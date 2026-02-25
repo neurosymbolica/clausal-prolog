@@ -98,7 +98,7 @@ __all__ = [
 REMOVED = object()
 
 
-from transform_nodes import _transform_node_list.py
+from transform_nodes import _transform_node_list
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Base
@@ -109,18 +109,18 @@ class Node:
     """Base class for all simplified AST nodes."""
     position: Optional[SourcePosition] = field(default=None, repr=False, compare=False)
 
-    def visit_children(self, visit) -> None:
+    def visit_children(node, visit) -> None:
         """Visit all direct child nodes. Override in subclasses with children."""
         pass
 
-    def children(self):
+    def children(node):
         children = []
-        self.visit_children(children.append)
+        node.visit_children(children.append)
         return children
 
-    def transform_children(self, transform) -> Node:
+    def transform_children(node, transform) -> Node:
         """Transform all direct child nodes in place. Override in subclasses."""
-        return self
+        return node
 
     def transform_fields(node, **kwargs) -> Node:
         """Return a copy with changed fields, or self if nothing changed."""
@@ -161,14 +161,14 @@ class BinOp(Node):
     left: Node = None   # type: ignore[assignment]
     right: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.left)
-        visit(self.right)
+    def visit_children(bin_op, visit) -> None:
+        visit(bin_op.left)
+        visit(bin_op.right)
 
-    def transform_children(self, transform) -> BinOp:
-        return self.transform_fields(
-            left=transform(self.left),
-            right=transform(self.right),
+    def transform_children(bin_op, transform) -> BinOp:
+        return bin_op.transform_fields(
+            left=transform(bin_op.left),
+            right=transform(bin_op.right),
         )
 
 
@@ -187,11 +187,11 @@ class UnaryOp(Node):
     """Base for unary operators."""
     operand: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.operand)
+    def visit_children(unary_op, visit) -> None:
+        visit(unary_op.operand)
 
-    def transform_children(self, transform) -> UnaryOp:
-        return self.transform_fields( operand=transform(self.operand))
+    def transform_children(unary_op, transform) -> UnaryOp:
+        return unary_op.transform_fields( operand=transform(unary_op.operand))
 
 
 @dataclass
@@ -200,14 +200,14 @@ class AugAssign(Node):
     target: Node = None  # type: ignore[assignment]
     value: Node = None   # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
-        visit(self.value)
+    def visit_children(aug_assign, visit) -> None:
+        visit(aug_assign.target)
+        visit(aug_assign.value)
 
-    def transform_children(self, transform) -> AugAssign:
-        return self.transform_fields(
-            target=transform(self.target),
-            value=transform(self.value),
+    def transform_children(aug_assign, transform) -> AugAssign:
+        return aug_assign.transform_fields(
+            target=transform(aug_assign.target),
+            value=transform(aug_assign.value),
         )
 
 
@@ -217,11 +217,11 @@ class AttrNode(Node):
     object: Node = None  # type: ignore[assignment]
     attr: str = ""
 
-    def visit_children(self, visit) -> None:
-        visit(self.object)
+    def visit_children(attr_node, visit) -> None:
+        visit(attr_node.object)
 
-    def transform_children(self, transform) -> AttrNode:
-        return self.transform_fields( object=transform(self.object))
+    def transform_children(attr_node, transform) -> AttrNode:
+        return attr_node.transform_fields( object=transform(attr_node.object))
 
 
 @dataclass
@@ -230,14 +230,14 @@ class SubscriptNode(Node):
     object: Node = None  # type: ignore[assignment]
     index: Node = None   # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.object)
-        visit(self.index)
+    def visit_children(subscript_node, visit) -> None:
+        visit(subscript_node.object)
+        visit(subscript_node.index)
 
-    def transform_children(self, transform) -> SubscriptNode:
-        return self.transform_fields(
-            object=transform(self.object),
-            index=transform(self.index),
+    def transform_children(subscript_node, transform) -> SubscriptNode:
+        return subscript_node.transform_fields(
+            object=transform(subscript_node.object),
+            index=transform(subscript_node.index),
         )
 
 
@@ -246,13 +246,13 @@ class ElementsLiteral(Node):
     """Base for collection literals that hold a flat element list."""
     elements: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for elem in self.elements:
+    def visit_children(elements_literal, visit) -> None:
+        for elem in elements_literal.elements:
             visit(elem)
 
-    def transform_children(self, transform) -> ElementsLiteral:
-        return self.transform_fields(
-            elements=_transform_node_list(self.elements, transform),
+    def transform_children(elements_literal, transform) -> ElementsLiteral:
+        return elements_literal.transform_fields(
+            elements=_transform_node_list(elements_literal.elements, transform),
         )
 
 
@@ -261,13 +261,13 @@ class PatternList(Node):
     """Base for destructuring assignment targets (tuple/list patterns)."""
     targets: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for target in self.targets:
+    def visit_children(pattern_list, visit) -> None:
+        for target in pattern_list.targets:
             visit(target)
 
-    def transform_children(self, transform) -> PatternList:
-        return self.transform_fields(
-            targets=_transform_node_list(self.targets, transform),
+    def transform_children(pattern_list, transform) -> PatternList:
+        return pattern_list.transform_fields(
+            targets=_transform_node_list(pattern_list.targets, transform),
         )
 
 
@@ -277,15 +277,15 @@ class ElemComp(Node):
     element: Node = None  # type: ignore[assignment]
     clauses: list[ForClause] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.element)
-        for clause in self.clauses:
+    def visit_children(elem_comp, visit) -> None:
+        visit(elem_comp.element)
+        for clause in elem_comp.clauses:
             visit(clause)
 
-    def transform_children(self, transform) -> ElemComp:
-        return self.transform_fields(
-            element=transform(self.element),
-            clauses=_transform_node_list(self.clauses, transform),
+    def transform_children(elem_comp, transform) -> ElemComp:
+        return elem_comp.transform_fields(
+            element=transform(elem_comp.element),
+            clauses=_transform_node_list(elem_comp.clauses, transform),
         )
 
 
@@ -296,18 +296,18 @@ class Branch(Node):
     body: list[Node] = field(default_factory=list)
     orelse: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.test)
-        for child in self.body:
+    def visit_children(branch, visit) -> None:
+        visit(branch.test)
+        for child in branch.body:
             visit(child)
-        for child in self.orelse:
+        for child in branch.orelse:
             visit(child)
 
-    def transform_children(self, transform) -> Branch:
-        return self.transform_fields(
-            test=transform(self.test),
-            body=_transform_node_list(self.body, transform),
-            orelse=_transform_node_list(self.orelse, transform),
+    def transform_children(branch, transform) -> Branch:
+        return branch.transform_fields(
+            test=transform(branch.test),
+            body=_transform_node_list(branch.body, transform),
+            orelse=_transform_node_list(branch.orelse, transform),
         )
 
 
@@ -319,33 +319,33 @@ class Branch(Node):
 class Module(Node):
     body: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for child in self.body:
+    def visit_children(module, visit) -> None:
+        for child in module.body:
             visit(child)
 
-    def transform_children(self, transform) -> Module:
-        return self.transform_fields( body=_transform_node_list(self.body, transform))
+    def transform_children(module, transform) -> Module:
+        return module.transform_fields( body=_transform_node_list(module.body, transform))
 
 @dataclass
 class Interactive(Node):
     body: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for child in self.body:
+    def visit_children(interactive, visit) -> None:
+        for child in interactive.body:
             visit(child)
 
-    def transform_children(self, transform) -> Interactive:
-        return self.transform_fields( body=_transform_node_list(self.body, transform))
+    def transform_children(interactive, transform) -> Interactive:
+        return interactive.transform_fields( body=_transform_node_list(interactive.body, transform))
 
 @dataclass
 class Expression(Node):
     body: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.body)
+    def visit_children(expression, visit) -> None:
+        visit(expression.body)
 
-    def transform_children(self, transform) -> Expression:
-        return self.transform_fields( body=transform(self.body))
+    def transform_children(expression, transform) -> Expression:
+        return expression.transform_fields( body=transform(expression.body))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -401,16 +401,16 @@ class DictLiteral(Node):
     keys: list[Optional[Node]] = field(default_factory=list)    # None key = **splat
     values: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for key in self.keys:
+    def visit_children(dict_literal, visit) -> None:
+        for key in dict_literal.keys:
             if key is not None:
                 visit(key)
-        for value in self.values:
+        for value in dict_literal.values:
             visit(value)
 
-    def transform_children(self, transform) -> DictLiteral:
+    def transform_children(dict_literal, transform) -> DictLiteral:
         new_keys, keys_changed = [], False
-        for k in self.keys:
+        for k in dict_literal.keys:
             if k is None:
                 new_keys.append(None)
             else:
@@ -418,9 +418,9 @@ class DictLiteral(Node):
                 if new_k is not k:
                     keys_changed = True
                 new_keys.append(new_k)
-        new_values = _transform_node_list(self.values, transform)
-        return self.transform_fields(
-            keys=new_keys if keys_changed else self.keys,
+        new_values = _transform_node_list(dict_literal.values, transform)
+        return dict_literal.transform_fields(
+            keys=new_keys if keys_changed else dict_literal.keys,
             values=new_values,
         )
 
@@ -433,12 +433,12 @@ class DictLiteral(Node):
 class FString(Node):
     parts: list[Node] = field(default_factory=list)  # StringLiteral | FormattedExpr
 
-    def visit_children(self, visit) -> None:
-        for part in self.parts:
+    def visit_children(f_string, visit) -> None:
+        for part in f_string.parts:
             visit(part)
 
-    def transform_children(self, transform) -> FString:
-        return self.transform_fields( parts=_transform_node_list(self.parts, transform))
+    def transform_children(f_string, transform) -> FString:
+        return f_string.transform_fields( parts=_transform_node_list(f_string.parts, transform))
 
 @dataclass
 class FormattedExpr(Node):
@@ -446,15 +446,15 @@ class FormattedExpr(Node):
     conversion: Optional[str] = None   # 's', 'r', 'a', or None
     format_spec: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
-        if self.format_spec is not None:
-            visit(self.format_spec)
+    def visit_children(formatted_expr, visit) -> None:
+        visit(formatted_expr.value)
+        if formatted_expr.format_spec is not None:
+            visit(formatted_expr.format_spec)
 
-    def transform_children(self, transform) -> FormattedExpr:
-        return self.transform_fields(
-            value=transform(self.value),
-            format_spec=transform(self.format_spec) if self.format_spec is not None else None,
+    def transform_children(formatted_expr, transform) -> FormattedExpr:
+        return formatted_expr.transform_fields(
+            value=transform(formatted_expr.value),
+            format_spec=transform(formatted_expr.format_spec) if formatted_expr.format_spec is not None else None,
         )
 
 
@@ -507,22 +507,22 @@ class StarUnpack(Node):
     """*expr in a call or literal — unpacking."""
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
+    def visit_children(star_unpack, visit) -> None:
+        visit(star_unpack.value)
 
-    def transform_children(self, transform) -> StarUnpack:
-        return self.transform_fields( value=transform(self.value))
+    def transform_children(star_unpack, transform) -> StarUnpack:
+        return star_unpack.transform_fields( value=transform(star_unpack.value))
 
 @dataclass
 class StarTarget(Node):
     """*name in an assignment target — catch-all."""
     target: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
+    def visit_children(star_target, visit) -> None:
+        visit(star_target.target)
 
-    def transform_children(self, transform) -> StarTarget:
-        return self.transform_fields( target=transform(self.target))
+    def transform_children(star_target, transform) -> StarTarget:
+        return star_target.transform_fields( target=transform(star_target.target))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -682,13 +682,13 @@ class CompareChain(Node):
     """
     comparisons: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for cmp in self.comparisons:
+    def visit_children(compare_chain, visit) -> None:
+        for cmp in compare_chain.comparisons:
             visit(cmp)
 
-    def transform_children(self, transform) -> CompareChain:
-        return self.transform_fields(
-            comparisons=_transform_node_list(self.comparisons, transform),
+    def transform_children(compare_chain, transform) -> CompareChain:
+        return compare_chain.transform_fields(
+            comparisons=_transform_node_list(compare_chain.comparisons, transform),
         )
 
 
@@ -759,18 +759,18 @@ class Call(Node):
     args: list[Node] = field(default_factory=list)
     kwargs: list[Keyword] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.func)
-        for arg in self.args:
+    def visit_children(call, visit) -> None:
+        visit(call.func)
+        for arg in call.args:
             visit(arg)
-        for kw in self.kwargs:
+        for kw in call.kwargs:
             visit(kw)
 
-    def transform_children(self, transform) -> Call:
-        return self.transform_fields(
-            func=transform(self.func),
-            args=_transform_node_list(self.args, transform),
-            kwargs=_transform_node_list(self.kwargs, transform),
+    def transform_children(call, transform) -> Call:
+        return call.transform_fields(
+            func=transform(call.func),
+            args=_transform_node_list(call.args, transform),
+            kwargs=_transform_node_list(call.kwargs, transform),
         )
 
 @dataclass
@@ -779,11 +779,11 @@ class Keyword(Node):
     name: Optional[str] = None
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
+    def visit_children(keyword, visit) -> None:
+        visit(keyword.value)
 
-    def transform_children(self, transform) -> Keyword:
-        return self.transform_fields( value=transform(self.value))
+    def transform_children(keyword, transform) -> Keyword:
+        return keyword.transform_fields( value=transform(keyword.value))
 
 @dataclass
 class IfExpr(Node):
@@ -792,16 +792,16 @@ class IfExpr(Node):
     body: Node = None    # type: ignore[assignment]
     orelse: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.test)
-        visit(self.body)
-        visit(self.orelse)
+    def visit_children(if_expr, visit) -> None:
+        visit(if_expr.test)
+        visit(if_expr.body)
+        visit(if_expr.orelse)
 
-    def transform_children(self, transform) -> IfExpr:
-        return self.transform_fields(
-            test=transform(self.test),
-            body=transform(self.body),
-            orelse=transform(self.orelse),
+    def transform_children(if_expr, transform) -> IfExpr:
+        return if_expr.transform_fields(
+            test=transform(if_expr.test),
+            body=transform(if_expr.body),
+            orelse=transform(if_expr.orelse),
         )
 
 @dataclass
@@ -810,14 +810,14 @@ class NamedExpr(Node):
     target: Node = None  # type: ignore[assignment]
     value: Node = None   # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
-        visit(self.value)
+    def visit_children(named_expr, visit) -> None:
+        visit(named_expr.target)
+        visit(named_expr.value)
 
-    def transform_children(self, transform) -> NamedExpr:
-        return self.transform_fields(
-            target=transform(self.target),
-            value=transform(self.value),
+    def transform_children(named_expr, transform) -> NamedExpr:
+        return named_expr.transform_fields(
+            target=transform(named_expr.target),
+            value=transform(named_expr.value),
         )
 
 @dataclass
@@ -825,48 +825,48 @@ class Lambda(Node):
     params: Params = None  # type: ignore[assignment]
     body: Node = None      # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.params)
-        visit(self.body)
+    def visit_children(lambda_node, visit) -> None:
+        visit(lambda_node.params)
+        visit(lambda_node.body)
 
-    def transform_children(self, transform) -> Lambda:
-        return self.transform_fields(
-            params=transform(self.params),
-            body=transform(self.body),
+    def transform_children(lambda_node, transform) -> Lambda:
+        return lambda_node.transform_fields(
+            params=transform(lambda_node.params),
+            body=transform(lambda_node.body),
         )
 
 @dataclass
 class Yield(Node):
     value: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.value is not None:
-            visit(self.value)
+    def visit_children(yield_node, visit) -> None:
+        if yield_node.value is not None:
+            visit(yield_node.value)
 
-    def transform_children(self, transform) -> Yield:
-        return self.transform_fields(
-            value=transform(self.value) if self.value is not None else None,
+    def transform_children(yield_node, transform) -> Yield:
+        return yield_node.transform_fields(
+            value=transform(yield_node.value) if yield_node.value is not None else None,
         )
 
 @dataclass
 class YieldFrom(Node):
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
+    def visit_children(yield_from, visit) -> None:
+        visit(yield_from.value)
 
-    def transform_children(self, transform) -> YieldFrom:
-        return self.transform_fields( value=transform(self.value))
+    def transform_children(yield_from, transform) -> YieldFrom:
+        return yield_from.transform_fields( value=transform(yield_from.value))
 
 @dataclass
 class Await(Node):
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
+    def visit_children(await_node, visit) -> None:
+        visit(await_node.value)
 
-    def transform_children(self, transform) -> Await:
-        return self.transform_fields( value=transform(self.value))
+    def transform_children(await_node, transform) -> Await:
+        return await_node.transform_fields( value=transform(await_node.value))
 
 @dataclass
 class Slice(Node):
@@ -874,19 +874,19 @@ class Slice(Node):
     upper: Optional[Node] = None
     step: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.lower is not None:
-            visit(self.lower)
-        if self.upper is not None:
-            visit(self.upper)
-        if self.step is not None:
-            visit(self.step)
+    def visit_children(slice, visit) -> None:
+        if slice.lower is not None:
+            visit(slice.lower)
+        if slice.upper is not None:
+            visit(slice.upper)
+        if slice.step is not None:
+            visit(slice.step)
 
-    def transform_children(self, transform) -> Slice:
-        return self.transform_fields(
-            lower=transform(self.lower) if self.lower is not None else None,
-            upper=transform(self.upper) if self.upper is not None else None,
-            step=transform(self.step) if self.step is not None else None,
+    def transform_children(slice, transform) -> Slice:
+        return slice.transform_fields(
+            lower=transform(slice.lower) if slice.lower is not None else None,
+            upper=transform(slice.upper) if slice.upper is not None else None,
+            step=transform(slice.step) if slice.step is not None else None,
         )
 
 
@@ -901,17 +901,17 @@ class ForClause(Node):
     filters: list[Node] = field(default_factory=list)
     is_async: bool = False
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
-        visit(self.iterable)
-        for f in self.filters:
+    def visit_children(for_clause, visit) -> None:
+        visit(for_clause.target)
+        visit(for_clause.iterable)
+        for f in for_clause.filters:
             visit(f)
 
-    def transform_children(self, transform) -> ForClause:
-        return self.transform_fields(
-            target=transform(self.target),
-            iterable=transform(self.iterable),
-            filters=_transform_node_list(self.filters, transform),
+    def transform_children(for_clause, transform) -> ForClause:
+        return for_clause.transform_fields(
+            target=transform(for_clause.target),
+            iterable=transform(for_clause.iterable),
+            filters=_transform_node_list(for_clause.filters, transform),
         )
 
 @dataclass
@@ -928,17 +928,17 @@ class DictComp(Node):
     value: Node = None  # type: ignore[assignment]
     clauses: list[ForClause] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.key)
-        visit(self.value)
-        for clause in self.clauses:
+    def visit_children(dict_comp, visit) -> None:
+        visit(dict_comp.key)
+        visit(dict_comp.value)
+        for clause in dict_comp.clauses:
             visit(clause)
 
-    def transform_children(self, transform) -> DictComp:
-        return self.transform_fields(
-            key=transform(self.key),
-            value=transform(self.value),
-            clauses=_transform_node_list(self.clauses, transform),
+    def transform_children(dict_comp, transform) -> DictComp:
+        return dict_comp.transform_fields(
+            key=transform(dict_comp.key),
+            value=transform(dict_comp.value),
+            clauses=_transform_node_list(dict_comp.clauses, transform),
         )
 
 @dataclass
@@ -957,16 +957,16 @@ class Param(Node):
     annotation: Optional[Node] = None
     default: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.annotation is not None:
-            visit(self.annotation)
-        if self.default is not None:
-            visit(self.default)
+    def visit_children(param, visit) -> None:
+        if param.annotation is not None:
+            visit(param.annotation)
+        if param.default is not None:
+            visit(param.default)
 
-    def transform_children(self, transform) -> Param:
-        return self.transform_fields(
-            annotation=transform(self.annotation) if self.annotation is not None else None,
-            default=transform(self.default) if self.default is not None else None,
+    def transform_children(param, transform) -> Param:
+        return param.transform_fields(
+            annotation=transform(param.annotation) if param.annotation is not None else None,
+            default=transform(param.default) if param.default is not None else None,
         )
 
 @dataclass
@@ -998,12 +998,12 @@ class VarKeyword(Param):
 class Params(Node):
     params: list[Param] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for p in self.params:
+    def visit_children(params, visit) -> None:
+        for p in params.params:
             visit(p)
 
-    def transform_children(self, transform) -> Params:
-        return self.transform_fields( params=_transform_node_list(self.params, transform))
+    def transform_children(params, transform) -> Params:
+        return params.transform_fields( params=_transform_node_list(params.params, transform))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1017,15 +1017,15 @@ class Assign(Node):
     targets: list[Node] = field(default_factory=list)
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        for t in self.targets:
+    def visit_children(assign, visit) -> None:
+        for t in assign.targets:
             visit(t)
-        visit(self.value)
+        visit(assign.value)
 
-    def transform_children(self, transform) -> Assign:
-        return self.transform_fields(
-            targets=_transform_node_list(self.targets, transform),
-            value=transform(self.value),
+    def transform_children(assign, transform) -> Assign:
+        return assign.transform_fields(
+            targets=_transform_node_list(assign.targets, transform),
+            value=transform(assign.value),
         )
 
 @dataclass
@@ -1035,30 +1035,30 @@ class AnnAssign(Node):
     value: Optional[Node] = None
     simple: bool = True
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
-        visit(self.annotation)
-        if self.value is not None:
-            visit(self.value)
+    def visit_children(ann_assign, visit) -> None:
+        visit(ann_assign.target)
+        visit(ann_assign.annotation)
+        if ann_assign.value is not None:
+            visit(ann_assign.value)
 
-    def transform_children(self, transform) -> AnnAssign:
-        return self.transform_fields(
-            target=transform(self.target),
-            annotation=transform(self.annotation),
-            value=transform(self.value) if self.value is not None else None,
+    def transform_children(ann_assign, transform) -> AnnAssign:
+        return ann_assign.transform_fields(
+            target=transform(ann_assign.target),
+            annotation=transform(ann_assign.annotation),
+            value=transform(ann_assign.value) if ann_assign.value is not None else None,
         )
 
 @dataclass
 class Return(Node):
     value: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.value is not None:
-            visit(self.value)
+    def visit_children(return_node, visit) -> None:
+        if return_node.value is not None:
+            visit(return_node.value)
 
-    def transform_children(self, transform) -> Return:
-        return self.transform_fields(
-            value=transform(self.value) if self.value is not None else None,
+    def transform_children(return_node, transform) -> Return:
+        return return_node.transform_fields(
+            value=transform(return_node.value) if return_node.value is not None else None,
         )
 
 @dataclass
@@ -1078,16 +1078,16 @@ class Raise(Node):
     exc: Optional[Node] = None
     cause: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.exc is not None:
-            visit(self.exc)
-        if self.cause is not None:
-            visit(self.cause)
+    def visit_children(raise_node, visit) -> None:
+        if raise_node.exc is not None:
+            visit(raise_node.exc)
+        if raise_node.cause is not None:
+            visit(raise_node.cause)
 
-    def transform_children(self, transform) -> Raise:
-        return self.transform_fields(
-            exc=transform(self.exc) if self.exc is not None else None,
-            cause=transform(self.cause) if self.cause is not None else None,
+    def transform_children(raise_node, transform) -> Raise:
+        return raise_node.transform_fields(
+            exc=transform(raise_node.exc) if raise_node.exc is not None else None,
+            cause=transform(raise_node.cause) if raise_node.cause is not None else None,
         )
 
 @dataclass
@@ -1095,15 +1095,15 @@ class Assert(Node):
     test: Node = None  # type: ignore[assignment]
     msg: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        visit(self.test)
-        if self.msg is not None:
-            visit(self.msg)
+    def visit_children(assert_node, visit) -> None:
+        visit(assert_node.test)
+        if assert_node.msg is not None:
+            visit(assert_node.msg)
 
-    def transform_children(self, transform) -> Assert:
-        return self.transform_fields(
-            test=transform(self.test),
-            msg=transform(self.msg) if self.msg is not None else None,
+    def transform_children(assert_node, transform) -> Assert:
+        return assert_node.transform_fields(
+            test=transform(assert_node.test),
+            msg=transform(assert_node.msg) if assert_node.msg is not None else None,
         )
 
 @dataclass
@@ -1148,20 +1148,20 @@ class For(Node):
     orelse: list[Node] = field(default_factory=list)
     is_async: bool = False
 
-    def visit_children(self, visit) -> None:
-        visit(self.target)
-        visit(self.iterable)
-        for child in self.body:
+    def visit_children(for_node, visit) -> None:
+        visit(for_node.target)
+        visit(for_node.iterable)
+        for child in for_node.body:
             visit(child)
-        for child in self.orelse:
+        for child in for_node.orelse:
             visit(child)
 
-    def transform_children(self, transform) -> For:
-        return self.transform_fields(
-            target=transform(self.target),
-            iterable=transform(self.iterable),
-            body=_transform_node_list(self.body, transform),
-            orelse=_transform_node_list(self.orelse, transform),
+    def transform_children(for_node, transform) -> For:
+        return for_node.transform_fields(
+            target=transform(for_node.target),
+            iterable=transform(for_node.iterable),
+            body=_transform_node_list(for_node.body, transform),
+            orelse=_transform_node_list(for_node.orelse, transform),
         )
 
 @dataclass
@@ -1170,25 +1170,25 @@ class With(Node):
     body: list[Node] = field(default_factory=list)
     is_async: bool = False
 
-    def visit_children(self, visit) -> None:
-        for ctx, var in self.items:
+    def visit_children(with_node, visit) -> None:
+        for ctx, var in with_node.items:
             visit(ctx)
             if var is not None:
                 visit(var)
-        for child in self.body:
+        for child in with_node.body:
             visit(child)
 
-    def transform_children(self, transform) -> With:
+    def transform_children(with_node, transform) -> With:
         new_items, items_changed = [], False
-        for ctx, var in self.items:
+        for ctx, var in with_node.items:
             new_ctx = transform(ctx)
             new_var = transform(var) if var is not None else None
             if new_ctx is not ctx or new_var is not var:
                 items_changed = True
             new_items.append((new_ctx, new_var))
-        new_body = _transform_node_list(self.body, transform)
-        return self.transform_fields(
-            items=new_items if items_changed else self.items,
+        new_body = _transform_node_list(with_node.body, transform)
+        return with_node.transform_fields(
+            items=new_items if items_changed else with_node.items,
             body=new_body,
         )
 
@@ -1200,22 +1200,22 @@ class Try(Node):
     finalbody: list[Node] = field(default_factory=list)
     is_star: bool = False
 
-    def visit_children(self, visit) -> None:
-        for child in self.body:
+    def visit_children(try_node, visit) -> None:
+        for child in try_node.body:
             visit(child)
-        for handler in self.handlers:
+        for handler in try_node.handlers:
             visit(handler)
-        for child in self.orelse:
+        for child in try_node.orelse:
             visit(child)
-        for child in self.finalbody:
+        for child in try_node.finalbody:
             visit(child)
 
-    def transform_children(self, transform) -> Try:
-        return self.transform_fields(
-            body=_transform_node_list(self.body, transform),
-            handlers=_transform_node_list(self.handlers, transform),
-            orelse=_transform_node_list(self.orelse, transform),
-            finalbody=_transform_node_list(self.finalbody, transform),
+    def transform_children(try_node, transform) -> Try:
+        return try_node.transform_fields(
+            body=_transform_node_list(try_node.body, transform),
+            handlers=_transform_node_list(try_node.handlers, transform),
+            orelse=_transform_node_list(try_node.orelse, transform),
+            finalbody=_transform_node_list(try_node.finalbody, transform),
         )
 
 @dataclass
@@ -1224,16 +1224,16 @@ class ExceptHandler(Node):
     name: Optional[str] = None
     body: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        if self.type is not None:
-            visit(self.type)
-        for child in self.body:
+    def visit_children(except_handler, visit) -> None:
+        if except_handler.type is not None:
+            visit(except_handler.type)
+        for child in except_handler.body:
             visit(child)
 
-    def transform_children(self, transform) -> ExceptHandler:
-        return self.transform_fields(
-            type=transform(self.type) if self.type is not None else None,
-            body=_transform_node_list(self.body, transform),
+    def transform_children(except_handler, transform) -> ExceptHandler:
+        return except_handler.transform_fields(
+            type=transform(except_handler.type) if except_handler.type is not None else None,
+            body=_transform_node_list(except_handler.body, transform),
         )
 
 
@@ -1249,24 +1249,24 @@ class FunctionDef(Node):
     is_async: bool = False
     type_params: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.params)
-        for child in self.body:
+    def visit_children(function_def, visit) -> None:
+        visit(function_def.params)
+        for child in function_def.body:
             visit(child)
-        for dec in self.decorators:
+        for dec in function_def.decorators:
             visit(dec)
-        if self.returns is not None:
-            visit(self.returns)
-        for tp in self.type_params:
+        if function_def.returns is not None:
+            visit(function_def.returns)
+        for tp in function_def.type_params:
             visit(tp)
 
-    def transform_children(self, transform) -> FunctionDef:
-        return self.transform_fields(
-            params=transform(self.params),
-            body=_transform_node_list(self.body, transform),
-            decorators=_transform_node_list(self.decorators, transform),
-            returns=transform(self.returns) if self.returns is not None else None,
-            type_params=_transform_node_list(self.type_params, transform),
+    def transform_children(function_def, transform) -> FunctionDef:
+        return function_def.transform_fields(
+            params=transform(function_def.params),
+            body=_transform_node_list(function_def.body, transform),
+            decorators=_transform_node_list(function_def.decorators, transform),
+            returns=transform(function_def.returns) if function_def.returns is not None else None,
+            type_params=_transform_node_list(function_def.type_params, transform),
         )
 
 @dataclass
@@ -1278,25 +1278,25 @@ class ClassDef(Node):
     decorators: list[Node] = field(default_factory=list)
     type_params: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for base in self.bases:
+    def visit_children(class_def, visit) -> None:
+        for base in class_def.bases:
             visit(base)
-        for kw in self.keywords:
+        for kw in class_def.keywords:
             visit(kw)
-        for child in self.body:
+        for child in class_def.body:
             visit(child)
-        for dec in self.decorators:
+        for dec in class_def.decorators:
             visit(dec)
-        for tp in self.type_params:
+        for tp in class_def.type_params:
             visit(tp)
 
-    def transform_children(self, transform) -> ClassDef:
-        return self.transform_fields(
-            bases=_transform_node_list(self.bases, transform),
-            keywords=_transform_node_list(self.keywords, transform),
-            body=_transform_node_list(self.body, transform),
-            decorators=_transform_node_list(self.decorators, transform),
-            type_params=_transform_node_list(self.type_params, transform),
+    def transform_children(class_def, transform) -> ClassDef:
+        return class_def.transform_fields(
+            bases=_transform_node_list(class_def.bases, transform),
+            keywords=_transform_node_list(class_def.keywords, transform),
+            body=_transform_node_list(class_def.body, transform),
+            decorators=_transform_node_list(class_def.decorators, transform),
+            type_params=_transform_node_list(class_def.type_params, transform),
         )
 
 @dataclass
@@ -1305,17 +1305,17 @@ class TypeAlias(Node):
     type_params: list[Node] = field(default_factory=list)
     value: Node = None  # type: ignore[assignment]
 
-    def visit_children(self, visit) -> None:
-        visit(self.name)
-        for tp in self.type_params:
+    def visit_children(type_alias, visit) -> None:
+        visit(type_alias.name)
+        for tp in type_alias.type_params:
             visit(tp)
-        visit(self.value)
+        visit(type_alias.value)
 
-    def transform_children(self, transform) -> TypeAlias:
-        return self.transform_fields(
-            name=transform(self.name),
-            type_params=_transform_node_list(self.type_params, transform),
-            value=transform(self.value),
+    def transform_children(type_alias, transform) -> TypeAlias:
+        return type_alias.transform_fields(
+            name=transform(type_alias.name),
+            type_params=_transform_node_list(type_alias.type_params, transform),
+            value=transform(type_alias.value),
         )
 
 
@@ -1326,13 +1326,13 @@ class TypeVar(Node):
     name: str = ""
     bound: Optional[Node] = None
 
-    def visit_children(self, visit) -> None:
-        if self.bound is not None:
-            visit(self.bound)
+    def visit_children(type_var, visit) -> None:
+        if type_var.bound is not None:
+            visit(type_var.bound)
 
-    def transform_children(self, transform) -> TypeVar:
-        return self.transform_fields(
-            bound=transform(self.bound) if self.bound is not None else None,
+    def transform_children(type_var, transform) -> TypeVar:
+        return type_var.transform_fields(
+            bound=transform(type_var.bound) if type_var.bound is not None else None,
         )
 
 @dataclass
@@ -1353,15 +1353,15 @@ class Match(Node):
     subject: Node = None  # type: ignore[assignment]
     cases: list[MatchCase] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.subject)
-        for case in self.cases:
+    def visit_children(match, visit) -> None:
+        visit(match.subject)
+        for case in match.cases:
             visit(case)
 
-    def transform_children(self, transform) -> Match:
-        return self.transform_fields(
-            subject=transform(self.subject),
-            cases=_transform_node_list(self.cases, transform),
+    def transform_children(match, transform) -> Match:
+        return match.transform_fields(
+            subject=transform(match.subject),
+            cases=_transform_node_list(match.cases, transform),
         )
 
 @dataclass
@@ -1370,18 +1370,18 @@ class MatchCase(Node):
     guard: Optional[Node] = None
     body: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.pattern)
-        if self.guard is not None:
-            visit(self.guard)
-        for child in self.body:
+    def visit_children(match_case, visit) -> None:
+        visit(match_case.pattern)
+        if match_case.guard is not None:
+            visit(match_case.guard)
+        for child in match_case.body:
             visit(child)
 
-    def transform_children(self, transform) -> MatchCase:
-        return self.transform_fields(
-            pattern=transform(self.pattern),
-            guard=transform(self.guard) if self.guard is not None else None,
-            body=_transform_node_list(self.body, transform),
+    def transform_children(match_case, transform) -> MatchCase:
+        return match_case.transform_fields(
+            pattern=transform(match_case.pattern),
+            guard=transform(match_case.guard) if match_case.guard is not None else None,
+            body=_transform_node_list(match_case.body, transform),
         )
 
 @dataclass
@@ -1389,23 +1389,23 @@ class MatchLiteral(Node):
     value: Node = None  # type: ignore[assignment]
     use_is: bool = False
 
-    def visit_children(self, visit) -> None:
-        visit(self.value)
+    def visit_children(match_literal, visit) -> None:
+        visit(match_literal.value)
 
-    def transform_children(self, transform) -> MatchLiteral:
-        return self.transform_fields( value=transform(self.value))
+    def transform_children(match_literal, transform) -> MatchLiteral:
+        return match_literal.transform_fields( value=transform(match_literal.value))
 
 @dataclass
 class MatchSequence(Node):
     patterns: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for p in self.patterns:
+    def visit_children(match_sequence, visit) -> None:
+        for p in match_sequence.patterns:
             visit(p)
 
-    def transform_children(self, transform) -> MatchSequence:
-        return self.transform_fields(
-            patterns=_transform_node_list(self.patterns, transform),
+    def transform_children(match_sequence, transform) -> MatchSequence:
+        return match_sequence.transform_fields(
+            patterns=_transform_node_list(match_sequence.patterns, transform),
         )
 
 @dataclass
@@ -1414,16 +1414,16 @@ class MatchMapping(Node):
     patterns: list[Node] = field(default_factory=list)
     rest: Optional[str] = None
 
-    def visit_children(self, visit) -> None:
-        for k in self.keys:
+    def visit_children(match_mapping, visit) -> None:
+        for k in match_mapping.keys:
             visit(k)
-        for p in self.patterns:
+        for p in match_mapping.patterns:
             visit(p)
 
-    def transform_children(self, transform) -> MatchMapping:
-        return self.transform_fields(
-            keys=_transform_node_list(self.keys, transform),
-            patterns=_transform_node_list(self.patterns, transform),
+    def transform_children(match_mapping, transform) -> MatchMapping:
+        return match_mapping.transform_fields(
+            keys=_transform_node_list(match_mapping.keys, transform),
+            patterns=_transform_node_list(match_mapping.patterns, transform),
         )
 
 @dataclass
@@ -1433,18 +1433,18 @@ class MatchClass(Node):
     kwd_attrs: list[str] = field(default_factory=list)
     kwd_patterns: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        visit(self.cls)
-        for p in self.patterns:
+    def visit_children(match_class, visit) -> None:
+        visit(match_class.cls)
+        for p in match_class.patterns:
             visit(p)
-        for kp in self.kwd_patterns:
+        for kp in match_class.kwd_patterns:
             visit(kp)
 
-    def transform_children(self, transform) -> MatchClass:
-        return self.transform_fields(
-            cls=transform(self.cls),
-            patterns=_transform_node_list(self.patterns, transform),
-            kwd_patterns=_transform_node_list(self.kwd_patterns, transform),
+    def transform_children(match_class, transform) -> MatchClass:
+        return match_class.transform_fields(
+            cls=transform(match_class.cls),
+            patterns=_transform_node_list(match_class.patterns, transform),
+            kwd_patterns=_transform_node_list(match_class.kwd_patterns, transform),
         )
 
 @dataclass
@@ -1456,26 +1456,26 @@ class MatchAs(Node):
     pattern: Optional[Node] = None
     name: Optional[str] = None
 
-    def visit_children(self, visit) -> None:
-        if self.pattern is not None:
-            visit(self.pattern)
+    def visit_children(match_as, visit) -> None:
+        if match_as.pattern is not None:
+            visit(match_as.pattern)
 
-    def transform_children(self, transform) -> MatchAs:
-        return self.transform_fields(
-            pattern=transform(self.pattern) if self.pattern is not None else None,
+    def transform_children(match_as, transform) -> MatchAs:
+        return match_as.transform_fields(
+            pattern=transform(match_as.pattern) if match_as.pattern is not None else None,
         )
 
 @dataclass
 class MatchOr(Node):
     patterns: list[Node] = field(default_factory=list)
 
-    def visit_children(self, visit) -> None:
-        for p in self.patterns:
+    def visit_children(match_or, visit) -> None:
+        for p in match_or.patterns:
             visit(p)
 
-    def transform_children(self, transform) -> MatchOr:
-        return self.transform_fields(
-            patterns=_transform_node_list(self.patterns, transform),
+    def transform_children(match_or, transform) -> MatchOr:
+        return match_or.transform_fields(
+            patterns=_transform_node_list(match_or.patterns, transform),
         )
 
 # ═══════════════════════════════════════════════════════════════════════════════
