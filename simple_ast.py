@@ -98,30 +98,7 @@ __all__ = [
 REMOVED = object()
 
 
-
-def _transform_node_list(nodes: list, transform) -> list:
-    """Transform a list of nodes; returns the original list if nothing changed.
-
-    Node items that are REMOVED are removed from the output list.
-    Non-Node items are passed through unchanged.
-    """
-    result = None
-    for i, node in enumerate(nodes):
-        if isinstance(node, Node):
-            new_node = transform(node)
-            if new_node is REMOVED:
-                if result is None:
-                    result = list(nodes[:i])
-            elif new_node is not node:
-                if result is None:
-                    result = list(nodes[:i])
-                result.append(new_node)
-            elif result is not None:
-                result.append(node)
-        elif result is not None:
-            result.append(node)
-    return result if result is not None else nodes
-
+from transform_nodes import _transform_node_list.py
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Base

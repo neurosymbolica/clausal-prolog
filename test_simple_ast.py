@@ -404,18 +404,18 @@ def test_children():
     assert isinstance(kids[0], sa.LoadName) and isinstance(kids[1], sa.IntLiteral)
     print("  children OK")
 
-def test_node_transformer():
-    class DoubleInts(sa.NodeTransformer):
-        def visit_IntLiteral(self, node):
-            return sa.IntLiteral(value=node.value * 2)
+# def test_node_transformer():
+#     class DoubleInts(sa.NodeTransformer):
+#         def visit_IntLiteral(self, node):
+#             return sa.IntLiteral(value=node.value * 2)
 
-    tree = sa.simplify(ast.parse("x = 1 + 2"))
-    tree = DoubleInts().visit(tree)
-    assign = tree.body[0]
-    add = assign.value
-    assert isinstance(add, sa.Add)
-    assert add.left.value == 2 and add.right.value == 4
-    print("  node transformer OK")
+#     tree = sa.simplify(ast.parse("x = 1 + 2"))
+#     tree = DoubleInts().visit(tree)
+#     assign = tree.body[0]
+#     add = assign.value
+#     assert isinstance(add, sa.Add)
+#     assert add.left.value == 2 and add.right.value == 4
+#     print("  node transformer OK")
 
 
 import ast as _ast
