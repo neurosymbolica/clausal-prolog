@@ -22,31 +22,105 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+__all__ = [
+    # Sentinel
+    "REMOVED",
+    # Helpers
+    "locate",
+    "dump",
+    "simplify",
+    # Base
+    "Node",
+    "SourcePosition",
+    # Intermediate bases
+    "BinOp", "BoolOp", "CmpOp", "UnaryOp", "AugAssign",
+    "AttrNode", "SubscriptNode", "ElementsLiteral", "PatternList",
+    "ElemComp", "Branch", "Param",
+    # Modules
+    "Module", "Interactive", "Expression",
+    # Literals
+    "IntLiteral", "FloatLiteral", "ComplexLiteral", "StringLiteral",
+    "BytesLiteral", "BoolLiteral", "NoneLiteral", "EllipsisLiteral",
+    # Collection literals
+    "ListLiteral", "TupleLiteral", "SetLiteral", "DictLiteral",
+    # F-strings
+    "FString", "FormattedExpr",
+    # Names / Attributes / Subscripts
+    "LoadName", "LoadAttr", "LoadSubscript",
+    "StoreName", "StoreAttr", "StoreSubscript",
+    "DeleteName", "DeleteAttr", "DeleteSubscript",
+    "StarUnpack", "StarTarget", "Slice",
+    # Destructuring patterns
+    "TuplePattern", "ListPattern",
+    # Binary operators
+    "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod", "Pow", "MatMult",
+    "LShift", "RShift", "BitOr", "BitXor", "BitAnd",
+    # Boolean operators
+    "And", "Or",
+    # Unary operators
+    "UnaryPlus", "Negate", "Not", "Invert",
+    # Comparison operators
+    "Eq", "NotEq", "Lt", "LtE", "Gt", "GtE", "Is", "IsNot", "In", "NotIn",
+    "CompareChain",
+    # Augmented assignment
+    "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
+    "ModAssign", "PowAssign", "MatMultAssign",
+    "LShiftAssign", "RShiftAssign", "BitOrAssign", "BitXorAssign", "BitAndAssign",
+    # Expressions
+    "Call", "Keyword", "IfExpr", "NamedExpr", "Lambda",
+    "Yield", "YieldFrom", "Await",
+    # Comprehensions
+    "ForClause", "ListComp", "SetComp", "DictComp", "GeneratorExpr",
+    # Parameters
+    "PosOnlyParam", "PosOrKwParam", "KwOnlyParam",
+    "VarPositional", "VarKeyword", "Params",
+    # Statements
+    "Assign", "AnnAssign", "Return", "Pass", "Break", "Continue",
+    "Raise", "Assert", "Global", "Nonlocal",
+    # Imports
+    "Import", "ImportFrom",
+    # Compound statements
+    "If", "While", "For", "With", "Try", "ExceptHandler",
+    # Definitions
+    "FunctionDef", "ClassDef", "TypeAlias",
+    # Type parameters
+    "TypeVar", "ParamSpec", "TypeVarTuple",
+    # Pattern matching
+    "Match", "MatchCase", "MatchLiteral", "MatchSequence", "MatchMapping",
+    "MatchClass", "MatchStar", "MatchAs", "MatchOr",
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _transform_node_list(lst: list, transform) -> tuple[list, bool]:
-    """Transform a list of nodes; returns (new_list, changed).
+REMOVED = object()
 
-    Node items replaced by None are removed from the output list.
+
+
+def _transform_node_list(nodes: list, transform) -> list:
+    """Transform a list of nodes; returns the original list if nothing changed.
+
+    Node items that are REMOVED are removed from the output list.
     Non-Node items are passed through unchanged.
     """
-    new_list = []
-    changed = False
-    for item in lst:
-        if isinstance(item, Node):
-            new_item = transform(item)
-            if new_item is None:
-                changed = True
-                continue
-            if new_item is not item:
-                changed = True
-            new_list.append(new_item)
-        else:
-            new_list.append(item)
-    return new_list, changed
+    result = None
+    for i, node in enumerate(nodes):
+        if isinstance(node, Node):
+            new_node = transform(node)
+            if new_node is REMOVED:
+                if result is None:
+                    result = list(nodes[:i])
+            elif new_node is not node:
+                if result is None:
+                    result = list(nodes[:i])
+                result.append(new_node)
+            elif result is not None:
+                result.append(node)
+        elif result is not None:
+            result.append(node)
+    return result if result is not None else nodes
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -56,28 +130,47 @@ def _transform_node_list(lst: list, transform) -> tuple[list, bool]:
 @dataclass
 class Node:
     """Base class for all simplified AST nodes."""
-    lineno: Optional[int] = field(default=None, repr=False, compare=False)
-    col_offset: Optional[int] = field(default=None, repr=False, compare=False)
-    end_lineno: Optional[int] = field(default=None, repr=False, compare=False)
-    end_col_offset: Optional[int] = field(default=None, repr=False, compare=False)
+    position: Optional[SourcePosition] = field(default=None, repr=False, compare=False)
 
     def visit_children(self, visit) -> None:
         """Visit all direct child nodes. Override in subclasses with children."""
         pass
 
+    def children(self):
+        children = []
+        self.visit_children(children.append)
+        return children
+
     def transform_children(self, transform) -> Node:
         """Transform all direct child nodes in place. Override in subclasses."""
         return self
 
+    def transform_fields(node, **kwargs) -> Node:
+        """Return a copy with changed fields, or self if nothing changed."""
+        for key, new_val in kwargs.items():
+            old_val = getattr(node, key)
+            if old_val is not new_val:
+                if not isinstance(old_val, (bool, int, float, str, bytes)) or old_val != new_val:
+                    return dataclasses.replace(node, **kwargs)
+        return node
 
-_LOC_FIELDS = frozenset(("lineno", "col_offset", "end_lineno", "end_col_offset"))
+
+@dataclass(frozen=True, slots=True)
+class SourcePosition:
+    lineno: int
+    col_offset: int
+    end_lineno: int
+    end_col_offset: int
+
+
+_LOC_FIELDS = frozenset(("position",))
 
 
 def locate(src: ast.AST, dst: Node) -> Node:
-    """Copy source location from a CPython AST node to a simplified node."""
-    for attr in _LOC_FIELDS:
-        if hasattr(src, attr):
-            setattr(dst, attr, getattr(src, attr))
+    """Copy source location from a CPython AST node to a simplified node.
+    Do not use with Modules, Interactive, or Expression nodes.
+    """
+    dst.position = SourcePosition(src.lineno, src.col_offset, src.end_lineno, src.end_col_offset)
     return dst
 
 
@@ -96,13 +189,10 @@ class BinOp(Node):
         visit(self.right)
 
     def transform_children(self, transform) -> BinOp:
-        left = transform(self.left)
-        if left is not self.left:
-            self.left = left
-        right = transform(self.right)
-        if right is not self.right:
-            self.right = right
-        return self
+        return self.transform_fields(
+            left=transform(self.left),
+            right=transform(self.right),
+        )
 
 
 class BoolOp(BinOp):
@@ -124,10 +214,7 @@ class UnaryOp(Node):
         visit(self.operand)
 
     def transform_children(self, transform) -> UnaryOp:
-        op = transform(self.operand)
-        if op is not self.operand:
-            self.operand = op
-        return self
+        return self.transform_fields( operand=transform(self.operand))
 
 
 @dataclass
@@ -141,13 +228,10 @@ class AugAssign(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> AugAssign:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields(
+            target=transform(self.target),
+            value=transform(self.value),
+        )
 
 
 @dataclass
@@ -160,10 +244,7 @@ class AttrNode(Node):
         visit(self.object)
 
     def transform_children(self, transform) -> AttrNode:
-        obj = transform(self.object)
-        if obj is not self.object:
-            self.object = obj
-        return self
+        return self.transform_fields( object=transform(self.object))
 
 
 @dataclass
@@ -177,13 +258,10 @@ class SubscriptNode(Node):
         visit(self.index)
 
     def transform_children(self, transform) -> SubscriptNode:
-        obj = transform(self.object)
-        if obj is not self.object:
-            self.object = obj
-        idx = transform(self.index)
-        if idx is not self.index:
-            self.index = idx
-        return self
+        return self.transform_fields(
+            object=transform(self.object),
+            index=transform(self.index),
+        )
 
 
 @dataclass
@@ -196,10 +274,9 @@ class ElementsLiteral(Node):
             visit(elem)
 
     def transform_children(self, transform) -> ElementsLiteral:
-        new_elems, changed = _transform_node_list(self.elements, transform)
-        if changed:
-            self.elements = new_elems
-        return self
+        return self.transform_fields(
+            elements=_transform_node_list(self.elements, transform),
+        )
 
 
 @dataclass
@@ -208,14 +285,13 @@ class PatternList(Node):
     targets: list[Node] = field(default_factory=list)
 
     def visit_children(self, visit) -> None:
-        for t in self.targets:
-            visit(t)
+        for target in self.targets:
+            visit(target)
 
     def transform_children(self, transform) -> PatternList:
-        new_targets, changed = _transform_node_list(self.targets, transform)
-        if changed:
-            self.targets = new_targets
-        return self
+        return self.transform_fields(
+            targets=_transform_node_list(self.targets, transform),
+        )
 
 
 @dataclass
@@ -230,13 +306,10 @@ class ElemComp(Node):
             visit(clause)
 
     def transform_children(self, transform) -> ElemComp:
-        elem = transform(self.element)
-        if elem is not self.element:
-            self.element = elem
-        new_clauses, changed = _transform_node_list(self.clauses, transform)
-        if changed:
-            self.clauses = new_clauses
-        return self
+        return self.transform_fields(
+            element=transform(self.element),
+            clauses=_transform_node_list(self.clauses, transform),
+        )
 
 
 @dataclass
@@ -254,16 +327,11 @@ class Branch(Node):
             visit(child)
 
     def transform_children(self, transform) -> Branch:
-        test = transform(self.test)
-        if test is not self.test:
-            self.test = test
-        new_body, c1 = _transform_node_list(self.body, transform)
-        if c1:
-            self.body = new_body
-        new_orelse, c2 = _transform_node_list(self.orelse, transform)
-        if c2:
-            self.orelse = new_orelse
-        return self
+        return self.transform_fields(
+            test=transform(self.test),
+            body=_transform_node_list(self.body, transform),
+            orelse=_transform_node_list(self.orelse, transform),
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -279,10 +347,7 @@ class Module(Node):
             visit(child)
 
     def transform_children(self, transform) -> Module:
-        new_body, changed = _transform_node_list(self.body, transform)
-        if changed:
-            self.body = new_body
-        return self
+        return self.transform_fields( body=_transform_node_list(self.body, transform))
 
 @dataclass
 class Interactive(Node):
@@ -293,10 +358,7 @@ class Interactive(Node):
             visit(child)
 
     def transform_children(self, transform) -> Interactive:
-        new_body, changed = _transform_node_list(self.body, transform)
-        if changed:
-            self.body = new_body
-        return self
+        return self.transform_fields( body=_transform_node_list(self.body, transform))
 
 @dataclass
 class Expression(Node):
@@ -306,10 +368,7 @@ class Expression(Node):
         visit(self.body)
 
     def transform_children(self, transform) -> Expression:
-        body = transform(self.body)
-        if body is not self.body:
-            self.body = body
-        return self
+        return self.transform_fields( body=transform(self.body))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -366,29 +425,27 @@ class DictLiteral(Node):
     values: list[Node] = field(default_factory=list)
 
     def visit_children(self, visit) -> None:
-        for k in self.keys:
-            if k is not None:
-                visit(k)
-        for v in self.values:
-            visit(v)
+        for key in self.keys:
+            if key is not None:
+                visit(key)
+        for value in self.values:
+            visit(value)
 
     def transform_children(self, transform) -> DictLiteral:
-        new_keys = []
-        keys_changed = False
+        new_keys, keys_changed = [], False
         for k in self.keys:
-            if k is not None:
-                nk = transform(k)
-                if nk is not k:
-                    keys_changed = True
-                new_keys.append(nk)
-            else:
+            if k is None:
                 new_keys.append(None)
-        if keys_changed:
-            self.keys = new_keys
-        new_vals, vchanged = _transform_node_list(self.values, transform)
-        if vchanged:
-            self.values = new_vals
-        return self
+            else:
+                new_k = transform(k)
+                if new_k is not k:
+                    keys_changed = True
+                new_keys.append(new_k)
+        new_values = _transform_node_list(self.values, transform)
+        return self.transform_fields(
+            keys=new_keys if keys_changed else self.keys,
+            values=new_values,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -404,10 +461,7 @@ class FString(Node):
             visit(part)
 
     def transform_children(self, transform) -> FString:
-        new_parts, changed = _transform_node_list(self.parts, transform)
-        if changed:
-            self.parts = new_parts
-        return self
+        return self.transform_fields( parts=_transform_node_list(self.parts, transform))
 
 @dataclass
 class FormattedExpr(Node):
@@ -421,14 +475,10 @@ class FormattedExpr(Node):
             visit(self.format_spec)
 
     def transform_children(self, transform) -> FormattedExpr:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        if self.format_spec is not None:
-            fs = transform(self.format_spec)
-            if fs is not self.format_spec:
-                self.format_spec = fs
-        return self
+        return self.transform_fields(
+            value=transform(self.value),
+            format_spec=transform(self.format_spec) if self.format_spec is not None else None,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -484,10 +534,7 @@ class StarUnpack(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> StarUnpack:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields( value=transform(self.value))
 
 @dataclass
 class StarTarget(Node):
@@ -498,10 +545,7 @@ class StarTarget(Node):
         visit(self.target)
 
     def transform_children(self, transform) -> StarTarget:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        return self
+        return self.transform_fields( target=transform(self.target))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -666,10 +710,9 @@ class CompareChain(Node):
             visit(cmp)
 
     def transform_children(self, transform) -> CompareChain:
-        new_cmps, changed = _transform_node_list(self.comparisons, transform)
-        if changed:
-            self.comparisons = new_cmps
-        return self
+        return self.transform_fields(
+            comparisons=_transform_node_list(self.comparisons, transform),
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -747,16 +790,11 @@ class Call(Node):
             visit(kw)
 
     def transform_children(self, transform) -> Call:
-        func = transform(self.func)
-        if func is not self.func:
-            self.func = func
-        new_args, c1 = _transform_node_list(self.args, transform)
-        if c1:
-            self.args = new_args
-        new_kwargs, c2 = _transform_node_list(self.kwargs, transform)
-        if c2:
-            self.kwargs = new_kwargs
-        return self
+        return self.transform_fields(
+            func=transform(self.func),
+            args=_transform_node_list(self.args, transform),
+            kwargs=_transform_node_list(self.kwargs, transform),
+        )
 
 @dataclass
 class Keyword(Node):
@@ -768,10 +806,7 @@ class Keyword(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> Keyword:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields( value=transform(self.value))
 
 @dataclass
 class IfExpr(Node):
@@ -786,16 +821,11 @@ class IfExpr(Node):
         visit(self.orelse)
 
     def transform_children(self, transform) -> IfExpr:
-        test = transform(self.test)
-        if test is not self.test:
-            self.test = test
-        body = transform(self.body)
-        if body is not self.body:
-            self.body = body
-        orelse = transform(self.orelse)
-        if orelse is not self.orelse:
-            self.orelse = orelse
-        return self
+        return self.transform_fields(
+            test=transform(self.test),
+            body=transform(self.body),
+            orelse=transform(self.orelse),
+        )
 
 @dataclass
 class NamedExpr(Node):
@@ -808,13 +838,10 @@ class NamedExpr(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> NamedExpr:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields(
+            target=transform(self.target),
+            value=transform(self.value),
+        )
 
 @dataclass
 class Lambda(Node):
@@ -826,13 +853,10 @@ class Lambda(Node):
         visit(self.body)
 
     def transform_children(self, transform) -> Lambda:
-        params = transform(self.params)
-        if params is not self.params:
-            self.params = params
-        body = transform(self.body)
-        if body is not self.body:
-            self.body = body
-        return self
+        return self.transform_fields(
+            params=transform(self.params),
+            body=transform(self.body),
+        )
 
 @dataclass
 class Yield(Node):
@@ -843,11 +867,9 @@ class Yield(Node):
             visit(self.value)
 
     def transform_children(self, transform) -> Yield:
-        if self.value is not None:
-            v = transform(self.value)
-            if v is not self.value:
-                self.value = v
-        return self
+        return self.transform_fields(
+            value=transform(self.value) if self.value is not None else None,
+        )
 
 @dataclass
 class YieldFrom(Node):
@@ -857,10 +879,7 @@ class YieldFrom(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> YieldFrom:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields( value=transform(self.value))
 
 @dataclass
 class Await(Node):
@@ -870,10 +889,7 @@ class Await(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> Await:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields( value=transform(self.value))
 
 @dataclass
 class Slice(Node):
@@ -890,19 +906,11 @@ class Slice(Node):
             visit(self.step)
 
     def transform_children(self, transform) -> Slice:
-        if self.lower is not None:
-            lower = transform(self.lower)
-            if lower is not self.lower:
-                self.lower = lower
-        if self.upper is not None:
-            upper = transform(self.upper)
-            if upper is not self.upper:
-                self.upper = upper
-        if self.step is not None:
-            step = transform(self.step)
-            if step is not self.step:
-                self.step = step
-        return self
+        return self.transform_fields(
+            lower=transform(self.lower) if self.lower is not None else None,
+            upper=transform(self.upper) if self.upper is not None else None,
+            step=transform(self.step) if self.step is not None else None,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -923,16 +931,11 @@ class ForClause(Node):
             visit(f)
 
     def transform_children(self, transform) -> ForClause:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        it = transform(self.iterable)
-        if it is not self.iterable:
-            self.iterable = it
-        new_filters, changed = _transform_node_list(self.filters, transform)
-        if changed:
-            self.filters = new_filters
-        return self
+        return self.transform_fields(
+            target=transform(self.target),
+            iterable=transform(self.iterable),
+            filters=_transform_node_list(self.filters, transform),
+        )
 
 @dataclass
 class ListComp(ElemComp):
@@ -955,16 +958,11 @@ class DictComp(Node):
             visit(clause)
 
     def transform_children(self, transform) -> DictComp:
-        k = transform(self.key)
-        if k is not self.key:
-            self.key = k
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        new_clauses, changed = _transform_node_list(self.clauses, transform)
-        if changed:
-            self.clauses = new_clauses
-        return self
+        return self.transform_fields(
+            key=transform(self.key),
+            value=transform(self.value),
+            clauses=_transform_node_list(self.clauses, transform),
+        )
 
 @dataclass
 class GeneratorExpr(ElemComp):
@@ -989,15 +987,10 @@ class Param(Node):
             visit(self.default)
 
     def transform_children(self, transform) -> Param:
-        if self.annotation is not None:
-            ann = transform(self.annotation)
-            if ann is not self.annotation:
-                self.annotation = ann
-        if self.default is not None:
-            dflt = transform(self.default)
-            if dflt is not self.default:
-                self.default = dflt
-        return self
+        return self.transform_fields(
+            annotation=transform(self.annotation) if self.annotation is not None else None,
+            default=transform(self.default) if self.default is not None else None,
+        )
 
 @dataclass
 class PosOnlyParam(Param):
@@ -1033,10 +1026,7 @@ class Params(Node):
             visit(p)
 
     def transform_children(self, transform) -> Params:
-        new_params, changed = _transform_node_list(self.params, transform)
-        if changed:
-            self.params = new_params
-        return self
+        return self.transform_fields( params=_transform_node_list(self.params, transform))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1056,13 +1046,10 @@ class Assign(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> Assign:
-        new_targets, c1 = _transform_node_list(self.targets, transform)
-        if c1:
-            self.targets = new_targets
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields(
+            targets=_transform_node_list(self.targets, transform),
+            value=transform(self.value),
+        )
 
 @dataclass
 class AnnAssign(Node):
@@ -1078,17 +1065,11 @@ class AnnAssign(Node):
             visit(self.value)
 
     def transform_children(self, transform) -> AnnAssign:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        ann = transform(self.annotation)
-        if ann is not self.annotation:
-            self.annotation = ann
-        if self.value is not None:
-            v = transform(self.value)
-            if v is not self.value:
-                self.value = v
-        return self
+        return self.transform_fields(
+            target=transform(self.target),
+            annotation=transform(self.annotation),
+            value=transform(self.value) if self.value is not None else None,
+        )
 
 @dataclass
 class Return(Node):
@@ -1099,11 +1080,9 @@ class Return(Node):
             visit(self.value)
 
     def transform_children(self, transform) -> Return:
-        if self.value is not None:
-            v = transform(self.value)
-            if v is not self.value:
-                self.value = v
-        return self
+        return self.transform_fields(
+            value=transform(self.value) if self.value is not None else None,
+        )
 
 @dataclass
 class Pass(Node):
@@ -1129,15 +1108,10 @@ class Raise(Node):
             visit(self.cause)
 
     def transform_children(self, transform) -> Raise:
-        if self.exc is not None:
-            exc = transform(self.exc)
-            if exc is not self.exc:
-                self.exc = exc
-        if self.cause is not None:
-            cause = transform(self.cause)
-            if cause is not self.cause:
-                self.cause = cause
-        return self
+        return self.transform_fields(
+            exc=transform(self.exc) if self.exc is not None else None,
+            cause=transform(self.cause) if self.cause is not None else None,
+        )
 
 @dataclass
 class Assert(Node):
@@ -1150,14 +1124,10 @@ class Assert(Node):
             visit(self.msg)
 
     def transform_children(self, transform) -> Assert:
-        test = transform(self.test)
-        if test is not self.test:
-            self.test = test
-        if self.msg is not None:
-            msg = transform(self.msg)
-            if msg is not self.msg:
-                self.msg = msg
-        return self
+        return self.transform_fields(
+            test=transform(self.test),
+            msg=transform(self.msg) if self.msg is not None else None,
+        )
 
 @dataclass
 class Global(Node):
@@ -1210,19 +1180,12 @@ class For(Node):
             visit(child)
 
     def transform_children(self, transform) -> For:
-        t = transform(self.target)
-        if t is not self.target:
-            self.target = t
-        it = transform(self.iterable)
-        if it is not self.iterable:
-            self.iterable = it
-        new_body, c1 = _transform_node_list(self.body, transform)
-        if c1:
-            self.body = new_body
-        new_orelse, c2 = _transform_node_list(self.orelse, transform)
-        if c2:
-            self.orelse = new_orelse
-        return self
+        return self.transform_fields(
+            target=transform(self.target),
+            iterable=transform(self.iterable),
+            body=_transform_node_list(self.body, transform),
+            orelse=_transform_node_list(self.orelse, transform),
+        )
 
 @dataclass
 class With(Node):
@@ -1239,22 +1202,18 @@ class With(Node):
             visit(child)
 
     def transform_children(self, transform) -> With:
-        new_items = []
-        items_changed = False
+        new_items, items_changed = [], False
         for ctx, var in self.items:
             new_ctx = transform(ctx)
-            if new_ctx is not ctx:
-                items_changed = True
             new_var = transform(var) if var is not None else None
-            if new_var is not var:
+            if new_ctx is not ctx or new_var is not var:
                 items_changed = True
             new_items.append((new_ctx, new_var))
-        if items_changed:
-            self.items = new_items
-        new_body, changed = _transform_node_list(self.body, transform)
-        if changed:
-            self.body = new_body
-        return self
+        new_body = _transform_node_list(self.body, transform)
+        return self.transform_fields(
+            items=new_items if items_changed else self.items,
+            body=new_body,
+        )
 
 @dataclass
 class Try(Node):
@@ -1275,19 +1234,12 @@ class Try(Node):
             visit(child)
 
     def transform_children(self, transform) -> Try:
-        new_body, c1 = _transform_node_list(self.body, transform)
-        if c1:
-            self.body = new_body
-        new_handlers, c2 = _transform_node_list(self.handlers, transform)
-        if c2:
-            self.handlers = new_handlers
-        new_orelse, c3 = _transform_node_list(self.orelse, transform)
-        if c3:
-            self.orelse = new_orelse
-        new_finalbody, c4 = _transform_node_list(self.finalbody, transform)
-        if c4:
-            self.finalbody = new_finalbody
-        return self
+        return self.transform_fields(
+            body=_transform_node_list(self.body, transform),
+            handlers=_transform_node_list(self.handlers, transform),
+            orelse=_transform_node_list(self.orelse, transform),
+            finalbody=_transform_node_list(self.finalbody, transform),
+        )
 
 @dataclass
 class ExceptHandler(Node):
@@ -1302,14 +1254,10 @@ class ExceptHandler(Node):
             visit(child)
 
     def transform_children(self, transform) -> ExceptHandler:
-        if self.type is not None:
-            t = transform(self.type)
-            if t is not self.type:
-                self.type = t
-        new_body, changed = _transform_node_list(self.body, transform)
-        if changed:
-            self.body = new_body
-        return self
+        return self.transform_fields(
+            type=transform(self.type) if self.type is not None else None,
+            body=_transform_node_list(self.body, transform),
+        )
 
 
 # --- Definitions ---
@@ -1336,23 +1284,13 @@ class FunctionDef(Node):
             visit(tp)
 
     def transform_children(self, transform) -> FunctionDef:
-        params = transform(self.params)
-        if params is not self.params:
-            self.params = params
-        new_body, c1 = _transform_node_list(self.body, transform)
-        if c1:
-            self.body = new_body
-        new_decs, c2 = _transform_node_list(self.decorators, transform)
-        if c2:
-            self.decorators = new_decs
-        if self.returns is not None:
-            ret = transform(self.returns)
-            if ret is not self.returns:
-                self.returns = ret
-        new_tps, c3 = _transform_node_list(self.type_params, transform)
-        if c3:
-            self.type_params = new_tps
-        return self
+        return self.transform_fields(
+            params=transform(self.params),
+            body=_transform_node_list(self.body, transform),
+            decorators=_transform_node_list(self.decorators, transform),
+            returns=transform(self.returns) if self.returns is not None else None,
+            type_params=_transform_node_list(self.type_params, transform),
+        )
 
 @dataclass
 class ClassDef(Node):
@@ -1376,22 +1314,13 @@ class ClassDef(Node):
             visit(tp)
 
     def transform_children(self, transform) -> ClassDef:
-        new_bases, c1 = _transform_node_list(self.bases, transform)
-        if c1:
-            self.bases = new_bases
-        new_kws, c2 = _transform_node_list(self.keywords, transform)
-        if c2:
-            self.keywords = new_kws
-        new_body, c3 = _transform_node_list(self.body, transform)
-        if c3:
-            self.body = new_body
-        new_decs, c4 = _transform_node_list(self.decorators, transform)
-        if c4:
-            self.decorators = new_decs
-        new_tps, c5 = _transform_node_list(self.type_params, transform)
-        if c5:
-            self.type_params = new_tps
-        return self
+        return self.transform_fields(
+            bases=_transform_node_list(self.bases, transform),
+            keywords=_transform_node_list(self.keywords, transform),
+            body=_transform_node_list(self.body, transform),
+            decorators=_transform_node_list(self.decorators, transform),
+            type_params=_transform_node_list(self.type_params, transform),
+        )
 
 @dataclass
 class TypeAlias(Node):
@@ -1406,16 +1335,11 @@ class TypeAlias(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> TypeAlias:
-        n = transform(self.name)
-        if n is not self.name:
-            self.name = n
-        new_tps, changed = _transform_node_list(self.type_params, transform)
-        if changed:
-            self.type_params = new_tps
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields(
+            name=transform(self.name),
+            type_params=_transform_node_list(self.type_params, transform),
+            value=transform(self.value),
+        )
 
 
 # --- Type params (3.12+) ---
@@ -1430,11 +1354,9 @@ class TypeVar(Node):
             visit(self.bound)
 
     def transform_children(self, transform) -> TypeVar:
-        if self.bound is not None:
-            b = transform(self.bound)
-            if b is not self.bound:
-                self.bound = b
-        return self
+        return self.transform_fields(
+            bound=transform(self.bound) if self.bound is not None else None,
+        )
 
 @dataclass
 class ParamSpec(Node):
@@ -1460,13 +1382,10 @@ class Match(Node):
             visit(case)
 
     def transform_children(self, transform) -> Match:
-        s = transform(self.subject)
-        if s is not self.subject:
-            self.subject = s
-        new_cases, changed = _transform_node_list(self.cases, transform)
-        if changed:
-            self.cases = new_cases
-        return self
+        return self.transform_fields(
+            subject=transform(self.subject),
+            cases=_transform_node_list(self.cases, transform),
+        )
 
 @dataclass
 class MatchCase(Node):
@@ -1482,17 +1401,11 @@ class MatchCase(Node):
             visit(child)
 
     def transform_children(self, transform) -> MatchCase:
-        p = transform(self.pattern)
-        if p is not self.pattern:
-            self.pattern = p
-        if self.guard is not None:
-            g = transform(self.guard)
-            if g is not self.guard:
-                self.guard = g
-        new_body, changed = _transform_node_list(self.body, transform)
-        if changed:
-            self.body = new_body
-        return self
+        return self.transform_fields(
+            pattern=transform(self.pattern),
+            guard=transform(self.guard) if self.guard is not None else None,
+            body=_transform_node_list(self.body, transform),
+        )
 
 @dataclass
 class MatchLiteral(Node):
@@ -1503,10 +1416,7 @@ class MatchLiteral(Node):
         visit(self.value)
 
     def transform_children(self, transform) -> MatchLiteral:
-        v = transform(self.value)
-        if v is not self.value:
-            self.value = v
-        return self
+        return self.transform_fields( value=transform(self.value))
 
 @dataclass
 class MatchSequence(Node):
@@ -1517,10 +1427,9 @@ class MatchSequence(Node):
             visit(p)
 
     def transform_children(self, transform) -> MatchSequence:
-        new_patterns, changed = _transform_node_list(self.patterns, transform)
-        if changed:
-            self.patterns = new_patterns
-        return self
+        return self.transform_fields(
+            patterns=_transform_node_list(self.patterns, transform),
+        )
 
 @dataclass
 class MatchMapping(Node):
@@ -1535,13 +1444,10 @@ class MatchMapping(Node):
             visit(p)
 
     def transform_children(self, transform) -> MatchMapping:
-        new_keys, c1 = _transform_node_list(self.keys, transform)
-        if c1:
-            self.keys = new_keys
-        new_patterns, c2 = _transform_node_list(self.patterns, transform)
-        if c2:
-            self.patterns = new_patterns
-        return self
+        return self.transform_fields(
+            keys=_transform_node_list(self.keys, transform),
+            patterns=_transform_node_list(self.patterns, transform),
+        )
 
 @dataclass
 class MatchClass(Node):
@@ -1558,16 +1464,11 @@ class MatchClass(Node):
             visit(kp)
 
     def transform_children(self, transform) -> MatchClass:
-        c = transform(self.cls)
-        if c is not self.cls:
-            self.cls = c
-        new_patterns, c1 = _transform_node_list(self.patterns, transform)
-        if c1:
-            self.patterns = new_patterns
-        new_kwd_patterns, c2 = _transform_node_list(self.kwd_patterns, transform)
-        if c2:
-            self.kwd_patterns = new_kwd_patterns
-        return self
+        return self.transform_fields(
+            cls=transform(self.cls),
+            patterns=_transform_node_list(self.patterns, transform),
+            kwd_patterns=_transform_node_list(self.kwd_patterns, transform),
+        )
 
 @dataclass
 class MatchStar(Node):
@@ -1583,11 +1484,9 @@ class MatchAs(Node):
             visit(self.pattern)
 
     def transform_children(self, transform) -> MatchAs:
-        if self.pattern is not None:
-            p = transform(self.pattern)
-            if p is not self.pattern:
-                self.pattern = p
-        return self
+        return self.transform_fields(
+            pattern=transform(self.pattern) if self.pattern is not None else None,
+        )
 
 @dataclass
 class MatchOr(Node):
@@ -1598,677 +1497,9 @@ class MatchOr(Node):
             visit(p)
 
     def transform_children(self, transform) -> MatchOr:
-        new_patterns, changed = _transform_node_list(self.patterns, transform)
-        if changed:
-            self.patterns = new_patterns
-        return self
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Transformer: ast → simple_ast
-#
-# Each CPython AST type maps to a bare converter function via VISITORS dict.
-# visit(node) does a direct hash lookup by type(node).
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def visit(node: ast.AST) -> Node:
-    """Convert a single CPython AST node. Dispatches by type(node)."""
-    converter = VISITORS.get(type(node))
-    if converter is None:
-        raise NotImplementedError(
-            f"No handler for {node.__class__.__name__}: {ast.dump(node)}"
+        return self.transform_fields(
+            patterns=_transform_node_list(self.patterns, transform),
         )
-    return converter(node)
-
-
-def visit_list(nodes: list[ast.AST]) -> list[Node]:
-    """Convert a list of CPython AST nodes, flattening any that return lists."""
-    result = []
-    for n in nodes:
-        v = visit(n)
-        if isinstance(v, list):
-            result.extend(v)
-        else:
-            result.append(v)
-    return result
-
-
-# ── Modules ──────────────────────────────────────────────────────────────────
-
-def convert_module(node: ast.Module) -> Module:
-    return locate(node, Module(body=visit_list(node.body)))
-
-def convert_interactive(node: ast.Interactive) -> Interactive:
-    return locate(node, Interactive(body=visit_list(node.body)))
-
-def convert_expression(node: ast.Expression) -> Expression:
-    return locate(node, Expression(body=visit(node.body)))
-
-
-# ── Literals ─────────────────────────────────────────────────────────────────
-
-_CONSTANT_TYPE_MAP: dict[type, type] = {
-    bool: BoolLiteral,   # must be before int in isinstance checks, but here we use exact type
-    int: IntLiteral,
-    float: FloatLiteral,
-    complex: ComplexLiteral,
-    str: StringLiteral,
-    bytes: BytesLiteral,
-}
-
-def convert_constant(node: ast.Constant) -> Node:
-    v = node.value
-    if v is None:
-        return locate(node, NoneLiteral())
-    if v is ...:
-        return locate(node, EllipsisLiteral())
-    # bool must be checked before int (bool is a subclass of int)
-    if isinstance(v, bool):
-        return locate(node, BoolLiteral(value=v))
-    cls = _CONSTANT_TYPE_MAP.get(type(v))
-    if cls is not None:
-        return locate(node, cls(value=v))
-    raise NotImplementedError(f"Unknown constant type: {type(v)} ({v!r})")
-
-
-def convert_joined_str(node: ast.JoinedStr) -> FString:
-    return locate(node, FString(parts=visit_list(node.values)))
-
-
-_CONVERSION_MAP = {-1: None, ord("s"): "s", ord("r"): "r", ord("a"): "a"}
-
-def convert_formatted_value(node: ast.FormattedValue) -> FormattedExpr:
-    return locate(node, FormattedExpr(
-        value=visit(node.value),
-        conversion=_CONVERSION_MAP.get(node.conversion),
-        format_spec=visit(node.format_spec) if node.format_spec else None,
-    ))
-
-
-# ── Collections with context ────────────────────────────────────────────────
-
-_LIST_CTX = {ast.Store: lambda elts: ListPattern(targets=elts)}
-_TUPLE_CTX = {ast.Store: lambda elts: TuplePattern(targets=elts)}
-
-def convert_list(node: ast.List) -> Node:
-    elts = visit_list(node.elts)
-    factory = _LIST_CTX.get(type(node.ctx))
-    return locate(node, factory(elts) if factory else ListLiteral(elements=elts))
-
-def convert_tuple(node: ast.Tuple) -> Node:
-    elts = visit_list(node.elts)
-    factory = _TUPLE_CTX.get(type(node.ctx))
-    return locate(node, factory(elts) if factory else TupleLiteral(elements=elts))
-
-def convert_set(node: ast.Set) -> SetLiteral:
-    return locate(node, SetLiteral(elements=visit_list(node.elts)))
-
-def convert_dict(node: ast.Dict) -> DictLiteral:
-    return locate(node, DictLiteral(
-        keys=[visit(k) if k else None for k in node.keys],
-        values=visit_list(node.values),
-    ))
-
-
-# ── Names / Attributes / Subscripts ─────────────────────────────────────────
-
-_NAME_CTX = {
-    ast.Load: lambda id: LoadName(name=id),
-    ast.Store: lambda id: StoreName(name=id),
-    ast.Del: lambda id: DeleteName(name=id),
-}
-
-def convert_name(node: ast.Name) -> Node:
-    return locate(node, _NAME_CTX[type(node.ctx)](node.id))
-
-
-_ATTR_CTX = {
-    ast.Load: lambda obj, attr: LoadAttr(object=obj, attr=attr),
-    ast.Store: lambda obj, attr: StoreAttr(object=obj, attr=attr),
-    ast.Del: lambda obj, attr: DeleteAttr(object=obj, attr=attr),
-}
-
-def convert_attribute(node: ast.Attribute) -> Node:
-    return locate(node, _ATTR_CTX[type(node.ctx)](visit(node.value), node.attr))
-
-
-_SUBSCRIPT_CTX = {
-    ast.Load: lambda obj, idx: LoadSubscript(object=obj, index=idx),
-    ast.Store: lambda obj, idx: StoreSubscript(object=obj, index=idx),
-    ast.Del: lambda obj, idx: DeleteSubscript(object=obj, index=idx),
-}
-
-def convert_subscript(node: ast.Subscript) -> Node:
-    return locate(node, _SUBSCRIPT_CTX[type(node.ctx)](visit(node.value), visit(node.slice)))
-
-
-_STARRED_CTX = {
-    ast.Store: lambda val: StarTarget(target=val),
-}
-
-def convert_starred(node: ast.Starred) -> Node:
-    val = visit(node.value)
-    factory = _STARRED_CTX.get(type(node.ctx))
-    return locate(node, factory(val) if factory else StarUnpack(value=val))
-
-
-def convert_slice(node: ast.Slice) -> Slice:
-    return locate(node, Slice(
-        lower=visit(node.lower) if node.lower else None,
-        upper=visit(node.upper) if node.upper else None,
-        step=visit(node.step) if node.step else None,
-    ))
-
-
-# ── Binary Operators ─────────────────────────────────────────────────────────
-
-BINOP_CLASS: dict[type, type] = {
-    ast.Add: Add, ast.Sub: Sub, ast.Mult: Mult, ast.Div: Div,
-    ast.FloorDiv: FloorDiv, ast.Mod: Mod, ast.Pow: Pow, ast.MatMult: MatMult,
-    ast.LShift: LShift, ast.RShift: RShift,
-    ast.BitOr: BitOr, ast.BitXor: BitXor, ast.BitAnd: BitAnd,
-}
-
-def convert_binop(node: ast.BinOp) -> Node:
-    return locate(node, BINOP_CLASS[type(node.op)](
-        left=visit(node.left), right=visit(node.right),
-    ))
-
-
-# ── Unary Operators ──────────────────────────────────────────────────────────
-
-UNARYOP_CLASS: dict[type, type] = {
-    ast.UAdd: UnaryPlus, ast.USub: Negate, ast.Not: Not, ast.Invert: Invert,
-}
-
-def convert_unaryop(node: ast.UnaryOp) -> Node:
-    return locate(node, UNARYOP_CLASS[type(node.op)](operand=visit(node.operand)))
-
-
-# ── Boolean Operators ────────────────────────────────────────────────────────
-
-BOOLOP_CLASS: dict[type, type] = {ast.And: And, ast.Or: Or}
-
-def convert_boolop(node: ast.BoolOp) -> Node:
-    cls = BOOLOP_CLASS[type(node.op)]
-    values = [visit(v) for v in node.values]
-    result = values[0]
-    for v in values[1:]:
-        result = locate(node, cls(left=result, right=v))
-    return result
-
-
-# ── Comparison Operators ─────────────────────────────────────────────────────
-
-COMPARISON_CLASS: dict[type, type] = {
-    ast.Eq: Eq, ast.NotEq: NotEq, ast.Lt: Lt, ast.LtE: LtE,
-    ast.Gt: Gt, ast.GtE: GtE, ast.Is: Is, ast.IsNot: IsNot,
-    ast.In: In, ast.NotIn: NotIn,
-}
-
-def convert_compare(node: ast.Compare) -> Node:
-    if len(node.ops) == 1:
-        return locate(node, COMPARISON_CLASS[type(node.ops[0])](
-            left=visit(node.left), right=visit(node.comparators[0]),
-        ))
-    all_operands = [visit(node.left)] + [visit(c) for c in node.comparators]
-    comparisons = [
-        COMPARISON_CLASS[type(op)](left=all_operands[i], right=all_operands[i + 1])
-        for i, op in enumerate(node.ops)
-    ]
-    return locate(node, CompareChain(comparisons=comparisons))
-
-
-# ── Augmented Assignment ─────────────────────────────────────────────────────
-
-AUGASSIGN_CLASS: dict[type, type] = {
-    ast.Add: AddAssign, ast.Sub: SubAssign, ast.Mult: MultAssign,
-    ast.Div: DivAssign, ast.FloorDiv: FloorDivAssign, ast.Mod: ModAssign,
-    ast.Pow: PowAssign, ast.MatMult: MatMultAssign,
-    ast.LShift: LShiftAssign, ast.RShift: RShiftAssign,
-    ast.BitOr: BitOrAssign, ast.BitXor: BitXorAssign, ast.BitAnd: BitAndAssign,
-}
-
-def convert_augassign(node: ast.AugAssign) -> Node:
-    return locate(node, AUGASSIGN_CLASS[type(node.op)](
-        target=visit(node.target), value=visit(node.value),
-    ))
-
-
-# ── Expressions ──────────────────────────────────────────────────────────────
-
-def convert_call(node: ast.Call) -> Call:
-    kwargs = [
-        locate(kw, Keyword(name=kw.arg, value=visit(kw.value)))
-        for kw in node.keywords
-    ]
-    return locate(node, Call(
-        func=visit(node.func), args=visit_list(node.args), kwargs=kwargs,
-    ))
-
-def convert_ifexp(node: ast.IfExp) -> IfExpr:
-    return locate(node, IfExpr(
-        test=visit(node.test), body=visit(node.body), orelse=visit(node.orelse),
-    ))
-
-def convert_namedexpr(node: ast.NamedExpr) -> NamedExpr:
-    return locate(node, NamedExpr(target=visit(node.target), value=visit(node.value)))
-
-def convert_lambda(node: ast.Lambda) -> Lambda:
-    return locate(node, Lambda(params=convert_arguments(node.args), body=visit(node.body)))
-
-def convert_yield(node: ast.Yield) -> Yield:
-    return locate(node, Yield(value=visit(node.value) if node.value else None))
-
-def convert_yieldfrom(node: ast.YieldFrom) -> YieldFrom:
-    return locate(node, YieldFrom(value=visit(node.value)))
-
-def convert_await(node: ast.Await) -> Await:
-    return locate(node, Await(value=visit(node.value)))
-
-
-# ── Comprehensions ───────────────────────────────────────────────────────────
-
-def convert_generators(generators: list[ast.comprehension]) -> list[ForClause]:
-    return [
-        ForClause(
-            target=visit(gen.target), iterable=visit(gen.iter),
-            filters=[visit(f) for f in gen.ifs], is_async=bool(gen.is_async),
-        )
-        for gen in generators
-    ]
-
-def convert_listcomp(node: ast.ListComp) -> ListComp:
-    return locate(node, ListComp(
-        element=visit(node.elt), clauses=convert_generators(node.generators),
-    ))
-
-def convert_setcomp(node: ast.SetComp) -> SetComp:
-    return locate(node, SetComp(
-        element=visit(node.elt), clauses=convert_generators(node.generators),
-    ))
-
-def convert_dictcomp(node: ast.DictComp) -> DictComp:
-    return locate(node, DictComp(
-        key=visit(node.key), value=visit(node.value),
-        clauses=convert_generators(node.generators),
-    ))
-
-def convert_generatorexp(node: ast.GeneratorExp) -> GeneratorExpr:
-    return locate(node, GeneratorExpr(
-        element=visit(node.elt), clauses=convert_generators(node.generators),
-    ))
-
-
-# ── Parameters ───────────────────────────────────────────────────────────────
-
-def convert_arguments(args: ast.arguments) -> Params:
-    params: list[Param] = []
-
-    for a in args.posonlyargs:
-        params.append(PosOnlyParam(
-            name=a.arg,
-            annotation=visit(a.annotation) if a.annotation else None,
-        ))
-
-    for a in args.args:
-        params.append(PosOrKwParam(
-            name=a.arg,
-            annotation=visit(a.annotation) if a.annotation else None,
-        ))
-
-    # defaults right-align to the combined posonlyargs + args
-    all_positional = params[:]
-    n_defaults = len(args.defaults)
-    if n_defaults:
-        defaults = [visit(d) for d in args.defaults]
-        for i, d in enumerate(defaults):
-            all_positional[len(all_positional) - n_defaults + i].default = d
-
-    if args.vararg:
-        params.append(VarPositional(
-            name=args.vararg.arg,
-            annotation=visit(args.vararg.annotation) if args.vararg.annotation else None,
-        ))
-
-    for i, a in enumerate(args.kwonlyargs):
-        default = None
-        if i < len(args.kw_defaults) and args.kw_defaults[i] is not None:
-            default = visit(args.kw_defaults[i])
-        params.append(KwOnlyParam(
-            name=a.arg,
-            annotation=visit(a.annotation) if a.annotation else None,
-            default=default,
-        ))
-
-    if args.kwarg:
-        params.append(VarKeyword(
-            name=args.kwarg.arg,
-            annotation=visit(args.kwarg.annotation) if args.kwarg.annotation else None,
-        ))
-
-    return Params(params=params)
-
-
-# ── Statements ───────────────────────────────────────────────────────────────
-
-def convert_expr_stmt(node: ast.Expr) -> Node:
-    """No ExprStmt wrapper — return the expression directly."""
-    return visit(node.value)
-
-def convert_assign(node: ast.Assign) -> Assign:
-    return locate(node, Assign(targets=visit_list(node.targets), value=visit(node.value)))
-
-def convert_annassign(node: ast.AnnAssign) -> AnnAssign:
-    return locate(node, AnnAssign(
-        target=visit(node.target), annotation=visit(node.annotation),
-        value=visit(node.value) if node.value else None, simple=bool(node.simple),
-    ))
-
-def convert_delete(node: ast.Delete) -> list[Node]:
-    return [visit(t) for t in node.targets]
-
-def convert_return(node: ast.Return) -> Return:
-    return locate(node, Return(value=visit(node.value) if node.value else None))
-
-def convert_pass(node: ast.Pass) -> Pass:
-    return locate(node, Pass())
-
-def convert_break(node: ast.Break) -> Break:
-    return locate(node, Break())
-
-def convert_continue(node: ast.Continue) -> Continue:
-    return locate(node, Continue())
-
-def convert_raise(node: ast.Raise) -> Raise:
-    return locate(node, Raise(
-        exc=visit(node.exc) if node.exc else None,
-        cause=visit(node.cause) if node.cause else None,
-    ))
-
-def convert_assert(node: ast.Assert) -> Assert:
-    return locate(node, Assert(
-        test=visit(node.test), msg=visit(node.msg) if node.msg else None,
-    ))
-
-def convert_global(node: ast.Global) -> Global:
-    return locate(node, Global(names=list(node.names)))
-
-def convert_nonlocal(node: ast.Nonlocal) -> Nonlocal:
-    return locate(node, Nonlocal(names=list(node.names)))
-
-
-# --- Imports (flattened) ---
-
-def convert_import(node: ast.Import) -> list[Import]:
-    return [locate(node, Import(module=a.name, alias=a.asname)) for a in node.names]
-
-def convert_importfrom(node: ast.ImportFrom) -> list[ImportFrom]:
-    return [
-        locate(node, ImportFrom(
-            module=node.module, name=a.name, alias=a.asname, level=node.level,
-        ))
-        for a in node.names
-    ]
-
-
-# --- Compound statements ---
-
-def convert_if(node: ast.If) -> If:
-    return locate(node, If(
-        test=visit(node.test), body=visit_list(node.body),
-        orelse=visit_list(node.orelse),
-    ))
-
-def convert_while(node: ast.While) -> While:
-    return locate(node, While(
-        test=visit(node.test), body=visit_list(node.body),
-        orelse=visit_list(node.orelse),
-    ))
-
-def convert_for(node: ast.For) -> For:
-    return locate(node, For(
-        target=visit(node.target), iterable=visit(node.iter),
-        body=visit_list(node.body), orelse=visit_list(node.orelse), is_async=False,
-    ))
-
-def convert_asyncfor(node: ast.AsyncFor) -> For:
-    return locate(node, For(
-        target=visit(node.target), iterable=visit(node.iter),
-        body=visit_list(node.body), orelse=visit_list(node.orelse), is_async=True,
-    ))
-
-def _convert_with_items(node) -> list[tuple[Node, Optional[Node]]]:
-    return [
-        (visit(item.context_expr), visit(item.optional_vars) if item.optional_vars else None)
-        for item in node.items
-    ]
-
-def convert_with(node: ast.With) -> With:
-    return locate(node, With(
-        items=_convert_with_items(node), body=visit_list(node.body), is_async=False,
-    ))
-
-def convert_asyncwith(node: ast.AsyncWith) -> With:
-    return locate(node, With(
-        items=_convert_with_items(node), body=visit_list(node.body), is_async=True,
-    ))
-
-def _convert_handler(node: ast.ExceptHandler) -> ExceptHandler:
-    return locate(node, ExceptHandler(
-        type=visit(node.type) if node.type else None,
-        name=node.name, body=visit_list(node.body),
-    ))
-
-def convert_try(node: ast.Try) -> Try:
-    return locate(node, Try(
-        body=visit_list(node.body),
-        handlers=[_convert_handler(h) for h in node.handlers],
-        orelse=visit_list(node.orelse), finalbody=visit_list(node.finalbody),
-        is_star=False,
-    ))
-
-def convert_trystar(node: ast.TryStar) -> Try:
-    return locate(node, Try(
-        body=visit_list(node.body),
-        handlers=[_convert_handler(h) for h in node.handlers],
-        orelse=visit_list(node.orelse), finalbody=visit_list(node.finalbody),
-        is_star=True,
-    ))
-
-
-# --- Definitions ---
-
-def convert_functiondef(node: ast.FunctionDef) -> FunctionDef:
-    type_params = visit_list(node.type_params) if hasattr(node, "type_params") else []
-    return locate(node, FunctionDef(
-        name=node.name, params=convert_arguments(node.args),
-        body=visit_list(node.body), decorators=visit_list(node.decorator_list),
-        returns=visit(node.returns) if node.returns else None,
-        is_async=False, type_params=type_params,
-    ))
-
-def convert_asyncfunctiondef(node: ast.AsyncFunctionDef) -> FunctionDef:
-    type_params = visit_list(node.type_params) if hasattr(node, "type_params") else []
-    return locate(node, FunctionDef(
-        name=node.name, params=convert_arguments(node.args),
-        body=visit_list(node.body), decorators=visit_list(node.decorator_list),
-        returns=visit(node.returns) if node.returns else None,
-        is_async=True, type_params=type_params,
-    ))
-
-def convert_classdef(node: ast.ClassDef) -> ClassDef:
-    kwargs = [locate(kw, Keyword(name=kw.arg, value=visit(kw.value))) for kw in node.keywords]
-    type_params = visit_list(node.type_params) if hasattr(node, "type_params") else []
-    return locate(node, ClassDef(
-        name=node.name, bases=visit_list(node.bases), keywords=kwargs,
-        body=visit_list(node.body), decorators=visit_list(node.decorator_list),
-        type_params=type_params,
-    ))
-
-def convert_typealias(node: ast.TypeAlias) -> TypeAlias:
-    return locate(node, TypeAlias(
-        name=visit(node.name), type_params=visit_list(node.type_params),
-        value=visit(node.value),
-    ))
-
-
-# --- Type params ---
-
-def convert_typevar(node: ast.TypeVar) -> TypeVar:
-    return locate(node, TypeVar(name=node.name, bound=visit(node.bound) if node.bound else None))
-
-def convert_paramspec(node: ast.ParamSpec) -> ParamSpec:
-    return locate(node, ParamSpec(name=node.name))
-
-def convert_typevartuple(node: ast.TypeVarTuple) -> TypeVarTuple:
-    return locate(node, TypeVarTuple(name=node.name))
-
-
-# ── Pattern Matching ─────────────────────────────────────────────────────────
-
-def convert_match(node: ast.Match) -> Match:
-    return locate(node, Match(
-        subject=visit(node.subject),
-        cases=[_convert_match_case(c) for c in node.cases],
-    ))
-
-def _convert_match_case(node: ast.match_case) -> MatchCase:
-    return MatchCase(
-        pattern=visit(node.pattern),
-        guard=visit(node.guard) if node.guard else None,
-        body=visit_list(node.body),
-    )
-
-def convert_matchvalue(node: ast.MatchValue) -> MatchLiteral:
-    return locate(node, MatchLiteral(value=visit(node.value), use_is=False))
-
-def convert_matchsingleton(node: ast.MatchSingleton) -> MatchLiteral:
-    v = node.value
-    if v is None:
-        val = NoneLiteral()
-    elif isinstance(v, bool):
-        val = BoolLiteral(value=v)
-    else:
-        val = convert_constant(ast.Constant(value=v))
-    return locate(node, MatchLiteral(value=val, use_is=True))
-
-def convert_matchsequence(node: ast.MatchSequence) -> MatchSequence:
-    return locate(node, MatchSequence(patterns=visit_list(node.patterns)))
-
-def convert_matchmapping(node: ast.MatchMapping) -> MatchMapping:
-    return locate(node, MatchMapping(
-        keys=visit_list(node.keys), patterns=visit_list(node.patterns), rest=node.rest,
-    ))
-
-def convert_matchclass(node: ast.MatchClass) -> MatchClass:
-    return locate(node, MatchClass(
-        cls=visit(node.cls), patterns=visit_list(node.patterns),
-        kwd_attrs=list(node.kwd_attrs), kwd_patterns=visit_list(node.kwd_patterns),
-    ))
-
-def convert_matchstar(node: ast.MatchStar) -> MatchStar:
-    return locate(node, MatchStar(name=node.name))
-
-def convert_matchas(node: ast.MatchAs) -> MatchAs:
-    return locate(node, MatchAs(
-        pattern=visit(node.pattern) if node.pattern else None, name=node.name,
-    ))
-
-def convert_matchor(node: ast.MatchOr) -> MatchOr:
-    return locate(node, MatchOr(patterns=visit_list(node.patterns)))
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# VISITORS dispatch table: ast type → converter function
-# ═══════════════════════════════════════════════════════════════════════════════
-
-VISITORS: dict[type, Any] = {
-    # Modules
-    ast.Module: convert_module,
-    ast.Interactive: convert_interactive,
-    ast.Expression: convert_expression,
-    # Literals
-    ast.Constant: convert_constant,
-    ast.JoinedStr: convert_joined_str,
-    ast.FormattedValue: convert_formatted_value,
-    # Collections
-    ast.List: convert_list,
-    ast.Tuple: convert_tuple,
-    ast.Set: convert_set,
-    ast.Dict: convert_dict,
-    # Names / Attributes / Subscripts
-    ast.Name: convert_name,
-    ast.Attribute: convert_attribute,
-    ast.Subscript: convert_subscript,
-    ast.Starred: convert_starred,
-    ast.Slice: convert_slice,
-    # Operators
-    ast.BinOp: convert_binop,
-    ast.UnaryOp: convert_unaryop,
-    ast.BoolOp: convert_boolop,
-    ast.Compare: convert_compare,
-    ast.AugAssign: convert_augassign,
-    # Expressions
-    ast.Call: convert_call,
-    ast.IfExp: convert_ifexp,
-    ast.NamedExpr: convert_namedexpr,
-    ast.Lambda: convert_lambda,
-    ast.Yield: convert_yield,
-    ast.YieldFrom: convert_yieldfrom,
-    ast.Await: convert_await,
-    # Comprehensions
-    ast.ListComp: convert_listcomp,
-    ast.SetComp: convert_setcomp,
-    ast.DictComp: convert_dictcomp,
-    ast.GeneratorExp: convert_generatorexp,
-    # Statements
-    ast.Expr: convert_expr_stmt,
-    ast.Assign: convert_assign,
-    ast.AnnAssign: convert_annassign,
-    ast.Delete: convert_delete,
-    ast.Return: convert_return,
-    ast.Pass: convert_pass,
-    ast.Break: convert_break,
-    ast.Continue: convert_continue,
-    ast.Raise: convert_raise,
-    ast.Assert: convert_assert,
-    ast.Global: convert_global,
-    ast.Nonlocal: convert_nonlocal,
-    # Imports
-    ast.Import: convert_import,
-    ast.ImportFrom: convert_importfrom,
-    # Compound statements
-    ast.If: convert_if,
-    ast.While: convert_while,
-    ast.For: convert_for,
-    ast.AsyncFor: convert_asyncfor,
-    ast.With: convert_with,
-    ast.AsyncWith: convert_asyncwith,
-    ast.Try: convert_try,
-    ast.TryStar: convert_trystar,
-    # Definitions
-    ast.FunctionDef: convert_functiondef,
-    ast.AsyncFunctionDef: convert_asyncfunctiondef,
-    ast.ClassDef: convert_classdef,
-    ast.TypeAlias: convert_typealias,
-    # Type params
-    ast.TypeVar: convert_typevar,
-    ast.ParamSpec: convert_paramspec,
-    ast.TypeVarTuple: convert_typevartuple,
-    # Match
-    ast.Match: convert_match,
-    ast.MatchValue: convert_matchvalue,
-    ast.MatchSingleton: convert_matchsingleton,
-    ast.MatchSequence: convert_matchsequence,
-    ast.MatchMapping: convert_matchmapping,
-    ast.MatchClass: convert_matchclass,
-    ast.MatchStar: convert_matchstar,
-    ast.MatchAs: convert_matchas,
-    ast.MatchOr: convert_matchor,
-}
-
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Pretty Printer
@@ -2316,4 +1547,5 @@ def dump(node: Node, indent: int = 2, include_loc: bool = False) -> str:
 
 def simplify(tree: ast.AST) -> Node:
     """Convert a CPython AST tree into a simplified AST."""
+    from conversion import visit
     return visit(tree)
