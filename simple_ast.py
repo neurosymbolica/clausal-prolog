@@ -77,6 +77,8 @@ __all__ = [
     # Statements
     "Assign", "AnnAssign", "Return", "Pass", "Break", "Continue",
     "Raise", "Assert", "Global", "Nonlocal",
+    # Logical / Prolog
+    "Predicate",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -143,11 +145,19 @@ class SourcePosition:
 _LOC_FIELDS = frozenset(("position",))
 
 
-def locate(src: ast.AST, dst: Node) -> Node:
+def locate(
+    src: ast.AST,
+    dst: Node
+) -> Node:
     """Copy source location from a CPython AST node to a simplified node.
     Do not use with Modules, Interactive, or Expression nodes.
     """
-    dst.position = SourcePosition(src.lineno, src.col_offset, src.end_lineno, src.end_col_offset)
+    dst.position = SourcePosition(
+        src.lineno,
+        src.col_offset,
+        src.end_lineno,
+        src.end_col_offset
+    )
     return dst
 
 
@@ -1026,6 +1036,22 @@ class Assign(Node):
         return assign.transform_fields(
             targets=_transform_node_list(assign.targets, transform),
             value=transform(assign.value),
+        )
+
+@dataclass
+class Predicate(Node):
+    """Prolog-style predicate: head <- body."""
+    head: Node = None  # type: ignore[assignment]
+    body: Node = None  # type: ignore[assignment]
+
+    def visit_children(predicate, visit) -> None:
+        visit(predicate.head)
+        visit(predicate.body)
+
+    def transform_children(predicate, transform) -> Predicate:
+        return predicate.transform_fields(
+            head=transform(predicate.head),
+            body=transform(predicate.body),
         )
 
 @dataclass

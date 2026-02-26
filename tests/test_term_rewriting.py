@@ -23,13 +23,15 @@ def _ns():
     return ns
 
 
-def term_eval(src: str):
+def term_eval(src: str, expected_type: type):
     """Parse an expression, run TermTransformer, evaluate → simple_ast node."""
     tree = ast.parse(src, mode='eval')
     ast.fix_missing_locations(tree)
     transformed = TermTransformer().visit(tree.body)
     expr_tree = ast.fix_missing_locations(ast.Expression(body=transformed))
-    return eval(compile(expr_tree, '<test>', 'eval'), _ns())
+    result = eval(compile(expr_tree, '<test>', 'eval'), _ns())
+    assert isinstance(result, expected_type)
+    return result
 
 
 def embed_exec(src: str) -> dict:
@@ -45,75 +47,64 @@ def embed_exec(src: str) -> dict:
 
 # ── TermTransformer: literals ──────────────────────────────────────────────────
 
+def literal_test(string, literal_type, value):
+    node = term_eval(string, literal_type)
+    assert node.value == value
+
+
 def test_integer():
-    node = term_eval("42")
-    assert isinstance(node, sa.IntLiteral)
-    assert node.value == 42
+    literal_test("42", sa.IntLiteral, 42)
 
 
 def test_float():
-    node = term_eval("3.14")
-    assert isinstance(node, sa.FloatLiteral)
-    assert node.value == 3.14
+    literal_test("3.14", sa.FloatLiteral, 3.14)
 
 
 def test_complex():
-    node = term_eval("1j")
-    assert isinstance(node, sa.ComplexLiteral)
-    assert node.value == 1j
+    literal_test("1j", sa.ComplexLiteral, 1j)
 
 
 def test_string():
-    node = term_eval("'hello'")
-    assert isinstance(node, sa.StringLiteral)
-    assert node.value == 'hello'
+    literal_test("'hello'", sa.StringLiteral, 'hello')
 
 
 def test_bytes():
-    node = term_eval("b'hi'")
-    assert isinstance(node, sa.BytesLiteral)
-    assert node.value == b'hi'
+    literal_test("b'hi'", sa.BytesLiteral, b'hi')
 
 
 def test_bool_true():
-    node = term_eval("True")
-    assert isinstance(node, sa.BoolLiteral)
-    assert node.value is True
+    literal_test("True", sa.BoolLiteral, True)
 
 
 def test_bool_false():
-    node = term_eval("False")
-    assert isinstance(node, sa.BoolLiteral)
-    assert node.value is False
+    literal_test("False", sa.BoolLiteral, False)
 
 
 def test_none():
-    assert isinstance(term_eval("None"), sa.NoneLiteral)
+    term_eval("None", sa.NoneLiteral)
 
 
 def test_ellipsis():
-    assert isinstance(term_eval("..."), sa.EllipsisLiteral)
+    term_eval("...", sa.EllipsisLiteral)
 
 
 # ── TermTransformer: names ─────────────────────────────────────────────────────
 
 def test_bare_name_becomes_load_name():
-    node = term_eval("foo")
-    assert isinstance(node, sa.LoadName)
+    node = term_eval("foo", sa.LoadName)
     assert node.name == 'foo'
 
 
 def test_logic_variable_first_use():
     # _X on first use creates a Var (our mock returns a sentinel string)
-    node = term_eval("_X")
+    node = term_eval("_X", str)  # ?
     assert node == '<Var _X>'
 
 
 def test_logic_variable_reuse():
     # _X used twice in the same expression: second use must be the same object
     # The walrus pattern ensures they share the same Python variable.
-    node = term_eval("_X == _X")
-    assert isinstance(node, sa.Eq)
+    node = term_eval("_X == _X", sa.Eq)
     assert node.left is node.right   # same Var object
 
 
@@ -135,8 +126,7 @@ def test_logic_variable_reuse():
     ("a & b",  sa.BitAnd),
 ])
 def test_binop(src, cls):
-    node = term_eval(src)
-    assert isinstance(node, cls)
+    node = term_eval(src, cls)
     assert isinstance(node.left,  sa.LoadName)
     assert isinstance(node.right, sa.LoadName)
 
@@ -150,30 +140,30 @@ def test_binop(src, cls):
     ("not x", sa.Not),
 ])
 def test_unaryop(src, cls):
-    node = term_eval(src)
-    assert isinstance(node, cls)
+    node = term_eval(src, cls)
     assert isinstance(node.operand, sa.LoadName)
 
 
 # ── TermTransformer: boolean operators ────────────────────────────────────────
 
 def test_bool_and():
-    node = term_eval("a and b")
-    assert isinstance(node, sa.And)
+    node = term_eval("a and b", sa.And)
     assert isinstance(node.left,  sa.LoadName)
     assert isinstance(node.right, sa.LoadName)
 
 
 def test_bool_or():
-    node = term_eval("a or b")
-    assert isinstance(node, sa.Or)
+    node = term_eval("a or b", sa.Or)
+    assert isinstance(node.left,  sa.LoadName)
+    assert isinstance(node.right, sa.LoadName)
 
 
 def test_bool_and_folded():
     # a and b and c → And(And(a, b), c)
-    node = term_eval("a and b and c")
-    assert isinstance(node, sa.And)
+    node = term_eval("a and b and c", sa.And)
     assert isinstance(node.left, sa.And)
+    assert node.left.left.name == 'a'
+    assert node.left.right.name == 'b'
     assert isinstance(node.right, sa.LoadName)
     assert node.right.name == 'c'
 
@@ -191,68 +181,60 @@ def test_bool_and_folded():
     ("a in b",  sa.In),
 ])
 def test_cmpop(src, cls):
-    node = term_eval(src)
-    assert isinstance(node, cls)
+    node = term_eval(src, cls)
+    assert node.left.name == 'a'
+    assert node.right.name == 'b'
 
 
 def test_compare_chain():
-    node = term_eval("a < b < c")
-    assert isinstance(node, sa.CompareChain)
+    node = term_eval("a < b <= c", sa.CompareChain)
     assert len(node.comparisons) == 2
     assert isinstance(node.comparisons[0], sa.Lt)
-    assert isinstance(node.comparisons[1], sa.Lt)
+    assert isinstance(node.comparisons[1], sa.LtE )
 
 
 # ── TermTransformer: '<-' pseudo-operator ─────────────────────────────────────
 
 def test_arrow_assign():
-    # a<-b (no space: '-' immediately follows '<') → Assign
-    node = term_eval("a<-b")
-    assert isinstance(node, sa.Assign)
-    assert len(node.targets) == 1
-    assert isinstance(node.targets[0], sa.LoadName)
-    assert node.targets[0].name == 'a'
-    assert isinstance(node.value, sa.LoadName)
-    assert node.value.name == 'b'
+    # a<-b (no space: '-' immediately follows '<') → Predicate
+    node = term_eval("a<-b", sa.Predicate)
+    assert isinstance(node.head, sa.LoadName)
+    assert node.head.name == 'a'
+    assert isinstance(node.body, sa.LoadName)
+    assert node.body.name == 'b'
 
 
 def test_spaced_lt_negate_not_arrow():
     # a < -b (space before '-') is NOT '<-', just Lt of Negate
-    node = term_eval("a < -b")
-    assert isinstance(node, sa.Lt)
+    node = term_eval("a < -b", sa.Lt)
     assert isinstance(node.right, sa.Negate)
 
 
 # ── TermTransformer: collections ──────────────────────────────────────────────
 
 def test_list_literal():
-    node = term_eval("[a, b, c]")
-    assert isinstance(node, sa.ListLiteral)
+    node = term_eval("[a, b, c]", sa.ListLiteral)
     assert len(node.elements) == 3
     assert all(isinstance(e, sa.LoadName) for e in node.elements)
 
 
 def test_empty_list():
-    node = term_eval("[]")
-    assert isinstance(node, sa.ListLiteral)
+    node = term_eval("[]", sa.ListLiteral)
     assert node.elements == []
 
 
 def test_tuple_literal():
-    node = term_eval("(a, b)")
-    assert isinstance(node, sa.TupleLiteral)
+    node = term_eval("(a, b)", sa.TupleLiteral)
     assert len(node.elements) == 2
 
 
 def test_set_literal():
-    node = term_eval("{a, b}")
-    assert isinstance(node, sa.SetLiteral)
+    node = term_eval("{a, b}", sa.SetLiteral)
     assert len(node.elements) == 2
 
 
 def test_dict_literal():
-    node = term_eval("{'k': v}")
-    assert isinstance(node, sa.DictLiteral)
+    node = term_eval("{'k': v}", sa.DictLiteral)
     assert len(node.keys) == 1
     assert isinstance(node.keys[0], sa.StringLiteral)
     assert node.keys[0].value == 'k'
@@ -262,8 +244,7 @@ def test_dict_literal():
 # ── TermTransformer: call expressions ─────────────────────────────────────────
 
 def test_call_positional():
-    node = term_eval("f(a, b)")
-    assert isinstance(node, sa.Call)
+    node = term_eval("f(a, b)", sa.Call)
     assert isinstance(node.func, sa.LoadName)
     assert node.func.name == 'f'
     assert len(node.args) == 2
@@ -271,8 +252,7 @@ def test_call_positional():
 
 
 def test_call_keyword():
-    node = term_eval("f(x=1)")
-    assert isinstance(node, sa.Call)
+    node = term_eval("f(x=1)", sa.Call)
     assert len(node.kwargs) == 1
     kw = node.kwargs[0]
     assert isinstance(kw, sa.Keyword)
@@ -283,30 +263,26 @@ def test_call_keyword():
 # ── TermTransformer: other expressions ────────────────────────────────────────
 
 def test_if_expr():
-    node = term_eval("a if c else b")
-    assert isinstance(node, sa.IfExpr)
+    node = term_eval("a if c else b", sa.IfExpr)
     assert isinstance(node.test,   sa.LoadName)
     assert isinstance(node.body,   sa.LoadName)
     assert isinstance(node.orelse, sa.LoadName)
 
 
 def test_subscript():
-    node = term_eval("a[b]")
-    assert isinstance(node, sa.LoadSubscript)
+    node = term_eval("a[b]", sa.LoadSubscript)
     assert isinstance(node.object, sa.LoadName)
     assert isinstance(node.index,  sa.LoadName)
 
 
 def test_starred():
     # *a in a list context
-    node = term_eval("[*a]")
-    assert isinstance(node, sa.ListLiteral)
+    node = term_eval("[*a]", sa.ListLiteral)
     assert isinstance(node.elements[0], sa.StarUnpack)
 
 
 def test_list_comp():
-    node = term_eval("[x for x in xs]")
-    assert isinstance(node, sa.ListComp)
+    node = term_eval("[x for x in xs]", sa.ListComp)
     assert isinstance(node.element, sa.LoadName)
     assert len(node.clauses) == 1
     clause = node.clauses[0]
@@ -315,15 +291,14 @@ def test_list_comp():
 
 
 def test_lambda():
-    node = term_eval("lambda x: x")
-    assert isinstance(node, sa.Lambda)
+    node = term_eval("lambda x: x", sa.Lambda)
     assert isinstance(node.body, sa.LoadName)
 
 
 # ── TermTransformer: position is always set ───────────────────────────────────
 
 def test_position_set():
-    node = term_eval("x + y")
+    node = term_eval("x + y", sa.Add)
     assert node.position is not None
     assert isinstance(node.position, sa.SourcePosition)
     assert node.position.lineno == 1
