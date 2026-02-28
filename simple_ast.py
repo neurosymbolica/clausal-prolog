@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, ClassVar
 from simple_ast_node import node_class
 
 
@@ -172,6 +172,9 @@ class BinOp(Node):
     left: Node = None   # type: ignore[assignment]
     right: Node = None  # type: ignore[assignment]
 
+    def __str__(bin_op):
+        return f"{bin_op.left} {bin_op.op} {bin_op.right}"
+
 
 class BoolOp(BinOp):
     """Base for boolean binary operators (And, Or)."""
@@ -188,6 +191,12 @@ class UnaryOp(Node):
     """Base for unary operators."""
     operand: Node = None  # type: ignore[assignment]
 
+    def __str__(unary_op):
+        operand_str = f"({unary_op.operand})" if isinstance(unary_op.operand, BinOp) else str(unary_op.operand)
+        if unary_op.op.isalpha():
+            return f"{unary_op.op} {operand_str}"
+        return f"{unary_op.op}{operand_str}"
+
 
 
 @node_class
@@ -203,12 +212,18 @@ class AttrNode(Node):
     object: Node = None  # type: ignore[assignment]
     attr: str = ""
 
+    def __str__(attr_node):
+        return f"{attr_node.object}.{attr_node.attr}"
+
 
 @node_class
 class SubscriptNode(Node):
     """Base for subscript-access nodes (Load/Store/Delete)."""
     object: Node = None  # type: ignore[assignment]
     index: Node = None   # type: ignore[assignment]
+
+    def __str__(subscript):
+        return f"{subscript.object}[{subscript.index}]"
 
 
 @dataclass
@@ -261,49 +276,62 @@ class Expression(Node):
 # Literals
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@dataclass
+class Literal(Node):
+    def __str__(literal):
+        return str(literal.value)
+
 @node_class
-class IntLiteral(Node):
+class IntLiteral(Literal):
     value: int = 0
 
 @node_class
-class FloatLiteral(Node):
+class FloatLiteral(Literal):
     value: float = 0.0
 
 @node_class
-class ComplexLiteral(Node):
+class ComplexLiteral(Literal):
     value: complex = 0j
 
 @node_class
-class StringLiteral(Node):
+class StringLiteral(Literal):
     value: str = ""
 
+    def __str__(literal):
+        return repr(literal.value)
+
 @node_class
-class BytesLiteral(Node):
+class BytesLiteral(Literal):
     value: bytes = b""
 
 @node_class
-class BoolLiteral(Node):
+class BoolLiteral(Literal):
     value: bool = False
 
 @dataclass
 class NoneLiteral(Node):
-    pass
+    def __str__(self): return "None"
 
 @dataclass
 class EllipsisLiteral(Node):
-    pass
+    def __str__(self): return "..."
 
 @dataclass
 class ListLiteral(ElementsLiteral):
-    pass
+    def __str__(ll):
+        return "[" + ", ".join(str(e) for e in ll.elements) + "]"
 
 @dataclass
 class TupleLiteral(ElementsLiteral):
-    pass
+    def __str__(tl):
+        if not tl.elements: return "()"
+        if len(tl.elements) == 1: return f"({tl.elements[0]},)"
+        return "(" + ", ".join(str(e) for e in tl.elements) + ")"
 
 @dataclass
 class SetLiteral(ElementsLiteral):
-    pass
+    def __str__(sl):
+        return "{" + ", ".join(str(e) for e in sl.elements) + "}"
 
 @dataclass
 class DictLiteral(Node):
@@ -333,6 +361,10 @@ class DictLiteral(Node):
             values=new_values,
         )
 
+    def __str__(dl):
+        pairs = [f"**{v}" if k is None else f"{k}: {v}" for k, v in zip(dl.keys, dl.values)]
+        return "{" + ", ".join(pairs) + "}"
+
     # No __call__, as can't imagine how that would work
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -342,6 +374,13 @@ class DictLiteral(Node):
 @node_class
 class FString(Node):
     parts: list[Node] = field(default_factory=list)  # StringLiteral | FormattedExpr
+
+    def __str__(fstring):
+        content = "".join(
+            p.value if isinstance(p, StringLiteral) else str(p)
+            for p in fstring.parts
+        )
+        return f'f"{content}"'
 
 
 @dataclass
@@ -361,14 +400,31 @@ class FormattedExpr(Node):
             format_spec=transform(formatted_expr.format_spec) if formatted_expr.format_spec is not None else None,
         )
 
+    def __str__(fe):
+        conv = f"!{fe.conversion}" if fe.conversion else ""
+        if fe.format_spec is not None:
+            spec_content = "".join(
+                p.value if isinstance(p, StringLiteral) else str(p)
+                for p in fe.format_spec.parts
+            )
+            spec = f":{spec_content}"
+        else:
+            spec = ""
+        return "{" + str(fe.value) + conv + spec + "}"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Names / Attributes / Subscripts — split by context
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+class Name(Node):
+    def __str__(load_name):
+        return load_name.name
+
 # --- Load ---
 @node_class
-class LoadName(Node):
+class LoadName(Name):
     name: str = ""
 
 @dataclass
@@ -381,7 +437,7 @@ class LoadSubscript(SubscriptNode):
 
 # --- Store ---
 @node_class
-class StoreName(Node):
+class StoreName(Name):
     name: str = ""
 
 @dataclass
@@ -394,7 +450,7 @@ class StoreSubscript(SubscriptNode):
 
 # --- Delete ---
 @node_class
-class DeleteName(Node):
+class DeleteName(Name):
     name: str = ""
 
 @dataclass
@@ -411,11 +467,15 @@ class StarUnpack(Node):
     """*expr in a call or literal — unpacking."""
     value: Node = None  # type: ignore[assignment]
 
+    def __str__(star): return f"*{star.value}"
+
 
 @node_class
 class StarTarget(Node):
     """*name in an assignment target — catch-all."""
     target: Node = None  # type: ignore[assignment]
+
+    def __str__(star): return f"*{star.target}"
 
 
 
@@ -425,11 +485,11 @@ class StarTarget(Node):
 
 @dataclass
 class TuplePattern(PatternList):
-    pass
+    def __str__(tp): return ", ".join(str(t) for t in tp.targets)
 
 @dataclass
 class ListPattern(PatternList):
-    pass
+    def __str__(lp): return "[" + ", ".join(str(t) for t in lp.targets) + "]"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -437,55 +497,55 @@ class ListPattern(PatternList):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class Add(BinOp):
-    pass
+    op: ClassVar = '+'
 
 @dataclass
 class Sub(BinOp):
-    pass
+    op: ClassVar = '-'
 
 @dataclass
 class Mult(BinOp):
-    pass
+    op: ClassVar = '*'
 
 @dataclass
 class Div(BinOp):
-    pass
+    op: ClassVar = '/'
 
 @dataclass
 class FloorDiv(BinOp):
-    pass
+    op: ClassVar = '//'
 
 @dataclass
 class Mod(BinOp):
-    pass
+    op: ClassVar = '%'
 
 @dataclass
 class Pow(BinOp):
-    pass
+    op: ClassVar = '**'
 
 @dataclass
 class MatMult(BinOp):
-    pass
+    op: ClassVar = '@'
 
 @dataclass
 class LShift(BinOp):
-    pass
+    op: ClassVar = '<<'
 
 @dataclass
 class RShift(BinOp):
-    pass
+    op: ClassVar = '>>'
 
 @dataclass
 class BitOr(BinOp):
-    pass
+    op: ClassVar = '|'
 
 @dataclass
 class BitXor(BinOp):
-    pass
+    op: ClassVar = '^'
 
 @dataclass
 class BitAnd(BinOp):
-    pass
+    op: ClassVar = '&'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -494,11 +554,11 @@ class BitAnd(BinOp):
 
 @dataclass
 class And(BoolOp):
-    pass
+    op: ClassVar = 'and'
 
 @dataclass
 class Or(BoolOp):
-    pass
+    op: ClassVar = 'or'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -507,19 +567,19 @@ class Or(BoolOp):
 
 @dataclass
 class UnaryPlus(UnaryOp):
-    pass
+    op: ClassVar = '+'
 
 @dataclass
 class Negate(UnaryOp):
-    pass
+    op: ClassVar = '-'
 
 @dataclass
 class Not(UnaryOp):
-    pass
+    op: ClassVar = 'not'
 
 @dataclass
 class Invert(UnaryOp):
-    pass
+    op: ClassVar = '~'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -528,43 +588,44 @@ class Invert(UnaryOp):
 
 @dataclass
 class Eq(CmpOp):
-    pass
+    op: ClassVar = '=='
 
 @dataclass
 class NotEq(CmpOp):
-    pass
+    op: ClassVar = '!='
 
 @dataclass
 class Lt(CmpOp):
-    pass
+    op: ClassVar = '<'
 
 @dataclass
 class LtE(CmpOp):
-    pass
+    op: ClassVar = '<='
 
 @dataclass
 class Gt(CmpOp):
-    pass
+    op: ClassVar = '>'
 
 @dataclass
 class GtE(CmpOp):
-    pass
+    op: ClassVar = '>='
 
 @dataclass
 class Is(CmpOp):
-    pass
+    op: ClassVar = 'is'
 
 @dataclass
 class IsNot(CmpOp):
-    pass
+    op: ClassVar = 'is not'
 
 @dataclass
 class In(CmpOp):
-    pass
+    op: ClassVar = 'in'
 
 @dataclass
 class NotIn(CmpOp):
-    pass
+    op: ClassVar = 'not in'
+
 
 @node_class
 class CompareChain(Node):
@@ -574,6 +635,13 @@ class CompareChain(Node):
     For single comparisons, the individual Eq/Lt/etc. nodes are used directly.
     """
     comparisons: list[Node] = field(default_factory=list)
+
+    def __str__(chain):
+        parts = [str(chain.comparisons[0].left)]
+        for cmp in chain.comparisons:
+            parts.append(cmp.op)
+            parts.append(str(cmp.right))
+        return " ".join(parts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -643,12 +711,19 @@ class Call(Node):
     args: list[Node] = field(default_factory=list)
     kwargs: list[Keyword] = field(default_factory=list)
 
+    def __str__(call):
+        all_args = [str(a) for a in call.args] + [str(kw) for kw in call.kwargs]
+        return f"{call.func}({', '.join(all_args)})"
+
 
 @node_class
 class Keyword(Node):
     """A single keyword argument. name=None means **splat."""
     name: Optional[str] = None
     value: Node = None  # type: ignore[assignment]
+
+    def __str__(kw):
+        return f"**{kw.value}" if kw.name is None else f"{kw.name}={kw.value}"
 
 
 @node_class
@@ -658,6 +733,9 @@ class IfExpr(Node):
     body: Node = None    # type: ignore[assignment]
     orelse: Node = None  # type: ignore[assignment]
 
+    def __str__(ife):
+        return f"{ife.body} if {ife.test} else {ife.orelse}"
+
 
 @node_class
 class NamedExpr(Node):
@@ -665,26 +743,42 @@ class NamedExpr(Node):
     target: Node = None  # type: ignore[assignment]
     value: Node = None   # type: ignore[assignment]
 
+    def __str__(ne):
+        return f"({ne.target} := {ne.value})"
+
 
 @node_class
 class Lambda(Node):
     params: Params = None  # type: ignore[assignment]
     body: Node = None      # type: ignore[assignment]
 
+    def __str__(lam):
+        params_str = str(lam.params)
+        if params_str:
+            return f"lambda {params_str}: {lam.body}"
+        return f"lambda: {lam.body}"
+
 
 @dataclass
 class Yield(Node):
     value: Optional[Node] = None
+
+    def __str__(y):
+        return "yield" if y.value is None else f"yield {y.value}"
 
 
 @node_class
 class YieldFrom(Node):
     value: Node = None  # type: ignore[assignment]
 
+    def __str__(yf): return f"yield from {yf.value}"
+
 
 @node_class
 class Await(Node):
     value: Node = None  # type: ignore[assignment]
+
+    def __str__(aw): return f"await {aw.value}"
 
 
 @node_class
@@ -692,6 +786,13 @@ class Slice(Node):
     lower: Optional[Node] = None
     upper: Optional[Node] = None
     step: Optional[Node] = None
+
+    def __str__(slc):
+        lo = "" if slc.lower is None else str(slc.lower)
+        hi = "" if slc.upper is None else str(slc.upper)
+        if slc.step is None:
+            return f"{lo}:{hi}"
+        return f"{lo}:{hi}:{slc.step}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -705,14 +806,25 @@ class ForClause(Node):
     filters: list[Node] = field(default_factory=list)
     is_async: bool = False
 
+    def __str__(fc):
+        kw = "async for" if fc.is_async else "for"
+        s = f"{kw} {fc.target} in {fc.iterable}"
+        for filt in fc.filters:
+            s += f" if {filt}"
+        return s
+
 
 @dataclass
 class ListComp(ElemComp):
-    pass
+    def __str__(lc):
+        clauses = " ".join(str(c) for c in lc.clauses)
+        return f"[{lc.element} {clauses}]"
 
 @dataclass
 class SetComp(ElemComp):
-    pass
+    def __str__(sc):
+        clauses = " ".join(str(c) for c in sc.clauses)
+        return "{" + f"{sc.element} {clauses}" + "}"
 
 @node_class
 class DictComp(Node):
@@ -720,10 +832,16 @@ class DictComp(Node):
     value: Node = None  # type: ignore[assignment]
     clauses: list[ForClause] = field(default_factory=list)
 
+    def __str__(dc):
+        clauses = " ".join(str(c) for c in dc.clauses)
+        return "{" + f"{dc.key}: {dc.value} {clauses}" + "}"
+
 
 @dataclass
 class GeneratorExpr(ElemComp):
-    pass
+    def __str__(ge):
+        clauses = " ".join(str(c) for c in ge.clauses)
+        return f"({ge.element} {clauses})"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -736,6 +854,16 @@ class Param(Node):
     name: str = ""
     annotation: Optional[Node] = None
     default: Optional[Node] = None
+
+    def __str__(param):
+        s = param.name
+        if param.annotation is not None:
+            s += f": {param.annotation}"
+            if param.default is not None:
+                s += f" = {param.default}"
+        elif param.default is not None:
+            s += f"={param.default}"
+        return s
 
 
 @dataclass
@@ -756,16 +884,60 @@ class KwOnlyParam(Param):
 @dataclass
 class VarPositional(Param):
     """*args parameter."""
-    pass
+    def __str__(p):
+        s = f"*{p.name}"
+        if p.annotation is not None:
+            s += f": {p.annotation}"
+        return s
 
 @dataclass
 class VarKeyword(Param):
     """**kwargs parameter."""
-    pass
+    def __str__(p):
+        s = f"**{p.name}"
+        if p.annotation is not None:
+            s += f": {p.annotation}"
+        return s
 
 @node_class
 class Params(Node):
     params: list[Param] = field(default_factory=list)
+
+    def __str__(params_node):
+        result = []
+        emitted_slash = False
+        emitted_star = False
+        has_posonly = any(isinstance(p, PosOnlyParam) for p in params_node.params)
+        for p in params_node.params:
+            if isinstance(p, PosOnlyParam):
+                result.append(str(p))
+            elif isinstance(p, PosOrKwParam):
+                if has_posonly and not emitted_slash:
+                    result.append("/")
+                    emitted_slash = True
+                result.append(str(p))
+            elif isinstance(p, VarPositional):
+                if has_posonly and not emitted_slash:
+                    result.append("/")
+                    emitted_slash = True
+                result.append(str(p))
+                emitted_star = True
+            elif isinstance(p, KwOnlyParam):
+                if has_posonly and not emitted_slash:
+                    result.append("/")
+                    emitted_slash = True
+                if not emitted_star:
+                    result.append("*")
+                    emitted_star = True
+                result.append(str(p))
+            elif isinstance(p, VarKeyword):
+                if has_posonly and not emitted_slash:
+                    result.append("/")
+                    emitted_slash = True
+                result.append(str(p))
+        if has_posonly and not emitted_slash:
+            result.append("/")
+        return ", ".join(result)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -86,3 +86,33 @@ class PredicateFinder(MetaPathFinder):
 
 
 sys.meta_path[:] = [PredicateFinder(), *sys.meta_path]
+
+
+# ── IPython integration ───────────────────────────────────────────────────────
+
+_simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+
+
+class _FreshEmbedTransformer(ast.NodeTransformer):
+    """Applies a fresh EmbedTransformer to each IPython cell."""
+
+    def visit(self, tree):
+        return EmbedTransformer().visit(tree)
+
+
+def enable_ipython(ipython_globals, shell=None):
+    """Enable the embedding DSL in an IPython session.
+
+    Call once from an IPython cell or startup script:
+
+        from import_hook import enable_ipython
+        enable_ipython(globals())
+
+    After this:
+    - The ``--expr`` syntax rewrites terms into simple_ast constructor calls.
+    - All simple_ast names (LoadName, Call, IntLiteral, …) are in scope.
+    """
+    if shell is None:
+        shell = ipython_globals["get_ipython"]()
+    shell.ast_transformers.append(_FreshEmbedTransformer())
+    ipython_globals.update(_simple_ast_builtins)

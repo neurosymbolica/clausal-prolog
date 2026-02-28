@@ -786,6 +786,197 @@ def test_big_real_code():
     print("  big real code OK")
 
 
+# ── __str__ (Python-like display) ────────────────────────────────────────────
+
+def test_str_literals():
+    assert str(sa.IntLiteral(value=42)) == "42"
+    assert str(sa.FloatLiteral(value=3.14)) == "3.14"
+    assert str(sa.BoolLiteral(value=True)) == "True"
+    assert str(sa.BoolLiteral(value=False)) == "False"
+    assert str(sa.NoneLiteral()) == "None"
+    assert str(sa.EllipsisLiteral()) == "..."
+    assert str(sa.StringLiteral(value="hi")) == "'hi'"
+    assert str(sa.BytesLiteral(value=b"hi")) == "b'hi'"
+    # also via round-trip
+    assert str(expr("42")) == "42"
+    assert str(expr("True")) == "True"
+    assert str(expr("None")) == "None"
+    assert str(expr("...")) == "..."
+    print("  str literals OK")
+
+
+def test_str_collections():
+    assert str(expr("[1, 2, 3]")) == "[1, 2, 3]"
+    assert str(expr("[]")) == "[]"
+    assert str(expr("()")) == "()"
+    assert str(expr("(1,)")) == "(1,)"
+    assert str(expr("(1, 2)")) == "(1, 2)"
+    assert str(expr("{1, 2}")) == "{1, 2}"
+    assert str(expr("{1: 2, 3: 4}")) == "{1: 2, 3: 4}"
+    assert str(expr("{**x}")) == "{**x}"
+    assert str(expr("{1: 2, **x}")) == "{1: 2, **x}"
+    print("  str collections OK")
+
+
+def test_str_names_attrs():
+    assert str(expr("x")) == "x"
+    assert str(expr("x.a")) == "x.a"
+    assert str(expr("x.a.b")) == "x.a.b"
+    assert str(expr("x[0]")) == "x[0]"
+    assert str(expr("x[0].a")) == "x[0].a"
+    print("  str names/attrs OK")
+
+
+def test_str_star():
+    assert str(sa.StarUnpack(value=sa.LoadName(name="args"))) == "*args"
+    assert str(sa.StarTarget(target=sa.StoreName(name="rest"))) == "*rest"
+    s = stmt("a, *b = [1, 2, 3]")
+    assert str(s.targets[0]) == "a, *b"
+    s = stmt("[a, *b] = [1, 2, 3]")
+    assert str(s.targets[0]) == "[a, *b]"
+    print("  str star OK")
+
+
+def test_str_binops():
+    assert str(expr("x + y")) == "x + y"
+    assert str(expr("x - y")) == "x - y"
+    assert str(expr("x * y")) == "x * y"
+    assert str(expr("x / y")) == "x / y"
+    assert str(expr("x // y")) == "x // y"
+    assert str(expr("x % y")) == "x % y"
+    assert str(expr("x ** y")) == "x ** y"
+    assert str(expr("x & y")) == "x & y"
+    assert str(expr("x | y")) == "x | y"
+    assert str(expr("x ^ y")) == "x ^ y"
+    assert str(expr("x << y")) == "x << y"
+    assert str(expr("x >> y")) == "x >> y"
+    print("  str binops OK")
+
+
+def test_str_boolops():
+    assert str(expr("a and b")) == "a and b"
+    assert str(expr("a or b")) == "a or b"
+    print("  str boolops OK")
+
+
+def test_str_unaryops():
+    assert str(expr("-x")) == "-x"
+    assert str(expr("+x")) == "+x"
+    assert str(expr("~x")) == "~x"
+    assert str(expr("not x")) == "not x"
+    # BinOp operand gets parenthesised
+    node = sa.Negate(operand=sa.Add(
+        left=sa.LoadName(name="a"), right=sa.LoadName(name="b")))
+    assert str(node) == "-(a + b)"
+    node = sa.Not(operand=sa.And(
+        left=sa.LoadName(name="a"), right=sa.LoadName(name="b")))
+    assert str(node) == "not (a and b)"
+    print("  str unaryops OK")
+
+
+def test_str_comparisons():
+    assert str(expr("x == y")) == "x == y"
+    assert str(expr("x != y")) == "x != y"
+    assert str(expr("x < y")) == "x < y"
+    assert str(expr("x <= y")) == "x <= y"
+    assert str(expr("x > y")) == "x > y"
+    assert str(expr("x >= y")) == "x >= y"
+    assert str(expr("x is y")) == "x is y"
+    assert str(expr("x is not y")) == "x is not y"
+    assert str(expr("x in y")) == "x in y"
+    assert str(expr("x not in y")) == "x not in y"
+    assert str(expr("1 < x < 10")) == "1 < x < 10"
+    print("  str comparisons OK")
+
+
+def test_str_call():
+    assert str(expr("f()")) == "f()"
+    assert str(expr("f(1, 2)")) == "f(1, 2)"
+    assert str(expr("f(1, *args, key=val, **kw)")) == "f(1, *args, key=val, **kw)"
+    assert str(expr("a.b(x)")) == "a.b(x)"
+    print("  str call OK")
+
+
+def test_str_ifexpr():
+    assert str(expr("a if b else c")) == "a if b else c"
+    print("  str ifexpr OK")
+
+
+def test_str_walrus():
+    assert str(expr("(x := 10)")) == "(x := 10)"
+    print("  str walrus OK")
+
+
+def test_str_lambda():
+    assert str(expr("lambda: 1")) == "lambda: 1"
+    assert str(expr("lambda x, y: x + y")) == "lambda x, y: x + y"
+    assert str(expr("lambda x=1: x")) == "lambda x=1: x"
+    print("  str lambda OK")
+
+
+def test_str_params():
+    s = stmt("def f(a, b, /, c=2, *args, d, e=3, **kw): pass")
+    assert str(s.params) == "a, b, /, c=2, *args, d, e=3, **kw"
+    s = stmt("def f(*args, x): pass")
+    assert str(s.params) == "*args, x"
+    s = stmt("def f(*, x): pass")
+    assert str(s.params) == "*, x"
+    print("  str params OK")
+
+
+def test_str_yield():
+    s = stmt("def f():\n yield")
+    assert str(s.body[0]) == "yield"
+    s = stmt("def f():\n yield 1")
+    assert str(s.body[0]) == "yield 1"
+    s = stmt("def f():\n yield from it")
+    assert str(s.body[0]) == "yield from it"
+    print("  str yield OK")
+
+
+def test_str_await():
+    s = stmt("async def f():\n await coro()")
+    assert str(s.body[0]) == "await coro()"
+    print("  str await OK")
+
+
+def test_str_slice():
+    assert str(expr("x[1:2]").index) == "1:2"
+    assert str(expr("x[1:2:3]").index) == "1:2:3"
+    assert str(expr("x[::2]").index) == "::2"
+    assert str(expr("x[1:]").index) == "1:"
+    assert str(expr("x[:5]").index) == ":5"
+    print("  str slice OK")
+
+
+def test_str_comprehensions():
+    assert str(expr("[x for x in y]")) == "[x for x in y]"
+    assert str(expr("[x for x in y if x > 0]")) == "[x for x in y if x > 0]"
+    assert str(expr("{x for x in y}")) == "{x for x in y}"
+    assert str(expr("(x for x in y)")) == "(x for x in y)"
+    assert str(expr("{k: v for k, v in items}")) == "{k: v for k, v in items}"
+    assert str(expr("[x for xs in xss for x in xs]")) == "[x for xs in xss for x in xs]"
+    print("  str comprehensions OK")
+
+
+def test_str_fstring():
+    assert str(expr("f'hello {name}'")) == 'f"hello {name}"'
+    assert str(expr("f'{val!r}'")) == 'f"{val!r}"'
+    assert str(expr("f'{val:.2f}'")) == 'f"{val:.2f}"'
+    assert str(expr("f'{val!r:.2f}'")) == 'f"{val!r:.2f}"'
+    assert str(expr("f'x={x} y={y}'")) == 'f"x={x} y={y}"'
+    print("  str fstring OK")
+
+
+def test_str_combined():
+    """A handful of realistic expressions."""
+    assert str(expr("x == 1 + y")) == "x == 1 + y"
+    assert str(expr("a.b[0](x, y=1)")) == "a.b[0](x, y=1)"
+    assert str(expr("[i * 2 for i in range(10) if i % 2 == 0]")) == \
+        "[i * 2 for i in range(10) if i % 2 == 0]"
+    print("  str combined OK")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = failed = 0
