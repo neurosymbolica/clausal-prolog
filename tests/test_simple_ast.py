@@ -389,7 +389,8 @@ match command:
 
 def test_loc_preserved():
     s = stmt("x = 1")
-    assert s.position.lineno == 1 and s.position.col_offset == 0
+    lineno, col_offset, *_ = s.position
+    assert lineno == 1 and col_offset == 0
     print("  location preserved OK")
 
 def test_dump():
@@ -398,7 +399,10 @@ def test_dump():
     print("  dump OK")
 
 def test_children():
-    node = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
+    node = sa.Add(
+        left=sa.LoadName(name="x"),
+        right=sa.IntLiteral(value=1)
+    )
     kids = node.children()
     assert len(kids) == 2
     assert isinstance(kids[0], sa.LoadName) and isinstance(kids[1], sa.IntLiteral)
@@ -416,6 +420,276 @@ def test_children():
 #     assert isinstance(add, sa.Add)
 #     assert add.left.value == 2 and add.right.value == 4
 #     print("  node transformer OK")
+
+
+# ── Generated methods (node_class) ───────────────────────────────────────────
+
+def test_call_copy():
+    """__call__ returns a copy with selectively replaced fields."""
+    orig = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
+    # Replace only right
+    updated = orig(right=sa.IntLiteral(value=99))
+    assert updated.right.value == 99
+    assert updated.left is orig.left      # left carried over, same object
+    assert updated is not orig
+    # Replace nothing — all fields carried over
+    same = orig()
+    assert same.left is orig.left
+    assert same.right is orig.right
+    assert same is not orig
+    print("  __call__ copy OK")
+
+
+def test_call_copy_list_field():
+    """__call__ on a node with a list field."""
+    node = sa.Module(body=[sa.LoadName(name="a"), sa.LoadName(name="b")])
+    updated = node(body=[sa.LoadName(name="c")])
+    assert len(updated.body) == 1
+    assert updated.body[0].name == "c"
+    assert len(node.body) == 2   # original unchanged
+    print("  __call__ copy list field OK")
+
+
+def test_visit_children_list_field():
+    """visit_children traverses elements of list[Node] fields."""
+    module = sa.simplify(ast.parse("a\nb\nc"))
+    visited = []
+    module.visit_children(visited.append)
+    assert len(visited) == 3
+    assert all(isinstance(n, sa.LoadName) for n in visited)
+    assert [n.name for n in visited] == ["a", "b", "c"]
+    print("  visit_children list field OK")
+
+
+def test_visit_children_node_fields():
+    """visit_children visits both node fields of a BinOp."""
+    add = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
+    visited = []
+    add.visit_children(visited.append)
+    assert len(visited) == 2
+    assert isinstance(visited[0], sa.LoadName)
+    assert isinstance(visited[1], sa.IntLiteral)
+    print("  visit_children node fields OK")
+
+
+def test_visit_children_optional_node():
+    """visit_children visits an Optional[Node] field only when set."""
+    ret_val = sa.simplify(ast.parse("def f():\n return 1")).body[0].body[0]
+    assert isinstance(ret_val, sa.Return)
+    visited = []
+    ret_val.visit_children(visited.append)
+    assert len(visited) == 1 and isinstance(visited[0], sa.IntLiteral)
+
+    ret_bare = sa.simplify(ast.parse("def f():\n return")).body[0].body[0]
+    assert isinstance(ret_bare, sa.Return)
+    visited2 = []
+    ret_bare.visit_children(visited2.append)
+    assert len(visited2) == 0
+    print("  visit_children optional node OK")
+
+
+def test_transform_children_replaces_nodes():
+    """transform_children replaces matched children and returns new node."""
+    add = sa.simplify(ast.parse("x + 1")).body[0]
+    assert isinstance(add, sa.Add)
+
+    def swap_int(n):
+        if isinstance(n, sa.IntLiteral):
+            return sa.IntLiteral(value=42)
+        return n
+
+    new_add = add.transform_children(swap_int)
+    assert isinstance(new_add, sa.Add)
+    assert new_add.right.value == 42
+    assert isinstance(new_add.left, sa.LoadName)
+    print("  transform_children replaces nodes OK")
+
+
+def test_transform_children_identity():
+    """transform_children returns self when nothing changes (no allocation)."""
+    add = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
+    result = add.transform_children(lambda n: n)
+    assert result is add
+    print("  transform_children identity OK")
+
+
+def test_transform_children_list_field():
+    """transform_children transforms elements inside a list[Node] field."""
+    func = sa.simplify(ast.parse("def f():\n a\n b")).body[0]
+    assert isinstance(func, sa.FunctionDef)
+
+    def rename(n):
+        if isinstance(n, sa.LoadName):
+            return sa.LoadName(name=n.name.upper())
+        return n
+
+    new_func = func.transform_children(rename)
+    assert isinstance(new_func, sa.FunctionDef)
+    assert new_func.body[0].name == "A"
+    assert new_func.body[1].name == "B"
+    print("  transform_children list field OK")
+
+
+def test_transform_fields():
+    """transform_fields returns self when nothing changed, copy otherwise."""
+    node = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
+    same = node.transform_fields(left=node.left, right=node.right)
+    assert same is node
+
+    new_right = sa.IntLiteral(value=2)
+    updated = node.transform_fields(right=new_right)
+    assert updated is not node
+    assert updated.right.value == 2
+    assert updated.left is node.left
+    print("  transform_fields OK")
+
+
+# ── More simplify cases ───────────────────────────────────────────────────────
+
+def test_yield_from():
+    s = stmt("def f():\n yield from it")
+    assert isinstance(s, sa.FunctionDef)
+    assert isinstance(s.body[0], sa.YieldFrom)
+    assert isinstance(s.body[0].value, sa.LoadName)
+    print("  yield from OK")
+
+
+def test_await():
+    s = stmt("async def f():\n await coro()")
+    assert isinstance(s, sa.FunctionDef) and s.is_async
+    assert isinstance(s.body[0], sa.Await)
+    assert isinstance(s.body[0].value, sa.Call)
+    print("  await OK")
+
+
+def test_try_star():
+    try:
+        s = stmt("try:\n pass\nexcept* ValueError as eg:\n pass")
+        assert isinstance(s, sa.Try) and s.is_star is True
+        assert len(s.handlers) == 1 and s.handlers[0].name == "eg"
+        print("  try/except* OK")
+    except SyntaxError:
+        print("  try/except* skipped (Python < 3.11)")
+
+
+def test_type_alias():
+    try:
+        s = stmt("type Vector = list[float]")
+        assert isinstance(s, sa.TypeAlias)
+        assert isinstance(s.name, sa.StoreName) and s.name.name == "Vector"
+        print("  type alias OK")
+    except SyntaxError:
+        print("  type alias skipped (Python < 3.12)")
+
+
+def test_type_params():
+    try:
+        s = stmt("def f[T, **P, *Ts](): pass")
+        assert isinstance(s, sa.FunctionDef)
+        tp = s.type_params
+        assert any(isinstance(p, sa.TypeVar) for p in tp)
+        assert any(isinstance(p, sa.ParamSpec) for p in tp)
+        assert any(isinstance(p, sa.TypeVarTuple) for p in tp)
+        print("  type params OK")
+    except SyntaxError:
+        print("  type params skipped (Python < 3.12)")
+
+
+def test_fstring_conversion_and_format_spec():
+    node = expr("f'{val!r:.2f}'")
+    assert isinstance(node, sa.FString)
+    fe = node.parts[0]
+    assert isinstance(fe, sa.FormattedExpr)
+    assert fe.conversion == "r"
+    assert fe.format_spec is not None
+    print("  fstring conversion+format_spec OK")
+
+
+def test_slice_partial():
+    """Slice with missing parts should have None for those components."""
+    s = expr("x[::2]")
+    assert isinstance(s.index, sa.Slice)
+    assert s.index.lower is None
+    assert s.index.upper is None
+    assert isinstance(s.index.step, sa.IntLiteral)
+    print("  partial slice OK")
+
+
+def test_compare_chain_shared_operand():
+    """Middle operand in 1 < x < 10 should be the same StoreName/LoadName object."""
+    node = expr("1 < x < 10")
+    assert isinstance(node, sa.CompareChain)
+    left_cmp, right_cmp = node.comparisons
+    assert isinstance(left_cmp, sa.Lt) and isinstance(right_cmp, sa.Lt)
+    # The shared middle operand 'x' should appear as right of first and left of second
+    assert isinstance(left_cmp.right, sa.LoadName) and left_cmp.right.name == "x"
+    assert isinstance(right_cmp.left, sa.LoadName) and right_cmp.left.name == "x"
+    print("  compare chain shared operand OK")
+
+
+def test_multi_for_comprehension():
+    """Nested for-in comprehension produces multiple ForClause entries."""
+    lc = expr("[x for xs in xss for x in xs if x > 0]")
+    assert isinstance(lc, sa.ListComp)
+    assert len(lc.clauses) == 2
+    assert isinstance(lc.clauses[0], sa.ForClause)
+    assert isinstance(lc.clauses[1], sa.ForClause)
+    assert len(lc.clauses[1].filters) == 1
+    print("  multi-for comprehension OK")
+
+
+def test_for_clause_children():
+    """ForClause.filters is visited as a list[Node] field."""
+    fc_node = sa.simplify(ast.parse("[x for x in y if x > 0 if x < 10]")).body[0]
+    assert isinstance(fc_node, sa.ListComp)
+    fc = fc_node.clauses[0]
+    assert isinstance(fc, sa.ForClause)
+    assert len(fc.filters) == 2
+    visited = []
+    fc.visit_children(visited.append)
+    # Should visit: target, iterable, and both filters
+    assert any(isinstance(n, sa.StoreName) for n in visited)   # target
+    assert any(isinstance(n, sa.LoadName) for n in visited)    # iterable
+    assert sum(isinstance(n, sa.Gt) or isinstance(n, sa.Lt) for n in visited) == 2
+    print("  ForClause filters visited OK")
+
+
+def test_match_star_and_as():
+    src = """
+match x:
+    case [*rest]:
+        pass
+    case _ as y:
+        pass
+    case _:
+        pass
+"""
+    s = stmt(src)
+    assert isinstance(s, sa.Match)
+    assert isinstance(s.cases[0].pattern, sa.MatchSequence)
+    assert isinstance(s.cases[0].pattern.patterns[0], sa.MatchStar)
+    assert s.cases[0].pattern.patterns[0].name == "rest"
+    assert isinstance(s.cases[1].pattern, sa.MatchAs)
+    assert s.cases[1].pattern.name == "y"
+    assert isinstance(s.cases[2].pattern, sa.MatchAs)
+    assert s.cases[2].pattern.name is None   # bare _
+    print("  MatchStar and MatchAs OK")
+
+
+def test_yield_bare():
+    s = stmt("def f():\n yield")
+    assert isinstance(s, sa.FunctionDef)
+    y = s.body[0]
+    assert isinstance(y, sa.Yield) and y.value is None
+    print("  bare yield OK")
+
+
+def test_exception_tuple():
+    """except (A, B) produces a single handler whose type is a tuple load."""
+    s = stmt("try:\n pass\nexcept (ValueError, TypeError):\n pass")
+    assert isinstance(s, sa.Try) and len(s.handlers) == 1
+    assert s.handlers[0].type is not None
+    print("  exception tuple OK")
 
 
 import ast as _ast

@@ -299,10 +299,9 @@ def test_lambda():
 
 def test_position_set():
     node = term_eval("x + y", sa.Add)
-    assert node.position is not None
-    assert isinstance(node.position, sa.SourcePosition)
-    assert node.position.lineno == 1
-    assert node.position.col_offset == 0
+    lineno, col_offset, end_lineno, end_col_offset = node.position
+    assert lineno == 1
+    assert col_offset == 0
 
 
 # ── EmbedTransformer: '--' escape ─────────────────────────────────────────────

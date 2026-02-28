@@ -6,29 +6,40 @@ from transform_nodes import _transform_node_list
 
 _unspecified = object()
 
-def _is_node_type(tp):
-    """Is tp a Node subclass?"""
-    return isinstance(tp, type) and issubclass(tp, Node)
-
-
-def _is_node_list_type(tp):
-    """Is tp list[SomeNode]?"""
-    return (
-        isinstance(tp, _types.GenericAlias)
-        and tp.__origin__ is list
-        and tp.__args__
-        and _is_node_type(tp.__args__[0])
-    )
+# Primitive scalar type names — anything else in an annotation is a Node subclass.
+_PRIMITIVE_NAMES = frozenset({'str', 'int', 'float', 'bool', 'bytes', 'complex'})
 
 
 def _field_kind(f):
-    """Classify a dataclass field as 'node', 'node_list', or 'plain'."""
-    if f.type == 'Node':
-        return "node"
-    elif _is_node_list_type(f.type):
-        return "node_list"
-    else:
-        return "plain"
+    """Classify a dataclass field as 'node', 'optional_node', 'node_list', or 'plain'.
+
+    With ``from __future__ import annotations`` (PEP 563), every annotation is
+    stored as a plain string, so we parse it directly instead of trying to use
+    it as a live type object (which was the original bug).
+
+    Rules:
+      Optional[X] where X is a non-primitive  → 'optional_node'
+      list[X]     where X is a non-primitive  → 'node_list'
+      list[X]     where X is a primitive       → 'plain'
+      any primitive scalar                     → 'plain'
+      anything else (Node, Params, ForClause…) → 'node'
+    """
+    s = f.type if isinstance(f.type, str) else repr(f.type)
+    s = s.strip()
+
+    optional = False
+    if s.startswith('Optional[') and s.endswith(']'):
+        s = s[9:-1].strip()
+        optional = True
+
+    if s.startswith('list[') and s.endswith(']'):
+        elem = s[5:-1].strip()
+        return 'plain' if elem in _PRIMITIVE_NAMES else 'node_list'
+
+    if s in _PRIMITIVE_NAMES:
+        return 'plain'
+
+    return 'optional_node' if optional else 'node'
 
 
 # ── Tiny AST helpers ──────────────────────────────────────────────────────────
@@ -125,6 +136,19 @@ def node_class(NodeClass):
             visit_body.append(
                 ast.Expr(value=_call(_name("visit"), [_self_attr(f.name)]))
             )
+        elif kind == "optional_node":
+            # if self.f is not None: visit(self.f)
+            visit_body.append(
+                ast.If(
+                    test=ast.Compare(
+                        left=_self_attr(f.name),
+                        ops=[ast.IsNot()],
+                        comparators=[ast.Constant(value=None)],
+                    ),
+                    body=[ast.Expr(value=_call(_name("visit"), [_self_attr(f.name)]))],
+                    orelse=[],
+                )
+            )
         elif kind == "node_list":
             visit_body.append(
                 ast.For(
@@ -155,6 +179,17 @@ def node_class(NodeClass):
     for f, kind in classified:
         if kind == "node":
             val = _call(_name("transform"), [_self_attr(f.name)])
+        elif kind == "optional_node":
+            # transform(self.f) if self.f is not None else None
+            val = ast.IfExp(
+                test=ast.Compare(
+                    left=_self_attr(f.name),
+                    ops=[ast.IsNot()],
+                    comparators=[ast.Constant(value=None)],
+                ),
+                body=_call(_name("transform"), [_self_attr(f.name)]),
+                orelse=ast.Constant(value=None),
+            )
         elif kind == "node_list":
             val = _call(
                 _name("_transform_node_list"),

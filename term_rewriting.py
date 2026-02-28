@@ -35,29 +35,14 @@ def pos_ast(source, end=None):
     if end is None:
         end = source
     return replace(
-        Call(
-            func=load_name_ast("SourcePosition", source),
-            args=[],
-            keywords=[
-                make_keyword_node(
-                    "lineno", replace(Constant(value=source.lineno), source), source
-                ),
-                make_keyword_node(
-                    "col_offset",
-                    replace(Constant(value=source.col_offset), source),
-                    source,
-                ),
-                make_keyword_node(
-                    "end_lineno",
-                    replace(Constant(value=end.end_lineno), source),
-                    source,
-                ),
-                make_keyword_node(
-                    "end_col_offset",
-                    replace(Constant(value=end.end_col_offset), source),
-                    source,
-                ),
+        Tuple(
+            elts=[
+                replace(Constant(value=source.lineno), source),
+                replace(Constant(value=source.col_offset), source),
+                replace(Constant(value=end.end_lineno), source),
+                replace(Constant(value=end.end_col_offset), source),
             ],
+            ctx=Load()
         ),
         source,
     )
@@ -593,6 +578,44 @@ class TermTransformer(NodeTransformer):
         return load_name_ast("Params", parameter_spec)
 
 
+# ─── Functor class generator ──────────────────────────────────────────────────
+
+
+def _make_functor_class_ast(functor_name, field_names, source):
+    """Generate a try/except NameError block that defines a functor dataclass.
+
+    Generated code (example for ``foo`` with field ``_x``):
+
+        try:
+            foo
+        except NameError:
+            import dataclasses as _dataclasses
+            @_dataclasses.dataclass
+            class foo:
+                _x: object = None
+                def __call__(self, **kwargs):
+                    return _dataclasses.replace(self, **kwargs)
+            foo = foo()
+    """
+    lines = [
+        "try:",
+        f"    {functor_name}",
+        "except NameError:",
+        "    import dataclasses as _dataclasses",
+        "    @_dataclasses.dataclass",
+        f"    class {functor_name}:",
+    ]
+    for name in field_names:
+        lines.append(f"        {name}: object = None")
+    lines.extend([
+        "        def __call__(self, **kwargs):",
+        "            return _dataclasses.replace(self, **kwargs)",
+        f"    {functor_name} = {functor_name}()",
+    ])
+    tree = parse("\n".join(lines))
+    return copy_location(tree.body[0], source)
+
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -602,10 +625,29 @@ class EmbedTransformer(NodeTransformer):
     Recognised patterns:
       --expr      Nested adjacent USub: transforms expr via TermTransformer.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
+      head<-body  Module-level predicate definition (only at module scope).
       with the_following as target:
           <body>  Converts body statements via TermTransformer, assigns list to target.
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
+
+    def __init__(transformer):
+        transformer._scope_depth = 0
+        transformer._seen_functors = set()
+
+    def visit_FunctionDef(transformer, node):
+        transformer._scope_depth += 1
+        result = transformer.generic_visit(node)
+        transformer._scope_depth -= 1
+        return result
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(transformer, node):
+        transformer._scope_depth += 1
+        result = transformer.generic_visit(node)
+        transformer._scope_depth -= 1
+        return result
 
     def visit_UnaryOp(transformer, unary_op):
         match unary_op:  # -- term_expression
@@ -644,15 +686,60 @@ class EmbedTransformer(NodeTransformer):
                 left=left,
                 ops=[Lt()],
                 comparators=[UnaryOp(op=USub(), operand=body_expr) as rhs],
-            ) if left.end_col_offset + 1 == rhs.col_offset:
-                # Module-level predicate definition: a<-b (no space)
+            ) if left.end_col_offset + 1 == rhs.col_offset and transformer._scope_depth == 0:
+                # Module-level predicate definition: functor_call<-body (no space)
+                # Extract functor name and positional/keyword field names from the
+                # original (pre-transformation) head Python AST.
+                if isinstance(left, Call) and isinstance(left.func, Name):
+                    functor_name = left.func.id
+                    orig_pos_args = left.args
+                    orig_kw_args = left.keywords
+                elif isinstance(left, Name):
+                    functor_name = left.id
+                    orig_pos_args = []
+                    orig_kw_args = []
+                else:
+                    return transformer.generic_visit(expr_stmt)
+
+                arg_field_names = [
+                    arg.id.lower()
+                    if isinstance(arg, Name) and arg.id.startswith("_")
+                    else f"arg_{i}"
+                    for i, arg in enumerate(orig_pos_args)
+                ]
+                kwarg_field_names = [kw.arg for kw in orig_kw_args]
+                all_field_names = arg_field_names + kwarg_field_names
+
+                # Transform terms. One shared transformer keeps variable bindings
+                # (walrus operator) consistent across head and body.
                 term_transformer = TermTransformer()
-                head_ast = term_transformer.visit(left)
+                transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
+                transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
                 body_ast = term_transformer.visit(body_expr)
+
+                # Build head call: functor(field=term, ...) as a plain Python Call,
+                # not a simple_ast.Call constructor.
+                anchor = left.func if isinstance(left, Call) else left
+                head_keywords = [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
+                ] + [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
+                ]
+                head_ast = replace(
+                    Call(
+                        func=replace(Name(id=functor_name, ctx=load), anchor),
+                        args=[],
+                        keywords=head_keywords,
+                    ),
+                    left,
+                )
+
                 predicate_ast = node_ast(
                     "Predicate", expr_stmt.value, head=head_ast, body=body_ast
                 )
-                return replace(
+                define_stmt = replace(
                     Expr(
                         value=replace(
                             Call(
@@ -670,6 +757,15 @@ class EmbedTransformer(NodeTransformer):
                     ),
                     expr_stmt,
                 )
+
+                statements = []
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors.add(functor_name)
+                    statements.append(
+                        _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+                    )
+                statements.append(define_stmt)
+                return statements if len(statements) > 1 else statements[0]
         return transformer.generic_visit(expr_stmt)
 
     def visit_With(transformer, with_statement):
