@@ -204,8 +204,17 @@ def test_arrow_assign():
     assert node.body.name == 'b'
 
 
+def test_arrow_assign_with_spaces():
+    # a <- b (spaces around '<-' but '<' and '-' adjacent) → Predicate
+    node = term_eval("a <- b", sa.Predicate)
+    assert isinstance(node.head, sa.LoadName)
+    assert node.head.name == 'a'
+    assert isinstance(node.body, sa.LoadName)
+    assert node.body.name == 'b'
+
+
 def test_spaced_lt_negate_not_arrow():
-    # a < -b (space before '-') is NOT '<-', just Lt of Negate
+    # a < -b (space between '<' and '-') is NOT '<-', just Lt of Negate
     node = term_eval("a < -b", sa.Lt)
     assert isinstance(node.right, sa.Negate)
 
@@ -348,6 +357,22 @@ def test_embed_trailing_comma_calls_assert_fact():
     assert isinstance(facts[0], sa.Call)
     assert isinstance(facts[0].func, sa.LoadName)
     assert facts[0].func.name == 'f'
+
+
+def test_embed_trailing_comma_predicate():
+    # pred(x) <- body,  — trailing comma wraps a rule in a tuple;
+    # TermTransformer should still recognise '<-' and produce Predicate.
+    facts = []
+    ns = _ns()
+    ns['assert_fact'] = facts.append
+    src = "pred(x) <- body,"
+    tree = ast.parse(src)
+    ast.fix_missing_locations(tree)
+    transformed = EmbedTransformer().visit(tree)
+    ast.fix_missing_locations(transformed)
+    exec(compile(transformed, '<test>', 'exec'), ns)
+    assert len(facts) == 1
+    assert isinstance(facts[0], sa.Predicate)
 
 
 # ── EmbedTransformer: 'with the_following' block ──────────────────────────────

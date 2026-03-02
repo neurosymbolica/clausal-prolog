@@ -186,8 +186,13 @@ class TermTransformer(NodeTransformer):
             and isinstance(comparators[0].op, USub)
         ):
             right_hand_side = comparators[0]
-            # col_offset of the UnaryOp is where '-' sits; '<' is one before it.
-            if left.end_col_offset + 1 == right_hand_side.col_offset:
+            # Detect '<-': '<' and '-' must be adjacent (no space between them).
+            # The gap from left's end to '-' is 1 for `a<-b` or 2 for `a <- b`;
+            # a gap of 3+ means `a < -b` (space between '<' and '-').
+            if (
+                left.end_lineno == right_hand_side.lineno
+                and 1 <= right_hand_side.col_offset - left.end_col_offset <= 2
+            ):
                 return node_ast(
                     "Predicate",
                     compare,
@@ -686,7 +691,11 @@ class EmbedTransformer(NodeTransformer):
                 left=left,
                 ops=[Lt()],
                 comparators=[UnaryOp(op=USub(), operand=body_expr) as rhs],
-            ) if left.end_col_offset + 1 == rhs.col_offset and transformer._scope_depth == 0:
+            ) if (
+                left.end_lineno == rhs.lineno
+                and 1 <= rhs.col_offset - left.end_col_offset <= 2
+                and transformer._scope_depth == 0
+            ):
                 # Module-level predicate definition: functor_call<-body (no space)
                 # Extract functor name and positional/keyword field names from the
                 # original (pre-transformation) head Python AST.
