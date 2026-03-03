@@ -10,7 +10,9 @@ import pytest
 from template_compiler import (
     TemplateCompileError,
     compile_template_func,
+    functiondef_to_function,
     is_template_func,
+    stmts_to_function,
     transform_module,
     transform_module_ast,
 )
@@ -612,3 +614,167 @@ def _name_node(id: str) -> ast.Name:
     n = ast.Name(id=id, ctx=ast.Load())
     ast.fix_missing_locations(ast.Expression(body=n))
     return n
+
+
+def _args(*names: str) -> ast.arguments:
+    return ast.arguments(
+        posonlyargs=[], args=[ast.arg(arg=n) for n in names],
+        vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+    )
+
+
+# ======================================================================
+# functiondef_to_function
+# ======================================================================
+
+class TestFunctiondefToFunction:
+    def test_basic_return_value(self):
+        f = functiondef_to_function(ast.parse("def f(): return 1").body[0])
+        assert f() == 1
+
+    def test_name_from_node(self):
+        f = functiondef_to_function(ast.parse("def my_func(): pass").body[0])
+        assert f.__name__ == "my_func"
+
+    def test_single_parameter(self):
+        f = functiondef_to_function(ast.parse("def double(x): return x * 2").body[0])
+        assert f(5) == 10
+
+    def test_multiple_parameters(self):
+        f = functiondef_to_function(ast.parse("def add(x, y): return x + y").body[0])
+        assert f(3, 4) == 7
+
+    def test_default_parameter(self):
+        f = functiondef_to_function(
+            ast.parse("def greet(name='world'): return 'hello ' + name").body[0])
+        assert f() == "hello world"
+        assert f("alice") == "hello alice"
+
+    def test_globals_accessible(self):
+        f = functiondef_to_function(
+            ast.parse("def f(): return helper()").body[0],
+            globals_={"helper": lambda: 99},
+        )
+        assert f() == 99
+
+    def test_globals_used_in_expression(self):
+        f = functiondef_to_function(
+            ast.parse("def f(x): return scale * x").body[0],
+            globals_={"scale": 3},
+        )
+        assert f(4) == 12
+
+    def test_filename_in_code_object(self):
+        f = functiondef_to_function(
+            ast.parse("def f(): pass").body[0], filename="myfile.py")
+        assert f.__code__.co_filename == "myfile.py"
+
+    def test_default_filename(self):
+        f = functiondef_to_function(ast.parse("def f(): pass").body[0])
+        assert f.__code__.co_filename == "<template>"
+
+    def test_multiline_body(self):
+        src = "def f(x):\n    y = x * 2\n    z = y + 1\n    return z"
+        f = functiondef_to_function(ast.parse(src).body[0])
+        assert f(5) == 11
+
+    def test_varargs(self):
+        f = functiondef_to_function(
+            ast.parse("def f(*args): return list(args)").body[0])
+        assert f(1, 2, 3) == [1, 2, 3]
+
+    def test_kwargs(self):
+        f = functiondef_to_function(ast.parse("def f(**kw): return kw").body[0])
+        assert f(a=1, b=2) == {"a": 1, "b": 2}
+
+    def test_exception_propagates(self):
+        f = functiondef_to_function(
+            ast.parse("def f(): raise ValueError('boom')").body[0])
+        with pytest.raises(ValueError, match="boom"):
+            f()
+
+    def test_globals_dict_not_mutated(self):
+        ns = {"x": 1}
+        functiondef_to_function(ast.parse("def f(): pass").body[0], globals_=ns)
+        assert set(ns.keys()) == {"x"}
+
+    def test_async_functiondef(self):
+        import asyncio
+        node = ast.parse("async def f(): return 7").body[0]
+        f = functiondef_to_function(node)
+        assert asyncio.run(f()) == 7
+
+
+# ======================================================================
+# stmts_to_function
+# ======================================================================
+
+class TestStmtsToFunction:
+    def test_basic_body_no_args(self):
+        f = stmts_to_function(ast.parse("return 42").body, "answer")
+        assert f() == 42
+
+    def test_name_assigned(self):
+        f = stmts_to_function(ast.parse("pass").body, "my_fn")
+        assert f.__name__ == "my_fn"
+
+    def test_explicit_args(self):
+        f = stmts_to_function(ast.parse("return x + y").body, "add", _args("x", "y"))
+        assert f(2, 3) == 5
+
+    def test_default_args_means_no_parameters(self):
+        import inspect
+        f = stmts_to_function(ast.parse("return 0").body, "f")
+        assert len(inspect.signature(f).parameters) == 0
+
+    def test_globals_accessible_in_body(self):
+        f = stmts_to_function(
+            ast.parse("return helper(x)").body, "f", _args("x"),
+            globals_={"helper": lambda v: v * 10},
+        )
+        assert f(3) == 30
+
+    def test_multiple_statements(self):
+        f = stmts_to_function(
+            ast.parse("y = x * x\nreturn y + 1").body, "f", _args("x"))
+        assert f(4) == 17
+
+    def test_filename_in_code_object(self):
+        f = stmts_to_function(ast.parse("pass").body, "f", filename="gen.py")
+        assert f.__code__.co_filename == "gen.py"
+
+    def test_default_filename(self):
+        f = stmts_to_function(ast.parse("pass").body, "f")
+        assert f.__code__.co_filename == "<template>"
+
+    def test_returns_annotation(self):
+        ret = ast.Name(id="int", ctx=ast.Load())
+        f = stmts_to_function(ast.parse("return 1").body, "f", returns=ret)
+        assert f.__annotations__ == {"return": int}
+
+    def test_decorator_applied(self):
+        dec = ast.parse("staticmethod").body[0].value
+        f = stmts_to_function(
+            ast.parse("return x").body, "f", _args("x"), decorators=[dec])
+        assert isinstance(f, staticmethod)
+
+    def test_same_body_reused_for_two_functions(self):
+        body = ast.parse("return n").body
+        f1 = stmts_to_function(body, "f1", _args("n"))
+        f2 = stmts_to_function(body, "f2", _args("n"))
+        assert f1(1) == 1
+        assert f2(2) == 2
+        assert f1.__name__ != f2.__name__
+
+    def test_integration_with_template(self):
+        """Template-generated stmts flow through stmts_to_function correctly."""
+        src = textwrap.dedent("""\
+            @{}
+            def make_body(N):
+                return N * 2
+        """)
+        tree = transform_module_ast(ast.parse(src))
+        make_body = functiondef_to_function(tree.body[0])
+        body = make_body("x")
+        f = stmts_to_function(body, "double", _args("x"))
+        assert f(5) == 10
