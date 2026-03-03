@@ -269,6 +269,21 @@ def test_call_keyword():
     assert isinstance(kw.value, sa.IntLiteral)
 
 
+def test_call_string_callable():
+    # '+'(a, b) — string used as functor name, e.g. for operators
+    node = term_eval("'+'(a, b)", sa.Call)
+    assert isinstance(node.func, sa.LoadName)
+    assert node.func.name == '+'
+    assert len(node.args) == 2
+    assert all(isinstance(arg, sa.LoadName) for arg in node.args)
+
+
+def test_call_string_callable_keyword():
+    node = term_eval("'f'(x=1)", sa.Call)
+    assert isinstance(node.func, sa.LoadName)
+    assert node.func.name == 'f'
+
+
 # ── TermTransformer: other expressions ────────────────────────────────────────
 
 def test_if_expr():

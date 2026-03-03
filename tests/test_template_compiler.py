@@ -520,6 +520,91 @@ class TestEdgeCases:
 
 
 # ======================================================================
+# String-as-callable syntax
+# ======================================================================
+
+class TestStringCallable:
+    def test_string_callable_becomes_name(self):
+        src = textwrap.dedent("""\
+            @{}
+            def t():
+                '+'(a, b)
+        """)
+        result = compile_and_run(src, "result = t()")
+        call = result[0].value
+        assert isinstance(call, ast.Call)
+        assert isinstance(call.func, ast.Name)
+        assert call.func.id == '+'
+
+    def test_string_callable_with_substitution(self):
+        src = textwrap.dedent("""\
+            @{}
+            def t(OP):
+                'OP'(a, b)
+        """)
+        result = compile_and_run(src, "result = t('+')")
+        call = result[0].value
+        assert isinstance(call, ast.Call)
+        assert isinstance(call.func, ast.Name)
+        assert call.func.id == '+'
+
+    def test_identifier_string_callable_in_comp_escape(self):
+        # 'make'(x) in a comprehension escape → make(x) at runtime
+        src = textwrap.dedent("""\
+            @{}
+            def t():
+                {'make'(x) for x in items}
+        """)
+        make = lambda x: ast.parse(f"print({x!r})").body[0]
+        result = compile_and_run(src, "result = t()", {
+            "make": make,
+            "items": ["a", "b"],
+        })
+        out = unparse_result(result)
+        assert "print('a')" in out
+        assert "print('b')" in out
+
+    def test_nonidentifier_string_callable_in_comp_escape(self):
+        # '+='(a, b) in a comprehension escape → globals()['+='](a, b) at runtime
+        src = textwrap.dedent("""\
+            @{}
+            def t():
+                {'+='(a, b) for a, b in pairs}
+        """)
+        make_aug = lambda a, b: ast.parse(f"{a} += {b}").body[0]
+        result = compile_and_run(src, "result = t()", {
+            "pairs": [("x", "1"), ("y", "2")],
+            "+=": make_aug,
+        })
+        out = unparse_result(result)
+        assert "x += 1" in out
+        assert "y += 2" in out
+
+    def test_identifier_string_callable_in_single_escape(self):
+        # {'make'(x)} — single escape
+        src = textwrap.dedent("""\
+            @{}
+            def t():
+                {'make'(x)}
+        """)
+        make = lambda x: ast.parse(f"pass").body[0]
+        result = compile_and_run(src, "result = t()", {"make": make, "x": "hi"})
+        assert len(result) == 1
+
+    def test_nonidentifier_string_callable_in_single_escape(self):
+        src = textwrap.dedent("""\
+            @{}
+            def t():
+                {'+='(a, b)}
+        """)
+        make_aug = lambda a, b: ast.parse(f"{a} += {b}").body[0]
+        result = compile_and_run(src, "result = t()", {
+            "+=": make_aug, "a": "x", "b": "1",
+        })
+        assert "x += 1" in unparse_result(result)
+
+
+# ======================================================================
 # Helper to create Name nodes for test data
 # ======================================================================
 

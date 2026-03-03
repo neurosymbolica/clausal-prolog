@@ -154,6 +154,12 @@ class TermTransformer(NodeTransformer):
 
     def visit_Call(transformer, call):
         visit = transformer.visit
+        # A string literal used as the callable, e.g. '+'(a, b), is sugar for a
+        # name reference whose identifier is that string.
+        if isinstance(call.func, Constant) and isinstance(call.func.value, str):
+            func_node = visit(replace(Name(id=call.func.value, ctx=load), call.func))
+        else:
+            func_node = visit(call.func)
         positional_args = [visit(argument) for argument in call.args]
         # Convert keyword arguments to Keyword simple_ast nodes
         keyword_argument_nodes = [
@@ -168,7 +174,7 @@ class TermTransformer(NodeTransformer):
         return node_ast(
             "Call",
             call,
-            func=visit(call.func),
+            func=func_node,
             args=list_ast(positional_args, call),
             kwargs=list_ast(keyword_argument_nodes, call),
         )

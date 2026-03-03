@@ -122,6 +122,38 @@ def _type_error(prefix: str, value_var: str):
 
 
 # ======================================================================
+# String-callable rewriter (for escape expression elts)
+# ======================================================================
+
+class _StringCallableRewriter(ast.NodeTransformer):
+    """Rewrite 'string'(args) in escape-expression elts.
+
+    Valid identifiers:  'foo'(a, b)  → foo(a, b)
+    Non-identifiers:    '+='(a, b)   → globals()['+='](a, b)
+
+    This prevents the SyntaxWarning Python's compiler emits for string-as-
+    callable, and the resulting TypeError when the generated code runs.
+    """
+
+    def visit_Call(self, node):
+        self.generic_visit(node)
+        if isinstance(node.func, ast.Constant) and isinstance(node.func.value, str):
+            name = node.func.value
+            loc = node.func
+            if name.isidentifier():
+                node.func = ast.copy_location(
+                    ast.Name(id=name, ctx=ast.Load()), loc)
+            else:
+                node.func = ast.copy_location(
+                    ast.Subscript(
+                        value=ast.copy_location(_call(_name("globals")), loc),
+                        slice=ast.copy_location(ast.Constant(value=name), loc),
+                        ctx=ast.Load(),
+                    ), loc)
+        return node
+
+
+# ======================================================================
 # Escape detection
 # ======================================================================
 
@@ -308,20 +340,22 @@ class ASTBuilder:
 
     def _emit_escape(self, esc, target: str, ln: int):
         kind, payload = esc
+        rewrite = _StringCallableRewriter().visit
         if kind == "single":
             for expr in payload:
                 tmp = self._fresh("_esc")
-                self._emit(_loc(_assign(tmp, expr), ln))
+                self._emit(_loc(_assign(tmp, rewrite(expr)), ln))
                 for s in self._splice_check(tmp, target):
                     self._emit(_loc(s, ln))
         elif kind == "star":
-            self._emit(_loc(_extend(target, payload), ln))
+            self._emit(_loc(_extend(target, rewrite(payload)), ln))
         elif kind == "comp":
             self._emit_comp(payload, target, ln)
 
     def _emit_comp(self, sc: ast.SetComp, target: str, ln: int):
         tmp = self._fresh("_ce")
-        body = [_assign(tmp, sc.elt), *self._splice_check(tmp, target)]
+        elt = _StringCallableRewriter().visit(sc.elt)
+        body = [_assign(tmp, elt), *self._splice_check(tmp, target)]
         for gen in reversed(sc.generators):
             for ifc in reversed(gen.ifs):
                 body = [ast.If(test=ifc, body=body, orelse=[])]
@@ -453,6 +487,14 @@ class ASTBuilder:
             _kw("annotation", ann),
         ])), getattr(node, "lineno", 0)))
         return var
+
+    def _build_Call(self, node: ast.Call) -> str:
+        # String callable: '+'(a, b) → Name(id='+')(a, b)
+        if isinstance(node.func, ast.Constant) and isinstance(node.func.value, str):
+            node = copy.copy(node)
+            node.func = ast.copy_location(
+                ast.Name(id=node.func.value, ctx=ast.Load()), node.func)
+        return self._build_generic(node)
 
     def _build_Load(self, n):
         v = self._fresh(); self._emit(_assign(v, _ast_call("Load"))); return v
