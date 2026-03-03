@@ -1,5 +1,7 @@
 from ast import *
 
+from template_compiler import is_template_func, compile_template_func
+
 load = Load()
 store = Store()
 
@@ -641,6 +643,8 @@ class EmbedTransformer(NodeTransformer):
         transformer._seen_functors = set()
 
     def visit_FunctionDef(transformer, node):
+        if is_template_func(node):
+            return compile_template_func(node)
         transformer._scope_depth += 1
         result = transformer.generic_visit(node)
         transformer._scope_depth -= 1

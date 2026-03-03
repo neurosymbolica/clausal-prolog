@@ -94,10 +94,19 @@ _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast._
 
 
 class _FreshEmbedTransformer(ast.NodeTransformer):
-    """Applies a fresh EmbedTransformer to each IPython cell."""
+    """Applies a fresh EmbedTransformer to each IPython cell.
+
+    Exceptions are caught and printed rather than propagated, so IPython
+    does not unregister this transformer on a bad cell.
+    """
 
     def visit(self, tree):
-        return EmbedTransformer().visit(tree)
+        try:
+            return EmbedTransformer().visit(tree)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return tree
 
 
 def enable_ipython(ipython_globals, shell=None):
