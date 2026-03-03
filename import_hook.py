@@ -18,6 +18,7 @@ This mirrors the mechanism in logython/__init__.py from prolog_in_python.
 from importlib.abc import MetaPathFinder, Loader
 import sys
 import ast
+import warnings
 
 import simple_ast
 from term_rewriting import EmbedTransformer
@@ -52,13 +53,16 @@ class PredicateLoader(Loader):
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
         module_dict["$module"] = module
-        tree = ast.parse(source)
-        tree = EmbedTransformer().visit(tree)
-        ast.fix_missing_locations(tree)
-        exec(
-            compile(tree, filename=filename, mode="exec"),
-            module_dict,
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="'str' object is not callable",
+                                    category=SyntaxWarning)
+            tree = ast.parse(source)
+            tree = EmbedTransformer().visit(tree)
+            ast.fix_missing_locations(tree)
+            exec(
+                compile(tree, filename=filename, mode="exec"),
+                module_dict,
+            )
 
 
 _predicate_loader = PredicateLoader()
@@ -123,5 +127,13 @@ def enable_ipython(ipython_globals, shell=None):
     """
     if shell is None:
         shell = ipython_globals["get_ipython"]()
+    # Suppress the "'str' object is not callable" SyntaxWarning that Python
+    # emits when it compiles source containing  'op'(args)  syntax.  In this
+    # DSL that syntax is intentional; the EmbedTransformer and
+    # _StringCallableRewriter rewrite it before any bytecode is generated, but
+    # tools such as IPython's check_complete() and Jedi compile the raw source
+    # before our AST transformer runs, so the warning would otherwise appear.
+    warnings.filterwarnings("ignore", message="'str' object is not callable",
+                            category=SyntaxWarning)
     shell.ast_transformers.append(_FreshEmbedTransformer())
     ipython_globals.update(_simple_ast_builtins)
