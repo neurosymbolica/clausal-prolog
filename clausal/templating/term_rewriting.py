@@ -1,6 +1,7 @@
 from ast import *
 
-from .template_compiler import is_template_func, compile_template_func
+from .parser import is_template_func
+from .compiler import compile_template_func
 
 load = Load()
 store = Store()
