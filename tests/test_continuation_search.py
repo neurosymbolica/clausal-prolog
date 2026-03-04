@@ -1,6 +1,6 @@
 """Tests for continuation_search.py"""
 import pytest
-from continuation_search import Search, Finished
+from clausal.continuation_search import Search, Finished
 
 
 # ── Basic iteration ───────────────────────────────────────────────────────────

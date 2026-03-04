@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from template_compiler import (
+from clausal.template_compiler import (
     TemplateCompileError,
     compile_template_func,
     functiondef_to_function,

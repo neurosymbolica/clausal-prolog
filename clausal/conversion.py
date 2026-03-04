@@ -1,6 +1,6 @@
 import ast
 from typing import Any, Optional
-from simple_ast import *
+from .simple_ast import *
 
 # ── Modules ──────────────────────────────────────────────────────────────────
 

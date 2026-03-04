@@ -20,8 +20,8 @@ import sys
 import ast
 import warnings
 
-import simple_ast
-from term_rewriting import EmbedTransformer
+from . import simple_ast
+from .term_rewriting import EmbedTransformer
 
 
 # ── Runtime support ──────────────────────────────────────────────────────────

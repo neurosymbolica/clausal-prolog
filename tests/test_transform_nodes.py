@@ -1,5 +1,5 @@
 import pytest
-from transform_nodes import _transform_node_list
+from clausal.transform_nodes import _transform_node_list
 
 
 # ---------------------------------------------------------------------------

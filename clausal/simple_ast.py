@@ -21,7 +21,7 @@ import ast
 import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Optional, ClassVar
-from simple_ast_node import node_class
+from .simple_ast_node import node_class
 
 
 __all__ = [
@@ -101,7 +101,7 @@ __all__ = [
 REMOVED = object()
 
 
-from transform_nodes import _transform_node_list
+from .transform_nodes import _transform_node_list
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Base
@@ -1224,5 +1224,5 @@ def dump(node: Node, indent: int = 2, include_loc: bool = False) -> str:
 
 def simplify(tree: ast.AST) -> Node:
     """Convert a CPython AST tree into a simplified AST."""
-    from conversion import visit
+    from .conversion import visit
     return visit(tree)

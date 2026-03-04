@@ -1,6 +1,6 @@
 from ast import *
 
-from template_compiler import is_template_func, compile_template_func
+from .template_compiler import is_template_func, compile_template_func
 
 load = Load()
 store = Store()

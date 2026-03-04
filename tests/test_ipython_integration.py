@@ -7,8 +7,8 @@ should produce simple_ast nodes as values.
 
 import ast
 import pytest
-from import_hook import _FreshEmbedTransformer, _simple_ast_builtins
-from simple_ast import (
+from clausal.import_hook import _FreshEmbedTransformer, _simple_ast_builtins
+from clausal.simple_ast import (
     Call, LoadName, IntLiteral, FloatLiteral, StringLiteral,
     BoolLiteral, NoneLiteral, Add, TupleLiteral,
 )

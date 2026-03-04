@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clausal"
+version = "0.1.0"
+description = "A Prolog-style logic programming DSL embedded in Python"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
+]
+requires-python = ">=3.14"
+dependencies = [
+    "greenlet",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["clausal"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
