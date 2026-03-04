@@ -361,7 +361,7 @@ def test_embed_normal_code_unchanged():
 def test_embed_trailing_comma_calls_assert_fact():
     facts = []
     ns = _ns()
-    ns['assert_fact'] = facts.append
+    ns['$assert_fact'] = facts.append
     src = "f(a),"   # trailing-comma tuple statement
     tree = ast.parse(src)
     ast.fix_missing_locations(tree)
@@ -379,7 +379,7 @@ def test_embed_trailing_comma_predicate():
     # TermTransformer should still recognise '<-' and produce Predicate.
     facts = []
     ns = _ns()
-    ns['assert_fact'] = facts.append
+    ns['$assert_fact'] = facts.append
     src = "pred(x) <- body,"
     tree = ast.parse(src)
     ast.fix_missing_locations(tree)

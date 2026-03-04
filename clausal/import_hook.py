@@ -7,10 +7,14 @@ Modules whose first line starts with:
 are intercepted by this hook, which:
 
   1. Injects predicate builtins (all simple_ast names) plus the hidden
-     globals ``$module`` and ``$define_predicate`` into the module namespace.
+     globals ``$module``, ``$define_predicate``, ``$assert_fact``, and
+     ``$ast`` into the module namespace.  Names starting with ``$`` are
+     intentionally not valid Python identifiers in normal source, so user
+     code cannot accidentally shadow them.
   2. Transforms the module's AST via EmbedTransformer, which rewrites
      module-level ``a<-b`` statements into
-     ``$define_predicate(Predicate(head=…, body=…), $module)`` calls.
+     ``$define_predicate(Predicate(head=…, body=…), $module)`` calls, and
+     trailing-comma expression statements into ``$assert_fact(term)`` calls.
 
 This mirrors the mechanism in logython/__init__.py from prolog_in_python.
 """
@@ -36,10 +40,26 @@ def _define_predicate(predicate, module):
     registry.append(predicate)
 
 
+def _assert_fact(term, module):
+    """Store a fact term in the module's __facts__ list."""
+    try:
+        facts = module.__facts__
+    except AttributeError:
+        module.__facts__ = facts = []
+    facts.append(term)
+
+
 # ── Builtins injected into every predicate module ────────────────────────────
 
 predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+# '$'-prefixed names cannot be typed as normal Python identifiers, so user code
+# cannot accidentally shadow them.  Do not remove the '$' prefix.
 predicate_builtins["$define_predicate"] = _define_predicate
+# '$ast' gives generated code access to the stdlib ast module without risking a
+# name collision with user-defined variables named 'ast'.
+predicate_builtins["$ast"] = ast
+# '$assert_fact' is set per-module in exec_module (needs a closure over 'module'),
+# so it is NOT added to this shared dict.
 
 
 # ── Loader ───────────────────────────────────────────────────────────────────
@@ -53,6 +73,10 @@ class PredicateLoader(Loader):
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
         module_dict["$module"] = module
+        # '$assert_fact' is module-specific (needs to know which module to store
+        # facts in), so it is set here as a closure rather than in predicate_builtins.
+        # '$' prefix prevents user code from accidentally overriding it.
+        module_dict["$assert_fact"] = lambda term: _assert_fact(term, module)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="'str' object is not callable",
                                     category=SyntaxWarning)
@@ -95,6 +119,14 @@ sys.meta_path[:] = [PredicateFinder(), *sys.meta_path]
 # ── IPython integration ───────────────────────────────────────────────────────
 
 _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+# '$'-prefixed names cannot be typed as normal Python identifiers, so user code
+# cannot accidentally shadow them.  Do not remove the '$' prefix.
+_simple_ast_builtins["$ast"] = ast
+# In IPython there is no per-session module, so '$assert_fact' collects facts in a
+# shared list.  For module-backed predicate files, exec_module overrides this with
+# a module-specific closure.
+_ipython_facts: list = []
+_simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 
 
 class _FreshEmbedTransformer(ast.NodeTransformer):

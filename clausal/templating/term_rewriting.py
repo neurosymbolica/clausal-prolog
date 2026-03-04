@@ -630,6 +630,60 @@ def _make_functor_class_ast(functor_name, field_names, source):
     return copy_location(tree.body[0], source)
 
 
+# ─── Python AST expression builder ───────────────────────────────────────────
+
+
+def _py_ast_expr(node, anchor):
+    """Build Python AST code that constructs `node` as an `ast.XXX` node at runtime.
+
+    Returns an expression AST node (no statements, purely nested calls) that,
+    when evaluated in a namespace where `ast` is the standard library module,
+    produces the standard Python AST equivalent of `node`.
+    """
+
+    def build_value(value):
+        if value is None:
+            return replace(Constant(value=None), anchor)
+        if isinstance(value, (bool, int, float, complex, str, bytes)):
+            return replace(Constant(value=value), anchor)
+        if isinstance(value, list):
+            return replace(List(
+                elts=[build_node(item) if isinstance(item, AST)
+                      else replace(Constant(value=item), anchor)
+                      for item in value],
+                ctx=load,
+            ), anchor)
+        if isinstance(value, AST):
+            return build_node(value)
+        return replace(Constant(value=repr(value)), anchor)
+
+    def build_node(n):
+        kws = [
+            replace(keyword(arg=field, value=build_value(val)), anchor)
+            for field, val in iter_fields(n)
+        ]
+        # Propagate source positions from the parsed node into the constructor call,
+        # so the runtime ast.XXX nodes carry the original file positions.
+        for attr in n._attributes:
+            if hasattr(n, attr):
+                kws.append(replace(
+                    keyword(arg=attr, value=replace(Constant(value=getattr(n, attr)), anchor)),
+                    anchor,
+                ))
+        # '$ast' uses '$' so user code cannot accidentally shadow the stdlib ast module.
+        return replace(Call(
+            func=replace(Attribute(
+                value=replace(Name(id='$ast', ctx=load), anchor),
+                attr=type(n).__name__,
+                ctx=load,
+            ), anchor),
+            args=[],
+            keywords=kws,
+        ), anchor)
+
+    return build_node(node)
+
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -638,6 +692,7 @@ class EmbedTransformer(NodeTransformer):
 
     Recognised patterns:
       --expr      Nested adjacent USub: transforms expr via TermTransformer.
+      ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
       head<-body  Module-level predicate definition (only at module scope).
       with the_following as target:
@@ -674,6 +729,26 @@ class EmbedTransformer(NodeTransformer):
                     and unary_op.lineno == unary_op.operand.lineno
                 ):
                     return TermTransformer().visit(expression)
+            case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
+                # '~~' must be written without a space (the two '~' are adjacent).
+                if (
+                    unary_op.col_offset == unary_op.operand.col_offset - 1
+                    and unary_op.lineno == unary_op.operand.lineno
+                ):
+                    inner = _py_ast_expr(expression, unary_op)
+                    # Wrap with $ast.fix_missing_locations so runtime nodes have positions.
+                    # '$ast' uses '$' so user code cannot accidentally shadow the stdlib ast module.
+                    result = replace(Call(
+                        func=replace(Attribute(
+                            value=replace(Name(id='$ast', ctx=load), unary_op),
+                            attr='fix_missing_locations',
+                            ctx=load,
+                        ), unary_op),
+                        args=[inner],
+                        keywords=[],
+                    ), unary_op)
+                    fix_missing_locations(result)
+                    return result
         unary_op.operand = transformer.visit(unary_op.operand)
         return unary_op
 
@@ -681,14 +756,15 @@ class EmbedTransformer(NodeTransformer):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         match expr_stmt.value:
             case Tuple(elts=[single_element], ctx=Load()):
-                # Transform the single element as a term and pass to assert_fact
+                # Transform the single element as a term and pass to $assert_fact.
+                # '$assert_fact' uses '$' so user code cannot accidentally override it.
                 term = TermTransformer().visit(single_element)
                 return replace(
                     Expr(
                         value=replace(
                             Call(
                                 func=replace(
-                                    Name(id="assert_fact", ctx=load), expr_stmt.value
+                                    Name(id="$assert_fact", ctx=load), expr_stmt.value
                                 ),
                                 args=[term],
                                 keywords=[],
