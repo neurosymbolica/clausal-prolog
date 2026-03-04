@@ -9,6 +9,7 @@ the template propagate to compiled output for readable tracebacks.
 import ast
 import copy
 
+from ..codegen import functiondef_to_function, stmts_to_function
 from .parser import (
     TemplateCompileError,
     is_template_func,
@@ -473,63 +474,5 @@ def transform_module(source: str) -> str:
     return ast.unparse(transform_module_ast(ast.parse(source)))
 
 
-# ======================================================================
-# AST → callable
-# ======================================================================
-
-def functiondef_to_function(
-    node: ast.FunctionDef | ast.AsyncFunctionDef,
-    globals_: dict | None = None,
-    filename: str = "<template>",
-):
-    """Compile an ast.FunctionDef (or AsyncFunctionDef) into a Python callable.
-
-    The function name is read from node.name.  globals_ provides names
-    visible at definition time (closures, helper functions, etc.).
-    """
-    module = ast.Module(body=[node], type_ignores=[])
-    ast.fix_missing_locations(module)
-    code = compile(module, filename, "exec")
-    ns = dict(globals_ or {})
-    exec(code, ns)
-    return ns[node.name]
-
-
-def stmts_to_function(
-    body: list[ast.stmt],
-    name: str,
-    args: ast.arguments | None = None,
-    *,
-    decorators: list[ast.expr] | None = None,
-    returns: ast.expr | None = None,
-    globals_: dict | None = None,
-    filename: str = "<template>",
-):
-    """Wrap a statement list in a function definition and return a callable.
-
-    Parameters
-    ----------
-    body:       statements forming the function body
-    name:       name to give the function
-    args:       parameter signature; defaults to no parameters
-    decorators: decorator list
-    returns:    return-annotation expression
-    globals_:   names made available in the function's defining scope
-    filename:   filename used in tracebacks
-    """
-    if args is None:
-        args = ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
-            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-        )
-    extra = {'type_params': []} if 'type_params' in ast.FunctionDef._fields else {}
-    func_node = ast.FunctionDef(
-        name=name,
-        args=args,
-        body=body,
-        decorator_list=decorators or [],
-        returns=returns,
-        type_comment=None,
-        **extra,
-    )
-    return functiondef_to_function(func_node, globals_=globals_, filename=filename)
+# functiondef_to_function and stmts_to_function live in clausal.codegen;
+# re-exported here for backward compatibility.

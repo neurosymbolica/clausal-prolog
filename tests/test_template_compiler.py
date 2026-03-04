@@ -7,12 +7,11 @@ from typing import Any
 
 import pytest
 
-from clausal.templating.template_compiler import (
+from clausal.codegen import functiondef_to_function, stmts_to_function
+from clausal.templating.compiler import (
     TemplateCompileError,
     compile_template_func,
-    functiondef_to_function,
     is_template_func,
-    stmts_to_function,
     transform_module,
     transform_module_ast,
 )
