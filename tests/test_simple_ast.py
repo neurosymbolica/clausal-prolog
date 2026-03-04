@@ -1,7 +1,7 @@
 """Tests for simple_ast."""
 import ast
 import sys
-from clausal import simple_ast as sa
+from clausal.pythonic_ast import nodes as sa
 
 
 def body(src: str) -> list[sa.Node]:
@@ -693,7 +693,7 @@ def test_exception_tuple():
 
 
 import ast as _ast
-from clausal import conversion
+from clausal.pythonic_ast import conversion_from_python_ast as conversion
 def test_visit_dispatch():
     """Verify VISITORS dict has direct hash lookup, not name mangling."""
     # Every entry in VISITORS should map an ast type directly

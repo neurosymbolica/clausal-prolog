@@ -10,8 +10,8 @@ TermTransformer output and detecting other DSL patterns.
 """
 import ast
 import pytest
-from clausal import simple_ast as sa
-from clausal.term_rewriting import TermTransformer, EmbedTransformer
+from clausal.pythonic_ast import nodes as sa
+from clausal.templating.term_rewriting import TermTransformer, EmbedTransformer
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

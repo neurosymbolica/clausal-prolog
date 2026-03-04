@@ -20,8 +20,8 @@ import sys
 import ast
 import warnings
 
-from . import simple_ast
-from .term_rewriting import EmbedTransformer
+from .pythonic_ast import nodes as simple_ast
+from .templating.term_rewriting import EmbedTransformer
 
 
 # ── Runtime support ──────────────────────────────────────────────────────────
