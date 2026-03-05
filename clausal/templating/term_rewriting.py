@@ -684,6 +684,7 @@ def _py_ast_expr(node, anchor):
     return build_node(node)
 
 
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -695,8 +696,14 @@ class EmbedTransformer(NodeTransformer):
       ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
       head<-body  Module-level predicate definition (only at module scope).
-      with the_following as target:
-          <body>  Converts body statements via TermTransformer, assigns list to target.
+      with --{} as target:
+          <body>  Block form of --: transforms each expression-statement body
+                  line via TermTransformer into a simple_ast node, assigns the
+                  resulting list to target.
+      with ~~{} as target:
+          <body>  Block form of ~~: converts each body statement to a Python
+                  ast.XXX node.  Expression statements yield the expression
+                  node; other statements yield the statement node itself.
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
 
@@ -866,18 +873,25 @@ class EmbedTransformer(NodeTransformer):
 
     def visit_With(transformer, with_statement):
         first = with_statement.items[0]
-        if (
-            isinstance(first.context_expr, Name)
-            and first.context_expr.id == "the_following"
-        ):
+        ctx = first.context_expr
+
+        def _is_double(op_type):
+            """True if ctx is op_type(op_type(Dict(…))) with adjacent operators."""
+            return (
+                isinstance(ctx, UnaryOp) and isinstance(ctx.op, op_type)
+                and isinstance(ctx.operand, UnaryOp) and isinstance(ctx.operand.op, op_type)
+                and isinstance(ctx.operand.operand, Dict)
+                and ctx.lineno == ctx.operand.lineno
+                and ctx.col_offset == ctx.operand.col_offset - 1
+            )
+
+        if _is_double(USub):
+            # with --{} as target: — block form of --; produces simple_ast terms.
             term_transformer = TermTransformer()
             elements = [
-                (
-                    term_transformer.visit(statement.value)
-                    if isinstance(statement, Expr)
-                    else term_transformer.visit(statement)
-                )
-                for statement in with_statement.body
+                term_transformer.visit(stmt.value)
+                for stmt in with_statement.body
+                if isinstance(stmt, Expr)
             ]
             return replace(
                 Assign(
@@ -886,6 +900,24 @@ class EmbedTransformer(NodeTransformer):
                 ),
                 with_statement,
             )
+
+        if _is_double(Invert):
+            # with ~~{} as target: — block form of ~~; produces Python ast nodes.
+            elements = [
+                _py_ast_expr(
+                    stmt.value if isinstance(stmt, Expr) else stmt,
+                    stmt,
+                )
+                for stmt in with_statement.body
+            ]
+            return replace(
+                Assign(
+                    targets=[first.optional_vars],
+                    value=replace(List(elts=elements, ctx=load), with_statement),
+                ),
+                with_statement,
+            )
+
         return transformer.generic_visit(with_statement)
 
     def visit_Name(transformer, name):

@@ -41,6 +41,7 @@ def embed_exec(src: str) -> dict:
     transformed = EmbedTransformer().visit(tree)
     ast.fix_missing_locations(transformed)
     ns = _ns()
+    ns['$ast'] = ast   # required by ~~ and with-the_following generated code
     exec(compile(transformed, '<test>', 'exec'), ns)
     return ns
 
@@ -392,9 +393,10 @@ def test_embed_trailing_comma_predicate():
 
 # ── EmbedTransformer: 'with the_following' block ──────────────────────────────
 
-def test_embed_the_following():
+def test_embed_dash_block_produces_simple_ast_terms():
+    # with --{} as id: — block form of --, produces simple_ast nodes.
     src = """\
-with the_following as clauses:
+with --{} as clauses:
     a + b
     f(x)
 """
@@ -403,3 +405,42 @@ with the_following as clauses:
     assert len(ns['clauses']) == 2
     assert isinstance(ns['clauses'][0], sa.Add)
     assert isinstance(ns['clauses'][1], sa.Call)
+
+
+def test_embed_tilde_block_expr_stmts():
+    # with ~~{} as id: — block form of ~~, expression statements yield expression node.
+    src = """\
+with ~~{} as clauses:
+    a + b
+    f(x)
+"""
+    ns = embed_exec(src)
+    assert isinstance(ns['clauses'], list)
+    assert len(ns['clauses']) == 2
+    assert isinstance(ns['clauses'][0], ast.BinOp)
+    assert isinstance(ns['clauses'][1], ast.Call)
+
+
+def test_embed_tilde_block_return_stmt():
+    # with ~~{} as id: — non-expression statements yield the statement node itself.
+    src = """\
+with ~~{} as clauses:
+    return x + 1
+"""
+    ns = embed_exec(src)
+    assert isinstance(ns['clauses'], list)
+    assert len(ns['clauses']) == 1
+    assert isinstance(ns['clauses'][0], ast.Return)
+    assert isinstance(ns['clauses'][0].value, ast.BinOp)
+
+
+def test_embed_tilde_block_mixed():
+    # with ~~{} as id: — mix of expression and statement nodes.
+    src = """\
+with ~~{} as clauses:
+    x + 1
+    return y
+"""
+    ns = embed_exec(src)
+    assert isinstance(ns['clauses'][0], ast.BinOp)
+    assert isinstance(ns['clauses'][1], ast.Return)
