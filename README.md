@@ -12,6 +12,7 @@ A Prolog-style logic programming DSL embedded in Python, built on a simplified A
 - **`clausal.continuation_search`** — `Search`: greenlet-based iterator for continuation-passing search functions.
 - **`clausal.import_hook`** — Import hook for `# predicates` modules; `enable_ipython()` for interactive use.
 - **`clausal.simple_ast_node`** — `@node_class` decorator that generates `visit_children`, `transform_children`, and `__call__` via AST.
+- **`clausal.logic.variables`** — Prolog-style logic variables and trail-based backtracking (C extension, WAM-less).
 
 ## Installation
 
@@ -55,3 +56,143 @@ parent(bob, ann)<-True,
 ## License
 
 MIT
+
+---
+
+## `clausal.logic.variables` — Logic variables and backtracking
+
+A C extension implementing Prolog-style **logic variables** and **trail-based backtracking** without a Warren Abstract Machine. Derived by studying GNU Prolog (`wam_inst.h`, `unify.c`) and Scryer Prolog (`machine_state_impl.rs`, `unify.rs`).
+
+### Quick start
+
+```python
+from clausal.logic.variables import Var, Trail, unify, walk, is_var
+
+trail = Trail()
+
+X = Var()
+Y = Var()
+
+# Unify X with 42
+assert unify(X, 42, trail)
+assert X.value == 42
+
+# Unify a compound term
+A = Var()
+assert unify(("point", A, 0), ("point", 3, 0), trail)
+assert A.value == 3
+
+# Backtrack
+mark = trail.mark()
+unify(Y, "temporary", trail)
+assert Y.value == "temporary"
+trail.undo(mark)
+assert is_var(Y)           # Y is unbound again
+```
+
+### API Reference
+
+#### `Var()`
+
+Create an unbound logic variable.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `is_bound` | `bool` | `True` if this variable has been assigned any value, including another `Var`. Use `is_var()` to test for a ground binding. |
+| `value` | any | The fully dereferenced value (follows the binding chain). Returns `self` if unbound. |
+| `_id` | `int` | Monotonic creation counter. Newer vars (larger `_id`) are bound to older ones in var-var unification. |
+
+Variables are hashable and use identity-based equality — suitable as dict keys.
+
+---
+
+#### `Trail()`
+
+Records variable bindings so they can be undone during backtracking.
+
+- **`trail.mark() -> int`** — Return the current trail length as a backtrack mark. Save before a speculative computation; pass to `undo()` to roll back.
+- **`trail.undo(mark: int)`** — Restore all bindings recorded after `mark`. Processes entries in reverse chronological order. `unify()` calls this automatically on failure.
+- **`trail.reset()`** — Undo every binding. Equivalent to `trail.undo(0)`.
+- **`len(trail)`** — Number of recorded bindings.
+
+---
+
+#### `unify(t1, t2, trail) -> bool`
+
+Try to unify two terms under `trail`. Returns `True` on success (bindings recorded on `trail`). Returns `False` on failure — **partial bindings are automatically rolled back**.
+
+**Term representation:**
+
+| Python type | Prolog analogue |
+|-------------|----------------|
+| `Var` | unbound variable |
+| `tuple` | compound term — elements unified pairwise |
+| `list` | sequence — elements unified pairwise |
+| any other | atomic — compared with `==` |
+
+In a `Var`–`Var` unification, the newer variable (larger `_id`) is bound to the older one, keeping the oldest as the canonical representative. Without `unify_with_occurs_check()`, binding `X` to `f(X)` succeeds and creates a cyclic term.
+
+---
+
+#### `unify_with_occurs_check(t1, t2, trail) -> bool`
+
+Like `unify()` but fails if the variable being bound appears free anywhere in the term, preventing circular terms.
+
+```python
+x = Var()
+unify_with_occurs_check(x, ("f", x), trail)   # False — would be circular
+```
+
+---
+
+#### `deref(term) -> term`
+
+Follow the variable binding chain to its root. Returns `self` if unbound. Does not recurse into compound subterms — use `walk()` for deep substitution.
+
+---
+
+#### `walk(term) -> term`
+
+Deeply substitute all bound variables throughout a term. Rebuilds tuples and lists with bound vars replaced by their values; unbound vars are left in place. Returns a new object.
+
+```python
+x = Var()
+unify(x, 5, trail)
+walk(("f", x, [x, 2]))   # → ("f", 5, [5, 2])
+```
+
+---
+
+#### `is_var(term) -> bool`
+
+Return `True` if `term` dereferences to an unbound `Var`.
+
+---
+
+#### `occurs_check(var, term) -> bool`
+
+Return `True` if `var` appears free anywhere inside `term`. Used to detect would-be circular bindings before calling `unify()`.
+
+---
+
+### Backtracking pattern
+
+```python
+from clausal.logic.variables import Var, Trail, unify
+
+def solve(goal, trail):
+    for clause_head, clause_body in database:
+        mark = trail.mark()
+        head = rename(clause_head)   # fresh vars per invocation
+        if unify(goal, head, trail):
+            yield from solve_body(clause_body, trail)
+        trail.undo(mark)   # backtrack before trying next clause
+```
+
+`unify()` already rolls back on failure, so `trail.undo(mark)` is only needed to undo successful bindings when moving to the next alternative.
+
+### Notes
+
+- **Partial lists** (`[H|T]` where `T` is a variable) are not directly supported. Use a tuple `(".", H, T)` or a dedicated cons type built on top of `Var`.
+- **Dicts** are treated as atomic (compared by `==`). Wrap in tuples to unify dict-structured terms.
+- **Thread safety:** not thread-safe. Use a separate `Trail` per thread and avoid sharing `Var` objects between threads without external locking.
