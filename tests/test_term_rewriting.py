@@ -11,15 +11,17 @@ TermTransformer output and detecting other DSL patterns.
 import ast
 import pytest
 from clausal.pythonic_ast import nodes as sa
+from clausal.terms import ArithConstraint
 from clausal.templating.term_rewriting import TermTransformer, EmbedTransformer
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _ns():
-    """Namespace with all simple_ast names + a mock Var constructor."""
+    """Namespace with all simple_ast names + a mock Var constructor + terms extras."""
     ns = {name: getattr(sa, name) for name in sa.__all__}
     ns['Var'] = lambda name: f'<Var {name}>'   # mock; returns distinguishable sentinel
+    ns['ArithConstraint'] = ArithConstraint
     return ns
 
 
@@ -177,14 +179,16 @@ def test_bool_and_folded():
 # ── TermTransformer: comparison operators ─────────────────────────────────────
 
 @pytest.mark.parametrize("src,cls", [
-    ("a == b",  sa.Eq),
-    ("a != b",  sa.NotEq),
-    ("a < b",   sa.Lt),
-    ("a <= b",  sa.LtE),
-    ("a > b",   sa.Gt),
-    ("a >= b",  sa.GtE),
-    ("a is b",  sa.Is),
-    ("a in b",  sa.In),
+    ("a == b",        sa.Eq),
+    ("a != b",        sa.NotEq),
+    ("a < b",         sa.Lt),
+    ("a <= b",        sa.LtE),
+    ("a > b",         sa.Gt),
+    ("a >= b",        sa.GtE),
+    ("a is b",        sa.Is),
+    ("a is not b",    sa.IsNot),
+    ("a in b",        sa.In),
+    ("a not in b",    sa.NotIn),
 ])
 def test_cmpop(src, cls):
     node = term_eval(src, cls)
@@ -196,7 +200,32 @@ def test_compare_chain():
     node = term_eval("a < b <= c", sa.CompareChain)
     assert len(node.comparisons) == 2
     assert isinstance(node.comparisons[0], sa.Lt)
-    assert isinstance(node.comparisons[1], sa.LtE )
+    assert isinstance(node.comparisons[1], sa.LtE)
+
+
+# ── TermTransformer: ArithConstraint (==+ / == +expr) ────────────────────────
+
+def test_arith_constraint():
+    # a == +b  →  ArithConstraint(expr=Eq(a, b))
+    node = term_eval("a == +b", ArithConstraint)
+    assert isinstance(node.expr, sa.Eq)
+    assert node.expr.left.name == 'a'
+    assert node.expr.right.name == 'b'
+
+
+def test_arith_constraint_expression():
+    # x == +(y + 1)  →  ArithConstraint(expr=Eq(x, Add(y, 1)))
+    node = term_eval("x == +(y + 1)", ArithConstraint)
+    assert isinstance(node.expr, sa.Eq)
+    assert node.expr.left.name == 'x'
+    assert isinstance(node.expr.right, sa.Add)
+
+
+def test_plain_eq_not_arith_constraint():
+    # a == b (no unary plus) → Eq, not ArithConstraint
+    node = term_eval("a == b", sa.Eq)
+    assert node.left.name == 'a'
+    assert node.right.name == 'b'
 
 
 # ── TermTransformer: '<-' pseudo-operator ─────────────────────────────────────

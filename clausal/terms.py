@@ -14,7 +14,7 @@ statement.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .logic.variables import Var
@@ -67,6 +67,7 @@ class ArithConstraint:
     the CLP(FD) integration point.
     """
     expr: Any
+    position: tuple | None = field(default=None, repr=False, compare=False)
 
     def __str__(self) -> str:
         return f"==+({term_str(self.expr)})"
