@@ -111,15 +111,6 @@ CMPOP_CLS = {
     NotIn: "NotIn",
 }
 
-CONSTANT_CLS = {
-    bool: "BoolLiteral",
-    int: "IntLiteral",
-    float: "FloatLiteral",
-    complex: "ComplexLiteral",
-    str: "StringLiteral",
-    bytes: "BytesLiteral",
-}
-
 
 # ─── Term Transformer ─────────────────────────────────────────────────────────
 
@@ -234,15 +225,9 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Constant(transformer, constant):
-        value = constant.value
-        if value is None:
-            return node_ast("NoneLiteral", constant)
-        if value is ...:
-            return node_ast("EllipsisLiteral", constant)
-        class_name = CONSTANT_CLS.get(type(value))
-        if class_name is not None:
-            return node_ast(class_name, constant, value=constant)
-        raise NotImplementedError(f"Unknown constant type: {type(value)!r}")
+        # Python built-in literals are terms directly — return the constant as-is.
+        # The evaluator sees the native Python value (int, float, str, bool, None, …).
+        return constant
 
     def visit_Dict(transformer, dict_expr):
         keys = list_ast(
@@ -307,10 +292,9 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_List(transformer, list_expr):
+        # Python lists are terms directly — emit a plain Python list.
         elements = [transformer.visit(element) for element in list_expr.elts]
-        return node_ast(
-            "ListLiteral", list_expr, elements=list_ast(elements, list_expr)
-        )
+        return list_ast(elements, list_expr)
 
     def visit_ListComp(transformer, list_comprehension):
         clauses = [

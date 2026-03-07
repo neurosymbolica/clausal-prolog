@@ -46,47 +46,52 @@ def embed_exec(src: str) -> dict:
     return ns
 
 
-# ── TermTransformer: literals ──────────────────────────────────────────────────
-
-def literal_test(string, literal_type, value):
-    node = term_eval(string, literal_type)
-    assert node.value == value
-
+# ── TermTransformer: literals (Python built-ins are terms directly) ────────────
 
 def test_integer():
-    literal_test("42", sa.IntLiteral, 42)
+    assert term_eval("42", int) == 42
 
 
 def test_float():
-    literal_test("3.14", sa.FloatLiteral, 3.14)
+    assert term_eval("3.14", float) == 3.14
 
 
 def test_complex():
-    literal_test("1j", sa.ComplexLiteral, 1j)
+    assert term_eval("1j", complex) == 1j
 
 
 def test_string():
-    literal_test("'hello'", sa.StringLiteral, 'hello')
+    assert term_eval("'hello'", str) == 'hello'
 
 
 def test_bytes():
-    literal_test("b'hi'", sa.BytesLiteral, b'hi')
+    assert term_eval("b'hi'", bytes) == b'hi'
 
 
 def test_bool_true():
-    literal_test("True", sa.BoolLiteral, True)
+    result = term_eval("True", bool)
+    assert result is True
 
 
 def test_bool_false():
-    literal_test("False", sa.BoolLiteral, False)
+    result = term_eval("False", bool)
+    assert result is False
 
 
 def test_none():
-    term_eval("None", sa.NoneLiteral)
+    tree = ast.parse("None", mode='eval')
+    ast.fix_missing_locations(tree)
+    transformed = TermTransformer().visit(tree.body)
+    expr_tree = ast.fix_missing_locations(ast.Expression(body=transformed))
+    assert eval(compile(expr_tree, '<test>', 'eval'), _ns()) is None
 
 
 def test_ellipsis():
-    term_eval("...", sa.EllipsisLiteral)
+    tree = ast.parse("...", mode='eval')
+    ast.fix_missing_locations(tree)
+    transformed = TermTransformer().visit(tree.body)
+    expr_tree = ast.fix_missing_locations(ast.Expression(body=transformed))
+    assert eval(compile(expr_tree, '<test>', 'eval')) is ...
 
 
 # ── TermTransformer: names ─────────────────────────────────────────────────────
@@ -223,14 +228,15 @@ def test_spaced_lt_negate_not_arrow():
 # ── TermTransformer: collections ──────────────────────────────────────────────
 
 def test_list_literal():
-    node = term_eval("[a, b, c]", sa.ListLiteral)
-    assert len(node.elements) == 3
-    assert all(isinstance(e, sa.LoadName) for e in node.elements)
+    # Python lists are terms directly — result is a plain list.
+    node = term_eval("[a, b, c]", list)
+    assert len(node) == 3
+    assert all(isinstance(e, sa.LoadName) for e in node)
 
 
 def test_empty_list():
-    node = term_eval("[]", sa.ListLiteral)
-    assert node.elements == []
+    node = term_eval("[]", list)
+    assert node == []
 
 
 def test_tuple_literal():
@@ -246,8 +252,7 @@ def test_set_literal():
 def test_dict_literal():
     node = term_eval("{'k': v}", sa.DictLiteral)
     assert len(node.keys) == 1
-    assert isinstance(node.keys[0], sa.StringLiteral)
-    assert node.keys[0].value == 'k'
+    assert node.keys[0] == 'k'   # plain Python string, not StringLiteral
     assert isinstance(node.values[0], sa.LoadName)
 
 
@@ -267,7 +272,7 @@ def test_call_keyword():
     kw = node.kwargs[0]
     assert isinstance(kw, sa.Keyword)
     assert kw.name == 'x'
-    assert isinstance(kw.value, sa.IntLiteral)
+    assert kw.value == 1   # plain Python int, not IntLiteral
 
 
 def test_call_string_callable():
@@ -301,9 +306,9 @@ def test_subscript():
 
 
 def test_starred():
-    # *a in a list context
-    node = term_eval("[*a]", sa.ListLiteral)
-    assert isinstance(node.elements[0], sa.StarUnpack)
+    # *a in a list context — result is a plain Python list
+    node = term_eval("[*a]", list)
+    assert isinstance(node[0], sa.StarUnpack)
 
 
 def test_list_comp():
@@ -341,8 +346,7 @@ def test_embed_double_dash():
 
 def test_embed_double_dash_nested():
     ns = embed_exec("result = --'hello'")
-    assert isinstance(ns['result'], sa.StringLiteral)
-    assert ns['result'].value == 'hello'
+    assert ns['result'] == 'hello'   # plain Python string, not StringLiteral
 
 
 def test_embed_spaced_double_dash_not_escaped():

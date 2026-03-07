@@ -9,8 +9,7 @@ import ast
 import pytest
 from clausal.import_hook import _FreshEmbedTransformer, _simple_ast_builtins
 from clausal.pythonic_ast.nodes import (
-    Call, LoadName, IntLiteral, FloatLiteral, StringLiteral,
-    BoolLiteral, NoneLiteral, Add, TupleLiteral,
+    Call, LoadName, Add, TupleLiteral,
 )
 
 
@@ -32,33 +31,32 @@ def test_embed_name_produces_LoadName():
     assert ns["result"].name == "foo"
 
 
-def test_embed_integer_produces_IntLiteral():
+def test_embed_integer_is_native_int():
     ns = run_cell("result = --42")
-    assert isinstance(ns["result"], IntLiteral)
-    assert ns["result"].value == 42
+    assert ns["result"] == 42
+    assert isinstance(ns["result"], int)
 
 
-def test_embed_float_produces_FloatLiteral():
+def test_embed_float_is_native_float():
     ns = run_cell("result = --3.14")
-    assert isinstance(ns["result"], FloatLiteral)
-    assert ns["result"].value == 3.14
+    assert ns["result"] == 3.14
+    assert isinstance(ns["result"], float)
 
 
-def test_embed_string_produces_StringLiteral():
+def test_embed_string_is_native_str():
     ns = run_cell('result = --"hello"')
-    assert isinstance(ns["result"], StringLiteral)
-    assert ns["result"].value == "hello"
+    assert ns["result"] == "hello"
+    assert isinstance(ns["result"], str)
 
 
-def test_embed_bool_produces_BoolLiteral():
+def test_embed_bool_is_native_bool():
     ns = run_cell("result = --True")
-    assert isinstance(ns["result"], BoolLiteral)
-    assert ns["result"].value is True
+    assert ns["result"] is True
 
 
-def test_embed_none_produces_NoneLiteral():
+def test_embed_none_is_native_none():
     ns = run_cell("result = --None")
-    assert isinstance(ns["result"], NoneLiteral)
+    assert ns["result"] is None
 
 
 # ── Call terms ────────────────────────────────────────────────────────────────
@@ -79,10 +77,8 @@ def test_embed_call_with_int_args():
     assert isinstance(node, Call)
     assert node.func.name == "foo"
     assert len(node.args) == 2
-    assert isinstance(node.args[0], IntLiteral)
-    assert node.args[0].value == 1
-    assert isinstance(node.args[1], IntLiteral)
-    assert node.args[1].value == 2
+    assert node.args[0] == 1   # plain int, not IntLiteral
+    assert node.args[1] == 2
 
 
 def test_embed_nested_call():
@@ -92,7 +88,7 @@ def test_embed_nested_call():
     assert node.func.name == "foo"
     assert isinstance(node.args[0], Call)
     assert node.args[0].func.name == "bar"
-    assert node.args[0].args[0].value == 1
+    assert node.args[0].args[0] == 1   # plain int
 
 
 # ── Arithmetic ────────────────────────────────────────────────────────────────
@@ -101,8 +97,8 @@ def test_embed_addition():
     ns = run_cell("result = --(1 + 2)")
     node = ns["result"]
     assert isinstance(node, Add)
-    assert isinstance(node.left, IntLiteral)
-    assert isinstance(node.right, IntLiteral)
+    assert node.left == 1    # plain int, not IntLiteral
+    assert node.right == 2
 
 
 # ── Transformer is fresh per cell ─────────────────────────────────────────────
