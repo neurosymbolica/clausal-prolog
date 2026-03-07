@@ -1,5 +1,6 @@
 from ._variables import (
     Var,
+    AttVar,
     Trail,
     unify,
     unify_with_occurs_check,
@@ -7,10 +8,15 @@ from ._variables import (
     walk,
     is_var,
     occurs_check,
+    put_attr,
+    get_attr,
+    del_attr,
+    register_attr_hook,
 )
 
 __all__ = [
     "Var",
+    "AttVar",
     "Trail",
     "unify",
     "unify_with_occurs_check",
@@ -18,4 +24,8 @@ __all__ = [
     "walk",
     "is_var",
     "occurs_check",
+    "put_attr",
+    "get_attr",
+    "del_attr",
+    "register_attr_hook",
 ]

@@ -1,59 +1,70 @@
 /*
- * logicvars.c — Logic variables with trail-based backtracking
+ * _variables.c — Logic variables with trail-based backtracking
+ *                and attributed variables (AttVar)
  *
- * A WAM-less Python C extension implementing Prolog-style unification.
+ * Design notes:
  *
- * Design notes (from studying GNU Prolog and Scryer Prolog):
+ *   Plain Var (unchanged from original):
+ *     - Unbound variable: binding == NULL, self-referential by convention.
+ *     - Age-ordered binding: newer var (larger var_id) binds to older one.
+ *     - Trail: (var, old_binding) pairs; undo in reverse order.
  *
- *   GNU Prolog (wam_inst.h / unify.c):
- *     - Variables are tagged words; unbound = self-referential pointer.
- *     - Bind_UV: records old value on trail iff var was created before the
- *       current choice point (h < HB).  We always trail (no HB optimization).
- *     - Trail entry types: TUV (restore to self-ref), TOV (restore one word),
- *       TMV (multi-word), TFC (function callback).  We use the TUV/TOV pattern.
- *     - Pl_Untrail: pops trail in reverse order, restores by tag.
+ *   AttVar (new, extends Var):
+ *     - Carries an optional attrs dict {key: value}.
+ *     - Inspired by SWI-Prolog / Scryer attributed variables and SICStus.
+ *     - When an AttVar with attrs is unified, a wakeup is deferred until
+ *       structural unification is complete, then hooks are fired.
+ *     - Hook signature: hook(attr_value, bound_to, trail) -> bool
+ *     - Hooks are registered globally per key via register_attr_hook().
+ *     - Attribute mutations (put_attr / del_attr) are trailed separately.
  *
- *   Scryer Prolog (machine_state_impl.rs / unify.rs):
- *     - Unbound var = heap cell whose value equals its own address.
- *     - trail(): only records when h < hb (heap barrier = mark at choice point).
- *     - unwind_trail(): reverse-order iteration restoring vars to self-ref.
- *     - bind(): age-ordered — newer var (larger id) binds to older (smaller id),
- *       matching GNU Prolog's "bind higher address to lower address" convention.
- *     - Unification uses a PDL (push-down list) to flatten recursion.
+ *   Scryer Prolog reference (machine/attributed_variables.rs):
+ *     - AttrVar is a distinct heap-cell tag from Var.
+ *     - bind_attr_var() queues the binding in attr_var_init.bindings and
+ *       sets up a verify_attr_interrupt before the next instruction.
+ *     - After structural unification, driver/2 calls verify_attributes/3
+ *       per module that owns an attribute on the variable.
  *
- *   WAM-less adaptation:
- *     - Variables are Python heap objects; GC manages memory.
- *     - No WAM stacks/heap or high-water mark — we always trail every binding.
- *     - Trail mark = saved trail length; undo = restore in reverse from mark.
- *     - Age ordering is by monotonic creation counter (var_id).
+ *   Our adaptation (WAM-less, Python heap):
+ *     - AttVar IS-A Var (C tp_base inheritance) so Var_Check passes.
+ *     - Wakeup queue is a temporary list on Trail, swapped in/out by
+ *       py_unify so nested unify() calls from hooks get their own slice.
+ *     - Constraint propagation is entirely in user-supplied hooks.
  */
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdint.h>
-#include <string.h>
 
 /* ================================================================
  * Forward declarations
  * ================================================================ */
 
-typedef struct VarObject   VarObject;
-typedef struct TrailObject TrailObject;
+typedef struct VarObject    VarObject;
+typedef struct AttVarObject AttVarObject;
+typedef struct TrailObject  TrailObject;
 
 static PyTypeObject VarType;
+static PyTypeObject AttVarType;
 static PyTypeObject TrailType;
+
+/* Global monotonic creation counter.  Not thread-safe without the GIL. */
+static uint64_t g_next_var_id = 0;
+
+/* Module-level attribute hook registry: {key -> callable}.
+ * Mirrors the Prolog model where verify_attributes/3 is a module predicate. */
+static PyObject *g_attr_hooks = NULL;
 
 /* ================================================================
  * Var type
  *
  * An unbound logic variable.  binding == NULL means unbound.
- * When bound, binding points to the bound value (another Var* or
+ * When bound, binding points to the bound value (another Var or
  * any Python object).
  *
  * var_id is a monotonic creation counter used to orient var-var
  * bindings: the newer var (larger id) is bound to the older one,
- * matching Scryer / GNU Prolog's age-based convention and preventing
- * trivial reference cycles.
+ * matching Scryer / GNU Prolog age-based convention.
  * ================================================================ */
 
 struct VarObject {
@@ -62,17 +73,13 @@ struct VarObject {
     uint64_t  var_id;    /* monotonic creation id */
 };
 
-/* Global monotonic counter.  Not thread-safe without the GIL. */
-static uint64_t g_next_var_id = 0;
-
-#define Var_Check(op)  PyObject_TypeCheck((op), &VarType)
-#define Var_CAST(op)   ((VarObject *)(op))
+#define Var_Check(op)    PyObject_TypeCheck((op), &VarType)
+#define Var_CAST(op)     ((VarObject *)(op))
+#define AttVar_Check(op) PyObject_TypeCheck((op), &AttVarType)
+#define AttVar_CAST(op)  ((AttVarObject *)(op))
 
 /*
- * var_deref — follow the binding chain and return the root term.
- *
- * Mirrors the DEREF macro in GNU Prolog (wam_inst.h:447) and
- * MachineState::deref in Scryer (machine_state_impl.rs:87).
+ * var_deref — follow the binding chain to the root term.
  * Returns a borrowed reference.
  */
 static PyObject *
@@ -81,8 +88,8 @@ var_deref(PyObject *term)
     while (Var_Check(term)) {
         VarObject *v = Var_CAST(term);
         if (v->binding == NULL)
-            return term;      /* unbound — stop */
-        term = v->binding;    /* follow chain */
+            return term;
+        term = v->binding;
     }
     return term;
 }
@@ -93,9 +100,8 @@ Var_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "", kwlist))
         return NULL;
-
     VarObject *self = (VarObject *)PyObject_GC_New(VarObject, type);
-    if (self != NULL) {
+    if (self) {
         self->binding = NULL;
         self->var_id  = g_next_var_id++;
     }
@@ -131,8 +137,6 @@ Var_repr(VarObject *self)
     PyObject *root = var_deref((PyObject *)self);
     if (root == (PyObject *)self)
         return PyUnicode_FromFormat("Var(_%llu)", (unsigned long long)self->var_id);
-
-    /* Bound: show id and value */
     PyObject *r = PyObject_Repr(root);
     if (!r) return NULL;
     PyObject *res = PyUnicode_FromFormat("Var(_%llu=%U)",
@@ -145,8 +149,6 @@ static PyObject *
 Var_get_is_bound(VarObject *self, void *closure)
 {
     (void)closure;
-    /* True if this variable has any binding (even to another Var).
-     * Use is_var() to test whether a term dereferences to an unbound variable. */
     return PyBool_FromLong(self->binding != NULL);
 }
 
@@ -167,14 +169,11 @@ Var_get_id(VarObject *self, void *closure)
 }
 
 static PyGetSetDef Var_getset[] = {
-    {"is_bound",
-     (getter)Var_get_is_bound, NULL,
+    {"is_bound", (getter)Var_get_is_bound, NULL,
      "True if this variable has been bound to a value.", NULL},
-    {"value",
-     (getter)Var_get_value, NULL,
+    {"value",    (getter)Var_get_value,    NULL,
      "The dereferenced value.  Returns self if unbound.", NULL},
-    {"_id",
-     (getter)Var_get_id, NULL,
+    {"_id",      (getter)Var_get_id,       NULL,
      "Monotonic creation ID used for binding-direction decisions.", NULL},
     {NULL, NULL, NULL, NULL, NULL}
 };
@@ -186,12 +185,8 @@ static PyTypeObject VarType = {
         "An unbound logic variable.\n"
         "\n"
         "Create with ``Var()``.  Bind by passing to ``unify()``.\n"
-        "Test with ``is_bound`` or ``logicvars.is_var()``.\n"
+        "Test with ``is_bound`` or ``is_var()``.\n"
         "Read the bound value with the ``value`` property.\n"
-        "\n"
-        "Variables are ordered by creation time (``_id``); in a var-var\n"
-        "unification the newer variable is bound to the older one, following\n"
-        "the convention used by GNU Prolog and Scryer Prolog.\n"
     ),
     .tp_basicsize = sizeof(VarObject),
     .tp_itemsize  = 0,
@@ -206,22 +201,173 @@ static PyTypeObject VarType = {
 
 
 /* ================================================================
- * Trail type
+ * AttVar type  (extends Var)
  *
- * Records variable bindings so they can be undone (backtracking).
+ * An attributed logic variable.  Like Var but may carry a dict of
+ * per-key attributes.  When the variable is unified with a value
+ * (or another variable), registered hooks are called after structural
+ * unification completes, one per attribute key.
  *
- * Each entry stores a (var, old_binding) pair where old_binding is
- * the value of var->binding *before* the bind, so undo can restore it.
- * NULL old_binding means the variable was unbound before binding.
+ * Inspired by:
+ *   SWI-Prolog:  put_attr/3, get_attr/3, attr_unify_hook/2
+ *   SICStus:     put_atts/2, get_atts/2, verify_attributes/3
+ *   Scryer:      AttrVar heap tag, bind_attr_var(), attr_var_init queue
  *
- * Mirrors the trail Vec<TrailEntry> in Scryer (machine_state.rs) and
- * the TR stack in GNU Prolog, but without the WAM high-water-mark
- * optimisation — we always trail every binding.
+ * Constraint propagation is entirely left to user-supplied hooks.
  * ================================================================ */
 
+struct AttVarObject {
+    VarObject  base;   /* MUST be first — AttVar IS-A Var */
+    PyObject  *attrs;  /* PyDict {key: value} or NULL (no attrs yet) */
+};
+
+static PyObject *
+AttVar_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    static char *kwlist[] = {NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "", kwlist))
+        return NULL;
+    AttVarObject *self = (AttVarObject *)PyObject_GC_New(AttVarObject, type);
+    if (self) {
+        self->base.binding = NULL;
+        self->base.var_id  = g_next_var_id++;
+        self->attrs        = NULL;
+    }
+    PyObject_GC_Track(self);
+    return (PyObject *)self;
+}
+
+static void
+AttVar_dealloc(AttVarObject *self)
+{
+    PyObject_GC_UnTrack(self);
+    Py_XDECREF(self->base.binding);
+    Py_XDECREF(self->attrs);
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static int
+AttVar_traverse(AttVarObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->base.binding);
+    Py_VISIT(self->attrs);
+    return 0;
+}
+
+static int
+AttVar_clear(AttVarObject *self)
+{
+    Py_CLEAR(self->base.binding);
+    Py_CLEAR(self->attrs);
+    return 0;
+}
+
+static PyObject *
+AttVar_repr(AttVarObject *self)
+{
+    PyObject *root = var_deref((PyObject *)self);
+    if (root == (PyObject *)self) {
+        if (self->attrs) {
+            PyObject *ar = PyObject_Repr(self->attrs);
+            if (!ar) return NULL;
+            PyObject *res = PyUnicode_FromFormat("AttVar(_%llu, attrs=%U)",
+                                                  (unsigned long long)self->base.var_id, ar);
+            Py_DECREF(ar);
+            return res;
+        }
+        return PyUnicode_FromFormat("AttVar(_%llu)",
+                                     (unsigned long long)self->base.var_id);
+    }
+    PyObject *r = PyObject_Repr(root);
+    if (!r) return NULL;
+    PyObject *res = PyUnicode_FromFormat("AttVar(_%llu=%U)",
+                                          (unsigned long long)self->base.var_id, r);
+    Py_DECREF(r);
+    return res;
+}
+
+static PyObject *
+AttVar_get_attrs(AttVarObject *self, void *closure)
+{
+    (void)closure;
+    if (!self->attrs)
+        Py_RETURN_NONE;
+    Py_INCREF(self->attrs);
+    return self->attrs;
+}
+
+static PyGetSetDef AttVar_getset[] = {
+    {"attrs", (getter)AttVar_get_attrs, NULL,
+     "Attribute dict {key: value}, or None if no attributes are set.", NULL},
+    {NULL, NULL, NULL, NULL, NULL}
+};
+
+static PyTypeObject AttVarType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name      = "clausal.logic.variables.AttVar",
+    .tp_doc       = (
+        "An attributed logic variable.\n"
+        "\n"
+        "Like ``Var`` but can carry per-key attributes.  When unified with a\n"
+        "value (or another variable), hooks registered via\n"
+        "``register_attr_hook(key, fn)`` are called for each attribute key.\n"
+        "\n"
+        "Hook signature::\n"
+        "\n"
+        "    def hook(attr_value, bound_to, trail) -> bool\n"
+        "\n"
+        "Returning ``False`` causes the unification to fail and roll back.\n"
+        "The hook may call ``unify()`` to propagate constraints.\n"
+    ),
+    .tp_basicsize = sizeof(AttVarObject),
+    .tp_itemsize  = 0,
+    .tp_flags     = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
+    /* tp_base is set to &VarType in PyMODINIT_FUNC before PyType_Ready */
+    .tp_new       = AttVar_new,
+    .tp_dealloc   = (destructor)AttVar_dealloc,
+    .tp_traverse  = (traverseproc)AttVar_traverse,
+    .tp_clear     = (inquiry)AttVar_clear,
+    .tp_repr      = (reprfunc)AttVar_repr,
+    .tp_getset    = AttVar_getset,
+};
+
+
+/* ================================================================
+ * Trail type
+ *
+ * Extended from the original to handle two kinds of trail entries:
+ *
+ *   TRAIL_BINDING — a variable binding (original behaviour).
+ *     Stores (var, old_binding); undo restores var->binding.
+ *
+ *   TRAIL_ATTR — an attribute mutation via put_attr / del_attr.
+ *     Stores (attvar, key, old_attr); undo restores attrs[key].
+ *     old_attr == NULL means the key was absent before put_attr.
+ *
+ * The wakeup_list field is NULL by default and is set to a fresh
+ * Python list by py_unify / py_unify_with_occurs_check before calling
+ * do_unify.  do_unify appends (attvar, bound_to) pairs to it for any
+ * AttVar bound during structural unification.  After do_unify the
+ * caller processes the list (firing hooks) then restores the field.
+ * This scoping ensures that nested unify() calls from inside hooks
+ * each get their own wakeup slice.
+ * ================================================================ */
+
+typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1 } TrailEntryKind;
+
 typedef struct {
-    VarObject *var;        /* the variable that was bound  (owned ref) */
-    PyObject  *old_value;  /* binding before bind          (owned ref, NULL = unbound) */
+    TrailEntryKind kind;
+    union {
+        struct {
+            VarObject *var;        /* owned ref */
+            PyObject  *old_value;  /* owned ref, NULL = var was unbound */
+        } binding;
+        struct {
+            PyObject *attvar;      /* AttVarObject *, owned ref */
+            PyObject *key;         /* owned ref */
+            PyObject *old_attr;    /* owned ref, NULL = key was absent */
+        } attr;
+    } u;
 } TrailEntry;
 
 struct TrailObject {
@@ -229,6 +375,9 @@ struct TrailObject {
     TrailEntry *entries;
     Py_ssize_t  length;
     Py_ssize_t  capacity;
+    /* Wakeup queue: NULL outside py_unify; a Python list inside it.
+     * do_unify appends (attvar, bound_to) tuples when binding an AttVar. */
+    PyObject   *wakeup_list;
 };
 
 static PyObject *
@@ -237,12 +386,12 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     static char *kwlist[] = {NULL};
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "", kwlist))
         return NULL;
-
     TrailObject *self = (TrailObject *)PyObject_GC_New(TrailObject, type);
     if (self) {
-        self->entries  = NULL;
-        self->length   = 0;
-        self->capacity = 0;
+        self->entries     = NULL;
+        self->length      = 0;
+        self->capacity    = 0;
+        self->wakeup_list = NULL;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -252,12 +401,19 @@ static void
 Trail_dealloc(TrailObject *self)
 {
     PyObject_GC_UnTrack(self);
-    /* Release refs without restoring bindings (the vars may be dead). */
     for (Py_ssize_t i = 0; i < self->length; i++) {
-        Py_DECREF(self->entries[i].var);
-        Py_XDECREF(self->entries[i].old_value);
+        TrailEntry *e = &self->entries[i];
+        if (e->kind == TRAIL_BINDING) {
+            Py_DECREF(e->u.binding.var);
+            Py_XDECREF(e->u.binding.old_value);
+        } else {
+            Py_DECREF(e->u.attr.attvar);
+            Py_DECREF(e->u.attr.key);
+            Py_XDECREF(e->u.attr.old_attr);
+        }
     }
     PyMem_Free(self->entries);
+    Py_XDECREF(self->wakeup_list);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -265,9 +421,17 @@ static int
 Trail_traverse(TrailObject *self, visitproc visit, void *arg)
 {
     for (Py_ssize_t i = 0; i < self->length; i++) {
-        Py_VISIT(self->entries[i].var);
-        Py_VISIT(self->entries[i].old_value);
+        TrailEntry *e = &self->entries[i];
+        if (e->kind == TRAIL_BINDING) {
+            Py_VISIT(e->u.binding.var);
+            Py_VISIT(e->u.binding.old_value);
+        } else {
+            Py_VISIT(e->u.attr.attvar);
+            Py_VISIT(e->u.attr.key);
+            Py_VISIT(e->u.attr.old_attr);
+        }
     }
+    Py_VISIT(self->wakeup_list);
     return 0;
 }
 
@@ -275,57 +439,66 @@ static int
 Trail_clear(TrailObject *self)
 {
     Py_ssize_t len = self->length;
-    self->length = 0;          /* prevent double-free if called re-entrantly */
+    self->length = 0;
     for (Py_ssize_t i = 0; i < len; i++) {
-        Py_DECREF(self->entries[i].var);
-        Py_XDECREF(self->entries[i].old_value);
+        TrailEntry *e = &self->entries[i];
+        if (e->kind == TRAIL_BINDING) {
+            Py_DECREF(e->u.binding.var);
+            Py_XDECREF(e->u.binding.old_value);
+        } else {
+            Py_DECREF(e->u.attr.attvar);
+            Py_DECREF(e->u.attr.key);
+            Py_XDECREF(e->u.attr.old_attr);
+        }
     }
+    Py_CLEAR(self->wakeup_list);
+    return 0;
+}
+
+/* Grow entries buffer. Returns 0 on success, -1 on OOM. */
+static int
+trail_grow(TrailObject *trail)
+{
+    if (trail->length < trail->capacity)
+        return 0;
+    Py_ssize_t newcap = (trail->capacity == 0) ? 64 : trail->capacity * 2;
+    TrailEntry *buf = (TrailEntry *)PyMem_Realloc(
+        trail->entries, (size_t)newcap * sizeof(TrailEntry));
+    if (!buf) { PyErr_NoMemory(); return -1; }
+    trail->entries  = buf;
+    trail->capacity = newcap;
     return 0;
 }
 
 /*
  * trail_push — record var's current binding before overwriting it.
  *
- * Analogous to Trail_Push / Trail_UV in GNU Prolog (wam_inst.h:211,513)
- * and MachineState::trail() in Scryer (machine_state_impl.rs:100).
- *
- * Returns 0 on success, -1 with Python exception set on OOM.
+ * Analogous to Trail_UV / Bind_UV in GNU Prolog and MachineState::trail()
+ * in Scryer Prolog (machine_state_impl.rs).
  */
 static int
 trail_push(TrailObject *trail, VarObject *var)
 {
-    if (trail->length >= trail->capacity) {
-        Py_ssize_t newcap = (trail->capacity == 0) ? 64 : trail->capacity * 2;
-        TrailEntry *buf = (TrailEntry *)PyMem_Realloc(
-            trail->entries, (size_t)newcap * sizeof(TrailEntry));
-        if (!buf) { PyErr_NoMemory(); return -1; }
-        trail->entries  = buf;
-        trail->capacity = newcap;
-    }
-    /* Take ownership of references for the trail entry. */
+    if (trail_grow(trail) < 0) return -1;
+    TrailEntry *e = &trail->entries[trail->length++];
+    e->kind = TRAIL_BINDING;
     Py_INCREF(var);
-    Py_XINCREF(var->binding);   /* may be NULL — Py_XINCREF handles that */
-    trail->entries[trail->length].var       = var;
-    trail->entries[trail->length].old_value = var->binding;
-    trail->length++;
+    Py_XINCREF(var->binding);
+    e->u.binding.var       = var;
+    e->u.binding.old_value = var->binding;
     return 0;
 }
 
 /*
  * trail_bind — bind var to value, recording the previous binding on trail.
  *
- * value must already be dereferenced (no raw Var with its own chain).
- * Returns 0 on success, -1 on OOM.
- *
- * Analogous to Bind_UV + Trail_UV in GNU Prolog and
- * MachineState::bind() in Scryer.
+ * Analogous to MachineState::bind() in Scryer and Bind_UV in GNU Prolog.
  */
 static int
 trail_bind(TrailObject *trail, VarObject *var, PyObject *value)
 {
     if (trail_push(trail, var) < 0)
         return -1;
-
     Py_XDECREF(var->binding);
     Py_INCREF(value);
     var->binding = value;
@@ -333,22 +506,86 @@ trail_bind(TrailObject *trail, VarObject *var, PyObject *value)
 }
 
 /*
- * trail_undo_to — restore all bindings recorded after mark.
+ * trail_push_attr — record an attribute's current value before modifying it.
  *
- * Iterates trail entries in reverse order (newest first), exactly as
- * Scryer's unwind_trail (mod.rs:1194) and GNU Prolog's Pl_Untrail
- * (wam_inst.c:1730) do.  Each entry's old_value is transferred back to
- * var->binding; the trail entry's refs are released.
+ * old_attr is a borrowed reference (or NULL if the key was absent).
+ * The trail takes its own owned reference.
+ */
+static int
+trail_push_attr(TrailObject *trail, AttVarObject *attvar,
+                PyObject *key, PyObject *old_attr)
+{
+    if (trail_grow(trail) < 0) return -1;
+    TrailEntry *e = &trail->entries[trail->length++];
+    e->kind = TRAIL_ATTR;
+    Py_INCREF(attvar);
+    Py_INCREF(key);
+    Py_XINCREF(old_attr);
+    e->u.attr.attvar    = (PyObject *)attvar;
+    e->u.attr.key       = key;
+    e->u.attr.old_attr  = old_attr;
+    return 0;
+}
+
+/*
+ * trail_enqueue_wakeup — append (attvar, bound_to) to trail->wakeup_list.
+ *
+ * Does nothing if wakeup_list is NULL (i.e. we are not inside py_unify).
+ * Mirrors Scryer's push_attr_var_binding() which queues the binding in
+ * attr_var_init.bindings for later processing by verify_attr_interrupt.
+ */
+static int
+trail_enqueue_wakeup(TrailObject *trail, PyObject *attvar, PyObject *bound_to)
+{
+    if (!trail->wakeup_list)
+        return 0;
+    PyObject *pair = PyTuple_New(2);
+    if (!pair) return -1;
+    Py_INCREF(attvar);
+    Py_INCREF(bound_to);
+    PyTuple_SET_ITEM(pair, 0, attvar);
+    PyTuple_SET_ITEM(pair, 1, bound_to);
+    int r = PyList_Append(trail->wakeup_list, pair);
+    Py_DECREF(pair);
+    return r;
+}
+
+/*
+ * trail_undo_to — restore all bindings and attribute changes after mark.
+ *
+ * Processes entries in reverse order (newest first), exactly as
+ * Scryer's unwind_trail() and GNU Prolog's Pl_Untrail() do.
  */
 static void
 trail_undo_to(TrailObject *trail, Py_ssize_t mark)
 {
     for (Py_ssize_t i = trail->length - 1; i >= mark; i--) {
-        VarObject *var = trail->entries[i].var;
-        PyObject  *old = trail->entries[i].old_value;
-        Py_XDECREF(var->binding);
-        var->binding = old;    /* transfer ownership: trail → var */
-        Py_DECREF(var);        /* release trail's ref to var */
+        TrailEntry *e = &trail->entries[i];
+        if (e->kind == TRAIL_BINDING) {
+            VarObject *var = e->u.binding.var;
+            PyObject  *old = e->u.binding.old_value;
+            Py_XDECREF(var->binding);
+            var->binding = old;    /* transfer ownership: trail → var */
+            Py_DECREF(var);
+        } else {
+            /* Restore attribute */
+            AttVarObject *av  = (AttVarObject *)e->u.attr.attvar;
+            PyObject     *key = e->u.attr.key;
+            PyObject     *old = e->u.attr.old_attr;
+            if (av->attrs) {
+                if (old == NULL) {
+                    /* Key was absent before put_attr — delete it again */
+                    PyDict_DelItem(av->attrs, key);  /* ignore errors */
+                    PyErr_Clear();
+                } else {
+                    /* Restore previous value */
+                    PyDict_SetItem(av->attrs, key, old);  /* ignoring errors */
+                }
+            }
+            Py_DECREF(e->u.attr.attvar);
+            Py_DECREF(key);
+            Py_XDECREF(old);    /* release trail's owned ref */
+        }
     }
     trail->length = mark;
 }
@@ -367,8 +604,7 @@ Trail_undo(TrailObject *self, PyObject *arg)
     Py_ssize_t mark = PyLong_AsSsize_t(arg);
     if (mark == -1 && PyErr_Occurred()) return NULL;
     if (mark < 0 || mark > self->length) {
-        PyErr_SetString(PyExc_ValueError,
-                        "trail mark out of range");
+        PyErr_SetString(PyExc_ValueError, "trail mark out of range");
         return NULL;
     }
     trail_undo_to(self, mark);
@@ -403,12 +639,12 @@ static PyMethodDef Trail_methods[] = {
     {"undo",  (PyCFunction)Trail_undo,  METH_O,
      "undo(mark)\n"
      "\n"
-     "Restore all variable bindings recorded after *mark* was taken.\n"
-     "Processes entries in reverse chronological order."},
+     "Restore all variable bindings and attribute changes recorded after\n"
+     "*mark* was taken.  Processes entries in reverse chronological order."},
     {"reset", (PyCFunction)Trail_reset, METH_NOARGS,
      "reset()\n"
      "\n"
-     "Undo every binding on this trail (equivalent to undo(0))."},
+     "Undo every binding and attribute change on this trail (undo(0))."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -420,7 +656,7 @@ static PyTypeObject TrailType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name      = "clausal.logic.variables.Trail",
     .tp_doc       = (
-        "Trail for recording and undoing variable bindings.\n"
+        "Trail for recording and undoing variable bindings and attribute changes.\n"
         "\n"
         "Usage pattern::\n"
         "\n"
@@ -431,7 +667,7 @@ static PyTypeObject TrailType = {
         "    # ... explore this branch ...\n"
         "    trail.undo(mark)       # backtrack\n"
         "\n"
-        "len(trail) returns the number of recorded bindings.\n"
+        "len(trail) returns the number of recorded entries (bindings + attr changes).\n"
     ),
     .tp_basicsize   = sizeof(TrailObject),
     .tp_itemsize    = 0,
@@ -450,7 +686,7 @@ static PyTypeObject TrailType = {
  * Occurs check
  *
  * Mirrors GNU Prolog's Check_If_Var_Occurs (unify.c:186) and
- * Scryer's bind_with_occurs_check (unify.rs:459).
+ * Scryer's bind_with_occurs_check (unify.rs).
  *
  * Returns 1 if var appears free in term, 0 if not, -1 on error.
  * ================================================================ */
@@ -465,15 +701,11 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
                         "occurs_check: term nesting too deep");
         return -1;
     }
-
     term = var_deref(term);
-
     if (term == (PyObject *)var)
-        return 1;           /* found it */
-
+        return 1;
     if (Var_Check(term))
-        return 0;           /* different unbound var */
-
+        return 0;
     if (PyTuple_Check(term)) {
         Py_ssize_t n = PyTuple_GET_SIZE(term);
         for (Py_ssize_t i = 0; i < n; i++) {
@@ -482,7 +714,6 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
         }
         return 0;
     }
-
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
         for (Py_ssize_t i = 0; i < n; i++) {
@@ -491,28 +722,20 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
         }
         return 0;
     }
-
-    return 0;   /* atomic — can't contain a free variable */
+    return 0;
 }
 
 
 /* ================================================================
- * Unification
+ * Unification  (extended for AttVar)
  *
- * Structural unification following the standard Robinson algorithm.
- * Mirrors GNU Prolog's Pl_Unify (unify.c:49) and Scryer's
- * Unifier::unify_internal (unify.rs:357).
+ * When an AttVar with attributes is bound (Var-Term or Var-Var where
+ * the AttVar is the "newer" variable being bound), a wakeup is
+ * enqueued via trail_enqueue_wakeup().  Hooks are fired after
+ * do_unify() returns from py_unify().
  *
- * Terms recognised:
- *   - Var  → follow chain, then bind if unbound
- *   - tuple → compound term; elements unified pairwise
- *   - list  → sequence; elements unified pairwise
- *   - anything else → atomic; compared with PyObject_RichCompareBool(==)
- *
- * Returns 1 (success), 0 (failure), -1 (Python exception).
- *
- * The `oc` flag enables the occurs check before each var-to-nonvar binding,
- * preventing creation of circular/rational-tree terms.
+ * This mirrors Scryer's bind_attr_var() which calls
+ * push_attr_var_binding() to defer hook execution.
  * ================================================================ */
 
 static int
@@ -524,11 +747,9 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         return -1;
     }
 
-    /* Deref both — follow binding chains to find the representative. */
     t1 = var_deref(t1);
     t2 = var_deref(t2);
 
-    /* Identical objects always unify (handles same unbound var, same atom, etc.) */
     if (t1 == t2)
         return 1;
 
@@ -539,15 +760,28 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
     if (t1v && t2v) {
         VarObject *v1 = Var_CAST(t1), *v2 = Var_CAST(t2);
         /*
-         * Age-ordered binding: bind the newer var (larger id) to the older
-         * one.  Mirrors Scryer bind() (machine_state_impl.rs:192) and GNU
-         * Prolog's "bind higher address to lower" convention in unify.c:68.
-         * This keeps the older variable as the canonical representative,
-         * which matters for efficient union-find behaviour.
+         * Age-ordered binding: bind the newer var (larger id) to the older.
+         * Mirrors Scryer bind() and GNU Prolog's "bind higher address to lower"
+         * convention.  Keeps the older variable as canonical representative.
          */
         VarObject *newer = (v1->var_id > v2->var_id) ? v1 : v2;
         VarObject *older = (v1->var_id > v2->var_id) ? v2 : v1;
-        return trail_bind(trail, newer, (PyObject *)older) < 0 ? -1 : 1;
+
+        if (trail_bind(trail, newer, (PyObject *)older) < 0)
+            return -1;
+
+        /*
+         * If the variable being bound (newer) is an AttVar with attributes,
+         * enqueue a wakeup so hooks are called after structural unification.
+         * The "value" the AttVar is being unified with is the older var;
+         * hooks receive it as bound_to and can inspect / constrain further.
+         */
+        if (AttVar_Check(newer) && AttVar_CAST(newer)->attrs != NULL) {
+            if (trail_enqueue_wakeup(trail, (PyObject *)newer,
+                                     (PyObject *)older) < 0)
+                return -1;
+        }
+        return 1;
     }
 
     /* ---- Var-Term ---- */
@@ -555,9 +789,15 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         if (oc) {
             int found = do_occurs_check(Var_CAST(t1), t2, 0);
             if (found < 0) return -1;
-            if (found)     return 0;  /* would create cycle */
+            if (found)     return 0;
         }
-        return trail_bind(trail, Var_CAST(t1), t2) < 0 ? -1 : 1;
+        if (trail_bind(trail, Var_CAST(t1), t2) < 0)
+            return -1;
+        if (AttVar_Check(t1) && AttVar_CAST(t1)->attrs != NULL) {
+            if (trail_enqueue_wakeup(trail, t1, t2) < 0)
+                return -1;
+        }
+        return 1;
     }
     if (t2v) {
         if (oc) {
@@ -565,16 +805,20 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             if (found < 0) return -1;
             if (found)     return 0;
         }
-        return trail_bind(trail, Var_CAST(t2), t1) < 0 ? -1 : 1;
+        if (trail_bind(trail, Var_CAST(t2), t1) < 0)
+            return -1;
+        if (AttVar_Check(t2) && AttVar_CAST(t2)->attrs != NULL) {
+            if (trail_enqueue_wakeup(trail, t2, t1) < 0)
+                return -1;
+        }
+        return 1;
     }
 
     /* ---- Both non-Var: structural comparison ---- */
 
-    /* Tuples: treat as compound terms (functor/arity encoded by element 0). */
     if (PyTuple_Check(t1) && PyTuple_Check(t2)) {
         Py_ssize_t n = PyTuple_GET_SIZE(t1);
         if (n != PyTuple_GET_SIZE(t2)) return 0;
-        /* Optimise last element with tail-call-like loop */
         for (Py_ssize_t i = 0; i < n - 1; i++) {
             int r = do_unify(PyTuple_GET_ITEM(t1, i),
                              PyTuple_GET_ITEM(t2, i),
@@ -582,14 +826,11 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             if (r != 1) return r;
         }
         if (n == 0) return 1;
-        /* Last element — tail position, one less stack frame needed */
-        return do_unify(PyTuple_GET_ITEM(t1, n - 1),
-                        PyTuple_GET_ITEM(t2, n - 1),
+        return do_unify(PyTuple_GET_ITEM(t1, n-1),
+                        PyTuple_GET_ITEM(t2, n-1),
                         trail, depth + 1, oc);
     }
 
-    /* Lists: elements unified pairwise, partial lists not supported here
-     * (use tuples for structures with variable tails). */
     if (PyList_Check(t1) && PyList_Check(t2)) {
         Py_ssize_t n = PyList_GET_SIZE(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
@@ -600,27 +841,149 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             if (r != 1) return r;
         }
         if (n == 0) return 1;
-        return do_unify(PyList_GET_ITEM(t1, n - 1),
-                        PyList_GET_ITEM(t2, n - 1),
+        return do_unify(PyList_GET_ITEM(t1, n-1),
+                        PyList_GET_ITEM(t2, n-1),
                         trail, depth + 1, oc);
     }
 
-    /* Type mismatch for structured types */
     if (PyTuple_Check(t1) || PyList_Check(t1) ||
         PyTuple_Check(t2) || PyList_Check(t2))
         return 0;
 
-    /* Atomic: compare by Python equality */
     int cmp = PyObject_RichCompareBool(t1, t2, Py_EQ);
     if (cmp < 0) return -1;
     return cmp;
 }
 
-/* Helper: undo trail from trail->length back to mark, used on failure. */
-static void
-undo_partial(TrailObject *trail, Py_ssize_t mark)
+
+/* ================================================================
+ * fire_wakeups
+ *
+ * Called after do_unify() succeeds.  For each (attvar, bound_to) pair
+ * in wakeup_list:
+ *
+ *   1. Snapshot the attvar's attrs dict (so hooks may mutate it safely).
+ *   2. Deref bound_to in case it was further constrained.
+ *   3. For each (key, attr_val) in the snapshot:
+ *        hook = g_attr_hooks.get(key)
+ *        if hook: result = hook(attr_val, bound_to, trail)
+ *        if result is falsy → return 0 (failure).
+ *
+ * Returns 1 (success), 0 (hook failure), -1 (Python exception).
+ *
+ * Mirrors Scryer's driver/2 → call_verify_attributes → verify_attrs
+ * sequence in machine/attributed_variables.pl.
+ * ================================================================ */
+
+static int
+fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
 {
-    trail_undo_to(trail, mark);
+    Py_ssize_t n = PyList_GET_SIZE(wakeup_list);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *pair     = PyList_GET_ITEM(wakeup_list, i);
+        PyObject *attvar   = PyTuple_GET_ITEM(pair, 0);
+        PyObject *bound_to = PyTuple_GET_ITEM(pair, 1);
+
+        /* Follow any further bindings made after the initial bind */
+        bound_to = var_deref(bound_to);
+
+        AttVarObject *av = AttVar_CAST(attvar);
+        if (!av->attrs)
+            continue;
+
+        /*
+         * Take a snapshot of the attrs items before calling hooks.
+         * This prevents issues if a hook modifies the attrs dict.
+         * PyDict_Items returns a new list of (key, value) tuples.
+         */
+        PyObject *items = PyDict_Items(av->attrs);
+        if (!items) return -1;
+
+        Py_ssize_t nitems = PyList_GET_SIZE(items);
+        for (Py_ssize_t j = 0; j < nitems; j++) {
+            PyObject *kv       = PyList_GET_ITEM(items, j);
+            PyObject *key      = PyTuple_GET_ITEM(kv, 0);
+            PyObject *attr_val = PyTuple_GET_ITEM(kv, 1);
+
+            PyObject *hook = PyDict_GetItem(g_attr_hooks, key);
+            if (!hook)
+                continue;   /* no hook registered for this key */
+
+            PyObject *result = PyObject_CallFunctionObjArgs(
+                hook, attr_val, bound_to, (PyObject *)trail, NULL);
+            if (!result) {
+                Py_DECREF(items);
+                return -1;
+            }
+            int truthy = PyObject_IsTrue(result);
+            Py_DECREF(result);
+            if (truthy < 0) {
+                Py_DECREF(items);
+                return -1;
+            }
+            if (!truthy) {
+                Py_DECREF(items);
+                return 0;   /* hook rejected the unification */
+            }
+        }
+        Py_DECREF(items);
+    }
+    return 1;
+}
+
+
+/* ================================================================
+ * do_unify_and_wake — shared core for py_unify / py_unify_with_occurs_check
+ *
+ * Protocol:
+ *   1. Swap in a fresh wakeup_list on the trail (scoped to this call).
+ *   2. Run structural unification (do_unify).
+ *   3. Restore the old wakeup_list so any hooks calling unify() get
+ *      their own fresh list (nested calls are self-contained).
+ *   4. Fire wakeups; roll back on failure or exception.
+ * ================================================================ */
+
+static PyObject *
+do_unify_and_wake(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
+{
+    Py_ssize_t mark = trail->length;
+
+    /* Swap in a fresh wakeup list scoped to this unify() invocation */
+    PyObject *saved_wl = trail->wakeup_list;
+    PyObject *my_wl    = PyList_New(0);
+    if (!my_wl) return NULL;
+    trail->wakeup_list = my_wl;
+
+    int result = do_unify(t1, t2, trail, 0, oc);
+
+    /* Restore wakeup_list before firing hooks so nested unify() calls
+     * (from within hooks) each get their own scope. */
+    trail->wakeup_list = saved_wl;
+
+    if (result < 0) {
+        trail_undo_to(trail, mark);
+        Py_DECREF(my_wl);
+        return NULL;
+    }
+    if (!result) {
+        trail_undo_to(trail, mark);
+        Py_DECREF(my_wl);
+        Py_RETURN_FALSE;
+    }
+
+    /* Fire attribute wakeup hooks */
+    int wake = fire_wakeups(my_wl, trail);
+    Py_DECREF(my_wl);
+
+    if (wake < 0) {
+        trail_undo_to(trail, mark);
+        return NULL;
+    }
+    if (!wake) {
+        trail_undo_to(trail, mark);
+        Py_RETURN_FALSE;
+    }
+    Py_RETURN_TRUE;
 }
 
 
@@ -630,10 +993,6 @@ undo_partial(TrailObject *trail, Py_ssize_t mark)
 
 /*
  * unify(t1, t2, trail) -> bool
- *
- * Try to unify terms t1 and t2.  On success, bindings are recorded on
- * trail.  On failure, any partial bindings are automatically rolled back
- * and False is returned — callers do NOT need to call trail.undo().
  */
 static PyObject *
 py_unify(PyObject *Py_UNUSED(module), PyObject *args)
@@ -646,29 +1005,11 @@ py_unify(PyObject *Py_UNUSED(module), PyObject *args)
                         "unify() third argument must be a Trail");
         return NULL;
     }
-    TrailObject *trail = (TrailObject *)trail_obj;
-    Py_ssize_t mark = trail->length;
-
-    int result = do_unify(t1, t2, trail, 0, 0);
-    if (result < 0) {
-        undo_partial(trail, mark);
-        return NULL;
-    }
-    if (!result) {
-        undo_partial(trail, mark);
-        Py_RETURN_FALSE;
-    }
-    Py_RETURN_TRUE;
+    return do_unify_and_wake(t1, t2, (TrailObject *)trail_obj, 0);
 }
 
 /*
  * unify_with_occurs_check(t1, t2, trail) -> bool
- *
- * Like unify() but performs the occurs check before each variable binding
- * to prevent creation of circular terms.  Slower but sound.
- *
- * Mirrors Pl_Unify_Occurs_Check in GNU Prolog and
- * CompositeUnifierForOccursCheck in Scryer.
  */
 static PyObject *
 py_unify_with_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
@@ -681,26 +1022,11 @@ py_unify_with_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
                         "unify_with_occurs_check() third argument must be a Trail");
         return NULL;
     }
-    TrailObject *trail = (TrailObject *)trail_obj;
-    Py_ssize_t mark = trail->length;
-
-    int result = do_unify(t1, t2, trail, 0, 1);
-    if (result < 0) {
-        undo_partial(trail, mark);
-        return NULL;
-    }
-    if (!result) {
-        undo_partial(trail, mark);
-        Py_RETURN_FALSE;
-    }
-    Py_RETURN_TRUE;
+    return do_unify_and_wake(t1, t2, (TrailObject *)trail_obj, 1);
 }
 
 /*
  * deref(term) -> term
- *
- * Follow the variable binding chain one level at a time until an unbound
- * variable or a non-variable is reached.  Returns the root of the chain.
  */
 static PyObject *
 py_deref(PyObject *Py_UNUSED(module), PyObject *arg)
@@ -711,14 +1037,7 @@ py_deref(PyObject *Py_UNUSED(module), PyObject *arg)
 }
 
 /*
- * walk(term) -> term
- *
- * Deeply dereference a term: recursively replace all bound variables with
- * their values throughout the term structure (tuples and lists are rebuilt).
- * Unbound variables are left in place.
- *
- * Returns a new object (or the original with an incremented refcount for
- * atomic types).  Does not modify the original term.
+ * walk(term) -> term  — deep substitution
  */
 static PyObject *
 do_walk(PyObject *term, int depth)
@@ -728,15 +1047,11 @@ do_walk(PyObject *term, int depth)
                         "walk: term nesting too deep");
         return NULL;
     }
-
     term = var_deref(term);
-
     if (Var_Check(term)) {
-        /* Unbound variable — return as-is */
         Py_INCREF(term);
         return term;
     }
-
     if (PyTuple_Check(term)) {
         Py_ssize_t n = PyTuple_GET_SIZE(term);
         PyObject *result = PyTuple_New(n);
@@ -744,11 +1059,10 @@ do_walk(PyObject *term, int depth)
         for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *elem = do_walk(PyTuple_GET_ITEM(term, i), depth + 1);
             if (!elem) { Py_DECREF(result); return NULL; }
-            PyTuple_SET_ITEM(result, i, elem);   /* steals ref */
+            PyTuple_SET_ITEM(result, i, elem);
         }
         return result;
     }
-
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
         PyObject *result = PyList_New(n);
@@ -756,12 +1070,10 @@ do_walk(PyObject *term, int depth)
         for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *elem = do_walk(PyList_GET_ITEM(term, i), depth + 1);
             if (!elem) { Py_DECREF(result); return NULL; }
-            PyList_SET_ITEM(result, i, elem);    /* steals ref */
+            PyList_SET_ITEM(result, i, elem);
         }
         return result;
     }
-
-    /* Atomic or unknown container — return the dereferenced value as-is */
     Py_INCREF(term);
     return term;
 }
@@ -774,8 +1086,6 @@ py_walk(PyObject *Py_UNUSED(module), PyObject *arg)
 
 /*
  * is_var(term) -> bool
- *
- * Return True if term dereferences to an unbound Var.
  */
 static PyObject *
 py_is_var(PyObject *Py_UNUSED(module), PyObject *arg)
@@ -786,11 +1096,6 @@ py_is_var(PyObject *Py_UNUSED(module), PyObject *arg)
 
 /*
  * occurs_check(var, term) -> bool
- *
- * Return True if var (or the variable it dereferences to) appears free
- * anywhere inside term.  Used to detect would-be circular bindings.
- *
- * Mirrors Check_If_Var_Occurs in GNU Prolog (unify.c:186).
  */
 static PyObject *
 py_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
@@ -798,14 +1103,197 @@ py_occurs_check(PyObject *Py_UNUSED(module), PyObject *args)
     PyObject *var_obj, *term;
     if (!PyArg_ParseTuple(args, "OO", &var_obj, &term))
         return NULL;
-
     PyObject *root = var_deref(var_obj);
     if (!Var_Check(root))
-        Py_RETURN_FALSE;   /* bound — not an unbound variable */
-
+        Py_RETURN_FALSE;
     int r = do_occurs_check(Var_CAST(root), term, 0);
     if (r < 0) return NULL;
     return PyBool_FromLong(r);
+}
+
+
+/* ================================================================
+ * Attributed variable API
+ * ================================================================ */
+
+/*
+ * put_attr(var, key, value, trail)
+ *
+ * Set attribute `key` on AttVar `var` to `value`.  The previous value
+ * (or absence) is recorded on `trail` and restored on backtrack.
+ *
+ * Mirrors SWI-Prolog's put_attr/3 and SICStus's put_atts/2.
+ * Attribute mutations are trailed via TRAIL_ATTR entries, analogous to
+ * Scryer's TrailedAttrVarListLink trail entries.
+ */
+static PyObject *
+py_put_attr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *var_obj, *key, *value, *trail_obj;
+    if (!PyArg_ParseTuple(args, "OOOO", &var_obj, &key, &value, &trail_obj))
+        return NULL;
+
+    PyObject *root = var_deref(var_obj);
+    if (!AttVar_Check(root)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "put_attr(): first argument must dereference to an unbound AttVar");
+        return NULL;
+    }
+    if (!PyObject_TypeCheck(trail_obj, &TrailType)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "put_attr(): fourth argument must be a Trail");
+        return NULL;
+    }
+
+    AttVarObject *av    = AttVar_CAST(root);
+    TrailObject  *trail = (TrailObject *)trail_obj;
+
+    /* Lazily create the attrs dict */
+    if (!av->attrs) {
+        av->attrs = PyDict_New();
+        if (!av->attrs) return NULL;
+    }
+
+    /* Get current value (borrowed ref, NULL if absent) */
+    PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
+    if (!old_attr && PyErr_Occurred()) return NULL;
+
+    if (trail_push_attr(trail, av, key, old_attr) < 0)
+        return NULL;
+
+    if (PyDict_SetItem(av->attrs, key, value) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}
+
+/*
+ * get_attr(var, key) -> value or None
+ *
+ * Return the attribute stored under `key` on AttVar `var`, or None
+ * if the variable has no such attribute (or is not an AttVar).
+ *
+ * Mirrors SWI-Prolog's get_attr/3 (without unification semantics).
+ */
+static PyObject *
+py_get_attr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *var_obj, *key;
+    if (!PyArg_ParseTuple(args, "OO", &var_obj, &key))
+        return NULL;
+
+    PyObject *root = var_deref(var_obj);
+    if (!AttVar_Check(root))
+        Py_RETURN_NONE;
+
+    AttVarObject *av = AttVar_CAST(root);
+    if (!av->attrs)
+        Py_RETURN_NONE;
+
+    PyObject *val = PyDict_GetItemWithError(av->attrs, key);
+    if (!val) {
+        if (PyErr_Occurred()) return NULL;
+        Py_RETURN_NONE;
+    }
+    Py_INCREF(val);
+    return val;
+}
+
+/*
+ * del_attr(var, key, trail)
+ *
+ * Delete attribute `key` from AttVar `var`.  The deletion is recorded
+ * on `trail` and reversed on backtrack.  A no-op if the key is absent.
+ */
+static PyObject *
+py_del_attr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *var_obj, *key, *trail_obj;
+    if (!PyArg_ParseTuple(args, "OOO", &var_obj, &key, &trail_obj))
+        return NULL;
+
+    PyObject *root = var_deref(var_obj);
+    if (!AttVar_Check(root)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "del_attr(): first argument must dereference to an unbound AttVar");
+        return NULL;
+    }
+    if (!PyObject_TypeCheck(trail_obj, &TrailType)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "del_attr(): third argument must be a Trail");
+        return NULL;
+    }
+
+    AttVarObject *av    = AttVar_CAST(root);
+    TrailObject  *trail = (TrailObject *)trail_obj;
+
+    if (!av->attrs)
+        Py_RETURN_NONE;   /* nothing to delete */
+
+    PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
+    if (!old_attr) {
+        if (PyErr_Occurred()) return NULL;
+        Py_RETURN_NONE;   /* key absent */
+    }
+
+    if (trail_push_attr(trail, av, key, old_attr) < 0)
+        return NULL;
+
+    if (PyDict_DelItem(av->attrs, key) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}
+
+/*
+ * register_attr_hook(key, callable)
+ *
+ * Register a hook to be called when an AttVar carrying attribute `key`
+ * is unified with a value.
+ *
+ * Hook signature::
+ *
+ *     def hook(attr_value, bound_to, trail) -> bool
+ *
+ * `attr_value` — the attribute stored under `key` on the AttVar.
+ * `bound_to`   — the value (or variable) the AttVar was unified with,
+ *                after following any binding chains.
+ * `trail`      — the Trail used in the unify() call; the hook may call
+ *                unify() or put_attr() with this trail to propagate
+ *                constraints.
+ *
+ * Returning a falsy value causes the entire unification to fail and
+ * roll back all bindings made since the enclosing unify() call started.
+ *
+ * Pass callable=None to unregister.
+ *
+ * This is the Python equivalent of Scryer's attr_unify_hook/2 (per
+ * module key) or SICStus's verify_attributes/3.
+ */
+static PyObject *
+py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *key, *callable;
+    if (!PyArg_ParseTuple(args, "OO", &key, &callable))
+        return NULL;
+
+    if (callable == Py_None) {
+        if (PyDict_DelItem(g_attr_hooks, key) < 0) {
+            if (PyErr_ExceptionMatches(PyExc_KeyError))
+                PyErr_Clear();   /* unregistering a non-existent key is fine */
+            else
+                return NULL;
+        }
+    } else {
+        if (!PyCallable_Check(callable)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "register_attr_hook(): callable must be callable or None");
+            return NULL;
+        }
+        if (PyDict_SetItem(g_attr_hooks, key, callable) < 0)
+            return NULL;
+    }
+    Py_RETURN_NONE;
 }
 
 
@@ -822,11 +1310,14 @@ static PyMethodDef module_methods[] = {
      "Returns True on success; bindings are recorded on *trail* for later\n"
      "backtracking via trail.undo().\n"
      "\n"
-     "Returns False on failure; any partial bindings made during the attempt\n"
-     "are automatically rolled back — callers do not need to call undo().\n"
+     "Returns False on failure; any partial bindings (including those made\n"
+     "by attribute hooks) are automatically rolled back.\n"
      "\n"
-     "Terms can be:\n"
-     "  - ``Var`` — an unbound logic variable\n"
+     "If any AttVar's attribute hook returns False the unification fails\n"
+     "and all bindings are rolled back to the state before this call.\n"
+     "\n"
+     "Terms recognised:\n"
+     "  - ``Var`` / ``AttVar`` — logic variable\n"
      "  - tuple  — compound term; elements unified pairwise\n"
      "  - list   — sequence; elements unified pairwise\n"
      "  - anything else — atomic; compared with ``==``\n"},
@@ -834,8 +1325,7 @@ static PyMethodDef module_methods[] = {
      "unify_with_occurs_check(t1, t2, trail) -> bool\n"
      "\n"
      "Like unify() but performs the occurs check before each variable\n"
-     "binding.  Prevents creation of circular/infinite terms at the cost\n"
-     "of additional traversal."},
+     "binding.  Prevents creation of circular/infinite terms."},
     {"deref", py_deref, METH_O,
      "deref(term) -> term\n"
      "\n"
@@ -850,25 +1340,57 @@ static PyMethodDef module_methods[] = {
     {"is_var", py_is_var, METH_O,
      "is_var(term) -> bool\n"
      "\n"
-     "Return True if *term* dereferences to an unbound Var."},
+     "Return True if *term* dereferences to an unbound Var or AttVar."},
     {"occurs_check", py_occurs_check, METH_VARARGS,
      "occurs_check(var, term) -> bool\n"
      "\n"
      "Return True if *var* appears free inside *term*.\n"
      "Used to guard against circular unification."},
+    /* Attributed variable API */
+    {"put_attr", py_put_attr, METH_VARARGS,
+     "put_attr(var, key, value, trail)\n"
+     "\n"
+     "Set attribute *key* on AttVar *var* to *value*.\n"
+     "The change is recorded on *trail* and reversed on backtrack.\n"
+     "Analogous to SWI-Prolog's put_attr/3."},
+    {"get_attr", py_get_attr, METH_VARARGS,
+     "get_attr(var, key) -> value or None\n"
+     "\n"
+     "Return the attribute stored under *key* on AttVar *var*, or None.\n"
+     "Analogous to SWI-Prolog's get_attr/3."},
+    {"del_attr", py_del_attr, METH_VARARGS,
+     "del_attr(var, key, trail)\n"
+     "\n"
+     "Delete attribute *key* from AttVar *var*.\n"
+     "The deletion is recorded on *trail* and reversed on backtrack."},
+    {"register_attr_hook", py_register_attr_hook, METH_VARARGS,
+     "register_attr_hook(key, callable)\n"
+     "\n"
+     "Register a hook called when an AttVar with attribute *key* is unified.\n"
+     "\n"
+     "Hook signature: hook(attr_value, bound_to, trail) -> bool\n"
+     "\n"
+     "Returning False fails the unification and rolls back all bindings.\n"
+     "The hook may call unify() or put_attr() to propagate constraints.\n"
+     "Pass callable=None to unregister.\n"
+     "\n"
+     "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
+     "SICStus's verify_attributes/3."},
     {NULL, NULL, 0, NULL}
 };
 
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
     "_variables",
-    "Logic variables with trail-based backtracking.\n"
+    "Logic variables with trail-based backtracking and attributed variables.\n"
     "\n"
-    "Implements Prolog-style unification and deterministic backtracking\n"
-    "without a Warren Abstract Machine.\n"
+    "Plain variables (Var) implement Prolog-style unification without a WAM.\n"
+    "Attributed variables (AttVar) extend Var with per-key attributes and\n"
+    "a hook mechanism for constraint propagation.\n"
     "\n"
-    "Studied implementations: GNU Prolog (wam_inst.h / unify.c) and\n"
-    "Scryer Prolog (machine_state_impl.rs / unify.rs).\n",
+    "Studied implementations: GNU Prolog (wam_inst.h / unify.c),\n"
+    "Scryer Prolog (machine_state_impl.rs / attributed_variables.rs),\n"
+    "SWI-Prolog (pl-attvar.c), SICStus Prolog (attributed variable design).\n",
     -1,
     module_methods
 };
@@ -876,14 +1398,26 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__variables(void)
 {
-    if (PyType_Ready(&VarType)   < 0) return NULL;
-    if (PyType_Ready(&TrailType) < 0) return NULL;
+    /* AttVarType must inherit from VarType.  Set tp_base before PyType_Ready
+     * since static initialisers cannot reference other static objects. */
+    AttVarType.tp_base = &VarType;
+
+    if (PyType_Ready(&VarType)    < 0) return NULL;
+    if (PyType_Ready(&AttVarType) < 0) return NULL;
+    if (PyType_Ready(&TrailType)  < 0) return NULL;
+
+    g_attr_hooks = PyDict_New();
+    if (!g_attr_hooks) return NULL;
 
     PyObject *m = PyModule_Create(&moduledef);
-    if (!m) return NULL;
+    if (!m) goto error;
 
     Py_INCREF(&VarType);
     if (PyModule_AddObject(m, "Var", (PyObject *)&VarType) < 0)
+        goto error;
+
+    Py_INCREF(&AttVarType);
+    if (PyModule_AddObject(m, "AttVar", (PyObject *)&AttVarType) < 0)
         goto error;
 
     Py_INCREF(&TrailType);
@@ -893,6 +1427,6 @@ PyInit__variables(void)
     return m;
 
 error:
-    Py_DECREF(m);
+    Py_XDECREF(m);
     return NULL;
 }
