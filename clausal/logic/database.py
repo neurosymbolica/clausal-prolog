@@ -45,6 +45,10 @@ class PredicateTable:
         self.dispatch_fn: Callable | None = None
         self.dispatch_index: dict = {}  # reserved for first-argument indexing
         self.signature: tuple[str, ...] | None = None
+        # Lazy recompile: set by the compiler after first compilation.
+        # When dispatch_fn is cleared by assertz/asserta/retract, the next
+        # get_dispatch() call invokes this to recompile from the current clauses.
+        self._lazy_recompile: Callable | None = None
 
     def assertz(self, clause: Clause) -> None:
         """Append clause at end; invalidate the compiled dispatch function."""
@@ -77,14 +81,20 @@ class PredicateTable:
     def get_dispatch(self) -> Callable:
         """Return the compiled dispatch function.
 
-        Raises NotImplementedError if the predicate has not been compiled yet.
-        The compiler is wired in steps 4–5.
+        If dispatch_fn was cleared by a dynamic clause addition and a lazy
+        recompile callback is registered, recompiles on demand before returning.
+
+        Raises NotImplementedError if neither dispatch_fn nor _lazy_recompile
+        is available (predicate has never been compiled).
         """
         if self.dispatch_fn is None:
-            raise NotImplementedError(
-                f"Predicate {self.functor}/{self.arity} has no compiled dispatch "
-                "function. The compiler (steps 4–5) must be run first."
-            )
+            if self._lazy_recompile is not None:
+                self.dispatch_fn = self._lazy_recompile()
+            else:
+                raise NotImplementedError(
+                    f"Predicate {self.functor}/{self.arity} has no compiled dispatch "
+                    "function. The compiler (steps 4–5) must be run first."
+                )
         return self.dispatch_fn
 
     def __repr__(self) -> str:
