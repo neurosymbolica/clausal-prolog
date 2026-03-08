@@ -968,6 +968,68 @@ def _make_body_compiler_trampoline(
 # ── compile_predicate_trampoline ───────────────────────────────────────────────
 
 
+def _build_predicate_trampoline_funcdef(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: Database,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+) -> ast.FunctionDef:
+    """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
+
+    Returns the fixed-up FunctionDef without executing it.  Used by both
+    ``compile_predicate_trampoline`` and ``compile_predicate_trampoline_ast``.
+    """
+    arg_names = [f"arg{i}" for i in range(arity)]
+    params = ["parent"] + arg_names + ["trail"]
+
+    bootstrap = ast.Assign(
+        targets=[_name("self", ast.Store())],
+        value=ast.Yield(value=None),
+        lineno=0, col_offset=0,
+    )
+    all_stmts: list[ast.stmt] = [bootstrap]
+
+    for clause in clauses:
+        var_context: dict[int, str] = {}
+        _head_arg_patterns(clause.head, var_context, arity)
+        body_stmts = body_compiler(clause, var_context)
+        case_arm = compile_head_to_match_case(
+            head=clause.head,
+            body_stmts=body_stmts,
+            var_context=var_context,
+            arity=arity,
+        )
+        subject = ast.Tuple(
+            elts=[_name(n) for n in arg_names],
+            ctx=ast.Load(),
+        )
+        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    all_stmts.append(_yield_step_stmt(_name("parent"), _name("_DONE")))
+
+    func_name = f"{functor}__{arity}"
+    func_def = ast.FunctionDef(
+        name=func_name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[ast.arg(arg=p) for p in params],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[],
+        ),
+        body=all_stmts,
+        decorator_list=[],
+        returns=None,
+        type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    ast.fix_missing_locations(func_def)
+    return func_def
+
+
 def compile_predicate_trampoline(
     functor: str,
     arity: int,
@@ -1020,56 +1082,7 @@ def compile_predicate_trampoline(
         _install(db, functor, arity, fn)
         return fn
 
-    arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["parent"] + arg_names + ["trail"]
-
-    # self = yield   (bootstrap: trampoline injects own generator reference)
-    bootstrap = ast.Assign(
-        targets=[_name("self", ast.Store())],
-        value=ast.Yield(value=None),
-        lineno=0,
-        col_offset=0,
-    )
-    all_stmts: list[ast.stmt] = [bootstrap]
-
-    for clause in clauses:
-        var_context: dict[int, str] = {}
-        _head_arg_patterns(clause.head, var_context, arity)
-        body_stmts = body_compiler(clause, var_context)
-        case_arm = compile_head_to_match_case(
-            head=clause.head,
-            body_stmts=body_stmts,
-            var_context=var_context,
-            arity=arity,
-        )
-        subject = ast.Tuple(
-            elts=[_name(n) for n in arg_names],
-            ctx=ast.Load(),
-        )
-        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
-
-    # yield Step(parent, _DONE) — all clauses exhausted
-    all_stmts.append(_yield_step_stmt(_name("parent"), _name("_DONE")))
-
-    func_name = f"{functor}__{arity}"
-    func_def = ast.FunctionDef(
-        name=func_name,
-        args=ast.arguments(
-            posonlyargs=[],
-            args=[ast.arg(arg=p) for p in params],
-            vararg=None,
-            kwonlyargs=[],
-            kw_defaults=[],
-            kwarg=None,
-            defaults=[],
-        ),
-        body=all_stmts,
-        decorator_list=[],
-        returns=None,
-        type_comment=None,
-        **_EXTRA_FUNCDEF,
-    )
-    ast.fix_missing_locations(func_def)
+    func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
 
     base_globals: dict = {
         "Compound": Compound,
@@ -1093,6 +1106,44 @@ def compile_predicate_trampoline(
 
     _install(db, functor, arity, fn, lazy_recompile=_recompile_trampoline)
     return fn
+
+
+def compile_predicate_trampoline_ast(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: Database,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
+) -> ast.FunctionDef:
+    """Return the ``ast.FunctionDef`` for a trampoline-mode compiled predicate.
+
+    Identical to ``compile_predicate_trampoline`` but returns the AST node
+    instead of executing it.  Does *not* install anything in the database.
+    """
+    if body_compiler is None:
+        body_compiler = _make_body_compiler_trampoline(db)
+    if not clauses:
+        arg_names = [f"arg{i}" for i in range(arity)]
+        params = ["parent"] + arg_names + ["trail"]
+        func_def = ast.FunctionDef(
+            name=f"{functor}__{arity}",
+            args=ast.arguments(
+                posonlyargs=[], args=[ast.arg(arg=p) for p in params],
+                vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+            ),
+            body=[
+                ast.Assign(
+                    targets=[_name("self", ast.Store())],
+                    value=ast.Yield(value=None),
+                    lineno=0, col_offset=0,
+                ),
+                _yield_step_stmt(_name("parent"), _name("_DONE")),
+            ],
+            decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
+        )
+        ast.fix_missing_locations(func_def)
+        return func_def
+    return _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
 
 
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
@@ -1295,6 +1346,62 @@ _EXTRA_FUNCDEF: dict = (
 )
 
 
+def _build_predicate_funcdef(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: Database,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+) -> ast.FunctionDef:
+    """Build the ``ast.FunctionDef`` for a simple/short-stack compiled predicate.
+
+    Returns the fixed-up FunctionDef without executing it.  Used by both
+    ``compile_predicate`` (which then calls ``functiondef_to_function``) and
+    ``compile_predicate_ast`` (which returns the FunctionDef directly).
+    """
+    arg_names = [f"arg{i}" for i in range(arity)]
+    params = arg_names + ["trail", "k"]
+
+    all_stmts: list[ast.stmt] = []
+
+    for clause in clauses:
+        var_context: dict[int, str] = {}
+        _head_arg_patterns(clause.head, var_context, arity)
+        body_stmts = body_compiler(clause, var_context)
+        case_arm = compile_head_to_match_case(
+            head=clause.head,
+            body_stmts=body_stmts,
+            var_context=var_context,
+            arity=arity,
+        )
+        subject = ast.Tuple(
+            elts=[_name(n) for n in arg_names],
+            ctx=ast.Load(),
+        )
+        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    func_name = f"{functor}__{arity}"
+    func_def = ast.FunctionDef(
+        name=func_name,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[ast.arg(arg=p) for p in params],
+            vararg=None,
+            kwonlyargs=[],
+            kw_defaults=[],
+            kwarg=None,
+            defaults=[],
+        ),
+        body=all_stmts,
+        decorator_list=[],
+        returns=None,
+        type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    ast.fix_missing_locations(func_def)
+    return func_def
+
+
 def compile_predicate(
     functor: str,
     arity: int,
@@ -1340,50 +1447,7 @@ def compile_predicate(
         _install(db, functor, arity, fn)
         return fn
 
-    arg_names = [f"arg{i}" for i in range(arity)]
-    params = arg_names + ["trail", "k"]
-
-    all_stmts: list[ast.stmt] = []
-
-    for clause in clauses:
-        var_context: dict[int, str] = {}
-        # Phase 1: populate var_context from head patterns so the body compiler
-        # can reference head-captured Vars by their Python local names.
-        _head_arg_patterns(clause.head, var_context, arity)
-        # Phase 2: compile body using the now-populated var_context.
-        body_stmts = body_compiler(clause, var_context)
-        # Phase 3: assemble match case (re-populates var_context idempotently).
-        case_arm = compile_head_to_match_case(
-            head=clause.head,
-            body_stmts=body_stmts,
-            var_context=var_context,
-            arity=arity,
-        )
-        subject = ast.Tuple(
-            elts=[_name(n) for n in arg_names],
-            ctx=ast.Load(),
-        )
-        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
-
-    func_name = f"{functor}__{arity}"
-    func_def = ast.FunctionDef(
-        name=func_name,
-        args=ast.arguments(
-            posonlyargs=[],
-            args=[ast.arg(arg=p) for p in params],
-            vararg=None,
-            kwonlyargs=[],
-            kw_defaults=[],
-            kwarg=None,
-            defaults=[],
-        ),
-        body=all_stmts,
-        decorator_list=[],
-        returns=None,
-        type_comment=None,
-        **_EXTRA_FUNCDEF,
-    )
-    ast.fix_missing_locations(func_def)
+    func_def = _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
 
     base_globals: dict = {
         "Compound": Compound,
@@ -1405,6 +1469,37 @@ def compile_predicate(
 
     _install(db, functor, arity, fn, lazy_recompile=_recompile_simple)
     return fn
+
+
+def compile_predicate_ast(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: Database,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
+) -> ast.FunctionDef:
+    """Return the ``ast.FunctionDef`` for a simple-mode compiled predicate.
+
+    Identical to ``compile_predicate`` but returns the AST node instead of
+    executing it.  Useful for inspecting or pretty-printing generated code.
+    Does *not* install anything in the database.
+    """
+    if body_compiler is None:
+        body_compiler = _make_body_compiler(db)
+    if not clauses:
+        arg_names = [f"arg{i}" for i in range(arity)]
+        params = arg_names + ["trail", "k"]
+        return ast.FunctionDef(
+            name=f"{functor}__{arity}",
+            args=ast.arguments(
+                posonlyargs=[], args=[ast.arg(arg=p) for p in params],
+                vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+            ),
+            body=[ast.Return(value=ast.Constant(value=None)),
+                  ast.Expr(value=ast.Yield(value=ast.Constant(value=None)))],
+            decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
+        )
+    return _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
 
 
 def _stub_body_stmts() -> list[ast.stmt]:
@@ -1464,10 +1559,12 @@ def _install(
 __all__ = [
     # Simple / short-stack compilation
     "compile_predicate",
+    "compile_predicate_ast",
     "compile_goal",
     "compile_body",
     # Trampoline / stack-safe compilation
     "compile_predicate_trampoline",
+    "compile_predicate_trampoline_ast",
     "compile_goal_trampoline",
     "compile_body_trampoline",
     "DONE",
