@@ -44,6 +44,7 @@ class PredicateTable:
         self._clauses: list[Clause] = []
         self.dispatch_fn: Callable | None = None
         self.dispatch_index: dict = {}  # reserved for first-argument indexing
+        self.signature: tuple[str, ...] | None = None
 
     def assertz(self, clause: Clause) -> None:
         """Append clause at end; invalidate the compiled dispatch function."""
@@ -145,6 +146,30 @@ class Database:
         """Return the PredicateTable for (functor, arity), or None."""
         return self._tables.get((functor, arity))
 
+    def register_signature(
+        self, functor: str, arity: int, param_names: tuple[str, ...]
+    ) -> None:
+        """Register the keyword parameter names for a predicate.
+
+        If a signature is already registered and matches, this is a no-op.
+        If it conflicts, emit a warning.
+        """
+        import warnings
+
+        table = self._table(functor, arity)
+        if table.signature is None:
+            table.signature = param_names
+        elif table.signature != param_names:
+            warnings.warn(
+                f"Signature conflict for {functor}/{arity}: "
+                f"registered {table.signature}, got {param_names}"
+            )
+
+    def signature_for(self, functor: str, arity: int) -> tuple[str, ...] | None:
+        """Return the registered keyword param names, or None."""
+        table = self._tables.get((functor, arity))
+        return table.signature if table else None
+
     def __repr__(self) -> str:
         parts = ", ".join(f"{f}/{a}" for f, a in sorted(self._tables))
         return f"Database({{{parts}}})"
@@ -177,10 +202,16 @@ class Module:
         Flattens the body And-chain into a flat list of goal terms and stores
         the resulting Clause.  The dispatch_fn slot is left None until the
         compiler (steps 4–5) recompiles the predicate.
+
+        Also registers the keyword signature from the head's field names.
         """
         head = predicate_node.head
         body_goals = _flatten_body(predicate_node.body)
         self.db.assertz(Clause(head=head, body=body_goals))
+        functor, arity = head_key(head)
+        param_names = _extract_param_names(head)
+        if param_names is not None:
+            self.db.register_signature(functor, arity, param_names)
 
     def solve(self, goal: Any):
         """Solve a goal against this module's database.
@@ -221,6 +252,21 @@ def head_key(head: Any) -> tuple[str, int]:
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
         "Expected Compound, Call(LoadName(...), ...), or a functor dataclass instance."
     )
+
+
+def _extract_param_names(head: Any) -> tuple[str, ...] | None:
+    """Extract keyword parameter names from a head term.
+
+    Returns a tuple of field name strings if the head is a user-defined functor
+    dataclass instance; None for built-in term types (Compound, Call) and
+    non-dataclass values.
+    """
+    if not dataclasses.is_dataclass(head) or isinstance(head, type):
+        return None
+    # Exclude built-in term types that happen to be dataclasses.
+    if isinstance(head, (Compound, Call)):
+        return None
+    return tuple(f.name for f in dataclasses.fields(head))
 
 
 def _flatten_body(body: Any) -> list:

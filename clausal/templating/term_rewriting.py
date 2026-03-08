@@ -608,8 +608,15 @@ def _make_functor_class_ast(functor_name, field_names, source):
             class foo:
                 _x: object = None
                 def __call__(self, **kwargs):
-                    return _dataclasses.replace(self, **kwargs)
+                    for _f in _dataclasses.fields(type(self)):
+                        if _f.name not in kwargs:
+                            kwargs[_f.name] = Var()
+                    return type(self)(**kwargs)
             foo = foo()
+
+    Calling the singleton instance with a subset of keyword arguments produces a
+    partial term: unspecified fields receive a fresh ``Var()`` each call, so two
+    separate partial calls never share the same unbound variable.
     """
     lines = [
         "try:",
@@ -623,7 +630,10 @@ def _make_functor_class_ast(functor_name, field_names, source):
         lines.append(f"        {name}: object = None")
     lines.extend([
         "        def __call__(self, **kwargs):",
-        "            return _dataclasses.replace(self, **kwargs)",
+        "            for _f in _dataclasses.fields(type(self)):",
+        "                if _f.name not in kwargs:",
+        "                    kwargs[_f.name] = Var()",
+        "            return type(self)(**kwargs)",
         f"    {functor_name} = {functor_name}()",
     ])
     tree = parse("\n".join(lines))

@@ -12,7 +12,12 @@ import ast
 import pytest
 from clausal.pythonic_ast import nodes as sa
 from clausal.terms import ArithConstraint
-from clausal.templating.term_rewriting import TermTransformer, EmbedTransformer
+from clausal.templating.term_rewriting import (
+    TermTransformer,
+    EmbedTransformer,
+    _make_functor_class_ast,
+)
+from clausal.logic.variables import Var as RealVar
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -477,3 +482,46 @@ with ~~{} as clauses:
     ns = embed_exec(src)
     assert isinstance(ns['clauses'][0], ast.BinOp)
     assert isinstance(ns['clauses'][1], ast.Return)
+
+
+# ── Partial-term: _make_functor_class_ast __call__ fills missing fields ────────
+
+
+def _make_functor_class(functor_name: str, *field_names: str):
+    """Compile and return the singleton functor class generated for the given fields."""
+    anchor = ast.parse("x").body[0]
+    ast.fix_missing_locations(anchor)
+    class_ast = _make_functor_class_ast(functor_name, list(field_names), anchor)
+    module = ast.fix_missing_locations(
+        ast.Module(body=[class_ast], type_ignores=[])
+    )
+    ns = {"Var": RealVar}
+    exec(compile(module, "<test>", "exec"), ns)
+    return ns[functor_name]
+
+
+def test_partial_term_unspecified_field_is_var():
+    point = _make_functor_class("point", "_x", "_y")
+    result = point(_x=1)
+    assert result._x == 1
+    assert isinstance(result._y, RealVar)
+
+
+def test_partial_term_explicit_none_preserved():
+    point = _make_functor_class("point", "_x", "_y")
+    result = point(_x=1, _y=None)
+    assert result._y is None
+
+
+def test_partial_term_no_args_all_vars():
+    point = _make_functor_class("point", "_x", "_y")
+    result = point()
+    assert isinstance(result._x, RealVar)
+    assert isinstance(result._y, RealVar)
+
+
+def test_partial_term_fresh_vars_each_call():
+    point = _make_functor_class("point", "_x", "_y")
+    r1 = point(_x=1)
+    r2 = point(_x=1)
+    assert r1._y is not r2._y

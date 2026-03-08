@@ -10,6 +10,7 @@ from clausal.logic.database import (
     PredicateTable,
     head_key,
     _flatten_body,
+    _extract_param_names,
 )
 from clausal.terms import And, Call, Compound, Is, LoadName, Var
 
@@ -356,3 +357,96 @@ class TestModule:
         m.define_predicate(MockPredicate(head=head, body=None))
         clauses = m.db.clauses_for("foo", 2)
         assert len(clauses) == 1
+
+
+# ── _extract_param_names ────────────────────────────────────────────────────────
+
+
+class TestExtractParamNames:
+    def test_functor_dataclass_returns_field_names(self):
+        h = foo(arg_0=1, arg_1=2)
+        assert _extract_param_names(h) == ("arg_0", "arg_1")
+
+    def test_single_field_dataclass(self):
+        h = bar(x=42)
+        assert _extract_param_names(h) == ("x",)
+
+    def test_compound_returns_none(self):
+        h = Compound("foo", (1, 2))
+        assert _extract_param_names(h) is None
+
+    def test_call_returns_none(self):
+        h = call_head("foo", 1, 2)
+        assert _extract_param_names(h) is None
+
+    def test_non_term_returns_none(self):
+        assert _extract_param_names("not_a_term") is None
+
+
+# ── Database.register_signature / signature_for ─────────────────────────────────
+
+
+class TestDatabaseSignature:
+    def test_register_and_retrieve(self):
+        db = Database()
+        db.register_signature("point", 2, ("_x", "_y"))
+        assert db.signature_for("point", 2) == ("_x", "_y")
+
+    def test_unknown_predicate_returns_none(self):
+        db = Database()
+        assert db.signature_for("ghost", 1) is None
+
+    def test_duplicate_identical_is_noop(self):
+        db = Database()
+        db.register_signature("point", 2, ("_x", "_y"))
+        db.register_signature("point", 2, ("_x", "_y"))  # no-op, no warning
+        assert db.signature_for("point", 2) == ("_x", "_y")
+
+    def test_conflicting_signature_warns(self):
+        db = Database()
+        db.register_signature("point", 2, ("_x", "_y"))
+        with pytest.warns(UserWarning, match="Signature conflict"):
+            db.register_signature("point", 2, ("_lat", "_lon"))
+        # Original signature is preserved.
+        assert db.signature_for("point", 2) == ("_x", "_y")
+
+    def test_register_creates_table_if_absent(self):
+        db = Database()
+        assert not db.is_defined("point", 2)
+        db.register_signature("point", 2, ("_x", "_y"))
+        # Table created but no clauses yet.
+        assert db.clauses_for("point", 2) == []
+        assert db.signature_for("point", 2) == ("_x", "_y")
+
+
+# ── Module.define_predicate auto-registers signature ────────────────────────────
+
+
+class TestModuleSignatureRegistration:
+    def _pred(self, head, body=None):
+        @dataclasses.dataclass
+        class MockPredicate:
+            head: object
+            body: object
+        return MockPredicate(head=head, body=body)
+
+    def test_dataclass_head_registers_signature(self):
+        m = Module("test")
+        m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))
+        assert m.db.signature_for("foo", 2) == ("arg_0", "arg_1")
+
+    def test_compound_head_no_signature(self):
+        m = Module("test")
+        m.define_predicate(self._pred(Compound("foo", (1, 2))))
+        assert m.db.signature_for("foo", 2) is None
+
+    def test_call_head_no_signature(self):
+        m = Module("test")
+        m.define_predicate(self._pred(call_head("foo", 1, 2)))
+        assert m.db.signature_for("foo", 2) is None
+
+    def test_consistent_clauses_same_signature(self):
+        m = Module("test")
+        m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))
+        m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))
+        assert m.db.signature_for("foo", 2) == ("arg_0", "arg_1")
