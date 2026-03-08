@@ -301,6 +301,85 @@ stores on `PredicateTable.dispatch_fn`.
 
 ---
 
+### WK-VAR — Variable naming: trailing-underscore convention
+
+**Depends on:** Steps 1–5
+
+**Goal:** Change the logic variable convention from a *leading* underscore (`_X`,
+`_foo`) to a *trailing* underscore (`X_`, `foo_`).  This aligns with conventional
+Prolog practice (uppercase = variable) while giving Python programmers full
+flexibility over variable names — any casing works, there are no conflicts with
+Python's own leading-underscore private-attribute convention, and names like
+`Head_`, `Tail_`, `N_`, `Acc_` are all natural.
+
+**Rule:** Any identifier whose last character is `_` but that does *not* end with
+`__` (double underscore) and is not the bare wildcard `_` is a logic variable in
+DSL context.
+
+**Changes:**
+- `TermTransformer.visit_Name` in `clausal/templating/term_rewriting.py`: recognise
+  `name_` (trailing single `_`) instead of `_name` (leading `_`).
+- `EmbedTransformer.visit_Name`: same — trailing `_` triggers the `.value` unbox
+  rewrite for variables referenced in outer Python code.
+- `EmbedTransformer.visit_Expr` predicate-head argument extraction: detect
+  trailing `_` to derive field names from positional variable arguments.
+- All tests and examples updated.
+
+---
+
+### Tool-VIS — Compiled predicate visualizer
+
+**Depends on:** Steps 4–5
+
+**Goal:** Provide a developer tool for inspecting what the compiler generates, as
+readable Python source and/or as an AST node tree.  Essential for debugging the
+compiler and for validating that generated code looks as expected.
+
+**`clausal/tools/visualize.py`:**
+- `predicate_to_source(functor, arity, clauses, db, *, trampoline=False) -> str`
+  — builds the predicate's AST and unparses it to Python source via `ast.unparse`
+- `predicate_ast(functor, arity, clauses, db, *, trampoline=False) -> ast.FunctionDef`
+  — returns the raw `ast.FunctionDef` for further inspection
+- `show(functor, arity, clauses, db, *, trampoline=False, mode='source') -> None`
+  — prints to stdout; `mode='source'` uses `ast.unparse`, `mode='ast'` uses
+  `astpretty.pprint` if available
+
+**Compiler additions** (`clausal/logic/compiler.py`):
+- `compile_predicate_ast(functor, arity, clauses, db, ...) -> ast.FunctionDef`
+  — like `compile_predicate` but returns the FunctionDef without compiling
+- `compile_predicate_trampoline_ast(...)` — same for the trampoline variant
+
+Tests can call `show()` directly; pytest's `-s` flag passes output through.
+
+---
+
+### WK-LAZY — Lazy dispatch and method-swap for dynamic predicates
+
+**Depends on:** Steps 4–5, WK-VAR
+
+**Goal:** When new clauses are added to a predicate at runtime, defer recompilation
+until the predicate is actually *called* — not at assert time.  This keeps the
+assertz/asserta path cheap and supports fully dynamic rule addition.
+
+**Pattern:** `PredicateTable` gains a `_lazy_recompile: Callable | None` slot.
+After the compiler first compiles a predicate it stores a recompile closure on
+`_lazy_recompile`.  Subsequent `assertz`/`asserta`/`retract` calls set
+`dispatch_fn = None` but leave `_lazy_recompile` intact.  On the next call to
+`get_dispatch()`, if `dispatch_fn is None` and `_lazy_recompile` is set, it is
+invoked to recompile with the fresh clause list and the result is stored back in
+`dispatch_fn`.
+
+```python
+# Conceptual closure stored by _install():
+def _recompile():
+    return compile_predicate(functor, arity, table.clauses, db)
+table._lazy_recompile = _recompile
+```
+
+No changes to `Database` or `Module` are needed — all state lives on the table.
+
+---
+
 ### Step 6 — Import hook wiring
 
 **Depends on:** Steps 3–5
@@ -314,6 +393,14 @@ stores on `PredicateTable.dispatch_fn`.
 3. Recompile the entire predicate: call `compile_predicate(functor, arity, all_clauses, module.db)`
 4. Install the compiled function in `module.db`'s dispatch slot and optionally in the module
    namespace under a mangled name (e.g. `_clausal_foo__2`) for direct Python call access
+
+**Compiled AST into module bytecode:** predicate `ast.FunctionDef` nodes are injected into
+the transformed module's `ast.Module` body *before* `compile()` is called.  This means the
+compiled predicate functions end up in the `.pyc` bytecode cached in `__pycache__` alongside
+the rest of the module.  On re-import of an unchanged file, Python loads the cached `.pyc`
+directly; the predicate functions are already present and no recompilation is needed at
+startup.  Only predicates added at runtime via `assertz`/`asserta` (after import) use the
+WK-LAZY lazy-recompile path.
 
 **`$assert_fact(term)`** becomes: `module.db.assertz(Clause(term, []))` + recompile.
 
@@ -418,6 +505,14 @@ generated AST structure; verify head pattern types (literal, class, Compound, Va
 - `last/2` — covers linear recursion
 - N-queens (N = 4, 5) — covers conjunction, arithmetic comparison, negation-as-failure
 - Fibonacci via arithmetic — covers `is`-goals with arithmetic evaluation
+
+**`tests/test_compiled_programs.py`**: meatier end-to-end tests that exercise the
+compiled predicates with realistic programs (no import hook needed):
+- Graph reachability (`edge/2` facts + `path/2` transitive closure via predicate calls)
+- Classification (`animal/2` with multiple compound-head clauses, dataclass patterns)
+- Fibonacci via accumulator (arithmetic Is goals + recursive calls)
+- Combination search (multiple predicate calls in conjunction, verifying all solutions)
+- N-queens (4×4) — arithmetic constraints + negation-as-failure, no stack overflow
 
 **`tests/test_import.py`**: import a `.clausal` source file, call predicates from Python via
 `solve` / `query`, verify solutions, verify re-assert at runtime
