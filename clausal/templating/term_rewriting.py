@@ -326,8 +326,11 @@ class TermTransformer(NodeTransformer):
 
     def visit_Name(transformer, name):
         identifier = name.id
-        if identifier[0] == "_" and identifier != "_":
-            # Logic variable: first occurrence allocates a Var; subsequent ones reuse it.
+        # Logic variable: trailing single underscore (not dunder, not bare '_').
+        # Examples: X_, Foo_, head_, tail_ — all are logic variables.
+        # Excluded: _, __, x__, __init__ (dunder-style).
+        if identifier.endswith("_") and not identifier.endswith("__") and identifier != "_":
+            # First occurrence allocates a Var; subsequent ones reuse it.
             if identifier in transformer.seen_vars:
                 return replace(Name(id=identifier, ctx=load), name)
             transformer.seen_vars.add(identifier)
@@ -816,7 +819,9 @@ class EmbedTransformer(NodeTransformer):
 
                 arg_field_names = [
                     arg.id.lower()
-                    if isinstance(arg, Name) and arg.id.startswith("_")
+                    if isinstance(arg, Name)
+                        and arg.id.endswith("_")
+                        and not arg.id.endswith("__")
                     else f"arg_{i}"
                     for i, arg in enumerate(orig_pos_args)
                 ]
@@ -931,9 +936,9 @@ class EmbedTransformer(NodeTransformer):
         return transformer.generic_visit(with_statement)
 
     def visit_Name(transformer, name):
-        # In outer Python code, rewrite _Var → _Var.value to unbox a logic variable.
-        # Ignore dunders and bare '_'.
-        if name.id[0] == "_" and name.id[-1] != "_" and name.id != "_":
+        # In outer Python code, rewrite var_ → var_.value to unbox a logic variable.
+        # Trailing single underscore (not dunder, not bare '_').
+        if name.id.endswith("_") and not name.id.endswith("__") and name.id != "_":
             return replace(
                 Attribute(value=name, attr="value", ctx=load),
                 name,

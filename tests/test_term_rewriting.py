@@ -109,15 +109,15 @@ def test_bare_name_becomes_load_name():
 
 
 def test_logic_variable_first_use():
-    # _X on first use creates a Var (our mock returns a sentinel string)
-    node = term_eval("_X", str)  # ?
-    assert node == '<Var _X>'
+    # X_ on first use creates a Var (our mock returns a sentinel string)
+    node = term_eval("X_", str)
+    assert node == '<Var X_>'
 
 
 def test_logic_variable_reuse():
-    # _X used twice in the same expression: second use must be the same object
+    # X_ used twice in the same expression: second use must be the same object
     # The walrus pattern ensures they share the same Python variable.
-    node = term_eval("_X == _X", sa.Eq)
+    node = term_eval("X_ == X_", sa.Eq)
     assert node.left is node.right   # same Var object
 
 
@@ -501,27 +501,27 @@ def _make_functor_class(functor_name: str, *field_names: str):
 
 
 def test_partial_term_unspecified_field_is_var():
-    point = _make_functor_class("point", "_x", "_y")
-    result = point(_x=1)
-    assert result._x == 1
-    assert isinstance(result._y, RealVar)
+    point = _make_functor_class("point", "x_", "y_")
+    result = point(x_=1)
+    assert result.x_ == 1
+    assert isinstance(result.y_, RealVar)
 
 
 def test_partial_term_explicit_none_preserved():
-    point = _make_functor_class("point", "_x", "_y")
-    result = point(_x=1, _y=None)
-    assert result._y is None
+    point = _make_functor_class("point", "x_", "y_")
+    result = point(x_=1, y_=None)
+    assert result.y_ is None
 
 
 def test_partial_term_no_args_all_vars():
-    point = _make_functor_class("point", "_x", "_y")
+    point = _make_functor_class("point", "x_", "y_")
     result = point()
-    assert isinstance(result._x, RealVar)
-    assert isinstance(result._y, RealVar)
+    assert isinstance(result.x_, RealVar)
+    assert isinstance(result.y_, RealVar)
 
 
 def test_partial_term_fresh_vars_each_call():
-    point = _make_functor_class("point", "_x", "_y")
-    r1 = point(_x=1)
-    r2 = point(_x=1)
-    assert r1._y is not r2._y
+    point = _make_functor_class("point", "x_", "y_")
+    r1 = point(x_=1)
+    r2 = point(x_=1)
+    assert r1.y_ is not r2.y_
