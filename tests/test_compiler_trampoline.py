@@ -156,7 +156,7 @@ class TestCompileBodyTrampolineStructure:
         import ast
         db = Database()
         x = Var()
-        vc: dict = {}
+        vc: dict = {x._id: "_vx"}  # pre-register so no pre-allocation stmts
         stmts = compile_body_trampoline([Is(left=x, right=1)], db, vc, "trail")
         assert len(stmts) == 3  # mark, if, undo
 
@@ -165,7 +165,7 @@ class TestCompileBodyTrampolineStructure:
         import ast
         db = Database()
         x, y = Var(), Var()
-        vc: dict = {}
+        vc: dict = {x._id: "_vx", y._id: "_vy"}  # pre-register so no pre-allocation stmts
         stmts = compile_body_trampoline([Is(left=x, right=1), Is(left=y, right=2)], db, vc, "trail")
         assert len(stmts) == 3  # mark, if, undo (outer Is wraps inner)
 

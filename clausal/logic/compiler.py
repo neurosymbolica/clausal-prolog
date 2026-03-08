@@ -66,6 +66,112 @@ def _var_python_name(var: Var) -> str:
     return f"_v{var._id}"
 
 
+def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
+    """Recursively collect all Var objects reachable from term, in order.
+
+    Used to pre-scan body goals left-to-right so that body-only Vars are
+    registered in ``var_context`` before right-to-left body compilation starts.
+    Without this pre-pass, body-only Vars are walrus-assigned in the innermost
+    (last) goal's argument list but referenced in earlier (outer) goal arguments,
+    causing UnboundLocalError at runtime.
+    """
+    if seen is None:
+        seen = set()
+
+    term = deref(term)
+
+    if is_var(term):
+        if term._id not in seen:
+            seen.add(term._id)
+            return [term]
+        return []
+
+    if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
+        return []
+
+    if isinstance(term, list):
+        result: list[Var] = []
+        for e in term:
+            result.extend(_collect_vars(e, seen))
+        return result
+
+    if isinstance(term, Compound):
+        result = _collect_vars(term.functor, seen)
+        for a in term.args:
+            result.extend(_collect_vars(a, seen))
+        return result
+
+    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+        result = []
+        for f in dataclasses.fields(term):
+            result.extend(_collect_vars(getattr(term, f.name), seen))
+        return result
+
+    # term is an operator/goal node — recurse into its fields
+    try:
+        for f in dataclasses.fields(term):
+            pass  # noqa: just check it's a dataclass
+        result = []
+        for f in dataclasses.fields(term):
+            val = getattr(term, f.name)
+            if val is not None:
+                result.extend(_collect_vars(val, seen))
+        return result
+    except TypeError:
+        return []
+
+
+def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
+    """Return a name→type dict for all user-defined dataclass types found in clause heads.
+
+    These are injected into the compiled function's globals so that
+    ``case dog(name=_v0):`` match patterns can resolve ``dog``.
+    """
+    types: dict[str, type] = {}
+
+    def _walk(term: Any) -> None:
+        term = deref(term)
+        if isinstance(term, Compound):
+            for a in term.args:
+                _walk(a)
+        elif dataclasses.is_dataclass(term) and not isinstance(term, type):
+            cls = type(term)
+            types[cls.__name__] = cls
+            for f in dataclasses.fields(term):
+                _walk(getattr(term, f.name))
+
+    for clause in clauses:
+        _walk(clause.head)
+
+    return types
+
+
+def _preallocate_body_vars(
+    goals: list,
+    var_context: dict[int, str],
+) -> list[ast.stmt]:
+    """Pre-scan goals left-to-right; emit ``_vN = Var()`` for body-only Vars.
+
+    Populates ``var_context`` for every Var found in the goals so that
+    subsequent right-to-left compilation sees them as already-known (name
+    reference) rather than body-only (walrus).  Returns the list of allocation
+    statements to prepend to the compiled body.
+
+    This prevents the UnboundLocalError that arises when a Var first appears as
+    an argument to an outer goal but gets walrus-assigned inside an inner goal
+    due to right-to-left compilation order.
+    """
+    stmts: list[ast.stmt] = []
+    seen: set[int] = set(var_context.keys())  # head Vars already allocated
+    for goal in goals:
+        for var in _collect_vars(goal, seen):
+            if var._id not in var_context:
+                name = _var_python_name(var)
+                var_context[var._id] = name
+                stmts.append(_assign(name, _call(_name("Var"))))
+    return stmts
+
+
 # ── ast helpers ────────────────────────────────────────────────────────────────
 
 
@@ -562,11 +668,18 @@ def compile_body(
 
     The leaf continuation is ``yield None`` (one solution).
     Goals are processed right-to-left so each wraps the next as its k_stmts.
+
+    Body-only Vars (variables that appear in the body but not the head) are
+    pre-allocated via ``_preallocate_body_vars`` so that they are registered
+    in ``var_context`` as named locals before right-to-left compilation begins.
+    This prevents UnboundLocalError when an outer goal references a Var that
+    would otherwise only be walrus-introduced inside a later (inner) goal.
     """
+    alloc_stmts = _preallocate_body_vars(goals, var_context)
     k: list[ast.stmt] = [_yield_none_stmt()]
     for goal in reversed(goals):
         k = compile_goal(goal, db, var_context, trail_name, k)
-    return k
+    return alloc_stmts + k
 
 
 def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
@@ -948,12 +1061,13 @@ def compile_body_trampoline(
     surfaced to the calling generator.
 
     Builds right-to-left: each goal wraps the next as its k_stmts, ending
-    with the leaf.
+    with the leaf.  Body-only Vars are pre-allocated (same fix as compile_body).
     """
+    alloc_stmts = _preallocate_body_vars(goals, var_context)
     k: list[ast.stmt] = [_yield_step_stmt(_name(parent_name), ast.Constant(None))]
     for goal in reversed(goals):
         k = compile_goal_trampoline(goal, db, var_context, trail_name, k, self_name, parent_name)
-    return k
+    return alloc_stmts + k
 
 
 def _make_body_compiler_trampoline(
@@ -1001,7 +1115,7 @@ def _build_predicate_trampoline_funcdef(
             arity=arity,
         )
         subject = ast.Tuple(
-            elts=[_name(n) for n in arg_names],
+            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
@@ -1093,6 +1207,7 @@ def compile_predicate_trampoline(
         "Step": Step,
         "_DONE": DONE,
     }
+    base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)
 
@@ -1375,7 +1490,7 @@ def _build_predicate_funcdef(
             arity=arity,
         )
         subject = ast.Tuple(
-            elts=[_name(n) for n in arg_names],
+            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
@@ -1456,6 +1571,7 @@ def compile_predicate(
         "deref": deref,
         "_db": db,
     }
+    base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)
 
