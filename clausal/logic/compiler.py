@@ -1444,6 +1444,10 @@ def _head_arg_patterns(
     """Extract per-argument patterns from a head term."""
     if isinstance(head, Compound):
         return [head_to_match_pattern(a, var_context) for a in head.args]
+    # Call(func=LoadName(f), args=[...]) — e.g. from $assert_fact with trailing comma.
+    # Extract patterns from the positional args, not from the Call dataclass fields.
+    if isinstance(head, Call) and isinstance(head.func, LoadName):
+        return [head_to_match_pattern(a, var_context) for a in head.args]
     if dataclasses.is_dataclass(head) and not isinstance(head, type):
         return [
             head_to_match_pattern(getattr(head, f.name), var_context)

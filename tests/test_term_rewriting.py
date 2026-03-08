@@ -25,7 +25,7 @@ from clausal.logic.variables import Var as RealVar
 def _ns():
     """Namespace with all simple_ast names + a mock Var constructor + terms extras."""
     ns = {name: getattr(sa, name) for name in sa.__all__}
-    ns['Var'] = lambda name: f'<Var {name}>'   # mock; returns distinguishable sentinel
+    ns['Var'] = lambda: '<Var>'   # mock; returns a sentinel string
     ns['ArithConstraint'] = ArithConstraint
     return ns
 
@@ -111,7 +111,7 @@ def test_bare_name_becomes_load_name():
 def test_logic_variable_first_use():
     # X_ on first use creates a Var (our mock returns a sentinel string)
     node = term_eval("X_", str)
-    assert node == '<Var X_>'
+    assert node == '<Var>'
 
 
 def test_logic_variable_reuse():

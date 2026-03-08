@@ -340,7 +340,7 @@ class TermTransformer(NodeTransformer):
                     value=replace(
                         Call(
                             func=replace(Name(id="Var", ctx=load), name),
-                            args=[replace(Constant(value=identifier), name)],
+                            args=[],
                             keywords=[],
                         ),
                         name,
