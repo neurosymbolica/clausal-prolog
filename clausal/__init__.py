@@ -6,7 +6,8 @@ Top-level public API (Step 7 and later).
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import Compound
+from clausal.terms import Compound, KWTerm
+from clausal.logic.builtins import structural_unify
 
 __all__ = [
     # Query API
@@ -21,6 +22,8 @@ __all__ = [
     "Var",
     "Trail",
     "Compound",
+    "KWTerm",
     "deref",
     "unify",
+    "structural_unify",
 ]

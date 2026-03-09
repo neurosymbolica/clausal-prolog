@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Callable
 
-from clausal.terms import And, Call, Compound, LoadName
+from clausal.terms import And, Call, Compound, KWTerm, LoadName
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -153,8 +153,24 @@ class Database:
         return (functor, arity) in self._tables
 
     def table_for(self, functor: str, arity: int) -> PredicateTable | None:
-        """Return the PredicateTable for (functor, arity), or None."""
-        return self._tables.get((functor, arity))
+        """Return the PredicateTable for (functor, arity).
+
+        Checks the local table first.  If not found, falls back to the
+        builtin/stdlib registry (clausal.logic.builtins).  Builtin tables are
+        cached on first access so subsequent lookups are O(1).
+        """
+        local = self._tables.get((functor, arity))
+        if local is not None:
+            return local
+        # Lazy builtin/stdlib lookup — avoids circular imports at module level.
+        from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
+        dispatch_fn = get_builtin_dispatch(functor, arity, self)
+        if dispatch_fn is not None:
+            table = PredicateTable(functor, arity)
+            table.dispatch_fn = dispatch_fn
+            self._tables[(functor, arity)] = table  # cache
+            return table
+        return None
 
     def register_signature(
         self, functor: str, arity: int, param_names: tuple[str, ...]
@@ -258,6 +274,8 @@ def head_key(head: Any) -> tuple[str, int]:
         if isinstance(head.func, LoadName):
             return head.func.name, len(head.args)
         raise TypeError(f"Call head with non-LoadName func: {head.func!r}")
+    if isinstance(head, KWTerm):
+        return head.functor, len(head)
     if dataclasses.is_dataclass(head) and not isinstance(head, type):
         return type(head).__name__, len(dataclasses.fields(head))
     raise TypeError(
@@ -273,6 +291,8 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     dataclass instance; None for built-in term types (Compound, Call) and
     non-dataclass values.
     """
+    if isinstance(head, KWTerm):
+        return tuple(head.keys())
     if not dataclasses.is_dataclass(head) or isinstance(head, type):
         return None
     # Exclude built-in term types that happen to be dataclasses.

@@ -95,6 +95,21 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
             result.extend(_collect_vars(e, seen))
         return result
 
+    if isinstance(term, dict):
+        result = []
+        for k, v in term.items():
+            result.extend(_collect_vars(k, seen))
+            result.extend(_collect_vars(v, seen))
+        return result
+
+    # KWTerm: recurse into field values
+    from clausal.terms import KWTerm  # noqa: PLC0415
+    if isinstance(term, KWTerm):
+        result = []
+        for v in term.values():
+            result.extend(_collect_vars(v, seen))
+        return result
+
     if isinstance(term, Compound):
         result = _collect_vars(term.functor, seen)
         for a in term.args:
@@ -142,7 +157,38 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
 
     for clause in clauses:
         _walk(clause.head)
+        for goal in clause.body:
+            _walk(goal)
 
+    return types
+
+
+def _collect_types_from_term(term: Any) -> dict[str, type]:
+    """Return a name→type dict for all user-defined dataclass types in *term*.
+
+    Like _collect_head_types but operates on a single arbitrary term, used by
+    _compile_as_query to inject types from inline goal arguments.
+    """
+    types: dict[str, type] = {}
+
+    def _walk(t: Any) -> None:
+        t = deref(t)
+        if isinstance(t, Compound):
+            for a in t.args:
+                _walk(a)
+        elif isinstance(t, list):
+            for e in t:
+                _walk(e)
+        elif isinstance(t, dict):
+            for v in t.values():
+                _walk(v)
+        elif dataclasses.is_dataclass(t) and not isinstance(t, type):
+            cls = type(t)
+            types[cls.__name__] = cls
+            for f in dataclasses.fields(t):
+                _walk(getattr(t, f.name))
+
+    _walk(term)
     return types
 
 
@@ -238,6 +284,12 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             ctx=ast.Load(),
         )
 
+    if isinstance(term, dict):
+        return ast.Dict(
+            keys=[term_to_ast_expr(k, var_context) for k in term.keys()],
+            values=[term_to_ast_expr(v, var_context) for v in term.values()],
+        )
+
     if isinstance(term, Compound):
         f = term.functor
         f_expr: ast.expr
@@ -270,6 +322,19 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                 )
                 for f in dataclasses.fields(term)
             ],
+        )
+
+    # KWTerm: generate KWTerm("functor", key=val, ...)
+    from clausal.terms import KWTerm  # noqa: PLC0415
+    if isinstance(term, KWTerm):
+        keywords = [
+            ast.keyword(arg=k, value=term_to_ast_expr(v, var_context))
+            for k, v in term.items()
+        ]
+        return ast.Call(
+            func=_name("KWTerm"),
+            args=[ast.Constant(value=term.functor)],
+            keywords=keywords,
         )
 
     raise NotImplementedError(
@@ -1210,8 +1275,10 @@ def compile_predicate_trampoline(
 
     func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
 
+    from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
+        "KWTerm": _KWTerm_t,
         "Var": Var,
         "unify": unify,
         "deref": deref,
@@ -1580,8 +1647,10 @@ def compile_predicate(
 
     func_def = _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
 
+    from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
+        "KWTerm": _KWTerm,
         "Var": Var,
         "unify": unify,
         "deref": deref,

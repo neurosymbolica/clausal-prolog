@@ -73,6 +73,84 @@ class ArithConstraint:
         return f"==+({term_str(self.expr)})"
 
 
+# ── Open-world keyword term ────────────────────────────────────────────────────
+
+
+class KWTerm:
+    """Open-world keyword term — any functor, any keywords, dict-backed.
+
+    For runtime-constructed terms where the functor has no compile-time class.
+    Attributes are read from the backing dict.  Iteration yields values in
+    insertion order.  Equality and unification match by keyword name (not
+    position): ``KWTerm('r', a=1, b=2) == KWTerm('r', b=2, a=1)``.
+    """
+
+    __slots__ = ("_functor", "_fields")
+
+    def __init__(self, functor: str, **kwargs: Any) -> None:
+        object.__setattr__(self, "_functor", functor)
+        object.__setattr__(self, "_fields", dict(kwargs))
+
+    @property
+    def functor(self) -> str:
+        return self._functor
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self._fields[name]
+        except KeyError:
+            raise AttributeError(
+                f"KWTerm {self._functor!r} has no field {name!r}"
+            ) from None
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, KWTerm):
+            return (
+                self._functor == other._functor
+                and self._fields == other._fields
+            )
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((self._functor, tuple(sorted(self._fields.items()))))
+
+    def __repr__(self) -> str:
+        args = ", ".join(f"{k}={v!r}" for k, v in self._fields.items())
+        return f"KWTerm({self._functor!r}, {args})"
+
+    def keys(self):
+        return self._fields.keys()
+
+    def values(self):
+        return self._fields.values()
+
+    def items(self):
+        return self._fields.items()
+
+    def __len__(self) -> int:
+        return len(self._fields)
+
+    def with_overrides(self, **overrides: Any) -> "KWTerm":
+        """Return a new KWTerm with specified fields replaced."""
+        new_fields = dict(self._fields)
+        for k in overrides:
+            if k not in new_fields:
+                raise KeyError(f"KWTerm {self._functor!r} has no field {k!r}")
+        new_fields.update(overrides)
+        return KWTerm(self._functor, **new_fields)
+
+    def with_extensions(self, **extensions: Any) -> "KWTerm":
+        """Return a new KWTerm with additional fields appended."""
+        new_fields = dict(self._fields)
+        for k in extensions:
+            if k in new_fields:
+                raise KeyError(
+                    f"KWTerm {self._functor!r} already has field {k!r}"
+                )
+        new_fields.update(extensions)
+        return KWTerm(self._functor, **new_fields)
+
+
 # ── Cons / list helpers ────────────────────────────────────────────────────────
 
 def list_to_cons(lst: list) -> object:
@@ -122,6 +200,9 @@ def term_str(t: Any) -> str:
         return repr(t)
     if isinstance(t, (Compound, ArithConstraint)):
         return str(t)
+    if isinstance(t, KWTerm):
+        args = ", ".join(f"{k}={term_str(v)}" for k, v in t.items())
+        return f"{t.functor}({args})"
 
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -155,6 +236,7 @@ __all__ = [
     "Var",
     # New term types
     "Compound",
+    "KWTerm",
     "ArithConstraint",
     # Helpers
     "list_to_cons",

@@ -75,12 +75,16 @@ def _compile_as_query(goal: Any, db: Database) -> Any:
         compile_body,
         _collect_vars,
         _var_python_name,
+        _collect_types_from_term,
     )
 
     # Collect all Var objects reachable from goal.
     vars_in_goal = _collect_vars(goal)
     pre_var_context = {v._id: _var_python_name(v) for v in vars_in_goal}
-    extra_globals = {_var_python_name(v): v for v in vars_in_goal}
+    extra_globals: dict = {_var_python_name(v): v for v in vars_in_goal}
+    # Also collect user-defined dataclass types that appear in the goal args
+    # so that term_to_ast_expr can reference them in the compiled code.
+    extra_globals.update(_collect_types_from_term(goal))
 
     def _query_body_compiler(clause: Clause, var_context: dict) -> list:
         # Pre-populate var_context so _preallocate_body_vars skips user Vars

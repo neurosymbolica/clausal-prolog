@@ -37,7 +37,7 @@ from .templating.term_rewriting import EmbedTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate
 from .logic.variables import Var, Trail, unify, deref, walk
-from .terms import Compound
+from .terms import Compound, KWTerm
 
 
 # ── Runtime support ──────────────────────────────────────────────────────────
