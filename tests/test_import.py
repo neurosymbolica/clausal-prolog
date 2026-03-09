@@ -237,3 +237,134 @@ def test_runtime_assertz_adds_clause():
     dispatch2 = logic_mod.db.table_for("edge", 2).get_dispatch()
     results = list(dispatch2(3, 4, Trail(), None))
     assert len(results) == 1
+
+
+# ── Step 7: solve/call/query/once via imported module ─────────────────────────
+
+
+def test_call_edge_ground_success():
+    """call() with two ground args succeeds when the edge exists.
+
+    Note: edge clauses in the fixture have literals in both head positions,
+    so both args must be ground (no Var enumeration via call).
+    """
+    from clausal.logic.solve import call
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    results = list(call("edge", 1, 2, module=logic_mod))
+    assert len(results) == 1
+
+
+def test_call_edge_ground_failure():
+    """call() with ground args fails when edge does not exist."""
+    from clausal.logic.solve import call
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    results = list(call("edge", 3, 1, module=logic_mod))
+    assert results == []
+
+
+def test_call_reach_ground_success():
+    """call() with both ground args succeeds for a reachable pair.
+
+    Note: edge_graph.py fixture has literal heads in both positions for edge,
+    so reach can only be queried with ground args (both src and dst specified).
+    """
+    from clausal.logic.solve import call
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    # 1 can reach 3 (directly via edge(1,3))
+    results = list(call("reach", 1, 3, module=logic_mod))
+    assert len(results) >= 1
+
+
+def test_call_reach_no_solution():
+    """call() yields nothing when no path exists."""
+    from clausal.logic.solve import call
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    results = list(call("reach", 3, 1, module=logic_mod))
+    assert results == []
+
+
+def test_query_reach_ground_via_api():
+    """query() works on a ground reach query."""
+    from clausal.logic.solve import query
+    from clausal.terms import Call, LoadName
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    goal = Call(func=LoadName(name="reach"), args=[1, 3], kwargs=[])
+    results = list(query(goal, {}, logic_mod))
+    assert len(results) >= 1
+
+
+def test_once_reach_ground_success():
+    """once() returns non-None when reach succeeds (ground query)."""
+    from clausal.logic.solve import once
+    from clausal.terms import Call, LoadName
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    goal = Call(func=LoadName(name="reach"), args=[1, 2], kwargs=[])
+    trail = once(goal, logic_mod)
+    assert trail is not None
+
+
+def test_once_reach_failure_returns_none():
+    """once() returns None when no path exists."""
+    from clausal.logic.solve import once
+    from clausal.terms import Call, LoadName
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    goal = Call(func=LoadName(name="reach"), args=[3, 1], kwargs=[])
+    result = once(goal, logic_mod)
+    assert result is None
+
+
+def test_module_solve_method_on_imported():
+    """Module.solve() works on an imported predicate."""
+    from clausal.terms import Call, LoadName
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    goal = Call(func=LoadName(name="reach"), args=[2, 3], kwargs=[])
+    results = list(logic_mod.solve(goal))
+    assert len(results) >= 1
+
+
+def test_solve_ground_edge_goal():
+    """solve() with a ground Call goal succeeds for an existing edge."""
+    from clausal.logic.solve import solve
+    from clausal.terms import Call, LoadName
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    goal = Call(func=LoadName(name="edge"), args=[1, 2], kwargs=[])
+    results = list(solve(goal, logic_mod))
+    assert len(results) == 1
+
+
+def test_call_unknown_predicate_raises():
+    """call() with an undefined predicate raises KeyError."""
+    from clausal.logic.solve import call
+
+    mod = _load_fixture("edge_graph.py")
+    logic_mod = mod.__dict__["$module"]
+
+    with pytest.raises(KeyError):
+        list(call("no_such_predicate", 1, module=logic_mod))
