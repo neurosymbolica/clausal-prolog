@@ -505,13 +505,20 @@ def compile_goal(
             naf_gen = _fresh("_naf_gen")
             naf_flag = _fresh("_naf")
             inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+            # Always append ``return; yield`` so the NAF function is a generator
+            # type even when inner_stmts is empty (e.g. inner goal is False).
+            # The dead ``yield`` after ``return`` is the standard Python trick.
+            naf_body = inner_stmts + [
+                ast.Return(value=ast.Constant(value=None)),
+                ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+            ]
             naf_fn = ast.FunctionDef(
                 name=naf_gen,
                 args=ast.arguments(
                     posonlyargs=[], args=[], vararg=None,
                     kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
                 ),
-                body=inner_stmts or [ast.Pass()],
+                body=naf_body,
                 decorator_list=[], returns=None, type_comment=None,
                 **_EXTRA_FUNCDEF,
             )
@@ -865,13 +872,18 @@ def compile_goal_trampoline(
             naf_flag = _fresh("_naf")
             inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
             k_none_stmt = _assign("k", ast.Constant(None))
+            # Always append ``return; yield`` so NAF function is a generator type.
+            naf_body = [k_none_stmt] + inner_stmts + [
+                ast.Return(value=ast.Constant(value=None)),
+                ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+            ]
             naf_fn = ast.FunctionDef(
                 name=naf_gen,
                 args=ast.arguments(
                     posonlyargs=[], args=[], vararg=None,
                     kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
                 ),
-                body=[k_none_stmt] + (inner_stmts or [ast.Pass()]),
+                body=naf_body,
                 decorator_list=[], returns=None, type_comment=None,
                 **_EXTRA_FUNCDEF,
             )

@@ -223,12 +223,14 @@ class Module:
         if param_names is not None:
             self.db.register_signature(functor, arity, param_names)
 
-    def solve(self, goal: Any):
+    def solve(self, goal: Any, trail=None):
         """Solve a goal against this module's database.
 
-        Stub — implemented in step 7 (clausal.logic.solve).
+        Delegates to clausal.logic.solve.solve.  Returns an iterator that
+        yields the Trail after each solution (bindings live on the trail).
         """
-        raise NotImplementedError("Module.solve is implemented in step 7.")
+        from clausal.logic.solve import solve as _solve
+        return _solve(goal, self, trail=trail)
 
     def __repr__(self) -> str:
         return f"Module({self.name!r}, {self.db!r})"

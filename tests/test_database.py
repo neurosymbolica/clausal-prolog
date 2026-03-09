@@ -336,10 +336,13 @@ class TestModule:
         assert len(clauses) == 1
         assert clauses[0].body == [goal1, goal2]
 
-    def test_solve_raises_not_implemented(self):
+    def test_solve_returns_iterator(self):
+        """Module.solve delegates to clausal.logic.solve and returns an iterator."""
         m = Module("test")
-        with pytest.raises(NotImplementedError):
-            m.solve(True)
+        result = m.solve(True)
+        # True succeeds once; iterator yields one Trail.
+        solutions = list(result)
+        assert len(solutions) == 1
 
     def test_repr(self):
         m = Module("mymod")
