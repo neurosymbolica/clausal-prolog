@@ -141,7 +141,7 @@ class PredicateLoader(Loader):
         # Create a LogicModule (database.Module) for this Python module.
         # This is the $module that predicate clauses are asserted into and
         # compiled against.  It is distinct from the Python module object.
-        logic_module = LogicModule(module.__name__)
+        logic_module = LogicModule(module.__name__, module_dict=module_dict)
         module_dict["$module"] = logic_module
         # '$define_predicate' and '$assert_fact' are module-specific closures
         # that capture both the LogicModule and module_dict.  This lets the

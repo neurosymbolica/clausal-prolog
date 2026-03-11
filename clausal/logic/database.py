@@ -215,9 +215,11 @@ class Module:
         $define_predicate(pred, module)  → module.define_predicate(pred)
     """
 
-    def __init__(self, name: str, db: Database | None = None) -> None:
+    def __init__(self, name: str, db: Database | None = None,
+                 module_dict: dict | None = None) -> None:
         self.name = name
         self.db: Database = db if db is not None else Database()
+        self.module_dict: dict | None = module_dict
 
     def assert_fact(self, term: Any) -> None:
         """Assert a fact (clause with no body goals)."""

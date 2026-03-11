@@ -253,14 +253,23 @@ existing `table.dispatch_fn` path. PredicateMeta class is auto-detected from
 
 Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
-### Phase 5: solve.py
+### Phase 5: solve.py ✅
 
 **File: `clausal/logic/solve.py`**
 
-- `call()`: look up Predicate class from module globals by name
-- `_compile_as_query()`: pass module globals to compiler instead of `db`
-- `solve()`, `query()`, `once()`: adapt to new interface
-- `Module` holds reference to the Python module's `__dict__`
+- `call()`: looks up PredicateMeta class from `module.module_dict` by functor name
+  first (using `_get_dispatch()`), falls back to `module.db.table_for()` for
+  test modules and builtins that don't have module_dict.
+- `_compile_as_query(goal, module)`: now accepts `Module` instead of `Database`.
+  When `module.module_dict` is available, merges it into `globals_` so predicate
+  names resolve from the module namespace (cross-predicate resolution without
+  `_db` string lookup).
+- `solve()`: passes `module` (not `module.db`) to `_compile_as_query`.
+- `Module.__init__` accepts optional `module_dict` parameter. Import hook sets
+  `module_dict=module.__dict__` when creating the LogicModule.
+- `query()`, `once()`: unchanged (delegate to `solve`).
+
+Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
 ### Phase 6: Builtins
 

@@ -62,13 +62,17 @@ def _deref_walk(term: Any) -> Any:
     return term
 
 
-def _compile_as_query(goal: Any, db: Database) -> Any:
+def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
     Vars embedded in the goal are injected into the compiled function's globals
     so that the compiled code references the *user's* Var objects rather than
     allocating fresh ones.  This means the trail binds the user's Vars directly,
     making deref(user_var) work during and after each solution.
+
+    When module.module_dict is available, it is merged into the compiled
+    function's globals so that predicate names resolve from the module namespace
+    (Phase 5: cross-predicate resolution without _db string lookup).
     """
     from clausal.logic.compiler import (
         compile_predicate,
@@ -78,10 +82,17 @@ def _compile_as_query(goal: Any, db: Database) -> Any:
         _collect_types_from_term,
     )
 
+    db = module.db
+
     # Collect all Var objects reachable from goal.
     vars_in_goal = _collect_vars(goal)
     pre_var_context = {v._id: _var_python_name(v) for v in vars_in_goal}
-    extra_globals: dict = {_var_python_name(v): v for v in vars_in_goal}
+    extra_globals: dict = {}
+    # Start with module globals so predicate names resolve from the namespace.
+    if module.module_dict is not None:
+        extra_globals.update(module.module_dict)
+    # Var globals take precedence over module globals.
+    extra_globals.update({_var_python_name(v): v for v in vars_in_goal})
     # Also collect user-defined dataclass types that appear in the goal args
     # so that term_to_ast_expr can reference them in the compiled code.
     extra_globals.update(_collect_types_from_term(goal))
@@ -133,16 +144,26 @@ def call(
     KeyError  if the predicate is not defined in module.
     """
     arity = len(args)
-    table = module.db.table_for(functor, arity)
-    if table is None:
-        raise KeyError(
-            f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
-        )
+
+    # Phase 5: look up PredicateMeta class from module globals first.
+    dispatch_fn = None
+    if module.module_dict is not None:
+        pred_cls = module.module_dict.get(functor)
+        if pred_cls is not None and hasattr(pred_cls, '_get_dispatch'):
+            dispatch_fn = pred_cls._get_dispatch()
+
+    # Fall back to Database lookup (test modules, builtins).
+    if dispatch_fn is None:
+        table = module.db.table_for(functor, arity)
+        if table is None:
+            raise KeyError(
+                f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
+            )
+        dispatch_fn = table.get_dispatch()
 
     if trail is None:
         trail = Trail()
 
-    dispatch_fn = table.get_dispatch()
     for _ in dispatch_fn(*args, trail, None):
         yield trail
 
@@ -178,7 +199,7 @@ def solve(
     if goal is False:
         return
 
-    dispatch_fn = _compile_as_query(goal, module.db)
+    dispatch_fn = _compile_as_query(goal, module)
     for _ in dispatch_fn(trail, None):
         yield trail
 
