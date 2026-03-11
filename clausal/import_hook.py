@@ -1,10 +1,6 @@
-"""import_hook.py — Import hook for Prolog-style predicate modules.
+"""import_hook.py — Import hook for ``.clausal`` predicate modules.
 
-Modules whose first line starts with:
-
-    # predicates
-
-are intercepted by this hook, which:
+Files with the ``.clausal`` extension are intercepted by this hook, which:
 
   1. Injects predicate builtins (all simple_ast names, Var, Compound, unify,
      deref, Trail, walk) plus the hidden globals ``$module``,
@@ -28,8 +24,10 @@ The Python module object is the standard ``sys.modules[name]`` entry.
 """
 
 from importlib.abc import MetaPathFinder, Loader
+from importlib.machinery import ModuleSpec
 import sys
 import ast
+import os
 import warnings
 
 from .pythonic_ast import nodes as simple_ast
@@ -103,8 +101,12 @@ predicate_builtins["walk"] = walk
 
 
 class PredicateLoader(Loader):
+    def create_module(loader, spec):
+        return None  # use default module semantics
+
     def exec_module(loader, module):
-        filename = module.__file__
+        filename = module.__spec__.origin
+        module.__file__ = filename
         sys.modules[module.__name__] = module
         source = open(filename).read()
         module_dict = module.__dict__
@@ -138,20 +140,13 @@ _predicate_loader = PredicateLoader()
 
 class PredicateFinder(MetaPathFinder):
     def find_spec(finder, fullname, path, target=None):
-        for other_finder in sys.meta_path[sys.meta_path.index(finder) + 1:]:
-            spec = other_finder.find_spec(fullname, path, target)
-            if spec:
-                origin = spec.origin
-                if origin and origin.endswith(".py"):
-                    try:
-                        first_line = open(origin).readline()
-                    except FileNotFoundError:
-                        pass
-                    else:
-                        if first_line.startswith("# predicates"):
-                            spec.loader = _predicate_loader
-                            return spec
-                return spec
+        # Search for a .clausal file matching the module name.
+        tail = fullname.rsplit(".", 1)[-1]
+        search_dirs = path if path else sys.path
+        for dir_entry in search_dirs:
+            candidate = os.path.join(dir_entry, tail + ".clausal")
+            if os.path.isfile(candidate):
+                return ModuleSpec(fullname, _predicate_loader, origin=candidate)
 
 
 sys.meta_path[:] = [PredicateFinder(), *sys.meta_path]

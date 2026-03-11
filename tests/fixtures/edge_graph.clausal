@@ -1,4 +1,3 @@
-# predicates
 # Edge facts: edge(From, To) <- True
 edge(1, 2) <- True
 edge(2, 3) <- True

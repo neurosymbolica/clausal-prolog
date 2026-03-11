@@ -10,7 +10,7 @@ A Prolog-style logic programming DSL embedded in Python, built on a simplified A
 - **`clausal.template_compiler`** — `@{}`-decorated function templates that expand to AST-building functions.
 - **`clausal.trampoline`** — Generator-based trampoline with `Step`/`trampoline()` for stack-safe recursive computations.
 - **`clausal.continuation_search`** — `Search`: greenlet-based iterator for continuation-passing search functions.
-- **`clausal.import_hook`** — Import hook for `# predicates` modules; `enable_ipython()` for interactive use.
+- **`clausal.import_hook`** — Import hook for `.clausal` predicate modules; `enable_ipython()` for interactive use.
 - **`clausal.simple_ast_node`** — `@node_class` decorator that generates `visit_children`, `transform_children`, and `__call__` via AST.
 - **`clausal.logic.variables`** — Prolog-style logic variables and trail-based backtracking (C extension, WAM-less).
 
@@ -43,7 +43,7 @@ result = --(x + y)   # produces simple_ast.Add node
 ### Prolog-style predicates
 
 ```python
-# predicates          ← first line activates the import hook
+# family.clausal      ← .clausal extension activates the import hook
 parent(tom, bob)<-True,
 parent(bob, ann)<-True,
 ```
