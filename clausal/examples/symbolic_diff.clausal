@@ -1,0 +1,38 @@
+module(symbolic_diff, [
+    d(Expr, Var, Derivative)
+])
+
+# Symbolic differentiation. Expressions as tagged lists:
+#   ["add", E1, E2], ["mul", E1, E2], ["pow", E, N]
+
+# d(x)/dx = 1
+d(EXPR=0, VAR=0, DERIV=0),
+d(X, X, 1),
+
+# Constant number: d(c)/dx = 0
+d(C, _, 0) <- number(C)
+
+# Different variable: d(y)/dx = 0
+d(Y, X, 0) <- (
+    string(Y),
+    Y is not X
+)
+
+# Sum: d(a+b)/dx = da/dx + db/dx
+d(["add", A, B], X, ["add", DA, DB]) <- (
+    d(A, X, DA),
+    d(B, X, DB)
+)
+
+# Product (Leibniz rule): d(a*b)/dx = a*db + b*da
+d(["mul", A, B], X, ["add", ["mul", A, DB], ["mul", B, DA]]) <- (
+    d(A, X, DA),
+    d(B, X, DB)
+)
+
+# Power rule: d(e^n)/dx = n * e^(n-1) * de/dx
+d(["pow", E, N], X, ["mul", ["mul", N, ["pow", E, N1]], DE]) <- (
+    number(N),
+    N1 == N - 1,
+    d(E, X, DE)
+)

@@ -1,0 +1,43 @@
+module(map_coloring, [
+    colorable(Coloring)
+])
+
+# Four-color map coloring for Australia.
+
+color(C="red"),
+color("green"),
+color("blue"),
+color("yellow"),
+
+adjacent(X="wa",  Y="nt"),
+adjacent("wa",  "sa"),
+adjacent("nt",  "sa"),
+adjacent("nt",  "q"),
+adjacent("sa",  "q"),
+adjacent("sa",  "nsw"),
+adjacent("sa",  "v"),
+adjacent("q",   "nsw"),
+adjacent("nsw", "v"),
+
+colorable(COLORING) <- (
+    color(WA),
+    color(NT),
+    color(SA),
+    color(Q),
+    color(NSW),
+    color(V),
+    color(T),
+    WA is not NT,
+    WA is not SA,
+    NT is not SA,
+    NT is not Q,
+    SA is not Q,
+    SA is not NSW,
+    SA is not V,
+    Q is not NSW,
+    NSW is not V,
+    COLORING is [
+        ["wa", WA], ["nt", NT], ["sa", SA],
+        ["q", Q], ["nsw", NSW], ["v", V], ["t", T]
+    ]
+)

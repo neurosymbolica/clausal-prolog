@@ -1,0 +1,41 @@
+module(peano, [
+    nat(N),
+    add(X, Y, Z),
+    mul(X, Y, Z),
+    leq(X, Y),
+    peano_to_int(N, I),
+    int_to_peano(I, N)
+])
+
+# Natural numbers as nested lists: 0 = [], succ(N) = [N].
+
+nat(N=[]),
+nat([N]) <- nat(N)
+
+add(X=[], Y=[], Z=[]),
+add([], Y, Y),
+add([X], Y, [Z]) <- add(X, Y, Z)
+
+mul(X=[], Y=[], Z=[]),
+mul([], _, []),
+mul([X], Y, Z) <- (
+    mul(X, Y, Z1),
+    add(Y, Z1, Z)
+)
+
+leq(X=[], Y=[]),
+leq([], _),
+leq([X], [Y]) <- leq(X, Y)
+
+peano_to_int(N=[], I=0),
+peano_to_int([N], I) <- (
+    peano_to_int(N, I1),
+    I == I1 + 1
+)
+
+int_to_peano(I=0, N=[]),
+int_to_peano(I, [N]) <- (
+    I > 0,
+    I1 == I - 1,
+    int_to_peano(I1, N)
+)

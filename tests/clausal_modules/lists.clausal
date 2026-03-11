@@ -5,19 +5,19 @@
 length(LIST=[], N=0),
 length([HEAD, *TAIL], N) <- (
     length(TAIL, N1),
-    N is N1 + 1
+    N == N1 + 1
 )
 
 # append/3 — repeated Var HEAD in head positions 1 and 3
 
-append([], B, B),
-append([HEAD, *TAIL], B, [HEAD, *RESULT]) <- (
-    append(TAIL, B, RESULT)
+append([], ELEM, [ELEM]),
+append([HEAD, *TAIL], ELEM, [HEAD, *TAIL_WITH_ELEM]) <- (
+    append(TAIL, ELEM, TAIL_WITH_ELEM)
 )
 
 # last/2
 
-last([X], X),
-last([_, *TAIL], X) <- (
-    last(TAIL, X)
+last([LAST], LAST),
+last([_, *TAIL], LAST) <- (
+    last(TAIL, LAST)
 )
