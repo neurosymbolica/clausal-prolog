@@ -1613,6 +1613,7 @@ def head_to_match_pattern(
     var_context: dict[int, str],
     dup_guards: list[tuple[str, str]] | None = None,
     list_guards: list[tuple] | None = None,
+    _list_reg_ids: set[int] | None = None,
 ) -> ast.pattern:
     """Convert a head field value to a Python ``ast.pattern`` node.
 
@@ -1649,6 +1650,8 @@ def head_to_match_pattern(
             return ast.MatchAs(pattern=None, name=dup_name)
         name = _var_python_name(term)
         var_context[vid] = name
+        # This Var is registered as a DIRECT match capture (not a list element).
+        # _list_reg_ids tracks list-registered Vars; absence means direct capture.
         return ast.MatchAs(pattern=None, name=name)
 
     # Python singletons
@@ -1675,14 +1678,55 @@ def head_to_match_pattern(
                 after.append(deref(e))
             else:
                 before.append(deref(e))
-        # Register vars from list elements into var_context
+        # Register vars from list elements into var_context.
+        # Three cases for a Var v inside this list:
+        #   (a) New Var: register normally, mark as list-registered in _list_reg_ids.
+        #   (b) Already registered from a PREVIOUS LIST: same name, no dup needed
+        #       (both list guards share the pre-allocated Var).
+        #   (c) Already registered as a DIRECT MATCH CAPTURE (not in _list_reg_ids):
+        #       generate a dup name + dup_guard so the match-captured value is
+        #       compared against the list-element Var after unification.
+        list_elem_vc: dict[int, str] = {}  # name overrides for this list's elements
         for v in before + ([star] if star is not None else []) + after:
-            if is_var(v) and v._id not in var_context:
-                var_context[v._id] = _var_python_name(v)
+            if not is_var(v):
+                continue
+            if v._id in var_context:
+                if v._id not in list_elem_vc:
+                    is_list_registered = (
+                        _list_reg_ids is not None and v._id in _list_reg_ids
+                    )
+                    # is_direct_capture: True only when _list_reg_ids is provided
+                    # (meaning compile_head_to_match_case called us) AND the var
+                    # was registered by the direct Var branch (not a list branch).
+                    is_direct_capture = (
+                        _list_reg_ids is not None and v._id not in _list_reg_ids
+                    )
+                    if is_direct_capture:
+                        # Case (c): direct match capture — need dup name
+                        orig_name = var_context[v._id]
+                        n_dups = len(dup_guards) if dup_guards is not None else 0
+                        dup_name = f"{orig_name}__dup{n_dups}"
+                        if dup_guards is not None:
+                            dup_guards.append((orig_name, dup_name))
+                        list_elem_vc[v._id] = dup_name
+                    else:
+                        # Case (b): already list-allocated or _list_reg_ids not
+                        # provided (legacy call) — reuse same name
+                        list_elem_vc[v._id] = var_context[v._id]
+            else:
+                # Case (a): new Var — register and mark as list-allocated
+                name = _var_python_name(v)
+                var_context[v._id] = name
+                if _list_reg_ids is not None:
+                    _list_reg_ids.add(v._id)
+                list_elem_vc[v._id] = name
+        # Build a var_context snapshot for this list guard using the element vc.
+        guard_vc = dict(var_context)
+        guard_vc.update(list_elem_vc)
         # Generate a capture name and record the list guard
         cap_name = f"_lcap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
-            list_guards.append((cap_name, before, star, after, var_context.copy()))
+            list_guards.append((cap_name, before, star, after, guard_vc))
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Compound(functor, args) → MatchClass on Compound
@@ -1691,7 +1735,7 @@ def head_to_match_pattern(
         if is_var(f):
             # Variable functor: cannot match statically → wildcard
             return ast.MatchAs(pattern=None, name=None)
-        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in term.args]
+        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids) for a in term.args]
         return ast.MatchClass(
             cls=_name("Compound"),
             patterns=[],
@@ -1711,7 +1755,7 @@ def head_to_match_pattern(
             patterns=[],
             kwd_attrs=[f.name for f in fields],
             kwd_patterns=[
-                head_to_match_pattern(getattr(term, f.name), var_context, dup_guards, list_guards)
+                head_to_match_pattern(getattr(term, f.name), var_context, dup_guards, list_guards, _list_reg_ids)
                 for f in fields
             ],
         )
@@ -1757,7 +1801,12 @@ def compile_head_to_match_case(
     # within a single head are correctly detected (the caller's var_context
     # may already contain vars from a pre-collection pass).
     head_var_ctx: dict[int, str] = {}
-    arg_patterns = _head_arg_patterns(head, head_var_ctx, arity, dup_guards, list_guards)
+    # _list_reg_ids tracks Var IDs registered via list-element branches (not direct
+    # match captures).  A Var appearing in multiple list patterns reuses the same
+    # pre-allocated name; a Var that was first registered as a direct match capture
+    # and then appears in a list gets a dup name to avoid overwriting the capture.
+    _list_reg_ids: set[int] = set()
+    arg_patterns = _head_arg_patterns(head, head_var_ctx, arity, dup_guards, list_guards, _list_reg_ids)
     var_context.update(head_var_ctx)
     outer_pattern = ast.MatchSequence(patterns=arg_patterns)
 
@@ -1893,19 +1942,19 @@ def _head_arg_patterns(
     head: Any, var_context: dict[int, str], arity: int,
     dup_guards: list[tuple[str, str]] | None = None,
     list_guards: list[tuple] | None = None,
+    _list_reg_ids: set[int] | None = None,
 ) -> list[ast.pattern]:
     """Extract per-argument patterns from a head term."""
+    def _pat(term):
+        return head_to_match_pattern(term, var_context, dup_guards, list_guards, _list_reg_ids)
     if isinstance(head, Compound):
-        return [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in head.args]
+        return [_pat(a) for a in head.args]
     # Call(func=LoadName(f), args=[...]) — e.g. from $assert_fact with trailing comma.
     # Extract patterns from the positional args, not from the Call dataclass fields.
     if isinstance(head, Call) and isinstance(head.func, LoadName):
-        return [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in head.args]
+        return [_pat(a) for a in head.args]
     if dataclasses.is_dataclass(head) and not isinstance(head, type):
-        return [
-            head_to_match_pattern(getattr(head, f.name), var_context, dup_guards, list_guards)
-            for f in dataclasses.fields(head)
-        ]
+        return [_pat(getattr(head, f.name)) for f in dataclasses.fields(head)]
     # Fallback: arity wildcards (accept any args)
     return [ast.MatchAs(pattern=None, name=None) for _ in range(arity)]
 

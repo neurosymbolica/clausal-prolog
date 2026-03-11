@@ -724,3 +724,80 @@ class TestRepeatedHeadVars:
         n = Var()
         results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
         assert results == [3]
+
+
+# ── Fixture-loaded program: anon (anonymous variable _) ───────────────────────
+
+
+class TestAnonymousVar:
+    """Phase 3: Anonymous _ variable in .clausal files."""
+
+    def _anon_mod(self) -> Module:
+        return _load_clausal_module("anon.clausal")
+
+    def test_first_extracts_head(self):
+        """first([H, *_], H) — _ ignores the tail."""
+        mod = self._anon_mod()
+        r = Var()
+        results = [deref(r) for _ in call("first", [10, 20, 30], r, module=mod)]
+        assert results == [10]
+
+    def test_has_pair_succeeds(self):
+        """has_pair([_, _, *_]) — list with at least 2 elements."""
+        mod = self._anon_mod()
+        assert list(call("has_pair", [1, 2], module=mod)) != []
+
+    def test_has_pair_fails_singleton(self):
+        """has_pair fails on a 1-element list."""
+        mod = self._anon_mod()
+        assert list(call("has_pair", [1], module=mod)) == []
+
+    def test_has_pair_fails_empty(self):
+        mod = self._anon_mod()
+        assert list(call("has_pair", [], module=mod)) == []
+
+    def test_second_extracts_second(self):
+        """second([_, S, *_], S) — _ ignores first element and rest."""
+        mod = self._anon_mod()
+        r = Var()
+        results = [deref(r) for _ in call("second", [10, 20, 30], r, module=mod)]
+        assert results == [20]
+
+    def test_const_ignores_input(self):
+        """const(_, 42) — any input yields 42."""
+        mod = self._anon_mod()
+        r = Var()
+        results = [deref(r) for _ in call("const", "anything", r, module=mod)]
+        assert results == [42]
+
+    def test_const_ignores_input_var(self):
+        """const(_, 42) with Var input."""
+        mod = self._anon_mod()
+        x, r = Var(), Var()
+        results = [deref(r) for _ in call("const", x, r, module=mod)]
+        assert results == [42]
+
+    def test_member_of_pair_first(self):
+        """member_of_pair(X, [X, _]) — X matches first position."""
+        mod = self._anon_mod()
+        results = list(call("member_of_pair", 1, [1, 2], module=mod))
+        assert len(results) >= 1
+
+    def test_member_of_pair_second(self):
+        """member_of_pair(X, [_, X]) — X matches second position."""
+        mod = self._anon_mod()
+        results = list(call("member_of_pair", 2, [1, 2], module=mod))
+        assert len(results) >= 1
+
+    def test_member_of_pair_neither_fails(self):
+        """member_of_pair(X, [A, B]) fails if X is neither A nor B."""
+        mod = self._anon_mod()
+        results = list(call("member_of_pair", 3, [1, 2], module=mod))
+        assert results == []
+
+    def test_last_anon_head_still_works(self):
+        """last/2 in lists.clausal uses _ for unused HEAD — verify it still works."""
+        mod = _load_clausal_module("lists.clausal")
+        x = Var()
+        results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
+        assert results == [3]

@@ -46,16 +46,31 @@ Two related issues solved together:
 - Forward mode: `append([1,2], [3,4], RESULT)` → `RESULT=[1,2,3,4]`
 - Reverse mode: `append(X, Y, [1,2,3])` → enumerates all splits
 
-## Phase 3: Anonymous variable `_`
+## Completed: Phase 3 — Anonymous variable `_`
 
-**Problem:** Bare `_` in `.clausal` files becomes `LoadName(name='_')` instead of a don't-care Var. The `TermTransformer.visit_Name` explicitly excludes `_` from logic variable treatment.
+**Changes made:**
 
-**Options:**
-1. Make `_` a fresh anonymous Var in predicate context (different from Python's `_`)
-2. Keep it as `LoadName` but handle in the compiler as a wildcard
-3. Require users to use a named throwaway like `ANY`
+1. **`clausal/templating/term_rewriting.py`** — `TermTransformer.visit_Name`: intercept `_` before the `_is_logic_var_name` check; emit a fresh `Var()` call (not tracked in `seen_vars`). Each `_` gets a distinct Var._id.
 
-**Recommendation:** Option 1 — `_` as anonymous Var in `.clausal` files only. Each occurrence generates a fresh `Var()` (no reuse like named vars).
+2. **`clausal/logic/compiler.py`** — `head_to_match_pattern` list branch: when a Var already in `var_context` appears as a list element, and it was registered as a **direct match capture** (not via list branch), generate a dup name and dup_guard. New `_list_reg_ids` parameter tracks which Vars were registered from list branches vs direct captures. Passed through `_head_arg_patterns` and `compile_head_to_match_case`.
+
+3. **`clausal/logic/database.py`** — `_normalize_dataclass_fact`: added `_is_ground_value()` helper; only normalize field values that are truly ground (no Vars, no StarUnpack). Lists containing Vars or StarUnpack are structural patterns left intact for the compiler's list-guard machinery. Also imports `StarUnpack`.
+
+4. **`tests/clausal_modules/anon.clausal`** — new fixture: `first/2`, `has_pair/1`, `second/2`, `const/2`, `member_of_pair/2`.
+
+5. **`tests/clausal_modules/lists.clausal`** — use `_` for unused `HEAD` in `last/2` recursive clause.
+
+6. **`tests/test_term_rewriting.py`** — three new tests for anonymous var: fresh per occurrence, never reused like named vars.
+
+7. **`tests/test_search.py`** — `TestAnonymousVar` class: 11 integration tests.
+
+**What works now:**
+- `_` in clause heads → wildcard (accepts anything, no binding)
+- Multiple `_` in the same clause → each is a distinct Var
+- `_` in lists → fresh Var per occurrence; `*_` in list head patterns correctly captures the tail
+- `_` in body goals → fresh Var (value not used after)
+- `member_of_pair(X, [X, _])` — cross-pattern repeated Var + anonymous Var
+- `last([_, *TAIL], X)` — anonymous Var in list head
 
 ## Phase 4: Multiple stars — `[*AS, *BS]` (combinatorial backtracking)
 

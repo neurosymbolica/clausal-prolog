@@ -512,3 +512,54 @@ def test_partial_term_fresh_vars_each_call():
     r1 = point(x_=1)
     r2 = point(x_=1)
     assert r1.y_ is not r2.y_
+
+
+# ── TermTransformer: anonymous variable _ ─────────────────────────────────────
+
+
+def test_anon_var_is_var():
+    """Bare _ in predicate context → fresh Var(), not LoadName."""
+    ns = {"Var": RealVar}
+    tree = ast.parse("_", mode="eval")
+    ast.fix_missing_locations(tree)
+    transformed = TermTransformer().visit(tree.body)
+    expr = ast.fix_missing_locations(ast.Expression(body=transformed))
+    result = eval(compile(expr, "<test>", "eval"), ns)
+    assert isinstance(result, RealVar)
+
+
+def test_anon_var_fresh_each_occurrence():
+    """Two _ in the same expression yield distinct Var objects."""
+    ns = {"Var": RealVar}
+    # Eval _ == _ — both sides should be different Var objects
+    tree = ast.parse("(_ == _)", mode="eval")
+    ast.fix_missing_locations(tree)
+    transformed = TermTransformer().visit(tree.body)
+    expr = ast.fix_missing_locations(ast.Expression(body=transformed))
+    from clausal.pythonic_ast import nodes as sa
+    result = eval(compile(expr, "<test>", "eval"), {**{n: getattr(sa, n) for n in sa.__all__}, "Var": RealVar})
+    assert isinstance(result, sa.Eq)
+    assert isinstance(result.left, RealVar)
+    assert isinstance(result.right, RealVar)
+    assert result.left is not result.right  # distinct Var objects
+
+
+def test_anon_var_not_reused_like_named_var():
+    """Named vars (X) are reused; _ is always fresh."""
+    ns = {"Var": RealVar}
+    from clausal.pythonic_ast import nodes as sa
+    sa_ns = {n: getattr(sa, n) for n in sa.__all__}
+    # Named var reuse: X == X produces same Var
+    tree = ast.parse("X == X", mode="eval")
+    ast.fix_missing_locations(tree)
+    transformed = TermTransformer().visit(tree.body)
+    expr = ast.fix_missing_locations(ast.Expression(body=transformed))
+    named_result = eval(compile(expr, "<test>", "eval"), {**sa_ns, "Var": RealVar})
+    assert named_result.left is named_result.right
+    # Anonymous var: _ == _ produces distinct Vars
+    tree2 = ast.parse("_ == _", mode="eval")
+    ast.fix_missing_locations(tree2)
+    transformed2 = TermTransformer().visit(tree2.body)
+    expr2 = ast.fix_missing_locations(ast.Expression(body=transformed2))
+    anon_result = eval(compile(expr2, "<test>", "eval"), {**sa_ns, "Var": RealVar})
+    assert anon_result.left is not anon_result.right

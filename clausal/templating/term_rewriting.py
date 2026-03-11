@@ -353,10 +353,20 @@ class TermTransformer(NodeTransformer):
 
     def visit_Name(transformer, name):
         identifier = name.id
+        # Anonymous variable: each _ is a fresh Var, never reused.
+        if identifier == "_":
+            return replace(
+                Call(
+                    func=replace(Name(id="Var", ctx=load), name),
+                    args=[],
+                    keywords=[],
+                ),
+                name,
+            )
         # Logic variable: trailing single underscore OR all-caps name.
         # Examples (underscore): X_, foo_, HEAD_ — all are logic variables.
         # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
-        # Excluded: _, __, x__, __init__ (dunder-style), MixedCase, lowercase.
+        # Excluded: __, x__, __init__ (dunder-style), MixedCase, lowercase.
         if _is_logic_var_name(identifier):
             # First occurrence allocates a Var; subsequent ones reuse it.
             if identifier in transformer.seen_vars:

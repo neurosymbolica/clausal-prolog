@@ -13,7 +13,7 @@ import dataclasses
 from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName
-from clausal.pythonic_ast.nodes import TupleLiteral
+from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -262,6 +262,23 @@ class Module:
 # ── Fact normalization ────────────────────────────────────────────────────────
 
 
+def _is_ground_value(val: Any) -> bool:
+    """Return True if val contains no Vars and no structural patterns (StarUnpack).
+
+    Ground values (scalars, empty lists, ground nested lists) are eligible for
+    Var+Is normalization in fact heads.  Lists containing Vars or StarUnpack
+    elements, and standalone Vars, are structural and must NOT be normalized.
+    """
+    from clausal.logic.variables import is_var
+    if is_var(val):
+        return False
+    if isinstance(val, StarUnpack):
+        return False
+    if isinstance(val, list):
+        return all(_is_ground_value(e) for e in val)
+    return True
+
+
 def _is_normalizable_fact(head: Any) -> bool:
     """True if head is a dataclass instance (not a built-in term type) with
     at least one ground field value that needs normalization."""
@@ -269,9 +286,8 @@ def _is_normalizable_fact(head: Any) -> bool:
         return False
     if isinstance(head, (Compound, Call, KWTerm)):
         return False
-    from clausal.logic.variables import is_var
     return any(
-        not is_var(getattr(head, f.name))
+        _is_ground_value(getattr(head, f.name))
         for f in dataclasses.fields(head)
     )
 
@@ -281,15 +297,18 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
 
     Returns (new_head, body_goals) where each ground field has been replaced by
     a fresh Var and a corresponding Is(var, value) goal in the body.
+
+    Lists containing Vars or StarUnpack elements are structural patterns and are
+    left in place (handled by the compiler's list-guard machinery).
     """
-    from clausal.logic.variables import Var, is_var
+    from clausal.logic.variables import Var
     from clausal.terms import Is
 
     replacements: dict[str, Any] = {}
     body: list = []
     for f in dataclasses.fields(head):
         val = getattr(head, f.name)
-        if not is_var(val):
+        if _is_ground_value(val):
             v = Var()
             replacements[f.name] = v
             body.append(Is(left=v, right=val))

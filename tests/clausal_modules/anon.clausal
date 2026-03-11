@@ -1,0 +1,17 @@
+# Anonymous variable _ tests
+
+# first/2 — return first element of a list, ignore rest
+first([HEAD, *_], HEAD),
+
+# has_pair/1 — succeeds if list has at least two elements
+has_pair([_, _ , *_]),
+
+# second/2 — return second element, ignore first and rest
+second([_, SECOND, *_], SECOND),
+
+# const/2 — always succeeds, result is always 42 regardless of input
+const(_, 42),
+
+# member_of_pair/2 — succeeds if X is first or second element of a 2-element list
+member_of_pair(X, [X, _]),
+member_of_pair(X, [_, X]),
