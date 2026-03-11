@@ -8,6 +8,7 @@ from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Compound, KWTerm
 from clausal.logic.builtins import structural_unify
+from clausal.logic.predicate import PredicateMeta, make_predicate
 
 __all__ = [
     # Query API
@@ -26,4 +27,6 @@ __all__ = [
     "deref",
     "unify",
     "structural_unify",
+    "PredicateMeta",
+    "make_predicate",
 ]

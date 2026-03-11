@@ -104,6 +104,26 @@ class _DbLookupAdapter:
         return table.get_dispatch()
 
 
+class _GlobalsDb:
+    """Minimal db-like proxy for signature lookup from module globals.
+
+    Used by compile_predicate when ``db=None`` — looks up ``_signature`` from
+    PredicateMeta classes found in the provided globals dict.  Only
+    ``signature_for`` is implemented; other Database methods are not needed
+    when compiling without a live database.
+    """
+    __slots__ = ("_globals",)
+
+    def __init__(self, globals_dict: dict) -> None:
+        self._globals = globals_dict
+
+    def signature_for(self, functor: str, arity: int):
+        cls = self._globals.get(functor)
+        if isinstance(cls, PredicateMeta):
+            return cls._signature
+        return None
+
+
 # ── Bidirectional list pattern unification ────────────────────────────────────
 #
 # Problem
@@ -505,7 +525,7 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
 def _inject_call_targets(
     clauses: list[Clause],
     base_globals: dict,
-    db: Database,
+    db: "Database | None",
     globals_: dict | None,
 ) -> None:
     """Inject predicate class references into base_globals for body call targets.
@@ -513,8 +533,9 @@ def _inject_call_targets(
     For each Call(LoadName(name=fname)) in clause bodies:
     - If fname is already in base_globals (e.g. utility functions), skip.
     - If fname is in globals_ (module dict), inject it directly.
-    - If fname is a builtin, inject a BuiltinPredicate adapter.
-    - Otherwise, inject a _DbLookupAdapter that defers to db.table_for().
+    - If fname is a builtin (and db is provided), inject a BuiltinPredicate adapter.
+    - If db is provided, fall back to a _DbLookupAdapter.
+    - If db is None, skip (predicate must be in globals_ or base_globals already).
     """
     from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
@@ -523,7 +544,7 @@ def _inject_call_targets(
             continue
         if globals_ and target_name in globals_:
             base_globals[target_name] = globals_[target_name]
-        else:
+        elif db is not None:
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
                 base_globals[target_name] = builtin
@@ -1745,9 +1766,10 @@ def compile_predicate_trampoline(
     functor: str,
     arity: int,
     clauses: list[Clause],
-    db: Database,
+    db: "Database | None" = None,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
+    pred_cls: "PredicateMeta | None" = None,
 ) -> Callable:
     """Compile all clauses into a trampoline Step-protocol immortal coroutine.
 
@@ -1785,18 +1807,23 @@ def compile_predicate_trampoline(
     ``continuation_search.Search`` (Step 7) will provide the ``__iter__``
     interface over solutions.
     """
-    if body_compiler is None:
-        body_compiler = _make_body_compiler_trampoline(db)
+    _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
 
-    if not clauses:
-        fn = _compile_always_fail_trampoline(functor, arity)
+    if body_compiler is None:
+        body_compiler = _make_body_compiler_trampoline(_effective_db)
+
+    # Resolve pred_cls: explicit param > globals_ > auto-detect later.
+    if pred_cls is None:
         pred_cls = (globals_ or {}).get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
+
+    if not clauses:
+        fn = _compile_always_fail_trampoline(functor, arity)
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
+    func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, _effective_db, body_compiler)
 
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
     base_globals: dict = {
@@ -1819,16 +1846,21 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     _inject_call_targets(clauses, base_globals, db, globals_)
 
-    pred_cls = base_globals.get(functor)
-    if not isinstance(pred_cls, PredicateMeta):
-        pred_cls = None
+    if pred_cls is None:
+        pred_cls = base_globals.get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
 
     fn = functiondef_to_function(func_def, globals_=base_globals)
 
     def _recompile_trampoline() -> Callable:
+        if db is not None:
+            next_clauses = db.clauses_for(functor, arity)
+        else:
+            next_clauses = pred_cls._clauses if pred_cls is not None else clauses
         return compile_predicate_trampoline(
-            functor, arity, db.clauses_for(functor, arity), db,
-            body_compiler=body_compiler, globals_=globals_,
+            functor, arity, next_clauses, db,
+            body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
         )
 
     _install(db, functor, arity, fn, lazy_recompile=_recompile_trampoline, pred_cls=pred_cls)
@@ -2690,9 +2722,10 @@ def compile_predicate(
     functor: str,
     arity: int,
     clauses: list[Clause],
-    db: Database,
+    db: "Database | None" = None,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
+    pred_cls: "PredicateMeta | None" = None,
 ) -> Callable:
     """Compile all clauses of a predicate into a dispatch generator function.
 
@@ -2705,12 +2738,15 @@ def compile_predicate(
     functor:       predicate name (used for the function name)
     arity:         predicate arity
     clauses:       all current clauses for this predicate
-    db:            the database; used for dispatch lookup and signature registry
+    db:            the database; used for dispatch lookup and signature registry.
+                   Optional — when None, signature lookup falls back to globals_.
     body_compiler: optional callable(clause, var_context) → list[ast.stmt].
                    Defaults to the Step-5 body compiler (compile_body via db).
     globals_:      additional names injected into the compiled function scope.
                    ``Compound``, ``Var``, ``unify``, ``deref``, and predicate
                    class references are always included automatically.
+    pred_cls:      explicit PredicateMeta class to install the compiled dispatch
+                   on.  If not provided, detected from base_globals by name.
 
     The compiled function signature is::
 
@@ -2720,24 +2756,28 @@ def compile_predicate(
     ``k`` is reserved for the Step-7 CPS trampoline; the Step-5 body always
     ends with ``yield None`` regardless of ``k``.
 
-    Returns the compiled callable.  Also installs it on
-    ``PredicateTable.dispatch_fn`` (and on the PredicateMeta class if
-    available) so subsequent ``get_dispatch()`` / ``_get_dispatch()`` calls
-    work.
+    Returns the compiled callable.  Also installs it on the PredicateMeta class
+    (and on ``PredicateTable.dispatch_fn`` if db is provided) so subsequent
+    ``_get_dispatch()`` / ``get_dispatch()`` calls work.
     """
-    if body_compiler is None:
-        body_compiler = _make_body_compiler(db)
+    # Choose the effective db for body compilation (may be a no-db proxy).
+    _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
 
-    if not clauses:
-        fn = _compile_always_fail(functor, arity)
-        # Try to find the Predicate class for _install
+    if body_compiler is None:
+        body_compiler = _make_body_compiler(_effective_db)
+
+    # Resolve pred_cls: explicit param > globals_ > auto-detect later.
+    if pred_cls is None:
         pred_cls = (globals_ or {}).get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
+
+    if not clauses:
+        fn = _compile_always_fail(functor, arity)
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    func_def = _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
+    func_def = _build_predicate_funcdef(functor, arity, clauses, _effective_db, body_compiler)
 
     from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
     base_globals: dict = {
@@ -2758,18 +2798,22 @@ def compile_predicate(
         base_globals.update(globals_)
     _inject_call_targets(clauses, base_globals, db, globals_)
 
-    # Resolve Predicate class — may come from globals_, _collect_head_types,
-    # or _inject_call_targets (in that priority order, all merged above).
-    pred_cls = base_globals.get(functor)
-    if not isinstance(pred_cls, PredicateMeta):
-        pred_cls = None
+    # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
+    if pred_cls is None:
+        pred_cls = base_globals.get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
 
     fn = functiondef_to_function(func_def, globals_=base_globals)
 
     def _recompile_simple() -> Callable:
+        if db is not None:
+            next_clauses = db.clauses_for(functor, arity)
+        else:
+            next_clauses = pred_cls._clauses if pred_cls is not None else clauses
         return compile_predicate(
-            functor, arity, db.clauses_for(functor, arity), db,
-            body_compiler=body_compiler, globals_=globals_,
+            functor, arity, next_clauses, db,
+            body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
         )
 
     _install(db, functor, arity, fn, lazy_recompile=_recompile_simple, pred_cls=pred_cls)
@@ -2843,27 +2887,28 @@ def _compile_always_fail(functor: str, arity: int) -> Callable:
 
 
 def _install(
-    db: Database,
+    db: "Database | None",
     functor: str,
     arity: int,
     fn: Callable,
     lazy_recompile: Callable | None = None,
     pred_cls: PredicateMeta | None = None,
 ) -> None:
-    """Install fn on PredicateTable.dispatch_fn, creating the table if needed.
+    """Install fn as the compiled dispatch function.
 
-    Also stores ``lazy_recompile`` on the table so that future assertz/asserta/
-    retract calls (which clear dispatch_fn) will trigger lazy recompilation on
-    the next get_dispatch() call rather than raising NotImplementedError.
+    If ``db`` is provided, installs on the corresponding PredicateTable (creating
+    it if needed) so that ``db.table_for().get_dispatch()`` works.
 
-    If ``pred_cls`` is a PredicateMeta class, also installs fn and
-    lazy_recompile on the class (Phase 3 of predicate-as-class refactor).
+    If ``pred_cls`` is a PredicateMeta class, installs fn and lazy_recompile
+    directly on the class so that ``pred_cls._get_dispatch()`` works.
+
+    At least one of ``db`` or ``pred_cls`` should be provided.
     """
-    table = db._table(functor, arity)
-    table.dispatch_fn = fn
-    if lazy_recompile is not None:
-        table._lazy_recompile = lazy_recompile
-    # Phase 3: also install on the Predicate class if available.
+    if db is not None:
+        table = db._table(functor, arity)
+        table.dispatch_fn = fn
+        if lazy_recompile is not None:
+            table._lazy_recompile = lazy_recompile
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
         pred_cls._dispatch_fn = fn
         if lazy_recompile is not None:

@@ -49,11 +49,9 @@ def _define_predicate(predicate_node, logic_module, module_dict):
     time for each ``head <- body`` definition in the source.
 
     Steps:
-      1. ``logic_module.define_predicate`` — assertz the clause into the
-         Database + register keyword signature from the head's field names.
-      2. Sync the clause to the PredicateMeta class (if available in
-         module_dict) so that ``pred_cls._clauses`` and ``pred_cls._signature``
-         stay in sync with the Database.
+      1. Assert the clause to both the Database (for backward compat) and
+         directly to the PredicateMeta class (if available in module_dict).
+      2. Set ``pred_cls._signature`` from ``pred_cls._fields`` if not yet set.
       3. ``compile_predicate`` — compile all current clauses for this
          predicate, passing ``module_dict`` as globals so the compiler can
          resolve cross-predicate references directly from module namespace.
@@ -61,18 +59,19 @@ def _define_predicate(predicate_node, logic_module, module_dict):
     logic_module.define_predicate(predicate_node)
     functor, arity = head_key(predicate_node.head)
 
-    # Sync to PredicateMeta class if available.
+    # Sync to PredicateMeta class — use the normalized clause from the DB.
     pred_cls = module_dict.get(functor)
     if isinstance(pred_cls, PredicateMeta):
-        # The clause just added is the last one in the db table.
         db_clauses = logic_module.db.clauses_for(functor, arity)
-        pred_cls._clauses.append(db_clauses[-1])
+        # Replace pred_cls._clauses with DB clauses (authoritative source).
+        pred_cls._clauses[:] = db_clauses
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 
     clauses = logic_module.db.clauses_for(functor, arity)
     compile_predicate(functor, arity, clauses, logic_module.db,
-                      globals_=module_dict)
+                      globals_=module_dict, pred_cls=pred_cls
+                      if isinstance(pred_cls, PredicateMeta) else None)
 
 
 def _assert_fact(term, logic_module, module_dict):
@@ -82,24 +81,26 @@ def _assert_fact(term, logic_module, module_dict):
     comma expression statement (the Prolog fact notation).
 
     Steps:
-      1. ``logic_module.assert_fact`` — assertz a unit clause with no body.
-      2. Sync the clause to the PredicateMeta class (if available).
+      1. Assert to the Database; normalize to Var+Is form if needed.
+      2. Sync to the PredicateMeta class (if available).
       3. ``compile_predicate`` — recompile with module globals.
     """
     logic_module.assert_fact(term)
     functor, arity = head_key(term)
 
-    # Sync to PredicateMeta class if available.
+    # Sync to PredicateMeta class — use the normalized clause from the DB.
     pred_cls = module_dict.get(functor)
     if isinstance(pred_cls, PredicateMeta):
         db_clauses = logic_module.db.clauses_for(functor, arity)
-        pred_cls._clauses.append(db_clauses[-1])
+        pred_cls._clauses[:] = db_clauses
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 
     clauses = logic_module.db.clauses_for(functor, arity)
     compile_predicate(functor, arity, clauses, logic_module.db,
-                      globals_=module_dict)
+                      globals_=module_dict,
+                      pred_cls=pred_cls
+                      if isinstance(pred_cls, PredicateMeta) else None)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────

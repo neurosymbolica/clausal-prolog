@@ -113,8 +113,9 @@ class PredicateTable:
 class Database:
     """In-memory store mapping (functor, arity) → PredicateTable."""
 
-    def __init__(self) -> None:
+    def __init__(self, module_dict: dict | None = None) -> None:
         self._tables: dict[tuple[str, int], PredicateTable] = {}
+        self.module_dict: dict | None = module_dict
 
     def _table(self, functor: str, arity: int) -> PredicateTable:
         key = (functor, arity)
@@ -219,7 +220,7 @@ class Module:
     def __init__(self, name: str, db: Database | None = None,
                  module_dict: dict | None = None) -> None:
         self.name = name
-        self.db: Database = db if db is not None else Database()
+        self.db: Database = db if db is not None else Database(module_dict=module_dict)
         self.module_dict: dict | None = module_dict
 
     def assert_fact(self, term: Any) -> None:

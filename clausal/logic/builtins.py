@@ -459,15 +459,28 @@ def _build_clause(term_val: Any) -> "Any":
     return _normalize_fact_clause(term_val)
 
 
+def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":
+    """Return the PredicateMeta class for functor from module_dict, or None."""
+    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+    if module_dict is None:
+        return None
+    candidate = module_dict.get(functor)
+    return candidate if isinstance(candidate, PredicateMeta) else None
+
+
 @_db_builtin("assertz", 1)
 def _assertz_factory(db):
     """assertz(Term) — add Term as a fact at end of its predicate's clause list.
 
     Ground facts are automatically normalized to Var+Is form so they are
     queryable in output mode (matching standard Prolog assert semantics).
+    When a module dict is available on the database, also syncs to the
+    PredicateMeta class and recompiles with module globals for cross-predicate
+    resolution.
     """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate
+    module_dict = getattr(db, "module_dict", None)
 
     def assertz__1(term, trail, k):
         term_val = deref(term)
@@ -475,9 +488,19 @@ def _assertz_factory(db):
             return
         clause = _build_clause(term_val)
         functor, arity = head_key(clause.head)
+        pred_cls = _find_pred_cls(functor, module_dict)
+        if pred_cls is not None and pred_cls._locked:
+            raise RuntimeError(
+                f"Predicate {functor}/{arity} is locked. "
+                "Use dynamic() to allow runtime assertion."
+            )
         db.assertz(clause)
+        if pred_cls is not None:
+            pred_cls._clauses.append(clause)
+            pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
-        compile_predicate(functor, arity, clauses, db)
+        compile_predicate(functor, arity, clauses, db,
+                          globals_=module_dict, pred_cls=pred_cls)
         yield None
 
     return assertz__1
@@ -485,9 +508,14 @@ def _assertz_factory(db):
 
 @_db_builtin("asserta", 1)
 def _asserta_factory(db):
-    """asserta(Term) — add Term as a fact at front of its predicate's clause list."""
+    """asserta(Term) — add Term as a fact at front of its predicate's clause list.
+
+    When a module dict is available on the database, also syncs to the
+    PredicateMeta class and recompiles with module globals.
+    """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate
+    module_dict = getattr(db, "module_dict", None)
 
     def asserta__1(term, trail, k):
         term_val = deref(term)
@@ -495,9 +523,19 @@ def _asserta_factory(db):
             return
         clause = _build_clause(term_val)
         functor, arity = head_key(clause.head)
+        pred_cls = _find_pred_cls(functor, module_dict)
+        if pred_cls is not None and pred_cls._locked:
+            raise RuntimeError(
+                f"Predicate {functor}/{arity} is locked. "
+                "Use dynamic() to allow runtime assertion."
+            )
         db.asserta(clause)
+        if pred_cls is not None:
+            pred_cls._clauses.insert(0, clause)
+            pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
-        compile_predicate(functor, arity, clauses, db)
+        compile_predicate(functor, arity, clauses, db,
+                          globals_=module_dict, pred_cls=pred_cls)
         yield None
 
     return asserta__1
@@ -511,9 +549,12 @@ def _retract_factory(db):
     normalized facts whose heads contain Var placeholders.  Bindings
     from the head unification are undone after the clause is removed
     (retract is not backtrackable in this implementation).
+    When a module dict is available on the database, also syncs to the
+    PredicateMeta class.
     """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate
+    module_dict = getattr(db, "module_dict", None)
 
     def retract__1(term, trail, k):
         term_val = deref(term)
@@ -526,6 +567,12 @@ def _retract_factory(db):
         tbl = db._tables.get((functor, arity))
         if tbl is None:
             return
+        pred_cls = _find_pred_cls(functor, module_dict)
+        if pred_cls is not None and pred_cls._locked:
+            raise RuntimeError(
+                f"Predicate {functor}/{arity} is locked. "
+                "Use dynamic() to allow runtime retraction."
+            )
         # Find first clause whose head unifies with term_val (and whose
         # Is-body goals are consistent with that unification).
         from clausal.terms import Is as _Is  # avoid top-level cycle
@@ -556,9 +603,17 @@ def _retract_factory(db):
             tmp_trail.undo(mark)  # clean up temporary bindings
             del tbl._clauses[i]
             tbl.dispatch_fn = None
+            # Sync removal to pred_cls if available (match by identity).
+            if pred_cls is not None:
+                for j, pcls_clause in enumerate(pred_cls._clauses):
+                    if pcls_clause is clause:
+                        del pred_cls._clauses[j]
+                        pred_cls._dispatch_fn = None
+                        break
             clauses = db.clauses_for(functor, arity)
             if clauses:
-                compile_predicate(functor, arity, clauses, db)
+                compile_predicate(functor, arity, clauses, db,
+                                  globals_=module_dict, pred_cls=pred_cls)
             yield None
             return  # retract is not backtrackable
 

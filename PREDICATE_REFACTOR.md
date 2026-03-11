@@ -308,26 +308,206 @@ Zero regressions (1167 passed, same 16 pre-existing failures).
 
 Zero regressions (1167 passed, same 16 pre-existing failures).
 
----
+### Phase 8: Remove PredicateTable, simplify Database
 
-## Test Impact
+The goal is to make PredicateMeta the single source of truth for predicate state.
+`PredicateTable` goes away; `Database` becomes a thin name→class registry (or is
+removed entirely once all callers resolve predicates from module globals).
 
-### Tests that directly test PredicateTable (`tests/test_database.py`)
-~10 tests. Rewrite to test Predicate class-level equivalents.
+**Current state (post-Phase 7):**
 
-### Tests that directly test Database (`tests/test_database.py`)
-~12 tests. Adapt to new thin registry or remove.
+PredicateMeta classes and PredicateTable hold duplicate state. The import hook syncs
+them in `_define_predicate` and `_assert_fact`. The compiler's `_install` writes to
+both. This duplication is the main thing Phase 8 eliminates.
 
-### Tests that use `db.table_for` (`tests/test_import.py`, `tests/test_compiled_programs.py`)
-~40 tests. Update to use Predicate class attributes directly.
+#### Phase 8a: `make_predicate` test helper ✅
 
-### Tests using `compile_predicate(functor, arity, clauses, db)` signature
-Many compiler tests construct `Database()` + `Compound` heads. These need a helper like
-`make_predicate("fib", ["n", "f"])` to dynamically create Predicate classes for testing.
+**File: `clausal/logic/predicate.py`**
 
-### `.clausal` module tests
-Functor names in globals become classes instead of singleton instances. Term construction
-(`edge(1, 2)`) still works via `PredicateMeta.__call__`. Most tests need minimal changes.
+`make_predicate(name, fields)` dynamically creates a PredicateMeta class:
+```python
+def make_predicate(name: str, fields: list[str]) -> PredicateMeta:
+    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+```
+Exported from `clausal.logic.predicate` and re-exported from `clausal`.
+
+#### Phase 8b: `compile_predicate` / `_install` optional `db` ✅
+
+**File: `clausal/logic/compiler.py`**
+
+- `db` is now optional (default `None`) in `compile_predicate`,
+  `compile_predicate_trampoline`, and `_install`
+- New `pred_cls` explicit parameter on `compile_predicate` and
+  `compile_predicate_trampoline` (in addition to auto-detection from globals_)
+- `_GlobalsDb` proxy class: provides `signature_for()` from module globals
+  (looks up `pred_cls._signature`) when `db=None`
+- `_install`: skips PredicateTable path when `db=None`; installs on pred_cls only
+- `_inject_call_targets`: skips `_DbLookupAdapter` fallback when `db=None`
+- Lazy recompile closures use `pred_cls._clauses` when `db=None`
+
+Zero regressions (1167 passed, same 16 pre-existing failures).
+
+#### Phase 8c: Builtins sync to PredicateMeta ✅
+
+**Files: `clausal/logic/builtins.py`, `clausal/logic/database.py`**
+
+- `Database.__init__` now accepts `module_dict` parameter (stored as `db.module_dict`)
+- `Module.__init__` passes `module_dict` to `Database()` constructor
+- `_find_pred_cls(functor, module_dict)` helper: looks up PredicateMeta class
+  from module_dict
+- `_assertz_factory`: reads `db.module_dict`; syncs clause to `pred_cls._clauses`
+  and passes `globals_=module_dict` + `pred_cls` to `compile_predicate`; checks
+  locking before any mutation
+- `_asserta_factory`: same pattern for insert-at-front
+- `_retract_factory`: reads `db.module_dict`; after removing from `tbl._clauses`,
+  also removes matching clause (by identity) from `pred_cls._clauses`; checks locking
+
+When `db.module_dict` is None (e.g. test modules), behavior is identical to before.
+Zero regressions (1167 passed, same 16 pre-existing failures).
+
+#### Phase 8d: Import hook uses `pred_cls` as authoritative source ✅
+
+**File: `clausal/import_hook.py`**
+
+- `_define_predicate`: now uses `pred_cls._clauses[:] = db_clauses` to replace
+  pred_cls clause list with the full (normalized) DB snapshot, rather than
+  appending only the latest clause. Passes `pred_cls=` explicitly to
+  `compile_predicate` to ensure both DB table and pred_cls get the dispatch fn.
+- `_assert_fact`: same pattern.
+- Database is still the authoritative normalization source (handles
+  `_normalize_dataclass_fact`); pred_cls is synced from it.
+
+Zero regressions (1167 passed, same 16 pre-existing failures).
+
+#### Phase 8a-orig: `make_predicate` test helper (original plan, now done)
+
+**File: `clausal/logic/predicate.py` (or `tests/conftest.py`)**
+
+Most compiler/goal tests create `Database()` + `Compound` heads manually:
+```python
+db = Database()
+db.assertz(Clause(head=Compound("foo", (Var(), Var())), body=[...]))
+clauses = db.clauses_for("foo", 2)
+compile_predicate("foo", 2, clauses, db)
+fn = db.table_for("foo", 2).get_dispatch()
+```
+
+Create a dynamic predicate factory:
+```python
+def make_predicate(name: str, fields: list[str]) -> PredicateMeta:
+    """Dynamically create a PredicateMeta class for testing."""
+    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+```
+
+This lets tests write:
+```python
+foo = make_predicate("foo", ["a", "b"])
+foo._assertz(Clause(head=foo(a=Var(), b=Var()), body=[...]))
+compile_predicate("foo", 2, foo._clauses, db=None, pred_cls=foo)
+fn = foo._get_dispatch()
+```
+
+**Scope**: ~140 Database constructor calls across 7 test files. Start with
+`test_compiler.py` and `test_compiled_programs.py` as they're highest-value.
+The others (`test_compiler_goals.py`, `test_compiler_trampoline.py`) are bulk
+conversions of the same pattern.
+
+#### Phase 8b: `_install` targets PredicateMeta only
+
+**File: `clausal/logic/compiler.py`**
+
+Change `_install` to require `pred_cls` and remove the `PredicateTable` path:
+
+```python
+def _install(pred_cls, fn, lazy_recompile=None):
+    pred_cls._dispatch_fn = fn
+    if lazy_recompile is not None:
+        pred_cls._lazy_recompile = lazy_recompile
+```
+
+Update `compile_predicate` and `compile_predicate_trampoline` to pass
+`pred_cls` (detected from `base_globals` via `_collect_head_types`, or from
+a new parameter). Callers that currently pass `db` but no `pred_cls` must
+be updated to provide one.
+
+`_DbLookupAdapter` can be removed once all call sites resolve predicates
+from globals or from `BuiltinPredicate` objects.
+
+#### Phase 8c: Builtins use PredicateMeta class methods
+
+**File: `clausal/logic/builtins.py`**
+
+The `assertz`, `asserta`, and `retract` builtins currently operate on the
+Database directly:
+- `db.assertz(clause)` → `tbl._clauses`
+- `db._tables.get(key)` → direct table access in retract
+
+Change them to operate on PredicateMeta classes:
+- Look up `pred_cls` from module globals (passed via closure or a new
+  `module_dict` parameter on the db-builtin factory)
+- `pred_cls._assertz(clause)` / `pred_cls._asserta(clause)`
+- `pred_cls._retract(head)` with unification-based matching (upgrade
+  the current structural-equality retract on PredicateMeta)
+- Recompile via `compile_predicate` using `pred_cls._clauses`
+
+The `signature` builtin should read `pred_cls._signature` directly.
+
+#### Phase 8d: Import hook drops Database sync
+
+**File: `clausal/import_hook.py`**
+
+Once `_install` targets PredicateMeta only and builtins use class methods:
+- `_define_predicate`: assert clause directly to `pred_cls._assertz`,
+  set `pred_cls._signature`, compile from `pred_cls._clauses`
+- `_assert_fact`: same pattern
+- `Module.__init__` no longer needs to create a `Database`
+- `Module.db` becomes optional/deprecated (kept for test compat if needed)
+
+#### Phase 8e: Remove PredicateTable and simplify Database
+
+**File: `clausal/logic/database.py`**
+
+- Delete `PredicateTable` class entirely
+- `Database` becomes a thin `dict[str, PredicateMeta]` registry mapping
+  predicate names to their classes. Only needed for:
+  - `signature_for` (can move to `pred_cls._signature` lookups)
+  - Builtin fallback (already handled by `BuiltinPredicate`)
+  - `_DbLookupAdapter` removal (no more table_for)
+- If `Database` has no remaining callers, remove it too. `Module` becomes
+  a wrapper around the module dict.
+
+#### Phase 8f: Update tests
+
+**Files: `tests/test_database.py`, `tests/test_compiler.py`, etc.**
+
+- `TestPredicateTable` (~10 tests): delete or rewrite as `TestPredicateMeta`
+  clause management tests (already covered in `test_predicate_meta.py`)
+- `TestDatabase` (~12 tests): rewrite to test the thin registry, or delete
+  if Database is fully removed
+- Compiler tests (~140 Database() calls): convert to `make_predicate()` pattern
+- Import hook tests: update `logic_mod.db.is_defined()` checks to
+  `hasattr(mod, predicate_name)` + `isinstance(mod.name, PredicateMeta)`
+- Search/builtin tests using `Module()`: update to pass `module_dict`
+
+**Migration order**: 8a → 8b → 8c → 8d → 8e → 8f (each step can be
+committed and tested independently; tests updated incrementally as the
+code they test changes)
+
+#### Risks and mitigations
+
+- **Compound-headed clauses in tests**: many compiler tests use
+  `Compound("foo", (Var(),))` heads. After Phase 8a, convert these to
+  PredicateMeta instances. The compiler already handles both; the change
+  is in test setup, not compiler logic.
+- **retract unification**: current retract uses `structural_unify` on
+  Compound facts with Var+Is normalization. PredicateMeta instances need
+  the same unification path. `_retract` on PredicateMeta currently uses
+  structural equality only — needs upgrading to unification-based.
+- **Backward compat for `Module.db`**: keep `Module.db` as a deprecated
+  property that raises or returns a shim, to catch stale callers.
+- **`compile_predicate` signature**: currently `(functor, arity, clauses, db, ...)`
+  with `db` required. Make `db` optional (default `None`) and add `pred_cls`
+  parameter. This allows incremental migration.
 
 ---
 
@@ -339,9 +519,9 @@ Functor names in globals become classes instead of singleton instances. Term con
   `__hash__`, `__repr__` at decoration time, which could clash).
 - **Locked by default**: `_locked = True`. Runtime `assertz`/`retract` raises unless
   explicitly unlocked. Prevents accidental cross-module mutation.
-- **No central Database for dispatch**: the Database becomes a thin index or goes away.
-  Predicate classes are the source of truth.
-- **Builtins via adapter first**: wrap existing dispatch functions before migrating to
-  full Predicate classes. Minimizes blast radius.
+- **No central Database for dispatch**: PredicateMeta classes are the source of truth.
+  Database is a legacy artifact being removed in Phase 8.
+- **Builtins via `BuiltinPredicate` adapter**: wraps existing dispatch functions with
+  the `_get_dispatch()` protocol. Later: migrate to real Predicate classes in stdlib.
 - **`_MISSING` sentinel for partial terms**: distinguishes "not provided" from `None` in
   `__call__`. Each missing field gets a fresh `Var()`.

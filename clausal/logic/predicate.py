@@ -242,4 +242,18 @@ def term_field_names(obj: Any) -> tuple[str, ...]:
     raise TypeError(f"Not a term instance: {obj!r}")
 
 
-__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "term_field_names"]
+def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
+    """Dynamically create a PredicateMeta class.
+
+    Useful in tests and runtime code that needs a predicate without a
+    module-level class definition::
+
+        foo = make_predicate("foo", ["a", "b"])
+        foo._assertz(Clause(head=foo(a=Var(), b=Var()), body=[...]))
+        compile_predicate("foo", 2, foo._clauses, pred_cls=foo)
+        fn = foo._get_dispatch()
+    """
+    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+
+
+__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "term_field_names", "make_predicate"]
