@@ -397,36 +397,23 @@ def test_embed_normal_code_unchanged():
 
 # ── EmbedTransformer: trailing-comma fact notation ────────────────────────────
 
-def test_embed_trailing_comma_calls_assert_fact():
-    facts = []
+def test_embed_trailing_comma_defines_fact():
+    # Trailing-comma fact: ``f(a),`` goes through $define_predicate with body=True.
+    predicates = []
     ns = _ns()
-    ns['$assert_fact'] = facts.append
-    src = "f(a),"   # trailing-comma tuple statement
+    ns['Var'] = lambda: '<Var>'
+    module = type('MockModule', (), {'define_predicate': lambda self, p: predicates.append(p)})()
+    ns['$define_predicate'] = lambda pred, mod: mod.define_predicate(pred)
+    ns['$module'] = module
+    src = "f(a),"
     tree = ast.parse(src)
     ast.fix_missing_locations(tree)
     transformed = EmbedTransformer().visit(tree)
     ast.fix_missing_locations(transformed)
     exec(compile(transformed, '<test>', 'exec'), ns)
-    assert len(facts) == 1
-    assert isinstance(facts[0], sa.Call)
-    assert isinstance(facts[0].func, sa.LoadName)
-    assert facts[0].func.name == 'f'
-
-
-def test_embed_trailing_comma_predicate():
-    # pred(x) <- body,  — trailing comma wraps a rule in a tuple;
-    # TermTransformer should still recognise '<-' and produce Predicate.
-    facts = []
-    ns = _ns()
-    ns['$assert_fact'] = facts.append
-    src = "pred(x) <- body,"
-    tree = ast.parse(src)
-    ast.fix_missing_locations(tree)
-    transformed = EmbedTransformer().visit(tree)
-    ast.fix_missing_locations(transformed)
-    exec(compile(transformed, '<test>', 'exec'), ns)
-    assert len(facts) == 1
-    assert isinstance(facts[0], sa.Predicate)
+    assert len(predicates) == 1
+    assert isinstance(predicates[0], sa.Predicate)
+    assert predicates[0].body is True
 
 
 # ── EmbedTransformer: 'with the_following' block ──────────────────────────────

@@ -13,6 +13,7 @@ import dataclasses
 from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName
+from clausal.pythonic_ast.nodes import TupleLiteral
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -302,11 +303,12 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
 
 
 def _flatten_body(body: Any) -> list:
-    """Flatten a nested And-chain body term into a flat list of goal terms.
+    """Flatten a nested And-chain or TupleLiteral body into a flat goal list.
 
-    And(And(a, b), c)  →  [a, b, c]
-    A single non-And term  →  [term]
-    None  →  []
+    And(And(a, b), c)                →  [a, b, c]
+    TupleLiteral([a, b, c])          →  [a, b, c]
+    A single non-And/non-Tuple term  →  [term]
+    None                             →  []
     """
     if body is None:
         return []
@@ -318,6 +320,11 @@ def _flatten_body(body: Any) -> list:
             # Push right first so left is processed first (preserving order).
             stack.append(term.right)
             stack.append(term.left)
+        elif isinstance(term, TupleLiteral):
+            # Comma-as-conjunction: (goal1, goal2, ...) in <- bodies.
+            # Push in reverse so elements are processed left-to-right.
+            for element in reversed(term.elements):
+                stack.append(element)
         else:
             goals.append(term)
     return goals

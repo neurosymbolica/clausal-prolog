@@ -775,18 +775,66 @@ class EmbedTransformer(NodeTransformer):
     def visit_Expr(transformer, expr_stmt):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         match expr_stmt.value:
-            case Tuple(elts=[single_element], ctx=Load()):
-                # Transform the single element as a term and pass to $assert_fact.
-                # '$assert_fact' uses '$' so user code cannot accidentally override it.
-                term = TermTransformer().visit(single_element)
-                return replace(
+            case Tuple(elts=[single_element], ctx=Load()) if (
+                isinstance(single_element, Call)
+                and isinstance(single_element.func, Name)
+                and transformer._scope_depth == 0
+            ):
+                # Trailing-comma fact: ``edge(1, 2),`` — treated as a predicate
+                # definition with body=True, generating a functor dataclass if
+                # this is the first clause for this functor.
+                functor_name = single_element.func.id
+                orig_pos_args = single_element.args
+                orig_kw_args = single_element.keywords
+
+                arg_field_names = [
+                    arg.id.lower()
+                    if isinstance(arg, Name)
+                        and arg.id.endswith("_")
+                        and not arg.id.endswith("__")
+                    else f"arg_{i}"
+                    for i, arg in enumerate(orig_pos_args)
+                ]
+                kwarg_field_names = [kw.arg for kw in orig_kw_args]
+                all_field_names = arg_field_names + kwarg_field_names
+
+                term_transformer = TermTransformer()
+                transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
+                transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
+
+                anchor = single_element.func
+                head_keywords = [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(arg_field_names, transformed_pos, orig_pos_args)
+                ] + [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(kwarg_field_names, transformed_kw, orig_kw_args)
+                ]
+                head_ast = replace(
+                    Call(
+                        func=replace(Name(id=functor_name, ctx=load), anchor),
+                        args=[],
+                        keywords=head_keywords,
+                    ),
+                    single_element,
+                )
+
+                predicate_ast = node_ast(
+                    "Predicate", expr_stmt.value,
+                    head=head_ast,
+                    body=replace(Constant(value=True), expr_stmt.value),
+                )
+                define_stmt = replace(
                     Expr(
                         value=replace(
                             Call(
                                 func=replace(
-                                    Name(id="$assert_fact", ctx=load), expr_stmt.value
+                                    Name(id="$define_predicate", ctx=load), expr_stmt.value
                                 ),
-                                args=[term],
+                                args=[
+                                    predicate_ast,
+                                    replace(Name(id="$module", ctx=load), expr_stmt.value),
+                                ],
                                 keywords=[],
                             ),
                             expr_stmt.value,
@@ -794,6 +842,15 @@ class EmbedTransformer(NodeTransformer):
                     ),
                     expr_stmt,
                 )
+
+                statements = []
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors.add(functor_name)
+                    statements.append(
+                        _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+                    )
+                statements.append(define_stmt)
+                return statements if len(statements) > 1 else statements[0]
             case Compare(
                 left=left,
                 ops=[Lt()],
