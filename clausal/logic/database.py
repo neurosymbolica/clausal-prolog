@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
+from clausal.logic.predicate import is_term_instance, term_field_names
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -282,15 +283,15 @@ def _is_ground_value(val: Any) -> bool:
 
 
 def _is_normalizable_fact(head: Any) -> bool:
-    """True if head is a dataclass instance (not a built-in term type) with
+    """True if head is a term instance (not a built-in term type) with
     at least one ground field value that needs normalization."""
-    if not dataclasses.is_dataclass(head) or isinstance(head, type):
+    if not is_term_instance(head):
         return False
     if isinstance(head, (Compound, Call, KWTerm)):
         return False
     return any(
-        _is_ground_value(getattr(head, f.name))
-        for f in dataclasses.fields(head)
+        _is_ground_value(getattr(head, name))
+        for name in term_field_names(head)
     )
 
 
@@ -308,18 +309,19 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
 
     replacements: dict[str, Any] = {}
     body: list = []
-    for f in dataclasses.fields(head):
-        val = getattr(head, f.name)
+    fields = term_field_names(head)
+    for name in fields:
+        val = getattr(head, name)
         if _is_ground_value(val):
             v = Var()
-            replacements[f.name] = v
+            replacements[name] = v
             body.append(Is(left=v, right=val))
     if not replacements:
         return head, [True]
     # Build a new head with Vars replacing ground values.
     new_kwargs = {
-        f.name: replacements.get(f.name, getattr(head, f.name))
-        for f in dataclasses.fields(head)
+        name: replacements.get(name, getattr(head, name))
+        for name in fields
     }
     new_head = type(head)(**new_kwargs)
     return new_head, body
@@ -349,8 +351,8 @@ def head_key(head: Any) -> tuple[str, int]:
         raise TypeError(f"Call head with non-LoadName func: {head.func!r}")
     if isinstance(head, KWTerm):
         return head.functor, len(head)
-    if dataclasses.is_dataclass(head) and not isinstance(head, type):
-        return type(head).__name__, len(dataclasses.fields(head))
+    if is_term_instance(head):
+        return type(head).__name__, len(term_field_names(head))
     raise TypeError(
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
         "Expected Compound, Call(LoadName(...), ...), or a functor dataclass instance."
@@ -366,12 +368,12 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     """
     if isinstance(head, KWTerm):
         return tuple(head.keys())
-    if not dataclasses.is_dataclass(head) or isinstance(head, type):
+    if not is_term_instance(head):
         return None
     # Exclude built-in term types that happen to be dataclasses.
     if isinstance(head, (Compound, Call)):
         return None
-    return tuple(f.name for f in dataclasses.fields(head))
+    return term_field_names(head)
 
 
 def _flatten_body(body: Any) -> list:

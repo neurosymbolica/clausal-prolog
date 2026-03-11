@@ -29,11 +29,11 @@ or None if the goal fails.
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.database import Clause, Database, Module
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import Compound
 
 
@@ -54,10 +54,10 @@ def _deref_walk(term: Any) -> Any:
         return [_deref_walk(e) for e in term]
     if isinstance(term, Compound):
         return Compound(term.functor, tuple(_deref_walk(a) for a in term.args))
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+    if is_term_instance(term):
         return type(term)(**{
-            f.name: _deref_walk(getattr(term, f.name))
-            for f in dataclasses.fields(term)
+            name: _deref_walk(getattr(term, name))
+            for name in term_field_names(term)
         })
     return term
 
@@ -152,7 +152,14 @@ def call(
         if pred_cls is not None and hasattr(pred_cls, '_get_dispatch'):
             dispatch_fn = pred_cls._get_dispatch()
 
-    # Fall back to Database lookup (test modules, builtins).
+    # Phase 6: try builtins before Database fallback.
+    if dispatch_fn is None:
+        from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
+        builtin = get_builtin_predicate(functor, arity, module.db)
+        if builtin is not None:
+            dispatch_fn = builtin._get_dispatch()
+
+    # Fall back to Database lookup (test modules).
     if dispatch_fn is None:
         table = module.db.table_for(functor, arity)
         if table is None:

@@ -271,21 +271,42 @@ Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
 Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
-### Phase 6: Builtins
+### Phase 6: Builtins ✅
 
 **File: `clausal/logic/builtins.py`**
 
-Create `BuiltinPredicate` adapter that wraps a dispatch function with a `_get_dispatch()`
-method. `Database.table_for` (if still used) or a global registry creates these on demand.
+Created `BuiltinPredicate` adapter class with `_get_dispatch()` interface. Supports
+both stateless builtins (dispatch fn stored directly) and DB-dependent builtins
+(factory stored, called lazily on first `_get_dispatch()`).
 
-Later: migrate builtins to real Predicate classes in `clausal/stdlib/`.
+- `get_builtin_predicate(functor, arity, db)` → `BuiltinPredicate | None`
+- `_inject_call_targets` in compiler.py now tries `BuiltinPredicate` before
+  falling back to `_DbLookupAdapter`
+- `solve.py`'s `call()` tries builtin lookup before Database fallback
 
-### Phase 7: Cleanup
+`get_builtin_dispatch` kept for backward compat (`Database.table_for` still uses it).
 
-- Remove `PredicateTable` class
-- Simplify `Database` to a thin registry or remove entirely
-- Simplify `Module` — it may just hold a reference to the module dict
-- Update all tests
+Zero regressions (1167 passed, same 16 pre-existing failures).
+
+### Phase 7: Cleanup (partial) ✅
+
+**Completed:**
+- Removed `__dataclass_fields__` compat shim from PredicateMeta (and `_FakeField` class)
+- Created `is_term_instance()` and `term_field_names()` utility functions in `predicate.py`
+- Replaced all `dataclasses.is_dataclass()` / `dataclasses.fields()` call sites across
+  `database.py`, `solve.py`, `builtins.py`, `compiler.py` with the new helpers
+- Fixed `vary/3` builtin to work with PredicateMeta instances (no longer uses
+  `dataclasses.replace`)
+- Updated `test_predicate_meta.py`: replaced `TestDataclassCompat` with `TestTermHelpers`
+
+**Deferred:**
+- `PredicateTable` class kept for backward compat — many compiler tests use
+  `Compound` heads (not PredicateMeta). Full removal requires converting all test
+  predicates to PredicateMeta or adding a dynamic predicate creation helper.
+- `Database` kept as-is — still used for clause storage, builtin lookup, and
+  signature registry by tests and the import hook.
+
+Zero regressions (1167 passed, same 16 pre-existing failures).
 
 ---
 

@@ -352,28 +352,30 @@ class TestEdgeCases:
 # ── Dataclass compatibility ──────────────────────────────────────────────────
 
 
-class TestDataclassCompat:
-    """PredicateMeta classes pass dataclasses.is_dataclass/fields checks."""
+class TestTermHelpers:
+    """is_term_instance / term_field_names work for PredicateMeta classes."""
 
-    def test_is_dataclass_class(self):
-        import dataclasses
-        assert dataclasses.is_dataclass(fib)
+    def test_is_term_instance_true(self):
+        from clausal.logic.predicate import is_term_instance
+        assert is_term_instance(fib(n=1, f=2))
 
-    def test_is_dataclass_instance(self):
-        import dataclasses
-        assert dataclasses.is_dataclass(fib(n=1, f=2))
+    def test_is_term_instance_class_false(self):
+        from clausal.logic.predicate import is_term_instance
+        assert not is_term_instance(fib)
 
-    def test_fields_returns_correct_names(self):
-        import dataclasses
-        names = [f.name for f in dataclasses.fields(fib)]
-        assert names == ["n", "f"]
+    def test_term_field_names(self):
+        from clausal.logic.predicate import term_field_names
+        assert term_field_names(fib(n=1, f=2)) == ("n", "f")
 
-    def test_fields_on_instance(self):
-        import dataclasses
-        t = fib(n=10, f=20)
-        names = [f.name for f in dataclasses.fields(t)]
-        assert names == ["n", "f"]
+    def test_term_field_names_on_class(self):
+        assert fib._fields == ("n", "f")
 
     def test_zero_arity_fields(self):
+        from clausal.logic.predicate import term_field_names
+        assert term_field_names(atom()) == ()
+
+    def test_not_dataclass(self):
+        """PredicateMeta classes should NOT pass dataclasses.is_dataclass."""
         import dataclasses
-        assert dataclasses.fields(atom) == ()
+        assert not dataclasses.is_dataclass(fib)
+        assert not dataclasses.is_dataclass(fib(n=1, f=2))

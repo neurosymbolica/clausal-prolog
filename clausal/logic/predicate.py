@@ -24,19 +24,6 @@ from typing import Any, Callable
 _MISSING = object()  # sentinel for "field not provided"
 
 
-class _FakeField:
-    """Minimal stand-in for ``dataclasses.Field`` so that PredicateMeta classes
-    pass ``dataclasses.is_dataclass()`` and ``dataclasses.fields()`` checks.
-
-    Only ``name`` and ``_field_type`` are needed; existing code only reads
-    ``f.name`` from the result of ``dataclasses.fields()``.
-    """
-    __slots__ = ("name", "_field_type")
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self._field_type = dataclasses._FIELD  # noqa: SLF001
-
 
 def _make_init(fields: tuple[str, ...]):
     """Generate an __init__ that accepts fields as keyword args with _MISSING default."""
@@ -102,11 +89,6 @@ class PredicateMeta(type):
         cls.__eq__ = _make_eq(fields)
         cls.__repr__ = _make_repr(fields)
         cls.__hash__ = None  # mutable terms shouldn't be hashable
-
-        # Dataclass compatibility — lets existing dataclasses.is_dataclass()
-        # and dataclasses.fields() calls work without changes.  Cleaned up
-        # in Phase 7 when all call sites switch to PredicateMeta-aware checks.
-        cls.__dataclass_fields__ = {f: _FakeField(f) for f in fields}
 
         return cls
 
@@ -233,4 +215,31 @@ class PredicateMeta(type):
         )
 
 
-__all__ = ["PredicateMeta", "_MISSING"]
+def is_term_instance(obj: Any) -> bool:
+    """True if obj is a term instance with named fields (not a type/class).
+
+    Works for both PredicateMeta instances and @dataclass instances.
+    Does NOT match built-in AST node types (Compound, Call, KWTerm) —
+    callers that need to exclude those must check separately.
+    """
+    if isinstance(obj, type):
+        return False
+    if isinstance(type(obj), PredicateMeta):
+        return True
+    return dataclasses.is_dataclass(obj)
+
+
+def term_field_names(obj: Any) -> tuple[str, ...]:
+    """Return field name strings for a term instance.
+
+    Works for PredicateMeta instances and @dataclass instances.
+    """
+    cls = type(obj)
+    if isinstance(cls, PredicateMeta):
+        return cls._fields
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return tuple(f.name for f in dataclasses.fields(obj))
+    raise TypeError(f"Not a term instance: {obj!r}")
+
+
+__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "term_field_names"]

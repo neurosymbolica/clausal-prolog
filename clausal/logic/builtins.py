@@ -51,10 +51,10 @@ Standard library — pair helpers
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import Compound, KWTerm
 
 
@@ -119,18 +119,16 @@ def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
                 return False
         return True
 
-    # dataclass ↔ dataclass (same type)
+    # term instance ↔ term instance (same type)
     if (
-        dataclasses.is_dataclass(t1)
-        and dataclasses.is_dataclass(t2)
-        and not isinstance(t1, type)
-        and not isinstance(t2, type)
+        is_term_instance(t1)
+        and is_term_instance(t2)
         and type(t1) is type(t2)
     ):
-        fields = dataclasses.fields(t1)
+        fields = term_field_names(t1)
         mark = trail.mark()
-        for f in fields:
-            if not structural_unify(getattr(t1, f.name), getattr(t2, f.name), trail):
+        for name in fields:
+            if not structural_unify(getattr(t1, name), getattr(t2, name), trail):
                 trail.undo(mark)
                 return False
         return True
@@ -148,6 +146,62 @@ def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
 
     # Fall back to C unify for all other combinations (atoms, tuples, etc.)
     return bool(unify(t1, t2, trail))
+
+
+class BuiltinPredicate:
+    """Adapter wrapping a builtin dispatch function with the ``_get_dispatch()``
+    protocol used by PredicateMeta classes.
+
+    Stateless builtins store the dispatch function directly.  DB-dependent
+    builtins (assertz, retract, etc.) store the factory; ``_get_dispatch()``
+    calls the factory lazily on first use.
+    """
+    __slots__ = ("_functor", "_arity", "_dispatch_fn", "_factory", "_db")
+
+    def __init__(
+        self,
+        functor: str,
+        arity: int,
+        dispatch_fn: Callable | None = None,
+        factory: Callable | None = None,
+        db: Any = None,
+    ) -> None:
+        self._functor = functor
+        self._arity = arity
+        self._dispatch_fn = dispatch_fn
+        self._factory = factory
+        self._db = db
+
+    def _get_dispatch(self) -> Callable:
+        if self._dispatch_fn is None:
+            if self._factory is not None and self._db is not None:
+                self._dispatch_fn = self._factory(self._db)
+            else:
+                raise NotImplementedError(
+                    f"Builtin {self._functor}/{self._arity} has no dispatch function"
+                )
+        return self._dispatch_fn
+
+    def __repr__(self) -> str:
+        return f"BuiltinPredicate({self._functor!r}/{self._arity})"
+
+
+def get_builtin_predicate(
+    functor: str, arity: int, db: Any = None
+) -> BuiltinPredicate | None:
+    """Return a ``BuiltinPredicate`` adapter for the given functor/arity, or None.
+
+    For stateless builtins the same singleton is returned on every call.
+    For DB-dependent builtins a new adapter is created with the given ``db``.
+    """
+    key = (functor, arity)
+    fn = _BUILTINS.get(key)
+    if fn is not None:
+        return BuiltinPredicate(functor, arity, dispatch_fn=fn)
+    factory = _DB_BUILTINS.get(key)
+    if factory is not None:
+        return BuiltinPredicate(functor, arity, factory=factory, db=db)
+    return None
 
 
 def get_builtin_dispatch(
@@ -176,7 +230,7 @@ def _functor_name(term: Any) -> str | None:
         return term.functor if isinstance(term.functor, str) else None
     if isinstance(term, KWTerm):
         return term.functor
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+    if is_term_instance(term):
         return type(term).__name__
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
@@ -191,8 +245,8 @@ def _arity(term: Any) -> int | None:
         return len(term.args)
     if isinstance(term, KWTerm):
         return len(term)
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
-        return len(dataclasses.fields(term))
+    if is_term_instance(term):
+        return len(term_field_names(term))
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
@@ -211,11 +265,11 @@ def _nth_arg(term: Any, n: int) -> Any:
         if n < 1 or n > len(vals):
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return vals[n - 1]
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
-        fields = dataclasses.fields(term)
+    if is_term_instance(term):
+        fields = term_field_names(term)
         if n < 1 or n > len(fields):
             raise IndexError(f"arg index {n} out of range for {term!r}")
-        return getattr(term, fields[n - 1].name)
+        return getattr(term, fields[n - 1])
     if isinstance(term, list) and len(term) >= n >= 1:
         return term[n - 1]
     raise IndexError(f"arg index {n} out of range for {term!r}")
@@ -227,15 +281,15 @@ def _args_list(term: Any) -> list:
         return list(term.args)
     if isinstance(term, KWTerm):
         return list(term.values())
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
-        return [getattr(term, f.name) for f in dataclasses.fields(term)]
+    if is_term_instance(term):
+        return [getattr(term, name) for name in term_field_names(term)]
     return []
 
 
 def _is_compound(term: Any) -> bool:
     return (
         isinstance(term, (Compound, KWTerm))
-        or (dataclasses.is_dataclass(term) and not isinstance(term, type))
+        or is_term_instance(term)
     )
 
 
@@ -252,8 +306,8 @@ def _is_ground(term: Any) -> bool:
         return isinstance(term.functor, str) and all(_is_ground(a) for a in term.args)
     if isinstance(term, KWTerm):
         return all(_is_ground(v) for v in term.values())
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
-        return all(_is_ground(getattr(term, f.name)) for f in dataclasses.fields(term))
+    if is_term_instance(term):
+        return all(_is_ground(getattr(term, name)) for name in term_field_names(term))
     return True
 
 
@@ -528,9 +582,12 @@ def _vary__3(overrides, term, new_term, trail, k):
         return
     if not isinstance(overrides_val, dict):
         return
-    if dataclasses.is_dataclass(term_val) and not isinstance(term_val, type):
+    if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
         try:
-            result = dataclasses.replace(term_val, **overrides_val)
+            fields = term_field_names(term_val)
+            kwargs = {name: getattr(term_val, name) for name in fields}
+            kwargs.update(overrides_val)
+            result = type(term_val)(**kwargs)
         except (TypeError, ValueError):
             return
     elif isinstance(term_val, KWTerm):
@@ -583,10 +640,10 @@ def _unbound_keys__2(term, keys_list, trail, k):
     if is_var(term_val):
         return
     keys: list[str] = []
-    if dataclasses.is_dataclass(term_val) and not isinstance(term_val, type):
-        for f in dataclasses.fields(term_val):
-            if is_var(deref(getattr(term_val, f.name))):
-                keys.append(f.name)
+    if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
+        for name in term_field_names(term_val):
+            if is_var(deref(getattr(term_val, name))):
+                keys.append(name)
     elif isinstance(term_val, KWTerm):
         for fname, val in term_val.items():
             if is_var(deref(val)):
@@ -688,11 +745,7 @@ def _compound__1(x, trail, k):
         yield None
     elif isinstance(x_val, KWTerm) and len(x_val) > 0:
         yield None
-    elif (
-        dataclasses.is_dataclass(x_val)
-        and not isinstance(x_val, type)
-        and len(dataclasses.fields(x_val)) > 0
-    ):
+    elif is_term_instance(x_val) and len(term_field_names(x_val)) > 0:
         yield None
 
 
@@ -704,7 +757,7 @@ def _callable__1(x, trail, k):
         return
     if isinstance(x_val, (str, Compound, KWTerm)):
         yield None
-    elif dataclasses.is_dataclass(x_val) and not isinstance(x_val, type):
+    elif is_term_instance(x_val):
         yield None
 
 
@@ -1238,6 +1291,8 @@ def _pairs_values__2(pairs, values, trail, k):
 
 
 __all__ = [
+    "BuiltinPredicate",
+    "get_builtin_predicate",
     "get_builtin_dispatch",
     "_BUILTINS",
     "_DB_BUILTINS",

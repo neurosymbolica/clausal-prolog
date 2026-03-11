@@ -60,7 +60,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.codegen import functiondef_to_function
 
 
@@ -391,18 +391,17 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
             result.extend(_collect_vars(a, seen))
         return result
 
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+    if is_term_instance(term):
         result = []
-        for f in dataclasses.fields(term):
-            result.extend(_collect_vars(getattr(term, f.name), seen))
+        for name in term_field_names(term):
+            result.extend(_collect_vars(getattr(term, name), seen))
         return result
 
     # term is an operator/goal node — recurse into its fields
     try:
-        for f in dataclasses.fields(term):
-            pass  # noqa: just check it's a dataclass
+        fields = dataclasses.fields(term)
         result = []
-        for f in dataclasses.fields(term):
+        for f in fields:
             val = getattr(term, f.name)
             if val is not None:
                 result.extend(_collect_vars(val, seen))
@@ -429,11 +428,11 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
         elif isinstance(term, list):
             for e in term:
                 _walk(e)
-        elif dataclasses.is_dataclass(term) and not isinstance(term, type):
+        elif is_term_instance(term):
             cls = type(term)
             types[cls.__name__] = cls
-            for f in dataclasses.fields(term):
-                _walk(getattr(term, f.name))
+            for name in term_field_names(term):
+                _walk(getattr(term, name))
 
     for clause in clauses:
         _walk(clause.head)
@@ -444,7 +443,7 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
 
 
 def _collect_types_from_term(term: Any) -> dict[str, type]:
-    """Return a name→type dict for all user-defined dataclass types in *term*.
+    """Return a name→type dict for all user-defined term types in *term*.
 
     Like _collect_head_types but operates on a single arbitrary term, used by
     _compile_as_query to inject types from inline goal arguments.
@@ -464,11 +463,11 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
         elif isinstance(t, dict):
             for v in t.values():
                 _walk(v)
-        elif dataclasses.is_dataclass(t) and not isinstance(t, type):
+        elif is_term_instance(t):
             cls = type(t)
             types[cls.__name__] = cls
-            for f in dataclasses.fields(t):
-                _walk(getattr(t, f.name))
+            for name in term_field_names(t):
+                _walk(getattr(t, name))
 
     _walk(term)
     return types
@@ -490,9 +489,9 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
         if isinstance(term, list):
             for e in term:
                 _walk(e)
-        elif dataclasses.is_dataclass(term) and not isinstance(term, type):
-            for f in dataclasses.fields(term):
-                val = getattr(term, f.name)
+        elif is_term_instance(term):
+            for name in term_field_names(term):
+                val = getattr(term, name)
                 if val is not None:
                     _walk(val)
 
@@ -513,9 +512,11 @@ def _inject_call_targets(
 
     For each Call(LoadName(name=fname)) in clause bodies:
     - If fname is already in base_globals (e.g. utility functions), skip.
-    - If fname is in globals_ and is a PredicateMeta class, inject it.
+    - If fname is in globals_ (module dict), inject it directly.
+    - If fname is a builtin, inject a BuiltinPredicate adapter.
     - Otherwise, inject a _DbLookupAdapter that defers to db.table_for().
     """
+    from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
     for target_name, target_arity in call_targets:
         if target_name in base_globals:
@@ -523,7 +524,11 @@ def _inject_call_targets(
         if globals_ and target_name in globals_:
             base_globals[target_name] = globals_[target_name]
         else:
-            base_globals[target_name] = _DbLookupAdapter(db, target_name, target_arity)
+            builtin = get_builtin_predicate(target_name, target_arity, db)
+            if builtin is not None:
+                base_globals[target_name] = builtin
+            else:
+                base_globals[target_name] = _DbLookupAdapter(db, target_name, target_arity)
 
 
 def _preallocate_body_vars(
@@ -650,17 +655,17 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
         return arith_to_ast_expr(term, var_context)
 
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+    if is_term_instance(term):
         cls_name = type(term).__name__
         return ast.Call(
             func=_name(cls_name),
             args=[],
             keywords=[
                 ast.keyword(
-                    arg=f.name,
-                    value=term_to_ast_expr(getattr(term, f.name), var_context),
+                    arg=name,
+                    value=term_to_ast_expr(getattr(term, name), var_context),
                 )
-                for f in dataclasses.fields(term)
+                for name in term_field_names(term)
             ],
         )
 
@@ -2122,17 +2127,17 @@ def head_to_match_pattern(
             ],
         )
 
-    # Functor dataclass instance → MatchClass with field patterns
-    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+    # Functor term instance → MatchClass with field patterns
+    if is_term_instance(term):
         cls_name = type(term).__name__
-        fields = dataclasses.fields(term)
+        fields = term_field_names(term)
         return ast.MatchClass(
             cls=_name(cls_name),
             patterns=[],
-            kwd_attrs=[f.name for f in fields],
+            kwd_attrs=list(fields),
             kwd_patterns=[
-                head_to_match_pattern(getattr(term, f.name), var_context, dup_guards, list_guards, _list_reg_ids)
-                for f in fields
+                head_to_match_pattern(getattr(term, name), var_context, dup_guards, list_guards, _list_reg_ids)
+                for name in fields
             ],
         )
 
@@ -2611,8 +2616,8 @@ def _head_arg_patterns(
     # Extract patterns from the positional args, not from the Call dataclass fields.
     if isinstance(head, Call) and isinstance(head.func, LoadName):
         return [_pat(a) for a in head.args]
-    if dataclasses.is_dataclass(head) and not isinstance(head, type):
-        return [_pat(getattr(head, f.name)) for f in dataclasses.fields(head)]
+    if is_term_instance(head):
+        return [_pat(getattr(head, name)) for name in term_field_names(head)]
     # Fallback: arity wildcards (accept any args)
     return [ast.MatchAs(pattern=None, name=None) for _ in range(arity)]
 
