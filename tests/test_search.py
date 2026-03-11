@@ -801,3 +801,98 @@ class TestAnonymousVar:
         x = Var()
         results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
         assert results == [3]
+
+
+class TestMultiStarPatterns:
+    """Phase 4: Multiple stars in list head patterns — combinatorial backtracking."""
+
+    def _ms_mod(self) -> Module:
+        return _load_clausal_module("multistar.clausal")
+
+    def test_split_empty(self):
+        """split([], A, B) → A=[], B=[] (one solution)."""
+        mod = self._ms_mod()
+        a, b = Var(), Var()
+        results = [(deref(a), deref(b)) for _ in call("split", [], a, b, module=mod)]
+        assert results == [([], [])]
+
+    def test_split_singleton(self):
+        """split([1], A, B) → two solutions."""
+        mod = self._ms_mod()
+        a, b = Var(), Var()
+        results = [(deref(a), deref(b)) for _ in call("split", [1], a, b, module=mod)]
+        assert results == [([], [1]), ([1], [])]
+
+    def test_split_three(self):
+        """split([1,2,3], A, B) → 4 solutions (all splits)."""
+        mod = self._ms_mod()
+        a, b = Var(), Var()
+        results = [(deref(a), deref(b)) for _ in call("split", [1, 2, 3], a, b, module=mod)]
+        assert results == [
+            ([], [1, 2, 3]),
+            ([1], [2, 3]),
+            ([1, 2], [3]),
+            ([1, 2, 3], []),
+        ]
+
+    def test_split3_fixed_head(self):
+        """split3([X, *A, *B], X, A, B) — first element fixed."""
+        mod = self._ms_mod()
+        x, a, b = Var(), Var(), Var()
+        results = [
+            (deref(x), deref(a), deref(b))
+            for _ in call("split3", [10, 20, 30], x, a, b, module=mod)
+        ]
+        assert results == [
+            (10, [], [20, 30]),
+            (10, [20], [30]),
+            (10, [20, 30], []),
+        ]
+
+    def test_around(self):
+        """around([*A, X, *B], X, [A, B]) — find element at every position."""
+        mod = self._ms_mod()
+        x, p = Var(), Var()
+        results = [
+            (deref(x), deref(p))
+            for _ in call("around", [1, 2, 3], x, p, module=mod)
+        ]
+        assert results == [
+            (1, [[], [2, 3]]),
+            (2, [[1], [3]]),
+            (3, [[1, 2], []]),
+        ]
+
+    def test_split3way(self):
+        """split3way([*A, *B, *C], A, B, C) — all 3-way partitions."""
+        mod = self._ms_mod()
+        a, b, c = Var(), Var(), Var()
+        results = [
+            (deref(a), deref(b), deref(c))
+            for _ in call("split3way", [1, 2], a, b, c, module=mod)
+        ]
+        assert results == [
+            ([], [], [1, 2]),
+            ([], [1], [2]),
+            ([], [1, 2], []),
+            ([1], [], [2]),
+            ([1], [2], []),
+            ([1, 2], [], []),
+        ]
+
+    def test_split3way_empty(self):
+        """split3way([], A, B, C) → one solution: all empty."""
+        mod = self._ms_mod()
+        a, b, c = Var(), Var(), Var()
+        results = [
+            (deref(a), deref(b), deref(c))
+            for _ in call("split3way", [], a, b, c, module=mod)
+        ]
+        assert results == [([], [], [])]
+
+    def test_unbound_raises(self):
+        """Multi-star against unbound Var raises TypeError."""
+        mod = self._ms_mod()
+        lst, a, b = Var(), Var(), Var()
+        with pytest.raises(TypeError, match="multi-star"):
+            list(call("split", lst, a, b, module=mod))

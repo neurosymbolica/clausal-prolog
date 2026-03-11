@@ -165,6 +165,13 @@ def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
         return False
 
 
+def _head_multi_star_error():
+    """Raise when a multi-star list pattern receives an unbound variable."""
+    raise TypeError(
+        "Cannot match multi-star pattern against unbound variable"
+    )
+
+
 def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
@@ -1462,6 +1469,7 @@ def compile_predicate_trampoline(
         "_DONE": DONE,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
+        "_head_multi_star_error": _head_multi_star_error,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:
@@ -1665,19 +1673,30 @@ def head_to_match_pattern(
     # Python list → wildcard capture + _head_list_unify guard
     # This handles both input (destructuring) and output (construction) modes.
     if isinstance(term, list):
-        # Collect before-star, star, and after-star elements
-        before: list[Any] = []
-        star: Any = None
-        after: list[Any] = []
-        in_after = False
+        # Parse list into segments: alternating fixed elements and stars
+        segments: list[tuple[str, Any]] = []  # ("fixed", [elems]) or ("star", var)
+        current_fixed: list[Any] = []
+        star_count = 0
         for e in term:
             if isinstance(e, StarUnpack):
-                star = deref(e.value)
-                in_after = True
-            elif in_after:
-                after.append(deref(e))
+                star_count += 1
+                if current_fixed:
+                    segments.append(("fixed", current_fixed))
+                    current_fixed = []
+                segments.append(("star", deref(e.value)))
             else:
-                before.append(deref(e))
+                current_fixed.append(deref(e))
+        if current_fixed:
+            segments.append(("fixed", current_fixed))
+
+        # Collect all vars from segments for registration
+        all_vars: list[Any] = []
+        for seg_type, seg_val in segments:
+            if seg_type == "fixed":
+                all_vars.extend(seg_val)
+            else:
+                all_vars.append(seg_val)
+
         # Register vars from list elements into var_context.
         # Three cases for a Var v inside this list:
         #   (a) New Var: register normally, mark as list-registered in _list_reg_ids.
@@ -1687,14 +1706,11 @@ def head_to_match_pattern(
         #       generate a dup name + dup_guard so the match-captured value is
         #       compared against the list-element Var after unification.
         list_elem_vc: dict[int, str] = {}  # name overrides for this list's elements
-        for v in before + ([star] if star is not None else []) + after:
+        for v in all_vars:
             if not is_var(v):
                 continue
             if v._id in var_context:
                 if v._id not in list_elem_vc:
-                    is_list_registered = (
-                        _list_reg_ids is not None and v._id in _list_reg_ids
-                    )
                     # is_direct_capture: True only when _list_reg_ids is provided
                     # (meaning compile_head_to_match_case called us) AND the var
                     # was registered by the direct Var branch (not a list branch).
@@ -1726,7 +1742,24 @@ def head_to_match_pattern(
         # Generate a capture name and record the list guard
         cap_name = f"_lcap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
-            list_guards.append((cap_name, before, star, after, guard_vc))
+            if star_count > 1:
+                # Multi-star: store segments format with "multi" tag
+                list_guards.append((cap_name, segments, guard_vc, "multi"))
+            else:
+                # Single-star: existing (before, star, after) format
+                before: list[Any] = []
+                star: Any = None
+                after: list[Any] = []
+                in_after = False
+                for seg_type, seg_val in segments:
+                    if seg_type == "star":
+                        star = seg_val
+                        in_after = True
+                    elif in_after:
+                        after.extend(seg_val)
+                    else:
+                        before.extend(seg_val)
+                list_guards.append((cap_name, before, star, after, guard_vc))
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Compound(functor, args) → MatchClass on Compound
@@ -1762,6 +1795,270 @@ def head_to_match_pattern(
 
     # Fallback: wildcard (accept anything, no binding)
     return ast.MatchAs(pattern=None, name=None)
+
+
+# ── Multi-star list guard compilation ──────────────────────────────────────────
+
+
+def _compile_multi_star_guard(
+    cap_name: str,
+    segments: list[tuple[str, Any]],
+    vc: dict[int, str],
+    trail_name: str,
+    body_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Compile a multi-star list pattern into nested splitting loops.
+
+    Generates code like::
+
+        _d0 = deref(_lcap0)
+        if is_var(_d0):
+            _head_multi_star_error()
+        if isinstance(_d0, list):
+            _n0 = len(_d0)
+            if _n0 >= <min_len>:
+                for _sp0 in range(...):
+                    ...nested loops...
+                        _mmark0 = trail.mark()
+                        if (unify(...) and unify(...) and ...):
+                            <body_stmts>
+                        trail.undo(_mmark0)
+    """
+    def _var_or_const_expr(elem):
+        if is_var(elem) and elem._id in vc:
+            return _name(vc[elem._id])
+        return ast.Constant(value=elem)
+
+    # Count fixed elements and stars
+    star_vars: list[Any] = []  # star Var objects in order
+    fixed_counts: list[int] = []  # fixed-elem count per fixed segment
+    fixed_segments: list[list[Any]] = []  # fixed elem lists
+    for seg_type, seg_val in segments:
+        if seg_type == "star":
+            star_vars.append(seg_val)
+        else:
+            fixed_counts.append(len(seg_val))
+            fixed_segments.append(seg_val)
+
+    n_stars = len(star_vars)
+    min_len = sum(fixed_counts)
+    d_name = f"_msd{cap_name}"  # deref'd list local
+    n_name = f"_msn{cap_name}"  # len local
+
+    # Build the unify chain and loops from inside out.
+    # Strategy: enumerate lengths assigned to each star var.
+    # The last star's length is determined (remaining elements).
+    # For k stars we need k-1 loop variables.
+
+    # Compute the position-to-slice mapping for each segment.
+    # pos tracks current position in the list as an AST expression.
+    # We build the innermost body first, then wrap with loops.
+
+    # The innermost body: mark + unify chain + body + undo
+    mark_name = f"_mmark{cap_name}"
+
+    # Build unify chain: for each segment, unify the var/elements with the slice
+    # We'll represent positions as expressions relative to split vars.
+    # split var names: _sp0, _sp1, ... (k-1 of them)
+    sp_names = [f"_msp{cap_name}_{i}" for i in range(n_stars - 1)]
+
+    # Position tracking: we walk segments left-to-right building slice exprs.
+    # pos_expr: AST expression for current position in the list.
+    # We accumulate position as: start=0, then add fixed-segment lengths and
+    # star-var lengths (star lengths are sp_names[i] for first k-1, remainder for last).
+    unify_calls: list[ast.expr] = []
+    # Track position as components to sum: list of (constant_offset, [sp_name, ...])
+    pos_const = 0  # constant part of current position
+    pos_sp: list[str] = []  # split-var names added to position so far
+    star_idx = 0
+    fixed_idx = 0
+
+    def _pos_expr():
+        """Build AST expr for current position."""
+        parts: list[ast.expr] = []
+        if pos_const:
+            parts.append(ast.Constant(value=pos_const))
+        parts.extend(_name(sp) for sp in pos_sp)
+        if not parts:
+            return ast.Constant(value=0)
+        if len(parts) == 1:
+            return parts[0]
+        result = parts[0]
+        for p in parts[1:]:
+            result = ast.BinOp(left=result, op=ast.Add(), right=p)
+        return result
+
+    for seg_type, seg_val in segments:
+        if seg_type == "fixed":
+            # Unify each fixed element with list[pos], list[pos+1], ...
+            for j, elem in enumerate(seg_val):
+                idx_expr = _pos_expr()
+                if j > 0:
+                    idx_expr = ast.BinOp(
+                        left=idx_expr, op=ast.Add(),
+                        right=ast.Constant(value=j),
+                    )
+                subscript = ast.Subscript(
+                    value=_name(d_name), slice=idx_expr, ctx=ast.Load(),
+                )
+                unify_calls.append(
+                    _call(_name("unify"), _var_or_const_expr(elem), subscript, _name(trail_name))
+                )
+            pos_const += len(seg_val)
+        else:
+            # Star segment: slice from pos to pos+length
+            star_var = seg_val
+            start_expr = _pos_expr()
+            if star_idx < n_stars - 1:
+                # Length is sp_names[star_idx]
+                end_parts: list[ast.expr] = [_pos_expr()]
+                end_parts.append(_name(sp_names[star_idx]))
+                end_expr = end_parts[0]
+                for p in end_parts[1:]:
+                    end_expr = ast.BinOp(left=end_expr, op=ast.Add(), right=p)
+                pos_sp.append(sp_names[star_idx])
+            else:
+                # Last star: takes everything remaining up to len - trailing fixed
+                trailing_fixed = 0
+                # Count fixed elements in segments after this star
+                found_last_star = False
+                for st, sv in segments:
+                    if found_last_star and st == "fixed":
+                        trailing_fixed += len(sv)
+                    if st == "star" and sv is star_var:
+                        found_last_star = True
+                if trailing_fixed:
+                    end_expr = ast.BinOp(
+                        left=_name(n_name), op=ast.Sub(),
+                        right=ast.Constant(value=trailing_fixed),
+                    )
+                else:
+                    end_expr = _name(n_name)
+
+            slice_expr = ast.Subscript(
+                value=_name(d_name),
+                slice=ast.Slice(lower=start_expr, upper=end_expr),
+                ctx=ast.Load(),
+            )
+            unify_calls.append(
+                _call(
+                    _name("unify"),
+                    _var_or_const_expr(star_var),
+                    slice_expr,
+                    _name(trail_name),
+                )
+            )
+            if star_idx < n_stars - 1:
+                pass  # pos_sp already updated above
+            else:
+                # For trailing fixed segments after last star, update pos
+                pos_const = 0
+                pos_sp = []
+                # pos is now end_expr + ... but we don't need it (no more segments
+                # that need position tracking — if there are trailing fixed elems,
+                # they were already counted above)
+            star_idx += 1
+
+    # Build the if-unify chain
+    if len(unify_calls) == 1:
+        unify_cond = unify_calls[0]
+    else:
+        unify_cond = ast.BoolOp(op=ast.And(), values=unify_calls)
+
+    innermost = [
+        _assign_mark(mark_name, trail_name),
+        ast.If(test=unify_cond, body=body_stmts, orelse=[]),
+        _undo_stmt(mark_name, trail_name),
+    ]
+
+    # Wrap with nested for-loops (inside-out, from last split var to first)
+    # Each sp_names[i] ranges from 0 to (remaining - sum of later splits)
+    # remaining = _n - min_len - sum of earlier splits
+    current = innermost
+    for i in range(n_stars - 2, -1, -1):
+        # upper bound for sp_names[i]:
+        # remaining after fixed and earlier splits = _n - min_len - sp0 - sp1 - ... - sp(i-1)
+        # but also need to leave room for later splits (which can be 0), so upper is:
+        # _n - min_len - sum(sp[0..i-1]) + 1
+        upper_parts: list[ast.expr] = [
+            ast.BinOp(
+                left=_name(n_name), op=ast.Sub(),
+                right=ast.Constant(value=min_len),
+            )
+        ]
+        for j in range(i):
+            upper_parts.append(_name(sp_names[j]))
+        # Also subtract later split vars (they take the remainder)
+        # For k splits (k-1 loop vars), sp[i] can range from 0 to
+        # (remaining - sum_of_later_sps). But later sps are inner loops.
+        # Actually: sp[i] + sp[i+1] + ... + sp[k-2] + last_star_len = remaining - sum(sp[0..i-1])
+        # And each later sp and last_star can be >= 0, so sp[i] <= remaining - sum(sp[0..i-1]) - (n_stars-1-i-1)*0
+        # Wait, no: remaining = n - min_len. sp[0] + sp[1] + ... + sp[k-2] + last_star_len = remaining
+        # For sp[i]: upper = remaining - sp[0] - ... - sp[i-1] - sp[i+1] - ... - sp[k-2]
+        # But sp[i+1]...sp[k-2] are inner loops that can be 0, and last_star = remaining - all sps >= 0
+        # So sp[i] <= remaining - sp[0] - ... - sp[i-1] - 0 - ... - 0
+        # upper = remaining - sum(sp[0..i-1]) + 1  (range is exclusive)
+        # remaining = n - min_len
+        # So upper = n - min_len - sum(sp[0..i-1]) + 1
+
+        # sp[i] ranges from 0 to (remaining - sum(sp[0..i-1])) inclusive.
+        # Later splits (sp[i+1]...) are inner loops that can be 0, so they
+        # don't constrain the upper bound of sp[i].
+        remaining_expr: ast.expr = ast.BinOp(
+            left=_name(n_name), op=ast.Sub(),
+            right=ast.Constant(value=min_len),
+        )
+        for j in range(i):
+            remaining_expr = ast.BinOp(
+                left=remaining_expr, op=ast.Sub(),
+                right=_name(sp_names[j]),
+            )
+        upper_expr = ast.BinOp(
+            left=remaining_expr, op=ast.Add(),
+            right=ast.Constant(value=1),
+        )
+
+        current = [ast.For(
+            target=_name(sp_names[i], ast.Store()),
+            iter=_call(_name("range"), upper_expr),
+            body=current,
+            orelse=[],
+        )]
+
+    # Wrap with: if isinstance(_d, list) and len >= min_len
+    len_check = ast.Compare(
+        left=_name(n_name),
+        ops=[ast.GtE()],
+        comparators=[ast.Constant(value=min_len)],
+    )
+    guarded = [ast.If(test=len_check, body=current, orelse=[])]
+
+    # _n = len(_d)
+    len_assign = _assign(n_name, _call(_name("len"), _name(d_name)))
+
+    # isinstance check
+    isinstance_check = _call(
+        _name("isinstance"), _name(d_name),
+        _name("list"),
+    )
+
+    # if is_var(_d): _head_multi_star_error()
+    var_check = ast.If(
+        test=_call(_name("is_var"), _name(d_name)),
+        body=[ast.Expr(value=_call(_name("_head_multi_star_error")))],
+        orelse=[],
+    )
+
+    list_branch = ast.If(
+        test=isinstance_check,
+        body=[len_assign] + guarded,
+        orelse=[],
+    )
+
+    # _d = deref(_lcap)
+    deref_assign = _assign(d_name, _call(_name("deref"), _name(cap_name)))
+
+    return [deref_assign, var_check, list_branch]
 
 
 # ── compile_head_to_match_case ─────────────────────────────────────────────────
@@ -1838,91 +2135,109 @@ def compile_head_to_match_case(
 
     # Emit list guards: input destructuring + deferred output construction
     if list_guards:
+        # Separate single-star and multi-star guards
+        single_star_guards = [g for g in list_guards if len(g) == 5]
+        multi_star_guards = [g for g in list_guards if len(g) == 4]
+
         # Pre-allocate Var() for list-pattern vars (not captured by match pattern)
         list_var_allocs: list[ast.stmt] = []
         _alloc_seen: set[str] = set()
-        for _cap_name, _before, _star, _after, _vc in list_guards:
-            for elem in _before + ([_star] if _star is not None else []) + _after:
+        for guard in list_guards:
+            if len(guard) == 5:
+                _cap_name, _before, _star, _after, _vc = guard
+                elems = _before + ([_star] if _star is not None else []) + _after
+            else:
+                _cap_name, _segments, _vc, _ = guard
+                elems = []
+                for seg_type, seg_val in _segments:
+                    if seg_type == "fixed":
+                        elems.extend(seg_val)
+                    else:
+                        elems.append(seg_val)
+            for elem in elems:
                 if is_var(elem) and elem._id in _vc:
                     vname = _vc[elem._id]
                     if vname not in _alloc_seen:
                         _alloc_seen.add(vname)
                         list_var_allocs.append(_assign(vname, _call(_name("Var"))))
 
-        def _list_guard_args(cap_name, before, star, after, vc):
-            """Build AST expressions for _head_list_unify_* call args."""
-            def _var_or_const(elem):
-                if is_var(elem) and elem._id in vc:
-                    return _name(vc[elem._id])
-                return ast.Constant(value=elem)
-            before_list = ast.List(elts=[_var_or_const(e) for e in before], ctx=ast.Load())
-            if star is not None and is_var(star) and star._id in vc:
-                star_expr = _name(vc[star._id])
-            else:
-                star_expr = ast.Constant(value=None)
-            after_list = ast.List(elts=[_var_or_const(e) for e in after], ctx=ast.Load())
-            return (_name(cap_name), before_list, star_expr, after_list, _name(trail_name))
+        # ── Single-star guards (existing path) ────────────────────────────
+        if single_star_guards:
+            def _list_guard_args(cap_name, before, star, after, vc):
+                """Build AST expressions for _head_list_unify_* call args."""
+                def _var_or_const(elem):
+                    if is_var(elem) and elem._id in vc:
+                        return _name(vc[elem._id])
+                    return ast.Constant(value=elem)
+                before_list = ast.List(elts=[_var_or_const(e) for e in before], ctx=ast.Load())
+                if star is not None and is_var(star) and star._id in vc:
+                    star_expr = _name(vc[star._id])
+                else:
+                    star_expr = ast.Constant(value=None)
+                after_list = ast.List(elts=[_var_or_const(e) for e in after], ctx=ast.Load())
+                return (_name(cap_name), before_list, star_expr, after_list, _name(trail_name))
 
-        # Emit: _lr_N = _head_list_unify_input(cap, [...], star, [...], trail)
-        input_check_stmts: list[ast.stmt] = []
-        lr_names: list[str] = []
-        all_guard_args: list[tuple] = []
-        for i, (cap_name, before, star, after, _vc) in enumerate(list_guards):
-            lr_name = f"_lr{i}"
-            lr_names.append(lr_name)
-            args = _list_guard_args(cap_name, before, star, after, _vc)
-            all_guard_args.append(args)
-            input_check_stmts.append(
-                _assign(lr_name, _call(_name("_head_list_unify_input"), *args))
+            input_check_stmts: list[ast.stmt] = []
+            lr_names: list[str] = []
+            all_guard_args: list[tuple] = []
+            for i, (cap_name, before, star, after, _vc) in enumerate(single_star_guards):
+                lr_name = f"_lr{i}"
+                lr_names.append(lr_name)
+                args = _list_guard_args(cap_name, before, star, after, _vc)
+                all_guard_args.append(args)
+                input_check_stmts.append(
+                    _assign(lr_name, _call(_name("_head_list_unify_input"), *args))
+                )
+
+            gate_tests = []
+            for lr_name in lr_names:
+                gate_tests.append(ast.Compare(
+                    left=_name(lr_name),
+                    ops=[ast.IsNot()],
+                    comparators=[ast.Constant(value=False)],
+                ))
+            if len(gate_tests) == 1:
+                gate_cond = gate_tests[0]
+            else:
+                gate_cond = ast.BoolOp(op=ast.And(), values=gate_tests)
+
+            output_conditions: list[ast.expr] = []
+            for i, lr_name in enumerate(lr_names):
+                args = all_guard_args[i]
+                output_conditions.append(ast.BoolOp(
+                    op=ast.Or(),
+                    values=[
+                        ast.Compare(
+                            left=_name(lr_name),
+                            ops=[ast.IsNot()],
+                            comparators=[ast.Constant(value=None)],
+                        ),
+                        _call(_name("_head_list_unify_output"), *args),
+                    ],
+                ))
+            if len(output_conditions) == 1:
+                output_cond = output_conditions[0]
+            else:
+                output_cond = ast.BoolOp(op=ast.And(), values=output_conditions)
+
+            output_guard_stmts = [ast.If(
+                test=output_cond,
+                body=[ast.Expr(value=ast.Yield(value=None))],
+                orelse=[],
+            )]
+            inner = _wrap_yields_with_output_guards(inner, output_guard_stmts)
+
+            gated_inner = [ast.If(test=gate_cond, body=inner, orelse=[])]
+            inner = input_check_stmts + gated_inner
+
+        # ── Multi-star guards ─────────────────────────────────────────────
+        for ms_guard in multi_star_guards:
+            cap_name, segments, vc, _ = ms_guard
+            inner = _compile_multi_star_guard(
+                cap_name, segments, vc, trail_name, inner,
             )
 
-        # Gate: if any _lr_N is False, skip clause
-        # Combined condition: _lr0 is not False and _lr1 is not False and ...
-        gate_tests = []
-        for lr_name in lr_names:
-            gate_tests.append(ast.Compare(
-                left=_name(lr_name),
-                ops=[ast.IsNot()],
-                comparators=[ast.Constant(value=False)],
-            ))
-        if len(gate_tests) == 1:
-            gate_cond = gate_tests[0]
-        else:
-            gate_cond = ast.BoolOp(op=ast.And(), values=gate_tests)
-
-        # Build output guard condition: all deferred list guards must succeed
-        # For each _lr_N that is None (deferred), call _head_list_unify_output
-        # Combined: (_lr0 is not None or _head_list_unify_output(...)) and ...
-        output_conditions: list[ast.expr] = []
-        for i, lr_name in enumerate(lr_names):
-            args = all_guard_args[i]
-            output_conditions.append(ast.BoolOp(
-                op=ast.Or(),
-                values=[
-                    ast.Compare(
-                        left=_name(lr_name),
-                        ops=[ast.IsNot()],
-                        comparators=[ast.Constant(value=None)],
-                    ),
-                    _call(_name("_head_list_unify_output"), *args),
-                ],
-            ))
-        if len(output_conditions) == 1:
-            output_cond = output_conditions[0]
-        else:
-            output_cond = ast.BoolOp(op=ast.And(), values=output_conditions)
-
-        # Wrap each yield None with: if <output_cond>: yield None
-        output_guard_stmts = [ast.If(
-            test=output_cond,
-            body=[ast.Expr(value=ast.Yield(value=None))],
-            orelse=[],
-        )]
-        inner = _wrap_yields_with_output_guards(inner, output_guard_stmts)
-
-        # Combine: allocs + input checks + gate + inner
-        gated_inner = [ast.If(test=gate_cond, body=inner, orelse=[])]
-        inner = list_var_allocs + input_check_stmts + gated_inner
+        inner = list_var_allocs + inner
 
     try_finally = ast.Try(
         body=inner,
@@ -2081,6 +2396,7 @@ def compile_predicate(
         "_db": db,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
+        "_head_multi_star_error": _head_multi_star_error,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:

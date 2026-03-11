@@ -72,31 +72,30 @@ Two related issues solved together:
 - `member_of_pair(X, [X, _])` — cross-pattern repeated Var + anonymous Var
 - `last([_, *TAIL], X)` — anonymous Var in list head
 
-## Phase 4: Multiple stars — `[*AS, *BS]` (combinatorial backtracking)
+## Completed: Phase 4 — Multiple stars `[*AS, *BS]` (combinatorial backtracking)
 
-**Semantics:** `[*AS, *BS]` matched against `[1, 2, 3]` should enumerate all splits on backtracking:
-- `AS=[], BS=[1,2,3]`
-- `AS=[1], BS=[2,3]`
-- `AS=[1,2], BS=[3]`
-- `AS=[1,2,3], BS=[]`
+**Changes made:**
 
-**Challenge:** Python's `match` allows only ONE `MatchStar` per `MatchSequence`. Multiple stars need a different compilation strategy.
+1. **`clausal/logic/compiler.py`** — `head_to_match_pattern` list branch: refactored to parse lists into segments (`("fixed", [elems])` / `("star", var)`). Counts stars; single-star uses existing `(before, star, after)` format, multi-star stores `(cap_name, segments, guard_vc, "multi")`.
 
-**Approach A — Desugar to loops:**
-```python
-# [*AS, *BS] in head against arg0
-for _i in range(len(arg0) + 1):
-    _v0 = arg0[:_i]   # AS
-    _v1 = arg0[_i:]   # BS
-    <body>
-```
+2. **`clausal/logic/compiler.py`** — `_compile_multi_star_guard()`: new function that generates nested `for` loops over split points. For k stars, generates k-1 nested `range()` loops. Innermost body: `trail.mark()` + chained `unify()` calls mapping each segment to its list slice + body stmts + `trail.undo()`. Raises `TypeError` if the target is an unbound Var.
 
-**Approach B — Desugar to `append`:**
-Rewrite `pred([*AS, *BS])` head as `pred(LIST)` with body-prepended `append(AS, BS, LIST)`.
+3. **`clausal/logic/compiler.py`** — `_head_multi_star_error()`: runtime error helper for unbound-Var multi-star patterns.
 
-**N-way splits:** `[*A, *B, *C]` → nested loops over two split points. Combinatorial but finite for ground lists.
+4. **`clausal/logic/compiler.py`** — `compile_head_to_match_case`: list guard processing split into single-star (existing path, untouched) and multi-star branches.
 
-**Restrictions:** Multiple stars only meaningful when the list is ground (known length). Matching against an unbound Var is an error.
+5. **`tests/clausal_modules/multistar.clausal`** — new fixture: `split/3`, `split3/4`, `around/3`, `split3way/4`.
+
+6. **`tests/test_search.py`** — `TestMultiStarPatterns` class: 8 tests.
+
+**What works now:**
+- `[*A, *B]` — enumerate all 2-way splits of a ground list
+- `[X, *A, *B]` — fixed element + 2-way split of remainder
+- `[*A, X, *B]` — element at every position with prefix/suffix
+- `[*A, *B, *C]` — all 3-way partitions (nested loops)
+- Unbound Var target → `TypeError` (Pythonic error)
+- Both simple and trampoline compilation modes
+- Single-star path completely untouched (no regressions)
 
 ## Phase 5: Star in body unification (deconstruction)
 
@@ -108,18 +107,9 @@ Currently body-position `[HEAD, *TAIL]` only works for **construction** (when th
 
 **Note:** Head-position matching handles deconstruction naturally via `MatchStar`. Body deconstruction is only needed when `[HEAD, *TAIL]` appears in an `is` goal's right-hand side or as an argument to a predicate call where the Var is to be bound.
 
-## Phase 6: `[H | T]` syntax (optional)
-
-**Question:** Should `[H | T]` be supported as a Prolog-compat alias?
-
-Python parses `|` as `BitOr`, so `[H | T]` becomes `[BitOr(left=H, right=T)]` — a single-element list with a BitOr node. Could intercept in `visit_List` or `visit_BinOp` to rewrite to `[H, StarUnpack(value=T)]`.
-
-**Recommendation:** Drop it. `[HEAD, *TAIL]` is Pythonic and more powerful. The `|` syntax is confusing because it looks like a 1-element list.
-
 ## Priority order
 
 1. **Phase 2** (repeated Vars) — blocks useful patterns like `append`
 2. **Phase 3** (anonymous `_`) — quality of life
 3. **Phase 4** (multiple stars) — powerful but complex
 4. **Phase 5** (body deconstruction) — niche, construction already works
-5. **Phase 6** (`|` alias) — optional, probably skip
