@@ -11,5 +11,5 @@ last(X_, L_) <- (
 length(L_=[], N_=0),
 length([H_ | T_], N_) <- (
     length(T_, N1_),
-    N_ is N1_ + 1
+    N_ == N1_ + 1
 )

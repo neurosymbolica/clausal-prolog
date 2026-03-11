@@ -16,5 +16,5 @@ ancestor(X_, Y_) <- (
 sibling(X_, Y_) <- (
     parent(Z_, X_),
     parent(Z_, Y_),
-    X_ != Y_
+    X_ is not Y_
 )

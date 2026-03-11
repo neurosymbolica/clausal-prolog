@@ -513,11 +513,26 @@ def compile_goal(
                 _undo_stmt(mark, trail_name),
             ]
 
-        # ── Dif (POC: structural check only) ────────────────────────────────
+        # ── Dif (negation of unification) ─────────────────────────────────
         case IsNot(left=l, right=r):
-            # POC: succeed iff deref(l) != deref(r) at this point.
-            # Full dif/2 via attr-vars is deferred to the CLP step.
-            return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
+            # Succeed iff l and r cannot unify right now.
+            # Try to unify; if it succeeds, undo and fail.
+            # If it fails, proceed with k_stmts.
+            mark = _fresh("_m")
+            l_expr = term_to_ast_expr(l, var_context)
+            r_expr = term_to_ast_expr(r, var_context)
+            return [
+                _assign_mark(mark, trail_name),
+                ast.If(
+                    test=ast.UnaryOp(
+                        op=ast.Not(),
+                        operand=_call(_name("unify"), l_expr, r_expr, _name(trail_name)),
+                    ),
+                    body=k_stmts,
+                    orelse=[],
+                ),
+                _undo_stmt(mark, trail_name),
+            ]
 
         # ── Structural equality ──────────────────────────────────────────────
         case Eq(left=l, right=r):
@@ -880,7 +895,21 @@ def compile_goal_trampoline(
             ]
 
         case IsNot(left=l, right=r):
-            return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
+            mark = _fresh("_m")
+            l_expr = term_to_ast_expr(l, var_context)
+            r_expr = term_to_ast_expr(r, var_context)
+            return [
+                _assign_mark(mark, trail_name),
+                ast.If(
+                    test=ast.UnaryOp(
+                        op=ast.Not(),
+                        operand=_call(_name("unify"), l_expr, r_expr, _name(trail_name)),
+                    ),
+                    body=k_stmts,
+                    orelse=[],
+                ),
+                _undo_stmt(mark, trail_name),
+            ]
 
         case Eq(left=l, right=r):
             return _deref_cmp(l, r, ast.Eq(), var_context, k_stmts)

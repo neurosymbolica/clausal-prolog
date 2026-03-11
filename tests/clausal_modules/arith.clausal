@@ -25,5 +25,5 @@ abs_diff(X_, Y_, D_) <- (
 )
 abs_diff(X_, Y_, D_) <- (
     Y_ > X_,
-    D_ is Y_ - X_
+    D_ == Y_ - X_
 )
