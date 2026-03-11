@@ -60,7 +60,48 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
+from clausal.logic.predicate import PredicateMeta
 from clausal.codegen import functiondef_to_function
+
+
+# ── Predicate-as-class dispatch adapter ───────────────────────────────────────
+#
+# Phase 2 of the predicate-as-class refactor changes compiled dispatch calls
+# from  ``_db.table_for(fname, arity).get_dispatch()(args, trail, k)``
+# to    ``fname._get_dispatch()(args, trail, k)``
+# where ``fname`` is resolved from the compiled function's globals.
+#
+# For predicates that are real PredicateMeta classes (e.g. from .clausal
+# modules), the class itself is injected into globals and _get_dispatch()
+# returns the compiled dispatch function directly.
+#
+# For predicates not yet available as classes (e.g. in tests that still use
+# Database directly, or for builtin predicates), _DbLookupAdapter wraps the
+# Database lookup with the same _get_dispatch() interface.
+
+
+class _DbLookupAdapter:
+    """Compat shim: wraps db.table_for() with _get_dispatch() interface.
+
+    Provides the same ``_get_dispatch()`` protocol as PredicateMeta classes,
+    but delegates to the Database at runtime.  This allows compiled code to
+    uniformly use ``fname._get_dispatch()`` regardless of whether ``fname``
+    is a PredicateMeta class or a Database-backed predicate.
+    """
+    __slots__ = ("_db", "_functor", "_arity")
+
+    def __init__(self, db: Database, functor: str, arity: int) -> None:
+        self._db = db
+        self._functor = functor
+        self._arity = arity
+
+    def _get_dispatch(self):
+        table = self._db.table_for(self._functor, self._arity)
+        if table is None:
+            raise KeyError(
+                f"Predicate {self._functor}/{self._arity} not found"
+            )
+        return table.get_dispatch()
 
 
 # ── Bidirectional list pattern unification ────────────────────────────────────
@@ -433,6 +474,58 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
     return types
 
 
+def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
+    """Collect (fname, arity) pairs from Call(LoadName) nodes in clause bodies.
+
+    Used to inject predicate class references (or _DbLookupAdapter shims)
+    into the compiled function's globals so that ``fname._get_dispatch()``
+    resolves at runtime.
+    """
+    targets: set[tuple[str, int]] = set()
+
+    def _walk(term: Any) -> None:
+        if isinstance(term, Call) and isinstance(term.func, LoadName):
+            n_kwargs = len(term.kwargs) if term.kwargs else 0
+            targets.add((term.func.name, len(term.args) + n_kwargs))
+        if isinstance(term, list):
+            for e in term:
+                _walk(e)
+        elif dataclasses.is_dataclass(term) and not isinstance(term, type):
+            for f in dataclasses.fields(term):
+                val = getattr(term, f.name)
+                if val is not None:
+                    _walk(val)
+
+    for clause in clauses:
+        for goal in clause.body:
+            _walk(goal)
+
+    return targets
+
+
+def _inject_call_targets(
+    clauses: list[Clause],
+    base_globals: dict,
+    db: Database,
+    globals_: dict | None,
+) -> None:
+    """Inject predicate class references into base_globals for body call targets.
+
+    For each Call(LoadName(name=fname)) in clause bodies:
+    - If fname is already in base_globals (e.g. utility functions), skip.
+    - If fname is in globals_ and is a PredicateMeta class, inject it.
+    - Otherwise, inject a _DbLookupAdapter that defers to db.table_for().
+    """
+    call_targets = _collect_call_targets(clauses)
+    for target_name, target_arity in call_targets:
+        if target_name in base_globals:
+            continue
+        if globals_ and target_name in globals_:
+            base_globals[target_name] = globals_[target_name]
+        else:
+            base_globals[target_name] = _DbLookupAdapter(db, target_name, target_arity)
+
+
 def _preallocate_body_vars(
     goals: list,
     var_context: dict[int, str],
@@ -698,14 +791,13 @@ def _dispatch_call_iter(
     arg_exprs: list[ast.expr],
     trail_name: str,
 ) -> ast.expr:
-    """Generate: _db.table_for(fname, arity).get_dispatch()(arg0, …, trail)"""
-    table_lookup = ast.Call(
-        func=ast.Attribute(value=_name("_db"), attr="table_for"),
-        args=[ast.Constant(value=fname), ast.Constant(value=arity)],
-        keywords=[],
-    )
+    """Generate: fname._get_dispatch()(arg0, …, trail, k)
+
+    ``fname`` is resolved from the compiled function's globals, where it
+    refers to either a PredicateMeta class or a _DbLookupAdapter shim.
+    """
     get_dispatch = ast.Call(
-        func=ast.Attribute(value=table_lookup, attr="get_dispatch"),
+        func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
         args=[],
         keywords=[],
     )
@@ -1210,18 +1302,14 @@ def _dispatch_call_trampoline(
     trail_name: str,
     self_name: str,
 ) -> ast.expr:
-    """Generate: _db.table_for(fname, arity).get_dispatch()(self, arg0, …, trail)
+    """Generate: fname._get_dispatch()(self, arg0, …, trail)
 
+    ``fname`` is resolved from the compiled function's globals.
     ``self`` is passed as ``parent`` so the child generator knows who to
     Step back to when it finds a solution.
     """
-    table_lookup = ast.Call(
-        func=ast.Attribute(value=_name("_db"), attr="table_for"),
-        args=[ast.Constant(value=fname), ast.Constant(value=arity)],
-        keywords=[],
-    )
     get_dispatch = ast.Call(
-        func=ast.Attribute(value=table_lookup, attr="get_dispatch"),
+        func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
         args=[],
         keywords=[],
     )
@@ -1697,7 +1785,10 @@ def compile_predicate_trampoline(
 
     if not clauses:
         fn = _compile_always_fail_trampoline(functor, arity)
-        _install(db, functor, arity, fn)
+        pred_cls = (globals_ or {}).get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
     func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
@@ -1710,7 +1801,6 @@ def compile_predicate_trampoline(
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
-        "_db": db,
         "Step": Step,
         "_DONE": DONE,
         "_head_list_unify_input": _head_list_unify_input,
@@ -1722,6 +1812,11 @@ def compile_predicate_trampoline(
     base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)
+    _inject_call_targets(clauses, base_globals, db, globals_)
+
+    pred_cls = base_globals.get(functor)
+    if not isinstance(pred_cls, PredicateMeta):
+        pred_cls = None
 
     fn = functiondef_to_function(func_def, globals_=base_globals)
 
@@ -1731,7 +1826,7 @@ def compile_predicate_trampoline(
             body_compiler=body_compiler, globals_=globals_,
         )
 
-    _install(db, functor, arity, fn, lazy_recompile=_recompile_trampoline)
+    _install(db, functor, arity, fn, lazy_recompile=_recompile_trampoline, pred_cls=pred_cls)
     return fn
 
 
@@ -2609,8 +2704,8 @@ def compile_predicate(
     body_compiler: optional callable(clause, var_context) → list[ast.stmt].
                    Defaults to the Step-5 body compiler (compile_body via db).
     globals_:      additional names injected into the compiled function scope.
-                   ``Compound``, ``Var``, ``unify``, ``deref``, and ``_db``
-                   are always included automatically.
+                   ``Compound``, ``Var``, ``unify``, ``deref``, and predicate
+                   class references are always included automatically.
 
     The compiled function signature is::
 
@@ -2621,14 +2716,20 @@ def compile_predicate(
     ends with ``yield None`` regardless of ``k``.
 
     Returns the compiled callable.  Also installs it on
-    ``PredicateTable.dispatch_fn`` so subsequent ``get_dispatch()`` calls work.
+    ``PredicateTable.dispatch_fn`` (and on the PredicateMeta class if
+    available) so subsequent ``get_dispatch()`` / ``_get_dispatch()`` calls
+    work.
     """
     if body_compiler is None:
         body_compiler = _make_body_compiler(db)
 
     if not clauses:
         fn = _compile_always_fail(functor, arity)
-        _install(db, functor, arity, fn)
+        # Try to find the Predicate class for _install
+        pred_cls = (globals_ or {}).get(functor)
+        if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
     func_def = _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
@@ -2641,7 +2742,6 @@ def compile_predicate(
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
-        "_db": db,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
         "_head_multi_star_error": _head_multi_star_error,
@@ -2651,6 +2751,13 @@ def compile_predicate(
     base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)
+    _inject_call_targets(clauses, base_globals, db, globals_)
+
+    # Resolve Predicate class — may come from globals_, _collect_head_types,
+    # or _inject_call_targets (in that priority order, all merged above).
+    pred_cls = base_globals.get(functor)
+    if not isinstance(pred_cls, PredicateMeta):
+        pred_cls = None
 
     fn = functiondef_to_function(func_def, globals_=base_globals)
 
@@ -2660,7 +2767,7 @@ def compile_predicate(
             body_compiler=body_compiler, globals_=globals_,
         )
 
-    _install(db, functor, arity, fn, lazy_recompile=_recompile_simple)
+    _install(db, functor, arity, fn, lazy_recompile=_recompile_simple, pred_cls=pred_cls)
     return fn
 
 
@@ -2736,17 +2843,26 @@ def _install(
     arity: int,
     fn: Callable,
     lazy_recompile: Callable | None = None,
+    pred_cls: PredicateMeta | None = None,
 ) -> None:
     """Install fn on PredicateTable.dispatch_fn, creating the table if needed.
 
     Also stores ``lazy_recompile`` on the table so that future assertz/asserta/
     retract calls (which clear dispatch_fn) will trigger lazy recompilation on
     the next get_dispatch() call rather than raising NotImplementedError.
+
+    If ``pred_cls`` is a PredicateMeta class, also installs fn and
+    lazy_recompile on the class (Phase 3 of predicate-as-class refactor).
     """
     table = db._table(functor, arity)
     table.dispatch_fn = fn
     if lazy_recompile is not None:
         table._lazy_recompile = lazy_recompile
+    # Phase 3: also install on the Predicate class if available.
+    if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
+        pred_cls._dispatch_fn = fn
+        if lazy_recompile is not None:
+            pred_cls._lazy_recompile = lazy_recompile
 
 
 __all__ = [

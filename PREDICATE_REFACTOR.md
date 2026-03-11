@@ -210,26 +210,32 @@ except NameError:
 `PredicateMeta` must be injected into module namespace via `predicate_builtins` in the
 import hook.
 
-#### Phase 2: Compiler dispatch generation
+#### Phase 2: Compiler dispatch generation ✅
 
 **File: `clausal/logic/compiler.py`**
 
-- `_dispatch_call_iter`: generate `fname._get_dispatch()(args, trail, k)` instead of
+- `_dispatch_call_iter`: generates `fname._get_dispatch()(args, trail, k)` instead of
   `_db.table_for(fname, arity).get_dispatch()(args, trail, k)`
 - `_dispatch_call_trampoline`: same change
-- Remove `_db` from `base_globals`
-- Inject Predicate classes referenced in body goals into compiled function globals
-- Keyword normalization: look up `globals_dict[fname]._signature` instead of
-  `db.signature_for(fname, arity)`
-- `compile_predicate` signature: receive module globals dict (or Predicate class)
-  instead of Database
+- Removed `_db` from `base_globals`
+- `_DbLookupAdapter` compat shim wraps `db.table_for()` with `_get_dispatch()` interface
+  for predicates not yet available as PredicateMeta classes (tests, builtins)
+- `_collect_call_targets(clauses)`: scans clause bodies for Call(LoadName) nodes
+- `_inject_call_targets()`: injects PredicateMeta classes or `_DbLookupAdapter` shims
+  into `base_globals` for each body call target
+- Keyword normalization still uses `db.signature_for()` (deferred to Phase 5)
+- `compile_predicate`/`compile_predicate_trampoline` signature unchanged (backward compat)
 
-#### Phase 3: `_install` targets Predicate class
+Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
+
+#### Phase 3: `_install` targets Predicate class ✅
 
 **File: `clausal/logic/compiler.py`**
 
-Change `_install` to set `pred_cls._dispatch_fn` and `pred_cls._lazy_recompile` instead
-of `table.dispatch_fn` and `table._lazy_recompile`.
+`_install` now accepts optional `pred_cls` parameter. When provided (a PredicateMeta
+class), sets `pred_cls._dispatch_fn` and `pred_cls._lazy_recompile` in addition to the
+existing `table.dispatch_fn` path. PredicateMeta class is auto-detected from
+`base_globals` (via `_collect_head_types` which finds it from clause head instances).
 
 #### Phase 4: Import hook
 
