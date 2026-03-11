@@ -1,0 +1,349 @@
+"""Tests for clausal.logic.predicate — PredicateMeta metaclass (Phase 0)."""
+
+import pytest
+
+from clausal.logic.predicate import PredicateMeta, _MISSING
+from clausal.logic.database import Clause
+from clausal.logic.variables import Var, is_var
+
+
+# ── Test predicate classes ────────────────────────────────────────────────────
+
+
+class fib(metaclass=PredicateMeta):
+    _fields = ("n", "f")
+
+
+class point(metaclass=PredicateMeta):
+    _fields = ("x", "y", "z")
+
+
+class atom(metaclass=PredicateMeta):
+    _fields = ()
+
+
+# ── Properties ────────────────────────────────────────────────────────────────
+
+
+class TestProperties:
+    def test_functor(self):
+        assert fib._functor == "fib"
+
+    def test_arity(self):
+        assert fib._arity == 2
+
+    def test_arity_zero(self):
+        assert atom._arity == 0
+
+    def test_arity_three(self):
+        assert point._arity == 3
+
+
+# ── Term construction ─────────────────────────────────────────────────────────
+
+
+class TestTermConstruction:
+    def test_full_kwargs(self):
+        t = fib(n=0, f=0)
+        assert t.n == 0
+        assert t.f == 0
+
+    def test_partial_kwargs_fills_var(self):
+        t = fib(n=5)
+        assert t.n == 5
+        assert is_var(t.f)
+
+    def test_no_args_all_vars(self):
+        t = fib()
+        assert is_var(t.n)
+        assert is_var(t.f)
+
+    def test_each_call_fresh_vars(self):
+        t1 = fib()
+        t2 = fib()
+        assert t1.n is not t2.n
+        assert t1.f is not t2.f
+
+    def test_positional_args(self):
+        t = fib(1, 2)
+        assert t.n == 1
+        assert t.f == 2
+
+    def test_isinstance_works(self):
+        """fib is a class, so isinstance works (unlike singleton pattern)."""
+        t = fib(n=0, f=1)
+        assert isinstance(t, fib)
+
+    def test_three_fields_partial(self):
+        t = point(x=1)
+        assert t.x == 1
+        assert is_var(t.y)
+        assert is_var(t.z)
+
+    def test_none_is_not_missing(self):
+        """Explicitly passing None should NOT be replaced with Var()."""
+        t = fib(n=None, f=5)
+        assert t.n is None
+        assert t.f == 5
+
+    def test_zero_arity(self):
+        t = atom()
+        assert isinstance(t, atom)
+
+
+# ── __eq__ and __repr__ ──────────────────────────────────────────────────────
+
+
+class TestEqRepr:
+    def test_eq_same_values(self):
+        assert fib(n=1, f=1) == fib(n=1, f=1)
+
+    def test_eq_different_values(self):
+        assert fib(n=1, f=1) != fib(n=1, f=2)
+
+    def test_eq_different_types(self):
+        assert fib(n=1, f=2) != point(x=1, y=2, z=3)
+
+    def test_repr(self):
+        t = fib(n=1, f=2)
+        assert repr(t) == "fib(n=1, f=2)"
+
+    def test_repr_zero_arity(self):
+        assert repr(atom()) == "atom()"
+
+
+# ── __match_args__ ────────────────────────────────────────────────────────────
+
+
+class TestPatternMatch:
+    def test_match_args_set(self):
+        assert fib.__match_args__ == ("n", "f")
+
+    def test_match_case(self):
+        t = fib(n=1, f=1)
+        match t:
+            case fib(n=1, f=f_val):
+                assert f_val == 1
+            case _:
+                pytest.fail("Pattern match failed")
+
+
+# ── Clause management ─────────────────────────────────────────────────────────
+
+
+class pred_a(metaclass=PredicateMeta):
+    _fields = ("x",)
+
+
+class TestClauseManagement:
+    def setup_method(self):
+        pred_a._clauses = []
+        pred_a._dispatch_fn = None
+        pred_a._lazy_recompile = None
+        pred_a._locked = False
+
+    def test_assertz_appends(self):
+        c1 = Clause(head=pred_a(x=1), body=[])
+        c2 = Clause(head=pred_a(x=2), body=[])
+        pred_a._assertz(c1)
+        pred_a._assertz(c2)
+        assert pred_a._clauses == [c1, c2]
+
+    def test_asserta_prepends(self):
+        c1 = Clause(head=pred_a(x=1), body=[])
+        c2 = Clause(head=pred_a(x=2), body=[])
+        pred_a._assertz(c1)
+        pred_a._asserta(c2)
+        assert pred_a._clauses == [c2, c1]
+
+    def test_assertz_clears_dispatch(self):
+        pred_a._dispatch_fn = lambda: None
+        pred_a._assertz(Clause(head=pred_a(x=1), body=[]))
+        assert pred_a._dispatch_fn is None
+
+    def test_retract_removes_first_match(self):
+        h1 = pred_a(x=1)
+        h2 = pred_a(x=2)
+        pred_a._assertz(Clause(head=h1, body=[]))
+        pred_a._assertz(Clause(head=h2, body=[]))
+        assert pred_a._retract(h1) is True
+        assert len(pred_a._clauses) == 1
+        assert pred_a._clauses[0].head == h2
+
+    def test_retract_nonexistent_returns_false(self):
+        pred_a._assertz(Clause(head=pred_a(x=1), body=[]))
+        assert pred_a._retract(pred_a(x=99)) is False
+
+    def test_retract_clears_dispatch(self):
+        h = pred_a(x=1)
+        pred_a._assertz(Clause(head=h, body=[]))
+        pred_a._dispatch_fn = lambda: None
+        pred_a._retract(h)
+        assert pred_a._dispatch_fn is None
+
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+
+
+class pred_b(metaclass=PredicateMeta):
+    _fields = ("x",)
+
+
+class TestDispatch:
+    def setup_method(self):
+        pred_b._clauses = []
+        pred_b._dispatch_fn = None
+        pred_b._lazy_recompile = None
+        pred_b._locked = False
+
+    def test_get_dispatch_returns_fn(self):
+        fn = lambda *a: iter([])
+        pred_b._dispatch_fn = fn
+        assert pred_b._get_dispatch() is fn
+
+    def test_get_dispatch_lazy_recompile(self):
+        fn = lambda *a: iter([])
+        pred_b._lazy_recompile = lambda: fn
+        result = pred_b._get_dispatch()
+        assert result is fn
+        assert pred_b._dispatch_fn is fn
+
+    def test_get_dispatch_no_fn_raises(self):
+        with pytest.raises(NotImplementedError, match="no compiled dispatch"):
+            pred_b._get_dispatch()
+
+    def test_assertz_triggers_lazy_recompile(self):
+        calls = []
+
+        def recompile():
+            calls.append(1)
+            return lambda *a: iter([])
+
+        pred_b._dispatch_fn = lambda *a: iter([])
+        pred_b._lazy_recompile = recompile
+        pred_b._assertz(Clause(head=pred_b(x=1), body=[]))
+        assert pred_b._dispatch_fn is None
+        pred_b._get_dispatch()
+        assert len(calls) == 1
+
+
+# ── Locking ───────────────────────────────────────────────────────────────────
+
+
+class pred_locked(metaclass=PredicateMeta):
+    _fields = ("x",)
+
+
+class TestLocking:
+    def setup_method(self):
+        pred_locked._clauses = []
+        pred_locked._dispatch_fn = None
+        pred_locked._lazy_recompile = None
+        pred_locked._locked = False
+
+    def test_starts_unlocked(self):
+        assert pred_locked._locked is False
+
+    def test_lock(self):
+        pred_locked._lock()
+        assert pred_locked._locked is True
+
+    def test_unlock(self):
+        pred_locked._lock()
+        pred_locked._unlock()
+        assert pred_locked._locked is False
+
+    def test_locked_assertz_raises(self):
+        pred_locked._lock()
+        with pytest.raises(RuntimeError, match="locked"):
+            pred_locked._assertz(Clause(head=pred_locked(x=1), body=[]))
+
+    def test_locked_asserta_raises(self):
+        pred_locked._lock()
+        with pytest.raises(RuntimeError, match="locked"):
+            pred_locked._asserta(Clause(head=pred_locked(x=1), body=[]))
+
+    def test_locked_retract_raises(self):
+        pred_locked._lock()
+        with pytest.raises(RuntimeError, match="locked"):
+            pred_locked._retract(pred_locked(x=1))
+
+    def test_unlocked_after_lock_allows_assertz(self):
+        pred_locked._lock()
+        pred_locked._unlock()
+        pred_locked._assertz(Clause(head=pred_locked(x=1), body=[]))
+        assert len(pred_locked._clauses) == 1
+
+
+# ── Isolation ─────────────────────────────────────────────────────────────────
+
+
+class pred_x(metaclass=PredicateMeta):
+    _fields = ("v",)
+
+
+class pred_y(metaclass=PredicateMeta):
+    _fields = ("v",)
+
+
+class TestIsolation:
+    def setup_method(self):
+        pred_x._clauses = []
+        pred_y._clauses = []
+        pred_x._locked = False
+        pred_y._locked = False
+
+    def test_clauses_are_per_class(self):
+        pred_x._assertz(Clause(head=pred_x(v=1), body=[]))
+        assert len(pred_x._clauses) == 1
+        assert len(pred_y._clauses) == 0
+
+    def test_locking_is_per_class(self):
+        pred_x._lock()
+        assert pred_x._locked is True
+        assert pred_y._locked is False
+
+
+# ── Repr (class-level) ───────────────────────────────────────────────────────
+
+
+class TestClassRepr:
+    def test_repr_uncompiled(self):
+        r = repr(fib)
+        assert "fib/2" in r
+        assert "uncompiled" in r
+
+    def test_repr_compiled(self):
+        fib._dispatch_fn = lambda: None
+        r = repr(fib)
+        assert "compiled" in r
+        fib._dispatch_fn = None
+
+    def test_repr_locked(self):
+        fib._lock()
+        r = repr(fib)
+        assert "locked" in r
+        fib._unlock()
+
+
+# ── Edge cases ────────────────────────────────────────────────────────────────
+
+
+class TestEdgeCases:
+    def test_predicate_is_a_class(self):
+        assert isinstance(fib, type)
+        assert isinstance(fib, PredicateMeta)
+
+    def test_fields_preserved(self):
+        assert fib._fields == ("n", "f")
+
+    def test_slots(self):
+        assert fib.__slots__ == ("n", "f")
+
+    def test_missing_sentinel_identity(self):
+        assert _MISSING is not None
+
+    def test_hash_disabled(self):
+        """Mutable terms should not be hashable by default."""
+        with pytest.raises(TypeError):
+            hash(fib(n=1, f=1))
