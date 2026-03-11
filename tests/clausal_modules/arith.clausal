@@ -1,0 +1,29 @@
+# Arithmetic predicates
+#
+# factorial/2, max_of/3, abs_diff/3
+
+factorial(N_=0, R_=1),
+factorial(N_, R_) <- (
+    N_ > 0,
+    N1_ is N_ - 1,
+    factorial(N1_, R1_),
+    R_ is N_ * R1_
+)
+
+max_of(X_, Y_, M_) <- (
+    X_ >= Y_,
+    M_ is X_
+)
+max_of(X_, Y_, M_) <- (
+    Y_ > X_,
+    M_ is Y_
+)
+
+abs_diff(X_, Y_, D_) <- (
+    X_ >= Y_,
+    D_ is X_ - Y_
+)
+abs_diff(X_, Y_, D_) <- (
+    Y_ > X_,
+    D_ is Y_ - X_
+)
