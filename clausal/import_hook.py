@@ -34,6 +34,7 @@ from .pythonic_ast import nodes as simple_ast
 from .templating.term_rewriting import EmbedTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate
+from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm
 
@@ -87,6 +88,7 @@ predicate_builtins["$ast"] = ast
 # Runtime types needed by functor class generation (_make_functor_class_ast uses
 # Var()) and by compiled predicate bodies.  These are injected so that user code
 # in predicate modules can use them without explicit imports.
+predicate_builtins["PredicateMeta"] = PredicateMeta
 predicate_builtins["Var"] = Var
 predicate_builtins["Compound"] = Compound
 predicate_builtins["Trail"] = Trail
@@ -160,6 +162,7 @@ _simple_ast_builtins = {name: getattr(simple_ast, name) for name in simple_ast._
 _simple_ast_builtins["$ast"] = ast
 # Inject runtime types so that functor class code (which calls Var()) works in
 # IPython cells.
+_simple_ast_builtins["PredicateMeta"] = PredicateMeta
 _simple_ast_builtins["Var"] = Var
 _simple_ast_builtins["Compound"] = Compound
 _simple_ast_builtins["Trail"] = Trail

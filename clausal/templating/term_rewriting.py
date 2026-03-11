@@ -637,46 +637,29 @@ class TermTransformer(NodeTransformer):
 
 
 def _make_functor_class_ast(functor_name, field_names, source):
-    """Generate a try/except NameError block that defines a functor dataclass.
+    """Generate a try/except NameError block that defines a Predicate class.
 
-    Generated code (example for ``foo`` with field ``_x``):
+    Generated code (example for ``fib`` with fields ``n``, ``f``):
 
         try:
-            foo
+            fib
         except NameError:
-            import dataclasses as _dataclasses
-            @_dataclasses.dataclass
-            class foo:
-                _x: object = None
-                def __call__(self, **kwargs):
-                    for _f in _dataclasses.fields(type(self)):
-                        if _f.name not in kwargs:
-                            kwargs[_f.name] = Var()
-                    return type(self)(**kwargs)
-            foo = foo()
+            class fib(metaclass=PredicateMeta):
+                _fields = ('n', 'f')
 
-    Calling the singleton instance with a subset of keyword arguments produces a
-    partial term: unspecified fields receive a fresh ``Var()`` each call, so two
-    separate partial calls never share the same unbound variable.
+    ``PredicateMeta`` handles ``__init__``, ``__eq__``, ``__repr__``,
+    ``__match_args__``, ``__slots__``, and partial-term creation (missing
+    fields → fresh ``Var()``).  No ``@dataclass`` and no singleton.
+    ``fib`` stays as the class in module globals.
     """
+    fields_tuple = repr(tuple(field_names))
     lines = [
         "try:",
         f"    {functor_name}",
         "except NameError:",
-        "    import dataclasses as _dataclasses",
-        "    @_dataclasses.dataclass",
-        f"    class {functor_name}:",
+        f"    class {functor_name}(metaclass=PredicateMeta):",
+        f"        _fields = {fields_tuple}",
     ]
-    for name in field_names:
-        lines.append(f"        {name}: object = None")
-    lines.extend([
-        "        def __call__(self, **kwargs):",
-        "            for _f in _dataclasses.fields(type(self)):",
-        "                if _f.name not in kwargs:",
-        "                    kwargs[_f.name] = Var()",
-        "            return type(self)(**kwargs)",
-        f"    {functor_name} = {functor_name}()",
-    ])
     tree = parse("\n".join(lines))
     return copy_location(tree.body[0], source)
 

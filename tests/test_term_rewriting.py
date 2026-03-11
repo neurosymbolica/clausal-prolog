@@ -399,9 +399,12 @@ def test_embed_normal_code_unchanged():
 
 def test_embed_trailing_comma_defines_fact():
     # Trailing-comma fact: ``f(a),`` goes through $define_predicate with body=True.
+    from clausal.logic.predicate import PredicateMeta
+
     predicates = []
     ns = _ns()
     ns['Var'] = lambda: '<Var>'
+    ns['PredicateMeta'] = PredicateMeta
     module = type('MockModule', (), {'define_predicate': lambda self, p: predicates.append(p)})()
     ns['$define_predicate'] = lambda pred, mod: mod.define_predicate(pred)
     ns['$module'] = module
@@ -475,14 +478,16 @@ with ~~{} as clauses:
 
 
 def _make_functor_class(functor_name: str, *field_names: str):
-    """Compile and return the singleton functor class generated for the given fields."""
+    """Compile and return the Predicate class generated for the given fields."""
+    from clausal.logic.predicate import PredicateMeta
+
     anchor = ast.parse("x").body[0]
     ast.fix_missing_locations(anchor)
     class_ast = _make_functor_class_ast(functor_name, list(field_names), anchor)
     module = ast.fix_missing_locations(
         ast.Module(body=[class_ast], type_ignores=[])
     )
-    ns = {"Var": RealVar}
+    ns = {"Var": RealVar, "PredicateMeta": PredicateMeta}
     exec(compile(module, "<test>", "exec"), ns)
     return ns[functor_name]
 

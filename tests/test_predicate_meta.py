@@ -347,3 +347,33 @@ class TestEdgeCases:
         """Mutable terms should not be hashable by default."""
         with pytest.raises(TypeError):
             hash(fib(n=1, f=1))
+
+
+# ── Dataclass compatibility ──────────────────────────────────────────────────
+
+
+class TestDataclassCompat:
+    """PredicateMeta classes pass dataclasses.is_dataclass/fields checks."""
+
+    def test_is_dataclass_class(self):
+        import dataclasses
+        assert dataclasses.is_dataclass(fib)
+
+    def test_is_dataclass_instance(self):
+        import dataclasses
+        assert dataclasses.is_dataclass(fib(n=1, f=2))
+
+    def test_fields_returns_correct_names(self):
+        import dataclasses
+        names = [f.name for f in dataclasses.fields(fib)]
+        assert names == ["n", "f"]
+
+    def test_fields_on_instance(self):
+        import dataclasses
+        t = fib(n=10, f=20)
+        names = [f.name for f in dataclasses.fields(t)]
+        assert names == ["n", "f"]
+
+    def test_zero_arity_fields(self):
+        import dataclasses
+        assert dataclasses.fields(atom) == ()

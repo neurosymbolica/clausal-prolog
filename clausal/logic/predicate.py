@@ -17,10 +17,25 @@ Usage:
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Callable
 
 
 _MISSING = object()  # sentinel for "field not provided"
+
+
+class _FakeField:
+    """Minimal stand-in for ``dataclasses.Field`` so that PredicateMeta classes
+    pass ``dataclasses.is_dataclass()`` and ``dataclasses.fields()`` checks.
+
+    Only ``name`` and ``_field_type`` are needed; existing code only reads
+    ``f.name`` from the result of ``dataclasses.fields()``.
+    """
+    __slots__ = ("name", "_field_type")
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self._field_type = dataclasses._FIELD  # noqa: SLF001
 
 
 def _make_init(fields: tuple[str, ...]):
@@ -87,6 +102,11 @@ class PredicateMeta(type):
         cls.__eq__ = _make_eq(fields)
         cls.__repr__ = _make_repr(fields)
         cls.__hash__ = None  # mutable terms shouldn't be hashable
+
+        # Dataclass compatibility — lets existing dataclasses.is_dataclass()
+        # and dataclasses.fields() calls work without changes.  Cleaned up
+        # in Phase 7 when all call sites switch to PredicateMeta-aware checks.
+        cls.__dataclass_fields__ = {f: _FakeField(f) for f in fields}
 
         return cls
 
