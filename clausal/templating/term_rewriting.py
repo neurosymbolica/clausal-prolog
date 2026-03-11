@@ -722,7 +722,7 @@ class EmbedTransformer(NodeTransformer):
 
     def __init__(transformer):
         transformer._scope_depth = 0
-        transformer._seen_functors = set()
+        transformer._seen_functors: dict[str, list[str]] = {}
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -798,6 +798,15 @@ class EmbedTransformer(NodeTransformer):
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names
 
+                # If the functor was already seen, remap positional arg field
+                # names to the established signature by position.
+                prev_fields = transformer._seen_functors.get(functor_name)
+                if prev_fields is not None:
+                    for i in range(len(arg_field_names)):
+                        if i < len(prev_fields):
+                            arg_field_names[i] = prev_fields[i]
+                    all_field_names = arg_field_names + kwarg_field_names
+
                 term_transformer = TermTransformer()
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
@@ -845,7 +854,7 @@ class EmbedTransformer(NodeTransformer):
 
                 statements = []
                 if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors.add(functor_name)
+                    transformer._seen_functors[functor_name] = all_field_names
                     statements.append(
                         _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
                     )
@@ -884,6 +893,15 @@ class EmbedTransformer(NodeTransformer):
                 ]
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names
+
+                # If the functor was already seen, remap positional arg field
+                # names to the established signature by position.
+                prev_fields = transformer._seen_functors.get(functor_name)
+                if prev_fields is not None:
+                    for i in range(len(arg_field_names)):
+                        if i < len(prev_fields):
+                            arg_field_names[i] = prev_fields[i]
+                    all_field_names = arg_field_names + kwarg_field_names
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
@@ -935,7 +953,7 @@ class EmbedTransformer(NodeTransformer):
 
                 statements = []
                 if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors.add(functor_name)
+                    transformer._seen_functors[functor_name] = all_field_names
                     statements.append(
                         _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
                     )

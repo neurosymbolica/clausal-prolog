@@ -231,9 +231,15 @@ class Module:
         compiler (steps 4–5) recompiles the predicate.
 
         Also registers the keyword signature from the head's field names.
+
+        For facts (body is just [True]), ground values in dataclass head fields
+        are normalized to Var+Is form so output-mode queries work correctly.
         """
         head = predicate_node.head
         body_goals = _flatten_body(predicate_node.body)
+        # Normalize dataclass facts: ground field values → Var + Is body goals.
+        if body_goals == [True] and _is_normalizable_fact(head):
+            head, body_goals = _normalize_dataclass_fact(head)
         self.db.assertz(Clause(head=head, body=body_goals))
         functor, arity = head_key(head)
         param_names = _extract_param_names(head)
@@ -251,6 +257,51 @@ class Module:
 
     def __repr__(self) -> str:
         return f"Module({self.name!r}, {self.db!r})"
+
+
+# ── Fact normalization ────────────────────────────────────────────────────────
+
+
+def _is_normalizable_fact(head: Any) -> bool:
+    """True if head is a dataclass instance (not a built-in term type) with
+    at least one ground field value that needs normalization."""
+    if not dataclasses.is_dataclass(head) or isinstance(head, type):
+        return False
+    if isinstance(head, (Compound, Call, KWTerm)):
+        return False
+    from clausal.logic.variables import is_var
+    return any(
+        not is_var(getattr(head, f.name))
+        for f in dataclasses.fields(head)
+    )
+
+
+def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
+    """Replace ground field values in a dataclass fact head with Vars + Is goals.
+
+    Returns (new_head, body_goals) where each ground field has been replaced by
+    a fresh Var and a corresponding Is(var, value) goal in the body.
+    """
+    from clausal.logic.variables import Var, is_var
+    from clausal.terms import Is
+
+    replacements: dict[str, Any] = {}
+    body: list = []
+    for f in dataclasses.fields(head):
+        val = getattr(head, f.name)
+        if not is_var(val):
+            v = Var()
+            replacements[f.name] = v
+            body.append(Is(left=v, right=val))
+    if not replacements:
+        return head, [True]
+    # Build a new head with Vars replacing ground values.
+    new_kwargs = {
+        f.name: replacements.get(f.name, getattr(head, f.name))
+        for f in dataclasses.fields(head)
+    }
+    new_head = type(head)(**new_kwargs)
+    return new_head, body
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
