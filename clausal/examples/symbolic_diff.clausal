@@ -2,8 +2,8 @@ module(symbolic_diff, [
     d(Expr, Var, Derivative)
 ])
 
-# Symbolic differentiation. Expressions as tagged lists:
-#   ["add", E1, E2], ["mul", E1, E2], ["pow", E, N]
+# Symbolic differentiation using operator-node terms:
+#   (E1 + E2), (E1 * E2), (E ** N)
 
 # d(x)/dx = 1
 d(EXPR=0, VAR=0, DERIV=0),
@@ -19,19 +19,19 @@ d(Y, X, 0) <- (
 )
 
 # Sum: d(a+b)/dx = da/dx + db/dx
-d(["add", A, B], X, ["add", DA, DB]) <- (
+d(A + B, X, DA + DB) <- (
     d(A, X, DA),
     d(B, X, DB)
 )
 
 # Product (Leibniz rule): d(a*b)/dx = a*db + b*da
-d(["mul", A, B], X, ["add", ["mul", A, DB], ["mul", B, DA]]) <- (
+d(A * B, X, A * DB + B * DA) <- (
     d(A, X, DA),
     d(B, X, DB)
 )
 
 # Power rule: d(e^n)/dx = n * e^(n-1) * de/dx
-d(["pow", E, N], X, ["mul", ["mul", N, ["pow", E, N1]], DE]) <- (
+d(E ** N, X, N * (E ** N1) * DE) <- (
     number(N),
     N1 == N - 1,
     d(E, X, DE)
