@@ -4,6 +4,10 @@ Step 4 (head patterns): head_to_match_pattern, compile_head_to_match_case
 Step 5 (body goals):    term_to_ast_expr, arith_to_ast_expr, compile_goal,
                         compile_body, _make_body_compiler
 
+List patterns:  Bidirectional ``[H_, *T_]`` via _head_list_unify_input/output.
+                Repeated head vars via dup_guards.  See block comment above
+                ``_head_list_unify_input`` for the full design.
+
 Two compilation strategies are provided:
 
 **Simple / short-stack** (``compile_predicate``)
@@ -54,8 +58,133 @@ from clausal.terms import (
     In, NotIn,
     Call, LoadName,
 )
+from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
 from clausal.codegen import functiondef_to_function
+
+
+# ── Bidirectional list pattern unification ────────────────────────────────────
+#
+# Problem
+# -------
+# A clause like ``append([H_, *T_], B_, [H_, *R_]) <- append(T_, B_, R_)``
+# has list patterns in head positions 1 and 3.  Python's ``match`` statement
+# can only *destructure* sequences — it requires the value to already be a
+# list.  But position 3 may receive an unbound Var (output mode), so a plain
+# MatchSequence would fail to match.
+#
+# Additionally, the same Var ``H_`` appears in both positions 1 and 3 —
+# Python's ``match`` rejects duplicate name bindings in a single case arm.
+#
+# Solution: two-phase list unification
+# -------------------------------------
+# List patterns in clause heads compile as **wildcard captures** (MatchAs)
+# instead of MatchSequence.  Each list pattern records a "list guard" with
+# its decomposed structure (before-star elements, star var, after-star
+# elements).  At runtime, unification proceeds in two phases:
+#
+# 1. **Input phase** (before the body runs):
+#    ``_head_list_unify_input(target, before_vars, star_var, after_vars, trail)``
+#    - If *target* is a list → destructure and unify each var.  Returns True.
+#    - If *target* is an unbound Var → defer.  Returns None.
+#    - Otherwise → clause doesn't match.  Returns False.
+#
+# 2. **Output phase** (at each solution / yield point):
+#    ``_head_list_unify_output(target, before_vars, star_var, after_vars, trail)``
+#    - Called only for guards that returned None in phase 1.
+#    - Constructs ``[deref(v1), deref(v2), *deref(star), ...]`` from the
+#      now-bound vars and unifies the result with *target*.
+#
+# The output phase runs at yield points rather than before the body because
+# the body may bind vars that the list pattern depends on (e.g., R_ in
+# ``append`` is bound by the recursive call).
+#
+# Compiled code structure (for ``append`` clause 2)::
+#
+#     case [_lcap0, _v10, _lcap1]:        # wildcards for all args
+#         _v8 = Var(); _v9 = Var(); _v11 = Var()   # list-pattern vars
+#         _lr0 = _head_list_unify_input(_lcap0, [_v8], _v9, [], trail)
+#         _lr1 = _head_list_unify_input(_lcap1, [_v8], _v11, [], trail)
+#         if _lr0 is not False and _lr1 is not False:
+#             for _ in dispatch(_v9, _v10, _v11, trail, k):  # body
+#                 if (_lr0 is not None or _head_list_unify_output(...)) \
+#                 and (_lr1 is not None or _head_list_unify_output(...)):
+#                     yield None                               # solution
+#
+# Repeated Vars across list patterns (e.g., H_ in positions 1 and 3) work
+# because both guards reference the *same* Var() object (_v8).  Phase-1
+# input destructuring binds it from one list; phase-2 output construction
+# uses the bound value to build the other list.
+#
+# Related: ``_wrap_yields_with_output_guards`` is an AST rewriter that
+# replaces every ``yield None`` in the body with the guarded version.
+#
+# Related: ``_derive_field_names`` in term_rewriting.py deduplicates field
+# names when the same Var name appears multiple times in a trailing-comma
+# fact (e.g., ``append([], B_, B_)`` → fields ``b_``, ``b__1``), preventing
+# a SyntaxError from duplicate keyword arguments.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
+    """Input-mode list pattern unification: destructure a list.
+
+    Returns True if target is a list and all elements unify.
+    Returns None if target is an unbound Var (defer to output mode).
+    Returns False if target is incompatible.
+    """
+    d = deref(target)
+
+    if isinstance(d, list):
+        n_before = len(var_vals)
+        n_after = len(after_vals)
+        min_len = n_before + n_after
+        if star_val is None:
+            if len(d) != min_len:
+                return False
+        else:
+            if len(d) < min_len:
+                return False
+        for i, v in enumerate(var_vals):
+            if not unify(v, d[i], trail):
+                return False
+        if star_val is not None:
+            star_end = len(d) - n_after if n_after else len(d)
+            if not unify(star_val, d[n_before:star_end], trail):
+                return False
+        for i, v in enumerate(after_vals):
+            if not unify(v, d[len(d) - n_after + i], trail):
+                return False
+        return True
+
+    elif is_var(d):
+        # Defer to output mode — vars will be bound by body
+        return None
+
+    else:
+        return False
+
+
+def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
+    """Output-mode list pattern unification: construct list from bound vars.
+
+    Called after body execution when target was an unbound Var.
+    """
+    d = deref(target)
+    if not is_var(d):
+        # Already bound (e.g., by body) — switch to input mode
+        return _head_list_unify_input(target, var_vals, star_val, after_vals, trail)
+    result = [deref(v) for v in var_vals]
+    if star_val is not None:
+        s = deref(star_val)
+        if isinstance(s, list):
+            result.extend(s)
+        elif is_var(s):
+            return False
+        else:
+            result.append(s)
+    result.extend(deref(v) for v in after_vals)
+    return unify(d, result, trail)
 
 
 # ── Variable naming ────────────────────────────────────────────────────────────
@@ -88,6 +217,9 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
 
     if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
         return []
+
+    if isinstance(term, StarUnpack):
+        return _collect_vars(term.value, seen)
 
     if isinstance(term, list):
         result: list[Var] = []
@@ -146,9 +278,14 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
 
     def _walk(term: Any) -> None:
         term = deref(term)
-        if isinstance(term, Compound):
+        if isinstance(term, StarUnpack):
+            _walk(term.value)
+        elif isinstance(term, Compound):
             for a in term.args:
                 _walk(a)
+        elif isinstance(term, list):
+            for e in term:
+                _walk(e)
         elif dataclasses.is_dataclass(term) and not isinstance(term, type):
             cls = type(term)
             types[cls.__name__] = cls
@@ -173,7 +310,9 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
 
     def _walk(t: Any) -> None:
         t = deref(t)
-        if isinstance(t, Compound):
+        if isinstance(t, StarUnpack):
+            _walk(t.value)
+        elif isinstance(t, Compound):
             for a in t.args:
                 _walk(a)
         elif isinstance(t, list):
@@ -277,6 +416,12 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
 
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.Constant(value=term)
+
+    if isinstance(term, StarUnpack):
+        return ast.Starred(
+            value=term_to_ast_expr(term.value, var_context),
+            ctx=ast.Load(),
+        )
 
     if isinstance(term, list):
         return ast.List(
@@ -1311,9 +1456,12 @@ def compile_predicate_trampoline(
         "Var": Var,
         "unify": unify,
         "deref": deref,
+        "is_var": is_var,
         "_db": db,
         "Step": Step,
         "_DONE": DONE,
+        "_head_list_unify_input": _head_list_unify_input,
+        "_head_list_unify_output": _head_list_unify_output,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:
@@ -1402,12 +1550,69 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     return functiondef_to_function(func_def, globals_={"Step": Step, "_DONE": DONE})
 
 
+def _wrap_yields_with_output_guards(
+    stmts: list[ast.stmt], replacement_stmts: list[ast.stmt]
+) -> list[ast.stmt]:
+    """Replace every ``yield None`` in *stmts* with *replacement_stmts*.
+
+    Walks the AST statement list recursively.  Any ``Expr(Yield(None))``
+    found is replaced by the *replacement_stmts* (which should contain
+    guarded yields).
+
+    If *replacement_stmts* is empty, returns *stmts* unchanged.
+    """
+    if not replacement_stmts:
+        return stmts
+
+    def _is_yield_none(stmt: ast.stmt) -> bool:
+        return (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Yield)
+            and (stmt.value.value is None
+                 or (isinstance(stmt.value.value, ast.Constant)
+                     and stmt.value.value.value is None))
+        )
+
+    def _walk_stmts(ss: list[ast.stmt]) -> list[ast.stmt]:
+        result: list[ast.stmt] = []
+        for s in ss:
+            if _is_yield_none(s):
+                result.extend(replacement_stmts)
+            else:
+                result.append(_walk_stmt(s))
+        return result
+
+    def _walk_stmt(s: ast.stmt) -> ast.stmt:
+        if isinstance(s, ast.If):
+            s.body = _walk_stmts(s.body)
+            s.orelse = _walk_stmts(s.orelse)
+        elif isinstance(s, ast.For):
+            s.body = _walk_stmts(s.body)
+            s.orelse = _walk_stmts(s.orelse)
+        elif isinstance(s, ast.While):
+            s.body = _walk_stmts(s.body)
+            s.orelse = _walk_stmts(s.orelse)
+        elif isinstance(s, ast.Try):
+            s.body = _walk_stmts(s.body)
+            for h in s.handlers:
+                h.body = _walk_stmts(h.body)
+            s.orelse = _walk_stmts(s.orelse)
+            s.finalbody = _walk_stmts(s.finalbody)
+        elif isinstance(s, ast.With):
+            s.body = _walk_stmts(s.body)
+        return s
+
+    return _walk_stmts(stmts)
+
+
 # ── head_to_match_pattern ──────────────────────────────────────────────────────
 
 
 def head_to_match_pattern(
     term: Any,
     var_context: dict[int, str],
+    dup_guards: list[tuple[str, str]] | None = None,
+    list_guards: list[tuple] | None = None,
 ) -> ast.pattern:
     """Convert a head field value to a Python ``ast.pattern`` node.
 
@@ -1432,9 +1637,18 @@ def head_to_match_pattern(
     term = deref(term)
 
     # Unbound Var → MatchAs to capture the incoming argument
+    # Repeated Var (already in var_context) → fresh dup name + unification guard
     if is_var(term):
+        vid = term._id
+        if vid in var_context:
+            # Duplicate occurrence — generate a unique dup name
+            orig_name = var_context[vid]
+            dup_name = f"{orig_name}__dup{len(dup_guards) if dup_guards is not None else 0}"
+            if dup_guards is not None:
+                dup_guards.append((orig_name, dup_name))
+            return ast.MatchAs(pattern=None, name=dup_name)
         name = _var_python_name(term)
-        var_context[term._id] = name
+        var_context[vid] = name
         return ast.MatchAs(pattern=None, name=name)
 
     # Python singletons
@@ -1445,11 +1659,31 @@ def head_to_match_pattern(
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.MatchValue(value=ast.Constant(value=term))
 
-    # Python list → MatchSequence of sub-patterns
+    # Python list → wildcard capture + _head_list_unify guard
+    # This handles both input (destructuring) and output (construction) modes.
     if isinstance(term, list):
-        return ast.MatchSequence(
-            patterns=[head_to_match_pattern(e, var_context) for e in term]
-        )
+        # Collect before-star, star, and after-star elements
+        before: list[Any] = []
+        star: Any = None
+        after: list[Any] = []
+        in_after = False
+        for e in term:
+            if isinstance(e, StarUnpack):
+                star = deref(e.value)
+                in_after = True
+            elif in_after:
+                after.append(deref(e))
+            else:
+                before.append(deref(e))
+        # Register vars from list elements into var_context
+        for v in before + ([star] if star is not None else []) + after:
+            if is_var(v) and v._id not in var_context:
+                var_context[v._id] = _var_python_name(v)
+        # Generate a capture name and record the list guard
+        cap_name = f"_lcap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append((cap_name, before, star, after, var_context.copy()))
+        return ast.MatchAs(pattern=None, name=cap_name)
 
     # Compound(functor, args) → MatchClass on Compound
     if isinstance(term, Compound):
@@ -1457,7 +1691,7 @@ def head_to_match_pattern(
         if is_var(f):
             # Variable functor: cannot match statically → wildcard
             return ast.MatchAs(pattern=None, name=None)
-        sub_patterns = [head_to_match_pattern(a, var_context) for a in term.args]
+        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in term.args]
         return ast.MatchClass(
             cls=_name("Compound"),
             patterns=[],
@@ -1477,7 +1711,7 @@ def head_to_match_pattern(
             patterns=[],
             kwd_attrs=[f.name for f in fields],
             kwd_patterns=[
-                head_to_match_pattern(getattr(term, f.name), var_context)
+                head_to_match_pattern(getattr(term, f.name), var_context, dup_guards, list_guards)
                 for f in fields
             ],
         )
@@ -1517,7 +1751,14 @@ def compile_head_to_match_case(
             finally:
                 trail.undo(_mark)
     """
-    arg_patterns = _head_arg_patterns(head, var_context, arity)
+    dup_guards: list[tuple[str, str]] = []
+    list_guards: list[tuple] = []
+    # Use a fresh context for head pattern generation so that repeated vars
+    # within a single head are correctly detected (the caller's var_context
+    # may already contain vars from a pre-collection pass).
+    head_var_ctx: dict[int, str] = {}
+    arg_patterns = _head_arg_patterns(head, head_var_ctx, arity, dup_guards, list_guards)
+    var_context.update(head_var_ctx)
     outer_pattern = ast.MatchSequence(patterns=arg_patterns)
 
     # _mark = trail.mark()
@@ -1531,7 +1772,109 @@ def compile_head_to_match_case(
     # trail.undo(_mark)
     undo_stmt = ast.Expr(value=_call(_attr(trail_name, "undo"), _name(mark_name)))
 
+    # Wrap body_stmts with dup-var unification guards (innermost first)
     inner = body_stmts if body_stmts else [ast.Pass()]
+    for orig_name, dup_name in reversed(dup_guards):
+        # if unify(orig, dup, trail): <inner>
+        inner = [ast.If(
+            test=_call(
+                _name("unify"),
+                _name(orig_name),
+                _name(dup_name),
+                _name(trail_name),
+            ),
+            body=inner,
+            orelse=[],
+        )]
+
+    # Emit list guards: input destructuring + deferred output construction
+    if list_guards:
+        # Pre-allocate Var() for list-pattern vars (not captured by match pattern)
+        list_var_allocs: list[ast.stmt] = []
+        _alloc_seen: set[str] = set()
+        for _cap_name, _before, _star, _after, _vc in list_guards:
+            for elem in _before + ([_star] if _star is not None else []) + _after:
+                if is_var(elem) and elem._id in _vc:
+                    vname = _vc[elem._id]
+                    if vname not in _alloc_seen:
+                        _alloc_seen.add(vname)
+                        list_var_allocs.append(_assign(vname, _call(_name("Var"))))
+
+        def _list_guard_args(cap_name, before, star, after, vc):
+            """Build AST expressions for _head_list_unify_* call args."""
+            def _var_or_const(elem):
+                if is_var(elem) and elem._id in vc:
+                    return _name(vc[elem._id])
+                return ast.Constant(value=elem)
+            before_list = ast.List(elts=[_var_or_const(e) for e in before], ctx=ast.Load())
+            if star is not None and is_var(star) and star._id in vc:
+                star_expr = _name(vc[star._id])
+            else:
+                star_expr = ast.Constant(value=None)
+            after_list = ast.List(elts=[_var_or_const(e) for e in after], ctx=ast.Load())
+            return (_name(cap_name), before_list, star_expr, after_list, _name(trail_name))
+
+        # Emit: _lr_N = _head_list_unify_input(cap, [...], star, [...], trail)
+        input_check_stmts: list[ast.stmt] = []
+        lr_names: list[str] = []
+        all_guard_args: list[tuple] = []
+        for i, (cap_name, before, star, after, _vc) in enumerate(list_guards):
+            lr_name = f"_lr{i}"
+            lr_names.append(lr_name)
+            args = _list_guard_args(cap_name, before, star, after, _vc)
+            all_guard_args.append(args)
+            input_check_stmts.append(
+                _assign(lr_name, _call(_name("_head_list_unify_input"), *args))
+            )
+
+        # Gate: if any _lr_N is False, skip clause
+        # Combined condition: _lr0 is not False and _lr1 is not False and ...
+        gate_tests = []
+        for lr_name in lr_names:
+            gate_tests.append(ast.Compare(
+                left=_name(lr_name),
+                ops=[ast.IsNot()],
+                comparators=[ast.Constant(value=False)],
+            ))
+        if len(gate_tests) == 1:
+            gate_cond = gate_tests[0]
+        else:
+            gate_cond = ast.BoolOp(op=ast.And(), values=gate_tests)
+
+        # Build output guard condition: all deferred list guards must succeed
+        # For each _lr_N that is None (deferred), call _head_list_unify_output
+        # Combined: (_lr0 is not None or _head_list_unify_output(...)) and ...
+        output_conditions: list[ast.expr] = []
+        for i, lr_name in enumerate(lr_names):
+            args = all_guard_args[i]
+            output_conditions.append(ast.BoolOp(
+                op=ast.Or(),
+                values=[
+                    ast.Compare(
+                        left=_name(lr_name),
+                        ops=[ast.IsNot()],
+                        comparators=[ast.Constant(value=None)],
+                    ),
+                    _call(_name("_head_list_unify_output"), *args),
+                ],
+            ))
+        if len(output_conditions) == 1:
+            output_cond = output_conditions[0]
+        else:
+            output_cond = ast.BoolOp(op=ast.And(), values=output_conditions)
+
+        # Wrap each yield None with: if <output_cond>: yield None
+        output_guard_stmts = [ast.If(
+            test=output_cond,
+            body=[ast.Expr(value=ast.Yield(value=None))],
+            orelse=[],
+        )]
+        inner = _wrap_yields_with_output_guards(inner, output_guard_stmts)
+
+        # Combine: allocs + input checks + gate + inner
+        gated_inner = [ast.If(test=gate_cond, body=inner, orelse=[])]
+        inner = list_var_allocs + input_check_stmts + gated_inner
+
     try_finally = ast.Try(
         body=inner,
         handlers=[],
@@ -1547,18 +1890,20 @@ def compile_head_to_match_case(
 
 
 def _head_arg_patterns(
-    head: Any, var_context: dict[int, str], arity: int
+    head: Any, var_context: dict[int, str], arity: int,
+    dup_guards: list[tuple[str, str]] | None = None,
+    list_guards: list[tuple] | None = None,
 ) -> list[ast.pattern]:
     """Extract per-argument patterns from a head term."""
     if isinstance(head, Compound):
-        return [head_to_match_pattern(a, var_context) for a in head.args]
+        return [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in head.args]
     # Call(func=LoadName(f), args=[...]) — e.g. from $assert_fact with trailing comma.
     # Extract patterns from the positional args, not from the Call dataclass fields.
     if isinstance(head, Call) and isinstance(head.func, LoadName):
-        return [head_to_match_pattern(a, var_context) for a in head.args]
+        return [head_to_match_pattern(a, var_context, dup_guards, list_guards) for a in head.args]
     if dataclasses.is_dataclass(head) and not isinstance(head, type):
         return [
-            head_to_match_pattern(getattr(head, f.name), var_context)
+            head_to_match_pattern(getattr(head, f.name), var_context, dup_guards, list_guards)
             for f in dataclasses.fields(head)
         ]
     # Fallback: arity wildcards (accept any args)
@@ -1683,7 +2028,10 @@ def compile_predicate(
         "Var": Var,
         "unify": unify,
         "deref": deref,
+        "is_var": is_var,
         "_db": db,
+        "_head_list_unify_input": _head_list_unify_input,
+        "_head_list_unify_output": _head_list_unify_output,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:

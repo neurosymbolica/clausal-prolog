@@ -17,9 +17,12 @@ from clausal.logic.compiler import (
     head_to_match_pattern,
     compile_head_to_match_case,
     compile_predicate,
+    _head_list_unify_input,
+    _head_list_unify_output,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.variables import Var, Trail
+from clausal.logic.variables import Var, Trail, deref, unify, is_var
+from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.terms import Compound
 
 
@@ -116,21 +119,23 @@ class TestHeadToMatchPattern:
 
     # ── Python list ──
 
-    def test_empty_list_gives_empty_sequence(self):
-        p = head_to_match_pattern([], {})
-        assert isinstance(p, ast.MatchSequence)
-        assert p.patterns == []
+    def test_empty_list_gives_wildcard_capture(self):
+        list_guards: list = []
+        p = head_to_match_pattern([], {}, list_guards=list_guards)
+        # Lists now compile as wildcard captures + list_guards
+        assert isinstance(p, ast.MatchAs)
+        assert p.name.startswith("_lcap")
+        assert len(list_guards) == 1
 
-    def test_list_recurses_into_elements(self):
+    def test_list_registers_vars_in_context(self):
         v = Var()
         ctx: dict[int, str] = {}
-        p = head_to_match_pattern([1, v, "x"], ctx)
-        assert isinstance(p, ast.MatchSequence)
-        assert len(p.patterns) == 3
-        assert isinstance(p.patterns[0], ast.MatchValue)  # 1
-        assert isinstance(p.patterns[1], ast.MatchAs)     # Var
-        assert isinstance(p.patterns[2], ast.MatchValue)  # "x"
+        list_guards: list = []
+        p = head_to_match_pattern([1, v, "x"], ctx, list_guards=list_guards)
+        # Lists compile as wildcard captures
+        assert isinstance(p, ast.MatchAs)
         assert v._id in ctx
+        assert len(list_guards) == 1
 
     # ── Compound ──
 
@@ -555,3 +560,223 @@ class TestCompilePredicate:
         fn = compile_predicate("u", 1, clauses, db, body_compiler=always_fail_body)
         list(fn(1, FakeTrail(), None))
         assert len(undo_calls) == 1
+
+
+# ── head_to_match_pattern: list + star patterns ──────────────────────────────
+
+
+class TestHeadListPatterns:
+    """Tests for list patterns [H_, *T_] in clause heads."""
+
+    # ── head_to_match_pattern with StarUnpack ──
+
+    def test_star_list_produces_wildcard_capture(self):
+        h, t = Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        p = head_to_match_pattern([h, StarUnpack(value=t)], ctx, list_guards=list_guards)
+        assert isinstance(p, ast.MatchAs)
+        assert p.name.startswith("_lcap")
+
+    def test_star_list_registers_both_vars(self):
+        h, t = Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern([h, StarUnpack(value=t)], ctx, list_guards=list_guards)
+        assert h._id in ctx
+        assert t._id in ctx
+
+    def test_star_list_records_list_guard(self):
+        h, t = Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern([h, StarUnpack(value=t)], ctx, list_guards=list_guards)
+        assert len(list_guards) == 1
+        cap_name, before, star, after, vc = list_guards[0]
+        assert cap_name == "_lcap0"
+        assert len(before) == 1  # [H_]
+        assert is_var(before[0])
+        assert is_var(star)      # *T_
+        assert after == []
+
+    def test_star_middle_pattern(self):
+        """[A_, *Mid_, Z_] records before=[A_], star=Mid_, after=[Z_]."""
+        a, mid, z = Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern(
+            [a, StarUnpack(value=mid), z], ctx, list_guards=list_guards
+        )
+        assert len(list_guards) == 1
+        _, before, star, after, _ = list_guards[0]
+        assert len(before) == 1 and is_var(before[0])
+        assert is_var(star)
+        assert len(after) == 1 and is_var(after[0])
+
+    def test_no_star_list_still_records_guard(self):
+        """A plain list [X_, 42] also uses list guard (no MatchSequence)."""
+        x = Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern([x, 42], ctx, list_guards=list_guards)
+        assert len(list_guards) == 1
+        _, before, star, after, _ = list_guards[0]
+        assert len(before) == 2
+        assert star is None
+        assert after == []
+
+    # ── Repeated vars in head patterns ──
+
+    def test_repeated_var_produces_dup_guard(self):
+        v = Var()
+        ctx: dict[int, str] = {}
+        dup_guards: list = []
+        # First occurrence → normal capture
+        p1 = head_to_match_pattern(v, ctx, dup_guards=dup_guards)
+        assert isinstance(p1, ast.MatchAs)
+        orig_name = p1.name
+        # Second occurrence → dup capture
+        p2 = head_to_match_pattern(v, ctx, dup_guards=dup_guards)
+        assert isinstance(p2, ast.MatchAs)
+        assert p2.name != orig_name
+        assert "__dup" in p2.name
+        assert len(dup_guards) == 1
+        assert dup_guards[0] == (orig_name, p2.name)
+
+    def test_repeated_var_across_list_patterns(self):
+        """H_ in [H_, *T_] and [H_, *R_] — same var_context entry, two list guards."""
+        h, t, r = Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern([h, StarUnpack(value=t)], ctx, list_guards=list_guards)
+        head_to_match_pattern([h, StarUnpack(value=r)], ctx, list_guards=list_guards)
+        assert len(list_guards) == 2
+        # Both guards reference the same H_ var
+        _, before1, _, _, vc1 = list_guards[0]
+        _, before2, _, _, vc2 = list_guards[1]
+        assert vc1[h._id] == vc2[h._id]  # same python name
+
+
+# ── _head_list_unify_input / _head_list_unify_output ─────────────────────────
+
+
+class TestHeadListUnify:
+    """Unit tests for the bidirectional list unification runtime helpers."""
+
+    # ── Input mode (destructuring) ──
+
+    def test_input_simple_list(self):
+        trail = Trail()
+        v0, v1 = Var(), Var()
+        result = _head_list_unify_input([10, 20], [v0, v1], None, [], trail)
+        assert result is True
+        assert deref(v0) == 10
+        assert deref(v1) == 20
+
+    def test_input_star_list(self):
+        trail = Trail()
+        h, t = Var(), Var()
+        result = _head_list_unify_input([1, 2, 3], [h], t, [], trail)
+        assert result is True
+        assert deref(h) == 1
+        assert deref(t) == [2, 3]
+
+    def test_input_star_middle(self):
+        trail = Trail()
+        a, mid, z = Var(), Var(), Var()
+        result = _head_list_unify_input([1, 2, 3, 4], [a], mid, [z], trail)
+        assert result is True
+        assert deref(a) == 1
+        assert deref(mid) == [2, 3]
+        assert deref(z) == 4
+
+    def test_input_empty_star(self):
+        trail = Trail()
+        h, t = Var(), Var()
+        result = _head_list_unify_input([1], [h], t, [], trail)
+        assert result is True
+        assert deref(h) == 1
+        assert deref(t) == []
+
+    def test_input_too_short_fails(self):
+        trail = Trail()
+        h, t = Var(), Var()
+        result = _head_list_unify_input([], [h], t, [], trail)
+        assert result is False
+
+    def test_input_no_star_wrong_length_fails(self):
+        trail = Trail()
+        v0 = Var()
+        result = _head_list_unify_input([1, 2], [v0], None, [], trail)
+        assert result is False
+
+    def test_input_non_list_fails(self):
+        trail = Trail()
+        v = Var()
+        result = _head_list_unify_input(42, [v], None, [], trail)
+        assert result is False
+
+    # ── Deferred mode (target is unbound Var) ──
+
+    def test_input_var_defers(self):
+        trail = Trail()
+        target = Var()
+        v = Var()
+        result = _head_list_unify_input(target, [v], None, [], trail)
+        assert result is None
+
+    # ── Output mode (construction) ──
+
+    def test_output_constructs_list(self):
+        trail = Trail()
+        target = Var()
+        h, t = Var(), Var()
+        unify(h, 1, trail)
+        unify(t, [2, 3], trail)
+        result = _head_list_unify_output(target, [h], t, [], trail)
+        assert result is True
+        assert deref(target) == [1, 2, 3]
+
+    def test_output_with_after(self):
+        trail = Trail()
+        target = Var()
+        a, mid, z = Var(), Var(), Var()
+        unify(a, 1, trail)
+        unify(mid, [2, 3], trail)
+        unify(z, 4, trail)
+        result = _head_list_unify_output(target, [a], mid, [z], trail)
+        assert result is True
+        assert deref(target) == [1, 2, 3, 4]
+
+    def test_output_empty_star(self):
+        trail = Trail()
+        target = Var()
+        h = Var()
+        star = Var()
+        unify(h, 42, trail)
+        unify(star, [], trail)
+        result = _head_list_unify_output(target, [h], star, [], trail)
+        assert result is True
+        assert deref(target) == [42]
+
+    def test_output_unbound_star_fails(self):
+        """Can't construct when star var is still unbound."""
+        trail = Trail()
+        target = Var()
+        h = Var()
+        star = Var()
+        unify(h, 1, trail)
+        # star is still unbound
+        result = _head_list_unify_output(target, [h], star, [], trail)
+        assert result is False
+
+    def test_output_already_bound_switches_to_input(self):
+        """If target was bound by the body, output falls back to input mode."""
+        trail = Trail()
+        target = Var()
+        unify(target, [1, 2, 3], trail)
+        h, t = Var(), Var()
+        result = _head_list_unify_output(target, [h], t, [], trail)
+        assert result is True
+        assert deref(h) == 1
+        assert deref(t) == [2, 3]

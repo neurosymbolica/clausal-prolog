@@ -698,6 +698,29 @@ def _py_ast_expr(node, anchor):
 
 
 
+def _derive_field_names(pos_args: list) -> list[str]:
+    """Derive unique field names from positional args in a clause head.
+
+    Trailing-underscore Name nodes use their lowercased id as the field name.
+    Other args get ``arg_<i>``.  Duplicate names are disambiguated with a
+    numeric suffix (e.g. ``b_``, ``b__1``) so that repeated logic variables
+    produce distinct dataclass fields.
+    """
+    names: list[str] = []
+    counts: dict[str, int] = {}
+    for i, arg in enumerate(pos_args):
+        if (isinstance(arg, Name)
+                and arg.id.endswith("_")
+                and not arg.id.endswith("__")):
+            base = arg.id.lower()
+        else:
+            base = f"arg_{i}"
+        n = counts.get(base, 0)
+        counts[base] = n + 1
+        names.append(base if n == 0 else f"{base}_{n}")
+    return names
+
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -787,14 +810,7 @@ class EmbedTransformer(NodeTransformer):
                 orig_pos_args = single_element.args
                 orig_kw_args = single_element.keywords
 
-                arg_field_names = [
-                    arg.id.lower()
-                    if isinstance(arg, Name)
-                        and arg.id.endswith("_")
-                        and not arg.id.endswith("__")
-                    else f"arg_{i}"
-                    for i, arg in enumerate(orig_pos_args)
-                ]
+                arg_field_names = _derive_field_names(orig_pos_args)
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names
 
@@ -883,14 +899,7 @@ class EmbedTransformer(NodeTransformer):
                 else:
                     return transformer.generic_visit(expr_stmt)
 
-                arg_field_names = [
-                    arg.id.lower()
-                    if isinstance(arg, Name)
-                        and arg.id.endswith("_")
-                        and not arg.id.endswith("__")
-                    else f"arg_{i}"
-                    for i, arg in enumerate(orig_pos_args)
-                ]
+                arg_field_names = _derive_field_names(orig_pos_args)
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names
 

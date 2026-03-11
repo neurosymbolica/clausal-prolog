@@ -637,3 +637,90 @@ class TestQueryAPI:
             mod,
         )
         assert t_result is not None
+
+
+# ── Fixture-loaded program: lists (repeated head vars) ────────────────────────
+
+
+def _load_clausal_module(filename: str) -> Module:
+    """Load a .clausal file from tests/clausal_modules/ and return its LogicModule."""
+    path = os.path.join(os.path.dirname(__file__), "clausal_modules", filename)
+    name = f"_test_fixture_{filename.replace('.', '_')}"
+    sys.modules.pop(name, None)
+    spec = ModuleSpec(name, _predicate_loader, origin=path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod.__dict__["$module"]
+
+
+class TestRepeatedHeadVars:
+    """Phase 2: Vars appearing multiple times in a clause head."""
+
+    def _lists_mod(self) -> Module:
+        return _load_clausal_module("lists.clausal")
+
+    # ── append/3 — repeated H_ in positions 1 and 3 ──
+
+    def test_append_empty_left(self):
+        mod = self._lists_mod()
+        r = Var()
+        results = [deref(r) for _ in call("append", [], [3, 4], r, module=mod)]
+        assert results == [[3, 4]]
+
+    def test_append_nonempty(self):
+        mod = self._lists_mod()
+        r = Var()
+        results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
+        assert results == [[1, 2, 3, 4]]
+
+    def test_append_both_empty(self):
+        mod = self._lists_mod()
+        r = Var()
+        results = [deref(r) for _ in call("append", [], [], r, module=mod)]
+        assert results == [[]]
+
+    def test_append_base_clause_repeated_var(self):
+        """append([], B_, B_) — B_ appears twice in head."""
+        mod = self._lists_mod()
+        r = Var()
+        results = [deref(r) for _ in call("append", [], [42], r, module=mod)]
+        assert results == [[42]]
+
+    # ── last/2 — repeated X_ in head ──
+
+    def test_last_singleton(self):
+        mod = self._lists_mod()
+        x = Var()
+        results = [deref(x) for _ in call("last", [7], x, module=mod)]
+        assert results == [7]
+
+    def test_last_multi(self):
+        mod = self._lists_mod()
+        x = Var()
+        results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
+        assert results == [3]
+
+    # ── append/3 reverse mode (splitting a list) ──
+
+    def test_append_split(self):
+        """append(X, Y, [1,2,3]) enumerates all splits."""
+        mod = self._lists_mod()
+        x, y = Var(), Var()
+        results = []
+        for _ in call("append", x, y, [1, 2, 3], module=mod):
+            results.append((list(deref(x)), list(deref(y))))
+        assert results == [
+            ([], [1, 2, 3]),
+            ([1], [2, 3]),
+            ([1, 2], [3]),
+            ([1, 2, 3], []),
+        ]
+
+    # ── length/2 (no repeated vars, regression check) ──
+
+    def test_length(self):
+        mod = self._lists_mod()
+        n = Var()
+        results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
+        assert results == [3]
