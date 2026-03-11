@@ -4,7 +4,7 @@ Step 4 (head patterns): head_to_match_pattern, compile_head_to_match_case
 Step 5 (body goals):    term_to_ast_expr, arith_to_ast_expr, compile_goal,
                         compile_body, _make_body_compiler
 
-List patterns:  Bidirectional ``[H_, *T_]`` via _head_list_unify_input/output.
+List patterns:  Bidirectional ``[HEAD, *TAIL]`` via _head_list_unify_input/output.
                 Repeated head vars via dup_guards.  See block comment above
                 ``_head_list_unify_input`` for the full design.
 
@@ -67,13 +67,13 @@ from clausal.codegen import functiondef_to_function
 #
 # Problem
 # -------
-# A clause like ``append([H_, *T_], B_, [H_, *R_]) <- append(T_, B_, R_)``
+# A clause like ``append([HEAD, *TAIL], B, [HEAD, *RESULT]) <- append(TAIL, B, RESULT)``
 # has list patterns in head positions 1 and 3.  Python's ``match`` statement
 # can only *destructure* sequences — it requires the value to already be a
 # list.  But position 3 may receive an unbound Var (output mode), so a plain
 # MatchSequence would fail to match.
 #
-# Additionally, the same Var ``H_`` appears in both positions 1 and 3 —
+# Additionally, the same Var ``HEAD`` appears in both positions 1 and 3 —
 # Python's ``match`` rejects duplicate name bindings in a single case arm.
 #
 # Solution: two-phase list unification
@@ -96,7 +96,7 @@ from clausal.codegen import functiondef_to_function
 #      now-bound vars and unifies the result with *target*.
 #
 # The output phase runs at yield points rather than before the body because
-# the body may bind vars that the list pattern depends on (e.g., R_ in
+# the body may bind vars that the list pattern depends on (e.g., RESULT in
 # ``append`` is bound by the recursive call).
 #
 # Compiled code structure (for ``append`` clause 2)::
@@ -111,7 +111,7 @@ from clausal.codegen import functiondef_to_function
 #                 and (_lr1 is not None or _head_list_unify_output(...)):
 #                     yield None                               # solution
 #
-# Repeated Vars across list patterns (e.g., H_ in positions 1 and 3) work
+# Repeated Vars across list patterns (e.g., HEAD in positions 1 and 3) work
 # because both guards reference the *same* Var() object (_v8).  Phase-1
 # input destructuring binds it from one list; phase-2 output construction
 # uses the bound value to build the other list.
@@ -121,7 +121,7 @@ from clausal.codegen import functiondef_to_function
 #
 # Related: ``_derive_field_names`` in term_rewriting.py deduplicates field
 # names when the same Var name appears multiple times in a trailing-comma
-# fact (e.g., ``append([], B_, B_)`` → fields ``b_``, ``b__1``), preventing
+# fact (e.g., ``append([], B, B)`` → fields ``b``, ``b_1``), preventing
 # a SyntaxError from duplicate keyword arguments.
 # ──────────────────────────────────────────────────────────────────────────────
 

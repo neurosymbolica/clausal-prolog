@@ -2,28 +2,28 @@
 #
 # factorial/2, max_of/3, abs_diff/3
 
-factorial(N_=0, R_=1),
-factorial(N_, R_) <- (
-    N_ > 0,
-    N1_ is N_ - 1,
-    factorial(N1_, R1_),
-    R_ is N_ * R1_
+factorial(N=0, RESULT=1),
+factorial(N, RESULT) <- (
+    N > 0,
+    N1 is N - 1,
+    factorial(N1, R1),
+    RESULT is N * R1
 )
 
-max_of(X_, Y_, M_) <- (
-    X_ >= Y_,
-    M_ is X_
+max_of(X, Y, MAX) <- (
+    X >= Y,
+    MAX is X
 )
-max_of(X_, Y_, M_) <- (
-    Y_ > X_,
-    M_ is Y_
+max_of(X, Y, MAX) <- (
+    Y > X,
+    MAX is Y
 )
 
-abs_diff(X_, Y_, D_) <- (
-    X_ >= Y_,
-    D_ is X_ - Y_
+abs_diff(X, Y, DIFF) <- (
+    X >= Y,
+    DIFF == X - Y
 )
-abs_diff(X_, Y_, D_) <- (
-    Y_ > X_,
-    D_ == Y_ - X_
+abs_diff(X, Y, DIFF) <- (
+    Y > X,
+    DIFF == Y - X
 )

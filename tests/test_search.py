@@ -660,7 +660,7 @@ class TestRepeatedHeadVars:
     def _lists_mod(self) -> Module:
         return _load_clausal_module("lists.clausal")
 
-    # ── append/3 — repeated H_ in positions 1 and 3 ──
+    # ── append/3 — repeated HEAD in positions 1 and 3 ──
 
     def test_append_empty_left(self):
         mod = self._lists_mod()
@@ -681,13 +681,13 @@ class TestRepeatedHeadVars:
         assert results == [[]]
 
     def test_append_base_clause_repeated_var(self):
-        """append([], B_, B_) — B_ appears twice in head."""
+        """append([], B, B) — B appears twice in head."""
         mod = self._lists_mod()
         r = Var()
         results = [deref(r) for _ in call("append", [], [42], r, module=mod)]
         assert results == [[42]]
 
-    # ── last/2 — repeated X_ in head ──
+    # ── last/2 — repeated X in head ──
 
     def test_last_singleton(self):
         mod = self._lists_mod()

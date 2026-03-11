@@ -4,8 +4,8 @@ edge(2, 3),
 edge(1, 3),
 
 # Reachability: reach(X, Y) if there is a path from X to Y
-reach(X_, Y_) <- edge(X_, Y_)
-reach(X_, Y_) <- (
-    edge(X_, Z_),
-    reach(Z_, Y_)
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (
+    edge(X, Z),
+    reach(Z, Y)
 )

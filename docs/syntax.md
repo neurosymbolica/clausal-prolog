@@ -50,27 +50,37 @@ with ... as block:
 
 ## Logic variables
 
-Logic variable identifiers begin with a single underscore and must not end with one:
+Two conventions are recognised:
+
+**Trailing single underscore** — any identifier whose last character is `_`, excluding dunders (`__`) and the bare anonymous variable `_`:
 
 ```python
-_X, _Head, _rest   # logic variables
+X_, HEAD_, rest_   # logic variables (trailing-underscore style)
 ```
+
+**ALL-CAPS** — any identifier where every cased character is uppercase and there is at least one cased character (underscores and digits are allowed inside):
+
+```python
+X, HEAD, REST, N1, MAX_OF   # logic variables (ALL-CAPS style)
+```
+
+Both styles may be used in the same file. ALL-CAPS is the preferred style for new code; trailing-underscore remains valid.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's existing convention).
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-Why underscore-prefix rather than titlecase (the Prolog convention)?
+Why not titlecase (the Prolog convention)?
 - Python programmers associate titlecase with class names — static, global, noun-like. This is actually close to how atoms behave, not variables.
-- Underscore-prefix is a well-known Python convention signalling "internal/special".
-- There are no existing Python names that start with `_` and are used as variables in normal code, so there is no ambiguity.
+- ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
+- Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
 
 ---
 
 ## Atoms
 
 Inside a logical term:
-- identifiers in `TitleCase` are atoms
+- identifiers in `TitleCase` or `lowercase` that are not logic variable names are atoms
 - string literals are atoms (except those prefixed with `u"..."`)
 
 ```python
@@ -88,9 +98,9 @@ Atoms that conflict with Python built-ins or that use non-identifier characters 
 Unification is written with `is`:
 
 ```python
-_X is 42,
-_X is _Y,
-_X is not _Y,   # disunification
+X is 42,
+X is Y,
+X is not Y,   # disunification
 ```
 
 Why `is` rather than `=`?
@@ -98,7 +108,7 @@ Why `is` rather than `=`?
 - `is` expresses the same concept in English — two things being the same — and Python programmers understand it
 - Standard Prolog uses `is` for arithmetic evaluation; this is a deliberate departure, because we want arithmetic to read naturally as constraint logic (see below)
 
-Note: `not _X is _Y` means "unification fails" with bindings discarded; `_X is not _Y` means disunification (a constraint that the two must never unify).
+Note: `not X is Y` means "unification fails" with bindings discarded; `X is not Y` means disunification (a constraint that the two must never unify).
 
 ---
 
@@ -128,10 +138,10 @@ Rule > ListDescription,
 ## Lists
 
 ```python
-[]           # empty list (singleton)
-[a, 1, _X]  # a simple list
-[_First, *_Rest]             # head/tail decomposition
-[*_Before, _Pivot, *_After]  # multiple spread patterns
+[]               # empty list (singleton)
+[a, 1, X]        # a simple list
+[FIRST, *REST]   # head/tail decomposition
+[*BEFORE, PIVOT, *AFTER]  # multiple spread patterns
 ```
 
 Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread syntax rather than `|`. The empty list is a singleton — unlike Python, two `[]` literals are the same object.
@@ -153,10 +163,10 @@ All list operations apply to strings. Plain string literals (without `u`) are at
 ## Compound terms and goals
 
 ```python
-goal(_A, _B),            # compound goal
-_A.goal(_B),             # equivalent infix form (syntactic sugar)
-_A .goal,                # postfix form of goal(_A)
-not goal,                # negation as failure
+goal(A, B),            # compound goal
+A.goal(B),             # equivalent infix form (syntactic sugar)
+A .goal,               # postfix form of goal(A)
+not goal,              # negation as failure
 ```
 
 The infix and postfix forms allow natural English-style reading of predicates that take a "subject" argument.
@@ -185,8 +195,8 @@ module/(Terms),
 Logic lambdas use Python's `lambda` syntax. Variables that escape the lambda (shared with outer scope) are declared with `in`:
 
 ```python
-_Y in (lambda _X: _Y is -_X),
-map(_Y in (lambda _X: _Y is -_X), [1, 2, 3]),
+Y in (lambda X: Y is -X),
+map(Y in (lambda X: Y is -X), [1, 2, 3]),
 ```
 
 Inside a lambda, parameters and locally-created logic variables are local. Variables that need to be shared with the outer scope are named with `in`. This mirrors Python's closure semantics without requiring explicit `nonlocal` declarations.
@@ -199,8 +209,8 @@ Arithmetic operators inside a constraint domain imply constraints, not evaluatio
 
 ```python
 (--clpz)(
-    _X < 43,
-    42 <= _X,
+    X < 43,
+    42 <= X,
 )
 ```
 
@@ -223,7 +233,7 @@ Three main reasons:
 
 2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them). Atoms need to be class objects for structural matching. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
 
-3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker (underscore prefix) avoids confusion without requiring explicit `declare` statements.
+3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker (ALL-CAPS or trailing underscore) avoids confusion without requiring explicit `declare` statements.
 
 The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely needed. Explicit is better than implicit.
 
@@ -234,7 +244,7 @@ The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely ne
 Any Python function that contains logical terms is treated as a predicate. Python code within the body becomes embedded and backtrackable. An implicit `backtracking` flag allows cleanup on backtrack:
 
 ```python
-def head(_Arg1, _Arg2):
+def head(ARG1, ARG2):
     goal(...),
     if not backtracking:
         # forward path: acquire resource, open file, etc.
@@ -252,49 +262,50 @@ This gives a symmetric and concise way to integrate Python side effects with Pro
 ## Syntax cheat sheet
 
 ```python
-# Variables
-_X, _head, _rest           # logic variables
-_                          # anonymous variable (always unifies, stores nothing)
+# Variables (ALL-CAPS preferred; trailing-underscore also valid)
+X, HEAD, REST          # ALL-CAPS logic variables
+X_, head_, rest_       # trailing-underscore style (also valid)
+_                      # anonymous variable (always unifies, stores nothing)
 
 # Atoms
-Atom, 'an atom', '+'       # atoms (titlecase or quoted string)
---python_obj               # any Python object used as an atom
+Atom, 'an atom', '+'   # atoms (titlecase or quoted string)
+--python_obj           # any Python object used as an atom
 
 # Lists
-[]                         # empty list
-[a, 1, _X]                 # simple list
-[_First, *_Rest]           # head/tail
+[]                     # empty list
+[a, 1, X]              # simple list
+[FIRST, *REST]         # head/tail
 
 # Strings
-u"hello"                   # list of character atoms
+u"hello"               # list of character atoms
 
 # Unification
-_X is _Y,                  # unify
-_X is not _Y,              # disunify
+X is Y,                # unify
+X is not Y,            # disunify
 
 # Rules and facts
-Head <- Body,              # Horn clause
-Fact,                      # fact (trivially true)
+Head <- Body,          # Horn clause
+Fact,                  # fact (trivially true)
 Rule > ListDescription,    # DCG rule
 
 # Goals
-goal(_A, _B),              # compound goal
-_A.goal(_B),               # infix sugar
-not goal,                  # negation as failure
-+ goal,                    # immediate goal
-- term,                    # retract
+goal(A, B),            # compound goal
+A.goal(B),             # infix sugar
+not goal,              # negation as failure
++ goal,                # immediate goal
+- term,                # retract
 
 # Module qualification
 module/(Terms),
 
 # Escaping
---python_expr              # Python inside logic term
-++logic_term               # logic term inside Python expression
-~~python_expr              # capture as AST node
+--python_expr          # Python inside logic term
+++logic_term           # logic term inside Python expression
+~~python_expr          # capture as AST node
 
 # Constraint domains
-(--clpz)(_X > 0, _X < 10),
+(--clpz)(X > 0, X < 10),
 
 # Lambdas
-_Y in (lambda _X: _Y is -_X)
+Y in (lambda X: Y is -X)
 ```

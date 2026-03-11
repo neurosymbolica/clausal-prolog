@@ -301,28 +301,35 @@ stores on `PredicateTable.dispatch_fn`.
 
 ---
 
-### WK-VAR — Variable naming: trailing-underscore convention
+### WK-VAR — Variable naming: ALL-CAPS and trailing-underscore conventions
 
 **Depends on:** Steps 1–5
 
-**Goal:** Change the logic variable convention from a *leading* underscore (`_X`,
-`_foo`) to a *trailing* underscore (`X_`, `foo_`).  This aligns with conventional
-Prolog practice (uppercase = variable) while giving Python programmers full
-flexibility over variable names — any casing works, there are no conflicts with
-Python's own leading-underscore private-attribute convention, and names like
-`Head_`, `Tail_`, `N_`, `Acc_` are all natural.
+**Goal:** Establish clear logic variable conventions that are visually distinct from
+Python names, conflict-free with Python's own naming conventions, and natural for
+logic programming.
 
-**Rule:** Any identifier whose last character is `_` but that does *not* end with
-`__` (double underscore) and is not the bare wildcard `_` is a logic variable in
-DSL context.
+**Two recognised conventions:**
+
+1. **ALL-CAPS** (preferred) — any identifier where every cased character is uppercase
+   and there is at least one cased character. Underscores and digits inside are
+   allowed. Examples: `X`, `Y`, `HEAD`, `TAIL`, `N1`, `MAX_OF`.
+
+2. **Trailing single underscore** (also valid) — any identifier ending with a single
+   `_` that is not a dunder (`__`) and is not the bare wildcard `_`. Examples:
+   `X_`, `head_`, `result_`.
+
+**Rule:** `_is_logic_var_name(identifier)` in `clausal/templating/term_rewriting.py`
+implements both tests. A bare `_` is always the anonymous wildcard, never a named
+variable.
 
 **Changes:**
-- `TermTransformer.visit_Name` in `clausal/templating/term_rewriting.py`: recognise
-  `name_` (trailing single `_`) instead of `_name` (leading `_`).
-- `EmbedTransformer.visit_Name`: same — trailing `_` triggers the `.value` unbox
-  rewrite for variables referenced in outer Python code.
-- `EmbedTransformer.visit_Expr` predicate-head argument extraction: detect
-  trailing `_` to derive field names from positional variable arguments.
+- `_is_logic_var_name()` helper added to `clausal/templating/term_rewriting.py`.
+- `TermTransformer.visit_Name`: uses `_is_logic_var_name` to detect variables.
+- `EmbedTransformer.visit_Name`: same — triggers `.value` unbox rewrite.
+- `_derive_field_names()`: uses `_is_logic_var_name`; strips trailing `_` before
+  lowercasing so `B_` → field `b`, `HEAD` → field `head`.
+- All `.clausal` files use ALL-CAPS style.
 - All tests and examples updated.
 
 ---

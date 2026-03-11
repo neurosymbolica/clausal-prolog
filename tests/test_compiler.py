@@ -566,7 +566,7 @@ class TestCompilePredicate:
 
 
 class TestHeadListPatterns:
-    """Tests for list patterns [H_, *T_] in clause heads."""
+    """Tests for list patterns [HEAD, *TAIL] in clause heads."""
 
     # ── head_to_match_pattern with StarUnpack ──
 
@@ -594,13 +594,13 @@ class TestHeadListPatterns:
         assert len(list_guards) == 1
         cap_name, before, star, after, vc = list_guards[0]
         assert cap_name == "_lcap0"
-        assert len(before) == 1  # [H_]
+        assert len(before) == 1  # [HEAD]
         assert is_var(before[0])
-        assert is_var(star)      # *T_
+        assert is_var(star)      # *TAIL
         assert after == []
 
     def test_star_middle_pattern(self):
-        """[A_, *Mid_, Z_] records before=[A_], star=Mid_, after=[Z_]."""
+        """[A, *MID, Z] records before=[A], star=MID, after=[Z]."""
         a, mid, z = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -614,7 +614,7 @@ class TestHeadListPatterns:
         assert len(after) == 1 and is_var(after[0])
 
     def test_no_star_list_still_records_guard(self):
-        """A plain list [X_, 42] also uses list guard (no MatchSequence)."""
+        """A plain list [X, 42] also uses list guard (no MatchSequence)."""
         x = Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -644,14 +644,14 @@ class TestHeadListPatterns:
         assert dup_guards[0] == (orig_name, p2.name)
 
     def test_repeated_var_across_list_patterns(self):
-        """H_ in [H_, *T_] and [H_, *R_] — same var_context entry, two list guards."""
+        """HEAD in [HEAD, *TAIL] and [HEAD, *RESULT] — same var_context entry, two list guards."""
         h, t, r = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
         head_to_match_pattern([h, StarUnpack(value=t)], ctx, list_guards=list_guards)
         head_to_match_pattern([h, StarUnpack(value=r)], ctx, list_guards=list_guards)
         assert len(list_guards) == 2
-        # Both guards reference the same H_ var
+        # Both guards reference the same HEAD var
         _, before1, _, _, vc1 = list_guards[0]
         _, before2, _, _, vc2 = list_guards[1]
         assert vc1[h._id] == vc2[h._id]  # same python name

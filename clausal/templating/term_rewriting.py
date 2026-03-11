@@ -112,6 +112,33 @@ CMPOP_CLS = {
 }
 
 
+# ─── Logic variable name helper ───────────────────────────────────────────────
+
+
+def _is_logic_var_name(identifier: str) -> bool:
+    """Return True if ``identifier`` should be treated as a logic variable.
+
+    Two conventions are recognised:
+
+    * **Trailing single underscore** — ``X_``, ``foo_``, ``HEAD_``.
+      The underscore must be a single trailing one; dunders (``__``) and the
+      bare ``_`` wildcard are excluded.
+    * **ALL-CAPS** — ``X``, ``FOO``, ``HEAD``, ``TAIL``.
+      Every *cased* character must be uppercase and there must be at least one
+      cased character (so plain ``_`` and digit-only names are excluded).
+      Underscores and digits are allowed inside (e.g. ``N1``, ``MAX_OF``).
+    """
+    if identifier == "_":
+        return False
+    if identifier.endswith("__"):
+        return False
+    if identifier.endswith("_"):
+        return True
+    # ALL-CAPS: str.isupper() is True iff all cased chars are uppercase AND
+    # there is at least one cased character — exactly what we want.
+    return identifier.isupper()
+
+
 # ─── Term Transformer ─────────────────────────────────────────────────────────
 
 
@@ -326,10 +353,11 @@ class TermTransformer(NodeTransformer):
 
     def visit_Name(transformer, name):
         identifier = name.id
-        # Logic variable: trailing single underscore (not dunder, not bare '_').
-        # Examples: X_, Foo_, head_, tail_ — all are logic variables.
-        # Excluded: _, __, x__, __init__ (dunder-style).
-        if identifier.endswith("_") and not identifier.endswith("__") and identifier != "_":
+        # Logic variable: trailing single underscore OR all-caps name.
+        # Examples (underscore): X_, foo_, HEAD_ — all are logic variables.
+        # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
+        # Excluded: _, __, x__, __init__ (dunder-style), MixedCase, lowercase.
+        if _is_logic_var_name(identifier):
             # First occurrence allocates a Var; subsequent ones reuse it.
             if identifier in transformer.seen_vars:
                 return replace(Name(id=identifier, ctx=load), name)
@@ -701,18 +729,16 @@ def _py_ast_expr(node, anchor):
 def _derive_field_names(pos_args: list) -> list[str]:
     """Derive unique field names from positional args in a clause head.
 
-    Trailing-underscore Name nodes use their lowercased id as the field name.
-    Other args get ``arg_<i>``.  Duplicate names are disambiguated with a
-    numeric suffix (e.g. ``b_``, ``b__1``) so that repeated logic variables
-    produce distinct dataclass fields.
+    Logic-variable Name nodes (trailing-underscore or ALL-CAPS) use their
+    lowercased id as the field name.  Other args get ``arg_<i>``.  Duplicate
+    names are disambiguated with a numeric suffix (e.g. ``b``, ``b_1``) so
+    that repeated logic variables produce distinct dataclass fields.
     """
     names: list[str] = []
     counts: dict[str, int] = {}
     for i, arg in enumerate(pos_args):
-        if (isinstance(arg, Name)
-                and arg.id.endswith("_")
-                and not arg.id.endswith("__")):
-            base = arg.id.lower()
+        if isinstance(arg, Name) and _is_logic_var_name(arg.id):
+            base = arg.id.rstrip("_").lower() or f"arg_{i}"
         else:
             base = f"arg_{i}"
         n = counts.get(base, 0)
@@ -1020,9 +1046,8 @@ class EmbedTransformer(NodeTransformer):
         return transformer.generic_visit(with_statement)
 
     def visit_Name(transformer, name):
-        # In outer Python code, rewrite var_ → var_.value to unbox a logic variable.
-        # Trailing single underscore (not dunder, not bare '_').
-        if name.id.endswith("_") and not name.id.endswith("__") and name.id != "_":
+        # In outer Python code, rewrite var_ / ALL_CAPS → .value to unbox a logic variable.
+        if _is_logic_var_name(name.id):
             return replace(
                 Attribute(value=name, attr="value", ctx=load),
                 name,

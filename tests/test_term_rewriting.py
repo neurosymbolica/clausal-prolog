@@ -109,15 +109,15 @@ def test_bare_name_becomes_load_name():
 
 
 def test_logic_variable_first_use():
-    # X_ on first use creates a Var (our mock returns a sentinel string)
-    node = term_eval("X_", str)
+    # X (ALL-CAPS) on first use creates a Var (our mock returns a sentinel string)
+    node = term_eval("X", str)
     assert node == '<Var>'
 
 
 def test_logic_variable_reuse():
-    # X_ used twice in the same expression: second use must be the same object
+    # X used twice in the same expression: second use must be the same object
     # The walrus pattern ensures they share the same Python variable.
-    node = term_eval("X_ == X_", sa.Eq)
+    node = term_eval("X == X", sa.Eq)
     assert node.left is node.right   # same Var object
 
 

@@ -2,19 +2,19 @@
 #
 # parent/2 facts + ancestor/2 rules + sibling/2 rule
 
-parent(Parent_="tom", Child_="bob"),
+parent(PARENT="tom", CHILD="bob"),
 parent("tom", "liz"),
 parent("bob", "ann"),
 parent("bob", "pat"),
 
-ancestor(X_, Y_) <- parent(X_, Y_)
-ancestor(X_, Y_) <- (
-    parent(X_, Z_),
-    ancestor(Z_, Y_)
+ancestor(X, Y) <- parent(X, Y)
+ancestor(X, Y) <- (
+    parent(X, Z),
+    ancestor(Z, Y)
 )
 
-sibling(X_, Y_) <- (
-    parent(Z_, X_),
-    parent(Z_, Y_),
-    X_ is not Y_
+sibling(X, Y) <- (
+    parent(Z, X),
+    parent(Z, Y),
+    X is not Y
 )

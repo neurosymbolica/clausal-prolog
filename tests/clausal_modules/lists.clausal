@@ -2,22 +2,22 @@
 #
 # length/2
 
-length(L_=[], N_=0),
-length([H_, *T_], N_) <- (
-    length(T_, N1_),
-    N_ is N1_ + 1
+length(LIST=[], N=0),
+length([HEAD, *TAIL], N) <- (
+    length(TAIL, N1),
+    N is N1 + 1
 )
 
-# append/3 — repeated Var H_ in head positions 1 and 3
+# append/3 — repeated Var HEAD in head positions 1 and 3
 
-append([], B_, B_),
-append([H_, *T_], B_, [H_, *R_]) <- (
-    append(T_, B_, R_)
+append([], B, B),
+append([HEAD, *TAIL], B, [HEAD, *RESULT]) <- (
+    append(TAIL, B, RESULT)
 )
 
 # last/2
 
-last([X_], X_),
-last([H_, *T_], X_) <- (
-    last(T_, X_)
+last([X], X),
+last([HEAD, *TAIL], X) <- (
+    last(TAIL, X)
 )
