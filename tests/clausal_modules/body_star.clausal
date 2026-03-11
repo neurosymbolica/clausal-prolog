@@ -1,0 +1,44 @@
+# Body-position star deconstruction predicates — Phase 5 test fixtures
+
+# head_tail/3 — deconstruct a list into head and tail in the body
+head_tail(LIST, HEAD, TAIL) <- (
+    [HEAD, *TAIL] is LIST
+)
+
+# init_last/3 — split off the last element using trailing star
+init_last(LIST, INIT, LAST) <- (
+    [*INIT, LAST] is LIST
+)
+
+# sandwich/4 — extract first, middle, and last
+sandwich(LIST, HEAD, MID, TAIL) <- (
+    [HEAD, *MID, TAIL] is LIST
+)
+
+# capture_body/2 — star-only body deconstruction (identity)
+capture_body(LIST, ALL) <- (
+    [*ALL] is LIST
+)
+
+# sum_tail/2 — deconstruct then use result in subsequent goal
+sum_tail(LIST, TAIL_LENGTH) <- (
+    [_, *TAIL] is LIST,
+    length(TAIL, TAIL_LENGTH)
+)
+
+# second/2 — two consecutive body deconstructions
+second(LIST, X) <- (
+    [_, *T] is LIST,
+    [X, *_] is T
+)
+
+# wrap_unwrap/2 — construct then deconstruct
+wrap_unwrap(X, Y) <- (
+    LIST is [X, 99],
+    [Y, _] is LIST
+)
+
+# body_split/3 — multi-star body deconstruction
+body_split(LIST, A, B) <- (
+    [*A, *B] is LIST
+)
