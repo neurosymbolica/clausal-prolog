@@ -42,25 +42,40 @@ from .terms import Compound, KWTerm
 # ── Runtime support ──────────────────────────────────────────────────────────
 
 
-def _define_predicate(predicate_node, logic_module):
+def _define_predicate(predicate_node, logic_module, module_dict):
     """Assert a clause from a Predicate node and (re)compile the predicate.
 
     Called as ``$define_predicate(predicate_node, $module)`` at module load
     time for each ``head <- body`` definition in the source.
 
     Steps:
-      1. ``logic_module.define_predicate`` — assertz the clause + register
-         keyword signature from the head's field names.
-      2. ``compile_predicate`` — compile all current clauses for this
-         predicate and install the dispatch function on the PredicateTable.
+      1. ``logic_module.define_predicate`` — assertz the clause into the
+         Database + register keyword signature from the head's field names.
+      2. Sync the clause to the PredicateMeta class (if available in
+         module_dict) so that ``pred_cls._clauses`` and ``pred_cls._signature``
+         stay in sync with the Database.
+      3. ``compile_predicate`` — compile all current clauses for this
+         predicate, passing ``module_dict`` as globals so the compiler can
+         resolve cross-predicate references directly from module namespace.
     """
     logic_module.define_predicate(predicate_node)
     functor, arity = head_key(predicate_node.head)
+
+    # Sync to PredicateMeta class if available.
+    pred_cls = module_dict.get(functor)
+    if isinstance(pred_cls, PredicateMeta):
+        # The clause just added is the last one in the db table.
+        db_clauses = logic_module.db.clauses_for(functor, arity)
+        pred_cls._clauses.append(db_clauses[-1])
+        if pred_cls._signature is None:
+            pred_cls._signature = pred_cls._fields
+
     clauses = logic_module.db.clauses_for(functor, arity)
-    compile_predicate(functor, arity, clauses, logic_module.db)
+    compile_predicate(functor, arity, clauses, logic_module.db,
+                      globals_=module_dict)
 
 
-def _assert_fact(term, logic_module):
+def _assert_fact(term, logic_module, module_dict):
     """Assert a ground fact term and (re)compile the predicate.
 
     Called as ``$assert_fact(term)`` at module load time for each trailing-
@@ -68,12 +83,23 @@ def _assert_fact(term, logic_module):
 
     Steps:
       1. ``logic_module.assert_fact`` — assertz a unit clause with no body.
-      2. ``compile_predicate`` — recompile the predicate with the new clause.
+      2. Sync the clause to the PredicateMeta class (if available).
+      3. ``compile_predicate`` — recompile with module globals.
     """
     logic_module.assert_fact(term)
     functor, arity = head_key(term)
+
+    # Sync to PredicateMeta class if available.
+    pred_cls = module_dict.get(functor)
+    if isinstance(pred_cls, PredicateMeta):
+        db_clauses = logic_module.db.clauses_for(functor, arity)
+        pred_cls._clauses.append(db_clauses[-1])
+        if pred_cls._signature is None:
+            pred_cls._signature = pred_cls._fields
+
     clauses = logic_module.db.clauses_for(functor, arity)
-    compile_predicate(functor, arity, clauses, logic_module.db)
+    compile_predicate(functor, arity, clauses, logic_module.db,
+                      globals_=module_dict)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
@@ -81,7 +107,8 @@ def _assert_fact(term, logic_module):
 predicate_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
-predicate_builtins["$define_predicate"] = _define_predicate
+# Note: $define_predicate and $assert_fact are set per-module in exec_module
+# (they need closures over the per-module LogicModule and module_dict).
 # '$ast' gives generated code access to the stdlib ast module without risking a
 # name collision with user-defined variables named 'ast'.
 predicate_builtins["$ast"] = ast
@@ -95,8 +122,6 @@ predicate_builtins["Trail"] = Trail
 predicate_builtins["unify"] = unify
 predicate_builtins["deref"] = deref
 predicate_builtins["walk"] = walk
-# '$assert_fact' is set per-module in exec_module (needs a closure over the
-# per-module LogicModule), so it is NOT added to this shared dict.
 
 
 # ── Loader ───────────────────────────────────────────────────────────────────
@@ -118,10 +143,16 @@ class PredicateLoader(Loader):
         # compiled against.  It is distinct from the Python module object.
         logic_module = LogicModule(module.__name__)
         module_dict["$module"] = logic_module
-        # '$assert_fact' is module-specific (needs to know which logic_module
-        # to assert facts into), so it is set here as a closure.
-        # '$' prefix prevents user code from accidentally overriding it.
-        module_dict["$assert_fact"] = lambda term: _assert_fact(term, logic_module)
+        # '$define_predicate' and '$assert_fact' are module-specific closures
+        # that capture both the LogicModule and module_dict.  This lets the
+        # import hook sync clauses to PredicateMeta classes and pass module
+        # globals to the compiler for cross-predicate resolution.
+        module_dict["$define_predicate"] = (
+            lambda pred, lm: _define_predicate(pred, lm, module_dict)
+        )
+        module_dict["$assert_fact"] = (
+            lambda term: _assert_fact(term, logic_module, module_dict)
+        )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="'str' object is not callable",
                                     category=SyntaxWarning)

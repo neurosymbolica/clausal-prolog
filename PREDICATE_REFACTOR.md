@@ -237,14 +237,21 @@ class), sets `pred_cls._dispatch_fn` and `pred_cls._lazy_recompile` in addition 
 existing `table.dispatch_fn` path. PredicateMeta class is auto-detected from
 `base_globals` (via `_collect_head_types` which finds it from clause head instances).
 
-#### Phase 4: Import hook
+#### Phase 4: Import hook ✅
 
 **File: `clausal/import_hook.py`**
 
-- `_define_predicate`: look up Predicate class from module dict, call
-  `pred_cls._assertz(clause)`, set `pred_cls._signature`, compile
-- `_assert_fact`: same — look up Predicate class, call `pred_cls._assertz()`
-- Add `PredicateMeta` to `predicate_builtins`
+- `_define_predicate(predicate_node, logic_module, module_dict)`: syncs clause
+  to `pred_cls._clauses` and sets `pred_cls._signature` from `pred_cls._fields`.
+  Passes `module_dict` as `globals_` to `compile_predicate` for cross-predicate
+  resolution via module namespace.
+- `_assert_fact(term, logic_module, module_dict)`: same sync to pred class.
+- Both `$define_predicate` and `$assert_fact` are now per-module closures in
+  `exec_module` (capturing `module_dict` and `logic_module`).
+- `PredicateMeta` already in `predicate_builtins` (from Phase 1).
+- Database kept in sync (backward compat until Phase 7 cleanup).
+
+Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
 ### Phase 5: solve.py
 
