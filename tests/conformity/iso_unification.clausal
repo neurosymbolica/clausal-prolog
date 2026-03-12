@@ -12,6 +12,15 @@
 # Note: 'literal is literal' triggers Python SyntaxWarning in 3.12+.
 # Use variable binding + == to test unification of ground values.
 
+-module(iso_unification, [test(DESC)])
+
+-private([
+    same_value(X, Y)
+])
+
+# Unify two values and confirm structural equality.
+same_value(X, Y) <- (X is Y and X == Y)
+
 # ── is (unification) ────────────────────────────────────────────────────────
 
 test("atom unifies with itself") <- (X_ is "a" and X_ == "a")
@@ -38,3 +47,9 @@ test("bound var == value") <- (X_ is "hello" and X_ == "hello")
 
 test("different atoms !=") <- ("a" != "b")
 test("same atom != fails") <- (not ("a" != "a"))
+
+# ── same_value/2 (private helper) ──────────────────────────────────────────
+
+test("same_value: integers") <- same_value(42, 42)
+test("same_value: strings") <- same_value("hello", "hello")
+test("same_value: lists") <- same_value([1, 2], [1, 2])

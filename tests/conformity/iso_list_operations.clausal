@@ -9,6 +9,30 @@
 #   sort/2 removes duplicates (like ISO sort/2)
 #   msort/2 preserves duplicates
 
+-module(iso_list_operations, [test(DESC)])
+
+-private([
+    palindrome(XS),
+    sorted_asc(XS),
+    is_permutation(XS, YS)
+])
+
+# A palindrome reads the same forwards and backwards.
+palindrome(XS) <- reverse(XS, XS)
+
+# Check that a list is in ascending order.
+sorted_asc(XS=[]),
+sorted_asc([_]),
+sorted_asc([A, B, *REST]) <- (
+    A <= B and sorted_asc([B, *REST])
+)
+
+# Two lists are permutations iff they have equal length and equal sorted form.
+is_permutation(XS, YS) <- (
+    length(XS, N) and length(YS, N) and
+    sort(XS, S) and sort(YS, S)
+)
+
 # ── in / not in (membership) ─────────────────────────────────────────────────
 
 test("in: found") <- ("b" in ["a", "b", "c"])
@@ -100,3 +124,26 @@ test("sum_list empty") <- sum_list([], 0)
 test("max_list") <- max_list([3, 1, 4, 1, 5], 5)
 test("min_list") <- min_list([3, 1, 4, 1, 5], 1)
 test("max_list singleton") <- max_list([42], 42)
+
+# ── palindrome/1 (private helper) ──────────────────────────────────────────
+
+test("palindrome: empty") <- palindrome([])
+test("palindrome: single") <- palindrome([1])
+test("palindrome: aba") <- palindrome([1, 2, 1])
+test("palindrome: abba") <- palindrome([1, 2, 2, 1])
+test("not palindrome: ab") <- (not palindrome([1, 2]))
+
+# ── sorted_asc/1 (private helper) ──────────────────────────────────────────
+
+test("sorted_asc: empty") <- sorted_asc([])
+test("sorted_asc: single") <- sorted_asc([1])
+test("sorted_asc: ascending") <- sorted_asc([1, 2, 3])
+test("sorted_asc: not descending") <- (not sorted_asc([3, 2, 1]))
+test("sorted_asc: equal elements") <- sorted_asc([2, 2, 2])
+
+# ── is_permutation/2 (private helper) ──────────────────────────────────────
+
+test("is_permutation: same list") <- is_permutation([1, 2, 3], [1, 2, 3])
+test("is_permutation: reordered") <- is_permutation([3, 1, 2], [1, 2, 3])
+test("not permutation: different lengths") <- (not is_permutation([1, 2], [1, 2, 3]))
+test("is_permutation: empty") <- is_permutation([], [])

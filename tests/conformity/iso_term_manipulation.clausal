@@ -10,6 +10,8 @@
 # tests and tests with string/integer arguments can be expressed here.
 # Inspection-mode tests remain in the Python test file.
 
+-module(iso_term_manipulation, [test(DESC)])
+
 # ── functor/3 — construction mode ────────────────────────────────────────────
 
 test("construct atom: functor(T, a, 0)") <- (

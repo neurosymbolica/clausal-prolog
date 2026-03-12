@@ -8,6 +8,21 @@
 # Not available:
 #   cut (!), if-then-else (->)
 
+-module(iso_control, [test(DESC)])
+
+-private([
+    choose(X, Y, R),
+    safe_max(X, Y, M)
+])
+
+# Multi-clause disjunction: choose/3 picks either argument.
+choose(X, _, X),
+choose(_, Y, Y),
+
+# If-then-else pattern via or+not (no -> in clausal).
+safe_max(X, Y, X) <- (X >= Y)
+safe_max(X, Y, Y) <- (Y > X)
+
 # ── Conjunction (and) ────────────────────────────────────────────────────────
 
 test("conjunction binds two vars") <- (X_ is 1 and Y_ is 2 and X_ == 1 and Y_ == 2)
@@ -40,3 +55,15 @@ test("not + member: d not in list") <- (
 test("conjunction + negation") <- (
     X_ is 5 and not (X_ is 3) and X_ == 5
 )
+
+# ── Multi-clause predicates (choose/3) ─────────────────────────────────────
+
+test("choose picks first") <- choose(1, 2, 1)
+test("choose picks second") <- choose(1, 2, 2)
+test("choose with atoms") <- choose("a", "b", "a")
+
+# ── If-then-else via safe_max/3 ────────────────────────────────────────────
+
+test("safe_max: first is larger") <- (safe_max(5, 3, M_) and M_ == 5)
+test("safe_max: second is larger") <- (safe_max(2, 7, M_) and M_ == 7)
+test("safe_max: equal") <- (safe_max(4, 4, M_) and M_ == 4)

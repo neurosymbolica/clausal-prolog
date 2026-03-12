@@ -16,6 +16,15 @@
 #     Tests needing negative int args must use Python test file.
 #   - Complex Python types (bool, complex) can't be tested directly.
 
+-module(iso_type_checking, [test(DESC)])
+
+-private([
+    is_bound_number(X)
+])
+
+# Succeeds when X is bound to a number (integer or float).
+is_bound_number(X) <- (nonvar(X) and number(X))
+
 # ── var/1 ────────────────────────────────────────────────────────────────────
 
 test("var: unbound var succeeds") <- var(X_)
@@ -82,3 +91,10 @@ test("ground: string") <- ground("abc")
 test("ground: ground list") <- ground([1, 2, 3])
 test("ground: empty list") <- ground([])
 test("ground: var fails") <- (not ground(X_))
+
+# ── is_bound_number/1 (private helper) ─────────────────────────────────────
+
+test("is_bound_number: integer") <- is_bound_number(42)
+test("is_bound_number: float") <- is_bound_number(3.14)
+test("is_bound_number: string fails") <- (not is_bound_number("42"))
+test("is_bound_number: unbound fails") <- (not is_bound_number(X_))
