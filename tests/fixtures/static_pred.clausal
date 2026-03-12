@@ -1,0 +1,4 @@
+-module(static_pred, [fact(X, Y)])
+
+fact(a, 1),
+fact(b, 2),

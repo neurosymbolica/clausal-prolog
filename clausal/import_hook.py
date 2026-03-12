@@ -164,6 +164,14 @@ class PredicateLoader(Loader):
                 compile(tree, filename=filename, mode="exec"),
                 module_dict,
             )
+        # Lock all non-dynamic predicates after module load.
+        # Predicates declared with -dynamic(...) remain unlocked so that
+        # runtime assertz/retract can modify them.
+        for obj in module_dict.values():
+            if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
+                key = (obj.__name__, len(obj._fields))
+                if not logic_module.db.is_dynamic(*key):
+                    obj._lock()
 
 
 _predicate_loader = PredicateLoader()

@@ -1,0 +1,6 @@
+-module(dynamic_pred, [color(X, Y)])
+
+-dynamic(color/2)
+
+color(sky, blue),
+color(grass, green),

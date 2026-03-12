@@ -784,6 +784,35 @@ class TermTransformer(NodeTransformer):
 # ─── Functor class generator ──────────────────────────────────────────────────
 
 
+def _parse_pred_arity_args(args, directive_name):
+    """Parse ``pred/arity, ...`` arguments from a directive AST.
+
+    Each argument should be a ``BinOp(Name("pred"), Div(), Constant(arity))``
+    node.  Returns a list of ``(functor_name, arity)`` tuples.
+    Raises SyntaxError on malformed arguments.
+    """
+    specs = []
+    for arg in args:
+        if (
+            isinstance(arg, BinOp)
+            and isinstance(arg.op, Div)
+            and isinstance(arg.left, Name)
+            and isinstance(arg.right, Constant)
+            and isinstance(arg.right.value, int)
+        ):
+            specs.append((arg.left.id, arg.right.value))
+        else:
+            raise SyntaxError(
+                f"Malformed argument in -{directive_name}(...): "
+                f"expected pred/arity (e.g. foo/2), got {dump(arg)}"
+            )
+    if not specs:
+        raise SyntaxError(
+            f"-{directive_name}(...) requires at least one pred/arity argument"
+        )
+    return specs
+
+
 def _make_functor_class_ast(functor_name, field_names, source):
     """Generate a try/except NameError block that defines a Predicate class.
 
@@ -1159,9 +1188,16 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_module_directive(args, expr_stmt)
         if name == "private":
             return transformer._handle_private_directive(args, expr_stmt)
-        # Unknown directive — leave as-is (will likely produce a runtime error,
-        # which is the right thing: the user mis-typed a directive name).
-        return transformer.generic_visit(expr_stmt)
+        if name == "dynamic":
+            return transformer._handle_predspec_directive("mark_dynamic", args, expr_stmt)
+        if name == "discontiguous":
+            return transformer._handle_predspec_directive("mark_discontiguous", args, expr_stmt)
+        if name == "table":
+            return transformer._handle_predspec_directive("mark_tabled", args, expr_stmt)
+        raise SyntaxError(
+            f"Unknown directive: -{name}(...)  "
+            f"(known directives: -module, -private, -dynamic, -discontiguous, -table)"
+        )
 
     def _handle_module_directive(transformer, args, expr_stmt):
         """Process ``-module(Name, [export1(A,B), export2(X,Y)])`` directive.
@@ -1249,6 +1285,43 @@ class EmbedTransformer(NodeTransformer):
                     )
         if not statements:
             return replace(Pass(), expr_stmt)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _handle_predspec_directive(transformer, method_name, args, expr_stmt):
+        """Process a directive that takes ``pred/arity, ...`` arguments.
+
+        Emits ``$module.db.<method_name>("pred", arity)`` calls for each
+        pred/arity spec.  Used by ``-dynamic``, ``-discontiguous``, and
+        ``-table`` directives.
+        """
+        load = Load()
+        specs = _parse_pred_arity_args(args, method_name)
+        if not specs:
+            return replace(Pass(), expr_stmt)
+        statements = []
+        for functor, arity in specs:
+            # $module.db.<method_name>("functor", arity)
+            call_node = replace(
+                Expr(value=Call(
+                    func=Attribute(
+                        value=Attribute(
+                            value=Name(id="$module", ctx=load),
+                            attr="db",
+                            ctx=load,
+                        ),
+                        attr=method_name,
+                        ctx=load,
+                    ),
+                    args=[
+                        Constant(value=functor),
+                        Constant(value=arity),
+                    ],
+                    keywords=[],
+                )),
+                expr_stmt,
+            )
+            fix_missing_locations(call_node)
+            statements.append(call_node)
         return statements if len(statements) > 1 else statements[0]
 
     def visit_With(transformer, with_statement):

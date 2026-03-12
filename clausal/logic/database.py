@@ -44,6 +44,9 @@ class Database:
         self._signatures: dict[tuple[str, int], tuple | None] = {}
         self._dispatch: dict[tuple[str, int], Callable | None] = {}
         self._lazy_recompile: dict[tuple[str, int], Callable] = {}
+        self._dynamic: set[tuple[str, int]] = set()
+        self._discontiguous: set[tuple[str, int]] = set()
+        self._tabled: set[tuple[str, int]] = set()
         self.module_dict: dict | None = module_dict
 
     def assertz(self, clause: Clause) -> None:
@@ -148,6 +151,32 @@ class Database:
             return fn
         from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
         return get_builtin_dispatch(functor, arity, self)
+
+    # ── Directive metadata ──────────────────────────────────────────────────
+
+    def mark_dynamic(self, functor: str, arity: int) -> None:
+        """Mark a predicate as dynamic (runtime assertz/retract allowed)."""
+        self._dynamic.add((functor, arity))
+
+    def is_dynamic(self, functor: str, arity: int) -> bool:
+        """True if the predicate was declared -dynamic."""
+        return (functor, arity) in self._dynamic
+
+    def mark_discontiguous(self, functor: str, arity: int) -> None:
+        """Mark a predicate as discontiguous (clauses may be non-adjacent)."""
+        self._discontiguous.add((functor, arity))
+
+    def is_discontiguous(self, functor: str, arity: int) -> bool:
+        """True if the predicate was declared -discontiguous."""
+        return (functor, arity) in self._discontiguous
+
+    def mark_tabled(self, functor: str, arity: int) -> None:
+        """Mark a predicate as tabled (memoised via SLG resolution)."""
+        self._tabled.add((functor, arity))
+
+    def is_tabled(self, functor: str, arity: int) -> bool:
+        """True if the predicate was declared -table."""
+        return (functor, arity) in self._tabled
 
     def __repr__(self) -> str:
         parts = ", ".join(f"{f}/{a}" for f, a in sorted(self._clauses))
