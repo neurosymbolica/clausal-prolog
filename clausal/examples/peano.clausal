@@ -39,3 +39,36 @@ int_to_peano(I, [N]) <- (
     I1 := I - 1,
     int_to_peano(I1, N)
 )
+
+# ── Tests ────────────────────────────────────────────────────────────────────────
+
+test("zero is nat") <- nat([])
+test("one is nat") <- nat([[]])
+test("two is nat") <- nat([[[]]])
+test("peano [] = 0") <- peano_to_int([], 0)
+test("peano [[]] = 1") <- peano_to_int([[]], 1)
+test("peano [[[]]] = 2") <- peano_to_int([[[]]], 2)
+test("peano [[[[]]]] = 3") <- peano_to_int([[[[]]]], 3)
+test("int 0 = []") <- int_to_peano(0, [])
+test("int 1 = [[]]") <- int_to_peano(1, [[]])
+test("int 2 = [[[]]]") <- int_to_peano(2, [[[]]])
+test("0 + 0 = 0") <- add([], [], [])
+test("0 + 1 = 1") <- add([], [[]], [[]])
+test("1 + 1 = 2") <- add([[]], [[]], [[[]]])
+test("1 + 2 = 3") <- (
+    int_to_peano(1, ONE),
+    int_to_peano(2, TWO),
+    int_to_peano(3, THREE),
+    add(ONE, TWO, THREE)
+)
+test("0 * 1 = 0") <- mul([], [[]], [])
+test("1 * 1 = 1") <- mul([[]], [[]], [[]])
+test("2 * 2 = 4") <- (
+    int_to_peano(2, TWO),
+    int_to_peano(4, FOUR),
+    mul(TWO, TWO, FOUR)
+)
+test("0 <= 0") <- leq([], [])
+test("0 <= 1") <- leq([], [[]])
+test("1 <= 2") <- leq([[]], [[[]]])
+test("not 2 <= 1") <- not leq([[[]]], [[]])

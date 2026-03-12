@@ -30,3 +30,18 @@ reachable(X, Y) <- path(X, Y, _)
 
 connected(X, Y) <- edge(X, Y)
 connected(X, Y) <- edge(Y, X)
+
+# ── Tests ────────────────────────────────────────────────────────────────────────
+
+test("edge 1->2 exists") <- edge(1, 2)
+test("edge 2->3 exists") <- edge(2, 3)
+test("1 reaches 5") <- reachable(1, 5)
+test("1 reaches 6") <- reachable(1, 6)
+test("1 reaches 4") <- reachable(1, 4)
+test("2 reaches 6") <- reachable(2, 6)
+test("5 cannot reach 1") <- not reachable(5, 1)
+test("connected 1-2") <- connected(1, 2)
+test("connected 2-1") <- connected(2, 1)
+test("path 1 to 5 via shortcut") <- path(1, 5, [1, 2, 5])
+test("path starts with source") <- path(1, 6, [1 | _])
+test("path 2 to 6 terminates despite cycle") <- path(2, 6, _)
