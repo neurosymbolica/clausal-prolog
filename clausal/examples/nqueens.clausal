@@ -2,6 +2,12 @@
     queens(N, Qs)
 ])
 
+-private([
+    numlist(LOW, HIGH, NS),
+    safe(QS),
+    no_attack(Q, QS, D)
+])
+
 queens(N, QS) <- (
     numlist(1, N, COLS),
     permutation(COLS, QS),

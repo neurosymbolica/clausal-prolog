@@ -4,6 +4,11 @@
     connected(X, Y)
 ])
 
+-private([
+    edge(X, Y),
+    path_acc(FROM, TO, VISITED, PATH)
+])
+
 # Sample directed graph.
 
 edge(X=1, Y=2),

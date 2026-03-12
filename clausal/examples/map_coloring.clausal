@@ -1,7 +1,12 @@
 -module(map_coloring, [
+    colorable(Coloring)
+])
+
+-private([
     red, green, blue, yellow,
     wa, nt, sa, q, nsw, v, t,
-    colorable(Coloring)
+    color(C),
+    adjacent(X, Y)
 ])
 
 # Four-color map coloring for Australia.

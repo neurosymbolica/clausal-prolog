@@ -1035,6 +1035,8 @@ class EmbedTransformer(NodeTransformer):
         """Dispatch a -directive(...) at module level."""
         if name == "module":
             return transformer._handle_module_directive(args, expr_stmt)
+        if name == "private":
+            return transformer._handle_private_directive(args, expr_stmt)
         # Unknown directive — leave as-is (will likely produce a runtime error,
         # which is the right thing: the user mis-typed a directive name).
         return transformer.generic_visit(expr_stmt)
@@ -1079,6 +1081,50 @@ class EmbedTransformer(NodeTransformer):
                                 functor_name, field_names, expr_stmt
                             )
                         )
+        if not statements:
+            return replace(Pass(), expr_stmt)
+        return statements if len(statements) > 1 else statements[0]
+
+    def _handle_private_directive(transformer, args, expr_stmt):
+        """Process ``-private([atom1, pred(A, B), ...])`` directive.
+
+        Declares atoms and predicate signatures that are internal to the
+        module.  Has the same compilation effect as ``-module`` exports
+        (atom assignments, functor class generation, pre-registration in
+        ``_seen_functors``) but communicates that these names are not part
+        of the module's public API.
+        """
+        statements = []
+        export_list = args[0] if len(args) >= 1 and isinstance(args[0], List) else None
+        if export_list is None:
+            return replace(Pass(), expr_stmt)
+        for item in export_list.elts:
+            if isinstance(item, Name):
+                # Bare atom: generate ``name = "name"``
+                transformer._atoms.add(item.id)
+                statements.append(
+                    replace(
+                        Assign(
+                            targets=[replace(Name(id=item.id, ctx=Store()), item)],
+                            value=replace(Constant(value=item.id), item),
+                        ),
+                        expr_stmt,
+                    )
+                )
+            elif isinstance(item, Call) and isinstance(item.func, Name):
+                functor_name = item.func.id
+                field_names = [
+                    arg.id if isinstance(arg, Name) else f"arg_{i}"
+                    for i, arg in enumerate(item.args)
+                ]
+                field_names += [kw.arg for kw in item.keywords]
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors[functor_name] = field_names
+                    statements.append(
+                        _make_functor_class_ast(
+                            functor_name, field_names, expr_stmt
+                        )
+                    )
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]

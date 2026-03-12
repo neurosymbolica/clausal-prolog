@@ -3,6 +3,11 @@
     qsort(LIST, SORTED)
 ])
 
+-private([
+    is_sorted(XS),
+    partition(PIVOT, LIST, LO, HI)
+])
+
 # ── Naive sort (permutation sort) ─────────────────────────────────────────────
 
 naive_sort(LIST, SORTED) <- (
