@@ -170,8 +170,8 @@ def convert_boolop(node: ast.BoolOp) -> Node:
 # ── Comparison Operators ─────────────────────────────────────────────────────
 
 COMPARISON_CLASS: dict[type, type] = {
-    ast.Eq: Eq, ast.NotEq: NotEq, ast.Lt: Lt, ast.LtE: LtE,
-    ast.Gt: Gt, ast.GtE: GtE, ast.Is: Unify, ast.IsNot: NotUnify,
+    ast.Eq: StructuralEq, ast.NotEq: StructuralNeq, ast.Lt: Lt, ast.LtE: LtE,
+    ast.Gt: Gt, ast.GtE: GtE, ast.Is: Unify, ast.IsNot: DoesNotUnify,
     ast.In: In, ast.NotIn: NotIn,
 }
 

@@ -26,7 +26,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, NotUnify as IsNot, Eq, NotEq,
+    Unify as Is, DoesNotUnify as IsNot, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Add, Sub, Mult, FloorDiv, Mod, Negate,
@@ -487,7 +487,7 @@ class TestIntegrationComparisons:
         # same(X, Y) <- X is Y, X == Y  (unify then check structural eq)
         db.assertz(Clause(
             head=Compound("same", (x, y)),
-            body=[Is(left=x, right=y), Eq(left=x, right=y)],
+            body=[Is(left=x, right=y), StructuralEq(left=x, right=y)],
         ))
         clauses = db.clauses_for("same", 2)
         fn = compile_predicate("same", 2, clauses, db)

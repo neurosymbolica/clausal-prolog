@@ -154,14 +154,14 @@ def test_unaryops():
 
 
 def test_comparisons():
-    assert isinstance(expr("x == y"), sa.Eq)
-    assert isinstance(expr("x != y"), sa.NotEq)
+    assert isinstance(expr("x == y"), sa.StructuralEq)
+    assert isinstance(expr("x != y"), sa.StructuralNeq)
     assert isinstance(expr("x < y"), sa.Lt)
     assert isinstance(expr("x <= y"), sa.LtE)
     assert isinstance(expr("x > y"), sa.Gt)
     assert isinstance(expr("x >= y"), sa.GtE)
     assert isinstance(expr("x is y"), sa.Unify)
-    assert isinstance(expr("x is not y"), sa.NotUnify)
+    assert isinstance(expr("x is not y"), sa.DoesNotUnify)
     assert isinstance(expr("x in y"), sa.In)
     assert isinstance(expr("x not in y"), sa.NotIn)
     node = expr("1 < x < 10")

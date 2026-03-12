@@ -117,7 +117,7 @@ def test_logic_variable_first_use():
 def test_logic_variable_reuse():
     # X used twice in the same expression: second use must be the same object
     # The walrus pattern ensures they share the same Python variable.
-    node = term_eval("X == X", sa.Eq)
+    node = term_eval("X == X", sa.StructuralEq)
     assert node.left is node.right   # same Var object
 
 
@@ -184,14 +184,14 @@ def test_bool_and_folded():
 # ── TermTransformer: comparison operators ─────────────────────────────────────
 
 @pytest.mark.parametrize("src,cls", [
-    ("a == b",        sa.Eq),
-    ("a != b",        sa.NotEq),
+    ("a == b",        sa.StructuralEq),
+    ("a != b",        sa.StructuralNeq),
     ("a < b",         sa.Lt),
     ("a <= b",        sa.LtE),
     ("a > b",         sa.Gt),
     ("a >= b",        sa.GtE),
     ("a is b",        sa.Unify),
-    ("a is not b",    sa.NotUnify),
+    ("a is not b",    sa.DoesNotUnify),
     ("a in b",        sa.In),
     ("a not in b",    sa.NotIn),
 ])
@@ -228,7 +228,7 @@ def test_walrus_is_arithmetic():
 def test_arith_constraint():
     # a == +b  →  ArithConstraint(expr=Eq(a, b))
     node = term_eval("a == +b", ArithConstraint)
-    assert isinstance(node.expr, sa.Eq)
+    assert isinstance(node.expr, sa.StructuralEq)
     assert node.expr.left.name == 'a'
     assert node.expr.right.name == 'b'
 
@@ -236,14 +236,14 @@ def test_arith_constraint():
 def test_arith_constraint_expression():
     # x == +(y + 1)  →  ArithConstraint(expr=Eq(x, Add(y, 1)))
     node = term_eval("x == +(y + 1)", ArithConstraint)
-    assert isinstance(node.expr, sa.Eq)
+    assert isinstance(node.expr, sa.StructuralEq)
     assert node.expr.left.name == 'x'
     assert isinstance(node.expr.right, sa.Add)
 
 
 def test_plain_eq_not_arith_constraint():
     # a == b (no unary plus) → Eq, not ArithConstraint
-    node = term_eval("a == b", sa.Eq)
+    node = term_eval("a == b", sa.StructuralEq)
     assert node.left.name == 'a'
     assert node.right.name == 'b'
 
@@ -602,7 +602,7 @@ def test_anon_var_fresh_each_occurrence():
     expr = ast.fix_missing_locations(ast.Expression(body=transformed))
     from clausal.pythonic_ast import nodes as sa
     result = eval(compile(expr, "<test>", "eval"), {**{n: getattr(sa, n) for n in sa.__all__}, "Var": RealVar})
-    assert isinstance(result, sa.Eq)
+    assert isinstance(result, sa.StructuralEq)
     assert isinstance(result.left, RealVar)
     assert isinstance(result.right, RealVar)
     assert result.left is not result.right  # distinct Var objects

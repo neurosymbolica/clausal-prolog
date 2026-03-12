@@ -36,7 +36,7 @@ from clausal.logic.trampoline import Step
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, Eq, NotEq, Lt, Gt,
+    Unify as Is, Evaluate, StructuralEq, StructuralNeq, Lt, Gt,
     In, NotIn,
     Call, LoadName,
     Compound,
@@ -549,7 +549,7 @@ class TestTrampolineIntegrationComparisons:
         db = Database()
         db.assertz(Clause(
             head=Compound("same", (x1, x2)),
-            body=[Eq(left=x1, right=x2)],
+            body=[StructuralEq(left=x1, right=x2)],
         ))
         fn = compile_predicate_trampoline("same", 2, db.clauses_for("same", 2), db)
         trail = fresh_trail()
@@ -558,12 +558,12 @@ class TestTrampolineIntegrationComparisons:
         assert _count_solutions(fn, 7, 8, trail2) == 0
 
     def test_arith_add_one(self):
-        """add_one(X, Y) :- Y is X + 1."""
+        """add_one(X, Y) :- Y := X + 1."""
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
             head=Compound("add_one", (x, y)),
-            body=[Is(left=y, right=Add(left=x, right=1))],
+            body=[Evaluate(left=y, right=Add(left=x, right=1))],
         ))
         fn = compile_predicate_trampoline("add_one", 2, db.clauses_for("add_one", 2), db)
         result = Var()

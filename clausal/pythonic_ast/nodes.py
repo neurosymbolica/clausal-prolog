@@ -61,7 +61,7 @@ __all__ = [
     # Unary operators
     "UnaryPlus", "Negate", "Not", "Invert",
     # Comparison operators
-    "Eq", "NotEq", "Lt", "LtE", "Gt", "GtE", "Unify", "NotUnify", "Evaluate", "In", "NotIn",
+    "StructuralEq", "StructuralNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "In", "NotIn",
     "CompareChain",
     # Augmented assignment
     "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
@@ -182,7 +182,7 @@ class BoolOp(BinOp):
 
 
 class CmpOp(BinOp):
-    """Base for comparison operators (Eq, Lt, Is, In, …)."""
+    """Base for comparison operators (StructuralEq, Lt, Unify, In, …)."""
     pass
 
 
@@ -587,11 +587,13 @@ class Invert(UnaryOp):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
-class Eq(CmpOp):
+class StructuralEq(CmpOp):
+    """Structural equality: ``X == Y``. Succeeds iff deref'd values are equal."""
     op: ClassVar = '=='
 
 @dataclass
-class NotEq(CmpOp):
+class StructuralNeq(CmpOp):
+    """Structural inequality: ``X != Y``. Succeeds iff deref'd values differ."""
     op: ClassVar = '!='
 
 @dataclass
@@ -612,15 +614,17 @@ class GtE(CmpOp):
 
 @dataclass
 class Unify(CmpOp):
+    """Unification: ``X is Y``. Binds variables to make both sides equal."""
     op: ClassVar = 'is'
 
 @dataclass
-class NotUnify(CmpOp):
+class DoesNotUnify(CmpOp):
+    """Dif / negation of unification: ``X is not Y``. Succeeds iff X and Y cannot unify."""
     op: ClassVar = 'is not'
 
 @dataclass
 class Evaluate(CmpOp):
-    """Arithmetic evaluate-and-bind: LHS := RHS. Like Prolog 'is' but explicit."""
+    """Arithmetic evaluate-and-bind: ``LHS := RHS``. Evaluates RHS as arithmetic, unifies with LHS."""
     op: ClassVar = ':='
 
 @dataclass
@@ -637,7 +641,7 @@ class CompareChain(Node):
     """1 < x < 10 → CompareChain([Lt(1, x), Lt(x, 10)])
 
     Semantics: each intermediate operand is evaluated only once.
-    For single comparisons, the individual Eq/Lt/etc. nodes are used directly.
+    For single comparisons, the individual StructuralEq/Lt/etc. nodes are used directly.
     """
     comparisons: list[Node] = field(default_factory=list)
 

@@ -31,7 +31,7 @@ from clausal.logic.solve import call, solve, query, once
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, Lt, LtE, Gt, GtE, NotEq, Eq,
+    Unify as Is, Lt, LtE, Gt, GtE, StructuralNeq, StructuralEq,
     In, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,

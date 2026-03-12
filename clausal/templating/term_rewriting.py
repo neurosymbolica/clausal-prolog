@@ -99,16 +99,16 @@ BOOLOP_CLS = {
 }
 
 CMPOP_CLS = {
-    Eq: "Eq",
-    NotEq: "NotEq",
-    Lt: "Lt",
-    LtE: "LtE",
-    Gt: "Gt",
-    GtE: "GtE",
-    Is: "Unify",
-    IsNot: "NotUnify",
-    In: "In",
-    NotIn: "NotIn",
+    Eq: "StructuralEq",       # ==  structural equality (deref'd)
+    NotEq: "StructuralNeq",   # !=  structural inequality (deref'd)
+    Lt: "Lt",                 # <   arithmetic comparison (evaluates)
+    LtE: "LtE",               # <=  arithmetic comparison (evaluates)
+    Gt: "Gt",                 # >   arithmetic comparison (evaluates)
+    GtE: "GtE",               # >=  arithmetic comparison (evaluates)
+    Is: "Unify",              # is  unification (structural, no arithmetic eval)
+    IsNot: "DoesNotUnify",    # is not  dif / negation of unification
+    In: "In",                 # in  membership / enumeration
+    NotIn: "NotIn",           # not in  non-membership
 }
 
 
@@ -145,8 +145,9 @@ def _is_logic_var_name(identifier: str) -> bool:
 class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
-    def __init__(transformer):
+    def __init__(transformer, atoms=frozenset()):
         transformer.seen_vars = set()
+        transformer.atoms = atoms
 
     def visit_Await(transformer, await_expr):
         return node_ast("Await", await_expr, value=transformer.visit(await_expr.value))
@@ -246,8 +247,8 @@ class TermTransformer(NodeTransformer):
                         body=transformer.visit(body_ast),
                     )
 
-        # Detect 'X == +Y': Eq with a UnaryPlus right-hand side → ArithConstraint stub.
-        # Emits ArithConstraint(expr=Eq(X, Y)) so the compiler can raise NotImplementedError.
+        # Detect 'X == +Y': StructuralEq with a UnaryPlus right-hand side → ArithConstraint stub.
+        # Emits ArithConstraint(expr=StructuralEq(X, Y)) so the compiler can raise NotImplementedError.
         if (
             len(operators) == 1
             and isinstance(operators[0], Eq)
@@ -255,7 +256,7 @@ class TermTransformer(NodeTransformer):
             and isinstance(comparators[0].op, UAdd)
         ):
             eq_node = node_ast(
-                "Eq",
+                "StructuralEq",
                 compare,
                 left=transformer.visit(left),
                 right=transformer.visit(comparators[0].operand),
@@ -405,6 +406,9 @@ class TermTransformer(NodeTransformer):
                 ),
                 name,
             )
+        # Atom: declared in -module(...) export list — keep as plain Name reference.
+        if identifier in transformer.atoms:
+            return replace(Name(id=identifier, ctx=load), name)
         return node_ast(
             "LoadName", name, name=replace(Constant(value=identifier), name)
         )
@@ -788,6 +792,7 @@ class EmbedTransformer(NodeTransformer):
     def __init__(transformer):
         transformer._scope_depth = 0
         transformer._seen_functors: dict[str, list[str]] = {}
+        transformer._atoms: set[str] = set()
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -813,7 +818,7 @@ class EmbedTransformer(NodeTransformer):
                     unary_op.col_offset == unary_op.operand.col_offset - 1
                     and unary_op.lineno == unary_op.operand.lineno
                 ):
-                    return TermTransformer().visit(expression)
+                    return TermTransformer(atoms=transformer._atoms).visit(expression)
             case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
                 # '~~' must be written without a space (the two '~' are adjacent).
                 if (
@@ -879,7 +884,7 @@ class EmbedTransformer(NodeTransformer):
                             arg_field_names[i] = prev_fields[i]
                     all_field_names = arg_field_names + kwarg_field_names
 
-                term_transformer = TermTransformer()
+                term_transformer = TermTransformer(atoms=transformer._atoms)
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
 
@@ -970,7 +975,7 @@ class EmbedTransformer(NodeTransformer):
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
-                term_transformer = TermTransformer()
+                term_transformer = TermTransformer(atoms=transformer._atoms)
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
                 body_ast = term_transformer.visit(body_expr)
@@ -1046,7 +1051,19 @@ class EmbedTransformer(NodeTransformer):
         # args[1] should be the export list: ast.List of Call nodes.
         if len(args) >= 2 and isinstance(args[1], List):
             for export in args[1].elts:
-                if isinstance(export, Call) and isinstance(export.func, Name):
+                if isinstance(export, Name):
+                    # Bare atom: generate ``name = "name"``
+                    transformer._atoms.add(export.id)
+                    statements.append(
+                        replace(
+                            Assign(
+                                targets=[replace(Name(id=export.id, ctx=Store()), export)],
+                                value=replace(Constant(value=export.id), export),
+                            ),
+                            expr_stmt,
+                        )
+                    )
+                elif isinstance(export, Call) and isinstance(export.func, Name):
                     functor_name = export.func.id
                     # Use raw Name ids as field names (not lowercased) so they
                     # match keyword arg names in clauses like fib(N=0, F=0).
@@ -1082,7 +1099,7 @@ class EmbedTransformer(NodeTransformer):
 
         if _is_double(USub):
             # with --{} as target: — block form of --; produces simple_ast terms.
-            term_transformer = TermTransformer()
+            term_transformer = TermTransformer(atoms=transformer._atoms)
             elements = [
                 term_transformer.visit(stmt.value)
                 for stmt in with_statement.body

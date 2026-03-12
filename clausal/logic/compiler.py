@@ -53,7 +53,7 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
-    Unify, NotUnify, Evaluate, Eq, NotEq,
+    Unify, DoesNotUnify, Evaluate, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Call, LoadName,
@@ -624,15 +624,21 @@ def _fresh(prefix: str = "_t") -> str:
 # ── Term → AST expression ──────────────────────────────────────────────────────
 
 
-def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
+def term_to_ast_expr(
+    term: Any, var_context: dict[int, str], *, eval_arith: bool = True
+) -> ast.expr:
     """Convert a term value to a Python AST expression.
 
     The generated expression evaluates at runtime to the term.
     Vars already in var_context are referenced by name.  Vars not yet in
     var_context (body-only Vars) are introduced via walrus ``(_vN := Var())``.
 
+    When *eval_arith* is True (the default), arithmetic term nodes
+    (Add, Sub, …) are compiled to native Python operators so they evaluate
+    at runtime.  When False, they are kept as structural term constructors
+    (e.g. ``Add(left=x, right=1)``).
+
     Supports: Var, Python scalars, list, Compound, functor dataclasses.
-    Does NOT recursively evaluate arithmetic — use arith_to_ast_expr for that.
     """
     term = deref(term)
 
@@ -656,13 +662,14 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
 
     if isinstance(term, StarUnpack):
         return ast.Starred(
-            value=term_to_ast_expr(term.value, var_context),
+            value=term_to_ast_expr(term.value, var_context, eval_arith=eval_arith),
             ctx=ast.Load(),
         )
 
     if isinstance(term, list):
         # If the list contains a StarUnpack, use _build_star_list helper
         # to safely handle unbound Vars at runtime.
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
         has_star = any(isinstance(e, StarUnpack) for e in term)
         if has_star:
             # Split into before, star, after segments
@@ -674,26 +681,26 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                 func=_name("_build_star_list"),
                 args=[
                     ast.List(
-                        elts=[term_to_ast_expr(e, var_context) for e in before],
+                        elts=[_rec(e) for e in before],
                         ctx=ast.Load(),
                     ),
-                    term_to_ast_expr(star_val, var_context),
+                    _rec(star_val),
                     ast.List(
-                        elts=[term_to_ast_expr(e, var_context) for e in after],
+                        elts=[_rec(e) for e in after],
                         ctx=ast.Load(),
                     ),
                 ],
                 keywords=[],
             )
         return ast.List(
-            elts=[term_to_ast_expr(e, var_context) for e in term],
+            elts=[_rec(e) for e in term],
             ctx=ast.Load(),
         )
 
     if isinstance(term, dict):
         return ast.Dict(
-            keys=[term_to_ast_expr(k, var_context) for k in term.keys()],
-            values=[term_to_ast_expr(v, var_context) for v in term.values()],
+            keys=[term_to_ast_expr(k, var_context, eval_arith=eval_arith) for k in term.keys()],
+            values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
         )
 
     if isinstance(term, Compound):
@@ -704,16 +711,17 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             f_expr = _name(var_context[vid]) if vid in var_context else _call(_name("Var"))
         else:
             f_expr = ast.Constant(value=f)
-        args_elts = [term_to_ast_expr(a, var_context) for a in term.args]
+        args_elts = [term_to_ast_expr(a, var_context, eval_arith=eval_arith) for a in term.args]
         return _call(
             _name("Compound"),
             f_expr,
             ast.Tuple(elts=args_elts, ctx=ast.Load()),
         )
 
-    # Arithmetic term nodes: dispatch to arith_to_ast_expr so they generate
-    # native Python binary/unary ops rather than functor-dataclass constructor calls.
-    if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
+    # Arithmetic term nodes: when eval_arith is set, generate native Python
+    # operators so they evaluate at runtime.  When False (e.g. predicate call
+    # arguments), keep them as structural term constructors.
+    if eval_arith and isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
         return arith_to_ast_expr(term, var_context)
 
     if is_term_instance(term):
@@ -724,7 +732,9 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             keywords=[
                 ast.keyword(
                     arg=name,
-                    value=term_to_ast_expr(getattr(term, name), var_context),
+                    value=term_to_ast_expr(
+                        getattr(term, name), var_context, eval_arith=eval_arith
+                    ),
                 )
                 for name in term_field_names(term)
                 if name != "position"
@@ -735,7 +745,7 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     from clausal.terms import KWTerm  # noqa: PLC0415
     if isinstance(term, KWTerm):
         keywords = [
-            ast.keyword(arg=k, value=term_to_ast_expr(v, var_context))
+            ast.keyword(arg=k, value=term_to_ast_expr(v, var_context, eval_arith=eval_arith))
             for k, v in term.items()
         ]
         return ast.Call(
@@ -846,8 +856,8 @@ def _deref_cmp(
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile a structural comparison using deref on both sides."""
-    l_expr = _call(_name("deref"), term_to_ast_expr(l, var_context))
-    r_expr = _call(_name("deref"), term_to_ast_expr(r, var_context))
+    l_expr = _call(_name("deref"), term_to_ast_expr(l, var_context, eval_arith=False))
+    r_expr = _call(_name("deref"), term_to_ast_expr(r, var_context, eval_arith=False))
     test = ast.Compare(left=l_expr, ops=[ast_op], comparators=[r_expr])
     return [_if(test, k_stmts)]
 
@@ -921,7 +931,7 @@ def _compile_star_is(
     """
     segments = _parse_star_segments(star_side)
     n_stars = _count_stars(segments)
-    other_expr = term_to_ast_expr(other_side, var_context)
+    other_expr = term_to_ast_expr(other_side, var_context, eval_arith=False)
 
     if n_stars == 1:
         return _compile_single_star_is(segments, other_expr, var_context, trail_name, k_stmts)
@@ -951,9 +961,9 @@ def _compile_single_star_is(
         else:
             after_vals.extend(val)
 
-    before_exprs = [term_to_ast_expr(v, var_context) for v in before_vals]
-    star_expr = term_to_ast_expr(star_val, var_context) if star_val is not None else ast.Constant(value=None)
-    after_exprs = [term_to_ast_expr(v, var_context) for v in after_vals]
+    before_exprs = [term_to_ast_expr(v, var_context, eval_arith=False) for v in before_vals]
+    star_expr = term_to_ast_expr(star_val, var_context, eval_arith=False) if star_val is not None else ast.Constant(value=None)
+    after_exprs = [term_to_ast_expr(v, var_context, eval_arith=False) for v in after_vals]
 
     mark = _fresh("_m")
     return [
@@ -986,7 +996,7 @@ def _compile_multi_star_is(
     for kind, val in segments:
         if kind == "fixed":
             elems = ast.List(
-                elts=[term_to_ast_expr(v, var_context) for v in val],
+                elts=[term_to_ast_expr(v, var_context, eval_arith=False) for v in val],
                 ctx=ast.Load(),
             )
             seg_elts.append(ast.Tuple(
@@ -995,7 +1005,7 @@ def _compile_multi_star_is(
             ))
         else:  # star
             seg_elts.append(ast.Tuple(
-                elts=[ast.Constant(value="star"), term_to_ast_expr(val, var_context)],
+                elts=[ast.Constant(value="star"), term_to_ast_expr(val, var_context, eval_arith=False)],
                 ctx=ast.Load(),
             ))
 
@@ -1057,8 +1067,8 @@ def compile_goal(
             if _is_star_list(r):
                 return _compile_star_is(r, l, var_context, trail_name, k_stmts)
             mark = _fresh("_m")
-            l_expr = term_to_ast_expr(l, var_context)
-            r_expr = term_to_ast_expr(r, var_context)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
@@ -1077,13 +1087,13 @@ def compile_goal(
             ]
 
         # ── Dif (negation of unification) ─────────────────────────────────
-        case NotUnify(left=l, right=r):
+        case DoesNotUnify(left=l, right=r):
             # Succeed iff l and r cannot unify right now.
             # Try to unify; if it succeeds, undo and fail.
             # If it fails, proceed with k_stmts.
             mark = _fresh("_m")
-            l_expr = term_to_ast_expr(l, var_context)
-            r_expr = term_to_ast_expr(r, var_context)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _assign_mark(mark, trail_name),
                 ast.If(
@@ -1098,10 +1108,10 @@ def compile_goal(
             ]
 
         # ── Structural equality ──────────────────────────────────────────────
-        case Eq(left=l, right=r):
+        case StructuralEq(left=l, right=r):
             return _deref_cmp(l, r, ast.Eq(), var_context, k_stmts)
 
-        case NotEq(left=l, right=r):
+        case StructuralNeq(left=l, right=r):
             return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
 
         # ── Arithmetic comparisons ───────────────────────────────────────────
@@ -1187,8 +1197,8 @@ def compile_goal(
         case In(left=elem, right=collection):
             loop_var = _fresh("_el")
             mark = _fresh("_m")
-            elem_expr = term_to_ast_expr(elem, var_context)
-            coll_expr = term_to_ast_expr(collection, var_context)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
                 ast.For(
                     target=_name(loop_var, ast.Store()),
@@ -1210,8 +1220,8 @@ def compile_goal(
             found_flag = _fresh("_found")
             loop_var = _fresh("_el")
             mark = _fresh("_m")
-            elem_expr = term_to_ast_expr(elem, var_context)
-            coll_expr = term_to_ast_expr(collection, var_context)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
                 _assign(found_flag, ast.Constant(value=False)),
                 ast.For(
@@ -1293,7 +1303,7 @@ def _compile_predicate_call(
                 )
             ordered_args.append(kw_dict[param_name])
 
-    arg_exprs = [term_to_ast_expr(a, var_context) for a in ordered_args]
+    arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     iter_expr = _dispatch_call_iter(fname, arity, arg_exprs, trail_name)
     return [
         ast.For(
@@ -1412,7 +1422,7 @@ def compile_goal_trampoline(
 ) -> list[ast.stmt]:
     """Compile a goal using the trampoline Step protocol.
 
-    Identical to ``compile_goal`` for deterministic goals (Is, Eq, comparisons,
+    Identical to ``compile_goal`` for deterministic goals (Unify, StructuralEq, comparisons,
     And, Or, Not, In, NotIn).  Differs for predicate ``Call`` nodes: instead of
 
         for _ in dispatch(args, trail, k): k_stmts
@@ -1450,8 +1460,8 @@ def compile_goal_trampoline(
             if _is_star_list(r):
                 return _compile_star_is(r, l, var_context, trail_name, k_stmts)
             mark = _fresh("_m")
-            l_expr = term_to_ast_expr(l, var_context)
-            r_expr = term_to_ast_expr(r, var_context)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
@@ -1469,10 +1479,10 @@ def compile_goal_trampoline(
                 _undo_stmt(mark, trail_name),
             ]
 
-        case NotUnify(left=l, right=r):
+        case DoesNotUnify(left=l, right=r):
             mark = _fresh("_m")
-            l_expr = term_to_ast_expr(l, var_context)
-            r_expr = term_to_ast_expr(r, var_context)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _assign_mark(mark, trail_name),
                 ast.If(
@@ -1486,10 +1496,10 @@ def compile_goal_trampoline(
                 _undo_stmt(mark, trail_name),
             ]
 
-        case Eq(left=l, right=r):
+        case StructuralEq(left=l, right=r):
             return _deref_cmp(l, r, ast.Eq(), var_context, k_stmts)
 
-        case NotEq(left=l, right=r):
+        case StructuralNeq(left=l, right=r):
             return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
 
         case Lt(left=l, right=r):
@@ -1578,8 +1588,8 @@ def compile_goal_trampoline(
         case In(left=elem, right=collection):
             loop_var = _fresh("_el")
             mark = _fresh("_m")
-            elem_expr = term_to_ast_expr(elem, var_context)
-            coll_expr = term_to_ast_expr(collection, var_context)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
                 ast.For(
                     target=_name(loop_var, ast.Store()),
@@ -1601,8 +1611,8 @@ def compile_goal_trampoline(
             found_flag = _fresh("_found")
             loop_var = _fresh("_el")
             mark = _fresh("_m")
-            elem_expr = term_to_ast_expr(elem, var_context)
-            coll_expr = term_to_ast_expr(collection, var_context)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
                 _assign(found_flag, ast.Constant(value=False)),
                 ast.For(
@@ -1697,7 +1707,7 @@ def _compile_predicate_call_trampoline(
                 )
             ordered_args.append(kw_dict[param_name])
 
-    arg_exprs = [term_to_ast_expr(a, var_context) for a in ordered_args]
+    arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     gen_name = _fresh("_gen")
     status_name = _fresh("_st")
 

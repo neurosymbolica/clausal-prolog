@@ -41,7 +41,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, NotUnify as IsNot, Eq, NotEq,
+    Unify as Is, DoesNotUnify as IsNot, Evaluate, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Add, Sub, Mult, Negate,
@@ -319,18 +319,18 @@ class TestFibonacci:
         r1 = Var()
         db.assertz(Clause(head=Compound("fib", (1, r1)), body=[Is(left=r1, right=1)]))
 
-        # fib(N, R) :- N > 1, N1 is N-1, N2 is N-2,
-        #              fib(N1, R1), fib(N2, R2), R is R1+R2.
+        # fib(N, R) :- N > 1, N1 := N-1, N2 := N-2,
+        #              fib(N1, R1), fib(N2, R2), R := R1+R2.
         n, r, n1, n2, ra, rb = Var(), Var(), Var(), Var(), Var(), Var()
         db.assertz(Clause(
             head=Compound("fib", (n, r)),
             body=[
                 Gt(left=n, right=1),
-                Is(left=n1, right=Sub(left=n, right=1)),
-                Is(left=n2, right=Sub(left=n, right=2)),
+                Evaluate(left=n1, right=Sub(left=n, right=1)),
+                Evaluate(left=n2, right=Sub(left=n, right=2)),
                 Call(func=LoadName(name="fib"), args=[n1, ra], kwargs=[]),
                 Call(func=LoadName(name="fib"), args=[n2, rb], kwargs=[]),
-                Is(left=r, right=Add(left=ra, right=rb)),
+                Evaluate(left=r, right=Add(left=ra, right=rb)),
             ],
         ))
 
@@ -402,12 +402,15 @@ class TestNQueens4:
         #   Ci - Cj != Dist (not on same diagonal one way)
         #   Cj - Ci != Dist (not on same diagonal the other way)
         ci, cj, dist = Var(), Var(), Var()
+        diff1, diff2 = Var(), Var()
         db.assertz(Clause(
             head=Compound("no_attack", (ci, cj, dist)),
             body=[
                 IsNot(left=ci, right=cj),
-                IsNot(left=Sub(left=ci, right=cj), right=dist),
-                IsNot(left=Sub(left=cj, right=ci), right=dist),
+                Evaluate(left=diff1, right=Sub(left=ci, right=cj)),
+                StructuralNeq(left=diff1, right=dist),
+                Evaluate(left=diff2, right=Sub(left=cj, right=ci)),
+                StructuralNeq(left=diff2, right=dist),
             ],
         ))
         compile_predicate("no_attack", 3, db.clauses_for("no_attack", 3), db)
@@ -740,7 +743,7 @@ class TestVisualizer:
         x, y = Var(), Var()
         db.assertz(Clause(
             head=Compound("add1", (x, y)),
-            body=[Is(left=y, right=Add(left=x, right=1))],
+            body=[Evaluate(left=y, right=Add(left=x, right=1))],
         ))
         src = predicate_to_source("add1", 2, db.clauses_for("add1", 2), db)
         tree = ast_mod.parse(src)
@@ -769,11 +772,11 @@ class TestVisualizer:
             head=Compound("fib", (n, r)),
             body=[
                 Gt(left=n, right=1),
-                Is(left=n1, right=Sub(left=n, right=1)),
-                Is(left=n2, right=Sub(left=n, right=2)),
+                Evaluate(left=n1, right=Sub(left=n, right=1)),
+                Evaluate(left=n2, right=Sub(left=n, right=2)),
                 Call(func=LoadName(name="fib"), args=[n1, ra], kwargs=[]),
                 Call(func=LoadName(name="fib"), args=[n2, rb], kwargs=[]),
-                Is(left=r, right=Add(left=ra, right=rb)),
+                Evaluate(left=r, right=Add(left=ra, right=rb)),
             ],
         ))
         show("fib", 2, db.clauses_for("fib", 2), db)

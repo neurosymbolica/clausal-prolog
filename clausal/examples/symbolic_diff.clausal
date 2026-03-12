@@ -1,11 +1,11 @@
 -module(symbolic_diff, [
+    x, y,
     d(EXPR, VAR, DERIV)
 ])
 
-# Symbolic differentiation using list-based term representation:
-#   ["plus", A, B], ["times", A, B], ["power", E, N]
-# Operators (+, *, **) are evaluated as Python arithmetic in clausal,
-# so we use list terms for symbolic expression trees.
+# Symbolic differentiation.
+# Arithmetic operators (+, *, **) are structural terms in clause heads and
+# predicate call arguments — they are matched/constructed, not evaluated.
 
 # d(x)/dx = 1
 d(EXPR=0, VAR=0, DERIV=0),
@@ -21,19 +21,19 @@ d(Y, X, 0) <- (
 )
 
 # Sum: d(a+b)/dx = da/dx + db/dx
-d(["plus", A, B], X, ["plus", DA, DB]) <- (
+d(A + B, X, DA + DB) <- (
     d(A, X, DA),
     d(B, X, DB)
 )
 
 # Product (Leibniz rule): d(a*b)/dx = a*db + b*da
-d(["times", A, B], X, ["plus", ["times", A, DB], ["times", B, DA]]) <- (
+d(A * B, X, A*DB + B*DA) <- (
     d(A, X, DA),
     d(B, X, DB)
 )
 
 # Power rule: d(e^n)/dx = n * e^(n-1) * de/dx
-d(["power", E, N], X, ["times", ["times", N, ["power", E, N1]], DE]) <- (
+d(E ** N, X, N * E**N1 * DE) <- (
     number(N),
     N1 := N - 1,
     d(E, X, DE)
@@ -41,13 +41,13 @@ d(["power", E, N], X, ["times", ["times", N, ["power", E, N1]], DE]) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("dx/dx = 1") <- d("x", "x", 1)
-test("d(5)/dx = 0") <- d(5, "x", 0)
-test("d(3)/dy = 0") <- d(3, "y", 0)
-test("d(y)/dx = 0") <- d("y", "x", 0)
-test("d(x+x)/dx") <- d(["plus", "x", "x"], "x", ["plus", 1, 1])
-test("d(x+5)/dx") <- d(["plus", "x", 5], "x", ["plus", 1, 0])
-test("d(x*x)/dx") <- d(["times", "x", "x"], "x", ["plus", ["times", "x", 1], ["times", "x", 1]])
-test("d(x^2)/dx") <- d(["power", "x", 2], "x", ["times", ["times", 2, ["power", "x", 1]], 1])
-test("d(x^3)/dx") <- d(["power", "x", 3], "x", ["times", ["times", 3, ["power", "x", 2]], 1])
-test("d(3*x)/dx") <- d(["times", 3, "x"], "x", ["plus", ["times", 3, 1], ["times", "x", 0]])
+test("dx/dx = 1") <- d(x, x, 1)
+test("d(5)/dx = 0") <- d(5, x, 0)
+test("d(3)/dy = 0") <- d(3, y, 0)
+test("d(y)/dx = 0") <- d(y, x, 0)
+test("d(x+x)/dx") <- d(x + x, x, 1 + 1)
+test("d(x+5)/dx") <- d(x + 5, x, 1 + 0)
+test("d(x*x)/dx") <- d(x * x, x, x*1 + x*1)
+test("d(x^2)/dx") <- d(x**2, x, 2 * x**1 * 1)
+test("d(x^3)/dx") <- d(x**3, x, 3 * x**2 * 1)
+test("d(3*x)/dx") <- d(3 * x, x, 3*1 + x*0)
