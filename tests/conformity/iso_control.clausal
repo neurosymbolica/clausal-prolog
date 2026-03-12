@@ -12,7 +12,8 @@
 
 -private([
     choose(X, Y, R),
-    safe_max(X, Y, M)
+    safe_max(X, Y, M),
+    a, b, c, d
 ])
 
 # Multi-clause disjunction: choose/3 picks either argument.
@@ -25,45 +26,67 @@ safe_max(X, Y, Y) <- (Y > X)
 
 # ── Conjunction (and) ────────────────────────────────────────────────────────
 
-test("conjunction binds two vars") <- (X_ is 1 and Y_ is 2 and X_ == 1 and Y_ == 2)
-test("conjunction fails if first fails") <- (not ("a" is "b" and X_ is 1))
-test("conjunction fails if second fails") <- (not (X_ is 1 and "a" is "b"))
-test("triple conjunction") <- (X_ is 1 and Y_ is 2 and Z_ is 3 and (R_ := X_ + Y_ + Z_) and R_ == 6)
+test("conjunction binds two vars") <- (
+    X_ is 1,
+    Y_ is 2,
+    X_ == 1,
+    Y_ == 2
+)
+test("conjunction fails if first fails") <- (not (a is b and X_ is 1))
+test("conjunction fails if second fails") <- (not (X_ is 1 and a is b))
+test("triple conjunction") <- (
+    X_ is 1,
+    Y_ is 2,
+    Z_ is 3,
+    (R_ := X_ + Y_ + Z_),
+    R_ == 6
+)
 
 # ── Disjunction (or) ────────────────────────────────────────────────────────
 
 test("disjunction first succeeds") <- (X_ is 1 or X_ is 2)
-test("disjunction first fails, second succeeds") <- ("a" is "b" or X_ is 1)
-test("disjunction both fail") <- (not ("a" is "b" or "c" is "d"))
+test("disjunction first fails, second succeeds") <- (a is b or X_ is 1)
+test("disjunction both fail") <- (not (a is b or c is d))
 
 # ── Negation as failure (not) ────────────────────────────────────────────────
 
 test("not: failed unification succeeds") <- (not (1 is 2))
 test("not: successful unification fails") <- (not (not (1 is 1)))
-test("not: member absent") <- (not member("d", ["a", "b", "c"]))
-test("not: member present fails") <- (not (not member("b", ["a", "b", "c"])))
+test("not: member absent") <- (not member(d, [a, b, c]))
+test("not: member present fails") <- (not (not member(b, [a, b, c])))
 test("double negation: not not (1=1)") <- (not (not (1 is 1)))
 
 # ── Combining control constructs ─────────────────────────────────────────────
 
 test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
-    (X_ is 1 and Y_ is "a") or (X_ is 2 and Y_ is "b")
+    (X_ is 1 and Y_ is a) or (X_ is 2 and Y_ is b)
 )
 test("not + member: d not in list") <- (
-    not member("d", ["a", "b", "c"])
+    not member(d, [a, b, c])
 )
 test("conjunction + negation") <- (
-    X_ is 5 and not (X_ is 3) and X_ == 5
+    X_ is 5,
+    not (X_ is 3),
+    X_ == 5
 )
 
 # ── Multi-clause predicates (choose/3) ─────────────────────────────────────
 
 test("choose picks first") <- choose(1, 2, 1)
 test("choose picks second") <- choose(1, 2, 2)
-test("choose with atoms") <- choose("a", "b", "a")
+test("choose with atoms") <- choose(a, b, a)
 
 # ── If-then-else via safe_max/3 ────────────────────────────────────────────
 
-test("safe_max: first is larger") <- (safe_max(5, 3, M_) and M_ == 5)
-test("safe_max: second is larger") <- (safe_max(2, 7, M_) and M_ == 7)
-test("safe_max: equal") <- (safe_max(4, 4, M_) and M_ == 4)
+test("safe_max: first is larger") <- (
+    safe_max(5, 3, M_),
+    M_ == 5
+)
+test("safe_max: second is larger") <- (
+    safe_max(2, 7, M_),
+    M_ == 7
+)
+test("safe_max: equal") <- (
+    safe_max(4, 4, M_),
+    M_ == 4
+)

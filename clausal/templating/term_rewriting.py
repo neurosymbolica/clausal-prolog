@@ -112,6 +112,144 @@ CMPOP_CLS = {
 }
 
 
+# ─── Arrow (<-) detection helpers ────────────────────────────────────────────
+
+_ARROW_BODY_ERROR = (
+    "clause body must be parenthesized or a single call: "
+    "write  head <- (body)  or  head <- goal(X)"
+)
+
+
+def _leftmost_usub(node):
+    """Walk the leftmost spine of *node* looking for a USub from ``<-``.
+
+    Returns ``(usub_node, depth)`` where *depth* is how many nodes were
+    traversed, or ``(None, 0)`` if no USub is reachable.  The walk follows
+    the "leftmost child" of each node type — the child that occupies the
+    leftmost source position and therefore absorbs the ``-`` from ``<-``
+    due to operator precedence.
+    """
+    depth = 0
+    while True:
+        if isinstance(node, UnaryOp) and isinstance(node.op, USub):
+            return node, depth
+        elif isinstance(node, BinOp):
+            node = node.left
+        elif isinstance(node, Compare):
+            node = node.left
+        elif isinstance(node, BoolOp):
+            node = node.values[0]
+        elif isinstance(node, Subscript):
+            node = node.value
+        elif isinstance(node, Attribute):
+            node = node.value
+        elif isinstance(node, Call):
+            node = node.func
+        elif isinstance(node, Starred):
+            node = node.value
+        elif isinstance(node, IfExp):
+            node = node.body
+        else:
+            return None, 0
+        depth += 1
+
+
+def _is_arrow_adjacent(left, usub_node):
+    """True if ``<`` and ``-`` are adjacent (gap ≤ 2 columns, same line).
+
+    Raises ``ValueError`` when position attributes are missing, which
+    happens with programmatically constructed AST nodes that were never
+    passed through ``ast.parse()`` or ``ast.fix_missing_locations()``.
+    """
+    try:
+        end_line = left.end_lineno
+        end_col = left.end_col_offset
+        usub_line = usub_node.lineno
+        usub_col = usub_node.col_offset
+    except AttributeError:
+        raise ValueError(
+            "AST nodes passed to arrow detection are missing source "
+            "positions (lineno/col_offset); use ast.fix_missing_locations() "
+            "on programmatically constructed AST trees"
+        ) from None
+    if end_line is None or end_col is None or usub_line is None or usub_col is None:
+        raise ValueError(
+            "AST nodes passed to arrow detection have None source "
+            "positions; use ast.fix_missing_locations() on programmatically "
+            "constructed AST trees"
+        )
+    return end_line == usub_line and 1 <= usub_col - end_col <= 2
+
+
+def _detect_arrow(left, operators, comparators):
+    """Detect ``<-`` in a Compare node.
+
+    Returns ``(head_ast, body_ast)`` if the Compare represents
+    ``head <- body``, or ``None`` if this is not a ``<-`` expression.
+
+    The body after ``<-`` must be one of:
+
+    * a single call — ``head <- goal(X)``
+    * a bare name  — ``head <- true``
+    * a parenthesized expression — ``head <- (body)``
+
+    When parenthesized, the USub from ``<-`` sits directly on top of the
+    body expression (path depth 0).  Unparenthesized non-call/non-name
+    bodies cause the USub to be absorbed deeper into the AST; these are
+    detected and rejected with a clear error.
+    """
+    if not operators or not isinstance(operators[0], Lt):
+        return None
+
+    first_comp = comparators[0]
+    usub_node, depth = _leftmost_usub(first_comp)
+    if usub_node is None:
+        return None
+
+    if not _is_arrow_adjacent(left, usub_node):
+        return None
+
+    # The <- was found.  Now enforce the parenthesization rule.
+    #
+    # Simple case (depth 0, single operator): USub sits directly on the
+    # comparator.  The body is either parenthesized, a call, or a bare name
+    # — all safe.
+    #
+    # If depth > 0 the USub was buried inside a BinOp/Compare/etc chain,
+    # meaning the body was not parenthesized and contains operators.
+    # If len(operators) > 1 the body contains comparison operators that
+    # Python absorbed into a chained comparison.  Both cases are rejected.
+    if depth > 0 or len(operators) > 1:
+        raise SyntaxError(_ARROW_BODY_ERROR)
+
+    return left, usub_node.operand
+
+
+def _check_hidden_arrow(node):
+    """Raise if a top-level BoolOp or IfExp hides a ``<-`` clause arrow.
+
+    When the user writes ``head <- a or b`` without parenthesizing the
+    body, Python parses it as ``(head < -a) or b`` — a BoolOp whose first
+    value contains a Compare with an adjacent ``< -``.  Similarly,
+    ``head <- a if cond else b`` becomes ``(head < -a) if cond else b``.
+    These are detected and rejected with a clear error message.
+    """
+    if isinstance(node, BoolOp):
+        inner = node.values[0]
+    elif isinstance(node, IfExp):
+        inner = node.body
+    else:
+        return
+    if not isinstance(inner, Compare):
+        return
+    if not inner.ops or not isinstance(inner.ops[0], Lt):
+        return
+    first_comp = inner.comparators[0]
+    usub_node, _ = _leftmost_usub(first_comp)
+    if usub_node is not None and _is_arrow_adjacent(inner.left, usub_node):
+        raise SyntaxError(_ARROW_BODY_ERROR)
+
+
 # ─── Logic variable name helper ───────────────────────────────────────────────
 
 
@@ -162,6 +300,7 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_BoolOp(transformer, bool_operation):
+        _check_hidden_arrow(bool_operation)
         # Python's BoolOp has N values; simple_ast uses nested binary And/Or
         class_name = BOOLOP_CLS[type(bool_operation.op)]
         value_nodes = [
@@ -206,46 +345,21 @@ class TermTransformer(NodeTransformer):
 
         # Detect '<-' pseudo-operator: written as  a <- b  in source.
         #
-        # Simple case: Python parses `a <- b` as
-        #   Compare(left=a, ops=[Lt], comparators=[UnaryOp(USub, b)])
-        # The USub node sits at the top of the comparator.
-        #
-        # Operator-body case: when the body contains binary operators whose
-        # precedence is lower than unary minus (i.e. +, -, *, /, //, %, @),
-        # the USub ends up as the leftmost node inside a BinOp chain.
-        # e.g. `a <- b + c` → Compare(a, [Lt], [BinOp(UnaryOp(USub,b), Add, c)])
-        #
-        # In both cases we look for the leftmost node reachable by following
-        # BinOp.left, confirm it is UnaryOp(USub), and verify that its '-' is
-        # adjacent to the preceding '<' (gap ≤ 2 columns, same line).
-        if len(operators) == 1 and isinstance(operators[0], Lt):
-            comparator = comparators[0]
-            # Walk left through any BinOp chain to find the leftmost node.
-            binop_path = []
-            node = comparator
-            while isinstance(node, BinOp):
-                binop_path.append(node)
-                node = node.left
-            if isinstance(node, UnaryOp) and isinstance(node.op, USub):
-                usub_node = node
-                # '<' and '-' must be adjacent: gap of 1 (`a<-b`) or 2 (`a <- b`).
-                if (
-                    left.end_lineno == usub_node.lineno
-                    and 1 <= usub_node.col_offset - left.end_col_offset <= 2
-                ):
-                    # Reconstruct the body by replacing the USub with its operand.
-                    body_ast = usub_node.operand
-                    for binop in reversed(binop_path):
-                        body_ast = replace(
-                            BinOp(left=body_ast, op=binop.op, right=binop.right),
-                            binop,
-                        )
-                    return node_ast(
-                        "Predicate",
-                        compare,
-                        head=transformer.visit(left),
-                        body=transformer.visit(body_ast),
-                    )
+        # Python parses `a <- b` as Compare(a, [Lt], [UnaryOp(USub, b)]).
+        # When the body contains operators with lower precedence than unary
+        # minus, the USub ends up buried as the leftmost node of the body
+        # expression.  When the body itself contains comparisons (e.g.
+        # `a <- 1 < 2`), Python produces a chained comparison with multiple
+        # operators.  _detect_arrow handles all of these cases.
+        arrow = _detect_arrow(left, operators, comparators)
+        if arrow is not None:
+            head_ast, body_ast = arrow
+            return node_ast(
+                "Predicate",
+                compare,
+                head=transformer.visit(head_ast),
+                body=transformer.visit(body_ast),
+            )
 
         # Detect 'X == +Y': StructuralEq with a UnaryPlus right-hand side → ArithConstraint stub.
         # Emits ArithConstraint(expr=StructuralEq(X, Y)) so the compiler can raise NotImplementedError.
@@ -336,6 +450,7 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_IfExp(transformer, if_expression):
+        _check_hidden_arrow(if_expression)
         return node_ast(
             "IfExpr",
             if_expression,
@@ -469,6 +584,13 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_UnaryOp(transformer, unary_op):
+        # Fold negative numeric literals: -3 → Constant(-3), not Negate(3).
+        if (
+            isinstance(unary_op.op, USub)
+            and isinstance(unary_op.operand, Constant)
+            and isinstance(unary_op.operand.value, (int, float))
+        ):
+            return replace(Constant(value=-unary_op.operand.value), unary_op)
         class_name = UNARYOP_CLS[type(unary_op.op)]
         return node_ast(
             class_name,
@@ -844,6 +966,8 @@ class EmbedTransformer(NodeTransformer):
 
     def visit_Expr(transformer, expr_stmt):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
+        if transformer._scope_depth == 0:
+            _check_hidden_arrow(expr_stmt.value)
         match expr_stmt.value:
             # -directive(...) at module level: unary minus applied to a call.
             # Currently only -module(name, [exports]) is recognised.
@@ -938,15 +1062,13 @@ class EmbedTransformer(NodeTransformer):
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
             case Compare(
-                left=left,
-                ops=[Lt()],
-                comparators=[UnaryOp(op=USub(), operand=body_expr) as rhs],
+                left=left, ops=ops, comparators=comparators,
             ) if (
-                left.end_lineno == rhs.lineno
-                and 1 <= rhs.col_offset - left.end_col_offset <= 2
-                and transformer._scope_depth == 0
+                transformer._scope_depth == 0
+                and (arrow := _detect_arrow(left, ops, comparators)) is not None
             ):
-                # Module-level predicate definition: functor_call<-body (no space)
+                # Module-level predicate definition: functor_call<-body
+                _, body_expr = arrow
                 # Extract functor name and positional/keyword field names from the
                 # original (pre-transformation) head Python AST.
                 if isinstance(left, Call) and isinstance(left.func, Name):

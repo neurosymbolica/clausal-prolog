@@ -15,41 +15,72 @@
 -module(iso_unification, [test(DESC)])
 
 -private([
-    same_value(X, Y)
+    same_value(X, Y),
+    a, b, hello
 ])
 
 # Unify two values and confirm structural equality.
-same_value(X, Y) <- (X is Y and X == Y)
+same_value(X, Y) <- (
+    X is Y,
+    X == Y
+)
 
 # ── is (unification) ────────────────────────────────────────────────────────
 
-test("atom unifies with itself") <- (X_ is "a" and X_ == "a")
-test("var unifies with atom") <- (X_ is "a" and X_ == "a")
-test("var unifies with integer") <- (X_ is 42 and X_ == 42)
-test("var unifies with list") <- (X_ is [1, 2, 3] and X_ == [1, 2, 3])
-test("different atoms fail") <- (not (X_ is "a" and X_ is "b" and X_ == "b"))
-test("list unification") <- (X_ is ["a"] and X_ == ["a"])
-test("empty lists unify") <- (X_ is [] and X_ == [])
+test("atom unifies with itself") <- (
+    X_ is a,
+    X_ == a
+)
+test("var unifies with atom") <- (
+    X_ is a,
+    X_ == a
+)
+test("var unifies with integer") <- (
+    X_ is 42,
+    X_ == 42
+)
+test("var unifies with list") <- (
+    X_ is [1, 2, 3],
+    X_ == [1, 2, 3]
+)
+test("different atoms fail") <- (not (X_ is a and X_ is b and X_ == b))
+test("list unification") <- (
+    X_ is [a],
+    X_ == [a]
+)
+test("empty lists unify") <- (
+    X_ is [],
+    X_ == []
+)
 
 # ── is not (does-not-unify) ──────────────────────────────────────────────────
 
-test("different atoms: is not succeeds") <- (X_ is "a" and X_ is not "b")
-test("same atom: is not fails") <- (X_ is "a" and not (X_ is not "a"))
+test("different atoms: is not succeeds") <- (
+    X_ is a,
+    X_ is not b
+)
+test("same atom: is not fails") <- (
+    X_ is a,
+    not (X_ is not a)
+)
 
 # ── == (structural equality) ─────────────────────────────────────────────────
 
-test("same atom ==") <- ("a" == "a")
-test("different atoms == fails") <- ("a" != "b")
+test("same atom ==") <- (a == a)
+test("different atoms == fails") <- (a != b)
 test("same integer ==") <- (42 == 42)
-test("bound var == value") <- (X_ is "hello" and X_ == "hello")
+test("bound var == value") <- (
+    X_ is hello,
+    X_ == hello
+)
 
 # ── != (structural inequality) ───────────────────────────────────────────────
 
-test("different atoms !=") <- ("a" != "b")
-test("same atom != fails") <- (not ("a" != "a"))
+test("different atoms !=") <- (a != b)
+test("same atom != fails") <- (not (a != a))
 
 # ── same_value/2 (private helper) ──────────────────────────────────────────
 
 test("same_value: integers") <- same_value(42, 42)
-test("same_value: strings") <- same_value("hello", "hello")
+test("same_value: strings") <- same_value(hello, hello)
 test("same_value: lists") <- same_value([1, 2], [1, 2])

@@ -14,7 +14,8 @@
 -private([
     palindrome(XS),
     sorted_asc(XS),
-    is_permutation(XS, YS)
+    is_permutation(XS, YS),
+    a, b, c, d, x
 ])
 
 # A palindrome reads the same forwards and backwards.
@@ -24,32 +25,35 @@ palindrome(XS) <- reverse(XS, XS)
 sorted_asc(XS=[]),
 sorted_asc([_]),
 sorted_asc([A, B, *REST]) <- (
-    A <= B and sorted_asc([B, *REST])
+    A <= B,
+    sorted_asc([B, *REST])
 )
 
 # Two lists are permutations iff they have equal length and equal sorted form.
 is_permutation(XS, YS) <- (
-    length(XS, N) and length(YS, N) and
-    sort(XS, S) and sort(YS, S)
+    length(XS, N),
+    length(YS, N),
+    sort(XS, S),
+    sort(YS, S)
 )
 
 # ── in / not in (membership) ─────────────────────────────────────────────────
 
-test("in: found") <- ("b" in ["a", "b", "c"])
-test("in: not found") <- (not ("d" in ["a", "b", "c"]))
-test("in: empty list fails") <- (not ("x" in []))
+test("in: found") <- (b in [a, b, c])
+test("in: not found") <- (not (d in [a, b, c]))
+test("in: empty list fails") <- (not (x in []))
 test("in: integer") <- (2 in [1, 2, 3])
-test("not in: absent") <- ("d" not in ["a", "b", "c"])
-test("not in: present fails") <- (not ("b" not in ["a", "b", "c"]))
-test("not in: empty list") <- ("x" not in [])
+test("not in: absent") <- (d not in [a, b, c])
+test("not in: present fails") <- (not (b not in [a, b, c]))
+test("not in: empty list") <- (x not in [])
 
 # ── member/2 (callable builtin) ──────────────────────────────────────────────
 
-test("member: found") <- member("b", ["a", "b", "c"])
-test("member: not found") <- (not member("d", ["a", "b", "c"]))
-test("member: empty fails") <- (not member("x", []))
-test("memberchk: found") <- memberchk("b", ["a", "b", "c"])
-test("memberchk: not found") <- (not memberchk("d", ["a", "b", "c"]))
+test("member: found") <- member(b, [a, b, c])
+test("member: not found") <- (not member(d, [a, b, c]))
+test("member: empty fails") <- (not member(x, []))
+test("memberchk: found") <- memberchk(b, [a, b, c])
+test("memberchk: not found") <- (not memberchk(d, [a, b, c]))
 
 # ── append/3 ──────────────────────────────────────────────────────────────────
 
@@ -57,14 +61,20 @@ test("append two lists") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 test("append empty left") <- append([], [1, 2], [1, 2])
 test("append empty right") <- append([1, 2], [], [1, 2])
 test("append both empty") <- append([], [], [])
-test("append binds result") <- (append([1], [2], R_) and R_ == [1, 2])
+test("append binds result") <- (
+    append([1], [2], R_),
+    R_ == [1, 2]
+)
 
 # ── length/2 ──────────────────────────────────────────────────────────────────
 
-test("length of 3") <- length(["a", "b", "c"], 3)
+test("length of 3") <- length([a, b, c], 3)
 test("length empty") <- length([], 0)
 test("length one") <- length([42], 1)
-test("length binds") <- (length([1, 2, 3], N_) and N_ == 3)
+test("length binds") <- (
+    length([1, 2, 3], N_),
+    N_ == 3
+)
 
 # ── last/2 ────────────────────────────────────────────────────────────────────
 
@@ -78,17 +88,19 @@ test("reverse list") <- reverse([1, 2, 3], [3, 2, 1])
 test("reverse empty") <- reverse([], [])
 test("reverse singleton") <- reverse([42], [42])
 test("reverse involution") <- (
-    reverse([1, 2, 3], R_) and reverse(R_, RR_) and RR_ == [1, 2, 3]
+    reverse([1, 2, 3], R_),
+    reverse(R_, RR_),
+    RR_ == [1, 2, 3]
 )
 
 # ── nth0/3 and nth1/3 ────────────────────────────────────────────────────────
 
-test("nth0 first") <- nth0(0, ["a", "b", "c"], "a")
-test("nth0 last") <- nth0(2, ["a", "b", "c"], "c")
-test("nth1 first") <- nth1(1, ["a", "b", "c"], "a")
-test("nth1 last") <- nth1(3, ["a", "b", "c"], "c")
-test("nth0 out of range") <- (not nth0(5, ["a", "b"], _))
-test("nth1 zero fails") <- (not nth1(0, ["a", "b"], _))
+test("nth0 first") <- nth0(0, [a, b, c], a)
+test("nth0 last") <- nth0(2, [a, b, c], c)
+test("nth1 first") <- nth1(1, [a, b, c], a)
+test("nth1 last") <- nth1(3, [a, b, c], c)
+test("nth0 out of range") <- (not nth0(5, [a, b], _))
+test("nth1 zero fails") <- (not nth1(0, [a, b], _))
 
 # ── sort/2 and msort/2 ───────────────────────────────────────────────────────
 
@@ -96,7 +108,7 @@ test("sort removes dups") <- sort([3, 1, 2, 1], [1, 2, 3])
 test("sort already sorted") <- sort([1, 2, 3], [1, 2, 3])
 test("sort empty") <- sort([], [])
 test("msort preserves dups") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
-test("sort strings") <- sort(["c", "a", "b"], ["a", "b", "c"])
+test("sort strings") <- sort([c, a, b], [a, b, c])
 
 # ── flatten/2 ────────────────────────────────────────────────────────────────
 

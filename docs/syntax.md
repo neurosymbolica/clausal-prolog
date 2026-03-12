@@ -146,6 +146,63 @@ Head <- Body,
 
 The `<-` operator denotes a Horn clause (rule). It will never be added to Python's expression grammar because it conflicts with `x < -y` (less-than applied to a negated value) — but only when there is no surrounding whitespace. With whitespace, it is unambiguous and parseable.
 
+### Body style
+
+The body after `<-` must be one of:
+
+- **A single call** — no parentheses needed:
+  ```python
+  sorted_asc([_]),
+  palindrome(XS) <- reverse(XS, XS),
+  ```
+
+- **A bare name** — no parentheses needed:
+  ```python
+  always_true <- true,
+  ```
+
+- **Anything else** — parenthesized:
+  ```python
+  safe_max(X, Y, X) <- (X >= Y),
+  fib(N, RESULT) <- (
+      N > 1,
+      N1 := N - 1,
+      N2 := N - 2,
+      fib(N1, A),
+      fib(N2, B),
+      RESULT := A + B
+  )
+  ```
+
+This rule exists because Python's parser sees `<-` as `<` followed by unary `-`. When the body contains operators (`+`, `<`, `and`, `or`, `not`, etc.), the `-` gets absorbed into the body expression and the AST is silently mangled. Parentheses force Python to treat the body as a single grouped expression, keeping the `-` at the top where the term rewriter can find it. Calls and bare names are safe without parentheses because they bind tighter than unary `-`.
+
+Attempting to write an unparenthesized operator body produces a clear error:
+
+```
+SyntaxError: clause body must be parenthesized or a single call:
+    write  head <- (body)  or  head <- goal(X)
+```
+
+### Conjunction style
+
+Multiple goals in a body are separated by commas, with each goal on its own line:
+
+```python
+is_permutation(XS, YS) <- (
+    length(XS, N),
+    length(YS, N),
+    sort(XS, S),
+    sort(YS, S)
+)
+```
+
+Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
+
+```python
+test("fails") <- (not (X is 1 and X is 2)),
+test("either") <- (X is 1 or X is 2),
+```
+
 Facts (trivially true rules) are written without a body:
 
 ```python
@@ -310,7 +367,8 @@ X is Y,                # unify
 X is not Y,            # disunify
 
 # Rules and facts
-Head <- Body,          # Horn clause
+Head <- call(X),       # single-call body (no parens needed)
+Head <- (Body),        # operator body (parens required)
 Fact,                  # fact (trivially true)
 Rule > ListDescription,    # DCG rule
 

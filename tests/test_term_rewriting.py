@@ -274,48 +274,89 @@ def test_spaced_lt_negate_not_arrow():
     assert isinstance(node.right, sa.Negate)
 
 
-def test_arrow_body_add():
-    # a <- b + c  parses as  a < ((-b) + c)  — USub is leftmost inside BinOp.
-    # Should produce Predicate(head=a, body=Add(b, c)), NOT Lt.
-    node = term_eval("a <- b + c", sa.Predicate)
+def test_arrow_body_requires_parens():
+    # Unparenthesized non-call/non-name bodies are rejected with a clear error.
+    import pytest
+    # BinOp bodies — USub buried in left spine
+    for expr in ["a <- b + c", "a <- b - c", "a <- b * c", "a <- b + c + d"]:
+        with pytest.raises(SyntaxError, match="parenthesized"):
+            term_eval(expr, sa.Predicate)
+    # BoolOp bodies — <- hidden inside or/and
+    for expr in ["a <- b or c", "a <- b and c"]:
+        with pytest.raises(SyntaxError, match="parenthesized"):
+            term_eval(expr, sa.Predicate)
+    # IfExp body — <- hidden inside ternary
+    with pytest.raises(SyntaxError, match="parenthesized"):
+        term_eval("a <- b if c else d", sa.Predicate)
+
+
+def test_arrow_body_binop_with_parens():
+    # Parenthesized operator bodies work fine.
+    node = term_eval("a <- (b + c)", sa.Predicate)
     assert isinstance(node.head, sa.LoadName) and node.head.name == 'a'
     assert isinstance(node.body, sa.Add)
     assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
     assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
 
-
-def test_arrow_body_sub():
-    # a <- b - c  parses as  a < ((-b) - c)  — same leftmost-USub pattern.
-    node = term_eval("a <- b - c", sa.Predicate)
+    node = term_eval("a <- (b - c)", sa.Predicate)
     assert isinstance(node.body, sa.Sub)
-    assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
-    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
 
-
-def test_arrow_body_mult():
-    # a <- b * c  parses as  a < ((-b) * c)  — same leftmost-USub pattern.
-    node = term_eval("a <- b * c", sa.Predicate)
+    node = term_eval("a <- (b * c)", sa.Predicate)
     assert isinstance(node.body, sa.Mult)
-    assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
-    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
 
-
-def test_arrow_body_chained_binop():
-    # a <- b + c + d  parses as  a < (((-b) + c) + d)  — USub two levels deep.
-    node = term_eval("a <- b + c + d", sa.Predicate)
+    node = term_eval("a <- (b + c + d)", sa.Predicate)
     assert isinstance(node.body, sa.Add)
-    inner = node.body.left
-    assert isinstance(inner, sa.Add)
-    assert isinstance(inner.left, sa.LoadName) and inner.left.name == 'b'
-    assert isinstance(inner.right, sa.LoadName) and inner.right.name == 'c'
-    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'd'
 
 
 def test_arrow_body_pow_still_works():
     # a <- b ** c  parses as  a < -(b ** c)  — USub at top level (** > unary -).
-    # This already worked before; confirm it still works after the refactor.
+    # ** binds tighter than unary -, so USub is on top → treated like a
+    # parenthesized body.  This is technically safe, though style-wise
+    # parentheses are recommended.
     node = term_eval("a <- b ** c", sa.Predicate)
     assert isinstance(node.body, sa.Pow)
+
+
+def test_arrow_detection_no_positions():
+    # Programmatically constructed AST nodes lack source positions.
+    # _detect_arrow should raise ValueError, not crash with AttributeError.
+    import ast as pyast
+    import pytest
+    from clausal.templating.term_rewriting import _detect_arrow, _check_hidden_arrow
+    left = pyast.Name(id='a', ctx=pyast.Load())
+    usub = pyast.UnaryOp(op=pyast.USub(), operand=pyast.Name(id='b', ctx=pyast.Load()))
+    with pytest.raises(ValueError, match="missing source positions"):
+        _detect_arrow(left, [pyast.Lt()], [usub])
+
+    # Same for _check_hidden_arrow
+    boolop = pyast.BoolOp(
+        op=pyast.Or(),
+        values=[
+            pyast.Compare(left=left, ops=[pyast.Lt()], comparators=[usub]),
+            pyast.Name(id='c', ctx=pyast.Load()),
+        ],
+    )
+    with pytest.raises(ValueError, match="missing source positions"):
+        _check_hidden_arrow(boolop)
+
+    # fix_missing_locations makes it work (positions default to 1:0)
+    pyast.fix_missing_locations(pyast.Expression(body=pyast.Compare(
+        left=left, ops=[pyast.Lt()], comparators=[usub]
+    )))
+    # Now positions exist but aren't adjacent (all default to 1:0)
+    result = _detect_arrow(left, [pyast.Lt()], [usub])
+    assert result is None
+
+
+def test_negative_literal_folding():
+    # -3 in a term should be Constant(-3), not Negate(3).
+    node = term_eval("-3", int)
+    assert node == -3
+    node = term_eval("-1.5", float)
+    assert node == -1.5
+    # -x (variable) should still be Negate
+    node = term_eval("-x", sa.Negate)
+    assert isinstance(node.operand, sa.LoadName)
 
 
 # ── TermTransformer: collections ──────────────────────────────────────────────

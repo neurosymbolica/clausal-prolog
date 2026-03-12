@@ -12,35 +12,45 @@
 
 -module(iso_term_manipulation, [test(DESC)])
 
+-private([a, hello])
+
 # ── functor/3 — construction mode ────────────────────────────────────────────
 
 test("construct atom: functor(T, a, 0)") <- (
-    functor(T_, "a", 0) and T_ == "a"
+    functor(T_, a, 0),
+    T_ == a
 )
 
 # ── functor/3 — decomposition of atoms ───────────────────────────────────────
 # Strings are atoms; functor/3 can decompose them
 
 test("decompose atom: functor('hello', Name, Arity)") <- (
-    functor("hello", N_, A_) and N_ == "hello" and A_ == 0
+    functor(hello, N_, A_),
+    N_ == hello,
+    A_ == 0
 )
 
 test("decompose empty string") <- (
-    functor("", N_, A_) and N_ == "" and A_ == 0
+    functor("", N_, A_),
+    N_ == "",
+    A_ == 0
 )
 
 # ── univ/2 — construction from list ──────────────────────────────────────────
 
 test("construct atom from list: T =.. ['a']") <- (
-    univ(T_, ["a"]) and T_ == "a"
+    univ(T_, [a]),
+    T_ == a
 )
 
 # ── univ/2 — decomposition of atoms ──────────────────────────────────────────
 
 test("decompose atom: 'a' =.. X") <- (
-    univ("a", X_) and X_ == ["a"]
+    univ(a, X_),
+    X_ == [a]
 )
 
 test("decompose string: 'hello' =.. X") <- (
-    univ("hello", X_) and X_ == ["hello"]
+    univ(hello, X_),
+    X_ == [hello]
 )

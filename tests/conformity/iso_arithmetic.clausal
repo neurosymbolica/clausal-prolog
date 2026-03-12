@@ -23,21 +23,60 @@ triangle_number(N, T) <- (T := N * (N + 1) // 2)
 
 # ── := (arithmetic evaluation) ───────────────────────────────────────────────
 
-test("addition: 1+2=3") <- (X_ := 1 + 2 and X_ == 3)
-test("subtraction: 5-3=2") <- (X_ := 5 - 3 and X_ == 2)
-test("multiplication: 3*4=12") <- (X_ := 3 * 4 and X_ == 12)
-test("integer division: 7//2=3") <- (X_ := 7 // 2 and X_ == 3)
-test("modulo: 7%2=1") <- (X_ := 7 % 2 and X_ == 1)
-test("power: 2**3=8") <- (X_ := 2 ** 3 and X_ == 8)
-test("negation: -3") <- (X_ := -3 and X_ == -3)
-test("nested: (2+3)*4=20") <- (X_ := (2 + 3) * 4 and X_ == 20)
-test("float addition: 1.5+2.5=4.0") <- (X_ := 1.5 + 2.5 and X_ == 4.0)
+test("addition: 1+2=3") <- (
+    X_ := 1 + 2,
+    X_ == 3
+)
+test("subtraction: 5-3=2") <- (
+    X_ := 5 - 3,
+    X_ == 2
+)
+test("multiplication: 3*4=12") <- (
+    X_ := 3 * 4,
+    X_ == 12
+)
+test("integer division: 7//2=3") <- (
+    X_ := 7 // 2,
+    X_ == 3
+)
+test("modulo: 7%2=1") <- (
+    X_ := 7 % 2,
+    X_ == 1
+)
+test("power: 2**3=8") <- (
+    X_ := 2 ** 3,
+    X_ == 8
+)
+test("negation: -3") <- (
+    X_ := -3,
+    X_ == -3
+)
+test("nested: (2+3)*4=20") <- (
+    X_ := (2 + 3) * 4,
+    X_ == 20
+)
+test("float addition: 1.5+2.5=4.0") <- (
+    X_ := 1.5 + 2.5,
+    X_ == 4.0
+)
 # Note: '3 := 1+2' cannot be expressed in .clausal — Python's parser rejects
 # := with a non-name LHS.  This is tested in the Python test file instead.
-test("double negation: --5=5") <- (X_ := -(-5) and X_ == 5)
-test("subtraction negative: 3-5=-2") <- (X_ := 3 - 5 and X_ == -2)
-test("negative floor div: -7//2=-4") <- (X_ := -7 // 2 and X_ == -4)
-test("negative mod: -7%2=1") <- (X_ := -7 % 2 and X_ == 1)
+test("double negation: --5=5") <- (
+    X_ := -(-5),
+    X_ == 5
+)
+test("subtraction negative: 3-5=-2") <- (
+    X_ := 3 - 5,
+    X_ == -2
+)
+test("negative floor div: -7//2=-4") <- (
+    X_ := -7 // 2,
+    X_ == -4
+)
+test("negative mod: -7%2=1") <- (
+    X_ := -7 % 2,
+    X_ == 1
+)
 
 # ── Arithmetic comparison ────────────────────────────────────────────────────
 
@@ -57,11 +96,20 @@ test("expression: 1+2 <= 3") <- (1 + 2 <= 3)
 # ── Arithmetic builtins ──────────────────────────────────────────────────────
 
 test("succ forward: succ(3,4)") <- succ(3, 4)
-test("succ backward: succ(X,4)=3") <- (succ(X_, 4) and X_ == 3)
+test("succ backward: succ(X,4)=3") <- (
+    succ(X_, 4),
+    X_ == 3
+)
 test("succ zero: succ(0,1)") <- succ(0, 1)
 test("plus forward: 2+3=5") <- plus(2, 3, 5)
-test("plus backward x: X+3=5") <- (plus(X_, 3, 5) and X_ == 2)
-test("plus backward y: 2+Y=5") <- (plus(2, Y_, 5) and Y_ == 3)
+test("plus backward x: X+3=5") <- (
+    plus(X_, 3, 5),
+    X_ == 2
+)
+test("plus backward y: 2+Y=5") <- (
+    plus(2, Y_, 5),
+    Y_ == 3
+)
 test("between check: 3 in 1..5") <- between(1, 5, 3)
 test("between out of range") <- (not between(1, 5, 6))
 # Note: abs_/2, max_/3, min_/3 have trailing underscores so they are parsed
@@ -69,10 +117,31 @@ test("between out of range") <- (not between(1, 5, 6))
 
 # ── Private helper predicates ──────────────────────────────────────────────
 
-test("double 3 is 6") <- (double(3, Y_) and Y_ == 6)
-test("double 0 is 0") <- (double(0, Y_) and Y_ == 0)
-test("square 4 is 16") <- (square(4, Y_) and Y_ == 16)
-test("square 1 is 1") <- (square(1, Y_) and Y_ == 1)
-test("triangle 5 is 15") <- (triangle_number(5, T_) and T_ == 15)
-test("triangle 1 is 1") <- (triangle_number(1, T_) and T_ == 1)
-test("triangle 10 is 55") <- (triangle_number(10, T_) and T_ == 55)
+test("double 3 is 6") <- (
+    double(3, Y_),
+    Y_ == 6
+)
+test("double 0 is 0") <- (
+    double(0, Y_),
+    Y_ == 0
+)
+test("square 4 is 16") <- (
+    square(4, Y_),
+    Y_ == 16
+)
+test("square 1 is 1") <- (
+    square(1, Y_),
+    Y_ == 1
+)
+test("triangle 5 is 15") <- (
+    triangle_number(5, T_),
+    T_ == 15
+)
+test("triangle 1 is 1") <- (
+    triangle_number(1, T_),
+    T_ == 1
+)
+test("triangle 10 is 55") <- (
+    triangle_number(10, T_),
+    T_ == 55
+)

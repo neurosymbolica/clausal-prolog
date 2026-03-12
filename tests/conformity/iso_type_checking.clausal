@@ -19,30 +19,40 @@
 -module(iso_type_checking, [test(DESC)])
 
 -private([
-    is_bound_number(X)
+    is_bound_number(X),
+    hello, abc
 ])
 
 # Succeeds when X is bound to a number (integer or float).
-is_bound_number(X) <- (nonvar(X) and number(X))
+is_bound_number(X) <- (
+    nonvar(X),
+    number(X)
+)
 
 # ── var/1 ────────────────────────────────────────────────────────────────────
 
 test("var: unbound var succeeds") <- var(X_)
 test("var: integer fails") <- (not var(42))
-test("var: atom fails") <- (not var("hello"))
-test("var: bound var fails") <- (X_ is 1 and not var(X_))
+test("var: atom fails") <- (not var(hello))
+test("var: bound var fails") <- (
+    X_ is 1,
+    not var(X_)
+)
 
 # ── nonvar/1 ─────────────────────────────────────────────────────────────────
 
 test("nonvar: integer succeeds") <- nonvar(42)
-test("nonvar: atom succeeds") <- nonvar("hello")
+test("nonvar: atom succeeds") <- nonvar(hello)
 test("nonvar: unbound var fails") <- (not nonvar(X_))
-test("nonvar: bound var succeeds") <- (X_ is 1 and nonvar(X_))
+test("nonvar: bound var succeeds") <- (
+    X_ is 1,
+    nonvar(X_)
+)
 test("nonvar: list succeeds") <- nonvar([1, 2])
 
 # ── atom/1 ───────────────────────────────────────────────────────────────────
 
-test("atom: string succeeds") <- atom("hello")
+test("atom: string succeeds") <- atom(hello)
 test("atom: empty string succeeds") <- atom("")
 test("atom: integer fails") <- (not atom(1))
 test("atom: unbound var fails") <- (not atom(X_))
@@ -70,7 +80,7 @@ test("number: var fails") <- (not number(X_))
 
 # ── string/1 ─────────────────────────────────────────────────────────────────
 
-test("string: str succeeds") <- string("hello")
+test("string: str succeeds") <- string(hello)
 test("string: empty str") <- string("")
 test("string: int fails") <- (not string(42))
 test("string: var fails") <- (not string(X_))
@@ -80,14 +90,14 @@ test("string: var fails") <- (not string(X_))
 test("is_list: list") <- is_list([1, 2, 3])
 test("is_list: empty") <- is_list([])
 test("is_list: nested") <- is_list([[1], [2]])
-test("is_list: string fails") <- (not is_list("hello"))
+test("is_list: string fails") <- (not is_list(hello))
 test("is_list: int fails") <- (not is_list(42))
 test("is_list: var fails") <- (not is_list(X_))
 
 # ── ground/1 ─────────────────────────────────────────────────────────────────
 
 test("ground: integer") <- ground(42)
-test("ground: string") <- ground("abc")
+test("ground: string") <- ground(abc)
 test("ground: ground list") <- ground([1, 2, 3])
 test("ground: empty list") <- ground([])
 test("ground: var fails") <- (not ground(X_))
