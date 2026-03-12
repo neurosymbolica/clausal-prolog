@@ -1,14 +1,17 @@
 """clausal.logic.builtins — built-in and standard-library predicates (Step 8).
 
-Built-ins are Python generator functions with the standard simple-mode
-dispatch signature::
+Built-ins are Python generator functions written with a simple internal
+signature::
 
     def predicate__N(arg0, …, argN-1, trail, k): …
 
-They yield ``None`` for each solution.  Stateless built-ins are stored in
-``_BUILTINS``.  Built-ins that need a reference to the live database (assertz,
-asserta, retract, signature) are stored in ``_DB_BUILTINS`` as factory
-callables; ``get_builtin_dispatch`` passes the database when creating them.
+They yield ``None`` for each solution internally, but are automatically
+wrapped to the trampoline dispatch protocol at registration time so that
+they can be called from trampoline-compiled code.  Stateless built-ins are
+stored in ``_BUILTINS``.  Built-ins that need a reference to the live
+database (assertz, asserta, retract, signature) are stored in
+``_DB_BUILTINS`` as factory callables; ``get_builtin_dispatch`` passes the
+database when creating them.
 
 ``Database.get_dispatch`` calls ``get_builtin_dispatch(functor, arity, db)`` as a
 fallback when a predicate is not found locally, so built-ins are available in
@@ -55,29 +58,55 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.trampoline import DONE
 from clausal.terms import Compound, KWTerm
 
 
+# ── Simple → trampoline adapter ──────────────────────────────────────────────
+
+
+def _simple_to_trampoline(simple_fn):
+    """Wrap a simple-mode dispatch function as a trampoline-protocol function.
+
+    Simple-mode signature:  ``fn(*args, trail, k)`` → yields ``None``
+    Trampoline signature:   ``fn(this_gen, parent, *args, trail)`` → yields ``(parent, None)`` / ``(parent, DONE)``
+    """
+    def trampoline_fn(this_generator, parent, *args):
+        # args = (*pred_args, trail)  — trail is always last
+        for _ in simple_fn(*args, None):
+            yield (parent, None)
+        yield (parent, DONE)
+    return trampoline_fn
+
+
+def _wrap_db_factory(factory):
+    """Wrap a DB-builtin factory so its product is trampoline-protocol."""
+    def wrapped_factory(db):
+        simple_fn = factory(db)
+        return _simple_to_trampoline(simple_fn)
+    return wrapped_factory
+
+
 # ── Registry dicts ─────────────────────────────────────────────────────────────
-# _BUILTINS: stateless dispatch functions  {(functor, arity) → fn}
-# _DB_BUILTINS: factory callables         {(functor, arity) → fn(db) → dispatch_fn}
+# _BUILTINS: trampoline-protocol dispatch functions  {(functor, arity) → fn}
+# _DB_BUILTINS: factory callables  {(functor, arity) → fn(db) → trampoline dispatch_fn}
 
 _BUILTINS: dict[tuple[str, int], Callable] = {}
 _DB_BUILTINS: dict[tuple[str, int], Callable] = {}
 
 
 def _builtin(functor: str, arity: int):
-    """Decorator: register a function as a stateless built-in."""
+    """Decorator: register a function as a stateless built-in (auto-wrapped to trampoline)."""
     def decorator(fn: Callable) -> Callable:
-        _BUILTINS[(functor, arity)] = fn
+        _BUILTINS[(functor, arity)] = _simple_to_trampoline(fn)
         return fn
     return decorator
 
 
 def _db_builtin(functor: str, arity: int):
-    """Decorator: register a factory as a db-dependent built-in."""
+    """Decorator: register a factory as a db-dependent built-in (auto-wrapped to trampoline)."""
     def decorator(factory: Callable) -> Callable:
-        _DB_BUILTINS[(functor, arity)] = factory
+        _DB_BUILTINS[(functor, arity)] = _wrap_db_factory(factory)
         return factory
     return decorator
 
@@ -479,7 +508,7 @@ def _assertz_factory(db):
     resolution.
     """
     from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate
+    from clausal.logic.compiler import compile_predicate_trampoline
     module_dict = getattr(db, "module_dict", None)
 
     def assertz__1(term, trail, k):
@@ -499,8 +528,8 @@ def _assertz_factory(db):
             pred_cls._clauses.append(clause)
             pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
-        compile_predicate(functor, arity, clauses, db,
-                          globals_=module_dict, pred_cls=pred_cls)
+        compile_predicate_trampoline(functor, arity, clauses, db,
+                                     globals_=module_dict, pred_cls=pred_cls)
         yield None
 
     return assertz__1
@@ -514,7 +543,7 @@ def _asserta_factory(db):
     PredicateMeta class and recompiles with module globals.
     """
     from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate
+    from clausal.logic.compiler import compile_predicate_trampoline
     module_dict = getattr(db, "module_dict", None)
 
     def asserta__1(term, trail, k):
@@ -534,8 +563,8 @@ def _asserta_factory(db):
             pred_cls._clauses.insert(0, clause)
             pred_cls._dispatch_fn = None
         clauses = db.clauses_for(functor, arity)
-        compile_predicate(functor, arity, clauses, db,
-                          globals_=module_dict, pred_cls=pred_cls)
+        compile_predicate_trampoline(functor, arity, clauses, db,
+                                     globals_=module_dict, pred_cls=pred_cls)
         yield None
 
     return asserta__1
@@ -553,7 +582,7 @@ def _retract_factory(db):
     PredicateMeta class.
     """
     from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate
+    from clausal.logic.compiler import compile_predicate_trampoline
     module_dict = getattr(db, "module_dict", None)
 
     def retract__1(term, trail, k):
@@ -611,8 +640,8 @@ def _retract_factory(db):
                         break
             clauses = db.clauses_for(functor, arity)
             if clauses:
-                compile_predicate(functor, arity, clauses, db,
-                                  globals_=module_dict, pred_cls=pred_cls)
+                compile_predicate_trampoline(functor, arity, clauses, db,
+                                             globals_=module_dict, pred_cls=pred_cls)
             yield None
             return  # retract is not backtrackable
 

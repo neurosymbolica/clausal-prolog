@@ -36,7 +36,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
-from clausal.logic.compiler import compile_predicate, compile_predicate_trampoline
+from clausal.logic.compiler import compile_predicate_trampoline, compile_predicate_trampoline as compile_predicate
 from clausal.logic.database import Clause, Database
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
@@ -58,17 +58,16 @@ def fresh_trail() -> Trail:
 
 
 def solutions_simple(dispatch_fn, *args_then_snapshot) -> list:
-    """Drive a simple-mode dispatch_fn and collect per-solution snapshots.
+    """Drive a dispatch_fn and collect per-solution snapshots.
 
     Call as: solutions_simple(fn, arg0, arg1, ..., trail, snapshot_fn)
     snapshot_fn is called while the generator is suspended (bindings live).
+
+    Delegates to solutions_trampoline since all dispatch fns are now trampoline mode.
     """
     snapshot_fn = args_then_snapshot[-1]
     gen_args = args_then_snapshot[:-1]   # includes trail as last positional arg
-    results = []
-    for _ in dispatch_fn(*gen_args, None):   # append k=None
-        results.append(snapshot_fn())
-    return results
+    return solutions_trampoline(dispatch_fn, gen_args, snapshot_fn)
 
 
 def solutions_trampoline(dispatch_fn, args_tuple, snapshot_fn) -> list:

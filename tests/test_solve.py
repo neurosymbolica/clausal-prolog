@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from clausal.logic.compiler import compile_predicate
+from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.solve import call, solve, query, once, _deref_walk
@@ -38,7 +38,7 @@ def _make_edge_module() -> Module:
             head=Compound("edge", (src, dv)),
             body=[Is(left=dv, right=dst)],
         ))
-    compile_predicate("edge", 2, db.clauses_for("edge", 2), db)
+    compile_predicate_trampoline("edge", 2, db.clauses_for("edge", 2), db)
 
     # path(X, Y) :- edge(X, Y).
     px, py = Var(), Var()
@@ -56,7 +56,7 @@ def _make_edge_module() -> Module:
             Call(func=LoadName(name="path"), args=[rz, ry], kwargs=[]),
         ],
     ))
-    compile_predicate("path", 2, db.clauses_for("path", 2), db)
+    compile_predicate_trampoline("path", 2, db.clauses_for("path", 2), db)
 
     return mod
 
@@ -81,7 +81,7 @@ def _make_member_module() -> Module:
         head=Compound("member2", (x2, l2)),
         body=[In(left=x2, right=l2)],
     ))
-    compile_predicate("member2", 2, db.clauses_for("member2", 2), db)
+    compile_predicate_trampoline("member2", 2, db.clauses_for("member2", 2), db)
 
     return mod
 
@@ -96,7 +96,7 @@ def _make_arith_module() -> Module:
         head=Compound("lt_check", (x, y)),
         body=[Lt(left=x, right=y)],
     ))
-    compile_predicate("lt_check", 2, db.clauses_for("lt_check", 2), db)
+    compile_predicate_trampoline("lt_check", 2, db.clauses_for("lt_check", 2), db)
 
     return mod
 

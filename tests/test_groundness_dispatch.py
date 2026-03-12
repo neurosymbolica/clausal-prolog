@@ -1,17 +1,16 @@
 """Tests for V2-2: Groundness-keyed dispatch (multi-plan compilation).
 
-Verifies that compile_predicate and compile_predicate_trampoline use
-multi-argument indexing when multiple argument positions have indexable
-values, and that the groundness-keyed selector picks the best plan at
-call time based on which arguments are ground.
+Verifies that compile_predicate_trampoline uses multi-argument indexing
+when multiple argument positions have indexable values, and that the
+groundness-keyed selector picks the best plan at call time based on
+which arguments are ground.
 """
 
 import pytest
 
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
-    compile_predicate,
-    compile_predicate_trampoline,
+    compile_predicate_trampoline as compile_predicate,
     _extract_arg_key,
     _build_arg_index,
     _analyze_index_positions,
@@ -26,16 +25,6 @@ from clausal.logic.builtins import _normalize_fact_clause
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _simple_solutions(dispatch, args, trail=None):
-    """Collect all solutions from a simple-mode dispatch function."""
-    if trail is None:
-        trail = Trail()
-    results = []
-    for _ in dispatch(*args, trail, None):
-        results.append(tuple(deref(a) for a in args))
-    return results
 
 
 def _trampoline_solutions(dispatch, args, trail=None):
@@ -200,10 +189,10 @@ class TestAnalyzeIndexPositions:
         assert len(positions) == 3
 
 
-# ── Integration: second-arg lookup (simple mode) ────────────────────────────
+# ── Integration: second-arg lookup ───────────────────────────────────────────
 
 
-class TestSecondArgLookupSimple:
+class TestSecondArgLookup:
     def test_lookup_by_second_arg(self):
         """When first arg is Var but second is ground, use second-arg index."""
         facts = [
@@ -216,7 +205,7 @@ class TestSecondArgLookupSimple:
         # Query with ground second arg, var first arg
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "warm"], trail)
+        results = _trampoline_solutions(fn, [v, "warm"], trail)
         assert sorted(r[0] for r in results) == ["red", "yellow"]
 
     def test_lookup_by_first_arg_still_works(self):
@@ -230,7 +219,7 @@ class TestSecondArgLookupSimple:
 
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, ["blue", v], trail)
+        results = _trampoline_solutions(fn, ["blue", v], trail)
         assert results == [("blue", "cool")]
 
     def test_all_vars_enumerate(self):
@@ -244,7 +233,7 @@ class TestSecondArgLookupSimple:
 
         trail = Trail()
         v1, v2 = Var(), Var()
-        results = _simple_solutions(fn, [v1, v2], trail)
+        results = _trampoline_solutions(fn, [v1, v2], trail)
         assert len(results) == 5
 
     def test_both_args_ground(self):
@@ -257,11 +246,11 @@ class TestSecondArgLookupSimple:
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         trail = Trail()
-        results = _simple_solutions(fn, ["red", "warm"], trail)
+        results = _trampoline_solutions(fn, ["red", "warm"], trail)
         assert results == [("red", "warm")]
 
         trail = Trail()
-        results = _simple_solutions(fn, ["red", "cool"], trail)
+        results = _trampoline_solutions(fn, ["red", "cool"], trail)
         assert results == []
 
     def test_no_match_second_arg(self):
@@ -275,7 +264,7 @@ class TestSecondArgLookupSimple:
 
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "freezing"], trail)
+        results = _trampoline_solutions(fn, [v, "freezing"], trail)
         assert results == []
 
     def test_three_arg_middle_ground(self):
@@ -289,7 +278,7 @@ class TestSecondArgLookupSimple:
 
         trail = Trail()
         v1, v2 = Var(), Var()
-        results = _simple_solutions(fn, [v1, "a", v2], trail)
+        results = _trampoline_solutions(fn, [v1, "a", v2], trail)
         assert sorted(r[0] for r in results) == [1, 3]
 
     def test_three_arg_last_ground(self):
@@ -303,71 +292,8 @@ class TestSecondArgLookupSimple:
 
         trail = Trail()
         v1, v2 = Var(), Var()
-        results = _simple_solutions(fn, [v1, v2, 100], trail)
+        results = _trampoline_solutions(fn, [v1, v2, 100], trail)
         assert sorted(r[0] for r in results) == [1, 3, 5]
-
-
-# ── Integration: second-arg lookup (trampoline mode) ────────────────────────
-
-
-class TestSecondArgLookupTrampoline:
-    def test_lookup_by_second_arg(self):
-        facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
-        ]
-        db = _make_fact_db("color", facts)
-        fn = compile_predicate_trampoline(
-            "color", 2, db.clauses_for("color", 2), db,
-        )
-
-        trail = Trail()
-        v = Var()
-        results = _trampoline_solutions(fn, [v, "warm"], trail)
-        assert sorted(r[0] for r in results) == ["red", "yellow"]
-
-    def test_lookup_by_first_arg(self):
-        facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
-        ]
-        db = _make_fact_db("color", facts)
-        fn = compile_predicate_trampoline(
-            "color", 2, db.clauses_for("color", 2), db,
-        )
-
-        trail = Trail()
-        v = Var()
-        results = _trampoline_solutions(fn, ["blue", v], trail)
-        assert results == [("blue", "cool")]
-
-    def test_all_vars_enumerate(self):
-        facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
-        ]
-        db = _make_fact_db("color", facts)
-        fn = compile_predicate_trampoline(
-            "color", 2, db.clauses_for("color", 2), db,
-        )
-
-        trail = Trail()
-        v1, v2 = Var(), Var()
-        results = _trampoline_solutions(fn, [v1, v2], trail)
-        assert len(results) == 5
-
-    def test_three_arg_middle_ground(self):
-        facts = [
-            (1, "a", 100), (2, "b", 200), (3, "a", 300),
-            (4, "c", 400), (5, "b", 500),
-        ]
-        db = _make_fact_db("t", facts)
-        fn = compile_predicate_trampoline("t", 3, db.clauses_for("t", 3), db)
-
-        trail = Trail()
-        v1, v2 = Var(), Var()
-        results = _trampoline_solutions(fn, [v1, "a", v2], trail)
-        assert sorted(r[0] for r in results) == [1, 3]
 
 
 # ── Same predicate, different modes ─────────────────────────────────────────
@@ -376,7 +302,7 @@ class TestSecondArgLookupTrampoline:
 class TestDifferentModes:
     """Same predicate called in different modes hits different plans."""
 
-    def test_color_all_modes_simple(self):
+    def test_color_all_modes(self):
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("orange", "warm"),
@@ -387,50 +313,21 @@ class TestDifferentModes:
         # Mode 1: first arg ground
         trail = Trail()
         v = Var()
-        r1 = _simple_solutions(fn, ["red", v], trail)
+        r1 = _trampoline_solutions(fn, ["red", v], trail)
         assert r1 == [("red", "warm")]
 
         # Mode 2: second arg ground
         trail = Trail()
         v = Var()
-        r2 = _simple_solutions(fn, [v, "cool"], trail)
+        r2 = _trampoline_solutions(fn, [v, "cool"], trail)
         assert sorted(r[0] for r in r2) == ["blue", "green"]
 
         # Mode 3: both ground
         trail = Trail()
-        r3 = _simple_solutions(fn, ["blue", "cool"], trail)
-        assert r3 == [("blue", "cool")]
-
-        # Mode 4: neither ground
-        trail = Trail()
-        v1, v2 = Var(), Var()
-        r4 = _simple_solutions(fn, [v1, v2], trail)
-        assert len(r4) == 5
-
-    def test_color_all_modes_trampoline(self):
-        facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("orange", "warm"),
-        ]
-        db = _make_fact_db("color", facts)
-        fn = compile_predicate_trampoline(
-            "color", 2, db.clauses_for("color", 2), db,
-        )
-
-        trail = Trail()
-        v = Var()
-        r1 = _trampoline_solutions(fn, ["red", v], trail)
-        assert r1 == [("red", "warm")]
-
-        trail = Trail()
-        v = Var()
-        r2 = _trampoline_solutions(fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in r2) == ["blue", "green"]
-
-        trail = Trail()
         r3 = _trampoline_solutions(fn, ["blue", "cool"], trail)
         assert r3 == [("blue", "cool")]
 
+        # Mode 4: neither ground
         trail = Trail()
         v1, v2 = Var(), Var()
         r4 = _trampoline_solutions(fn, [v1, v2], trail)
@@ -456,13 +353,13 @@ class TestMixedClauses:
         # Query by first arg 1: should get (1, a) + catch-alls (_, b), (_, e)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [1, v], trail)
+        results = _trampoline_solutions(fn, [1, v], trail)
         assert [r[1] for r in results] == ["a", "b", "e"]
 
         # Query by second arg "d": position 1 has no defaults → only (3, d)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "d"], trail)
+        results = _trampoline_solutions(fn, [v, "d"], trail)
         assert [r[1] for r in results] == ["d"]
 
     def test_true_catch_all_clauses(self):
@@ -478,13 +375,13 @@ class TestMixedClauses:
         # Query by first arg: gets specific + catch-all
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [1, v], trail)
+        results = _trampoline_solutions(fn, [1, v], trail)
         assert len(results) == 2  # (1, "a") + catch-all
 
         # Query by second arg: gets specific + catch-all
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "b"], trail)
+        results = _trampoline_solutions(fn, [v, "b"], trail)
         assert len(results) == 2  # (2, "b") + catch-all
 
 
@@ -492,7 +389,7 @@ class TestMixedClauses:
 
 
 class TestDynamicReindexGroundness:
-    def test_assertz_rebuilds_multi_index_simple(self):
+    def test_assertz_rebuilds_multi_index(self):
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", "warm"), ("green", "cool"),
@@ -503,32 +400,10 @@ class TestDynamicReindexGroundness:
         # Initial second-arg lookup
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in results) == ["blue", "green"]
-
-        # Add new fact and trigger recompile
-        db.assertz(_normalize_fact_clause(Compound("color", ("purple", "cool"))))
-        new_fn = db.get_dispatch("color", 2)
-        trail = Trail()
-        v = Var()
-        results = _simple_solutions(new_fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in results) == ["blue", "green", "purple"]
-
-    def test_assertz_rebuilds_multi_index_trampoline(self):
-        db = Database()
-        db.mark_dynamic("color", 2)
-        for args in [("red", "warm"), ("green", "cool"),
-                     ("blue", "cool"), ("white", "neutral")]:
-            db.assertz(_normalize_fact_clause(Compound("color", args)))
-        fn = compile_predicate_trampoline(
-            "color", 2, db.clauses_for("color", 2), db,
-        )
-
-        trail = Trail()
-        v = Var()
         results = _trampoline_solutions(fn, [v, "cool"], trail)
         assert sorted(r[0] for r in results) == ["blue", "green"]
 
+        # Add new fact and trigger recompile
         db.assertz(_normalize_fact_clause(Compound("color", ("purple", "cool"))))
         new_fn = db.get_dispatch("color", 2)
         trail = Trail()
@@ -555,7 +430,7 @@ class TestBackwardCompat:
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [3, v], trail)
+        results = _trampoline_solutions(fn, [3, v], trail)
         assert len(results) == 1
         assert results[0][0] == 3
 
@@ -565,7 +440,7 @@ class TestBackwardCompat:
         fn = compile_predicate("small", 2, db.clauses_for("small", 2), db)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [1, v], trail)
+        results = _trampoline_solutions(fn, [1, v], trail)
         assert results == [(1, "a")]
 
 
@@ -596,11 +471,11 @@ class TestPredicateMetaGroundness:
         # Lookup by color (second field)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, [v, "red"], trail)
+        results = _trampoline_solutions(fn, [v, "red"], trail)
         assert sorted(r[0] for r in results) == ["apple", "cherry", "strawberry"]
 
         # Lookup by name (first field)
         trail = Trail()
         v = Var()
-        results = _simple_solutions(fn, ["banana", v], trail)
+        results = _trampoline_solutions(fn, ["banana", v], trail)
         assert results == [("banana", "yellow")]

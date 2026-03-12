@@ -21,6 +21,25 @@ import pytest
 # Ensure the import hook is active.
 import clausal.import_hook
 from clausal.import_hook import _load_module
+from clausal.logic.trampoline import StepGenerator, DONE
+
+
+def _run_dispatch(dispatch, *args):
+    """Drive a trampoline-protocol dispatch function, return list of solution counts."""
+    # args = (*pred_args, trail) — trail is last, ignore the old trailing None
+    # Filter out trailing None from old simple-mode call pattern
+    from clausal.logic.variables import Trail
+    sg = StepGenerator(dispatch, None, *args)
+    results = []
+    gen, value = sg.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return results
+            results.append(value)
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
 
 
 # ── Fixture loading helper ────────────────────────────────────────────────────
@@ -138,7 +157,7 @@ def test_edge_matches_1_2():
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("edge", 2)
-    results = list(dispatch(1, 2, Trail(), None))
+    results = _run_dispatch(dispatch, 1, 2, Trail())
     assert len(results) == 1
 
 
@@ -146,7 +165,7 @@ def test_edge_matches_2_3():
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("edge", 2)
-    results = list(dispatch(2, 3, Trail(), None))
+    results = _run_dispatch(dispatch, 2, 3, Trail())
     assert len(results) == 1
 
 
@@ -154,7 +173,7 @@ def test_edge_matches_1_3():
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("edge", 2)
-    results = list(dispatch(1, 3, Trail(), None))
+    results = _run_dispatch(dispatch, 1, 3, Trail())
     assert len(results) == 1
 
 
@@ -162,7 +181,7 @@ def test_edge_no_match_2_1():
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("edge", 2)
-    results = list(dispatch(2, 1, Trail(), None))
+    results = _run_dispatch(dispatch, 2, 1, Trail())
     assert len(results) == 0
 
 
@@ -170,7 +189,7 @@ def test_edge_no_match_9_9():
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("edge", 2)
-    results = list(dispatch(9, 9, Trail(), None))
+    results = _run_dispatch(dispatch, 9, 9, Trail())
     assert len(results) == 0
 
 
@@ -182,7 +201,7 @@ def test_reach_direct_edge():
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("reach", 2)
     # reach(1, 2) via edge(1, 2) directly
-    results = list(dispatch(1, 2, Trail(), None))
+    results = _run_dispatch(dispatch, 1, 2, Trail())
     assert len(results) >= 1
 
 
@@ -191,7 +210,7 @@ def test_reach_transitive():
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("reach", 2)
     # reach(1, 3): directly via edge(1,3), and transitively via edge(1,2)->reach(2,3)
-    results = list(dispatch(1, 3, Trail(), None))
+    results = _run_dispatch(dispatch, 1, 3, Trail())
     assert len(results) >= 1
 
 
@@ -200,7 +219,7 @@ def test_reach_no_path_3_1():
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("reach", 2)
     # No reverse edges, so 3 cannot reach 1
-    results = list(dispatch(3, 1, Trail(), None))
+    results = _run_dispatch(dispatch, 3, 1, Trail())
     assert len(results) == 0
 
 
@@ -217,7 +236,7 @@ def test_runtime_assertz_adds_clause():
 
     # Before: no edge(3, 4)
     dispatch = logic_mod.db.get_dispatch("edge", 2)
-    assert list(dispatch(3, 4, Trail(), None)) == []
+    assert _run_dispatch(dispatch, 3, 4, Trail()) == []
 
     # Add edge(3, 4) at runtime.  We need an edge instance — get the class
     # from the module namespace (it was created by _make_functor_class_ast).
@@ -226,7 +245,7 @@ def test_runtime_assertz_adds_clause():
     logic_mod.db.assertz(Clause(head=new_head, body=[]))
     # Lazy recompile kicks in on next get_dispatch() call.
     dispatch2 = logic_mod.db.get_dispatch("edge", 2)
-    results = list(dispatch2(3, 4, Trail(), None))
+    results = _run_dispatch(dispatch2, 3, 4, Trail())
     assert len(results) == 1
 
 

@@ -433,15 +433,13 @@ class TestTrampolineIntegrationDisjunction:
 
 
 class TestTrampolineIntegrationNegation:
-    """NAF inner goal uses simple-mode dispatch (documented limitation)."""
+    """NAF inner goal uses trampoline-mode dispatch."""
 
     def test_naf_succeeds_when_inner_fails(self):
         """not(fail_pred(X)) where fail_pred has no clauses → 1 solution."""
-        from clausal.logic.compiler import compile_predicate  # simple mode for NAF inner
         x = Var()
         db = Database()
-        # NAF inner (fail_pred) compiled in simple mode so the for-loop driver works
-        compile_predicate("fail_pred", 1, [], db)
+        compile_predicate_trampoline("fail_pred", 1, [], db)
         db.assertz(Clause(
             head=Compound("naf_test", (x,)),
             body=[Not(operand=Call(func=LoadName(name="fail_pred"), args=[x], kwargs=[]))],
@@ -452,11 +450,10 @@ class TestTrampolineIntegrationNegation:
 
     def test_naf_fails_when_inner_succeeds(self):
         """not(succeed_pred(42)) where succeed_pred(42) is a fact → 0 solutions."""
-        from clausal.logic.compiler import compile_predicate  # simple mode for NAF inner
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("succeed_pred", (42,)), body=[]))
-        compile_predicate("succeed_pred", 1, db.clauses_for("succeed_pred", 1), db)
+        compile_predicate_trampoline("succeed_pred", 1, db.clauses_for("succeed_pred", 1), db)
         db.assertz(Clause(
             head=Compound("naf_test2", (x,)),
             body=[Not(operand=Call(func=LoadName(name="succeed_pred"), args=[x], kwargs=[]))],
@@ -621,20 +618,17 @@ class TestLazyRecompile:
         results = _snap(new_fn, lambda: deref(v2), v2, trail2)
         assert results == [1, 2]
 
-    def test_lazy_recompile_simple_mode(self):
-        """Same test for compile_predicate (simple mode)."""
-        from clausal.logic.compiler import compile_predicate
+    def test_lazy_recompile_via_db_dispatch(self):
+        """Lazy recompile works when driving dispatch from db.get_dispatch()."""
         db = Database()
         hv = Var()
         db.assertz(Clause(head=Compound("sdyn", (hv,)), body=[Is(left=hv, right=10)]))
-        compile_predicate("sdyn", 1, db.clauses_for("sdyn", 1), db)
+        compile_predicate_trampoline("sdyn", 1, db.clauses_for("sdyn", 1), db)
 
         hv2 = Var()
         db.assertz(Clause(head=Compound("sdyn", (hv2,)), body=[Is(left=hv2, right=20)]))
         fn = db.get_dispatch("sdyn", 1)
-        trail = fresh_trail()
         v = Var()
-        results = []
-        for _ in fn(v, trail, None):
-            results.append(deref(v))
+        trail = fresh_trail()
+        results = _snap(fn, lambda: deref(v), v, trail)
         assert results == [10, 20]

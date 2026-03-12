@@ -50,9 +50,9 @@ class Step:
 # _trampoline is a C extension providing optimised DONE, StepGenerator,
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
 
-try:
+if False:  # C extension disabled — using pure-Python implementation
     from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions  # type: ignore[import-untyped]
-except ImportError:
+else:
     # ── DONE sentinel ─────────────────────────────────────────────────────
     DONE: object = object()
 
@@ -112,14 +112,19 @@ except ImportError:
             gen, value = gen.send(value)
         return value
 
-    def solutions(root: StepGenerator) -> Generator:  # type: ignore[no-redef]
-        """Yield each solution value from *root* until DONE."""
+    def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:  # type: ignore[no-redef]
+        """Collect all solution values from *root* until DONE.
+
+        If *snapshot* is provided, it is called while bindings are live
+        and its return value is collected instead of the raw solution value.
+        """
+        results: list = []
         gen, value = root.send(None)
         while True:
             if gen is None:
                 if value is DONE:
-                    return
-                yield value
+                    return results
+                results.append(snapshot() if snapshot is not None else value)
                 gen, value = root.send(None)
             else:
                 gen, value = gen.send(value)

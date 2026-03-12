@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import pytest
 from clausal.logic.database import Clause, Module
-from clausal.logic.compiler import compile_predicate
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
 from clausal.logic.solve import solve, once, call
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, Unify as Is, Call, LoadName

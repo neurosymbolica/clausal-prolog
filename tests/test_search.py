@@ -434,25 +434,23 @@ def _make_queens_module(n: int) -> Module:
     # safe is a Python check — register as a builtin via Module.
     # But that requires adding the builtin. Instead, implement directly.
 
-    # Register a pure-Python safe check as a predicate.
-    def safe_dispatch(qs, trail, k):
+    # Register a pure-Python safe check as a predicate (trampoline protocol).
+    from clausal.logic.trampoline import StepGenerator, DONE
+
+    def safe_dispatch(this_generator, parent, qs, trail):
         """safe(Qs): check no two queens attack each other."""
         qs_val = deref(qs)
         if not isinstance(qs_val, list):
+            yield (parent, DONE)
             return
         cols = [deref(c) for c in qs_val]
         for i in range(len(cols)):
             for j in range(i + 1, len(cols)):
                 if abs(cols[i] - cols[j]) == abs(i - j):
+                    yield (parent, DONE)
                     return
-        mark = trail.mark()
-        try:
-            if k is not None:
-                yield from k(trail)
-            else:
-                yield None
-        finally:
-            trail.undo(mark)
+        yield (parent, None)
+        yield (parent, DONE)
 
     db.set_dispatch("safe", 1, safe_dispatch)
 
@@ -460,19 +458,27 @@ def _make_queens_module(n: int) -> Module:
     # Build the Ns list in the goal using between/3 enumeration is complex.
     # Simplest: build Ns as a Python list directly in a wrapper predicate.
 
-    def queens_dispatch(n_arg, qs_arg, trail, k):
+    def queens_dispatch(this_generator, parent, n_arg, qs_arg, trail):
         """queens(N, Qs): generate all N-queens solutions."""
         n_val = deref(n_arg)
         if not isinstance(n_val, int) or n_val < 0:
+            yield (parent, DONE)
             return
         ns = list(range(1, n_val + 1))
 
-        # Use builtin permutation
+        # Use builtin permutation via trampoline
         perm_dispatch = db.get_dispatch("permutation", 2)
-        for _ in perm_dispatch(ns, qs_arg, trail, None):
+        perm_sg = StepGenerator(perm_dispatch, this_generator, ns, qs_arg, trail)
+        perm_st = yield (perm_sg, None)
+        while perm_st is not DONE:
             qs_val = deref(qs_arg)
-            for _ in safe_dispatch(qs_val, trail, k):
-                yield None
+            safe_sg = StepGenerator(safe_dispatch, this_generator, qs_val, trail)
+            safe_st = yield (safe_sg, None)
+            while safe_st is not DONE:
+                yield (parent, None)
+                safe_st = yield (safe_sg, None)
+            perm_st = yield (perm_sg, None)
+        yield (parent, DONE)
 
     db.set_dispatch("queens", 2, queens_dispatch)
 

@@ -18,11 +18,12 @@ import pytest
 from clausal.logic.compiler import (
     compile_body,
     compile_goal,
-    compile_predicate,
+    compile_predicate_trampoline as compile_predicate,
     term_to_ast_expr,
     arith_to_ast_expr,
 )
 from clausal.logic.database import Clause, Database
+from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
@@ -344,17 +345,31 @@ class TestCompileBody:
 # ── Integration: compile_predicate with real bodies ──────────────────────────
 
 
+def _drive(fn, *args_and_trail):
+    """Drive a trampoline-compiled fn, yielding None per solution."""
+    root = StepGenerator(fn, None, *args_and_trail)
+    gen, value = root.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return
+            yield None
+            gen, value = root.send(None)
+        else:
+            gen, value = gen.send(value)
+
+
 def _run(fn, *args):
     """Collect all solutions from a compiled predicate."""
     trail = fresh_trail()
-    return list(fn(*args, trail, None))
+    return list(_drive(fn, *args, trail))
 
 
 def _run_and_deref(fn, var, *args):
     """Run predicate, collect deref'd values of var for each solution."""
     trail = fresh_trail()
     results = []
-    for _ in fn(*args, trail, None):
+    for _ in _drive(fn, *args, trail):
         results.append(deref(var))
     return results
 
@@ -395,7 +410,7 @@ class TestIntegrationUnification:
         a, b = Var(), Var()
         trail = fresh_trail()
         unified_during = []
-        for _ in fn(a, b, trail, None):
+        for _ in _drive(fn, a, b, trail):
             # Check binding while generator is paused (before undo)
             unified_during.append(deref(a) is b or deref(b) is a)
         assert len(unified_during) == 1
@@ -421,7 +436,7 @@ class TestIntegrationUnification:
         v = Var()
         trail = fresh_trail()
         mark = trail.mark()
-        list(fn(v, trail, None))  # run to exhaustion
+        list(_drive(fn, v, trail))  # run to exhaustion
         trail.undo(mark)          # undo to before the call
         assert is_var_unbound(v, trail)
 
@@ -438,7 +453,7 @@ class TestIntegrationUnification:
         a, b = Var(), Var()
         trail = fresh_trail()
         results_during = []
-        for _ in fn(a, b, trail, None):
+        for _ in _drive(fn, a, b, trail):
             # Check bindings while suspended (before undo)
             results_during.append((deref(a), deref(b)))
         assert results_during == [(10, 20)]
@@ -494,7 +509,7 @@ class TestIntegrationComparisons:
         # same(1, V) unifies V→1 then checks 1==1 → succeeds
         v = Var()
         trail = fresh_trail()
-        results = list(fn(1, v, trail, None))
+        results = list(_drive(fn, 1, v, trail))
         assert len(results) == 1
 
     def test_lte_boundary(self):
@@ -523,7 +538,7 @@ class TestIntegrationDisjunction:
         v = Var()
         trail = fresh_trail()
         results = []
-        for _ in fn(v, trail, None):
+        for _ in _drive(fn, v, trail):
             results.append(deref(v))
         assert results == [1, 2]
 
@@ -540,7 +555,7 @@ class TestIntegrationDisjunction:
         v = Var()
         trail = fresh_trail()
         results = []
-        for _ in fn(v, trail, None):
+        for _ in _drive(fn, v, trail):
             results.append(deref(v))
         # Is(v, "nope") then check "nope"≠"yes": left passes (binds v), yields 1
         # Then Is(v, "yes") where v may or may not be bound — depends on undo
@@ -602,7 +617,7 @@ class TestIntegrationMembership:
         v = Var()
         trail = fresh_trail()
         results = []
-        for _ in fn(v, trail, None):
+        for _ in _drive(fn, v, trail):
             results.append(deref(v))
         assert results == [1, 2, 3]
 

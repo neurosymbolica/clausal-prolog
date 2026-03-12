@@ -749,7 +749,8 @@ class TestBuiltinsInCompiledPredicates:
 
     def test_between_in_compiled_body(self):
         """A compiled predicate that calls between/3 in its body."""
-        from clausal.logic.compiler import compile_predicate
+        from clausal.logic.compiler import compile_predicate_trampoline
+        from clausal.logic.trampoline import StepGenerator, solutions
 
         mod = fresh_module()
         db = mod.db
@@ -760,17 +761,18 @@ class TestBuiltinsInCompiledPredicates:
             head=Compound("range_check", (n,)),
             body=[Call(func=LoadName(name="between"), args=[1, 5, n], kwargs=[])],
         ))
-        compile_predicate("range_check", 1, db.clauses_for("range_check", 1), db)
+        compile_predicate_trampoline("range_check", 1, db.clauses_for("range_check", 1), db)
 
         out = Var()
         t = Trail()
         fn = db.get_dispatch("range_check", 1)
-        results = [deref(out) for _ in fn(out, t, None)]
+        results = solutions(StepGenerator(fn, None, out, t), lambda: deref(out))
         assert results == [1, 2, 3, 4, 5]
 
     def test_member_in_compiled_body(self):
         """A compiled predicate that calls member/2 to enumerate."""
-        from clausal.logic.compiler import compile_predicate
+        from clausal.logic.compiler import compile_predicate_trampoline
+        from clausal.logic.trampoline import StepGenerator, solutions
 
         mod = fresh_module()
         db = mod.db
@@ -781,10 +783,10 @@ class TestBuiltinsInCompiledPredicates:
             head=Compound("pick", (x,)),
             body=[Call(func=LoadName(name="member"), args=[x, ["a", "b", "c"]], kwargs=[])],
         ))
-        compile_predicate("pick", 1, db.clauses_for("pick", 1), db)
+        compile_predicate_trampoline("pick", 1, db.clauses_for("pick", 1), db)
 
         out = Var()
         t = Trail()
         fn = db.get_dispatch("pick", 1)
-        results = [deref(out) for _ in fn(out, t, None)]
+        results = solutions(StepGenerator(fn, None, out, t), lambda: deref(out))
         assert results == ["a", "b", "c"]

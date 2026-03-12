@@ -34,6 +34,7 @@ from typing import Any, Iterator
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.terms import Compound
 
 
@@ -62,6 +63,20 @@ def _deref_walk(term: Any) -> Any:
     return term
 
 
+def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
+    """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
+    sg = StepGenerator(dispatch_fn, None, *args, trail)
+    gen, value = sg.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return
+            yield trail
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -75,8 +90,8 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     (Phase 5: cross-predicate resolution without _db string lookup).
     """
     from clausal.logic.compiler import (
-        compile_predicate,
-        compile_body,
+        compile_predicate_trampoline,
+        compile_body_trampoline,
         _collect_vars,
         _var_python_name,
         _collect_types_from_term,
@@ -102,11 +117,11 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # and term_to_ast_expr references them by name (→ global) rather than
         # emitting a walrus that creates a new Var().
         var_context.update(pre_var_context)
-        return compile_body(clause.body, db, var_context, "trail")
+        return compile_body_trampoline(clause.body, db, var_context, "trail")
 
     dummy_head = Compound("_query", ())
     clause = Clause(head=dummy_head, body=[goal])
-    return compile_predicate(
+    return compile_predicate_trampoline(
         "_query", 0, [clause], db,
         body_compiler=_query_body_compiler,
         globals_=extra_globals,
@@ -171,8 +186,7 @@ def call(
     if trail is None:
         trail = Trail()
 
-    for _ in dispatch_fn(*args, trail, None):
-        yield trail
+    yield from _drive_trampoline(dispatch_fn, trail, *args)
 
 
 def solve(
@@ -207,8 +221,7 @@ def solve(
         return
 
     dispatch_fn = _compile_as_query(goal, module)
-    for _ in dispatch_fn(trail, None):
-        yield trail
+    yield from _drive_trampoline(dispatch_fn, trail)
 
 
 def query(

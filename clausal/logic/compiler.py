@@ -1416,7 +1416,7 @@ def compile_goal_trampoline(
     trail_name: str,
     k_stmts: list[ast.stmt],
     self_name: str = "this_generator",
-    parent_name: str = "parent",
+    parent_name: str = "_tramp_parent",
 ) -> list[ast.stmt]:
     """Compile a goal using the trampoline tuple protocol.
 
@@ -1540,24 +1540,32 @@ def compile_goal_trampoline(
             ]
 
         # ── Negation-as-failure ──────────────────────────────────────────────
-        # Inner goal uses simple mode (local for-loop check; no deep recursion).
-        # The trampoline outer function has no ``k`` parameter, so inject
-        # ``k = None`` into the inner generator's local scope so that any
-        # simple-mode predicate calls inside the inner stmts can pass it.
+        # Inner goal is compiled in trampoline mode.  A mini-trampoline loop
+        # checks if at least one solution exists.  If not, the continuation
+        # (k_stmts) is executed.
         case Not(operand=inner):
-            naf_gen = _fresh("_naf_gen")
+            naf_gen_fn = _fresh("_naf_gen_fn")
             naf_flag = _fresh("_naf")
-            inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
-            k_none_stmt = _assign("k", ast.Constant(None))
-            # Always append ``return; yield`` so NAF function is a generator type.
-            naf_body = [k_none_stmt] + inner_stmts + [
-                ast.Return(value=ast.Constant(value=None)),
-                ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+            naf_sg = _fresh("_naf_sg")
+            naf_g = _fresh("_naf_g")
+            naf_v = _fresh("_naf_v")
+            # Compile inner goal in trampoline mode with a solution yield
+            inner_k = [_yield_step_stmt(_name("_naf_parent"), ast.Constant(None))]
+            inner_stmts = compile_goal_trampoline(
+                inner, db, var_context, trail_name, inner_k,
+                self_name="_naf_self", parent_name="_naf_parent",
+            )
+            # Build the inner function: def _naf_gen_fn(_naf_self, _naf_parent, trail): ...
+            naf_body = inner_stmts + [
+                _yield_step_stmt(_name("_naf_parent"), _name("_DONE")),
             ]
-            naf_fn = ast.FunctionDef(
-                name=naf_gen,
+            naf_fn_def = ast.FunctionDef(
+                name=naf_gen_fn,
                 args=ast.arguments(
-                    posonlyargs=[], args=[], vararg=None,
+                    posonlyargs=[],
+                    args=[ast.arg(arg="_naf_self"), ast.arg(arg="_naf_parent"),
+                          ast.arg(arg=trail_name)],
+                    vararg=None,
                     kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
                 ),
                 body=naf_body,
@@ -1565,19 +1573,71 @@ def compile_goal_trampoline(
                 **_EXTRA_FUNCDEF,
             )
             naf_mark = _fresh("_m")
+            # Mini-trampoline: create StepGenerator, loop until solution or DONE.
+            # _naf_sg = StepGenerator(_naf_gen_fn, None, trail)
+            # _naf_g, _naf_v = _naf_sg.send(None)
+            # while True:
+            #     if _naf_g is None:
+            #         if _naf_v is _DONE: break
+            #         _naf_flag = False; break
+            #     _naf_g, _naf_v = _naf_g.send(_naf_v)
+            sg_create = _assign(naf_sg,
+                _call(_name("StepGenerator"), _name(naf_gen_fn),
+                      ast.Constant(None), _name(trail_name)))
+            first_send = ast.Assign(
+                targets=[ast.Tuple(
+                    elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
+                    ctx=ast.Store(),
+                )],
+                value=_call(ast.Attribute(value=_name(naf_sg), attr="send", ctx=ast.Load()),
+                            ast.Constant(None)),
+            )
+            # while True body:
+            inner_if = ast.If(
+                test=ast.Compare(
+                    left=_name(naf_g),
+                    ops=[ast.Is()],
+                    comparators=[ast.Constant(None)],
+                ),
+                body=[
+                    # if _naf_v is _DONE: break
+                    ast.If(
+                        test=ast.Compare(
+                            left=_name(naf_v),
+                            ops=[ast.Is()],
+                            comparators=[_name("_DONE")],
+                        ),
+                        body=[ast.Break()],
+                        orelse=[],
+                    ),
+                    # Found a solution: _naf_flag = False; break
+                    _assign(naf_flag, ast.Constant(value=False)),
+                    ast.Break(),
+                ],
+                orelse=[
+                    # Step into child: _naf_g, _naf_v = _naf_g.send(_naf_v)
+                    ast.Assign(
+                        targets=[ast.Tuple(
+                            elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
+                            ctx=ast.Store(),
+                        )],
+                        value=_call(ast.Attribute(value=_name(naf_g), attr="send", ctx=ast.Load()),
+                                    _name(naf_v)),
+                    ),
+                ],
+            )
+            while_loop = ast.While(
+                test=ast.Constant(value=True),
+                body=[inner_if],
+                orelse=[],
+            )
             return [
-                naf_fn,
+                naf_fn_def,
                 _assign(naf_flag, ast.Constant(value=True)),
                 _assign_mark(naf_mark, trail_name),
-                ast.For(
-                    target=_name("_", ast.Store()),
-                    iter=_call(_name(naf_gen)),
-                    body=[
-                        _assign(naf_flag, ast.Constant(value=False)),
-                        ast.Break(),
-                    ],
-                    orelse=[],
-                ),
+                sg_create,
+                first_send,
+                while_loop,
                 _undo_stmt(naf_mark, trail_name),
                 _if(_name(naf_flag), k_stmts),
             ]
@@ -1741,7 +1801,7 @@ def compile_body_trampoline(
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
-    parent_name: str = "parent",
+    parent_name: str = "_tramp_parent",
     self_name: str = "this_generator",
 ) -> list[ast.stmt]:
     """Compile a flat list of goals as a conjunction using the Step protocol.
@@ -1789,7 +1849,7 @@ def _build_predicate_trampoline_funcdef(
     ``yield from`` by an outer wrapper which emits its own DONE.
     """
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["this_generator", "parent"] + arg_names + ["trail"]
+    params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
 
     all_stmts: list[ast.stmt] = []
 
@@ -1810,7 +1870,7 @@ def _build_predicate_trampoline_funcdef(
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
     if emit_done:
-        all_stmts.append(_yield_step_stmt(_name("parent"), _name("_DONE")))
+        all_stmts.append(_yield_step_stmt(_name("_tramp_parent"), _name("_DONE")))
 
     # A generator function needs at least one yield or a return+yield pair.
     # When emit_done is False and clauses is empty, add return+yield.
@@ -1991,7 +2051,7 @@ def compile_predicate_trampoline_ast(
         body_compiler = _make_body_compiler_trampoline(db)
     if not clauses:
         arg_names = [f"arg{i}" for i in range(arity)]
-        params = ["this_generator", "parent"] + arg_names + ["trail"]
+        params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
         func_def = ast.FunctionDef(
             name=f"{functor}__{arity}",
             args=ast.arguments(
@@ -1999,7 +2059,7 @@ def compile_predicate_trampoline_ast(
                 vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
             ),
             body=[
-                _yield_step_stmt(_name("parent"), _name("_DONE")),
+                _yield_step_stmt(_name("_tramp_parent"), _name("_DONE")),
             ],
             decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
         )
@@ -2009,9 +2069,9 @@ def compile_predicate_trampoline_ast(
 
 
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
-    """Trampoline variant: generator that immediately yields (parent, DONE)."""
+    """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["this_generator", "parent"] + arg_names + ["trail"]
+    params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
         name=func_name,
@@ -2025,7 +2085,7 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
             defaults=[],
         ),
         body=[
-            _yield_step_stmt(_name("parent"), _name("_DONE")),
+            _yield_step_stmt(_name("_tramp_parent"), _name("_DONE")),
         ],
         decorator_list=[],
         returns=None,
@@ -2037,33 +2097,44 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
 
 
 def _wrap_yields_with_output_guards(
-    stmts: list[ast.stmt], replacement_stmts: list[ast.stmt]
+    stmts: list[ast.stmt], output_guard_cond: "ast.expr"
 ) -> list[ast.stmt]:
-    """Replace every ``yield None`` in *stmts* with *replacement_stmts*.
+    """Wrap every solution yield in *stmts* with an output-guard condition.
 
-    Walks the AST statement list recursively.  Any ``Expr(Yield(None))``
-    found is replaced by the *replacement_stmts* (which should contain
-    guarded yields).
+    Walks the AST statement list recursively.  Any ``Expr(Yield(...))`` that
+    represents a solution point — either ``yield None`` (simple mode) or
+    ``yield (parent, None)`` (trampoline mode) — is wrapped in
+    ``if output_guard_cond: <original yield>``.
 
-    If *replacement_stmts* is empty, returns *stmts* unchanged.
+    If *output_guard_cond* is None, returns *stmts* unchanged.
     """
-    if not replacement_stmts:
+    if output_guard_cond is None:
         return stmts
 
-    def _is_yield_none(stmt: ast.stmt) -> bool:
-        return (
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Yield)
-            and (stmt.value.value is None
-                 or (isinstance(stmt.value.value, ast.Constant)
-                     and stmt.value.value.value is None))
-        )
+    def _is_solution_yield(stmt: ast.stmt) -> bool:
+        """Detect both simple-mode ``yield None`` and trampoline ``yield (parent, None)``."""
+        if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Yield)):
+            return False
+        val = stmt.value.value
+        # Simple mode: yield None
+        if val is None or (isinstance(val, ast.Constant) and val.value is None):
+            return True
+        # Trampoline mode: yield (parent, None)
+        if (isinstance(val, ast.Tuple) and len(val.elts) == 2
+                and isinstance(val.elts[1], ast.Constant)
+                and val.elts[1].value is None):
+            return True
+        return False
 
     def _walk_stmts(ss: list[ast.stmt]) -> list[ast.stmt]:
         result: list[ast.stmt] = []
         for s in ss:
-            if _is_yield_none(s):
-                result.extend(replacement_stmts)
+            if _is_solution_yield(s):
+                result.append(ast.If(
+                    test=output_guard_cond,
+                    body=[s],
+                    orelse=[],
+                ))
             else:
                 result.append(_walk_stmt(s))
         return result
@@ -2727,12 +2798,7 @@ def compile_head_to_match_case(
             else:
                 output_cond = ast.BoolOp(op=ast.And(), values=output_conditions)
 
-            output_guard_stmts = [ast.If(
-                test=output_cond,
-                body=[ast.Expr(value=ast.Yield(value=None))],
-                orelse=[],
-            )]
-            inner = _wrap_yields_with_output_guards(inner, output_guard_stmts)
+            inner = _wrap_yields_with_output_guards(inner, output_cond)
 
             gated_inner = [ast.If(test=gate_cond, body=inner, orelse=[])]
             inner = input_check_stmts + gated_inner
@@ -3142,6 +3208,44 @@ def compile_predicate(
     globals_: dict | None = None,
     pred_cls: "PredicateMeta | None" = None,
 ) -> Callable:
+    """DEPRECATED: delegates to compile_predicate_trampoline with simple-mode adapter.
+
+    Returns a function with simple-mode signature ``fn(*args, trail, k)``
+    that internally drives the trampoline.  This exists only for backward
+    compatibility in tests; production code should call
+    ``compile_predicate_trampoline`` directly.
+    """
+    import warnings
+    warnings.warn(
+        "compile_predicate() is deprecated — use compile_predicate_trampoline()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    tramp_fn = compile_predicate_trampoline(
+        functor, arity, clauses, db,
+        body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
+    )
+    from clausal.logic.trampoline import StepGenerator, DONE
+
+    def simple_adapter(*args):
+        # args = (*pred_args, trail, k)  — k is ignored (simple mode yields None)
+        pred_args = args[:-2]
+        trail = args[-2]
+        sg = StepGenerator(tramp_fn, None, *pred_args, trail)
+        gen, value = sg.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    return
+                yield None
+                gen, value = sg.send(None)
+            else:
+                gen, value = gen.send(value)
+
+    simple_adapter.__name__ = tramp_fn.__name__
+    simple_adapter.__qualname__ = tramp_fn.__qualname__
+    return simple_adapter
+    # Original docstring and implementation preserved below for reference.
     """Compile all clauses of a predicate into a dispatch generator function.
 
     Each clause becomes one ``match`` block in the generated function.

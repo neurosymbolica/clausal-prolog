@@ -9,7 +9,7 @@ import pytest
 
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
-    compile_predicate,
+    compile_predicate_trampoline as compile_predicate,
     compile_predicate_trampoline,
     _extract_first_arg_key,
     _build_first_arg_index,
@@ -27,13 +27,11 @@ from clausal.logic.builtins import _normalize_fact_clause
 
 
 def _simple_solutions(dispatch, args, trail=None):
-    """Collect all solutions from a simple-mode dispatch function."""
-    if trail is None:
-        trail = Trail()
-    results = []
-    for _ in dispatch(*args, trail, None):
-        results.append(tuple(deref(a) for a in args))
-    return results
+    """Collect all solutions from a trampoline-mode dispatch function.
+
+    (Legacy name kept for minimal test churn; now drives trampoline protocol.)
+    """
+    return _trampoline_solutions(dispatch, args, trail)
 
 
 def _trampoline_solutions(dispatch, args, trail=None):

@@ -236,8 +236,8 @@ class TestDeferredCompilation:
             shutil.rmtree(pycache)
 
         try:
-            with patch("clausal.import_hook.compile_predicate",
-                       wraps=clausal.import_hook.compile_predicate) as mock_cp:
+            with patch("clausal.import_hook.compile_predicate_trampoline",
+                       wraps=clausal.import_hook.compile_predicate_trampoline) as mock_cp:
                 _load_module(mod_name, str(src))
                 # Should be called once for the single predicate item/1.
                 assert mock_cp.call_count == 1
@@ -266,8 +266,8 @@ class TestDeferredCompilation:
             shutil.rmtree(pycache)
 
         try:
-            with patch("clausal.import_hook.compile_predicate",
-                       wraps=clausal.import_hook.compile_predicate) as mock_cp:
+            with patch("clausal.import_hook.compile_predicate_trampoline",
+                       wraps=clausal.import_hook.compile_predicate_trampoline) as mock_cp:
                 _load_module(mod_name, str(src))
                 # Two predicates: foo/1 and bar/1.
                 assert mock_cp.call_count == 2

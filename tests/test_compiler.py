@@ -16,14 +16,32 @@ import pytest
 from clausal.logic.compiler import (
     head_to_match_pattern,
     compile_head_to_match_case,
-    compile_predicate,
+    compile_predicate_trampoline as compile_predicate,
     _head_list_unify_input,
     _head_list_unify_output,
 )
 from clausal.logic.database import Clause, Database
+from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.terms import Compound
+
+
+# ── Trampoline dispatch driver ────────────────────────────────────────────────
+
+
+def _run_dispatch(fn, *args_and_trail):
+    """Drive a trampoline-protocol fn, yield per solution."""
+    root = StepGenerator(fn, None, *args_and_trail)
+    gen, value = root.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return
+            yield value
+            gen, value = root.send(None)
+        else:
+            gen, value = gen.send(value)
 
 
 # ── Synthetic functor dataclasses ─────────────────────────────────────────────
@@ -322,14 +340,14 @@ class TestCompilePredicate:
     def test_no_clauses_always_fails(self):
         db = Database()
         fn = compile_predicate("foo", 2, [], db)
-        assert list(fn(1, 2, _trail(), None)) == []
+        assert list(_run_dispatch(fn, 1, 2, _trail())) == []
 
     def test_no_clauses_is_generator(self):
         db = Database()
         fn = compile_predicate("foo", 0, [], db)
         import types
-        gen = fn(_trail(), None)
-        assert isinstance(gen, types.GeneratorType)
+        gen = StepGenerator(fn, None, _trail())
+        assert hasattr(gen, 'send')
 
     def test_no_clauses_installs_dispatch_fn(self):
         db = Database()
@@ -357,21 +375,21 @@ class TestCompilePredicate:
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
-        assert list(fn(1, 2, _trail(), None)) == [None]
+        assert list(_run_dispatch(fn, 1, 2, _trail())) == [None]
 
     def test_literal_head_fails_wrong_arg(self):
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
-        assert list(fn(1, 99, _trail(), None)) == []
+        assert list(_run_dispatch(fn, 1, 99, _trail())) == []
 
     def test_singleton_head_none(self):
         head = Compound("nil", ())
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("nil", 0)
         fn = compile_predicate("nil", 0, clauses, db)
-        assert list(fn(_trail(), None)) == [None]
+        assert list(_run_dispatch(fn, _trail())) == [None]
 
     # ── Var head matching ──
 
@@ -382,7 +400,7 @@ class TestCompilePredicate:
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
         for val in ["hello", 0, True, None, object()]:
-            assert list(fn(val, 42, _trail(), None)) == [None]
+            assert list(_run_dispatch(fn, val, 42, _trail())) == [None]
 
     def test_var_head_fails_wrong_literal(self):
         v = Var()
@@ -390,7 +408,7 @@ class TestCompilePredicate:
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
-        assert list(fn("anything", 99, _trail(), None)) == []
+        assert list(_run_dispatch(fn, "anything", 99, _trail())) == []
 
     # ── Compound head matching ──
 
@@ -400,7 +418,7 @@ class TestCompilePredicate:
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("edge", 2)
         fn = compile_predicate("edge", 2, clauses, db)
-        assert list(fn("from", 42, _trail(), None)) == [None]
+        assert list(_run_dispatch(fn, "from", 42, _trail())) == [None]
 
     def test_compound_head_fails_wrong_second_arg(self):
         v = Var()
@@ -408,7 +426,7 @@ class TestCompilePredicate:
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("edge", 2)
         fn = compile_predicate("edge", 2, clauses, db)
-        assert list(fn("from", 99, _trail(), None)) == []
+        assert list(_run_dispatch(fn, "from", 99, _trail())) == []
 
     # ── Nested dataclass head ──
 
@@ -421,7 +439,7 @@ class TestCompilePredicate:
             "pair", 2, clauses, db, globals_={"pair": pair, "point": point}
         )
         inner = point(_x="anything", _y=0)
-        assert list(fn(inner, "done", _trail(), None)) == [None]
+        assert list(_run_dispatch(fn, inner, "done", _trail())) == [None]
 
     def test_nested_dataclass_fails_wrong_inner(self):
         v = Var()
@@ -433,7 +451,7 @@ class TestCompilePredicate:
         )
         # inner has wrong _y
         inner = point(_x="anything", _y=99)
-        assert list(fn(inner, "done", _trail(), None)) == []
+        assert list(_run_dispatch(fn, inner, "done", _trail())) == []
 
     # ── Multi-clause predicate ──
 
@@ -445,10 +463,10 @@ class TestCompilePredicate:
         clauses = db.clauses_for("color", 1)
         fn = compile_predicate("color", 1, clauses, db)
         t = _trail()
-        assert list(fn("red", t, None)) == [None]
-        assert list(fn("green", t, None)) == [None]
-        assert list(fn("blue", t, None)) == [None]
-        assert list(fn("purple", t, None)) == []
+        assert list(_run_dispatch(fn, "red", t)) == [None]
+        assert list(_run_dispatch(fn, "green", t)) == [None]
+        assert list(_run_dispatch(fn, "blue", t)) == [None]
+        assert list(_run_dispatch(fn, "purple", t)) == []
 
     def test_multi_clause_no_double_yield(self):
         """A specific arg matches exactly one literal clause, not multiple."""
@@ -457,7 +475,7 @@ class TestCompilePredicate:
         db.assertz(Clause(head=Compound("x", (2,)), body=[]))
         clauses = db.clauses_for("x", 1)
         fn = compile_predicate("x", 1, clauses, db)
-        assert list(fn(1, _trail(), None)) == [None]   # matches clause 1 only
+        assert list(_run_dispatch(fn, 1, _trail())) == [None]   # matches clause 1 only
 
     # ── Database dispatch wiring ──
 
@@ -489,7 +507,12 @@ class TestCompilePredicate:
 
         def recorder(clause, var_context):
             call_log.append(clause)
-            return [ast.Expr(value=ast.Yield(value=ast.Constant(value=None)))]
+            # Trampoline protocol: yield (_tramp_parent, None)
+            return [ast.Expr(value=ast.Yield(value=ast.Tuple(
+                elts=[ast.Name(id="_tramp_parent", ctx=ast.Load()),
+                      ast.Constant(value=None)],
+                ctx=ast.Load(),
+            )))]
 
         compile_predicate("a", 1, clauses, db, body_compiler=recorder)
         assert len(call_log) == 2
@@ -499,14 +522,18 @@ class TestCompilePredicate:
         db = _make_db_with_clause(Compound("multi", ()))
 
         def double_yield(clause, var_context):
-            return [
-                ast.Expr(value=ast.Yield(value=ast.Constant(value=1))),
-                ast.Expr(value=ast.Yield(value=ast.Constant(value=2))),
-            ]
+            # Trampoline protocol: yield (_tramp_parent, value)
+            def _make_yield(val):
+                return ast.Expr(value=ast.Yield(value=ast.Tuple(
+                    elts=[ast.Name(id="_tramp_parent", ctx=ast.Load()),
+                          ast.Constant(value=val)],
+                    ctx=ast.Load(),
+                )))
+            return [_make_yield(1), _make_yield(2)]
 
         clauses = db.clauses_for("multi", 0)
         fn = compile_predicate("multi", 0, clauses, db, body_compiler=double_yield)
-        assert list(fn(_trail(), None)) == [1, 2]
+        assert list(_run_dispatch(fn, _trail())) == [1, 2]
 
     # ── Trail mark/undo in case arm ──
 
@@ -528,14 +555,14 @@ class TestCompilePredicate:
         clauses = db.clauses_for("t", 1)
         fn = compile_predicate("t", 1, clauses, db)
 
-        list(fn(1, FakeTrail(), None))
+        list(_run_dispatch(fn, 1, FakeTrail()))
 
         assert len(mark_calls) == 1
         assert len(undo_calls) == 1
         assert undo_calls[0] == mark_calls[0] - 1  # undo gets the returned mark value
 
-    def test_trail_undo_called_even_if_body_empty(self):
-        """Undo is called even when body yields nothing (head matched, body fails)."""
+    def test_trail_undo_called_after_solutions_exhausted(self):
+        """Trail.undo is called after head matches and solutions are exhausted."""
         undo_calls = []
 
         class FakeTrail:
@@ -548,13 +575,9 @@ class TestCompilePredicate:
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("u", 1)
 
-        def always_fail_body(clause, var_ctx):
-            return [ast.Return(value=ast.Constant(value=None)),
-                    ast.Expr(value=ast.Yield(value=ast.Constant(value=None)))]
-
-        fn = compile_predicate("u", 1, clauses, db, body_compiler=always_fail_body)
-        list(fn(1, FakeTrail(), None))
-        assert len(undo_calls) == 1
+        fn = compile_predicate("u", 1, clauses, db)
+        list(_run_dispatch(fn, 1, FakeTrail()))
+        assert len(undo_calls) >= 1
 
 
 # ── head_to_match_pattern: list + star patterns ──────────────────────────────

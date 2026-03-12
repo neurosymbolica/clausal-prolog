@@ -36,7 +36,7 @@ import warnings
 from .pythonic_ast import nodes as simple_ast
 from .templating.term_rewriting import EmbedTransformer
 from .logic.database import Module as LogicModule, head_key
-from .logic.compiler import compile_predicate
+from .logic.compiler import compile_predicate_trampoline
 from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm
@@ -82,8 +82,8 @@ def _compile_all_pending(pending, db, module_dict):
     """Compile each pending predicate once (after all clauses asserted)."""
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
-        compile_predicate(functor, arity, clauses, db,
-                          globals_=module_dict, pred_cls=pred_cls)
+        compile_predicate_trampoline(functor, arity, clauses, db,
+                                     globals_=module_dict, pred_cls=pred_cls)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
