@@ -839,6 +839,11 @@ class EmbedTransformer(NodeTransformer):
     def visit_Expr(transformer, expr_stmt):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         match expr_stmt.value:
+            # module(name, [exports]) declaration — strip to pass statement.
+            case Call(func=Name(id="module"), args=[_, _]) if (
+                transformer._scope_depth == 0
+            ):
+                return replace(Pass(), expr_stmt)
             case Tuple(elts=[single_element], ctx=Load()) if (
                 isinstance(single_element, Call)
                 and isinstance(single_element.func, Name)

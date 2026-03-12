@@ -48,12 +48,12 @@ test("red is a color") <- color("red")
 test("green is a color") <- color("green")
 test("blue is a color") <- color("blue")
 test("yellow is a color") <- color("yellow")
-test("purple is not a color") <- not color("purple")
+test("purple is not a color") <- (not color("purple"))
 test("wa adjacent to nt") <- adjacent("wa", "nt")
 test("wa adjacent to sa") <- adjacent("wa", "sa")
 test("nsw adjacent to v") <- adjacent("nsw", "v")
 test("a coloring exists") <- colorable(_)
-test("coloring has 7 regions") <- colorable(COLORING), length(COLORING, 7)
+test("coloring has 7 regions") <- (colorable(COLORING), length(COLORING, 7))
 test("wa and nt get different colors") <- (
     colorable(COLORING),
     member(["wa", WA], COLORING),

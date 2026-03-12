@@ -22,5 +22,5 @@ test("fib(3) = 2") <- fib(3, 2)
 test("fib(4) = 3") <- fib(4, 3)
 test("fib(5) = 5") <- fib(5, 5)
 test("fib(6) = 8") <- fib(6, 8)
-test("fib(7) = 13") <- fib(7, F), F == 13
-test("fib(N, 8) finds N=6") <- fib(N, 8), N == 6
+test("fib(7) = 13") <- (fib(7, F), F == 13)
+test("fib(N, 8) finds N=6") <- (fib(N, 8), N == 6)
