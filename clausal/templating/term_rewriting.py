@@ -204,28 +204,47 @@ class TermTransformer(NodeTransformer):
         left = compare.left
 
         # Detect '<-' pseudo-operator: written as  a <- b  in source.
-        # Python parses this as Compare(left=a, ops=[Lt], comparators=[UnaryOp(USub, b)]).
-        # We recognise it when the '-' immediately follows '<' (no space between them).
-        if (
-            len(operators) == 1
-            and isinstance(operators[0], Lt)
-            and isinstance(comparators[0], UnaryOp)
-            and isinstance(comparators[0].op, USub)
-        ):
-            right_hand_side = comparators[0]
-            # Detect '<-': '<' and '-' must be adjacent (no space between them).
-            # The gap from left's end to '-' is 1 for `a<-b` or 2 for `a <- b`;
-            # a gap of 3+ means `a < -b` (space between '<' and '-').
-            if (
-                left.end_lineno == right_hand_side.lineno
-                and 1 <= right_hand_side.col_offset - left.end_col_offset <= 2
-            ):
-                return node_ast(
-                    "Predicate",
-                    compare,
-                    head=transformer.visit(left),
-                    body=transformer.visit(right_hand_side.operand),
-                )
+        #
+        # Simple case: Python parses `a <- b` as
+        #   Compare(left=a, ops=[Lt], comparators=[UnaryOp(USub, b)])
+        # The USub node sits at the top of the comparator.
+        #
+        # Operator-body case: when the body contains binary operators whose
+        # precedence is lower than unary minus (i.e. +, -, *, /, //, %, @),
+        # the USub ends up as the leftmost node inside a BinOp chain.
+        # e.g. `a <- b + c` → Compare(a, [Lt], [BinOp(UnaryOp(USub,b), Add, c)])
+        #
+        # In both cases we look for the leftmost node reachable by following
+        # BinOp.left, confirm it is UnaryOp(USub), and verify that its '-' is
+        # adjacent to the preceding '<' (gap ≤ 2 columns, same line).
+        if len(operators) == 1 and isinstance(operators[0], Lt):
+            comparator = comparators[0]
+            # Walk left through any BinOp chain to find the leftmost node.
+            binop_path = []
+            node = comparator
+            while isinstance(node, BinOp):
+                binop_path.append(node)
+                node = node.left
+            if isinstance(node, UnaryOp) and isinstance(node.op, USub):
+                usub_node = node
+                # '<' and '-' must be adjacent: gap of 1 (`a<-b`) or 2 (`a <- b`).
+                if (
+                    left.end_lineno == usub_node.lineno
+                    and 1 <= usub_node.col_offset - left.end_col_offset <= 2
+                ):
+                    # Reconstruct the body by replacing the USub with its operand.
+                    body_ast = usub_node.operand
+                    for binop in reversed(binop_path):
+                        body_ast = replace(
+                            BinOp(left=body_ast, op=binop.op, right=binop.right),
+                            binop,
+                        )
+                    return node_ast(
+                        "Predicate",
+                        compare,
+                        head=transformer.visit(left),
+                        body=transformer.visit(body_ast),
+                    )
 
         # Detect 'X == +Y': Eq with a UnaryPlus right-hand side → ArithConstraint stub.
         # Emits ArithConstraint(expr=Eq(X, Y)) so the compiler can raise NotImplementedError.

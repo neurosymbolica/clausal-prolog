@@ -274,6 +274,50 @@ def test_spaced_lt_negate_not_arrow():
     assert isinstance(node.right, sa.Negate)
 
 
+def test_arrow_body_add():
+    # a <- b + c  parses as  a < ((-b) + c)  — USub is leftmost inside BinOp.
+    # Should produce Predicate(head=a, body=Add(b, c)), NOT Lt.
+    node = term_eval("a <- b + c", sa.Predicate)
+    assert isinstance(node.head, sa.LoadName) and node.head.name == 'a'
+    assert isinstance(node.body, sa.Add)
+    assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
+    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
+
+
+def test_arrow_body_sub():
+    # a <- b - c  parses as  a < ((-b) - c)  — same leftmost-USub pattern.
+    node = term_eval("a <- b - c", sa.Predicate)
+    assert isinstance(node.body, sa.Sub)
+    assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
+    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
+
+
+def test_arrow_body_mult():
+    # a <- b * c  parses as  a < ((-b) * c)  — same leftmost-USub pattern.
+    node = term_eval("a <- b * c", sa.Predicate)
+    assert isinstance(node.body, sa.Mult)
+    assert isinstance(node.body.left, sa.LoadName) and node.body.left.name == 'b'
+    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'c'
+
+
+def test_arrow_body_chained_binop():
+    # a <- b + c + d  parses as  a < (((-b) + c) + d)  — USub two levels deep.
+    node = term_eval("a <- b + c + d", sa.Predicate)
+    assert isinstance(node.body, sa.Add)
+    inner = node.body.left
+    assert isinstance(inner, sa.Add)
+    assert isinstance(inner.left, sa.LoadName) and inner.left.name == 'b'
+    assert isinstance(inner.right, sa.LoadName) and inner.right.name == 'c'
+    assert isinstance(node.body.right, sa.LoadName) and node.body.right.name == 'd'
+
+
+def test_arrow_body_pow_still_works():
+    # a <- b ** c  parses as  a < -(b ** c)  — USub at top level (** > unary -).
+    # This already worked before; confirm it still works after the refactor.
+    node = term_eval("a <- b ** c", sa.Predicate)
+    assert isinstance(node.body, sa.Pow)
+
+
 # ── TermTransformer: collections ──────────────────────────────────────────────
 
 def test_list_literal():
