@@ -30,12 +30,12 @@ leq([X], [Y]) <- leq(X, Y)
 peano_to_int(N=[], I=0),
 peano_to_int([N], I) <- (
     peano_to_int(N, I1),
-    I == I1 + 1
+    I := I1 + 1
 )
 
 int_to_peano(I=0, N=[]),
 int_to_peano(I, [N]) <- (
     I > 0,
-    I1 == I - 1,
+    I1 := I - 1,
     int_to_peano(I1, N)
 )

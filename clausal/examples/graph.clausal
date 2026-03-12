@@ -22,7 +22,7 @@ path_acc(FROM=0, TO=0, VISITED=[], PATH=[]),
 path_acc(X, X, _, [X]),
 path_acc(X, Y, VISITED, [X, *REST]) <- (
     edge(X, Z),
-    not member(Z, VISITED),
+    Z not in VISITED,
     path_acc(Z, Y, [Z, *VISITED], REST)
 )
 

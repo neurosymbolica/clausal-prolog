@@ -4,6 +4,7 @@ module(symbolic_diff, [
 
 # Symbolic differentiation using operator-node terms:
 #   (E1 + E2), (E1 * E2), (E ** N)
+# This has been rewritten with regular terms instead of lists containing strings, there may be issues
 
 # d(x)/dx = 1
 d(EXPR=0, VAR=0, DERIV=0),
@@ -33,6 +34,6 @@ d(A * B, X, A * DB + B * DA) <- (
 # Power rule: d(e^n)/dx = n * e^(n-1) * de/dx
 d(E ** N, X, N * (E ** N1) * DE) <- (
     number(N),
-    N1 == N - 1,
+    N1 := N - 1,
     d(E, X, DE)
 )
