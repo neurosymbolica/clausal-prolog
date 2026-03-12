@@ -117,7 +117,14 @@ else:
 
         If *snapshot* is provided, it is called while bindings are live
         and its return value is collected instead of the raw solution value.
+
+        Handles SLG tabling: ``_TABLING_SUSPEND`` is intercepted and converted
+        to DONE so the parent's while-loop exits normally.  The consumer
+        generator remains saved in the table entry's suspended list for later
+        resumption by the leader's completion phase.
         """
+        from clausal.logic.tabling import _TABLING_SUSPEND
+
         results: list = []
         gen, value = root.send(None)
         while True:
@@ -127,7 +134,11 @@ else:
                 results.append(snapshot() if snapshot is not None else value)
                 gen, value = root.send(None)
             else:
-                gen, value = gen.send(value)
+                # Intercept _TABLING_SUSPEND → send DONE to parent instead
+                if value is _TABLING_SUSPEND:
+                    gen, value = gen.send(DONE)
+                else:
+                    gen, value = gen.send(value)
 
 
 # ── Minimal test problem: n! ─────────────────────────────────────────────────

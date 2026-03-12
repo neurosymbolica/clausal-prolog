@@ -47,6 +47,7 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
+        self._table_store: dict = {}
         self.module_dict: dict | None = module_dict
 
     def assertz(self, clause: Clause) -> None:
@@ -57,6 +58,9 @@ class Database:
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             self._dispatch[key] = None
+        # Auto-invalidate tabled answers when a tabled predicate changes.
+        if key in self._tabled:
+            self.abolish_table(functor, arity)
 
     def asserta(self, clause: Clause) -> None:
         """Add clause at front of its predicate's clause list."""
@@ -68,6 +72,9 @@ class Database:
         # Invalidate compiled dispatch so lazy recompile triggers on next use.
         if key in self._dispatch:
             self._dispatch[key] = None
+        # Auto-invalidate tabled answers when a tabled predicate changes.
+        if key in self._tabled:
+            self.abolish_table(functor, arity)
 
     def retract(self, head: Any) -> bool:
         """Remove first clause whose head structurally equals head.
@@ -84,6 +91,9 @@ class Database:
                 # Invalidate compiled dispatch.
                 if key in self._dispatch:
                     self._dispatch[key] = None
+                # Auto-invalidate tabled answers when a tabled predicate changes.
+                if key in self._tabled:
+                    self.abolish_table(functor, arity)
                 return True
         return False
 
@@ -177,6 +187,26 @@ class Database:
     def is_tabled(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -table."""
         return (functor, arity) in self._tabled
+
+    @property
+    def table_store(self) -> dict:
+        """The shared table store for all tabled predicates in this database."""
+        return self._table_store
+
+    def abolish_table(self, functor: str, arity: int) -> None:
+        """Remove all cached answers for (functor, arity).
+
+        Entries are keyed as (functor, arity, variant_key) in _table_store.
+        This removes all variant entries for the given predicate.
+        """
+        to_remove = [k for k in self._table_store
+                     if k[0] == functor and k[1] == arity]
+        for k in to_remove:
+            del self._table_store[k]
+
+    def abolish_all_tables(self) -> None:
+        """Remove all cached tabling answers."""
+        self._table_store.clear()
 
     def __repr__(self) -> str:
         parts = ", ".join(f"{f}/{a}" for f, a in sorted(self._clauses))

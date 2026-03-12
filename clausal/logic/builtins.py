@@ -648,6 +648,37 @@ def _retract_factory(db):
     return retract__1
 
 
+# ── Tabling ───────────────────────────────────────────────────────────────────
+
+
+@_db_builtin("abolish_table", 2)
+def _abolish_table_factory(db):
+    """abolish_table(Functor, Arity) — remove cached answers for a tabled predicate."""
+
+    def abolish_table__2(functor_arg, arity_arg, trail, k):
+        f = deref(functor_arg)
+        a = deref(arity_arg)
+        if is_var(f) or is_var(a):
+            return
+        if not isinstance(f, str) or not isinstance(a, int):
+            return
+        db.abolish_table(f, a)
+        yield None
+
+    return abolish_table__2
+
+
+@_db_builtin("abolish_all_tables", 0)
+def _abolish_all_tables_factory(db):
+    """abolish_all_tables — remove all cached tabling answers."""
+
+    def abolish_all_tables__0(trail, k):
+        db.abolish_all_tables()
+        yield None
+
+    return abolish_all_tables__0
+
+
 # ── WK-5: Keyword-term introspection ──────────────────────────────────────────
 
 

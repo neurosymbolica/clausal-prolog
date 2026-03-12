@@ -79,11 +79,29 @@ def _assert_fact_deferred(term, logic_module, module_dict, pending):
 
 
 def _compile_all_pending(pending, db, module_dict):
-    """Compile each pending predicate once (after all clauses asserted)."""
+    """Compile each pending predicate once (after all clauses asserted).
+
+    Tabled predicates are compiled in trampoline mode and wrapped with the
+    SLG tabling wrapper.  Non-tabled predicates use the standard trampoline
+    compilation.
+    """
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, db,
                                      globals_=module_dict, pred_cls=pred_cls)
+
+    # Wrap tabled predicates AFTER all compilation (so cross-predicate
+    # references are resolved before wrapping).
+    for (functor, arity), pred_cls in pending.items():
+        if db.is_tabled(functor, arity):
+            from clausal.logic.tabling import make_tabled_wrapper_trampoline
+            original_fn = (pred_cls._get_dispatch() if pred_cls is not None
+                           else db.get_dispatch(functor, arity))
+            wrapped = make_tabled_wrapper_trampoline(
+                original_fn, functor, arity, db.table_store)
+            if pred_cls is not None:
+                pred_cls._dispatch_fn = wrapped
+            db.set_dispatch(functor, arity, wrapped)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────

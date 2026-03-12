@@ -65,6 +65,8 @@ def _deref_walk(term: Any) -> Any:
 
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
+    from clausal.logic.tabling import _TABLING_SUSPEND
+
     sg = StepGenerator(dispatch_fn, None, *args, trail)
     gen, value = sg.send(None)
     while True:
@@ -74,7 +76,11 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             yield trail
             gen, value = sg.send(None)
         else:
-            gen, value = gen.send(value)
+            # Intercept _TABLING_SUSPEND → send DONE to parent instead
+            if value is _TABLING_SUSPEND:
+                gen, value = gen.send(DONE)
+            else:
+                gen, value = gen.send(value)
 
 
 def _compile_as_query(goal: Any, module: Module) -> Any:

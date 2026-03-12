@@ -1,0 +1,11 @@
+-table(path/2)
+
+edge(1, 2),
+edge(2, 3),
+edge(3, 1),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (
+    edge(X, Z),
+    path(Z, Y)
+)
