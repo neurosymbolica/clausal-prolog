@@ -8,11 +8,12 @@ length([HEAD, *TAIL], N) <- (
     N == N1 + 1
 )
 
-# append/3 — repeated Var HEAD in head positions 1 and 3
+# append/3 — standard list concatenation: append(Xs, Ys, Zs)
+# repeated Var HEAD in clause 2 (positions 1 and 3)
 
-append([], ELEM, [ELEM]),
-append([HEAD, *TAIL], ELEM, [HEAD, *TAIL_WITH_ELEM]) <- (
-    append(TAIL, ELEM, TAIL_WITH_ELEM)
+append(LHS=[], RHS=TOGETHER, TOGETHER=TOGETHER),
+append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- (
+    append(TAIL, RHS, REST)
 )
 
 # last/2

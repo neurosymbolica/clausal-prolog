@@ -13,8 +13,8 @@ ancestor(X, Y) <- (
     ancestor(Z, Y)
 )
 
-sibling(X, Y) <- (
-    parent(Z, X),
-    parent(Z, Y),
-    X is not Y
+sibling(PERSON, SIBLING) <- (
+    PERSON is not SIBLING,
+    parent(PARENT, PERSON),
+    parent(PARENT, SIBLING),
 )
