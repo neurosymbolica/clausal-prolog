@@ -120,15 +120,15 @@ To evaluate an arithmetic expression and bind the result to a variable, use the 
 ```python
 fib(N, RESULT) <- (
     N > 1,
-    (N1 := N - 1),
-    (N2 := N - 2),
+    N1 := N - 1,
+    N2 := N - 2,
     fib(N1, A),
     fib(N2, B),
-    (RESULT := A + B)
+    RESULT := A + B
 )
 ```
 
-`(N1 := N - 1)` evaluates `N - 1` as Python arithmetic and unifies the result with `N1`. This is equivalent to Prolog's `is` operator. Parentheses are required when `:=` appears inside an `and`-chain (Python syntax restriction).
+`N1 := N - 1` evaluates `N - 1` as Python arithmetic and unifies the result with `N1`. This is equivalent to Prolog's `is` operator. No extra parentheses are needed: clause bodies are already inside `(...)`, and `:=`'s RHS is a `test` expression in Python's grammar so it does not consume the comma that follows.
 
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically

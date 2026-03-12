@@ -5,7 +5,7 @@
 factorial(N=0, RESULT=1),
 factorial(N, RESULT) <- (
     N > 0,
-    (N1 := N - 1),
+    N1 := N - 1,
     factorial(N1, R1),
     RESULT := N * R1
 )
