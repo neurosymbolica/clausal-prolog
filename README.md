@@ -48,6 +48,33 @@ parent(tom, bob)<-True,
 parent(bob, ann)<-True,
 ```
 
+## Testing
+
+`.clausal` files can include inline tests as `test/1` clauses:
+
+```
+test("fib(5) = 5") <- fib(5, 5)
+```
+
+A test passes if its body produces at least one solution.
+
+**Standalone runner** (no pytest needed):
+
+```bash
+python -m clausal.testing clausal/examples/           # all .clausal files
+python -m clausal.testing clausal/examples/hanoi.clausal  # single file
+python -m clausal.testing -v clausal/examples/        # verbose
+```
+
+**Via pytest** (`.clausal` tests are collected automatically alongside Python tests):
+
+```bash
+python -m pytest clausal/examples/ -v        # just .clausal tests
+python -m pytest tests/ clausal/examples/ -q  # everything together
+```
+
+See [docs/testing.md](docs/testing.md) for details.
+
 ## Requirements
 
 - Python ≥ 3.14
