@@ -1,0 +1,44 @@
+# ISO Prolog conformity: term creation and decomposition
+#
+# ISO §8.5.1 — functor/3
+# ISO §8.5.2 — arg/3
+# ISO §8.5.3 — =../2 (univ)
+#
+# Note: many ISO tests for these builtins involve passing compound terms
+# as data (e.g. functor(f(a,b), Name, Arity)).  In clausal, f(a,b) in
+# goal position is a predicate call, not a term.  Only construction-mode
+# tests and tests with string/integer arguments can be expressed here.
+# Inspection-mode tests remain in the Python test file.
+
+# ── functor/3 — construction mode ────────────────────────────────────────────
+
+test("construct atom: functor(T, a, 0)") <- (
+    functor(T_, "a", 0) and T_ == "a"
+)
+
+# ── functor/3 — decomposition of atoms ───────────────────────────────────────
+# Strings are atoms; functor/3 can decompose them
+
+test("decompose atom: functor('hello', Name, Arity)") <- (
+    functor("hello", N_, A_) and N_ == "hello" and A_ == 0
+)
+
+test("decompose empty string") <- (
+    functor("", N_, A_) and N_ == "" and A_ == 0
+)
+
+# ── univ/2 — construction from list ──────────────────────────────────────────
+
+test("construct atom from list: T =.. ['a']") <- (
+    univ(T_, ["a"]) and T_ == "a"
+)
+
+# ── univ/2 — decomposition of atoms ──────────────────────────────────────────
+
+test("decompose atom: 'a' =.. X") <- (
+    univ("a", X_) and X_ == ["a"]
+)
+
+test("decompose string: 'hello' =.. X") <- (
+    univ("hello", X_) and X_ == ["hello"]
+)

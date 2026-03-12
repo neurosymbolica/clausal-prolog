@@ -1,0 +1,84 @@
+# ISO Prolog conformity: type-checking predicates
+#
+# ISO §8.3 — var/1, nonvar/1, atom/1, integer/1, float/1, number/1,
+#            compound/1, callable/1
+#
+# Differences from ISO:
+#   atom/1 tests for Python str (not Prolog atom symbol)
+#   float/1 spelled float_/1 — cannot be tested in .clausal (trailing _ = Var)
+#   bool excluded from integer/1, number/1
+#   [] is a list, not an atom
+#
+# Limitations in .clausal syntax:
+#   - float_/1 has trailing underscore so it's parsed as a logic variable.
+#     float_ tests must use Python test file.
+#   - Negative literals like -1 are parsed as Negate(1), not as int.
+#     Tests needing negative int args must use Python test file.
+#   - Complex Python types (bool, complex) can't be tested directly.
+
+# ── var/1 ────────────────────────────────────────────────────────────────────
+
+test("var: unbound var succeeds") <- var(X_)
+test("var: integer fails") <- (not var(42))
+test("var: atom fails") <- (not var("hello"))
+test("var: bound var fails") <- (X_ is 1 and not var(X_))
+
+# ── nonvar/1 ─────────────────────────────────────────────────────────────────
+
+test("nonvar: integer succeeds") <- nonvar(42)
+test("nonvar: atom succeeds") <- nonvar("hello")
+test("nonvar: unbound var fails") <- (not nonvar(X_))
+test("nonvar: bound var succeeds") <- (X_ is 1 and nonvar(X_))
+test("nonvar: list succeeds") <- nonvar([1, 2])
+
+# ── atom/1 ───────────────────────────────────────────────────────────────────
+
+test("atom: string succeeds") <- atom("hello")
+test("atom: empty string succeeds") <- atom("")
+test("atom: integer fails") <- (not atom(1))
+test("atom: unbound var fails") <- (not atom(X_))
+test("atom: list fails") <- (not atom([]))
+
+# ── integer/1 ────────────────────────────────────────────────────────────────
+
+test("integer: positive") <- integer(1)
+test("integer: zero") <- integer(0)
+test("integer: large") <- integer(100000000000000000000)
+test("integer: string fails") <- (not integer("1"))
+test("integer: var fails") <- (not integer(X_))
+# Note: integer(-1), integer(True/False) tested in Python test file
+
+# ── float_/1 ─────────────────────────────────────────────────────────────────
+# Cannot test float_/1 in .clausal — 'float_' is parsed as a logic variable.
+# See test_iso_type_checking.py for these tests.
+
+# ── number/1 ─────────────────────────────────────────────────────────────────
+
+test("number: integer") <- number(42)
+test("number: float") <- number(3.14)
+test("number: string fails") <- (not number("42"))
+test("number: var fails") <- (not number(X_))
+
+# ── string/1 ─────────────────────────────────────────────────────────────────
+
+test("string: str succeeds") <- string("hello")
+test("string: empty str") <- string("")
+test("string: int fails") <- (not string(42))
+test("string: var fails") <- (not string(X_))
+
+# ── is_list/1 ────────────────────────────────────────────────────────────────
+
+test("is_list: list") <- is_list([1, 2, 3])
+test("is_list: empty") <- is_list([])
+test("is_list: nested") <- is_list([[1], [2]])
+test("is_list: string fails") <- (not is_list("hello"))
+test("is_list: int fails") <- (not is_list(42))
+test("is_list: var fails") <- (not is_list(X_))
+
+# ── ground/1 ─────────────────────────────────────────────────────────────────
+
+test("ground: integer") <- ground(42)
+test("ground: string") <- ground("abc")
+test("ground: ground list") <- ground([1, 2, 3])
+test("ground: empty list") <- ground([])
+test("ground: var fails") <- (not ground(X_))

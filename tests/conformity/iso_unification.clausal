@@ -1,0 +1,40 @@
+# ISO Prolog conformity: unification
+#
+# ISO §8.2.1 — =/2 (is)
+# ISO §8.2.2 — \=/2 (is not)
+# ISO §8.2.3 — ==/2 (==)
+# ISO §8.2.4 — \==/2 (!=)
+#
+# Differences from ISO:
+#   Python 1 == 1.0 is True, so 1 is 1.0 succeeds (ISO: fails)
+#   Arithmetic terms are structural in unification (not evaluated)
+#
+# Note: 'literal is literal' triggers Python SyntaxWarning in 3.12+.
+# Use variable binding + == to test unification of ground values.
+
+# ── is (unification) ────────────────────────────────────────────────────────
+
+test("atom unifies with itself") <- (X_ is "a" and X_ == "a")
+test("var unifies with atom") <- (X_ is "a" and X_ == "a")
+test("var unifies with integer") <- (X_ is 42 and X_ == 42)
+test("var unifies with list") <- (X_ is [1, 2, 3] and X_ == [1, 2, 3])
+test("different atoms fail") <- (not (X_ is "a" and X_ is "b" and X_ == "b"))
+test("list unification") <- (X_ is ["a"] and X_ == ["a"])
+test("empty lists unify") <- (X_ is [] and X_ == [])
+
+# ── is not (does-not-unify) ──────────────────────────────────────────────────
+
+test("different atoms: is not succeeds") <- (X_ is "a" and X_ is not "b")
+test("same atom: is not fails") <- (X_ is "a" and not (X_ is not "a"))
+
+# ── == (structural equality) ─────────────────────────────────────────────────
+
+test("same atom ==") <- ("a" == "a")
+test("different atoms == fails") <- ("a" != "b")
+test("same integer ==") <- (42 == 42)
+test("bound var == value") <- (X_ is "hello" and X_ == "hello")
+
+# ── != (structural inequality) ───────────────────────────────────────────────
+
+test("different atoms !=") <- ("a" != "b")
+test("same atom != fails") <- (not ("a" != "a"))
