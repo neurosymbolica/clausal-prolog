@@ -1,4 +1,4 @@
-module(symbolic_diff, [
+-module(symbolic_diff, [
     d(Expr, Var, Derivative)
 ])
 

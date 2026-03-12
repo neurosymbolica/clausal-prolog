@@ -1,4 +1,4 @@
-module(nqueens, [
+-module(nqueens, [
     queens(N, Qs)
 ])
 

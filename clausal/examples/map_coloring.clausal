@@ -1,4 +1,4 @@
-module(map_coloring, [
+-module(map_coloring, [
     colorable(Coloring)
 ])
 

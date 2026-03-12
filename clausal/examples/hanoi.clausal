@@ -1,4 +1,4 @@
-module(hanoi, [
+-module(hanoi, [
     hanoi(N, From, To, Via, Moves)
 ])
 

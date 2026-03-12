@@ -1,4 +1,4 @@
-module(sorting, [
+-module(sorting, [
     naive_sort(List, Sorted),
     qsort(List, Sorted)
 ])

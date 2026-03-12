@@ -1,4 +1,4 @@
-module(graph, [
+-module(graph, [
     path(X, Y, Path),
     reachable(X, Y),
     connected(X, Y)

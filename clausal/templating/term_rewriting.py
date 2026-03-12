@@ -769,6 +769,7 @@ class EmbedTransformer(NodeTransformer):
     """Walk Python source and expand DSL escapes into simple_ast constructor calls.
 
     Recognised patterns:
+      -dir(...)   Module-level directive (e.g. -module(name, [exports])).
       --expr      Nested adjacent USub: transforms expr via TermTransformer.
       ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
@@ -839,11 +840,20 @@ class EmbedTransformer(NodeTransformer):
     def visit_Expr(transformer, expr_stmt):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         match expr_stmt.value:
-            # module(name, [exports]) declaration — strip to pass statement.
-            case Call(func=Name(id="module"), args=[_, _]) if (
+            # -directive(...) at module level: unary minus applied to a call.
+            # Currently only -module(name, [exports]) is recognised.
+            case UnaryOp(
+                op=USub(),
+                operand=Call(func=Name(id=directive_name), args=directive_args),
+            ) as neg if (
                 transformer._scope_depth == 0
+                # '-' must be adjacent to the call (no space).
+                and neg.col_offset == neg.operand.col_offset - 1
+                and neg.lineno == neg.operand.lineno
             ):
-                return replace(Pass(), expr_stmt)
+                return transformer._handle_directive(
+                    directive_name, directive_args, expr_stmt
+                )
             case Tuple(elts=[single_element], ctx=Load()) if (
                 isinstance(single_element, Call)
                 and isinstance(single_element.func, Name)
@@ -1014,6 +1024,14 @@ class EmbedTransformer(NodeTransformer):
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
+        return transformer.generic_visit(expr_stmt)
+
+    def _handle_directive(transformer, name, args, expr_stmt):
+        """Dispatch a -directive(...) at module level."""
+        if name == "module":
+            return replace(Pass(), expr_stmt)
+        # Unknown directive — leave as-is (will likely produce a runtime error,
+        # which is the right thing: the user mis-typed a directive name).
         return transformer.generic_visit(expr_stmt)
 
     def visit_With(transformer, with_statement):

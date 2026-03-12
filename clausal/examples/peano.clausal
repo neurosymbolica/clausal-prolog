@@ -1,4 +1,4 @@
-module(peano, [
+-module(peano, [
     nat(N),
     add(X, Y, Z),
     mul(X, Y, Z),
