@@ -275,6 +275,25 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     return False
 
 
+def _build_star_list(before, star, after):
+    """Build a list from [*before, *star, *after], dereffing the star element.
+
+    If star is an unbound Var, returns a partial list (the Var itself when
+    before and after are empty, otherwise raises — caller should use Is/unify).
+    In practice, star should be bound to a list by the time body code runs.
+    """
+    d = deref(star)
+    if isinstance(d, list):
+        return list(before) + d + list(after)
+    # star is an unbound Var — can't construct a concrete list
+    # Fall back: if no before/after, just return the Var (identity)
+    if not before and not after:
+        return d
+    raise TypeError(
+        f"Cannot build list: star element is unbound Var"
+    )
+
+
 def _body_multi_star_unify(target, segments, trail):
     """Body-position multi-star unification.
 
@@ -642,6 +661,30 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
         )
 
     if isinstance(term, list):
+        # If the list contains a StarUnpack, use _build_star_list helper
+        # to safely handle unbound Vars at runtime.
+        has_star = any(isinstance(e, StarUnpack) for e in term)
+        if has_star:
+            # Split into before, star, after segments
+            star_idx = next(i for i, e in enumerate(term) if isinstance(e, StarUnpack))
+            before = term[:star_idx]
+            star_val = term[star_idx].value
+            after = term[star_idx + 1:]
+            return ast.Call(
+                func=_name("_build_star_list"),
+                args=[
+                    ast.List(
+                        elts=[term_to_ast_expr(e, var_context) for e in before],
+                        ctx=ast.Load(),
+                    ),
+                    term_to_ast_expr(star_val, var_context),
+                    ast.List(
+                        elts=[term_to_ast_expr(e, var_context) for e in after],
+                        ctx=ast.Load(),
+                    ),
+                ],
+                keywords=[],
+            )
         return ast.List(
             elts=[term_to_ast_expr(e, var_context) for e in term],
             ctx=ast.Load(),
@@ -684,6 +727,7 @@ def term_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                     value=term_to_ast_expr(getattr(term, name), var_context),
                 )
                 for name in term_field_names(term)
+                if name != "position"
             ],
         )
 
@@ -1859,6 +1903,7 @@ def compile_predicate_trampoline(
         "_head_multi_star_error": _head_multi_star_error,
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
+        "_build_star_list": _build_star_list,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:
@@ -2088,11 +2133,20 @@ def head_to_match_pattern(
         if current_fixed:
             segments.append(("fixed", current_fixed))
 
-        # Collect all vars from segments for registration
+        # Collect all vars from segments for registration (recursing into nested lists)
+        def _collect_vars(items):
+            result = []
+            for item in items:
+                if isinstance(item, list):
+                    result.extend(_collect_vars(item))
+                else:
+                    result.append(item)
+            return result
+
         all_vars: list[Any] = []
         for seg_type, seg_val in segments:
             if seg_type == "fixed":
-                all_vars.extend(seg_val)
+                all_vars.extend(_collect_vars(seg_val))
             else:
                 all_vars.append(seg_val)
 
@@ -2226,6 +2280,11 @@ def _compile_multi_star_guard(
     def _var_or_const_expr(elem):
         if is_var(elem) and elem._id in vc:
             return _name(vc[elem._id])
+        if isinstance(elem, list):
+            return ast.List(
+                elts=[_var_or_const_expr(e) for e in elem],
+                ctx=ast.Load(),
+            )
         return ast.Constant(value=elem)
 
     # Count fixed elements and stars
@@ -2539,18 +2598,28 @@ def compile_head_to_match_case(
         multi_star_guards = [g for g in list_guards if len(g) == 4]
 
         # Pre-allocate Var() for list-pattern vars (not captured by match pattern)
+        def _flatten_elems(items):
+            """Recursively collect all items from nested lists."""
+            result = []
+            for item in items:
+                if isinstance(item, list):
+                    result.extend(_flatten_elems(item))
+                else:
+                    result.append(item)
+            return result
+
         list_var_allocs: list[ast.stmt] = []
         _alloc_seen: set[str] = set()
         for guard in list_guards:
             if len(guard) == 5:
                 _cap_name, _before, _star, _after, _vc = guard
-                elems = _before + ([_star] if _star is not None else []) + _after
+                elems = _flatten_elems(_before + ([_star] if _star is not None else []) + _after)
             else:
                 _cap_name, _segments, _vc, _ = guard
                 elems = []
                 for seg_type, seg_val in _segments:
                     if seg_type == "fixed":
-                        elems.extend(seg_val)
+                        elems.extend(_flatten_elems(seg_val))
                     else:
                         elems.append(seg_val)
             for elem in elems:
@@ -2567,6 +2636,11 @@ def compile_head_to_match_case(
                 def _var_or_const(elem):
                     if is_var(elem) and elem._id in vc:
                         return _name(vc[elem._id])
+                    if isinstance(elem, list):
+                        return ast.List(
+                            elts=[_var_or_const(e) for e in elem],
+                            ctx=ast.Load(),
+                        )
                     return ast.Constant(value=elem)
                 before_list = ast.List(elts=[_var_or_const(e) for e in before], ctx=ast.Load())
                 if star is not None and is_var(star) and star._id in vc:
@@ -2811,6 +2885,7 @@ def compile_predicate(
         "_head_multi_star_error": _head_multi_star_error,
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
+        "_build_star_list": _build_star_list,
     }
     base_globals.update(_collect_head_types(clauses))
     if globals_:
