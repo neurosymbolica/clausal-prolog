@@ -163,7 +163,7 @@ def _cli_main() -> None:  # pragma: no cover
     import argparse
     from clausal.logic.variables import Var
     from clausal.logic.database import Clause, Database
-    from clausal.terms import Is, Compound
+    from clausal.terms import Unify, Compound
 
     parser = argparse.ArgumentParser(
         description="Show compiled clausal predicate source code.",

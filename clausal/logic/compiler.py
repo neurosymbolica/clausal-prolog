@@ -53,7 +53,7 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
-    Is, IsNot, Eq, NotEq,
+    Unify, NotUnify, Evaluate, Eq, NotEq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Call, LoadName,
@@ -1006,8 +1006,8 @@ def compile_goal(
     match goal:
 
         # ── Unification ─────────────────────────────────────────────────────
-        case Is(left=l, right=r):
-            # Phase 5: detect star-list patterns in body Is goals
+        case Unify(left=l, right=r):
+            # Phase 5: detect star-list patterns in body Unify goals
             if _is_star_list(l):
                 return _compile_star_is(l, r, var_context, trail_name, k_stmts)
             if _is_star_list(r):
@@ -1021,8 +1021,19 @@ def compile_goal(
                 _undo_stmt(mark, trail_name),
             ]
 
+        # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
+        case Evaluate(left=l, right=r):
+            mark = _fresh("_m")
+            l_expr = term_to_ast_expr(l, var_context)
+            r_expr = arith_to_ast_expr(r, var_context)
+            return [
+                _assign_mark(mark, trail_name),
+                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _undo_stmt(mark, trail_name),
+            ]
+
         # ── Dif (negation of unification) ─────────────────────────────────
-        case IsNot(left=l, right=r):
+        case NotUnify(left=l, right=r):
             # Succeed iff l and r cannot unify right now.
             # Try to unify; if it succeeds, undo and fail.
             # If it fails, proceed with k_stmts.
@@ -1388,8 +1399,8 @@ def compile_goal_trampoline(
     match goal:
 
         # ── Deterministic goals — identical to simple mode ───────────────────
-        case Is(left=l, right=r):
-            # Phase 5: detect star-list patterns in body Is goals
+        case Unify(left=l, right=r):
+            # Phase 5: detect star-list patterns in body Unify goals
             if _is_star_list(l):
                 return _compile_star_is(l, r, var_context, trail_name, k_stmts)
             if _is_star_list(r):
@@ -1403,7 +1414,18 @@ def compile_goal_trampoline(
                 _undo_stmt(mark, trail_name),
             ]
 
-        case IsNot(left=l, right=r):
+        # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
+        case Evaluate(left=l, right=r):
+            mark = _fresh("_m")
+            l_expr = term_to_ast_expr(l, var_context)
+            r_expr = arith_to_ast_expr(r, var_context)
+            return [
+                _assign_mark(mark, trail_name),
+                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _undo_stmt(mark, trail_name),
+            ]
+
+        case NotUnify(left=l, right=r):
             mark = _fresh("_m")
             l_expr = term_to_ast_expr(l, var_context)
             r_expr = term_to_ast_expr(r, var_context)

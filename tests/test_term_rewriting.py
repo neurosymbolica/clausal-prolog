@@ -11,13 +11,13 @@ TermTransformer output and detecting other DSL patterns.
 import ast
 import pytest
 from clausal.pythonic_ast import nodes as sa
-from clausal.terms import ArithConstraint
 from clausal.templating.term_rewriting import (
     TermTransformer,
     EmbedTransformer,
     _make_functor_class_ast,
 )
 from clausal.logic.variables import Var as RealVar
+from clausal.terms import ArithConstraint
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -190,8 +190,8 @@ def test_bool_and_folded():
     ("a <= b",        sa.LtE),
     ("a > b",         sa.Gt),
     ("a >= b",        sa.GtE),
-    ("a is b",        sa.Is),
-    ("a is not b",    sa.IsNot),
+    ("a is b",        sa.Unify),
+    ("a is not b",    sa.NotUnify),
     ("a in b",        sa.In),
     ("a not in b",    sa.NotIn),
 ])
@@ -206,6 +206,21 @@ def test_compare_chain():
     assert len(node.comparisons) == 2
     assert isinstance(node.comparisons[0], sa.Lt)
     assert isinstance(node.comparisons[1], sa.LtE)
+
+# ── TermTransformer: walrus operator ':=' → Evaluate (arithmetic evaluate-and-bind) ──
+
+def test_walrus_is_simple():
+    # N := expr  →  Evaluate(N, expr) — variable LHS becomes Var(), lowercase RHS is LoadName
+    node = term_eval("(N := x)", sa.Evaluate)
+    assert node.left == '<Var>'   # uppercase N → Var() in mock namespace
+    assert node.right.name == 'x'
+
+
+def test_walrus_is_arithmetic():
+    # N := N1 + 1  →  Evaluate(Var, Add(Var, 1))
+    node = term_eval("(N := N1 + 1)", sa.Evaluate)
+    assert node.left == '<Var>'
+    assert isinstance(node.right, sa.Add)
 
 
 # ── TermTransformer: ArithConstraint (==+ / == +expr) ────────────────────────

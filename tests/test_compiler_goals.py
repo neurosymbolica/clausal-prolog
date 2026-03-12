@@ -26,7 +26,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Is, IsNot, Eq, NotEq,
+    Unify as Is, NotUnify as IsNot, Eq, NotEq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Add, Sub, Mult, FloorDiv, Mod, Negate,

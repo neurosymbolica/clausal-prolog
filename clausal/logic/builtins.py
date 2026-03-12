@@ -425,7 +425,7 @@ def _normalize_fact_clause(term: Any):
     Facts asserted via the DSL already use Var+Is form via the term transformer.
     """
     from clausal.logic.database import Clause  # avoid top-level import cycle
-    from clausal.terms import Is as _Is
+    from clausal.terms import Unify as _Unify
 
     if isinstance(term, Compound):
         new_args = []
@@ -435,7 +435,7 @@ def _normalize_fact_clause(term: Any):
             if not is_var(arg_val):
                 v = Var()
                 new_args.append(v)
-                body.append(_Is(left=v, right=arg_val))
+                body.append(_Unify(left=v, right=arg_val))
             else:
                 new_args.append(arg_val)
         return Clause(head=Compound(term.functor, tuple(new_args)), body=body)
@@ -575,18 +575,18 @@ def _retract_factory(db):
             )
         # Find first clause whose head unifies with term_val (and whose
         # Is-body goals are consistent with that unification).
-        from clausal.terms import Is as _Is  # avoid top-level cycle
+        from clausal.terms import Unify as _Unify  # avoid top-level cycle
         for i, clause in enumerate(clause_list):
             tmp_trail = Trail()
             mark = tmp_trail.mark()
             if not structural_unify(term_val, clause.head, tmp_trail):
                 tmp_trail.undo(mark)
                 continue
-            # Verify body: check that Is goals are consistent with the head
-            # unification.  We check only Is goals (normalization artefacts).
+            # Verify body: check that Unify goals are consistent with the head
+            # unification.  We check only Unify goals (normalization artefacts).
             body_ok = True
             for goal in clause.body:
-                if isinstance(goal, _Is):
+                if isinstance(goal, _Unify):
                     lv = deref(goal.left)
                     rv = deref(goal.right)
                     chk_trail = Trail()

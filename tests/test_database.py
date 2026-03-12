@@ -11,7 +11,7 @@ from clausal.logic.database import (
     _flatten_body,
     _extract_param_names,
 )
-from clausal.terms import And, Call, Compound, Is, LoadName, Var
+from clausal.terms import And, Call, Compound, Unify as Is, LoadName, Var
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

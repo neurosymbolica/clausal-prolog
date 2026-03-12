@@ -16,7 +16,7 @@ import pytest
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve, call, query, once
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Compound, KWTerm, Is, And, Call, LoadName, Not, In
+from clausal.terms import Compound, KWTerm, Unify as Is, And, Call, LoadName, Not, In
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

@@ -36,7 +36,7 @@ from clausal.logic.trampoline import Step
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Is, Eq, NotEq, Lt, Gt,
+    Unify as Is, Eq, NotEq, Lt, Gt,
     In, NotIn,
     Call, LoadName,
     Compound,

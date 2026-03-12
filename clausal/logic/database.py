@@ -247,16 +247,16 @@ def _is_normalizable_fact(head: Any) -> bool:
 
 
 def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
-    """Replace ground field values in a dataclass fact head with Vars + Is goals.
+    """Replace ground field values in a dataclass fact head with Vars + Unify goals.
 
     Returns (new_head, body_goals) where each ground field has been replaced by
-    a fresh Var and a corresponding Is(var, value) goal in the body.
+    a fresh Var and a corresponding Unify(var, value) goal in the body.
 
     Lists containing Vars or StarUnpack elements are structural patterns and are
     left in place (handled by the compiler's list-guard machinery).
     """
     from clausal.logic.variables import Var
-    from clausal.terms import Is
+    from clausal.terms import Unify
 
     replacements: dict[str, Any] = {}
     body: list = []
@@ -266,7 +266,7 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
         if _is_ground_value(val):
             v = Var()
             replacements[name] = v
-            body.append(Is(left=v, right=val))
+            body.append(Unify(left=v, right=val))
     if not replacements:
         return head, [True]
     # Build a new head with Vars replacing ground values.

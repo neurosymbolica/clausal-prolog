@@ -56,12 +56,12 @@ Raises `KeyError` if the predicate is not found.
 
 ```python
 from clausal.logic.solve import solve
-from clausal.terms import And, Call, LoadName, Is
+from clausal.terms import And, Call, LoadName, Unify
 from clausal.logic.variables import Var, deref
 
 X = Var()
 N = Var()
-goal = And(Call(LoadName("fib"), (N, X)), Is(N, 7))
+goal = And(Call(LoadName("fib"), (N, X)), Unify(N, 7))
 
 for trail in solve(goal, module=mod):
     print(deref(X))   # → 13
@@ -176,7 +176,7 @@ from clausal.logic.database import Module, Clause
 from clausal.logic.predicate import make_predicate
 from clausal.logic.compiler import compile_predicate
 from clausal.logic.variables import Var
-from clausal.terms import Is
+from clausal.terms import Unify
 
 # Create a predicate programmatically
 fib = make_predicate("fib", ["n", "result"])

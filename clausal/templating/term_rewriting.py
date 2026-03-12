@@ -105,8 +105,8 @@ CMPOP_CLS = {
     LtE: "LtE",
     Gt: "Gt",
     GtE: "GtE",
-    Is: "Is",
-    IsNot: "IsNot",
+    Is: "Unify",
+    IsNot: "NotUnify",
     In: "In",
     NotIn: "NotIn",
 }
@@ -391,11 +391,14 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_NamedExpr(transformer, named_expr):
+        # ':=' maps to Evaluate (arithmetic evaluate-and-bind) — Prolog-style 'is'.
+        # Python's walrus operator requires a Name on the left, which is exactly
+        # the common case: N := N1 + 1  →  Evaluate(N, Add(N1, 1)).
         return node_ast(
-            "NamedExpr",
+            "Evaluate",
             named_expr,
-            target=transformer.visit(named_expr.target),
-            value=transformer.visit(named_expr.value),
+            left=transformer.visit(named_expr.target),
+            right=transformer.visit(named_expr.value),
         )
 
     def visit_Set(transformer, set_expr):

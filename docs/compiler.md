@@ -65,8 +65,9 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 |---|---|
 | `True` | pass-through to `k_stmts` |
 | `False` | empty (no solution) |
-| `Is(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
-| `IsNot(l, r)` | `mark = ...; if not unify(l, r, trail): k_stmts; trail.undo(mark)` |
+| `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
+| `NotUnify(l, r)` | `mark = ...; if not unify(l, r, trail): k_stmts; trail.undo(mark)` |
+| `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
 | `Eq(l, r)` | `if deref(l) == deref(r): k_stmts` |
 | `NotEq(l, r)` | `if deref(l) != deref(r): k_stmts` |
 | `Lt/LtE/Gt/GtE` | arithmetic comparison via `arith_to_ast_expr` |

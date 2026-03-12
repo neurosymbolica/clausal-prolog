@@ -61,7 +61,7 @@ __all__ = [
     # Unary operators
     "UnaryPlus", "Negate", "Not", "Invert",
     # Comparison operators
-    "Eq", "NotEq", "Lt", "LtE", "Gt", "GtE", "Is", "IsNot", "In", "NotIn",
+    "Eq", "NotEq", "Lt", "LtE", "Gt", "GtE", "Unify", "NotUnify", "Evaluate", "In", "NotIn",
     "CompareChain",
     # Augmented assignment
     "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
@@ -611,12 +611,17 @@ class GtE(CmpOp):
     op: ClassVar = '>='
 
 @dataclass
-class Is(CmpOp):
+class Unify(CmpOp):
     op: ClassVar = 'is'
 
 @dataclass
-class IsNot(CmpOp):
+class NotUnify(CmpOp):
     op: ClassVar = 'is not'
+
+@dataclass
+class Evaluate(CmpOp):
+    """Arithmetic evaluate-and-bind: LHS := RHS. Like Prolog 'is' but explicit."""
+    op: ClassVar = ':='
 
 @dataclass
 class In(CmpOp):

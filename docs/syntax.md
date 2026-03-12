@@ -100,15 +100,41 @@ Unification is written with `is`:
 ```python
 X is 42,
 X is Y,
-X is not Y,   # disunification
+X is not Y,   # disunification (dif)
 ```
 
 Why `is` rather than `=`?
 - `=` is Python's assignment operator and cannot appear in expressions
 - `is` expresses the same concept in English — two things being the same — and Python programmers understand it
-- Standard Prolog uses `is` for arithmetic evaluation; this is a deliberate departure, because we want arithmetic to read naturally as constraint logic (see below)
 
 Note: `not X is Y` means "unification fails" with bindings discarded; `X is not Y` means disunification (a constraint that the two must never unify).
+
+The corresponding AST node is `Unify(left, right)`. Disunification is `NotUnify(left, right)`.
+
+---
+
+## Arithmetic binding
+
+To evaluate an arithmetic expression and bind the result to a variable, use the walrus operator `:=`:
+
+```python
+fib(N, RESULT) <- (
+    N > 1,
+    (N1 := N - 1),
+    (N2 := N - 2),
+    fib(N1, A),
+    fib(N2, B),
+    (RESULT := A + B)
+)
+```
+
+`(N1 := N - 1)` evaluates `N - 1` as Python arithmetic and unifies the result with `N1`. This is equivalent to Prolog's `is` operator. Parentheses are required when `:=` appears inside an `and`-chain (Python syntax restriction).
+
+The distinction from `is`:
+- `X is Y` — pure structural unification; neither side is evaluated arithmetically
+- `(X := expr)` — `expr` is evaluated as arithmetic before unification; `X` should be unbound
+
+The corresponding AST node is `Evaluate(left, right)`. The compiler applies `arith_to_ast_expr` to the right side, producing native Python arithmetic that is evaluated before `unify` is called.
 
 ---
 

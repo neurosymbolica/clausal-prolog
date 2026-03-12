@@ -23,7 +23,7 @@ from clausal.terms import (
     term_str,
     Var,
     # goal/operator nodes used in term_str tests
-    Is, And, Or, Not,
+    Unify as Is, And, Or, Not,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Lt, LtE, Gt, GtE, Eq, NotEq, In, NotIn,
     Call, LoadName, LoadAttr,
