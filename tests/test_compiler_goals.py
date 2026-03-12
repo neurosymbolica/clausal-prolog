@@ -684,8 +684,7 @@ class TestIntegrationPredicateCall:
             body=[Call(func=LoadName(name="nat"), args=[inner_x], kwargs=[])],
         ))
         clauses = db.clauses_for("nat", 1)
-        compile_predicate("nat", 1, clauses, db)
-        fn = db.table_for("nat", 1).get_dispatch()
+        fn = compile_predicate("nat", 1, clauses, db)
 
         assert _run(fn, 0) == [None]
         assert _run(fn, Compound("s", (0,))) == [None]

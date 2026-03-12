@@ -7,7 +7,6 @@ from clausal.logic.database import (
     Clause,
     Database,
     Module,
-    PredicateTable,
     head_key,
     _flatten_body,
     _extract_param_names,
@@ -122,82 +121,6 @@ class TestClause:
         assert not c.is_fact()
 
 
-# ── PredicateTable ─────────────────────────────────────────────────────────────
-
-
-class TestPredicateTable:
-    def make_table(self):
-        return PredicateTable("foo", 1)
-
-    def clause(self, val):
-        return Clause(head=Compound("foo", (val,)), body=[])
-
-    def test_initial_empty(self):
-        t = self.make_table()
-        assert t.clauses == []
-
-    def test_assertz_appends(self):
-        t = self.make_table()
-        c1, c2 = self.clause(1), self.clause(2)
-        t.assertz(c1)
-        t.assertz(c2)
-        assert t.clauses == [c1, c2]
-
-    def test_asserta_prepends(self):
-        t = self.make_table()
-        c1, c2 = self.clause(1), self.clause(2)
-        t.assertz(c1)
-        t.asserta(c2)
-        assert t.clauses == [c2, c1]
-
-    def test_retract_removes_first_match(self):
-        t = self.make_table()
-        c1, c2 = self.clause(1), self.clause(2)
-        t.assertz(c1)
-        t.assertz(c2)
-        removed = t.retract(Compound("foo", (1,)))
-        assert removed is True
-        assert t.clauses == [c2]
-
-    def test_retract_returns_false_when_no_match(self):
-        t = self.make_table()
-        t.assertz(self.clause(1))
-        assert t.retract(Compound("foo", (99,))) is False
-
-    def test_assert_invalidates_dispatch(self):
-        t = self.make_table()
-        t.dispatch_fn = lambda: None
-        t.assertz(self.clause(1))
-        assert t.dispatch_fn is None
-
-    def test_retract_invalidates_dispatch(self):
-        t = self.make_table()
-        c = self.clause(1)
-        t.assertz(c)
-        t.dispatch_fn = lambda: None
-        t.retract(Compound("foo", (1,)))
-        assert t.dispatch_fn is None
-
-    def test_get_dispatch_raises_before_compile(self):
-        t = self.make_table()
-        with pytest.raises(NotImplementedError):
-            t.get_dispatch()
-
-    def test_get_dispatch_returns_fn_after_install(self):
-        t = self.make_table()
-        fn = lambda *a: None
-        t.dispatch_fn = fn
-        assert t.get_dispatch() is fn
-
-    def test_clauses_returns_snapshot(self):
-        t = self.make_table()
-        c = self.clause(1)
-        t.assertz(c)
-        snapshot = t.clauses
-        t.assertz(self.clause(2))
-        # Snapshot not affected by subsequent mutation.
-        assert len(snapshot) == 1
-
 
 # ── Database ───────────────────────────────────────────────────────────────────
 
@@ -235,16 +158,9 @@ class TestDatabase:
         db = self.db()
         assert db.clauses_for("ghost", 0) == []
 
-    def test_table_for_returns_none_when_absent(self):
+    def test_get_dispatch_returns_none_when_absent(self):
         db = self.db()
-        assert db.table_for("ghost", 0) is None
-
-    def test_table_for_returns_table(self):
-        db = self.db()
-        db.assertz(self.fact("foo", 1))
-        t = db.table_for("foo", 1)
-        assert isinstance(t, PredicateTable)
-        assert t.functor == "foo" and t.arity == 1
+        assert db.get_dispatch("ghost", 0) is None
 
     def test_retract_removes_clause(self):
         db = self.db()
@@ -413,11 +329,11 @@ class TestDatabaseSignature:
         # Original signature is preserved.
         assert db.signature_for("point", 2) == ("_x", "_y")
 
-    def test_register_creates_table_if_absent(self):
+    def test_register_creates_signature_if_absent(self):
         db = Database()
         assert not db.is_defined("point", 2)
         db.register_signature("point", 2, ("_x", "_y"))
-        # Table created but no clauses yet.
+        # No clauses asserted, but signature is registered.
         assert db.clauses_for("point", 2) == []
         assert db.signature_for("point", 2) == ("_x", "_y")
 

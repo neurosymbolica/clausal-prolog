@@ -76,17 +76,15 @@ from clausal.codegen import functiondef_to_function
 # returns the compiled dispatch function directly.
 #
 # For predicates not yet available as classes (e.g. in tests that still use
-# Database directly, or for builtin predicates), _DbLookupAdapter wraps the
+# Database directly, or for builtin predicates), _DbDispatchAdapter wraps the
 # Database lookup with the same _get_dispatch() interface.
 
 
-class _DbLookupAdapter:
-    """Compat shim: wraps db.table_for() with _get_dispatch() interface.
+class _DbDispatchAdapter:
+    """Adapter: wraps db.get_dispatch() with _get_dispatch() interface.
 
-    Provides the same ``_get_dispatch()`` protocol as PredicateMeta classes,
-    but delegates to the Database at runtime.  This allows compiled code to
-    uniformly use ``fname._get_dispatch()`` regardless of whether ``fname``
-    is a PredicateMeta class or a Database-backed predicate.
+    Used when a called predicate is in the database but not in module globals.
+    Provides the same ``_get_dispatch()`` protocol as PredicateMeta classes.
     """
     __slots__ = ("_db", "_functor", "_arity")
 
@@ -96,12 +94,12 @@ class _DbLookupAdapter:
         self._arity = arity
 
     def _get_dispatch(self):
-        table = self._db.table_for(self._functor, self._arity)
-        if table is None:
+        fn = self._db.get_dispatch(self._functor, self._arity)
+        if fn is None:
             raise KeyError(
                 f"Predicate {self._functor}/{self._arity} not found"
             )
-        return table.get_dispatch()
+        return fn
 
 
 class _GlobalsDb:
@@ -496,7 +494,7 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
 def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     """Collect (fname, arity) pairs from Call(LoadName) nodes in clause bodies.
 
-    Used to inject predicate class references (or _DbLookupAdapter shims)
+    Used to inject predicate class references (or _DbDispatchAdapter shims)
     into the compiled function's globals so that ``fname._get_dispatch()``
     resolves at runtime.
     """
@@ -533,9 +531,8 @@ def _inject_call_targets(
     For each Call(LoadName(name=fname)) in clause bodies:
     - If fname is already in base_globals (e.g. utility functions), skip.
     - If fname is in globals_ (module dict), inject it directly.
-    - If fname is a builtin (and db is provided), inject a BuiltinPredicate adapter.
-    - If db is provided, fall back to a _DbLookupAdapter.
-    - If db is None, skip (predicate must be in globals_ or base_globals already).
+    - If fname is a builtin, inject a BuiltinPredicate adapter.
+    - Otherwise, skip (predicate must be resolved at runtime or is missing).
     """
     from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
@@ -544,12 +541,12 @@ def _inject_call_targets(
             continue
         if globals_ and target_name in globals_:
             base_globals[target_name] = globals_[target_name]
-        elif db is not None:
+        else:
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
                 base_globals[target_name] = builtin
-            else:
-                base_globals[target_name] = _DbLookupAdapter(db, target_name, target_arity)
+            elif db is not None:
+                base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
 
 
 def _preallocate_body_vars(
@@ -820,7 +817,7 @@ def _dispatch_call_iter(
     """Generate: fname._get_dispatch()(arg0, …, trail, k)
 
     ``fname`` is resolved from the compiled function's globals, where it
-    refers to either a PredicateMeta class or a _DbLookupAdapter shim.
+    refers to either a PredicateMeta class or a _DbDispatchAdapter shim.
     """
     get_dispatch = ast.Call(
         func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
@@ -2757,8 +2754,8 @@ def compile_predicate(
     ends with ``yield None`` regardless of ``k``.
 
     Returns the compiled callable.  Also installs it on the PredicateMeta class
-    (and on ``PredicateTable.dispatch_fn`` if db is provided) so subsequent
-    ``_get_dispatch()`` / ``get_dispatch()`` calls work.
+    (and via ``db.set_dispatch()`` if db is provided) so subsequent
+    ``_get_dispatch()`` / ``db.get_dispatch()`` calls work.
     """
     # Choose the effective db for body compilation (may be a no-db proxy).
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
@@ -2896,19 +2893,14 @@ def _install(
 ) -> None:
     """Install fn as the compiled dispatch function.
 
-    If ``db`` is provided, installs on the corresponding PredicateTable (creating
-    it if needed) so that ``db.table_for().get_dispatch()`` works.
+    If ``db`` is provided, stores the dispatch fn via ``db.set_dispatch()``
+    so that ``db.get_dispatch()`` works for test/non-PredicateMeta usage.
 
     If ``pred_cls`` is a PredicateMeta class, installs fn and lazy_recompile
     directly on the class so that ``pred_cls._get_dispatch()`` works.
-
-    At least one of ``db`` or ``pred_cls`` should be provided.
     """
     if db is not None:
-        table = db._table(functor, arity)
-        table.dispatch_fn = fn
-        if lazy_recompile is not None:
-            table._lazy_recompile = lazy_recompile
+        db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
         pred_cls._dispatch_fn = fn
         if lazy_recompile is not None:

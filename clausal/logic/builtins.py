@@ -10,7 +10,7 @@ They yield ``None`` for each solution.  Stateless built-ins are stored in
 asserta, retract, signature) are stored in ``_DB_BUILTINS`` as factory
 callables; ``get_builtin_dispatch`` passes the database when creating them.
 
-``Database.table_for`` calls ``get_builtin_dispatch(functor, arity, db)`` as a
+``Database.get_dispatch`` calls ``get_builtin_dispatch(functor, arity, db)`` as a
 fallback when a predicate is not found locally, so built-ins are available in
 every database without requiring explicit registration.
 
@@ -209,7 +209,7 @@ def get_builtin_dispatch(
 ) -> Callable | None:
     """Return the dispatch function for a built-in predicate, or None.
 
-    Called by ``Database.table_for`` when a predicate is not found locally.
+    Called by ``Database.get_dispatch`` when a predicate is not found locally.
     """
     key = (functor, arity)
     fn = _BUILTINS.get(key)
@@ -564,8 +564,8 @@ def _retract_factory(db):
             functor, arity = head_key(term_val)
         except TypeError:
             return
-        tbl = db._tables.get((functor, arity))
-        if tbl is None:
+        clause_list = db._clauses.get((functor, arity))
+        if clause_list is None:
             return
         pred_cls = _find_pred_cls(functor, module_dict)
         if pred_cls is not None and pred_cls._locked:
@@ -576,7 +576,7 @@ def _retract_factory(db):
         # Find first clause whose head unifies with term_val (and whose
         # Is-body goals are consistent with that unification).
         from clausal.terms import Is as _Is  # avoid top-level cycle
-        for i, clause in enumerate(tbl._clauses):
+        for i, clause in enumerate(clause_list):
             tmp_trail = Trail()
             mark = tmp_trail.mark()
             if not structural_unify(term_val, clause.head, tmp_trail):
@@ -601,8 +601,7 @@ def _retract_factory(db):
                 continue
             # Found a matching clause — remove it.
             tmp_trail.undo(mark)  # clean up temporary bindings
-            del tbl._clauses[i]
-            tbl.dispatch_fn = None
+            del clause_list[i]
             # Sync removal to pred_cls if available (match by identity).
             if pred_cls is not None:
                 for j, pcls_clause in enumerate(pred_cls._clauses):

@@ -159,14 +159,14 @@ def call(
         if builtin is not None:
             dispatch_fn = builtin._get_dispatch()
 
-    # Fall back to Database lookup (test modules).
+    # Fall back to Database dispatch lookup (test modules and Compound-head predicates).
     if dispatch_fn is None:
-        table = module.db.table_for(functor, arity)
-        if table is None:
-            raise KeyError(
-                f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
-            )
-        dispatch_fn = table.get_dispatch()
+        dispatch_fn = module.db.get_dispatch(functor, arity)
+
+    if dispatch_fn is None:
+        raise KeyError(
+            f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
+        )
 
     if trail is None:
         trail = Trail()

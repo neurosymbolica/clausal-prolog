@@ -430,7 +430,9 @@ def _make_queens_module(n: int) -> Module:
     # This is complex. Let's just use a direct Python implementation as a builtin.
 
     # Remove the partial safe clauses and use a simpler approach:
-    db._tables.clear()
+    db._clauses.clear()
+    db._dispatch.clear()
+    db._lazy_recompile.clear()
 
     # Encode queens using:
     # queens(N, Qs) :- numlist(1, N, Ns), permutation(Ns, Qs), safe(Qs)
@@ -457,9 +459,7 @@ def _make_queens_module(n: int) -> Module:
         finally:
             trail.undo(mark)
 
-    from clausal.logic.database import PredicateTable
-    t = db._table("safe", 1)
-    t.dispatch_fn = safe_dispatch
+    db.set_dispatch("safe", 1, safe_dispatch)
 
     # queens(N, Qs) :- numlist(1, N, Ns), permutation(Ns, Qs), safe(Qs).
     # Build the Ns list in the goal using between/3 enumeration is complex.
@@ -473,17 +473,13 @@ def _make_queens_module(n: int) -> Module:
         ns = list(range(1, n_val + 1))
 
         # Use builtin permutation
-        perm_dispatch = db.table_for("permutation", 2).get_dispatch()
+        perm_dispatch = db.get_dispatch("permutation", 2)
         for _ in perm_dispatch(ns, qs_arg, trail, None):
             qs_val = deref(qs_arg)
             for _ in safe_dispatch(qs_val, trail, k):
                 yield None
 
-    t2 = db._table("queens", 2)
-    t2.dispatch_fn = queens_dispatch
-
-    # Also compile permutation via builtins lookup
-    _ = db.table_for("permutation", 2)  # triggers builtin registration
+    db.set_dispatch("queens", 2, queens_dispatch)
 
     return mod
 

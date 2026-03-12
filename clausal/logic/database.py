@@ -1,10 +1,9 @@
 """clausal.logic.database — in-memory predicate clause store.
 
 Components:
-    Clause          — one clause (head term + list of body goal terms)
-    PredicateTable  — clause list + dispatch slot for one (functor, arity)
-    Database        — maps (functor, arity) → PredicateTable
-    Module          — runtime $module object wrapping a Database
+    Clause    — one clause (head term + list of body goal terms)
+    Database  — maps (functor, arity) → clause list + signatures
+    Module    — runtime $module object wrapping a Database
 """
 
 from __future__ import annotations
@@ -34,104 +33,38 @@ class Clause:
         return not self.body
 
 
-# ── PredicateTable ─────────────────────────────────────────────────────────────
-
-
-class PredicateTable:
-    """Holds all clauses for one (functor, arity) pair plus a dispatch slot."""
-
-    def __init__(self, functor: str, arity: int) -> None:
-        self.functor = functor
-        self.arity = arity
-        self._clauses: list[Clause] = []
-        self.dispatch_fn: Callable | None = None
-        self.dispatch_index: dict = {}  # reserved for first-argument indexing
-        self.signature: tuple[str, ...] | None = None
-        # Lazy recompile: set by the compiler after first compilation.
-        # When dispatch_fn is cleared by assertz/asserta/retract, the next
-        # get_dispatch() call invokes this to recompile from the current clauses.
-        self._lazy_recompile: Callable | None = None
-
-    def assertz(self, clause: Clause) -> None:
-        """Append clause at end; invalidate the compiled dispatch function."""
-        self._clauses.append(clause)
-        self.dispatch_fn = None
-
-    def asserta(self, clause: Clause) -> None:
-        """Prepend clause at front; invalidate the compiled dispatch function."""
-        self._clauses.insert(0, clause)
-        self.dispatch_fn = None
-
-    def retract(self, head: Any) -> bool:
-        """Remove the first clause whose head equals head (structural equality).
-
-        Returns True if a clause was removed, False if none matched.
-        Note: step-8 builtins add unification-based retract on top of this.
-        """
-        for i, clause in enumerate(self._clauses):
-            if clause.head == head:
-                del self._clauses[i]
-                self.dispatch_fn = None
-                return True
-        return False
-
-    @property
-    def clauses(self) -> list[Clause]:
-        """Snapshot of the current clause list."""
-        return list(self._clauses)
-
-    def get_dispatch(self) -> Callable:
-        """Return the compiled dispatch function.
-
-        If dispatch_fn was cleared by a dynamic clause addition and a lazy
-        recompile callback is registered, recompiles on demand before returning.
-
-        Raises NotImplementedError if neither dispatch_fn nor _lazy_recompile
-        is available (predicate has never been compiled).
-        """
-        if self.dispatch_fn is None:
-            if self._lazy_recompile is not None:
-                self.dispatch_fn = self._lazy_recompile()
-            else:
-                raise NotImplementedError(
-                    f"Predicate {self.functor}/{self.arity} has no compiled dispatch "
-                    "function. The compiler (steps 4–5) must be run first."
-                )
-        return self.dispatch_fn
-
-    def __repr__(self) -> str:
-        compiled = "compiled" if self.dispatch_fn is not None else "uncompiled"
-        return (
-            f"PredicateTable({self.functor!r}/{self.arity}, "
-            f"{len(self._clauses)} clause(s), {compiled})"
-        )
-
-
 # ── Database ───────────────────────────────────────────────────────────────────
 
 
 class Database:
-    """In-memory store mapping (functor, arity) → PredicateTable."""
+    """In-memory store mapping (functor, arity) → clause list."""
 
     def __init__(self, module_dict: dict | None = None) -> None:
-        self._tables: dict[tuple[str, int], PredicateTable] = {}
+        self._clauses: dict[tuple[str, int], list[Clause]] = {}
+        self._signatures: dict[tuple[str, int], tuple | None] = {}
+        self._dispatch: dict[tuple[str, int], Callable | None] = {}
+        self._lazy_recompile: dict[tuple[str, int], Callable] = {}
         self.module_dict: dict | None = module_dict
-
-    def _table(self, functor: str, arity: int) -> PredicateTable:
-        key = (functor, arity)
-        if key not in self._tables:
-            self._tables[key] = PredicateTable(functor, arity)
-        return self._tables[key]
 
     def assertz(self, clause: Clause) -> None:
         """Add clause at end of its predicate's clause list."""
         functor, arity = head_key(clause.head)
-        self._table(functor, arity).assertz(clause)
+        key = (functor, arity)
+        self._clauses.setdefault(key, []).append(clause)
+        # Invalidate compiled dispatch so lazy recompile triggers on next use.
+        if key in self._dispatch:
+            self._dispatch[key] = None
 
     def asserta(self, clause: Clause) -> None:
         """Add clause at front of its predicate's clause list."""
         functor, arity = head_key(clause.head)
-        self._table(functor, arity).asserta(clause)
+        key = (functor, arity)
+        if key not in self._clauses:
+            self._clauses[key] = []
+        self._clauses[key].insert(0, clause)
+        # Invalidate compiled dispatch so lazy recompile triggers on next use.
+        if key in self._dispatch:
+            self._dispatch[key] = None
 
     def retract(self, head: Any) -> bool:
         """Remove first clause whose head structurally equals head.
@@ -140,40 +73,24 @@ class Database:
         """
         functor, arity = head_key(head)
         key = (functor, arity)
-        if key not in self._tables:
+        if key not in self._clauses:
             return False
-        return self._tables[key].retract(head)
+        for i, clause in enumerate(self._clauses[key]):
+            if clause.head == head:
+                del self._clauses[key][i]
+                # Invalidate compiled dispatch.
+                if key in self._dispatch:
+                    self._dispatch[key] = None
+                return True
+        return False
 
     def clauses_for(self, functor: str, arity: int) -> list[Clause]:
         """Return a snapshot of clauses for (functor, arity), or [] if undefined."""
-        key = (functor, arity)
-        if key not in self._tables:
-            return []
-        return self._tables[key].clauses
+        return list(self._clauses.get((functor, arity), []))
 
     def is_defined(self, functor: str, arity: int) -> bool:
         """True if any clause has been asserted for (functor, arity)."""
-        return (functor, arity) in self._tables
-
-    def table_for(self, functor: str, arity: int) -> PredicateTable | None:
-        """Return the PredicateTable for (functor, arity).
-
-        Checks the local table first.  If not found, falls back to the
-        builtin/stdlib registry (clausal.logic.builtins).  Builtin tables are
-        cached on first access so subsequent lookups are O(1).
-        """
-        local = self._tables.get((functor, arity))
-        if local is not None:
-            return local
-        # Lazy builtin/stdlib lookup — avoids circular imports at module level.
-        from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
-        dispatch_fn = get_builtin_dispatch(functor, arity, self)
-        if dispatch_fn is not None:
-            table = PredicateTable(functor, arity)
-            table.dispatch_fn = dispatch_fn
-            self._tables[(functor, arity)] = table  # cache
-            return table
-        return None
+        return (functor, arity) in self._clauses
 
     def register_signature(
         self, functor: str, arity: int, param_names: tuple[str, ...]
@@ -185,22 +102,55 @@ class Database:
         """
         import warnings
 
-        table = self._table(functor, arity)
-        if table.signature is None:
-            table.signature = param_names
-        elif table.signature != param_names:
+        key = (functor, arity)
+        existing = self._signatures.get(key)
+        if existing is None:
+            self._signatures[key] = param_names
+        elif existing != param_names:
             warnings.warn(
                 f"Signature conflict for {functor}/{arity}: "
-                f"registered {table.signature}, got {param_names}"
+                f"registered {existing}, got {param_names}"
             )
 
     def signature_for(self, functor: str, arity: int) -> tuple[str, ...] | None:
         """Return the registered keyword param names, or None."""
-        table = self._tables.get((functor, arity))
-        return table.signature if table else None
+        return self._signatures.get((functor, arity))
+
+    def set_dispatch(
+        self,
+        functor: str,
+        arity: int,
+        fn: Callable,
+        lazy_recompile: Callable | None = None,
+    ) -> None:
+        """Store the compiled dispatch function for (functor, arity)."""
+        key = (functor, arity)
+        self._dispatch[key] = fn
+        if lazy_recompile is not None:
+            self._lazy_recompile[key] = lazy_recompile
+
+    def get_dispatch(self, functor: str, arity: int) -> Callable | None:
+        """Return the compiled dispatch function for (functor, arity), or None.
+
+        If the dispatch was invalidated by assertz/retract and a lazy recompile
+        callback is registered, recompiles on demand before returning.
+        Falls back to the builtin/stdlib registry if not found locally.
+        """
+        key = (functor, arity)
+        fn = self._dispatch.get(key)
+        if fn is None and key in self._dispatch:
+            # Invalidated — try lazy recompile.
+            lazy = self._lazy_recompile.get(key)
+            if lazy is not None:
+                fn = lazy()
+                self._dispatch[key] = fn
+        if fn is not None:
+            return fn
+        from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
+        return get_builtin_dispatch(functor, arity, self)
 
     def __repr__(self) -> str:
-        parts = ", ".join(f"{f}/{a}" for f, a in sorted(self._tables))
+        parts = ", ".join(f"{f}/{a}" for f, a in sorted(self._clauses))
         return f"Database({{{parts}}})"
 
 
@@ -407,7 +357,6 @@ def _flatten_body(body: Any) -> list:
 
 __all__ = [
     "Clause",
-    "PredicateTable",
     "Database",
     "Module",
     "head_key",

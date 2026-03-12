@@ -628,10 +628,10 @@ class TestLazyRecompile:
         # Add a second clause at runtime
         hv2 = Var()
         db.assertz(Clause(head=Compound("dyn", (hv2,)), body=[Is(left=hv2, right=2)]))
-        # dispatch_fn is now None; get_dispatch() should lazy-recompile
+        # dispatch is now None; get_dispatch() should lazy-recompile
         v2 = Var()
         trail2 = fresh_trail()
-        new_fn = db.table_for("dyn", 1).get_dispatch()
+        new_fn = db.get_dispatch("dyn", 1)
         results = _snap(new_fn, lambda: deref(v2), v2, trail2)
         assert results == [1, 2]
 
@@ -645,7 +645,7 @@ class TestLazyRecompile:
 
         hv2 = Var()
         db.assertz(Clause(head=Compound("sdyn", (hv2,)), body=[Is(left=hv2, right=20)]))
-        fn = db.table_for("sdyn", 1).get_dispatch()
+        fn = db.get_dispatch("sdyn", 1)
         trail = fresh_trail()
         v = Var()
         results = []

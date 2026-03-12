@@ -149,7 +149,7 @@ class TestGraphReachability:
     def test_direct_edge(self):
         """path(a, b) holds — direct edge."""
         db = self._build_db()
-        fn = db.table_for("path", 2).get_dispatch()
+        fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
         dest = Var()
         results = solutions_simple(fn, "a", dest, trail, lambda: deref(dest))
@@ -158,7 +158,7 @@ class TestGraphReachability:
     def test_transitive_reachability(self):
         """From 'a', can reach b, c, d (but not a itself in a DAG)."""
         db = self._build_db()
-        fn = db.table_for("path", 2).get_dispatch()
+        fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
         dest = Var()
         results = solutions_simple(fn, "a", dest, trail, lambda: deref(dest))
@@ -167,7 +167,7 @@ class TestGraphReachability:
     def test_no_path_backwards(self):
         """No outgoing edges from 'd' → path(d, Y) has no solutions."""
         db = self._build_db()
-        fn = db.table_for("path", 2).get_dispatch()
+        fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
         dest = Var()
         results = solutions_simple(fn, "d", dest, trail, lambda: deref(dest))
@@ -176,7 +176,7 @@ class TestGraphReachability:
     def test_path_to_specific_dest(self):
         """path(a, d) is provable (at least one path: a→b→d or a→b→c→d)."""
         db = self._build_db()
-        fn = db.table_for("path", 2).get_dispatch()
+        fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
         # When second arg is ground, the match arm body fails if unification fails.
         # Because 'd' is a string and the Is body produces "b"/"c"/"d", we need
@@ -236,7 +236,7 @@ class TestClassification:
 
     def test_dog_is_mammal(self):
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
         cat = Var()
         results = solutions_simple(fn, dog(name="rex"), cat, trail, lambda: deref(cat))
@@ -244,7 +244,7 @@ class TestClassification:
 
     def test_eagle_is_bird(self):
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
         cat = Var()
         results = solutions_simple(fn, eagle(name="goldie"), cat, trail, lambda: deref(cat))
@@ -252,7 +252,7 @@ class TestClassification:
 
     def test_salmon_is_fish(self):
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
         cat = Var()
         results = solutions_simple(fn, salmon(name="coho"), cat, trail, lambda: deref(cat))
@@ -261,7 +261,7 @@ class TestClassification:
     def test_name_is_irrelevant(self):
         """Different names for the same species → same category."""
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
         for name in ["fido", "rex", "spot"]:
             trail = fresh_trail()
             cat = Var()
@@ -271,7 +271,7 @@ class TestClassification:
     def test_unknown_matches_nothing(self):
         """A string is not a known animal term → no solutions."""
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
         cat = Var()
         results = solutions_simple(fn, "not_an_animal", cat, trail, lambda: deref(cat))
@@ -280,7 +280,7 @@ class TestClassification:
     def test_ground_category_check(self):
         """animal(eagle(_), 'mammal') fails; animal(eagle(_), 'bird') succeeds."""
         db = self._build_db()
-        fn = db.table_for("animal", 2).get_dispatch()
+        fn = db.get_dispatch("animal", 2)
 
         t1 = fresh_trail()
         results_wrong = solutions_simple(
@@ -342,7 +342,7 @@ class TestFibonacci:
     ])
     def test_fib_values(self, n, expected):
         db = self._build_db()
-        fn = db.table_for("fib", 2).get_dispatch()
+        fn = db.get_dispatch("fib", 2)
         trail = fresh_trail()
         result = Var()
         results = solutions_simple(fn, n, result, trail, lambda: deref(result))
@@ -351,7 +351,7 @@ class TestFibonacci:
     def test_fib_deterministic(self):
         """fib(N, R) yields exactly one solution for each ground N."""
         db = self._build_db()
-        fn = db.table_for("fib", 2).get_dispatch()
+        fn = db.get_dispatch("fib", 2)
         for n in range(8):
             trail = fresh_trail()
             result = Var()
@@ -434,7 +434,7 @@ class TestNQueens4:
     def test_perm4_has_24_solutions(self):
         """perm4/4 enumerates all 4! = 24 permutations of {1,2,3,4}."""
         db = self._build_db()
-        fn = db.table_for("perm4", 4).get_dispatch()
+        fn = db.get_dispatch("perm4", 4)
         trail = fresh_trail()
         a, b, c, d = Var(), Var(), Var(), Var()
         results = solutions_simple(
@@ -447,7 +447,7 @@ class TestNQueens4:
     def test_no_attack_passes_safe_queens(self):
         """no_attack(2, 4, 1) succeeds: col diff = 2 ≠ 1."""
         db = self._build_db()
-        fn = db.table_for("no_attack", 3).get_dispatch()
+        fn = db.get_dispatch("no_attack", 3)
         trail = fresh_trail()
         results = solutions_simple(fn, 2, 4, 1, trail, lambda: True)
         assert results == [True]
@@ -455,7 +455,7 @@ class TestNQueens4:
     def test_no_attack_fails_diagonal(self):
         """no_attack(1, 2, 1) fails: |1-2| = 1 = dist."""
         db = self._build_db()
-        fn = db.table_for("no_attack", 3).get_dispatch()
+        fn = db.get_dispatch("no_attack", 3)
         trail = fresh_trail()
         results = solutions_simple(fn, 1, 2, 1, trail, lambda: True)
         assert results == []
@@ -463,7 +463,7 @@ class TestNQueens4:
     def test_exactly_two_solutions(self):
         """4-queens has exactly 2 solutions."""
         db = self._build_db()
-        fn = db.table_for("queens4", 4).get_dispatch()
+        fn = db.get_dispatch("queens4", 4)
         trail = fresh_trail()
         q0, q1, q2, q3 = Var(), Var(), Var(), Var()
         results = solutions_simple(
@@ -475,7 +475,7 @@ class TestNQueens4:
     def test_known_solutions(self):
         """Both known 4-queens solutions are found."""
         db = self._build_db()
-        fn = db.table_for("queens4", 4).get_dispatch()
+        fn = db.get_dispatch("queens4", 4)
         trail = fresh_trail()
         q0, q1, q2, q3 = Var(), Var(), Var(), Var()
         results = solutions_simple(
@@ -529,7 +529,7 @@ class TestCombinationSearch:
 
     def test_nine_combinations_simple(self):
         db = self._build_db(mode="simple")
-        fn = db.table_for("combo", 2).get_dispatch()
+        fn = db.get_dispatch("combo", 2)
         trail = fresh_trail()
         c, s = Var(), Var()
         results = solutions_simple(fn, c, s, trail, lambda: (deref(c), deref(s)))
@@ -540,7 +540,7 @@ class TestCombinationSearch:
 
     def test_nine_combinations_trampoline(self):
         db = self._build_db(mode="trampoline")
-        fn = db.table_for("combo", 2).get_dispatch()
+        fn = db.get_dispatch("combo", 2)
         trail = fresh_trail()
         c, s = Var(), Var()
         results = solutions_trampoline(
@@ -553,7 +553,7 @@ class TestCombinationSearch:
     def test_colour_filter(self):
         """colour(red) has exactly one solution (exact match)."""
         db = self._build_db()
-        fn = db.table_for("colour", 1).get_dispatch()
+        fn = db.get_dispatch("colour", 1)
         trail = fresh_trail()
         results = solutions_simple(fn, "red", trail, lambda: True)
         assert results == [True]
@@ -561,7 +561,7 @@ class TestCombinationSearch:
     def test_size_enumeration(self):
         """size(S) with unbound S yields exactly 3 solutions."""
         db = self._build_db()
-        fn = db.table_for("size", 1).get_dispatch()
+        fn = db.get_dispatch("size", 1)
         trail = fresh_trail()
         s = Var()
         results = solutions_simple(fn, s, trail, lambda: deref(s))
@@ -604,7 +604,7 @@ class TestDisjunctionAndOr:
 
     def test_or_val_three_solutions(self):
         db = self._build_db()
-        fn = db.table_for("or_val", 1).get_dispatch()
+        fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
         v = Var()
         results = solutions_simple(fn, v, trail, lambda: deref(v))
@@ -612,7 +612,7 @@ class TestDisjunctionAndOr:
 
     def test_or_pair_nine_solutions(self):
         db = self._build_db()
-        fn = db.table_for("or_pair", 2).get_dispatch()
+        fn = db.get_dispatch("or_pair", 2)
         trail = fresh_trail()
         a, b = Var(), Var()
         results = solutions_simple(fn, a, b, trail, lambda: (deref(a), deref(b)))
@@ -624,7 +624,7 @@ class TestDisjunctionAndOr:
     def test_filter_by_first(self):
         """or_val(20) has exactly one solution."""
         db = self._build_db()
-        fn = db.table_for("or_val", 1).get_dispatch()
+        fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
         results = solutions_simple(fn, 20, trail, lambda: True)
         assert results == [True]
@@ -632,7 +632,7 @@ class TestDisjunctionAndOr:
     def test_nonexistent_value(self):
         """or_val(99) has no solutions."""
         db = self._build_db()
-        fn = db.table_for("or_val", 1).get_dispatch()
+        fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
         results = solutions_simple(fn, 99, trail, lambda: True)
         assert results == []
@@ -679,7 +679,7 @@ class TestNegationAsFailure:
     def test_not_red_with_green(self):
         """not_red("green") succeeds."""
         db = self._build_db()
-        fn = db.table_for("not_red", 1).get_dispatch()
+        fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
         results = solutions_simple(fn, "green", trail, lambda: True)
         assert results == [True]
@@ -687,7 +687,7 @@ class TestNegationAsFailure:
     def test_not_red_with_red_fails(self):
         """not_red("red") fails."""
         db = self._build_db()
-        fn = db.table_for("not_red", 1).get_dispatch()
+        fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
         results = solutions_simple(fn, "red", trail, lambda: True)
         assert results == []
@@ -695,7 +695,7 @@ class TestNegationAsFailure:
     def test_not_red_enumerates_two(self):
         """not_red(C) with unbound C yields green and blue (not red)."""
         db = self._build_db()
-        fn = db.table_for("not_red", 1).get_dispatch()
+        fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
         c = Var()
         results = solutions_simple(fn, c, trail, lambda: deref(c))

@@ -764,7 +764,7 @@ class TestBuiltinsInCompiledPredicates:
 
         out = Var()
         t = Trail()
-        fn = db.table_for("range_check", 1).get_dispatch()
+        fn = db.get_dispatch("range_check", 1)
         results = [deref(out) for _ in fn(out, t, None)]
         assert results == [1, 2, 3, 4, 5]
 
@@ -785,6 +785,6 @@ class TestBuiltinsInCompiledPredicates:
 
         out = Var()
         t = Trail()
-        fn = db.table_for("pick", 1).get_dispatch()
+        fn = db.get_dispatch("pick", 1)
         results = [deref(out) for _ in fn(out, t, None)]
         assert results == ["a", "b", "c"]

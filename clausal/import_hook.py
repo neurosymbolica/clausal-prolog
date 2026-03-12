@@ -14,9 +14,9 @@ Files with the ``.clausal`` extension are intercepted by this hook, which:
   3. Each ``$define_predicate`` call asserts the clause into a
      ``clausal.logic.database.Module`` and immediately recompiles the predicate
      via ``clausal.logic.compiler.compile_predicate``.  The compiled dispatch
-     function is installed on the ``PredicateTable`` so that subsequent
+     function is installed on the PredicateMeta class so that subsequent
      predicate calls (and cross-predicate calls from compiled bodies) resolve
-     via ``_db.table_for(...).get_dispatch()``.
+     via ``pred_cls._get_dispatch()``.
 
 ``$module`` (the value of the ``$module`` name in the module namespace) is a
 ``clausal.logic.database.Module`` instance, not the Python module object.

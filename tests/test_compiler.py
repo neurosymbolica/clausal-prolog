@@ -3,7 +3,7 @@
 Tests cover:
   - head_to_match_pattern: all term types → correct ast.pattern
   - compile_head_to_match_case: structure of generated match_case arm
-  - compile_predicate: dispatch function correctness and PredicateTable wiring
+  - compile_predicate: dispatch function correctness and dispatch fn wiring
 """
 
 from __future__ import annotations
@@ -333,11 +333,8 @@ class TestCompilePredicate:
 
     def test_no_clauses_installs_dispatch_fn(self):
         db = Database()
-        # We need a PredicateTable to install onto; assertz first creates it
-        db.assertz(Clause(head=Compound("foo", (1, 2)), body=[]))
-        db.retract(Compound("foo", (1, 2)))  # remove the clause but keep the table
         fn = compile_predicate("foo", 2, [], db)
-        assert db.table_for("foo", 2).dispatch_fn is fn
+        assert db.get_dispatch("foo", 2) is fn
 
     # ── Function naming ──
 
@@ -462,23 +459,21 @@ class TestCompilePredicate:
         fn = compile_predicate("x", 1, clauses, db)
         assert list(fn(1, _trail(), None)) == [None]   # matches clause 1 only
 
-    # ── PredicateTable wiring ──
+    # ── Database dispatch wiring ──
 
     def test_installs_dispatch_fn_on_table(self):
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
-        table = db.table_for("point", 2)
-        assert table is not None
-        assert table.dispatch_fn is fn
+        assert db.get_dispatch("point", 2) is fn
 
     def test_get_dispatch_works_after_compile(self):
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
         compile_predicate("point", 2, clauses, db, globals_={"point": point})
-        fn = db.table_for("point", 2).get_dispatch()
+        fn = db.get_dispatch("point", 2)
         assert callable(fn)
 
     # ── custom body_compiler ──
