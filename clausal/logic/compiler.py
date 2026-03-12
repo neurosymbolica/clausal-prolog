@@ -1777,11 +1777,16 @@ def _build_predicate_trampoline_funcdef(
     clauses: list[Clause],
     db: Database,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+    emit_done: bool = True,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
     Returns the fixed-up FunctionDef without executing it.  Used by both
     ``compile_predicate_trampoline`` and ``compile_predicate_trampoline_ast``.
+
+    When *emit_done* is False the trailing ``yield (parent, _DONE)`` is
+    omitted — used for indexed-dispatch sub-functions that are consumed via
+    ``yield from`` by an outer wrapper which emits its own DONE.
     """
     arg_names = [f"arg{i}" for i in range(arity)]
     params = ["this_generator", "parent"] + arg_names + ["trail"]
@@ -1804,7 +1809,16 @@ def _build_predicate_trampoline_funcdef(
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
-    all_stmts.append(_yield_step_stmt(_name("parent"), _name("_DONE")))
+    if emit_done:
+        all_stmts.append(_yield_step_stmt(_name("parent"), _name("_DONE")))
+
+    # A generator function needs at least one yield or a return+yield pair.
+    # When emit_done is False and clauses is empty, add return+yield.
+    if not all_stmts:
+        all_stmts = [
+            ast.Return(value=ast.Constant(value=None)),
+            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        ]
 
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
@@ -1886,8 +1900,6 @@ def compile_predicate_trampoline(
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    func_def = _build_predicate_trampoline_funcdef(functor, arity, clauses, _effective_db, body_compiler)
-
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -1915,7 +1927,33 @@ def compile_predicate_trampoline(
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    fn = functiondef_to_function(func_def, globals_=base_globals)
+    # ── First-argument indexing ───────────────────────────────────────────
+    index = _build_first_arg_index(clauses, arity)
+    if index is not None:
+        all_def = _build_predicate_trampoline_funcdef(
+            f"{functor}__all", arity, index["all"],
+            _effective_db, body_compiler, emit_done=False,
+        )
+        all_fn = functiondef_to_function(all_def, globals_=base_globals)
+        idx_dict: dict = {}
+        for key, bucket_clauses in index["buckets"].items():
+            bname = f"{functor}__b{len(idx_dict)}"
+            bdef = _build_predicate_trampoline_funcdef(
+                bname, arity, bucket_clauses,
+                _effective_db, body_compiler, emit_done=False,
+            )
+            idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+        ddef = _build_predicate_trampoline_funcdef(
+            f"{functor}__dflt", arity, index["defaults"],
+            _effective_db, body_compiler, emit_done=False,
+        )
+        default_fn = functiondef_to_function(ddef, globals_=base_globals)
+        fn = _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, DONE)
+    else:
+        func_def = _build_predicate_trampoline_funcdef(
+            functor, arity, clauses, _effective_db, body_compiler,
+        )
+        fn = functiondef_to_function(func_def, globals_=base_globals)
 
     def _recompile_trampoline() -> Callable:
         if db is not None:
@@ -2745,6 +2783,134 @@ _EXTRA_FUNCDEF: dict = (
 )
 
 
+# ── First-argument indexing (V2-1) ────────────────────────────────────────────
+
+_INDEX_VAR = object()  # sentinel: clause has variable/non-indexable first arg
+_INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))
+_INDEX_THRESHOLD = 4  # minimum clauses before indexing kicks in
+
+
+def _extract_first_arg_key(clause: Clause, arity: int) -> Any:
+    """Extract the indexing key for a clause's first argument.
+
+    Returns a hashable key (scalar value) for indexable clauses,
+    or ``_INDEX_VAR`` for clauses with a variable/non-indexable first arg.
+    """
+    if arity == 0:
+        return _INDEX_VAR
+    head = clause.head
+    # Get first arg from head
+    if isinstance(head, Compound):
+        if not head.args:
+            return _INDEX_VAR
+        first_arg = head.args[0]
+    elif isinstance(head, Call) and isinstance(head.func, LoadName):
+        if not head.args:
+            return _INDEX_VAR
+        first_arg = head.args[0]
+    elif is_term_instance(head):
+        fields = term_field_names(head)
+        if not fields:
+            return _INDEX_VAR
+        first_arg = getattr(head, fields[0])
+    else:
+        return _INDEX_VAR
+    # Direct ground scalar (note: None is a valid key, checked via isinstance)
+    if isinstance(first_arg, _INDEXABLE_TYPES):
+        return first_arg
+    # Var + Unify pattern (from _normalize_dataclass_fact)
+    if is_var(first_arg):
+        for goal in clause.body:
+            if isinstance(goal, Unify):
+                if goal.left is first_arg and isinstance(goal.right, _INDEXABLE_TYPES):
+                    return goal.right
+                if goal.right is first_arg and isinstance(goal.left, _INDEXABLE_TYPES):
+                    return goal.left
+        return _INDEX_VAR
+    return _INDEX_VAR
+
+
+def _build_first_arg_index(
+    clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+) -> dict | None:
+    """Partition clauses into first-arg buckets.
+
+    Returns None if indexing is not beneficial (too few clauses, all defaults,
+    or arity == 0).  Otherwise returns::
+
+        {"buckets": {key: [Clause, ...]},  # merged with defaults
+         "defaults": [Clause, ...],
+         "all": [Clause, ...]}
+
+    Each bucket's clause list includes the default (var-headed) clauses
+    interleaved in their original order, preserving Prolog clause ordering.
+    """
+    if arity == 0 or len(clauses) < threshold:
+        return None
+    keys = [_extract_first_arg_key(c, arity) for c in clauses]
+    default_indices = [i for i, k in enumerate(keys) if k is _INDEX_VAR]
+    specific_indices = [i for i, k in enumerate(keys) if k is not _INDEX_VAR]
+    if not specific_indices:
+        return None  # all defaults — indexing won't help
+    # Group specific clauses by key
+    from collections import defaultdict
+    bucket_map: dict[Any, list[int]] = defaultdict(list)
+    for i in specific_indices:
+        bucket_map[keys[i]].append(i)
+    # Each bucket = bucket-specific + default clauses, merged in original order
+    merged_buckets: dict[Any, list[Clause]] = {}
+    for key, b_indices in bucket_map.items():
+        merged = sorted(b_indices + default_indices)
+        merged_buckets[key] = [clauses[i] for i in merged]
+    return {
+        "buckets": merged_buckets,
+        "defaults": [clauses[i] for i in default_indices],
+        "all": clauses,
+    }
+
+
+def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
+    """Build an indexed dispatch wrapper for simple/short-stack mode."""
+    def dispatch(*args):
+        _a0 = deref(args[0])
+        if is_var(_a0):
+            yield from all_fn(*args)
+            return
+        try:
+            _bfn = idx_dict.get(_a0)
+        except TypeError:
+            _bfn = None
+        if _bfn is not None:
+            yield from _bfn(*args)
+        else:
+            yield from default_fn(*args)
+    dispatch.__name__ = all_fn.__name__
+    dispatch.__qualname__ = all_fn.__qualname__
+    return dispatch
+
+
+def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
+    """Build an indexed dispatch wrapper for trampoline mode."""
+    def dispatch(*args):
+        parent = args[1]
+        _a0 = deref(args[2])  # first predicate arg is at index 2
+        if is_var(_a0):
+            yield from all_fn(*args)
+        else:
+            try:
+                _bfn = idx_dict.get(_a0)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from default_fn(*args)
+        yield (parent, done)
+    dispatch.__name__ = all_fn.__name__
+    dispatch.__qualname__ = all_fn.__qualname__
+    return dispatch
+
+
 def _build_predicate_funcdef(
     functor: str,
     arity: int,
@@ -2778,6 +2944,13 @@ def _build_predicate_funcdef(
             ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    # Empty body is invalid Python; use return+yield to make a no-op generator.
+    if not all_stmts:
+        all_stmts = [
+            ast.Return(value=ast.Constant(value=None)),
+            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        ]
 
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
@@ -2860,8 +3033,6 @@ def compile_predicate(
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    func_def = _build_predicate_funcdef(functor, arity, clauses, _effective_db, body_compiler)
-
     from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -2888,7 +3059,35 @@ def compile_predicate(
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    fn = functiondef_to_function(func_def, globals_=base_globals)
+    # ── First-argument indexing ───────────────────────────────────────────
+    index = _build_first_arg_index(clauses, arity)
+    if index is not None:
+        # Compile sub-functions: all-clauses, per-bucket, defaults-only
+        all_def = _build_predicate_funcdef(
+            f"{functor}__all", arity, index["all"], _effective_db, body_compiler,
+        )
+        all_fn = functiondef_to_function(all_def, globals_=base_globals)
+        idx_dict: dict = {}
+        for key, bucket_clauses in index["buckets"].items():
+            bname = f"{functor}__b{len(idx_dict)}"
+            bdef = _build_predicate_funcdef(
+                bname, arity, bucket_clauses, _effective_db, body_compiler,
+            )
+            idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+        if index["defaults"]:
+            ddef = _build_predicate_funcdef(
+                f"{functor}__dflt", arity, index["defaults"],
+                _effective_db, body_compiler,
+            )
+            default_fn = functiondef_to_function(ddef, globals_=base_globals)
+        else:
+            default_fn = _compile_always_fail(functor, arity)
+        fn = _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn)
+    else:
+        func_def = _build_predicate_funcdef(
+            functor, arity, clauses, _effective_db, body_compiler,
+        )
+        fn = functiondef_to_function(func_def, globals_=base_globals)
 
     def _recompile_simple() -> Callable:
         if db is not None:

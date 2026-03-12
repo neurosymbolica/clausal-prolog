@@ -197,6 +197,14 @@ Negation-as-failure (`Not`) in trampoline mode compiles the inner goal in **simp
 
 ---
 
+## First-argument indexing
+
+When a predicate has 4 or more clauses, `compile_predicate` and `compile_predicate_trampoline` automatically build a first-argument index. Clauses are partitioned by the first argument's value: ground-first-arg calls jump directly to the matching clause subset via a dict lookup, while unbound-Var-first-arg calls fall back to the full unindexed path.
+
+See [`docs/indexing.md`](indexing.md) for the full design, including bucket merging, trampoline `yield from` semantics, and the `emit_done` parameter.
+
+---
+
 ## `compile_predicate` entry point
 
 ```python

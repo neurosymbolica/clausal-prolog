@@ -1,0 +1,193 @@
+# Clausal — First-Argument Indexing
+
+## Problem
+
+Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).
+
+```
+color("red",   [255,   0,   0]),
+color("green", [  0, 128,   0]),
+color("blue",  [  0,   0, 255]),
+...  # 200 more colors
+```
+
+Querying `color("blue", X_)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `"blue"`.
+
+---
+
+## Design
+
+First-argument indexing partitions a predicate's clauses into buckets keyed on the first argument's value. At call time, the dispatch function inspects `arg0`:
+
+1. If `arg0` is an unbound `Var` (output-mode query), all clauses must be tried — fall back to the unindexed path.
+2. If `arg0` is ground, look up the value in a dict to find the right bucket.
+3. If no bucket matches (the value wasn't seen in any clause head), try only the default clauses.
+
+### Clause classification
+
+Each clause's first-argument position is classified at compile time:
+
+| First arg in clause head | Index key | Bucket |
+|---|---|---|
+| Literal scalar (int, str, float, bytes, bool, None) | The value itself | Specific bucket for that value |
+| Var with `Unify(var, scalar)` in body (normalized fact) | The scalar value | Specific bucket |
+| Unbound Var (no body unification) | `_INDEX_VAR` sentinel | Default bucket |
+| List, term instance, or other non-scalar | `_INDEX_VAR` sentinel | Default bucket |
+
+The Var+Unify pattern comes from fact normalization (`_normalize_dataclass_fact` / `_normalize_fact_clause`), which replaces ground head values with fresh Vars and adds `Unify(var, value)` goals to the body. This is the standard representation for facts in clausal — the indexer recognises it and extracts the original ground value.
+
+### Bucket merging
+
+A critical correctness requirement: **clause ordering must be preserved.** In Prolog and clausal, clause order determines solution order. Consider:
+
+```
+f(1, "a"),          # clause 0, key=1
+f(X_, "b"),         # clause 1, default
+f(2, "c"),          # clause 2, key=2
+f(3, "d"),          # clause 3, key=3
+f(X_, "e"),         # clause 4, default
+```
+
+When querying `f(1, Y_)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
+
+To achieve this, each bucket's clause list **merges the bucket-specific clauses with all default clauses, in their original order:**
+
+```
+bucket[1] = [clause_0, clause_1, clause_4]   # key=1 + defaults
+bucket[2] = [clause_1, clause_2, clause_4]   # key=2 + defaults
+bucket[3] = [clause_1, clause_3, clause_4]   # key=3 + defaults
+defaults  = [clause_1, clause_4]              # only defaults (for miss)
+all       = [clause_0 .. clause_4]            # for Var first-arg queries
+```
+
+Each bucket is compiled as an independent dispatch function containing only its merged clause subset. The unindexed "all" function contains every clause.
+
+### Threshold
+
+Indexing is only applied when `arity >= 1` and the predicate has at least 4 clauses (`_INDEX_THRESHOLD = 4`). Below this threshold, the overhead of the index dict lookup and multiple sub-functions outweighs the savings from skipping clauses.
+
+Indexing is also skipped when all clauses have variable first arguments (all defaults) — there's nothing to index on.
+
+---
+
+## Implementation
+
+### Compile-time: building the index
+
+```python
+_extract_first_arg_key(clause, arity) -> key | _INDEX_VAR
+```
+
+Extracts the indexing key from a clause. Handles three head representations:
+
+- `Compound(functor, args)` — `args[0]`
+- `Call(func=LoadName(f), args)` — `args[0]`
+- PredicateMeta instance — `getattr(head, fields[0])`
+
+If the first arg is a Var, scans the clause body for `Unify(left=same_var, right=scalar)` or `Unify(left=scalar, right=same_var)` and returns the scalar. Identity comparison (`is`) ensures we match the exact Var object from the head.
+
+```python
+_build_first_arg_index(clauses, arity, threshold=4) -> dict | None
+```
+
+Returns `None` if indexing is not beneficial. Otherwise returns:
+
+```python
+{
+    "buckets": {key: [Clause, ...]},  # merged with defaults
+    "defaults": [Clause, ...],
+    "all": [Clause, ...],
+}
+```
+
+### Runtime: indexed dispatch
+
+The indexed dispatch function is a Python closure that wraps three categories of sub-functions:
+
+```
+                    ┌─ is_var(arg0)? ──→ all_fn(*args)
+                    │
+dispatch(*args) ────┤
+                    │                  ┌─ hit ──→ bucket_fn(*args)
+                    └─ idx.get(arg0) ──┤
+                                       └─ miss ─→ default_fn(*args)
+```
+
+#### Simple mode
+
+```python
+def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
+    def dispatch(*args):
+        _a0 = deref(args[0])
+        if is_var(_a0):
+            yield from all_fn(*args)
+            return
+        try:
+            _bfn = idx_dict.get(_a0)
+        except TypeError:
+            _bfn = None
+        if _bfn is not None:
+            yield from _bfn(*args)
+        else:
+            yield from default_fn(*args)
+    return dispatch
+```
+
+The `try/except TypeError` handles unhashable values (e.g., lists) gracefully — they fall through to the default bucket.
+
+#### Trampoline mode
+
+```python
+def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
+    def dispatch(*args):
+        parent = args[1]
+        _a0 = deref(args[2])      # first predicate arg is at index 2
+        if is_var(_a0):
+            yield from all_fn(*args)
+        else:
+            ...                    # same lookup logic
+        yield (parent, done)       # DONE after all sub-functions
+    return dispatch
+```
+
+**Critical detail:** sub-functions in trampoline mode must NOT yield `(parent, DONE)` at the end. Since they are consumed via `yield from`, a DONE yield would be forwarded to the trampoline, which would interpret it as the wrapper being exhausted — even though the wrapper still has more sub-functions to try. The `_build_predicate_trampoline_funcdef` function accepts an `emit_done=False` parameter for this purpose. The wrapper itself emits the final `yield (parent, DONE)`.
+
+### Sub-function compilation
+
+Each sub-function (all, bucket, default) is compiled through the same `_build_predicate_funcdef` / `_build_predicate_trampoline_funcdef` machinery as a normal predicate, just with a subset of clauses. This means:
+
+- Head pattern compilation, body goal compilation, variable pre-allocation, and call target injection all work identically.
+- All sub-functions share the same `base_globals` dict, so they have access to the same builtins, predicate classes, and call targets.
+- The call to `_inject_call_targets` and `_collect_head_types` uses the **full** clause list, not the subset — ensuring all needed names are available in every sub-function.
+
+Sub-functions get distinct names (`{functor}__all`, `{functor}__b0`, `{functor}__dflt`) to avoid collisions when compiled via `functiondef_to_function`.
+
+### Lazy recompile integration
+
+No changes to the Database or PredicateMeta invalidation mechanism were needed. When `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.
+
+---
+
+## What is NOT indexed
+
+The current implementation indexes only scalar values. These are not indexed (they go to the default bucket):
+
+- **Lists** — including empty lists. List first-args could be indexed by structure (empty vs cons), but this is deferred.
+- **Term instances** (PredicateMeta classes, Compound) — could be indexed by type/functor, but requires a two-level dict (value dict + type dict) to avoid collisions between a type used as a literal value and a type used as an index key.
+- **Nested structures** — only the top-level value is checked; no deep indexing.
+
+These are planned for V2-2 (groundness-keyed dispatch), which extends first-argument indexing to multi-argument dispatch plans.
+
+---
+
+## Testing
+
+`tests/test_first_arg_index.py` covers:
+
+- **Key extraction**: scalar values, Var+Unify pattern, None, booleans, zero arity, non-indexable types
+- **Index building**: threshold enforcement, all-defaults detection, bucket merging with defaults
+- **Simple mode dispatch**: ground lookup, Var enumeration, no-match fallback, mixed var+specific clauses, integer and string keys
+- **Trampoline mode dispatch**: same scenarios as simple mode, verifying `yield from` + DONE protocol correctness
+- **Dynamic re-indexing**: `assertz` triggers lazy recompile with updated index (both modes)
+- **PredicateMeta integration**: normalized Var+Unify heads from PredicateMeta facts
+- **Edge cases**: arity-1 predicates, duplicate first-arg keys, None as key, bool/int hash collision
