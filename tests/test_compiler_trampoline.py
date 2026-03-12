@@ -1,23 +1,21 @@
-"""Tests for compile_predicate_trampoline — stack-safe Step-protocol compilation.
+"""Tests for compile_predicate_trampoline — stack-safe tuple-protocol compilation.
 
 The trampoline execution model:
-  - Every compiled predicate is an immortal coroutine: ``self = yield`` at top.
-  - At each solution: ``yield Step(parent, None)`` — suspends until parent
+  - Every compiled predicate is a generator wrapped by ``StepGenerator``.
+    ``StepGenerator`` passes itself as ``this_generator`` — no bootstrap needed.
+  - At each solution: ``yield (parent, None)`` — suspends until parent
     resumes for more solutions.
-  - When all clauses exhausted: ``yield Step(parent, DONE)`` — signals search end.
-  - Sub-predicate calls use ``_st = (yield Step(child_gen, None))`` in a while
+  - When all clauses exhausted: ``yield (parent, DONE)`` — signals search end.
+  - Sub-predicate calls use ``_st = (yield (_gen, None))`` in a while
     loop so Python call depth does not grow with recursion.
 
 Driver contract
 ---------------
-Pass ``parent=None`` to a trampoline predicate.  The search trampoline then
-interprets:
-  - ``Step(None, None)``  → solution found; snapshot, then resume pred for more
-  - ``Step(None, DONE)``  → search exhausted; stop
-  - ``Step(child, v)``    → intermediate step; route through child and continue
-
-This avoids needing a separate "sink" generator — the top-level driver IS the
-parent, and pred_gen routes everything to it.
+Create ``StepGenerator(dispatch_fn, None, *args)`` to drive a trampoline
+predicate.  The search trampoline then interprets:
+  - ``(None, None)``  → solution found; snapshot, then resume for more
+  - ``(None, DONE)``  → search exhausted; stop
+  - ``(child, v)``    → intermediate step; route through child and continue
 """
 
 from __future__ import annotations
@@ -32,7 +30,7 @@ from clausal.logic.compiler import (
     compile_predicate_trampoline,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.trampoline import Step
+from clausal.logic.trampoline import StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
@@ -67,12 +65,12 @@ class pair:
 #
 # Drive a trampoline-compiled predicate with parent=None.
 #
-# Semantics of steps from the predicate's perspective:
-#   Step(None, None)  — predicate found a solution; pred is suspended (bindings active)
-#   Step(None, DONE)  — predicate exhausted all clauses
-#   Step(child, v)    — predicate delegated to a sub-predicate; route and continue
+# Semantics of tuples from the predicate's perspective:
+#   (None, None)   — predicate found a solution; pred is suspended (bindings active)
+#   (None, DONE)   — predicate exhausted all clauses
+#   (child, v)     — predicate delegated to a sub-predicate; route and continue
 #
-# Because the predicate is suspended at the yield point when Step(None, None) is
+# Because the predicate is suspended at the yield point when (None, None) is
 # returned, callers can safely call deref() on Var arguments to snapshot bindings
 # before resuming.
 
@@ -84,28 +82,18 @@ def _search_trampoline(dispatch_fn, args, snapshot_fn):
     internally.  ``snapshot_fn`` is called while pred is suspended (bindings live).
     """
     snapshots = []
-    pred_gen = dispatch_fn(None, *args)
-
-    started: set[int] = set()
-
-    def resume(gen, value):
-        if id(gen) not in started:
-            started.add(id(gen))
-            next(gen)            # park at self = yield
-            return gen.send(gen) # inject self-reference → first real Step
-        return gen.send(value)
-
-    step = resume(pred_gen, None)
+    root = StepGenerator(dispatch_fn, None, *args)
+    gen, value = root.send(None)
 
     while True:
-        if step.gen is None:
-            if step.value is DONE:
+        if gen is None:
+            if value is DONE:
                 break
-            # Solution: pred_gen is suspended, bindings live
+            # Solution: generator is suspended, bindings live
             snapshots.append(snapshot_fn())
-            step = resume(pred_gen, None)
+            gen, value = root.send(None)
         else:
-            step = resume(step.gen, step.value)
+            gen, value = gen.send(value)
 
     return snapshots
 
@@ -583,17 +571,15 @@ class TestTrampolineAlwaysFail:
         trail = fresh_trail()
         assert _count_solutions(fn, 1, 2, trail) == 0
 
-    def test_always_fail_yields_step_none_done(self):
-        """The always-fail generator's first Step is Step(None, DONE) or Step(parent, DONE)."""
+    def test_always_fail_yields_tuple_none_done(self):
+        """The always-fail generator's first yield is (parent=None, DONE)."""
         db = Database()
         fn = compile_predicate_trampoline("undef2", 1, [], db)
         trail = fresh_trail()
-        gen = fn(None, 42, trail)
-        next(gen)                  # park at self = yield
-        step = gen.send(gen)       # inject self; get first Step
-        # First step: Step(parent=None, DONE)
-        assert step.gen is None
-        assert step.value is DONE
+        root = StepGenerator(fn, None, 42, trail)
+        gen, value = root.send(None)
+        assert gen is None
+        assert value is DONE
 
 
 class TestDONESentinel:

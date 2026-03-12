@@ -101,36 +101,95 @@ Before the continuation chain is assembled, `_preallocate_body_vars` scans all g
 ### Compiled function shape
 
 ```python
-def fib__2(parent, arg0, arg1, trail):
-    self = yield               # bootstrap: receive own Step handle
+def fib__2(this_generator, parent, arg0, arg1, trail):
     # clause 1
     match ...:
         case ...:
             mark = trail.mark()
             if unify(...):
-                yield Step(parent, None)   # ← solution
+                yield (parent, None)   # ← solution
             trail.undo(mark)
-    yield Step(parent, DONE)   # ← search exhausted
+    yield (parent, DONE)   # ← search exhausted
 ```
 
-- First arg is `parent` (the caller's `Step`).
-- No `k` arg — continuations are communicated via `yield Step(...)`.
-- `self = yield` is a bootstrap idiom: the trampoline sends the generator back to itself as the first `.send()` value.
-- `yield Step(parent, None)` signals one solution to the parent.
-- `yield Step(parent, DONE)` signals search exhaustion.
+- First arg is `this_generator` — a `StepGenerator` wrapper that called this function. `StepGenerator` creates itself first, then calls `func(self, parent, ...)`, so the generator body has a reference to its own wrapper without needing any bootstrap step.
+- Second arg is `parent` — the `StepGenerator` of the calling predicate (or `None` at the root).
+- No `k` arg — continuations are communicated via `yield (gen, value)` tuples.
+- `yield (parent, None)` signals one solution to the parent.
+- `yield (parent, DONE)` signals search exhaustion.
 
-Sub-predicate calls:
+### StepGenerator protocol
+
+Every trampoline-compiled generator is wrapped in a `StepGenerator`:
 
 ```python
-_gen = fib._get_dispatch()(self, N1, A, trail)
-_st = yield Step(_gen, None)
+from clausal.logic.trampoline import StepGenerator
+
+root = StepGenerator(fib__2, None, 10, result_var, trail)
+gen, value = root.send(None)
+```
+
+`StepGenerator.__init__(func, *args)` calls `func(self, *args)`, passing itself as the first argument (`this_generator`). This eliminates the old `self = yield` bootstrap round-trip — the generator has its own wrapper reference from the very first statement.
+
+`send(value)` handles first-call bootstrapping transparently: the first call does `next(inner_gen)` (ignoring the value), subsequent calls delegate to `inner_gen.send(value)`.
+
+A C extension (`_trampoline`) provides an optimised `StepGenerator` for production use. The pure-Python version in `clausal.logic.trampoline` is the fallback.
+
+### Tuple protocol
+
+Generators yield plain `(target, value)` tuples to steer the trampoline:
+
+| Tuple | Meaning |
+|---|---|
+| `(this_generator, v)` | Resume self with value `v` (iterative step / tail call) |
+| `(child, v)` | Start or resume a child `StepGenerator` |
+| `(parent, None)` | Solution found — parent resumes us for more |
+| `(parent, DONE)` | Search exhausted |
+| `(None, v)` | Root computation complete (only at top level) |
+
+Plain tuples get Python's `UNPACK_SEQUENCE` opcode — faster than attribute access on a dataclass.
+
+### Sub-predicate calls
+
+```python
+_gen = StepGenerator(fib._get_dispatch(), this_generator, N1, A, trail)
+_st = yield (_gen, None)
 while _st is not DONE:
     # body continuation: current solution available
     ...
-    _st = yield Step(_gen, None)
+    _st = yield (_gen, None)
 ```
 
-The trampoline drives all generator resumption in a flat loop, so call depth does not grow the Python call stack.
+`StepGenerator` wraps the child dispatch function. `this_generator` is passed as the child's `parent`, so the child yields `(this_generator, None)` on solution and `(this_generator, DONE)` on exhaustion. The trampoline routes these back to us.
+
+### Trampoline driver
+
+The trampoline loop is simple:
+
+```python
+def trampoline(root: StepGenerator) -> Any:
+    gen, value = root.send(None)
+    while gen is not None:
+        gen, value = gen.send(value)
+    return value
+```
+
+No `started` set, no `resume` helper — `StepGenerator.send()` handles bootstrapping internally. The `solutions()` function yields each solution value:
+
+```python
+def solutions(root: StepGenerator):
+    gen, value = root.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return
+            yield value
+            gen, value = root.send(None)
+        else:
+            gen, value = gen.send(value)
+```
+
+Both `trampoline` and `solutions` are available from `clausal.logic.trampoline` (preferring C extension, falling back to Python).
 
 ### NAF in trampoline mode
 

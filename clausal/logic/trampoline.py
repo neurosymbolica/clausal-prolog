@@ -3,77 +3,136 @@ Generator-based trampoline.
 
 Protocol
 --------
-Every participating generator must:
-  1. Open with ``self = yield``  — receives its own reference at bootstrap time.
-  2. Yield Step objects to steer the trampoline.
+Every participating generator yields **tuples** ``(target, value)`` to steer
+the trampoline:
 
-Step semantics
---------------
-  Step(self,   v)  – resume *this* generator with value v
-                     (iterative step / tail call — no stack growth)
-  Step(child,  v)  – start a fresh nested computation; the child will
-                     eventually yield Step(parent, result) to resume self
-  Step(parent, v)  – return v to the calling generator
-  Step(None,   v)  – the root computation is done; v is the final answer
+  (this_generator, v)  – resume *this* generator with value v
+                         (iterative step / tail call — no stack growth)
+  (child,          v)  – start a fresh nested computation; the child will
+                         eventually yield (parent, result) to resume self
+  (parent,         v)  – return v to the calling generator
+  (None,           v)  – the root computation is done; v is the final answer
 
-Self-reference trick
---------------------
+StepGenerator
+-------------
 A generator cannot normally refer to itself before it is fully constructed.
-The solution used here is a two-phase bootstrap performed by the trampoline:
+``StepGenerator`` solves this by acting as a thin wrapper: it is created
+*first*, then calls the generator function passing itself as the
+``this_generator`` parameter.  The compiled function signature is::
 
-    next(gen)         # advance execution to the ``self = yield`` suspension
-    gen.send(gen)     # inject the generator object as ``self``; run to first Step
+    def pred__N(this_generator, parent, arg0, …, argN, trail):
+        …
 
-No wrapper class, no frame inspection — just one spare yield at the top of
-every generator.
+No bootstrap ``self = yield`` is needed — ``this_generator`` is just a
+regular parameter.
+
+A C extension (_trampoline) provides optimised versions of StepGenerator
+and trampoline() for production use.  This module is the pure-Python
+reference implementation.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
-
-# ── Step ──────────────────────────────────────────────────────────────────────
+# ── Step (legacy) ─────────────────────────────────────────────────────────────
+# Kept for backward compatibility with existing compiled code and tests.
+# New code should yield plain tuples (gen, value) instead.
 
 @dataclass
 class Step:
-    """Steering token yielded by every participating generator."""
-    gen: Generator | None   # which generator to resume next (None → done)
-    value: Any = None       # argument to send into gen
+    """Steering token yielded by every participating generator (legacy)."""
+    gen: Generator | None
+    value: Any = None
 
 
-# ── Trampoline ────────────────────────────────────────────────────────────────
+# ── C extension fast path ────────────────────────────────────────────────────
+# _trampoline is a C extension providing optimised DONE, StepGenerator,
+# trampoline, and solutions.  Fall back to pure-Python implementations below.
 
-def trampoline(initial_gen: Generator) -> Any:
-    """
-    Drive a chain of Step-yielding generators without growing the call stack.
+try:
+    from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions  # type: ignore[import-untyped]
+except ImportError:
+    # ── DONE sentinel ─────────────────────────────────────────────────────
+    DONE: object = object()
 
-    The trampoline keeps a set of already-bootstrapped generator ids so it
-    knows whether to run the two-phase bootstrap or a plain send.
-    """
-    started: set[int] = set()
+    # ── StepGenerator ─────────────────────────────────────────────────────
 
-    def resume(gen: Generator, value: Any) -> Step:
-        if id(gen) not in started:
-            started.add(id(gen))
-            next(gen)               # park at ``self = yield``
-            return gen.send(gen)    # inject self-reference → first real Step
-        return gen.send(value)
+    class StepGenerator:  # type: ignore[no-redef]
+        """Wraps a generator function, providing ``this_generator`` automatically.
 
-    step = resume(initial_gen, None)
-    while step.gen is not None:
-        step = resume(step.gen, step.value)
-    return step.value
+        Usage::
+
+            sg = StepGenerator(pred_fn, parent, arg0, arg1, trail)
+
+        This calls ``pred_fn(sg, parent, arg0, arg1, trail)`` internally, so the
+        generator body receives ``sg`` as its ``this_generator`` parameter.
+
+        ``send(value)`` handles first-call bootstrapping transparently:
+        the first call does ``next(inner_gen)``; subsequent calls delegate to
+        ``inner_gen.send(value)``.
+        """
+        __slots__ = ('_gen', '_started')
+
+        def __init__(self, func: Callable, *args: Any) -> None:
+            self._gen: Generator = func(self, *args)
+            self._started: bool = False
+
+        def send(self, value: Any) -> tuple:
+            if self._started:
+                return self._gen.send(value)
+            self._started = True
+            return next(self._gen)
+
+        def throw(self, *args: Any) -> tuple:
+            return self._gen.throw(*args)
+
+        def close(self) -> None:
+            self._gen.close()
+
+    # ── Trampoline ────────────────────────────────────────────────────────
+
+    def trampoline(root: StepGenerator) -> Any:  # type: ignore[no-redef]
+        """
+        Drive a chain of tuple-yielding generators without growing the call stack.
+
+        Each generator yields ``(target, value)`` tuples.  The trampoline loop is
+        just::
+
+            step = root.send(None)
+            while step[0] is not None:
+                step = step[0].send(step[1])
+            return step[1]
+
+        No ``started`` set, no ``resume`` helper — StepGenerator handles
+        bootstrapping internally.
+        """
+        gen, value = root.send(None)
+        while gen is not None:
+            gen, value = gen.send(value)
+        return value
+
+    def solutions(root: StepGenerator) -> Generator:  # type: ignore[no-redef]
+        """Yield each solution value from *root* until DONE."""
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    return
+                yield value
+                gen, value = root.send(None)
+            else:
+                gen, value = gen.send(value)
 
 
-# ── Minimal test problem: n! ──────────────────────────────────────────────────
+# ── Minimal test problem: n! ─────────────────────────────────────────────────
 #
-# Uses all three Step targets in one small program:
+# Uses all three targets in one small program:
 #
-#   factorial → validate    Step(child,  …)   new generator (sub-computation)
-#   validate  → factorial   Step(parent, n)   return to caller
-#   factorial → factorial   Step(self,   n-1) iterative step via trampoline
-#   factorial → None        Step(None,   acc) root computation complete
+#   factorial → validate    (child,  …)   new generator (sub-computation)
+#   validate  → factorial   (parent, n)   return to caller
+#   factorial → factorial   (self,   n-1) iterative step via trampoline
+#   factorial → None        (None,   acc) root computation complete
 #
 # Trace for factorial(None, 4):
 #
@@ -84,46 +143,44 @@ def trampoline(initial_gen: Generator) -> Any:
 #   factorial  →  factorial    [self]    n = 1, acc = 24
 #   factorial  →  None         [done]    return 24
 
-def validate(parent: Generator | None, n: int) -> Generator:
+def validate(this_generator: StepGenerator, parent: StepGenerator | None, n: int) -> Generator:
     """
     Leaf sub-computation: assert n >= 0, then echo it back to parent.
-    Exists solely to demonstrate the 'new generator' (child) Step.
+    Exists solely to demonstrate the 'new generator' (child) target.
     """
-    self = yield                        # bootstrap hook — receives self
     if n < 0:
         raise ValueError(f"n must be >= 0, got {n}")
-    yield Step(parent, n)               # ← Step(parent, …)  return to caller
+    yield (parent, n)
 
 
-def factorial(parent: Generator | None, n: int) -> Generator:
-    """Compute n! while exercising all three Step targets."""
-    self = yield                        # bootstrap hook — receives self
+def factorial(this_generator: StepGenerator, parent: StepGenerator | None, n: int) -> Generator:
+    """Compute n! while exercising all three targets."""
 
-    # ① Step(child, …) — delegate to a fresh generator for input validation
-    n = yield Step(validate(self, n), None)
+    # ① (child, …) — delegate to a fresh generator for input validation
+    n = yield (StepGenerator(validate, this_generator, n), None)
 
     acc = 1
     while n > 1:
         acc *= n
-        # ② Step(self, …) — the trampoline drives the loop; no recursion depth
-        n = yield Step(self, n - 1)
+        # ② (this_generator, …) — the trampoline drives the loop; no recursion depth
+        n = yield (this_generator, n - 1)
 
-    # ③ Step(parent, …) — surface the answer to whoever called us
-    yield Step(parent, acc)
+    # ③ (parent, …) — surface the answer to whoever called us
+    yield (parent, acc)
 
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# ── Tests ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     cases = [(0, 1), (1, 1), (2, 2), (5, 120), (10, 3_628_800)]
     for n, expected in cases:
-        got = trampoline(factorial(None, n))
+        got = trampoline(StepGenerator(factorial, None, n))
         assert got == expected, f"factorial({n}) → {got}, expected {expected}"
         print(f"factorial({n:>2}) = {got}")
 
     # Error path through validate
     try:
-        trampoline(factorial(None, -1))
+        trampoline(StepGenerator(factorial, None, -1))
         assert False, "should have raised"
     except ValueError as exc:
         print(f"Caught expected error: {exc}")

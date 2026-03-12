@@ -56,35 +56,43 @@ The solution is a **trampoline**: a driver loop that receives the next continuat
 - the ability to interrupt execution for timeouts, concurrency, asyncio interop
 - a point of control that can be swapped (e.g. a C trampoline for reduced overhead)
 
-`clausal.trampoline` implements this. `clausal.continuation_search` builds the greenlet-based search layer on top.
+`clausal.logic.trampoline` implements this. A C extension (`_trampoline`) provides optimised versions; the pure-Python module is the fallback.
 
 ### Why generators rather than functions for CPS
 
 Generators are better than plain functions for CPS in this setting because they allow resumption for the next choice point without a new continuation being passed. A generator implementing a predicate can:
 
 1. match arguments and set up bindings
-2. yield the next continuation to the trampoline
+2. yield a `(target, value)` tuple to the trampoline
 3. be resumed for the next clause (next choice point)
 
 Each resumption corresponds to a choice point. This maps the Prolog search tree directly onto Python's generator protocol.
 
-A typical compiled predicate generator has the shape:
+Every trampoline-compiled generator is wrapped in a `StepGenerator`. `StepGenerator.__init__(func, *args)` calls `func(self, *args)`, so the generator receives its own wrapper as the first parameter (`this_generator`) without any bootstrap round-trip. The compiled function signature is:
 
 ```python
-def my_predicate(arg1, arg2, trail, k):
+def my_predicate(this_generator, parent, arg1, arg2, trail):
     # clause 1
-    mark = trail.mark()
-    if unify(arg1, pattern1, trail):
-        yield from k(...)
-    trail.undo(mark)
-    # clause 2
-    mark = trail.mark()
-    if unify(arg1, pattern2, trail):
-        yield from k(...)
-    trail.undo(mark)
+    match (deref(arg1), deref(arg2)):
+        case (pattern1, pattern2):
+            mark = trail.mark()
+            if unify(...):
+                yield (parent, None)       # solution
+            trail.undo(mark)
+    yield (parent, DONE)                   # exhausted
 ```
 
-The compiler (`clausal.logic.compiler`, planned) will generate this from predicate definitions written in clausal syntax.
+Sub-predicate calls wrap the child dispatch in `StepGenerator`:
+
+```python
+_gen = StepGenerator(child._get_dispatch(), this_generator, ...)
+_st = yield (_gen, None)
+while _st is not DONE:
+    ...                     # continuation
+    _st = yield (_gen, None)
+```
+
+The compiler (`clausal.logic.compiler`) generates this from predicate definitions written in clausal syntax. See [compiler.md](compiler.md) for full details.
 
 ---
 

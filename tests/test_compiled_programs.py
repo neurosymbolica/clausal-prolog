@@ -74,28 +74,19 @@ def solutions_simple(dispatch_fn, *args_then_snapshot) -> list:
 def solutions_trampoline(dispatch_fn, args_tuple, snapshot_fn) -> list:
     """Drive a trampoline-mode dispatch_fn and collect per-solution snapshots."""
     from clausal.logic.compiler import DONE
-    from clausal.logic.trampoline import Step
+    from clausal.logic.trampoline import StepGenerator
 
     snapshots = []
-    pred_gen = dispatch_fn(None, *args_tuple)
-    started: set[int] = set()
-
-    def resume(gen, value):
-        if id(gen) not in started:
-            started.add(id(gen))
-            next(gen)
-            return gen.send(gen)
-        return gen.send(value)
-
-    step = resume(pred_gen, None)
+    root = StepGenerator(dispatch_fn, None, *args_tuple)
+    gen, value = root.send(None)
     while True:
-        if step.gen is None:
-            if step.value is DONE:
+        if gen is None:
+            if value is DONE:
                 break
             snapshots.append(snapshot_fn())
-            step = resume(pred_gen, None)
+            gen, value = root.send(None)
         else:
-            step = resume(step.gen, step.value)
+            gen, value = gen.send(value)
     return snapshots
 
 
@@ -732,7 +723,6 @@ class TestVisualizer:
         show("demo", 1, clauses, db, trampoline=True)
         captured = capsys.readouterr()
         assert "def demo__1" in captured.out
-        assert "Step" in captured.out
         assert "_DONE" in captured.out
 
     def test_source_is_valid_python(self):

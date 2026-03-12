@@ -23,20 +23,18 @@ Two compilation strategies are provided:
             yield None   # ← one solution
 
 **Trampoline / stack-safe** (``compile_predicate_trampoline``)
-    Every generated function is an immortal coroutine in the
-    ``clausal.logic.trampoline`` Step protocol.  Sub-predicate calls use
-    ``yield Step(child_gen, …)`` so the Python call stack does *not* grow.
-    Solutions are surfaced via ``yield Step(parent, None)``; exhaustion via
-    ``yield Step(parent, DONE)``.  The trampoline drives all generators.
-    ``continuation_search.Search`` (Step 7) provides the ``__iter__``
-    bridge.
+    Every generated function participates in the
+    ``clausal.logic.trampoline`` tuple protocol.  Sub-predicate calls use
+    ``StepGenerator(dispatch, this_generator, …)`` so the Python call stack
+    does *not* grow.  Solutions are surfaced via ``yield (parent, None)``;
+    exhaustion via ``yield (parent, DONE)``.  The trampoline drives all
+    generators.
 
     Compiled function signature::
 
-        def {functor}__{arity}(parent, arg0, …, argN, trail):
-            self = yield   # bootstrap hook
+        def {functor}__{arity}(this_generator, parent, arg0, …, argN, trail):
             …
-            yield Step(parent, _DONE)   # ← search exhausted
+            yield (parent, _DONE)   # ← search exhausted
 """
 
 from __future__ import annotations
@@ -46,7 +44,7 @@ import dataclasses
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, is_var, deref, unify
-from clausal.logic.trampoline import Step
+from clausal.logic.trampoline import Step, DONE, StepGenerator
 from clausal.terms import (
     Compound,
     ArithConstraint,
@@ -1349,35 +1347,35 @@ def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list
     return _body_compiler
 
 
-# ── Trampoline Step-protocol compilation ───────────────────────────────────────
+# ── Trampoline tuple-protocol compilation ──────────────────────────────────────
 #
-# DONE sentinel: yielded as Step(parent, DONE) when a predicate generator has
+# DONE sentinel: yielded as (parent, DONE) when a predicate generator has
 # exhausted all clauses.  The calling generator receives DONE as the value of
-# its ``_st = yield Step(child, None)`` expression and exits its while loop.
+# its ``_st = (yield (_gen, None))`` expression and exits its while loop.
 #
-DONE: object = object()
+# DONE is imported from clausal.logic.trampoline (which prefers the C extension).
 
 
-# ── AST helpers for Step yields ────────────────────────────────────────────────
+# ── AST helpers for tuple yields ───────────────────────────────────────────────
 
 
 def _step_expr(gen_expr: ast.expr, value_expr: ast.expr) -> ast.expr:
-    """Generate AST for: Step(gen_expr, value_expr)"""
-    return _call(_name("Step"), gen_expr, value_expr)
+    """Generate AST for: (gen_expr, value_expr) tuple"""
+    return ast.Tuple(elts=[gen_expr, value_expr], ctx=ast.Load())
 
 
 def _yield_step_stmt(gen_expr: ast.expr, value_expr: ast.expr) -> ast.stmt:
-    """Generate AST for statement: yield Step(gen_expr, value_expr)"""
+    """Generate AST for statement: yield (gen_expr, value_expr)"""
     return ast.Expr(value=ast.Yield(value=_step_expr(gen_expr, value_expr)))
 
 
 def _assign_yield_step(
     target: str, gen_expr: ast.expr, value_expr: ast.expr
 ) -> ast.stmt:
-    """Generate AST for: target = (yield Step(gen_expr, value_expr))
+    """Generate AST for: target = (yield (gen_expr, value_expr))
 
-    The yielded Step tells the trampoline to (re)start gen_expr.  When
-    gen_expr next yields Step(back_to_us, v), the trampoline sends v here
+    The yielded tuple tells the trampoline to (re)start gen_expr.  When
+    gen_expr next yields (back_to_us, v), the trampoline sends v here
     and target is bound to v.
     """
     return _assign(target, ast.Yield(value=_step_expr(gen_expr, value_expr)))
@@ -1390,11 +1388,11 @@ def _dispatch_call_trampoline(
     trail_name: str,
     self_name: str,
 ) -> ast.expr:
-    """Generate: fname._get_dispatch()(self, arg0, …, trail)
+    """Generate: StepGenerator(fname._get_dispatch(), this_generator, arg0, …, trail)
 
     ``fname`` is resolved from the compiled function's globals.
-    ``self`` is passed as ``parent`` so the child generator knows who to
-    Step back to when it finds a solution.
+    ``this_generator`` is passed as ``parent`` so the child generator knows who to
+    yield back to when it finds a solution.
     """
     get_dispatch = ast.Call(
         func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
@@ -1402,8 +1400,8 @@ def _dispatch_call_trampoline(
         keywords=[],
     )
     return ast.Call(
-        func=get_dispatch,
-        args=[_name(self_name)] + arg_exprs + [_name(trail_name)],
+        func=_name("StepGenerator"),
+        args=[get_dispatch, _name(self_name)] + arg_exprs + [_name(trail_name)],
         keywords=[],
     )
 
@@ -1417,10 +1415,10 @@ def compile_goal_trampoline(
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
-    self_name: str = "self",
+    self_name: str = "this_generator",
     parent_name: str = "parent",
 ) -> list[ast.stmt]:
-    """Compile a goal using the trampoline Step protocol.
+    """Compile a goal using the trampoline tuple protocol.
 
     Identical to ``compile_goal`` for deterministic goals (Unify, StructuralEq, comparisons,
     And, Or, Not, In, NotIn).  Differs for predicate ``Call`` nodes: instead of
@@ -1429,14 +1427,14 @@ def compile_goal_trampoline(
 
     it generates the stack-safe coroutine pattern::
 
-        _gen  = dispatch(self, args, trail)        # child generator
-        _st   = (yield Step(_gen, None))           # start child; get solution or DONE
+        _gen  = StepGenerator(dispatch, this_generator, args, trail)  # child
+        _st   = (yield (_gen, None))           # start child; get solution or DONE
         while _st is not _DONE:
-            <k_stmts>                              # continuation (ends with yield Step(parent,None))
-            _st = (yield Step(_gen, None))         # ask child for next solution
+            <k_stmts>                          # continuation (ends with yield (parent,None))
+            _st = (yield (_gen, None))         # ask child for next solution
 
     ``k_stmts`` for the innermost goal must be
-    ``[yield Step(parent, None)]`` — use ``compile_body_trampoline`` to build
+    ``[yield (parent, None)]`` — use ``compile_body_trampoline`` to build
     these correctly from the inside out.
 
     Note: ``Not`` (NAF) compiles its inner goal with ``compile_goal`` (simple
@@ -1672,16 +1670,16 @@ def _compile_predicate_call_trampoline(
 
     Generates the coroutine-backtracking pattern::
 
-        _gen_N  = dispatch(self, arg0, …, trail)
-        _st_N   = (yield Step(_gen_N, None))
+        _gen_N  = StepGenerator(dispatch, this_generator, arg0, …, trail)
+        _st_N   = (yield (_gen_N, None))
         while _st_N is not _DONE:
             <k_stmts>
-            _st_N = (yield Step(_gen_N, None))
+            _st_N = (yield (_gen_N, None))
 
-    When ``_gen_N`` yields ``Step(self, None)`` (solution found), the
-    trampoline sends ``None`` to ``self`` so ``_st_N`` gets ``None`` (not
-    DONE) and the while body runs.  When ``_gen_N`` yields
-    ``Step(self, DONE)`` (exhausted), ``_st_N`` gets ``DONE`` and the
+    When ``_gen_N`` yields ``(this_generator, None)`` (solution found), the
+    trampoline sends ``None`` to ``this_generator`` so ``_st_N`` gets ``None``
+    (not DONE) and the while body runs.  When ``_gen_N`` yields
+    ``(this_generator, DONE)`` (exhausted), ``_st_N`` gets ``DONE`` and the
     while loop exits.
 
     WK-4 keyword normalisation is applied identically to the simple variant.
@@ -1744,7 +1742,7 @@ def compile_body_trampoline(
     var_context: dict[int, str],
     trail_name: str,
     parent_name: str = "parent",
-    self_name: str = "self",
+    self_name: str = "this_generator",
 ) -> list[ast.stmt]:
     """Compile a flat list of goals as a conjunction using the Step protocol.
 
@@ -1786,14 +1784,9 @@ def _build_predicate_trampoline_funcdef(
     ``compile_predicate_trampoline`` and ``compile_predicate_trampoline_ast``.
     """
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["parent"] + arg_names + ["trail"]
+    params = ["this_generator", "parent"] + arg_names + ["trail"]
 
-    bootstrap = ast.Assign(
-        targets=[_name("self", ast.Store())],
-        value=ast.Yield(value=None),
-        lineno=0, col_offset=0,
-    )
-    all_stmts: list[ast.stmt] = [bootstrap]
+    all_stmts: list[ast.stmt] = []
 
     for clause in clauses:
         var_context: dict[int, str] = {}
@@ -1844,41 +1837,38 @@ def compile_predicate_trampoline(
     globals_: dict | None = None,
     pred_cls: "PredicateMeta | None" = None,
 ) -> Callable:
-    """Compile all clauses into a trampoline Step-protocol immortal coroutine.
+    """Compile all clauses into a trampoline tuple-protocol generator.
 
     Unlike ``compile_predicate`` (simple/short-stack), the generated function:
 
-    - Takes ``parent`` as first argument — the generator to Step back to.
-    - Opens with ``self = yield`` — the trampoline's bootstrap hook; ``self``
-      receives the generator's own reference so it can pass itself as
-      ``parent`` to child generators.
-    - At each solution: ``yield Step(parent, None)`` — suspends; the calling
+    - Takes ``this_generator, parent`` as first two arguments.
+      ``StepGenerator`` wraps the function and passes itself as
+      ``this_generator`` automatically.
+    - At each solution: ``yield (parent, None)`` — suspends; the calling
       generator (via the trampoline) processes the solution, then resumes
       this generator to find more.
-    - After all clauses exhausted: ``yield Step(parent, _DONE)`` — signals
+    - After all clauses exhausted: ``yield (parent, _DONE)`` — signals
       end of search for this predicate.
 
     Sub-predicate calls within clause bodies use the coroutine-backtracking
     pattern::
 
-        _gen  = dispatch(self, args, trail)
-        _st   = (yield Step(_gen, None))
+        _gen  = StepGenerator(dispatch, this_generator, args, trail)
+        _st   = (yield (_gen, None))
         while _st is not _DONE:
             <continuation>
-            _st = (yield Step(_gen, None))
+            _st = (yield (_gen, None))
 
     so the Python call stack does *not* grow with predicate recursion depth.
 
     Compiled function signature::
 
-        def {functor}__{arity}(parent, arg0, …, argN, trail):
-            self = yield   # bootstrap hook
+        def {functor}__{arity}(this_generator, parent, arg0, …, argN, trail):
             …              # clause match arms
-            yield Step(parent, _DONE)
+            yield (parent, _DONE)
 
-    The trampoline (``clausal.logic.trampoline.trampoline``) drives execution.
-    ``continuation_search.Search`` (Step 7) will provide the ``__iter__``
-    interface over solutions.
+    The trampoline (``clausal.logic.trampoline.trampoline``) drives execution
+    via ``StepGenerator`` wrappers.
     """
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
 
@@ -1906,7 +1896,7 @@ def compile_predicate_trampoline(
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
-        "Step": Step,
+        "StepGenerator": StepGenerator,
         "_DONE": DONE,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
@@ -1957,7 +1947,7 @@ def compile_predicate_trampoline_ast(
         body_compiler = _make_body_compiler_trampoline(db)
     if not clauses:
         arg_names = [f"arg{i}" for i in range(arity)]
-        params = ["parent"] + arg_names + ["trail"]
+        params = ["this_generator", "parent"] + arg_names + ["trail"]
         func_def = ast.FunctionDef(
             name=f"{functor}__{arity}",
             args=ast.arguments(
@@ -1965,11 +1955,6 @@ def compile_predicate_trampoline_ast(
                 vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
             ),
             body=[
-                ast.Assign(
-                    targets=[_name("self", ast.Store())],
-                    value=ast.Yield(value=None),
-                    lineno=0, col_offset=0,
-                ),
                 _yield_step_stmt(_name("parent"), _name("_DONE")),
             ],
             decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
@@ -1980,9 +1965,9 @@ def compile_predicate_trampoline_ast(
 
 
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
-    """Trampoline variant: generator that immediately yields Step(parent, DONE)."""
+    """Trampoline variant: generator that immediately yields (parent, DONE)."""
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["parent"] + arg_names + ["trail"]
+    params = ["this_generator", "parent"] + arg_names + ["trail"]
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
         name=func_name,
@@ -1996,11 +1981,6 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
             defaults=[],
         ),
         body=[
-            ast.Assign(
-                targets=[_name("self", ast.Store())],
-                value=ast.Yield(value=None),
-                lineno=0, col_offset=0,
-            ),
             _yield_step_stmt(_name("parent"), _name("_DONE")),
         ],
         decorator_list=[],
@@ -2009,7 +1989,7 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
         **_EXTRA_FUNCDEF,
     )
     ast.fix_missing_locations(func_def)
-    return functiondef_to_function(func_def, globals_={"Step": Step, "_DONE": DONE})
+    return functiondef_to_function(func_def, globals_={"_DONE": DONE})
 
 
 def _wrap_yields_with_output_guards(
