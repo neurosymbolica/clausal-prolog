@@ -11,8 +11,6 @@ Verifies:
 
 from __future__ import annotations
 
-from importlib.machinery import ModuleSpec
-import importlib.util
 import sys
 import os
 import ast
@@ -20,7 +18,7 @@ import ast
 import pytest
 
 import clausal.import_hook
-from clausal.import_hook import _predicate_loader
+from clausal.import_hook import _load_module
 from clausal.logic.database import Database, Clause
 from clausal.logic.predicate import PredicateMeta
 from clausal.templating.term_rewriting import EmbedTransformer
@@ -32,12 +30,7 @@ from clausal.templating.term_rewriting import EmbedTransformer
 def _load_fixture(filename: str, mod_name: str | None = None) -> object:
     path = os.path.join(os.path.dirname(__file__), "fixtures", filename)
     name = mod_name or f"_test_directive_{filename.replace('.', '_')}"
-    sys.modules.pop(name, None)
-    spec = ModuleSpec(name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    return _load_module(name, path)
 
 
 # ── Database mark_dynamic / mark_discontiguous / mark_tabled ─────────────────

@@ -16,6 +16,8 @@ After the import:
 - `fib(7)` creates a term; `fib._get_dispatch()` returns the compiled search function
 - `from fibonacci import fib` in another module brings both the term constructor and dispatch together — no separate wiring step needed
 
+On the first import, the source is parsed, AST-transformed, and compiled to Python bytecode. The bytecode is cached in `__pycache__/` as a `.pyc` file. Subsequent imports of the same file load the cached bytecode directly, skipping parsing and transformation entirely. See [caching.md](caching.md) for details.
+
 ---
 
 ## The two module objects
@@ -44,7 +46,11 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 ### PredicateFinder
 
-`PredicateFinder.find_spec` searches for `<name>.clausal` files in `sys.path` (or the package's `__path__` for sub-packages). On a match it returns a `ModuleSpec` pointing to `PredicateLoader`.
+`PredicateFinder.find_spec` searches for `<name>.clausal` files in `sys.path` (or the package's `__path__` for sub-packages). On a match it creates a per-file `PredicateLoader(fullname, path)` instance and returns a `ModuleSpec` pointing to it.
+
+### PredicateLoader (SourceLoader subclass)
+
+`PredicateLoader` extends `importlib.abc.SourceLoader`, which provides automatic `.pyc` caching via the `get_code()` method. The key override is `source_to_code(data, path)`, which performs the AST transformation step — parsing the `.clausal` source and running `EmbedTransformer`. The resulting bytecode is what gets cached.
 
 ### PredicateLoader.exec_module
 
@@ -52,19 +58,19 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 2. **Create LogicModule** — a `clausal.logic.database.Module` is created with `module_dict=module.__dict__`. It is stored as `$module` in the globals.
 
-3. **Install per-module closures** — `$define_predicate` and `$assert_fact` are closures that capture the specific `LogicModule` and `module_dict` for this module. This is why they are set per-module rather than as shared globals.
+3. **Install per-module closures** — `$define_predicate` and `$assert_fact` are deferred closures that assert clauses to the database and sync them to the PredicateMeta class, but do **not** compile. They record each predicate's `(functor, arity)` in a pending dict for later compilation.
 
-4. **Parse and transform** — the source is parsed into a Python AST, then `EmbedTransformer` rewrites it:
-   - `head <- body` statements → `$define_predicate(Predicate(head=…, body=…), $module)`
-   - trailing-comma expression statements → `$assert_fact(term)`
-   - logic variable names → `Var()` allocations
-   - functor names → `try: name except NameError: class name(metaclass=PredicateMeta): _fields=(...)` declarations
+4. **Load bytecode** — `self.get_code(module.__name__)` either loads the cached `.pyc` or calls `source_to_code()` to parse and transform fresh source. The `SourceLoader` protocol handles cache validation automatically (comparing mtime and size).
 
-5. **Execute** — the transformed AST is compiled and executed in the module's `__dict__`.
+5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` / `$assert_fact` call asserts clauses but defers compilation.
+
+6. **Compile all pending predicates** — `_compile_all_pending(pending, db, module_dict)` iterates the pending dict and calls `compile_predicate` once per predicate. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion.
+
+7. **Lock non-dynamic predicates** — iterate module globals and lock every `PredicateMeta` class that was not declared with `-dynamic(pred/arity)`.
 
 ---
 
-## `$define_predicate` — compiling a rule
+## `$define_predicate` — asserting a rule (deferred)
 
 Called once per `head <- body` clause as the module executes. Steps:
 
@@ -74,17 +80,27 @@ Called once per `head <- body` clause as the module executes. Steps:
    - Replace `pred_cls._clauses[:]` with the DB's full clause list (the DB performs normalisation; pred_cls stays in sync).
    - Set `pred_cls._signature = pred_cls._fields` if not yet set.
 
-3. Call `compile_predicate(functor, arity, clauses, db, globals_=module_dict, pred_cls=pred_cls)` — compile all current clauses for this predicate and install the dispatch function on both the PredicateMeta class and the Database entry.
-
-The predicate is recompiled from scratch on every new clause during module load. This is efficient enough for load time and ensures the final dispatch function covers all clauses.
+3. Record `(functor, arity) → pred_cls` in the pending dict. Compilation is deferred until all clauses have been asserted.
 
 ---
 
-## `$assert_fact` — compiling a fact
+## `$assert_fact` — asserting a fact (deferred)
 
-Called once per trailing-comma fact statement. Steps are identical to `$define_predicate` except the head term is passed directly rather than wrapped in a `Predicate` node.
+Called once per trailing-comma fact statement. Steps are identical to `$define_predicate` except the head term is passed directly rather than wrapped in a `Predicate` node. Compilation is equally deferred.
 
 Fact normalization: ground values in functor field positions are replaced with fresh `Var` objects and corresponding `Is(var, value)` body goals. This enables output-mode queries — e.g., `fib(N, RESULT)` with both args unbound can enumerate facts rather than only checking them.
+
+---
+
+## Deferred compilation
+
+Prior to V2-3, each `$define_predicate` / `$assert_fact` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
+
+With deferred compilation, assertions and compilation are separated:
+- During `exec()`, each `$define_predicate` / `$assert_fact` only asserts the clause and records the predicate in a pending dict.
+- After `exec()` completes, `_compile_all_pending()` compiles each predicate exactly once with the full clause set.
+
+This is safe because no predicate is queried during module load — `.clausal` files only contain definitions. Directives (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
 
 ---
 
@@ -129,3 +145,18 @@ The following names are injected into every predicate module's namespace by the 
 - the parent package's `__path__` for sub-modules
 
 The `.clausal` extension is the sole distinguishing criterion. Files with this extension are always handled by the import hook; standard `.py` files are unaffected.
+
+---
+
+## Loading `.clausal` files programmatically
+
+For tests and external callers, `_load_module(fullname, path)` is the recommended way to load a `.clausal` file without relying on `sys.path` discovery:
+
+```python
+from clausal.import_hook import _load_module
+
+mod = _load_module("my_predicates", "/path/to/my_predicates.clausal")
+logic_module = mod.__dict__["$module"]
+```
+
+Each call creates a fresh `PredicateLoader` and module instance. Any previously cached `sys.modules` entry for the name is evicted first. This is the standard pattern used by all test helpers in the test suite.

@@ -11,20 +11,23 @@ Files with the ``.clausal`` extension are intercepted by this hook, which:
      module-level ``a<-b`` statements into
      ``$define_predicate(Predicate(head=…, body=…), $module)`` calls, and
      trailing-comma expression statements into ``$assert_fact(term)`` calls.
-  3. Each ``$define_predicate`` call asserts the clause into a
-     ``clausal.logic.database.Module`` and immediately recompiles the predicate
-     via ``clausal.logic.compiler.compile_predicate``.  The compiled dispatch
-     function is installed on the PredicateMeta class so that subsequent
-     predicate calls (and cross-predicate calls from compiled bodies) resolve
-     via ``pred_cls._get_dispatch()``.
+  3. Compilation is deferred: ``$define_predicate`` and ``$assert_fact`` only
+     assert clauses during module exec.  After all clauses are asserted,
+     ``_compile_all_pending`` compiles each predicate once (O(N) per predicate
+     instead of O(N²)).
+  4. ``PredicateLoader`` extends ``importlib.abc.SourceLoader``, which
+     provides automatic ``.pyc`` caching via ``get_code()``.  On subsequent
+     imports, the parsed+transformed bytecode is loaded from
+     ``__pycache__/*.pyc``, skipping parsing and AST transformation entirely.
 
 ``$module`` (the value of the ``$module`` name in the module namespace) is a
 ``clausal.logic.database.Module`` instance, not the Python module object.
 The Python module object is the standard ``sys.modules[name]`` entry.
 """
 
-from importlib.abc import MetaPathFinder, Loader
+from importlib.abc import MetaPathFinder, SourceLoader
 from importlib.machinery import ModuleSpec
+import importlib.util
 import sys
 import ast
 import os
@@ -42,20 +45,9 @@ from .terms import Compound, KWTerm
 # ── Runtime support ──────────────────────────────────────────────────────────
 
 
-def _define_predicate(predicate_node, logic_module, module_dict):
-    """Assert a clause from a Predicate node and (re)compile the predicate.
-
-    Called as ``$define_predicate(predicate_node, $module)`` at module load
-    time for each ``head <- body`` definition in the source.
-
-    Steps:
-      1. Assert the clause to both the Database (for backward compat) and
-         directly to the PredicateMeta class (if available in module_dict).
-      2. Set ``pred_cls._signature`` from ``pred_cls._fields`` if not yet set.
-      3. ``compile_predicate`` — compile all current clauses for this
-         predicate, passing ``module_dict`` as globals so the compiler can
-         resolve cross-predicate references directly from module namespace.
-    """
+def _define_predicate_deferred(predicate_node, logic_module, module_dict,
+                               pending):
+    """Assert a clause without compiling.  Record for deferred compilation."""
     logic_module.define_predicate(predicate_node)
     functor, arity = head_key(predicate_node.head)
 
@@ -63,28 +55,15 @@ def _define_predicate(predicate_node, logic_module, module_dict):
     pred_cls = module_dict.get(functor)
     if isinstance(pred_cls, PredicateMeta):
         db_clauses = logic_module.db.clauses_for(functor, arity)
-        # Replace pred_cls._clauses with DB clauses (authoritative source).
         pred_cls._clauses[:] = db_clauses
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 
-    clauses = logic_module.db.clauses_for(functor, arity)
-    compile_predicate(functor, arity, clauses, logic_module.db,
-                      globals_=module_dict, pred_cls=pred_cls
-                      if isinstance(pred_cls, PredicateMeta) else None)
+    pending[(functor, arity)] = pred_cls if isinstance(pred_cls, PredicateMeta) else None
 
 
-def _assert_fact(term, logic_module, module_dict):
-    """Assert a ground fact term and (re)compile the predicate.
-
-    Called as ``$assert_fact(term)`` at module load time for each trailing-
-    comma expression statement (the Prolog fact notation).
-
-    Steps:
-      1. Assert to the Database; normalize to Var+Is form if needed.
-      2. Sync to the PredicateMeta class (if available).
-      3. ``compile_predicate`` — recompile with module globals.
-    """
+def _assert_fact_deferred(term, logic_module, module_dict, pending):
+    """Assert a ground fact without compiling.  Record for deferred compilation."""
     logic_module.assert_fact(term)
     functor, arity = head_key(term)
 
@@ -96,11 +75,15 @@ def _assert_fact(term, logic_module, module_dict):
         if pred_cls._signature is None:
             pred_cls._signature = pred_cls._fields
 
-    clauses = logic_module.db.clauses_for(functor, arity)
-    compile_predicate(functor, arity, clauses, logic_module.db,
-                      globals_=module_dict,
-                      pred_cls=pred_cls
-                      if isinstance(pred_cls, PredicateMeta) else None)
+    pending[(functor, arity)] = pred_cls if isinstance(pred_cls, PredicateMeta) else None
+
+
+def _compile_all_pending(pending, db, module_dict):
+    """Compile each pending predicate once (after all clauses asserted)."""
+    for (functor, arity), pred_cls in pending.items():
+        clauses = db.clauses_for(functor, arity)
+        compile_predicate(functor, arity, clauses, db,
+                          globals_=module_dict, pred_cls=pred_cls)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
@@ -128,45 +111,77 @@ predicate_builtins["walk"] = walk
 # ── Loader ───────────────────────────────────────────────────────────────────
 
 
-class PredicateLoader(Loader):
-    def create_module(loader, spec):
-        return None  # use default module semantics
+class PredicateLoader(SourceLoader):
+    """SourceLoader subclass for .clausal predicate modules.
 
-    def exec_module(loader, module):
-        filename = module.__spec__.origin
+    Extends ``importlib.abc.SourceLoader`` to get automatic ``.pyc`` caching.
+    ``source_to_code`` performs the EmbedTransformer rewrite; the resulting
+    bytecode is cached in ``__pycache__/`` so subsequent imports skip parsing
+    and AST transformation.
+    """
+
+    def __init__(self, fullname, path):
+        self._fullname = fullname
+        self._path = path
+
+    def get_filename(self, fullname):
+        return self._path
+
+    def get_data(self, path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    def path_stats(self, path):
+        st = os.stat(path)
+        return {"mtime": int(st.st_mtime), "size": st.st_size}
+
+    def set_data(self, path, data):
+        # Write .pyc file; create __pycache__/ dir if needed.
+        try:
+            dir_ = os.path.dirname(path)
+            os.makedirs(dir_, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+        except OSError:
+            pass  # silently skip if we cannot write cache
+
+    def source_to_code(self, data, path="<string>"):
+        source = data.decode("utf-8")
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="'str' object is not callable",
+                category=SyntaxWarning,
+            )
+            tree = ast.parse(source, filename=path)
+            tree = EmbedTransformer().visit(tree)
+            ast.fix_missing_locations(tree)
+            return compile(tree, filename=path, mode="exec")
+
+    def exec_module(self, module):
+        filename = self._path
         module.__file__ = filename
         sys.modules[module.__name__] = module
-        source = open(filename).read()
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
         # Create a LogicModule (database.Module) for this Python module.
-        # This is the $module that predicate clauses are asserted into and
-        # compiled against.  It is distinct from the Python module object.
         logic_module = LogicModule(module.__name__, module_dict=module_dict)
         module_dict["$module"] = logic_module
-        # '$define_predicate' and '$assert_fact' are module-specific closures
-        # that capture both the LogicModule and module_dict.  This lets the
-        # import hook sync clauses to PredicateMeta classes and pass module
-        # globals to the compiler for cross-predicate resolution.
+        # Deferred compilation: assert clauses during exec, compile once after.
+        pending = {}
         module_dict["$define_predicate"] = (
-            lambda pred, lm: _define_predicate(pred, lm, module_dict)
+            lambda pred, lm: _define_predicate_deferred(
+                pred, lm, module_dict, pending)
         )
         module_dict["$assert_fact"] = (
-            lambda term: _assert_fact(term, logic_module, module_dict)
+            lambda term: _assert_fact_deferred(
+                term, logic_module, module_dict, pending)
         )
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="'str' object is not callable",
-                                    category=SyntaxWarning)
-            tree = ast.parse(source)
-            tree = EmbedTransformer().visit(tree)
-            ast.fix_missing_locations(tree)
-            exec(
-                compile(tree, filename=filename, mode="exec"),
-                module_dict,
-            )
+        # get_code() handles .pyc caching via SourceLoader protocol.
+        code = self.get_code(module.__name__)
+        exec(code, module_dict)
+        # Compile all predicates once (deferred from individual assertions).
+        _compile_all_pending(pending, logic_module.db, module_dict)
         # Lock all non-dynamic predicates after module load.
-        # Predicates declared with -dynamic(...) remain unlocked so that
-        # runtime assertz/retract can modify them.
         for obj in module_dict.values():
             if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
                 key = (obj.__name__, len(obj._fields))
@@ -174,7 +189,23 @@ class PredicateLoader(Loader):
                     obj._lock()
 
 
-_predicate_loader = PredicateLoader()
+# Backward-compat alias — prefer _load_module() for new code.
+_predicate_loader = None
+
+
+def _load_module(fullname, path):
+    """Load a .clausal file as a Python module and return it.
+
+    This is the recommended helper for tests and external callers.
+    Each call creates a fresh PredicateLoader and module instance.
+    """
+    sys.modules.pop(fullname, None)
+    loader = PredicateLoader(fullname, path)
+    spec = ModuleSpec(fullname, loader, origin=path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[fullname] = mod
+    loader.exec_module(mod)
+    return mod
 
 
 # ── Finder ───────────────────────────────────────────────────────────────────
@@ -188,7 +219,8 @@ class PredicateFinder(MetaPathFinder):
         for dir_entry in search_dirs:
             candidate = os.path.join(dir_entry, tail + ".clausal")
             if os.path.isfile(candidate):
-                return ModuleSpec(fullname, _predicate_loader, origin=candidate)
+                loader = PredicateLoader(fullname, candidate)
+                return ModuleSpec(fullname, loader, origin=candidate)
 
 
 sys.meta_path[:] = [PredicateFinder(), *sys.meta_path]

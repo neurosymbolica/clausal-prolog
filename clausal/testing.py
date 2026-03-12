@@ -20,13 +20,10 @@ to collect and run .clausal tests as individual pytest items.
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
 import os
 import sys
 import time
 from dataclasses import dataclass, field
-from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Iterator
 
@@ -50,19 +47,17 @@ def load_clausal_module(path: str | Path) -> object:
     # Ensure import hook is installed.
     import clausal.import_hook  # noqa: F401
 
-    from clausal.import_hook import _predicate_loader
+    from clausal.import_hook import _load_module
 
     path = str(path)
     mod_name = f"_clausal_test_{os.path.basename(path).removesuffix('.clausal')}"
 
-    spec = ModuleSpec(mod_name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    # Avoid polluting sys.modules across test runs.
+    # _load_module handles sys.modules eviction internally.
     old = sys.modules.get(mod_name)
     try:
-        sys.modules[mod_name] = mod
-        spec.loader.exec_module(mod)
+        mod = _load_module(mod_name, path)
     finally:
+        # Avoid polluting sys.modules across test runs.
         if old is None:
             sys.modules.pop(mod_name, None)
         else:

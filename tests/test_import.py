@@ -12,8 +12,6 @@ Verifies that importing a ``.clausal`` predicate module:
 
 from __future__ import annotations
 
-from importlib.machinery import ModuleSpec
-import importlib.util
 import sys
 import os
 import types
@@ -22,7 +20,7 @@ import pytest
 
 # Ensure the import hook is active.
 import clausal.import_hook
-from clausal.import_hook import _predicate_loader
+from clausal.import_hook import _load_module
 
 
 # ── Fixture loading helper ────────────────────────────────────────────────────
@@ -36,13 +34,7 @@ def _load_fixture(filename: str, mod_name: str | None = None) -> object:
     """
     path = os.path.join(os.path.dirname(__file__), "fixtures", filename)
     name = mod_name or f"_test_fixture_{filename.replace('.', '_')}"
-    # Evict any previously cached module so each test starts fresh.
-    sys.modules.pop(name, None)
-    spec = ModuleSpec(name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    return _load_module(name, path)
 
 
 # ── $module is a real LogicModule ─────────────────────────────────────────────

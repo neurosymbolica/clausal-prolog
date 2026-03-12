@@ -130,7 +130,7 @@ The import hook (`clausal.import_hook`) intercepts module imports and transforms
 
 **Python code as data.** Expressions or statement blocks can be captured as AST nodes without being executed. This allows the logic system to reason about Python programs — useful for meta-interpreters, program analysis, and code generation.
 
-The cost of AST transformation is paid once at import time; Python then caches the transformed bytecode normally. Subsequent imports pay no transformation overhead.
+The cost of AST transformation is paid once at import time. `PredicateLoader` (a `SourceLoader` subclass) caches the transformed bytecode in `__pycache__/` as a `.pyc` file. Subsequent imports load the cached bytecode directly, skipping parsing and AST transformation entirely. See [caching.md](caching.md) for details.
 
 ---
 
@@ -162,9 +162,13 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.continuation_search` | Done |
 | `clausal.simple_ast` / `clausal.conversion` | Done |
 | `clausal.term_rewriting` | Done |
-| `clausal.import_hook` | Done |
-| `clausal.logic.compiler` | Planned — predicates → Python generator AST |
-| `clausal.logic.runtime` | Planned — database, SLD search |
+| `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
+| `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
+| `clausal.logic.database` | Done — clause store, directives, dispatch |
+| `clausal.logic.builtins` | Done — assertz/retract, member/append, arithmetic |
+| `clausal.logic.solve` | Done — call/solve/query/once |
+| Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
+| Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
 | `clausal.logic.tabling` | Planned — SLG resolution |
 | `clausal.logic.wfs` | Planned — well-founded semantics |
 | Constraint domains (CLP(Z), CLP(R)) | Future |

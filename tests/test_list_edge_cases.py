@@ -18,8 +18,7 @@ import pytest
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.import_hook import _predicate_loader
-from importlib.machinery import ModuleSpec
+from clausal.import_hook import _load_module
 import clausal.import_hook
 
 
@@ -28,11 +27,7 @@ import clausal.import_hook
 def _load(filename: str) -> Module:
     path = os.path.join(os.path.dirname(__file__), "clausal_modules", filename)
     name = f"_edge_{filename.replace('.', '_')}"
-    sys.modules.pop(name, None)
-    spec = ModuleSpec(name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
+    mod = _load_module(name, path)
     return mod.__dict__["$module"]
 
 

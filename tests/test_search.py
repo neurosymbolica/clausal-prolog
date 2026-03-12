@@ -40,8 +40,7 @@ from clausal.terms import (
 
 # Ensure the import hook is active.
 import clausal.import_hook
-from clausal.import_hook import _predicate_loader
-from importlib.machinery import ModuleSpec
+from clausal.import_hook import _load_module
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -320,11 +319,7 @@ def _load_fixture(filename: str) -> Module:
     """Load a .clausal file from tests/fixtures/ and return its LogicModule."""
     path = os.path.join(os.path.dirname(__file__), "fixtures", filename)
     name = f"_test_fixture_{filename.replace('.', '_')}"
-    sys.modules.pop(name, None)
-    spec = ModuleSpec(name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
+    mod = _load_module(name, path)
     return mod.__dict__["$module"]
 
 
@@ -642,11 +637,7 @@ def _load_clausal_module(filename: str) -> Module:
     """Load a .clausal file from tests/clausal_modules/ and return its LogicModule."""
     path = os.path.join(os.path.dirname(__file__), "clausal_modules", filename)
     name = f"_test_fixture_{filename.replace('.', '_')}"
-    sys.modules.pop(name, None)
-    spec = ModuleSpec(name, _predicate_loader, origin=path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
+    mod = _load_module(name, path)
     return mod.__dict__["$module"]
 
 
