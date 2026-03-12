@@ -1,0 +1,19 @@
+-table(reach_a/2)
+-table(reach_b/2)
+
+link_a(1, 2),
+link_a(3, 4),
+link_b(2, 3),
+link_b(4, 1),
+
+reach_a(X, Y) <- link_a(X, Y)
+reach_a(X, Y) <- (
+    reach_b(X, Z),
+    link_a(Z, Y)
+)
+
+reach_b(X, Y) <- link_b(X, Y)
+reach_b(X, Y) <- (
+    reach_a(X, Z),
+    link_b(Z, Y)
+)

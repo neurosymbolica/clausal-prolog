@@ -108,9 +108,9 @@ Tabling memoises subgoal calls and their answers in a call/answer table. When a 
 - enables Datalog-style bottom-up evaluation
 - is a prerequisite for well-founded semantics
 
-The key insight is that **tabling is easier to implement on coroutines/generators than on a WAM**. Tabling requires suspending a computation mid-execution and resuming it when new answers arrive. Greenlets and generators do this naturally; on a WAM it requires saving and restoring the full register file and stack explicitly — which is why tabling required deep engine surgery in SWI-Prolog.
+The key insight is that **tabling is easier to implement on coroutines/generators than on a WAM**. Tabling requires suspending a computation mid-execution and resuming it when new answers arrive. Generators do this naturally; on a WAM it requires saving and restoring the full register file and stack explicitly — which is why tabling required deep engine surgery in SWI-Prolog.
 
-The planned `clausal.logic.tabling` module will maintain a table mapping subgoal terms to `(answers, waiters)` pairs, where waiters are suspended greenlets.
+The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, variant_key)` to `TableEntry` objects that track status, cached answers, and suspended consumers. See [tabling.md](tabling.md) for full details.
 
 ### Well-founded semantics
 
@@ -169,6 +169,6 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
-| `clausal.logic.tabling` | Planned — SLG resolution |
+| `clausal.logic.tabling` | Done — SLG resolution, variant tabling (V2-4b) |
 | `clausal.logic.wfs` | Planned — well-founded semantics |
 | Constraint domains (CLP(Z), CLP(R)) | Future |
