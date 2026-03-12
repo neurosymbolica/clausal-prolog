@@ -1927,28 +1927,34 @@ def compile_predicate_trampoline(
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    # ── First-argument indexing ───────────────────────────────────────────
-    index = _build_first_arg_index(clauses, arity)
-    if index is not None:
-        all_def = _build_predicate_trampoline_funcdef(
-            f"{functor}__all", arity, index["all"],
+    # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────────
+    index_positions = _analyze_index_positions(clauses, arity)
+    if index_positions:
+        # Compile fallback (all clauses, for when no arg is ground)
+        fallback_def = _build_predicate_trampoline_funcdef(
+            f"{functor}__all", arity, clauses,
             _effective_db, body_compiler, emit_done=False,
         )
-        all_fn = functiondef_to_function(all_def, globals_=base_globals)
-        idx_dict: dict = {}
-        for key, bucket_clauses in index["buckets"].items():
-            bname = f"{functor}__b{len(idx_dict)}"
-            bdef = _build_predicate_trampoline_funcdef(
-                bname, arity, bucket_clauses,
+        fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
+
+        plans: list[tuple[int, dict, Callable]] = []
+        for pos, index in index_positions:
+            idx_dict: dict = {}
+            for key, bucket_clauses in index["buckets"].items():
+                bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                bdef = _build_predicate_trampoline_funcdef(
+                    bname, arity, bucket_clauses,
+                    _effective_db, body_compiler, emit_done=False,
+                )
+                idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+            ddef = _build_predicate_trampoline_funcdef(
+                f"{functor}__p{pos}_dflt", arity, index["defaults"],
                 _effective_db, body_compiler, emit_done=False,
             )
-            idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
-        ddef = _build_predicate_trampoline_funcdef(
-            f"{functor}__dflt", arity, index["defaults"],
-            _effective_db, body_compiler, emit_done=False,
-        )
-        default_fn = functiondef_to_function(ddef, globals_=base_globals)
-        fn = _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, DONE)
+            pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+            plans.append((pos, idx_dict, pos_default_fn))
+
+        fn = _make_groundness_dispatch_trampoline(plans, fallback_fn, DONE)
     else:
         func_def = _build_predicate_trampoline_funcdef(
             functor, arity, clauses, _effective_db, body_compiler,
@@ -2790,64 +2796,74 @@ _INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))
 _INDEX_THRESHOLD = 4  # minimum clauses before indexing kicks in
 
 
-def _extract_first_arg_key(clause: Clause, arity: int) -> Any:
-    """Extract the indexing key for a clause's first argument.
+def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
+    """Extract the indexing key for a clause's argument at position *pos*.
 
     Returns a hashable key (scalar value) for indexable clauses,
-    or ``_INDEX_VAR`` for clauses with a variable/non-indexable first arg.
+    or ``_INDEX_VAR`` for clauses with a variable/non-indexable arg at *pos*.
     """
-    if arity == 0:
+    if arity == 0 or pos >= arity:
         return _INDEX_VAR
     head = clause.head
-    # Get first arg from head
+    # Get arg at position pos from head
     if isinstance(head, Compound):
-        if not head.args:
+        if len(head.args) <= pos:
             return _INDEX_VAR
-        first_arg = head.args[0]
+        arg = head.args[pos]
     elif isinstance(head, Call) and isinstance(head.func, LoadName):
-        if not head.args:
+        if len(head.args) <= pos:
             return _INDEX_VAR
-        first_arg = head.args[0]
+        arg = head.args[pos]
     elif is_term_instance(head):
         fields = term_field_names(head)
-        if not fields:
+        if len(fields) <= pos:
             return _INDEX_VAR
-        first_arg = getattr(head, fields[0])
+        arg = getattr(head, fields[pos])
     else:
         return _INDEX_VAR
     # Direct ground scalar (note: None is a valid key, checked via isinstance)
-    if isinstance(first_arg, _INDEXABLE_TYPES):
-        return first_arg
+    if isinstance(arg, _INDEXABLE_TYPES):
+        return arg
     # Var + Unify pattern (from _normalize_dataclass_fact)
-    if is_var(first_arg):
+    if is_var(arg):
         for goal in clause.body:
             if isinstance(goal, Unify):
-                if goal.left is first_arg and isinstance(goal.right, _INDEXABLE_TYPES):
+                if goal.left is arg and isinstance(goal.right, _INDEXABLE_TYPES):
                     return goal.right
-                if goal.right is first_arg and isinstance(goal.left, _INDEXABLE_TYPES):
+                if goal.right is arg and isinstance(goal.left, _INDEXABLE_TYPES):
                     return goal.left
         return _INDEX_VAR
     return _INDEX_VAR
 
 
-def _build_first_arg_index(
-    clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+def _extract_first_arg_key(clause: Clause, arity: int) -> Any:
+    """Extract the indexing key for a clause's first argument.
+
+    Convenience wrapper around :func:`_extract_arg_key` for position 0.
+    """
+    return _extract_arg_key(clause, 0, arity)
+
+
+def _build_arg_index(
+    clauses: list[Clause], arity: int, pos: int,
+    threshold: int = _INDEX_THRESHOLD,
 ) -> dict | None:
-    """Partition clauses into first-arg buckets.
+    """Partition clauses into buckets keyed on argument *pos*.
 
     Returns None if indexing is not beneficial (too few clauses, all defaults,
     or arity == 0).  Otherwise returns::
 
         {"buckets": {key: [Clause, ...]},  # merged with defaults
          "defaults": [Clause, ...],
-         "all": [Clause, ...]}
+         "all": [Clause, ...],
+         "n_distinct": int}
 
     Each bucket's clause list includes the default (var-headed) clauses
     interleaved in their original order, preserving Prolog clause ordering.
     """
-    if arity == 0 or len(clauses) < threshold:
+    if arity == 0 or pos >= arity or len(clauses) < threshold:
         return None
-    keys = [_extract_first_arg_key(c, arity) for c in clauses]
+    keys = [_extract_arg_key(c, pos, arity) for c in clauses]
     default_indices = [i for i, k in enumerate(keys) if k is _INDEX_VAR]
     specific_indices = [i for i, k in enumerate(keys) if k is not _INDEX_VAR]
     if not specific_indices:
@@ -2866,11 +2882,47 @@ def _build_first_arg_index(
         "buckets": merged_buckets,
         "defaults": [clauses[i] for i in default_indices],
         "all": clauses,
+        "n_distinct": len(bucket_map),
     }
 
 
+def _build_first_arg_index(
+    clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+) -> dict | None:
+    """Partition clauses into first-arg buckets.
+
+    Convenience wrapper around :func:`_build_arg_index` for position 0.
+    """
+    return _build_arg_index(clauses, arity, 0, threshold)
+
+
+def _analyze_index_positions(
+    clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
+) -> list[tuple[int, dict]]:
+    """Find argument positions suitable for indexing, sorted by selectivity.
+
+    Returns a list of ``(pos, index_info)`` tuples where each *index_info*
+    is the dict from :func:`_build_arg_index`.  Positions are sorted by
+    number of distinct keys (most distinct first = most selective).
+    """
+    if arity == 0 or len(clauses) < threshold:
+        return []
+    results = []
+    for pos in range(arity):
+        idx = _build_arg_index(clauses, arity, pos, threshold)
+        if idx is not None:
+            results.append((pos, idx))
+    # Sort by selectivity: most distinct keys first
+    results.sort(key=lambda x: -x[1]["n_distinct"])
+    return results
+
+
 def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
-    """Build an indexed dispatch wrapper for simple/short-stack mode."""
+    """Build an indexed dispatch wrapper for simple/short-stack mode.
+
+    Legacy V2-1 wrapper — indexes only on the first argument.
+    Superseded by :func:`_make_groundness_dispatch_simple` for V2-2.
+    """
     def dispatch(*args):
         _a0 = deref(args[0])
         if is_var(_a0):
@@ -2890,7 +2942,11 @@ def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
 
 
 def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
-    """Build an indexed dispatch wrapper for trampoline mode."""
+    """Build an indexed dispatch wrapper for trampoline mode.
+
+    Legacy V2-1 wrapper — indexes only on the first argument.
+    Superseded by :func:`_make_groundness_dispatch_trampoline` for V2-2.
+    """
     def dispatch(*args):
         parent = args[1]
         _a0 = deref(args[2])  # first predicate arg is at index 2
@@ -2908,6 +2964,109 @@ def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
         yield (parent, done)
     dispatch.__name__ = all_fn.__name__
     dispatch.__qualname__ = all_fn.__qualname__
+    return dispatch
+
+
+# ── V2-2: Groundness-keyed dispatch ─────────────────────────────────────────
+
+
+def _make_groundness_dispatch_simple(plans, fallback_fn):
+    """Build a groundness-keyed dispatch selector for simple/short-stack mode.
+
+    *plans* is a list of ``(pos, idx_dict, default_fn)`` tuples, sorted by
+    selectivity (most selective position first).  At call time the selector
+    checks each position's argument; the first ground argument triggers
+    index lookup on that position.  If no argument is ground, *fallback_fn*
+    (all clauses, linear scan) is used.
+    """
+    if len(plans) == 1:
+        # Single-position fast path — avoid the loop overhead.
+        pos, idx_dict, dflt_fn = plans[0]
+        def dispatch(*args):
+            _a = deref(args[pos])
+            if is_var(_a):
+                yield from fallback_fn(*args)
+                return
+            try:
+                _bfn = idx_dict.get(_a)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from dflt_fn(*args)
+        dispatch.__name__ = fallback_fn.__name__
+        dispatch.__qualname__ = fallback_fn.__qualname__
+        return dispatch
+
+    # Multi-position selector — check positions in selectivity order.
+    def dispatch(*args):
+        for _pos, _idx_dict, _dflt_fn in plans:
+            _a = deref(args[_pos])
+            if not is_var(_a):
+                try:
+                    _bfn = _idx_dict.get(_a)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from _dflt_fn(*args)
+                return
+        yield from fallback_fn(*args)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
+    return dispatch
+
+
+def _make_groundness_dispatch_trampoline(plans, fallback_fn, done):
+    """Build a groundness-keyed dispatch selector for trampoline mode.
+
+    Same logic as :func:`_make_groundness_dispatch_simple` but accounts for
+    the trampoline arg layout ``(this_generator, parent, arg0, ..., trail)``
+    and emits a trailing ``yield (parent, done)`` after search exhaustion.
+    """
+    if len(plans) == 1:
+        pos, idx_dict, dflt_fn = plans[0]
+        offset = pos + 2  # skip this_generator, parent
+        def dispatch(*args):
+            parent = args[1]
+            _a = deref(args[offset])
+            if is_var(_a):
+                yield from fallback_fn(*args)
+            else:
+                try:
+                    _bfn = idx_dict.get(_a)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from dflt_fn(*args)
+            yield (parent, done)
+        dispatch.__name__ = fallback_fn.__name__
+        dispatch.__qualname__ = fallback_fn.__qualname__
+        return dispatch
+
+    def dispatch(*args):
+        parent = args[1]
+        for _pos, _idx_dict, _dflt_fn in plans:
+            _a = deref(args[_pos + 2])
+            if not is_var(_a):
+                try:
+                    _bfn = _idx_dict.get(_a)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from _dflt_fn(*args)
+                yield (parent, done)
+                return
+        yield from fallback_fn(*args)
+        yield (parent, done)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
 
 
@@ -3059,30 +3218,35 @@ def compile_predicate(
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    # ── First-argument indexing ───────────────────────────────────────────
-    index = _build_first_arg_index(clauses, arity)
-    if index is not None:
-        # Compile sub-functions: all-clauses, per-bucket, defaults-only
-        all_def = _build_predicate_funcdef(
-            f"{functor}__all", arity, index["all"], _effective_db, body_compiler,
+    # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────────
+    index_positions = _analyze_index_positions(clauses, arity)
+    if index_positions:
+        # Compile fallback (all clauses, for when no arg is ground)
+        fallback_def = _build_predicate_funcdef(
+            f"{functor}__all", arity, clauses, _effective_db, body_compiler,
         )
-        all_fn = functiondef_to_function(all_def, globals_=base_globals)
-        idx_dict: dict = {}
-        for key, bucket_clauses in index["buckets"].items():
-            bname = f"{functor}__b{len(idx_dict)}"
-            bdef = _build_predicate_funcdef(
-                bname, arity, bucket_clauses, _effective_db, body_compiler,
-            )
-            idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
-        if index["defaults"]:
-            ddef = _build_predicate_funcdef(
-                f"{functor}__dflt", arity, index["defaults"],
-                _effective_db, body_compiler,
-            )
-            default_fn = functiondef_to_function(ddef, globals_=base_globals)
-        else:
-            default_fn = _compile_always_fail(functor, arity)
-        fn = _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn)
+        fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
+
+        plans: list[tuple[int, dict, Callable]] = []
+        for pos, index in index_positions:
+            idx_dict: dict = {}
+            for key, bucket_clauses in index["buckets"].items():
+                bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                bdef = _build_predicate_funcdef(
+                    bname, arity, bucket_clauses, _effective_db, body_compiler,
+                )
+                idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+            if index["defaults"]:
+                ddef = _build_predicate_funcdef(
+                    f"{functor}__p{pos}_dflt", arity, index["defaults"],
+                    _effective_db, body_compiler,
+                )
+                pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+            else:
+                pos_default_fn = _compile_always_fail(functor, arity)
+            plans.append((pos, idx_dict, pos_default_fn))
+
+        fn = _make_groundness_dispatch_simple(plans, fallback_fn)
     else:
         func_def = _build_predicate_funcdef(
             functor, arity, clauses, _effective_db, body_compiler,

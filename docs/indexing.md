@@ -1,4 +1,4 @@
-# Clausal — First-Argument Indexing
+# Clausal — Predicate Indexing
 
 ## Problem
 
@@ -176,11 +176,9 @@ The current implementation indexes only scalar values. These are not indexed (th
 - **Term instances** (PredicateMeta classes, Compound) — could be indexed by type/functor, but requires a two-level dict (value dict + type dict) to avoid collisions between a type used as a literal value and a type used as an index key.
 - **Nested structures** — only the top-level value is checked; no deep indexing.
 
-These are planned for V2-2 (groundness-keyed dispatch), which extends first-argument indexing to multi-argument dispatch plans.
-
 ---
 
-## Testing
+## Testing (V2-1)
 
 `tests/test_first_arg_index.py` covers:
 
@@ -191,3 +189,152 @@ These are planned for V2-2 (groundness-keyed dispatch), which extends first-argu
 - **Dynamic re-indexing**: `assertz` triggers lazy recompile with updated index (both modes)
 - **PredicateMeta integration**: normalized Var+Unify heads from PredicateMeta facts
 - **Edge cases**: arity-1 predicates, duplicate first-arg keys, None as key, bool/int hash collision
+
+---
+---
+
+# Groundness-Keyed Dispatch (V2-2)
+
+V2-2 generalises first-argument indexing to **multi-argument indexing** with a runtime selector. Instead of indexing only on `arg0`, the compiler analyses every argument position and builds an independent index for each one that has useful discriminating power. At call time, a lightweight selector inspects which arguments are ground and dispatches to the best available index.
+
+## Motivation
+
+First-argument indexing (V2-1) only helps when the first argument is ground. Many predicates are queried in multiple modes:
+
+```
+color("red", Temp_)      # first arg ground  → V2-1 handles this
+color(Name_, "warm")     # second arg ground → V2-1 can't help
+color(Name_, Temp_)      # neither ground    → full scan either way
+```
+
+With V2-2, querying `color(Name_, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
+
+## Design
+
+### Multi-position analysis
+
+At compile time, `_analyze_index_positions(clauses, arity)` scans every argument position:
+
+```python
+for pos in range(arity):
+    index = _build_arg_index(clauses, arity, pos)
+    if index is useful:
+        results.append((pos, index))
+```
+
+Each position is ranked by **selectivity** — the number of distinct keys. The most selective position (most distinct values, best at narrowing the clause set) is checked first at runtime.
+
+### Generalised key extraction
+
+`_extract_arg_key(clause, pos, arity)` generalises `_extract_first_arg_key` to work on any argument position. The same classification rules apply:
+
+| Arg at position `pos` | Key | Bucket |
+|---|---|---|
+| Scalar (int, str, float, bytes, bool, None) | The value | Specific |
+| Var with `Unify(var, scalar)` in body | The scalar | Specific |
+| Unbound Var, list, term instance | `_INDEX_VAR` | Default |
+
+The Var identity check (`goal.left is arg`) ensures we match the correct Var when multiple positions have Var+Unify patterns — each position's Var object is distinct.
+
+### Plan structure
+
+For a predicate with indexable positions at, say, positions 0, 1, and 2, the compiler builds:
+
+```
+plans = [
+    (1, idx_dict_1, default_fn_1),   # position 1 (most selective)
+    (0, idx_dict_0, default_fn_0),   # position 0
+    (2, idx_dict_2, default_fn_2),   # position 2 (least selective)
+]
+fallback_fn = all_clauses_fn         # for when no arg is ground
+```
+
+Each plan's `idx_dict` maps values to compiled sub-functions (exactly like V2-1 buckets), and `default_fn` handles values not in the index at that position. The `fallback_fn` is the full linear-scan function used when all arguments are unbound.
+
+### Runtime selector
+
+```
+                        ┌─ ground? ──→ idx_1.get(val) ──→ bucket / default
+                        │
+dispatch(*args) ────────┤  (check positions in selectivity order)
+                        │
+                        ├─ ground? ──→ idx_0.get(val) ──→ bucket / default
+                        │
+                        └─ all Var  ──→ fallback_fn
+```
+
+The selector is a Python closure:
+
+```python
+def dispatch(*args):
+    for pos, idx_dict, default_fn in plans:
+        a = deref(args[pos])
+        if not is_var(a):
+            bfn = idx_dict.get(a)       # O(1) hash lookup
+            yield from (bfn or default_fn)(*args)
+            return
+    yield from fallback_fn(*args)        # all-Var fallback
+```
+
+**Single-position fast path:** when only one position is indexable, the loop is eliminated and the selector degenerates to the same structure as V2-1 — no performance regression.
+
+### Trampoline mode
+
+The trampoline selector accounts for the different argument layout (`this_generator, parent, arg0, ..., trail`) by offsetting position indices by 2. Sub-functions use `emit_done=False` as in V2-1 — the selector emits the final `yield (parent, DONE)`.
+
+## Example: colour database
+
+```
+color("red",    "warm"),
+color("blue",   "cool"),
+color("green",  "cool"),
+color("yellow", "warm"),
+color("white",  "neutral"),
+```
+
+Analysis finds both positions indexable:
+
+- **Position 0**: 5 distinct keys (red, blue, green, yellow, white) — most selective
+- **Position 1**: 3 distinct keys (warm, cool, neutral) — less selective
+
+Plans sorted by selectivity: position 0 first, then position 1.
+
+| Query | Selector path | Clauses tried |
+|---|---|---|
+| `color("blue", X_)` | arg0 ground → pos-0 index → bucket["blue"] | 1 |
+| `color(X_, "cool")` | arg0 Var → skip; arg1 ground → pos-1 index → bucket["cool"] | 2 |
+| `color("red", "warm")` | arg0 ground → pos-0 index → bucket["red"] | 1 |
+| `color(X_, Y_)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
+
+## Interaction with V2-1
+
+V2-2 fully subsumes V2-1. The `compile_predicate` and `compile_predicate_trampoline` functions now use `_analyze_index_positions` instead of `_build_first_arg_index`. When only position 0 is indexable, the result is behaviourally identical to V2-1.
+
+The V2-1 functions (`_extract_first_arg_key`, `_build_first_arg_index`, `_make_indexed_dispatch_simple`, `_make_indexed_dispatch_trampoline`) are retained as thin wrappers or standalone utilities for backward compatibility with tests that reference them directly.
+
+## Interaction with dynamic predicates
+
+No changes to the invalidation mechanism. When `assertz` or `retract` modifies a predicate, the lazy recompile closure calls `compile_predicate` from scratch. The fresh compilation analyses all positions and builds new indexes reflecting the updated clause list.
+
+## Limitations
+
+- **Indexed types**: only scalar types are indexed. Lists, term instances, and compound structures go to the default bucket at every position.
+- **No cross-position indexing**: positions are checked independently. There is no combined multi-key hash table (e.g., indexing on `(arg0, arg1)` jointly). The selector picks the single best position, not a combination.
+- **Compilation cost**: each indexable position produces its own set of sub-functions (buckets + default). For a predicate with `P` indexable positions and `K` average distinct keys, compilation produces roughly `P * K` sub-functions. This is acceptable because indexing only kicks in at 4+ clauses and the sub-functions are small.
+
+---
+
+## Testing (V2-2)
+
+`tests/test_groundness_dispatch.py` covers:
+
+- **Generalised key extraction**: arbitrary position, Var+Unify at non-first positions, PredicateMeta second field
+- **Per-position index building**: position 0 matches V2-1, position 1 index, `n_distinct` field
+- **Position analysis**: both positions indexable, single-position detection, selectivity sorting, three-arg predicates
+- **Second-arg lookup (simple mode)**: ground second arg, ground first arg, both ground, neither ground, no-match, three-arg middle/last ground
+- **Second-arg lookup (trampoline mode)**: same scenarios
+- **Different-mode dispatch**: same predicate queried in four modes (first-ground, second-ground, both-ground, neither-ground)
+- **Mixed clauses**: var-headed clauses in position-specific buckets, true catch-all clauses (Var at all positions)
+- **Dynamic re-indexing**: `assertz` triggers multi-plan recompile (both modes)
+- **Backward compatibility**: single-position matches V2-1, below-threshold still works
+- **PredicateMeta integration**: second-field lookup on PredicateMeta facts
