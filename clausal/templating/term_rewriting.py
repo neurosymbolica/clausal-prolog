@@ -1029,10 +1029,42 @@ class EmbedTransformer(NodeTransformer):
     def _handle_directive(transformer, name, args, expr_stmt):
         """Dispatch a -directive(...) at module level."""
         if name == "module":
-            return replace(Pass(), expr_stmt)
+            return transformer._handle_module_directive(args, expr_stmt)
         # Unknown directive — leave as-is (will likely produce a runtime error,
         # which is the right thing: the user mis-typed a directive name).
         return transformer.generic_visit(expr_stmt)
+
+    def _handle_module_directive(transformer, args, expr_stmt):
+        """Process ``-module(Name, [export1(A,B), export2(X,Y)])`` directive.
+
+        Extracts predicate signatures from the export list and emits
+        ``_make_functor_class_ast`` definitions for each, pre-registering
+        them in ``_seen_functors`` so that subsequent clauses use the
+        declared field names rather than inferring them from the first clause.
+        """
+        statements = []
+        # args[1] should be the export list: ast.List of Call nodes.
+        if len(args) >= 2 and isinstance(args[1], List):
+            for export in args[1].elts:
+                if isinstance(export, Call) and isinstance(export.func, Name):
+                    functor_name = export.func.id
+                    # Use raw Name ids as field names (not lowercased) so they
+                    # match keyword arg names in clauses like fib(N=0, F=0).
+                    field_names = [
+                        arg.id if isinstance(arg, Name) else f"arg_{i}"
+                        for i, arg in enumerate(export.args)
+                    ]
+                    field_names += [kw.arg for kw in export.keywords]
+                    if functor_name not in transformer._seen_functors:
+                        transformer._seen_functors[functor_name] = field_names
+                        statements.append(
+                            _make_functor_class_ast(
+                                functor_name, field_names, expr_stmt
+                            )
+                        )
+        if not statements:
+            return replace(Pass(), expr_stmt)
+        return statements if len(statements) > 1 else statements[0]
 
     def visit_With(transformer, with_statement):
         first = with_statement.items[0]

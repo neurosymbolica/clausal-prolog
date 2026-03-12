@@ -2,7 +2,7 @@
     hanoi(N, From, To, Via, Moves)
 ])
 
-hanoi(N=0, FROM=_, TO=_, VIA=_, MOVES=[]),
+hanoi(0, _, _, _, []),
 hanoi(N, FROM, TO, VIA, MOVES) <- (
     N > 0,
     N1 := N - 1,
@@ -15,7 +15,7 @@ hanoi(N, FROM, TO, VIA, MOVES) <- (
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
 test("0 disks = no moves") <- hanoi(0, "left", "right", "center", [])
-test("1 disk = 1 move") <- hanoi(1, "left", "right", "center", MOVES), length(MOVES, 1)
+test("1 disk = 1 move") <- (hanoi(1, "left", "right", "center", MOVES), length(MOVES, 1))
 test("1 disk move is [left, right]") <- hanoi(1, "a", "b", "c", [["a", "b"]])
-test("2 disks = 3 moves") <- hanoi(2, "left", "right", "center", MOVES), length(MOVES, 3)
-test("3 disks = 7 moves") <- hanoi(3, "left", "right", "center", MOVES), length(MOVES, 7)
+test("2 disks = 3 moves") <- (hanoi(2, "left", "right", "center", MOVES), length(MOVES, 3))
+test("3 disks = 7 moves") <- (hanoi(3, "left", "right", "center", MOVES), length(MOVES, 7))

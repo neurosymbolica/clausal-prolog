@@ -1,6 +1,6 @@
 -module(sorting, [
-    naive_sort(List, Sorted),
-    qsort(List, Sorted)
+    naive_sort(LIST, SORTED),
+    qsort(LIST, SORTED)
 ])
 
 # ── Naive sort (permutation sort) ─────────────────────────────────────────────

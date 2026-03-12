@@ -1,5 +1,5 @@
 -module(symbolic_diff, [
-    d(Expr, Var, Derivative)
+    d(EXPR, VAR, DERIV)
 ])
 
 # Symbolic differentiation using operator-node terms:
