@@ -4,6 +4,7 @@
 
 ```
 clausal.logic.wfs            (planned) well-founded semantics
+clausal.logic.clpfd          CLP(FD) finite-domain constraints (V2-6)
 clausal.logic.constraints    dif/2 via attribute variables (V2-5)
 clausal.logic.tabling        SLG resolution (V2-4b)
 clausal.logic.runtime        (planned) database, SLD search
@@ -172,5 +173,5 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling (V2-4b) |
 | `clausal.logic.constraints` | Done — dif/2 via attributed variables (V2-5) |
+| `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints (V2-6) |
 | `clausal.logic.wfs` | Planned — well-founded semantics |
-| Constraint domains (CLP(Z), CLP(R)) | Future |

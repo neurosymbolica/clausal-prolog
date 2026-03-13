@@ -74,5 +74,6 @@ Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if 
 
 - Each test should be a single rule with a descriptive string as the argument.
 - Test bodies can use any predicates defined in the module, plus builtins like `append`, `member`, etc.
-- Use `==` for structural equality checks on computed results: `test("check") <- (some_pred(X), X == expected)`.
+- Use `==` for CLP(FD) arithmetic equality on computed results: `test("check") <- (some_pred(X), X == expected)`. For ground integers this behaves like equality; for Vars it posts a CLP(FD) constraint.
+- Use `equivalent(X, Y)` for structural equality (the old `==` behavior) when comparing non-integer terms.
 - Use `:=` for arithmetic: `test("arith") <- (N := 2 + 3, N == 5)`.

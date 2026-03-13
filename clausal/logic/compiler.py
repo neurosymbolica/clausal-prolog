@@ -1093,25 +1093,49 @@ def compile_goal(
                 _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
-        # ── Structural equality ──────────────────────────────────────────────
+        # ── CLP(FD) arithmetic equality ─────────────────────────────────────
         case StructuralEq(left=l, right=r):
-            return _deref_cmp(l, r, ast.Eq(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_eq"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case StructuralNeq(left=l, right=r):
-            return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_ne"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
-        # ── Arithmetic comparisons ───────────────────────────────────────────
+        # ── CLP(FD) arithmetic comparisons ──────────────────────────────────
         case Lt(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.Lt(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_lt"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case LtE(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.LtE(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_le"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case Gt(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.Gt(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_gt"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case GtE(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.GtE(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_ge"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
@@ -1474,22 +1498,46 @@ def compile_goal_trampoline(
             ]
 
         case StructuralEq(left=l, right=r):
-            return _deref_cmp(l, r, ast.Eq(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_eq"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case StructuralNeq(left=l, right=r):
-            return _deref_cmp(l, r, ast.NotEq(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_ne"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case Lt(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.Lt(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_lt"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case LtE(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.LtE(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_le"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case Gt(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.Gt(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_gt"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         case GtE(left=l, right=r):
-            return _compile_arith_cmp(l, r, ast.GtE(), var_context, k_stmts)
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_fd_ge"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
 
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
@@ -1941,6 +1989,11 @@ def compile_predicate_trampoline(
 
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
     from clausal.logic.constraints import dif as _dif_fn  # noqa: PLC0415
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        fd_eq as _fd_eq_fn, fd_ne as _fd_ne_fn,
+        fd_lt as _fd_lt_fn, fd_le as _fd_le_fn,
+        fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
+    )
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm_t,
@@ -1951,6 +2004,12 @@ def compile_predicate_trampoline(
         "StepGenerator": StepGenerator,
         "_DONE": DONE,
         "_dif": _dif_fn,
+        "_fd_eq": _fd_eq_fn,
+        "_fd_ne": _fd_ne_fn,
+        "_fd_lt": _fd_lt_fn,
+        "_fd_le": _fd_le_fn,
+        "_fd_gt": _fd_gt_fn,
+        "_fd_ge": _fd_ge_fn,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
         "_head_multi_star_error": _head_multi_star_error,
@@ -3279,6 +3338,11 @@ def compile_predicate(
 
     from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
     from clausal.logic.constraints import dif as _dif_fn_s  # noqa: PLC0415
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        fd_eq as _fd_eq_fn_s, fd_ne as _fd_ne_fn_s,
+        fd_lt as _fd_lt_fn_s, fd_le as _fd_le_fn_s,
+        fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
+    )
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm,
@@ -3287,6 +3351,12 @@ def compile_predicate(
         "deref": deref,
         "is_var": is_var,
         "_dif": _dif_fn_s,
+        "_fd_eq": _fd_eq_fn_s,
+        "_fd_ne": _fd_ne_fn_s,
+        "_fd_lt": _fd_lt_fn_s,
+        "_fd_le": _fd_le_fn_s,
+        "_fd_gt": _fd_gt_fn_s,
+        "_fd_ge": _fd_ge_fn_s,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
         "_head_multi_star_error": _head_multi_star_error,

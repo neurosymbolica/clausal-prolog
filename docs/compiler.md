@@ -68,9 +68,9 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 | `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
 | `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — dif/2 constraint (see [constraints.md](constraints.md)) |
 | `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
-| `Eq(l, r)` | `if deref(l) == deref(r): k_stmts` |
-| `NotEq(l, r)` | `if deref(l) != deref(r): k_stmts` |
-| `Lt/LtE/Gt/GtE` | arithmetic comparison via `arith_to_ast_expr` |
+| `StructuralEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality (V2-6) |
+| `StructuralNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality (V2-6) |
+| `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison (V2-6) |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails |

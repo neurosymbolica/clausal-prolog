@@ -271,9 +271,9 @@ class TestStructuralEquality:
         structurally equal."""
         assert _goal_succeeds(StructuralEq(left=1, right=1.0))
 
-    def test_var_vs_var_different(self):
-        """Two different unbound Vars are structurally different."""
-        assert _goal_fails(StructuralEq(left=Var(), right=Var()))
+    def test_var_vs_var_clpfd(self):
+        """V2-6: == is CLP(FD). Two unbound Vars constrained to be equal → succeeds."""
+        assert _goal_succeeds(StructuralEq(left=Var(), right=Var()))
 
     def test_var_vs_var_same(self):
         """Same Var is structurally equal to itself."""

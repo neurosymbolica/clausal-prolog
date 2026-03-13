@@ -127,7 +127,8 @@ max_/3          min_/3          sum_list/2      max_list/2
 min_list/2      var/1           nonvar/1        atom/1
 number/1        integer/1       float_/1        string/1
 compound/1      callable/1      is_list/1       ground/1
-functor/3       arg/3           univ/2          ...
+functor/3       arg/3           univ/2          dif/2
+in_domain/3     label/1         all_different/1 equivalent/2
 ```
 
 **DB-dependent builtins** — stored in `_DB_BUILTINS` as factory callables; instantiated lazily with the live `Database`:

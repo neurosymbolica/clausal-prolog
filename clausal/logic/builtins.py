@@ -799,6 +799,40 @@ def _dif__2(x, y, trail, k):
         yield None
 
 
+# ── CLP(FD) builtins ─────────────────────────────────────────────────────────
+
+
+@_builtin("in_domain", 3)
+def _in_domain__3(var_or_list, lo, hi, trail, k):
+    """in_domain(Var, Lo, Hi) — post domain [Lo, Hi] on Var or list of Vars."""
+    from clausal.logic.clpfd import in_domain as _in_domain_fn  # noqa: PLC0415
+    if _in_domain_fn(var_or_list, lo, hi, trail):
+        yield None
+
+
+@_builtin("label", 1)
+def _label__1(vars_list, trail, k):
+    """label(Vars) — enumerate values for FD-constrained variables."""
+    from clausal.logic.clpfd import label as _label_fn  # noqa: PLC0415
+    yield from _label_fn(vars_list, trail)
+
+
+@_builtin("all_different", 1)
+def _all_different__1(vars_list, trail, k):
+    """all_different(Vars) — post all-different constraint on list of Vars."""
+    from clausal.logic.clpfd import all_different as _all_diff_fn  # noqa: PLC0415
+    if _all_diff_fn(vars_list, trail):
+        yield None
+
+
+@_builtin("equivalent", 2)
+def _equivalent__2(t1, t2, trail, k):
+    """equivalent(T1, T2) — structural equality (old == behavior)."""
+    from clausal.logic.clpfd import equivalent as _equiv_fn  # noqa: PLC0415
+    if _equiv_fn(t1, t2, trail):
+        yield None
+
+
 # ── Standard library: type checks ─────────────────────────────────────────────
 
 

@@ -1,0 +1,25 @@
+safe_queens(N_, Qs_) <- (
+    in_domain(Qs_, 1, N_)
+    and all_different(Qs_)
+    and label(Qs_)
+    and check_diagonals(Qs_)
+)
+
+check_diagonals([]),
+
+check_diagonals([Q_, *Rest_]) <- (
+    safe_from(Q_, Rest_, 1)
+    and check_diagonals(Rest_)
+)
+
+safe_from(Q_, [], D_),
+
+safe_from(Q_, [H_, *T_], D_) <- (
+    Q_ != H_
+    and (Diff1_ := Q_ - H_)
+    and (Diff2_ := H_ - Q_)
+    and Diff1_ != D_
+    and Diff2_ != D_
+    and (D1_ := D_ + 1)
+    and safe_from(Q_, T_, D1_)
+)

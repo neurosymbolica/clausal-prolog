@@ -140,6 +140,39 @@ The corresponding AST node is `Evaluate(left, right)`. The compiler applies `ari
 
 ---
 
+## Comparison operators (CLP(FD))
+
+The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) (Constraint Logic Programming over Finite Domains) operators. They post constraints on integer variables rather than performing immediate checks.
+
+```python
+bounded(X) <- (
+    in_domain(X, 1, 10)
+    and X > 3
+    and X < 8
+    and label([X])
+)
+```
+
+When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison — `3 == 3` is True, `3 < 2` is False — so existing ground arithmetic code works unchanged.
+
+When at least one side is an unbound Var, a CLP(FD) constraint is posted:
+- `X == 5` narrows X's domain to `{5}` (and binds it)
+- `1 <= X` and `X <= 10` constrain X's domain to `[1, 10]`
+- `X != 3` removes 3 from X's domain
+- `X < Y` narrows X's upper bound and Y's lower bound
+
+| Operator | CLP(FD) meaning |
+|---|---|
+| `==` | Arithmetic equality constraint |
+| `!=` | Arithmetic disequality constraint |
+| `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
+
+The old structural-equality behaviour of `==` is available as the builtin `equivalent(X, Y)`. Use `equivalent` when comparing non-integer terms where CLP(FD) semantics are not appropriate.
+
+See [constraints.md](constraints.md) for the full CLP(FD) design, including domain representation, propagation, and labeling.
+
+---
+
 ## Horn clauses
 
 ```python
@@ -368,6 +401,19 @@ u"hello"               # list of character atoms
 X is Y,                # unify
 X is not Y,            # dif constraint (must stay different)
 not (X is Y),          # immediate check (don't unify right now)
+
+# Arithmetic
+(N := X + 1),          # evaluate RHS, unify with LHS
+
+# CLP(FD) constraints (V2-6)
+X == Y,                # arithmetic equality constraint
+X != Y,                # arithmetic disequality constraint
+X < Y,                 # less-than constraint
+X <= Y,                # less-or-equal constraint
+in_domain(X, 1, 10),   # post finite domain
+all_different([X,Y,Z]), # pairwise disequality
+label([X, Y, Z]),      # enumerate solutions (first-fail)
+equivalent(X, Y),      # structural equality (old == behavior)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
