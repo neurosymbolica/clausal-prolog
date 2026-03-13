@@ -1024,6 +1024,67 @@ def _compile_multi_star_is(
     ]
 
 
+# ── WFS: tabled NAF helpers ────────────────────────────────────────────────────
+
+
+def _is_tabled_naf(inner_goal, db) -> bool:
+    """Return True if inner_goal is a Call to a tabled predicate."""
+    if not isinstance(inner_goal, Call):
+        return False
+    if not isinstance(inner_goal.func, LoadName):
+        return False
+    if db is None:
+        return False
+    fname = inner_goal.func.name
+    call_arity = len(inner_goal.args) + len(inner_goal.kwargs)
+    return db.is_tabled(fname, call_arity)
+
+
+def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts):
+    """Emit _naf_tabled(...) call for tabled NAF (both simple and trampoline modes).
+
+    Generates:
+        _m = trail.mark()
+        if _naf_tabled("fname", arity, (arg0, ..., argN), trail, _table_store):
+            k_stmts
+        trail.undo(_m)
+    """
+    fname = inner_goal.func.name
+    call_args = inner_goal.args
+    call_kwargs = inner_goal.kwargs
+    # Normalize kwargs into positional using signature
+    if call_kwargs:
+        sig = db.signature_for(fname, len(call_args) + len(call_kwargs))
+        if sig is not None:
+            kw_dict = {kw.arg: kw.value for kw in call_kwargs}
+            all_args = []
+            for i, field in enumerate(sig):
+                if i < len(call_args):
+                    all_args.append(call_args[i])
+                elif field in kw_dict:
+                    all_args.append(kw_dict[field])
+            call_args = all_args
+
+    arity = len(call_args)
+    arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in call_args]
+    args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
+    mark = _fresh("_m")
+
+    naf_call = _call(
+        _name("_naf_tabled"),
+        ast.Constant(value=fname),
+        ast.Constant(value=arity),
+        args_tuple,
+        _name(trail_name),
+        _name("_table_store"),
+    )
+    return [
+        _assign_mark(mark, trail_name),
+        _if(naf_call, k_stmts),
+        _undo_stmt(mark, trail_name),
+    ]
+
+
 # ── compile_goal ───────────────────────────────────────────────────────────────
 
 
@@ -1161,6 +1222,11 @@ def compile_goal(
 
         # ── Negation-as-failure ──────────────────────────────────────────────
         case Not(operand=inner):
+            # WFS: if inner is a call to a tabled predicate, use _naf_tabled
+            # instead of inline NAF (handles cycles through negation).
+            if _is_tabled_naf(inner, db):
+                return _compile_tabled_naf_simple(inner, db, var_context, trail_name, k_stmts)
+
             # Run inner as a sub-generator; succeed iff it yields no solutions.
             # Bindings from the inner goal do not escape (the nested function
             # closes over trail, and we use a fresh mark to undo any accidental
@@ -1571,6 +1637,10 @@ def compile_goal_trampoline(
         # checks if at least one solution exists.  If not, the continuation
         # (k_stmts) is executed.
         case Not(operand=inner):
+            # WFS: if inner is a call to a tabled predicate, use _naf_tabled
+            if _is_tabled_naf(inner, db):
+                return _compile_tabled_naf_simple(inner, db, var_context, trail_name, k_stmts)
+
             naf_gen_fn = _fresh("_naf_gen_fn")
             naf_flag = _fresh("_naf")
             naf_sg = _fresh("_naf_sg")
@@ -2017,6 +2087,11 @@ def compile_predicate_trampoline(
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
     }
+    # WFS: inject _naf_tabled and _table_store for tabled NAF
+    if db is not None:
+        from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn  # noqa: PLC0415
+        base_globals["_naf_tabled"] = _naf_tabled_fn
+        base_globals["_table_store"] = db.table_store
     base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)
@@ -3364,6 +3439,11 @@ def compile_predicate(
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
     }
+    # WFS: inject _naf_tabled and _table_store for tabled NAF
+    if db is not None:
+        from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn_s  # noqa: PLC0415
+        base_globals["_naf_tabled"] = _naf_tabled_fn_s
+        base_globals["_table_store"] = db.table_store
     base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)

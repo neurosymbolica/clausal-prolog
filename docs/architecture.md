@@ -3,7 +3,7 @@
 ## Layer stack
 
 ```
-clausal.logic.wfs            (planned) well-founded semantics
+clausal.logic.tabling (wfs)  well-founded semantics (V2-7)
 clausal.logic.clpfd          CLP(FD) finite-domain constraints (V2-6)
 clausal.logic.constraints    dif/2 via attribute variables (V2-5)
 clausal.logic.tabling        SLG resolution (V2-4b)
@@ -114,11 +114,17 @@ The key insight is that **tabling is easier to implement on coroutines/generator
 
 The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, variant_key)` to `TableEntry` objects that track status, cached answers, and suspended consumers. See [tabling.md](tabling.md) for full details.
 
-### Well-founded semantics
+### Well-founded semantics (V2-7)
 
 Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *undefined*. It gives a principled treatment of negation in the presence of recursion — the "undefined" value propagates through mutually recursive negations rather than looping or giving arbitrary results.
 
-WFS requires tabling as its foundation and adds a scheduling discipline (the SLG algorithm, Shen/Chen/Warren 1994) for resolving cycles involving negation. It is the semantic basis for XSB Prolog's reasoning power and is the target for clausal's well-founded module.
+WFS is implemented directly in `clausal.logic.tabling` (V2-7), extending the existing SLG machinery with delayed negation and conditional answer resolution. When `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
+
+- Negation of a completed table with no matching answer → **true** (delay removed)
+- Negation of a completed table with an unconditional matching answer → **false** (answer invalidated)
+- Remaining delays form unfounded sets → truth value **undefined**
+
+The compiler detects `not P(args)` where `P` is tabled and emits a call to `_naf_tabled` (a plain function, not a generator) instead of the inline NAF generator pattern. This is transparent — programs with recursion through negation "just work". See [tabling.md](tabling.md) for full details.
 
 **Note on Python interop and WFS:** calling Python code with side effects from within a tabled or WFS predicate during an incomplete subgoal evaluation requires care — the Python code may observe intermediate (undefined) state. This is a known constraint, not a fundamental obstacle. Clausal documents it rather than prohibiting it.
 
@@ -174,4 +180,4 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling (V2-4b) |
 | `clausal.logic.constraints` | Done — dif/2 via attributed variables (V2-5) |
 | `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints (V2-6) |
-| `clausal.logic.wfs` | Planned — well-founded semantics |
+| Well-founded semantics | Done — delayed negation, conditional answers (V2-7) |

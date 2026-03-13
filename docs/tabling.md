@@ -110,11 +110,15 @@ When a solution is found, the current arg bindings are *frozen* — fully derefe
 
 ```python
 class TableEntry:
-    status: str          # "evaluating" | "complete"
-    answers: list[tuple] # frozen answer tuples, in discovery order
-    answer_set: set      # for O(1) duplicate detection
-    suspended: list      # SuspendedConsumer instances
+    status: str                   # "evaluating" | "complete"
+    answers: list[tuple]          # frozen answer tuples, in discovery order
+    answer_set: set               # for O(1) duplicate detection
+    suspended: list               # SuspendedConsumer instances
+    conditions: list              # parallel to answers: frozenset[DelayedNegation] | _FAILED
+    _current_delays: set          # accumulates DelayedNegation during current derivation
 ```
+
+`conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `"undefined"`, or `False` accordingly.
 
 ### SuspendedConsumer
 
@@ -137,10 +141,12 @@ The primary implementation (`make_tabled_wrapper_trampoline`) wraps a trampoline
 
 **Leader path:**
 
-1. Create a `TableEntry` with status `"evaluating"`.
+1. Create a `TableEntry` with status `"evaluating"`. Push it onto the leader context stack.
 2. Spawn a `StepGenerator` over the original dispatch.
-3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
+3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
 4. When the inner dispatch is exhausted, enter the *completion phase*.
+5. After completion, run `_resolve_conditions` to simplify delayed negations (WFS).
+6. Pop the leader from the context stack and mark `"complete"`.
 
 **Consumer path:**
 
@@ -162,7 +168,9 @@ After the original dispatch is exhausted, the leader resumes each suspended cons
    - Other `(gen, value)` → sub-call from consumer body → forward through the mini-trampoline.
 3. Repeat until a fixpoint: no new answers are discovered in a full round.
 4. Send `DONE` to any remaining suspended consumers for cleanup.
-5. Mark the table entry `"complete"`.
+5. Run `_resolve_conditions(entry, table_store)` to resolve WFS delayed negations.
+6. Pop the leader context stack.
+7. Mark the table entry `"complete"`.
 
 ### Simple-mode wrapper
 
@@ -185,8 +193,9 @@ Consumer calls during evaluation yield currently known answers and return (no su
 |---|---|---|
 | `_TABLING_SUSPEND` | consumer → trampoline | "Park me; I'm waiting for more answers" |
 | `_TABLING_RESUME` | leader → consumer | "Wake up; check for new answers" |
+| `_FAILED` | internal | Marks an invalidated conditional answer (WFS) |
 
-These are distinct from the trampoline's `DONE` sentinel. The trampoline and `solutions()` function intercept `_TABLING_SUSPEND` and convert it to `DONE` so that non-tabling-aware code (callers of the tabled predicate) never sees these sentinels.
+`_TABLING_SUSPEND` and `_TABLING_RESUME` are distinct from the trampoline's `DONE` sentinel. The trampoline and `solutions()` function intercept `_TABLING_SUSPEND` and convert it to `DONE` so that non-tabling-aware code (callers of the tabled predicate) never sees these sentinels.
 
 ---
 
@@ -232,9 +241,82 @@ The architecture doc notes that tabling is easier on generators than on a WAM. H
 
 ---
 
+## Well-founded semantics (V2-7)
+
+When a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). WFS provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
+
+### How it works
+
+When evaluating `not P(args)` where `P` is tabled:
+
+- **Complete table**: standard NAF — check if any answer matches, negate.
+- **Evaluating table** (cycle detected): **delay** the negation. The derivation continues conditionally — the answer is recorded with a `DelayedNegation` condition attached.
+
+After the SLG leader finishes driving all consumers and no new answers appear, `_resolve_conditions` runs:
+
+1. Delayed `not P(args)` targeting a completed table with no matching answer → negation **true** → condition removed (answer becomes unconditional).
+2. Delayed `not P(args)` targeting a completed table with an unconditional matching answer → negation **false** → answer invalidated.
+3. Remaining conditional answers form **unfounded sets** — truth value **undefined**.
+
+### Example: symmetric game
+
+```
+-table(win/1)
+
+move(1, 2),
+move(2, 1),
+
+win(X_) <- (move(X_, Y_) and not win(Y_))
+```
+
+`win(1)` depends on `not win(2)`, and `win(2)` depends on `not win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
+
+### Example: asymmetric game
+
+```
+-table(win/1)
+
+move("a", "b"),
+move("b", "a"),
+move("a", "c"),
+
+win(X_) <- (move(X_, Y_) and not win(Y_))
+```
+
+- `win("c")` = false (no moves from "c")
+- `win("a")` = true (via `move("a", "c")`, `not win("c")` succeeds)
+- `win("b")` = false (`not win("a")` fails because `win("a")` is true)
+
+### Truth value inspection
+
+`TableEntry.truth_value(i)` returns `True`, `False`, or `"undefined"` for the i-th answer based on its conditions. The `query_wfs()` function in `clausal.logic.solve` returns results annotated with `"_truth"` keys.
+
+### Compiler integration
+
+The compiler detects `Not(operand=Call(LoadName(tabled_pred), ...))` and emits:
+
+```python
+_m = trail.mark()
+if _naf_tabled("pred", arity, (arg0, ..., argN), trail, _table_store):
+    k_stmts
+trail.undo(_m)
+```
+
+`_naf_tabled` is a plain function (not a generator) — it returns `True` (negation succeeds, possibly conditionally) or `False` (negation fails). It works identically from both simple and trampoline compiled code.
+
+Non-tabled predicates fall through to the existing inline NAF codegen (no behavior change).
+
+### Data structures
+
+- **`DelayedNegation(functor, arity, key, frozen_args)`** — represents a conditional dependency.
+- **`TableEntry.conditions`** — list parallel to `answers`, each entry a `frozenset[DelayedNegation]`. Empty frozenset = unconditional. `_FAILED` sentinel = invalidated.
+- **`TableEntry._current_delays`** — accumulates delays during the current derivation.
+- **Leader context stack** — thread-local stack of `TableEntry` objects. `push_leader`/`pop_leader`/`current_leader` helpers. `_naf_tabled` attaches delays to the current leader.
+
+---
+
 ## Limitations
 
-- **No well-founded semantics yet.** Tabling handles positive recursion (left-recursion, mutual recursion). Negation through cycles (`\+ p, p :- \+ p`) is not yet handled correctly — it requires WFS scheduling.
 - **Variant-only tabling.** Two calls are the same subgoal only if their arguments are structurally identical (modulo unbound variables). Subsumption-based tabling (where `p(1, X)` subsumes `p(1, 2)`) is not implemented.
 - **No answer subsumption.** All answers are kept. There is no mechanism for lattice-based answer combination (e.g., keeping only the maximum).
 - **Side effects during incomplete evaluation.** Python code called from within a tabled predicate may observe intermediate state when the table is still evaluating. This is documented, not prevented.
@@ -243,7 +325,7 @@ The architecture doc notes that tabling is easier on generators than on a WAM. H
 
 ## Test coverage
 
-Tests are in `tests/test_tabling.py` (46 tests) and `tests/test_slg_termination.py` (20 tests).
+Tests are in `tests/test_tabling.py` (46 tests), `tests/test_slg_termination.py` (20 tests), and `tests/test_wfs.py` (31 tests).
 
 **Unit tests** (`test_tabling.py`):
 - `TableEntry` state management, duplicate suppression, ordering
@@ -265,9 +347,24 @@ Tests are in `tests/test_tabling.py` (46 tests) and `tests/test_slg_termination.
 - Same generation (Bancilhon et al. 1986) — reflexive, sibling, cousin, cross-level, negative cases
 - Mutual recursion through two tabled predicates on a cyclic graph
 
+**WFS tests** (`test_wfs.py`):
+- `DelayedNegation`: equality, hashing, repr
+- `TableEntry` conditions: default unconditional, with delays, truth values (true/false/undefined)
+- Leader context stack: empty, push/pop, nesting
+- `_naf_tabled`: complete table (match/no match), skips failed, evaluating table delays, no entry, var args
+- `_resolve_conditions`: unconditional passthrough, resolve to true, resolve to false, unfounded self-reference, multiple delays partial resolution
+- Positive-only regression: tabled fib and cyclic path still work
+- Complete table NAF: immediate check on complete table
+- Symmetric win/move: both win(1) and win(2) are undefined
+- Asymmetric win/move: win("a") is true
+- No negation cycle: tabled with NAF but no cycle → standard behavior
+- `query_wfs` API: returns list with truth annotations
+
 **Fixtures:**
 - `tests/fixtures/tabled_fib.clausal` — tabled fibonacci
 - `tests/fixtures/tabled_path.clausal` — tabled cyclic path (1→2→3→1)
 - `tests/fixtures/tabled_left_rec.clausal` — left-recursive path on acyclic graph (1→2→3→4)
 - `tests/fixtures/tabled_same_gen.clausal` — same-generation problem
 - `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
+- `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
+- `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win("a") true)

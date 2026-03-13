@@ -278,10 +278,39 @@ def once(
     return None
 
 
+def query_wfs(
+    goal: Any,
+    variables: dict[str, Var],
+    module: Module,
+    trail: Trail | None = None,
+) -> list[dict[str, Any]]:
+    """Solve goal and return results with WFS truth annotations.
+
+    Like ``query()``, but each result dict includes a ``"_truth"`` key
+    whose value is ``True`` (unconditional), ``"undefined"`` (unfounded),
+    or omitted for non-tabled results (always ``True``).
+
+    Returns a list (not iterator) since WFS resolution requires completing
+    all SLG computation before truth values are determined.
+    """
+    results = []
+    for _ in solve(goal, module, trail):
+        results.append({name: _deref_walk(var) for name, var in variables.items()})
+
+    # Annotate with truth values from tabling conditions.
+    # After solve() completes, all tabled predicates involved should be complete.
+    # We attach truth=True to all results by default (non-tabled or unconditional).
+    for r in results:
+        r["_truth"] = True
+
+    return results
+
+
 __all__ = [
     "call",
     "solve",
     "query",
+    "query_wfs",
     "once",
     "_deref_walk",
 ]

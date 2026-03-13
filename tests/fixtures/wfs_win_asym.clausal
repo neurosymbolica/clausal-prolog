@@ -1,0 +1,7 @@
+-table(win/1)
+
+move("a", "b"),
+move("b", "a"),
+move("a", "c"),
+
+win(X_) <- (move(X_, Y_) and not win(Y_))

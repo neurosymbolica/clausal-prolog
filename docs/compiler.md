@@ -73,7 +73,7 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 | `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison (V2-6) |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
-| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails |
+| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (WFS, V2-7). |
 | `In(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
 | `NotIn(elem, coll)` | found-flag pattern |
 | `Call(LoadName(f), args)` | `for _ in f._get_dispatch()(args, trail, k): k_stmts` |
@@ -194,6 +194,21 @@ Both `trampoline` and `solutions` are available from `clausal.logic.trampoline` 
 ### NAF in trampoline mode
 
 Negation-as-failure (`Not`) in trampoline mode compiles the inner goal in **simple mode** (a plain `for`-loop driver), not trampoline mode. This avoids the complexity of suspending and resuming the inner generator through the trampoline.
+
+### WFS: tabled NAF (V2-7)
+
+When `Not(operand=Call(LoadName(f), ...))` targets a tabled predicate (detected via `db.is_tabled(f, arity)`), the compiler emits a call to `_naf_tabled` instead of the inline NAF generator pattern:
+
+```python
+_m = trail.mark()
+if _naf_tabled("f", arity, (arg0, ..., argN), trail, _table_store):
+    k_stmts
+trail.undo(_m)
+```
+
+`_naf_tabled` is a plain function (not a generator) that checks the table store and either performs standard NAF (complete table), delays the negation (evaluating table — cycle through negation), or treats an absent entry as "no answers". This works identically from both simple and trampoline compiled code.
+
+`_naf_tabled` and `_table_store` (a reference to `db.table_store`) are injected into `base_globals` when `db` is not None. Non-tabled predicates fall through to the existing inline NAF codegen.
 
 ---
 

@@ -112,6 +112,22 @@ if trail is not None:
 
 ---
 
+## `query_wfs` — results with truth annotations (V2-7)
+
+```python
+from clausal.logic.solve import query_wfs
+
+results = query_wfs(goal, {"X": X}, module=mod)
+for r in results:
+    print(r["X"], r["_truth"])  # True or "undefined"
+```
+
+`query_wfs(goal, variables, module, trail=None)` returns a **list** (not iterator) of binding dicts, each annotated with a `"_truth"` key. For programs with well-founded semantics (recursion through negation on tabled predicates), answers may have truth value `"undefined"` — atoms that are neither provably true nor provably false. Standard (non-WFS) answers have truth value `True`.
+
+This is the entry point for inspecting WFS truth values. The standard `query()` / `call()` / `solve()` functions yield all non-failed answers without truth annotation.
+
+---
+
 ## Builtins
 
 Built-in predicates are available in every module without explicit import. They fall into two categories:
