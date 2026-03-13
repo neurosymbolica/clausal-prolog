@@ -788,6 +788,17 @@ def _signature_factory(db):
     return signature__3
 
 
+# ── Constraint builtins ───────────────────────────────────────────────────────
+
+
+@_builtin("dif", 2)
+def _dif__2(x, y, trail, k):
+    """dif(X, Y) — disequality constraint: succeed if X and Y can remain different."""
+    from clausal.logic.constraints import dif as _dif_fn  # noqa: PLC0415
+    if _dif_fn(x, y, trail):
+        yield None
+
+
 # ── Standard library: type checks ─────────────────────────────────────────────
 
 

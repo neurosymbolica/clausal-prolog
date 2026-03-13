@@ -2,7 +2,8 @@
 
 ## Status
 
-V1 (Steps 1–9 + keyword work items WK-1 through WK-6) is complete. 1174 tests passing.
+V1 (Steps 1–9 + keyword work items WK-1 through WK-6) is complete.
+V2-D through V2-5 are complete. 1943 tests passing.
 The system compiles `.clausal` files to Python generator functions via an import hook,
 with full backtracking search, unification, builtins, and a query API.
 
@@ -18,12 +19,12 @@ resolution strategies, and constraint logic programming.
 ## V2 step overview
 
 ```
-V2-D   Directives (-dynamic, -table, -discontiguous, -meta_predicate)
-V2-1   First-argument indexing
-V2-2   Groundness-keyed dispatch (multi-plan compilation)
-V2-3   __pycache__ bytecode caching
-V2-4   Tabling (SLG resolution)
-V2-5   Full dif via attribute variables
+V2-D   Directives (-dynamic, -table, -discontiguous, -meta_predicate)   ✓
+V2-1   First-argument indexing                                          ✓
+V2-2   Groundness-keyed dispatch (multi-plan compilation)               ✓
+V2-3   __pycache__ bytecode caching                                     ✓
+V2-4   Tabling (SLG resolution)                                         ✓
+V2-5   Full dif via attribute variables                                 ✓
 V2-6   CLP(FD) integration (using :=)
 V2-7   Well-founded semantics
 V2-8   Standard library expansion
@@ -245,35 +246,24 @@ answer subsumption.
 
 ---
 
-## V2-5 — Full dif via attribute variables
+## V2-5 — Full dif via attribute variables ✓
 
-**Depends on:** V1 complete (independent, but V2-4 is a nice-to-have first)
+**Status: DONE.** Implemented in `clausal/logic/constraints.py`. 42 tests in `tests/test_dif.py`.
+See `docs/constraints.md` for full documentation.
 
-**Goal:** proper `dif/2` (disequality constraint) propagation using the attribute variable
-hooks already present in `clausal.logic.variables`. Currently `is not` uses a deferred
-check at solution time; this step makes it a true constraint that propagates eagerly.
+**Summary:**
 
-**Design:**
-
-- `clausal.logic.variables` already has attr-var hook slots (`attr_unify_hook`). These
-  fire when a variable with attributes is unified.
-- `dif(X, Y)` attaches a disequality constraint to the relevant variables. When either
-  variable is unified, the hook checks whether the constraint is violated, satisfied
-  (can be removed), or still pending (re-attach to remaining variables).
-- A constraint store (per-trail or per-search) tracks active dif constraints.
-- At solution time, all remaining dif constraints are verified (residual check).
-
-**Files to change:**
-- `clausal/logic/variables/` — implement `attr_unify_hook` dispatch
-- `clausal/logic/builtins.py` — replace deferred-check `is not` with proper dif
-- New: `clausal/logic/constraints.py` — constraint store abstraction
-
-**Tests:**
-- `X is not Y, X is 1, Y is 1` → fails (constraint violation on unification)
-- `X is not Y, X is 1, Y is 2` → succeeds
-- `X is not 1` as a constraint: `X is 2` succeeds, `X is 1` fails
-- Residual constraints: unresolved dif reported at solution time
-- Interaction with backtracking: constraints are undone on trail undo
+- All `Var()` are now `AttVar` (attributed variables) from birth — `Var = AttVar` alias in
+  `clausal/logic/variables/__init__.py`. Zero overhead when no constraints are attached.
+- `dif(x, y, trail)` implements the disequality constraint: sandbox-unify with occurs check,
+  attach `(x, y)` constraint pairs to all free variables, re-evaluate via `_dif_hook` when
+  any constrained variable is bound.
+- `is not` now has `dif/2` semantics (constraint), not `\=/2` (immediate check). The old
+  immediate check is still available as `not (X_ is Y_)` (NAF of unification).
+- `dif/2` registered as a builtin for explicit use from `.clausal` files.
+- Compiler emits `if _dif(l, r, trail): k_stmts` — no mark/undo wrapper needed.
+- `_structural_unify_oc` extends C `unify_with_occurs_check` to handle Compound, PredicateMeta,
+  and list types that the C extension falls through to `==` on
 
 ---
 

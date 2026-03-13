@@ -4,12 +4,13 @@
 
 ```
 clausal.logic.wfs            (planned) well-founded semantics
-clausal.logic.tabling        (planned) SLG resolution, answer subsumption
+clausal.logic.constraints    dif/2 via attribute variables (V2-5)
+clausal.logic.tabling        SLG resolution (V2-4b)
 clausal.logic.runtime        (planned) database, SLD search
-clausal.logic.compiler       (planned) Prolog-style predicates → Python generator AST
+clausal.logic.compiler       Prolog-style predicates → Python generator AST
 clausal.continuation_search  greenlet-based search iterator
 clausal.trampoline           generator trampoline, stack-safe CPS
-clausal.logic.variables      C extension: unification, trails, backtracking
+clausal.logic.variables      C extension: unification, trails, backtracking, AttVars
 clausal.term_rewriting       DSL syntax → AST
 clausal.simple_ast           term representation (homoiconic)
 clausal.import_hook          transparent import; IPython integration
@@ -170,5 +171,6 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling (V2-4b) |
+| `clausal.logic.constraints` | Done — dif/2 via attributed variables (V2-5) |
 | `clausal.logic.wfs` | Planned — well-founded semantics |
 | Constraint domains (CLP(Z), CLP(R)) | Future |

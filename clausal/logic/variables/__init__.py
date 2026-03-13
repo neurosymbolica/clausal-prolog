@@ -1,5 +1,5 @@
 from ._variables import (
-    Var,
+    Var as PlainVar,
     AttVar,
     Trail,
     unify,
@@ -14,8 +14,14 @@ from ._variables import (
     register_attr_hook,
 )
 
+# All logic variables are AttVars so constraints (dif, etc.) can be attached.
+# AttVar IS-A Var (C tp_base inheritance) — is_var/deref/unify all work unchanged.
+# Only overhead: +8 bytes per variable for the attrs pointer (NULL until first put_attr).
+Var = AttVar
+
 __all__ = [
     "Var",
+    "PlainVar",
     "AttVar",
     "Trail",
     "unify",

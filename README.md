@@ -12,7 +12,9 @@ A Prolog-style logic programming DSL embedded in Python, built on a simplified A
 - **`clausal.continuation_search`** — `Search`: greenlet-based iterator for continuation-passing search functions.
 - **`clausal.import_hook`** — Import hook for `.clausal` predicate modules; `enable_ipython()` for interactive use.
 - **`clausal.simple_ast_node`** — `@node_class` decorator that generates `visit_children`, `transform_children`, and `__call__` via AST.
-- **`clausal.logic.variables`** — Prolog-style logic variables and trail-based backtracking (C extension, WAM-less).
+- **`clausal.logic.variables`** — Prolog-style logic variables, attributed variables, and trail-based backtracking (C extension, WAM-less).
+- **`clausal.logic.constraints`** — Constraint solvers: `dif/2` disequality constraint via attributed variables.
+- **`clausal.logic.tabling`** — SLG tabling: memoised subgoal calls with suspension/resumption for termination.
 
 ## Installation
 
@@ -217,6 +219,36 @@ def solve(goal, trail):
 ```
 
 `unify()` already rolls back on failure, so `trail.undo(mark)` is only needed to undo successful bindings when moving to the next alternative.
+
+### Constraints
+
+Logic variables support constraints via the attributed variable infrastructure. The `dif/2` constraint ensures two terms remain different:
+
+```python
+from clausal.logic.variables import Var, Trail, unify
+from clausal.logic.constraints import dif
+
+trail = Trail()
+x, y = Var(), Var()
+
+dif(x, y, trail)       # post constraint: x ≠ y
+unify(x, 1, trail)     # ok — constraint re-checked, still satisfiable
+unify(y, 2, trail)     # ok — constraint satisfied (1 ≠ 2)
+
+# But:
+trail2 = Trail()
+a, b = Var(), Var()
+dif(a, b, trail2)
+unify(a, 1, trail2)
+unify(b, 1, trail2)    # False — constraint violated (1 = 1)
+```
+
+In `.clausal` files, `is not` has dif semantics:
+```
+safe(X_, Y_) <- (X_ is not Y_ and X_ is 1 and Y_ is 2)  # succeeds
+```
+
+See [docs/constraints.md](docs/constraints.md) for details.
 
 ### Notes
 

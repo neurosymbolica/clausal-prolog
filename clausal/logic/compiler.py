@@ -1084,25 +1084,13 @@ def compile_goal(
                 _undo_stmt(mark, trail_name),
             ]
 
-        # ── Dif (negation of unification) ─────────────────────────────────
+        # ── Dif (disequality constraint) ──────────────────────────────────
         case DoesNotUnify(left=l, right=r):
-            # Succeed iff l and r cannot unify right now.
-            # Try to unify; if it succeeds, undo and fail.
-            # If it fails, proceed with k_stmts.
-            mark = _fresh("_m")
+            # dif/2 semantics: post constraint, succeed if terms can stay different.
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
-                _assign_mark(mark, trail_name),
-                ast.If(
-                    test=ast.UnaryOp(
-                        op=ast.Not(),
-                        operand=_call(_name("unify"), l_expr, r_expr, _name(trail_name)),
-                    ),
-                    body=k_stmts,
-                    orelse=[],
-                ),
-                _undo_stmt(mark, trail_name),
+                _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
         # ── Structural equality ──────────────────────────────────────────────
@@ -1478,20 +1466,11 @@ def compile_goal_trampoline(
             ]
 
         case DoesNotUnify(left=l, right=r):
-            mark = _fresh("_m")
+            # dif/2 semantics: post constraint, succeed if terms can stay different.
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
-                _assign_mark(mark, trail_name),
-                ast.If(
-                    test=ast.UnaryOp(
-                        op=ast.Not(),
-                        operand=_call(_name("unify"), l_expr, r_expr, _name(trail_name)),
-                    ),
-                    body=k_stmts,
-                    orelse=[],
-                ),
-                _undo_stmt(mark, trail_name),
+                _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
         case StructuralEq(left=l, right=r):
@@ -1961,6 +1940,7 @@ def compile_predicate_trampoline(
         return fn
 
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
+    from clausal.logic.constraints import dif as _dif_fn  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm_t,
@@ -1970,6 +1950,7 @@ def compile_predicate_trampoline(
         "is_var": is_var,
         "StepGenerator": StepGenerator,
         "_DONE": DONE,
+        "_dif": _dif_fn,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
         "_head_multi_star_error": _head_multi_star_error,
@@ -3297,6 +3278,7 @@ def compile_predicate(
         return fn
 
     from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
+    from clausal.logic.constraints import dif as _dif_fn_s  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm,
@@ -3304,6 +3286,7 @@ def compile_predicate(
         "unify": unify,
         "deref": deref,
         "is_var": is_var,
+        "_dif": _dif_fn_s,
         "_head_list_unify_input": _head_list_unify_input,
         "_head_list_unify_output": _head_list_unify_output,
         "_head_multi_star_error": _head_multi_star_error,

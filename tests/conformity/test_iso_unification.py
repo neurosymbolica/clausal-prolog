@@ -220,19 +220,24 @@ class TestStructuralUnify:
 
 
 class TestDoesNotUnify:
-    """ISO §8.2.2 — \\=/2."""
+    """``is not`` now has dif/2 semantics (constraint), not ISO \\=/2 (immediate).
+
+    dif(X, Y) succeeds when X and Y *can* remain different, posting a
+    constraint if they are not yet ground.  Use ``not (X is Y)`` for
+    immediate \\=/2 behavior.
+    """
 
     def test_different_atoms(self):
-        """ISO: a \\= b succeeds."""
+        """dif(a, b) succeeds — structurally incompatible."""
         assert _goal_succeeds(DoesNotUnify(left="a", right="b"))
 
     def test_same_atom_fails(self):
-        """ISO: a \\= a fails."""
+        """dif(a, a) fails — already identical."""
         assert _goal_fails(DoesNotUnify(left="a", right="a"))
 
-    def test_var_and_atom_fails(self):
-        """ISO: X \\= a fails (they CAN unify)."""
-        assert _goal_fails(DoesNotUnify(left=Var(), right="a"))
+    def test_var_and_atom_succeeds_with_constraint(self):
+        """dif(X, a) succeeds — posts constraint (X is not yet 'a')."""
+        assert _goal_succeeds(DoesNotUnify(left=Var(), right="a"))
 
     def test_different_numbers(self):
         assert _goal_succeeds(DoesNotUnify(left=1, right=2))

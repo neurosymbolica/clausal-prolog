@@ -100,16 +100,18 @@ Unification is written with `is`:
 ```python
 X is 42,
 X is Y,
-X is not Y,   # disunification (dif)
+X is not Y,   # disequality constraint (dif/2)
 ```
 
 Why `is` rather than `=`?
 - `=` is Python's assignment operator and cannot appear in expressions
 - `is` expresses the same concept in English — two things being the same — and Python programmers understand it
 
-Note: `not X is Y` means "unification fails" with bindings discarded; `X is not Y` means disunification (a constraint that the two must never unify).
+`X is not Y` posts a disequality constraint (`dif/2`): X and Y must end up with different values. This is lazily checked — the constraint is re-evaluated each time either variable gets bound. If they become equal, the constraint fails and the search backtracks. If they remain different, the constraint is satisfied and dropped. See [constraints.md](constraints.md) for details.
 
-The corresponding AST node is `Unify(left, right)`. Disunification is `NotUnify(left, right)`.
+`not (X is Y)` is the immediate check (Prolog `\=/2`): it fails if X and Y *can* unify right now, regardless of future bindings. Use this when you want point-in-time semantics.
+
+The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify(left, right)`.
 
 ---
 
@@ -364,7 +366,8 @@ u"hello"               # list of character atoms
 
 # Unification
 X is Y,                # unify
-X is not Y,            # disunify
+X is not Y,            # dif constraint (must stay different)
+not (X is Y),          # immediate check (don't unify right now)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
