@@ -16,7 +16,7 @@ import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.constraints import reify_eq, dif
-from clausal.logic.clpfd import reify_fd, fd_eq, in_domain
+from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain
 from clausal.terms import Compound
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause, Database
@@ -196,6 +196,65 @@ class TestReifyFd:
     def test_ground_ne_false(self):
         trail = Trail()
         assert reify_fd("ne", 3, 3, trail) is False
+
+    def test_ground_le_true(self):
+        trail = Trail()
+        assert reify_fd("le", 3, 3, trail) is True
+
+    def test_ground_le_false(self):
+        trail = Trail()
+        assert reify_fd("le", 4, 3, trail) is False
+
+    def test_ground_gt_true(self):
+        trail = Trail()
+        assert reify_fd("gt", 5, 3, trail) is True
+
+    def test_ground_gt_false(self):
+        trail = Trail()
+        assert reify_fd("gt", 3, 5, trail) is False
+
+    def test_ground_ge_true(self):
+        trail = Trail()
+        assert reify_fd("ge", 5, 5, trail) is True
+
+    def test_ground_ge_false(self):
+        trail = Trail()
+        assert reify_fd("ge", 4, 5, trail) is False
+
+    def test_undetermined_fd_var_with_domain(self):
+        """FD var with domain is still undetermined (not ground)."""
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 10, trail)
+        assert reify_fd("lt", x, 5, trail) is None
+
+    def test_undetermined_both_fd_vars(self):
+        """Both sides are FD vars → undetermined."""
+        trail = Trail()
+        x = Var()
+        y = Var()
+        in_domain(x, 1, 10, trail)
+        in_domain(y, 1, 10, trail)
+        assert reify_fd("eq", x, y, trail) is None
+
+    def test_bound_fd_var_becomes_ground(self):
+        """FD var bound to integer → ground, deterministic result."""
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 10, trail)
+        unify(x, 3, trail)
+        assert reify_fd("lt", x, 5, trail) is True
+        assert reify_fd("gt", x, 5, trail) is False
+
+    def test_no_side_effects(self):
+        """reify_fd must not leave bindings or domain changes on the trail."""
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 10, trail)
+        mark = trail.mark()
+        reify_fd("lt", x, 5, trail)
+        assert trail.mark() == mark, "trail should not have grown"
+        assert is_var(deref(x)), "x should still be unbound"
 
 
 # ── Compiled reified ITE tests ───────────────────────────────────────────────
@@ -417,6 +476,28 @@ class TestReifiedIteFd:
             results.append(tuple(deref(a) for a in args))
         return results
 
+    def _run_trampoline(self, clause, arity=1):
+        from clausal.logic.trampoline import StepGenerator, DONE
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate_trampoline("ite_test", arity, [clause], db)
+        trail = Trail()
+        results = []
+        args = [Var() for _ in range(arity)]
+        root = StepGenerator(fn, None, *args, trail)
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    break
+                results.append(tuple(deref(a) for a in args))
+                gen, value = root.send(None)
+            else:
+                gen, value = gen.send(value)
+        return results
+
+    # ── Ground tests: all operators ──
+
     def test_ground_lt_true(self):
         """If(2 < 5, 'yes', 'no') → 'yes'."""
         r = Var()
@@ -472,6 +553,324 @@ class TestReifiedIteFd:
         )
         results = self._run_simple(clause)
         assert results == [("no",)]
+
+    def test_ground_ne_true(self):
+        """If(3 != 4, 'yes', 'no') → 'yes'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=StructuralNeq(left=3, right=4),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("yes",)]
+
+    def test_ground_ne_false(self):
+        """If(3 != 3, 'yes', 'no') → 'no'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=StructuralNeq(left=3, right=3),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("no",)]
+
+    def test_ground_le_true(self):
+        """If(3 <= 3, 'yes', 'no') → 'yes'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=LtE(left=3, right=3),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("yes",)]
+
+    def test_ground_le_false(self):
+        """If(4 <= 3, 'yes', 'no') → 'no'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=LtE(left=4, right=3),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("no",)]
+
+    def test_ground_gt_true(self):
+        """If(5 > 3, 'yes', 'no') → 'yes'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=Gt(left=5, right=3),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("yes",)]
+
+    def test_ground_gt_false(self):
+        """If(3 > 5, 'yes', 'no') → 'no'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=Gt(left=3, right=5),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("no",)]
+
+    def test_ground_ge_true(self):
+        """If(5 >= 5, 'yes', 'no') → 'yes'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=GtE(left=5, right=5),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("yes",)]
+
+    def test_ground_ge_false(self):
+        """If(4 >= 5, 'yes', 'no') → 'no'."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=GtE(left=4, right=5),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_simple(clause)
+        assert results == [("no",)]
+
+    # ── Trampoline mode: ground FD tests ──
+
+    def test_ground_lt_true_trampoline(self):
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=Lt(left=2, right=5),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_trampoline(clause)
+        assert results == [("yes",)]
+
+    def test_ground_lt_false_trampoline(self):
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=Lt(left=5, right=2),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_trampoline(clause)
+        assert results == [("no",)]
+
+    def test_ground_ge_true_trampoline(self):
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=GtE(left=5, right=5),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_trampoline(clause)
+        assert results == [("yes",)]
+
+    def test_ground_ne_true_trampoline(self):
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=StructuralNeq(left=1, right=2),
+                body=Unify(left=r, right="yes"),
+                orelse=Unify(left=r, right="no"),
+            )],
+        )
+        results = self._run_trampoline(clause)
+        assert results == [("yes",)]
+
+    # ── Undetermined: FD var tests (both branches explored) ──
+
+    def test_undetermined_lt_explores_both(self):
+        """If(X < 5, 'lo', 'hi') with X as FD var [1..10] → both branches."""
+        x = Var()
+        r = Var()
+        trail = Trail()
+        in_domain(x, 1, 10, trail)
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=Lt(left=x, right=5),
+                body=Unify(left=r, right="lo"),
+                orelse=Unify(left=r, right="hi"),
+            )],
+        )
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate("ite_test", 2, [clause], db)
+        results = []
+        for _ in fn(x, r, trail, None):
+            results.append((deref(x), deref(r)))
+        # Undetermined: reify_fd returns None, both branches should be explored
+        # fd_lt path: X < 5 constrained → 'lo'
+        # fd_ge path: X >= 5 constrained → 'hi'
+        labels = [r for _, r in results]
+        assert "lo" in labels
+        assert "hi" in labels
+
+    def test_undetermined_eq_explores_both(self):
+        """If(X == 3, 'hit', 'miss') with FD var X [1..5] → both branches."""
+        x = Var()
+        r = Var()
+        trail = Trail()
+        in_domain(x, 1, 5, trail)
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=StructuralEq(left=x, right=3),
+                body=Unify(left=r, right="hit"),
+                orelse=Unify(left=r, right="miss"),
+            )],
+        )
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate("ite_test", 2, [clause], db)
+        results = []
+        for _ in fn(x, r, trail, None):
+            results.append((deref(x), deref(r)))
+        labels = [r for _, r in results]
+        assert "hit" in labels
+        assert "miss" in labels
+
+    def test_undetermined_ge_explores_both_trampoline(self):
+        """If(X >= 5, 'hi', 'lo') with FD var X [1..10] in trampoline mode."""
+        from clausal.logic.trampoline import StepGenerator, DONE
+        x = Var()
+        r = Var()
+        trail = Trail()
+        in_domain(x, 1, 10, trail)
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=GtE(left=x, right=5),
+                body=Unify(left=r, right="hi"),
+                orelse=Unify(left=r, right="lo"),
+            )],
+        )
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate_trampoline("ite_test", 2, [clause], db)
+        results = []
+        root = StepGenerator(fn, None, x, r, trail)
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    break
+                results.append((deref(x), deref(r)))
+                gen, value = root.send(None)
+            else:
+                gen, value = gen.send(value)
+        labels = [r for _, r in results]
+        assert "hi" in labels
+        assert "lo" in labels
+
+    # ── FD reification + labeling integration ──
+
+    def test_fd_ite_then_label(self):
+        """If(X < 5, R is 'lo', R is 'hi') then label X — correct domain restriction."""
+        from clausal.logic.clpfd import label as fd_label
+        x = Var()
+        r = Var()
+        trail = Trail()
+        in_domain(x, 1, 8, trail)
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=Lt(left=x, right=5),
+                body=Unify(left=r, right="lo"),
+                orelse=Unify(left=r, right="hi"),
+            )],
+        )
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate("ite_test", 2, [clause], db)
+        lo_vals = []
+        hi_vals = []
+        for _ in fn(x, r, trail, None):
+            dx, dr = deref(x), deref(r)
+            if dr == "lo":
+                # X should be constrained to < 5 (i.e., 1..4)
+                # Label to enumerate concrete values
+                m = trail.mark()
+                for _ in fd_label([x], trail):
+                    lo_vals.append(deref(x))
+                trail.undo(m)
+            elif dr == "hi":
+                m = trail.mark()
+                for _ in fd_label([x], trail):
+                    hi_vals.append(deref(x))
+                trail.undo(m)
+        # lo branch: X constrained < 5, domain [1..4]
+        if lo_vals:
+            assert all(v < 5 for v in lo_vals), f"lo branch values should be < 5: {lo_vals}"
+        # hi branch: X constrained >= 5, domain [5..8]
+        if hi_vals:
+            assert all(v >= 5 for v in hi_vals), f"hi branch values should be >= 5: {hi_vals}"
+        # At least one branch should have produced values
+        assert lo_vals or hi_vals
+
+    # ── Nested FD ITE ──
+
+    def test_nested_fd_ite(self):
+        """If(X < 10, If(X > 5, 'mid', 'lo'), 'hi') — nested FD conditions."""
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (r,)),
+            body=[IfExpr(
+                test=Lt(left=3, right=10),
+                body=IfExpr(
+                    test=Gt(left=3, right=5),
+                    body=Unify(left=r, right="mid"),
+                    orelse=Unify(left=r, right="lo"),
+                ),
+                orelse=Unify(left=r, right="hi"),
+            )],
+        )
+        results = self._run_simple(clause)
+        # 3 < 10 → true, 3 > 5 → false → "lo"
+        assert results == [("lo",)]
 
 
 class TestGeneralIte:
