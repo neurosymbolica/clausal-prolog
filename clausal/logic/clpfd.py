@@ -896,6 +896,33 @@ def all_different(vars_list, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
+import operator as _operator_module
+
+_REIFY_OPS = {
+    "eq": _operator_module.eq,
+    "ne": _operator_module.ne,
+    "lt": _operator_module.lt,
+    "le": _operator_module.le,
+    "gt": _operator_module.gt,
+    "ge": _operator_module.ge,
+}
+
+
+def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
+    """Reified FD comparison: three-valued decision.
+
+    op is one of "eq", "ne", "lt", "le", "gt", "ge".
+    Returns True (ground-satisfies), False (ground-violates), None (undetermined).
+    """
+    x = deref(x)
+    y = deref(y)
+    x = _resolve(x)
+    y = _resolve(y)
+    if _both_ground(x, y):
+        return _REIFY_OPS[op](x, y)
+    return None
+
+
 def equivalent(t1, t2, trail: Trail) -> bool:
     """Structural equality (old == behavior): succeed iff deref'd values are equal."""
     t1 = deref(t1)

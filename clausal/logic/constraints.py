@@ -212,3 +212,33 @@ def _dif_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
 
 
 register_attr_hook(DIF_KEY, _dif_hook)
+
+
+# ── Reified equality ────────────────────────────────────────────────────────
+
+
+def reify_eq(x: Any, y: Any, trail: Trail) -> bool | None:
+    """Reified equality: three-valued decision procedure.
+
+    Returns:
+        True  — x and y are already identical (no bindings needed)
+        False — x and y are structurally incompatible (cannot unify)
+        None  — undetermined (unification possible but requires bindings)
+    """
+    x = deref(x)
+    y = deref(y)
+
+    # Fast path: identical objects (includes same Var)
+    if x is y:
+        return True
+
+    mark = trail.mark()
+    unified = _structural_unify_oc(x, y, trail)
+    grew = (len(trail) != mark) if unified else False
+    trail.undo(mark)
+
+    if not unified:
+        return False    # structurally incompatible
+    if not grew:
+        return True     # ground-equal, no bindings needed
+    return None         # undetermined — needs exploration

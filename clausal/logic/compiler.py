@@ -56,6 +56,7 @@ from clausal.terms import (
     In, NotIn,
     Call, LoadName,
 )
+from clausal.pythonic_ast.nodes import IfExpr
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
@@ -1085,6 +1086,232 @@ def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts)
     ]
 
 
+# ── Reified if-then-else helpers ───────────────────────────────────────────────
+
+_REIFIABLE_TYPES = (Unify, DoesNotUnify, StructuralEq, StructuralNeq, Lt, LtE, Gt, GtE)
+
+
+def _is_reifiable(test) -> bool:
+    """Return True if *test* can be compiled as a reified three-way branch."""
+    return isinstance(test, _REIFIABLE_TYPES)
+
+
+# ── Mapping from CmpOp node types to their FD reify ops and negated fd_ names ──
+
+_FD_REIFY_INFO: dict[type, tuple[str, str, str]] = {
+    StructuralEq:  ("eq", "_fd_eq", "_fd_ne"),
+    StructuralNeq: ("ne", "_fd_ne", "_fd_eq"),
+    Lt:            ("lt", "_fd_lt", "_fd_ge"),
+    LtE:           ("le", "_fd_le", "_fd_gt"),
+    Gt:            ("gt", "_fd_gt", "_fd_le"),
+    GtE:           ("ge", "_fd_ge", "_fd_lt"),
+}
+
+
+def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts):
+    """Compile a reified if-then-else for a reifiable condition.
+
+    Generates a three-way branch:
+    - True (ground-satisfied): run then
+    - False (ground-violated): run else
+    - None (undetermined): explore both with appropriate constraints
+    """
+    match test:
+        case Unify(left=l, right=r):
+            return _compile_reified_ite_eq(
+                l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False
+            )
+        case DoesNotUnify(left=l, right=r):
+            return _compile_reified_ite_eq(
+                l, r, then, else_, db, var_context, trail_name, k_stmts, swap=True
+            )
+        case _:
+            # CLP(FD) comparison
+            return _compile_reified_ite_fd(
+                test, then, else_, db, var_context, trail_name, k_stmts
+            )
+
+
+def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
+    """Compile reified ITE for equality/disequality conditions.
+
+    When swap=False (Unify):   True→then, False→else
+    When swap=True  (DoesNot): True→else, False→then  (inverted reify_eq)
+    """
+    reif_var = _fresh("_reif")
+    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+
+    then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
+    else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
+
+    if swap:
+        true_stmts, false_stmts = else_stmts, then_stmts
+    else:
+        true_stmts, false_stmts = then_stmts, else_stmts
+
+    # Undetermined branch: explore both (unify for "true", dif for "false")
+    mark = _fresh("_m")
+    # "unify" path → then (or else if swapped)
+    unify_branch_stmts = compile_goal(then, db, var_context, trail_name, k_stmts) if not swap else compile_goal(else_, db, var_context, trail_name, k_stmts)
+    # "dif" path → else (or then if swapped)
+    dif_branch_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts) if not swap else compile_goal(then, db, var_context, trail_name, k_stmts)
+
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), unify_branch_stmts),
+        _undo_stmt(mark, trail_name),
+        _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), dif_branch_stmts),
+    ]
+
+    # _reif_N = _reify_eq(l, r, trail)
+    reif_assign = _assign(reif_var,
+        _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name)))
+
+    # if _reif_N is True: <true_stmts>
+    # elif _reif_N is False: <false_stmts>
+    # else: <undetermined>
+    branch = ast.If(
+        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
+        body=true_stmts or [ast.Pass()],
+        orelse=[
+            ast.If(
+                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
+                body=false_stmts or [ast.Pass()],
+                orelse=undetermined,
+            ),
+        ],
+    )
+
+    return [reif_assign, branch]
+
+
+def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_stmts):
+    """Compile reified ITE for CLP(FD) comparison conditions."""
+    test_type = type(test)
+    op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
+
+    reif_var = _fresh("_reif")
+    l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
+
+    then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
+    else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
+
+    # Undetermined: post FD constraint for then path, negated for else path
+    mark = _fresh("_m")
+    fd_then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
+    fd_else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
+
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), fd_then_stmts),
+        _undo_stmt(mark, trail_name),
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), fd_else_stmts),
+        _undo_stmt(mark, trail_name),
+    ]
+
+    # _reif_N = _reify_fd("op", l, r, trail)
+    reif_assign = _assign(reif_var,
+        _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name)))
+
+    branch = ast.If(
+        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
+        body=then_stmts or [ast.Pass()],
+        orelse=[
+            ast.If(
+                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
+                body=else_stmts or [ast.Pass()],
+                orelse=undetermined,
+            ),
+        ],
+    )
+
+    return [reif_assign, branch]
+
+
+def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts):
+    """Compile ITE for non-reifiable conditions using double-evaluation NAF pattern."""
+    # Check if the condition is a tabled NAF case
+    use_tabled_naf = _is_tabled_naf(test, db)
+
+    # Build the condition sub-generator
+    cond_gen = _fresh("_ite_cond")
+    cond_stmts = compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()])
+    cond_body = cond_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    cond_fn = ast.FunctionDef(
+        name=cond_gen,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=cond_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
+    else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
+
+    # "True" path: for each solution of condition, run then with k_stmts
+    true_mark = _fresh("_m")
+    true_block = [
+        _assign_mark(true_mark, trail_name),
+        ast.For(
+            target=_name("_", ast.Store()),
+            iter=_call(_name(cond_gen)),
+            body=then_stmts,
+            orelse=[],
+        ),
+        _undo_stmt(true_mark, trail_name),
+    ]
+
+    # "False" path: NAF of condition → run else with k_stmts
+    naf_flag = _fresh("_naf")
+    naf_mark = _fresh("_m")
+
+    if use_tabled_naf:
+        # Use _naf_tabled for tabled predicates
+        fname = test.func.name
+        call_arity = len(test.args) + len(test.kwargs)
+        arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in test.args]
+        naf_call = _call(
+            _name("_naf_tabled"),
+            ast.Constant(fname),
+            ast.Constant(call_arity),
+            ast.List(elts=arg_exprs, ctx=ast.Load()),
+            _name(trail_name),
+            _name("_table_store"),
+        )
+        false_block = [
+            _assign_mark(naf_mark, trail_name),
+            _if(naf_call, else_stmts),
+            _undo_stmt(naf_mark, trail_name),
+        ]
+    else:
+        false_block = [
+            _assign(naf_flag, ast.Constant(value=True)),
+            _assign_mark(naf_mark, trail_name),
+            ast.For(
+                target=_name("_", ast.Store()),
+                iter=_call(_name(cond_gen)),
+                body=[
+                    _assign(naf_flag, ast.Constant(value=False)),
+                    ast.Break(),
+                ],
+                orelse=[],
+            ),
+            _undo_stmt(naf_mark, trail_name),
+            _if(_name(naf_flag), else_stmts),
+        ]
+
+    return [cond_fn] + true_block + false_block
+
+
 # ── compile_goal ───────────────────────────────────────────────────────────────
 
 
@@ -1268,6 +1495,16 @@ def compile_goal(
                 _undo_stmt(naf_mark, trail_name),
                 _if(_name(naf_flag), k_stmts),
             ]
+
+        # ── Reified if-then-else ───────────────────────────────────────────
+        case IfExpr(test=test, body=then, orelse=else_):
+            if else_ is None:
+                # If without else → conjunction
+                return compile_goal(And(left=test, right=then), db, var_context, trail_name, k_stmts)
+            if _is_reifiable(test):
+                return _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts)
+            else:
+                return _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts)
 
         # ── Membership / enumeration ─────────────────────────────────────────
         case In(left=elem, right=collection):
@@ -1739,6 +1976,24 @@ def compile_goal_trampoline(
                 _if(_name(naf_flag), k_stmts),
             ]
 
+        # ── Reified if-then-else ───────────────────────────────────────────
+        case IfExpr(test=test, body=then, orelse=else_):
+            if else_ is None:
+                return compile_goal_trampoline(
+                    And(left=test, right=then), db, var_context, trail_name,
+                    k_stmts, self_name, parent_name,
+                )
+            if _is_reifiable(test):
+                return _compile_reified_ite_trampoline(
+                    test, then, else_, db, var_context, trail_name,
+                    k_stmts, self_name, parent_name,
+                )
+            else:
+                return _compile_general_ite_trampoline(
+                    test, then, else_, db, var_context, trail_name,
+                    k_stmts, self_name, parent_name,
+                )
+
         # ── Membership / enumeration (Python for-loop, safe) ─────────────────
         case In(left=elem, right=collection):
             loop_var = _fresh("_el")
@@ -1888,6 +2143,202 @@ def _compile_predicate_call_trampoline(
         orelse=[],
     )
     return [gen_assign, first_step, loop]
+
+
+# ── Trampoline-mode reified ITE helpers ────────────────────────────────────────
+
+
+def _compile_reified_ite_trampoline(test, then, else_, db, var_context, trail_name,
+                                     k_stmts, self_name, parent_name):
+    """Trampoline variant of _compile_reified_ite."""
+    match test:
+        case Unify(left=l, right=r):
+            return _compile_reified_ite_eq_trampoline(
+                l, r, then, else_, db, var_context, trail_name,
+                k_stmts, self_name, parent_name, swap=False,
+            )
+        case DoesNotUnify(left=l, right=r):
+            return _compile_reified_ite_eq_trampoline(
+                l, r, then, else_, db, var_context, trail_name,
+                k_stmts, self_name, parent_name, swap=True,
+            )
+        case _:
+            return _compile_reified_ite_fd_trampoline(
+                test, then, else_, db, var_context, trail_name,
+                k_stmts, self_name, parent_name,
+            )
+
+
+def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail_name,
+                                        k_stmts, self_name, parent_name, swap=False):
+    """Trampoline variant of _compile_reified_ite_eq."""
+    reif_var = _fresh("_reif")
+    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+
+    _cgt = compile_goal_trampoline  # shorthand
+    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+
+    if swap:
+        true_stmts, false_stmts = else_stmts, then_stmts
+    else:
+        true_stmts, false_stmts = then_stmts, else_stmts
+
+    mark = _fresh("_m")
+    unify_branch = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    dif_branch = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
+
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), unify_branch),
+        _undo_stmt(mark, trail_name),
+        _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), dif_branch),
+    ]
+
+    reif_assign = _assign(reif_var,
+        _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name)))
+
+    branch = ast.If(
+        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
+        body=true_stmts or [ast.Pass()],
+        orelse=[
+            ast.If(
+                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
+                body=false_stmts or [ast.Pass()],
+                orelse=undetermined,
+            ),
+        ],
+    )
+
+    return [reif_assign, branch]
+
+
+def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail_name,
+                                        k_stmts, self_name, parent_name):
+    """Trampoline variant of _compile_reified_ite_fd."""
+    test_type = type(test)
+    op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
+
+    reif_var = _fresh("_reif")
+    l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
+
+    _cgt = compile_goal_trampoline
+    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+
+    mark = _fresh("_m")
+    fd_then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    fd_else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), fd_then_stmts),
+        _undo_stmt(mark, trail_name),
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), fd_else_stmts),
+        _undo_stmt(mark, trail_name),
+    ]
+
+    reif_assign = _assign(reif_var,
+        _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name)))
+
+    branch = ast.If(
+        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
+        body=then_stmts or [ast.Pass()],
+        orelse=[
+            ast.If(
+                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
+                body=else_stmts or [ast.Pass()],
+                orelse=undetermined,
+            ),
+        ],
+    )
+
+    return [reif_assign, branch]
+
+
+def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_name,
+                                     k_stmts, self_name, parent_name):
+    """Trampoline variant of _compile_general_ite.
+
+    Condition compiles in simple mode (sub-generator for-loop).
+    Then/else branches compile in trampoline mode.
+    """
+    use_tabled_naf = _is_tabled_naf(test, db)
+
+    cond_gen = _fresh("_ite_cond")
+    cond_stmts = compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()])
+    cond_body = cond_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    cond_fn = ast.FunctionDef(
+        name=cond_gen,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=cond_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    _cgt = compile_goal_trampoline
+    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+
+    true_mark = _fresh("_m")
+    true_block = [
+        _assign_mark(true_mark, trail_name),
+        ast.For(
+            target=_name("_", ast.Store()),
+            iter=_call(_name(cond_gen)),
+            body=then_stmts,
+            orelse=[],
+        ),
+        _undo_stmt(true_mark, trail_name),
+    ]
+
+    naf_flag = _fresh("_naf")
+    naf_mark = _fresh("_m")
+
+    if use_tabled_naf:
+        fname = test.func.name
+        call_arity = len(test.args) + len(test.kwargs)
+        arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in test.args]
+        naf_call = _call(
+            _name("_naf_tabled"),
+            ast.Constant(fname),
+            ast.Constant(call_arity),
+            ast.List(elts=arg_exprs, ctx=ast.Load()),
+            _name(trail_name),
+            _name("_table_store"),
+        )
+        false_block = [
+            _assign_mark(naf_mark, trail_name),
+            _if(naf_call, else_stmts),
+            _undo_stmt(naf_mark, trail_name),
+        ]
+    else:
+        false_block = [
+            _assign(naf_flag, ast.Constant(value=True)),
+            _assign_mark(naf_mark, trail_name),
+            ast.For(
+                target=_name("_", ast.Store()),
+                iter=_call(_name(cond_gen)),
+                body=[
+                    _assign(naf_flag, ast.Constant(value=False)),
+                    ast.Break(),
+                ],
+                orelse=[],
+            ),
+            _undo_stmt(naf_mark, trail_name),
+            _if(_name(naf_flag), else_stmts),
+        ]
+
+    return [cond_fn] + true_block + false_block
 
 
 # ── compile_body_trampoline ────────────────────────────────────────────────────
@@ -2058,11 +2509,12 @@ def compile_predicate_trampoline(
         return fn
 
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
-    from clausal.logic.constraints import dif as _dif_fn  # noqa: PLC0415
+    from clausal.logic.constraints import dif as _dif_fn, reify_eq as _reify_eq_fn  # noqa: PLC0415
     from clausal.logic.clpfd import (  # noqa: PLC0415
         fd_eq as _fd_eq_fn, fd_ne as _fd_ne_fn,
         fd_lt as _fd_lt_fn, fd_le as _fd_le_fn,
         fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
+        reify_fd as _reify_fd_fn,
     )
     base_globals: dict = {
         "Compound": Compound,
@@ -2074,6 +2526,8 @@ def compile_predicate_trampoline(
         "StepGenerator": StepGenerator,
         "_DONE": DONE,
         "_dif": _dif_fn,
+        "_reify_eq": _reify_eq_fn,
+        "_reify_fd": _reify_fd_fn,
         "_fd_eq": _fd_eq_fn,
         "_fd_ne": _fd_ne_fn,
         "_fd_lt": _fd_lt_fn,
@@ -3412,11 +3866,12 @@ def compile_predicate(
         return fn
 
     from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
-    from clausal.logic.constraints import dif as _dif_fn_s  # noqa: PLC0415
+    from clausal.logic.constraints import dif as _dif_fn_s, reify_eq as _reify_eq_fn_s  # noqa: PLC0415
     from clausal.logic.clpfd import (  # noqa: PLC0415
         fd_eq as _fd_eq_fn_s, fd_ne as _fd_ne_fn_s,
         fd_lt as _fd_lt_fn_s, fd_le as _fd_le_fn_s,
         fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
+        reify_fd as _reify_fd_fn_s,
     )
     base_globals: dict = {
         "Compound": Compound,
@@ -3426,6 +3881,8 @@ def compile_predicate(
         "deref": deref,
         "is_var": is_var,
         "_dif": _dif_fn_s,
+        "_reify_eq": _reify_eq_fn_s,
+        "_reify_fd": _reify_fd_fn_s,
         "_fd_eq": _fd_eq_fn_s,
         "_fd_ne": _fd_ne_fn_s,
         "_fd_lt": _fd_lt_fn_s,
