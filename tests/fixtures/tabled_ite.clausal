@@ -1,0 +1,14 @@
+-table(path/2)
+
+edge(1, 2),
+edge(2, 3),
+edge(3, 1),
+
+path(X_, Y_) <- edge(X_, Y_)
+path(X_, Y_) <- (
+    edge(X_, Z_),
+    path(Z_, Y_)
+)
+
+# check_path/2: uses ITE with a tabled predicate as condition
+check_path(X_, R_) <- (R_ is "reachable" if path(1, X_) else R_ is "unreachable")

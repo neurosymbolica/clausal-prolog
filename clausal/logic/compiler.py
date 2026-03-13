@@ -2263,21 +2263,53 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
                                      k_stmts, self_name, parent_name):
     """Trampoline variant of _compile_general_ite.
 
-    Condition compiles in simple mode (sub-generator for-loop).
-    Then/else branches compile in trampoline mode.
+    Condition compiles in trampoline mode and is driven by a mini-trampoline.
+    Then/else branches compile in trampoline mode with normal k_stmts.
+
+    Generated code structure::
+
+        # Condition function (trampoline mode)
+        def _ite_cond_fn(_ite_self, _ite_parent, trail):
+            <compiled test with k_stmts=[yield (_ite_parent, None)]>
+            yield (_ite_parent, _DONE)
+
+        # "True" path: drive condition, run then for each solution
+        _m = trail.mark()
+        _ite_sg = StepGenerator(_ite_cond_fn, None, trail)
+        _ite_g, _ite_v = _ite_sg.send(None)
+        while True:
+            if _ite_g is None:
+                if _ite_v is _DONE: break
+                <then_stmts>
+                _ite_g, _ite_v = _ite_sg.send(None)
+            else:
+                _ite_g, _ite_v = _ite_g.send(_ite_v)
+        trail.undo(_m)
+
+        # "False" path: NAF of condition → run else
+        (tabled: _naf_tabled, non-tabled: mini-trampoline check)
     """
     use_tabled_naf = _is_tabled_naf(test, db)
 
-    cond_gen = _fresh("_ite_cond")
-    cond_stmts = compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()])
+    # ── Build the condition function in trampoline mode ──
+    cond_fn_name = _fresh("_ite_cond_fn")
+    cond_self = "_ite_self"
+    cond_parent = "_ite_parent"
+    cond_k = [_yield_step_stmt(_name(cond_parent), ast.Constant(None))]
+    cond_stmts = compile_goal_trampoline(
+        test, db, var_context, trail_name, cond_k,
+        self_name=cond_self, parent_name=cond_parent,
+    )
     cond_body = cond_stmts + [
-        ast.Return(value=ast.Constant(value=None)),
-        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        _yield_step_stmt(_name(cond_parent), _name("_DONE")),
     ]
-    cond_fn = ast.FunctionDef(
-        name=cond_gen,
+    cond_fn_def = ast.FunctionDef(
+        name=cond_fn_name,
         args=ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
+            posonlyargs=[],
+            args=[ast.arg(arg=cond_self), ast.arg(arg=cond_parent),
+                  ast.arg(arg=trail_name)],
+            vararg=None,
             kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
         ),
         body=cond_body,
@@ -2289,19 +2321,92 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
     then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
     else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
+    # ── "True" path: mini-trampoline that runs then for each solution ──
+    sg_name = _fresh("_ite_sg")
+    g_name = _fresh("_ite_g")
+    v_name = _fresh("_ite_v")
     true_mark = _fresh("_m")
+
+    sg_create = _assign(sg_name,
+        _call(_name("StepGenerator"), _name(cond_fn_name),
+              ast.Constant(None), _name(trail_name)))
+    first_send = ast.Assign(
+        targets=[ast.Tuple(
+            elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+            ctx=ast.Store(),
+        )],
+        value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
+                    ast.Constant(None)),
+    )
+    # Continue send after running then_stmts
+    continue_send = ast.Assign(
+        targets=[ast.Tuple(
+            elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+            ctx=ast.Store(),
+        )],
+        value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
+                    ast.Constant(None)),
+    )
+    # Step into child generator (with _TABLING_SUSPEND handling)
+    step_send_normal = ast.Assign(
+        targets=[ast.Tuple(
+            elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+            ctx=ast.Store(),
+        )],
+        value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
+                    _name(v_name)),
+    )
+    step_send_done = ast.Assign(
+        targets=[ast.Tuple(
+            elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+            ctx=ast.Store(),
+        )],
+        value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
+                    _name("_DONE")),
+    )
+    # if _ite_v is _TABLING_SUSPEND: send DONE; else: send value
+    step_send = ast.If(
+        test=ast.Compare(
+            left=_name(v_name),
+            ops=[ast.Is()],
+            comparators=[_name("_TABLING_SUSPEND")],
+        ),
+        body=[step_send_done],
+        orelse=[step_send_normal],
+    )
+    true_loop_body = ast.If(
+        test=ast.Compare(
+            left=_name(g_name),
+            ops=[ast.Is()],
+            comparators=[ast.Constant(None)],
+        ),
+        body=[
+            ast.If(
+                test=ast.Compare(
+                    left=_name(v_name),
+                    ops=[ast.Is()],
+                    comparators=[_name("_DONE")],
+                ),
+                body=[ast.Break()],
+                orelse=[],
+            ),
+            # Got a solution — run then branch
+        ] + then_stmts + [continue_send],
+        orelse=[step_send],
+    )
     true_block = [
         _assign_mark(true_mark, trail_name),
-        ast.For(
-            target=_name("_", ast.Store()),
-            iter=_call(_name(cond_gen)),
-            body=then_stmts,
+        sg_create,
+        first_send,
+        ast.While(
+            test=ast.Constant(value=True),
+            body=[true_loop_body],
             orelse=[],
         ),
         _undo_stmt(true_mark, trail_name),
     ]
 
-    naf_flag = _fresh("_naf")
+    # ── "False" path: NAF of condition → run else ──
     naf_mark = _fresh("_m")
 
     if use_tabled_naf:
@@ -2322,23 +2427,66 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
             _undo_stmt(naf_mark, trail_name),
         ]
     else:
+        # Mini-trampoline NAF: check if condition has any solution
+        naf_flag = _fresh("_naf")
+        naf_sg = _fresh("_naf_sg")
+        naf_g = _fresh("_naf_g")
+        naf_v = _fresh("_naf_v")
+        naf_sg_create = _assign(naf_sg,
+            _call(_name("StepGenerator"), _name(cond_fn_name),
+                  ast.Constant(None), _name(trail_name)))
+        naf_first_send = ast.Assign(
+            targets=[ast.Tuple(
+                elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
+                ctx=ast.Store(),
+            )],
+            value=_call(ast.Attribute(value=_name(naf_sg), attr="send", ctx=ast.Load()),
+                        ast.Constant(None)),
+        )
+        naf_step_send = ast.Assign(
+            targets=[ast.Tuple(
+                elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
+                ctx=ast.Store(),
+            )],
+            value=_call(ast.Attribute(value=_name(naf_g), attr="send", ctx=ast.Load()),
+                        _name(naf_v)),
+        )
+        naf_loop_body = ast.If(
+            test=ast.Compare(
+                left=_name(naf_g),
+                ops=[ast.Is()],
+                comparators=[ast.Constant(None)],
+            ),
+            body=[
+                ast.If(
+                    test=ast.Compare(
+                        left=_name(naf_v),
+                        ops=[ast.Is()],
+                        comparators=[_name("_DONE")],
+                    ),
+                    body=[ast.Break()],
+                    orelse=[],
+                ),
+                _assign(naf_flag, ast.Constant(value=False)),
+                ast.Break(),
+            ],
+            orelse=[naf_step_send],
+        )
         false_block = [
             _assign(naf_flag, ast.Constant(value=True)),
             _assign_mark(naf_mark, trail_name),
-            ast.For(
-                target=_name("_", ast.Store()),
-                iter=_call(_name(cond_gen)),
-                body=[
-                    _assign(naf_flag, ast.Constant(value=False)),
-                    ast.Break(),
-                ],
+            naf_sg_create,
+            naf_first_send,
+            ast.While(
+                test=ast.Constant(value=True),
+                body=[naf_loop_body],
                 orelse=[],
             ),
             _undo_stmt(naf_mark, trail_name),
             _if(_name(naf_flag), else_stmts),
         ]
 
-    return [cond_fn] + true_block + false_block
+    return [cond_fn_def] + true_block + false_block
 
 
 # ── compile_body_trampoline ────────────────────────────────────────────────────
@@ -2541,11 +2689,13 @@ def compile_predicate_trampoline(
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
     }
-    # WFS: inject _naf_tabled and _table_store for tabled NAF
+    # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
         from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn  # noqa: PLC0415
+        from clausal.logic.tabling import _TABLING_SUSPEND  # noqa: PLC0415
         base_globals["_naf_tabled"] = _naf_tabled_fn
         base_globals["_table_store"] = db.table_store
+        base_globals["_TABLING_SUSPEND"] = _TABLING_SUSPEND
     base_globals.update(_collect_head_types(clauses))
     if globals_:
         base_globals.update(globals_)

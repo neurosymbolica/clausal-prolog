@@ -1089,7 +1089,199 @@ class TestIteControlFlow:
         assert results == [("a", "b")]
 
 
-# ── Import integration test ──────────────────────────────────────────────────
+# ── Multi-solution general ITE ────────────────────────────────────────────────
+
+
+class TestGeneralIteMultiSolution:
+    """Test general ITE with conditions that yield multiple solutions."""
+
+    def _run_simple(self, clause, arity=1):
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate("ite_test", arity, [clause], db)
+        trail = Trail()
+        results = []
+        args = [Var() for _ in range(arity)]
+        for _ in fn(*args, trail, None):
+            results.append(tuple(deref(a) for a in args))
+        return results
+
+    def _run_trampoline(self, clause, arity=1):
+        from clausal.logic.trampoline import StepGenerator, DONE
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate_trampoline("ite_test", arity, [clause], db)
+        trail = Trail()
+        results = []
+        args = [Var() for _ in range(arity)]
+        root = StepGenerator(fn, None, *args, trail)
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    break
+                results.append(tuple(deref(a) for a in args))
+                gen, value = root.send(None)
+            else:
+                gen, value = gen.send(value)
+        return results
+
+    def test_multi_solution_runs_then_for_each(self):
+        """If(X in [1,2,3], R is X, R is 'none') → then runs 3 times."""
+        x = Var()
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=In(left=x, right=[1, 2, 3]),
+                body=Unify(left=r, right=x),
+                orelse=Unify(left=r, right="none"),
+            )],
+        )
+        results = self._run_simple(clause, arity=2)
+        # Condition matches 3 times (X=1, X=2, X=3), then branch runs for each
+        then_results = [(a, b) for a, b in results if b != "none"]
+        assert len(then_results) == 3
+        vals = {a for a, _ in then_results}
+        assert vals == {1, 2, 3}
+
+    def test_multi_solution_then_for_each_trampoline(self):
+        """Same multi-solution test in trampoline mode."""
+        x = Var()
+        r = Var()
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=In(left=x, right=[1, 2, 3]),
+                body=Unify(left=r, right=x),
+                orelse=Unify(left=r, right="none"),
+            )],
+        )
+        results = self._run_trampoline(clause, arity=2)
+        then_results = [(a, b) for a, b in results if b != "none"]
+        assert len(then_results) == 3
+
+    def test_general_ite_preserves_condition_bindings(self):
+        """General ITE: bindings from condition survive into then branch."""
+        x = Var()
+        r = Var()
+        # If(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=In(left=x, right=[10, 20]),
+                body=Unify(left=r, right=x),
+                orelse=Unify(left=r, right=0),
+            )],
+        )
+        results = self._run_simple(clause, arity=2)
+        then_results = [(a, b) for a, b in results if b != 0]
+        # Each then result should have R == X (bound by condition)
+        for a, b in then_results:
+            assert a == b, f"then branch should see X={a} bound by condition, got R={b}"
+
+
+# ── ITE + dif/2 interaction ──────────────────────────────────────────────────
+
+
+class TestIteDifInteraction:
+    """Test ITE interacting with pre-existing dif constraints."""
+
+    def _run_simple(self, clause, arity, args, trail):
+        db = _make_db()
+        db.assertz(clause)
+        fn = compile_predicate("ite_test", arity, [clause], db)
+        results = []
+        for _ in fn(*args, trail, None):
+            results.append(tuple(deref(a) for a in args))
+        return results
+
+    def test_undetermined_ite_with_preexisting_dif(self):
+        """dif(X, 1) before If(X is 1, then, else) → only else branch."""
+        x = Var()
+        r = Var()
+        trail = Trail()
+        # Constrain X != 1 before the ITE
+        assert dif(x, 1, trail)
+
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=Unify(left=x, right=1),
+                body=Unify(left=r, right="eq"),
+                orelse=Unify(left=r, right="neq"),
+            )],
+        )
+        results = self._run_simple(clause, 2, [x, r], trail)
+        # X already has dif(X, 1), so reify_eq returns None (undetermined),
+        # but the unify(X, 1) path in the undetermined branch fails because
+        # dif constraint blocks it. Only else branch produces a result.
+        labels = [b for _, b in results]
+        assert "neq" in labels
+        assert "eq" not in labels
+
+    def test_undetermined_ite_with_dif_still_explores_both_when_compatible(self):
+        """dif(X, 2) before If(X is 1, then, else) → both branches (dif doesn't block)."""
+        x = Var()
+        r = Var()
+        trail = Trail()
+        assert dif(x, 2, trail)
+
+        clause = Clause(
+            head=Compound("ite_test", (x, r)),
+            body=[IfExpr(
+                test=Unify(left=x, right=1),
+                body=Unify(left=r, right="eq"),
+                orelse=Unify(left=r, right="neq"),
+            )],
+        )
+        results = self._run_simple(clause, 2, [x, r], trail)
+        # dif(X, 2) doesn't block X=1, so both branches explored
+        labels = [b for _, b in results]
+        assert "eq" in labels
+        assert "neq" in labels
+
+
+# ── Tabled predicate as ITE condition ────────────────────────────────────────
+
+
+class TestTabledIteCondition:
+    """Test ITE where the condition is a call to a tabled predicate."""
+
+    def _load_fixture(self, filename):
+        import os
+        from clausal.import_hook import _load_module
+        path = os.path.join(os.path.dirname(__file__), "fixtures", filename)
+        name = f"_test_fixture_{filename.replace('.', '_')}"
+        return _load_module(name, path)
+
+    def test_tabled_condition_succeeds(self):
+        """check_path(3, R) with tabled path(1,3) reachable → 'reachable'."""
+        mod = self._load_fixture("tabled_ite.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+        r = Var()
+        goal = Call(func=LoadName(name="check_path"), args=[3, r], kwargs=[])
+        results = list(query(goal, {"r": r}, logic_mod))
+        labels = [res["r"] for res in results]
+        assert "reachable" in labels
+
+    def test_tabled_condition_fails(self):
+        """check_path(99, R) with tabled path(1,99) unreachable → 'unreachable'."""
+        mod = self._load_fixture("tabled_ite.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+        r = Var()
+        goal = Call(func=LoadName(name="check_path"), args=[99, r], kwargs=[])
+        results = list(query(goal, {"r": r}, logic_mod))
+        labels = [res["r"] for res in results]
+        assert "unreachable" in labels
+        assert "reachable" not in labels
+
+
+# ── Import integration tests ─────────────────────────────────────────────────
 
 
 class TestIteImportIntegration:
@@ -1120,3 +1312,62 @@ class TestIteImportIntegration:
         results2 = list(query(goal2, {"l": l2}, logic_mod))
         labels2 = [r["l"] for r in results2]
         assert "negative" in labels2
+
+    def test_memberd_ground_deterministic(self):
+        """memberd(1, [1,2,3]) — ground query is deterministic (one solution, no duplicates).
+
+        This is the key example from Neumerkel & Kral §6: reified membership
+        eliminates leftover choicepoints for ground queries.
+        """
+        mod = self._load_fixture("reified_memberd.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+
+        goal = Call(func=LoadName(name="memberd"), args=[1, [1, 2, 3]], kwargs=[])
+        results = list(query(goal, {}, logic_mod))
+        # Ground element present → exactly one solution (deterministic)
+        assert len(results) == 1
+
+    def test_memberd_ground_absent(self):
+        """memberd(99, [1,2,3]) — ground element not in list → no solutions."""
+        mod = self._load_fixture("reified_memberd.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+
+        goal = Call(func=LoadName(name="memberd"), args=[99, [1, 2, 3]], kwargs=[])
+        results = list(query(goal, {}, logic_mod))
+        assert len(results) == 0
+
+    def test_memberd_unbound_enumerates(self):
+        """memberd(X, [a, b, c]) — unbound X enumerates all elements."""
+        mod = self._load_fixture("reified_memberd.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+
+        x = Var()
+        goal = Call(func=LoadName(name="memberd"), args=[x, ["a", "b", "c"]], kwargs=[])
+        results = list(query(goal, {"x": x}, logic_mod))
+        vals = {r["x"] for r in results}
+        assert vals == {"a", "b", "c"}
+
+    def test_memberd_no_duplicates(self):
+        """memberd(X, [1,1,2]) — repeated elements: each unique value once.
+
+        Unlike standard member/2 which yields 1 twice, memberd with dif
+        constraints should yield 1 once and 2 once.
+        """
+        mod = self._load_fixture("reified_memberd.clausal")
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+
+        x = Var()
+        goal = Call(func=LoadName(name="memberd"), args=[x, [1, 1, 2]], kwargs=[])
+        results = list(query(goal, {"x": x}, logic_mod))
+        vals = [r["x"] for r in results]
+        # Should not yield duplicate 1s
+        assert vals.count(1) == 1
+        assert 2 in vals
