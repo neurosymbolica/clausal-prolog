@@ -211,10 +211,11 @@ what I'm doing" escape hatch.
 The compiler could optimise specific patterns (e.g., ground conditions → no
 double-evaluation).
 
-#### A.5: `If` without else
+#### A.5: No 2-arg form
 
-`If(cond, then)` (no else branch) — if cond fails, the whole thing fails silently.
-This is just `cond and then` — conjunction. The compiler can desugar it.
+`If` always requires three arguments: `If(cond, then, else)`. There is no 2-arg
+`If(cond, then)` — that would just be conjunction (`cond and then`), which doesn't
+involve reification and can be written directly.
 
 #### A.6: `IfExpr` node reuse
 
@@ -495,8 +496,6 @@ Add `case IfExpr(...)` to `compile_goal` (simple mode) after the `Not` case:
 
 ```python
 case IfExpr(test=test, body=then, orelse=else_):
-    if else_ is None:
-        return compile_goal(And(left=test, right=then), ...)
     if _is_reifiable(test):
         return _compile_reified_ite(test, then, else_, ...)
     else:
@@ -619,8 +618,8 @@ rejected it:
 **Decision:** `If(cond, then, else)` as a callable goal constructor — Cond-Then-Else
 order, clean nesting, explicit.
 
-The `IfExpr` AST node is reused internally. The `TermTransformer` can still parse
-Python ternary if users write it, but it's not promoted.
+The `IfExpr` AST node is reused internally. The `TermTransformer` rejects Python
+ternary syntax with a `SyntaxError` directing users to `If(...)` instead.
 
 **Question for later**: Do we want `If` as a user-facing name imported from `clausal`,
 or do we keep it compiler-internal and only expose it through `.clausal` file syntax

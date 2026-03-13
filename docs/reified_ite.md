@@ -10,39 +10,34 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 ## Syntax
 
-In `.clausal` files, use Python's ternary expression:
+In `.clausal` files, use the `If` function call:
 
 ```
-then_goal if condition else else_goal
+If(condition, then_goal, else_goal)
 ```
 
 This compiles to a reified three-way branch when the condition is a built-in reifiable operation, or a sound double-evaluation fallback otherwise.
+
+All three arguments are required.
 
 ### Examples
 
 **Ground branching — deterministic:**
 ```
-classify(X_, L_) <- (L_ is "positive" if X_ >= 0 else L_ is "negative")
+classify(X_, L_) <- If(X_ >= 0, L_ is "positive", L_ is "negative")
 ```
 
 **Undetermined branching — explores both paths:**
 ```
-check(X_, R_) <- (R_ is "equal" if X_ is 1 else R_ is "different")
+check(X_, R_) <- If(X_ is 1, R_ is "equal", R_ is "different")
 ```
 
 When `X_` is unbound, this produces two solutions: `X_=1, R_="equal"` and `dif(X_,1), R_="different"`.
 
 **Nested ITE:**
 ```
-grade(S_, G_) <- (
-    G_ is "A" if S_ >= 90
-    else (G_ is "B" if S_ >= 80 else G_ is "C")
-)
+grade(S_, G_) <- If(S_ >= 90, G_ is "A", If(S_ >= 80, G_ is "B", G_ is "C"))
 ```
-
-**ITE without else — conjunction:**
-
-When the else branch is omitted (not possible in ternary syntax, but available via the compiler API), the ITE degenerates to conjunction: `If(cond, then, None)` is equivalent to `cond and then`.
 
 ---
 
@@ -120,11 +115,11 @@ Three-valued CLP(FD) comparison in `clausal.logic.clpfd`:
 
 ## Compiler Integration
 
-The `IfExpr` AST node (Python's ternary `body if test else orelse`) is handled in both `compile_goal` and `compile_goal_trampoline` in `clausal.logic.compiler`.
+The `If(condition, then, else)` call syntax is parsed into an `IfExpr` AST node, which is handled in both `compile_goal` and `compile_goal_trampoline` in `clausal.logic.compiler`.
 
 ### Generated code (reifiable equality condition)
 
-For `R_ is "yes" if X_ is 1 else R_ is "no"`:
+For `If(X_ is 1, R_ is "yes", R_ is "no")`:
 
 ```python
 _reif_0 = _reify_eq(X_, 1, trail)
@@ -158,7 +153,7 @@ else:
 
 ### Generated code (general non-reifiable condition)
 
-For `then_goal if member(X, Xs) else else_goal`:
+For `If(member(X, Xs), then_goal, else_goal)`:
 
 ```python
 def _ite_cond_0():

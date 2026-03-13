@@ -4,5 +4,5 @@
 # Partial queries explore both branches with correct constraints.
 
 memberd(X_, [E_, *Es_]) <- (
-    memberd(X_, Es_) if X_ is not E_ else True
+    If(X_ is not E_, memberd(X_, Es_), True)
 )

@@ -226,18 +226,14 @@ def _detect_arrow(left, operators, comparators):
 
 
 def _check_hidden_arrow(node):
-    """Raise if a top-level BoolOp or IfExp hides a ``<-`` clause arrow.
+    """Raise if a top-level BoolOp hides a ``<-`` clause arrow.
 
     When the user writes ``head <- a or b`` without parenthesizing the
     body, Python parses it as ``(head < -a) or b`` — a BoolOp whose first
-    value contains a Compare with an adjacent ``< -``.  Similarly,
-    ``head <- a if cond else b`` becomes ``(head < -a) if cond else b``.
-    These are detected and rejected with a clear error message.
+    value contains a Compare with an adjacent ``< -``.
     """
     if isinstance(node, BoolOp):
         inner = node.values[0]
-    elif isinstance(node, IfExp):
-        inner = node.body
     else:
         return
     if not isinstance(inner, Compare):
@@ -313,6 +309,21 @@ class TermTransformer(NodeTransformer):
 
     def visit_Call(transformer, call):
         visit = transformer.visit
+
+        # If(cond, then) or If(cond, then, else) → IfExpr node
+        if isinstance(call.func, Name) and call.func.id == "If":
+            if call.keywords or len(call.args) != 3:
+                raise SyntaxError(
+                    "If() takes exactly 3 positional arguments: "
+                    "If(condition, then, else)"
+                )
+            return node_ast(
+                "IfExpr", call,
+                test=visit(call.args[0]),
+                body=visit(call.args[1]),
+                orelse=visit(call.args[2]),
+            )
+
         # A string literal used as the callable, e.g. '+'(a, b), is sugar for a
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
@@ -450,13 +461,9 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_IfExp(transformer, if_expression):
-        _check_hidden_arrow(if_expression)
-        return node_ast(
-            "IfExpr",
-            if_expression,
-            test=transformer.visit(if_expression.test),
-            body=transformer.visit(if_expression.body),
-            orelse=transformer.visit(if_expression.orelse),
+        raise SyntaxError(
+            "Ternary 'THEN if COND else ELSE' is not supported; "
+            "use If(COND, THEN, ELSE) instead"
         )
 
     def visit_Lambda(transformer, lambda_expr):

@@ -285,8 +285,8 @@ def test_arrow_body_requires_parens():
     for expr in ["a <- b or c", "a <- b and c"]:
         with pytest.raises(SyntaxError, match="parenthesized"):
             term_eval(expr, sa.Predicate)
-    # IfExp body — <- hidden inside ternary
-    with pytest.raises(SyntaxError, match="parenthesized"):
+    # IfExp body — <- hidden inside ternary (now rejected as unsupported syntax)
+    with pytest.raises(SyntaxError, match="not supported"):
         term_eval("a <- b if c else d", sa.Predicate)
 
 
@@ -427,10 +427,20 @@ def test_call_string_callable_keyword():
 # ── TermTransformer: other expressions ────────────────────────────────────────
 
 def test_if_expr():
-    node = term_eval("a if c else b", sa.IfExpr)
+    node = term_eval("If(c, a, b)", sa.IfExpr)
     assert isinstance(node.test,   sa.LoadName)
     assert isinstance(node.body,   sa.LoadName)
     assert isinstance(node.orelse, sa.LoadName)
+
+
+def test_if_expr_rejects_two_args():
+    with pytest.raises(SyntaxError, match="exactly 3"):
+        term_eval("If(c, a)", sa.IfExpr)
+
+
+def test_if_expr_ternary_rejected():
+    with pytest.raises(SyntaxError, match="not supported"):
+        term_eval("a if c else b", sa.IfExpr)
 
 
 def test_subscript():

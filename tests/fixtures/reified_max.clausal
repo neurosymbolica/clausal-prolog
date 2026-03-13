@@ -1,3 +1,3 @@
 # classify/2: classify(X, Label)
 # Ground ITE: X >= 0 → 'positive', else 'negative'
-classify(X_, L_) <- (L_ is "positive" if X_ >= 0 else L_ is "negative")
+classify(X_, L_) <- If(X_ >= 0, L_ is "positive", L_ is "negative")

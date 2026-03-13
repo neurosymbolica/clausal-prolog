@@ -1498,9 +1498,6 @@ def compile_goal(
 
         # ── Reified if-then-else ───────────────────────────────────────────
         case IfExpr(test=test, body=then, orelse=else_):
-            if else_ is None:
-                # If without else → conjunction
-                return compile_goal(And(left=test, right=then), db, var_context, trail_name, k_stmts)
             if _is_reifiable(test):
                 return _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts)
             else:
@@ -1978,11 +1975,6 @@ def compile_goal_trampoline(
 
         # ── Reified if-then-else ───────────────────────────────────────────
         case IfExpr(test=test, body=then, orelse=else_):
-            if else_ is None:
-                return compile_goal_trampoline(
-                    And(left=test, right=then), db, var_context, trail_name,
-                    k_stmts, self_name, parent_name,
-                )
             if _is_reifiable(test):
                 return _compile_reified_ite_trampoline(
                     test, then, else_, db, var_context, trail_name,

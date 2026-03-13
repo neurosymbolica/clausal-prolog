@@ -974,7 +974,7 @@ class TestGeneralIte:
 
 
 class TestIteControlFlow:
-    """Test ITE control flow: no-else, nesting, binding preservation."""
+    """Test ITE control flow: nesting, binding preservation."""
 
     def _run_simple(self, clause, arity=1):
         db = _make_db()
@@ -986,35 +986,6 @@ class TestIteControlFlow:
         for _ in fn(*args, trail, None):
             results.append(tuple(deref(a) for a in args))
         return results
-
-    def test_ite_without_else(self):
-        """If without else → conjunction (if cond fails, whole goal fails)."""
-        r = Var()
-        # If(1 is 1, r is 'ok', None) → 'ok'
-        clause = Clause(
-            head=Compound("ite_test", (r,)),
-            body=[IfExpr(
-                test=Unify(left=1, right=1),
-                body=Unify(left=r, right="ok"),
-                orelse=None,
-            )],
-        )
-        results = self._run_simple(clause)
-        assert results == [("ok",)]
-
-    def test_ite_without_else_fails(self):
-        """If(failing_cond, then, None) → no solutions."""
-        r = Var()
-        clause = Clause(
-            head=Compound("ite_test", (r,)),
-            body=[IfExpr(
-                test=Unify(left=1, right=2),
-                body=Unify(left=r, right="ok"),
-                orelse=None,
-            )],
-        )
-        results = self._run_simple(clause)
-        assert results == []
 
     def test_nested_ite(self):
         """If(c1, If(c2, a, b), c) with ground conditions."""

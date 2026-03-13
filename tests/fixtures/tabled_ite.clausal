@@ -11,4 +11,4 @@ path(X_, Y_) <- (
 )
 
 # check_path/2: uses ITE with a tabled predicate as condition
-check_path(X_, R_) <- (R_ is "reachable" if path(1, X_) else R_ is "unreachable")
+check_path(X_, R_) <- If(path(1, X_), R_ is "reachable", R_ is "unreachable")
