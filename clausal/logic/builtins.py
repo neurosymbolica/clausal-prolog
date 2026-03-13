@@ -799,6 +799,23 @@ def _dif__2(x, y, trail, k):
         yield None
 
 
+# ── Reified builtins (V2-8 Phase B) ──────────────────────────────────────────
+
+
+@_builtin("eq", 3)
+def _eq__3(x, y, t, trail, k):
+    """eq(X, Y, T) — reified equality: T is True if X=Y, False if dif(X,Y)."""
+    from clausal.logic.reif import eq__3  # noqa: PLC0415
+    yield from eq__3(x, y, t, trail, k)
+
+
+@_builtin("dif_t", 3)
+def _dif_t__3(x, y, t, trail, k):
+    """dif_t(X, Y, T) — reified disequality: T is True if dif(X,Y), False if X=Y."""
+    from clausal.logic.reif import dif_t__3  # noqa: PLC0415
+    yield from dif_t__3(x, y, t, trail, k)
+
+
 # ── CLP(FD) builtins ─────────────────────────────────────────────────────────
 
 
