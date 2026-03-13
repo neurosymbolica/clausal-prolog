@@ -3,7 +3,7 @@
 ## Status
 
 V1 (Steps 1–9 + keyword work items WK-1 through WK-6) is complete.
-V2-D through V2-5 are complete. 1943 tests passing.
+V2-D through V2-7 are complete. 2060 tests passing.
 The system compiles `.clausal` files to Python generator functions via an import hook,
 with full backtracking search, unification, builtins, and a query API.
 
@@ -25,9 +25,17 @@ V2-2   Groundness-keyed dispatch (multi-plan compilation)               ✓
 V2-3   __pycache__ bytecode caching                                     ✓
 V2-4   Tabling (SLG resolution)                                         ✓
 V2-5   Full dif via attribute variables                                 ✓
-V2-6   CLP(FD) integration (using :=)
-V2-7   Well-founded semantics
-V2-8   Standard library expansion
+V2-6   CLP(FD) integration (using :=)                                 ✓
+V2-7   Well-founded semantics                                          ✓
+V2-8   If-then-else (reification of IfExpr)
+V2-9   Pythonic lambdas (goal closures)
+V2-10  Meta-predicates (call/N, find_all, bag_of, set_of, for_all)
+V2-11  List processing builtins
+V2-12  Arithmetic builtins
+V2-13  Term inspection builtins
+V2-14  Control / exception handling (catch/3, throw/1)
+V2-15  I/O builtins
+V2-16  Python interop
 ```
 
 Deferred beyond V2: type-directed dispatch (see note at end).
@@ -352,44 +360,406 @@ predicates. Prevents unsound answers from programs with recursion through negati
 
 ---
 
-## V2-8 — Standard library expansion
+## V2-8 — If-then-else (reification of IfExpr)
 
-**Depends on:** V2-1 through V2-6 as features become available
+**Depends on:** V2-7 (complete system)
 
-**Goal:** grow the standard library with predicates that exercise and depend on new V2
-capabilities.
+**Goal:** compile Python's ternary `if` expression as committed-choice control flow in goal
+position. This is a compiler feature, not a builtin — it extends `compile_goal` /
+`compile_goal_trampoline` to handle `IfExpr` nodes.
 
-**Predicates to add:**
+**Syntax:** Python's ternary if-expression in goal position:
 
-*List processing (pure, benefits from tabling):*
-- `msort/2`, `sort/2` — merge sort, sort with dedup
-- `flatten/2` — nested list flattening
-- `nth0/3`, `nth1/3` — zero/one-indexed element access
-- `select/3` — select element from list, return rest
-- `permutation/2` — (already exists, verify tabling interaction)
-- `maplist/2..5`, `foldl/4..6`, `include/3`, `exclude/3`
+```
+action1(X_) if condition(X_) else action2(X_)
+```
 
-*Arithmetic (benefits from CLP(FD)):*
-- `between/3` — (already exists, add CLP-aware version)
-- `succ/2`, `plus/3` — successor and addition, reversible with CLP
-- `sum_list/2`, `max_list/2`, `min_list/2`
-- `abs/1`, `sign/1`, `gcd/2`
+**Semantics** (Prolog's `->` / `;`): try `Cond` — if it succeeds (first solution only,
+committed choice), execute `Then`; if it fails, execute `Else`. No backtracking into `Cond`
+after committing.
 
-*Term inspection:*
-- `functor/3`, `arg/3`, `=../2` — (partially exist, complete)
-- `copy_term/2` — deep copy with fresh variables
-- `numbervars/3` — number unbound variables for readable output
-- `term_variables/2` — collect all variables in a term
+**Parsing:** Already handled — `TermTransformer.visit_IfExp` produces `IfExpr(test, body, orelse)`.
+Currently not compiled.
 
-*Control:*
-- `findall/3`, `bagof/3`, `setof/3` — all-solutions predicates
-- `aggregate_all/3` — aggregate with arbitrary collector
-- `forall/2` — universal quantification
-- `catch/3`, `throw/1` — exception handling
+**Compilation** (trampoline mode — the only production path):
 
-*I/O and interop:*
-- `print_term/1`, `format/2` — formatted output
-- `py_call/3` — call arbitrary Python from logic predicates
+Cond is compiled in simple mode as a sub-generator (same pattern as NAF). Then/Else are
+compiled in trampoline mode with normal `k_stmts`.
+
+```python
+# (Then if Cond else Else) compiles to:
+_if_m = trail.mark()
+_if_found = False
+def _if_cond():
+    k = None  # needed for simple-mode predicate calls in sub-generator
+    <compiled Cond with k_stmts = [yield None]>
+    return; yield
+for _ in _if_cond():
+    _if_found = True
+    break
+if _if_found:
+    <compiled Then with k_stmts>
+else:
+    trail.undo(_if_m)
+    <compiled Else with k_stmts>
+```
+
+**Key details:**
+
+- **`k = None` in sub-generators:** When `compile_goal` (simple mode) is used inside a nested
+  generator function (for NAF, find_all, if-then-else cond), any predicate call in the goal
+  generates `_tramp_call(fname._get_dispatch(), args, trail)`. Since `_get_dispatch()` returns
+  trampoline-mode functions, simple-mode sub-generators cannot call them directly — they need
+  the `_tramp_call` wrapper that drives the trampoline and yields None per solution. This
+  applies to ALL sub-generator patterns (NAF, find_all, if-then-else cond, bag_of, set_of).
+
+- **`_tramp_call` helper:** A runtime function injected into `base_globals` that takes a
+  trampoline dispatch fn + args and drives it with a temporary `StepGenerator`, yielding None
+  per solution. `_dispatch_call_iter` should generate `_tramp_call(dispatch, args, trail)`
+  instead of `dispatch(args, trail, k)`.
+
+- **`orelse=True` means "succeed":** When `else_` is `True` (no explicit else branch), the
+  else path should emit `k_stmts` directly (not be treated as a no-op). `True` = succeed =
+  pass through to continuation.
+
+- **Test pattern:** Bindings are undone after generator exhaustion. Tests must capture
+  `deref()` values DURING iteration, not after `list(fn(...))`.
+
+**Also support:** `Then if Cond` (no else) — equivalent to `IfExpr(test=Cond, body=Then, orelse=None)`.
+When `orelse is None`, if Cond fails the whole thing fails silently (no else branch at all).
+
+**Files:**
+- `clausal/logic/compiler.py` — `_compile_if_then_else` (simple), `_compile_if_then_else_trampoline`
+- `tests/test_if_then_else.py` (~15 tests): committed choice, binding preservation/undo,
+  nested if-then-else, if-without-else, trampoline mode
+
+---
+
+## V2-9 — Pythonic lambdas (goal closures)
+
+**Depends on:** V2-8 (if-then-else demonstrates sub-generator compilation)
+
+**Goal:** first-class goal closures using Python lambda syntax, enabling higher-order
+programming. Lambdas are the mechanism for adapting predicates in meta-predicates.
+Needed before call/N and higher-order predicates can be useful.
+
+**Syntax:** `Z_ >> lambda X_, Y_: Y_ := X_ + Z_`
+
+- `>>` (RShift) specifies closure variables on the left
+- `lambda X_, Y_: <goal_body>` specifies parameters and a goal body
+- Without closure vars: `lambda X_: X_ > 0` (bare lambda, no `>>`)
+
+**Canonical form:** New `GoalLambda` term node in `clausal/terms.py`:
+
+```python
+@dataclass
+class GoalLambda:
+    params: tuple          # ('x_', 'y_') — string parameter names
+    param_vars: tuple      # (Var, Var) — Var objects for each param
+    body: Any              # goal term tree
+    closure_vars: tuple = ()  # Var references from enclosing scope
+```
+
+**`_make_goal_lambda` runtime helper:** Since TermTransformer generates AST code but Var
+objects only exist at runtime, use a Python lambda as a body builder:
+
+```python
+def _make_goal_lambda(param_names, closure_vars, body_builder):
+    param_vars = tuple(Var() for _ in param_names)
+    body = body_builder(*param_vars)
+    return GoalLambda(params=param_names, param_vars=param_vars, body=body, closure_vars=closure_vars)
+```
+
+**Parsing:** `TermTransformer._visit_goal_lambda` handles both `RShift(vars, Lambda(...))` and
+bare `Lambda(...)`. Key: use `name_remap` dict to map original param names to unique internal
+names (`_lp{counter}_{i}`) to avoid scope contamination between nested lambdas and enclosing
+scope variables.
+
+**Compilation:** When `GoalLambda` appears in a goal argument position (inside a Call to
+map_list, find_all, etc.), `_compile_goal_lambda` compiles it to a local `FunctionDef`
+following the trampoline dispatch protocol:
+
+```python
+# Z_ >> lambda X_, Y_: Y_ := X_ + Z_
+# compiles to:
+def _lambda_N(this_generator, parent, _arg_x, _arg_y, trail):
+    # Z_ captured from enclosing scope (same var_context name)
+    <compiled goal body>
+    yield (parent, DONE)
+_lambda_N  # expression value = reference to this function
+```
+
+**Files:**
+- `clausal/terms.py` — `GoalLambda`, `_make_goal_lambda`
+- `clausal/templating/term_rewriting.py` — `_visit_goal_lambda`, `name_remap`
+- `clausal/logic/compiler.py` — `_compile_goal_lambda` in `term_to_ast_expr`
+- `clausal/import_hook.py` — add `GoalLambda`, `_make_goal_lambda` to predicate builtins
+- `tests/test_lambdas.py` (~20 tests): construction, parsing, closure capture, compilation
+
+---
+
+## V2-10 — Meta-predicates (call/N, find_all, bag_of, set_of, for_all)
+
+**Depends on:** V2-9 (lambdas), V2-8 (if-then-else demonstrates sub-generator pattern)
+
+**Goal:** compiler special forms for all-solutions predicates and dynamic predicate dispatch.
+These are NOT builtins — they are compiled inline by the compiler, like NAF.
+
+### call/N — Dynamic predicate dispatch
+
+`call(Goal)` through `call(Goal, Arg1, ..., Arg7)` — compiler special forms.
+
+**Runtime helper** `_call_goal(goal, extra_args, trail, module_globals)`:
+- Deref goal
+- If callable function (compiled lambda): call directly with extra_args via trampoline
+- If `PredicateMeta` class: dispatch with extra_args
+- If `BuiltinPredicate`: dispatch directly
+- Yields solutions
+
+**New file:** `clausal/logic/meta.py` — `_call_goal` runtime helper, injected into `base_globals`.
+
+### find_all/3 — All-solutions collection
+
+Compiler special form in `_SPECIAL_FORMS_SIMPLE` / `_SPECIAL_FORMS_TRAMPOLINE`.
+
+```python
+# find_all(Template, Goal, Bag) compiles to:
+_fa_results = []
+_fa_m = trail.mark()
+def _fa_gen():
+    k = None  # for simple-mode pred calls
+    <compiled Goal with k_stmts = [yield None]>
+    return; yield
+for _ in _fa_gen():
+    _fa_results.append(_deref_walk(template))
+trail.undo(_fa_m)
+# Now unify Bag with results as part of normal continuation:
+_fa_om = trail.mark()
+if unify(bag, _fa_results, trail):
+    <k_stmts>
+trail.undo(_fa_om)
+```
+
+**Key:** `_deref_walk` (from `solve.py`) deep-copies the template with current bindings.
+The inner goal's bindings are undone before the bag unification, but the bag unification
+itself is part of the normal continuation (not isolated).
+
+### bag_of/3, set_of/3
+
+Same pattern as find_all but:
+- `bag_of`: fails if no solutions (wrap unify in `if _results:`)
+- `set_of`: bag_of + `_set_of_dedup(results)` (sort + dedup)
+
+### for_all/2
+
+Rewrite `for_all(Cond, Action)` → `Not(And(Cond, Not(Action)))` and delegate to existing
+NAF compilation. No new codegen.
+
+**Files:**
+- `clausal/logic/compiler.py` — special forms dispatch, `_compile_find_all_simple/trampoline`,
+  `_compile_call_n_simple/trampoline`, etc.
+- `clausal/logic/meta.py` (new) — `_call_goal` runtime helper
+- `clausal/logic/solve.py` — export `_deref_walk`
+- `tests/test_find_all.py` (~20 tests)
+- `tests/test_call_n.py` (~15 tests)
+
+---
+
+## V2-11 — List processing builtins
+
+**Depends on:** V2-10 (meta-predicates needed for higher-order list ops)
+
+**Goal:** higher-order list predicates that use `_call_goal` internally.
+
+**Already implemented (committed):** `member/2`, `memberchk/2`, `append/3`, `length/2`,
+`last/2`, `reverse/2`, `nth0/3`, `nth1/3`, `flatten/2`, `msort/2`, `sort/2`,
+`permutation/2`, `select/3`, `subtract/3`, `intersection/3`, `union/3`, `list_to_set/2`,
+`pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2`.
+
+**New predicates:**
+
+| Predicate | Description |
+|-----------|-------------|
+| `map_list/2` | `map_list(Goal, List)` — Goal succeeds for each element |
+| `map_list/3` | `map_list(Goal, Xs, Ys)` — Goal maps each X to Y |
+| `include/3` | Filter: keep elements where Goal succeeds |
+| `exclude/3` | Filter: keep elements where Goal fails |
+| `foldl/4` | `foldl(Goal, List, V0, V)` — left fold |
+
+These are **Python builtins** that call `_call_goal` internally with proper trail mark/undo.
+
+**Rename aliases** (old names still work):
+
+| Old | New |
+|-----|-----|
+| `msort/2` | `merge_sort/2` |
+| `nth0/3` | `get_item/3` |
+| `memberchk/2` | `member_check/2` |
+| `univ/2` | `unpack/2` |
+
+**Files:**
+- `clausal/logic/builtins.py` — higher-order builtins, rename aliases
+- `tests/test_higher_order.py` (~25 tests)
+
+---
+
+## V2-12 — Arithmetic builtins
+
+**Depends on:** nothing beyond V2-7 (mostly already done)
+
+**Goal:** fill gaps in arithmetic builtins.
+
+**Already implemented (committed):** `between/3`, `succ/2`, `plus/3`, `abs_/2`, `max_/3`,
+`min_/3`, `sum_list/2`, `max_list/2`, `min_list/2`.
+
+**New predicates:**
+
+| Predicate | Description |
+|-----------|-------------|
+| `sign/2` | `sign(X, S)` — S is the sign of X (-1, 0, 1) |
+| `gcd/3` | `gcd(X, Y, G)` — G is the GCD of X and Y |
+| `divmod/4` | `divmod(X, Y, Q, R)` — quotient and remainder |
+
+**Files:**
+- `clausal/logic/builtins.py`
+- `tests/test_builtins.py` — extend existing arithmetic tests
+
+---
+
+## V2-13 — Term inspection builtins
+
+**Depends on:** nothing beyond V2-7
+
+**Goal:** predicates for examining and manipulating term structure at runtime.
+
+**Already implemented (committed):** `functor/3`, `arg/3`, `univ/2` (unpack).
+
+**New predicates:**
+
+| Predicate | Description |
+|-----------|-------------|
+| `copy_term/2` | Deep copy with fresh Vars |
+| `term_variables/2` | Collect all unbound Vars in term |
+| `number_vars/3` | Bind unbound Vars to `$VAR(N)` atoms |
+
+**Files:**
+- `clausal/logic/builtins.py`
+- `tests/test_term_inspection.py` (~20 tests)
+
+---
+
+## V2-14 — Control / exception handling
+
+**Depends on:** V2-8 (if-then-else), V2-10 (meta-predicates for find_all interaction)
+
+**Goal:** Prolog-style exception handling integrated with backtracking and the trail.
+
+**Design:**
+
+```python
+class LogicException(Exception):
+    """Wraps a logic term thrown by throw/1."""
+    def __init__(self, term): self.term = term
+```
+
+- `throw/1` — builtin that raises `LogicException(deref_walk(term))`
+- `catch/3` — **compiler special form** (Goal and Recovery are goals, Pattern is a
+  term for unification with the thrown value)
+
+**Compilation pattern:**
+
+```python
+# catch(Goal, Catcher, Recovery) compiles to:
+_m_catch = trail.mark()
+try:
+    <compiled Goal with k_stmts>
+except LogicException as _e:
+    trail.undo(_m_catch)
+    _m_match = trail.mark()
+    if unify(<catcher_expr>, _e.term, trail):
+        <compiled Recovery with k_stmts>
+    trail.undo(_m_match)
+```
+
+**Key:** When an exception is caught, trail bindings from the failed Goal are undone before
+Recovery runs. Python exceptions from builtins can also be caught by wrapping them.
+
+**Files:**
+- `clausal/logic/compiler.py` — `_compile_catch_simple`, `_compile_catch_trampoline`
+- `clausal/logic/builtins.py` — `throw/1`, `LogicException`
+- `tests/test_exceptions.py` (~15 tests)
+
+---
+
+## V2-15 — I/O builtins
+
+**Depends on:** nothing beyond V2-7
+
+**Goal:** basic formatted output predicates.
+
+| Predicate | Description |
+|-----------|-------------|
+| `print_term/1` | Print dereffed term to stdout |
+| `writeln/1` | Print term + newline |
+| `format/2` | Basic format strings |
+
+**Files:**
+- `clausal/logic/builtins.py`
+- `tests/test_io.py` (~10 tests)
+
+---
+
+## V2-16 — Python interop
+
+**Depends on:** V2-9 (lambdas provide the escape hatch pattern)
+
+**Goal:** call arbitrary Python code from logic predicates. Design TBD — the user
+indicated a preference for an escape-hatch pattern rather than `py_call/3`.
+
+**Deferred for design discussion.** Options include:
+- Escape-hatch via lambdas: `lambda X_: <python expression>` as a goal
+- `py_call/3` or similar explicit bridge predicate
+- Direct Python function calls via the existing `Call` mechanism
+
+---
+
+## Dependency graph
+
+```
+V2-8  (if-then-else)  ──→ V2-9  (lambdas) ──→ V2-10 (meta-predicates) ──→ V2-11 (list HOF)
+                                                                        ──→ V2-14 (exceptions)
+V2-12 (arithmetic)     — independent
+V2-13 (term inspection) — independent
+V2-15 (I/O)            — independent
+V2-16 (Python interop) — depends on V2-9
+```
+
+---
+
+## Implementation insights from V2-8 prototype
+
+These issues were discovered during an initial prototype attempt and should be addressed
+when implementing V2-8 through V2-10:
+
+1. **Sub-generator `k` scoping:** When `compile_goal` (simple mode) is used inside nested
+   generator functions (NAF, find_all, if-then-else cond), predicate calls generate code
+   referencing `k` (the continuation callback), but `k` is not in scope inside the nested
+   function. Fix: either inject `k = None` at the top of each sub-generator, or better,
+   change `_dispatch_call_iter` to generate `_tramp_call(dispatch, args, trail)` using a
+   runtime wrapper that drives the trampoline.
+
+2. **`_dispatch_call_iter` vs trampoline:** The simple-mode `_dispatch_call_iter` generates
+   `fname._get_dispatch()(args, trail, k)` but `_get_dispatch()` always returns trampoline
+   functions now. Need a `_tramp_call` runtime helper that wraps `StepGenerator` driving
+   and yields None per solution.
+
+3. **Test pattern for bindings:** Compiled predicates undo bindings after generator
+   exhaustion. Tests must capture `deref()` values DURING iteration (inside `for _ in fn(...):
+   results.append(deref(x))`), not after `list(fn(...))`.
+
+4. **`IfExpr` orelse=True:** When `else_` is `True`, it means "succeed" — should emit
+   `k_stmts` directly. When `else_` is `None`, it means "no else" — should emit nothing
+   (whole if-then fails if cond fails).
 
 ---
 
