@@ -1466,6 +1466,39 @@ def _pairs_values__2(pairs, values, trail, k):
     trail.undo(mark)
 
 
+# ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
+
+
+@_builtin("call_goal", 1)
+def _call_goal__1(goal, trail, k):
+    """call_goal(Goal) — call a zero-extra-arg goal closure."""
+    goal_val = deref(goal)
+    if callable(goal_val):
+        for _ in goal_val(trail, k):
+            yield None
+    return; yield  # noqa: B901
+
+
+@_builtin("call_goal", 2)
+def _call_goal__2(goal, arg1, trail, k):
+    """call_goal(Goal, Arg1) — call a 1-extra-arg goal closure."""
+    goal_val = deref(goal)
+    if callable(goal_val):
+        for _ in goal_val(deref(arg1), trail, k):
+            yield None
+    return; yield  # noqa: B901
+
+
+@_builtin("call_goal", 3)
+def _call_goal__3(goal, arg1, arg2, trail, k):
+    """call_goal(Goal, Arg1, Arg2) — call a 2-extra-arg goal closure."""
+    goal_val = deref(goal)
+    if callable(goal_val):
+        for _ in goal_val(deref(arg1), deref(arg2), trail, k):
+            yield None
+    return; yield  # noqa: B901
+
+
 __all__ = [
     "BuiltinPredicate",
     "get_builtin_predicate",

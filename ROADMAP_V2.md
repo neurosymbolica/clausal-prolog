@@ -437,6 +437,8 @@ When `orelse is None`, if Cond fails the whole thing fails silently (no else bra
 
 ## V2-9 — Pythonic lambdas (goal closures)
 
+(Note: superseded by V2_9_LAMBDAS.md)
+
 **Depends on:** V2-8 (if-then-else demonstrates sub-generator compilation)
 
 **Goal:** first-class goal closures using Python lambda syntax, enabling higher-order

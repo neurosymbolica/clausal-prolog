@@ -56,7 +56,7 @@ from clausal.terms import (
     In, NotIn,
     Call, LoadName,
 )
-from clausal.pythonic_ast.nodes import IfExpr
+from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
@@ -366,6 +366,28 @@ def _multi_star_splits(n_stars, total):
             yield (i, *rest)
 
 
+# ── _tramp_call: bridge simple-mode → trampoline-mode ─────────────────────────
+
+
+def _tramp_call(dispatch_fn, args, trail):
+    """Call a trampoline-mode dispatch fn from simple-mode context.
+
+    Drives a mini-trampoline internally and yields None per solution.
+    Used by simple-mode code paths (lambda bodies, NAF, once) that need
+    to call trampoline-mode predicates.
+    """
+    sg = StepGenerator(dispatch_fn, None, *args, trail)
+    gen, value = sg.send(None)
+    while True:
+        if gen is None:
+            if value is DONE:
+                return
+            yield None
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
+
+
 # ── Variable naming ────────────────────────────────────────────────────────────
 
 
@@ -395,6 +417,10 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
         return []
 
     if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
+        return []
+
+    if isinstance(term, Lambda):
+        # Lambda body vars are in a separate scope — don't collect them.
         return []
 
     if isinstance(term, StarUnpack):
@@ -653,6 +679,9 @@ def term_to_ast_expr(
             value=_call(_name("Var")),
         )
 
+    if isinstance(term, LoadName):
+        return _name(term.name)
+
     if term is None or isinstance(term, bool):
         return ast.Constant(value=term)
 
@@ -751,6 +780,11 @@ def term_to_ast_expr(
             func=_name("KWTerm"),
             args=[ast.Constant(value=term.functor)],
             keywords=keywords,
+        )
+
+    if isinstance(term, Lambda):
+        raise NotImplementedError(
+            "Lambdas are currently only supported as predicate call arguments"
         )
 
     raise NotImplementedError(
@@ -867,8 +901,9 @@ def _dispatch_call_iter(
     arg_exprs: list[ast.expr],
     trail_name: str,
 ) -> ast.expr:
-    """Generate: fname._get_dispatch()(arg0, …, trail, k)
+    """Generate: _tramp_call(fname._get_dispatch(), (arg0, …, argN), trail)
 
+    Bridges simple-mode callers to trampoline-mode dispatch functions.
     ``fname`` is resolved from the compiled function's globals, where it
     refers to either a PredicateMeta class or a _DbDispatchAdapter shim.
     """
@@ -877,9 +912,10 @@ def _dispatch_call_iter(
         args=[],
         keywords=[],
     )
+    args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
     return ast.Call(
-        func=get_dispatch,
-        args=arg_exprs + [_name(trail_name), _name("k")],
+        func=_name("_tramp_call"),
+        args=[get_dispatch, args_tuple, _name(trail_name)],
         keywords=[],
     )
 
@@ -1619,6 +1655,114 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
     ]
 
 
+# ── Goal lambda compilation ──────────────────────────────────────────────────
+
+
+def _compile_goal_lambda(
+    lambda_node: Lambda,
+    enclosing_var_context: dict[int, str],
+    db: Database,
+    trail_name: str,
+) -> tuple[str, ast.FunctionDef]:
+    """Compile a Lambda node to a simple-mode dispatch function.
+
+    Returns ``(func_name, func_def)`` — a FunctionDef statement that should be
+    emitted before the enclosing call, and the name to reference it by.
+
+    The generated function has signature::
+
+        def _lambda_N(X_, Y_, trail, k):
+            # body-only Var allocations
+            # compiled goal body with k_stmts = [yield None]
+            return; yield  # ensure generator
+
+    Lambda params are direct function arguments (not Var + unify).
+    Param references in the body are LoadName nodes — term_to_ast_expr
+    maps them to the function arg names directly.
+    Captured variables from the enclosing scope are Python closure references.
+    """
+    func_name = _fresh("_lambda")
+
+    # Inherit captured vars from enclosing scope.
+    # Param references are LoadName nodes (not Vars), so they don't need
+    # entries in var_context — term_to_ast_expr handles them directly.
+    body_vc: dict[int, str] = dict(enclosing_var_context)
+    param_arg_names: list[str] = [param.name for param in lambda_node.params.params]
+
+    # Compile the lambda body goals
+    body_goals = _flatten_conjunction(lambda_node.body)
+    alloc_stmts = _preallocate_body_vars(body_goals, body_vc)
+
+    k: list[ast.stmt] = [_yield_none_stmt()]
+    for goal in reversed(body_goals):
+        k = compile_goal(goal, db, body_vc, trail_name, k)
+
+    body_stmts = alloc_stmts + k + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+
+    # Build the function arguments: X_, Y_, ..., trail, k
+    func_args = ast.arguments(
+        posonlyargs=[],
+        args=[ast.arg(arg=n) for n in param_arg_names] + [
+            ast.arg(arg=trail_name),
+            ast.arg(arg="k"),
+        ],
+        vararg=None,
+        kwonlyargs=[],
+        kw_defaults=[],
+        kwarg=None,
+        defaults=[],
+    )
+
+    func_def = ast.FunctionDef(
+        name=func_name,
+        args=func_args,
+        body=body_stmts,
+        decorator_list=[],
+        returns=None,
+        type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    ast.fix_missing_locations(func_def)
+
+    return func_name, func_def
+
+
+def _flatten_conjunction(goal) -> list:
+    """Flatten nested And nodes into a list of goals."""
+    if isinstance(goal, And):
+        return _flatten_conjunction(goal.left) + _flatten_conjunction(goal.right)
+    return [goal]
+
+
+def _hoist_lambda_args(
+    ordered_args: list,
+    enclosing_var_context: dict[int, str],
+    db: Database,
+    trail_name: str,
+) -> tuple[list, list[ast.stmt]]:
+    """Scan call args for Lambda nodes; compile them and replace with name refs.
+
+    Returns ``(processed_args, lambda_defs)`` where processed_args has Lambda
+    nodes replaced with LoadName references to the generated functions, and
+    lambda_defs is the list of FunctionDef statements to emit before the call.
+    """
+    lambda_defs: list[ast.stmt] = []
+    processed: list = []
+    for a in ordered_args:
+        if isinstance(a, Lambda):
+            func_name, func_def = _compile_goal_lambda(
+                a, enclosing_var_context, db, trail_name,
+            )
+            lambda_defs.append(func_def)
+            processed.append(LoadName(name=func_name))
+        else:
+            processed.append(a)
+    return processed, lambda_defs
+
+
 def _compile_predicate_call(
     fname: str,
     call_args: list,
@@ -1655,9 +1799,14 @@ def _compile_predicate_call(
                 )
             ordered_args.append(kw_dict[param_name])
 
+    # Hoist any Lambda arguments to FunctionDef statements
+    ordered_args, lambda_defs = _hoist_lambda_args(
+        ordered_args, var_context, db, trail_name,
+    )
+
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     iter_expr = _dispatch_call_iter(fname, arity, arg_exprs, trail_name)
-    return [
+    return lambda_defs + [
         ast.For(
             target=_name("_", ast.Store()),
             iter=iter_expr,
@@ -2156,6 +2305,11 @@ def _compile_predicate_call_trampoline(
                 )
             ordered_args.append(kw_dict[param_name])
 
+    # Hoist any Lambda arguments to FunctionDef statements
+    ordered_args, lambda_defs = _hoist_lambda_args(
+        ordered_args, var_context, db, trail_name,
+    )
+
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     gen_name = _fresh("_gen")
     status_name = _fresh("_st")
@@ -2181,7 +2335,7 @@ def _compile_predicate_call_trampoline(
         body=loop_body,
         orelse=[],
     )
-    return [gen_assign, first_step, loop]
+    return lambda_defs + [gen_assign, first_step, loop]
 
 
 # ── Trampoline-mode reified ITE helpers ────────────────────────────────────────
@@ -2659,6 +2813,7 @@ def compile_predicate_trampoline(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_tramp_call": _tramp_call,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -4016,6 +4171,7 @@ def compile_predicate(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_tramp_call": _tramp_call,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:

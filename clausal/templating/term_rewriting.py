@@ -467,13 +467,57 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Lambda(transformer, lambda_expr):
-        # Give the lambda body its own scope for seen_vars
+        # Inherit enclosing scope's seen_vars so that captured variables
+        # generate Name references (closure capture) instead of fresh Var().
+        # Copy prevents lambda-body-only variables from leaking back.
         lambda_transformer = TermTransformer()
+        lambda_transformer.seen_vars = transformer.seen_vars.copy()
+
+        # Logic-var params get LoadName nodes (not Var allocations) in the
+        # body.  _load_names tells visit_Name to emit LoadName instead of
+        # Name/NamedExpr.  Inherited from enclosing lambdas so nested
+        # lambdas capture outer params correctly.
+        logic_var_params = [
+            arg.arg for arg in
+            lambda_expr.args.posonlyargs + lambda_expr.args.args
+            if _is_logic_var_name(arg.arg)
+        ]
+        lambda_transformer._load_names = (
+            set(logic_var_params)
+            | getattr(transformer, '_load_names', set())
+        )
+        # Also add to seen_vars so they aren't walrus-allocated if _load_names
+        # is ever bypassed, and so nested lambdas inherit them as "known".
+        lambda_transformer.seen_vars.update(logic_var_params)
+
+        all_args = (lambda_expr.args.posonlyargs + lambda_expr.args.args +
+                    ([lambda_expr.args.vararg] if lambda_expr.args.vararg else []) +
+                    lambda_expr.args.kwonlyargs +
+                    ([lambda_expr.args.kwarg] if lambda_expr.args.kwarg else []))
+        if all_args:
+            params = transformer._visit_arguments(lambda_expr.args, lambda_transformer)
+        else:
+            # Zero-arg lambda: generate Params() with lambda_expr as position source
+            params = replace(
+                Call(
+                    func=load_name_ast("Params", lambda_expr),
+                    args=[],
+                    keywords=[
+                        make_keyword_node(
+                            "params",
+                            list_ast([], lambda_expr),
+                            lambda_expr,
+                        ),
+                    ],
+                ),
+                lambda_expr,
+            )
+        body = lambda_transformer.visit(lambda_expr.body)
         return node_ast(
             "Lambda",
             lambda_expr,
-            params=transformer._visit_arguments(lambda_expr.args, lambda_transformer),
-            body=lambda_transformer.visit(lambda_expr.body),
+            params=params,
+            body=body,
         )
 
     def visit_List(transformer, list_expr):
@@ -510,6 +554,13 @@ class TermTransformer(NodeTransformer):
         # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
         # Excluded: __, x__, __init__ (dunder-style), MixedCase, lowercase.
         if _is_logic_var_name(identifier):
+            # Lambda param or outer-lambda param: generate LoadName term node
+            # so the compiler maps it to a function arg (no Var allocation).
+            if identifier in getattr(transformer, '_load_names', ()):
+                return node_ast(
+                    "LoadName", name,
+                    name=replace(Constant(value=identifier), name),
+                )
             # First occurrence allocates a Var; subsequent ones reuse it.
             if identifier in transformer.seen_vars:
                 return replace(Name(id=identifier, ctx=load), name)
