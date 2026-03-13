@@ -310,14 +310,25 @@ module/(Terms),
 
 ## Lambdas
 
-Logic lambdas use Python's `lambda` syntax. Variables that escape the lambda (shared with outer scope) are declared with `in`:
+Logic lambdas use Python's `lambda` syntax directly. Enclosing-scope variables are captured implicitly via Python's native closure semantics — no explicit declarations are needed:
 
 ```python
-Y in (lambda X: Y is -X),
-map(Y in (lambda X: Y is -X), [1, 2, 3]),
+# Zero-arg goal closure
+run_goal(Result_) <- call_goal((lambda: Result_ is 42))
+
+# One-arg lambda — X_ is a parameter, Result_ is captured from the clause
+apply(Result_, Val_) <- call_goal((lambda X_: Result_ := X_ + 1), Val_)
+
+# Multi-goal body — use 'and' (not commas) for conjunction
+transform(R_) <- call_goal((lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2)), 5, R_)
+
+# Captured variable from enclosing clause
+add_z(Z_, R_) <- call_goal((lambda X_: R_ := X_ + Z_), 10)
 ```
 
-Inside a lambda, parameters and locally-created logic variables are local. Variables that need to be shared with the outer scope are named with `in`. This mirrors Python's closure semantics without requiring explicit `nonlocal` declarations.
+Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `call_goal/1,2,3` builtins.
+
+See [lambdas.md](lambdas.md) for the full design, compilation details, and examples.
 
 ---
 
@@ -439,6 +450,7 @@ module/(Terms),
 # Constraint domains
 (--clpz)(X > 0, X < 10),
 
-# Lambdas
-Y in (lambda X: Y is -X)
+# Lambdas (goal closures)
+call_goal((lambda X_: R_ := X_ + 1), 5)  # R_ = 6
+call_goal((lambda X_, Y_: (X_ is A_ and Y_ is B_)), A_, B_)  # multi-param
 ```
