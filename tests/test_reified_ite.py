@@ -27,6 +27,11 @@ from clausal.pythonic_ast.nodes import (
 )
 
 
+def _once(goal):
+    """Helper: build a once(goal) Call node."""
+    return Call(func=LoadName(name="once"), args=[goal], kwargs=[])
+
+
 # ── reify_eq unit tests ──────────────────────────────────────────────────────
 
 
@@ -1342,3 +1347,195 @@ class TestIteImportIntegration:
         # Should not yield duplicate 1s
         assert vals.count(1) == 1
         assert 2 in vals
+
+
+# ── once() tests ─────────────────────────────────────────────────────────────
+
+
+class TestOnce:
+    """Test once(goal) — commit to first solution."""
+
+    def _run_simple(self, clauses, arity=1):
+        db = _make_db()
+        for c in clauses:
+            db.assertz(c)
+        fn = compile_predicate("once_test", arity, clauses, db)
+        trail = Trail()
+        results = []
+        args = [Var() for _ in range(arity)]
+        for _ in fn(*args, trail, None):
+            results.append(tuple(deref(a) for a in args))
+        return results
+
+    def _run_trampoline(self, clauses, arity=1):
+        from clausal.logic.trampoline import StepGenerator, DONE
+        db = _make_db()
+        for c in clauses:
+            db.assertz(c)
+        fn = compile_predicate_trampoline("once_test", arity, clauses, db)
+        trail = Trail()
+        results = []
+        args = [Var() for _ in range(arity)]
+        root = StepGenerator(fn, None, *args, trail)
+        gen, value = root.send(None)
+        while True:
+            if gen is None:
+                if value is DONE:
+                    break
+                results.append(tuple(deref(a) for a in args))
+                gen, value = root.send(None)
+            else:
+                gen, value = gen.send(value)
+        return results
+
+    def test_once_takes_first_solution_simple(self):
+        """once(X in [1,2,3]) should produce only X=1."""
+        x = Var()
+        clause = Clause(
+            head=Compound("once_test", (x,)),
+            body=[_once(In(left=x, right=[1, 2, 3]))],
+        )
+        results = self._run_simple([clause])
+        assert results == [(1,)]
+
+    def test_once_takes_first_solution_trampoline(self):
+        """once(X in [1,2,3]) should produce only X=1."""
+        x = Var()
+        clause = Clause(
+            head=Compound("once_test", (x,)),
+            body=[_once(In(left=x, right=[1, 2, 3]))],
+        )
+        results = self._run_trampoline([clause])
+        assert results == [(1,)]
+
+    def test_once_failing_goal_simple(self):
+        """once(99 in [1,2,3]) — failing goal produces no results."""
+        r = Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[
+                _once(In(left=99, right=[1, 2, 3])),
+                Unify(left=r, right="reached"),
+            ],
+        )
+        results = self._run_simple([clause])
+        assert results == []
+
+    def test_once_failing_goal_trampoline(self):
+        """once(99 in [1,2,3]) — failing goal produces no results."""
+        r = Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[
+                _once(In(left=99, right=[1, 2, 3])),
+                Unify(left=r, right="reached"),
+            ],
+        )
+        results = self._run_trampoline([clause])
+        assert results == []
+
+    def test_once_with_continuation_simple(self):
+        """once(X in [1,2]) and Y in [a,b] — once limits first goal,
+        continuation still backtracks normally."""
+        x, y = Var(), Var()
+        clause = Clause(
+            head=Compound("once_test", (x, y)),
+            body=[
+                _once(In(left=x, right=[1, 2])),
+                In(left=y, right=["a", "b"]),
+            ],
+        )
+        results = self._run_simple([clause], arity=2)
+        # X=1 only (once), but Y backtracks: (1,"a"), (1,"b")
+        assert results == [(1, "a"), (1, "b")]
+
+    def test_once_with_continuation_trampoline(self):
+        x, y = Var(), Var()
+        clause = Clause(
+            head=Compound("once_test", (x, y)),
+            body=[
+                _once(In(left=x, right=[1, 2])),
+                In(left=y, right=["a", "b"]),
+            ],
+        )
+        results = self._run_trampoline([clause], arity=2)
+        assert results == [(1, "a"), (1, "b")]
+
+    def test_once_preserves_bindings_simple(self):
+        """Bindings from the once'd goal are visible in continuation."""
+        x, r = Var(), Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[
+                _once(Unify(left=x, right=42)),
+                Unify(left=r, right=x),
+            ],
+        )
+        results = self._run_simple([clause])
+        assert results == [(42,)]
+
+    def test_once_preserves_bindings_trampoline(self):
+        x, r = Var(), Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[
+                _once(Unify(left=x, right=42)),
+                Unify(left=r, right=x),
+            ],
+        )
+        results = self._run_trampoline([clause])
+        assert results == [(42,)]
+
+    def test_once_in_if_condition_simple(self):
+        """If(once(X in [1,2,3]), then, else) — once inside If condition."""
+        r = Var()
+        x = Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[IfExpr(
+                test=_once(In(left=x, right=[1, 2, 3])),
+                body=Unify(left=r, right="found"),
+                orelse=Unify(left=r, right="not_found"),
+            )],
+        )
+        results = self._run_simple([clause])
+        assert ("found",) in results
+
+    def test_once_in_if_condition_trampoline(self):
+        r = Var()
+        x = Var()
+        clause = Clause(
+            head=Compound("once_test", (r,)),
+            body=[IfExpr(
+                test=_once(In(left=x, right=[1, 2, 3])),
+                body=Unify(left=r, right="found"),
+                orelse=Unify(left=r, right="not_found"),
+            )],
+        )
+        results = self._run_trampoline([clause])
+        assert ("found",) in results
+
+
+class TestOnceClausal:
+    """Test once() via .clausal file import."""
+
+    def test_once_clausal_import(self):
+        """once() works when used in a .clausal file."""
+        import importlib
+        import os
+        from clausal.import_hook import _load_module
+
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "once_member.clausal"
+        )
+        if not os.path.exists(fixture):
+            pytest.skip("once_member.clausal fixture not created yet")
+        mod = _load_module("once_member", fixture)
+        from clausal.logic.solve import query
+
+        logic_mod = mod.__dict__["$module"]
+        x = Var()
+        goal = Call(func=LoadName(name="first_member"), args=[x, [10, 20, 30]], kwargs=[])
+        results = list(query(goal, {"x": x}, logic_mod))
+        assert len(results) == 1
+        assert results[0]["x"] == 10

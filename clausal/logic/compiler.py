@@ -1232,8 +1232,12 @@ def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_st
 
 
 def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts):
-    """Compile ITE for non-reifiable conditions using double-evaluation NAF pattern."""
-    # Check if the condition is a tabled NAF case
+    """Compile ITE for non-reifiable conditions.
+
+    Uses single-evaluation with a _found flag instead of double-evaluation NAF.
+    For tabled predicates, falls back to _naf_tabled for the false path (WFS
+    requires separate tabled negation).
+    """
     use_tabled_naf = _is_tabled_naf(test, db)
 
     # Build the condition sub-generator
@@ -1257,25 +1261,21 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
     then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
     else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
 
-    # "True" path: for each solution of condition, run then with k_stmts
-    true_mark = _fresh("_m")
-    true_block = [
-        _assign_mark(true_mark, trail_name),
-        ast.For(
-            target=_name("_", ast.Store()),
-            iter=_call(_name(cond_gen)),
-            body=then_stmts,
-            orelse=[],
-        ),
-        _undo_stmt(true_mark, trail_name),
-    ]
-
-    # "False" path: NAF of condition → run else with k_stmts
-    naf_flag = _fresh("_naf")
-    naf_mark = _fresh("_m")
-
     if use_tabled_naf:
-        # Use _naf_tabled for tabled predicates
+        # Tabled predicates: must use _naf_tabled for WFS soundness.
+        # Still evaluate condition once for the true path, but use
+        # _naf_tabled separately for the false path.
+        true_mark = _fresh("_m")
+        true_block = [
+            _assign_mark(true_mark, trail_name),
+            ast.For(
+                target=_name("_", ast.Store()),
+                iter=_call(_name(cond_gen)),
+                body=then_stmts,
+                orelse=[],
+            ),
+            _undo_stmt(true_mark, trail_name),
+        ]
         fname = test.func.name
         call_arity = len(test.args) + len(test.kwargs)
         arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in test.args]
@@ -1287,29 +1287,35 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
             _name(trail_name),
             _name("_table_store"),
         )
+        naf_mark = _fresh("_m")
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),
             _undo_stmt(naf_mark, trail_name),
         ]
+        return [cond_fn] + true_block + false_block
     else:
-        false_block = [
-            _assign(naf_flag, ast.Constant(value=True)),
-            _assign_mark(naf_mark, trail_name),
+        # Non-tabled: single evaluation with _found flag.
+        # Run condition once; for each solution run then. After exhaustion,
+        # if no solutions were found, run else.
+        found_flag = _fresh("_found")
+        mark = _fresh("_m")
+        return [
+            cond_fn,
+            _assign(found_flag, ast.Constant(value=False)),
+            _assign_mark(mark, trail_name),
             ast.For(
                 target=_name("_", ast.Store()),
                 iter=_call(_name(cond_gen)),
-                body=[
-                    _assign(naf_flag, ast.Constant(value=False)),
-                    ast.Break(),
-                ],
+                body=[_assign(found_flag, ast.Constant(value=True))] + then_stmts,
                 orelse=[],
             ),
-            _undo_stmt(naf_mark, trail_name),
-            _if(_name(naf_flag), else_stmts),
+            _undo_stmt(mark, trail_name),
+            _if(
+                ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
+                else_stmts,
+            ),
         ]
-
-    return [cond_fn] + true_block + false_block
 
 
 # ── compile_goal ───────────────────────────────────────────────────────────────
@@ -1560,6 +1566,10 @@ def compile_goal(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
+        # ── once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
+            return _compile_once(inner, db, var_context, trail_name, k_stmts)
+
         # ── Compile-time-known predicate call ────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
             return _compile_predicate_call(
@@ -1575,6 +1585,38 @@ def compile_goal(
             raise NotImplementedError(
                 f"compile_goal: unsupported goal type {type(goal).__name__}: {goal!r}"
             )
+
+
+def _compile_once(inner, db, var_context, trail_name, k_stmts):
+    """Compile once(goal) — take first solution of inner goal, then continue."""
+    once_gen = _fresh("_once_gen")
+    inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    once_body = inner_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    once_fn = ast.FunctionDef(
+        name=once_gen,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=once_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    once_mark = _fresh("_m")
+    return [
+        once_fn,
+        _assign_mark(once_mark, trail_name),
+        ast.For(
+            target=_name("_", ast.Store()),
+            iter=_call(_name(once_gen)),
+            body=k_stmts + [ast.Break()],
+            orelse=[],
+        ),
+        _undo_stmt(once_mark, trail_name),
+    ]
 
 
 def _compile_predicate_call(
@@ -2042,6 +2084,11 @@ def compile_goal_trampoline(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
+        # ── once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
+            # Inner compiles in simple mode (sub-generator), same as NAF.
+            return _compile_once(inner, db, var_context, trail_name, k_stmts)
+
         # ── Stack-safe predicate call ─────────────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
             return _compile_predicate_call_trampoline(
@@ -2258,28 +2305,8 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
     Condition compiles in trampoline mode and is driven by a mini-trampoline.
     Then/else branches compile in trampoline mode with normal k_stmts.
 
-    Generated code structure::
-
-        # Condition function (trampoline mode)
-        def _ite_cond_fn(_ite_self, _ite_parent, trail):
-            <compiled test with k_stmts=[yield (_ite_parent, None)]>
-            yield (_ite_parent, _DONE)
-
-        # "True" path: drive condition, run then for each solution
-        _m = trail.mark()
-        _ite_sg = StepGenerator(_ite_cond_fn, None, trail)
-        _ite_g, _ite_v = _ite_sg.send(None)
-        while True:
-            if _ite_g is None:
-                if _ite_v is _DONE: break
-                <then_stmts>
-                _ite_g, _ite_v = _ite_sg.send(None)
-            else:
-                _ite_g, _ite_v = _ite_g.send(_ite_v)
-        trail.undo(_m)
-
-        # "False" path: NAF of condition → run else
-        (tabled: _naf_tabled, non-tabled: mini-trampoline check)
+    Non-tabled: single evaluation with _found flag (no double-evaluation).
+    Tabled: uses _naf_tabled for WFS-sound false path.
     """
     use_tabled_naf = _is_tabled_naf(test, db)
 
@@ -2318,6 +2345,7 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
     g_name = _fresh("_ite_g")
     v_name = _fresh("_ite_v")
     true_mark = _fresh("_m")
+    found_flag = _fresh("_found")
 
     sg_create = _assign(sg_name,
         _call(_name("StepGenerator"), _name(cond_fn_name),
@@ -2382,11 +2410,13 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
                 body=[ast.Break()],
                 orelse=[],
             ),
-            # Got a solution — run then branch
+            # Got a solution — set found flag and run then branch
+            _assign(found_flag, ast.Constant(value=True)),
         ] + then_stmts + [continue_send],
         orelse=[step_send],
     )
     true_block = [
+        _assign(found_flag, ast.Constant(value=False)),
         _assign_mark(true_mark, trail_name),
         sg_create,
         first_send,
@@ -2398,10 +2428,9 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         _undo_stmt(true_mark, trail_name),
     ]
 
-    # ── "False" path: NAF of condition → run else ──
-    naf_mark = _fresh("_m")
-
+    # ── "False" path ──
     if use_tabled_naf:
+        # Tabled: must use _naf_tabled for WFS soundness
         fname = test.func.name
         call_arity = len(test.args) + len(test.kwargs)
         arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in test.args]
@@ -2413,69 +2442,19 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
             _name(trail_name),
             _name("_table_store"),
         )
+        naf_mark = _fresh("_m")
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),
             _undo_stmt(naf_mark, trail_name),
         ]
     else:
-        # Mini-trampoline NAF: check if condition has any solution
-        naf_flag = _fresh("_naf")
-        naf_sg = _fresh("_naf_sg")
-        naf_g = _fresh("_naf_g")
-        naf_v = _fresh("_naf_v")
-        naf_sg_create = _assign(naf_sg,
-            _call(_name("StepGenerator"), _name(cond_fn_name),
-                  ast.Constant(None), _name(trail_name)))
-        naf_first_send = ast.Assign(
-            targets=[ast.Tuple(
-                elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
-                ctx=ast.Store(),
-            )],
-            value=_call(ast.Attribute(value=_name(naf_sg), attr="send", ctx=ast.Load()),
-                        ast.Constant(None)),
-        )
-        naf_step_send = ast.Assign(
-            targets=[ast.Tuple(
-                elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],
-                ctx=ast.Store(),
-            )],
-            value=_call(ast.Attribute(value=_name(naf_g), attr="send", ctx=ast.Load()),
-                        _name(naf_v)),
-        )
-        naf_loop_body = ast.If(
-            test=ast.Compare(
-                left=_name(naf_g),
-                ops=[ast.Is()],
-                comparators=[ast.Constant(None)],
-            ),
-            body=[
-                ast.If(
-                    test=ast.Compare(
-                        left=_name(naf_v),
-                        ops=[ast.Is()],
-                        comparators=[_name("_DONE")],
-                    ),
-                    body=[ast.Break()],
-                    orelse=[],
-                ),
-                _assign(naf_flag, ast.Constant(value=False)),
-                ast.Break(),
-            ],
-            orelse=[naf_step_send],
-        )
+        # Non-tabled: use _found flag from true path (no re-evaluation)
         false_block = [
-            _assign(naf_flag, ast.Constant(value=True)),
-            _assign_mark(naf_mark, trail_name),
-            naf_sg_create,
-            naf_first_send,
-            ast.While(
-                test=ast.Constant(value=True),
-                body=[naf_loop_body],
-                orelse=[],
+            _if(
+                ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
+                else_stmts,
             ),
-            _undo_stmt(naf_mark, trail_name),
-            _if(_name(naf_flag), else_stmts),
         ]
 
     return [cond_fn_def] + true_block + false_block

@@ -77,12 +77,12 @@ The compiler distinguishes two kinds of conditions:
 | `X_ > Y_` | `reify_fd("gt")` | `fd_gt(X, Y)` | `fd_le(X, Y)` |
 | `X_ >= Y_` | `reify_fd("ge")` | `fd_ge(X, Y)` | `fd_lt(X, Y)` |
 
-**Non-reifiable conditions** (arbitrary predicate calls, `in`, etc.) use a sound double-evaluation pattern:
+**Non-reifiable conditions** (arbitrary predicate calls, `in`, etc.) use a single-evaluation pattern with a `_found` flag:
 
-1. Run the condition as a sub-generator. For each solution, run the then branch.
-2. Run NAF of the condition. If no solutions exist, run the else branch.
+1. Run the condition as a sub-generator. For each solution, set `_found = True` and run the then branch.
+2. After exhaustion, if `_found` is false, run the else branch.
 
-This evaluates the condition twice but is always correct. For tabled predicates, the false path uses `_naf_tabled` instead of inline NAF.
+This evaluates the condition only once. For tabled predicates, the false path uses `_naf_tabled` instead (WFS requires separate tabled negation).
 
 ---
 
@@ -161,22 +161,18 @@ def _ite_cond_0():
     ...
     return; yield
 
-# True path: for each solution of condition, run then
+# Single evaluation with _found flag
+_found_0 = False
 _m_0 = trail.mark()
 for _ in _ite_cond_0():
+    _found_0 = True
     <compiled then_goal>
 trail.undo(_m_0)
-
-# False path: NAF of condition → run else
-_naf_0 = True
-_m_1 = trail.mark()
-for _ in _ite_cond_0():
-    _naf_0 = False
-    break
-trail.undo(_m_1)
-if _naf_0:
+if not _found_0:
     <compiled else_goal>
 ```
+
+For tabled predicates, the false path uses `_naf_tabled` instead of the `_found` flag (required for WFS soundness with conditional answers).
 
 ### Trampoline mode
 
@@ -227,16 +223,42 @@ Goal reordering changes answers — a fundamental soundness problem. Even "soft 
 Clausal avoids this entirely:
 
 - **Reifiable conditions** get a three-way check: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints.
-- **Non-reifiable conditions** use double evaluation (sound NAF-based).
-- **Users who want first-solution commitment** can use `once()` explicitly (future builtin).
+- **Non-reifiable conditions** use single evaluation with a `_found` flag.
+- **Users who want first-solution commitment** use `once()` explicitly.
 
 The result is a system where goal reordering is always safe and adding constraints never loses solutions.
 
 ---
 
+## `once()` — First-Solution Commitment
+
+`once(goal)` is a builtin meta-predicate that commits to the first solution of `goal`. It compiles to a sub-generator with a `break` after the first yield:
+
+```python
+def _once_gen_0():
+    <compiled goal with yield None as k_stmts>
+    return; yield
+
+_m_0 = trail.mark()
+for _ in _once_gen_0():
+    <k_stmts>        # bindings from goal are visible here
+    break             # stop after first solution
+trail.undo(_m_0)
+```
+
+Key properties:
+- **Bindings escape**: unlike `Not`, bindings from the once'd goal are visible to the continuation.
+- **Continuation backtracks normally**: `once(X in [1,2]) and Y in [a,b]` produces `(1,a), (1,b)` — only `X` is committed, `Y` still backtracks.
+- **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
+- **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
+
+`once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(once(goal), then, else)`.
+
+---
+
 ## Test Coverage
 
-Tests are in `tests/test_reified_ite.py` (54 tests).
+Tests are in `tests/test_reified_ite.py` (99 tests).
 
 - **`reify_eq` unit tests** (20): identical var, ground equal/incompatible (int, str, type mismatch), undetermined (var-int, int-var, two vars), bound var equal/inequal, Compound (same/different/different functor/with var), PredicateMeta (same/different), lists (same/different/with var), no side effects
 - **`reify_fd` unit tests** (10): ground eq/ne/lt/ge true/false, undetermined with vars
@@ -245,4 +267,9 @@ Tests are in `tests/test_reified_ite.py` (54 tests).
 - **Reified ITE FD** (4): ground lt/eq true/false
 - **General ITE** (4): succeeding/failing condition — simple + trampoline modes
 - **Control flow** (6): no-else (conjunction), nested ITE, binding preservation, conjunction body
-- **Import integration** (1): `.clausal` file with ITE imported and queried via `solve` API
+- **Multi-solution ITE** (2): multi-solution condition, binding preservation
+- **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
+- **Tabled ITE** (2): tabled condition with true/false paths
+- **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
+- **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-If, `.clausal` file integration — simple + trampoline modes
+- **`once()` .clausal integration** (1): `once_member.clausal` fixture

@@ -74,6 +74,8 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (WFS, V2-7). |
+| `IfExpr(test, body, orelse)` | Reified ITE: three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. See [reified_ite.md](reified_ite.md). |
+| `Call(LoadName("once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
 | `In(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
 | `NotIn(elem, coll)` | found-flag pattern |
 | `Call(LoadName(f), args)` | `for _ in f._get_dispatch()(args, trail, k): k_stmts` |

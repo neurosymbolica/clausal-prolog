@@ -687,22 +687,22 @@ This is the pure path from the start. No `(->)/2` to deprecate later.
 
 ---
 
-## Open Questions
+## Open Questions (Resolved)
 
-1. **CLP(FD) reification (Step 8)**: How far do we go? Just equality/inequality, or
-   all comparison operators? The pattern is the same for all — check ground, then
-   explore both with constraints. Suggest: do them all in Phase A since the pattern
-   is uniform.
+1. **CLP(FD) reification (Step 8)**: All comparison operators implemented.
+   Done in Phase A Step 7.
 
-2. **General ITE double-evaluation cost**: For non-reifiable conditions, we evaluate
-   the condition twice (once for true path, once for NAF). This is correct but
-   potentially expensive. Optimisation: cache the first evaluation's result? Or just
-   document the cost and point users toward writing `_t` predicates for hot paths.
+2. **General ITE double-evaluation cost**: Resolved — non-tabled conditions now use
+   single evaluation with a `_found` flag. The condition runs once; a boolean flag
+   tracks whether any solution was found. After the true path exhausts, if `_found`
+   is false, the else path runs. This is correct (the flag is trail-independent) and
+   eliminates the second evaluation entirely. Tabled predicates still use
+   `_naf_tabled` for WFS soundness.
 
-3. **`once()` builtin**: Should we ship this in Phase A as the explicit commitment
-   escape hatch? It's trivial to implement (sub-generator + break after first yield).
-   Suggest: yes, it's useful independent of ITE and good to have.
+3. **`once()` builtin**: Implemented as a compiler-recognized Call pattern.
+   `once(goal)` compiles to a sub-generator + for-loop with break after first yield.
+   The inner goal's bindings are preserved in the continuation. Available in both
+   simple and trampoline modes, and in `.clausal` files.
 
-4. **WFS interaction**: For tabled predicates as ITE conditions, should the "false"
-   path use `_naf_tabled` instead of inline NAF? Probably yes — same logic as the
-   existing tabled NAF in `Not` compilation.
+4. **WFS interaction**: Yes — tabled predicates in ITE conditions use `_naf_tabled`
+   for the false path. Already implemented in both simple and trampoline modes.
