@@ -310,20 +310,41 @@ module/(Terms),
 
 ## Lambdas
 
-Logic lambdas use Python's `lambda` syntax directly. Enclosing-scope variables are captured implicitly via Python's native closure semantics — no explicit declarations are needed:
+Lambdas are anonymous clauses — goal closures passed as arguments to higher-order predicates. Two syntaxes are supported.
+
+### Arrow syntax (preferred)
+
+Arrow lambdas use the same `head <- body` form as clause definitions:
 
 ```python
-# Zero-arg goal closure
-run_goal(Result_) <- call_goal((lambda: Result_ is 42))
+# One-arg arrow lambda — X_ is a parameter, Result_ is captured
+apply(Result_, Val_) <- call_goal((X_ <- (Result_ := X_ + 1)), Val_)
 
-# One-arg lambda — X_ is a parameter, Result_ is captured from the clause
-apply(Result_, Val_) <- call_goal((lambda X_: Result_ := X_ + 1), Val_)
+# Two-arg arrow lambda
+apply_add(A_, B_, R_) <- call_goal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)
 
-# Multi-goal body — use 'and' (not commas) for conjunction
-transform(R_) <- call_goal((lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2)), 5, R_)
+# Zero-arg arrow lambda
+run_goal(Result_) <- call_goal((() <- (Result_ is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z_, R_) <- call_goal((lambda X_: R_ := X_ + Z_), 10)
+add_z(Z_, R_) <- call_goal((X_ <- (R_ := X_ + Z_)), 10)
+
+# Conjunction body — parenthesize each := subgoal
+transform(R_) <- call_goal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
+```
+
+Arrow syntax supports `:=` (arithmetic evaluation) in the body, which Python's `lambda` syntax forbids.
+
+### Python lambda syntax
+
+Python's native `lambda` also works:
+
+```python
+# One-arg lambda — must use 'is' (unification) instead of ':=' in lambda bodies
+apply(Result_, Val_) <- call_goal((lambda X_: Result_ is X_ + 1), Val_)
+
+# Multi-goal body — use 'and' (not commas) for conjunction
+transform(R_) <- call_goal((lambda X_, Y_: (T_ is X_ + 1 and Y_ is T_ * 2)), 5, R_)
 ```
 
 Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `call_goal/1,2,3` builtins.
@@ -450,7 +471,11 @@ module/(Terms),
 # Constraint domains
 (--clpz)(X > 0, X < 10),
 
-# Lambdas (goal closures)
-call_goal((lambda X_: R_ := X_ + 1), 5)  # R_ = 6
-call_goal((lambda X_, Y_: (X_ is A_ and Y_ is B_)), A_, B_)  # multi-param
+# Lambdas (goal closures) — arrow syntax (preferred)
+call_goal((X_ <- (R_ := X_ + 1)), 5)                            # R_ = 6
+call_goal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)                # multi-param
+
+# Lambdas — Python lambda syntax (alternative)
+call_goal((lambda X_: R_ is X_ + 1), 5)                         # R_ = 6
+call_goal((lambda X_, Y_: (X_ is A_ and Y_ is B_)), A_, B_)     # multi-param
 ```

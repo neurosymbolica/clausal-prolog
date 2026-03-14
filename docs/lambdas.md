@@ -1,37 +1,87 @@
 # Lambdas (Goal Closures)
 
-Lambdas are anonymous goal closures that use Python's native `lambda` syntax. They capture variables from the enclosing clause by implicit closure — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
+Lambdas are anonymous goal closures — anonymous clauses that can be passed as arguments to higher-order predicates. They capture variables from the enclosing clause by implicit closure — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
+
+Two syntaxes are supported: **arrow syntax** (preferred) and **Python lambda syntax**.
 
 The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`call_goal` builtins). Added in V2-9.
 
 ---
 
-## Basic syntax
+## Arrow syntax (preferred)
 
-A lambda is written exactly as a Python lambda, where the body is a goal (or conjunction of goals):
+Arrow lambdas use the same `head <- body` syntax as clause definitions, making them anonymous clauses:
 
 ```
-# Zero-arg lambda (goal closure)
+# One-arg arrow lambda
+apply_val(Result_, Val_) <- call_goal((X_ <- (Result_ is X_)), Val_)
+
+# Two-arg arrow lambda with arithmetic
+test(R_) <- call_goal(((X_, Y_) <- (Y_ := X_ + 1)), 5, R_)
+
+# Zero-arg arrow lambda
+run_goal(Result_) <- call_goal((() <- (Result_ is 42)))
+
+# Captured variable from enclosing clause
+add_z(Z_, R_) <- call_goal((X_ <- (R_ := X_ + Z_)), 10)
+```
+
+The head is a variable (single param) or tuple of variables (multiple params). The body is any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
+
+Arrow syntax has a key advantage over Python `lambda`: the body supports `:=` (arithmetic evaluation), which Python's lambda syntax forbids.
+
+### Conjunction bodies
+
+Multiple goals are joined with `and`. Parenthesize each `:=` subgoal separately:
+
+```
+transform(R_) <- call_goal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
+```
+
+### Why arrow syntax?
+
+Arrow lambdas are homoiconic — they look like the clause definitions they represent:
+
+```
+# Clause definition (statement level)
+double(X_, Y_) <- (Y_ := X_ + X_)
+
+# Anonymous clause (expression level) — same syntax
+apply_double(V_, R_) <- call_goal((X_ <- (double(X_, R_))), V_)
+```
+
+---
+
+## Python lambda syntax
+
+Python's native `lambda` also works as a goal closure:
+
+```
+# Zero-arg lambda
 run_goal(Result_) <- call_goal((lambda: Result_ is 42))
 
 # One-arg lambda
 apply_val(Result_, Val_) <- call_goal((lambda X_: Result_ is X_), Val_)
 
-# Two-arg lambda with arithmetic
-test(R_) <- call_goal((lambda X_, Y_: Y_ := X_ + 1), 5, R_)
+# Two-arg lambda with arithmetic (must use 'is' not ':=' — Python forbids := in lambda bodies)
+test(R_) <- call_goal((lambda X_, Y_: Y_ is X_ + 1), 5, R_)
 ```
 
-Lambda parameters are logic variables (trailing underscore or ALL-CAPS). The body can be any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
+Lambda parameters are logic variables (trailing underscore or ALL-CAPS). The body can be any goal expression — unification, predicate calls, or conjunctions.
 
 ### Conjunction bodies
 
 Multiple goals in a lambda body are joined with `and` (not commas — commas would be parsed as Python tuple syntax):
 
 ```
-test(R_) <- call_goal((lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2)), 5, R_)
+test(R_) <- call_goal((lambda X_, Y_: (T_ is X_ + 1 and Y_ is T_ * 2)), 5, R_)
 ```
 
 Parentheses around the conjunction body are required for the same reason as in clause bodies — they prevent Python's parser from mis-parsing the operator precedence.
+
+### Limitation: no `:=` in Python lambda
+
+Python's parser forbids walrus `:=` expressions inside lambda bodies. Use `is` (unification) instead, or switch to arrow syntax where `:=` works.
 
 ---
 
@@ -202,4 +252,5 @@ Tests are in `tests/test_lambdas.py`.
 - **Compiler** (Phase 2): produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
 - **Runtime** (Phase 3): `call_goal/1,2,3` with zero/one/two-arg closures, failing closure, multi-solution closure
 - **Compiled execution** (Phase 2+3): lambda with arithmetic body, captured var, unification body, failing body, conjunction body
+- **Arrow lambda** (Phase 5): single/two/zero param, LoadName for params, captures enclosing var, body vars don't leak, `:=` in body, functor heads stay as Predicate, arithmetic/conjunction/capture/predicate-call integration in `.clausal` files
 - **Import integration** (Phase 4): `.clausal` file with lambda + unification, captured head var, conjunction, zero-arg lambda, lambda calling user predicate, lambda calling multi-solution predicate

@@ -585,3 +585,193 @@ class TestLambdaImport:
         goal = Call(func=LoadName(name="get_color"), args=[c], kwargs=[])
         results = [row["c"] for row in query(goal, {"c": c}, logic_mod)]
         assert sorted(results) == ["blue", "green", "red"]
+
+
+# ── Phase 5: Arrow lambda syntax  (X_, Y_) <- (body) ─────────────────────────
+
+
+class TestArrowLambdaTermTransformer:
+    """Arrow syntax ``(X_, Y_) <- (body)`` produces Lambda nodes."""
+
+    def test_single_param_arrow_lambda(self):
+        """X_ <- (X_ > 0) produces a Lambda with one param."""
+        node = term_eval("X_ <- (X_ > 0)", sa.Lambda)
+        assert len(node.params.params) == 1
+        assert node.params.params[0].name == "X_"
+
+    def test_two_param_arrow_lambda(self):
+        """(X_, Y_) <- (Y_ is X_) produces a Lambda with two params."""
+        node = term_eval("(X_, Y_) <- (Y_ is X_)", sa.Lambda)
+        assert len(node.params.params) == 2
+        assert node.params.params[0].name == "X_"
+        assert node.params.params[1].name == "Y_"
+
+    def test_zero_param_arrow_lambda(self):
+        """() <- (True) produces a zero-param Lambda."""
+        node = term_eval("() <- (True)", sa.Lambda)
+        assert len(node.params.params) == 0
+
+    def test_arrow_lambda_param_generates_loadname(self):
+        """Arrow lambda param in body is a LoadName (not Var)."""
+        node = term_eval("X_ <- (X_)", sa.Lambda)
+        assert isinstance(node.body, sa.LoadName)
+        assert node.body.name == "X_"
+
+    def test_arrow_lambda_captures_enclosing_var(self):
+        """Arrow lambda captures enclosing scope Var."""
+        node, ns = term_eval_with_scope(
+            "X_ <- (Z_)", seen_vars={"Z_"}
+        )
+        assert isinstance(node, sa.Lambda)
+        assert node.body is ns["Z_"]
+
+    def test_arrow_lambda_body_var_does_not_leak(self):
+        """Var in arrow lambda body does not leak to enclosing scope."""
+        tree = ast.parse("X_ <- (X_)", mode="eval")
+        ast.fix_missing_locations(tree)
+        tt = TermTransformer()
+        original_seen = tt.seen_vars.copy()
+        tt.visit(tree.body)
+        assert tt.seen_vars == original_seen
+
+    def test_arrow_lambda_walrus_in_body(self):
+        """Arrow lambda supports := (Evaluate) in body — unlike Python lambda."""
+        node = term_eval("(X_, Y_) <- (Y_ := X_ + 1)", sa.Lambda)
+        assert isinstance(node, sa.Lambda)
+        assert isinstance(node.body, Evaluate)
+
+    def test_functor_head_stays_predicate(self):
+        """A functor call head like foo(X_) <- body stays as Predicate, not Lambda."""
+        from clausal.terms import Predicate as PredNode
+        tree = ast.parse("foo(X_) <- (X_ > 0)", mode="eval")
+        ast.fix_missing_locations(tree)
+        tt = TermTransformer()
+        transformed = tt.visit(tree.body)
+        ns = _ns()
+        ns["X_"] = Var()
+        expr = ast.fix_missing_locations(ast.Expression(body=transformed))
+        result = eval(compile(expr, "<test>", "eval"), ns)
+        assert isinstance(result, PredNode)
+
+
+class TestArrowLambdaCompiled:
+    """Arrow lambdas compile and execute correctly."""
+
+    def test_arrow_lambda_unify(self):
+        """Arrow lambda with unification body works at runtime."""
+        from clausal.logic.database import Clause, Database
+        from clausal.logic.compiler import compile_predicate_trampoline
+
+        # Build: apply_val(Result_, Val_) <- call_goal((X_ <- (Result_ is X_)), Val_)
+        # We test via .clausal file to get the full pipeline
+        pass  # covered by integration tests below
+
+    def test_arrow_lambda_arithmetic_in_clausal(self, tmp_path):
+        """Arrow lambda with := arithmetic in .clausal file."""
+        clausal_file = tmp_path / "arrow_arith.clausal"
+        clausal_file.write_text(
+            "-module(arrow_arith, [apply_inc/2])\n"
+            "\n"
+            "apply_inc(Val_, Result_) <- call_goal((X_ <- (Result_ := X_ + 1)), Val_)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_arith", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="apply_inc"), args=[5, r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [6]
+
+    def test_arrow_lambda_two_params_in_clausal(self, tmp_path):
+        """Two-param arrow lambda in .clausal file."""
+        clausal_file = tmp_path / "arrow_two.clausal"
+        clausal_file.write_text(
+            "-module(arrow_two, [apply_add/3])\n"
+            "\n"
+            "apply_add(A_, B_, Result_) <- call_goal(((X_, Y_) <- (Result_ := X_ + Y_)), A_, B_)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_two", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="apply_add"), args=[3, 4, r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [7]
+
+    def test_arrow_lambda_zero_arg_in_clausal(self, tmp_path):
+        """Zero-arg arrow lambda in .clausal file."""
+        clausal_file = tmp_path / "arrow_zero.clausal"
+        clausal_file.write_text(
+            "-module(arrow_zero, [run_goal/1])\n"
+            "\n"
+            "run_goal(Result_) <- call_goal((() <- (Result_ is 99)))\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_zero", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="run_goal"), args=[r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [99]
+
+    def test_arrow_lambda_captures_head_var(self, tmp_path):
+        """Arrow lambda captures clause-head variable."""
+        clausal_file = tmp_path / "arrow_capture.clausal"
+        clausal_file.write_text(
+            "-module(arrow_capture, [add_z/2])\n"
+            "\n"
+            "add_z(Z_, Result_) <- call_goal((X_ <- (Result_ := X_ + Z_)), 10)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_capture", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="add_z"), args=[3, r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [13]
+
+    def test_arrow_lambda_conjunction_in_clausal(self, tmp_path):
+        """Arrow lambda with conjunction body in .clausal file."""
+        clausal_file = tmp_path / "arrow_conj.clausal"
+        clausal_file.write_text(
+            "-module(arrow_conj, [transform/2])\n"
+            "\n"
+            "transform(Val_, Result_) <- call_goal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), Val_, Result_)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_conj", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="transform"), args=[5, r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [12]
+
+    def test_arrow_lambda_calls_user_predicate(self, tmp_path):
+        """Arrow lambda calling a user-defined predicate."""
+        clausal_file = tmp_path / "arrow_pred.clausal"
+        clausal_file.write_text(
+            "-module(arrow_pred, [double/2, apply_double/2])\n"
+            "\n"
+            "double(X_, Y_) <- (Y_ := X_ + X_)\n"
+            "\n"
+            "apply_double(Val_, Result_) <- call_goal((X_ <- (double(X_, Result_))), Val_)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        mod = _load_module("arrow_pred", str(clausal_file))
+        from clausal.logic.solve import query
+        r = Var()
+        logic_mod = mod.__dict__["$module"]
+        goal = Call(func=LoadName(name="apply_double"), args=[7, r], kwargs=[])
+        results = [row["r"] for row in query(goal, {"r": r}, logic_mod)]
+        assert results == [14]

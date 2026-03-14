@@ -225,6 +225,29 @@ def _detect_arrow(left, operators, comparators):
     return left, usub_node.operand
 
 
+def _extract_arrow_lambda_params(head_ast):
+    """Extract lambda parameter names from an arrow head, or return None.
+
+    Returns a list of parameter name strings if the head is a valid lambda
+    parameter list (all logic-variable names, or an empty tuple).  Returns
+    ``None`` if the head is not a lambda-style parameter list (e.g. a
+    functor call like ``foo(X_)``).
+    """
+    # Single variable: X_ <- body
+    if isinstance(head_ast, Name) and _is_logic_var_name(head_ast.id):
+        return [head_ast.id]
+    # Tuple of variables: (X_, Y_) <- body  or  () <- body
+    if isinstance(head_ast, Tuple):
+        params = []
+        for elt in head_ast.elts:
+            if isinstance(elt, Name) and _is_logic_var_name(elt.id):
+                params.append(elt.id)
+            else:
+                return None  # non-variable element → not a lambda
+        return params
+    return None
+
+
 def _check_hidden_arrow(node):
     """Raise if a top-level BoolOp hides a ``<-`` clause arrow.
 
@@ -365,6 +388,15 @@ class TermTransformer(NodeTransformer):
         arrow = _detect_arrow(left, operators, comparators)
         if arrow is not None:
             head_ast, body_ast = arrow
+            # If the head consists solely of logic-variable names (or is an
+            # empty tuple), treat the expression-level ``<-`` as a lambda
+            # (anonymous clause).  Otherwise fall through to Predicate node
+            # (used by assertz for rule assertions).
+            lambda_params = _extract_arrow_lambda_params(head_ast)
+            if lambda_params is not None:
+                return transformer._build_arrow_lambda(
+                    lambda_params, body_ast, compare,
+                )
             return node_ast(
                 "Predicate",
                 compare,
@@ -519,6 +551,73 @@ class TermTransformer(NodeTransformer):
             params=params,
             body=body,
         )
+
+    def _build_arrow_lambda(transformer, param_names, body_ast, source):
+        """Build a Lambda node from ``(X_, Y_) <- (body)`` arrow syntax.
+
+        Uses the same capture/LoadName mechanism as ``visit_Lambda``.
+        """
+        lambda_transformer = TermTransformer()
+        lambda_transformer.seen_vars = transformer.seen_vars.copy()
+
+        logic_var_params = [p for p in param_names if _is_logic_var_name(p)]
+        lambda_transformer._load_names = (
+            set(logic_var_params)
+            | getattr(transformer, '_load_names', set())
+        )
+        lambda_transformer.seen_vars.update(logic_var_params)
+
+        # Build Params AST — each param is a PosOrKwParam.
+        if param_names:
+            param_nodes = [
+                replace(
+                    Call(
+                        func=load_name_ast("PosOrKwParam", source),
+                        args=[],
+                        keywords=[
+                            make_keyword_node(
+                                "name",
+                                replace(Constant(value=name), source),
+                                source,
+                            ),
+                        ],
+                    ),
+                    source,
+                )
+                for name in param_names
+            ]
+            params = replace(
+                Call(
+                    func=load_name_ast("Params", source),
+                    args=[],
+                    keywords=[
+                        make_keyword_node(
+                            "params",
+                            list_ast(param_nodes, source),
+                            source,
+                        ),
+                    ],
+                ),
+                source,
+            )
+        else:
+            params = replace(
+                Call(
+                    func=load_name_ast("Params", source),
+                    args=[],
+                    keywords=[
+                        make_keyword_node(
+                            "params",
+                            list_ast([], source),
+                            source,
+                        ),
+                    ],
+                ),
+                source,
+            )
+
+        body = lambda_transformer.visit(body_ast)
+        return node_ast("Lambda", source, params=params, body=body)
 
     def visit_List(transformer, list_expr):
         # Python lists are terms directly — emit a plain Python list.
