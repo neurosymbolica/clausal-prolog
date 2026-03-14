@@ -1,9 +1,9 @@
 sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
-    in_domain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
-    and all_different([S_, E_, N_, D_, M_, O_, R_, Y_])
+    InDomain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
+    and AllDifferent([S_, E_, N_, D_, M_, O_, R_, Y_])
     and S_ != 0
     and M_ != 0
-    and label([S_, E_, N_, D_, M_, O_, R_, Y_])
+    and Label([S_, E_, N_, D_, M_, O_, R_, Y_])
     and (Send_ := S_ * 1000 + E_ * 100 + N_ * 10 + D_)
     and (More_ := M_ * 1000 + O_ * 100 + R_ * 10 + E_)
     and (Money_ := M_ * 10000 + O_ * 1000 + N_ * 100 + E_ * 10 + Y_)

@@ -95,23 +95,23 @@ test("expression: 1+2 <= 3") <- (1 + 2 <= 3)
 
 # ── Arithmetic builtins ──────────────────────────────────────────────────────
 
-test("succ forward: succ(3,4)") <- succ(3, 4)
+test("succ forward: succ(3,4)") <- Succ(3, 4)
 test("succ backward: succ(X,4)=3") <- (
-    succ(X_, 4),
+    Succ(X_, 4),
     X_ == 3
 )
-test("succ zero: succ(0,1)") <- succ(0, 1)
-test("plus forward: 2+3=5") <- plus(2, 3, 5)
+test("succ zero: succ(0,1)") <- Succ(0, 1)
+test("plus forward: 2+3=5") <- Plus(2, 3, 5)
 test("plus backward x: X+3=5") <- (
-    plus(X_, 3, 5),
+    Plus(X_, 3, 5),
     X_ == 2
 )
 test("plus backward y: 2+Y=5") <- (
-    plus(2, Y_, 5),
+    Plus(2, Y_, 5),
     Y_ == 3
 )
-test("between check: 3 in 1..5") <- between(1, 5, 3)
-test("between out of range") <- (not between(1, 5, 6))
+test("between check: 3 in 1..5") <- Between(1, 5, 3)
+test("between out of range") <- (not Between(1, 5, 6))
 # Note: abs_/2, max_/3, min_/3 have trailing underscores so they are parsed
 # as logic variables in .clausal syntax.  Tested in Python test file instead.
 

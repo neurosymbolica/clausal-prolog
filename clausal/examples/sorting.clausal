@@ -11,7 +11,7 @@
 # ── Naive sort (permutation sort) ─────────────────────────────────────────────
 
 naive_sort(LIST, SORTED) <- (
-    permutation(LIST, SORTED),
+    Permutation(LIST, SORTED),
     is_sorted(SORTED)
 )
 
@@ -29,7 +29,7 @@ qsort([PIVOT, *REST], SORTED) <- (
     partition(PIVOT, REST, LO, HI),
     qsort(LO, SORTED_LO),
     qsort(HI, SORTED_HI),
-    append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
+    Append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
 )
 
 partition(PIVOT=0, LIST=[], LO=[], HI=[]),

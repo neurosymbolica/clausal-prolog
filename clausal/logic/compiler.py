@@ -61,6 +61,19 @@ from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.codegen import functiondef_to_function
+from clausal.logic.solve import _deref_walk as _deref_walk_fn
+
+
+def _set_of_dedup(items: list) -> list:
+    """Deduplicate a list preserving order. Tries hash first, falls back to ==."""
+    try:
+        return list(dict.fromkeys(items))
+    except TypeError:
+        seen: list = []
+        for item in items:
+            if item not in seen:
+                seen.append(item)
+        return seen
 
 
 # ── Predicate-as-class dispatch adapter ───────────────────────────────────────
@@ -581,16 +594,20 @@ def _inject_call_targets(
     from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
     for target_name, target_arity in call_targets:
-        if target_name in base_globals:
+        existing = base_globals.get(target_name)
+        if existing is not None and hasattr(existing, "_get_dispatch"):
+            # Already resolved to a valid call target (predicate or builtin).
             continue
+        # Builtins take priority over any non-predicate name already in globals.
+        builtin = get_builtin_predicate(target_name, target_arity, db)
+        if builtin is not None:
+            base_globals[target_name] = builtin
+            continue
+        # User-defined predicate from module globals (cross-module calls).
         if globals_ and target_name in globals_:
             base_globals[target_name] = globals_[target_name]
-        else:
-            builtin = get_builtin_predicate(target_name, target_arity, db)
-            if builtin is not None:
-                base_globals[target_name] = builtin
-            elif db is not None:
-                base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
+        elif db is not None:
+            base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
 
 
 def _preallocate_body_vars(
@@ -1602,9 +1619,35 @@ def compile_goal(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
-        # ── once(goal) — commit to first solution ──────────────────────────
-        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
+        # ── Once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
+
+        # ── FindAll/3 — collect all solutions ───────────────────────────────
+        case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=False, dedup=False,
+            )
+
+        # ── BagOf/3 — FindAll that fails on empty ─────────────────────────
+        case Call(func=LoadName(name="BagOf"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=True, dedup=False,
+            )
+
+        # ── SetOf/3 — BagOf + dedup ───────────────────────────────────────
+        case Call(func=LoadName(name="SetOf"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=True, dedup=True,
+            )
+
+        # ── ForAll/2 — \+( Cond, \+ Action ) ───────────────────────────────
+        case Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[]):
+            rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
+            return compile_goal(rewritten, db, var_context, trail_name, k_stmts)
 
         # ── Compile-time-known predicate call ────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
@@ -1653,6 +1696,113 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
         ),
         _undo_stmt(once_mark, trail_name),
     ]
+
+
+def _compile_find_all_core(
+    template: Any,
+    inner_goal: Any,
+    bag: Any,
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+    k_stmts: list[ast.stmt],
+    *,
+    fail_on_empty: bool = False,
+    dedup: bool = False,
+) -> list[ast.stmt]:
+    """Compile find_all/3, bag_of/3, set_of/3 as special forms.
+
+    Generates::
+
+        _fa_results_N = []
+        _fa_m_N = trail.mark()
+        def _fa_gen_N():
+            <compiled inner_goal with k = [yield None]>
+            return; yield
+        for _ in _fa_gen_N():
+            _fa_results_N.append(_deref_walk(<template_expr>))
+        trail.undo(_fa_m_N)
+        # optional dedup: _fa_results_N = _set_of_dedup(_fa_results_N)
+        # optional empty check: if _fa_results_N:
+        _fa_um_N = trail.mark()
+        if unify(<bag_expr>, _fa_results_N, trail):
+            <k_stmts>
+        trail.undo(_fa_um_N)
+    """
+    results_var = _fresh("_fa_results")
+    mark_var = _fresh("_fa_m")
+    gen_name = _fresh("_fa_gen")
+    unify_mark = _fresh("_fa_um")
+
+    template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
+    bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
+
+    # Compile inner goal as sub-generator (simple mode, like once/NAF)
+    inner_stmts = compile_goal(inner_goal, db, var_context, trail_name, [_yield_none_stmt()])
+    gen_body = inner_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=gen_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    # Build the for-loop that collects results
+    append_call = ast.Expr(value=_call(
+        _attr(results_var, "append"),
+        _call(_name("_deref_walk"), template_expr),
+    ))
+    collect_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=[append_call],
+        orelse=[],
+    )
+
+    # Unify bag with results + k_stmts
+    unify_block = [
+        _assign_mark(unify_mark, trail_name),
+        ast.If(
+            test=_call(_name("unify"), bag_expr, _name(results_var), _name(trail_name)),
+            body=k_stmts or [ast.Pass()],
+            orelse=[],
+        ),
+        _undo_stmt(unify_mark, trail_name),
+    ]
+
+    stmts: list[ast.stmt] = [
+        _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
+        _assign_mark(mark_var, trail_name),
+        gen_fn,
+        collect_loop,
+        _undo_stmt(mark_var, trail_name),
+    ]
+
+    # Optional dedup (set_of)
+    if dedup:
+        stmts.append(_assign(
+            results_var,
+            _call(_name("_set_of_dedup"), _name(results_var)),
+        ))
+
+    # Optional empty check (bag_of, set_of)
+    if fail_on_empty:
+        stmts.append(ast.If(
+            test=_name(results_var),
+            body=unify_block,
+            orelse=[],
+        ))
+    else:
+        stmts.extend(unify_block)
+
+    return stmts
 
 
 # ── Goal lambda compilation ──────────────────────────────────────────────────
@@ -2233,10 +2383,36 @@ def compile_goal_trampoline(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
-        # ── once(goal) — commit to first solution ──────────────────────────
-        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
+        # ── Once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             # Inner compiles in simple mode (sub-generator), same as NAF.
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
+
+        # ── FindAll/3 — collect all solutions ───────────────────────────────
+        case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=False, dedup=False,
+            )
+
+        # ── BagOf/3 — FindAll that fails on empty ─────────────────────────
+        case Call(func=LoadName(name="BagOf"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=True, dedup=False,
+            )
+
+        # ── SetOf/3 — BagOf + dedup ───────────────────────────────────────
+        case Call(func=LoadName(name="SetOf"), args=[template, inner_goal, bag], kwargs=[]):
+            return _compile_find_all_core(
+                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                fail_on_empty=True, dedup=True,
+            )
+
+        # ── ForAll/2 — \+( Cond, \+ Action ) ───────────────────────────────
+        case Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[]):
+            rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
+            return compile_goal(rewritten, db, var_context, trail_name, k_stmts)
 
         # ── Stack-safe predicate call ─────────────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
@@ -2814,6 +2990,8 @@ def compile_predicate_trampoline(
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
         "_tramp_call": _tramp_call,
+        "_deref_walk": _deref_walk_fn,
+        "_set_of_dedup": _set_of_dedup,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -4172,6 +4350,8 @@ def compile_predicate(
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
         "_tramp_call": _tramp_call,
+        "_deref_walk": _deref_walk_fn,
+        "_set_of_dedup": _set_of_dedup,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:

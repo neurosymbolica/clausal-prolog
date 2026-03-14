@@ -122,8 +122,8 @@ class TestConjunction:
         member(X, [1,2]) and member(Y, [a,b]) generates 4 solutions."""
         x, y = Var(), Var()
         goal = And(
-            left=Call(func=LoadName(name="member"), args=[x, [1, 2]], kwargs=[]),
-            right=Call(func=LoadName(name="member"), args=[y, ["a", "b"]], kwargs=[]),
+            left=Call(func=LoadName(name="In"), args=[x, [1, 2]], kwargs=[]),
+            right=Call(func=LoadName(name="In"), args=[y, ["a", "b"]], kwargs=[]),
         )
         mod = Module("test")
         solutions = []
@@ -239,7 +239,7 @@ class TestNegation:
     def test_naf_with_member(self):
         """not(member(d, [a,b,c])) succeeds — d is not in the list."""
         goal = Not(operand=Call(
-            func=LoadName(name="member"),
+            func=LoadName(name="In"),
             args=["d", ["a", "b", "c"]],
             kwargs=[],
         ))
@@ -248,7 +248,7 @@ class TestNegation:
     def test_naf_with_member_present(self):
         """not(member(b, [a,b,c])) fails — b IS in the list."""
         goal = Not(operand=Call(
-            func=LoadName(name="member"),
+            func=LoadName(name="In"),
             args=["b", ["a", "b", "c"]],
             kwargs=[],
         ))

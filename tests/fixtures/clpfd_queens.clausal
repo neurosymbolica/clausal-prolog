@@ -1,7 +1,7 @@
 safe_queens(N_, Qs_) <- (
-    in_domain(Qs_, 1, N_)
-    and all_different(Qs_)
-    and label(Qs_)
+    InDomain(Qs_, 1, N_)
+    and AllDifferent(Qs_)
+    and Label(Qs_)
     and check_diagonals(Qs_)
 )
 

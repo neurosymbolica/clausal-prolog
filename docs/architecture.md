@@ -173,7 +173,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — assertz/retract, member/append, arithmetic |
+| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order (V2-11) |
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
@@ -181,3 +181,5 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.logic.constraints` | Done — dif/2 via attributed variables (V2-5) |
 | `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints (V2-6) |
 | Well-founded semantics | Done — delayed negation, conditional answers (V2-7) |
+| Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N (V2-10) |
+| Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft (V2-11) |

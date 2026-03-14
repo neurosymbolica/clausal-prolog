@@ -18,38 +18,38 @@
 # ── Basic lambdas ────────────────────────────────────────────────────────────
 
 # Identity via call_goal — the simplest lambda.
-apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
+apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
 
 # Arithmetic in lambda body.
-add_one(X, Y) <- call_goal((V <- (Y := V + 1)), X)
+add_one(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
 
 # Two-argument lambda.
-double_val(X, Y) <- call_goal(((A, B) <- (B := A * 2)), X, Y)
+double_val(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
 
 # Zero-argument lambda.
-zero_arg(RESULT) <- call_goal((() <- (RESULT is 42)))
+zero_arg(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # ── Variable capture ─────────────────────────────────────────────────────────
 
 # Capture one variable from enclosing clause.
-add_z(Z, X, RESULT) <- call_goal((V <- (RESULT := V + Z)), X)
+add_z(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
 
 # Capture two variables from enclosing clause.
 capture_two(A, B, X, RESULT) <- (
-    call_goal((V <- (RESULT := V + A + B)), X)
+    CallGoal((V <- (RESULT := V + A + B)), X)
 )
 
 # ── Conjunction body ─────────────────────────────────────────────────────────
 
 # Lambda with multi-step conjunction: T := V + 1, R := T * 2
-transform(X, Y) <- call_goal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
 
 # ── Predicate calls from lambdas ─────────────────────────────────────────────
 
 # Helper predicate called from within a lambda.
 helper(X, Y) <- (Y := X * 10)
 
-apply_pred(X, Y) <- call_goal((V <- (helper(V, Y))), X)
+apply_pred(X, Y) <- CallGoal((V <- (helper(V, Y))), X)
 
 # ── Multi-solution via find_all ──────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ color("green"),
 color("blue"),
 
 all_colors(COLORS) <- (
-    find_all(C, color(C), COLORS)
+    FindAll(C, color(C), COLORS)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────

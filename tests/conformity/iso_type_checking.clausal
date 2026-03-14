@@ -25,82 +25,81 @@
 
 # Succeeds when X is bound to a number (integer or float).
 is_bound_number(X) <- (
-    nonvar(X),
-    number(X)
+    IsBound(X),
+    IsNumber(X)
 )
 
-# ── var/1 ────────────────────────────────────────────────────────────────────
+# ── IsVar/1 ────────────────────────────────────────────────────────────────────
 
-test("var: unbound var succeeds") <- var(X_)
-test("var: integer fails") <- (not var(42))
-test("var: atom fails") <- (not var(hello))
+test("var: unbound var succeeds") <- IsVar(X_)
+test("var: integer fails") <- (not IsVar(42))
+test("var: atom fails") <- (not IsVar(hello))
 test("var: bound var fails") <- (
     X_ is 1,
-    not var(X_)
+    not IsVar(X_)
 )
 
-# ── nonvar/1 ─────────────────────────────────────────────────────────────────
+# ── IsBound/1 ─────────────────────────────────────────────────────────────────
 
-test("nonvar: integer succeeds") <- nonvar(42)
-test("nonvar: atom succeeds") <- nonvar(hello)
-test("nonvar: unbound var fails") <- (not nonvar(X_))
+test("nonvar: integer succeeds") <- IsBound(42)
+test("nonvar: atom succeeds") <- IsBound(hello)
+test("nonvar: unbound var fails") <- (not IsBound(X_))
 test("nonvar: bound var succeeds") <- (
     X_ is 1,
-    nonvar(X_)
+    IsBound(X_)
 )
-test("nonvar: list succeeds") <- nonvar([1, 2])
+test("nonvar: list succeeds") <- IsBound([1, 2])
 
-# ── atom/1 ───────────────────────────────────────────────────────────────────
+# ── IsStr/1 ───────────────────────────────────────────────────────────────────
 
-test("atom: string succeeds") <- atom(hello)
-test("atom: empty string succeeds") <- atom("")
-test("atom: integer fails") <- (not atom(1))
-test("atom: unbound var fails") <- (not atom(X_))
-test("atom: list fails") <- (not atom([]))
+test("atom: string succeeds") <- IsStr(hello)
+test("atom: empty string succeeds") <- IsStr("")
+test("atom: integer fails") <- (not IsStr(1))
+test("atom: unbound var fails") <- (not IsStr(X_))
+test("atom: list fails") <- (not IsStr([]))
 
-# ── integer/1 ────────────────────────────────────────────────────────────────
+# ── IsInt/1 ────────────────────────────────────────────────────────────────────
 
-test("integer: positive") <- integer(1)
-test("integer: zero") <- integer(0)
-test("integer: large") <- integer(100000000000000000000)
-test("integer: string fails") <- (not integer("1"))
-test("integer: var fails") <- (not integer(X_))
-# Note: integer(-1), integer(True/False) tested in Python test file
+test("integer: positive") <- IsInt(1)
+test("integer: zero") <- IsInt(0)
+test("integer: large") <- IsInt(100000000000000000000)
+test("integer: string fails") <- (not IsInt("1"))
+test("integer: var fails") <- (not IsInt(X_))
+# Note: IsInt(-1), IsInt(True/False) tested in Python test file
 
-# ── float_/1 ─────────────────────────────────────────────────────────────────
-# Cannot test float_/1 in .clausal — 'float_' is parsed as a logic variable.
-# See test_iso_type_checking.py for these tests.
+# ── IsFloat/1 ─────────────────────────────────────────────────────────────────
+# Note: IsFloat can be tested in .clausal (no longer a trailing-underscore name)
 
-# ── number/1 ─────────────────────────────────────────────────────────────────
+# ── IsNumber/1 ─────────────────────────────────────────────────────────────────
 
-test("number: integer") <- number(42)
-test("number: float") <- number(3.14)
-test("number: string fails") <- (not number("42"))
-test("number: var fails") <- (not number(X_))
+test("number: integer") <- IsNumber(42)
+test("number: float") <- IsNumber(3.14)
+test("number: string fails") <- (not IsNumber("42"))
+test("number: var fails") <- (not IsNumber(X_))
 
-# ── string/1 ─────────────────────────────────────────────────────────────────
+# ── IsStr/1 (string alias) ────────────────────────────────────────────────────
 
-test("string: str succeeds") <- string(hello)
-test("string: empty str") <- string("")
-test("string: int fails") <- (not string(42))
-test("string: var fails") <- (not string(X_))
+test("string: str succeeds") <- IsStr(hello)
+test("string: empty str") <- IsStr("")
+test("string: int fails") <- (not IsStr(42))
+test("string: var fails") <- (not IsStr(X_))
 
-# ── is_list/1 ────────────────────────────────────────────────────────────────
+# ── IsList/1 ────────────────────────────────────────────────────────────────────
 
-test("is_list: list") <- is_list([1, 2, 3])
-test("is_list: empty") <- is_list([])
-test("is_list: nested") <- is_list([[1], [2]])
-test("is_list: string fails") <- (not is_list(hello))
-test("is_list: int fails") <- (not is_list(42))
-test("is_list: var fails") <- (not is_list(X_))
+test("is_list: list") <- IsList([1, 2, 3])
+test("is_list: empty") <- IsList([])
+test("is_list: nested") <- IsList([[1], [2]])
+test("is_list: string fails") <- (not IsList(hello))
+test("is_list: int fails") <- (not IsList(42))
+test("is_list: var fails") <- (not IsList(X_))
 
-# ── ground/1 ─────────────────────────────────────────────────────────────────
+# ── IsGround/1 ─────────────────────────────────────────────────────────────────
 
-test("ground: integer") <- ground(42)
-test("ground: string") <- ground(abc)
-test("ground: ground list") <- ground([1, 2, 3])
-test("ground: empty list") <- ground([])
-test("ground: var fails") <- (not ground(X_))
+test("ground: integer") <- IsGround(42)
+test("ground: string") <- IsGround(abc)
+test("ground: ground list") <- IsGround([1, 2, 3])
+test("ground: empty list") <- IsGround([])
+test("ground: var fails") <- (not IsGround(X_))
 
 # ── is_bound_number/1 (private helper) ─────────────────────────────────────
 

@@ -50,6 +50,13 @@ Standard library — list predicates
 
 Standard library — pair helpers
     pairs_keys_values/3, pairs_keys/2, pairs_values/2
+
+Higher-order list predicates (V2-11)
+    map_list/2, map_list/3, include/3, exclude/3, foldl/4
+
+Pythonic aliases (V2-11)
+    merge_sort/2 (→ msort/2), get_item/3 (→ nth0/3),
+    member_check/2 (→ memberchk/2), unpack/2 (→ univ/2)
 """
 
 from __future__ import annotations
@@ -343,7 +350,7 @@ def _is_ground(term: Any) -> bool:
 # ── Core inspection ────────────────────────────────────────────────────────────
 
 
-@_builtin("functor", 3)
+@_builtin("Functor", 3)
 def _functor__3(term, name, arity, trail, k):
     """functor(Term, Name, Arity) — decompose or compose a term.
 
@@ -384,7 +391,7 @@ def _functor__3(term, name, arity, trail, k):
         trail.undo(mark)
 
 
-@_builtin("arg", 3)
+@_builtin("Arg", 3)
 def _arg__3(n, term, arg_out, trail, k):
     """arg(N, Term, Arg) — unify Arg with the N-th argument of Term (1-based)."""
     n_val = deref(n)
@@ -403,7 +410,7 @@ def _arg__3(n, term, arg_out, trail, k):
     trail.undo(mark)
 
 
-@_builtin("univ", 2)
+@_builtin("Unpack", 2)
 def _univ__2(term, lst, trail, k):
     """univ(Term, List) — ``=..`` in Prolog.
 
@@ -497,7 +504,7 @@ def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":
     return candidate if isinstance(candidate, PredicateMeta) else None
 
 
-@_db_builtin("assertz", 1)
+@_db_builtin("Assert", 1)
 def _assertz_factory(db):
     """assertz(Term) — add Term as a fact at end of its predicate's clause list.
 
@@ -535,7 +542,7 @@ def _assertz_factory(db):
     return assertz__1
 
 
-@_db_builtin("asserta", 1)
+@_db_builtin("AssertFirst", 1)
 def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
@@ -570,7 +577,7 @@ def _asserta_factory(db):
     return asserta__1
 
 
-@_db_builtin("retract", 1)
+@_db_builtin("Retract", 1)
 def _retract_factory(db):
     """retract(Term) — remove the first clause whose head unifies with Term.
 
@@ -651,7 +658,7 @@ def _retract_factory(db):
 # ── Tabling ───────────────────────────────────────────────────────────────────
 
 
-@_db_builtin("abolish_table", 2)
+@_db_builtin("ClearTable", 2)
 def _abolish_table_factory(db):
     """abolish_table(Functor, Arity) — remove cached answers for a tabled predicate."""
 
@@ -668,7 +675,7 @@ def _abolish_table_factory(db):
     return abolish_table__2
 
 
-@_db_builtin("abolish_all_tables", 0)
+@_db_builtin("ClearAllTables", 0)
 def _abolish_all_tables_factory(db):
     """abolish_all_tables — remove all cached tabling answers."""
 
@@ -682,7 +689,7 @@ def _abolish_all_tables_factory(db):
 # ── WK-5: Keyword-term introspection ──────────────────────────────────────────
 
 
-@_builtin("vary", 3)
+@_builtin("Vary", 3)
 def _vary__3(overrides, term, new_term, trail, k):
     """vary(Overrides, Term, NewTerm) — copy Term with field overrides.
 
@@ -717,7 +724,7 @@ def _vary__3(overrides, term, new_term, trail, k):
     trail.undo(mark)
 
 
-@_builtin("extend", 3)
+@_builtin("Extend", 3)
 def _extend__3(additions, term, new_term, trail, k):
     """extend(Additions, Term, NewTerm) — copy Term with additional fields.
 
@@ -744,7 +751,7 @@ def _extend__3(additions, term, new_term, trail, k):
     trail.undo(mark)
 
 
-@_builtin("unbound_keys", 2)
+@_builtin("UnboundKeys", 2)
 def _unbound_keys__2(term, keys_list, trail, k):
     """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
 
@@ -768,7 +775,7 @@ def _unbound_keys__2(term, keys_list, trail, k):
     trail.undo(mark)
 
 
-@_db_builtin("signature", 3)
+@_db_builtin("Signature", 3)
 def _signature_factory(db):
     """signature(FunctorName, Arity, Names) — reflect the registered signature."""
     def signature__3(functor_name, arity, names, trail, k):
@@ -791,7 +798,7 @@ def _signature_factory(db):
 # ── Constraint builtins ───────────────────────────────────────────────────────
 
 
-@_builtin("dif", 2)
+@_builtin("Dif", 2)
 def _dif__2(x, y, trail, k):
     """dif(X, Y) — disequality constraint: succeed if X and Y can remain different."""
     from clausal.logic.constraints import dif as _dif_fn  # noqa: PLC0415
@@ -802,14 +809,14 @@ def _dif__2(x, y, trail, k):
 # ── Reified builtins (V2-8 Phase B) ──────────────────────────────────────────
 
 
-@_builtin("eq", 3)
+@_builtin("Eq", 3)
 def _eq__3(x, y, t, trail, k):
     """eq(X, Y, T) — reified equality: T is True if X=Y, False if dif(X,Y)."""
     from clausal.logic.reif import eq__3  # noqa: PLC0415
     yield from eq__3(x, y, t, trail, k)
 
 
-@_builtin("dif_t", 3)
+@_builtin("DifT", 3)
 def _dif_t__3(x, y, t, trail, k):
     """dif_t(X, Y, T) — reified disequality: T is True if dif(X,Y), False if X=Y."""
     from clausal.logic.reif import dif_t__3  # noqa: PLC0415
@@ -819,7 +826,7 @@ def _dif_t__3(x, y, t, trail, k):
 # ── CLP(FD) builtins ─────────────────────────────────────────────────────────
 
 
-@_builtin("in_domain", 3)
+@_builtin("InDomain", 3)
 def _in_domain__3(var_or_list, lo, hi, trail, k):
     """in_domain(Var, Lo, Hi) — post domain [Lo, Hi] on Var or list of Vars."""
     from clausal.logic.clpfd import in_domain as _in_domain_fn  # noqa: PLC0415
@@ -827,14 +834,14 @@ def _in_domain__3(var_or_list, lo, hi, trail, k):
         yield None
 
 
-@_builtin("label", 1)
+@_builtin("Label", 1)
 def _label__1(vars_list, trail, k):
     """label(Vars) — enumerate values for FD-constrained variables."""
     from clausal.logic.clpfd import label as _label_fn  # noqa: PLC0415
     yield from _label_fn(vars_list, trail)
 
 
-@_builtin("all_different", 1)
+@_builtin("AllDifferent", 1)
 def _all_different__1(vars_list, trail, k):
     """all_different(Vars) — post all-different constraint on list of Vars."""
     from clausal.logic.clpfd import all_different as _all_diff_fn  # noqa: PLC0415
@@ -842,7 +849,7 @@ def _all_different__1(vars_list, trail, k):
         yield None
 
 
-@_builtin("equivalent", 2)
+@_builtin("Equivalent", 2)
 def _equivalent__2(t1, t2, trail, k):
     """equivalent(T1, T2) — structural equality (old == behavior)."""
     from clausal.logic.clpfd import equivalent as _equiv_fn  # noqa: PLC0415
@@ -853,21 +860,21 @@ def _equivalent__2(t1, t2, trail, k):
 # ── Standard library: type checks ─────────────────────────────────────────────
 
 
-@_builtin("var", 1)
+@_builtin("IsVar", 1)
 def _var__1(x, trail, k):
     """var(X) — succeeds if X is an unbound logic variable."""
     if is_var(deref(x)):
         yield None
 
 
-@_builtin("nonvar", 1)
+@_builtin("IsBound", 1)
 def _nonvar__1(x, trail, k):
     """nonvar(X) — succeeds if X is bound (not an unbound Var)."""
     if not is_var(deref(x)):
         yield None
 
 
-@_builtin("atom", 1)
+@_builtin("IsStr", 1)
 def _atom__1(x, trail, k):
     """atom(X) — succeeds if X is a string (Prolog atom)."""
     x_val = deref(x)
@@ -875,7 +882,7 @@ def _atom__1(x, trail, k):
         yield None
 
 
-@_builtin("number", 1)
+@_builtin("IsNumber", 1)
 def _number__1(x, trail, k):
     """number(X) — succeeds if X is an int or float (not bool)."""
     x_val = deref(x)
@@ -887,7 +894,7 @@ def _number__1(x, trail, k):
         yield None
 
 
-@_builtin("integer", 1)
+@_builtin("IsInt", 1)
 def _integer__1(x, trail, k):
     """integer(X) — succeeds if X is an int (not bool)."""
     x_val = deref(x)
@@ -895,7 +902,7 @@ def _integer__1(x, trail, k):
         yield None
 
 
-@_builtin("float_", 1)
+@_builtin("IsFloat", 1)
 def _float__1(x, trail, k):
     """float_(X) — succeeds if X is a Python float."""
     x_val = deref(x)
@@ -903,15 +910,8 @@ def _float__1(x, trail, k):
         yield None
 
 
-@_builtin("string", 1)
-def _string__1(x, trail, k):
-    """string(X) — alias for atom/1: succeeds if X is a Python str."""
-    x_val = deref(x)
-    if not is_var(x_val) and isinstance(x_val, str):
-        yield None
 
-
-@_builtin("compound", 1)
+@_builtin("IsCompound", 1)
 def _compound__1(x, trail, k):
     """compound(X) — succeeds if X is a compound term with arity > 0."""
     x_val = deref(x)
@@ -925,7 +925,7 @@ def _compound__1(x, trail, k):
         yield None
 
 
-@_builtin("callable", 1)
+@_builtin("IsCallable", 1)
 def _callable__1(x, trail, k):
     """callable(X) — succeeds if X is an atom or compound."""
     x_val = deref(x)
@@ -937,14 +937,14 @@ def _callable__1(x, trail, k):
         yield None
 
 
-@_builtin("is_list", 1)
+@_builtin("IsList", 1)
 def _is_list__1(x, trail, k):
     """is_list(X) — succeeds if X is a Python list."""
     if isinstance(deref(x), list):
         yield None
 
 
-@_builtin("ground", 1)
+@_builtin("IsGround", 1)
 def _ground__1(x, trail, k):
     """ground(X) — succeeds if X contains no unbound Vars."""
     if _is_ground(deref(x)):
@@ -954,7 +954,7 @@ def _ground__1(x, trail, k):
 # ── Standard library: arithmetic ──────────────────────────────────────────────
 
 
-@_builtin("between", 3)
+@_builtin("Between", 3)
 def _between__3(low, high, x, trail, k):
     """between(Low, High, X) — X ranges over integers from Low to High inclusive."""
     low_val = deref(low)
@@ -977,7 +977,7 @@ def _between__3(low, high, x, trail, k):
             trail.undo(mark)
 
 
-@_builtin("succ", 2)
+@_builtin("Succ", 2)
 def _succ__2(x, y, trail, k):
     """succ(X, Y) — Y = X + 1 (both non-negative integers)."""
     x_val = deref(x)
@@ -998,7 +998,7 @@ def _succ__2(x, y, trail, k):
         trail.undo(mark)
 
 
-@_builtin("plus", 3)
+@_builtin("Plus", 3)
 def _plus__3(x, y, z, trail, k):
     """plus(X, Y, Z) — Z = X + Y; any two determine the third."""
     x_val = deref(x)
@@ -1025,7 +1025,7 @@ def _plus__3(x, y, z, trail, k):
         trail.undo(mark)
 
 
-@_builtin("abs_", 2)
+@_builtin("Abs", 2)
 def _abs__2(x, y, trail, k):
     """abs_(X, Y) — Y = abs(X)."""
     x_val = deref(x)
@@ -1039,7 +1039,7 @@ def _abs__2(x, y, trail, k):
     trail.undo(mark)
 
 
-@_builtin("max_", 3)
+@_builtin("Max", 3)
 def _max__3(x, y, z, trail, k):
     """max_(X, Y, Z) — Z = max(X, Y)."""
     x_val = deref(x)
@@ -1052,7 +1052,7 @@ def _max__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
-@_builtin("min_", 3)
+@_builtin("Min", 3)
 def _min__3(x, y, z, trail, k):
     """min_(X, Y, Z) — Z = min(X, Y)."""
     x_val = deref(x)
@@ -1068,7 +1068,7 @@ def _min__3(x, y, z, trail, k):
 # ── Standard library: list predicates ─────────────────────────────────────────
 
 
-@_builtin("member", 2)
+@_builtin("In", 2)
 def _member__2(elem, lst, trail, k):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack."""
     lst_val = deref(lst)
@@ -1081,7 +1081,7 @@ def _member__2(elem, lst, trail, k):
         trail.undo(mark)
 
 
-@_builtin("memberchk", 2)
+@_builtin("InCheck", 2)
 def _memberchk__2(elem, lst, trail, k):
     """memberchk(Elem, List) — like member/2 but commits to the first match."""
     lst_val = deref(lst)
@@ -1095,7 +1095,7 @@ def _memberchk__2(elem, lst, trail, k):
         trail.undo(mark)
 
 
-@_builtin("append", 3)
+@_builtin("Append", 3)
 def _append__3(l1, l2, l3, trail, k):
     """append(L1, L2, L3) — L3 is the concatenation of L1 and L2.
 
@@ -1131,7 +1131,7 @@ def _append__3(l1, l2, l3, trail, k):
             trail.undo(mark)
 
 
-@_builtin("length", 2)
+@_builtin("Length", 2)
 def _length__2(lst, n, trail, k):
     """length(List, N) — N is the length of List."""
     lst_val = deref(lst)
@@ -1149,7 +1149,7 @@ def _length__2(lst, n, trail, k):
         trail.undo(mark)
 
 
-@_builtin("last", 2)
+@_builtin("Last", 2)
 def _last__2(lst, elem, trail, k):
     """last(List, Elem) — Elem is the last element of List."""
     lst_val = deref(lst)
@@ -1160,7 +1160,7 @@ def _last__2(lst, elem, trail, k):
         trail.undo(mark)
 
 
-@_builtin("reverse", 2)
+@_builtin("Reverse", 2)
 def _reverse__2(lst, rev, trail, k):
     """reverse(List, Rev) — Rev is the reverse of List."""
     lst_val = deref(lst)
@@ -1171,7 +1171,7 @@ def _reverse__2(lst, rev, trail, k):
         trail.undo(mark)
 
 
-@_builtin("nth0", 3)
+@_builtin("GetItem", 3)
 def _nth0__3(n, lst, elem, trail, k):
     """nth0(N, List, Elem) — Elem is the N-th element of List (0-based)."""
     n_val = deref(n)
@@ -1193,29 +1193,8 @@ def _nth0__3(n, lst, elem, trail, k):
             trail.undo(mark)
 
 
-@_builtin("nth1", 3)
-def _nth1__3(n, lst, elem, trail, k):
-    """nth1(N, List, Elem) — Elem is the N-th element of List (1-based)."""
-    n_val = deref(n)
-    lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    if not is_var(n_val):
-        if not isinstance(n_val, int) or n_val < 1 or n_val > len(lst_val):
-            return
-        mark = trail.mark()
-        if unify(elem, lst_val[n_val - 1], trail):
-            yield None
-        trail.undo(mark)
-    else:
-        for i, item in enumerate(lst_val):
-            mark = trail.mark()
-            if unify(n, i + 1, trail) and unify(elem, item, trail):
-                yield None
-            trail.undo(mark)
 
-
-@_builtin("flatten", 2)
+@_builtin("Flatten", 2)
 def _flatten__2(lst, flat, trail, k):
     """flatten(List, Flat) — Flat is the flat list of all atoms in List."""
     lst_val = deref(lst)
@@ -1238,7 +1217,7 @@ def _flatten__2(lst, flat, trail, k):
     trail.undo(mark)
 
 
-@_builtin("msort", 2)
+@_builtin("MergeSort", 2)
 def _msort__2(lst, sorted_lst, trail, k):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
     lst_val = deref(lst)
@@ -1255,7 +1234,7 @@ def _msort__2(lst, sorted_lst, trail, k):
     trail.undo(mark)
 
 
-@_builtin("sort", 2)
+@_builtin("Sort", 2)
 def _sort__2(lst, sorted_lst, trail, k):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed."""
     lst_val = deref(lst)
@@ -1276,7 +1255,7 @@ def _sort__2(lst, sorted_lst, trail, k):
     trail.undo(mark)
 
 
-@_builtin("permutation", 2)
+@_builtin("Permutation", 2)
 def _permutation__2(lst, perm, trail, k):
     """permutation(List, Perm) — Perm is a permutation of List."""
     import itertools
@@ -1290,7 +1269,7 @@ def _permutation__2(lst, perm, trail, k):
         trail.undo(mark)
 
 
-@_builtin("select", 3)
+@_builtin("Select", 3)
 def _select__3(elem, lst, rest, trail, k):
     """select(Elem, List, Rest) — Elem is in List, Rest is List without one occurrence."""
     lst_val = deref(lst)
@@ -1304,7 +1283,7 @@ def _select__3(elem, lst, rest, trail, k):
         trail.undo(mark)
 
 
-@_builtin("subtract", 3)
+@_builtin("Subtract", 3)
 def _subtract__3(set1, set2, diff, trail, k):
     """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
     s1 = deref(set1)
@@ -1318,7 +1297,7 @@ def _subtract__3(set1, set2, diff, trail, k):
     trail.undo(mark)
 
 
-@_builtin("intersection", 3)
+@_builtin("Intersection", 3)
 def _intersection__3(set1, set2, inter, trail, k):
     """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
     s1 = deref(set1)
@@ -1332,7 +1311,7 @@ def _intersection__3(set1, set2, inter, trail, k):
     trail.undo(mark)
 
 
-@_builtin("union", 3)
+@_builtin("Union", 3)
 def _union__3(set1, set2, uni, trail, k):
     """union(Set1, Set2, Union) — Union is Set1 ∪ Set2 (no duplicates)."""
     s1 = deref(set1)
@@ -1349,7 +1328,7 @@ def _union__3(set1, set2, uni, trail, k):
     trail.undo(mark)
 
 
-@_builtin("list_to_set", 2)
+@_builtin("ToSet", 2)
 def _list_to_set__2(lst, set_out, trail, k):
     """list_to_set(List, Set) — Set is List with duplicates removed (order preserved)."""
     lst_val = deref(lst)
@@ -1365,7 +1344,7 @@ def _list_to_set__2(lst, set_out, trail, k):
     trail.undo(mark)
 
 
-@_builtin("sum_list", 2)
+@_builtin("SumList", 2)
 def _sum_list__2(lst, total, trail, k):
     """sum_list(List, Total) — Total is the sum of all numbers in List."""
     lst_val = deref(lst)
@@ -1381,7 +1360,7 @@ def _sum_list__2(lst, total, trail, k):
     trail.undo(mark)
 
 
-@_builtin("max_list", 2)
+@_builtin("MaxList", 2)
 def _max_list__2(lst, maximum, trail, k):
     """max_list(List, Max) — Max is the maximum element of List."""
     lst_val = deref(lst)
@@ -1397,7 +1376,7 @@ def _max_list__2(lst, maximum, trail, k):
     trail.undo(mark)
 
 
-@_builtin("min_list", 2)
+@_builtin("MinList", 2)
 def _min_list__2(lst, minimum, trail, k):
     """min_list(List, Min) — Min is the minimum element of List."""
     lst_val = deref(lst)
@@ -1416,7 +1395,7 @@ def _min_list__2(lst, minimum, trail, k):
 # ── Standard library: pair helpers ────────────────────────────────────────────
 
 
-@_builtin("pairs_keys_values", 3)
+@_builtin("Unzip", 3)
 def _pairs_keys_values__3(pairs, keys, values, trail, k):
     """pairs_keys_values(Pairs, Keys, Values) — Pairs is a list of [K, V] lists."""
     pairs_val = deref(pairs)
@@ -1440,7 +1419,7 @@ def _pairs_keys_values__3(pairs, keys, values, trail, k):
             trail.undo(mark)
 
 
-@_builtin("pairs_keys", 2)
+@_builtin("PairKeys", 2)
 def _pairs_keys__2(pairs, keys, trail, k):
     """pairs_keys(Pairs, Keys) — Keys are the first elements of each pair."""
     pairs_val = deref(pairs)
@@ -1453,7 +1432,7 @@ def _pairs_keys__2(pairs, keys, trail, k):
     trail.undo(mark)
 
 
-@_builtin("pairs_values", 2)
+@_builtin("PairValues", 2)
 def _pairs_values__2(pairs, values, trail, k):
     """pairs_values(Pairs, Values) — Values are the second elements of each pair."""
     pairs_val = deref(pairs)
@@ -1469,7 +1448,7 @@ def _pairs_values__2(pairs, values, trail, k):
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
 
 
-@_builtin("call_goal", 1)
+@_builtin("CallGoal", 1)
 def _call_goal__1(goal, trail, k):
     """call_goal(Goal) — call a zero-extra-arg goal closure."""
     goal_val = deref(goal)
@@ -1479,7 +1458,7 @@ def _call_goal__1(goal, trail, k):
     return; yield  # noqa: B901
 
 
-@_builtin("call_goal", 2)
+@_builtin("CallGoal", 2)
 def _call_goal__2(goal, arg1, trail, k):
     """call_goal(Goal, Arg1) — call a 1-extra-arg goal closure."""
     goal_val = deref(goal)
@@ -1489,7 +1468,7 @@ def _call_goal__2(goal, arg1, trail, k):
     return; yield  # noqa: B901
 
 
-@_builtin("call_goal", 3)
+@_builtin("CallGoal", 3)
 def _call_goal__3(goal, arg1, arg2, trail, k):
     """call_goal(Goal, Arg1, Arg2) — call a 2-extra-arg goal closure."""
     goal_val = deref(goal)
@@ -1497,6 +1476,163 @@ def _call_goal__3(goal, arg1, arg2, trail, k):
         for _ in goal_val(deref(arg1), deref(arg2), trail, k):
             yield None
     return; yield  # noqa: B901
+
+
+# ── call_goal/4..8 and call/1..8 — generalized call/N ─────────────────────────
+
+
+def _make_call_goal_n(extra_n: int):
+    """Generate a call_goal builtin with extra_n extra args (arity = extra_n + 1)."""
+    def _call_goal_n(*args):
+        # args = (goal, extra1, ..., extraN, trail, k)
+        goal_val = deref(args[0])
+        if callable(goal_val):
+            derefed = [deref(a) for a in args[1:extra_n + 1]]
+            trail = args[extra_n + 1]
+            k = args[extra_n + 2]
+            for _ in goal_val(*derefed, trail, k):
+                yield None
+        return; yield  # noqa: B901
+    return _call_goal_n
+
+
+for _n in range(3, 8):  # extra_n=3..7 → arity 4..8
+    _builtin("CallGoal", _n + 1)(_make_call_goal_n(_n))
+
+# Call/1..8 — aliases: Call(Goal, A1, ...) = CallGoal(Goal, A1, ...)
+# Call/N has arity N: Call(Goal) is arity 1, Call(Goal, A1) is arity 2, etc.
+for _n in range(1, 9):
+    _key = ("CallGoal", _n)
+    if _key in _BUILTINS:
+        _BUILTINS[("Call", _n)] = _BUILTINS[_key]
+
+
+# ── Higher-order list predicates (V2-11) ──────────────────────────────────────
+
+
+@_builtin("MapList", 2)
+def _map_list__2(goal, lst, trail, k):
+    """map_list(Goal, List) — Goal(Elem) succeeds for each element."""
+    lst_val = deref(lst)
+    if not isinstance(lst_val, list):
+        return; yield  # noqa: B901
+    goal_val = deref(goal)
+    if not callable(goal_val):
+        return; yield  # noqa: B901
+    outer_mark = trail.mark()
+    for elem in lst_val:
+        found = False
+        for _ in goal_val(deref(elem), trail, None):
+            found = True
+            break
+        if not found:
+            trail.undo(outer_mark)
+            return; yield  # noqa: B901
+    yield None
+    trail.undo(outer_mark)
+
+
+@_builtin("MapList", 3)
+def _map_list__3(goal, xs, ys, trail, k):
+    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y."""
+    xs_val = deref(xs)
+    if not isinstance(xs_val, list):
+        return; yield  # noqa: B901
+    goal_val = deref(goal)
+    if not callable(goal_val):
+        return; yield  # noqa: B901
+    outer_mark = trail.mark()
+    results = []
+    for x in xs_val:
+        y = Var()
+        found = False
+        for _ in goal_val(deref(x), y, trail, None):
+            found = True
+            results.append(deref(y))
+            break
+        if not found:
+            trail.undo(outer_mark)
+            return; yield  # noqa: B901
+    if unify(ys, results, trail):
+        yield None
+    trail.undo(outer_mark)
+
+
+@_builtin("Filter", 3)
+def _include__3(goal, lst, included, trail, k):
+    """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
+    lst_val = deref(lst)
+    if not isinstance(lst_val, list):
+        return; yield  # noqa: B901
+    goal_val = deref(goal)
+    if not callable(goal_val):
+        return; yield  # noqa: B901
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        mark = trail.mark()
+        found = False
+        for _ in goal_val(deref(elem), trail, None):
+            found = True
+            break
+        trail.undo(mark)
+        if found:
+            kept.append(deref(elem))
+    if unify(included, kept, trail):
+        yield None
+    trail.undo(outer_mark)
+
+
+@_builtin("Exclude", 3)
+def _exclude__3(goal, lst, excluded, trail, k):
+    """exclude(Goal, List, Excluded) — keep elements where Goal(Elem) fails."""
+    lst_val = deref(lst)
+    if not isinstance(lst_val, list):
+        return; yield  # noqa: B901
+    goal_val = deref(goal)
+    if not callable(goal_val):
+        return; yield  # noqa: B901
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        mark = trail.mark()
+        found = False
+        for _ in goal_val(deref(elem), trail, None):
+            found = True
+            break
+        trail.undo(mark)
+        if not found:
+            kept.append(deref(elem))
+    if unify(excluded, kept, trail):
+        yield None
+    trail.undo(outer_mark)
+
+
+@_builtin("FoldLeft", 4)
+def _foldl__4(goal, lst, v0, v, trail, k):
+    """foldl(Goal, List, V0, V) — left fold with Goal(Elem, Acc0, Acc1)."""
+    lst_val = deref(lst)
+    if not isinstance(lst_val, list):
+        return; yield  # noqa: B901
+    goal_val = deref(goal)
+    if not callable(goal_val):
+        return; yield  # noqa: B901
+    outer_mark = trail.mark()
+    acc = v0
+    for elem in lst_val:
+        next_acc = Var()
+        found = False
+        for _ in goal_val(deref(elem), deref(acc), next_acc, trail, None):
+            found = True
+            break
+        if not found:
+            trail.undo(outer_mark)
+            return; yield  # noqa: B901
+        acc = next_acc
+    if unify(v, deref(acc), trail):
+        yield None
+    trail.undo(outer_mark)
+
 
 
 __all__ = [

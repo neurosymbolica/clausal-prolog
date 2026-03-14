@@ -1,0 +1,12 @@
+# Tests for keyword-term introspection predicates: Vary/3, Extend/3, UnboundKeys/2, Signature/3
+
+# Vary/3 — copy a term with field overrides
+# (Uses Python dict as overrides; requires a predicate with known fields.)
+# Example: copy a point with its x replaced
+update_x(P_, NewX_, P2_) <- Vary({"x": NewX_}, P_, P2_)
+
+# UnboundKeys/2 — find which fields are still unbound vars
+free_fields(T_, Ks_) <- UnboundKeys(T_, Ks_)
+
+# Signature/3 — reflect the registered parameter names for a predicate
+pred_params(Name_, Arity_, Params_) <- Signature(Name_, Arity_, Params_)

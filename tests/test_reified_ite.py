@@ -29,7 +29,7 @@ from clausal.pythonic_ast.nodes import (
 
 def _once(goal):
     """Helper: build a once(goal) Call node."""
-    return Call(func=LoadName(name="once"), args=[goal], kwargs=[])
+    return Call(func=LoadName(name="Once"), args=[goal], kwargs=[])
 
 
 # ── reify_eq unit tests ──────────────────────────────────────────────────────

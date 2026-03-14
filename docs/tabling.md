@@ -67,7 +67,7 @@ for trail in call("path", 1, Y, module=lm):
 
 ### Invalidation
 
-Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via `assertz`, `asserta`, or `retract` on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
+Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via `Assert`, `AssertFirst`, or `Retract` on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
 
 To invalidate manually:
 
@@ -76,7 +76,7 @@ db.abolish_table("path", 2)   # clear one predicate's cache
 db.abolish_all_tables()        # clear all
 ```
 
-The builtins `abolish_table/2` and `abolish_all_tables/0` are also available from within clausal code.
+The builtins `ClearTable/2` and `ClearAllTables/0` are also available from within clausal code.
 
 ---
 
@@ -220,7 +220,7 @@ The two-pass approach ensures all cross-predicate references resolve before wrap
 
 ### Auto-invalidation
 
-When `assertz`, `asserta`, or `retract` modify a tabled predicate's clauses, the database automatically clears all table entries for that predicate:
+When `Assert`, `AssertFirst`, or `Retract` modify a tabled predicate's clauses, the database automatically clears all table entries for that predicate:
 
 ```python
 if self.is_tabled(functor, arity):
@@ -333,7 +333,7 @@ Tests are in `tests/test_tabling.py` (46 tests), `tests/test_slg_termination.py`
 - Answer freezing and unification
 - Simple-mode wrapper: basic dispatch, cache hit
 - Trampoline-mode wrapper: basic, multiple answers, adapter
-- Database integration: table store, abolish, auto-invalidation on assertz/retract
+- Database integration: table store, abolish, auto-invalidation on Assert/Retract
 
 **Integration tests** (`test_tabling.py`):
 - Tabled fibonacci (fib/2): basic, zero, one, cache hit, ground query success/failure

@@ -135,31 +135,42 @@ Built-in predicates are available in every module without explicit import. They 
 **Stateless builtins** — stored in `_BUILTINS` as dispatch functions:
 
 ```
-member/2        append/3        length/2        reverse/2
-last/2          nth0/3          nth1/3          flatten/2
-sort/2          msort/2         permutation/2   select/3
-between/3       succ/2          plus/3          abs_/2
-max_/3          min_/3          sum_list/2      max_list/2
-min_list/2      var/1           nonvar/1        atom/1
-number/1        integer/1       float_/1        string/1
-compound/1      callable/1      is_list/1       ground/1
-functor/3       arg/3           univ/2          dif/2
-in_domain/3     label/1         all_different/1 equivalent/2
-call_goal/1     call_goal/2     call_goal/3
+In/2            InCheck/2       Append/3        Length/2
+Reverse/2       Last/2          GetItem/3       Flatten/2
+Sort/2          MergeSort/2     Permutation/2   Select/3
+Between/3       Succ/2          Plus/3          Abs/2
+Max/3           Min/3           SumList/2       MaxList/2
+MinList/2       IsVar/1         IsBound/1       IsStr/1
+IsNumber/1      IsInt/1         IsFloat/1       IsCompound/1
+IsCallable/1    IsList/1        IsGround/1      Functor/3
+Arg/3           Unpack/2        Dif/2           InDomain/3
+Label/1         AllDifferent/1  Equivalent/2    CallGoal/1
+CallGoal/2      CallGoal/3      CallGoal/4      CallGoal/5
+CallGoal/6      CallGoal/7      CallGoal/8      Call/1
+Call/2          Call/3          Call/4          Call/5
+Call/6          Call/7          Call/8          MapList/2
+MapList/3       Filter/3        Exclude/3       FoldLeft/4
+Unzip/3         PairKeys/2      PairValues/2
+```
+
+**Compiler special forms** — compiled inline, not dispatched as builtins:
+
+```
+FindAll/3       BagOf/3         SetOf/3         ForAll/2
 ```
 
 **DB-dependent builtins** — stored in `_DB_BUILTINS` as factory callables; instantiated lazily with the live `Database`:
 
 ```
-assertz/1       asserta/1       retract/1       signature/3
-vary/3          extend/3        unbound_keys/2
+Assert/1        AssertFirst/1   Retract/1       Signature/3
+Vary/3          Extend/3        UnboundKeys/2
 ```
 
 `BuiltinPredicate` wraps a dispatch function (or a db-bound factory result) with the same `_get_dispatch()` protocol as PredicateMeta classes. This means compiled predicate bodies call builtins via the same code path as user predicates.
 
 ---
 
-## assertz / asserta / retract from Python
+## Assert / AssertFirst / Retract from Python
 
 When called from a predicate body in a `.clausal` module, these builtins:
 1. Check that the target predicate is not locked.

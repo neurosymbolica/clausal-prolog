@@ -4,14 +4,14 @@ Clausal supports constraint logic programming through attributed variables. The 
 
 Two constraint solvers are built in:
 
-- **dif/2** — disequality constraint (`clausal.logic.constraints`, V2-5)
+- **Dif/2** — disequality constraint (`clausal.logic.constraints`, V2-5)
 - **CLP(FD)** — finite-domain constraints (`clausal.logic.clpfd`, V2-6)
 
 ---
 
-## dif/2 — Disequality constraint
+## Dif/2 — Disequality constraint
 
-`dif(X, Y)` constrains X and Y to be different. Unlike a point-in-time check, the constraint survives and is re-evaluated whenever either variable gets bound.
+`Dif(X, Y)` constrains X and Y to be different. Unlike a point-in-time check, the constraint survives and is re-evaluated whenever either variable gets bound.
 
 ### Syntax
 
@@ -27,11 +27,11 @@ safe_assign(X_, Y_) <- (
 
 This succeeds because X and Y end up with different values (1 and 2), even though at the time of `is not` they are both unbound.
 
-The builtin `dif/2` can also be called explicitly:
+The builtin `Dif/2` can also be called explicitly:
 
 ```
 constrained(X_, Y_) <- (
-    dif(X_, Y_)
+    Dif(X_, Y_)
     and X_ is 1
     and Y_ is 2
 )
@@ -41,7 +41,7 @@ constrained(X_, Y_) <- (
 
 | Clausal syntax | Semantics | Prolog equivalent |
 |---|---|---|
-| `X_ is not Y_` | Constraint: must end up different | `dif(X, Y)` |
+| `X_ is not Y_` | Constraint: must end up different | `Dif(X, Y)` |
 | `not (X_ is Y_)` | Immediate: don't unify right now | `\=(X, Y)` |
 
 The `is not` operator changed from Prolog `\=` (immediate) to Prolog `dif/2` (constraint) in V2-5. The old immediate-check semantics are still available as `not (X_ is Y_)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
@@ -157,7 +157,7 @@ Tests are in `tests/test_dif.py` (42 tests).
 - **Constraint propagation**: same/different values, multiple constraints, compound args, transitive via shared var
 - **Backtracking**: constraint undone on trail undo, binding failure doesn't corrupt trail
 - **Compiled integration**: `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints
-- **Builtin `dif/2`**: callable from clausal code, with vars and ground terms
+- **Builtin `Dif/2`**: callable from clausal code, with vars and ground terms
 - **Import hook**: `.clausal` file with `is not` using proper dif semantics
 
 ---
@@ -176,12 +176,12 @@ The implementation lives in `clausal.logic.clpfd` (V2-6).
 | `!=` | CLP(FD) arithmetic disequality |
 | `<` `>` `<=` `>=` | CLP(FD) comparison constraints |
 | `is` | Unification (unchanged) |
-| `is not` | dif/2 constraint (unchanged) |
+| `is not` | `Dif/2` constraint (unchanged) |
 | `:=` | Eager arithmetic eval + unify (unchanged) |
 
 When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. When at least one side is an unbound Var, CLP(FD) constraints are posted.
 
-The old structural-equality behaviour of `==` is available as the named builtin `equivalent/2`.
+The old structural-equality behaviour of `==` is available as the named builtin `Equivalent/2`.
 
 ### Domain representation
 
@@ -255,34 +255,34 @@ Ground arithmetic expressions are evaluated before comparison.
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `in_domain` | 3 | `in_domain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
-| `label` | 1 | `label(Vars)` — enumerate values, first-fail strategy |
-| `all_different` | 1 | `all_different(Vars)` — pairwise disequality constraint |
-| `equivalent` | 2 | `equivalent(X, Y)` — structural equality (old `==` behavior) |
+| `InDomain` | 3 | `InDomain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
+| `Label` | 1 | `Label(Vars)` — enumerate values, first-fail strategy |
+| `AllDifferent` | 1 | `AllDifferent(Vars)` — pairwise disequality constraint |
+| `Equivalent` | 2 | `Equivalent(X, Y)` — structural equality (old `==` behavior) |
 
 ### Syntax examples
 
 **Domain declaration and labeling:**
 ```
 solve(X_) <- (
-    in_domain(X_, 1, 10)
-    and label([X_])
+    InDomain(X_, 1, 10)
+    and Label([X_])
 )
 ```
 
 **Chained comparison (natural Python syntax):**
 ```
-bounded(X_) <- (1 <= X_ and X_ <= 10 and label([X_]))
+bounded(X_) <- (1 <= X_ and X_ <= 10 and Label([X_]))
 ```
 
 Since `<=` is CLP(FD), `1 <= X_` and `X_ <= 10` naturally constrain X's domain.
 
-**N-Queens via all_different:**
+**N-Queens via AllDifferent:**
 ```
 queens(N_, Qs_) <- (
-    in_domain(Qs_, 1, N_)
-    and all_different(Qs_)
-    and label(Qs_)
+    InDomain(Qs_, 1, N_)
+    and AllDifferent(Qs_)
+    and Label(Qs_)
     and check_diagonals(Qs_)
 )
 ```
@@ -290,11 +290,11 @@ queens(N_, Qs_) <- (
 **SEND + MORE = MONEY:**
 ```
 sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
-    in_domain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
-    and all_different([S_, E_, N_, D_, M_, O_, R_, Y_])
+    InDomain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
+    and AllDifferent([S_, E_, N_, D_, M_, O_, R_, Y_])
     and S_ != 0
     and M_ != 0
-    and label([S_, E_, N_, D_, M_, O_, R_, Y_])
+    and Label([S_, E_, N_, D_, M_, O_, R_, Y_])
     and (Send_ := S_ * 1000 + E_ * 100 + N_ * 10 + D_)
     and (More_ := M_ * 1000 + O_ * 100 + R_ * 10 + E_)
     and (Money_ := M_ * 10000 + O_ * 1000 + N_ * 100 + E_ * 10 + Y_)
@@ -349,11 +349,11 @@ Tests are in `tests/test_clpfd.py` (74 tests).
 - **Domain operations**: from_range, contains, min/max, size, singleton, intersection, remove, remove_above/below, values
 - **in_domain**: post domain, unify succeeds/fails, list, narrows existing, singleton binds, empty fails, ground int
 - **label**: single var, two vars (cartesian product), backtracking restores, all ground
-- **equivalent**: same/different atoms, compounds, vars, bound vars
+- **Equivalent**: same/different atoms, compounds, vars, bound vars
 - **fd_eq/ne/lt/le/gt/ge**: ground values, var-int, var-var, auto-domain, wipeout
 - **Propagation**: lt chain, eq propagation, wipeout, backtracking restores domains
 - **Compiler integration**: ground eq/ne/lt/le/gt/ge, var eq via solve, chained le, ne with label, evaluate unchanged, is unchanged, is-not unchanged
-- **all_different**: basic permutations, ground ok/fail, via solve
+- **AllDifferent**: basic permutations, ground ok/fail, via solve
 - **N-Queens**: 4-queens (2 solutions), 8-queens (92 solutions)
 - **SEND+MORE=MONEY**: unique solution (9567 + 1085 = 10652)
 - **FD + dif interaction**: both constraints on same var, independent operation

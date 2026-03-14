@@ -1,0 +1,27 @@
+# Tests for higher-order list predicates: MapList/2, MapList/3, Filter/3, Exclude/3, FoldLeft/4
+# Goals are passed as references to named predicates defined in this file.
+
+# Helper predicates used as goals
+
+is_positive(X_) <- (X_ > 0)
+
+is_negative(X_) <- (X_ < 0)
+
+double(X_, Y_) <- (Y_ := X_ * 2)
+
+add_step(N_, Acc_, Next_) <- (Next_ := Acc_ + N_)
+
+# MapList/2 — Goal(Elem) holds for all elements
+all_positive(Xs_) <- MapList(is_positive, Xs_)
+
+# MapList/3 — maps each X to doubled Y
+doubled(Xs_, Ys_) <- MapList(double, Xs_, Ys_)
+
+# Filter/3 — filter keeping positives
+keep_positives(Xs_, Ys_) <- Filter(is_positive, Xs_, Ys_)
+
+# Exclude/3 — remove negatives
+drop_negatives(Xs_, Ys_) <- Exclude(is_negative, Xs_, Ys_)
+
+# FoldLeft/4 — sum a list via fold
+sum_fold(Xs_, S_) <- FoldLeft(add_step, Xs_, 0, S_)

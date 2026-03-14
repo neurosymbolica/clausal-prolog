@@ -60,16 +60,16 @@ test("wa adjacent to nt") <- adjacent(wa, nt)
 test("wa adjacent to sa") <- adjacent(wa, sa)
 test("nsw adjacent to v") <- adjacent(nsw, v)
 test("a coloring exists") <- colorable(_)
-test("coloring has 7 regions") <- (colorable(COLORING), length(COLORING, 7))
+test("coloring has 7 regions") <- (colorable(COLORING), Length(COLORING, 7))
 test("wa and nt get different colors") <- (
     colorable(COLORING),
-    member([wa, WA_C], COLORING),
-    member([nt, NT_C], COLORING),
+    In([wa, WA_C], COLORING),
+    In([nt, NT_C], COLORING),
     WA_C is not NT_C
 )
 test("sa and q get different colors") <- (
     colorable(COLORING),
-    member([sa, SA_C], COLORING),
-    member([q, Q_C], COLORING),
+    In([sa, SA_C], COLORING),
+    In([q, Q_C], COLORING),
     SA_C is not Q_C
 )

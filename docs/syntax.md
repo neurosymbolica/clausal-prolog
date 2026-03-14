@@ -93,6 +93,18 @@ Atoms that conflict with Python built-ins or that use non-identifier characters 
 
 ---
 
+## Builtin predicate naming
+
+All built-in predicates use **PascalCase** (e.g. `FindAll`, `In`, `Assert`, `IsVar`). This is a deliberate design choice — not aesthetic — with two goals:
+
+1. **Avoid Python keyword conflicts.** Many natural predicate names are Python reserved words: `not`, `in`, `is`, `and`, `or`, `if`, `for`, `assert`, `lambda`, `global`, `return`, `yield`. A Prolog-style lowercase predicate named `in` or `not` would be a syntax error the moment it appears as a function call in a clause body.
+
+2. **Avoid Python builtin conflicts.** Names like `abs`, `all`, `any`, `callable`, `filter`, `float`, `int`, `map`, `max`, `min`, `set`, `str`, `sum`, `var` are Python builtins that shadow (or would shadow) predicates if used lowercase.
+
+PascalCase keeps the builtin namespace cleanly separate from both Python keywords and user-defined (lowercase) predicates. User predicates are written in `lowercase` or `snake_case` as usual; they never conflict with builtins.
+
+---
+
 ## Unification
 
 Unification is written with `is`:
@@ -146,10 +158,10 @@ The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) (Constrain
 
 ```python
 bounded(X) <- (
-    in_domain(X, 1, 10)
+    InDomain(X, 1, 10)
     and X > 3
     and X < 8
-    and label([X])
+    and Label([X])
 )
 ```
 
@@ -167,7 +179,7 @@ When at least one side is an unbound Var, a CLP(FD) constraint is posted:
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-The old structural-equality behaviour of `==` is available as the builtin `equivalent(X, Y)`. Use `equivalent` when comparing non-integer terms where CLP(FD) semantics are not appropriate.
+The old structural-equality behaviour of `==` is available as the builtin `Equivalent(X, Y)`. Use `Equivalent` when comparing non-integer terms where CLP(FD) semantics are not appropriate.
 
 See [constraints.md](constraints.md) for the full CLP(FD) design, including domain representation, propagation, and labeling.
 
@@ -224,10 +236,10 @@ Multiple goals in a body are separated by commas, with each goal on its own line
 
 ```python
 is_permutation(XS, YS) <- (
-    length(XS, N),
-    length(YS, N),
-    sort(XS, S),
-    sort(YS, S)
+    Length(XS, N),
+    Length(YS, N),
+    Sort(XS, S),
+    Sort(YS, S)
 )
 ```
 
@@ -314,24 +326,97 @@ Lambdas are anonymous clauses — goal closures passed as arguments to higher-or
 
 ```python
 # One-arg lambda — X_ is a parameter, Result_ is captured
-apply(Result_, Val_) <- call_goal((X_ <- (Result_ := X_ + 1)), Val_)
+apply(Result_, Val_) <- CallGoal((X_ <- (Result_ := X_ + 1)), Val_)
 
 # Two-arg lambda
-apply_add(A_, B_, R_) <- call_goal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)
+apply_add(A_, B_, R_) <- CallGoal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)
 
 # Zero-arg lambda
-run_goal(Result_) <- call_goal((() <- (Result_ is 42)))
+run_goal(Result_) <- CallGoal((() <- (Result_ is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z_, R_) <- call_goal((X_ <- (R_ := X_ + Z_)), 10)
+add_z(Z_, R_) <- CallGoal((X_ <- (R_ := X_ + Z_)), 10)
 
 # Conjunction body — parenthesize each := subgoal
-transform(R_) <- call_goal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
+transform(R_) <- CallGoal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
 ```
 
-Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `call_goal/1,2,3` builtins.
+Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
 
 See [lambdas.md](lambdas.md) for the full design, compilation details, and examples.
+
+---
+
+## Meta-predicates
+
+Meta-predicates are higher-order predicates that take goals as arguments. They are compiled as special forms — the goal argument is compiled inline, not passed as a runtime value.
+
+### All-solutions predicates
+
+```python
+# Collect all X where In(X, [1,2,3]) into Bag
+FindAll(X_, In(X_, [1, 2, 3]), Bag_),
+
+# Same but with a filter — only X > 1
+FindAll(X_, (In(X_, [1, 2, 3]) and X_ > 1), Bag_),
+
+# Cartesian product — template can be any term
+FindAll([X_, Y_], (In(X_, [a, b]) and In(Y_, [1, 2])), Bag_),
+
+# BagOf fails if no solutions (FindAll succeeds with [])
+BagOf(X_, In(X_, List_), Bag_),
+
+# SetOf deduplicates results (preserving first-occurrence order)
+SetOf(X_, In(X_, [1, 1, 2, 2, 3]), Bag_),   # Bag_ = [1, 2, 3]
+```
+
+| Predicate | Empty result |
+|---|---|
+| `FindAll/3` | Succeeds with `Bag = []` |
+| `BagOf/3` | Fails |
+| `SetOf/3` | Fails |
+
+### Universal quantification
+
+```python
+# Succeeds iff Action holds for every solution of Cond
+ForAll(In(X_, [2, 4, 6]), X_ > 0),   # succeeds
+ForAll(In(X_, [2, -1, 6]), X_ > 0),  # fails
+```
+
+`ForAll(Cond, Action)` is equivalent to `not (Cond and not Action)`.
+
+### Call/N
+
+`Call/N` invokes a goal closure with extra arguments. It is an alias for `CallGoal/N`:
+
+```python
+CallGoal((X_ <- (X_ > 0)), 5),        # CallGoal/2: succeeds
+Call(Goal_, Arg1_, Arg2_),             # Call/3: invoke Goal_ with two extra args
+```
+
+`Call/1` through `Call/8` are available (as are `CallGoal/1` through `CallGoal/8`).
+
+### Higher-order list predicates (V2-11)
+
+These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
+
+```python
+# MapList/2 — check Goal(Elem) succeeds for every element
+MapList((X_ <- (X_ > 0)), [1, 2, 3]),              # succeeds
+
+# MapList/3 — map Goal(X, Y) over list, collect results
+MapList(((X_, Y_) <- (Y_ := X_ * 2)), [1, 2, 3], Ys_),  # Ys_ = [2, 4, 6]
+
+# Filter/3 — keep elements where Goal(Elem) succeeds
+Filter((X_ <- (X_ > 0)), [1, -2, 3, -4], R_),      # R_ = [1, 3]
+
+# Exclude/3 — keep elements where Goal(Elem) fails
+Exclude((X_ <- (X_ > 0)), [1, -2, 3, -4], R_),     # R_ = [-2, -4]
+
+# FoldLeft/4 — left fold with Goal(Elem, Acc0, Acc1)
+FoldLeft(((E_, A_, R_) <- (R_ := A_ + E_)), [1, 2, 3], 0, Sum_),  # Sum_ = 6
+```
 
 ---
 
@@ -424,10 +509,10 @@ X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
-in_domain(X, 1, 10),   # post finite domain
-all_different([X,Y,Z]), # pairwise disequality
-label([X, Y, Z]),      # enumerate solutions (first-fail)
-equivalent(X, Y),      # structural equality (old == behavior)
+InDomain(X, 1, 10),    # post finite domain
+AllDifferent([X,Y,Z]), # pairwise disequality
+Label([X, Y, Z]),      # enumerate solutions (first-fail)
+Equivalent(X, Y),      # structural equality (old == behavior)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
@@ -454,6 +539,23 @@ module/(Terms),
 (--clpz)(X > 0, X < 10),
 
 # Lambdas (anonymous clauses)
-call_goal((X_ <- (R_ := X_ + 1)), 5)                            # R_ = 6
-call_goal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)                # multi-param
+CallGoal((X_ <- (R_ := X_ + 1)), 5)                             # R_ = 6
+CallGoal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)                 # multi-param
+
+# Meta-predicates (V2-10)
+FindAll(X_, In(X_, [1,2,3]), Bag_),          # Bag_ = [1,2,3]
+BagOf(X_, In(X_, List_), Bag_),              # fails if List_ empty
+SetOf(X_, In(X_, Xs_), Bag_),               # deduplicates
+ForAll(In(X_, Ns_), X_ > 0),               # universal quantification
+Call(Goal_, Arg1_),                          # Call/2 (alias for CallGoal/2)
+
+# Higher-order list predicates (V2-11)
+MapList(Goal_, [1, 2, 3]),                   # check Goal_ on each element
+MapList(Goal_, Xs_, Ys_),                    # map Goal_(X, Y) over list
+Filter(Goal_, List_, Kept_),                 # keep where Goal_ succeeds
+Exclude(Goal_, List_, Removed_),             # keep where Goal_ fails
+FoldLeft(Goal_, List_, Acc0_, Result_),      # left fold with Goal_(Elem, Acc, Next)
+GetItem(Index_, List_, Elem_),               # 0-based index access
+InCheck(Elem_, List_),                       # deterministic membership check
+Unpack(Term_, List_),                        # decompose/construct term
 ```

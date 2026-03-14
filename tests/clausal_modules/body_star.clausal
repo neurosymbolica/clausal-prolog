@@ -23,7 +23,7 @@ capture_body(LIST, ALL) <- (
 # sum_tail/2 — deconstruct then use result in subsequent goal
 sum_tail(LIST, TAIL_LENGTH) <- (
     [_, *TAIL] is LIST,
-    length(TAIL, TAIL_LENGTH)
+    Length(TAIL, TAIL_LENGTH)
 )
 
 # second/2 — two consecutive body deconstructions

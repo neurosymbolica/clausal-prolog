@@ -79,35 +79,35 @@ class TestMember:
     def test_member_enumerates_all(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("member", x, [1, 2, 3], module=mod)]
+        results = [deref(x) for _ in call("In", x, [1, 2, 3], module=mod)]
         assert results == [1, 2, 3]
 
     def test_member_check_present(self):
         mod = fresh_module()
-        results = list(call("member", 2, [1, 2, 3], module=mod))
+        results = list(call("In", 2, [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_member_check_absent(self):
         mod = fresh_module()
-        results = list(call("member", 99, [1, 2, 3], module=mod))
+        results = list(call("In", 99, [1, 2, 3], module=mod))
         assert results == []
 
     def test_member_empty_list_fails(self):
         mod = fresh_module()
         x = Var()
-        results = list(call("member", x, [], module=mod))
+        results = list(call("In", x, [], module=mod))
         assert results == []
 
     def test_member_with_duplicates(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("member", x, [1, 1, 2], module=mod)]
+        results = [deref(x) for _ in call("In", x, [1, 1, 2], module=mod)]
         assert results == [1, 1, 2]
 
     def test_member_string_elements(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("member", x, ["a", "b", "c"], module=mod)]
+        results = [deref(x) for _ in call("In", x, ["a", "b", "c"], module=mod)]
         assert results == ["a", "b", "c"]
 
 
@@ -117,43 +117,43 @@ class TestMember:
 class TestAppend:
     def test_append_ground_check(self):
         mod = fresh_module()
-        results = list(call("append", [1, 2], [3], [1, 2, 3], module=mod))
+        results = list(call("Append", [1, 2], [3], [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_append_ground_check_fail(self):
         mod = fresh_module()
-        results = list(call("append", [1, 2], [3], [1, 2, 4], module=mod))
+        results = list(call("Append", [1, 2], [3], [1, 2, 4], module=mod))
         assert results == []
 
     def test_append_compute_result(self):
         mod = fresh_module()
         z = Var()
-        results = [deref(z) for _ in call("append", [1, 2], [3, 4], z, module=mod)]
+        results = [deref(z) for _ in call("Append", [1, 2], [3, 4], z, module=mod)]
         assert results == [[1, 2, 3, 4]]
 
     def test_append_empty_left(self):
         mod = fresh_module()
         z = Var()
-        results = [deref(z) for _ in call("append", [], [1, 2], z, module=mod)]
+        results = [deref(z) for _ in call("Append", [], [1, 2], z, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_empty_right(self):
         mod = fresh_module()
         z = Var()
-        results = [deref(z) for _ in call("append", [1, 2], [], z, module=mod)]
+        results = [deref(z) for _ in call("Append", [1, 2], [], z, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_both_empty(self):
         mod = fresh_module()
         z = Var()
-        results = [deref(z) for _ in call("append", [], [], z, module=mod)]
+        results = [deref(z) for _ in call("Append", [], [], z, module=mod)]
         assert results == [[]]
 
     def test_append_split_mode(self):
         """append(X, Y, [1,2,3]) yields all splits of [1,2,3]."""
         mod = fresh_module()
         x, y = Var(), Var()
-        pairs = [(deref(x), deref(y)) for _ in call("append", x, y, [1, 2, 3], module=mod)]
+        pairs = [(deref(x), deref(y)) for _ in call("Append", x, y, [1, 2, 3], module=mod)]
         assert len(pairs) == 4
         assert ([], [1, 2, 3]) in pairs
         assert ([1], [2, 3]) in pairs
@@ -163,7 +163,7 @@ class TestAppend:
     def test_append_left_unknown(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("append", x, [3, 4], [1, 2, 3, 4], module=mod)]
+        results = [deref(x) for _ in call("Append", x, [3, 4], [1, 2, 3, 4], module=mod)]
         assert results == [[1, 2]]
 
 
@@ -174,29 +174,29 @@ class TestLast:
     def test_last_singleton(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("last", [42], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [42], x, module=mod)]
         assert results == [42]
 
     def test_last_multiple(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [1, 2, 3], x, module=mod)]
         assert results == [3]
 
     def test_last_check_correct(self):
         mod = fresh_module()
-        results = list(call("last", [1, 2, 3], 3, module=mod))
+        results = list(call("Last", [1, 2, 3], 3, module=mod))
         assert len(results) == 1
 
     def test_last_check_wrong(self):
         mod = fresh_module()
-        results = list(call("last", [1, 2, 3], 1, module=mod))
+        results = list(call("Last", [1, 2, 3], 1, module=mod))
         assert results == []
 
     def test_last_strings(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("last", ["a", "b", "c"], x, module=mod)]
+        results = [deref(x) for _ in call("Last", ["a", "b", "c"], x, module=mod)]
         assert results == ["c"]
 
 
@@ -207,24 +207,24 @@ class TestReverse:
     def test_reverse_empty(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("reverse", [], x, module=mod)]
+        results = [deref(x) for _ in call("Reverse", [], x, module=mod)]
         assert results == [[]]
 
     def test_reverse_singleton(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("reverse", [1], x, module=mod)]
+        results = [deref(x) for _ in call("Reverse", [1], x, module=mod)]
         assert results == [[1]]
 
     def test_reverse_multiple(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("reverse", [1, 2, 3], x, module=mod)]
+        results = [deref(x) for _ in call("Reverse", [1, 2, 3], x, module=mod)]
         assert results == [[3, 2, 1]]
 
     def test_reverse_check(self):
         mod = fresh_module()
-        results = list(call("reverse", [1, 2, 3], [3, 2, 1], module=mod))
+        results = list(call("Reverse", [1, 2, 3], [3, 2, 1], module=mod))
         assert len(results) == 1
 
 
@@ -235,41 +235,41 @@ class TestPermutation:
     def test_permutation_empty(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("permutation", [], x, module=mod)]
+        results = [deref(x) for _ in call("Permutation", [], x, module=mod)]
         assert results == [[]]
 
     def test_permutation_singleton(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("permutation", [1], x, module=mod)]
+        results = [deref(x) for _ in call("Permutation", [1], x, module=mod)]
         assert results == [[1]]
 
     def test_permutation_two_elements(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("permutation", [1, 2], x, module=mod)]
+        results = [deref(x) for _ in call("Permutation", [1, 2], x, module=mod)]
         assert set(map(tuple, results)) == {(1, 2), (2, 1)}
 
     def test_permutation_three_elements_count(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("permutation", [1, 2, 3], x, module=mod)]
+        results = [deref(x) for _ in call("Permutation", [1, 2, 3], x, module=mod)]
         assert len(results) == 6
 
     def test_permutation_three_all_distinct(self):
         mod = fresh_module()
         x = Var()
-        results = [tuple(deref(x)) for _ in call("permutation", [1, 2, 3], x, module=mod)]
+        results = [tuple(deref(x)) for _ in call("Permutation", [1, 2, 3], x, module=mod)]
         assert len(set(results)) == 6  # all 3! permutations are unique
 
     def test_permutation_check_valid(self):
         mod = fresh_module()
-        results = list(call("permutation", [1, 2, 3], [3, 1, 2], module=mod))
+        results = list(call("Permutation", [1, 2, 3], [3, 1, 2], module=mod))
         assert len(results) == 1
 
     def test_permutation_check_invalid(self):
         mod = fresh_module()
-        results = list(call("permutation", [1, 2, 3], [1, 2, 4], module=mod))
+        results = list(call("Permutation", [1, 2, 3], [1, 2, 4], module=mod))
         assert results == []
 
 
@@ -280,35 +280,35 @@ class TestBetween:
     def test_between_enumerates(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("between", 1, 5, x, module=mod)]
+        results = [deref(x) for _ in call("Between", 1, 5, x, module=mod)]
         assert results == [1, 2, 3, 4, 5]
 
     def test_between_single_value(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("between", 3, 3, x, module=mod)]
+        results = [deref(x) for _ in call("Between", 3, 3, x, module=mod)]
         assert results == [3]
 
     def test_between_empty_range(self):
         mod = fresh_module()
         x = Var()
-        results = list(call("between", 5, 3, x, module=mod))
+        results = list(call("Between", 5, 3, x, module=mod))
         assert results == []
 
     def test_between_check_in_range(self):
         mod = fresh_module()
-        results = list(call("between", 1, 10, 5, module=mod))
+        results = list(call("Between", 1, 10, 5, module=mod))
         assert len(results) == 1
 
     def test_between_check_out_of_range(self):
         mod = fresh_module()
-        results = list(call("between", 1, 10, 15, module=mod))
+        results = list(call("Between", 1, 10, 15, module=mod))
         assert results == []
 
     def test_between_negative(self):
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("between", -2, 2, x, module=mod)]
+        results = [deref(x) for _ in call("Between", -2, 2, x, module=mod)]
         assert results == [-2, -1, 0, 1, 2]
 
 
@@ -467,7 +467,7 @@ def _make_queens_module(n: int) -> Module:
         ns = list(range(1, n_val + 1))
 
         # Use builtin permutation via trampoline
-        perm_dispatch = db.get_dispatch("permutation", 2)
+        perm_dispatch = db.get_dispatch("Permutation", 2)
         perm_sg = StepGenerator(perm_dispatch, this_generator, ns, qs_arg, trail)
         perm_st = yield (perm_sg, None)
         while perm_st is not DONE:
@@ -615,14 +615,14 @@ class TestQueryAPI:
     def test_query_append(self):
         mod = fresh_module()
         z = Var()
-        goal = Call(func=LoadName(name="append"), args=[[1, 2], [3], z], kwargs=[])
+        goal = Call(func=LoadName(name="Append"), args=[[1, 2], [3], z], kwargs=[])
         results = list(query(goal, {"Z": z}, mod))
         assert results == [{"Z": [1, 2, 3]}]
 
     def test_query_member_multiple(self):
         mod = fresh_module()
         x = Var()
-        goal = Call(func=LoadName(name="member"), args=[x, [1, 2, 3]], kwargs=[])
+        goal = Call(func=LoadName(name="In"), args=[x, [1, 2, 3]], kwargs=[])
         results = list(query(goal, {"X": x}, mod))
         assert [r["X"] for r in results] == [1, 2, 3]
 
@@ -630,7 +630,7 @@ class TestQueryAPI:
         mod = fresh_module()
         x = Var()
         t_result = once(
-            Call(func=LoadName(name="member"), args=[x, [10, 20, 30]], kwargs=[]),
+            Call(func=LoadName(name="In"), args=[x, [10, 20, 30]], kwargs=[]),
             mod,
         )
         assert t_result is not None
@@ -658,26 +658,26 @@ class TestRepeatedHeadVars:
     def test_append_empty_left(self):
         mod = self._lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [], [3, 4], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [], [3, 4], r, module=mod)]
         assert results == [[3, 4]]
 
     def test_append_nonempty(self):
         mod = self._lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [1, 2], [3, 4], r, module=mod)]
         assert results == [[1, 2, 3, 4]]
 
     def test_append_both_empty(self):
         mod = self._lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [], [], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [], [], r, module=mod)]
         assert results == [[]]
 
     def test_append_base_clause_repeated_var(self):
         """append([], B, B) — B appears twice in head."""
         mod = self._lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [], [42], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [], [42], r, module=mod)]
         assert results == [[42]]
 
     # ── last/2 — repeated X in head ──
@@ -685,13 +685,13 @@ class TestRepeatedHeadVars:
     def test_last_singleton(self):
         mod = self._lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("last", [7], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [7], x, module=mod)]
         assert results == [7]
 
     def test_last_multi(self):
         mod = self._lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [1, 2, 3], x, module=mod)]
         assert results == [3]
 
     # ── append/3 reverse mode (splitting a list) ──
@@ -701,7 +701,7 @@ class TestRepeatedHeadVars:
         mod = self._lists_mod()
         x, y = Var(), Var()
         results = []
-        for _ in call("append", x, y, [1, 2, 3], module=mod):
+        for _ in call("Append", x, y, [1, 2, 3], module=mod):
             results.append((list(deref(x)), list(deref(y))))
         assert results == [
             ([], [1, 2, 3]),
@@ -792,7 +792,7 @@ class TestAnonymousVar:
         """last/2 in lists.clausal uses _ for unused HEAD — verify it still works."""
         mod = _load_clausal_module("lists.clausal")
         x = Var()
-        results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [1, 2, 3], x, module=mod)]
         assert results == [3]
 
 

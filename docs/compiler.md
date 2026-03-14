@@ -75,7 +75,11 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (WFS, V2-7). |
 | `IfExpr(test, body, orelse)` | Reified ITE: three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. See [reified_ite.md](reified_ite.md). |
-| `Call(LoadName("once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
+| `Call(LoadName("Once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
+| `Call(LoadName("FindAll"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
+| `Call(LoadName("BagOf"), [tmpl, goal, bag])` | Same as `FindAll`, but fails if no solutions (empty result list). |
+| `Call(LoadName("SetOf"), [tmpl, goal, bag])` | Same as `BagOf`, plus deduplication via `_set_of_dedup` before unifying with `bag`. |
+| `Call(LoadName("ForAll"), [cond, action])` | Desugared to `not (cond and not action)` — uses existing NAF compilation. |
 | `In(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
 | `NotIn(elem, coll)` | found-flag pattern |
 | `Call(LoadName(f), args)` | `for _ in f._get_dispatch()(args, trail, k): k_stmts` |
@@ -211,6 +215,63 @@ trail.undo(_m)
 `_naf_tabled` is a plain function (not a generator) that checks the table store and either performs standard NAF (complete table), delays the negation (evaluating table — cycle through negation), or treats an absent entry as "no answers". This works identically from both simple and trampoline compiled code.
 
 `_naf_tabled` and `_table_store` (a reference to `db.table_store`) are injected into `base_globals` when `db` is not None. Non-tabled predicates fall through to the existing inline NAF codegen.
+
+---
+
+## Meta-predicates (V2-10)
+
+`FindAll/3`, `BagOf/3`, `SetOf/3`, and `ForAll/2` are compiled as **special forms** — not as builtin predicate calls, but as inline AST patterns emitted directly by `compile_goal`. This is necessary because the inner goal must be compiled at compile time (not dispatched at runtime).
+
+### FindAll/3
+
+`FindAll(Template, Goal, Bag)` collects all solutions of `Goal`, snapshots `Template` for each, and unifies the resulting list with `Bag`. It always succeeds — if `Goal` has no solutions, `Bag` unifies with `[]`.
+
+Generated code pattern:
+
+```python
+_fa_results = []
+_fa_m = trail.mark()
+def _fa_gen():
+    <compiled Goal with k_stmts = [yield None]>
+    return; yield
+for _ in _fa_gen():
+    _fa_results.append(_deref_walk(<template_expr>))
+trail.undo(_fa_m)
+_fa_um = trail.mark()
+if unify(<bag_expr>, _fa_results, trail):
+    <k_stmts>
+trail.undo(_fa_um)
+```
+
+Key details:
+- The inner goal compiles in **simple mode** as a sub-generator (same pattern as `Once` and NAF).
+- `_deref_walk` (from `clausal.logic.solve`) recursively dereferences the template, capturing a ground snapshot of each solution.
+- The trail mark/undo around the sub-generator ensures inner bindings don't leak.
+- `_deref_walk` and `_set_of_dedup` are injected into `base_globals`.
+
+### BagOf/3
+
+Same as `FindAll` but wraps the unify+continuation block in `if _fa_results:`, so it **fails** when the inner goal has no solutions.
+
+### SetOf/3
+
+Same as `BagOf` with an additional deduplication step before unification:
+
+```python
+_fa_results = _set_of_dedup(_fa_results)
+```
+
+`_set_of_dedup` tries `dict.fromkeys` for hashable items, falling back to O(n²) equality-based dedup for non-hashable terms.
+
+### ForAll/2
+
+`ForAll(Cond, Action)` succeeds if for every solution of `Cond`, `Action` also succeeds. Desugared at compile time to:
+
+```python
+not (Cond and not Action)
+```
+
+No new codegen — piggybacks on existing NAF compilation.
 
 ---
 

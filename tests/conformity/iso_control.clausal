@@ -52,8 +52,8 @@ test("disjunction both fail") <- (not (a is b or c is d))
 
 test("not: failed unification succeeds") <- (not (1 is 2))
 test("not: successful unification fails") <- (not (not (1 is 1)))
-test("not: member absent") <- (not member(d, [a, b, c]))
-test("not: member present fails") <- (not (not member(b, [a, b, c])))
+test("not: member absent") <- (not In(d, [a, b, c]))
+test("not: member present fails") <- (not (not In(b, [a, b, c])))
 test("double negation: not not (1=1)") <- (not (not (1 is 1)))
 
 # ── Combining control constructs ─────────────────────────────────────────────
@@ -62,7 +62,7 @@ test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
     (X_ is 1 and Y_ is a) or (X_ is 2 and Y_ is b)
 )
 test("not + member: d not in list") <- (
-    not member(d, [a, b, c])
+    not In(d, [a, b, c])
 )
 test("conjunction + negation") <- (
     X_ is 5,

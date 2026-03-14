@@ -10,7 +10,7 @@
 
 queens(N, QS) <- (
     numlist(1, N, COLS),
-    permutation(COLS, QS),
+    Permutation(COLS, QS),
     safe(QS)
 )
 

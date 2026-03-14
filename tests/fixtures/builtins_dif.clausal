@@ -1,0 +1,20 @@
+# Tests for constraint predicates: Dif/2, Eq/3, DifT/3
+
+# Dif/2 — disequality constraint
+not_equal(X_, Y_) <- Dif(X_, Y_)
+
+# Use Dif inside a rule: pick an element different from a given value
+pick_different(X_, Xs_, Y_) <- (
+    In(Y_, Xs_),
+    Dif(Y_, X_)
+)
+
+# Eq/3 — reified equality: T is True if X=Y, False if Dif(X,Y)
+reified_eq(X_, Y_, T_) <- Eq(X_, Y_, T_)
+
+# DifT/3 — reified disequality
+reified_dif(X_, Y_, T_) <- DifT(X_, Y_, T_)
+
+# Use reified Eq to categorize pairs
+same_or_diff(X_, Y_, "same") <- Eq(X_, Y_, True)
+same_or_diff(X_, Y_, "different") <- Eq(X_, Y_, False)
