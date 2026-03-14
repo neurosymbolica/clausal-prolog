@@ -1,0 +1,79 @@
+# Meta-predicate tests
+#
+# find_all/3, bag_of/3, set_of/3, for_all/2 as compiler special forms
+
+# squares/2 — square each element via find_all
+squares(NS, SQUARES) <- (
+    find_all(
+        SQ,
+        (member(X, NS) and (SQ := X * X)),
+        SQUARES,
+    )
+)
+
+# positives/2 — filter positive elements via find_all
+positives(NS, POS) <- (
+    find_all(
+        X,
+        (member(X, NS) and X > 0),
+        POS,
+    )
+)
+
+# unique_members/2 — deduplicate via set_of
+unique_members(NS, UNIQUE) <- (
+    set_of(
+        X,
+        member(X, NS),
+        UNIQUE,
+    )
+)
+
+# all_positive/1 — universal quantification via for_all
+all_positive(NS) <- (
+    for_all(member(X, NS), X > 0)
+)
+
+# sum_squares/2 — nested: find_all squares then sum
+sum_squares(NS, TOTAL) <- (
+    squares(NS, SQS),
+    sum_list(SQS, TOTAL)
+)
+
+# evens/2 — filter even elements via find_all with modulo
+evens(NS, ES) <- (
+    find_all(
+        X,
+        (member(X, NS) and (M := X % 2) and M is 0),
+        ES,
+    )
+)
+
+# count_solutions/2 — count number of list elements via find_all + length
+count_solutions(NS, COUNT) <- (
+    find_all(X, member(X, NS), BAG),
+    length(BAG, COUNT)
+)
+
+# pairs/3 — cartesian product via find_all
+pairs(XS1, XS2, RESULT) <- (
+    find_all(
+        [A, B],
+        (member(A, XS1) and member(B, XS2)),
+        RESULT,
+    )
+)
+
+# all_members/2 — for_all: every element of first list is in second list
+all_members(SUB1, SUPER1) <- (
+    for_all(member(X, SUB1), member(X, SUPER1))
+)
+
+# bag_positives/2 — bag_of (fails on empty)
+bag_positives(NS, POS) <- (
+    bag_of(
+        X,
+        (member(X, NS) and X > 0),
+        POS,
+    )
+)

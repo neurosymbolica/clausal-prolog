@@ -1,0 +1,88 @@
+-module(lambdas, [
+    apply_val(RESULT, VAL),
+    add_one(X, Y),
+    add_z(Z, X, RESULT),
+    double_val(X, Y),
+    zero_arg(RESULT),
+    transform(X, Y),
+    capture_two(A, B, X, RESULT),
+    apply_pred(X, Y),
+    all_colors(COLORS)
+])
+
+-private([
+    helper(X, Y),
+    color(C)
+])
+
+# ── Basic lambdas ────────────────────────────────────────────────────────────
+
+# Identity via call_goal — the simplest lambda.
+apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
+
+# Arithmetic in lambda body.
+add_one(X, Y) <- call_goal((V <- (Y := V + 1)), X)
+
+# Two-argument lambda.
+double_val(X, Y) <- call_goal(((A, B) <- (B := A * 2)), X, Y)
+
+# Zero-argument lambda.
+zero_arg(RESULT) <- call_goal((() <- (RESULT is 42)))
+
+# ── Variable capture ─────────────────────────────────────────────────────────
+
+# Capture one variable from enclosing clause.
+add_z(Z, X, RESULT) <- call_goal((V <- (RESULT := V + Z)), X)
+
+# Capture two variables from enclosing clause.
+capture_two(A, B, X, RESULT) <- (
+    call_goal((V <- (RESULT := V + A + B)), X)
+)
+
+# ── Conjunction body ─────────────────────────────────────────────────────────
+
+# Lambda with multi-step conjunction: T := V + 1, R := T * 2
+transform(X, Y) <- call_goal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+
+# ── Predicate calls from lambdas ─────────────────────────────────────────────
+
+# Helper predicate called from within a lambda.
+helper(X, Y) <- (Y := X * 10)
+
+apply_pred(X, Y) <- call_goal((V <- (helper(V, Y))), X)
+
+# ── Multi-solution via find_all ──────────────────────────────────────────────
+
+color("red"),
+color("green"),
+color("blue"),
+
+all_colors(COLORS) <- (
+    find_all(C, color(C), COLORS)
+)
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+
+# Basic
+test("apply_val 42") <- apply_val(42, 42)
+test("apply_val string") <- apply_val("hello", "hello")
+test("add_one 5") <- add_one(5, 6)
+test("add_one -1") <- add_one(-1, 0)
+test("double_val 5") <- double_val(5, 10)
+test("zero_arg 42") <- zero_arg(42)
+
+# Capture
+test("add_z 3+10") <- add_z(3, 10, 13)
+test("add_z 0+7") <- add_z(0, 7, 7)
+test("capture_two 10+20+5") <- capture_two(10, 20, 5, 35)
+
+# Conjunction
+test("transform 5 -> 12") <- transform(5, 12)
+test("transform 0 -> 2") <- transform(0, 2)
+
+# Predicate call
+test("apply_pred 3 -> 30") <- apply_pred(3, 30)
+test("apply_pred 0 -> 0") <- apply_pred(0, 0)
+
+# Multi-solution
+test("all_colors") <- all_colors(["red", "green", "blue"])

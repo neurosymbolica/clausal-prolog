@@ -1,0 +1,488 @@
+"""Tests for .clausal module files: meta-predicates, higher-order, lambdas.
+
+These tests validate that predicates defined in .clausal files using
+meta-predicates (find_all, bag_of, set_of, for_all), higher-order list
+builtins (map_list, include, exclude, foldl), and lambdas (arrow syntax,
+variable capture, conjunction bodies) work correctly end-to-end through
+the import hook and compiled dispatch.
+"""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+from clausal.logic.database import Module
+from clausal.logic.solve import call, _deref_walk
+from clausal.logic.variables import Var, Trail, deref
+
+import clausal.import_hook
+from clausal.import_hook import _load_module
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def _load_clausal_module(filename: str) -> Module:
+    """Load a .clausal file from tests/clausal_modules/ and return its LogicModule."""
+    path = os.path.join(os.path.dirname(__file__), "clausal_modules", filename)
+    name = f"_test_cm_{filename.replace('.', '_')}"
+    mod = _load_module(name, path)
+    return mod.__dict__["$module"]
+
+
+def _call_collect(functor: str, *args, mod: Module) -> list:
+    """Call functor with args, collect deref'd value of last Var arg."""
+    var = args[-1]
+    return [_deref_walk(var) for _ in call(functor, *args, module=mod)]
+
+
+def _call_succeeds(functor: str, *args, mod: Module) -> int:
+    """Call functor with args, return number of solutions."""
+    return len(list(call(functor, *args, module=mod)))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Meta-predicates (meta.clausal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMetaSquares:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_squares_basic(self):
+        r = Var()
+        assert _call_collect("squares", [1, 2, 3], r, mod=self.mod) == [[1, 4, 9]]
+
+    def test_squares_empty(self):
+        r = Var()
+        assert _call_collect("squares", [], r, mod=self.mod) == [[]]
+
+    def test_squares_single(self):
+        r = Var()
+        assert _call_collect("squares", [5], r, mod=self.mod) == [[25]]
+
+    def test_squares_negative(self):
+        r = Var()
+        assert _call_collect("squares", [-2, 3], r, mod=self.mod) == [[4, 9]]
+
+
+class TestMetaPositives:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_positives_mixed(self):
+        r = Var()
+        assert _call_collect("positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
+
+    def test_positives_all_negative(self):
+        r = Var()
+        assert _call_collect("positives", [-1, -2, -3], r, mod=self.mod) == [[]]
+
+    def test_positives_all_positive(self):
+        r = Var()
+        assert _call_collect("positives", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
+
+    def test_positives_with_zero(self):
+        r = Var()
+        assert _call_collect("positives", [0, 1, -1], r, mod=self.mod) == [[1]]
+
+
+class TestMetaUniqueMembers:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_unique_dedup(self):
+        r = Var()
+        assert _call_collect("unique_members", [1, 2, 1, 3, 2], r, mod=self.mod) == [[1, 2, 3]]
+
+    def test_unique_already_unique(self):
+        r = Var()
+        assert _call_collect("unique_members", [5, 10, 15], r, mod=self.mod) == [[5, 10, 15]]
+
+    def test_unique_single(self):
+        r = Var()
+        assert _call_collect("unique_members", [7, 7, 7], r, mod=self.mod) == [[7]]
+
+
+class TestMetaAllPositive:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_all_positive_succeeds(self):
+        assert _call_succeeds("all_positive", [1, 2, 3], mod=self.mod) == 1
+
+    def test_all_positive_fails(self):
+        assert _call_succeeds("all_positive", [1, -2, 3], mod=self.mod) == 0
+
+    def test_all_positive_empty(self):
+        # for_all with no solutions is vacuously true
+        assert _call_succeeds("all_positive", [], mod=self.mod) == 1
+
+
+class TestMetaSumSquares:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_sum_squares(self):
+        r = Var()
+        assert _call_collect("sum_squares", [1, 2, 3], r, mod=self.mod) == [14]
+
+    def test_sum_squares_empty(self):
+        r = Var()
+        assert _call_collect("sum_squares", [], r, mod=self.mod) == [0]
+
+
+class TestMetaEvens:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_evens(self):
+        r = Var()
+        assert _call_collect("evens", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
+
+    def test_evens_none(self):
+        r = Var()
+        assert _call_collect("evens", [1, 3, 5], r, mod=self.mod) == [[]]
+
+
+class TestMetaCountSolutions:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_count(self):
+        r = Var()
+        assert _call_collect("count_solutions", [10, 20, 30], r, mod=self.mod) == [3]
+
+    def test_count_empty(self):
+        r = Var()
+        assert _call_collect("count_solutions", [], r, mod=self.mod) == [0]
+
+
+class TestMetaPairs:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_pairs_cartesian(self):
+        r = Var()
+        results = _call_collect("pairs", ["a", "b"], [1, 2], r, mod=self.mod)
+        assert results == [[["a", 1], ["a", 2], ["b", 1], ["b", 2]]]
+
+    def test_pairs_empty_first(self):
+        r = Var()
+        assert _call_collect("pairs", [], [1, 2], r, mod=self.mod) == [[]]
+
+    def test_pairs_empty_second(self):
+        r = Var()
+        assert _call_collect("pairs", ["a"], [], r, mod=self.mod) == [[]]
+
+
+class TestMetaAllMembers:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_all_members_subset(self):
+        assert _call_succeeds("all_members", [1, 2], [1, 2, 3], mod=self.mod) == 1
+
+    def test_all_members_not_subset(self):
+        assert _call_succeeds("all_members", [1, 4], [1, 2, 3], mod=self.mod) == 0
+
+    def test_all_members_empty_sub(self):
+        assert _call_succeeds("all_members", [], [1, 2, 3], mod=self.mod) == 1
+
+
+class TestMetaBagPositives:
+    def setup_method(self):
+        self.mod = _load_clausal_module("meta.clausal")
+
+    def test_bag_positives(self):
+        r = Var()
+        assert _call_collect("bag_positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
+
+    def test_bag_positives_fails_on_none(self):
+        r = Var()
+        # bag_of fails when no solutions
+        assert _call_collect("bag_positives", [-1, -2, -3], r, mod=self.mod) == []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Higher-order list predicates (higher_order.clausal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestHigherOrderDoubles:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_doubles(self):
+        r = Var()
+        assert _call_collect("doubles", [1, 2, 3], r, mod=self.mod) == [[2, 4, 6]]
+
+    def test_doubles_empty(self):
+        r = Var()
+        assert _call_collect("doubles", [], r, mod=self.mod) == [[]]
+
+    def test_doubles_negative(self):
+        r = Var()
+        assert _call_collect("doubles", [-1, 0, 5], r, mod=self.mod) == [[-2, 0, 10]]
+
+
+class TestHigherOrderAllPositive:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_all_positive_pass(self):
+        assert _call_succeeds("all_positive", [1, 2, 3], mod=self.mod) == 1
+
+    def test_all_positive_fail(self):
+        assert _call_succeeds("all_positive", [1, -2, 3], mod=self.mod) == 0
+
+    def test_all_positive_empty(self):
+        assert _call_succeeds("all_positive", [], mod=self.mod) == 1
+
+
+class TestHigherOrderKeepPositive:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_keep_positive(self):
+        r = Var()
+        assert _call_collect("keep_positive", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
+
+    def test_keep_positive_none(self):
+        r = Var()
+        assert _call_collect("keep_positive", [-1, -2], r, mod=self.mod) == [[]]
+
+    def test_keep_positive_all(self):
+        r = Var()
+        assert _call_collect("keep_positive", [5, 10], r, mod=self.mod) == [[5, 10]]
+
+
+class TestHigherOrderRemoveNegative:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_remove_negative(self):
+        r = Var()
+        assert _call_collect("remove_negative", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
+
+    def test_remove_negative_none(self):
+        r = Var()
+        assert _call_collect("remove_negative", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
+
+
+class TestHigherOrderSumListFold:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_sum(self):
+        r = Var()
+        assert _call_collect("sum_list_fold", [1, 2, 3], r, mod=self.mod) == [6]
+
+    def test_sum_empty(self):
+        r = Var()
+        assert _call_collect("sum_list_fold", [], r, mod=self.mod) == [0]
+
+    def test_sum_single(self):
+        r = Var()
+        assert _call_collect("sum_list_fold", [42], r, mod=self.mod) == [42]
+
+
+class TestHigherOrderProductList:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_product(self):
+        r = Var()
+        assert _call_collect("product_list", [2, 3, 4], r, mod=self.mod) == [24]
+
+    def test_product_empty(self):
+        r = Var()
+        assert _call_collect("product_list", [], r, mod=self.mod) == [1]
+
+    def test_product_with_zero(self):
+        r = Var()
+        assert _call_collect("product_list", [5, 0, 3], r, mod=self.mod) == [0]
+
+
+class TestHigherOrderSquares:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_squares(self):
+        r = Var()
+        assert _call_collect("squares", [1, 2, 3, 4], r, mod=self.mod) == [[1, 4, 9, 16]]
+
+
+class TestHigherOrderKeepEven:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_keep_even(self):
+        r = Var()
+        assert _call_collect("keep_even", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
+
+    def test_keep_even_none(self):
+        r = Var()
+        assert _call_collect("keep_even", [1, 3, 5], r, mod=self.mod) == [[]]
+
+
+class TestHigherOrderRemoveEven:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_remove_even(self):
+        r = Var()
+        assert _call_collect("remove_even", [1, 2, 3, 4, 5], r, mod=self.mod) == [[1, 3, 5]]
+
+
+class TestHigherOrderNegateList:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_negate(self):
+        r = Var()
+        assert _call_collect("negate_list", [1, -2, 3], r, mod=self.mod) == [[-1, 2, -3]]
+
+    def test_negate_empty(self):
+        r = Var()
+        assert _call_collect("negate_list", [], r, mod=self.mod) == [[]]
+
+
+class TestHigherOrderCountFold:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_count(self):
+        r = Var()
+        assert _call_collect("count_fold", [10, 20, 30, 40], r, mod=self.mod) == [4]
+
+    def test_count_empty(self):
+        r = Var()
+        assert _call_collect("count_fold", [], r, mod=self.mod) == [0]
+
+
+class TestHigherOrderMaxFold:
+    def setup_method(self):
+        self.mod = _load_clausal_module("higher_order.clausal")
+
+    def test_max_fold(self):
+        r = Var()
+        assert _call_collect("max_fold", [3, 7, 2, 9, 1], 0, r, mod=self.mod) == [9]
+
+    def test_max_fold_single(self):
+        r = Var()
+        assert _call_collect("max_fold", [5], 0, r, mod=self.mod) == [5]
+
+    def test_max_fold_init_wins(self):
+        r = Var()
+        assert _call_collect("max_fold", [1, 2], 100, r, mod=self.mod) == [100]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Lambdas (lambdas.clausal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLambdaApplyVal:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_apply_val(self):
+        r = Var()
+        assert _call_collect("apply_val", r, 42, mod=self.mod) == [42]
+
+    def test_apply_val_string(self):
+        r = Var()
+        assert _call_collect("apply_val", r, "hello", mod=self.mod) == ["hello"]
+
+
+class TestLambdaAddOne:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_add_one(self):
+        r = Var()
+        assert _call_collect("add_one", 5, r, mod=self.mod) == [6]
+
+    def test_add_one_negative(self):
+        r = Var()
+        assert _call_collect("add_one", -1, r, mod=self.mod) == [0]
+
+
+class TestLambdaAddZ:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_add_z(self):
+        r = Var()
+        assert _call_collect("add_z", 3, 10, r, mod=self.mod) == [13]
+
+    def test_add_z_zero(self):
+        r = Var()
+        assert _call_collect("add_z", 0, 7, r, mod=self.mod) == [7]
+
+
+class TestLambdaDoubleVal:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_double_val(self):
+        r = Var()
+        assert _call_collect("double_val", 5, r, mod=self.mod) == [10]
+
+
+class TestLambdaZeroArg:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_zero_arg(self):
+        r = Var()
+        assert _call_collect("zero_arg", r, mod=self.mod) == [42]
+
+
+class TestLambdaTransform:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_transform(self):
+        """transform(5, Y): T := 5 + 1 = 6, Y := 6 * 2 = 12"""
+        r = Var()
+        assert _call_collect("transform", 5, r, mod=self.mod) == [12]
+
+    def test_transform_zero(self):
+        """transform(0, Y): T := 0 + 1 = 1, Y := 1 * 2 = 2"""
+        r = Var()
+        assert _call_collect("transform", 0, r, mod=self.mod) == [2]
+
+
+class TestLambdaCaptureTwo:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_capture_two(self):
+        """capture_two(10, 20, 5, R): R := 5 + 10 + 20 = 35"""
+        r = Var()
+        assert _call_collect("capture_two", 10, 20, 5, r, mod=self.mod) == [35]
+
+
+class TestLambdaApplyPred:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_apply_pred(self):
+        """apply_pred(3, Y): helper(3, Y) → Y := 3 * 10 = 30"""
+        r = Var()
+        assert _call_collect("apply_pred", 3, r, mod=self.mod) == [30]
+
+
+class TestLambdaAllColors:
+    def setup_method(self):
+        self.mod = _load_clausal_module("lambdas.clausal")
+
+    def test_all_colors(self):
+        r = Var()
+        results = _call_collect("all_colors", r, mod=self.mod)
+        assert results == [["red", "green", "blue"]]
