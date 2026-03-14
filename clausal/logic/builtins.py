@@ -31,9 +31,12 @@ every database without requiring explicit registration.
 Built-ins implemented
 ---------------------
 Core inspection
-    functor/3   — decompose/compose term functor name and arity
-    arg/3       — Nth argument of a compound term (1-based)
-    univ/2      — T =.. [Functor | Args]  (term ↔ list)
+    functor/3       — decompose/compose term functor name and arity
+    arg/3           — Nth argument of a compound term (1-based)
+    univ/2          — T =.. [Functor | Args]  (term ↔ list)
+    copy_term/2     — deep copy with fresh Vars (V2-13)
+    term_variables/2 — collect unbound Vars in term (V2-13)
+    number_vars/3   — number unbound Vars with $VAR(N) (V2-13)
 
 Runtime database manipulation
     assertz/1   — add clause at end of its predicate
@@ -487,6 +490,119 @@ def _univ__2(term, lst, trail, k):
         if unify(term, constructed, trail):
             yield None
         trail.undo(mark)
+
+
+# ── V2-13 Term inspection ──────────────────────────────────────────────────────
+
+
+def _copy_term(term: Any, var_map: dict) -> Any:
+    """Recursively copy *term*, replacing each unbound Var with a fresh one.
+
+    *var_map* maps original Var id → fresh Var so that sharing is preserved.
+    """
+    term = deref(term)
+    if is_var(term):
+        vid = id(term)
+        if vid not in var_map:
+            var_map[vid] = Var()
+        return var_map[vid]
+    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return term
+    if isinstance(term, list):
+        return [_copy_term(e, var_map) for e in term]
+    if isinstance(term, Compound):
+        return Compound(term.functor, tuple(_copy_term(a, var_map) for a in term.args))
+    if isinstance(term, KWTerm):
+        return KWTerm({k: _copy_term(v, var_map) for k, v in term.items()})
+    if is_term_instance(term):
+        return type(term)(**{
+            name: _copy_term(getattr(term, name), var_map)
+            for name in term_field_names(term)
+        })
+    return term
+
+
+@_builtin("CopyTerm", 2)
+def _copy_term__2(original, copy, trail, k):
+    """copy_term(Original, Copy) — unify Copy with a deep copy of Original with fresh Vars."""
+    orig_val = deref(original)
+    copied = _copy_term(orig_val, {})
+    mark = trail.mark()
+    if unify(copy, copied, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _collect_vars(term: Any, seen_ids: set, result: list) -> None:
+    """Collect all unbound Vars in *term* into *result*, preserving left-to-right order."""
+    term = deref(term)
+    if is_var(term):
+        vid = id(term)
+        if vid not in seen_ids:
+            seen_ids.add(vid)
+            result.append(term)
+        return
+    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return
+    if isinstance(term, list):
+        for e in term:
+            _collect_vars(e, seen_ids, result)
+        return
+    if isinstance(term, Compound):
+        for a in term.args:
+            _collect_vars(a, seen_ids, result)
+        return
+    if isinstance(term, KWTerm):
+        for v in term.values():
+            _collect_vars(v, seen_ids, result)
+        return
+    if is_term_instance(term):
+        for name in term_field_names(term):
+            _collect_vars(getattr(term, name), seen_ids, result)
+
+
+@_builtin("TermVariables", 2)
+def _term_variables__2(term, vars_out, trail, k):
+    """term_variables(Term, Vars) — unify Vars with list of unbound variables in Term."""
+    term_val = deref(term)
+    result: list = []
+    _collect_vars(term_val, set(), result)
+    mark = trail.mark()
+    if unify(vars_out, result, trail):
+        yield None
+    trail.undo(mark)
+
+
+@_builtin("NumberVars", 3)
+def _number_vars__3(term, start, end, trail, k):
+    """number_vars(Term, Start, End) — bind unbound Vars in Term to '$VAR'(N) atoms.
+
+    Variables are numbered left-to-right starting at Start.  End is unified
+    with the next available number after all variables are numbered.
+    """
+    start_val = deref(start)
+    if is_var(start_val) or not isinstance(start_val, int):
+        return
+    term_val = deref(term)
+    vars_list: list = []
+    _collect_vars(term_val, set(), vars_list)
+    # Bind each unbound var to Compound("$VAR", (N,))
+    marks = []
+    for i, v in enumerate(vars_list):
+        m = trail.mark()
+        atom = Compound("$VAR", (start_val + i,))
+        if not unify(v, atom, trail):
+            for mk in reversed(marks):
+                trail.undo(mk)
+            return
+        marks.append(m)
+    end_val = start_val + len(vars_list)
+    mark = trail.mark()
+    if unify(end, end_val, trail):
+        yield None
+    trail.undo(mark)
+    for mk in reversed(marks):
+        trail.undo(mk)
 
 
 # ── Runtime database manipulation ─────────────────────────────────────────────

@@ -3,7 +3,7 @@
 ## Status
 
 V1 (Steps 1–9 + keyword work items WK-1 through WK-6) is complete.
-V2-D through V2-11 are complete. 2427 tests passing.
+V2-D through V2-13 are complete. 2486 tests passing.
 The system compiles `.clausal` files to Python generator functions via an import hook,
 with full backtracking search, unification, builtins, and a query API.
 
@@ -36,7 +36,7 @@ V2-9   Pythonic lambdas (goal closures)                                  ✓
 V2-10  Meta-predicates (Call/N, FindAll, BagOf, SetOf, ForAll)           ✓
 V2-11  List processing builtins (MapList, Filter, Exclude, FoldLeft)     ✓
 V2-12  Arithmetic builtins                                        ✓
-V2-13  Term inspection builtins
+V2-13  Term inspection builtins                                         ✓
 V2-14  Control / exception handling (Catch/3, Throw/1)
 V2-15  I/O builtins
 V2-16  Python interop

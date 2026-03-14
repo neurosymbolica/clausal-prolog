@@ -174,6 +174,42 @@ Decompose a term to `[functor | args]` list, or construct a term from such a lis
 
 ---
 
+### `CopyTerm/2`
+```
+CopyTerm(+Original, -Copy)
+```
+Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
+
+**Implementation:** `clausal/logic/builtins.py` (`_copy_term`, `CopyTerm/2`)
+**Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
+**Python tests:** `tests/test_term_inspection.py`
+
+---
+
+### `TermVariables/2`
+```
+TermVariables(+Term, -Vars)
+```
+Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-right with duplicates removed (same `Var` appearing multiple times in `Term` appears only once in `Vars`). Bound variables are followed and not collected.
+
+**Implementation:** `clausal/logic/builtins.py` (`_collect_vars`, `TermVariables/2`)
+**Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
+**Python tests:** `tests/test_term_inspection.py`
+
+---
+
+### `NumberVars/3`
+```
+NumberVars(+Term, +Start, -End)
+```
+Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$VAR", (N,))` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
+
+**Implementation:** `clausal/logic/builtins.py` (`NumberVars/3`)
+**Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
+**Python tests:** `tests/test_term_inspection.py`
+
+---
+
 ## Runtime Database
 
 These predicates require a live `Database` reference (`_DB_BUILTINS`). They recompile the affected predicate after modification.
@@ -949,6 +985,7 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/once_member.clausal` | `Once/1` |
 | `tests/fixtures/meta_test.clausal` | `FindAll/3`, `SetOf/3`, `ForAll/2`, `In/2` |
 | `tests/fixtures/builtins_inspect.clausal` | `Functor/3`, `Arg/3`, `Unpack/2` |
+| `tests/clausal_modules/term_inspection.clausal` | `CopyTerm/2`, `TermVariables/2`, `NumberVars/3` |
 | `tests/fixtures/builtins_db.clausal` | `Assert/1`, `AssertFirst/1`, `Retract/1` |
 | `tests/fixtures/builtins_types.clausal` | `IsVar/1`, `IsBound/1`, `IsStr/1`, `IsNumber/1`, `IsInt/1`, `IsFloat/1`, `IsCompound/1`, `IsCallable/1`, `IsList/1`, `IsGround/1` |
 | `tests/fixtures/builtins_arith.clausal` | `Between/3`, `Succ/2`, `Plus/3`, `Abs/2`, `Max/3`, `Min/3` |

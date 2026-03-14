@@ -486,3 +486,195 @@ class TestLambdaAllColors:
         r = Var()
         results = _call_collect("AllColors", r, mod=self.mod)
         assert results == [["red", "green", "blue"]]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Term inspection builtins (term_inspection.clausal) — V2-13
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTermInspectionCopyFresh:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_copy_ground_term(self):
+        from clausal.terms import Compound
+        term = Compound("foo", (1, 2))
+        r = Var()
+        result = _call_collect("CopyFresh", term, r, mod=self.mod)
+        assert len(result) == 1
+        assert result[0] == Compound("foo", (1, 2))
+
+    def test_copy_returns_fresh_copy(self):
+        from clausal.terms import Compound
+        from clausal.logic.variables import is_var
+        x = Var()
+        term = Compound("f", (x,))
+        r = Var()
+        result = _call_collect("CopyFresh", term, r, mod=self.mod)
+        assert len(result) == 1
+        c = result[0]
+        assert isinstance(c, Compound)
+        assert is_var(c.args[0])
+        assert c.args[0] is not x
+
+    def test_copy_atom(self):
+        r = Var()
+        result = _call_collect("CopyFresh", "hello", r, mod=self.mod)
+        assert result == ["hello"]
+
+    def test_copy_integer(self):
+        r = Var()
+        result = _call_collect("CopyFresh", 42, r, mod=self.mod)
+        assert result == [42]
+
+    def test_copy_list(self):
+        r = Var()
+        result = _call_collect("CopyFresh", [1, 2, 3], r, mod=self.mod)
+        assert result == [[1, 2, 3]]
+
+
+class TestTermInspectionHasNoVars:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_ground_term_no_vars(self):
+        from clausal.terms import Compound
+        assert _call_succeeds("HasNoVars", Compound("f", (1, 2)), mod=self.mod) == 1
+
+    def test_ground_atom(self):
+        assert _call_succeeds("HasNoVars", "hello", mod=self.mod) == 1
+
+    def test_term_with_var_fails(self):
+        from clausal.terms import Compound
+        term = Compound("f", (Var(),))
+        assert _call_succeeds("HasNoVars", term, mod=self.mod) == 0
+
+    def test_ground_list(self):
+        assert _call_succeeds("HasNoVars", [1, 2, 3], mod=self.mod) == 1
+
+    def test_list_with_var_fails(self):
+        assert _call_succeeds("HasNoVars", [1, Var(), 3], mod=self.mod) == 0
+
+
+class TestTermInspectionCountVars:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_no_vars(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("CountVars", Compound("f", (1, 2)), r, mod=self.mod)
+        assert result == [0]
+
+    def test_one_var(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("CountVars", Compound("f", (Var(),)), r, mod=self.mod)
+        assert result == [1]
+
+    def test_two_vars(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("CountVars", Compound("f", (Var(), Var())), r, mod=self.mod)
+        assert result == [2]
+
+    def test_repeated_var_counts_once(self):
+        from clausal.terms import Compound
+        x = Var()
+        r = Var()
+        result = _call_collect("CountVars", Compound("f", (x, x)), r, mod=self.mod)
+        assert result == [1]
+
+    def test_list_vars(self):
+        r = Var()
+        result = _call_collect("CountVars", [Var(), Var(), Var()], r, mod=self.mod)
+        assert result == [3]
+
+
+class TestTermInspectionNumberAndCount:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_no_vars(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("NumberAndCount", Compound("f", (1, 2)), 0, r, mod=self.mod)
+        assert result == [0]
+
+    def test_one_var(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("NumberAndCount", Compound("f", (Var(),)), 0, r, mod=self.mod)
+        assert result == [1]
+
+    def test_start_offset(self):
+        from clausal.terms import Compound
+        r = Var()
+        result = _call_collect("NumberAndCount", Compound("f", (Var(), Var())), 5, r, mod=self.mod)
+        assert result == [7]
+
+    def test_two_vars_consecutive(self):
+        r = Var()
+        result = _call_collect("NumberAndCount", [Var(), Var()], 0, r, mod=self.mod)
+        assert result == [2]
+
+
+class TestTermInspectionCopyShared:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_sharing_preserved(self):
+        """f(X, X) copied: the two args in copy should be the same fresh Var."""
+        from clausal.terms import Compound
+        from clausal.logic.variables import is_var
+        x = Var()
+        term = Compound("f", (x, x))
+        a, b = Var(), Var()
+        shared = []
+        for _ in call("CopyShared", term, a, b, module=self.mod):
+            shared.append((deref(a), deref(b)))
+        assert len(shared) == 1
+        av, bv = shared[0]
+        assert is_var(av) and is_var(bv)
+        assert av is bv
+
+    def test_sharing_independent_from_original(self):
+        """Fresh vars in copy are distinct from original Var."""
+        from clausal.terms import Compound
+        from clausal.logic.variables import is_var
+        x = Var()
+        term = Compound("f", (x, x))
+        a, b = Var(), Var()
+        captured = []
+        for _ in call("CopyShared", term, a, b, module=self.mod):
+            captured.append(deref(a))
+        assert len(captured) == 1
+        assert captured[0] is not x
+
+
+class TestTermInspectionVarList:
+    def setup_method(self):
+        self.mod = _load_clausal_module("term_inspection.clausal")
+
+    def test_empty_list(self):
+        r = Var()
+        result = _call_collect("VarList", [], r, mod=self.mod)
+        assert result == [[]]
+
+    def test_list_no_vars(self):
+        r = Var()
+        result = _call_collect("VarList", [1, 2, 3], r, mod=self.mod)
+        assert result == [[]]
+
+    def test_list_with_vars(self):
+        from clausal.logic.variables import is_var
+        x, y = Var(), Var()
+        r = Var()
+        results = []
+        for _ in call("VarList", [1, x, 2, y], r, module=self.mod):
+            vs = _deref_walk(r)
+            results.append(vs)
+        assert len(results) == 1
+        assert len(results[0]) == 2
+        assert all(is_var(v) for v in results[0])

@@ -1,0 +1,31 @@
+# Term inspection predicates (V2-13)
+#
+# CopyTerm/2, TermVariables/2, NumberVars/3
+
+# CopyFresh/2 — copy a term, returning the fresh copy
+CopyFresh(TERM, COPY) <- CopyTerm(TERM, COPY)
+
+# HasNoVars/1 — succeed if term contains no unbound vars
+HasNoVars(TERM) <- (
+    TermVariables(TERM, VARS),
+    VARS is []
+)
+
+# CountVars/2 — count unbound vars in a term
+CountVars(TERM, COUNT) <- (
+    TermVariables(TERM, VARS),
+    Length(VARS, COUNT)
+)
+
+# NumberAndCount/3 — number vars starting from START, return END
+NumberAndCount(TERM, START, END) <- NumberVars(TERM, START, END)
+
+# CopyShared/3 — copy a compound f(X, X); the two fresh vars should be identical
+CopyShared(TERM, FIRST, SECOND) <- (
+    CopyTerm(TERM, COPY),
+    Arg(1, COPY, FIRST),
+    Arg(2, COPY, SECOND)
+)
+
+# VarList/2 — collect vars from a list
+VarList(LIST, VARS) <- TermVariables(LIST, VARS)
