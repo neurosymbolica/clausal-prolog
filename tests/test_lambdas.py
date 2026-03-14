@@ -103,81 +103,69 @@ def _run_and_deref(fn, var, *args_and_trail):
 
 
 class TestTermTransformerCapture:
-    """TermTransformer inherits seen_vars for lambda implicit capture."""
+    """TermTransformer arrow lambda capture and param handling."""
+
+    def test_python_lambda_syntax_rejected(self):
+        """Python 'lambda' syntax raises SyntaxError in .clausal context."""
+        with pytest.raises(SyntaxError, match="arrow syntax"):
+            term_eval("lambda X_: X_")
 
     def test_lambda_param_generates_loadname(self):
-        """Lambda param reference in body is a LoadName (not a Var)."""
-        node = term_eval("lambda X_: X_", sa.Lambda)
-        # X_ in the body should be a LoadName, not a Var
+        """Arrow lambda param reference in body is a LoadName (not a Var)."""
+        node = term_eval("X_ <- (X_)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
         assert node.body.name == "X_"
 
     def test_lambda_captures_enclosing_var(self):
-        """Lambda body referencing enclosing var gets the same Var."""
+        """Arrow lambda body referencing enclosing var gets the same Var."""
         node, ns = term_eval_with_scope(
-            "lambda X_: Z_", seen_vars={"Z_"}
+            "X_ <- (Z_)", seen_vars={"Z_"}
         )
         assert isinstance(node, sa.Lambda)
-        # Z_ in the body should be the same Var from the enclosing scope
         assert node.body is ns["Z_"]
 
     def test_lambda_body_only_var_does_not_leak(self):
-        """Var introduced in lambda body does not appear in enclosing scope."""
-        tree = ast.parse("lambda X_: X_", mode="eval")
+        """Var introduced in arrow lambda body does not appear in enclosing scope."""
+        tree = ast.parse("X_ <- (X_)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
         original_seen = tt.seen_vars.copy()
         tt.visit(tree.body)
-        # X_ should NOT have been added to the outer transformer's seen_vars
         assert tt.seen_vars == original_seen
 
     def test_lambda_captures_multiple_enclosing_vars(self):
-        """Lambda can capture multiple enclosing scope vars."""
+        """Arrow lambda can capture multiple enclosing scope vars."""
         node, ns = term_eval_with_scope(
-            "lambda X_: X_", seen_vars={"A_", "B_"}
+            "X_ <- (X_)", seen_vars={"A_", "B_"}
         )
-        # The captured vars are accessible from the outer namespace
         assert isinstance(node, sa.Lambda)
 
     def test_nested_lambda_captures_outer(self):
-        """Nested lambda captures from the outermost scope."""
-        # Inner lambda should see the var from the outermost scope
-        src = "lambda X_: (lambda Y_: Z_)"
+        """Nested arrow lambda captures from the outermost scope."""
+        src = "X_ <- (Y_ <- (Z_))"
         node, ns = term_eval_with_scope(src, seen_vars={"Z_"})
         assert isinstance(node, sa.Lambda)
         inner = node.body
         assert isinstance(inner, sa.Lambda)
-        # Inner lambda body Z_ should be the enclosing scope's Z_
         assert inner.body is ns["Z_"]
 
     def test_anonymous_underscore_in_lambda(self):
-        """_ in lambda body is a fresh Var (anonymous)."""
-        node = term_eval("lambda X_: _", sa.Lambda)
-        # Body should be a Var (fresh anonymous)
+        """_ in arrow lambda body is a fresh Var (anonymous)."""
+        node = term_eval("X_ <- (_)", sa.Lambda)
         assert is_var(node.body)
 
     def test_param_refs_are_loadname(self):
-        """Lambda with logic var params produces LoadName refs in body."""
-        node = term_eval("lambda X_, Y_: X_", sa.Lambda)
-        # Body is a LoadName for param X_
+        """Arrow lambda with logic var params produces LoadName refs in body."""
+        node = term_eval("(X_, Y_) <- (X_)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
         assert node.body.name == "X_"
-        # No _param_vars attribute needed
-        assert not hasattr(node, "_param_vars")
-
-    def test_non_logic_param_lambda(self):
-        """Lambda with non-logic-var params has no _load_names behavior."""
-        node = term_eval("lambda x, y: x + y", sa.Lambda)
-        # Non-logic-var params are not LoadName'd
-        assert not hasattr(node, "_param_vars")
 
     def test_nested_lambda_outer_param_is_loadname(self):
-        """Inner lambda references outer param as LoadName (not Var)."""
-        src = "lambda X_: (lambda Y_: X_)"
+        """Inner arrow lambda references outer param as LoadName (not Var)."""
+        src = "X_ <- (Y_ <- (X_))"
         node = term_eval(src, sa.Lambda)
         inner = node.body
         assert isinstance(inner, sa.Lambda)
-        # X_ in inner body should be LoadName (inherited from outer _load_names)
         assert isinstance(inner.body, sa.LoadName)
         assert inner.body.name == "X_"
 
@@ -489,12 +477,12 @@ class TestLambdaImport:
         return [row["r"] for row in query(goal, {"r": r}, logic_mod)]
 
     def test_lambda_unify_in_clausal_file(self, tmp_path):
-        """Lambda with unification body in a .clausal file."""
+        """Arrow lambda with unification body in a .clausal file."""
         clausal_file = tmp_path / "lambda_test.clausal"
         clausal_file.write_text(
             "-module(lambda_test, [apply_val/2])\n"
             "\n"
-            "apply_val(Result_, Val_) <- call_goal((lambda X_: Result_ is X_), Val_)\n"
+            "apply_val(Result_, Val_) <- call_goal((X_ <- (Result_ is X_)), Val_)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -503,12 +491,12 @@ class TestLambdaImport:
         assert results == [42]
 
     def test_lambda_captures_head_var_in_clausal(self, tmp_path):
-        """Lambda in .clausal captures a variable from the clause head."""
+        """Arrow lambda in .clausal captures a variable from the clause head."""
         clausal_file = tmp_path / "capture_test.clausal"
         clausal_file.write_text(
             "-module(capture_test, [bind_z/2])\n"
             "\n"
-            "bind_z(Z_, Result_) <- call_goal((lambda X_: Result_ is X_), Z_)\n"
+            "bind_z(Z_, Result_) <- call_goal((X_ <- (Result_ is X_)), Z_)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -517,12 +505,12 @@ class TestLambdaImport:
         assert results == [99]
 
     def test_lambda_with_conjunction_in_clausal(self, tmp_path):
-        """Lambda with conjunction body in .clausal file."""
+        """Arrow lambda with conjunction body in .clausal file."""
         clausal_file = tmp_path / "conj_test.clausal"
         clausal_file.write_text(
             "-module(conj_test, [bind_pair/3])\n"
             "\n"
-            "bind_pair(A_, B_, Result_) <- call_goal((lambda X_, Y_: (X_ is A_ and Y_ is B_ and Result_ is [X_, Y_])), A_, B_)\n"
+            "bind_pair(A_, B_, Result_) <- call_goal(((X_, Y_) <- (X_ is A_ and Y_ is B_ and Result_ is [X_, Y_])), A_, B_)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -531,12 +519,12 @@ class TestLambdaImport:
         assert results == [[1, 2]]
 
     def test_lambda_zero_arg_in_clausal(self, tmp_path):
-        """Zero-arg lambda (goal closure) in .clausal file."""
+        """Zero-arg arrow lambda in .clausal file."""
         clausal_file = tmp_path / "zero_arg_test.clausal"
         clausal_file.write_text(
             "-module(zero_arg_test, [run_goal/1])\n"
             "\n"
-            "run_goal(Result_) <- call_goal((lambda: Result_ is 42))\n"
+            "run_goal(Result_) <- call_goal((() <- (Result_ is 42)))\n"
         )
 
         from clausal.import_hook import _load_module
@@ -549,14 +537,14 @@ class TestLambdaImport:
         assert results == [42]
 
     def test_lambda_calls_user_predicate(self, tmp_path):
-        """Lambda body calling a user predicate via _tramp_call bridge."""
+        """Arrow lambda body calling a user predicate via _tramp_call bridge."""
         clausal_file = tmp_path / "lambda_pred_call.clausal"
         clausal_file.write_text(
             "-module(lambda_pred_call, [double/2, apply_double/2])\n"
             "\n"
             "double(X_, Y_) <- (Y_ := X_ + X_)\n"
             "\n"
-            "apply_double(Val_, Result_) <- call_goal((lambda X_: double(X_, Result_)), Val_)\n"
+            "apply_double(Val_, Result_) <- call_goal((X_ <- (double(X_, Result_))), Val_)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -565,7 +553,7 @@ class TestLambdaImport:
         assert results == [14]
 
     def test_lambda_calls_multi_solution_predicate(self, tmp_path):
-        """Lambda body calling a multi-solution predicate collects all answers."""
+        """Arrow lambda body calling a multi-solution predicate collects all answers."""
         clausal_file = tmp_path / "lambda_multi.clausal"
         clausal_file.write_text(
             "-module(lambda_multi, [color/1, get_color/1])\n"
@@ -574,7 +562,7 @@ class TestLambdaImport:
             'color("green"),\n'
             'color("blue"),\n'
             "\n"
-            "get_color(C_) <- call_goal((lambda X_: color(X_) and C_ is X_), _)\n"
+            "get_color(C_) <- call_goal((X_ <- (color(X_) and C_ is X_)), _)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -585,6 +573,19 @@ class TestLambdaImport:
         goal = Call(func=LoadName(name="get_color"), args=[c], kwargs=[])
         results = [row["c"] for row in query(goal, {"c": c}, logic_mod)]
         assert sorted(results) == ["blue", "green", "red"]
+
+    def test_python_lambda_rejected_in_clausal_file(self, tmp_path):
+        """Python lambda syntax raises SyntaxError in .clausal files."""
+        clausal_file = tmp_path / "py_lambda.clausal"
+        clausal_file.write_text(
+            "-module(py_lambda, [test/1])\n"
+            "\n"
+            "test(R_) <- call_goal((lambda X_: R_ is X_), 1)\n"
+        )
+
+        from clausal.import_hook import _load_module
+        with pytest.raises(SyntaxError, match="arrow syntax"):
+            _load_module("py_lambda", str(clausal_file))
 
 
 # ── Phase 5: Arrow lambda syntax  (X_, Y_) <- (body) ─────────────────────────

@@ -464,9 +464,9 @@ def test_list_comp():
     assert isinstance(clause.iterable, sa.LoadName)
 
 
-def test_lambda():
-    node = term_eval("lambda x: x", sa.Lambda)
-    assert isinstance(node.body, sa.LoadName)
+def test_lambda_syntax_rejected():
+    with pytest.raises(SyntaxError, match="arrow syntax"):
+        term_eval("lambda x: x", object)
 
 
 # ── TermTransformer: position is always set ───────────────────────────────────
