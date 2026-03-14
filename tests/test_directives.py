@@ -164,3 +164,62 @@ class TestDynamicImport:
         mod = _load_fixture("static_pred.clausal")
         logic_mod = mod.__dict__["$module"]
         assert not logic_mod.db.is_dynamic("Fact", 2)
+
+
+# ── Database mark_shallow ─────────────────────────────────────────────────────
+
+
+class TestDatabaseShallowMetadata:
+    def test_mark_shallow(self):
+        db = Database()
+        db.mark_shallow("lookup", 2)
+        assert db.is_shallow("lookup", 2)
+
+    def test_not_shallow_by_default(self):
+        db = Database()
+        assert not db.is_shallow("lookup", 2)
+
+    def test_multiple_shallow(self):
+        db = Database()
+        db.mark_shallow("foo", 1)
+        db.mark_shallow("bar", 2)
+        assert db.is_shallow("foo", 1)
+        assert db.is_shallow("bar", 2)
+        assert not db.is_shallow("baz", 1)
+
+
+# ── -shallow directive parsing ────────────────────────────────────────────────
+
+
+class TestShallowDirectiveParsing:
+    def test_shallow_directive_positional_form(self):
+        tree = _transform_source("-shallow(foo/2)\n")
+        code = ast.dump(tree)
+        assert "mark_shallow" in code
+
+    def test_shallow_directive_list_form(self):
+        tree = _transform_source("-shallow([foo/2])\n")
+        code = ast.dump(tree)
+        assert "mark_shallow" in code
+
+    def test_shallow_directive_list_multiple(self):
+        tree = _transform_source("-shallow([foo/2, bar/1])\n")
+        code = ast.dump(tree)
+        assert code.count("mark_shallow") == 2
+
+    def test_shallow_directive_positional_multiple(self):
+        tree = _transform_source("-shallow(foo/2, bar/1)\n")
+        code = ast.dump(tree)
+        assert code.count("mark_shallow") == 2
+
+    def test_shallow_flag_recorded_on_db(self):
+        mod = _load_fixture("shallow_pred.clausal")
+        logic_mod = mod.__dict__["$module"]
+        assert logic_mod.db.is_shallow("Color", 2)
+
+    def test_shallow_predicate_is_queryable(self):
+        from clausal.logic.solve import call
+        mod = _load_fixture("shallow_pred.clausal", "shallow_pred_q")
+        logic_mod = mod.__dict__["$module"]
+        results = list(call("Color", "sky", "blue", module=logic_mod))
+        assert len(results) == 1

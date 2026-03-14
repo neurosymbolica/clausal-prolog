@@ -1,0 +1,6 @@
+-module(shallow_pred, [Color(Name, Hue)])
+-shallow([Color/2])
+
+Color("sky", "blue"),
+Color("grass", "green"),
+Color("sun", "yellow"),

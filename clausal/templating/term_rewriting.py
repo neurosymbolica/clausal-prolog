@@ -896,10 +896,17 @@ class TermTransformer(NodeTransformer):
 def _parse_pred_arity_args(args, directive_name):
     """Parse ``pred/arity, ...`` arguments from a directive AST.
 
-    Each argument should be a ``BinOp(Name("pred"), Div(), Constant(arity))``
+    Accepts two forms:
+    - ``-dir(foo/2, bar/3)``        — positional pred/arity arguments
+    - ``-dir([foo/2, bar/3])``      — a single list of pred/arity specs
+
+    Each spec should be a ``BinOp(Name("pred"), Div(), Constant(arity))``
     node.  Returns a list of ``(functor_name, arity)`` tuples.
     Raises SyntaxError on malformed arguments.
     """
+    # Unwrap single-list form: -dir([foo/2, bar/3]) → args = [foo/2, bar/3]
+    if len(args) == 1 and isinstance(args[0], List):
+        args = args[0].elts
     specs = []
     for arg in args:
         if (
@@ -1303,9 +1310,11 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_predspec_directive("mark_discontiguous", args, expr_stmt)
         if name == "table":
             return transformer._handle_predspec_directive("mark_tabled", args, expr_stmt)
+        if name == "shallow":
+            return transformer._handle_predspec_directive("mark_shallow", args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
-            f"(known directives: -module, -private, -dynamic, -discontiguous, -table)"
+            f"(known directives: -module, -private, -dynamic, -discontiguous, -table, -shallow)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -1400,8 +1409,8 @@ class EmbedTransformer(NodeTransformer):
         """Process a directive that takes ``pred/arity, ...`` arguments.
 
         Emits ``$module.db.<method_name>("pred", arity)`` calls for each
-        pred/arity spec.  Used by ``-dynamic``, ``-discontiguous``, and
-        ``-table`` directives.
+        pred/arity spec.  Used by ``-dynamic``, ``-discontiguous``,
+        ``-table``, and ``-shallow`` directives.
         """
         load = Load()
         specs = _parse_pred_arity_args(args, method_name)

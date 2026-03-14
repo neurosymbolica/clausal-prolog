@@ -32,7 +32,7 @@ import sys
 from typing import Any
 
 from clausal.logic.compiler import (
-    compile_predicate_ast,
+    compile_predicate_shallow_ast,
     compile_predicate_trampoline_ast,
 )
 from clausal.logic.database import Clause, Database
@@ -55,11 +55,11 @@ def predicate_ast(
     clauses:     clause list (from ``db.clauses_for(functor, arity)``)
     db:          the database — used for dispatch lookups in body compilation
     trampoline:  if True, use the stack-safe trampoline compilation strategy;
-                 if False (default), use the simple/short-stack strategy
+                 if False (default), use the shallow/short-stack strategy
     """
     if trampoline:
         return compile_predicate_trampoline_ast(functor, arity, clauses, db)
-    return compile_predicate_ast(functor, arity, clauses, db)
+    return compile_predicate_shallow_ast(functor, arity, clauses, db)
 
 
 def predicate_to_source(

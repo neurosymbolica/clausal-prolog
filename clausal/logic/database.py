@@ -47,6 +47,7 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
+        self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self.module_dict: dict | None = module_dict
 
@@ -187,6 +188,14 @@ class Database:
     def is_tabled(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -table."""
         return (functor, arity) in self._tabled
+
+    def mark_shallow(self, functor: str, arity: int) -> None:
+        """Mark a predicate as shallow (compile with short-stack mode)."""
+        self._shallow.add((functor, arity))
+
+    def is_shallow(self, functor: str, arity: int) -> bool:
+        """True if the predicate was declared -shallow."""
+        return (functor, arity) in self._shallow
 
     @property
     def table_store(self) -> dict:

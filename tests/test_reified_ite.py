@@ -20,7 +20,7 @@ from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain
 from clausal.terms import Compound
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause, Database
-from clausal.logic.compiler import compile_predicate, compile_predicate_trampoline
+from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
 from clausal.pythonic_ast.nodes import (
     IfExpr, Unify, DoesNotUnify, StructuralEq, StructuralNeq, Lt, LtE, Gt, GtE,
     And, Or, Not, Call, LoadName, In,

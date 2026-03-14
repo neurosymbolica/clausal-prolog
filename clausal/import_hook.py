@@ -36,7 +36,7 @@ import warnings
 from .pythonic_ast import nodes as simple_ast
 from .templating.term_rewriting import EmbedTransformer
 from .logic.database import Module as LogicModule, head_key
-from .logic.compiler import compile_predicate_trampoline
+from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
 from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm
@@ -81,14 +81,19 @@ def _assert_fact_deferred(term, logic_module, module_dict, pending):
 def _compile_all_pending(pending, db, module_dict):
     """Compile each pending predicate once (after all clauses asserted).
 
-    Tabled predicates are compiled in trampoline mode and wrapped with the
-    SLG tabling wrapper.  Non-tabled predicates use the standard trampoline
+    Shallow predicates (declared via ``-shallow``) are compiled in short-stack
+    mode.  Tabled predicates are compiled in trampoline mode and wrapped with
+    the SLG tabling wrapper.  All other predicates use the standard trampoline
     compilation.
     """
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
-        compile_predicate_trampoline(functor, arity, clauses, db,
-                                     globals_=module_dict, pred_cls=pred_cls)
+        if db.is_shallow(functor, arity):
+            compile_predicate_shallow(functor, arity, clauses, db,
+                                      globals_=module_dict, pred_cls=pred_cls)
+        else:
+            compile_predicate_trampoline(functor, arity, clauses, db,
+                                         globals_=module_dict, pred_cls=pred_cls)
 
     # Wrap tabled predicates AFTER all compilation (so cross-predicate
     # references are resolved before wrapping).

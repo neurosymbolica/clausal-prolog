@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from clausal.logic.compiler import compile_predicate, compile_predicate_trampoline
+from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.variables import Var, Trail, deref, unify

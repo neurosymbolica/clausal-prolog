@@ -10,11 +10,12 @@ List patterns:  Bidirectional ``[HEAD, *TAIL]`` via _head_list_unify_input/outpu
 
 Two compilation strategies are provided:
 
-**Simple / short-stack** (``compile_predicate``)
+**Shallow / short-stack** (``compile_predicate_shallow``)
     Each clause becomes a ``match`` arm.  The body ends with ``yield None``
     for each solution.  Sub-predicate calls use Python ``for`` loops so the
-    Python call stack grows with recursion depth.  Use for predicates whose
-    call depth is bounded (e.g., fact tables, leaf predicates).
+    Python call stack grows with recursion depth.  Safe only for predicates
+    with bounded call depth (e.g., fact tables, leaf predicates).  Declared
+    via the ``-shallow([pred/arity, ...])`` directive in ``.clausal`` files.
 
     Compiled function signature::
 
@@ -4239,7 +4240,30 @@ def _build_predicate_funcdef(
     return func_def
 
 
-def compile_predicate(
+def _shallow_to_trampoline(shallow_fn: Callable, func_name: str) -> Callable:
+    """Wrap a shallow-mode dispatch function in a trampoline-protocol adapter.
+
+    Shallow functions have signature ``fn(arg0, …, argN, trail, k)`` and
+    ``yield None`` per solution.  The trampoline solver calls predicates as
+    ``fn(this_generator, parent, arg0, …, argN, trail)``.  This wrapper
+    bridges the two protocols so the standard solver can drive shallow
+    predicates without modification.
+
+    The internal for-loop body of the shallow function is unchanged; the
+    overhead is one extra generator frame at the call boundary.
+    """
+    def _trampoline_wrapper(this_generator, parent, *args):
+        # args = (arg0, ..., argN, trail) in trampoline calling convention.
+        for _ in shallow_fn(*args, None):   # k=None (shallow mode ignores k)
+            yield (parent, None)
+        yield (parent, DONE)
+
+    _trampoline_wrapper.__name__ = func_name
+    _trampoline_wrapper.__qualname__ = func_name
+    return _trampoline_wrapper
+
+
+def compile_predicate_shallow(
     functor: str,
     arity: int,
     clauses: list[Clause],
@@ -4248,76 +4272,22 @@ def compile_predicate(
     globals_: dict | None = None,
     pred_cls: "PredicateMeta | None" = None,
 ) -> Callable:
-    """DEPRECATED: delegates to compile_predicate_trampoline with simple-mode adapter.
+    """Compile a predicate in shallow / short-stack mode.
 
-    Returns a function with simple-mode signature ``fn(*args, trail, k)``
-    that internally drives the trampoline.  This exists only for backward
-    compatibility in tests; production code should call
-    ``compile_predicate_trampoline`` directly.
-    """
-    import warnings
-    warnings.warn(
-        "compile_predicate() is deprecated — use compile_predicate_trampoline()",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    tramp_fn = compile_predicate_trampoline(
-        functor, arity, clauses, db,
-        body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
-    )
-    from clausal.logic.trampoline import StepGenerator, DONE
-
-    def simple_adapter(*args):
-        # args = (*pred_args, trail, k)  — k is ignored (simple mode yields None)
-        pred_args = args[:-2]
-        trail = args[-2]
-        sg = StepGenerator(tramp_fn, None, *pred_args, trail)
-        gen, value = sg.send(None)
-        while True:
-            if gen is None:
-                if value is DONE:
-                    return
-                yield None
-                gen, value = sg.send(None)
-            else:
-                gen, value = gen.send(value)
-
-    simple_adapter.__name__ = tramp_fn.__name__
-    simple_adapter.__qualname__ = tramp_fn.__qualname__
-    return simple_adapter
-    # Original docstring and implementation preserved below for reference.
-    """Compile all clauses of a predicate into a dispatch generator function.
-
-    Each clause becomes one ``match`` block in the generated function.
-    Clauses are tried in order; when a head matches, the body runs.
-    The generator yields one value per solution (via the body).
-
-    Parameters
-    ----------
-    functor:       predicate name (used for the function name)
-    arity:         predicate arity
-    clauses:       all current clauses for this predicate
-    db:            the database; used for dispatch lookup and signature registry.
-                   Optional — when None, signature lookup falls back to globals_.
-    body_compiler: optional callable(clause, var_context) → list[ast.stmt].
-                   Defaults to the Step-5 body compiler (compile_body via db).
-    globals_:      additional names injected into the compiled function scope.
-                   ``Compound``, ``Var``, ``unify``, ``deref``, and predicate
-                   class references are always included automatically.
-    pred_cls:      explicit PredicateMeta class to install the compiled dispatch
-                   on.  If not provided, detected from base_globals by name.
+    Use this for predicates that are known to be bounded in call depth —
+    fact tables, leaf predicates, and simple deterministic helpers.  Each
+    sub-predicate call is a Python ``for`` loop, so the Python call stack
+    grows with recursion depth.  For predicates with unbounded recursion use
+    ``compile_predicate_trampoline`` instead.
 
     The compiled function signature is::
 
         def {functor}__{arity}(arg0, …, argN, trail, k):
             …
+            yield None   # ← one solution
 
-    ``k`` is reserved for the Step-7 CPS trampoline; the Step-5 body always
-    ends with ``yield None`` regardless of ``k``.
-
-    Returns the compiled callable.  Also installs it on the PredicateMeta class
-    (and via ``db.set_dispatch()`` if db is provided) so subsequent
-    ``_get_dispatch()`` / ``db.get_dispatch()`` calls work.
+    Also installs on the PredicateMeta class (and ``db.set_dispatch()``) so
+    subsequent ``_get_dispatch()`` / ``db.get_dispatch()`` calls work.
     """
     # Choose the effective db for body compilation (may be a no-db proxy).
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
@@ -4421,32 +4391,63 @@ def compile_predicate(
         )
         fn = functiondef_to_function(func_def, globals_=base_globals)
 
-    def _recompile_simple() -> Callable:
+    # Wrap the shallow function in a trampoline-protocol adapter so it can be
+    # driven by the standard solver and called from compiled trampoline code.
+    tramp_fn = _shallow_to_trampoline(fn, f"{functor}__{arity}")
+
+    def _recompile_shallow() -> Callable:
         if db is not None:
             next_clauses = db.clauses_for(functor, arity)
         else:
             next_clauses = pred_cls._clauses if pred_cls is not None else clauses
-        return compile_predicate(
+        return compile_predicate_shallow(
             functor, arity, next_clauses, db,
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
         )
 
-    _install(db, functor, arity, fn, lazy_recompile=_recompile_simple, pred_cls=pred_cls)
+    _install(db, functor, arity, tramp_fn, lazy_recompile=_recompile_shallow, pred_cls=pred_cls)
     return fn
 
 
-def compile_predicate_ast(
+def compile_predicate(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: "Database | None" = None,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
+    globals_: dict | None = None,
+    pred_cls: "PredicateMeta | None" = None,
+) -> Callable:
+    """Deprecated alias for ``compile_predicate_shallow``.
+
+    Use ``compile_predicate_shallow`` for shallow/bounded predicates or
+    ``compile_predicate_trampoline`` for the stack-safe production path.
+    """
+    import warnings
+    warnings.warn(
+        "compile_predicate() is deprecated — use compile_predicate_shallow() "
+        "or compile_predicate_trampoline()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return compile_predicate_shallow(
+        functor, arity, clauses, db,
+        body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
+    )
+
+
+def compile_predicate_shallow_ast(
     functor: str,
     arity: int,
     clauses: list[Clause],
     db: Database,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
 ) -> ast.FunctionDef:
-    """Return the ``ast.FunctionDef`` for a simple-mode compiled predicate.
+    """Return the ``ast.FunctionDef`` for a shallow-mode compiled predicate.
 
-    Identical to ``compile_predicate`` but returns the AST node instead of
-    executing it.  Useful for inspecting or pretty-printing generated code.
-    Does *not* install anything in the database.
+    Identical to ``compile_predicate_shallow`` but returns the AST node
+    instead of executing it.  Useful for inspecting or pretty-printing
+    generated code.  Does *not* install anything in the database.
     """
     if body_compiler is None:
         body_compiler = _make_body_compiler(db)
@@ -4464,6 +4465,23 @@ def compile_predicate_ast(
             decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
         )
     return _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
+
+
+def compile_predicate_ast(
+    functor: str,
+    arity: int,
+    clauses: list[Clause],
+    db: Database,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
+) -> ast.FunctionDef:
+    """Deprecated alias for ``compile_predicate_shallow_ast``."""
+    import warnings
+    warnings.warn(
+        "compile_predicate_ast() is deprecated — use compile_predicate_shallow_ast()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return compile_predicate_shallow_ast(functor, arity, clauses, db, body_compiler)
 
 
 def _stub_body_stmts() -> list[ast.stmt]:
@@ -4526,12 +4544,12 @@ def _install(
 
 
 __all__ = [
-    # Simple / short-stack compilation
-    "compile_predicate",
-    "compile_predicate_ast",
+    # Shallow / short-stack compilation (bounded-depth predicates)
+    "compile_predicate_shallow",
+    "compile_predicate_shallow_ast",
     "compile_goal",
     "compile_body",
-    # Trampoline / stack-safe compilation
+    # Trampoline / stack-safe compilation (production default)
     "compile_predicate_trampoline",
     "compile_predicate_trampoline_ast",
     "compile_goal_trampoline",
@@ -4542,4 +4560,7 @@ __all__ = [
     "compile_head_to_match_case",
     "term_to_ast_expr",
     "arith_to_ast_expr",
+    # Deprecated aliases
+    "compile_predicate",
+    "compile_predicate_ast",
 ]
