@@ -9,6 +9,7 @@ from clausal.logic.builtins import (
 )
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
+from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Call, LoadName, Compound
 
@@ -16,20 +17,37 @@ from clausal.terms import Call, LoadName, Compound
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def run_simple(fn, *args):
-    """Call a simple-mode builtin and return list of solutions."""
+def run_trampoline(fn, *args):
+    """Call a native trampoline builtin and return number of solutions."""
     trail = Trail()
-    return list(fn(*args, trail, None))
+    sg = StepGenerator(fn, None, *args, trail)
+    gen, value = sg.send(None)
+    count = 0
+    while True:
+        if gen is None:
+            if value is DONE:
+                return count
+            count += 1
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
 
 
-def run_simple_var(fn, *args_before_result):
-    """Call a simple-mode builtin with a trailing Var, return deref'd values."""
+def run_trampoline_var(fn, *args_before_result):
+    """Call a native trampoline builtin with trailing Var, return deref'd values."""
     trail = Trail()
     result = Var()
+    sg = StepGenerator(fn, None, *args_before_result, result, trail)
+    gen, value = sg.send(None)
     results = []
-    for _ in fn(*args_before_result, result, trail, None):
-        results.append(deref(result))
-    return results
+    while True:
+        if gen is None:
+            if value is DONE:
+                return results
+            results.append(deref(result))
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
 
 
 def fresh_module(name: str = "test") -> Module:
@@ -101,19 +119,19 @@ def _goal_always_fail(*args):
 
 class TestMapList2:
     def test_all_succeed(self):
-        assert len(run_simple(_map_list__2, _goal_positive, [1, 2, 3])) == 1
+        assert run_trampoline(_map_list__2, _goal_positive, [1, 2, 3]) == 1
 
     def test_one_fails(self):
-        assert run_simple(_map_list__2, _goal_positive, [1, -2, 3]) == []
+        assert run_trampoline(_map_list__2, _goal_positive, [1, -2, 3]) == 0
 
     def test_empty_list(self):
-        assert len(run_simple(_map_list__2, _goal_positive, [])) == 1
+        assert run_trampoline(_map_list__2, _goal_positive, []) == 1
 
     def test_non_list_fails(self):
-        assert run_simple(_map_list__2, _goal_positive, 42) == []
+        assert run_trampoline(_map_list__2, _goal_positive, 42) == 0
 
     def test_non_callable_fails(self):
-        assert run_simple(_map_list__2, 42, [1, 2, 3]) == []
+        assert run_trampoline(_map_list__2, 42, [1, 2, 3]) == 0
 
 
 # ── map_list/3 ────────────────────────────────────────────────────────────────
@@ -121,19 +139,19 @@ class TestMapList2:
 
 class TestMapList3:
     def test_double(self):
-        results = run_simple_var(_map_list__3, _goal_double, [1, 2, 3])
+        results = run_trampoline_var(_map_list__3, _goal_double, [1, 2, 3])
         assert results == [[2, 4, 6]]
 
     def test_empty_list(self):
-        results = run_simple_var(_map_list__3, _goal_double, [])
+        results = run_trampoline_var(_map_list__3, _goal_double, [])
         assert results == [[]]
 
     def test_goal_fails_mid_list(self):
-        results = run_simple_var(_map_list__3, _goal_always_fail, [1, 2, 3])
+        results = run_trampoline_var(_map_list__3, _goal_always_fail, [1, 2, 3])
         assert results == []
 
     def test_non_list_fails(self):
-        results = run_simple_var(_map_list__3, _goal_double, "abc")
+        results = run_trampoline_var(_map_list__3, _goal_double, "abc")
         assert results == []
 
 
@@ -142,23 +160,23 @@ class TestMapList3:
 
 class TestInclude:
     def test_filter_positive(self):
-        results = run_simple_var(_include__3, _goal_positive, [1, -2, 3, -4])
+        results = run_trampoline_var(_include__3, _goal_positive, [1, -2, 3, -4])
         assert results == [[1, 3]]
 
     def test_all_match(self):
-        results = run_simple_var(_include__3, _goal_positive, [1, 2, 3])
+        results = run_trampoline_var(_include__3, _goal_positive, [1, 2, 3])
         assert results == [[1, 2, 3]]
 
     def test_none_match(self):
-        results = run_simple_var(_include__3, _goal_positive, [-1, -2, -3])
+        results = run_trampoline_var(_include__3, _goal_positive, [-1, -2, -3])
         assert results == [[]]
 
     def test_empty_input(self):
-        results = run_simple_var(_include__3, _goal_positive, [])
+        results = run_trampoline_var(_include__3, _goal_positive, [])
         assert results == [[]]
 
     def test_even_filter(self):
-        results = run_simple_var(_include__3, _goal_even, [1, 2, 3, 4])
+        results = run_trampoline_var(_include__3, _goal_even, [1, 2, 3, 4])
         assert results == [[2, 4]]
 
 
@@ -167,19 +185,19 @@ class TestInclude:
 
 class TestExclude:
     def test_filter_non_positive(self):
-        results = run_simple_var(_exclude__3, _goal_positive, [1, -2, 3, -4])
+        results = run_trampoline_var(_exclude__3, _goal_positive, [1, -2, 3, -4])
         assert results == [[-2, -4]]
 
     def test_all_match(self):
-        results = run_simple_var(_exclude__3, _goal_positive, [1, 2, 3])
+        results = run_trampoline_var(_exclude__3, _goal_positive, [1, 2, 3])
         assert results == [[]]
 
     def test_none_match(self):
-        results = run_simple_var(_exclude__3, _goal_positive, [-1, -2, -3])
+        results = run_trampoline_var(_exclude__3, _goal_positive, [-1, -2, -3])
         assert results == [[-1, -2, -3]]
 
     def test_empty_input(self):
-        results = run_simple_var(_exclude__3, _goal_positive, [])
+        results = run_trampoline_var(_exclude__3, _goal_positive, [])
         assert results == [[]]
 
 
@@ -187,13 +205,20 @@ class TestExclude:
 
 
 def _run_foldl(goal, lst, v0):
-    """Helper: run foldl and capture deref'd result during yield."""
+    """Helper: run foldl via trampoline and capture deref'd result."""
     trail = Trail()
     v = Var()
+    sg = StepGenerator(_foldl__4, None, goal, lst, v0, v, trail)
+    gen, value = sg.send(None)
     results = []
-    for _ in _foldl__4(goal, lst, v0, v, trail, None):
-        results.append(deref(v))
-    return results
+    while True:
+        if gen is None:
+            if value is DONE:
+                return results
+            results.append(deref(v))
+            gen, value = sg.send(None)
+        else:
+            gen, value = gen.send(value)
 
 
 class TestFoldl:

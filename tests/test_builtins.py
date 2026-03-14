@@ -365,6 +365,129 @@ class TestArithmetic:
         goal = Call(func=LoadName(name="Min"), args=[3, 7, z], kwargs=[])
         assert sol_var(goal, z, mod=mod) == [3]
 
+    # ── Sign/2 ──
+
+    def test_sign_positive(self):
+        mod = fresh_module()
+        s = Var()
+        goal = Call(func=LoadName(name="Sign"), args=[42, s], kwargs=[])
+        assert sol_var(goal, s, mod=mod) == [1]
+
+    def test_sign_negative(self):
+        mod = fresh_module()
+        s = Var()
+        goal = Call(func=LoadName(name="Sign"), args=[-7, s], kwargs=[])
+        assert sol_var(goal, s, mod=mod) == [-1]
+
+    def test_sign_zero(self):
+        mod = fresh_module()
+        s = Var()
+        goal = Call(func=LoadName(name="Sign"), args=[0, s], kwargs=[])
+        assert sol_var(goal, s, mod=mod) == [0]
+
+    def test_sign_float(self):
+        mod = fresh_module()
+        s = Var()
+        goal = Call(func=LoadName(name="Sign"), args=[-3.14, s], kwargs=[])
+        assert sol_var(goal, s, mod=mod) == [-1]
+
+    def test_sign_unbound_fails(self):
+        mod = fresh_module()
+        x, s = Var(), Var()
+        goal = Call(func=LoadName(name="Sign"), args=[x, s], kwargs=[])
+        assert solutions(goal, mod) == []
+
+    def test_sign_check_mode(self):
+        mod = fresh_module()
+        goal = Call(func=LoadName(name="Sign"), args=[5, 1], kwargs=[])
+        assert len(solutions(goal, mod)) == 1
+        goal2 = Call(func=LoadName(name="Sign"), args=[5, -1], kwargs=[])
+        assert solutions(goal2, mod) == []
+
+    # ── Gcd/3 ──
+
+    def test_gcd_basic(self):
+        mod = fresh_module()
+        g = Var()
+        goal = Call(func=LoadName(name="Gcd"), args=[12, 8, g], kwargs=[])
+        assert sol_var(goal, g, mod=mod) == [4]
+
+    def test_gcd_coprime(self):
+        mod = fresh_module()
+        g = Var()
+        goal = Call(func=LoadName(name="Gcd"), args=[7, 13, g], kwargs=[])
+        assert sol_var(goal, g, mod=mod) == [1]
+
+    def test_gcd_with_zero(self):
+        mod = fresh_module()
+        g = Var()
+        goal = Call(func=LoadName(name="Gcd"), args=[0, 5, g], kwargs=[])
+        assert sol_var(goal, g, mod=mod) == [5]
+
+    def test_gcd_negative(self):
+        mod = fresh_module()
+        g = Var()
+        goal = Call(func=LoadName(name="Gcd"), args=[-12, 8, g], kwargs=[])
+        assert sol_var(goal, g, mod=mod) == [4]
+
+    def test_gcd_unbound_fails(self):
+        mod = fresh_module()
+        x, g = Var(), Var()
+        goal = Call(func=LoadName(name="Gcd"), args=[x, 8, g], kwargs=[])
+        assert solutions(goal, mod) == []
+
+    # ── DivMod/4 ──
+
+    def test_divmod_basic(self):
+        mod = fresh_module()
+        q, r = Var(), Var()
+        goal = Call(func=LoadName(name="DivMod"), args=[17, 5, q, r], kwargs=[])
+        t = Trail()
+        results = []
+        for _ in solve(goal, mod, t):
+            results.append((deref(q), deref(r)))
+        assert results == [(3, 2)]
+
+    def test_divmod_exact(self):
+        mod = fresh_module()
+        q, r = Var(), Var()
+        goal = Call(func=LoadName(name="DivMod"), args=[10, 5, q, r], kwargs=[])
+        t = Trail()
+        results = []
+        for _ in solve(goal, mod, t):
+            results.append((deref(q), deref(r)))
+        assert results == [(2, 0)]
+
+    def test_divmod_by_zero_fails(self):
+        mod = fresh_module()
+        q, r = Var(), Var()
+        goal = Call(func=LoadName(name="DivMod"), args=[10, 0, q, r], kwargs=[])
+        assert solutions(goal, mod) == []
+
+    def test_divmod_negative(self):
+        mod = fresh_module()
+        q, r = Var(), Var()
+        goal = Call(func=LoadName(name="DivMod"), args=[-7, 2, q, r], kwargs=[])
+        t = Trail()
+        results = []
+        for _ in solve(goal, mod, t):
+            results.append((deref(q), deref(r)))
+        # Python divmod: -7 // 2 = -4, -7 % 2 = 1
+        assert results == [(-4, 1)]
+
+    def test_divmod_unbound_fails(self):
+        mod = fresh_module()
+        x, q, r = Var(), Var(), Var()
+        goal = Call(func=LoadName(name="DivMod"), args=[x, 5, q, r], kwargs=[])
+        assert solutions(goal, mod) == []
+
+    def test_divmod_check_mode(self):
+        mod = fresh_module()
+        goal = Call(func=LoadName(name="DivMod"), args=[17, 5, 3, 2], kwargs=[])
+        assert len(solutions(goal, mod)) == 1
+        goal2 = Call(func=LoadName(name="DivMod"), args=[17, 5, 3, 99], kwargs=[])
+        assert solutions(goal2, mod) == []
+
 
 # ── List predicates ────────────────────────────────────────────────────────────
 

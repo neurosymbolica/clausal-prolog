@@ -1,17 +1,28 @@
 """clausal.logic.builtins — built-in and standard-library predicates (Step 8).
 
-Built-ins are Python generator functions written with a simple internal
-signature::
+Built-ins come in two flavours:
+
+**Simple-mode** (``@_builtin``): small deterministic predicates (type checks,
+arithmetic, term inspection) written with a simple internal signature::
 
     def predicate__N(arg0, …, argN-1, trail, k): …
 
-They yield ``None`` for each solution internally, but are automatically
-wrapped to the trampoline dispatch protocol at registration time so that
-they can be called from trampoline-compiled code.  Stateless built-ins are
-stored in ``_BUILTINS``.  Built-ins that need a reference to the live
-database (assertz, asserta, retract, signature) are stored in
-``_DB_BUILTINS`` as factory callables; ``get_builtin_dispatch`` passes the
-database when creating them.
+They yield ``None`` for each solution and are automatically wrapped to the
+trampoline dispatch protocol at registration time.
+
+**Native trampoline** (``@_trampoline_builtin``): predicates that operate on
+lists or call sub-goals.  Written with the trampoline signature directly::
+
+    def predicate__N(this_generator, parent, arg0, …, argN-1, trail): …
+
+They yield ``(parent, None)`` per solution and ``(parent, DONE)`` at
+exhaustion, and call sub-goals via ``StepGenerator`` so the trampoline
+drives every level — no hidden stack growth.
+
+Stateless built-ins are stored in ``_BUILTINS``.  Built-ins that need a
+reference to the live database (assertz, asserta, retract, signature) are
+stored in ``_DB_BUILTINS`` as factory callables; ``get_builtin_dispatch``
+passes the database when creating them.
 
 ``Database.get_dispatch`` calls ``get_builtin_dispatch(functor, arity, db)`` as a
 fallback when a predicate is not found locally, so built-ins are available in
@@ -65,7 +76,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.logic.trampoline import DONE
+from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.terms import Compound, KWTerm
 
 
@@ -108,6 +119,36 @@ def _builtin(functor: str, arity: int):
         _BUILTINS[(functor, arity)] = _simple_to_trampoline(fn)
         return fn
     return decorator
+
+
+def _trampoline_builtin(functor: str, arity: int):
+    """Decorator: register a native trampoline-protocol built-in (no wrapping).
+
+    Use for builtins that operate on lists or call sub-goals, so they
+    participate directly in the trampoline without an extra wrapper layer.
+
+    Signature: ``fn(this_generator, parent, arg0, …, argN-1, trail)``
+    Must yield ``(parent, None)`` per solution and ``(parent, DONE)`` at end.
+    """
+    def decorator(fn: Callable) -> Callable:
+        _BUILTINS[(functor, arity)] = fn
+        return fn
+    return decorator
+
+
+def _ensure_trampoline_dispatch(goal_val):
+    """Return a trampoline-protocol dispatch function for *goal_val*.
+
+    Handles:
+    - PredicateMeta / BuiltinPredicate with ``_get_dispatch()`` → returns that
+    - Simple-mode callable ``fn(*args, trail, k)`` → wraps to trampoline
+    """
+    if hasattr(goal_val, '_get_dispatch'):
+        return goal_val._get_dispatch()
+    # Assume simple-mode callable
+    return _simple_to_trampoline(goal_val)
+
+
 
 
 def _db_builtin(functor: str, arity: int):
@@ -1065,38 +1106,91 @@ def _min__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
+@_builtin("Sign", 2)
+def _sign__2(x, s, trail, k):
+    """Sign(X, S) — S is the sign of X: -1, 0, or 1."""
+    x_val = deref(x)
+    if is_var(x_val):
+        return
+    if not isinstance(x_val, (int, float)):
+        return
+    sign_val = (x_val > 0) - (x_val < 0)
+    mark = trail.mark()
+    if unify(s, sign_val, trail):
+        yield None
+    trail.undo(mark)
+
+
+@_builtin("Gcd", 3)
+def _gcd__3(x, y, g, trail, k):
+    """Gcd(X, Y, G) — G is the greatest common divisor of X and Y."""
+    from math import gcd
+    x_val = deref(x)
+    y_val = deref(y)
+    if is_var(x_val) or is_var(y_val):
+        return
+    if not isinstance(x_val, int) or not isinstance(y_val, int):
+        return
+    mark = trail.mark()
+    if unify(g, gcd(x_val, y_val), trail):
+        yield None
+    trail.undo(mark)
+
+
+@_builtin("DivMod", 4)
+def _divmod__4(x, y, q, r, trail, k):
+    """DivMod(X, Y, Q, R) — Q is X // Y and R is X mod Y."""
+    x_val = deref(x)
+    y_val = deref(y)
+    if is_var(x_val) or is_var(y_val):
+        return
+    if not isinstance(x_val, int) or not isinstance(y_val, int):
+        return
+    if y_val == 0:
+        return
+    quotient, remainder = divmod(x_val, y_val)
+    mark = trail.mark()
+    if unify(q, quotient, trail):
+        m2 = trail.mark()
+        if unify(r, remainder, trail):
+            yield None
+        trail.undo(m2)
+    trail.undo(mark)
+
+
 # ── Standard library: list predicates ─────────────────────────────────────────
 
 
-@_builtin("In", 2)
-def _member__2(elem, lst, trail, k):
+@_trampoline_builtin("In", 2)
+def _member__2(this_generator, parent, elem, lst, trail):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    for item in lst_val:
-        mark = trail.mark()
-        if unify(elem, item, trail):
-            yield None
-        trail.undo(mark)
+    if isinstance(lst_val, list):
+        for item in lst_val:
+            mark = trail.mark()
+            if unify(elem, item, trail):
+                yield (parent, None)
+            trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("InCheck", 2)
-def _memberchk__2(elem, lst, trail, k):
+@_trampoline_builtin("InCheck", 2)
+def _memberchk__2(this_generator, parent, elem, lst, trail):
     """memberchk(Elem, List) — like member/2 but commits to the first match."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    for item in lst_val:
-        mark = trail.mark()
-        if unify(elem, item, trail):
-            yield None
-            return
-        trail.undo(mark)
+    if isinstance(lst_val, list):
+        for item in lst_val:
+            mark = trail.mark()
+            if unify(elem, item, trail):
+                yield (parent, None)
+                yield (parent, DONE)
+                return
+            trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Append", 3)
-def _append__3(l1, l2, l3, trail, k):
+@_trampoline_builtin("Append", 3)
+def _append__3(this_generator, parent, l1, l2, l3, trail):
     """append(L1, L2, L3) — L3 is the concatenation of L1 and L2.
 
     Modes:
@@ -1112,7 +1206,7 @@ def _append__3(l1, l2, l3, trail, k):
         # Both known: concatenate
         mark = trail.mark()
         if unify(l3, l1_val + l2_val, trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
     elif isinstance(l1_val, list) and isinstance(l3_val, list):
         # L1 and L3 known: compute L2
@@ -1120,283 +1214,287 @@ def _append__3(l1, l2, l3, trail, k):
         if len(l3_val) >= n and l3_val[:n] == l1_val:
             mark = trail.mark()
             if unify(l2, l3_val[n:], trail):
-                yield None
+                yield (parent, None)
             trail.undo(mark)
     elif isinstance(l3_val, list):
         # Only L3 known: enumerate all splits
         for i in range(len(l3_val) + 1):
             mark = trail.mark()
             if unify(l1, l3_val[:i], trail) and unify(l2, l3_val[i:], trail):
-                yield None
+                yield (parent, None)
             trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Length", 2)
-def _length__2(lst, n, trail, k):
+@_trampoline_builtin("Length", 2)
+def _length__2(this_generator, parent, lst, n, trail):
     """length(List, N) — N is the length of List."""
     lst_val = deref(lst)
     n_val = deref(n)
     if isinstance(lst_val, list):
         mark = trail.mark()
         if unify(n, len(lst_val), trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
     elif not is_var(n_val) and isinstance(n_val, int) and n_val >= 0:
         result = [Var() for _ in range(n_val)]
         mark = trail.mark()
         if unify(lst, result, trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Last", 2)
-def _last__2(lst, elem, trail, k):
+@_trampoline_builtin("Last", 2)
+def _last__2(this_generator, parent, lst, elem, trail):
     """last(List, Elem) — Elem is the last element of List."""
     lst_val = deref(lst)
     if isinstance(lst_val, list) and len(lst_val) > 0:
         mark = trail.mark()
         if unify(elem, lst_val[-1], trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Reverse", 2)
-def _reverse__2(lst, rev, trail, k):
+@_trampoline_builtin("Reverse", 2)
+def _reverse__2(this_generator, parent, lst, rev, trail):
     """reverse(List, Rev) — Rev is the reverse of List."""
     lst_val = deref(lst)
     if isinstance(lst_val, list):
         mark = trail.mark()
         if unify(rev, list(reversed(lst_val)), trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("GetItem", 3)
-def _nth0__3(n, lst, elem, trail, k):
+@_trampoline_builtin("GetItem", 3)
+def _nth0__3(this_generator, parent, n, lst, elem, trail):
     """nth0(N, List, Elem) — Elem is the N-th element of List (0-based)."""
     n_val = deref(n)
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    if not is_var(n_val):
-        if not isinstance(n_val, int) or n_val < 0 or n_val >= len(lst_val):
-            return
-        mark = trail.mark()
-        if unify(elem, lst_val[n_val], trail):
-            yield None
-        trail.undo(mark)
-    else:
-        for i, item in enumerate(lst_val):
-            mark = trail.mark()
-            if unify(n, i, trail) and unify(elem, item, trail):
-                yield None
-            trail.undo(mark)
+    if isinstance(lst_val, list):
+        if not is_var(n_val):
+            if isinstance(n_val, int) and 0 <= n_val < len(lst_val):
+                mark = trail.mark()
+                if unify(elem, lst_val[n_val], trail):
+                    yield (parent, None)
+                trail.undo(mark)
+        else:
+            for i, item in enumerate(lst_val):
+                mark = trail.mark()
+                if unify(n, i, trail) and unify(elem, item, trail):
+                    yield (parent, None)
+                trail.undo(mark)
+    yield (parent, DONE)
 
 
 
-@_builtin("Flatten", 2)
-def _flatten__2(lst, flat, trail, k):
+@_trampoline_builtin("Flatten", 2)
+def _flatten__2(this_generator, parent, lst, flat, trail):
     """flatten(List, Flat) — Flat is the flat list of all atoms in List."""
     lst_val = deref(lst)
-    if is_var(lst_val):
-        return
-    result: list = []
+    if not is_var(lst_val):
+        result: list = []
 
-    def _do_flat(x: Any) -> None:
-        x = deref(x)
-        if isinstance(x, list):
-            for item in x:
-                _do_flat(item)
-        else:
-            result.append(x)
+        def _do_flat(x: Any) -> None:
+            x = deref(x)
+            if isinstance(x, list):
+                for item in x:
+                    _do_flat(item)
+            else:
+                result.append(x)
 
-    _do_flat(lst_val)
-    mark = trail.mark()
-    if unify(flat, result, trail):
-        yield None
-    trail.undo(mark)
+        _do_flat(lst_val)
+        mark = trail.mark()
+        if unify(flat, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("MergeSort", 2)
-def _msort__2(lst, sorted_lst, trail, k):
+@_trampoline_builtin("MergeSort", 2)
+def _msort__2(this_generator, parent, lst, sorted_lst, trail):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    try:
-        result = sorted(lst_val)
-    except TypeError:
-        # Mixed types: use string representation as tiebreaker
-        result = sorted(lst_val, key=lambda x: (type(x).__name__, repr(x)))
-    mark = trail.mark()
-    if unify(sorted_lst, result, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list):
+        try:
+            result = sorted(lst_val)
+        except TypeError:
+            result = sorted(lst_val, key=lambda x: (type(x).__name__, repr(x)))
+        mark = trail.mark()
+        if unify(sorted_lst, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Sort", 2)
-def _sort__2(lst, sorted_lst, trail, k):
+@_trampoline_builtin("Sort", 2)
+def _sort__2(this_generator, parent, lst, sorted_lst, trail):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    # Deduplicate preserving order, then sort
-    seen: list = []
-    for x in lst_val:
-        if x not in seen:
-            seen.append(x)
-    try:
-        result = sorted(seen)
-    except TypeError:
-        result = sorted(seen, key=lambda x: (type(x).__name__, repr(x)))
-    mark = trail.mark()
-    if unify(sorted_lst, result, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list):
+        seen: list = []
+        for x in lst_val:
+            if x not in seen:
+                seen.append(x)
+        try:
+            result = sorted(seen)
+        except TypeError:
+            result = sorted(seen, key=lambda x: (type(x).__name__, repr(x)))
+        mark = trail.mark()
+        if unify(sorted_lst, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Permutation", 2)
-def _permutation__2(lst, perm, trail, k):
+@_trampoline_builtin("Permutation", 2)
+def _permutation__2(this_generator, parent, lst, perm, trail):
     """permutation(List, Perm) — Perm is a permutation of List."""
     import itertools
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    for p in itertools.permutations(lst_val):
-        mark = trail.mark()
-        if unify(perm, list(p), trail):
-            yield None
-        trail.undo(mark)
+    if isinstance(lst_val, list):
+        for p in itertools.permutations(lst_val):
+            mark = trail.mark()
+            if unify(perm, list(p), trail):
+                yield (parent, None)
+            trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Select", 3)
-def _select__3(elem, lst, rest, trail, k):
+@_trampoline_builtin("Select", 3)
+def _select__3(this_generator, parent, elem, lst, rest, trail):
     """select(Elem, List, Rest) — Elem is in List, Rest is List without one occurrence."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    for i, item in enumerate(lst_val):
-        mark = trail.mark()
-        remainder = lst_val[:i] + lst_val[i + 1:]
-        if unify(elem, item, trail) and unify(rest, remainder, trail):
-            yield None
-        trail.undo(mark)
+    if isinstance(lst_val, list):
+        for i, item in enumerate(lst_val):
+            mark = trail.mark()
+            remainder = lst_val[:i] + lst_val[i + 1:]
+            if unify(elem, item, trail) and unify(rest, remainder, trail):
+                yield (parent, None)
+            trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Subtract", 3)
-def _subtract__3(set1, set2, diff, trail, k):
+@_trampoline_builtin("Subtract", 3)
+def _subtract__3(this_generator, parent, set1, set2, diff, trail):
     """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
     s1 = deref(set1)
     s2 = deref(set2)
-    if not isinstance(s1, list) or not isinstance(s2, list):
-        return
-    result = [x for x in s1 if x not in s2]
-    mark = trail.mark()
-    if unify(diff, result, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(s1, list) and isinstance(s2, list):
+        result = [x for x in s1 if x not in s2]
+        mark = trail.mark()
+        if unify(diff, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Intersection", 3)
-def _intersection__3(set1, set2, inter, trail, k):
+@_trampoline_builtin("Intersection", 3)
+def _intersection__3(this_generator, parent, set1, set2, inter, trail):
     """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
     s1 = deref(set1)
     s2 = deref(set2)
-    if not isinstance(s1, list) or not isinstance(s2, list):
-        return
-    result = [x for x in s1 if x in s2]
-    mark = trail.mark()
-    if unify(inter, result, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(s1, list) and isinstance(s2, list):
+        result = [x for x in s1 if x in s2]
+        mark = trail.mark()
+        if unify(inter, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("Union", 3)
-def _union__3(set1, set2, uni, trail, k):
+@_trampoline_builtin("Union", 3)
+def _union__3(this_generator, parent, set1, set2, uni, trail):
     """union(Set1, Set2, Union) — Union is Set1 ∪ Set2 (no duplicates)."""
     s1 = deref(set1)
     s2 = deref(set2)
-    if not isinstance(s1, list) or not isinstance(s2, list):
-        return
-    result = list(s1)
-    for x in s2:
-        if x not in result:
-            result.append(x)
-    mark = trail.mark()
-    if unify(uni, result, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(s1, list) and isinstance(s2, list):
+        result = list(s1)
+        for x in s2:
+            if x not in result:
+                result.append(x)
+        mark = trail.mark()
+        if unify(uni, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("ToSet", 2)
-def _list_to_set__2(lst, set_out, trail, k):
+@_trampoline_builtin("ToSet", 2)
+def _list_to_set__2(this_generator, parent, lst, set_out, trail):
     """list_to_set(List, Set) — Set is List with duplicates removed (order preserved)."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    seen: list = []
-    for x in lst_val:
-        if x not in seen:
-            seen.append(x)
-    mark = trail.mark()
-    if unify(set_out, seen, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list):
+        seen: list = []
+        for x in lst_val:
+            if x not in seen:
+                seen.append(x)
+        mark = trail.mark()
+        if unify(set_out, seen, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("SumList", 2)
-def _sum_list__2(lst, total, trail, k):
+@_trampoline_builtin("SumList", 2)
+def _sum_list__2(this_generator, parent, lst, total, trail):
     """sum_list(List, Total) — Total is the sum of all numbers in List."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return
-    try:
-        s = sum(deref(x) for x in lst_val)
-    except TypeError:
-        return
-    mark = trail.mark()
-    if unify(total, s, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list):
+        try:
+            s = sum(deref(x) for x in lst_val)
+        except TypeError:
+            yield (parent, DONE)
+            return
+        mark = trail.mark()
+        if unify(total, s, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("MaxList", 2)
-def _max_list__2(lst, maximum, trail, k):
+@_trampoline_builtin("MaxList", 2)
+def _max_list__2(this_generator, parent, lst, maximum, trail):
     """max_list(List, Max) — Max is the maximum element of List."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list) or len(lst_val) == 0:
-        return
-    try:
-        m = max(deref(x) for x in lst_val)
-    except TypeError:
-        return
-    mark = trail.mark()
-    if unify(maximum, m, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list) and len(lst_val) > 0:
+        try:
+            m = max(deref(x) for x in lst_val)
+        except TypeError:
+            yield (parent, DONE)
+            return
+        mark = trail.mark()
+        if unify(maximum, m, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("MinList", 2)
-def _min_list__2(lst, minimum, trail, k):
+@_trampoline_builtin("MinList", 2)
+def _min_list__2(this_generator, parent, lst, minimum, trail):
     """min_list(List, Min) — Min is the minimum element of List."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list) or len(lst_val) == 0:
-        return
-    try:
-        m = min(deref(x) for x in lst_val)
-    except TypeError:
-        return
-    mark = trail.mark()
-    if unify(minimum, m, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(lst_val, list) and len(lst_val) > 0:
+        try:
+            m = min(deref(x) for x in lst_val)
+        except TypeError:
+            yield (parent, DONE)
+            return
+        mark = trail.mark()
+        if unify(minimum, m, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
 # ── Standard library: pair helpers ────────────────────────────────────────────
 
 
-@_builtin("Unzip", 3)
-def _pairs_keys_values__3(pairs, keys, values, trail, k):
+@_trampoline_builtin("Unzip", 3)
+def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
     """pairs_keys_values(Pairs, Keys, Values) — Pairs is a list of [K, V] lists."""
     pairs_val = deref(pairs)
     if isinstance(pairs_val, list):
@@ -1404,103 +1502,71 @@ def _pairs_keys_values__3(pairs, keys, values, trail, k):
         vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
         mark = trail.mark()
         if unify(keys, ks, trail) and unify(values, vs, trail):
-            yield None
+            yield (parent, None)
         trail.undo(mark)
     else:
         ks_val = deref(keys)
         vs_val = deref(values)
-        if isinstance(ks_val, list) and isinstance(vs_val, list):
-            if len(ks_val) != len(vs_val):
-                return
+        if isinstance(ks_val, list) and isinstance(vs_val, list) and len(ks_val) == len(vs_val):
             result = [[k, v] for k, v in zip(ks_val, vs_val)]
             mark = trail.mark()
             if unify(pairs, result, trail):
-                yield None
+                yield (parent, None)
             trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("PairKeys", 2)
-def _pairs_keys__2(pairs, keys, trail, k):
+@_trampoline_builtin("PairKeys", 2)
+def _pairs_keys__2(this_generator, parent, pairs, keys, trail):
     """pairs_keys(Pairs, Keys) — Keys are the first elements of each pair."""
     pairs_val = deref(pairs)
-    if not isinstance(pairs_val, list):
-        return
-    ks = [deref(p)[0] for p in pairs_val if isinstance(deref(p), list)]
-    mark = trail.mark()
-    if unify(keys, ks, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(pairs_val, list):
+        ks = [deref(p)[0] for p in pairs_val if isinstance(deref(p), list)]
+        mark = trail.mark()
+        if unify(keys, ks, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
-@_builtin("PairValues", 2)
-def _pairs_values__2(pairs, values, trail, k):
+@_trampoline_builtin("PairValues", 2)
+def _pairs_values__2(this_generator, parent, pairs, values, trail):
     """pairs_values(Pairs, Values) — Values are the second elements of each pair."""
     pairs_val = deref(pairs)
-    if not isinstance(pairs_val, list):
-        return
-    vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
-    mark = trail.mark()
-    if unify(values, vs, trail):
-        yield None
-    trail.undo(mark)
+    if isinstance(pairs_val, list):
+        vs = [deref(p)[1] for p in pairs_val if isinstance(deref(p), list)]
+        mark = trail.mark()
+        if unify(values, vs, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
 
 
-@_builtin("CallGoal", 1)
-def _call_goal__1(goal, trail, k):
-    """call_goal(Goal) — call a zero-extra-arg goal closure."""
-    goal_val = deref(goal)
-    if callable(goal_val):
-        for _ in goal_val(trail, k):
-            yield None
-    return; yield  # noqa: B901
-
-
-@_builtin("CallGoal", 2)
-def _call_goal__2(goal, arg1, trail, k):
-    """call_goal(Goal, Arg1) — call a 1-extra-arg goal closure."""
-    goal_val = deref(goal)
-    if callable(goal_val):
-        for _ in goal_val(deref(arg1), trail, k):
-            yield None
-    return; yield  # noqa: B901
-
-
-@_builtin("CallGoal", 3)
-def _call_goal__3(goal, arg1, arg2, trail, k):
-    """call_goal(Goal, Arg1, Arg2) — call a 2-extra-arg goal closure."""
-    goal_val = deref(goal)
-    if callable(goal_val):
-        for _ in goal_val(deref(arg1), deref(arg2), trail, k):
-            yield None
-    return; yield  # noqa: B901
-
-
-# ── call_goal/4..8 and call/1..8 — generalized call/N ─────────────────────────
-
-
-def _make_call_goal_n(extra_n: int):
-    """Generate a call_goal builtin with extra_n extra args (arity = extra_n + 1)."""
-    def _call_goal_n(*args):
-        # args = (goal, extra1, ..., extraN, trail, k)
+def _make_call_goal_trampoline(extra_n: int):
+    """Generate a native trampoline call_goal builtin for *extra_n* extra args."""
+    def _call_goal_n(this_generator, parent, *args):
+        # args = (goal, extra1, ..., extraN, trail)
         goal_val = deref(args[0])
-        if callable(goal_val):
+        if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
+            dispatch = _ensure_trampoline_dispatch(goal_val)
             derefed = [deref(a) for a in args[1:extra_n + 1]]
             trail = args[extra_n + 1]
-            k = args[extra_n + 2]
-            for _ in goal_val(*derefed, trail, k):
-                yield None
-        return; yield  # noqa: B901
+            sg = StepGenerator(dispatch, this_generator, *derefed, trail)
+            _st = yield (sg, None)
+            while _st is not DONE:
+                yield (parent, None)
+                _st = yield (sg, None)
+        yield (parent, DONE)
     return _call_goal_n
 
 
-for _n in range(3, 8):  # extra_n=3..7 → arity 4..8
-    _builtin("CallGoal", _n + 1)(_make_call_goal_n(_n))
+for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
+    _BUILTINS[("CallGoal", _n + 1)] = _make_call_goal_trampoline(_n)
 
 # Call/1..8 — aliases: Call(Goal, A1, ...) = CallGoal(Goal, A1, ...)
-# Call/N has arity N: Call(Goal) is arity 1, Call(Goal, A1) is arity 2, etc.
 for _n in range(1, 9):
     _key = ("CallGoal", _n)
     if _key in _BUILTINS:
@@ -1510,128 +1576,129 @@ for _n in range(1, 9):
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 
-@_builtin("MapList", 2)
-def _map_list__2(goal, lst, trail, k):
+@_trampoline_builtin("MapList", 2)
+def _map_list__2(this_generator, parent, goal, lst, trail):
     """map_list(Goal, List) — Goal(Elem) succeeds for each element."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return; yield  # noqa: B901
     goal_val = deref(goal)
-    if not callable(goal_val):
-        return; yield  # noqa: B901
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     for elem in lst_val:
-        found = False
-        for _ in goal_val(deref(elem), trail, None):
-            found = True
-            break
-        if not found:
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        if _st is DONE:
             trail.undo(outer_mark)
-            return; yield  # noqa: B901
-    yield None
+            yield (parent, DONE)
+            return
+        # Got first solution — committed choice, move to next element
+    yield (parent, None)
     trail.undo(outer_mark)
+    yield (parent, DONE)
 
 
-@_builtin("MapList", 3)
-def _map_list__3(goal, xs, ys, trail, k):
+@_trampoline_builtin("MapList", 3)
+def _map_list__3(this_generator, parent, goal, xs, ys, trail):
     """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y."""
     xs_val = deref(xs)
-    if not isinstance(xs_val, list):
-        return; yield  # noqa: B901
     goal_val = deref(goal)
-    if not callable(goal_val):
-        return; yield  # noqa: B901
+    if not isinstance(xs_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     results = []
     for x in xs_val:
         y = Var()
-        found = False
-        for _ in goal_val(deref(x), y, trail, None):
-            found = True
-            results.append(deref(y))
-            break
-        if not found:
+        sg = StepGenerator(dispatch, this_generator, deref(x), y, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
             trail.undo(outer_mark)
-            return; yield  # noqa: B901
+            yield (parent, DONE)
+            return
+        results.append(deref(y))
     if unify(ys, results, trail):
-        yield None
+        yield (parent, None)
     trail.undo(outer_mark)
+    yield (parent, DONE)
 
 
-@_builtin("Filter", 3)
-def _include__3(goal, lst, included, trail, k):
+@_trampoline_builtin("Filter", 3)
+def _include__3(this_generator, parent, goal, lst, included, trail):
     """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return; yield  # noqa: B901
     goal_val = deref(goal)
-    if not callable(goal_val):
-        return; yield  # noqa: B901
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     kept = []
     for elem in lst_val:
         mark = trail.mark()
-        found = False
-        for _ in goal_val(deref(elem), trail, None):
-            found = True
-            break
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
         trail.undo(mark)
         if found:
             kept.append(deref(elem))
     if unify(included, kept, trail):
-        yield None
+        yield (parent, None)
     trail.undo(outer_mark)
+    yield (parent, DONE)
 
 
-@_builtin("Exclude", 3)
-def _exclude__3(goal, lst, excluded, trail, k):
+@_trampoline_builtin("Exclude", 3)
+def _exclude__3(this_generator, parent, goal, lst, excluded, trail):
     """exclude(Goal, List, Excluded) — keep elements where Goal(Elem) fails."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return; yield  # noqa: B901
     goal_val = deref(goal)
-    if not callable(goal_val):
-        return; yield  # noqa: B901
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     kept = []
     for elem in lst_val:
         mark = trail.mark()
-        found = False
-        for _ in goal_val(deref(elem), trail, None):
-            found = True
-            break
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
         trail.undo(mark)
         if not found:
             kept.append(deref(elem))
     if unify(excluded, kept, trail):
-        yield None
+        yield (parent, None)
     trail.undo(outer_mark)
+    yield (parent, DONE)
 
 
-@_builtin("FoldLeft", 4)
-def _foldl__4(goal, lst, v0, v, trail, k):
+@_trampoline_builtin("FoldLeft", 4)
+def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
     """foldl(Goal, List, V0, V) — left fold with Goal(Elem, Acc0, Acc1)."""
     lst_val = deref(lst)
-    if not isinstance(lst_val, list):
-        return; yield  # noqa: B901
     goal_val = deref(goal)
-    if not callable(goal_val):
-        return; yield  # noqa: B901
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     acc = v0
     for elem in lst_val:
         next_acc = Var()
-        found = False
-        for _ in goal_val(deref(elem), deref(acc), next_acc, trail, None):
-            found = True
-            break
-        if not found:
+        sg = StepGenerator(dispatch, this_generator, deref(elem), deref(acc), next_acc, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
             trail.undo(outer_mark)
-            return; yield  # noqa: B901
+            yield (parent, DONE)
+            return
         acc = next_acc
     if unify(v, deref(acc), trail):
-        yield None
+        yield (parent, None)
     trail.undo(outer_mark)
+    yield (parent, DONE)
 
 
 
