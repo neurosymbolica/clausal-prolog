@@ -57,7 +57,7 @@ from clausal.terms import (
     Call, LoadName,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
-from clausal.pythonic_ast.nodes import StarUnpack
+from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.codegen import functiondef_to_function
@@ -1490,6 +1490,14 @@ def compile_goal(
             inner_k = compile_goal(r, db, var_context, trail_name, k_stmts)
             return compile_goal(l, db, var_context, trail_name, inner_k)
 
+        # ── Tuple-as-conjunction ─────────────────────────────────────────────
+        # (A, B, C) in goal position → treat as conjunction (same as A and B and C)
+        case TupleLiteral(elements=elems) if elems:
+            k = k_stmts
+            for goal in reversed(elems):
+                k = compile_goal(goal, db, var_context, trail_name, k)
+            return k
+
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
             mark = _fresh("_m")
@@ -2188,6 +2196,15 @@ def compile_goal_trampoline(
             return compile_goal_trampoline(
                 l, db, var_context, trail_name, inner_k, self_name, parent_name
             )
+
+        # ── Tuple-as-conjunction ─────────────────────────────────────────────
+        case TupleLiteral(elements=elems) if elems:
+            k = k_stmts
+            for goal in reversed(elems):
+                k = compile_goal_trampoline(
+                    goal, db, var_context, trail_name, k, self_name, parent_name
+                )
+            return k
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):

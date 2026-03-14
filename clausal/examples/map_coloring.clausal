@@ -1,5 +1,5 @@
 -module(map_coloring, [
-    Colorable(Coloring)
+    Colorable(COLORING)
 ])
 
 -private([
@@ -8,7 +8,7 @@
     Queensland, NewSouthWales, Victoria, Tasmania,
     Color(C),
     Adjacent(X, Y),
-    ColorOf(Region, C, Coloring)
+    ColorOf(REGION, C, COLORING)
 ])
 
 # Four-color map coloring for Australia.
@@ -28,7 +28,7 @@ Adjacent(SouthAustralia,      Victoria),
 Adjacent(Queensland,          NewSouthWales),
 Adjacent(NewSouthWales,       Victoria),
 
-ColorOf(Region, C, Coloring) <- In([Region, C], Coloring)
+ColorOf(REGION, C, COLORING) <- In([REGION, C], COLORING)
 
 Colorable(COLORING) <- (
     Color(WA_COLOR),
