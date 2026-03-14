@@ -603,11 +603,16 @@ Trail_undo(TrailObject *self, PyObject *arg)
 {
     Py_ssize_t mark = PyLong_AsSsize_t(arg);
     if (mark == -1 && PyErr_Occurred()) return NULL;
-    if (mark < 0 || mark > self->length) {
+    if (mark < 0) {
         PyErr_SetString(PyExc_ValueError, "trail mark out of range");
         return NULL;
     }
-    trail_undo_to(self, mark);
+    /* If mark > length, an outer context already rewound past this mark
+       (common when generators with try/finally are abandoned mid-execution
+       during NAF, ForAll, or find_all).  Silently skip — the bindings are
+       already undone. */
+    if (mark <= self->length)
+        trail_undo_to(self, mark);
     Py_RETURN_NONE;
 }
 
