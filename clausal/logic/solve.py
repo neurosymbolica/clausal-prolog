@@ -66,6 +66,7 @@ def _deref_walk(term: Any) -> Any:
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
     from clausal.logic.tabling import _TABLING_SUSPEND
+    from clausal.logic.exceptions import LogicException
 
     sg = StepGenerator(dispatch_fn, None, *args, trail)
     gen, value = sg.send(None)
@@ -76,11 +77,22 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             yield trail
             gen, value = sg.send(None)
         else:
-            # Intercept _TABLING_SUSPEND → send DONE to parent instead
-            if value is _TABLING_SUSPEND:
-                gen, value = gen.send(DONE)
-            else:
-                gen, value = gen.send(value)
+            try:
+                # Intercept _TABLING_SUSPEND → send DONE to parent instead
+                if value is _TABLING_SUSPEND:
+                    gen, value = gen.send(DONE)
+                else:
+                    gen, value = gen.send(value)
+            except LogicException as exc:
+                target = gen.parent if hasattr(gen, 'parent') else None
+                while target is not None:
+                    try:
+                        gen, value = target.throw(exc)
+                        break
+                    except LogicException:
+                        target = target.parent if hasattr(target, 'parent') else None
+                else:
+                    raise exc
 
 
 def _compile_as_query(goal: Any, module: Module) -> Any:

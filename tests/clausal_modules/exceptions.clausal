@@ -1,0 +1,141 @@
+# Exception handling tests (V2-14)
+#
+# throw/1, catch/3, halt/0, halt/1
+
+# ── Basic throw and catch ────────────────────────────────────────────────────
+
+# CatchAll/2 — variable catcher matches any thrown term
+CatchAll(TERM, CAUGHT) <- (
+    catch(
+        throw(TERM),
+        CAUGHT,
+        True
+    )
+)
+
+# SafeResult/2 — catch a specific error, return fallback
+SafeResult(GOAL_VALUE, RESULT) <- (
+    catch(
+        (RESULT is GOAL_VALUE),
+        _,
+        RESULT is "error",
+    )
+)
+
+# ThrowIfZero/1 — throws "division_by_zero" if input is 0
+ThrowIfZero(0) <- throw("division_by_zero")
+ThrowIfZero(N) <- (N is not 0)
+
+# SafeRecip/2 — safe reciprocal with catch
+SafeRecip(N, RESULT) <- (
+    catch(
+        (ThrowIfZero(N) and (RESULT := 1 / N)),
+        "division_by_zero",
+        RESULT is 0,
+    )
+)
+
+# ── Nested catch ─────────────────────────────────────────────────────────────
+
+# InnerMiss/1 — inner catch only handles "inner"; outer catches the rest
+InnerMiss(RESULT) <- (
+    catch(
+        catch(
+            throw("outer_problem"),
+            "inner_only",
+            RESULT is "inner_caught",
+        ),
+        ERROR,
+        RESULT is ERROR,
+    )
+)
+
+# InnerHit/1 — inner catch handles the exact error
+InnerHit(RESULT) <- (
+    catch(
+        catch(
+            throw("inner_problem"),
+            "inner_problem",
+            RESULT is "inner_caught",
+        ),
+        _,
+        RESULT is "outer_caught",
+    )
+)
+
+# ── Dead child generator recovery (critical regression test) ─────────────────
+#
+# Scenario: Parent tries INPUT=0 first (which causes Risky to throw),
+# then backtracks and tries INPUT=1 (which should succeed normally).
+# This verifies that after catch handles the exception from the first
+# attempt, the second attempt creates fresh generators — no dead child
+# reuse.
+
+# Risky/2 — fails on 0, succeeds on nonzero
+Risky(0, _) <- throw("zero_error")
+Risky(INPUT, OUTPUT) <- ((INPUT is not 0) and (OUTPUT := INPUT * 10))
+
+# TryRisky/2 — wraps Risky in catch; on error, RESULT stays unbound (fails)
+TryRisky(INPUT, RESULT) <- (
+    catch(
+        Risky(INPUT, RESULT),
+        "zero_error",
+        False,
+    )
+)
+
+# Parent/1 — tries 0 first (catch swallows error, recovery fails),
+#             then backtracks to 1 (succeeds)
+Parent(RESULT) <- (
+    In(INPUT, [0, 1]) and TryRisky(INPUT, RESULT)
+)
+
+# ── Catch with successful goal (no exception) ───────────────────────────────
+
+# CatchNoThrow/1 — goal succeeds without throwing; catch is transparent
+CatchNoThrow(RESULT) <- (
+    catch(
+        RESULT is "normal",
+        _,
+        RESULT is "recovery",
+    )
+)
+
+# CatchMultiple/1 — goal with multiple solutions inside catch
+CatchMultiple(RESULT) <- (
+    catch(
+        In(RESULT, [10, 20, 30]),
+        _,
+        False,
+    )
+)
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+
+Test("catch variable catcher") <- (CatchAll(42, CAUGHT) and CAUGHT is 42)
+Test("catch string term") <- (CatchAll("oops", CAUGHT) and CAUGHT is "oops")
+Test("safe reciprocal of 2") <- (SafeRecip(2, R) and R == 0.5)
+Test("safe reciprocal of 0") <- (SafeRecip(0, R) and R is 0)
+Test("throw if zero throws") <- (
+    catch(ThrowIfZero(0), "division_by_zero", True)
+)
+Test("throw if zero passes") <- ThrowIfZero(1)
+Test("inner catch misses - outer catches") <- (
+    InnerMiss(R) and R is "outer_problem"
+)
+Test("inner catch hits") <- (InnerHit(R) and R is "inner_caught")
+
+# The critical dead-child-generator test
+Test("parent backtracks after catch failure") <- (
+    Parent(RESULT) and RESULT is 10
+)
+
+Test("catch is transparent when no throw") <- (
+    CatchNoThrow(R) and R is "normal"
+)
+Test("catch with multiple solutions") <- (
+    FindAll(X, CatchMultiple(X), BAG) and BAG is [10, 20, 30]
+)
+Test("safe result passes through") <- (
+    SafeResult(42, R) and R is 42
+)

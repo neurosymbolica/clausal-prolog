@@ -9,6 +9,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Compound, KWTerm
 from clausal.logic.builtins import structural_unify
 from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.exceptions import LogicException
 
 __all__ = [
     # Query API
@@ -29,4 +30,5 @@ __all__ = [
     "structural_unify",
     "PredicateMeta",
     "make_predicate",
+    "LogicException",
 ]

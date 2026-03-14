@@ -50,6 +50,45 @@ If `Cond` has a solution, run `Then`; otherwise run `Else`. Soft-cut: only the f
 
 ---
 
+### `throw/1`
+```
+throw(+Term)
+```
+Raise a logic-level exception carrying `Term`. The exception propagates through the generator/trampoline chain until caught by `catch/3` or surfaces as a Python `LogicException`.
+
+**Implementation:** `clausal/logic/compiler.py` (`_compile_throw`)
+**Exception class:** `clausal/logic/exceptions.py` (`LogicException`)
+**Clausal tests:** `tests/clausal_modules/exceptions.clausal`
+**Python tests:** `tests/test_exceptions.py`
+
+---
+
+### `catch/3`
+```
+catch(+Goal, ?Catcher, +Recovery)
+```
+Execute `Goal`. If `Goal` throws a `LogicException`, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
+
+Trail bindings from the failing goal are undone before recovery runs. The `Catcher` can be a variable (catches everything) or a specific term (selective).
+
+**Implementation:** `clausal/logic/compiler.py` (`_compile_catch`, `_compile_catch_trampoline`)
+**Clausal tests:** `tests/clausal_modules/exceptions.clausal`
+**Python tests:** `tests/test_exceptions.py`
+
+---
+
+### `halt/0`, `halt/1`
+```
+halt
+halt(+Code)
+```
+Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1` exits with the given code.
+
+**Implementation:** `clausal/logic/compiler.py` (inline in `compile_goal`/`compile_goal_trampoline`)
+**Python tests:** `tests/test_exceptions.py`
+
+---
+
 ## Meta-Predicates
 
 These are **compiler special forms** recognized by name in `compile_goal`/`compile_goal_trampoline`. Inner goals compile in simple mode as sub-generators.

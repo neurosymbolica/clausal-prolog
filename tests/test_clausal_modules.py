@@ -678,3 +678,73 @@ class TestTermInspectionVarList:
         assert len(results) == 1
         assert len(results[0]) == 2
         assert all(is_var(v) for v in results[0])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Exception handling (exceptions.clausal) — V2-14
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestExceptionsCatchAll:
+    def setup_method(self):
+        self.mod = _load_clausal_module("exceptions.clausal")
+
+    def test_catch_integer(self):
+        r = Var()
+        assert _call_collect("CatchAll", 42, r, mod=self.mod) == [42]
+
+    def test_catch_string(self):
+        r = Var()
+        assert _call_collect("CatchAll", "oops", r, mod=self.mod) == ["oops"]
+
+
+class TestExceptionsSafeRecip:
+    def setup_method(self):
+        self.mod = _load_clausal_module("exceptions.clausal")
+
+    def test_safe_recip_nonzero(self):
+        r = Var()
+        assert _call_collect("SafeRecip", 2, r, mod=self.mod) == [0.5]
+
+    def test_safe_recip_zero(self):
+        r = Var()
+        assert _call_collect("SafeRecip", 0, r, mod=self.mod) == [0]
+
+
+class TestExceptionsNested:
+    def setup_method(self):
+        self.mod = _load_clausal_module("exceptions.clausal")
+
+    def test_inner_miss(self):
+        r = Var()
+        assert _call_collect("InnerMiss", r, mod=self.mod) == ["outer_problem"]
+
+    def test_inner_hit(self):
+        r = Var()
+        assert _call_collect("InnerHit", r, mod=self.mod) == ["inner_caught"]
+
+
+class TestExceptionsDeadChildRecovery:
+    """Critical regression test: after catch swallows an exception from the
+    first attempt (input=0), the parent backtracks and retries with input=1.
+    The second attempt must create fresh generators — no dead child reuse."""
+
+    def setup_method(self):
+        self.mod = _load_clausal_module("exceptions.clausal")
+
+    def test_parent_backtracks(self):
+        r = Var()
+        assert _call_collect("Parent", r, mod=self.mod) == [10]
+
+
+class TestExceptionsCatchTransparent:
+    def setup_method(self):
+        self.mod = _load_clausal_module("exceptions.clausal")
+
+    def test_no_throw(self):
+        r = Var()
+        assert _call_collect("CatchNoThrow", r, mod=self.mod) == ["normal"]
+
+    def test_multiple_solutions(self):
+        r = Var()
+        assert _call_collect("CatchMultiple", r, mod=self.mod) == [10, 20, 30]

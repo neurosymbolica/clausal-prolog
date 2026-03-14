@@ -1,0 +1,47 @@
+# V2-14: catch/throw integration test fixture
+
+# SafeDiv: catches division-by-zero, returns "infinity" instead
+SafeDiv(X, Y, RESULT) <- (
+    catch(
+        (RESULT := X // Y),
+        _,
+        RESULT is "infinity",
+    )
+)
+
+# ThrowIfNeg: throws if argument is negative
+ThrowIfNeg(X) <- (X >= 0)
+ThrowIfNeg(X) <- (X < 0 and throw("negative"))
+
+# CatchNeg: wraps ThrowIfNeg, catches "negative" error
+CatchNeg(X, RESULT) <- (
+    catch(
+        (ThrowIfNeg(X) and RESULT is "ok"),
+        "negative",
+        RESULT is "caught_negative",
+    )
+)
+
+# NestedCatch: inner catch doesn't match, outer catches
+InnerThrow() <- throw("outer_error")
+
+NestedCatch(RESULT) <- (
+    catch(
+        catch(
+            InnerThrow(),
+            "inner_only",
+            RESULT is "inner_caught",
+        ),
+        ERROR,
+        RESULT is ERROR,
+    )
+)
+
+# CatchAll: variable catcher matches anything
+CatchAll(RESULT) <- (
+    catch(
+        throw(42),
+        ERROR,
+        RESULT is ERROR,
+    )
+)

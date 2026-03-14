@@ -72,9 +72,10 @@ else:
         the first call does ``next(inner_gen)``; subsequent calls delegate to
         ``inner_gen.send(value)``.
         """
-        __slots__ = ('_gen', '_started')
+        __slots__ = ('_gen', '_started', 'parent')
 
         def __init__(self, func: Callable, *args: Any) -> None:
+            self.parent = args[0] if args else None  # first arg is always parent
             self._gen: Generator = func(self, *args)
             self._started: bool = False
 
@@ -106,10 +107,28 @@ else:
 
         No ``started`` set, no ``resume`` helper — StepGenerator handles
         bootstrapping internally.
+
+        LogicException routing: when a generator raises LogicException, the
+        throwing generator is dead (its try/finally already ran trail.undo).
+        We unwind through the parent chain using .throw() until a catch/3
+        handler catches it.
         """
+        from clausal.logic.exceptions import LogicException
+
         gen, value = root.send(None)
         while gen is not None:
-            gen, value = gen.send(value)
+            try:
+                gen, value = gen.send(value)
+            except LogicException as exc:
+                target = gen.parent if hasattr(gen, 'parent') else None
+                while target is not None:
+                    try:
+                        gen, value = target.throw(exc)
+                        break  # parent caught it — resume normal trampoline
+                    except LogicException:
+                        target = target.parent if hasattr(target, 'parent') else None
+                else:
+                    raise exc  # uncaught — surface to Python
         return value
 
     def solutions(root: StepGenerator, snapshot: Callable | None = None) -> list:  # type: ignore[no-redef]
@@ -122,8 +141,12 @@ else:
         to DONE so the parent's while-loop exits normally.  The consumer
         generator remains saved in the table entry's suspended list for later
         resumption by the leader's completion phase.
+
+        LogicException routing: same as trampoline() — unwind through parent
+        chain via .throw() until caught or surface to Python.
         """
         from clausal.logic.tabling import _TABLING_SUSPEND
+        from clausal.logic.exceptions import LogicException
 
         results: list = []
         gen, value = root.send(None)
@@ -134,11 +157,22 @@ else:
                 results.append(snapshot() if snapshot is not None else value)
                 gen, value = root.send(None)
             else:
-                # Intercept _TABLING_SUSPEND → send DONE to parent instead
-                if value is _TABLING_SUSPEND:
-                    gen, value = gen.send(DONE)
-                else:
-                    gen, value = gen.send(value)
+                try:
+                    # Intercept _TABLING_SUSPEND → send DONE to parent instead
+                    if value is _TABLING_SUSPEND:
+                        gen, value = gen.send(DONE)
+                    else:
+                        gen, value = gen.send(value)
+                except LogicException as exc:
+                    target = gen.parent if hasattr(gen, 'parent') else None
+                    while target is not None:
+                        try:
+                            gen, value = target.throw(type(exc), exc)
+                            break
+                        except LogicException:
+                            target = target.parent if hasattr(target, 'parent') else None
+                    else:
+                        raise exc
 
 
 # ── Minimal test problem: n! ─────────────────────────────────────────────────

@@ -1628,6 +1628,24 @@ def compile_goal(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
+        # ── throw(Term) — raise LogicException ────────────────────────────
+        case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
+            return _compile_throw(term_arg, var_context)
+
+        # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
+        case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
+            return _compile_catch(
+                goal_arg, catcher, recovery, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── halt/0, halt/1 — exit ────────────────────────────────────────
+        case Call(func=LoadName(name="halt"), args=[], kwargs=[]):
+            return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
+
+        case Call(func=LoadName(name="halt"), args=[code_arg], kwargs=[]):
+            code_expr = term_to_ast_expr(code_arg, var_context, eval_arith=True)
+            return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
+
         # ── Once(goal) — commit to first solution ──────────────────────────
         case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
@@ -1812,6 +1830,243 @@ def _compile_find_all_core(
         stmts.extend(unify_block)
 
     return stmts
+
+
+# ── throw/catch compilation (V2-14) ─────────────────────────────────────────
+
+
+def _compile_throw(
+    term_arg: Any,
+    var_context: dict[int, str],
+) -> list[ast.stmt]:
+    """Compile throw(Term) — raise LogicException(term_expr).
+
+    Same in both simple and trampoline modes — Python raise propagates naturally.
+    """
+    term_expr = term_to_ast_expr(term_arg, var_context, eval_arith=False)
+    return [
+        ast.Raise(exc=_call(_name("_LogicException"), term_expr)),
+    ]
+
+
+def _compile_catch(
+    goal_arg: Any,
+    catcher: Any,
+    recovery: Any,
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Compile catch(Goal, Catcher, Recovery) in simple mode.
+
+    Generates::
+
+        _catch_mark_N = trail.mark()
+        def _catch_gen_N():
+            <compiled goal with k = [yield None]>
+            return; yield
+        try:
+            for _ in _catch_gen_N():
+                <k_stmts>
+        except _LogicException as _exc_N:
+            trail.undo(_catch_mark_N)
+            _catch_um_N = trail.mark()
+            if unify(<catcher_expr>, _exc_N.term, trail):
+                def _catch_rec_N():
+                    <compiled recovery with k = [yield None]>
+                    return; yield
+                for _ in _catch_rec_N():
+                    <k_stmts>
+            trail.undo(_catch_um_N)
+    """
+    catch_mark = _fresh("_catch_m")
+    gen_name = _fresh("_catch_gen")
+    exc_name = _fresh("_exc")
+    unify_mark = _fresh("_catch_um")
+    rec_gen_name = _fresh("_catch_rec")
+
+    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+
+    # Compile inner goal as sub-generator (simple mode)
+    inner_stmts = compile_goal(goal_arg, db, var_context, trail_name, [_yield_none_stmt()])
+    gen_body = inner_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=gen_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    # for loop over goal generator
+    goal_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+
+    # Compile recovery as sub-generator (simple mode)
+    recovery_stmts = compile_goal(recovery, db, var_context, trail_name, [_yield_none_stmt()])
+    rec_body = recovery_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    rec_fn = ast.FunctionDef(
+        name=rec_gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=rec_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    # Recovery for loop
+    rec_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(rec_gen_name)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+
+    # except block: undo trail, match catcher, run recovery; else re-raise
+    except_body: list[ast.stmt] = [
+        _undo_stmt(catch_mark, trail_name),
+        _assign_mark(unify_mark, trail_name),
+        ast.If(
+            test=_call(
+                _name("unify"),
+                catcher_expr,
+                ast.Attribute(
+                    value=_name(exc_name), attr="term", ctx=ast.Load(),
+                ),
+                _name(trail_name),
+            ),
+            body=[rec_fn, rec_loop],
+            orelse=[
+                _undo_stmt(unify_mark, trail_name),
+                ast.Raise(),  # re-raise if catcher doesn't match
+            ],
+        ),
+        _undo_stmt(unify_mark, trail_name),
+    ]
+
+    handler = ast.ExceptHandler(
+        type=_name("_LogicException"),
+        name=exc_name,
+        body=except_body,
+    )
+
+    try_block = ast.Try(
+        body=[goal_loop],
+        handlers=[handler],
+        orelse=[],
+        finalbody=[],
+    )
+
+    return [
+        _assign_mark(catch_mark, trail_name),
+        gen_fn,
+        try_block,
+    ]
+
+
+def _compile_catch_trampoline(
+    goal_arg: Any,
+    catcher: Any,
+    recovery: Any,
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+    k_stmts: list[ast.stmt],
+    self_name: str,
+) -> list[ast.stmt]:
+    """Compile catch(Goal, Catcher, Recovery) in trampoline mode.
+
+    Generates::
+
+        _catch_mark_N = trail.mark()
+        try:
+            _gen_N = StepGenerator(goal_dispatch, this_generator, ..., trail)
+            _st_N = (yield (_gen_N, None))
+            while _st_N is not _DONE:
+                <k_stmts>
+                _st_N = (yield (_gen_N, None))
+        except _LogicException as _exc_N:
+            trail.undo(_catch_mark_N)
+            _catch_um_N = trail.mark()
+            if unify(<catcher_expr>, _exc_N.term, trail):
+                _gen_rec_N = StepGenerator(rec_dispatch, this_generator, ..., trail)
+                _st_rec_N = (yield (_gen_rec_N, None))
+                while _st_rec_N is not _DONE:
+                    <k_stmts>
+                    _st_rec_N = (yield (_gen_rec_N, None))
+            trail.undo(_catch_um_N)
+    """
+    catch_mark = _fresh("_catch_m")
+    exc_name = _fresh("_exc")
+    unify_mark = _fresh("_catch_um")
+
+    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+
+    # Compile goal as trampoline call
+    goal_stmts = compile_goal_trampoline(
+        goal_arg, db, var_context, trail_name, k_stmts, self_name,
+    )
+
+    # Compile recovery as trampoline call
+    recovery_stmts = compile_goal_trampoline(
+        recovery, db, var_context, trail_name, k_stmts, self_name,
+    )
+
+    # except block: undo trail, match catcher, run recovery; else re-raise
+    except_body: list[ast.stmt] = [
+        _undo_stmt(catch_mark, trail_name),
+        _assign_mark(unify_mark, trail_name),
+        ast.If(
+            test=_call(
+                _name("unify"),
+                catcher_expr,
+                ast.Attribute(
+                    value=_name(exc_name), attr="term", ctx=ast.Load(),
+                ),
+                _name(trail_name),
+            ),
+            body=recovery_stmts or [ast.Pass()],
+            orelse=[
+                _undo_stmt(unify_mark, trail_name),
+                ast.Raise(),  # re-raise if catcher doesn't match
+            ],
+        ),
+        _undo_stmt(unify_mark, trail_name),
+    ]
+
+    handler = ast.ExceptHandler(
+        type=_name("_LogicException"),
+        name=exc_name,
+        body=except_body,
+    )
+
+    try_block = ast.Try(
+        body=goal_stmts,
+        handlers=[handler],
+        orelse=[],
+        finalbody=[],
+    )
+
+    return [
+        _assign_mark(catch_mark, trail_name),
+        try_block,
+    ]
 
 
 # ── Goal lambda compilation ──────────────────────────────────────────────────
@@ -2401,6 +2656,25 @@ def compile_goal_trampoline(
                 "CLP(FD) arithmetic constraints (==+) are not yet implemented"
             )
 
+        # ── throw(Term) — raise LogicException ────────────────────────────
+        case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
+            return _compile_throw(term_arg, var_context)
+
+        # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
+        case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
+            return _compile_catch_trampoline(
+                goal_arg, catcher, recovery, db, var_context,
+                trail_name, k_stmts, self_name,
+            )
+
+        # ── halt/0, halt/1 — exit ────────────────────────────────────────
+        case Call(func=LoadName(name="halt"), args=[], kwargs=[]):
+            return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
+
+        case Call(func=LoadName(name="halt"), args=[code_arg], kwargs=[]):
+            code_expr = term_to_ast_expr(code_arg, var_context, eval_arith=True)
+            return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
+
         # ── Once(goal) — commit to first solution ──────────────────────────
         case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             # Inner compiles in simple mode (sub-generator), same as NAF.
@@ -2983,6 +3257,7 @@ def compile_predicate_trampoline(
         fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
         reify_fd as _reify_fd_fn,
     )
+    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm_t,
@@ -3010,6 +3285,7 @@ def compile_predicate_trampoline(
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
+        "_LogicException": _LogicException_cls,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -4314,6 +4590,7 @@ def compile_predicate_shallow(
         fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
         reify_fd as _reify_fd_fn_s,
     )
+    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm,
@@ -4339,6 +4616,7 @@ def compile_predicate_shallow(
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
+        "_LogicException": _LogicException_cls,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
