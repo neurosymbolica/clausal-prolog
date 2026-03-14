@@ -4,9 +4,11 @@
 
 -private([
     Red, Green, Blue, Yellow,
-    Wa, Nt, Sa, Qld, Nsw, Vic, Tas,
+    WesternAustralia, NorthernTerritory, SouthAustralia,
+    Queensland, NewSouthWales, Victoria, Tasmania,
     Color(C),
-    Adjacent(X, Y)
+    Adjacent(X, Y),
+    ColorOf(Region, C, Coloring)
 ])
 
 # Four-color map coloring for Australia.
@@ -16,37 +18,40 @@ Color(Green),
 Color(Blue),
 Color(Yellow),
 
-Adjacent(X=Wa,  Y=Nt),
-Adjacent(Wa,  Sa),
-Adjacent(Nt,  Sa),
-Adjacent(Nt,  Qld),
-Adjacent(Sa,  Qld),
-Adjacent(Sa,  Nsw),
-Adjacent(Sa,  Vic),
-Adjacent(Qld, Nsw),
-Adjacent(Nsw, Vic),
+Adjacent(X=WesternAustralia,  Y=NorthernTerritory),
+Adjacent(WesternAustralia,    SouthAustralia),
+Adjacent(NorthernTerritory,   SouthAustralia),
+Adjacent(NorthernTerritory,   Queensland),
+Adjacent(SouthAustralia,      Queensland),
+Adjacent(SouthAustralia,      NewSouthWales),
+Adjacent(SouthAustralia,      Victoria),
+Adjacent(Queensland,          NewSouthWales),
+Adjacent(NewSouthWales,       Victoria),
+
+ColorOf(Region, C, Coloring) <- In([Region, C], Coloring)
 
 Colorable(COLORING) <- (
-    Color(WA_C),
-    Color(NT_C),
-    Color(SA_C),
-    Color(Q_C),
-    Color(NSW_C),
-    Color(V_C),
-    Color(T_C),
-    WA_C is not NT_C,
-    WA_C is not SA_C,
-    NT_C is not SA_C,
-    NT_C is not Q_C,
-    SA_C is not Q_C,
-    SA_C is not NSW_C,
-    SA_C is not V_C,
-    Q_C is not NSW_C,
-    NSW_C is not V_C,
+    Color(WA_COLOR),
+    Color(NT_COLOR),
+    Color(SA_COLOR),
+    Color(QLD_COLOR),
+    Color(NSW_COLOR),
+    Color(VIC_COLOR),
+    Color(TAS_COLOR),
     COLORING is [
-        [Wa, WA_C], [Nt, NT_C], [Sa, SA_C],
-        [Qld, Q_C], [Nsw, NSW_C], [Vic, V_C], [Tas, T_C]
-    ]
+        [WesternAustralia,   WA_COLOR],
+        [NorthernTerritory,  NT_COLOR],
+        [SouthAustralia,     SA_COLOR],
+        [Queensland,         QLD_COLOR],
+        [NewSouthWales,      NSW_COLOR],
+        [Victoria,           VIC_COLOR],
+        [Tasmania,           TAS_COLOR]
+    ],
+    ForAll(Adjacent(REGION_X, REGION_Y), (
+        ColorOf(REGION_X, COLOR_OF_REGION_X, COLORING),
+        ColorOf(REGION_Y, COLOR_OF_REGION_Y, COLORING),
+        COLOR_OF_REGION_X is not COLOR_OF_REGION_Y
+    ))
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
@@ -56,20 +61,20 @@ Test("green is a color") <- Color(Green)
 Test("blue is a color") <- Color(Blue)
 Test("yellow is a color") <- Color(Yellow)
 Test("purple is not a color") <- (not Color("purple"))
-Test("wa adjacent to nt") <- Adjacent(Wa, Nt)
-Test("wa adjacent to sa") <- Adjacent(Wa, Sa)
-Test("nsw adjacent to vic") <- Adjacent(Nsw, Vic)
+Test("wa adjacent to nt") <- Adjacent(WesternAustralia, NorthernTerritory)
+Test("wa adjacent to sa") <- Adjacent(WesternAustralia, SouthAustralia)
+Test("nsw adjacent to vic") <- Adjacent(NewSouthWales, Victoria)
 Test("a coloring exists") <- Colorable(_)
 Test("coloring has 7 regions") <- (Colorable(COLORING), Length(COLORING, 7))
 Test("wa and nt get different colors") <- (
     Colorable(COLORING),
-    In([Wa, WA_C], COLORING),
-    In([Nt, NT_C], COLORING),
-    WA_C is not NT_C
+    In([WesternAustralia, WA_COLOR], COLORING),
+    In([NorthernTerritory, NT_COLOR], COLORING),
+    WA_COLOR is not NT_COLOR
 )
 Test("sa and qld get different colors") <- (
     Colorable(COLORING),
-    In([Sa, SA_C], COLORING),
-    In([Qld, Q_C], COLORING),
-    SA_C is not Q_C
+    In([SouthAustralia, SA_COLOR], COLORING),
+    In([Queensland, QLD_COLOR], COLORING),
+    SA_COLOR is not QLD_COLOR
 )
