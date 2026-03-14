@@ -1,20 +1,20 @@
 # Family relationships
 #
-# parent/2 facts + ancestor/2 rules + sibling/2 rule
+# Parent/2 facts + Ancestor/2 rules + Sibling/2 rule
 
-parent(PARENT="tom", CHILD="bob"),
-parent("tom", "liz"),
-parent("bob", "ann"),
-parent("bob", "pat"),
+Parent(PARENT="tom", CHILD="bob"),
+Parent("tom", "liz"),
+Parent("bob", "ann"),
+Parent("bob", "pat"),
 
-ancestor(X, Y) <- parent(X, Y)
-ancestor(X, Y) <- (
-    parent(X, Z),
-    ancestor(Z, Y)
+Ancestor(X, Y) <- Parent(X, Y)
+Ancestor(X, Y) <- (
+    Parent(X, Z),
+    Ancestor(Z, Y)
 )
 
-sibling(PERSON, SIBLING) <- (
+Sibling(PERSON, SIBLING) <- (
     PERSON is not SIBLING,
-    parent(PARENT, PERSON),
-    parent(PARENT, SIBLING),
+    Parent(PARENT, PERSON),
+    Parent(PARENT, SIBLING),
 )

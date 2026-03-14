@@ -1,88 +1,88 @@
 -module(lambdas, [
-    apply_val(RESULT, VAL),
-    add_one(X, Y),
-    add_z(Z, X, RESULT),
-    double_val(X, Y),
-    zero_arg(RESULT),
-    transform(X, Y),
-    capture_two(A, B, X, RESULT),
-    apply_pred(X, Y),
-    all_colors(COLORS)
+    ApplyVal(RESULT, VAL),
+    AddOne(X, Y),
+    AddZ(Z, X, RESULT),
+    DoubleVal(X, Y),
+    ZeroArg(RESULT),
+    Transform(X, Y),
+    CaptureTwo(A, B, X, RESULT),
+    ApplyPred(X, Y),
+    AllColors(COLORS)
 ])
 
 -private([
-    helper(X, Y),
-    color(C)
+    Helper(X, Y),
+    Color(C)
 ])
 
 # ── Basic lambdas ────────────────────────────────────────────────────────────
 
 # Identity via call_goal — the simplest lambda.
-apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
+ApplyVal(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
 
 # Arithmetic in lambda body.
-add_one(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
+AddOne(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
 
 # Two-argument lambda.
-double_val(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
+DoubleVal(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
 
 # Zero-argument lambda.
-zero_arg(RESULT) <- CallGoal((() <- (RESULT is 42)))
+ZeroArg(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # ── Variable capture ─────────────────────────────────────────────────────────
 
 # Capture one variable from enclosing clause.
-add_z(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
+AddZ(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
 
 # Capture two variables from enclosing clause.
-capture_two(A, B, X, RESULT) <- (
+CaptureTwo(A, B, X, RESULT) <- (
     CallGoal((V <- (RESULT := V + A + B)), X)
 )
 
 # ── Conjunction body ─────────────────────────────────────────────────────────
 
 # Lambda with multi-step conjunction: T := V + 1, R := T * 2
-transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+Transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
 
 # ── Predicate calls from lambdas ─────────────────────────────────────────────
 
 # Helper predicate called from within a lambda.
-helper(X, Y) <- (Y := X * 10)
+Helper(X, Y) <- (Y := X * 10)
 
-apply_pred(X, Y) <- CallGoal((V <- (helper(V, Y))), X)
+ApplyPred(X, Y) <- CallGoal((V <- (Helper(V, Y))), X)
 
 # ── Multi-solution via find_all ──────────────────────────────────────────────
 
-color("red"),
-color("green"),
-color("blue"),
+Color("red"),
+Color("green"),
+Color("blue"),
 
-all_colors(COLORS) <- (
-    FindAll(C, color(C), COLORS)
+AllColors(COLORS) <- (
+    FindAll(C, Color(C), COLORS)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 # Basic
-test("apply_val 42") <- apply_val(42, 42)
-test("apply_val string") <- apply_val("hello", "hello")
-test("add_one 5") <- add_one(5, 6)
-test("add_one -1") <- add_one(-1, 0)
-test("double_val 5") <- double_val(5, 10)
-test("zero_arg 42") <- zero_arg(42)
+Test("apply_val 42") <- ApplyVal(42, 42)
+Test("apply_val string") <- ApplyVal("hello", "hello")
+Test("add_one 5") <- AddOne(5, 6)
+Test("add_one -1") <- AddOne(-1, 0)
+Test("double_val 5") <- DoubleVal(5, 10)
+Test("zero_arg 42") <- ZeroArg(42)
 
 # Capture
-test("add_z 3+10") <- add_z(3, 10, 13)
-test("add_z 0+7") <- add_z(0, 7, 7)
-test("capture_two 10+20+5") <- capture_two(10, 20, 5, 35)
+Test("add_z 3+10") <- AddZ(3, 10, 13)
+Test("add_z 0+7") <- AddZ(0, 7, 7)
+Test("capture_two 10+20+5") <- CaptureTwo(10, 20, 5, 35)
 
 # Conjunction
-test("transform 5 -> 12") <- transform(5, 12)
-test("transform 0 -> 2") <- transform(0, 2)
+Test("transform 5 -> 12") <- Transform(5, 12)
+Test("transform 0 -> 2") <- Transform(0, 2)
 
 # Predicate call
-test("apply_pred 3 -> 30") <- apply_pred(3, 30)
-test("apply_pred 0 -> 0") <- apply_pred(0, 0)
+Test("apply_pred 3 -> 30") <- ApplyPred(3, 30)
+Test("apply_pred 0 -> 0") <- ApplyPred(0, 0)
 
 # Multi-solution
-test("all_colors") <- all_colors(["red", "green", "blue"])
+Test("all_colors") <- AllColors(["red", "green", "blue"])

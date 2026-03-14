@@ -1,39 +1,39 @@
 -module(map_coloring, [
-    colorable(Coloring)
+    Colorable(Coloring)
 ])
 
 -private([
-    red, green, blue, yellow,
-    wa, nt, sa, q, nsw, v, t,
-    color(C),
-    adjacent(X, Y)
+    Red, Green, Blue, Yellow,
+    Wa, Nt, Sa, Qld, Nsw, Vic, Tas,
+    Color(C),
+    Adjacent(X, Y)
 ])
 
 # Four-color map coloring for Australia.
 
-color(C=red),
-color(green),
-color(blue),
-color(yellow),
+Color(C=Red),
+Color(Green),
+Color(Blue),
+Color(Yellow),
 
-adjacent(X=wa,  Y=nt),
-adjacent(wa,  sa),
-adjacent(nt,  sa),
-adjacent(nt,  q),
-adjacent(sa,  q),
-adjacent(sa,  nsw),
-adjacent(sa,  v),
-adjacent(q,   nsw),
-adjacent(nsw, v),
+Adjacent(X=Wa,  Y=Nt),
+Adjacent(Wa,  Sa),
+Adjacent(Nt,  Sa),
+Adjacent(Nt,  Qld),
+Adjacent(Sa,  Qld),
+Adjacent(Sa,  Nsw),
+Adjacent(Sa,  Vic),
+Adjacent(Qld, Nsw),
+Adjacent(Nsw, Vic),
 
-colorable(COLORING) <- (
-    color(WA_C),
-    color(NT_C),
-    color(SA_C),
-    color(Q_C),
-    color(NSW_C),
-    color(V_C),
-    color(T_C),
+Colorable(COLORING) <- (
+    Color(WA_C),
+    Color(NT_C),
+    Color(SA_C),
+    Color(Q_C),
+    Color(NSW_C),
+    Color(V_C),
+    Color(T_C),
     WA_C is not NT_C,
     WA_C is not SA_C,
     NT_C is not SA_C,
@@ -44,32 +44,32 @@ colorable(COLORING) <- (
     Q_C is not NSW_C,
     NSW_C is not V_C,
     COLORING is [
-        [wa, WA_C], [nt, NT_C], [sa, SA_C],
-        [q, Q_C], [nsw, NSW_C], [v, V_C], [t, T_C]
+        [Wa, WA_C], [Nt, NT_C], [Sa, SA_C],
+        [Qld, Q_C], [Nsw, NSW_C], [Vic, V_C], [Tas, T_C]
     ]
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("red is a color") <- color(red)
-test("green is a color") <- color(green)
-test("blue is a color") <- color(blue)
-test("yellow is a color") <- color(yellow)
-test("purple is not a color") <- (not color("purple"))
-test("wa adjacent to nt") <- adjacent(wa, nt)
-test("wa adjacent to sa") <- adjacent(wa, sa)
-test("nsw adjacent to v") <- adjacent(nsw, v)
-test("a coloring exists") <- colorable(_)
-test("coloring has 7 regions") <- (colorable(COLORING), Length(COLORING, 7))
-test("wa and nt get different colors") <- (
-    colorable(COLORING),
-    In([wa, WA_C], COLORING),
-    In([nt, NT_C], COLORING),
+Test("red is a color") <- Color(Red)
+Test("green is a color") <- Color(Green)
+Test("blue is a color") <- Color(Blue)
+Test("yellow is a color") <- Color(Yellow)
+Test("purple is not a color") <- (not Color("purple"))
+Test("wa adjacent to nt") <- Adjacent(Wa, Nt)
+Test("wa adjacent to sa") <- Adjacent(Wa, Sa)
+Test("nsw adjacent to vic") <- Adjacent(Nsw, Vic)
+Test("a coloring exists") <- Colorable(_)
+Test("coloring has 7 regions") <- (Colorable(COLORING), Length(COLORING, 7))
+Test("wa and nt get different colors") <- (
+    Colorable(COLORING),
+    In([Wa, WA_C], COLORING),
+    In([Nt, NT_C], COLORING),
     WA_C is not NT_C
 )
-test("sa and q get different colors") <- (
-    colorable(COLORING),
-    In([sa, SA_C], COLORING),
-    In([q, Q_C], COLORING),
+Test("sa and qld get different colors") <- (
+    Colorable(COLORING),
+    In([Sa, SA_C], COLORING),
+    In([Qld, Q_C], COLORING),
     SA_C is not Q_C
 )

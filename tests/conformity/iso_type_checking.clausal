@@ -16,55 +16,55 @@
 #     Tests needing negative int args must use Python test file.
 #   - Complex Python types (bool, complex) can't be tested directly.
 
--module(iso_type_checking, [test(DESC)])
+-module(iso_type_checking, [Test(DESC)])
 
 -private([
-    is_bound_number(X),
-    hello, abc
+    IsBoundNumber(X),
+    Hello, Abc
 ])
 
 # Succeeds when X is bound to a number (integer or float).
-is_bound_number(X) <- (
+IsBoundNumber(X) <- (
     IsBound(X),
     IsNumber(X)
 )
 
 # ── IsVar/1 ────────────────────────────────────────────────────────────────────
 
-test("var: unbound var succeeds") <- IsVar(X_)
-test("var: integer fails") <- (not IsVar(42))
-test("var: atom fails") <- (not IsVar(hello))
-test("var: bound var fails") <- (
+Test("var: unbound var succeeds") <- IsVar(X_)
+Test("var: integer fails") <- (not IsVar(42))
+Test("var: atom fails") <- (not IsVar(Hello))
+Test("var: bound var fails") <- (
     X_ is 1,
     not IsVar(X_)
 )
 
 # ── IsBound/1 ─────────────────────────────────────────────────────────────────
 
-test("nonvar: integer succeeds") <- IsBound(42)
-test("nonvar: atom succeeds") <- IsBound(hello)
-test("nonvar: unbound var fails") <- (not IsBound(X_))
-test("nonvar: bound var succeeds") <- (
+Test("nonvar: integer succeeds") <- IsBound(42)
+Test("nonvar: atom succeeds") <- IsBound(Hello)
+Test("nonvar: unbound var fails") <- (not IsBound(X_))
+Test("nonvar: bound var succeeds") <- (
     X_ is 1,
     IsBound(X_)
 )
-test("nonvar: list succeeds") <- IsBound([1, 2])
+Test("nonvar: list succeeds") <- IsBound([1, 2])
 
 # ── IsStr/1 ───────────────────────────────────────────────────────────────────
 
-test("atom: string succeeds") <- IsStr(hello)
-test("atom: empty string succeeds") <- IsStr("")
-test("atom: integer fails") <- (not IsStr(1))
-test("atom: unbound var fails") <- (not IsStr(X_))
-test("atom: list fails") <- (not IsStr([]))
+Test("atom: string succeeds") <- IsStr(Hello)
+Test("atom: empty string succeeds") <- IsStr("")
+Test("atom: integer fails") <- (not IsStr(1))
+Test("atom: unbound var fails") <- (not IsStr(X_))
+Test("atom: list fails") <- (not IsStr([]))
 
 # ── IsInt/1 ────────────────────────────────────────────────────────────────────
 
-test("integer: positive") <- IsInt(1)
-test("integer: zero") <- IsInt(0)
-test("integer: large") <- IsInt(100000000000000000000)
-test("integer: string fails") <- (not IsInt("1"))
-test("integer: var fails") <- (not IsInt(X_))
+Test("integer: positive") <- IsInt(1)
+Test("integer: zero") <- IsInt(0)
+Test("integer: large") <- IsInt(100000000000000000000)
+Test("integer: string fails") <- (not IsInt("1"))
+Test("integer: var fails") <- (not IsInt(X_))
 # Note: IsInt(-1), IsInt(True/False) tested in Python test file
 
 # ── IsFloat/1 ─────────────────────────────────────────────────────────────────
@@ -72,38 +72,38 @@ test("integer: var fails") <- (not IsInt(X_))
 
 # ── IsNumber/1 ─────────────────────────────────────────────────────────────────
 
-test("number: integer") <- IsNumber(42)
-test("number: float") <- IsNumber(3.14)
-test("number: string fails") <- (not IsNumber("42"))
-test("number: var fails") <- (not IsNumber(X_))
+Test("number: integer") <- IsNumber(42)
+Test("number: float") <- IsNumber(3.14)
+Test("number: string fails") <- (not IsNumber("42"))
+Test("number: var fails") <- (not IsNumber(X_))
 
 # ── IsStr/1 (string alias) ────────────────────────────────────────────────────
 
-test("string: str succeeds") <- IsStr(hello)
-test("string: empty str") <- IsStr("")
-test("string: int fails") <- (not IsStr(42))
-test("string: var fails") <- (not IsStr(X_))
+Test("string: str succeeds") <- IsStr(Hello)
+Test("string: empty str") <- IsStr("")
+Test("string: int fails") <- (not IsStr(42))
+Test("string: var fails") <- (not IsStr(X_))
 
 # ── IsList/1 ────────────────────────────────────────────────────────────────────
 
-test("is_list: list") <- IsList([1, 2, 3])
-test("is_list: empty") <- IsList([])
-test("is_list: nested") <- IsList([[1], [2]])
-test("is_list: string fails") <- (not IsList(hello))
-test("is_list: int fails") <- (not IsList(42))
-test("is_list: var fails") <- (not IsList(X_))
+Test("is_list: list") <- IsList([1, 2, 3])
+Test("is_list: empty") <- IsList([])
+Test("is_list: nested") <- IsList([[1], [2]])
+Test("is_list: string fails") <- (not IsList(Hello))
+Test("is_list: int fails") <- (not IsList(42))
+Test("is_list: var fails") <- (not IsList(X_))
 
 # ── IsGround/1 ─────────────────────────────────────────────────────────────────
 
-test("ground: integer") <- IsGround(42)
-test("ground: string") <- IsGround(abc)
-test("ground: ground list") <- IsGround([1, 2, 3])
-test("ground: empty list") <- IsGround([])
-test("ground: var fails") <- (not IsGround(X_))
+Test("ground: integer") <- IsGround(42)
+Test("ground: string") <- IsGround(Abc)
+Test("ground: ground list") <- IsGround([1, 2, 3])
+Test("ground: empty list") <- IsGround([])
+Test("ground: var fails") <- (not IsGround(X_))
 
-# ── is_bound_number/1 (private helper) ─────────────────────────────────────
+# ── IsBoundNumber/1 (private helper) ─────────────────────────────────────────
 
-test("is_bound_number: integer") <- is_bound_number(42)
-test("is_bound_number: float") <- is_bound_number(3.14)
-test("is_bound_number: string fails") <- (not is_bound_number("42"))
-test("is_bound_number: unbound fails") <- (not is_bound_number(X_))
+Test("is_bound_number: integer") <- IsBoundNumber(42)
+Test("is_bound_number: float") <- IsBoundNumber(3.14)
+Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))
+Test("is_bound_number: unbound fails") <- (not IsBoundNumber(X_))

@@ -1,19 +1,19 @@
 -module(meta_predicates, [
-    squares(NS, SQUARES),
-    positives(NS, POS),
-    unique_members(NS, UNIQUE),
-    all_positive(NS),
-    sum_squares(NS, TOTAL),
-    evens(NS, ES),
-    pairs(XS1, XS2, RESULT),
-    all_members(SUB1, SUPER1),
-    bag_positives(NS, POS)
+    Squares(NS, SQUARES),
+    Positives(NS, POS),
+    UniqueMembers(NS, UNIQUE),
+    AllPositive(NS),
+    SumSquares(NS, TOTAL),
+    Evens(NS, ES),
+    Pairs(XS1, XS2, RESULT),
+    AllMembers(SUB1, SUPER1),
+    BagPositives(NS, POS)
 ])
 
 # ── FindAll/3 ─────────────────────────────────────────────────────────────────
 
 # Square each element.
-squares(NS, SQUARES) <- (
+Squares(NS, SQUARES) <- (
     FindAll(
         SQ,
         (In(X, NS) and (SQ := X * X)),
@@ -22,7 +22,7 @@ squares(NS, SQUARES) <- (
 )
 
 # Filter positive elements.
-positives(NS, POS) <- (
+Positives(NS, POS) <- (
     FindAll(
         X,
         (In(X, NS) and X > 0),
@@ -31,7 +31,7 @@ positives(NS, POS) <- (
 )
 
 # Filter even elements via modulo.
-evens(NS, ES) <- (
+Evens(NS, ES) <- (
     FindAll(
         X,
         (In(X, NS) and (M := X % 2) and M is 0),
@@ -40,7 +40,7 @@ evens(NS, ES) <- (
 )
 
 # Cartesian product of two lists.
-pairs(XS1, XS2, RESULT) <- (
+Pairs(XS1, XS2, RESULT) <- (
     FindAll(
         [A, B],
         (In(A, XS1) and In(B, XS2)),
@@ -51,69 +51,69 @@ pairs(XS1, XS2, RESULT) <- (
 # ── SetOf/3 ───────────────────────────────────────────────────────────────────
 
 # Deduplicate a list preserving first-occurrence order.
-unique_members(NS, UNIQUE) <- (
+UniqueMembers(NS, UNIQUE) <- (
     SetOf(X, In(X, NS), UNIQUE)
 )
 
 # ── BagOf/3 ───────────────────────────────────────────────────────────────────
 
 # Collect positive elements, fail if none.
-bag_positives(NS, POS) <- (
+BagPositives(NS, POS) <- (
     BagOf(X, (In(X, NS) and X > 0), POS)
 )
 
 # ── ForAll/2 ──────────────────────────────────────────────────────────────────
 
 # Check every element is positive.
-all_positive(NS) <- (
+AllPositive(NS) <- (
     ForAll(In(X, NS), X > 0)
 )
 
 # Check every element of SUB1 is in SUPER1.
-all_members(SUB1, SUPER1) <- (
+AllMembers(SUB1, SUPER1) <- (
     ForAll(In(X, SUB1), In(X, SUPER1))
 )
 
 # ── Composed ──────────────────────────────────────────────────────────────────
 
-# Sum of squares via FindAll + builtin SumList.
-sum_squares(NS, TOTAL) <- (
-    squares(NS, SQS),
+# Sum of squares via Squares + builtin SumList.
+SumSquares(NS, TOTAL) <- (
+    Squares(NS, SQS),
     SumList(SQS, TOTAL)
 )
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 # FindAll
-test("squares [1,2,3]") <- squares([1, 2, 3], [1, 4, 9])
-test("squares empty") <- squares([], [])
-test("squares negative") <- squares([-2, 3], [4, 9])
-test("positives mixed") <- positives([-1, 2, -3, 4], [2, 4])
-test("positives all negative") <- positives([-1, -2], [])
-test("positives with zero") <- positives([0, 1, -1], [1])
-test("evens") <- evens([1, 2, 3, 4, 5, 6], [2, 4, 6])
-test("evens none") <- evens([1, 3, 5], [])
-test("pairs cartesian") <- pairs(["a", "b"], [1, 2], [["a", 1], ["a", 2], ["b", 1], ["b", 2]])
-test("pairs empty first") <- pairs([], [1, 2], [])
-test("pairs empty second") <- pairs(["a"], [], [])
+Test("squares [1,2,3]") <- Squares([1, 2, 3], [1, 4, 9])
+Test("squares empty") <- Squares([], [])
+Test("squares negative") <- Squares([-2, 3], [4, 9])
+Test("positives mixed") <- Positives([-1, 2, -3, 4], [2, 4])
+Test("positives all negative") <- Positives([-1, -2], [])
+Test("positives with zero") <- Positives([0, 1, -1], [1])
+Test("evens") <- Evens([1, 2, 3, 4, 5, 6], [2, 4, 6])
+Test("evens none") <- Evens([1, 3, 5], [])
+Test("pairs cartesian") <- Pairs(["a", "b"], [1, 2], [["a", 1], ["a", 2], ["b", 1], ["b", 2]])
+Test("pairs empty first") <- Pairs([], [1, 2], [])
+Test("pairs empty second") <- Pairs(["a"], [], [])
 
 # SetOf
-test("unique dedup") <- unique_members([1, 2, 1, 3, 2], [1, 2, 3])
-test("unique already unique") <- unique_members([5, 10], [5, 10])
-test("unique all same") <- unique_members([7, 7, 7], [7])
+Test("unique dedup") <- UniqueMembers([1, 2, 1, 3, 2], [1, 2, 3])
+Test("unique already unique") <- UniqueMembers([5, 10], [5, 10])
+Test("unique all same") <- UniqueMembers([7, 7, 7], [7])
 
 # BagOf
-test("bag positives") <- bag_positives([-1, 2, -3, 4], [2, 4])
-test("bag positives fails on none") <- (not bag_positives([-1, -2], _))
+Test("bag positives") <- BagPositives([-1, 2, -3, 4], [2, 4])
+Test("bag positives fails on none") <- (not BagPositives([-1, -2], _))
 
 # ForAll
-test("all positive pass") <- all_positive([1, 2, 3])
-test("all positive fail") <- (not all_positive([1, -2, 3]))
-test("all positive empty") <- all_positive([])
-test("all members subset") <- all_members([1, 2], [1, 2, 3])
-test("all members not subset") <- (not all_members([1, 4], [1, 2, 3]))
-test("all members empty sub") <- all_members([], [1, 2])
+Test("all positive pass") <- AllPositive([1, 2, 3])
+Test("all positive fail") <- (not AllPositive([1, -2, 3]))
+Test("all positive empty") <- AllPositive([])
+Test("all members subset") <- AllMembers([1, 2], [1, 2, 3])
+Test("all members not subset") <- (not AllMembers([1, 4], [1, 2, 3]))
+Test("all members empty sub") <- AllMembers([], [1, 2])
 
 # composed
-test("sum squares [1,2,3]") <- sum_squares([1, 2, 3], 14)
-test("sum squares empty") <- sum_squares([], 0)
+Test("sum squares [1,2,3]") <- SumSquares([1, 2, 3], 14)
+Test("sum squares empty") <- SumSquares([], 0)

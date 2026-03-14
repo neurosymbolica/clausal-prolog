@@ -59,21 +59,21 @@ class TestPhase1EdgeCases:
         """[*ALL] on empty list → ALL=[]."""
         mod = _edge_mod()
         r = Var()
-        results = [deref(r) for _ in call("capture_all", [], r, module=mod)]
+        results = [deref(r) for _ in call("CaptureAll", [], r, module=mod)]
         assert results == [[]]
 
     def test_capture_all_nonempty(self):
         """[*ALL] on [1,2,3] → ALL=[1,2,3]."""
         mod = _edge_mod()
         r = Var()
-        results = [deref(r) for _ in call("capture_all", [1, 2, 3], r, module=mod)]
+        results = [deref(r) for _ in call("CaptureAll", [1, 2, 3], r, module=mod)]
         assert results == [[1, 2, 3]]
 
     def test_capture_all_singleton(self):
         """[*ALL] on [42] → ALL=[42]."""
         mod = _edge_mod()
         r = Var()
-        results = [deref(r) for _ in call("capture_all", [42], r, module=mod)]
+        results = [deref(r) for _ in call("CaptureAll", [42], r, module=mod)]
         assert results == [[42]]
 
     def test_three_and_rest(self):
@@ -82,7 +82,7 @@ class TestPhase1EdgeCases:
         a, b, c, rest = Var(), Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c), deref(rest))
-            for _ in call("three_and_rest", [10, 20, 30, 40, 50], a, b, c, rest, module=mod)
+            for _ in call("ThreeAndRest", [10, 20, 30, 40, 50], a, b, c, rest, module=mod)
         ]
         assert results == [(10, 20, 30, [40, 50])]
 
@@ -92,7 +92,7 @@ class TestPhase1EdgeCases:
         a, b, c, rest = Var(), Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c), deref(rest))
-            for _ in call("three_and_rest", [10, 20, 30], a, b, c, rest, module=mod)
+            for _ in call("ThreeAndRest", [10, 20, 30], a, b, c, rest, module=mod)
         ]
         assert results == [(10, 20, 30, [])]
 
@@ -100,55 +100,55 @@ class TestPhase1EdgeCases:
         """[A, B, C, *REST] with 2 elements → no match."""
         mod = _edge_mod()
         a, b, c, rest = Var(), Var(), Var(), Var()
-        results = list(call("three_and_rest", [10, 20], a, b, c, rest, module=mod))
+        results = list(call("ThreeAndRest", [10, 20], a, b, c, rest, module=mod))
         assert results == []
 
     def test_exactly_two_match(self):
         """[A, B] matches exactly a 2-element list."""
         mod = _edge_mod()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("exactly_two", [1, 2], a, b, module=mod)]
+        results = [(deref(a), deref(b)) for _ in call("ExactlyTwo", [1, 2], a, b, module=mod)]
         assert results == [(1, 2)]
 
     def test_exactly_two_too_short(self):
         mod = _edge_mod()
         a, b = Var(), Var()
-        results = list(call("exactly_two", [1], a, b, module=mod))
+        results = list(call("ExactlyTwo", [1], a, b, module=mod))
         assert results == []
 
     def test_exactly_two_too_long(self):
         mod = _edge_mod()
         a, b = Var(), Var()
-        results = list(call("exactly_two", [1, 2, 3], a, b, module=mod))
+        results = list(call("ExactlyTwo", [1, 2, 3], a, b, module=mod))
         assert results == []
 
     def test_is_empty_succeeds(self):
         mod = _edge_mod()
-        results = list(call("is_empty", [], module=mod))
+        results = list(call("IsEmpty", [], module=mod))
         assert len(results) == 1
 
     def test_is_empty_fails_nonempty(self):
         mod = _edge_mod()
-        results = list(call("is_empty", [1], module=mod))
+        results = list(call("IsEmpty", [1], module=mod))
         assert results == []
 
     def test_head_tail_regression(self):
         """Single-star [HEAD, *TAIL] still works (regression after multi-star)."""
         mod = _edge_mod()
         h, t = Var(), Var()
-        results = [(deref(h), deref(t)) for _ in call("head_tail", [1, 2, 3], h, t, module=mod)]
+        results = [(deref(h), deref(t)) for _ in call("HeadTail", [1, 2, 3], h, t, module=mod)]
         assert results == [(1, [2, 3])]
 
     def test_head_tail_singleton(self):
         mod = _edge_mod()
         h, t = Var(), Var()
-        results = [(deref(h), deref(t)) for _ in call("head_tail", [99], h, t, module=mod)]
+        results = [(deref(h), deref(t)) for _ in call("HeadTail", [99], h, t, module=mod)]
         assert results == [(99, [])]
 
     def test_head_tail_empty_fails(self):
         mod = _edge_mod()
         h, t = Var(), Var()
-        results = list(call("head_tail", [], h, t, module=mod))
+        results = list(call("HeadTail", [], h, t, module=mod))
         assert results == []
 
     def test_length_zero(self):
@@ -194,39 +194,39 @@ class TestPhase2EdgeCases:
     def test_all_same_succeeds(self):
         """all_same(X, X, X) — triple repeat, all equal."""
         mod = _edge_mod()
-        results = list(call("all_same", 5, 5, 5, module=mod))
+        results = list(call("AllSame", 5, 5, 5, module=mod))
         assert len(results) == 1
 
     def test_all_same_fails(self):
         """all_same(X, X, X) — fails when not all equal."""
         mod = _edge_mod()
-        results = list(call("all_same", 5, 5, 6, module=mod))
+        results = list(call("AllSame", 5, 5, 6, module=mod))
         assert results == []
 
     def test_all_same_query_mode(self):
         """all_same(X, X, X) — with Var, binds all to same value."""
         mod = _edge_mod()
         x = Var()
-        results = [deref(x) for _ in call("all_same", 42, 42, x, module=mod)]
+        results = [deref(x) for _ in call("AllSame", 42, 42, x, module=mod)]
         assert results == [42]
 
     def test_head_is(self):
         """head_is(X, [X, *_]) — extracts head and verifies match."""
         mod = _edge_mod()
-        results = list(call("head_is", 1, [1, 2, 3], module=mod))
+        results = list(call("HeadIs", 1, [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_head_is_fails(self):
         """head_is(X, [X, *_]) — fails when X != head."""
         mod = _edge_mod()
-        results = list(call("head_is", 99, [1, 2, 3], module=mod))
+        results = list(call("HeadIs", 99, [1, 2, 3], module=mod))
         assert results == []
 
     def test_head_is_query(self):
         """head_is(X, [X, *_]) — extracts head into X."""
         mod = _edge_mod()
         x = Var()
-        results = [deref(x) for _ in call("head_is", x, [10, 20], module=mod)]
+        results = [deref(x) for _ in call("HeadIs", x, [10, 20], module=mod)]
         assert results == [10]
 
     def test_append_single_elements(self):
@@ -283,31 +283,31 @@ class TestPhase2EdgeCases:
     def test_bookend_single(self):
         """bookend([X]) — singleton is a bookend."""
         mod = _edge_mod()
-        results = list(call("bookend", [1], module=mod))
+        results = list(call("Bookend", [1], module=mod))
         assert len(results) >= 1
 
     def test_bookend_same(self):
         """bookend([1, 2, 3, 1]) — first == last."""
         mod = _edge_mod()
-        results = list(call("bookend", [1, 2, 3, 1], module=mod))
+        results = list(call("Bookend", [1, 2, 3, 1], module=mod))
         assert len(results) >= 1
 
     def test_bookend_different_fails(self):
         """bookend([1, 2, 3, 4]) — first != last."""
         mod = _edge_mod()
-        results = list(call("bookend", [1, 2, 3, 4], module=mod))
+        results = list(call("Bookend", [1, 2, 3, 4], module=mod))
         assert results == []
 
     def test_bookend_two_same(self):
         """bookend([5, 5]) — two equal elements."""
         mod = _edge_mod()
-        results = list(call("bookend", [5, 5], module=mod))
+        results = list(call("Bookend", [5, 5], module=mod))
         assert len(results) >= 1
 
     def test_bookend_two_different_fails(self):
         """bookend([1, 2]) — two different elements."""
         mod = _edge_mod()
-        results = list(call("bookend", [1, 2], module=mod))
+        results = list(call("Bookend", [1, 2], module=mod))
         assert results == []
 
 
@@ -322,44 +322,44 @@ class TestPhase3EdgeCases:
     def test_ignore_first_two(self):
         """ignore_first_two(_, _, X, X) — ignores first two, binds third and fourth."""
         mod = _edge_mod()
-        results = list(call("ignore_first_two", "a", "b", 7, 7, module=mod))
+        results = list(call("IgnoreFirstTwo", "a", "b", 7, 7, module=mod))
         assert len(results) == 1
 
     def test_ignore_first_two_mismatch(self):
         """ignore_first_two(_, _, X, X) — fails when third != fourth."""
         mod = _edge_mod()
-        results = list(call("ignore_first_two", "a", "b", 7, 8, module=mod))
+        results = list(call("IgnoreFirstTwo", "a", "b", 7, 8, module=mod))
         assert results == []
 
     def test_ignore_first_two_query(self):
         """ignore_first_two(_, _, X, X) — query mode: bind X."""
         mod = _edge_mod()
         x = Var()
-        results = [deref(x) for _ in call("ignore_first_two", "a", "b", 42, x, module=mod)]
+        results = [deref(x) for _ in call("IgnoreFirstTwo", "a", "b", 42, x, module=mod)]
         assert results == [42]
 
     def test_is_list_empty(self):
         """is_list([*_]) — empty list is a list."""
         mod = _edge_mod()
-        results = list(call("is_list", [], module=mod))
+        results = list(call("IsList", [], module=mod))
         assert len(results) == 1
 
     def test_is_list_nonempty(self):
         """is_list([*_]) — non-empty list is a list."""
         mod = _edge_mod()
-        results = list(call("is_list", [1, 2, 3], module=mod))
+        results = list(call("IsList", [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_is_list_non_list_fails(self):
         """is_list([*_]) — non-list fails."""
         mod = _edge_mod()
-        results = list(call("is_list", 42, module=mod))
+        results = list(call("IsList", 42, module=mod))
         assert results == []
 
     def test_is_list_string_fails(self):
         """is_list([*_]) — string is not a list."""
         mod = _edge_mod()
-        results = list(call("is_list", "hello", module=mod))
+        results = list(call("IsList", "hello", module=mod))
         assert results == []
 
     def test_has_pair_three_elements(self):
@@ -494,7 +494,7 @@ class TestPhase4EdgeCases:
         x, y, a, b = Var(), Var(), Var(), Var()
         results = [
             (deref(x), deref(y), deref(a), deref(b))
-            for _ in call("bracket", [1, 2, 3, 4], x, y, a, b, module=mod)
+            for _ in call("Bracket", [1, 2, 3, 4], x, y, a, b, module=mod)
         ]
         # Possible positions for (X, Y):
         # (1,2) → A=[], B=[3,4]
@@ -509,7 +509,7 @@ class TestPhase4EdgeCases:
         """bracket needs at least 2 elements (for X and Y)."""
         mod = _edge_mod()
         x, y, a, b = Var(), Var(), Var(), Var()
-        results = list(call("bracket", [1], x, y, a, b, module=mod))
+        results = list(call("Bracket", [1], x, y, a, b, module=mod))
         assert results == []
 
     def test_bracket_exact_two(self):
@@ -518,7 +518,7 @@ class TestPhase4EdgeCases:
         x, y, a, b = Var(), Var(), Var(), Var()
         results = [
             (deref(x), deref(y), deref(a), deref(b))
-            for _ in call("bracket", [1, 2], x, y, a, b, module=mod)
+            for _ in call("Bracket", [1, 2], x, y, a, b, module=mod)
         ]
         assert results == [(1, 2, [], [])]
 

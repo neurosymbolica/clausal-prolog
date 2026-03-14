@@ -1,33 +1,33 @@
 -module(hanoi, [
-    left, center, right,
-    hanoi(N, From, To, Via, Moves)
+    Left, Center, Right,
+    Hanoi(N, From, To, Via, Moves)
 ])
 
-hanoi(0, _, _, _, []),
-hanoi(N, FROM, TO, VIA, MOVES) <- (
+Hanoi(0, _, _, _, []),
+Hanoi(N, FROM, TO, VIA, MOVES) <- (
     N > 0,
     N1 := N - 1,
-    hanoi(N1, FROM, VIA, TO, MOVES1),
-    hanoi(N1, VIA, TO, FROM, MOVES2),
+    Hanoi(N1, FROM, VIA, TO, MOVES1),
+    Hanoi(N1, VIA, TO, FROM, MOVES2),
     Append(MOVES1, [[FROM, TO]], MID),
     Append(MID, MOVES2, MOVES)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("0 disks = no moves") <- hanoi(0, left, right, center, [])
-test("1 disk") <- hanoi(1, left, right, center, [[left, right]])
-test("2 disks") <- hanoi(2, left, right, center, [
-    [left, center],
-    [left, right],
-    [center, right]
+Test("0 disks = no moves") <- Hanoi(0, Left, Right, Center, [])
+Test("1 disk") <- Hanoi(1, Left, Right, Center, [[Left, Right]])
+Test("2 disks") <- Hanoi(2, Left, Right, Center, [
+    [Left, Center],
+    [Left, Right],
+    [Center, Right]
 ])
-test("3 disks") <- hanoi(3, left, right, center, [
-    [left, right],
-    [left, center],
-    [right, center],
-    [left, right],
-    [center, left],
-    [center, right],
-    [left, right]
+Test("3 disks") <- Hanoi(3, Left, Right, Center, [
+    [Left, Right],
+    [Left, Center],
+    [Right, Center],
+    [Left, Right],
+    [Center, Left],
+    [Center, Right],
+    [Left, Right]
 ])

@@ -1,44 +1,44 @@
 # Body-position star deconstruction predicates — Phase 5 test fixtures
 
-# head_tail/3 — deconstruct a list into head and tail in the body
-head_tail(LIST, HEAD, TAIL) <- (
+# HeadTail/3 — deconstruct a list into head and tail in the body
+HeadTail(LIST, HEAD, TAIL) <- (
     [HEAD, *TAIL] is LIST
 )
 
-# init_last/3 — split off the last element using trailing star
-init_last(LIST, INIT, LAST) <- (
+# InitLast/3 — split off the last element using trailing star
+InitLast(LIST, INIT, LAST) <- (
     [*INIT, LAST] is LIST
 )
 
-# sandwich/4 — extract first, middle, and last
-sandwich(LIST, HEAD, MID, TAIL) <- (
+# Sandwich/4 — extract first, middle, and last
+Sandwich(LIST, HEAD, MID, TAIL) <- (
     [HEAD, *MID, TAIL] is LIST
 )
 
-# capture_body/2 — star-only body deconstruction (identity)
-capture_body(LIST, ALL) <- (
+# CaptureBody/2 — star-only body deconstruction (identity)
+CaptureBody(LIST, ALL) <- (
     [*ALL] is LIST
 )
 
-# sum_tail/2 — deconstruct then use result in subsequent goal
-sum_tail(LIST, TAIL_LENGTH) <- (
+# SumTail/2 — deconstruct then use result in subsequent goal
+SumTail(LIST, TAIL_LENGTH) <- (
     [_, *TAIL] is LIST,
     Length(TAIL, TAIL_LENGTH)
 )
 
-# second/2 — two consecutive body deconstructions
-second(LIST, X) <- (
+# Second/2 — two consecutive body deconstructions
+Second(LIST, X) <- (
     [_, *T] is LIST,
     [X, *_] is T
 )
 
-# wrap_unwrap/2 — construct then deconstruct
-wrap_unwrap(X, Y) <- (
+# WrapUnwrap/2 — construct then deconstruct
+WrapUnwrap(X, Y) <- (
     LIST is [X, 99],
     [Y, _] is LIST
 )
 
-# body_split/3 — multi-star body deconstruction
-body_split(LIST, A, B) <- (
+# BodySplit/3 — multi-star body deconstruction
+BodySplit(LIST, A, B) <- (
     [*A, *B] is LIST
 )

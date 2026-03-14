@@ -8,140 +8,140 @@
 #   -7 // 2 = -4 (Python floor), some Prologs = -3 (truncate)
 #   -7 % 2 = 1 (Python floor mod), some Prologs = -1
 
--module(iso_arithmetic, [test(DESC)])
+-module(iso_arithmetic, [Test(DESC)])
 
 -private([
-    double(X, Y),
-    square(X, Y),
-    triangle_number(N, T)
+    Double(X, Y),
+    Square(X, Y),
+    TriangleNumber(N, T)
 ])
 
 # Arithmetic helper predicates.
-double(X, Y) <- (Y := X * 2)
-square(X, Y) <- (Y := X * X)
-triangle_number(N, T) <- (T := N * (N + 1) // 2)
+Double(X, Y) <- (Y := X * 2)
+Square(X, Y) <- (Y := X * X)
+TriangleNumber(N, T) <- (T := N * (N + 1) // 2)
 
 # ── := (arithmetic evaluation) ───────────────────────────────────────────────
 
-test("addition: 1+2=3") <- (
+Test("addition: 1+2=3") <- (
     X_ := 1 + 2,
     X_ == 3
 )
-test("subtraction: 5-3=2") <- (
+Test("subtraction: 5-3=2") <- (
     X_ := 5 - 3,
     X_ == 2
 )
-test("multiplication: 3*4=12") <- (
+Test("multiplication: 3*4=12") <- (
     X_ := 3 * 4,
     X_ == 12
 )
-test("integer division: 7//2=3") <- (
+Test("integer division: 7//2=3") <- (
     X_ := 7 // 2,
     X_ == 3
 )
-test("modulo: 7%2=1") <- (
+Test("modulo: 7%2=1") <- (
     X_ := 7 % 2,
     X_ == 1
 )
-test("power: 2**3=8") <- (
+Test("power: 2**3=8") <- (
     X_ := 2 ** 3,
     X_ == 8
 )
-test("negation: -3") <- (
+Test("negation: -3") <- (
     X_ := -3,
     X_ == -3
 )
-test("nested: (2+3)*4=20") <- (
+Test("nested: (2+3)*4=20") <- (
     X_ := (2 + 3) * 4,
     X_ == 20
 )
-test("float addition: 1.5+2.5=4.0") <- (
+Test("float addition: 1.5+2.5=4.0") <- (
     X_ := 1.5 + 2.5,
     X_ == 4.0
 )
 # Note: '3 := 1+2' cannot be expressed in .clausal — Python's parser rejects
 # := with a non-name LHS.  This is tested in the Python test file instead.
-test("double negation: --5=5") <- (
+Test("double negation: --5=5") <- (
     X_ := -(-5),
     X_ == 5
 )
-test("subtraction negative: 3-5=-2") <- (
+Test("subtraction negative: 3-5=-2") <- (
     X_ := 3 - 5,
     X_ == -2
 )
-test("negative floor div: -7//2=-4") <- (
+Test("negative floor div: -7//2=-4") <- (
     X_ := -7 // 2,
     X_ == -4
 )
-test("negative mod: -7%2=1") <- (
+Test("negative mod: -7%2=1") <- (
     X_ := -7 % 2,
     X_ == 1
 )
 
 # ── Arithmetic comparison ────────────────────────────────────────────────────
 
-test("1 < 2") <- (1 < 2)
-test("not 2 < 1") <- (not (2 < 1))
-test("not 1 < 1") <- (not (1 < 1))
-test("1 <= 2") <- (1 <= 2)
-test("1 <= 1") <- (1 <= 1)
-test("2 > 1") <- (2 > 1)
-test("not 1 > 2") <- (not (1 > 2))
-test("2 >= 1") <- (2 >= 1)
-test("1 >= 1") <- (1 >= 1)
-test("1.5 < 2.5") <- (1.5 < 2.5)
-test("expression: 1+2 < 2+3") <- (1 + 2 < 2 + 3)
-test("expression: 1+2 <= 3") <- (1 + 2 <= 3)
+Test("1 < 2") <- (1 < 2)
+Test("not 2 < 1") <- (not (2 < 1))
+Test("not 1 < 1") <- (not (1 < 1))
+Test("1 <= 2") <- (1 <= 2)
+Test("1 <= 1") <- (1 <= 1)
+Test("2 > 1") <- (2 > 1)
+Test("not 1 > 2") <- (not (1 > 2))
+Test("2 >= 1") <- (2 >= 1)
+Test("1 >= 1") <- (1 >= 1)
+Test("1.5 < 2.5") <- (1.5 < 2.5)
+Test("expression: 1+2 < 2+3") <- (1 + 2 < 2 + 3)
+Test("expression: 1+2 <= 3") <- (1 + 2 <= 3)
 
 # ── Arithmetic builtins ──────────────────────────────────────────────────────
 
-test("succ forward: succ(3,4)") <- Succ(3, 4)
-test("succ backward: succ(X,4)=3") <- (
+Test("succ forward: succ(3,4)") <- Succ(3, 4)
+Test("succ backward: succ(X,4)=3") <- (
     Succ(X_, 4),
     X_ == 3
 )
-test("succ zero: succ(0,1)") <- Succ(0, 1)
-test("plus forward: 2+3=5") <- Plus(2, 3, 5)
-test("plus backward x: X+3=5") <- (
+Test("succ zero: succ(0,1)") <- Succ(0, 1)
+Test("plus forward: 2+3=5") <- Plus(2, 3, 5)
+Test("plus backward x: X+3=5") <- (
     Plus(X_, 3, 5),
     X_ == 2
 )
-test("plus backward y: 2+Y=5") <- (
+Test("plus backward y: 2+Y=5") <- (
     Plus(2, Y_, 5),
     Y_ == 3
 )
-test("between check: 3 in 1..5") <- Between(1, 5, 3)
-test("between out of range") <- (not Between(1, 5, 6))
+Test("between check: 3 in 1..5") <- Between(1, 5, 3)
+Test("between out of range") <- (not Between(1, 5, 6))
 # Note: abs_/2, max_/3, min_/3 have trailing underscores so they are parsed
 # as logic variables in .clausal syntax.  Tested in Python test file instead.
 
 # ── Private helper predicates ──────────────────────────────────────────────
 
-test("double 3 is 6") <- (
-    double(3, Y_),
+Test("double 3 is 6") <- (
+    Double(3, Y_),
     Y_ == 6
 )
-test("double 0 is 0") <- (
-    double(0, Y_),
+Test("double 0 is 0") <- (
+    Double(0, Y_),
     Y_ == 0
 )
-test("square 4 is 16") <- (
-    square(4, Y_),
+Test("square 4 is 16") <- (
+    Square(4, Y_),
     Y_ == 16
 )
-test("square 1 is 1") <- (
-    square(1, Y_),
+Test("square 1 is 1") <- (
+    Square(1, Y_),
     Y_ == 1
 )
-test("triangle 5 is 15") <- (
-    triangle_number(5, T_),
+Test("triangle 5 is 15") <- (
+    TriangleNumber(5, T_),
     T_ == 15
 )
-test("triangle 1 is 1") <- (
-    triangle_number(1, T_),
+Test("triangle 1 is 1") <- (
+    TriangleNumber(1, T_),
     T_ == 1
 )
-test("triangle 10 is 55") <- (
-    triangle_number(10, T_),
+Test("triangle 10 is 55") <- (
+    TriangleNumber(10, T_),
     T_ == 55
 )

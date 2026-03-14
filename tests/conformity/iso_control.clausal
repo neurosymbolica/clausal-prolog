@@ -8,33 +8,33 @@
 # Not available:
 #   cut (!), if-then-else (->)
 
--module(iso_control, [test(DESC)])
+-module(iso_control, [Test(DESC)])
 
 -private([
-    choose(X, Y, R),
-    safe_max(X, Y, M),
+    Choose(X, Y, R),
+    SafeMax(X, Y, M),
     a, b, c, d
 ])
 
-# Multi-clause disjunction: choose/3 picks either argument.
-choose(X, _, X),
-choose(_, Y, Y),
+# Multi-clause disjunction: Choose/3 picks either argument.
+Choose(X, _, X),
+Choose(_, Y, Y),
 
 # If-then-else pattern via or+not (no -> in clausal).
-safe_max(X, Y, X) <- (X >= Y)
-safe_max(X, Y, Y) <- (Y > X)
+SafeMax(X, Y, X) <- (X >= Y)
+SafeMax(X, Y, Y) <- (Y > X)
 
 # ── Conjunction (and) ────────────────────────────────────────────────────────
 
-test("conjunction binds two vars") <- (
+Test("conjunction binds two vars") <- (
     X_ is 1,
     Y_ is 2,
     X_ == 1,
     Y_ == 2
 )
-test("conjunction fails if first fails") <- (not (a is b and X_ is 1))
-test("conjunction fails if second fails") <- (not (X_ is 1 and a is b))
-test("triple conjunction") <- (
+Test("conjunction fails if first fails") <- (not (a is b and X_ is 1))
+Test("conjunction fails if second fails") <- (not (X_ is 1 and a is b))
+Test("triple conjunction") <- (
     X_ is 1,
     Y_ is 2,
     Z_ is 3,
@@ -44,49 +44,49 @@ test("triple conjunction") <- (
 
 # ── Disjunction (or) ────────────────────────────────────────────────────────
 
-test("disjunction first succeeds") <- (X_ is 1 or X_ is 2)
-test("disjunction first fails, second succeeds") <- (a is b or X_ is 1)
-test("disjunction both fail") <- (not (a is b or c is d))
+Test("disjunction first succeeds") <- (X_ is 1 or X_ is 2)
+Test("disjunction first fails, second succeeds") <- (a is b or X_ is 1)
+Test("disjunction both fail") <- (not (a is b or c is d))
 
 # ── Negation as failure (not) ────────────────────────────────────────────────
 
-test("not: failed unification succeeds") <- (not (1 is 2))
-test("not: successful unification fails") <- (not (not (1 is 1)))
-test("not: member absent") <- (not In(d, [a, b, c]))
-test("not: member present fails") <- (not (not In(b, [a, b, c])))
-test("double negation: not not (1=1)") <- (not (not (1 is 1)))
+Test("not: failed unification succeeds") <- (not (1 is 2))
+Test("not: successful unification fails") <- (not (not (1 is 1)))
+Test("not: member absent") <- (not In(d, [a, b, c]))
+Test("not: member present fails") <- (not (not In(b, [a, b, c])))
+Test("double negation: not not (1=1)") <- (not (not (1 is 1)))
 
 # ── Combining control constructs ─────────────────────────────────────────────
 
-test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
+Test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
     (X_ is 1 and Y_ is a) or (X_ is 2 and Y_ is b)
 )
-test("not + member: d not in list") <- (
+Test("not + member: d not in list") <- (
     not In(d, [a, b, c])
 )
-test("conjunction + negation") <- (
+Test("conjunction + negation") <- (
     X_ is 5,
     not (X_ is 3),
     X_ == 5
 )
 
-# ── Multi-clause predicates (choose/3) ─────────────────────────────────────
+# ── Multi-clause predicates (Choose/3) ─────────────────────────────────────
 
-test("choose picks first") <- choose(1, 2, 1)
-test("choose picks second") <- choose(1, 2, 2)
-test("choose with atoms") <- choose(a, b, a)
+Test("choose picks first") <- Choose(1, 2, 1)
+Test("choose picks second") <- Choose(1, 2, 2)
+Test("choose with atoms") <- Choose(a, b, a)
 
-# ── If-then-else via safe_max/3 ────────────────────────────────────────────
+# ── If-then-else via SafeMax/3 ────────────────────────────────────────────
 
-test("safe_max: first is larger") <- (
-    safe_max(5, 3, M_),
+Test("safe_max: first is larger") <- (
+    SafeMax(5, 3, M_),
     M_ == 5
 )
-test("safe_max: second is larger") <- (
-    safe_max(2, 7, M_),
+Test("safe_max: second is larger") <- (
+    SafeMax(2, 7, M_),
     M_ == 7
 )
-test("safe_max: equal") <- (
-    safe_max(4, 4, M_),
+Test("safe_max: equal") <- (
+    SafeMax(4, 4, M_),
     M_ == 4
 )

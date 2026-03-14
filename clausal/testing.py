@@ -70,7 +70,7 @@ def collect_tests(mod: object) -> list[str]:
     logic_module = mod.__dict__.get("$module")
     if logic_module is None:
         return []
-    clauses = logic_module.db.clauses_for("test", 1)
+    clauses = logic_module.db.clauses_for("Test", 1)
     descriptions = []
     for clause in clauses:
         head = clause.head
@@ -93,7 +93,7 @@ def run_test(mod: object, description: str) -> TestResult:
     logic_module = mod.__dict__["$module"]
     t0 = time.perf_counter()
     try:
-        solutions = list(call("test", description, module=logic_module))
+        solutions = list(call("Test", description, module=logic_module))
         passed = len(solutions) > 0
         return TestResult(name=description, passed=passed,
                           duration=time.perf_counter() - t0)

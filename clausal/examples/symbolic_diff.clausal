@@ -1,53 +1,53 @@
 -module(symbolic_diff, [
-    x, y,
-    d(EXPR, VAR, DERIV)
+    Vx, Vy,
+    Diff(EXPR, VAR, DERIV)
 ])
 
 # Symbolic differentiation.
 # Arithmetic operators (+, *, **) are structural terms in clause heads and
 # predicate call arguments — they are matched/constructed, not evaluated.
 
-# d(x)/dx = 1
-d(EXPR=0, VAR=0, DERIV=0),
-d(X, X, 1),
+# Diff(Vx)/dVx = 1
+Diff(EXPR=0, VAR=0, DERIV=0),
+Diff(X, X, 1),
 
-# Constant number: d(c)/dx = 0
-d(C, _, 0) <- number(C)
+# Constant number: Diff(c)/dVx = 0
+Diff(C, _, 0) <- IsNumber(C)
 
-# Different variable: d(y)/dx = 0
-d(Y, X, 0) <- (
-    string(Y),
+# Different variable: Diff(Vy)/dVx = 0
+Diff(Y, X, 0) <- (
+    IsStr(Y),
     Y is not X
 )
 
-# Sum: d(a+b)/dx = da/dx + db/dx
-d(A + B, X, DA + DB) <- (
-    d(A, X, DA),
-    d(B, X, DB)
+# Sum: Diff(a+b)/dVx = da/dVx + db/dVx
+Diff(A + B, X, DA + DB) <- (
+    Diff(A, X, DA),
+    Diff(B, X, DB)
 )
 
-# Product (Leibniz rule): d(a*b)/dx = a*db + b*da
-d(A * B, X, A*DB + B*DA) <- (
-    d(A, X, DA),
-    d(B, X, DB)
+# Product (Leibniz rule): Diff(a*b)/dVx = a*db + b*da
+Diff(A * B, X, A*DB + B*DA) <- (
+    Diff(A, X, DA),
+    Diff(B, X, DB)
 )
 
-# Power rule: d(e^n)/dx = n * e^(n-1) * de/dx
-d(E ** N, X, N * E**N1 * DE) <- (
-    number(N),
+# Power rule: Diff(e^n)/dVx = n * e^(n-1) * de/dVx
+Diff(E ** N, X, N * E**N1 * DE) <- (
+    IsNumber(N),
     N1 := N - 1,
-    d(E, X, DE)
+    Diff(E, X, DE)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("dx/dx = 1") <- d(x, x, 1)
-test("d(5)/dx = 0") <- d(5, x, 0)
-test("d(3)/dy = 0") <- d(3, y, 0)
-test("d(y)/dx = 0") <- d(y, x, 0)
-test("d(x+x)/dx") <- d(x + x, x, 1 + 1)
-test("d(x+5)/dx") <- d(x + 5, x, 1 + 0)
-test("d(x*x)/dx") <- d(x * x, x, x*1 + x*1)
-test("d(x^2)/dx") <- d(x**2, x, 2 * x**1 * 1)
-test("d(x^3)/dx") <- d(x**3, x, 3 * x**2 * 1)
-test("d(3*x)/dx") <- d(3 * x, x, 3*1 + x*0)
+Test("dx/dx = 1") <- Diff(Vx, Vx, 1)
+Test("d(5)/dx = 0") <- Diff(5, Vx, 0)
+Test("d(3)/dy = 0") <- Diff(3, Vy, 0)
+Test("d(y)/dx = 0") <- Diff(Vy, Vx, 0)
+Test("d(x+x)/dx") <- Diff(Vx + Vx, Vx, 1 + 1)
+Test("d(x+5)/dx") <- Diff(Vx + 5, Vx, 1 + 0)
+Test("d(x*x)/dx") <- Diff(Vx * Vx, Vx, Vx*1 + Vx*1)
+Test("d(x^2)/dx") <- Diff(Vx**2, Vx, 2 * Vx**1 * 1)
+Test("d(x^3)/dx") <- Diff(Vx**3, Vx, 3 * Vx**2 * 1)
+Test("d(3*x)/dx") <- Diff(3 * Vx, Vx, 3*1 + Vx*0)

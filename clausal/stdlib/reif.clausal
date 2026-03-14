@@ -1,14 +1,14 @@
 # Reified predicates library (V2-8 Phase B)
 #
-# memberd_t/3: reified deterministic membership
+# MemberdT/3: reified deterministic membership
 # From Neumerkel & Kral (arXiv:1607.01590, §7):
-#   memberd_t(X, Es, T) — T is True if X is a member of Es, False otherwise.
+#   MemberdT(X, Es, T) — T is True if X is a member of Es, False otherwise.
 #   Ground queries are deterministic (no leftover choicepoints).
-#   Uses eq/3 (reified equality) and If (reified branching).
+#   Uses Eq/3 (reified equality) and If (reified branching).
 
-memberd_t(X_, Es_, T_) <- l_memberd_t(Es_, X_, T_)
+MemberdT(X_, Es_, T_) <- LMemberdT(Es_, X_, T_)
 
-l_memberd_t([], _, False),
-l_memberd_t([E_, *Es_], X_, T_) <- (
-    If(X_ is E_, T_ is True, l_memberd_t(Es_, X_, T_))
+LMemberdT([], _, False),
+LMemberdT([E_, *Es_], X_, T_) <- (
+    If(X_ is E_, T_ is True, LMemberdT(Es_, X_, T_))
 )

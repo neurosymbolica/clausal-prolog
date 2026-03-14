@@ -1,4 +1,4 @@
--module(dynamic_pred, [color(X, Y)])
+-module(dynamic_pred, [Color(X, Y)])
 
 -dynamic(Color/2)
 
