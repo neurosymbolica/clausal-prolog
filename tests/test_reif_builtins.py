@@ -304,7 +304,7 @@ class TestReifCompiledIntegration:
 
         logic_mod = mod.__dict__["$module"]
         t = Var()
-        goal = Call(func=LoadName(name="check_eq"), args=[1, 1, t], kwargs=[])
+        goal = Call(func=LoadName(name="CheckEq"), args=[1, 1, t], kwargs=[])
         results = list(query(goal, {"t": t}, logic_mod))
         assert len(results) == 1
         assert results[0]["t"] is True
@@ -316,7 +316,7 @@ class TestReifCompiledIntegration:
 
         logic_mod = mod.__dict__["$module"]
         t = Var()
-        goal = Call(func=LoadName(name="check_eq"), args=[1, 2, t], kwargs=[])
+        goal = Call(func=LoadName(name="CheckEq"), args=[1, 2, t], kwargs=[])
         results = list(query(goal, {"t": t}, logic_mod))
         assert len(results) == 1
         assert results[0]["t"] is False
@@ -329,7 +329,7 @@ class TestReifCompiledIntegration:
         logic_mod = mod.__dict__["$module"]
         x = Var()
         t = Var()
-        goal = Call(func=LoadName(name="check_eq"), args=[x, 1, t], kwargs=[])
+        goal = Call(func=LoadName(name="CheckEq"), args=[x, 1, t], kwargs=[])
         results = list(query(goal, {"x": x, "t": t}, logic_mod))
         assert len(results) == 2
         truths = {r["t"] for r in results}

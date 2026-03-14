@@ -1,25 +1,26 @@
 # Tests for runtime database predicates: Assert/1, AssertFirst/1, Retract/1
 
--dynamic(color/1)
+-dynamic(Color/1)
 
-color("red"),
-color("green"),
-color("blue"),
+Color("red"),
+Color("green"),
+Color("blue"),
 
-# assert_and_query/1: adds yellow dynamically then checks it exists
-assert_and_query(X_) <- (
-    Assert(color("yellow")),
-    color(X_)
+# AssertAndQuery/1: adds yellow dynamically then checks it exists
+AssertAndQuery(X_) <- (
+    Assert(Color("yellow")),
+    Color(X_)
 )
 
-# prepend_color/1: adds violet at front then queries first result
-prepend_color(X_) <- (
-    AssertFirst(color("violet")),
-    color(X_)
+# PrependColor/1: adds violet at front then queries first result
+PrependColor(X_) <- (
+    AssertFirst(Color("violet")),
+    Color(X_)
 )
 
-# retract_and_check/0: removes red then checks it's gone
-retract_red <- (
-    Retract(color("red")),
-    not color("red")
+# RetractRed: removes red then checks it's gone
+RetractRed <- (
+    Retract(Color("red")),
+    not Color("red")
 )
+

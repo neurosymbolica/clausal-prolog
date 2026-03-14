@@ -1,4 +1,4 @@
-squares(N_, Squares_) <- (
+Squares(N_, Squares_) <- (
     FindAll(
         Sq_,
         (In(X_, N_) and (Sq_ := X_ * X_)),
@@ -6,7 +6,7 @@ squares(N_, Squares_) <- (
     )
 )
 
-positives(Ns_, Pos_) <- (
+Positives(Ns_, Pos_) <- (
     FindAll(
         X_,
         (In(X_, Ns_) and X_ > 0),
@@ -14,7 +14,7 @@ positives(Ns_, Pos_) <- (
     )
 )
 
-unique_members(Ns_, Unique_) <- (
+UniqueMembers(Ns_, Unique_) <- (
     SetOf(
         X_,
         In(X_, Ns_),
@@ -22,6 +22,7 @@ unique_members(Ns_, Unique_) <- (
     )
 )
 
-all_positive(Ns_) <- (
+AllPositive(Ns_) <- (
     ForAll(In(X_, Ns_), X_ > 0)
 )
+

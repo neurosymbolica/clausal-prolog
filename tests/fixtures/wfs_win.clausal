@@ -1,6 +1,7 @@
--table(win/1)
+-table(Win/1)
 
-move(1, 2),
-move(2, 1),
+Move(1, 2),
+Move(2, 1),
 
-win(X_) <- (move(X_, Y_) and not win(Y_))
+Win(X_) <- (Move(X_, Y_) and not Win(Y_))
+

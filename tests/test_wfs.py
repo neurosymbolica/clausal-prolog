@@ -328,7 +328,7 @@ class TestPositiveTablingRegression:
         m = _load("tabled_fib")
         F = Var()
         results = []
-        for trail in call("fib", 10, F, module=_module(m)):
+        for trail in call("Fib", 10, F, module=_module(m)):
             results.append(deref(F))
         assert results == [55]
 
@@ -337,7 +337,7 @@ class TestPositiveTablingRegression:
         m = _load("tabled_path")
         Y = Var()
         results = []
-        for t in call("path", 1, Y, module=_module(m)):
+        for t in call("Path", 1, Y, module=_module(m)):
             results.append(deref(Y))
         assert sorted(results) == [1, 2, 3]
 
@@ -380,7 +380,7 @@ class TestWfsSymmetricWin:
         # Query win(1) and win(2)
         X = Var()
         results = []
-        for t in call("win", X, module=lm):
+        for t in call("Win", X, module=lm):
             results.append(deref(X))
 
         # With WFS, the symmetric cycle means both are conditional/undefined.
@@ -388,7 +388,7 @@ class TestWfsSymmetricWin:
         # The table should have entries with non-empty conditions.
         table_store = db.table_store
         # Find the win table entries
-        win_entries = [(k, v) for k, v in table_store.items() if k[0] == "win"]
+        win_entries = [(k, v) for k, v in table_store.items() if k[0] == "Win"]
         # Check that answers exist and are conditional (undefined)
         for key, entry in win_entries:
             assert entry.status == "complete"
@@ -417,7 +417,7 @@ class TestWfsAsymmetricWin:
 
         X = Var()
         results = []
-        for t in call("win", X, module=lm):
+        for t in call("Win", X, module=lm):
             results.append(deref(X))
 
         # win("a") should be in results (true: via move("a","c"), not win("c"))
@@ -444,7 +444,7 @@ class TestNoNegationCycle:
         # This test just confirms fib with no negation works.
         F = Var()
         results = []
-        for trail in call("fib", 5, F, module=lm):
+        for trail in call("Fib", 5, F, module=lm):
             results.append(deref(F))
         assert results == [5]
 
@@ -460,7 +460,7 @@ class TestQueryWfs:
         from clausal.terms import Call as TermCall, LoadName
         N = Var()
         F = Var()
-        goal = TermCall(func=LoadName(name="fib"), args=[N, F], kwargs=[])
+        goal = TermCall(func=LoadName(name="Fib"), args=[N, F], kwargs=[])
         # Bind N to 5
         trail = Trail()
         unify(N, 5, trail)

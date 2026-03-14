@@ -3,25 +3,26 @@
 
 # Helper predicates used as goals
 
-is_positive(X_) <- (X_ > 0)
+IsPositive(X_) <- (X_ > 0)
 
-is_negative(X_) <- (X_ < 0)
+IsNegative(X_) <- (X_ < 0)
 
-double(X_, Y_) <- (Y_ := X_ * 2)
+Double(X_, Y_) <- (Y_ := X_ * 2)
 
-add_step(N_, Acc_, Next_) <- (Next_ := Acc_ + N_)
+AddStep(N_, Acc_, Next_) <- (Next_ := Acc_ + N_)
 
 # MapList/2 — Goal(Elem) holds for all elements
-all_positive(Xs_) <- MapList(is_positive, Xs_)
+AllPositive(Xs_) <- MapList(IsPositive, Xs_)
 
 # MapList/3 — maps each X to doubled Y
-doubled(Xs_, Ys_) <- MapList(double, Xs_, Ys_)
+Doubled(Xs_, Ys_) <- MapList(Double, Xs_, Ys_)
 
 # Filter/3 — filter keeping positives
-keep_positives(Xs_, Ys_) <- Filter(is_positive, Xs_, Ys_)
+KeepPositives(Xs_, Ys_) <- Filter(IsPositive, Xs_, Ys_)
 
 # Exclude/3 — remove negatives
-drop_negatives(Xs_, Ys_) <- Exclude(is_negative, Xs_, Ys_)
+DropNegatives(Xs_, Ys_) <- Exclude(IsNegative, Xs_, Ys_)
 
 # FoldLeft/4 — sum a list via fold
-sum_fold(Xs_, S_) <- FoldLeft(add_step, Xs_, 0, S_)
+SumFold(Xs_, S_) <- FoldLeft(AddStep, Xs_, 0, S_)
+

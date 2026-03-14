@@ -2,38 +2,38 @@
 #
 # Arrow syntax, variable capture, conjunction bodies, predicate calls
 
-# apply_val/2 — basic lambda: identity via call_goal
-apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
+# ApplyVal/2 — basic lambda: identity via call_goal
+ApplyVal(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
 
-# add_one/2 — lambda with arithmetic
-add_one(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
+# AddOne/2 — lambda with arithmetic
+AddOne(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
 
-# add_z/3 — captured variable from enclosing clause
-add_z(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
+# AddZ/3 — captured variable from enclosing clause
+AddZ(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
 
-# double_val/2 — two-arg lambda
-double_val(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
+# DoubleVal/2 — two-arg lambda
+DoubleVal(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
 
-# zero_arg/1 — zero-arg lambda
-zero_arg(RESULT) <- CallGoal((() <- (RESULT is 42)))
+# ZeroArg/1 — zero-arg lambda
+ZeroArg(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
-# conjunction/2 — lambda with conjunction body
-transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+# Transform/2 — lambda with conjunction body
+Transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
 
-# capture_two/4 — captures two variables from enclosing clause
-capture_two(A, B, X, RESULT) <- (
+# CaptureTwo/4 — captures two variables from enclosing clause
+CaptureTwo(A, B, X, RESULT) <- (
     CallGoal((V <- (RESULT := V + A + B)), X)
 )
 
-# apply_pred/2 — lambda calling a predicate defined in same module
-helper(X, Y) <- (Y := X * 10)
-apply_pred(X, Y) <- CallGoal((V <- (helper(V, Y))), X)
+# ApplyPred/2 — lambda calling a predicate defined in same module
+Helper(X, Y) <- (Y := X * 10)
+ApplyPred(X, Y) <- CallGoal((V <- (Helper(V, Y))), X)
 
-# multi_solution/1 — lambda body with multiple solutions (member)
-color("red"),
-color("green"),
-color("blue"),
+# AllColors/1 — FindAll with multi-solution predicate
+Color("red"),
+Color("green"),
+Color("blue"),
 
-all_colors(COLORS) <- (
-    FindAll(C, (color(C)), COLORS)
+AllColors(COLORS) <- (
+    FindAll(C, (Color(C)), COLORS)
 )

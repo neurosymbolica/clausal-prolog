@@ -1,4 +1,4 @@
-sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
+Sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
     InDomain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
     and AllDifferent([S_, E_, N_, D_, M_, O_, R_, Y_])
     and S_ != 0
@@ -10,3 +10,4 @@ sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
     and (Sum_ := Send_ + More_)
     and Sum_ == Money_
 )
+

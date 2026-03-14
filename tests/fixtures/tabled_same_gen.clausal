@@ -1,15 +1,16 @@
--table(sg/2)
+-table(Sg/2)
 
-parent(1, 2),
-parent(1, 3),
-parent(2, 4),
-parent(2, 5),
-parent(3, 5),
-parent(3, 6),
+Parent(1, 2),
+Parent(1, 3),
+Parent(2, 4),
+Parent(2, 5),
+Parent(3, 5),
+Parent(3, 6),
 
-sg(X, Y) <- (X is Y)
-sg(X, Y) <- (
-    parent(P, X),
-    sg(P, Q),
-    parent(Q, Y)
+Sg(X, Y) <- (X is Y)
+Sg(X, Y) <- (
+    Parent(P, X),
+    Sg(P, Q),
+    Parent(Q, Y)
 )
+

@@ -45,28 +45,28 @@ class TestLeftRecursion:
         """Left-recursive path/2 finds all reachable nodes from 1."""
         Y = Var()
         results = set()
-        for trail in call("path", 1, Y, module=self.lm):
+        for trail in call("Path", 1, Y, module=self.lm):
             results.add(deref(Y))
         assert results == {2, 3, 4}
 
     def test_single_hop(self):
-        results = list(call("path", 3, 4, module=self.lm))
+        results = list(call("Path", 3, 4, module=self.lm))
         assert len(results) >= 1
 
     def test_multi_hop(self):
-        results = list(call("path", 1, 4, module=self.lm))
+        results = list(call("Path", 1, 4, module=self.lm))
         assert len(results) >= 1
 
     def test_no_path(self):
         """No backward edges in this acyclic graph."""
-        results = list(call("path", 4, 1, module=self.lm))
+        results = list(call("Path", 4, 1, module=self.lm))
         assert len(results) == 0
 
     def test_all_pairs(self):
         """Enumerate all (X,Y) pairs."""
         X, Y = Var(), Var()
         results = set()
-        for trail in call("path", X, Y, module=self.lm):
+        for trail in call("Path", X, Y, module=self.lm):
             results.add((deref(X), deref(Y)))
         expected = {
             (1, 2), (1, 3), (1, 4),
@@ -77,7 +77,7 @@ class TestLeftRecursion:
 
     def test_table_entries_complete(self):
         X = Var()
-        list(call("path", 1, X, module=self.lm))
+        list(call("Path", 1, X, module=self.lm))
         for entry in self.lm.db.table_store.values():
             assert entry.status == "complete"
 
@@ -111,39 +111,39 @@ class TestSameGeneration:
     def test_reflexive(self):
         """Every node is in the same generation as itself."""
         for node in [1, 2, 3, 4, 5, 6]:
-            results = list(call("sg", node, node, module=self.lm))
+            results = list(call("Sg", node, node, module=self.lm))
             assert len(results) >= 1, f"sg({node}, {node}) should succeed"
 
     def test_same_gen_siblings(self):
         """2 and 3 are siblings (both children of 1) → same generation."""
-        results = list(call("sg", 2, 3, module=self.lm))
+        results = list(call("Sg", 2, 3, module=self.lm))
         assert len(results) >= 1
 
     def test_same_gen_cousins(self):
         """4 and 6: 4 is child of 2, 6 is child of 3, 2 and 3 are same-gen."""
-        results = list(call("sg", 4, 6, module=self.lm))
+        results = list(call("Sg", 4, 6, module=self.lm))
         assert len(results) >= 1
 
     def test_same_gen_shared_child(self):
         """4 and 5 are same-gen (both children of 2). Also via 3→5, 1→2→4."""
-        results = list(call("sg", 4, 5, module=self.lm))
+        results = list(call("Sg", 4, 5, module=self.lm))
         assert len(results) >= 1
 
     def test_not_same_gen_different_levels(self):
         """1 is root, 4 is grandchild — not same generation."""
-        results = list(call("sg", 1, 4, module=self.lm))
+        results = list(call("Sg", 1, 4, module=self.lm))
         assert len(results) == 0
 
     def test_not_same_gen_parent_child(self):
         """2 is parent of 4 — different generations."""
-        results = list(call("sg", 2, 4, module=self.lm))
+        results = list(call("Sg", 2, 4, module=self.lm))
         assert len(results) == 0
 
     def test_enumerate_cross_gen_pairs(self):
         """Collect non-reflexive same-generation pairs via recursive clause."""
         X, Y = Var(), Var()
         results = set()
-        for trail in call("sg", X, Y, module=self.lm):
+        for trail in call("Sg", X, Y, module=self.lm):
             x, y = deref(X), deref(Y)
             if not (is_var(x) or is_var(y)):
                 results.add((x, y))
@@ -160,7 +160,7 @@ class TestSameGeneration:
 
     def test_table_entries_complete(self):
         X, Y = Var(), Var()
-        list(call("sg", X, Y, module=self.lm))
+        list(call("Sg", X, Y, module=self.lm))
         for entry in self.lm.db.table_store.values():
             assert entry.status == "complete"
 
@@ -186,7 +186,7 @@ class TestMutualRecursion:
         """reach_a(1, Y): direct link_a(1,2) + reach_b(1,3)→link_a(3,4)."""
         Y = Var()
         results = set()
-        for trail in call("reach_a", 1, Y, module=self.lm):
+        for trail in call("ReachA", 1, Y, module=self.lm):
             results.add(deref(Y))
         assert results == {2, 4}
 
@@ -194,7 +194,7 @@ class TestMutualRecursion:
         """reach_b(2, Y): direct link_b(2,3); also reach_a(2,4),link_b(4,1)."""
         Y = Var()
         results = set()
-        for trail in call("reach_b", 2, Y, module=self.lm):
+        for trail in call("ReachB", 2, Y, module=self.lm):
             results.add(deref(Y))
         assert results == {3, 1}
 
@@ -202,7 +202,7 @@ class TestMutualRecursion:
         """reach_a(3, Y): link_a(3,4) direct; also reach_b(3,1),link_a(1,2)."""
         Y = Var()
         results = set()
-        for trail in call("reach_a", 3, Y, module=self.lm):
+        for trail in call("ReachA", 3, Y, module=self.lm):
             results.add(deref(Y))
         assert results == {4, 2}
 
@@ -210,16 +210,16 @@ class TestMutualRecursion:
         """Must terminate despite the 1→2→3→4→1 cycle."""
         Y = Var()
         results = set()
-        for trail in call("reach_a", 1, Y, module=self.lm):
+        for trail in call("ReachA", 1, Y, module=self.lm):
             results.add(deref(Y))
         assert len(results) >= 1
 
     def test_both_tabled(self):
-        assert self.lm.db.is_tabled("reach_a", 2)
-        assert self.lm.db.is_tabled("reach_b", 2)
+        assert self.lm.db.is_tabled("ReachA", 2)
+        assert self.lm.db.is_tabled("ReachB", 2)
 
     def test_table_entries_complete(self):
         Y = Var()
-        list(call("reach_a", 1, Y, module=self.lm))
+        list(call("ReachA", 1, Y, module=self.lm))
         for entry in self.lm.db.table_store.values():
             assert entry.status == "complete"

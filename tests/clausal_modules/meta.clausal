@@ -2,8 +2,8 @@
 #
 # FindAll/3, BagOf/3, SetOf/3, ForAll/2 as compiler special forms
 
-# squares/2 — square each element via FindAll
-squares(NS, SQUARES) <- (
+# Squares/2 — square each element via FindAll
+Squares(NS, SQUARES) <- (
     FindAll(
         SQ,
         (In(X, NS) and (SQ := X * X)),
@@ -11,8 +11,8 @@ squares(NS, SQUARES) <- (
     )
 )
 
-# positives/2 — filter positive elements via FindAll
-positives(NS, POS) <- (
+# Positives/2 — filter positive elements via FindAll
+Positives(NS, POS) <- (
     FindAll(
         X,
         (In(X, NS) and X > 0),
@@ -20,8 +20,8 @@ positives(NS, POS) <- (
     )
 )
 
-# unique_members/2 — deduplicate via SetOf
-unique_members(NS, UNIQUE) <- (
+# UniqueMembers/2 — deduplicate via SetOf
+UniqueMembers(NS, UNIQUE) <- (
     SetOf(
         X,
         In(X, NS),
@@ -29,19 +29,19 @@ unique_members(NS, UNIQUE) <- (
     )
 )
 
-# all_positive/1 — universal quantification via ForAll
-all_positive(NS) <- (
+# AllPositive/1 — universal quantification via ForAll
+AllPositive(NS) <- (
     ForAll(In(X, NS), X > 0)
 )
 
-# sum_squares/2 — nested: FindAll squares then sum
-sum_squares(NS, TOTAL) <- (
-    squares(NS, SQS),
+# SumSquares/2 — nested: FindAll squares then sum
+SumSquares(NS, TOTAL) <- (
+    Squares(NS, SQS),
     SumList(SQS, TOTAL)
 )
 
-# evens/2 — filter even elements via FindAll with modulo
-evens(NS, ES) <- (
+# Evens/2 — filter even elements via FindAll with modulo
+Evens(NS, ES) <- (
     FindAll(
         X,
         (In(X, NS) and (M := X % 2) and M is 0),
@@ -49,14 +49,14 @@ evens(NS, ES) <- (
     )
 )
 
-# count_solutions/2 — count number of list elements via FindAll + Length
-count_solutions(NS, COUNT) <- (
+# CountSolutions/2 — count number of list elements via FindAll + Length
+CountSolutions(NS, COUNT) <- (
     FindAll(X, In(X, NS), BAG),
     Length(BAG, COUNT)
 )
 
-# pairs/3 — cartesian product via FindAll
-pairs(XS1, XS2, RESULT) <- (
+# Pairs/3 — cartesian product via FindAll
+Pairs(XS1, XS2, RESULT) <- (
     FindAll(
         [A, B],
         (In(A, XS1) and In(B, XS2)),
@@ -64,13 +64,13 @@ pairs(XS1, XS2, RESULT) <- (
     )
 )
 
-# all_members/2 — ForAll: every element of first list is in second list
-all_members(SUB1, SUPER1) <- (
+# AllMembers/2 — ForAll: every element of first list is in second list
+AllMembers(SUB1, SUPER1) <- (
     ForAll(In(X, SUB1), In(X, SUPER1))
 )
 
-# bag_positives/2 — BagOf (fails on empty)
-bag_positives(NS, POS) <- (
+# BagPositives/2 — BagOf (fails on empty)
+BagPositives(NS, POS) <- (
     BagOf(
         X,
         (In(X, NS) and X > 0),

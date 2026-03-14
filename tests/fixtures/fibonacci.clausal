@@ -1,21 +1,22 @@
 # Fibonacci
 #
-# fib(0, 0).
-# fib(1, 1).
-# fib(N, R) :- N > 1, N1 is N-1, N2 is N-2,
-#              fib(N1, R1), fib(N2, R2), R is R1+R2.
+# Fib(0, 0).
+# Fib(1, 1).
+# Fib(N, R) :- N > 1, N1 is N-1, N2 is N-2,
+#              Fib(N1, R1), Fib(N2, R2), R is R1+R2.
 #
 # The first clause uses keyword syntax (N=0, RESULT=0) to establish field
 # names; subsequent clauses can use positional args mapped to those names.
 
 
-fib(N=0, RESULT=0),
-fib(1, 1),
-fib(N, RESULT) <- (
+Fib(N=0, RESULT=0),
+Fib(1, 1),
+Fib(N, RESULT) <- (
     N > 1,
     N1 := N - 1,
     N2 := N - 2,
-    fib(N1, A),
-    fib(N2, B),
+    Fib(N1, A),
+    Fib(N2, B),
     RESULT := A + B
 )
+

@@ -1,11 +1,12 @@
 # Edge facts
-edge(1, 2),
-edge(2, 3),
-edge(1, 3),
+Edge(1, 2),
+Edge(2, 3),
+Edge(1, 3),
 
-# Reachability: reach(X, Y) if there is a path from X to Y
-reach(X, Y) <- edge(X, Y)
-reach(X, Y) <- (
-    edge(X, Z),
-    reach(Z, Y)
+# Reachability: Reach(X, Y) if there is a path from X to Y
+Reach(X, Y) <- Edge(X, Y)
+Reach(X, Y) <- (
+    Edge(X, Z),
+    Reach(Z, Y)
 )
+

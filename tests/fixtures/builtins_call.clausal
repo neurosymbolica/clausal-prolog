@@ -1,25 +1,26 @@
 # Tests for Call/N and CallGoal/N higher-order call predicates
 
-# apply_goal/2: call a unary goal with an argument
-apply_goal(Goal_, X_) <- Call(Goal_, X_)
+# ApplyGoal/2: call a unary goal with an argument
+ApplyGoal(Goal_, X_) <- Call(Goal_, X_)
 
-# apply_binary/3: call a binary goal with two arguments
-apply_binary(Goal_, X_, Y_) <- Call(Goal_, X_, Y_)
+# ApplyBinary/3: call a binary goal with two arguments
+ApplyBinary(Goal_, X_, Y_) <- Call(Goal_, X_, Y_)
 
 # Use Call/1 to invoke a goal stored in a variable
-run_goal(Goal_) <- Call(Goal_)
+RunGoal(Goal_) <- Call(Goal_)
 
 # Example: call member via a goal variable
-member_via_call(X_, Xs_) <- (
+MemberViaCall(X_, Xs_) <- (
     G_ := (X_) <- In(X_, Xs_),
     Call(G_, X_)
 )
 
 # map using Call/3
-double_via_call(X_, Y_) <- (Y_ := X_ * 2)
+DoubleViaCall(X_, Y_) <- (Y_ := X_ * 2)
 
-mapped_doubles(Xs_, Ys_) <- MapList(
-    (X_, Y_) <- Call(double_via_call, X_, Y_),
+MappedDoubles(Xs_, Ys_) <- MapList(
+    (X_, Y_) <- Call(DoubleViaCall, X_, Y_),
     Xs_,
     Ys_,
 )
+

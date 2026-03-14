@@ -152,34 +152,34 @@ class TestPhase1EdgeCases:
         assert results == []
 
     def test_length_zero(self):
-        """length([], N) → N=0."""
+        """Length([], N) → N=0."""
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("length", [], n, module=mod)]
+        results = [deref(n) for _ in call("Length", [], n, module=mod)]
         assert results == [0]
 
     def test_length_three(self):
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("length", [1, 2, 3], n, module=mod)]
+        results = [deref(n) for _ in call("Length", [1, 2, 3], n, module=mod)]
         assert results == [3]
 
     def test_length_singleton(self):
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("length", ["a"], n, module=mod)]
+        results = [deref(n) for _ in call("Length", ["a"], n, module=mod)]
         assert results == [1]
 
     def test_length_check_correct(self):
-        """length([1,2], 2) succeeds."""
+        """Length([1,2], 2) succeeds."""
         mod = _lists_mod()
-        results = list(call("length", [1, 2], 2, module=mod))
+        results = list(call("Length", [1, 2], 2, module=mod))
         assert len(results) == 1
 
     def test_length_check_wrong(self):
-        """length([1,2], 5) fails."""
+        """Length([1,2], 5) fails."""
         mod = _lists_mod()
-        results = list(call("length", [1, 2], 5, module=mod))
+        results = list(call("Length", [1, 2], 5, module=mod))
         assert results == []
 
 
@@ -230,54 +230,54 @@ class TestPhase2EdgeCases:
         assert results == [10]
 
     def test_append_single_elements(self):
-        """append([1], [2], R) → R=[1,2]."""
+        """Append([1], [2], R) → R=[1,2]."""
         mod = _lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [1], [2], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [1], [2], r, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_compute_middle(self):
-        """append([1], Y, [1, 2, 3]) → Y=[2,3]."""
+        """Append([1], Y, [1, 2, 3]) → Y=[2,3]."""
         mod = _lists_mod()
         y = Var()
-        results = [deref(y) for _ in call("append", [1], y, [1, 2, 3], module=mod)]
+        results = [deref(y) for _ in call("Append", [1], y, [1, 2, 3], module=mod)]
         assert results == [[2, 3]]
 
     def test_append_all_vars_with_ground_result(self):
-        """append(X, Y, [1]) — 2 splits."""
+        """Append(X, Y, [1]) — 2 splits."""
         mod = _lists_mod()
         x, y = Var(), Var()
-        pairs = [(deref(x), deref(y)) for _ in call("append", x, y, [1], module=mod)]
+        pairs = [(deref(x), deref(y)) for _ in call("Append", x, y, [1], module=mod)]
         assert ([], [1]) in pairs
         assert ([1], []) in pairs
         assert len(pairs) == 2
 
     def test_append_nested_lists(self):
-        """append([[1]], [[2]], R) → R=[[1],[2]]."""
+        """Append([[1]], [[2]], R) → R=[[1],[2]]."""
         mod = _lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("append", [[1]], [[2]], r, module=mod)]
+        results = [deref(r) for _ in call("Append", [[1]], [[2]], r, module=mod)]
         assert results == [[[1], [2]]]
 
     def test_last_two_elements(self):
-        """last([1,2], X) → X=2."""
+        """Last([1,2], X) → X=2."""
         mod = _lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("last", [1, 2], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [1, 2], x, module=mod)]
         assert results == [2]
 
     def test_last_nested_list_element(self):
-        """last([1, [2, 3]], X) → X=[2,3]."""
+        """Last([1, [2, 3]], X) → X=[2,3]."""
         mod = _lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("last", [1, [2, 3]], x, module=mod)]
+        results = [deref(x) for _ in call("Last", [1, [2, 3]], x, module=mod)]
         assert results == [[2, 3]]
 
     def test_last_empty_fails(self):
-        """last([], X) → no solution."""
+        """Last([], X) → no solution."""
         mod = _lists_mod()
         x = Var()
-        results = list(call("last", [], x, module=mod))
+        results = list(call("Last", [], x, module=mod))
         assert results == []
 
     def test_bookend_single(self):
@@ -363,50 +363,50 @@ class TestPhase3EdgeCases:
         assert results == []
 
     def test_has_pair_three_elements(self):
-        """has_pair with 3 elements succeeds."""
+        """HasPair with 3 elements succeeds."""
         mod = _anon_mod()
-        results = list(call("has_pair", [1, 2, 3], module=mod))
+        results = list(call("HasPair", [1, 2, 3], module=mod))
         assert len(results) >= 1
 
     def test_first_two_element_list(self):
-        """first([H, *_], H) with 2-element list."""
+        """First([H, *_], H) with 2-element list."""
         mod = _anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("first", [10, 20], r, module=mod)]
+        results = [deref(r) for _ in call("First", [10, 20], r, module=mod)]
         assert results == [10]
 
     def test_second_exactly_two(self):
-        """second([_, SECOND, *_], SECOND) with exactly 2 elements."""
+        """Second([_, SECOND, *_], SECOND) with exactly 2 elements."""
         mod = _anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("second", [10, 20], r, module=mod)]
+        results = [deref(r) for _ in call("Second", [10, 20], r, module=mod)]
         assert results == [20]
 
     def test_second_fails_singleton(self):
-        """second([_, SECOND, *_], SECOND) fails on singleton."""
+        """Second([_, SECOND, *_], SECOND) fails on singleton."""
         mod = _anon_mod()
         r = Var()
-        results = list(call("second", [10], r, module=mod))
+        results = list(call("Second", [10], r, module=mod))
         assert results == []
 
     def test_member_of_pair_both(self):
-        """member_of_pair(X, [X, X]) where X matches both positions → two solutions."""
+        """MemberOfPair(X, [X, X]) where X matches both positions → two solutions."""
         mod = _anon_mod()
-        results = list(call("member_of_pair", 1, [1, 1], module=mod))
+        results = list(call("MemberOfPair", 1, [1, 1], module=mod))
         assert len(results) == 2
 
     def test_const_numeric_input(self):
-        """const(_, 42) with numeric input."""
+        """Const(_, 42) with numeric input."""
         mod = _anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("const", 999, r, module=mod)]
+        results = [deref(r) for _ in call("Const", 999, r, module=mod)]
         assert results == [42]
 
     def test_const_list_input(self):
-        """const(_, 42) with list input."""
+        """Const(_, 42) with list input."""
         mod = _anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("const", [1, 2, 3], r, module=mod)]
+        results = [deref(r) for _ in call("Const", [1, 2, 3], r, module=mod)]
         assert results == [42]
 
 
@@ -419,58 +419,58 @@ class TestPhase4EdgeCases:
     """Multi-star [*A, *B] combinatorial backtracking edge cases."""
 
     def test_split_longer_list(self):
-        """split([1..5], A, B) → 6 solutions."""
+        """Split([1..5], A, B) → 6 solutions."""
         mod = _multistar_mod()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("split", [1, 2, 3, 4, 5], a, b, module=mod)]
+        results = [(deref(a), deref(b)) for _ in call("Split", [1, 2, 3, 4, 5], a, b, module=mod)]
         assert len(results) == 6
         assert results[0] == ([], [1, 2, 3, 4, 5])
         assert results[-1] == ([1, 2, 3, 4, 5], [])
 
     def test_split3_singleton(self):
-        """split3([X, *A, *B], X, A, B) with singleton → X=elem, A=[], B=[]."""
+        """Split3([X, *A, *B], X, A, B) with singleton → X=elem, A=[], B=[]."""
         mod = _multistar_mod()
         x, a, b = Var(), Var(), Var()
         results = [
             (deref(x), deref(a), deref(b))
-            for _ in call("split3", [42], x, a, b, module=mod)
+            for _ in call("Split3", [42], x, a, b, module=mod)
         ]
         assert results == [(42, [], [])]
 
     def test_split3_two_elements(self):
-        """split3([X, *A, *B], X, A, B) with [1,2] → 2 solutions."""
+        """Split3([X, *A, *B], X, A, B) with [1,2] → 2 solutions."""
         mod = _multistar_mod()
         x, a, b = Var(), Var(), Var()
         results = [
             (deref(x), deref(a), deref(b))
-            for _ in call("split3", [1, 2], x, a, b, module=mod)
+            for _ in call("Split3", [1, 2], x, a, b, module=mod)
         ]
         assert results == [(1, [], [2]), (1, [2], [])]
 
     def test_around_singleton(self):
-        """around([*A, X, *B], X, [A, B]) with [1] → X=1, A=[], B=[]."""
+        """Around([*A, X, *B], X, [A, B]) with [1] → X=1, A=[], B=[]."""
         mod = _multistar_mod()
         x, p = Var(), Var()
-        results = [(deref(x), deref(p)) for _ in call("around", [1], x, p, module=mod)]
+        results = [(deref(x), deref(p)) for _ in call("Around", [1], x, p, module=mod)]
         assert results == [(1, [[], []])]
 
     def test_around_duplicates(self):
-        """around with duplicate values — finds element at each position."""
+        """Around with duplicate values — finds element at each position."""
         mod = _multistar_mod()
         x, p = Var(), Var()
-        results = [(deref(x), deref(p)) for _ in call("around", [1, 2, 1], x, p, module=mod)]
+        results = [(deref(x), deref(p)) for _ in call("Around", [1, 2, 1], x, p, module=mod)]
         assert len(results) == 3
         assert (1, [[], [2, 1]]) in results
         assert (2, [[1], [1]]) in results
         assert (1, [[1, 2], []]) in results
 
     def test_split3way_singleton(self):
-        """split3way([1], A, B, C) — 3 solutions (one non-empty segment)."""
+        """Split3way([1], A, B, C) — 3 solutions (one non-empty segment)."""
         mod = _multistar_mod()
         a, b, c = Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c))
-            for _ in call("split3way", [1], a, b, c, module=mod)
+            for _ in call("Split3way", [1], a, b, c, module=mod)
         ]
         assert len(results) == 3
         assert ([], [], [1]) in results
@@ -478,12 +478,12 @@ class TestPhase4EdgeCases:
         assert ([1], [], []) in results
 
     def test_split3way_three(self):
-        """split3way([1,2,3], A, B, C) — 10 solutions (C(5,2) = 10)."""
+        """Split3way([1,2,3], A, B, C) — 10 solutions (C(5,2) = 10)."""
         mod = _multistar_mod()
         a, b, c = Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c))
-            for _ in call("split3way", [1, 2, 3], a, b, c, module=mod)
+            for _ in call("Split3way", [1, 2, 3], a, b, c, module=mod)
         ]
         # n=3, k=3 stars → C(n+k-1, k-1) = C(5,2) = 10
         assert len(results) == 10
@@ -527,22 +527,22 @@ class TestPhase4EdgeCases:
         mod = _multistar_mod()
         a, b = Var(), Var()
         all_results = []
-        for _ in call("split", [1, 2, 3], a, b, module=mod):
+        for _ in call("Split", [1, 2, 3], a, b, module=mod):
             all_results.append((deref(a), deref(b)))
         # Each result should be independent — no leaking from previous iteration
         for i, (ra, rb) in enumerate(all_results):
             assert ra + rb == [1, 2, 3], f"Solution {i}: {ra} + {rb} != [1,2,3]"
 
     def test_around_empty_fails(self):
-        """around([], X, P) — no element to find."""
+        """Around([], X, P) — no element to find."""
         mod = _multistar_mod()
         x, p = Var(), Var()
-        results = list(call("around", [], x, p, module=mod))
+        results = list(call("Around", [], x, p, module=mod))
         assert results == []
 
     def test_split3_empty_fails(self):
-        """split3([], X, A, B) — needs at least one element for X."""
+        """Split3([], X, A, B) — needs at least one element for X."""
         mod = _multistar_mod()
         x, a, b = Var(), Var(), Var()
-        results = list(call("split3", [], x, a, b, module=mod))
+        results = list(call("Split3", [], x, a, b, module=mod))
         assert results == []

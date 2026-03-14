@@ -1238,7 +1238,7 @@ class TestTabledIteCondition:
 
         logic_mod = mod.__dict__["$module"]
         r = Var()
-        goal = Call(func=LoadName(name="check_path"), args=[3, r], kwargs=[])
+        goal = Call(func=LoadName(name="CheckPath"), args=[3, r], kwargs=[])
         results = list(query(goal, {"r": r}, logic_mod))
         labels = [res["r"] for res in results]
         assert "reachable" in labels
@@ -1250,7 +1250,7 @@ class TestTabledIteCondition:
 
         logic_mod = mod.__dict__["$module"]
         r = Var()
-        goal = Call(func=LoadName(name="check_path"), args=[99, r], kwargs=[])
+        goal = Call(func=LoadName(name="CheckPath"), args=[99, r], kwargs=[])
         results = list(query(goal, {"r": r}, logic_mod))
         labels = [res["r"] for res in results]
         assert "unreachable" in labels
@@ -1278,13 +1278,13 @@ class TestIteImportIntegration:
         logic_mod = mod.__dict__["$module"]
 
         l = Var()
-        goal = Call(func=LoadName(name="classify"), args=[5, l], kwargs=[])
+        goal = Call(func=LoadName(name="Classify"), args=[5, l], kwargs=[])
         results = list(query(goal, {"l": l}, logic_mod))
         labels = [r["l"] for r in results]
         assert "positive" in labels
 
         l2 = Var()
-        goal2 = Call(func=LoadName(name="classify"), args=[-3, l2], kwargs=[])
+        goal2 = Call(func=LoadName(name="Classify"), args=[-3, l2], kwargs=[])
         results2 = list(query(goal2, {"l": l2}, logic_mod))
         labels2 = [r["l"] for r in results2]
         assert "negative" in labels2
@@ -1300,7 +1300,7 @@ class TestIteImportIntegration:
 
         logic_mod = mod.__dict__["$module"]
 
-        goal = Call(func=LoadName(name="memberd"), args=[1, [1, 2, 3]], kwargs=[])
+        goal = Call(func=LoadName(name="Memberd"), args=[1, [1, 2, 3]], kwargs=[])
         results = list(query(goal, {}, logic_mod))
         # Ground element present → exactly one solution (deterministic)
         assert len(results) == 1
@@ -1312,7 +1312,7 @@ class TestIteImportIntegration:
 
         logic_mod = mod.__dict__["$module"]
 
-        goal = Call(func=LoadName(name="memberd"), args=[99, [1, 2, 3]], kwargs=[])
+        goal = Call(func=LoadName(name="Memberd"), args=[99, [1, 2, 3]], kwargs=[])
         results = list(query(goal, {}, logic_mod))
         assert len(results) == 0
 
@@ -1324,7 +1324,7 @@ class TestIteImportIntegration:
         logic_mod = mod.__dict__["$module"]
 
         x = Var()
-        goal = Call(func=LoadName(name="memberd"), args=[x, ["a", "b", "c"]], kwargs=[])
+        goal = Call(func=LoadName(name="Memberd"), args=[x, ["a", "b", "c"]], kwargs=[])
         results = list(query(goal, {"x": x}, logic_mod))
         vals = {r["x"] for r in results}
         assert vals == {"a", "b", "c"}
@@ -1341,7 +1341,7 @@ class TestIteImportIntegration:
         logic_mod = mod.__dict__["$module"]
 
         x = Var()
-        goal = Call(func=LoadName(name="memberd"), args=[x, [1, 1, 2]], kwargs=[])
+        goal = Call(func=LoadName(name="Memberd"), args=[x, [1, 1, 2]], kwargs=[])
         results = list(query(goal, {"x": x}, logic_mod))
         vals = [r["x"] for r in results]
         # Should not yield duplicate 1s
@@ -1535,7 +1535,7 @@ class TestOnceClausal:
 
         logic_mod = mod.__dict__["$module"]
         x = Var()
-        goal = Call(func=LoadName(name="first_member"), args=[x, [10, 20, 30]], kwargs=[])
+        goal = Call(func=LoadName(name="FirstMember"), args=[x, [10, 20, 30]], kwargs=[])
         results = list(query(goal, {"x": x}, logic_mod))
         assert len(results) == 1
         assert results[0]["x"] == 10

@@ -1,4 +1,5 @@
 # Test fixture for Eq/3 builtin integration
 # Simple wrapper that calls Eq/3
 
-check_eq(X_, Y_, T_) <- Eq(X_, Y_, T_)
+CheckEq(X_, Y_, T_) <- Eq(X_, Y_, T_)
+

@@ -1,12 +1,13 @@
--table(fib/2)
+-table(Fib/2)
 
-fib(N=0, RESULT=0),
-fib(1, 1),
-fib(N, RESULT) <- (
+Fib(N=0, RESULT=0),
+Fib(1, 1),
+Fib(N, RESULT) <- (
     N > 1,
     N1 := N - 1,
     N2 := N - 2,
-    fib(N1, A),
-    fib(N2, B),
+    Fib(N1, A),
+    Fib(N2, B),
     RESULT := A + B
 )
+

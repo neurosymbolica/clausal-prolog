@@ -1,17 +1,18 @@
 # Tests for term inspection predicates: Functor/3, Arg/3, Unpack/2
 
 # Functor/3 — decompose mode: extract functor name and arity
-get_functor(T_, F_, A_) <- Functor(T_, F_, A_)
+GetFunctor(T_, F_, A_) <- Functor(T_, F_, A_)
 
 # Functor/3 — construct mode: build compound from name and arity
-build_term(F_, A_, T_) <- Functor(T_, F_, A_)
+BuildTerm(F_, A_, T_) <- Functor(T_, F_, A_)
 
 # Arg/3 — extract nth argument (1-based)
-first_arg(T_, A_) <- Arg(1, T_, A_)
-second_arg(T_, A_) <- Arg(2, T_, A_)
+FirstArg(T_, A_) <- Arg(1, T_, A_)
+SecondArg(T_, A_) <- Arg(2, T_, A_)
 
 # Unpack/2 — decompose term to list
-term_to_list(T_, L_) <- Unpack(T_, L_)
+TermToList(T_, L_) <- Unpack(T_, L_)
 
 # Unpack/2 — construct term from list
-list_to_term(L_, T_) <- Unpack(T_, L_)
+ListToTerm(L_, T_) <- Unpack(T_, L_)
+

@@ -1,3 +1,4 @@
-# first_member/2: like member but only returns the first match via Once()
+# FirstMember/2: like member but only returns the first match via Once()
 
-first_member(X_, Xs_) <- Once(X_ in Xs_)
+FirstMember(X_, Xs_) <- Once(X_ in Xs_)
+

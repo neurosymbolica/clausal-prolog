@@ -4,23 +4,24 @@
 # float_/1 is now registered as IsFloat/1
 
 # IsVar/1, IsBound/1
-is_var(X_) <- IsVar(X_)
-is_nonvar(X_) <- IsBound(X_)
+CheckVar(X_) <- IsVar(X_)
+CheckNonvar(X_) <- IsBound(X_)
 
 # IsStr/1, IsNumber/1, IsInt/1
-is_atom(X_) <- IsStr(X_)
-is_number(X_) <- IsNumber(X_)
-is_integer(X_) <- IsInt(X_)
-is_string(X_) <- IsStr(X_)
+CheckAtom(X_) <- IsStr(X_)
+CheckNumber(X_) <- IsNumber(X_)
+CheckInteger(X_) <- IsInt(X_)
+CheckString(X_) <- IsStr(X_)
 
 # IsCompound/1, IsCallable/1, IsList/1, IsGround/1
-is_compound(X_) <- IsCompound(X_)
-is_callable(X_) <- IsCallable(X_)
-check_list(X_) <- IsList(X_)
-is_ground(X_) <- IsGround(X_)
+CheckCompound(X_) <- IsCompound(X_)
+CheckCallable(X_) <- IsCallable(X_)
+CheckList(X_) <- IsList(X_)
+CheckGround(X_) <- IsGround(X_)
 
-# classify/2: produce a type tag for a bound value
-classify(X_, "integer") <- IsInt(X_)
-classify(X_, "atom") <- IsStr(X_)
-classify(X_, "list") <- IsList(X_)
-classify(X_, "compound") <- IsCompound(X_)
+# Classify/2: produce a type tag for a bound value
+Classify(X_, "integer") <- IsInt(X_)
+Classify(X_, "atom") <- IsStr(X_)
+Classify(X_, "list") <- IsList(X_)
+Classify(X_, "compound") <- IsCompound(X_)
+

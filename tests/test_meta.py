@@ -282,34 +282,34 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 class TestClausalImport:
     def test_squares(self):
-        """squares/2 from meta_test.clausal."""
+        """Squares/2 from meta_test.clausal."""
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
-        results = [_deref_walk(x) for _ in call("squares", [1, 2, 3], x, module=mod.__dict__["$module"])]
+        results = [_deref_walk(x) for _ in call("Squares", [1, 2, 3], x, module=mod.__dict__["$module"])]
         assert results == [[1, 4, 9]]
 
     def test_positives(self):
-        """positives/2 from meta_test.clausal."""
+        """Positives/2 from meta_test.clausal."""
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
-        results = [_deref_walk(x) for _ in call("positives", [-1, 2, -3, 4], x, module=mod.__dict__["$module"])]
+        results = [_deref_walk(x) for _ in call("Positives", [-1, 2, -3, 4], x, module=mod.__dict__["$module"])]
         assert results == [[2, 4]]
 
     def test_unique_members(self):
-        """unique_members/2 from meta_test.clausal."""
+        """UniqueMembers/2 from meta_test.clausal."""
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
-        results = [_deref_walk(x) for _ in call("unique_members", [1, 2, 1, 3, 2], x, module=mod.__dict__["$module"])]
+        results = [_deref_walk(x) for _ in call("UniqueMembers", [1, 2, 1, 3, 2], x, module=mod.__dict__["$module"])]
         assert results == [[1, 2, 3]]
 
     def test_all_positive_pass(self):
-        """all_positive succeeds for all positive list."""
+        """AllPositive succeeds for all positive list."""
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        results = list(call("all_positive", [1, 2, 3], module=mod.__dict__["$module"]))
+        results = list(call("AllPositive", [1, 2, 3], module=mod.__dict__["$module"]))
         assert len(results) == 1
 
     def test_all_positive_fail(self):
-        """all_positive fails if any element is non-positive."""
+        """AllPositive fails if any element is non-positive."""
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        results = list(call("all_positive", [1, -2, 3], module=mod.__dict__["$module"]))
+        results = list(call("AllPositive", [1, -2, 3], module=mod.__dict__["$module"]))
         assert results == []

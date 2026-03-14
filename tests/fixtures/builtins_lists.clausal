@@ -1,54 +1,55 @@
 # Tests for list predicates
 
 # In/2, InCheck/2
-has_member(X_, Xs_) <- In(X_, Xs_)
-has_member_check(X_, Xs_) <- InCheck(X_, Xs_)
+HasMember(X_, Xs_) <- In(X_, Xs_)
+HasMemberCheck(X_, Xs_) <- InCheck(X_, Xs_)
 
 # Append/3
-concat(A_, B_, C_) <- Append(A_, B_, C_)
+Concat(A_, B_, C_) <- Append(A_, B_, C_)
 
-# split(Prefix, Suffix, Whole): Whole = Prefix ++ Suffix
-split(A_, B_, C_) <- Append(A_, B_, C_)
+# Split(Prefix, Suffix, Whole): Whole = Prefix ++ Suffix
+Split(A_, B_, C_) <- Append(A_, B_, C_)
 
 # Length/2
-list_length(Xs_, N_) <- Length(Xs_, N_)
+ListLength(Xs_, N_) <- Length(Xs_, N_)
 
 # Last/2
-list_last(Xs_, X_) <- Last(Xs_, X_)
+ListLast(Xs_, X_) <- Last(Xs_, X_)
 
 # Reverse/2
-list_reverse(Xs_, Ys_) <- Reverse(Xs_, Ys_)
+ListReverse(Xs_, Ys_) <- Reverse(Xs_, Ys_)
 
 # GetItem/3 (0-based)
-get0(Xs_, I_, X_) <- GetItem(I_, Xs_, X_)
+Get0(Xs_, I_, X_) <- GetItem(I_, Xs_, X_)
 
 # Flatten/2
-flat(Xs_, Ys_) <- Flatten(Xs_, Ys_)
+Flat(Xs_, Ys_) <- Flatten(Xs_, Ys_)
 
 # MergeSort/2 (stable sort, keeps duplicates), Sort/2 (removes duplicates)
-sorted_with_dups(Xs_, Ys_) <- MergeSort(Xs_, Ys_)
-sorted_unique(Xs_, Ys_) <- Sort(Xs_, Ys_)
+SortedWithDups(Xs_, Ys_) <- MergeSort(Xs_, Ys_)
+SortedUnique(Xs_, Ys_) <- Sort(Xs_, Ys_)
 
 # Permutation/2
-perms(Xs_, Ys_) <- Permutation(Xs_, Ys_)
+Perms(Xs_, Ys_) <- Permutation(Xs_, Ys_)
 
 # Select/3: select element from list leaving rest
-pick(X_, Xs_, Rest_) <- Select(X_, Xs_, Rest_)
+Pick(X_, Xs_, Rest_) <- Select(X_, Xs_, Rest_)
 
 # Subtract/3, Intersection/3, Union/3
-list_diff(A_, B_, C_) <- Subtract(A_, B_, C_)
-list_inter(A_, B_, C_) <- Intersection(A_, B_, C_)
-list_union(A_, B_, C_) <- Union(A_, B_, C_)
+ListDiff(A_, B_, C_) <- Subtract(A_, B_, C_)
+ListInter(A_, B_, C_) <- Intersection(A_, B_, C_)
+ListUnion(A_, B_, C_) <- Union(A_, B_, C_)
 
 # ToSet/2: remove duplicates preserving order
-dedup(Xs_, Ys_) <- ToSet(Xs_, Ys_)
+Dedup(Xs_, Ys_) <- ToSet(Xs_, Ys_)
 
 # SumList/2, MaxList/2, MinList/2
-total(Xs_, S_) <- SumList(Xs_, S_)
-maximum(Xs_, M_) <- MaxList(Xs_, M_)
-minimum(Xs_, M_) <- MinList(Xs_, M_)
+Total(Xs_, S_) <- SumList(Xs_, S_)
+Maximum(Xs_, M_) <- MaxList(Xs_, M_)
+Minimum(Xs_, M_) <- MinList(Xs_, M_)
 
 # Unzip/3, PairKeys/2, PairValues/2
-make_pairs(Ks_, Vs_, Ps_) <- Unzip(Ps_, Ks_, Vs_)
-keys_of(Ps_, Ks_) <- PairKeys(Ps_, Ks_)
-values_of(Ps_, Vs_) <- PairValues(Ps_, Vs_)
+MakePairs(Ks_, Vs_, Ps_) <- Unzip(Ps_, Ks_, Vs_)
+KeysOf(Ps_, Ks_) <- PairKeys(Ps_, Ks_)
+ValuesOf(Ps_, Vs_) <- PairValues(Ps_, Vs_)
+

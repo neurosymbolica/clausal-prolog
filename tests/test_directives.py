@@ -131,36 +131,36 @@ class TestDirectiveParsing:
 class TestDynamicImport:
     def test_dynamic_predicate_is_unlocked(self):
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["color"]
+        color_cls = mod.__dict__["Color"]
         assert isinstance(color_cls, PredicateMeta)
         assert not color_cls._locked
 
     def test_dynamic_predicate_allows_runtime_assertz(self):
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["color"]
+        color_cls = mod.__dict__["Color"]
         logic_mod = mod.__dict__["$module"]
-        initial_count = len(logic_mod.db.clauses_for("color", 2))
-        color_cls._assertz(Clause(head=color_cls(X="fire", Y="red"), body=[]))
+        initial_count = len(logic_mod.db.clauses_for("Color", 2))
+        color_cls._assertz(Clause(head=color_cls("fire", "red"), body=[]))
         assert len(color_cls._clauses) == initial_count + 1
 
     def test_static_predicate_is_locked(self):
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["fact"]
+        fact_cls = mod.__dict__["Fact"]
         assert isinstance(fact_cls, PredicateMeta)
         assert fact_cls._locked
 
     def test_static_predicate_rejects_runtime_assertz(self):
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["fact"]
+        fact_cls = mod.__dict__["Fact"]
         with pytest.raises(RuntimeError, match="locked"):
-            fact_cls._assertz(Clause(head=fact_cls(X="c", Y=3), body=[]))
+            fact_cls._assertz(Clause(head=fact_cls("c", 3), body=[]))
 
     def test_dynamic_flag_recorded_on_db(self):
         mod = _load_fixture("dynamic_pred.clausal")
         logic_mod = mod.__dict__["$module"]
-        assert logic_mod.db.is_dynamic("color", 2)
+        assert logic_mod.db.is_dynamic("Color", 2)
 
     def test_static_not_dynamic_on_db(self):
         mod = _load_fixture("static_pred.clausal")
         logic_mod = mod.__dict__["$module"]
-        assert not logic_mod.db.is_dynamic("fact", 2)
+        assert not logic_mod.db.is_dynamic("Fact", 2)

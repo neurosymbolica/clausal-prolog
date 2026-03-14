@@ -54,19 +54,19 @@ class TestMetaSquares:
 
     def test_squares_basic(self):
         r = Var()
-        assert _call_collect("squares", [1, 2, 3], r, mod=self.mod) == [[1, 4, 9]]
+        assert _call_collect("Squares", [1, 2, 3], r, mod=self.mod) == [[1, 4, 9]]
 
     def test_squares_empty(self):
         r = Var()
-        assert _call_collect("squares", [], r, mod=self.mod) == [[]]
+        assert _call_collect("Squares", [], r, mod=self.mod) == [[]]
 
     def test_squares_single(self):
         r = Var()
-        assert _call_collect("squares", [5], r, mod=self.mod) == [[25]]
+        assert _call_collect("Squares", [5], r, mod=self.mod) == [[25]]
 
     def test_squares_negative(self):
         r = Var()
-        assert _call_collect("squares", [-2, 3], r, mod=self.mod) == [[4, 9]]
+        assert _call_collect("Squares", [-2, 3], r, mod=self.mod) == [[4, 9]]
 
 
 class TestMetaPositives:
@@ -75,19 +75,19 @@ class TestMetaPositives:
 
     def test_positives_mixed(self):
         r = Var()
-        assert _call_collect("positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
+        assert _call_collect("Positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
 
     def test_positives_all_negative(self):
         r = Var()
-        assert _call_collect("positives", [-1, -2, -3], r, mod=self.mod) == [[]]
+        assert _call_collect("Positives", [-1, -2, -3], r, mod=self.mod) == [[]]
 
     def test_positives_all_positive(self):
         r = Var()
-        assert _call_collect("positives", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
+        assert _call_collect("Positives", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
 
     def test_positives_with_zero(self):
         r = Var()
-        assert _call_collect("positives", [0, 1, -1], r, mod=self.mod) == [[1]]
+        assert _call_collect("Positives", [0, 1, -1], r, mod=self.mod) == [[1]]
 
 
 class TestMetaUniqueMembers:
@@ -96,15 +96,15 @@ class TestMetaUniqueMembers:
 
     def test_unique_dedup(self):
         r = Var()
-        assert _call_collect("unique_members", [1, 2, 1, 3, 2], r, mod=self.mod) == [[1, 2, 3]]
+        assert _call_collect("UniqueMembers", [1, 2, 1, 3, 2], r, mod=self.mod) == [[1, 2, 3]]
 
     def test_unique_already_unique(self):
         r = Var()
-        assert _call_collect("unique_members", [5, 10, 15], r, mod=self.mod) == [[5, 10, 15]]
+        assert _call_collect("UniqueMembers", [5, 10, 15], r, mod=self.mod) == [[5, 10, 15]]
 
     def test_unique_single(self):
         r = Var()
-        assert _call_collect("unique_members", [7, 7, 7], r, mod=self.mod) == [[7]]
+        assert _call_collect("UniqueMembers", [7, 7, 7], r, mod=self.mod) == [[7]]
 
 
 class TestMetaAllPositive:
@@ -112,14 +112,14 @@ class TestMetaAllPositive:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_all_positive_succeeds(self):
-        assert _call_succeeds("all_positive", [1, 2, 3], mod=self.mod) == 1
+        assert _call_succeeds("AllPositive", [1, 2, 3], mod=self.mod) == 1
 
     def test_all_positive_fails(self):
-        assert _call_succeeds("all_positive", [1, -2, 3], mod=self.mod) == 0
+        assert _call_succeeds("AllPositive", [1, -2, 3], mod=self.mod) == 0
 
     def test_all_positive_empty(self):
         # for_all with no solutions is vacuously true
-        assert _call_succeeds("all_positive", [], mod=self.mod) == 1
+        assert _call_succeeds("AllPositive", [], mod=self.mod) == 1
 
 
 class TestMetaSumSquares:
@@ -128,11 +128,11 @@ class TestMetaSumSquares:
 
     def test_sum_squares(self):
         r = Var()
-        assert _call_collect("sum_squares", [1, 2, 3], r, mod=self.mod) == [14]
+        assert _call_collect("SumSquares", [1, 2, 3], r, mod=self.mod) == [14]
 
     def test_sum_squares_empty(self):
         r = Var()
-        assert _call_collect("sum_squares", [], r, mod=self.mod) == [0]
+        assert _call_collect("SumSquares", [], r, mod=self.mod) == [0]
 
 
 class TestMetaEvens:
@@ -141,11 +141,11 @@ class TestMetaEvens:
 
     def test_evens(self):
         r = Var()
-        assert _call_collect("evens", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
+        assert _call_collect("Evens", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_evens_none(self):
         r = Var()
-        assert _call_collect("evens", [1, 3, 5], r, mod=self.mod) == [[]]
+        assert _call_collect("Evens", [1, 3, 5], r, mod=self.mod) == [[]]
 
 
 class TestMetaCountSolutions:
@@ -154,11 +154,11 @@ class TestMetaCountSolutions:
 
     def test_count(self):
         r = Var()
-        assert _call_collect("count_solutions", [10, 20, 30], r, mod=self.mod) == [3]
+        assert _call_collect("CountSolutions", [10, 20, 30], r, mod=self.mod) == [3]
 
     def test_count_empty(self):
         r = Var()
-        assert _call_collect("count_solutions", [], r, mod=self.mod) == [0]
+        assert _call_collect("CountSolutions", [], r, mod=self.mod) == [0]
 
 
 class TestMetaPairs:
@@ -167,16 +167,16 @@ class TestMetaPairs:
 
     def test_pairs_cartesian(self):
         r = Var()
-        results = _call_collect("pairs", ["a", "b"], [1, 2], r, mod=self.mod)
+        results = _call_collect("Pairs", ["a", "b"], [1, 2], r, mod=self.mod)
         assert results == [[["a", 1], ["a", 2], ["b", 1], ["b", 2]]]
 
     def test_pairs_empty_first(self):
         r = Var()
-        assert _call_collect("pairs", [], [1, 2], r, mod=self.mod) == [[]]
+        assert _call_collect("Pairs", [], [1, 2], r, mod=self.mod) == [[]]
 
     def test_pairs_empty_second(self):
         r = Var()
-        assert _call_collect("pairs", ["a"], [], r, mod=self.mod) == [[]]
+        assert _call_collect("Pairs", ["a"], [], r, mod=self.mod) == [[]]
 
 
 class TestMetaAllMembers:
@@ -184,13 +184,13 @@ class TestMetaAllMembers:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_all_members_subset(self):
-        assert _call_succeeds("all_members", [1, 2], [1, 2, 3], mod=self.mod) == 1
+        assert _call_succeeds("AllMembers", [1, 2], [1, 2, 3], mod=self.mod) == 1
 
     def test_all_members_not_subset(self):
-        assert _call_succeeds("all_members", [1, 4], [1, 2, 3], mod=self.mod) == 0
+        assert _call_succeeds("AllMembers", [1, 4], [1, 2, 3], mod=self.mod) == 0
 
     def test_all_members_empty_sub(self):
-        assert _call_succeeds("all_members", [], [1, 2, 3], mod=self.mod) == 1
+        assert _call_succeeds("AllMembers", [], [1, 2, 3], mod=self.mod) == 1
 
 
 class TestMetaBagPositives:
@@ -199,12 +199,12 @@ class TestMetaBagPositives:
 
     def test_bag_positives(self):
         r = Var()
-        assert _call_collect("bag_positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
+        assert _call_collect("BagPositives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
 
     def test_bag_positives_fails_on_none(self):
         r = Var()
         # bag_of fails when no solutions
-        assert _call_collect("bag_positives", [-1, -2, -3], r, mod=self.mod) == []
+        assert _call_collect("BagPositives", [-1, -2, -3], r, mod=self.mod) == []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -218,15 +218,15 @@ class TestHigherOrderDoubles:
 
     def test_doubles(self):
         r = Var()
-        assert _call_collect("doubles", [1, 2, 3], r, mod=self.mod) == [[2, 4, 6]]
+        assert _call_collect("Doubles", [1, 2, 3], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_doubles_empty(self):
         r = Var()
-        assert _call_collect("doubles", [], r, mod=self.mod) == [[]]
+        assert _call_collect("Doubles", [], r, mod=self.mod) == [[]]
 
     def test_doubles_negative(self):
         r = Var()
-        assert _call_collect("doubles", [-1, 0, 5], r, mod=self.mod) == [[-2, 0, 10]]
+        assert _call_collect("Doubles", [-1, 0, 5], r, mod=self.mod) == [[-2, 0, 10]]
 
 
 class TestHigherOrderAllPositive:
@@ -234,13 +234,13 @@ class TestHigherOrderAllPositive:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_all_positive_pass(self):
-        assert _call_succeeds("all_positive", [1, 2, 3], mod=self.mod) == 1
+        assert _call_succeeds("AllPositive", [1, 2, 3], mod=self.mod) == 1
 
     def test_all_positive_fail(self):
-        assert _call_succeeds("all_positive", [1, -2, 3], mod=self.mod) == 0
+        assert _call_succeeds("AllPositive", [1, -2, 3], mod=self.mod) == 0
 
     def test_all_positive_empty(self):
-        assert _call_succeeds("all_positive", [], mod=self.mod) == 1
+        assert _call_succeeds("AllPositive", [], mod=self.mod) == 1
 
 
 class TestHigherOrderKeepPositive:
@@ -249,15 +249,15 @@ class TestHigherOrderKeepPositive:
 
     def test_keep_positive(self):
         r = Var()
-        assert _call_collect("keep_positive", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
+        assert _call_collect("KeepPositive", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
 
     def test_keep_positive_none(self):
         r = Var()
-        assert _call_collect("keep_positive", [-1, -2], r, mod=self.mod) == [[]]
+        assert _call_collect("KeepPositive", [-1, -2], r, mod=self.mod) == [[]]
 
     def test_keep_positive_all(self):
         r = Var()
-        assert _call_collect("keep_positive", [5, 10], r, mod=self.mod) == [[5, 10]]
+        assert _call_collect("KeepPositive", [5, 10], r, mod=self.mod) == [[5, 10]]
 
 
 class TestHigherOrderRemoveNegative:
@@ -266,11 +266,11 @@ class TestHigherOrderRemoveNegative:
 
     def test_remove_negative(self):
         r = Var()
-        assert _call_collect("remove_negative", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
+        assert _call_collect("RemoveNegative", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
 
     def test_remove_negative_none(self):
         r = Var()
-        assert _call_collect("remove_negative", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
+        assert _call_collect("RemoveNegative", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
 
 
 class TestHigherOrderSumListFold:
@@ -279,15 +279,15 @@ class TestHigherOrderSumListFold:
 
     def test_sum(self):
         r = Var()
-        assert _call_collect("sum_list_fold", [1, 2, 3], r, mod=self.mod) == [6]
+        assert _call_collect("SumListFold", [1, 2, 3], r, mod=self.mod) == [6]
 
     def test_sum_empty(self):
         r = Var()
-        assert _call_collect("sum_list_fold", [], r, mod=self.mod) == [0]
+        assert _call_collect("SumListFold", [], r, mod=self.mod) == [0]
 
     def test_sum_single(self):
         r = Var()
-        assert _call_collect("sum_list_fold", [42], r, mod=self.mod) == [42]
+        assert _call_collect("SumListFold", [42], r, mod=self.mod) == [42]
 
 
 class TestHigherOrderProductList:
@@ -296,15 +296,15 @@ class TestHigherOrderProductList:
 
     def test_product(self):
         r = Var()
-        assert _call_collect("product_list", [2, 3, 4], r, mod=self.mod) == [24]
+        assert _call_collect("ProductList", [2, 3, 4], r, mod=self.mod) == [24]
 
     def test_product_empty(self):
         r = Var()
-        assert _call_collect("product_list", [], r, mod=self.mod) == [1]
+        assert _call_collect("ProductList", [], r, mod=self.mod) == [1]
 
     def test_product_with_zero(self):
         r = Var()
-        assert _call_collect("product_list", [5, 0, 3], r, mod=self.mod) == [0]
+        assert _call_collect("ProductList", [5, 0, 3], r, mod=self.mod) == [0]
 
 
 class TestHigherOrderSquares:
@@ -313,7 +313,7 @@ class TestHigherOrderSquares:
 
     def test_squares(self):
         r = Var()
-        assert _call_collect("squares", [1, 2, 3, 4], r, mod=self.mod) == [[1, 4, 9, 16]]
+        assert _call_collect("Squares", [1, 2, 3, 4], r, mod=self.mod) == [[1, 4, 9, 16]]
 
 
 class TestHigherOrderKeepEven:
@@ -322,11 +322,11 @@ class TestHigherOrderKeepEven:
 
     def test_keep_even(self):
         r = Var()
-        assert _call_collect("keep_even", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
+        assert _call_collect("KeepEven", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_keep_even_none(self):
         r = Var()
-        assert _call_collect("keep_even", [1, 3, 5], r, mod=self.mod) == [[]]
+        assert _call_collect("KeepEven", [1, 3, 5], r, mod=self.mod) == [[]]
 
 
 class TestHigherOrderRemoveEven:
@@ -335,7 +335,7 @@ class TestHigherOrderRemoveEven:
 
     def test_remove_even(self):
         r = Var()
-        assert _call_collect("remove_even", [1, 2, 3, 4, 5], r, mod=self.mod) == [[1, 3, 5]]
+        assert _call_collect("RemoveEven", [1, 2, 3, 4, 5], r, mod=self.mod) == [[1, 3, 5]]
 
 
 class TestHigherOrderNegateList:
@@ -344,11 +344,11 @@ class TestHigherOrderNegateList:
 
     def test_negate(self):
         r = Var()
-        assert _call_collect("negate_list", [1, -2, 3], r, mod=self.mod) == [[-1, 2, -3]]
+        assert _call_collect("NegateList", [1, -2, 3], r, mod=self.mod) == [[-1, 2, -3]]
 
     def test_negate_empty(self):
         r = Var()
-        assert _call_collect("negate_list", [], r, mod=self.mod) == [[]]
+        assert _call_collect("NegateList", [], r, mod=self.mod) == [[]]
 
 
 class TestHigherOrderCountFold:
@@ -357,11 +357,11 @@ class TestHigherOrderCountFold:
 
     def test_count(self):
         r = Var()
-        assert _call_collect("count_fold", [10, 20, 30, 40], r, mod=self.mod) == [4]
+        assert _call_collect("CountFold", [10, 20, 30, 40], r, mod=self.mod) == [4]
 
     def test_count_empty(self):
         r = Var()
-        assert _call_collect("count_fold", [], r, mod=self.mod) == [0]
+        assert _call_collect("CountFold", [], r, mod=self.mod) == [0]
 
 
 class TestHigherOrderMaxFold:
@@ -370,15 +370,15 @@ class TestHigherOrderMaxFold:
 
     def test_max_fold(self):
         r = Var()
-        assert _call_collect("max_fold", [3, 7, 2, 9, 1], 0, r, mod=self.mod) == [9]
+        assert _call_collect("MaxFold", [3, 7, 2, 9, 1], 0, r, mod=self.mod) == [9]
 
     def test_max_fold_single(self):
         r = Var()
-        assert _call_collect("max_fold", [5], 0, r, mod=self.mod) == [5]
+        assert _call_collect("MaxFold", [5], 0, r, mod=self.mod) == [5]
 
     def test_max_fold_init_wins(self):
         r = Var()
-        assert _call_collect("max_fold", [1, 2], 100, r, mod=self.mod) == [100]
+        assert _call_collect("MaxFold", [1, 2], 100, r, mod=self.mod) == [100]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -392,11 +392,11 @@ class TestLambdaApplyVal:
 
     def test_apply_val(self):
         r = Var()
-        assert _call_collect("apply_val", r, 42, mod=self.mod) == [42]
+        assert _call_collect("ApplyVal", r, 42, mod=self.mod) == [42]
 
     def test_apply_val_string(self):
         r = Var()
-        assert _call_collect("apply_val", r, "hello", mod=self.mod) == ["hello"]
+        assert _call_collect("ApplyVal", r, "hello", mod=self.mod) == ["hello"]
 
 
 class TestLambdaAddOne:
@@ -405,11 +405,11 @@ class TestLambdaAddOne:
 
     def test_add_one(self):
         r = Var()
-        assert _call_collect("add_one", 5, r, mod=self.mod) == [6]
+        assert _call_collect("AddOne", 5, r, mod=self.mod) == [6]
 
     def test_add_one_negative(self):
         r = Var()
-        assert _call_collect("add_one", -1, r, mod=self.mod) == [0]
+        assert _call_collect("AddOne", -1, r, mod=self.mod) == [0]
 
 
 class TestLambdaAddZ:
@@ -418,11 +418,11 @@ class TestLambdaAddZ:
 
     def test_add_z(self):
         r = Var()
-        assert _call_collect("add_z", 3, 10, r, mod=self.mod) == [13]
+        assert _call_collect("AddZ", 3, 10, r, mod=self.mod) == [13]
 
     def test_add_z_zero(self):
         r = Var()
-        assert _call_collect("add_z", 0, 7, r, mod=self.mod) == [7]
+        assert _call_collect("AddZ", 0, 7, r, mod=self.mod) == [7]
 
 
 class TestLambdaDoubleVal:
@@ -431,7 +431,7 @@ class TestLambdaDoubleVal:
 
     def test_double_val(self):
         r = Var()
-        assert _call_collect("double_val", 5, r, mod=self.mod) == [10]
+        assert _call_collect("DoubleVal", 5, r, mod=self.mod) == [10]
 
 
 class TestLambdaZeroArg:
@@ -440,7 +440,7 @@ class TestLambdaZeroArg:
 
     def test_zero_arg(self):
         r = Var()
-        assert _call_collect("zero_arg", r, mod=self.mod) == [42]
+        assert _call_collect("ZeroArg", r, mod=self.mod) == [42]
 
 
 class TestLambdaTransform:
@@ -448,14 +448,14 @@ class TestLambdaTransform:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_transform(self):
-        """transform(5, Y): T := 5 + 1 = 6, Y := 6 * 2 = 12"""
+        """Transform(5, Y): T := 5 + 1 = 6, Y := 6 * 2 = 12"""
         r = Var()
-        assert _call_collect("transform", 5, r, mod=self.mod) == [12]
+        assert _call_collect("Transform", 5, r, mod=self.mod) == [12]
 
     def test_transform_zero(self):
-        """transform(0, Y): T := 0 + 1 = 1, Y := 1 * 2 = 2"""
+        """Transform(0, Y): T := 0 + 1 = 1, Y := 1 * 2 = 2"""
         r = Var()
-        assert _call_collect("transform", 0, r, mod=self.mod) == [2]
+        assert _call_collect("Transform", 0, r, mod=self.mod) == [2]
 
 
 class TestLambdaCaptureTwo:
@@ -463,9 +463,9 @@ class TestLambdaCaptureTwo:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_capture_two(self):
-        """capture_two(10, 20, 5, R): R := 5 + 10 + 20 = 35"""
+        """CaptureTwo(10, 20, 5, R): R := 5 + 10 + 20 = 35"""
         r = Var()
-        assert _call_collect("capture_two", 10, 20, 5, r, mod=self.mod) == [35]
+        assert _call_collect("CaptureTwo", 10, 20, 5, r, mod=self.mod) == [35]
 
 
 class TestLambdaApplyPred:
@@ -473,9 +473,9 @@ class TestLambdaApplyPred:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_apply_pred(self):
-        """apply_pred(3, Y): helper(3, Y) → Y := 3 * 10 = 30"""
+        """ApplyPred(3, Y): Helper(3, Y) → Y := 3 * 10 = 30"""
         r = Var()
-        assert _call_collect("apply_pred", 3, r, mod=self.mod) == [30]
+        assert _call_collect("ApplyPred", 3, r, mod=self.mod) == [30]
 
 
 class TestLambdaAllColors:
@@ -484,5 +484,5 @@ class TestLambdaAllColors:
 
     def test_all_colors(self):
         r = Var()
-        results = _call_collect("all_colors", r, mod=self.mod)
+        results = _call_collect("AllColors", r, mod=self.mod)
         assert results == [["red", "green", "blue"]]
