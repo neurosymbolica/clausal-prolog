@@ -104,15 +104,106 @@ This is safe because no predicate is queried during module load — `.clausal` f
 
 ---
 
-## Cross-module predicate calls
+## Importing predicates between `.clausal` files
 
-A clause in `edge_graph.clausal` that calls `reach(X, Y)` from `fibonacci.clausal` (hypothetically) works because:
+`.clausal` files can import predicates from other `.clausal` files (or from Python modules that define `PredicateMeta` classes) using two directives: `-import_from` and `-import_module`.
 
-1. `from fibonacci import fib` brings the `fib` PredicateMeta class into `edge_graph`'s module globals.
-2. When the compiler processes `edge_graph.clausal`, it finds `fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
-3. The compiled call `for _ in fib._get_dispatch()(args, trail, k):` resolves `fib` by name at call time.
+### `-import_from` — selective import
 
-No separate wiring, no module-qualified call syntax, no `use_module` directive. Python `import` is the entire module system.
+```
+-import_from(myapp.graphs.utils, [ShortestPath, Reachable])
+```
+
+This emits `from myapp.graphs.utils import ShortestPath, Reachable` in the generated Python code. The imported `PredicateMeta` classes land in module globals, where the compiler picks them up and wires dispatch automatically.
+
+Imported predicates can be used in clause bodies just like locally-defined ones:
+
+```
+Connected(X_, Y_) <- Reachable(X_, Y_)
+```
+
+#### Aliases
+
+```
+-import_from(myapp.graphs.utils, [alias(Reachable, Reach)])
+```
+
+Generates `from myapp.graphs.utils import Reachable as Reach`. Use the alias name in clause bodies:
+
+```
+Connected(X_, Y_) <- Reach(X_, Y_)
+```
+
+Alias names must be **TitleCase** (multi-character). Single uppercase letters like `R` are treated as logic variables by the name resolver and will not work as aliases.
+
+#### Name isolation
+
+Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.Reachable"` rather than bare `"Reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
+
+### `-import_module` — whole-module import with qualified calls
+
+```
+-import_module(myapp.graphs.utils)
+```
+
+This emits `import myapp.graphs.utils` in the generated Python code. The module object lands in globals. Predicates are accessed via qualified (dotted) names:
+
+```
+Connected(X_, Y_) <- myapp.graphs.utils.Reachable(X_, Y_)
+```
+
+Qualified calls are resolved at compile time: the compiler walks the dotted attribute chain, finds the `PredicateMeta` class, and stores it under the dotted key `"myapp.graphs.utils.Reachable"` in compiled globals. At runtime, `_get_dispatch()` is called on that class — no attribute lookup overhead on every call.
+
+### Restrictions on qualified names
+
+The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (trailing underscore like `X_`, or ALL-CAPS like `FOO`) are rejected with a `SyntaxError`:
+
+```
+Bad(X_) <- X_.foo(X_)      # SyntaxError: Logic variable 'X_' cannot appear
+Bad(X_) <- mod.X_(X_)      # SyntaxError: Logic variable 'X_' cannot appear
+```
+
+Only simple dotted name chains are supported. Computed attribute access or method calls are not valid in predicate position.
+
+### How it works under the hood
+
+1. **`_handle_import_from_directive`** on `EmbedTransformer` parses the directive, emits a Python `from ... import` statement, and records a remap (`{local_name: "full.module.path.Name"}`) in `_import_remap`.
+2. The remap is passed to every `TermTransformer` instance created for clause heads and bodies.
+3. When `TermTransformer.visit_Name` sees a name in the remap, it emits `LoadName(name="full.module.path.Name")` instead of `LoadName(name="Name")`.
+4. The compiler's `_collect_call_targets` collects the dotted name. `_inject_call_targets` resolves it — first by attribute traversal from globals (for `-import_module` qualified calls), then by `sys.modules` lookup (for `-import_from` remapped names).
+5. The resolved `PredicateMeta` class is stored under the dotted key in the compiled function's globals dict. Dict keys don't need to be valid Python identifiers — `"myapp.graphs.utils.Reachable"` works fine.
+
+### Cross-module calls from Python
+
+The original Python-side import mechanism still works unchanged:
+
+1. `from fibonacci import fib` brings the `fib` PredicateMeta class into the importing module's globals.
+2. When the compiler processes that module, it finds `fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
+3. The compiled call resolves `fib._get_dispatch()` by name at call time.
+
+### Why not Prolog-style modules
+
+Prolog's module system is widely regarded as one of the language's weakest points. Clausal avoids every major pitfall:
+
+| Prolog pain point | Clausal's approach |
+|---|---|
+| **Meta-predicate "context module" confusion** — the #1 complaint | Predicates are `PredicateMeta` classes carrying their own `_get_dispatch()`. No context module resolution needed. |
+| **Flat namespace** | Python packages give hierarchical dotted paths for free. |
+| **Operator scoping** | No user-defined operators. Non-issue. |
+| **Export list maintenance** | No export lists. Everything is public (Python convention: `_` prefix = private). |
+| **`assert`/`retract` module context confusion** | Each `pred_cls` owns its `_clauses`. `assertz` on an imported class modifies *that class* directly. |
+| **ISO standard fragmentation** | We use Python's `importlib` — one standard, universally implemented. |
+
+### Circular imports
+
+Same strategy as Python — partial module objects. The deferred compilation model helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). When B's predicates call A's predicates at runtime, A's dispatch is already compiled by then.
+
+### Error handling
+
+- Unknown module in `-import_from` or `-import_module` → Python's `ImportError`
+- Unknown predicate name in import list → Python's `ImportError` (from `from X import Y`)
+- Bad directive syntax (non-dotted path, missing list) → `SyntaxError`
+- Logic variable in qualified name → `SyntaxError`
 
 ---
 

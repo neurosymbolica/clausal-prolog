@@ -55,7 +55,7 @@ from clausal.terms import (
     Unify, DoesNotUnify, Evaluate, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
-    Call, LoadName,
+    Call, LoadName, LoadAttr,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral
@@ -581,8 +581,26 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
     return types
 
 
+def _dotted_name_from_loadattr(node) -> str | None:
+    """Extract a dotted name string from a LoadAttr chain.
+
+    ``LoadAttr(object=LoadName("graphs"), attr="Path")`` → ``"graphs.Path"``
+    ``LoadAttr(object=LoadAttr(..., "sub"), attr="Pred")`` → ``"mod.sub.Pred"``
+    ``LoadName("foo")`` → ``"foo"``
+
+    Returns None if the chain contains non-name nodes.
+    """
+    if isinstance(node, LoadName):
+        return node.name
+    if isinstance(node, LoadAttr):
+        prefix = _dotted_name_from_loadattr(node.object)
+        if prefix is not None:
+            return f"{prefix}.{node.attr}"
+    return None
+
+
 def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
-    """Collect (fname, arity) pairs from Call(LoadName) nodes in clause bodies.
+    """Collect (fname, arity) pairs from Call(LoadName/LoadAttr) nodes in clause bodies.
 
     Used to inject predicate class references (or _DbDispatchAdapter shims)
     into the compiled function's globals so that ``fname._get_dispatch()``
@@ -594,6 +612,11 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
         if isinstance(term, Call) and isinstance(term.func, LoadName):
             n_kwargs = len(term.kwargs) if term.kwargs else 0
             targets.add((term.func.name, len(term.args) + n_kwargs))
+        elif isinstance(term, Call) and isinstance(term.func, LoadAttr):
+            dotted = _dotted_name_from_loadattr(term.func)
+            if dotted is not None:
+                n_kwargs = len(term.kwargs) if term.kwargs else 0
+                targets.add((dotted, len(term.args) + n_kwargs))
         if isinstance(term, list):
             for e in term:
                 _walk(e)
@@ -630,6 +653,32 @@ def _inject_call_targets(
         existing = base_globals.get(target_name)
         if existing is not None and hasattr(existing, "_get_dispatch"):
             # Already resolved to a valid call target (predicate or builtin).
+            continue
+        # Qualified (dotted) call targets: resolve via attribute traversal
+        # from module globals.  The dotted string is used directly as a
+        # globals key (e.g. "graphs.Path") — no mangling needed.
+        if "." in target_name:
+            parts = target_name.split(".")
+            obj = globals_.get(parts[0]) if globals_ else None
+            for part in parts[1:]:
+                if obj is None:
+                    break
+                obj = getattr(obj, part, None)
+            if obj is not None and hasattr(obj, "_get_dispatch"):
+                base_globals[target_name] = obj
+                continue
+            # For -import_from remapped names (e.g.
+            # "tests.fixtures.utils.Helper"), resolve via sys.modules.
+            # The dotted key is "module.path.PredName"; the module is
+            # "module.path" and the attr is "PredName".
+            import sys as _sys  # noqa: PLC0415
+            mod_path = ".".join(parts[:-1])
+            attr_name = parts[-1]
+            mod_obj = _sys.modules.get(mod_path)
+            if mod_obj is not None:
+                resolved = getattr(mod_obj, attr_name, None)
+                if resolved is not None and hasattr(resolved, "_get_dispatch"):
+                    base_globals[target_name] = resolved
             continue
         # Builtins take priority over any non-predicate name already in globals.
         builtin = get_builtin_predicate(target_name, target_arity, db)
@@ -802,10 +851,14 @@ def term_to_ast_expr(
     if eval_arith and isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
         return arith_to_ast_expr(term, var_context)
 
-    # Call nodes with LoadName func: compile as direct function call so that
-    # e.g. phrase(count_leaves(T_), ...) constructs a count_leaves instance,
-    # not a Call AST node.
-    if isinstance(term, Call) and isinstance(term.func, LoadName):
+    # Call nodes with LoadName/LoadAttr func: compile as direct function call so
+    # that e.g. phrase(count_leaves(T_), ...) constructs a count_leaves instance,
+    # not a Call AST node.  LoadAttr handles qualified calls like mod.Pred(X_).
+    if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
+        if isinstance(term.func, LoadName):
+            fname = term.func.name
+        else:
+            fname = _dotted_name_from_loadattr(term.func)
         arg_exprs = [
             term_to_ast_expr(a, var_context, eval_arith=eval_arith)
             for a in term.args
@@ -818,7 +871,7 @@ def term_to_ast_expr(
             for kw in (term.kwargs or [])
         ]
         return ast.Call(
-            func=_name(term.func.name),
+            func=_name(fname),
             args=arg_exprs,
             keywords=kw_exprs,
         )
@@ -1768,6 +1821,13 @@ def compile_goal(
 
         # ── Compile-time-known predicate call ────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
+            return _compile_predicate_call(
+                fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts
+            )
+
+        # ── Qualified predicate call (mod.Pred(X_)) ──────────────────────────
+        case Call(func=LoadAttr() as attr, args=call_args, kwargs=call_kwargs):
+            fname = _dotted_name_from_loadattr(attr)
             return _compile_predicate_call(
                 fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts
             )
@@ -2804,6 +2864,14 @@ def compile_goal_trampoline(
 
         # ── Stack-safe predicate call ─────────────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
+            return _compile_predicate_call_trampoline(
+                fname, call_args, call_kwargs, db, var_context,
+                trail_name, k_stmts, self_name,
+            )
+
+        # ── Qualified predicate call (mod.Pred(X_)) ──────────────────────────
+        case Call(func=LoadAttr() as attr, args=call_args, kwargs=call_kwargs):
+            fname = _dotted_name_from_loadattr(attr)
             return _compile_predicate_call_trampoline(
                 fname, call_args, call_kwargs, db, var_context,
                 trail_name, k_stmts, self_name,

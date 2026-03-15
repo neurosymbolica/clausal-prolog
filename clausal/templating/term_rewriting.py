@@ -378,9 +378,10 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
 class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
-    def __init__(transformer, atoms=frozenset()):
+    def __init__(transformer, atoms=frozenset(), import_remap=None):
         transformer.seen_vars = set()
         transformer.atoms = atoms
+        transformer._import_remap = import_remap or {}
 
     def visit_Await(transformer, await_expr):
         return node_ast("Await", await_expr, value=transformer.visit(await_expr.value))
@@ -585,7 +586,7 @@ class TermTransformer(NodeTransformer):
 
         Uses the same capture/LoadName mechanism as ``visit_Lambda``.
         """
-        lambda_transformer = TermTransformer()
+        lambda_transformer = TermTransformer(import_remap=transformer._import_remap)
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
 
         logic_var_params = [p for p in param_names if _is_logic_var_name(p)]
@@ -709,8 +710,51 @@ class TermTransformer(NodeTransformer):
         # Atom: declared in -module(...) export list — keep as plain Name reference.
         if identifier in transformer.atoms:
             return replace(Name(id=identifier, ctx=load), name)
+        # Imported predicate: remap to full dotted path so Python code in the
+        # .clausal file cannot accidentally clobber the predicate reference.
+        dotted = transformer._import_remap.get(identifier)
+        if dotted is not None:
+            return node_ast(
+                "LoadName", name, name=replace(Constant(value=dotted), name)
+            )
         return node_ast(
             "LoadName", name, name=replace(Constant(value=identifier), name)
+        )
+
+    def visit_Attribute(transformer, attr_node):
+        """Compile ``mod.Pred`` qualified calls to ``LoadAttr`` simple_ast nodes.
+
+        Only supports dotted chains of non-variable names (e.g. ``utils.Helper``).
+        Raises ``SyntaxError`` if any part of the chain is a logic variable or
+        the expression isn't a simple dotted name.
+        """
+        # Collect the full dotted chain and validate each part.
+        parts = []
+        node = attr_node
+        while isinstance(node, Attribute):
+            if _is_logic_var_name(node.attr):
+                raise SyntaxError(
+                    f"Logic variable '{node.attr}' cannot appear in a "
+                    f"qualified name (line {attr_node.lineno})"
+                )
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, Name):
+            raise SyntaxError(
+                f"Unsupported attribute expression in predicate body "
+                f"(line {attr_node.lineno}): only dotted names like "
+                f"mod.Pred are supported"
+            )
+        if _is_logic_var_name(node.id):
+            raise SyntaxError(
+                f"Logic variable '{node.id}' cannot appear as the base "
+                f"of a qualified name (line {attr_node.lineno})"
+            )
+        return node_ast(
+            "LoadAttr",
+            attr_node,
+            object=transformer.visit(attr_node.value),
+            attr=replace(Constant(value=attr_node.attr), attr_node),
         )
 
     def visit_NamedExpr(transformer, named_expr):
@@ -1007,6 +1051,25 @@ class TermTransformer(NodeTransformer):
 
 
 # ─── Functor class generator ──────────────────────────────────────────────────
+
+
+def _dotted_name_from_ast(node):
+    """Extract a dotted module path from nested ``ast.Attribute`` or ``ast.Name`` nodes.
+
+    ``myapp.graphs.utils`` is parsed as::
+
+        Attribute(value=Attribute(value=Name("myapp"), attr="graphs"), attr="utils")
+
+    Returns a dotted string like ``"myapp.graphs.utils"``, or ``None`` if the
+    node is not a valid dotted-name chain.
+    """
+    if isinstance(node, Name):
+        return node.id
+    if isinstance(node, Attribute) and isinstance(node.attr, str):
+        prefix = _dotted_name_from_ast(node.value)
+        if prefix is not None:
+            return f"{prefix}.{node.attr}"
+    return None
 
 
 def _parse_pred_arity_args(args, directive_name):
@@ -1377,6 +1440,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._scope_depth = 0
         transformer._seen_functors: dict[str, list[str]] = {}
         transformer._atoms: set[str] = set()
+        transformer._import_remap: dict[str, str] = {}
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -1402,7 +1466,7 @@ class EmbedTransformer(NodeTransformer):
                     unary_op.col_offset == unary_op.operand.col_offset - 1
                     and unary_op.lineno == unary_op.operand.lineno
                 ):
-                    return TermTransformer(atoms=transformer._atoms).visit(expression)
+                    return TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap).visit(expression)
             case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
                 # '~~' must be written without a space (the two '~' are adjacent).
                 if (
@@ -1470,7 +1534,7 @@ class EmbedTransformer(NodeTransformer):
                             arg_field_names[i] = prev_fields[i]
                     all_field_names = arg_field_names + kwarg_field_names
 
-                term_transformer = TermTransformer(atoms=transformer._atoms)
+                term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
 
@@ -1601,7 +1665,7 @@ class EmbedTransformer(NodeTransformer):
                 # string constants.  Exclude them from the atom set.
                 dcg_call_names = _collect_call_func_names(body_expr_raw)
                 dcg_atoms = transformer._atoms - dcg_call_names
-                term_transformer = TermTransformer(atoms=dcg_atoms)
+                term_transformer = TermTransformer(atoms=dcg_atoms, import_remap=transformer._import_remap)
                 transformed_pos = [
                     term_transformer.visit(a) for a in orig_pos_args
                 ]
@@ -1699,7 +1763,7 @@ class EmbedTransformer(NodeTransformer):
 
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
-                term_transformer = TermTransformer(atoms=transformer._atoms)
+                term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
                 body_ast = term_transformer.visit(body_expr)
@@ -1769,9 +1833,14 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_predspec_directive("mark_tabled", args, expr_stmt)
         if name == "shallow":
             return transformer._handle_predspec_directive("mark_shallow", args, expr_stmt)
+        if name == "import_from":
+            return transformer._handle_import_from_directive(args, expr_stmt)
+        if name == "import_module":
+            return transformer._handle_import_module_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
-            f"(known directives: -module, -private, -dynamic, -discontiguous, -table, -shallow)"
+            f"(known directives: -module, -private, -dynamic, -discontiguous, "
+            f"-table, -shallow, -import_from, -import_module)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -1899,6 +1968,87 @@ class EmbedTransformer(NodeTransformer):
             statements.append(call_node)
         return statements if len(statements) > 1 else statements[0]
 
+    def _handle_import_from_directive(transformer, args, expr_stmt):
+        """Process ``-import_from(dotted.module, [Pred1, alias(Pred2, Local)])`` directive.
+
+        Emits a Python ``from dotted.module import Pred1, Pred2 as Local``
+        statement.  The imported names land in module globals where the
+        compiler's ``_inject_call_targets`` picks them up.
+        """
+        if len(args) < 2:
+            raise SyntaxError(
+                "-import_from requires two arguments: "
+                "-import_from(module.path, [Name, ...])"
+            )
+        module_path = _dotted_name_from_ast(args[0])
+        if module_path is None:
+            raise SyntaxError(
+                f"-import_from: first argument must be a dotted module path, "
+                f"got {dump(args[0])}"
+            )
+        if not isinstance(args[1], List):
+            raise SyntaxError(
+                f"-import_from: second argument must be a list of names, "
+                f"got {dump(args[1])}"
+            )
+        aliases = []
+        for item in args[1].elts:
+            if isinstance(item, Name):
+                # Map local name → "module.path.Name" for dotted globals key
+                local_name = item.id
+                dotted_key = f"{module_path}.{local_name}"
+                transformer._import_remap[local_name] = dotted_key
+                aliases.append(alias(name=item.id))
+            elif (
+                isinstance(item, Call)
+                and isinstance(item.func, Name)
+                and item.func.id == "alias"
+                and len(item.args) == 2
+                and isinstance(item.args[0], Name)
+                and isinstance(item.args[1], Name)
+            ):
+                orig_name = item.args[0].id
+                local_name = item.args[1].id
+                dotted_key = f"{module_path}.{orig_name}"
+                transformer._import_remap[local_name] = dotted_key
+                aliases.append(alias(name=orig_name, asname=local_name))
+            else:
+                raise SyntaxError(
+                    f"-import_from: import list items must be names or "
+                    f"alias(OrigName, LocalName), got {dump(item)}"
+                )
+        stmt = replace(
+            ImportFrom(module=module_path, names=aliases, level=0),
+            expr_stmt,
+        )
+        fix_missing_locations(stmt)
+        return stmt
+
+    def _handle_import_module_directive(transformer, args, expr_stmt):
+        """Process ``-import_module(dotted.module)`` directive.
+
+        Emits a Python ``import dotted.module`` statement.  The module object
+        lands in globals; qualified calls like ``mod.Pred(X_)`` are resolved
+        at compile time via ``_inject_call_targets``.
+        """
+        if len(args) < 1:
+            raise SyntaxError(
+                "-import_module requires one argument: "
+                "-import_module(module.path)"
+            )
+        module_path = _dotted_name_from_ast(args[0])
+        if module_path is None:
+            raise SyntaxError(
+                f"-import_module: argument must be a dotted module path, "
+                f"got {dump(args[0])}"
+            )
+        stmt = replace(
+            Import(names=[alias(name=module_path)]),
+            expr_stmt,
+        )
+        fix_missing_locations(stmt)
+        return stmt
+
     def visit_With(transformer, with_statement):
         first = with_statement.items[0]
         ctx = first.context_expr
@@ -1915,7 +2065,7 @@ class EmbedTransformer(NodeTransformer):
 
         if _is_double(USub):
             # with --{} as target: — block form of --; produces simple_ast terms.
-            term_transformer = TermTransformer(atoms=transformer._atoms)
+            term_transformer = TermTransformer(atoms=transformer._atoms, import_remap=transformer._import_remap)
             elements = [
                 term_transformer.visit(stmt.value)
                 for stmt in with_statement.body

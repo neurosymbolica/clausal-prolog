@@ -1,0 +1,3 @@
+-import_module(tests.fixtures.importable_utils)
+
+UseImported(X_, Y_) <- tests.fixtures.importable_utils.Double(X_, Y_)

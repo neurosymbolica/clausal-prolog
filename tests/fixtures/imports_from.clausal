@@ -1,0 +1,4 @@
+-import_from(tests.fixtures.importable_utils, [Helper, Double])
+
+UseHelper(X_, Y_) <- Helper(X_, Y_)
+UseDouble(X_, R_) <- Double(X_, R_)
