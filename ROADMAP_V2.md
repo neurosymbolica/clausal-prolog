@@ -40,6 +40,7 @@ V2-13  Term inspection builtins                                         ✓
 V2-14  Control / exception handling (Catch/3, Throw/1)                  ✓
 V2-15  I/O builtins                                                     ✓
 V2-16  Python interop                                                  ✓
+V2-17  Definite Clause Grammars (DCGs)                                 ✓
 ```
 
 Deferred beyond V2: type-directed dispatch (see note at end).
@@ -768,6 +769,96 @@ effects and succeeds once.
 
 ---
 
+## V2-17 — Definite Clause Grammars (DCGs) ✓
+
+**Depends on:** nothing (source-level rewrite only)
+
+**Goal:** provide syntactic sugar for difference-list grammars. Each DCG rule compiles
+to an ordinary predicate with two extra arguments (input list, remaining list) threaded
+through the body. The `>>` operator replaces Prolog's `-->`.
+
+### Syntax
+
+```python
+# Terminal — consume literal tokens from input
+greeting >> (["hello", "world"])
+
+# Non-terminal — call another DCG rule
+sentence >> (noun_phrase, verb_phrase, noun_phrase)
+
+# Non-terminal with extra args + inline goals
+digit(D) >> ([D], {D >= 0}, {D <= 9})
+
+# Disjunction
+letter >> (["a"] or ["b"] or ["c"])
+
+# Negation as failure
+not_a >> (not ["a"], [X])
+
+# If-then-else (non-terminal branches)
+a_or_c >> (If(a_rule, b_rule, c_rule))
+
+# Pushback / semicontext (peek without consuming)
+(look_ahead(T), [T]) >> ([T])
+
+# Invoke DCG rules from regular predicates
+valid_sentence(S) <- phrase(sentence, S)         # phrase/2 — must consume all
+phrase(digit(D), [3, "plus", 4], REST)           # phrase/3 — partial parse
+```
+
+### Body element translation
+
+| Python AST node | DCG meaning | Rewrite |
+|---|---|---|
+| `List([t1,..,tn])` | Terminal sequence | `S_in is [t1,..,tn, *S_out]` |
+| `List([])` | Empty terminal | passthrough (S_in = S_out) |
+| `Set([goal])` | Inline goal `{goal}` | `goal` (no state change) |
+| `Name("foo")` | Non-terminal, 0 args | `foo(S_in, S_out)` |
+| `Call(foo, [args])` | Non-terminal, N args | `foo(args.., S_in, S_out)` |
+| `Tuple([a, b, c])` | Conjunction | Thread state through elements |
+| `BoolOp(And, [..])` | Conjunction | Same as Tuple |
+| `BoolOp(Or, [..])` | Disjunction | Each branch gets S_in → S_out |
+| `UnaryOp(Not, a)` | NAF | `not rewrite(a, S_in, _)` (passthrough) |
+| `Call(If, [C,T,E])` | If-then-else | Condition → mid, then mid → out, else in → out |
+
+### Implementation
+
+Source-level rewriting in `EmbedTransformer.visit_Expr` — a new `BinOp(RShift)` case
+before the `<-` Compare case. No compiler changes needed.
+
+- **`_rewrite_dcg_body(node, s_in, s_out, counter, source)`** — dispatches on AST node
+  type, returns `(rewritten_ast, new_counter)`. Handles all element types above.
+- **`_rewrite_dcg_sequence(elements, s_in, s_out, counter, source)`** — processes
+  conjunction left-to-right with inline-goal optimisation (inline goals don't generate
+  intermediate state vars; last state-consuming element gets `s_out` directly).
+- **`_collect_call_func_names(node)`** — collects non-terminal call targets to exclude
+  from `_atoms`, ensuring TermTransformer generates `LoadName` references.
+- **`phrase/2` and `phrase/3`** in `clausal/logic/builtins.py` — native trampoline
+  builtins. Handle both class refs (0 user args) and instances (N user args, last 2
+  fields are DCG state).
+
+### Module exports
+
+DCG predicates exported from `-module(...)` must use Call form with state args:
+
+```python
+# Correct: declares greeting as a 2-field predicate
+-module(my_grammar, [greeting(S0, S), sentence(S0, S)])
+
+# Wrong: declares greeting as a string atom
+-module(my_grammar, [greeting, sentence])
+```
+
+### Key files
+
+- `clausal/templating/term_rewriting.py` — `_rewrite_dcg_body`, `_rewrite_dcg_sequence`,
+  `_is_dcg_passthrough`, `_collect_call_func_names`, `>>` arm in `visit_Expr`
+- `clausal/logic/builtins.py` — `phrase/2`, `phrase/3`
+- `tests/test_dcg.py` (26 tests)
+- `tests/fixtures/dcg_grammar.clausal`
+
+---
+
 ## Dependency graph
 
 ```
@@ -777,6 +868,7 @@ V2-12 (arithmetic)     — independent
 V2-13 (term inspection) — independent
 V2-15 (I/O)            — independent
 V2-16 (Python interop) — depends on V2-9
+V2-17 (DCGs)           — independent (source-level rewrite only)
 ```
 
 ---

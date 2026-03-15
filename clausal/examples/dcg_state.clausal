@@ -1,0 +1,54 @@
+# DCG State Threading
+#
+# DCGs are a general state-passing mechanism. The difference-list pair can
+# carry any state encoded as a single-element list [State]. Terminals read
+# state, pushback writes it back, and phrase/3 sets initial/final state.
+#
+# See also: metalevel.at/prolog/dcg
+
+-module(dcg_state, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2), inc(S0_, S_), double(S0_, S_), count3(S0_, S_), inc_then_double(S0_, S_), count_leaves(T_, S0_, S_), num_leaves(T_, N_), push(X_, S0_, S_), push_all(XS_, S0_, S_), collect_items(XS_, R_)])
+
+# ── State helpers ──────────────────────────────────────────────────────────
+#
+# These two nonterminals are the core of state-passing DCGs. Copy them
+# into any module that needs state threading.
+
+# state/1: Read current state (passthrough — state is not modified).
+(state(S_), [S_]) >> ([S_])
+
+# state/2: Read old state S0_, replace with S_.
+(state2(S0_, S_), [S_]) >> ([S0_])
+
+# ── Counter ────────────────────────────────────────────────────────────────
+#
+# Increment a counter threaded through phrase/3:
+#   phrase(count3, [0], [N_])  →  N_ = 3
+
+inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))
+double >> (state(N0_), {N_ := N0_ * 2}, state2(_, N_))
+
+count3 >> (inc, inc, inc)
+inc_then_double >> (inc, double)
+
+# ── Tree leaf counting ─────────────────────────────────────────────────────
+#
+# Trees represented as "leaf" or [Left, Right].
+#   num_leaves(["leaf", "leaf"], N_)  →  N_ = 2
+#   num_leaves(["leaf", ["leaf", "leaf"]], N_)  →  N_ = 3
+
+count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))
+count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))
+
+num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])
+
+# ── Accumulator ────────────────────────────────────────────────────────────
+#
+# Collect items from a list into an accumulator via state threading.
+#   phrase(push_all([1, 2, 3]), [[]], Rest_)  →  Rest_ = [[3, 2, 1]]
+
+push(X_) >> (state(Acc0_), {Acc_ is [X_, *Acc0_]}, state2(_, Acc_))
+
+push_all([]) >> ([])
+push_all([X_, *Xs_]) >> (push(X_), push_all(Xs_))
+
+collect_items(XS_, R_) <- phrase(push_all(XS_), [[]], [R_])

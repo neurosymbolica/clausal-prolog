@@ -173,6 +173,32 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 
 ---
 
+## DCG (Definite Clause Grammars)
+
+### `phrase/2`
+```
+phrase(+RuleBody, +List)
+```
+Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate class (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). Equivalent to calling the rule with `List` as the input state and `[]` as the output state.
+
+**Implementation:** `clausal/logic/builtins.py` (`_phrase__2`)
+**Python tests:** `tests/test_dcg.py`
+
+---
+
+### `phrase/3`
+```
+phrase(+RuleBody, +List, ?Rest)
+```
+Invoke a DCG rule for partial parsing. Like `phrase/2`, but the remaining unconsumed input is unified with `Rest` instead of requiring `[]`.
+
+Also used for **state-passing DCGs**: encode state as a single-element list `[State]`, thread it through DCG nonterminals using `phrase(Rule, [InitialState], [FinalState])`. See [syntax.md](syntax.md#dcgs-as-general-state-passing) for the full pattern.
+
+**Implementation:** `clausal/logic/builtins.py` (`_phrase__3`)
+**Python tests:** `tests/test_dcg.py`
+
+---
+
 ## Term Inspection
 
 ### `Functor/3`
@@ -1113,3 +1139,5 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
 | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
 | `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
+| `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
+| `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |

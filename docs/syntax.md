@@ -412,6 +412,189 @@ See [lambdas.md](lambdas.md) for the full design, compilation details, and examp
 
 ---
 
+## Definite Clause Grammars — `>>` (V2-17)
+
+DCG rules provide syntactic sugar for difference-list grammars. Each `>>` rule compiles to an ordinary `<-` clause with two extra hidden arguments (input list, remaining list) threaded through the body. This is the same approach as Prolog's `-->`, using Python's `>>` operator instead.
+
+### Basic syntax
+
+```python
+# Terminal — consume literal tokens from the input list
+greeting >> (["hello", "world"])
+
+# Non-terminal — call another DCG rule (state threaded automatically)
+sentence >> (noun_phrase, verb_phrase, noun_phrase)
+
+# Empty terminal (epsilon — matches without consuming)
+epsilon >> ([])
+```
+
+### Extra arguments and inline goals
+
+DCG predicates can have extra arguments beyond the hidden state:
+
+```python
+# Extra arg D, plus inline goals {D >= 0} and {D <= 9}
+digit(D) >> ([D], {D >= 0}, {D <= 9})
+```
+
+Inline goals are written with `{...}` (Python set literal syntax). They execute without consuming input — the state passes through unchanged. Multiple consecutive inline goals are optimised to avoid generating unnecessary intermediate state variables.
+
+### Conjunction and disjunction
+
+```python
+# Conjunction — comma-separated tuple (primary style)
+rule >> (a, b, c)
+
+# Conjunction — 'and' also works
+rule >> (a and b and c)
+
+# Disjunction
+letter >> (["a"] or ["b"] or ["c"])
+```
+
+### Negation
+
+```python
+# Negation as failure — state passes through
+not_a >> (not ["a"], [X])
+```
+
+### Pushback / semicontext
+
+The LHS can be a tuple `(head, [pushback_tokens])` to push tokens back onto the input after matching:
+
+```python
+# Peek at next token without consuming it
+(look_ahead(T), [T]) >> ([T])
+```
+
+After the body matches `[T]`, the pushback `[T]` is prepended to the remainder.
+
+### Invoking DCGs with `phrase`
+
+Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
+
+```python
+# phrase/2 — must consume the entire input list
+valid_sentence(S) <- phrase(sentence, S)
+
+# phrase/3 — partial parse, remaining input bound to REST
+phrase(digit(D), [3, "plus", 4], REST)
+```
+
+`phrase/2` passes `[]` as the expected remainder, so the rule must consume all input. `phrase/3` leaves the remainder as a logic variable for partial parsing.
+
+### Module exports
+
+When using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
+
+```python
+# Correct: PredicateMeta classes created with proper field counts
+-module(my_grammar, [greeting(S0, S), digit(D, S0, S)])
+
+# Wrong: creates string atom assignments, not predicate classes
+-module(my_grammar, [greeting, digit])
+```
+
+### How it works
+
+The `>>` rewriting is purely syntactic — it transforms DCG rules into ordinary `<-` clauses before the compiler sees them:
+
+```python
+# This DCG rule:
+greeting >> (["hello", "world"])
+
+# Rewrites to this ordinary clause:
+greeting(S0, S) <- (S0 is ["hello", "world", *S])
+```
+
+```python
+# This DCG rule:
+digit(D) >> ([D], {D >= 0}, {D <= 9})
+
+# Rewrites to:
+digit(D, S0, S) <- (S0 is [D, *S] and D >= 0 and D <= 9)
+```
+
+No changes to the compiler, database, or runtime are needed.
+
+### DCGs as general state-passing
+
+DCGs are not just for parsing — they are a **general state-passing mechanism**. The difference-list pair can carry any state encoded as a single-element list `[State]`. Terminals read state, pushback writes it back, and `phrase/3` sets initial/final state. (For a good explanation of this pattern, see [Markus Triska's DCG tutorial](https://www.metalevel.at/prolog/dcg).)
+
+#### `state/1` and `state/2` helper nonterminals
+
+Two reusable nonterminals form the core of state-passing DCGs:
+
+```python
+# Read current state (passthrough — state is not modified)
+(state(S), [S]) >> ([S])
+
+# Read old state S0, replace with S
+(state(S0, S), [S]) >> ([S0])
+```
+
+`state/1` reads the current state value into `S` without modifying it. `state/2` reads the old state into `S0` and writes `S` as the new state. Copy these into any module that needs state threading.
+
+#### Counter example
+
+Thread a counter through `phrase/3`:
+
+```python
+# Increment: read counter, add 1, write new counter
+inc >> (state(N0), {N := N0 + 1}, state(_, N))
+
+# Chain three increments
+count3 >> (inc, inc, inc)
+```
+
+```python
+# Call from Python:
+phrase(count3, [0], [N])  # → N = 3
+phrase(count3, [10], [N])  # → N = 13
+```
+
+#### Tree leaf counting
+
+```python
+# Trees as "leaf" or [Left, Right]
+count_leaves("leaf") >> (state(N0), {N := N0 + 1}, state(_, N))
+count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
+
+# API: wrap with phrase/3
+num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])
+```
+
+```python
+num_leaves("leaf", N)                     # → N = 1
+num_leaves(["leaf", ["leaf", "leaf"]], N)  # → N = 3
+```
+
+#### Accumulator: collecting items
+
+```python
+# Push item onto accumulator state
+push(X) >> (state(Acc0), {Acc is [X, *Acc0]}, state(_, Acc))
+
+# Push all items from a list
+push_all([]) >> ([])
+push_all([X, *Xs]) >> (push(X), push_all(Xs))
+```
+
+```python
+phrase(push_all([1, 2, 3]), [[]], Rest)  # → Rest = [[3, 2, 1]]
+```
+
+#### Key points
+
+- **State is encoded as `[Value]`** — a single-element list. `phrase/3` sets `[InitialState]` and receives `[FinalState]`.
+- **Multiple states** → use a compound value: `[state(Count, Items)]` or `[[Count, Items]]`.
+- **State-only DCG** (no token parsing): use `phrase/3` where the "list" is just a state wrapper. There is no requirement that the threaded state be a token list.
+- **Chaining**: DCG nonterminal calls naturally compose — `inc_then_double >> (inc, double)` threads the state through both operations sequentially.
+
+---
+
 ## Meta-predicates
 
 Meta-predicates are higher-order predicates that take goals as arguments. They are compiled as special forms — the goal argument is compiled inline, not passed as a runtime value.
@@ -618,6 +801,16 @@ Call(Goal_, Arg1_),                          # Call/2 (alias for CallGoal/2)
 Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
 Writeln(f"{X:.2f}"),                   # format specs work
 S_ := f"{X} and {Y}",                 # capture as string
+
+# DCGs (V2-17) — >> defines grammar rules with difference lists
+greeting >> (["hello", "world"]),          # terminal sequence
+sentence >> (noun_phrase, verb_phrase),    # non-terminal chain
+digit(D) >> ([D], {D >= 0}, {D <= 9}),    # args + inline goals
+letter >> (["a"] or ["b"] or ["c"]),      # disjunction
+not_a >> (not ["a"], [X]),                # negation
+(peek(T), [T]) >> ([T]),                  # pushback/semicontext
+phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
+phrase(digit(D), [3], REST),              # phrase/3 — partial parse
 
 # Python interop (V2-16) — ++() evaluates Python at search time
 N_ is ++len(L_),                       # call Python builtin

@@ -802,6 +802,27 @@ def term_to_ast_expr(
     if eval_arith and isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
         return arith_to_ast_expr(term, var_context)
 
+    # Call nodes with LoadName func: compile as direct function call so that
+    # e.g. phrase(count_leaves(T_), ...) constructs a count_leaves instance,
+    # not a Call AST node.
+    if isinstance(term, Call) and isinstance(term.func, LoadName):
+        arg_exprs = [
+            term_to_ast_expr(a, var_context, eval_arith=eval_arith)
+            for a in term.args
+        ]
+        kw_exprs = [
+            ast.keyword(
+                arg=kw.arg,
+                value=term_to_ast_expr(kw.value, var_context, eval_arith=eval_arith),
+            )
+            for kw in (term.kwargs or [])
+        ]
+        return ast.Call(
+            func=_name(term.func.name),
+            args=arg_exprs,
+            keywords=kw_exprs,
+        )
+
     if is_term_instance(term):
         cls_name = type(term).__name__
         return ast.Call(

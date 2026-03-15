@@ -1149,6 +1149,206 @@ def _derive_field_names(pos_args: list) -> list[str]:
     return names
 
 
+# ─── DCG (Definite Clause Grammar) rewriting ─────────────────────────────────
+
+
+def _collect_call_func_names(node):
+    """Collect all function-call target names from a Python AST tree."""
+    names = set()
+    for child in walk(node):
+        if isinstance(child, Call) and isinstance(child.func, Name):
+            names.add(child.func.id)
+    return names
+
+
+def _is_dcg_passthrough(node):
+    """Return True if this DCG body element does not consume input state.
+
+    Passthrough elements: inline goals ``{goal}`` (Set nodes), empty terminals
+    ``[]``, and negation-as-failure ``not X`` (tests but does not advance).
+    """
+    if isinstance(node, Set):
+        return True
+    if isinstance(node, List) and len(node.elts) == 0:
+        return True
+    if isinstance(node, UnaryOp) and isinstance(node.op, Not):
+        return True
+    return False
+
+
+def _rewrite_dcg_body(node, s_in, s_out, counter, source):
+    """Rewrite a single DCG body element into ordinary clause body AST.
+
+    Returns ``(rewritten_ast, new_counter)`` where *counter* tracks the next
+    available ``_dcg{N}_`` intermediate variable index.
+    """
+    match node:
+        case List(elts=[]):
+            # Empty terminal (epsilon): s_in = s_out.
+            cmp = Compare(
+                left=Name(id=s_in, ctx=load),
+                ops=[Is()],
+                comparators=[Name(id=s_out, ctx=load)],
+            )
+            return replace(cmp, source), counter
+
+        case List(elts=elements):
+            # Terminal [t1, ..., tn]: s_in is [t1, ..., tn, *s_out]
+            starred = replace(
+                Starred(value=Name(id=s_out, ctx=load), ctx=load), source
+            )
+            new_list = replace(
+                List(elts=list(elements) + [starred], ctx=load), source
+            )
+            cmp = Compare(
+                left=Name(id=s_in, ctx=load),
+                ops=[Is()],
+                comparators=[new_list],
+            )
+            return replace(cmp, source), counter
+
+        case Set(elts=[goal]):
+            # Inline goal {goal}: no state consumed.
+            return goal, counter
+
+        case Name(id=name):
+            # Non-terminal, 0 extra args: name(s_in, s_out)
+            call = Call(
+                func=Name(id=name, ctx=load),
+                args=[Name(id=s_in, ctx=load), Name(id=s_out, ctx=load)],
+                keywords=[],
+            )
+            return replace(call, source), counter
+
+        case Call(func=Name(id=name), args=args, keywords=kwargs) if (
+            name == "If" and len(args) == 3
+        ):
+            # If-then-else: If(cond, then, else)
+            cond, then_, else_ = args
+            mid = f"_dcg{counter}_"
+            counter += 1
+            cond_r, counter = _rewrite_dcg_body(cond, s_in, mid, counter, source)
+            then_r, counter = _rewrite_dcg_body(then_, mid, s_out, counter, source)
+            else_r, counter = _rewrite_dcg_body(else_, s_in, s_out, counter, source)
+            result = Call(
+                func=Name(id="If", ctx=load),
+                args=[cond_r, then_r, else_r],
+                keywords=[],
+            )
+            return replace(result, source), counter
+
+        case Call(func=func_node, args=args, keywords=kwargs):
+            # Non-terminal with args: name(args..., s_in, s_out)
+            new_args = list(args) + [
+                Name(id=s_in, ctx=load), Name(id=s_out, ctx=load),
+            ]
+            call = Call(func=func_node, args=new_args, keywords=list(kwargs))
+            return replace(call, source), counter
+
+        case Tuple(elts=elements):
+            return _rewrite_dcg_sequence(elements, s_in, s_out, counter, source)
+
+        case BoolOp(op=And(), values=elements):
+            return _rewrite_dcg_sequence(elements, s_in, s_out, counter, source)
+
+        case BoolOp(op=Or(), values=elements):
+            # Disjunction: each branch gets s_in → s_out.
+            rewritten = []
+            max_counter = counter
+            for elem in elements:
+                r, c = _rewrite_dcg_body(elem, s_in, s_out, counter, source)
+                rewritten.append(r)
+                if c > max_counter:
+                    max_counter = c
+            result = BoolOp(op=Or(), values=rewritten)
+            return replace(result, source), max_counter
+
+        case UnaryOp(op=Not(), operand=inner):
+            # NAF: not rewrite(inner, s_in, _fresh). State passes through.
+            fresh = f"_dcg{counter}_"
+            counter += 1
+            inner_r, counter = _rewrite_dcg_body(inner, s_in, fresh, counter, source)
+            result = UnaryOp(op=Not(), operand=inner_r)
+            return replace(result, source), counter
+
+    raise SyntaxError(f"Unsupported DCG body element: {dump(node)}")
+
+
+def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
+    """Rewrite a conjunction of DCG body elements, threading state variables.
+
+    Implements inline-goal optimisation: elements that don't consume state
+    (``{goal}``, empty ``[]``, ``not X``) don't generate intermediate state
+    variables.  The last state-consuming element gets *s_out* directly.
+    """
+    # Find the last state-consuming element.
+    last_consumer = -1
+    for i in range(len(elements) - 1, -1, -1):
+        if not _is_dcg_passthrough(elements[i]):
+            last_consumer = i
+            break
+
+    if last_consumer == -1:
+        # All passthrough — emit inline goals + s_in = s_out.
+        parts = []
+        for elem in elements:
+            if isinstance(elem, Set):
+                parts.append(elem.elts[0])
+            elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
+                fresh = f"_dcg{counter}_"
+                counter += 1
+                inner_r, counter = _rewrite_dcg_body(
+                    elem.operand, s_in, fresh, counter, source
+                )
+                parts.append(replace(UnaryOp(op=Not(), operand=inner_r), source))
+        eq = Compare(
+            left=Name(id=s_in, ctx=load),
+            ops=[Is()],
+            comparators=[Name(id=s_out, ctx=load)],
+        )
+        parts.append(replace(eq, source))
+        if len(parts) == 1:
+            return parts[0], counter
+        result = BoolOp(op=And(), values=parts)
+        return replace(result, source), counter
+
+    # Thread state through elements.
+    current_state = s_in
+    rewritten_parts = []
+
+    for i, elem in enumerate(elements):
+        if isinstance(elem, Set):
+            rewritten_parts.append(elem.elts[0])
+        elif isinstance(elem, List) and len(elem.elts) == 0:
+            pass  # empty terminal — nothing to emit
+        elif isinstance(elem, UnaryOp) and isinstance(elem.op, Not):
+            fresh = f"_dcg{counter}_"
+            counter += 1
+            inner_r, counter = _rewrite_dcg_body(
+                elem.operand, current_state, fresh, counter, source
+            )
+            rewritten_parts.append(
+                replace(UnaryOp(op=Not(), operand=inner_r), source)
+            )
+        else:
+            # State-consuming element.
+            if i == last_consumer:
+                next_state = s_out
+            else:
+                next_state = f"_dcg{counter}_"
+                counter += 1
+            r, counter = _rewrite_dcg_body(
+                elem, current_state, next_state, counter, source
+            )
+            rewritten_parts.append(r)
+            current_state = next_state
+
+    if len(rewritten_parts) == 1:
+        return rewritten_parts[0], counter
+    result = BoolOp(op=And(), values=rewritten_parts)
+    return replace(result, source), counter
+
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -1161,6 +1361,7 @@ class EmbedTransformer(NodeTransformer):
       ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
       head<-body  Module-level predicate definition (only at module scope).
+      head>>(body) DCG rule: rewrites to head(_dcg0_,_dcg1_)<-(rewritten body).
       with --{} as target:
           <body>  Block form of --: transforms each expression-statement body
                   line via TermTransformer into a simple_ast node, assigns the
@@ -1319,6 +1520,146 @@ class EmbedTransformer(NodeTransformer):
                     transformer._seen_functors[functor_name] = all_field_names
                     statements.append(
                         _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+                    )
+                statements.append(define_stmt)
+                return statements if len(statements) > 1 else statements[0]
+            case BinOp(left=lhs, op=RShift(), right=rhs) if (
+                transformer._scope_depth == 0
+            ):
+                # DCG rule: head >> (body)
+                # Parse LHS for pushback: (head, [pushback]) >> (body)
+                pushback = None
+                if isinstance(lhs, Tuple) and len(lhs.elts) == 2:
+                    head_part, pb_part = lhs.elts
+                    if isinstance(pb_part, List):
+                        pushback = pb_part.elts
+                        lhs = head_part
+
+                # Extract functor name and user args from the head.
+                if isinstance(lhs, Call) and isinstance(lhs.func, Name):
+                    functor_name = lhs.func.id
+                    orig_pos_args = list(lhs.args)
+                    orig_kw_args = list(lhs.keywords)
+                elif isinstance(lhs, Name):
+                    functor_name = lhs.id
+                    orig_pos_args = []
+                    orig_kw_args = []
+                else:
+                    return transformer.generic_visit(expr_stmt)
+
+                # Add DCG state args (_dcg0_, _dcg1_) to the head.
+                src = expr_stmt.value
+                dcg_in = replace(Name(id="_dcg0_", ctx=load), src)
+                dcg_out = replace(Name(id="_dcg1_", ctx=load), src)
+                orig_pos_args.append(dcg_in)
+                orig_pos_args.append(dcg_out)
+
+                # Rewrite DCG body to ordinary clause body AST.
+                if pushback is not None:
+                    # (head, [pb...]) >> body → body s_out is _dcg_pb_,
+                    # then _dcg1_ is [pb..., *_dcg_pb_]
+                    body_raw, _ = _rewrite_dcg_body(
+                        rhs, "_dcg0_", "_dcg_pb_", 2, src
+                    )
+                    pb_starred = replace(
+                        Starred(value=Name(id="_dcg_pb_", ctx=load), ctx=load), src
+                    )
+                    pb_list = replace(
+                        List(elts=list(pushback) + [pb_starred], ctx=load), src
+                    )
+                    pb_unify = replace(Compare(
+                        left=Name(id="_dcg1_", ctx=load),
+                        ops=[Is()],
+                        comparators=[pb_list],
+                    ), src)
+                    body_expr_raw = replace(
+                        BoolOp(op=And(), values=[body_raw, pb_unify]), src
+                    )
+                else:
+                    body_expr_raw, _ = _rewrite_dcg_body(
+                        rhs, "_dcg0_", "_dcg1_", 2, src
+                    )
+
+                # From here: same pipeline as <- rules.
+                arg_field_names = _derive_field_names(orig_pos_args)
+                kwarg_field_names = [kw.arg for kw in orig_kw_args]
+                all_field_names = arg_field_names + kwarg_field_names
+
+                prev_fields = transformer._seen_functors.get(functor_name)
+                if prev_fields is not None:
+                    for i in range(len(arg_field_names)):
+                        if i < len(prev_fields):
+                            arg_field_names[i] = prev_fields[i]
+                    all_field_names = arg_field_names + kwarg_field_names
+
+                # Ensure all synthetic AST nodes have source positions.
+                copy_location(body_expr_raw, src)
+                fix_missing_locations(body_expr_raw)
+
+                # Non-terminal call targets in the rewritten body must be
+                # treated as predicate references (LoadName), not as atom
+                # string constants.  Exclude them from the atom set.
+                dcg_call_names = _collect_call_func_names(body_expr_raw)
+                dcg_atoms = transformer._atoms - dcg_call_names
+                term_transformer = TermTransformer(atoms=dcg_atoms)
+                transformed_pos = [
+                    term_transformer.visit(a) for a in orig_pos_args
+                ]
+                transformed_kw = [
+                    term_transformer.visit(kw.value) for kw in orig_kw_args
+                ]
+                body_ast = term_transformer.visit(body_expr_raw)
+
+                anchor = lhs.func if isinstance(lhs, Call) else lhs
+                head_keywords = [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(
+                        arg_field_names, transformed_pos, orig_pos_args
+                    )
+                ] + [
+                    make_keyword_node(fname, term, orig)
+                    for fname, term, orig in zip(
+                        kwarg_field_names, transformed_kw, orig_kw_args
+                    )
+                ]
+                head_ast = replace(
+                    Call(
+                        func=replace(Name(id=functor_name, ctx=load), anchor),
+                        args=[],
+                        keywords=head_keywords,
+                    ),
+                    lhs,
+                )
+
+                predicate_ast = node_ast(
+                    "Predicate", src, head=head_ast, body=body_ast
+                )
+                define_stmt = replace(
+                    Expr(
+                        value=replace(
+                            Call(
+                                func=replace(
+                                    Name(id="$define_predicate", ctx=load), src
+                                ),
+                                args=[
+                                    predicate_ast,
+                                    replace(Name(id="$module", ctx=load), src),
+                                ],
+                                keywords=[],
+                            ),
+                            src,
+                        )
+                    ),
+                    expr_stmt,
+                )
+
+                statements = []
+                if functor_name not in transformer._seen_functors:
+                    transformer._seen_functors[functor_name] = all_field_names
+                    statements.append(
+                        _make_functor_class_ast(
+                            functor_name, all_field_names, expr_stmt
+                        )
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
