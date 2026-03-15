@@ -296,46 +296,80 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
-class _LogicVarRemapper(NodeTransformer):
-    """Remap logic variable Names inside f-strings without full TermTransformer.
+def _collect_logic_var_names(node) -> list[str]:
+    """Collect logic variable names from an AST node in first-occurrence order."""
+    ordered: list[str] = []
+    seen: set[str] = set()
 
-    Only transforms Name nodes that are logic variables (trailing underscore
-    or ALL-CAPS). All other names (builtins, module-level, etc.) are left
-    as raw Python references so f-strings can use ``len()``, ``str()``, etc.
+    class _Collector(NodeVisitor):
+        def visit_Name(self, name):
+            ident = name.id
+            if ident != "_" and _is_logic_var_name(ident):
+                if ident not in seen:
+                    seen.add(ident)
+                    ordered.append(ident)
+            self.generic_visit(name)
+
+    _Collector().visit(node)
+    return ordered
+
+
+def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
+    """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
+
+    Shared by ``visit_JoinedStr`` (f-strings) and ``visit_UnaryOp`` (``++()``).
+    *transformer* is the enclosing ``TermTransformer`` (for ``seen_vars``).
+    *node* is used for source locations.  *expression* is the lambda body AST.
+    *var_names* is the ordered list of logic variable names.
     """
+    lambda_params = [
+        arg(arg=name, annotation=None,
+            lineno=node.lineno, col_offset=node.col_offset,
+            end_lineno=node.end_lineno, end_col_offset=node.end_col_offset)
+        for name in var_names
+    ]
+    lambda_node = replace(
+        Lambda(
+            args=arguments(
+                posonlyargs=[], args=lambda_params, vararg=None,
+                kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+            ),
+            body=expression,
+        ),
+        node,
+    )
 
-    def __init__(self, seen_vars: set):
-        self.seen_vars = seen_vars
-
-    def visit_Name(self, name):
-        identifier = name.id
-        if identifier == "_":
-            return Call(
-                func=Name(id="Var", ctx=load),
-                args=[], keywords=[],
-                lineno=name.lineno, col_offset=name.col_offset,
-                end_lineno=name.end_lineno, end_col_offset=name.end_col_offset,
-            )
-        if _is_logic_var_name(identifier):
-            if identifier in self.seen_vars:
-                return name  # Reference existing Var
-            self.seen_vars.add(identifier)
-            return NamedExpr(
-                target=Name(id=identifier, ctx=store,
-                            lineno=name.lineno, col_offset=name.col_offset,
-                            end_lineno=name.end_lineno, end_col_offset=name.end_col_offset),
-                value=Call(
-                    func=Name(id="Var", ctx=load,
-                              lineno=name.lineno, col_offset=name.col_offset,
-                              end_lineno=name.end_lineno, end_col_offset=name.end_col_offset),
-                    args=[], keywords=[],
-                    lineno=name.lineno, col_offset=name.col_offset,
-                    end_lineno=name.end_lineno, end_col_offset=name.end_col_offset,
+    var_ref_asts = []
+    for name in var_names:
+        if name not in transformer.seen_vars:
+            transformer.seen_vars.add(name)
+            var_ref_asts.append(replace(
+                NamedExpr(
+                    target=replace(Name(id=name, ctx=store), node),
+                    value=replace(
+                        Call(
+                            func=replace(Name(id="Var", ctx=load), node),
+                            args=[], keywords=[],
+                        ),
+                        node,
+                    ),
                 ),
-                lineno=name.lineno, col_offset=name.col_offset,
-                end_lineno=name.end_lineno, end_col_offset=name.end_col_offset,
-            )
-        return name  # Non-logic-var: leave as-is
+                node,
+            ))
+        else:
+            var_ref_asts.append(replace(Name(id=name, ctx=load), node))
+
+    return replace(
+        Call(
+            func=replace(Name(id=thunk_cls, ctx=load), node),
+            args=[
+                lambda_node,
+                replace(List(elts=var_ref_asts, ctx=load), node),
+            ],
+            keywords=[],
+        ),
+        node,
+    )
 
 
 # ─── Term Transformer ─────────────────────────────────────────────────────────
@@ -703,80 +737,18 @@ class TermTransformer(NodeTransformer):
         The compiler maps these Vars through ``var_context`` and emits
         ``thunk.fn(deref(_v0), deref(_v1), ...)``.
         """
-        # Collect logic variable names from the f-string interpolation values.
-        # Walk the raw Python AST (before any term transformation) to find
-        # Name nodes that are logic variables.
-        var_names_ordered: list[str] = []  # preserve first-occurrence order
-        var_names_seen: set[str] = set()
-
-        class _VarCollector(NodeVisitor):
-            def visit_Name(self, name):
-                ident = name.id
-                if ident != "_" and _is_logic_var_name(ident):
-                    if ident not in var_names_seen:
-                        var_names_seen.add(ident)
-                        var_names_ordered.append(ident)
-                self.generic_visit(name)
-
-        collector = _VarCollector()
+        # Collect logic variable names from f-string interpolation values only.
+        var_names = []
+        seen: set[str] = set()
         for v in node.values:
             if isinstance(v, FormattedValue):
-                collector.visit(v.value)
+                for name in _collect_logic_var_names(v.value):
+                    if name not in seen:
+                        seen.add(name)
+                        var_names.append(name)
 
-        # Build the lambda: lambda V1, V2, ...: f"..."
-        # The lambda parameters shadow the module-scope Var names, so the
-        # f-string body uses the lambda params (which receive deref'd values
-        # at search time) instead of the module-scope Var objects.
-        lambda_params = [
-            arg(arg=name, annotation=None,
-                lineno=node.lineno, col_offset=node.col_offset,
-                end_lineno=node.end_lineno, end_col_offset=node.end_col_offset)
-            for name in var_names_ordered
-        ]
-        lambda_node = replace(
-            Lambda(
-                args=arguments(
-                    posonlyargs=[], args=lambda_params, vararg=None,
-                    kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-                ),
-                body=node,  # the original JoinedStr — unevaluated inside lambda
-            ),
-            node,
-        )
-
-        # Build var_objects list: references to the Var objects from the
-        # enclosing transformer scope (same walrus/reuse as visit_Name).
-        var_ref_asts = []
-        for name in var_names_ordered:
-            # Ensure the Var is allocated (first occurrence) or reused.
-            if name not in transformer.seen_vars:
-                transformer.seen_vars.add(name)
-                var_ref_asts.append(replace(
-                    NamedExpr(
-                        target=replace(Name(id=name, ctx=store), node),
-                        value=replace(
-                            Call(
-                                func=replace(Name(id="Var", ctx=load), node),
-                                args=[], keywords=[],
-                            ),
-                            node,
-                        ),
-                    ),
-                    node,
-                ))
-            else:
-                var_ref_asts.append(replace(Name(id=name, ctx=load), node))
-
-        return replace(
-            Call(
-                func=replace(Name(id="FStringThunk", ctx=load), node),
-                args=[
-                    lambda_node,
-                    replace(List(elts=var_ref_asts, ctx=load), node),
-                ],
-                keywords=[],
-            ),
-            node,
+        return _build_py_thunk_ast(
+            transformer, node, node, var_names, thunk_cls="FStringThunk",
         )
 
     def visit_Set(transformer, set_expr):
@@ -825,8 +797,6 @@ class TermTransformer(NodeTransformer):
 
     def visit_UnaryOp(transformer, unary_op):
         # ++expr — Python escape: evaluate expr as Python at search time.
-        # Wraps the expression in a lambda over logic variables, producing a
-        # PyThunk that the compiler calls with deref'd values.
         if (
             isinstance(unary_op.op, UAdd)
             and isinstance(unary_op.operand, UnaryOp)
@@ -836,73 +806,8 @@ class TermTransformer(NodeTransformer):
             and unary_op.lineno == unary_op.operand.lineno
         ):
             expression = unary_op.operand.operand
-
-            # Collect logic variable names from the expression.
-            var_names_ordered: list[str] = []
-            var_names_seen: set[str] = set()
-
-            class _VarCollector(NodeVisitor):
-                def visit_Name(self, name):
-                    ident = name.id
-                    if ident != "_" and _is_logic_var_name(ident):
-                        if ident not in var_names_seen:
-                            var_names_seen.add(ident)
-                            var_names_ordered.append(ident)
-                    self.generic_visit(name)
-
-            _VarCollector().visit(expression)
-
-            # Build lambda: lambda V1, V2, ...: expression
-            lambda_params = [
-                arg(arg=name, annotation=None,
-                    lineno=unary_op.lineno, col_offset=unary_op.col_offset,
-                    end_lineno=unary_op.end_lineno,
-                    end_col_offset=unary_op.end_col_offset)
-                for name in var_names_ordered
-            ]
-            lambda_node = replace(
-                Lambda(
-                    args=arguments(
-                        posonlyargs=[], args=lambda_params, vararg=None,
-                        kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-                    ),
-                    body=expression,
-                ),
-                unary_op,
-            )
-
-            # Build var_objects list: references to Var objects in scope.
-            var_ref_asts = []
-            for name in var_names_ordered:
-                if name not in transformer.seen_vars:
-                    transformer.seen_vars.add(name)
-                    var_ref_asts.append(replace(
-                        NamedExpr(
-                            target=replace(Name(id=name, ctx=store), unary_op),
-                            value=replace(
-                                Call(
-                                    func=replace(Name(id="Var", ctx=load), unary_op),
-                                    args=[], keywords=[],
-                                ),
-                                unary_op,
-                            ),
-                        ),
-                        unary_op,
-                    ))
-                else:
-                    var_ref_asts.append(replace(Name(id=name, ctx=load), unary_op))
-
-            return replace(
-                Call(
-                    func=replace(Name(id="PyThunk", ctx=load), unary_op),
-                    args=[
-                        lambda_node,
-                        replace(List(elts=var_ref_asts, ctx=load), unary_op),
-                    ],
-                    keywords=[],
-                ),
-                unary_op,
-            )
+            var_names = _collect_logic_var_names(expression)
+            return _build_py_thunk_ast(transformer, unary_op, expression, var_names)
 
         # Fold negative numeric literals: -3 → Constant(-3), not Negate(3).
         if (

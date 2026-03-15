@@ -692,7 +692,8 @@ Recovery runs. Python exceptions from builtins can also be caught by wrapping th
 ## V2-15 — I/O builtins ✓
 
 **Status: DONE.** 43 tests in `tests/test_io.py`. Var `__str__`/`__format__` in C extension
-auto-deref for f-string support. FStringThunk/FStringPart deferred evaluation for `.clausal` files.
+auto-deref for f-string support. `FStringThunk` (alias for `PyThunk`) wraps f-strings in
+lambdas for deferred evaluation in `.clausal` files.
 
 **Depends on:** nothing beyond V2-7
 
@@ -701,9 +702,9 @@ containing logic variables auto-deref at search time — no manual `deref()` nee
 
 **F-string support:** `Var.__str__` and `Var.__format__` (in C extension) auto-deref bound
 values. Unbound vars format as `_N`. Format specs work: `f"{X_:.2f}"`. In `.clausal` files,
-f-strings are deferred to search time via `FStringThunk`/`FStringPart` term nodes — the
-TermTransformer's `visit_JoinedStr` constructs structured parts, and the compiler
-reconstructs `JoinedStr` AST with proper local variable references.
+f-strings are deferred to search time via `FStringThunk` (alias for `PyThunk`) — the
+TermTransformer's `visit_JoinedStr` wraps the entire f-string in a lambda parameterized by
+its logic variables, and the compiler emits `thunk.fn(deref(v0), ...)` calls.
 
 | Predicate | Description |
 |-----------|-------------|
@@ -717,10 +718,10 @@ reconstructs `JoinedStr` AST with proper local variable references.
 
 **Files:**
 - `clausal/logic/variables/_variables.c` — `Var_str`, `Var_format`, `Var_methods`
-- `clausal/terms.py` — `FStringThunk`, `FStringPart`
-- `clausal/templating/term_rewriting.py` — `visit_JoinedStr`, `_LogicVarRemapper`
-- `clausal/logic/compiler.py` — `term_to_ast_expr` handles `FStringThunk`
-- `clausal/import_hook.py` — `FStringThunk`/`FStringPart` in predicate builtins
+- `clausal/terms.py` — `PyThunk`, `FStringThunk` (alias)
+- `clausal/templating/term_rewriting.py` — `visit_JoinedStr`, `_build_py_thunk_ast`, `_collect_logic_var_names`
+- `clausal/logic/compiler.py` — `term_to_ast_expr` handles `PyThunk`, `_collect_py_thunks`
+- `clausal/import_hook.py` — `PyThunk`/`FStringThunk` in predicate builtins
 - `clausal/logic/builtins.py` — I/O builtins
 - `tests/test_io.py` (43 tests)
 

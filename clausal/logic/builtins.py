@@ -77,10 +77,12 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import sys as _sys
+
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, KWTerm, term_str as _term_str
 
 
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
@@ -1819,9 +1821,6 @@ def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
 
 
 # ── I/O builtins (V2-15) ──────────────────────────────────────────────────────
-
-import sys as _sys
-from clausal.terms import term_str as _term_str
 
 
 def _format_term_for_io(val):

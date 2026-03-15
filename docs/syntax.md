@@ -21,7 +21,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | Operator | Meaning |
 |---|---|
 | `--expr` | Python expression embedded inside a logic term |
-| `++expr` | Logic term embedded inside a Python expression |
+| `++expr` | In Python context: logic term inside a Python expression. In `.clausal` context: evaluate Python expression at search time (V2-16) |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
 
 `--` was chosen because:

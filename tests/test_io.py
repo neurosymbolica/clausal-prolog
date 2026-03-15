@@ -108,6 +108,18 @@ class TestVarFormat:
         result = f"x={x}, y={y}"
         assert result.startswith("x=42, y=_")
 
+    def test_format_spec_unbound_ignores_spec(self):
+        """Format spec on unbound Var is ignored — returns _N."""
+        v = Var()
+        result = f"{v:05d}"
+        assert result.startswith("_")
+
+    def test_format_bound_none(self):
+        v = Var()
+        t = Trail()
+        unify(v, None, t)
+        assert f"{v}" == "None"
+
     def test_str_bound_list(self):
         v = Var()
         t = Trail()
@@ -152,6 +164,17 @@ class TestWrite:
         unify(x, 42, t)
         out = _capture_stdout("Write", 1, f"The answer is {x}", t)
         assert out == "The answer is 42"
+
+    def test_write_unbound_var(self):
+        v = Var()
+        t = Trail()
+        out = _capture_stdout("Write", 1, v, t)
+        assert out.startswith("_")
+
+    def test_write_compound(self):
+        t = Trail()
+        out = _capture_stdout("Write", 1, Compound("f", (1, 2)), t)
+        assert "f" in out
 
     def test_write_no_newline(self):
         t = Trail()
@@ -274,6 +297,23 @@ class TestTab:
         out = _capture_stdout("Tab", 1, v, t)
         assert out == ""
 
+    def test_tab_negative_no_output(self):
+        """Tab with negative number produces empty string (Python ' ' * -N == '')."""
+        t = Trail()
+        out = _capture_stdout("Tab", 1, -3, t)
+        assert out == ""
+
+
+# ── PrintTerm edge cases ─────────────────────────────────────────────────────
+
+class TestPrintTermEdgeCases:
+
+    def test_print_term_unbound_var(self):
+        v = Var()
+        t = Trail()
+        out = _capture_stdout("PrintTerm", 1, v, t)
+        assert "Var(" in out
+
 
 # ── WriteToString/2 ───────────────────────────────────────────────────────────
 
@@ -315,6 +355,16 @@ class TestWriteToString:
                          snapshot=lambda: deref(result))
         assert vals == ["answer=42"]
 
+    def test_unbound_var(self):
+        v = Var()
+        result = Var()
+        t = Trail()
+        dispatch = get_builtin_dispatch("WriteToString", 2, None)
+        vals = solutions(StepGenerator(dispatch, None, v, result, t),
+                         snapshot=lambda: deref(result))
+        assert len(vals) == 1
+        assert vals[0].startswith("_")
+
 
 # ── TermToString/2 ────────────────────────────────────────────────────────────
 
@@ -343,6 +393,24 @@ class TestTermToString:
         vals = solutions(StepGenerator(dispatch, None, [1, 2], result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["[1, 2]"]
+
+    def test_unbound_var(self):
+        v = Var()
+        result = Var()
+        t = Trail()
+        dispatch = get_builtin_dispatch("TermToString", 2, None)
+        vals = solutions(StepGenerator(dispatch, None, v, result, t),
+                         snapshot=lambda: deref(result))
+        assert len(vals) == 1
+        assert "Var(" in vals[0]
+
+    def test_compound(self):
+        result = Var()
+        t = Trail()
+        dispatch = get_builtin_dispatch("TermToString", 2, None)
+        vals = solutions(StepGenerator(dispatch, None, Compound("f", (1, 2)), result, t),
+                         snapshot=lambda: deref(result))
+        assert vals == ["f(1, 2)"]
 
 
 # ── Integration: .clausal file ────────────────────────────────────────────────
@@ -449,3 +517,66 @@ class TestClausalIntegration:
             sys.stdout = old
         assert len(results) == 1
         assert buf.getvalue() == "HELLO\n"
+
+    def test_writeln_with_backtracking(self, tmp_path):
+        """Writeln fires once per solution during backtracking."""
+        src = tmp_path / "io_bt.clausal"
+        src.write_text(
+            "Color('red'),\n"
+            "Color('green'),\n"
+            "Color('blue'),\n"
+            "ShowColors(X_) <- (Color(X_), Writeln(X_))\n"
+        )
+        from clausal.logic.solve import call
+        from clausal.import_hook import _load_module
+        mod = _load_module("io_bt", str(src))
+        logic_mod = mod.__dict__["$module"]
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            results = list(call("ShowColors", Var(), module=logic_mod))
+        finally:
+            sys.stdout = old
+        assert len(results) == 3
+        assert buf.getvalue() == "red\ngreen\nblue\n"
+
+    def test_fstring_format_spec_in_clausal(self, tmp_path):
+        """f"{X_:.2f}" with format spec works in .clausal files."""
+        src = tmp_path / "io_spec.clausal"
+        src.write_text(
+            "ShowFloat(X_) <- Writeln(f\"{X_:.2f}\")\n"
+        )
+        from clausal.logic.solve import call
+        from clausal.import_hook import _load_module
+        mod = _load_module("io_spec", str(src))
+        logic_mod = mod.__dict__["$module"]
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            results = list(call("ShowFloat", 3.14159, module=logic_mod))
+        finally:
+            sys.stdout = old
+        assert len(results) == 1
+        assert buf.getvalue() == "3.14\n"
+
+    def test_fstring_no_vars(self, tmp_path):
+        """f-string with no logic variables produces a zero-arg lambda."""
+        src = tmp_path / "io_novar.clausal"
+        src.write_text(
+            "Hello() <- Writeln(f\"hello world\")\n"
+        )
+        from clausal.logic.solve import call
+        from clausal.import_hook import _load_module
+        mod = _load_module("io_novar", str(src))
+        logic_mod = mod.__dict__["$module"]
+        buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            results = list(call("Hello", module=logic_mod))
+        finally:
+            sys.stdout = old
+        assert len(results) == 1
+        assert buf.getvalue() == "hello world\n"

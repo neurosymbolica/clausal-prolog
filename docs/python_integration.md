@@ -150,7 +150,10 @@ CallGoal/6      CallGoal/7      CallGoal/8      Call/1
 Call/2          Call/3          Call/4          Call/5
 Call/6          Call/7          Call/8          MapList/2
 MapList/3       Filter/3        Exclude/3       FoldLeft/4
-Unzip/3         PairKeys/2      PairValues/2
+Unzip/3         PairKeys/2      PairValues/2    Sign/2
+Gcd/3           DivMod/4        CopyTerm/2      TermVariables/2
+NumberVars/3    Write/1         Writeln/1       PrintTerm/1
+Nl/0            Tab/1           WriteToString/2 TermToString/2
 ```
 
 **Compiler special forms** — compiled inline, not dispatched as builtins:

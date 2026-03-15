@@ -3401,13 +3401,11 @@ def compile_predicate_trampoline(
                     bname, arity, bucket_clauses,
                     _effective_db, body_compiler, emit_done=False,
                 )
-        
                 idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
             ddef = _build_predicate_trampoline_funcdef(
                 f"{functor}__p{pos}_dflt", arity, index["defaults"],
                 _effective_db, body_compiler, emit_done=False,
             )
-    
             pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
             plans.append((pos, idx_dict, pos_default_fn))
 
@@ -4735,14 +4733,12 @@ def compile_predicate_shallow(
                 bdef = _build_predicate_funcdef(
                     bname, arity, bucket_clauses, _effective_db, body_compiler,
                 )
-        
                 idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
             if index["defaults"]:
                 ddef = _build_predicate_funcdef(
                     f"{functor}__p{pos}_dflt", arity, index["defaults"],
                     _effective_db, body_compiler,
                 )
-        
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
             else:
                 pos_default_fn = _compile_always_fail(functor, arity)

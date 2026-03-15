@@ -149,3 +149,39 @@ class TestPyThunkGoal:
             sys.stdout = old
         assert results == [10]
         assert buf.getvalue() == "5\n"
+
+
+class TestPyThunkMultiSolution:
+    """++() evaluated per solution during backtracking."""
+
+    def test_thunk_per_choice_point(self, tmp_path):
+        """PyThunk value is computed for each solution."""
+        src = tmp_path / "interop_multi_sol.clausal"
+        src.write_text(
+            "Item(1),\n"
+            "Item(2),\n"
+            "Item(3),\n"
+            "Doubled(R_) <- (Item(X_), R_ is ++(X_ * 2))\n"
+        )
+        mod = _load_module("interop_multi_sol", str(src))
+        logic_mod = mod.__dict__["$module"]
+        results = _call_and_capture("Doubled", module=logic_mod)
+        assert results == [2, 4, 6]
+
+    def test_thunk_no_vars(self, tmp_path):
+        """++() with no logic variables — pure Python constant."""
+        src = tmp_path / "interop_const.clausal"
+        src.write_text("the_answer(R_) <- (R_ is ++(21 * 2))\n")
+        mod = _load_module("interop_const", str(src))
+        logic_mod = mod.__dict__["$module"]
+        results = _call_and_capture("the_answer", module=logic_mod)
+        assert results == [42]
+
+    def test_thunk_list_comprehension(self, tmp_path):
+        """++[x*2 for x in X_] — list comprehension over a logic var."""
+        src = tmp_path / "interop_comp.clausal"
+        src.write_text("double_all(L_, R_) <- (R_ is ++[x*2 for x in L_])\n")
+        mod = _load_module("interop_comp", str(src))
+        logic_mod = mod.__dict__["$module"]
+        results = _call_and_capture("double_all", [1, 2, 3], module=logic_mod)
+        assert results == [[2, 4, 6]]

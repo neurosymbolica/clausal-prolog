@@ -1112,5 +1112,4 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/builtins_keywords.clausal` | `Vary/3`, `Extend/3`, `UnboundKeys/2`, `Signature/3` |
 | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
 | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
-| `tests/clausal_modules/io_test.clausal` | `Writeln/1`, f-string I/O integration |
-| `tests/test_python_interop.py` | `++()` Python interop (10 tests) |
+| `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
