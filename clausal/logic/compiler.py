@@ -65,6 +65,7 @@ from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 
 
+
 def _set_of_dedup(items: list) -> list:
     """Deduplicate a list preserving order. Tries hash first, falls back to ==."""
     try:
@@ -518,6 +519,37 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
     return types
 
 
+def _collect_py_thunks(clauses: list[Clause]) -> dict[str, Any]:
+    """Collect PyThunk lambdas from clause bodies for globals injection.
+
+    Returns a dict mapping ``_pyt_<id>`` → ``thunk.fn`` for each PyThunk
+    found in clause body goals.  The compiler references these names when
+    emitting thunk calls.
+    """
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    thunks: dict[str, Any] = {}
+
+    def _walk(term: Any) -> None:
+        term = deref(term)
+        if isinstance(term, PyThunk):
+            thunks[f"_pyt_{id(term)}"] = term.fn
+        elif isinstance(term, Compound):
+            for a in term.args:
+                _walk(a)
+        elif isinstance(term, list):
+            for e in term:
+                _walk(e)
+        elif is_term_instance(term):
+            for name in term_field_names(term):
+                _walk(getattr(term, name))
+
+    for clause in clauses:
+        for goal in clause.body:
+            _walk(goal)
+
+    return thunks
+
+
 def _collect_types_from_term(term: Any) -> dict[str, type]:
     """Return a name→type dict for all user-defined term types in *term*.
 
@@ -779,7 +811,7 @@ def term_to_ast_expr(
                 ast.keyword(
                     arg=name,
                     value=term_to_ast_expr(
-                        getattr(term, name), var_context, eval_arith=eval_arith
+                        getattr(term, name), var_context, eval_arith=eval_arith,
                     ),
                 )
                 for name in term_field_names(term)
@@ -798,6 +830,37 @@ def term_to_ast_expr(
             func=_name("KWTerm"),
             args=[ast.Constant(value=term.functor)],
             keywords=keywords,
+        )
+
+    # PyThunk: deferred Python expression via lambda wrapper.
+    # Used for f-strings in .clausal files and ++() Python escapes.
+    # The thunk stores a callable (lambda) and a list of Var objects.
+    # The compiler emits: thunk.fn(deref(local0), deref(local1), ...)
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    if isinstance(term, PyThunk):
+        # Reference to the thunk's .fn stored in compiled function globals.
+        # Use a unique name to avoid collisions.
+        thunk_name = f"_pyt_{id(term)}"
+        arg_exprs = []
+        for var_obj in term.var_objects:
+            vid = var_obj._id
+            if vid in var_context:
+                arg_exprs.append(_call(_name("deref"), _name(var_context[vid])))
+            else:
+                # Body-only var — allocate and deref
+                vname = _var_python_name(var_obj)
+                var_context[vid] = vname
+                arg_exprs.append(_call(
+                    _name("deref"),
+                    ast.NamedExpr(
+                        target=ast.Name(id=vname, ctx=ast.Store()),
+                        value=_call(_name("Var")),
+                    ),
+                ))
+        return ast.Call(
+            func=_name(thunk_name),
+            args=arg_exprs,
+            keywords=[],
         )
 
     if isinstance(term, Lambda):
@@ -1402,6 +1465,12 @@ def compile_goal(
         return list(k_stmts)
     if goal is False:
         return []
+
+    # PyThunk as a goal — evaluate for side effects, then continue.
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    if isinstance(goal, PyThunk):
+        call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
+        return [ast.Expr(value=call_expr)] + list(k_stmts)
 
     match goal:
 
@@ -2365,6 +2434,12 @@ def compile_goal_trampoline(
     if goal is False:
         return []
 
+    # PyThunk as a goal — evaluate for side effects, then continue.
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    if isinstance(goal, PyThunk):
+        call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
+        return [ast.Expr(value=call_expr)] + list(k_stmts)
+
     match goal:
 
         # ── Deterministic goals — identical to simple mode ───────────────────
@@ -3295,9 +3370,11 @@ def compile_predicate_trampoline(
         base_globals["_table_store"] = db.table_store
         base_globals["_TABLING_SUSPEND"] = _TABLING_SUSPEND
     base_globals.update(_collect_head_types(clauses))
+    base_globals.update(_collect_py_thunks(clauses))
     if globals_:
         base_globals.update(globals_)
     _inject_call_targets(clauses, base_globals, db, globals_)
+
 
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
@@ -3312,6 +3389,7 @@ def compile_predicate_trampoline(
             f"{functor}__all", arity, clauses,
             _effective_db, body_compiler, emit_done=False,
         )
+
         fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
         plans: list[tuple[int, dict, Callable]] = []
@@ -3323,11 +3401,13 @@ def compile_predicate_trampoline(
                     bname, arity, bucket_clauses,
                     _effective_db, body_compiler, emit_done=False,
                 )
+        
                 idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
             ddef = _build_predicate_trampoline_funcdef(
                 f"{functor}__p{pos}_dflt", arity, index["defaults"],
                 _effective_db, body_compiler, emit_done=False,
             )
+    
             pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
             plans.append((pos, idx_dict, pos_default_fn))
 
@@ -3336,6 +3416,7 @@ def compile_predicate_trampoline(
         func_def = _build_predicate_trampoline_funcdef(
             functor, arity, clauses, _effective_db, body_compiler,
         )
+
         fn = functiondef_to_function(func_def, globals_=base_globals)
 
     def _recompile_trampoline() -> Callable:
@@ -4624,9 +4705,11 @@ def compile_predicate_shallow(
         base_globals["_naf_tabled"] = _naf_tabled_fn_s
         base_globals["_table_store"] = db.table_store
     base_globals.update(_collect_head_types(clauses))
+    base_globals.update(_collect_py_thunks(clauses))
     if globals_:
         base_globals.update(globals_)
     _inject_call_targets(clauses, base_globals, db, globals_)
+
 
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
@@ -4641,6 +4724,7 @@ def compile_predicate_shallow(
         fallback_def = _build_predicate_funcdef(
             f"{functor}__all", arity, clauses, _effective_db, body_compiler,
         )
+
         fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
         plans: list[tuple[int, dict, Callable]] = []
@@ -4651,12 +4735,14 @@ def compile_predicate_shallow(
                 bdef = _build_predicate_funcdef(
                     bname, arity, bucket_clauses, _effective_db, body_compiler,
                 )
+        
                 idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
             if index["defaults"]:
                 ddef = _build_predicate_funcdef(
                     f"{functor}__p{pos}_dflt", arity, index["defaults"],
                     _effective_db, body_compiler,
                 )
+        
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
             else:
                 pos_default_fn = _compile_always_fail(functor, arity)
@@ -4667,6 +4753,7 @@ def compile_predicate_shallow(
         func_def = _build_predicate_funcdef(
             functor, arity, clauses, _effective_db, body_compiler,
         )
+
         fn = functiondef_to_function(func_def, globals_=base_globals)
 
     # Wrap the shallow function in a trampoline-protocol adapter so it can be

@@ -145,6 +145,43 @@ Var_repr(VarObject *self)
     return res;
 }
 
+/* __str__: deref, then str() on the resolved value.
+ * Unbound vars produce "_N" (no wrapper). */
+static PyObject *
+Var_str(VarObject *self)
+{
+    PyObject *root = var_deref((PyObject *)self);
+    if (root == (PyObject *)self)
+        return PyUnicode_FromFormat("_%llu", (unsigned long long)self->var_id);
+    return PyObject_Str(root);
+}
+
+/* __format__(spec): deref, then format(resolved, spec).
+ * Enables natural f-string usage: f"{X_}" auto-derefs. */
+static PyObject *
+Var_format(VarObject *self, PyObject *args)
+{
+    PyObject *spec = NULL;
+    if (!PyArg_ParseTuple(args, "|U", &spec))
+        return NULL;
+
+    PyObject *root = var_deref((PyObject *)self);
+    if (root == (PyObject *)self) {
+        /* Unbound var — ignore format spec, return _N */
+        return PyUnicode_FromFormat("_%llu", (unsigned long long)self->var_id);
+    }
+    /* Delegate to format(resolved_value, spec) */
+    if (spec == NULL || PyUnicode_GET_LENGTH(spec) == 0)
+        return PyObject_Str(root);
+    return PyObject_Format(root, spec);
+}
+
+static PyMethodDef Var_methods[] = {
+    {"__format__", (PyCFunction)Var_format, METH_VARARGS,
+     "Format the dereferenced value of this variable."},
+    {NULL, NULL, 0, NULL}
+};
+
 static PyObject *
 Var_get_is_bound(VarObject *self, void *closure)
 {
@@ -196,6 +233,8 @@ static PyTypeObject VarType = {
     .tp_traverse  = (traverseproc)Var_traverse,
     .tp_clear     = (inquiry)Var_clear,
     .tp_repr      = (reprfunc)Var_repr,
+    .tp_str       = (reprfunc)Var_str,
+    .tp_methods   = Var_methods,
     .tp_getset    = Var_getset,
 };
 

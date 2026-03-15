@@ -173,7 +173,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order (V2-11) |
+| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order, term inspection, exceptions, I/O |
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
@@ -183,3 +183,8 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Well-founded semantics | Done — delayed negation, conditional answers (V2-7) |
 | Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N (V2-10) |
 | Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft (V2-11) |
+| Arithmetic builtins | Done — Sign, Gcd, DivMod (V2-12) |
+| Term inspection | Done — CopyTerm, TermVariables, NumberVars (V2-13) |
+| Control exceptions | Done — throw/1, catch/3, halt/0, halt/1 (V2-14) |
+| I/O builtins | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support (V2-15) |
+| Python interop | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper (V2-16) |

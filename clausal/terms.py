@@ -178,6 +178,39 @@ def cons_to_list(term: object) -> list:
     return result
 
 
+# ── Deferred Python expression thunk ──────────────────────────────────────────
+
+class PyThunk:
+    """Deferred Python expression: a lambda evaluated at search time.
+
+    The lambda takes the dereferenced values of logic variables as positional
+    arguments and returns the result.  ``var_objects`` is a list of ``Var``
+    instances (in parameter order) so the compiler can map each to its local
+    variable name via ``var_context`` and emit ``fn(deref(v0), ...)``.
+
+    Used for:
+    - **f-strings in .clausal files**: ``f"Hello, {NAME}!"`` — the lambda
+      contains the native f-string, returns a formatted string.
+    - **``++()`` Python escape in logic terms**: ``++len(X_)`` — the lambda
+      wraps the Python expression, returns any Python value.
+
+    The lambda keeps the Python code native — no term transformation — so any
+    Python expression (method calls, builtins, arithmetic, etc.) works.
+    """
+    __slots__ = ('fn', 'var_objects')
+
+    def __init__(self, fn, var_objects):
+        self.fn = fn
+        self.var_objects = tuple(var_objects)
+
+    def __repr__(self):
+        return f"PyThunk({self.fn!r}, {self.var_objects!r})"
+
+
+# Backward-compat alias — f-string thunks use the same mechanism.
+FStringThunk = PyThunk
+
+
 # ── Readable term representation ───────────────────────────────────────────────
 
 def term_str(t: Any) -> str:
@@ -238,6 +271,8 @@ __all__ = [
     "Compound",
     "KWTerm",
     "ArithConstraint",
+    "PyThunk",
+    "FStringThunk",
     # Helpers
     "list_to_cons",
     "cons_to_list",

@@ -290,6 +290,71 @@ All list operations apply to strings. Plain string literals (without `u`) are at
 
 ---
 
+## F-strings
+
+Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
+
+```python
+greet(NAME) <- Writeln(f"Hello, {NAME}!"),
+
+show_pair(X, Y) <- Writeln(f"{X} and {Y}"),
+
+# Format specs work too
+show_price(ITEM, PRICE) <- Writeln(f"{ITEM}: ${PRICE:.2f}"),
+```
+
+Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
+
+Simple variable references like `f"{X_}"` and `f"{NAME}"` work correctly. Format specs (`:.2f`, `:>10`, etc.) and conversions (`!r`, `!s`) are fully supported. Python expressions inside f-strings (like `f"{len(L_)}"` or `f"{S_.upper()}"`) also work — the entire f-string is wrapped in a lambda that receives dereferenced values.
+
+---
+
+## Python interop — `++()` escape (V2-16)
+
+The `++()` operator evaluates an arbitrary Python expression at search time. Logic variables inside the expression are automatically dereferenced.
+
+**As a value** (inside `is`):
+
+```python
+# Call a Python builtin
+list_len(L_, N_) <- (N_ is ++len(L_)),
+
+# Method call on a dereferenced variable
+to_upper(S_, R_) <- (R_ is ++S_.upper()),
+
+# Arithmetic
+inc(X_, R_) <- (R_ is ++(X_ + 1)),
+
+# Subscript access
+first(L_, R_) <- (R_ is ++L_[0]),
+
+# Dict access
+get_key(D_, K_, R_) <- (R_ is ++D_[K_]),
+
+# Multiple logic variables
+add_len(A_, B_, R_) <- (R_ is ++(len(A_) + len(B_))),
+
+# No logic variables (pure Python)
+get_pi(R_) <- (R_ is ++(3.14159)),
+```
+
+**As a goal** (side effects):
+
+```python
+# Print as a goal
+show(X_) <- ++print(X_),
+
+# Goal followed by continuation
+process(X_, R_) <- (
+    ++print(X_),
+    R_ is ++(X_ * 2)
+),
+```
+
+Under the hood, `++expr` wraps the Python expression in a lambda whose parameters shadow the module-scope Var names. The compiler emits `thunk_fn(deref(v0), deref(v1), ...)`. Any Python expression works — method calls, builtins, arithmetic, subscripts, etc.
+
+---
+
 ## Compound terms and goals
 
 ```python
@@ -548,6 +613,19 @@ BagOf(X_, In(X_, List_), Bag_),              # fails if List_ empty
 SetOf(X_, In(X_, Xs_), Bag_),               # deduplicates
 ForAll(In(X_, Ns_), X_ > 0),               # universal quantification
 Call(Goal_, Arg1_),                          # Call/2 (alias for CallGoal/2)
+
+# F-strings (V2-15) — logic variables auto-deref at search time
+Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
+Writeln(f"{X:.2f}"),                   # format specs work
+S_ := f"{X} and {Y}",                 # capture as string
+
+# Python interop (V2-16) — ++() evaluates Python at search time
+N_ is ++len(L_),                       # call Python builtin
+R_ is ++S_.upper(),                    # method call on deref'd var
+R_ is ++(X_ + 1),                      # Python arithmetic
+R_ is ++L_[0],                         # subscript access
+R_ is ++D_[K_],                        # dict access
+++print(X_),                           # side-effect goal
 
 # Higher-order list predicates (V2-11)
 MapList(Goal_, [1, 2, 3]),                   # check Goal_ on each element

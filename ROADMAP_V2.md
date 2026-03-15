@@ -37,9 +37,9 @@ V2-10  Meta-predicates (Call/N, FindAll, BagOf, SetOf, ForAll)           ✓
 V2-11  List processing builtins (MapList, Filter, Exclude, FoldLeft)     ✓
 V2-12  Arithmetic builtins                                        ✓
 V2-13  Term inspection builtins                                         ✓
-V2-14  Control / exception handling (Catch/3, Throw/1)
-V2-15  I/O builtins
-V2-16  Python interop
+V2-14  Control / exception handling (Catch/3, Throw/1)                  ✓
+V2-15  I/O builtins                                                     ✓
+V2-16  Python interop                                                  ✓
 ```
 
 Deferred beyond V2: type-directed dispatch (see note at end).
@@ -689,35 +689,81 @@ Recovery runs. Python exceptions from builtins can also be caught by wrapping th
 
 ---
 
-## V2-15 — I/O builtins
+## V2-15 — I/O builtins ✓
+
+**Status: DONE.** 43 tests in `tests/test_io.py`. Var `__str__`/`__format__` in C extension
+auto-deref for f-string support. FStringThunk/FStringPart deferred evaluation for `.clausal` files.
 
 **Depends on:** nothing beyond V2-7
 
-**Goal:** basic formatted output predicates.
+**Goal:** basic formatted output predicates with natural f-string support. Python f-strings
+containing logic variables auto-deref at search time — no manual `deref()` needed.
+
+**F-string support:** `Var.__str__` and `Var.__format__` (in C extension) auto-deref bound
+values. Unbound vars format as `_N`. Format specs work: `f"{X_:.2f}"`. In `.clausal` files,
+f-strings are deferred to search time via `FStringThunk`/`FStringPart` term nodes — the
+TermTransformer's `visit_JoinedStr` constructs structured parts, and the compiler
+reconstructs `JoinedStr` AST with proper local variable references.
 
 | Predicate | Description |
 |-----------|-------------|
-| `PrintTerm/1` | Print dereffed term to stdout |
+| `Write/1` | Print dereffed term to stdout (no newline) |
 | `Writeln/1` | Print term + newline |
-| `Format/2` | Basic format strings |
+| `PrintTerm/1` | Print structured term_str representation + newline |
+| `Nl/0` | Print a newline |
+| `Tab/1` | Print N spaces |
+| `WriteToString/2` | Unify result with string representation of term |
+| `TermToString/2` | Unify result with structured term_str representation |
 
 **Files:**
-- `clausal/logic/builtins.py`
-- `tests/test_io.py` (~10 tests)
+- `clausal/logic/variables/_variables.c` — `Var_str`, `Var_format`, `Var_methods`
+- `clausal/terms.py` — `FStringThunk`, `FStringPart`
+- `clausal/templating/term_rewriting.py` — `visit_JoinedStr`, `_LogicVarRemapper`
+- `clausal/logic/compiler.py` — `term_to_ast_expr` handles `FStringThunk`
+- `clausal/import_hook.py` — `FStringThunk`/`FStringPart` in predicate builtins
+- `clausal/logic/builtins.py` — I/O builtins
+- `tests/test_io.py` (43 tests)
 
 ---
 
-## V2-16 — Python interop
+## V2-16 — Python interop ✓
 
 **Depends on:** V2-9 (lambdas provide the escape hatch pattern)
 
-**Goal:** call arbitrary Python code from logic predicates. Design TBD — the user
-indicated a preference for an escape-hatch pattern rather than `py_call/3`.
+**Goal:** call arbitrary Python code from logic predicates via the `++()` escape.
 
-**Deferred for design discussion.** Options include:
-- Escape-hatch via lambdas: `lambda X_: <python expression>` as a goal
-- `py_call/3` or similar explicit bridge predicate
-- Direct Python function calls via the existing `Call` mechanism
+### Design
+
+The `++()` operator (double unary plus) marks a Python expression inside a `.clausal`
+clause body. The expression is wrapped in a lambda at AST transformation time, with
+logic variable names as parameters. At search time, the compiler emits a call to the
+lambda with `deref()`'d values.
+
+**As a value** (predicate argument): `R_ is ++len(L_)` — evaluates the Python expression
+and unifies the result with the LHS.
+
+**As a goal** (clause body): `++print(X_)` — evaluates the Python expression for side
+effects and succeeds once.
+
+### Implementation
+
+- **`PyThunk`** class in `clausal/terms.py` — stores `(fn, var_objects)` pair where `fn` is
+  a lambda and `var_objects` is a tuple of `Var` instances in parameter order.
+- **`TermTransformer.visit_UnaryOp`** in `clausal/templating/term_rewriting.py` — detects
+  `UAdd(UAdd(expr))` with adjacent columns, collects logic var `Name` nodes via
+  `_VarCollector`, wraps expression in a lambda, returns `PyThunk(lambda, [vars])` AST.
+- **`term_to_ast_expr`** in `clausal/logic/compiler.py` — emits `_pyt_<id>(deref(v0), ...)`.
+- **`_collect_py_thunks`** — walks clause bodies, returns `{_pyt_<id>: thunk.fn}` dict for
+  globals injection.
+- **`compile_goal` / `compile_goal_trampoline`** — handles PyThunk as a goal (evaluate +
+  continue).
+
+### Key files
+
+- `clausal/terms.py` — `PyThunk` class
+- `clausal/templating/term_rewriting.py` — `++()` detection in `visit_UnaryOp`
+- `clausal/logic/compiler.py` — PyThunk handling in `term_to_ast_expr`, `compile_goal`, `_collect_py_thunks`
+- `tests/test_python_interop.py` (10 tests)
 
 ---
 

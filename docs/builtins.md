@@ -978,6 +978,85 @@ Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumu
 
 ---
 
+## I/O
+
+### `Write/1`
+```
+Write(+Term)
+```
+Print `Term` to stdout without a trailing newline. Strings are printed as-is; other values use `str()`. Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X_}"` derefs `X_` at search time.
+
+**Implementation:** `clausal/logic/builtins.py` (`Write/1`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `Writeln/1`
+```
+Writeln(+Term)
+```
+Like `Write/1` but appends a newline.
+
+**Implementation:** `clausal/logic/builtins.py` (`Writeln/1`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `PrintTerm/1`
+```
+PrintTerm(+Term)
+```
+Print the structured `term_str` representation of `Term` (strings are quoted, compounds show functor/args) followed by a newline. Useful for debugging.
+
+**Implementation:** `clausal/logic/builtins.py` (`PrintTerm/1`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `Nl/0`
+```
+Nl
+```
+Print a newline to stdout. Equivalent to `Write("\n")`.
+
+**Implementation:** `clausal/logic/builtins.py` (`Nl/0`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `Tab/1`
+```
+Tab(+N)
+```
+Print `N` spaces to stdout. `N` must be a bound non-negative integer.
+
+**Implementation:** `clausal/logic/builtins.py` (`Tab/1`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `WriteToString/2`
+```
+WriteToString(+Term, -String)
+```
+Unify `String` with the `Write`-style string representation of `Term` (strings pass through, others use `str()`). Does not print anything.
+
+**Implementation:** `clausal/logic/builtins.py` (`WriteToString/2`)
+**Python tests:** `tests/test_io.py`
+
+---
+
+### `TermToString/2`
+```
+TermToString(+Term, -String)
+```
+Unify `String` with the `term_str` representation of `Term` (structured, with quoted strings). Does not print anything.
+
+**Implementation:** `clausal/logic/builtins.py` (`TermToString/2`)
+**Python tests:** `tests/test_io.py`
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
@@ -1033,3 +1112,5 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/builtins_keywords.clausal` | `Vary/3`, `Extend/3`, `UnboundKeys/2`, `Signature/3` |
 | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
 | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
+| `tests/clausal_modules/io_test.clausal` | `Writeln/1`, f-string I/O integration |
+| `tests/test_python_interop.py` | `++()` Python interop (10 tests) |
