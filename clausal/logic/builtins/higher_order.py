@@ -1,0 +1,176 @@
+"""Higher-order builtins: CallGoal/1..8, Call/1..8, MapList/2,3,
+Filter/3, Exclude/3, FoldLeft/4."""
+
+from __future__ import annotations
+
+from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.trampoline import DONE, StepGenerator
+
+from clausal.logic.builtins._registry import (
+    _trampoline_builtin, _ensure_trampoline_dispatch,
+    _BUILTINS, _BUILTIN_FIELDS,
+)
+
+
+# ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
+
+
+def _make_call_goal_trampoline(extra_n: int):
+    """Generate a native trampoline call_goal builtin for *extra_n* extra args."""
+    def _call_goal_n(this_generator, parent, *args):
+        # args = (goal, extra1, ..., extraN, trail)
+        goal_val = deref(args[0])
+        if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
+            dispatch = _ensure_trampoline_dispatch(goal_val)
+            derefed = [deref(a) for a in args[1:extra_n + 1]]
+            trail = args[extra_n + 1]
+            sg = StepGenerator(dispatch, this_generator, *derefed, trail)
+            _st = yield (sg, None)
+            while _st is not DONE:
+                yield (parent, None)
+                _st = yield (sg, None)
+        yield (parent, DONE)
+    return _call_goal_n
+
+
+for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
+    _cg_arity = _n + 1
+    _BUILTINS[("CallGoal", _cg_arity)] = _make_call_goal_trampoline(_n)
+    _BUILTIN_FIELDS[("CallGoal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
+
+# Call/1..8 — aliases: Call(Goal, A1, ...) = CallGoal(Goal, A1, ...)
+for _n in range(1, 9):
+    _key = ("CallGoal", _n)
+    if _key in _BUILTINS:
+        _BUILTINS[("Call", _n)] = _BUILTINS[_key]
+        _BUILTIN_FIELDS[("Call", _n)] = _BUILTIN_FIELDS[_key]
+
+del _n, _cg_arity, _key  # clean up loop variables
+
+
+# ── Higher-order list predicates (V2-11) ──────────────────────────────────────
+
+
+@_trampoline_builtin("MapList", 2)
+def _map_list__2(this_generator, parent, goal, lst, trail):
+    """map_list(Goal, List) — Goal(Elem) succeeds for each element."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    for elem in lst_val:
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        # Got first solution — committed choice, move to next element
+    yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("MapList", 3)
+def _map_list__3(this_generator, parent, goal, xs, ys, trail):
+    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y."""
+    xs_val = deref(xs)
+    goal_val = deref(goal)
+    if not isinstance(xs_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    results = []
+    for x in xs_val:
+        y = Var()
+        sg = StepGenerator(dispatch, this_generator, deref(x), y, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        results.append(deref(y))
+    if unify(ys, results, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Filter", 3)
+def _include__3(this_generator, parent, goal, lst, included, trail):
+    """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if found:
+            kept.append(deref(elem))
+    if unify(included, kept, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Exclude", 3)
+def _exclude__3(this_generator, parent, goal, lst, excluded, trail):
+    """exclude(Goal, List, Excluded) — keep elements where Goal(Elem) fails."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if not found:
+            kept.append(deref(elem))
+    if unify(excluded, kept, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("FoldLeft", 4)
+def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
+    """foldl(Goal, List, V0, V) — left fold with Goal(Elem, Acc0, Acc1)."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    acc = v0
+    for elem in lst_val:
+        next_acc = Var()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), deref(acc), next_acc, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        acc = next_acc
+    if unify(v, deref(acc), trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
