@@ -80,6 +80,9 @@ __all__ = [
     "Raise", "Assert", "Global", "Nonlocal",
     # Logical / Prolog
     "Predicate",
+    # Module-level items (pipeline split)
+    "Directive", "ImportFromDirective", "ImportModuleDirective",
+    "ModuleDeclaration", "PrivateDeclaration",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -966,6 +969,37 @@ class Predicate(Node):
     """Prolog-style predicate: head <- body."""
     head: Node = None  # type: ignore[assignment]
     body: Node = None  # type: ignore[assignment]
+
+
+# ── Module-level items (pipeline split) ──────────────────────────────────────
+
+@node_class
+class Directive(Node):
+    """Module-level directive: -dynamic, -table, -discontiguous, -shallow."""
+    name: str = ""
+    specs: list = field(default_factory=list)  # [(functor, arity), ...]
+
+@node_class
+class ImportFromDirective(Node):
+    """Module-level -import_from(module, [names...])."""
+    module: str = ""
+    names: list = field(default_factory=list)  # [name_or_alias_tuple, ...]
+
+@node_class
+class ImportModuleDirective(Node):
+    """Module-level -import_module(module)."""
+    module: str = ""
+
+@node_class
+class ModuleDeclaration(Node):
+    """Module-level -module(name, [exports...]) directive."""
+    module_name: str = ""
+    exports: list = field(default_factory=list)  # [(functor, fields), ...] or atom strings
+
+@node_class
+class PrivateDeclaration(Node):
+    """Module-level -private([preds...]) directive."""
+    items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
 
 
 @node_class

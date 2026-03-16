@@ -24,6 +24,7 @@ import pytest
 
 import clausal.import_hook
 from clausal.import_hook import PredicateLoader, _load_module
+from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -236,8 +237,8 @@ class TestDeferredCompilation:
             shutil.rmtree(pycache)
 
         try:
-            with patch("clausal.import_hook.compile_predicate_trampoline",
-                       wraps=clausal.import_hook.compile_predicate_trampoline) as mock_cp:
+            with patch("clausal.logic.compiler_v2.compile_predicate_trampoline",
+                       wraps=compile_predicate_trampoline) as mock_cp:
                 _load_module(mod_name, str(src))
                 # Should be called once for the single predicate item/1.
                 assert mock_cp.call_count == 1
@@ -266,8 +267,8 @@ class TestDeferredCompilation:
             shutil.rmtree(pycache)
 
         try:
-            with patch("clausal.import_hook.compile_predicate_trampoline",
-                       wraps=clausal.import_hook.compile_predicate_trampoline) as mock_cp:
+            with patch("clausal.logic.compiler_v2.compile_predicate_trampoline",
+                       wraps=compile_predicate_trampoline) as mock_cp:
                 _load_module(mod_name, str(src))
                 # Two predicates: foo/1 and bar/1.
                 assert mock_cp.call_count == 2

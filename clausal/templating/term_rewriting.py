@@ -3,6 +3,16 @@ from ast import *
 from .parser import is_template_func
 from .compiler import compile_template_func
 
+# Module-level item types for the pipeline-split ModuleAST.
+from clausal.pythonic_ast.nodes import (
+    Directive as DirectiveItem,
+    ImportFromDirective as ImportFromItem,
+    ImportModuleDirective as ImportModuleItem,
+    ModuleDeclaration as ModuleDeclItem,
+    PrivateDeclaration as PrivateDeclItem,
+    Predicate as PredicateItem,
+)
+
 load = Load()
 store = Store()
 
@@ -409,6 +419,17 @@ class TermTransformer(NodeTransformer):
 
     def visit_Call(transformer, call):
         visit = transformer.visit
+
+        # q(expr) — quasi-quotation: produces the simple_ast node for expr.
+        # The inner expression is transformed by the SAME TermTransformer
+        # (sharing seen_vars), so variables are unified across the clause.
+        if (
+            isinstance(call.func, Name)
+            and call.func.id == "q"
+            and len(call.args) == 1
+            and not call.keywords
+        ):
+            return visit(call.args[0])
 
         # If(cond, then) or If(cond, then, else) → IfExpr node
         if isinstance(call.func, Name) and call.func.id == "If":
@@ -1441,6 +1462,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._seen_functors: dict[str, list[str]] = {}
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
+        transformer._module_items: list = []
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -1826,12 +1848,20 @@ class EmbedTransformer(NodeTransformer):
         if name == "private":
             return transformer._handle_private_directive(args, expr_stmt)
         if name == "dynamic":
+            specs = _parse_pred_arity_args(args, "dynamic")
+            transformer._module_items.append(DirectiveItem(name="dynamic", specs=specs))
             return transformer._handle_predspec_directive("mark_dynamic", args, expr_stmt)
         if name == "discontiguous":
+            specs = _parse_pred_arity_args(args, "discontiguous")
+            transformer._module_items.append(DirectiveItem(name="discontiguous", specs=specs))
             return transformer._handle_predspec_directive("mark_discontiguous", args, expr_stmt)
         if name == "table":
+            specs = _parse_pred_arity_args(args, "table")
+            transformer._module_items.append(DirectiveItem(name="table", specs=specs))
             return transformer._handle_predspec_directive("mark_tabled", args, expr_stmt)
         if name == "shallow":
+            specs = _parse_pred_arity_args(args, "shallow")
+            transformer._module_items.append(DirectiveItem(name="shallow", specs=specs))
             return transformer._handle_predspec_directive("mark_shallow", args, expr_stmt)
         if name == "import_from":
             return transformer._handle_import_from_directive(args, expr_stmt)
@@ -1852,12 +1882,17 @@ class EmbedTransformer(NodeTransformer):
         declared field names rather than inferring them from the first clause.
         """
         statements = []
+        module_name = ""
+        exports_info = []  # for ModuleAST accumulation
+        if len(args) >= 1 and isinstance(args[0], Name):
+            module_name = args[0].id
         # args[1] should be the export list: ast.List of Call nodes.
         if len(args) >= 2 and isinstance(args[1], List):
             for export in args[1].elts:
                 if isinstance(export, Name):
                     # Bare atom: generate ``name = "name"``
                     transformer._atoms.add(export.id)
+                    exports_info.append(export.id)
                     statements.append(
                         replace(
                             Assign(
@@ -1876,6 +1911,7 @@ class EmbedTransformer(NodeTransformer):
                         for i, arg in enumerate(export.args)
                     ]
                     field_names += [kw.arg for kw in export.keywords]
+                    exports_info.append((functor_name, field_names))
                     if functor_name not in transformer._seen_functors:
                         transformer._seen_functors[functor_name] = field_names
                         statements.append(
@@ -1883,6 +1919,9 @@ class EmbedTransformer(NodeTransformer):
                                 functor_name, field_names, expr_stmt
                             )
                         )
+        transformer._module_items.append(
+            ModuleDeclItem(module_name=module_name, exports=exports_info)
+        )
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -1897,13 +1936,16 @@ class EmbedTransformer(NodeTransformer):
         of the module's public API.
         """
         statements = []
+        private_info = []  # for ModuleAST accumulation
         export_list = args[0] if len(args) >= 1 and isinstance(args[0], List) else None
         if export_list is None:
+            transformer._module_items.append(PrivateDeclItem(items=[]))
             return replace(Pass(), expr_stmt)
         for item in export_list.elts:
             if isinstance(item, Name):
                 # Bare atom: generate ``name = "name"``
                 transformer._atoms.add(item.id)
+                private_info.append(item.id)
                 statements.append(
                     replace(
                         Assign(
@@ -1920,6 +1962,7 @@ class EmbedTransformer(NodeTransformer):
                     for i, arg in enumerate(item.args)
                 ]
                 field_names += [kw.arg for kw in item.keywords]
+                private_info.append((functor_name, field_names))
                 if functor_name not in transformer._seen_functors:
                     transformer._seen_functors[functor_name] = field_names
                     statements.append(
@@ -1927,6 +1970,7 @@ class EmbedTransformer(NodeTransformer):
                             functor_name, field_names, expr_stmt
                         )
                     )
+        transformer._module_items.append(PrivateDeclItem(items=private_info))
         if not statements:
             return replace(Pass(), expr_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -2017,6 +2061,16 @@ class EmbedTransformer(NodeTransformer):
                     f"-import_from: import list items must be names or "
                     f"alias(OrigName, LocalName), got {dump(item)}"
                 )
+        # Accumulate import info for pipeline-split ModuleAST.
+        import_names = []
+        for a in aliases:
+            if a.asname:
+                import_names.append((a.name, a.asname))
+            else:
+                import_names.append(a.name)
+        transformer._module_items.append(
+            ImportFromItem(module=module_path, names=import_names)
+        )
         stmt = replace(
             ImportFrom(module=module_path, names=aliases, level=0),
             expr_stmt,
@@ -2042,6 +2096,9 @@ class EmbedTransformer(NodeTransformer):
                 f"-import_module: argument must be a dotted module path, "
                 f"got {dump(args[0])}"
             )
+        transformer._module_items.append(
+            ImportModuleItem(module=module_path)
+        )
         stmt = replace(
             Import(names=[alias(name=module_path)]),
             expr_stmt,

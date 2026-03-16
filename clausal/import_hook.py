@@ -41,8 +41,16 @@ from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
 from .terms import Compound, KWTerm
 
+# Pipeline selection flag.  Set to True to use the new pipeline-split path.
+_USE_V2_PIPELINE = True
+
 
 # ── Runtime support ──────────────────────────────────────────────────────────
+
+
+def _fact_to_predicate_node(term):
+    """Wrap a ground fact term as a Predicate(head=term, body=True) node."""
+    return simple_ast.Predicate(head=term, body=simple_ast.BoolLiteral(value=True))
 
 
 def _define_predicate_deferred(predicate_node, logic_module, module_dict,
@@ -179,8 +187,11 @@ class PredicateLoader(SourceLoader):
                 category=SyntaxWarning,
             )
             tree = ast.parse(source, filename=path)
-            tree = EmbedTransformer().visit(tree)
+            transformer = EmbedTransformer()
+            tree = transformer.visit(tree)
             ast.fix_missing_locations(tree)
+            # Store the transformer so _exec_module_v2 can access _module_items.
+            self._last_transformer = transformer
             return compile(tree, filename=path, mode="exec")
 
     def exec_module(self, module):
@@ -189,10 +200,16 @@ class PredicateLoader(SourceLoader):
         sys.modules[module.__name__] = module
         module_dict = module.__dict__
         module_dict.update(predicate_builtins)
-        # Create a LogicModule (database.Module) for this Python module.
+
+        if _USE_V2_PIPELINE:
+            self._exec_module_v2(module, module_dict, filename)
+        else:
+            self._exec_module_v1(module, module_dict)
+
+    def _exec_module_v1(self, module, module_dict):
+        """Original pipeline: exec bytecode → $define_predicate → compile."""
         logic_module = LogicModule(module.__name__, module_dict=module_dict)
         module_dict["$module"] = logic_module
-        # Deferred compilation: assert clauses during exec, compile once after.
         pending = {}
         module_dict["$define_predicate"] = (
             lambda pred, lm: _define_predicate_deferred(
@@ -202,17 +219,60 @@ class PredicateLoader(SourceLoader):
             lambda term: _assert_fact_deferred(
                 term, logic_module, module_dict, pending)
         )
-        # get_code() handles .pyc caching via SourceLoader protocol.
         code = self.get_code(module.__name__)
         exec(code, module_dict)
-        # Compile all predicates once (deferred from individual assertions).
         _compile_all_pending(pending, logic_module.db, module_dict)
-        # Lock all non-dynamic predicates after module load.
         for obj in module_dict.values():
             if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
                 key = (obj.__name__, len(obj._fields))
                 if not logic_module.db.is_dynamic(*key):
                     obj._lock()
+
+    def _exec_module_v2(self, module, module_dict, filename):
+        """New pipeline: parse → EmbedTransformer → collect items → compile_module."""
+        from clausal.logic.compiler_v2 import compile_module
+
+        # Phase A: get_code() runs source_to_code (which stores
+        # _last_transformer with _module_items) and handles .pyc caching.
+        predicate_nodes = []
+        # Provide dummy $module and collection closures for bytecode exec.
+        dummy_logic_module = LogicModule(module.__name__, module_dict=module_dict)
+        module_dict["$module"] = dummy_logic_module
+        module_dict["$define_predicate"] = (
+            lambda pred, lm: predicate_nodes.append(pred)
+        )
+        module_dict["$assert_fact"] = (
+            lambda term: predicate_nodes.append(
+                _fact_to_predicate_node(term)
+            )
+        )
+        code = self.get_code(module.__name__)
+        exec(code, module_dict)
+
+        # _last_transformer is set by source_to_code.  If the code came
+        # from .pyc cache, source_to_code didn't run, so we need to
+        # re-parse to get _module_items.
+        transformer = getattr(self, '_last_transformer', None)
+        if transformer is not None:
+            module_items = transformer._module_items
+        else:
+            # .pyc cache hit — re-parse source just for module_items.
+            source = self.get_data(self._path).decode("utf-8")
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="'str' object is not callable",
+                    category=SyntaxWarning,
+                )
+                tree = ast.parse(source, filename=filename)
+                transformer = EmbedTransformer()
+                transformer.visit(tree)
+                module_items = transformer._module_items
+
+        # Phase B: compile from collected ModuleAST.
+        logic_module = compile_module(
+            predicate_nodes, module_items, module_dict, module.__name__,
+        )
+        module_dict["$module"] = logic_module
 
 
 # Backward-compat alias — prefer _load_module() for new code.
