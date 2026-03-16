@@ -140,6 +140,9 @@ predicate_builtins["walk"] = walk
 from clausal.terms import PyThunk, FStringThunk
 predicate_builtins["PyThunk"] = PyThunk
 predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
+from clausal.logic.clpb import BoolEq, BoolImpl
+predicate_builtins["BoolEq"] = BoolEq
+predicate_builtins["BoolImpl"] = BoolImpl
 
 
 # ── Loader ───────────────────────────────────────────────────────────────────
@@ -355,6 +358,8 @@ _simple_ast_builtins["deref"] = deref
 _simple_ast_builtins["walk"] = walk
 _simple_ast_builtins["PyThunk"] = PyThunk
 _simple_ast_builtins["FStringThunk"] = FStringThunk  # alias
+_simple_ast_builtins["BoolEq"] = BoolEq
+_simple_ast_builtins["BoolImpl"] = BoolImpl
 # In IPython there is no per-session logic module, so '$assert_fact' collects
 # facts in a shared list.  For module-backed predicate files, exec_module
 # overrides this with a module-specific closure.

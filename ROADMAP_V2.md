@@ -43,6 +43,14 @@ V2-16  Python interop                                                  ✓
 V2-17  Definite Clause Grammars (DCGs)                                 ✓
 ```
 
+V3 steps:
+```
+V3-1   Module system (import_from, import_module, qualified calls)     ✓
+V3-2   Pipeline split + term expansion (compiler_v2, TermExpansion)    ✓
+V3-3   Regex + goal expansion                                         ✓
+V3-4   CLP(B) — Boolean constraints via BDDs                          ✓
+```
+
 Deferred beyond V2: type-directed dispatch (see note at end).
 
 ---
@@ -869,6 +877,7 @@ V2-13 (term inspection) — independent
 V2-15 (I/O)            — independent
 V2-16 (Python interop) — depends on V2-9
 V2-17 (DCGs)           — independent (source-level rewrite only)
+V3-4  (CLP(B))         — depends on V2-5 (attribute variables)
 ```
 
 ---
@@ -887,6 +896,38 @@ All resolved:
 
 4. **`IfExpr` orelse=True/None:** Both handled correctly in `_compile_general_ite` and
    `_compile_reified_ite`.
+
+---
+
+## V3-4 — CLP(B) — Boolean constraints via BDDs ✓
+
+**Status: DONE.** 87 tests in `tests/test_clpb.py`. Follows Markus Triska's reference design.
+
+**Depends on:** V2-5 (attribute variables)
+
+**Goal:** constraint logic programming over Booleans using reduced ordered BDDs. Enables SAT
+solving, tautology checking, model counting, and combinatorial problems (circuit verification,
+pigeon-hole) as first-class logic programming.
+
+**Design:**
+
+- Per-variable unique tables (Triska/Knuth technique) — no global hash table
+- Local apply memoization per call — simple, no stale-cache issues
+- Static variable ordering (first-appearance via monotonic counter)
+- Connected-component merging: multiple `sat()` calls sharing variables form a single BDD
+- Attribute hook fires on binding/aliasing, propagates forced values
+
+**Syntax:** Python bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT).
+`BoolEq(X_, Y_)` for equivalence, `BoolImpl(X_, Y_)` for implication.
+
+**Builtins:** `Sat/1`, `Taut/2`, `SatCount/2`, `BoolLabeling/1`.
+
+**Files:**
+- `clausal/logic/clpb.py` — BDD engine, BoolState, sat/taut/sat_count/bool_labeling, hook
+- `clausal/logic/builtins/constraints.py` — builtin registration
+- `clausal/import_hook.py` — BoolEq/BoolImpl injected into predicate_builtins
+- `tests/test_clpb.py` (87 tests)
+- `tests/fixtures/clpb_circuit.clausal` — HalfAdder, FullAdder, PigeonHole
 
 ---
 

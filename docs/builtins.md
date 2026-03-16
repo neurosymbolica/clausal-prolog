@@ -530,6 +530,58 @@ Structural equality test (old `==` behavior before CLP(FD) remapping). Succeeds 
 
 ---
 
+## CLP(B) — Boolean Constraints
+
+CLP(B) uses reduced ordered BDDs (Binary Decision Diagrams) for Boolean constraint solving. Expressions use Python's bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), plus `BoolEq` (equivalence) and `BoolImpl` (implication) term constructors.
+
+### `Sat/1`
+```
+Sat(+Expr)
+```
+Post a Boolean constraint. The expression must evaluate to true. Fails if unsatisfiable. Propagates forced values (e.g., `Sat(X_ & Y_)` forces both to 1).
+
+**Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
+**Clausal tests:** `tests/fixtures/clpb_circuit.clausal`
+**Python tests:** `tests/test_clpb.py`
+
+---
+
+### `Taut/2`
+```
+Taut(+Expr, -T)
+```
+Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. Fail if indeterminate.
+
+**Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
+**Clausal tests:** none
+**Python tests:** `tests/test_clpb.py`
+
+---
+
+### `SatCount/2`
+```
+SatCount(+Expr, -N)
+```
+Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
+
+**Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
+**Clausal tests:** none
+**Python tests:** `tests/test_clpb.py`
+
+---
+
+### `BoolLabeling/1`
+```
+BoolLabeling(+Vars)
+```
+Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all satisfying assignments.
+
+**Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
+**Clausal tests:** `tests/fixtures/clpb_circuit.clausal`
+**Python tests:** `tests/test_clpb.py`
+
+---
+
 ## Type Checks
 
 ### `IsVar/1`
@@ -1190,3 +1242,4 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
 | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
 | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
+| `tests/fixtures/clpb_circuit.clausal` | `Sat/1`, `BoolLabeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |

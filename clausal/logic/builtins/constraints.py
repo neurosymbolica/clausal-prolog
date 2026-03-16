@@ -1,5 +1,5 @@
 """Constraint builtins: Dif/2, Eq/3, DifT/3, InDomain/3, Label/1,
-AllDifferent/1, Equivalent/2."""
+AllDifferent/1, Equivalent/2, Sat/1, Taut/2, SatCount/2, BoolLabeling/1."""
 
 from __future__ import annotations
 
@@ -63,3 +63,37 @@ def _equivalent__2(t1, t2, trail, k):
     from clausal.logic.clpfd import equivalent as _equiv_fn  # noqa: PLC0415
     if _equiv_fn(t1, t2, trail):
         yield None
+
+
+# ── CLP(B) builtins ─────────────────────────────────────────────────────────
+
+
+@_builtin("Sat", 1)
+def _sat__1(expr, trail, k):
+    """Sat(Expr) — post Boolean constraint, fail if unsatisfiable."""
+    from clausal.logic.clpb import sat as _sat_fn  # noqa: PLC0415
+    if _sat_fn(expr, trail):
+        yield None
+
+
+@_builtin("Taut", 2)
+def _taut__2(expr, t, trail, k):
+    """Taut(Expr, T) — T=1 if tautology, T=0 if contradiction, else fail."""
+    from clausal.logic.clpb import taut as _taut_fn  # noqa: PLC0415
+    if _taut_fn(expr, t, trail):
+        yield None
+
+
+@_builtin("SatCount", 2)
+def _sat_count__2(expr, count, trail, k):
+    """SatCount(Expr, N) — N is the number of satisfying assignments."""
+    from clausal.logic.clpb import sat_count as _sat_count_fn  # noqa: PLC0415
+    if _sat_count_fn(expr, count, trail):
+        yield None
+
+
+@_builtin("BoolLabeling", 1)
+def _bool_labeling__1(vars_list, trail, k):
+    """BoolLabeling(Vars) — enumerate 0/1 assignments for Boolean variables."""
+    from clausal.logic.clpb import bool_labeling as _bool_labeling_fn  # noqa: PLC0415
+    yield from _bool_labeling_fn(vars_list, trail)

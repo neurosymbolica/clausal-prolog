@@ -357,3 +357,188 @@ Tests are in `tests/test_clpfd.py` (74 tests).
 - **N-Queens**: 4-queens (2 solutions), 8-queens (92 solutions)
 - **SEND+MORE=MONEY**: unique solution (9567 + 1085 = 10652)
 - **FD + dif interaction**: both constraints on same var, independent operation
+
+---
+
+## CLP(B) — Boolean constraints
+
+CLP(B) provides constraint logic programming over Booleans, enabling SAT solving, tautology checking, model counting, and combinatorial problems as first-class logic programming. The implementation follows Markus Triska's reference design using reduced ordered BDDs (Binary Decision Diagrams).
+
+The implementation lives in `clausal.logic.clpb`.
+
+### Operator syntax
+
+Python's bitwise operators are used for Boolean expressions:
+
+| Operator | Meaning |
+|---|---|
+| `X_ & Y_` | AND |
+| `X_ \| Y_` | OR |
+| `X_ ^ Y_` | XOR |
+| `~X_` | NOT |
+| `BoolEq(X_, Y_)` | Equivalence (iff) |
+| `BoolImpl(X_, Y_)` | Implication (X→Y) |
+
+These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`, `BitXor`, and `Invert` nodes pass through `term_to_ast_expr` as structural terms and are walked by `_expr_to_bdd` at runtime.
+
+### BDD representation
+
+- **`BDD_TRUE = 1`**, **`BDD_FALSE = 0`** — terminal constants (plain ints)
+- **`BDDNode(var_id, high, low)`** — immutable internal node
+  - `var_id`: integer ordering index (lower = closer to root)
+  - `high`: child BDD when var=1
+  - `low`: child BDD when var=0
+- **Per-variable unique tables** (Triska/Knuth technique): each variable stores its own node lookup dict, eliminating the need for a global unique table
+- **Reduction rule**: if `high == low`, the node is skipped (returns the child directly)
+- **Local memoization**: `apply()` creates a fresh memo dict per call, not persisted globally
+
+### Variable ordering
+
+Static first-appearance order via a module-level monotonic counter. Variables are assigned ordering IDs on first encounter in `enumerate_var()`. No dynamic reordering.
+
+### BoolState — per-variable state
+
+Each constrained variable stores a `BoolState` as an attributed-variable attribute under the key `"clpb"`:
+
+```python
+class BoolState:
+    __slots__ = ('sat_expr', 'bdd', 'root_var')
+    sat_expr: Any         # original Boolean formula (for rebuild on aliasing)
+    bdd: Any              # current BDD (BDDNode or terminal)
+    root_var: Var         # shared root variable linking all vars in this network
+```
+
+**Trail safety**: every state change creates a new `BoolState` and calls `put_attr(var, "clpb", new_state, trail)`. The old state is automatically restored on `trail.undo()`. Never mutate in place.
+
+### Connected-component merging
+
+When `sat()` is called with an expression containing variables that already have constraints, ALL connected BDDs are conjoined into a single combined BDD. This ensures that multiple `sat()` calls sharing variables form a single constraint network — binding any variable propagates through all constraints in the network.
+
+### Builtins
+
+| Builtin | Arity | Description |
+|---|---|---|
+| `Sat` | 1 | `Sat(Expr)` — post Boolean constraint, fail if unsatisfiable |
+| `Taut` | 2 | `Taut(Expr, T)` — T=1 if tautology, T=0 if contradiction, else fail |
+| `SatCount` | 2 | `SatCount(Expr, N)` — N is the number of satisfying assignments |
+| `BoolLabeling` | 1 | `BoolLabeling(Vars)` — enumerate 0/1 assignments |
+
+### Syntax examples
+
+**Posting constraints:**
+```
+Sat(X_ & Y_)                # both must be 1
+Sat(X_ | Y_)                # at least one must be 1
+Sat(~X_)                     # X must be 0
+Sat(BoolEq(X_, Y_))         # X ↔ Y (equivalence)
+Sat(BoolImpl(X_, Y_))       # X → Y (implication)
+```
+
+**Half adder:**
+```
+HalfAdder(X_, Y_, Sum_, Carry_) <- (
+    Sat(BoolEq(Sum_, X_ ^ Y_))
+    and Sat(BoolEq(Carry_, X_ & Y_))
+)
+```
+
+**Tautology check (De Morgan's law):**
+```
+Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
+```
+
+**Model counting:**
+```
+SatCount(X_ ^ Y_, N_)       # N_ = 2
+SatCount(X_ & Y_, N_)       # N_ = 1
+SatCount(X_ | Y_, N_)       # N_ = 3
+```
+
+**Labeling (enumerate all solutions):**
+```
+solve(X_, Y_) <- (
+    Sat(X_ ^ Y_)
+    and BoolLabeling([X_, Y_])
+)
+# yields (0,1) and (1,0)
+```
+
+**Pigeon-hole (unsatisfiable):**
+```
+PigeonHole() <- (
+    Sat(P11_ | P12_)
+    and Sat(P21_ | P22_)
+    and Sat(P31_ | P32_)
+    and Sat(~(P11_ & P21_))
+    and Sat(~(P11_ & P31_))
+    and Sat(~(P21_ & P31_))
+    and Sat(~(P12_ & P22_))
+    and Sat(~(P12_ & P32_))
+    and Sat(~(P22_ & P32_))
+    and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
+)
+# no solutions — 3 pigeons can't fit in 2 holes
+```
+
+### Python API
+
+```python
+from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.clpb import sat, taut, sat_count, bool_labeling, BoolEq
+from clausal.pythonic_ast.nodes import BitAnd, BitOr, BitXor, Invert
+
+trail = Trail()
+x, y = Var(), Var()
+
+# Post constraint: X XOR Y must be true
+sat(BitXor(left=x, right=y), trail)
+
+# Label (enumerate solutions)
+for _ in bool_labeling([x, y], trail):
+    print(deref(x), deref(y))   # prints 0 1, then 1 0
+
+# Tautology check
+t = Var()
+taut(BitOr(left=x, right=Invert(operand=x)), t, Trail())
+# t = 1 (tautology)
+
+# Model counting
+n = Var()
+sat_count(BitXor(left=Var(), right=Var()), n, Trail())
+# n = 2
+```
+
+### Attribute hook
+
+`_bool_hook` fires when a CLP(B)-constrained variable is unified:
+
+- **Bound to 0 or 1**: restrict BDD at this variable's level, propagate forced values on remaining variables
+- **Bound to another Var (aliasing)**: conjoin both variables' BDDs, update combined state on surviving variable, propagate
+- **Bound to other integer**: fail (only 0/1 are valid Boolean values)
+- **Bound to non-integer/non-Var**: fail
+
+### Interaction with other constraints
+
+CLP(B) uses the attribute key `"clpb"`, independent of CLP(FD) (`"fd"`) and dif/2 (`"dif"`). All three hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(FD), and dif constraints simultaneously (though combining CLP(B) with CLP(FD) on the same variable is unusual).
+
+### Test coverage
+
+Tests are in `tests/test_clpb.py` (87 tests).
+
+- **BDDNode**: construction, identity equality, hashable, repr
+- **make_node**: reduction rule, unique table sharing, different children
+- **apply**: all terminal cases (and/or/xor/equiv/impl), variable operands, two-variable xor, negate
+- **restrict**: terminal, identity, higher var
+- **_expr_to_bdd**: int/bool constants, invalid int, Var, BitAnd/BitOr/BitXor/Invert, BoolEq/BoolImpl, nested, unsupported type
+- **sat**: ground true/false, single var forced, and/negation/or forcing, contradiction, tautology, sequential conjunction
+- **taut**: tautology (T=1), contradiction (T=0), indeterminate (fail), ground, xor, equiv
+- **sat_count**: xor/and/or/tautology/contradiction counts, single var, three vars
+- **BoolLabeling**: single var (2 sols), two vars (4 sols), constrained xor (2 sols), all bound (1 sol)
+- **Attribute hook**: bind constrained var, invalid int, var-var merge, incompatible merge
+- **Trail safety**: backtrack restores state, labeling backtracks cleanly
+- **BoolEq/BoolImpl**: construction, equivalence in sat, implication in sat
+- **Half adder**: complete truth table (4 tests)
+- **Full adder**: 5 input combinations
+- **Pigeon-hole**: 3 pigeons 2 holes → unsatisfiable
+- **Circuit equivalence**: De Morgan's law via Taut, non-equivalence
+- **Fixture integration**: HalfAdder, FullAdder, PigeonHole via `.clausal` file
