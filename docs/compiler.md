@@ -370,7 +370,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | Step | What happens |
 |---|---|
 | 0. Imports | `_process_imports()` — execute `-import_from` and `-import_module` directives, populating `module_dict`. Bare module names (e.g. `regex`) are resolved via `clausal.modules` fallback. |
-| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [term_expansion.md](term_expansion.md) |
+| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [Import System](import.md) |
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. Directives | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |

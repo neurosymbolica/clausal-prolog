@@ -5,3 +5,4 @@ __transformed__/
 *.so
 build/
 clausal.egg-info/
+site/

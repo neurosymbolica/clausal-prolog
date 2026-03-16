@@ -1,0 +1,87 @@
+site_name: Clausal
+site_description: Logic programming embedded in Python
+site_url: https://clausal.example.io/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/gitlab
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Project Goals: goals.md
+    - Syntax: syntax.md
+    - Testing: testing.md
+  - Language:
+    - Predicates: predicates.md
+    - Lambdas: lambdas.md
+    - If-Then-Else: reified_ite.md
+    - Constraints: constraints.md
+  - Builtins:
+    - Predicate Index: builtins.md
+    - Logging: logging.md
+  - Internals:
+    - Architecture: architecture.md
+    - Compiler: compiler.md
+    - Import System: import.md
+    - Indexing: indexing.md
+    - Tabling: tabling.md
+    - Caching: caching.md
+  - Python Integration: python_integration.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.snippets
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/clausal/
