@@ -237,8 +237,13 @@ class BuiltinPredicate:
     Stateless builtins store the dispatch function directly.  DB-dependent
     builtins (assertz, retract, etc.) store the factory; ``_get_dispatch()``
     calls the factory lazily on first use.
+
+    Multi-arity support: when a predicate name has multiple arities (e.g.
+    Match/2 and Match/3), ``_merge`` combines them into one adapter with
+    an arity-dispatching ``_get_dispatch()`` that selects at call time.
     """
-    __slots__ = ("_functor", "_arity", "_dispatch_fn", "_factory", "_db")
+    __slots__ = ("_functor", "_arity", "_dispatch_fn", "_factory", "_db",
+                 "_arity_map")
 
     def __init__(
         self,
@@ -253,8 +258,11 @@ class BuiltinPredicate:
         self._dispatch_fn = dispatch_fn
         self._factory = factory
         self._db = db
+        self._arity_map: dict[int, Callable] | None = None
 
     def _get_dispatch(self) -> Callable:
+        if self._arity_map is not None:
+            return self._arity_dispatch
         if self._dispatch_fn is None:
             if self._factory is not None and self._db is not None:
                 self._dispatch_fn = self._factory(self._db)
@@ -264,7 +272,38 @@ class BuiltinPredicate:
                 )
         return self._dispatch_fn
 
+    def _arity_dispatch(self, this_generator, parent, *args):
+        """Dispatch to the correct arity handler based on arg count.
+
+        Trampoline protocol: args = (*pred_args, trail).
+        Arity = len(args) - 1.
+        """
+        arity = len(args) - 1  # exclude trail
+        fn = self._arity_map.get(arity)
+        if fn is None:
+            from clausal.logic.trampoline import DONE as _DONE
+            yield (parent, _DONE)
+            return
+        yield from fn(this_generator, parent, *args)
+
+    def _merge(self, other: "BuiltinPredicate") -> None:
+        """Merge another BuiltinPredicate into this one for multi-arity dispatch."""
+        if self._arity_map is None:
+            self._arity_map = {}
+            # Add our own arity to the map.
+            if self._dispatch_fn is not None:
+                self._arity_map[self._arity] = self._dispatch_fn
+            elif self._factory is not None and self._db is not None:
+                self._arity_map[self._arity] = self._factory(self._db)
+        if other._dispatch_fn is not None:
+            self._arity_map[other._arity] = other._dispatch_fn
+        elif other._factory is not None and other._db is not None:
+            self._arity_map[other._arity] = other._factory(other._db)
+
     def __repr__(self) -> str:
+        if self._arity_map:
+            arities = sorted(self._arity_map)
+            return f"BuiltinPredicate({self._functor!r}/{arities})"
         return f"BuiltinPredicate({self._functor!r}/{self._arity})"
 
 

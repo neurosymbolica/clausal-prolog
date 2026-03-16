@@ -72,6 +72,10 @@ def compile_module(
     from clausal.logic.term_expansion import run_term_expansion
     predicate_nodes = run_term_expansion(predicate_nodes, module_dict)
 
+    # ── Step 1b: Goal expansion (regex pre-compile + auto-binding) ─────
+    from clausal.logic.goal_expansion import run_goal_expansion
+    predicate_nodes = run_goal_expansion(predicate_nodes, module_dict)
+
     # ── Step 2: Process directives ───────────────────────────────────────
     _process_directives(module_items, db)
 
@@ -135,11 +139,19 @@ def compile_module(
     return logic_module
 
 
+def _resolve_module(module_path: str):
+    """Import a module, falling back to clausal.modules.<name> if not found."""
+    try:
+        return importlib.import_module(module_path)
+    except ModuleNotFoundError:
+        return importlib.import_module(f"clausal.modules.{module_path}")
+
+
 def _process_imports(module_items: list, module_dict: dict) -> None:
     """Execute import directives, populating module_dict."""
     for item in module_items:
         if isinstance(item, ImportFromItem):
-            mod = importlib.import_module(item.module)
+            mod = _resolve_module(item.module)
             for name_spec in item.names:
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
@@ -147,10 +159,10 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                 else:
                     module_dict[name_spec] = getattr(mod, name_spec)
         elif isinstance(item, ImportModuleItem):
-            mod = importlib.import_module(item.module)
+            mod = _resolve_module(item.module)
             # Store the top-level name (e.g., "foo" for "foo.bar.baz").
             top_name = item.module.split(".")[0]
-            module_dict[top_name] = importlib.import_module(top_name)
+            module_dict[top_name] = mod
 
 
 def _process_directives(module_items: list, db: Any) -> None:

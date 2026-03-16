@@ -633,6 +633,15 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     return targets
 
 
+def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
+    """Inject a builtin into base_globals, merging multi-arity builtins."""
+    existing = base_globals.get(name)
+    if existing is not None and hasattr(existing, "_merge"):
+        existing._merge(builtin)
+    else:
+        base_globals[name] = builtin
+
+
 def _inject_call_targets(
     clauses: list[Clause],
     base_globals: dict,
@@ -647,12 +656,17 @@ def _inject_call_targets(
     - If fname is a builtin, inject a BuiltinPredicate adapter.
     - Otherwise, skip (predicate must be resolved at runtime or is missing).
     """
-    from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
+    from clausal.logic.builtins import get_builtin_predicate, BuiltinPredicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
     for target_name, target_arity in call_targets:
         existing = base_globals.get(target_name)
         if existing is not None and hasattr(existing, "_get_dispatch"):
-            # Already resolved to a valid call target (predicate or builtin).
+            # Already resolved — but if it's a BuiltinPredicate and a
+            # different arity is needed, merge rather than skip.
+            if isinstance(existing, BuiltinPredicate):
+                builtin = get_builtin_predicate(target_name, target_arity, db)
+                if builtin is not None and builtin._arity != existing._arity:
+                    existing._merge(builtin)
             continue
         # Qualified (dotted) call targets: resolve via attribute traversal
         # from module globals.  The dotted string is used directly as a
@@ -679,11 +693,16 @@ def _inject_call_targets(
                 resolved = getattr(mod_obj, attr_name, None)
                 if resolved is not None and hasattr(resolved, "_get_dispatch"):
                     base_globals[target_name] = resolved
+                    continue
+            # Check builtins for dotted keys (e.g. "re.FindAll").
+            builtin = get_builtin_predicate(target_name, target_arity, db)
+            if builtin is not None:
+                _merge_builtin(base_globals, target_name, builtin)
             continue
         # Builtins take priority over any non-predicate name already in globals.
         builtin = get_builtin_predicate(target_name, target_arity, db)
         if builtin is not None:
-            base_globals[target_name] = builtin
+            _merge_builtin(base_globals, target_name, builtin)
             continue
         # User-defined predicate from module globals (cross-module calls).
         if globals_ and target_name in globals_:
