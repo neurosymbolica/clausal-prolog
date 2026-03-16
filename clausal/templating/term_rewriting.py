@@ -6,6 +6,9 @@ from .compiler import compile_template_func
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
     Directive as DirectiveItem,
+    EdcgAccDecl,
+    EdcgPassDecl,
+    EdcgPredDecl,
     ImportFromDirective as ImportFromItem,
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
@@ -1433,6 +1436,461 @@ def _rewrite_dcg_sequence(elements, s_in, s_out, counter, source):
     return replace(result, source), counter
 
 
+# ─── EDCG Rewriting ──────────────────────────────────────────────────────────
+
+
+def _edcg_acc_vars(acc_name, suffix=""):
+    """Return (in_var, out_var) names for an EDCG accumulator."""
+    return f"_edcg_{acc_name}_in{suffix}_", f"_edcg_{acc_name}_out{suffix}_"
+
+
+def _edcg_pass_var(pass_name):
+    """Return the variable name for an EDCG passed argument."""
+    return f"_edcg_{pass_name}_"
+
+
+def _is_edcg_push(node):
+    """Check if node is ``[value] // acc_name``.
+
+    Returns ``(value_node, acc_name)`` or None.
+    Python ``//`` is FloorDiv.
+    """
+    if not isinstance(node, BinOp) or not isinstance(node.op, FloorDiv):
+        return None
+    if not isinstance(node.right, Name):
+        return None
+    if not isinstance(node.left, List) or len(node.left.elts) != 1:
+        return None
+    return node.left.elts[0], node.right.id
+
+
+def _is_edcg_read(node):
+    """Check if node is ``acc_name / Var_``.
+
+    Returns ``(acc_name, var_node)`` or None.
+    Python ``/`` is Div.
+    """
+    if not isinstance(node, BinOp) or not isinstance(node.op, Div):
+        return None
+    if not isinstance(node.left, Name):
+        return None
+    return node.left.id, node.right
+
+
+def _make_joiner_call(acc_info, val_ast, in_var, out_var, source):
+    """Instantiate a joiner goal AST with concrete variable names.
+
+    The joiner_ast from -edcg_acc uses placeholder variable names (Val_, In_, Out_).
+    We substitute them with the actual variable names for this position in the chain.
+    """
+    import copy
+    joiner = copy.deepcopy(acc_info["joiner_ast"])
+
+    class _SubstVars(NodeTransformer):
+        def visit_Name(self, node):
+            if node.id == acc_info["val"]:
+                return replace(val_ast, node)
+            if node.id == acc_info["in_"]:
+                return replace(Name(id=in_var, ctx=load), node)
+            if node.id == acc_info["out"]:
+                return replace(Name(id=out_var, ctx=load), node)
+            return node
+
+    result = _SubstVars().visit(joiner)
+    return replace(result, source)
+
+
+def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
+                        edcg_preds, counter, source):
+    """Rewrite an EDCG body element into ordinary clause body AST.
+
+    Parameters:
+        node: the body AST node
+        acc_states: dict mapping acc_name → (current_in_var, current_out_var)
+        pass_states: dict mapping pass_name → var_name
+        edcg_accs: the transformer's _edcg_accs dict
+        edcg_passes: the transformer's _edcg_passes set
+        edcg_preds: the transformer's _edcg_preds dict
+        counter: int, next available intermediate variable index
+        source: AST node for source position copying
+
+    Returns (rewritten_ast, new_acc_states, new_counter).
+    acc_states is updated: after a push, the "in" of the accumulator advances.
+    """
+    push = _is_edcg_push(node)
+    if push is not None:
+        val_node, acc_name = push
+        if acc_name not in acc_states:
+            raise SyntaxError(
+                f"EDCG: accumulator '{acc_name}' not available in this rule "
+                f"(available: {list(acc_states.keys())})"
+            )
+        in_var, out_var = acc_states[acc_name]
+        # Create an intermediate variable for the new state.
+        mid = f"_edcg_{acc_name}_{counter}_"
+        counter += 1
+        if acc_name == "dcg":
+            # DCG accumulator: [V | Rest] pattern
+            starred = replace(
+                Starred(value=Name(id=mid, ctx=load), ctx=load), source
+            )
+            new_list = replace(
+                List(elts=[val_node, starred], ctx=load), source
+            )
+            goal = Compare(
+                left=Name(id=in_var, ctx=load),
+                ops=[Is()],
+                comparators=[new_list],
+            )
+        else:
+            acc_info = edcg_accs[acc_name]
+            goal = _make_joiner_call(acc_info, val_node, in_var, mid, source)
+        new_acc_states = dict(acc_states)
+        new_acc_states[acc_name] = (mid, out_var)
+        return replace(goal, source), new_acc_states, counter
+
+    read = _is_edcg_read(node)
+    if read is not None:
+        acc_or_pass_name, var_node = read
+        if acc_or_pass_name in acc_states:
+            # Read current accumulator value (the "in" variable).
+            in_var, _ = acc_states[acc_or_pass_name]
+            goal = Compare(
+                left=var_node,
+                ops=[Is()],
+                comparators=[Name(id=in_var, ctx=load)],
+            )
+            return replace(goal, source), acc_states, counter
+        elif acc_or_pass_name in pass_states:
+            # Read passed argument value.
+            pass_var = pass_states[acc_or_pass_name]
+            goal = Compare(
+                left=var_node,
+                ops=[Is()],
+                comparators=[Name(id=pass_var, ctx=load)],
+            )
+            return replace(goal, source), acc_states, counter
+        else:
+            raise SyntaxError(
+                f"EDCG: '{acc_or_pass_name}' is not an available accumulator or pass "
+                f"(accumulators: {list(acc_states.keys())}, passes: {list(pass_states.keys())})"
+            )
+
+    match node:
+        case List(elts=[]):
+            # Empty list [] in EDCG: no-op for all accumulators.
+            # Each accumulator's in = out.
+            parts = []
+            for acc_name, (in_var, out_var) in acc_states.items():
+                if in_var != out_var:
+                    eq = Compare(
+                        left=Name(id=in_var, ctx=load),
+                        ops=[Is()],
+                        comparators=[Name(id=out_var, ctx=load)],
+                    )
+                    parts.append(replace(eq, source))
+            if not parts:
+                # Degenerate: return True-like.
+                parts.append(replace(Constant(value=True), source))
+            new_acc_states = {k: (v[1], v[1]) for k, v in acc_states.items()}
+            if len(parts) == 1:
+                return parts[0], new_acc_states, counter
+            return replace(BoolOp(op=And(), values=parts), source), new_acc_states, counter
+
+        case List(elts=elements):
+            # Terminal list [t1, t2, ...]: push to 'dcg' accumulator.
+            if "dcg" not in acc_states:
+                raise SyntaxError(
+                    "EDCG: terminal list [..] requires 'dcg' accumulator but this "
+                    "predicate doesn't use it"
+                )
+            in_var, out_var = acc_states["dcg"]
+            mid = f"_edcg_dcg_{counter}_"
+            counter += 1
+            starred = replace(
+                Starred(value=Name(id=mid, ctx=load), ctx=load), source
+            )
+            new_list = replace(
+                List(elts=list(elements) + [starred], ctx=load), source
+            )
+            goal = Compare(
+                left=Name(id=in_var, ctx=load),
+                ops=[Is()],
+                comparators=[new_list],
+            )
+            new_acc_states = dict(acc_states)
+            new_acc_states["dcg"] = (mid, out_var)
+            return replace(goal, source), new_acc_states, counter
+
+        case Set(elts=[goal]):
+            # Inline goal {goal}: no accumulator threading.
+            return goal, acc_states, counter
+
+        case Name(id=name) if name in edcg_preds:
+            # EDCG non-terminal, 0 visible args.
+            return _rewrite_edcg_subcall(
+                name, [], [], acc_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+
+        case Call(func=Name(id=name), args=args, keywords=kwargs) if name in edcg_preds:
+            # EDCG non-terminal with args.
+            return _rewrite_edcg_subcall(
+                name, list(args), list(kwargs), acc_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+
+        case Name(id=name):
+            # Non-EDCG non-terminal with no args; treat like standard DCG
+            # if 'dcg' is available.
+            if "dcg" in acc_states:
+                in_var, out_var = acc_states["dcg"]
+                call_node = Call(
+                    func=Name(id=name, ctx=load),
+                    args=[Name(id=in_var, ctx=load), Name(id=out_var, ctx=load)],
+                    keywords=[],
+                )
+                new_acc_states = dict(acc_states)
+                new_acc_states["dcg"] = (out_var, out_var)
+                return replace(call_node, source), new_acc_states, counter
+            else:
+                # 0-arity call.
+                call_node = Call(
+                    func=Name(id=name, ctx=load),
+                    args=[],
+                    keywords=[],
+                )
+                return replace(call_node, source), acc_states, counter
+
+        case Call(func=Name(id=name), args=args, keywords=kwargs):
+            # Non-EDCG call with args; if dcg available, add state args.
+            if "dcg" in acc_states:
+                in_var, out_var = acc_states["dcg"]
+                new_args = list(args) + [
+                    Name(id=in_var, ctx=load), Name(id=out_var, ctx=load),
+                ]
+                call_node = Call(func=Name(id=name, ctx=load),
+                                args=new_args, keywords=list(kwargs))
+                new_acc_states = dict(acc_states)
+                new_acc_states["dcg"] = (out_var, out_var)
+                return replace(call_node, source), new_acc_states, counter
+            else:
+                call_node = Call(func=Name(id=name, ctx=load),
+                                args=list(args), keywords=list(kwargs))
+                return replace(call_node, source), acc_states, counter
+
+        case Tuple(elts=elements):
+            return _rewrite_edcg_sequence(
+                elements, acc_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+
+        case BoolOp(op=And(), values=elements):
+            return _rewrite_edcg_sequence(
+                elements, acc_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+
+        case BoolOp(op=Or(), values=elements):
+            # Disjunction: each branch gets the same starting acc_states,
+            # all branches must independently close to out_var.
+            rewritten = []
+            max_counter = counter
+            for elem in elements:
+                branch_states = dict(acc_states)
+                r, branch_final, c = _rewrite_edcg_body(
+                    elem, branch_states, dict(pass_states),
+                    edcg_accs, edcg_passes, edcg_preds, counter, source
+                )
+                # Close any open accumulator chains in this branch.
+                closers = []
+                for acc_name, (orig_in, orig_out) in acc_states.items():
+                    final_in, _ = branch_final.get(acc_name, (orig_in, orig_out))
+                    if final_in != orig_out:
+                        eq = Compare(
+                            left=Name(id=final_in, ctx=load),
+                            ops=[Is()],
+                            comparators=[Name(id=orig_out, ctx=load)],
+                        )
+                        closers.append(replace(eq, source))
+                if closers:
+                    r = replace(BoolOp(op=And(), values=[r] + closers), source)
+                rewritten.append(r)
+                if c > max_counter:
+                    max_counter = c
+            result = BoolOp(op=Or(), values=rewritten)
+            # After disjunction, all accumulators are at their out_var.
+            closed_states = {k: (v[1], v[1]) for k, v in acc_states.items()}
+            return replace(result, source), closed_states, max_counter
+
+        case UnaryOp(op=Not(), operand=inner):
+            # NAF: doesn't affect accumulator state.
+            # Create fresh out vars for the inner goal.
+            inner_acc_states = {}
+            for acc_name, (in_var, out_var) in acc_states.items():
+                fresh = f"_edcg_{acc_name}_{counter}_"
+                counter += 1
+                inner_acc_states[acc_name] = (in_var, fresh)
+            inner_r, _, counter = _rewrite_edcg_body(
+                inner, inner_acc_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            result = UnaryOp(op=Not(), operand=inner_r)
+            return replace(result, source), acc_states, counter
+
+        case Call(func=Name(id="If"), args=[cond, then_, else_], keywords=_):
+            # If-then-else.
+            mid_states = {}
+            for acc_name, (in_var, out_var) in acc_states.items():
+                mid = f"_edcg_{acc_name}_{counter}_"
+                counter += 1
+                mid_states[acc_name] = (in_var, mid)
+            cond_r, cond_out_states, counter = _rewrite_edcg_body(
+                cond, mid_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            # Then branch starts from where cond left off.
+            then_states = {}
+            for acc_name in acc_states:
+                cin, _ = cond_out_states[acc_name]
+                _, out_var = acc_states[acc_name]
+                then_states[acc_name] = (cin, out_var)
+            then_r, _, counter = _rewrite_edcg_body(
+                then_, then_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            # Else branch starts from original in.
+            else_states = dict(acc_states)
+            else_r, _, counter = _rewrite_edcg_body(
+                else_, else_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+            result = Call(
+                func=Name(id="If", ctx=load),
+                args=[cond_r, then_r, else_r],
+                keywords=[],
+            )
+            return replace(result, source), acc_states, counter
+
+    raise SyntaxError(f"Unsupported EDCG body element: {dump(node)}")
+
+
+def _rewrite_edcg_subcall(callee_name, args, kwargs, acc_states, pass_states,
+                           edcg_accs, edcg_passes, edcg_preds, counter, source):
+    """Rewrite a call to another EDCG predicate, threading shared accumulators."""
+    callee_arity, callee_ap_names = edcg_preds[callee_name]
+
+    # Build the full argument list: visible args + hidden acc/pass args.
+    full_args = list(args)
+    new_acc_states = dict(acc_states)
+
+    for ap_name in callee_ap_names:
+        if ap_name in edcg_accs or ap_name == "dcg":
+            # Accumulator: thread in/out.
+            if ap_name in acc_states:
+                in_var, out_var = acc_states[ap_name]
+                # Create intermediate variable for callee's output.
+                mid = f"_edcg_{ap_name}_{counter}_"
+                counter += 1
+                full_args.append(Name(id=in_var, ctx=load))
+                full_args.append(Name(id=mid, ctx=load))
+                new_acc_states[ap_name] = (mid, out_var)
+            else:
+                # Caller doesn't use this accumulator — use fresh vars.
+                fresh_in = f"_edcg_{ap_name}_{counter}_"
+                counter += 1
+                fresh_out = f"_edcg_{ap_name}_{counter}_"
+                counter += 1
+                full_args.append(Name(id=fresh_in, ctx=load))
+                full_args.append(Name(id=fresh_out, ctx=load))
+        elif ap_name in edcg_passes:
+            # Pass: thread the value.
+            if ap_name in pass_states:
+                full_args.append(Name(id=pass_states[ap_name], ctx=load))
+            else:
+                # Caller doesn't have this pass — use fresh var.
+                fresh = f"_edcg_{ap_name}_{counter}_"
+                counter += 1
+                full_args.append(Name(id=fresh, ctx=load))
+
+    call_node = Call(
+        func=Name(id=callee_name, ctx=load),
+        args=full_args,
+        keywords=list(kwargs),
+    )
+    return replace(call_node, source), new_acc_states, counter
+
+
+def _is_edcg_passthrough(node, edcg_accs, edcg_passes):
+    """Return True if this EDCG body element doesn't consume any accumulator state."""
+    if isinstance(node, Set):
+        return True
+    if isinstance(node, UnaryOp) and isinstance(node.op, Not):
+        return True
+    return False
+
+
+def _rewrite_edcg_sequence(elements, acc_states, pass_states,
+                            edcg_accs, edcg_passes, edcg_preds, counter, source):
+    """Rewrite a conjunction of EDCG body elements, threading accumulator state."""
+    rewritten_parts = []
+
+    # For the last element of each accumulator, we want it to reach the
+    # final out_var. We process left-to-right, threading acc_states.
+    # The final element for each accumulator should unify its output with
+    # the accumulator's out_var.
+
+    current_states = dict(acc_states)
+
+    for i, elem in enumerate(elements):
+        if isinstance(elem, Set):
+            # Inline goal: no threading.
+            rewritten_parts.append(elem.elts[0])
+            continue
+
+        is_last = (i == len(elements) - 1)
+
+        if is_last:
+            # Last element: its outputs should be the final out_vars.
+            # Set up acc_states so each accumulator's out is the final out.
+            final_states = {}
+            for acc_name, (in_var, out_var) in current_states.items():
+                final_out = acc_states[acc_name][1]  # original out_var
+                final_states[acc_name] = (in_var, final_out)
+            r, current_states, counter = _rewrite_edcg_body(
+                elem, final_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+        else:
+            r, current_states, counter = _rewrite_edcg_body(
+                elem, current_states, pass_states,
+                edcg_accs, edcg_passes, edcg_preds, counter, source
+            )
+        rewritten_parts.append(r)
+
+    if not rewritten_parts:
+        # Empty sequence: unify all in = out.
+        parts = []
+        for acc_name, (in_var, out_var) in acc_states.items():
+            if in_var != out_var:
+                eq = Compare(
+                    left=Name(id=in_var, ctx=load),
+                    ops=[Is()],
+                    comparators=[Name(id=out_var, ctx=load)],
+                )
+                parts.append(replace(eq, source))
+        if not parts:
+            return replace(Constant(value=True), source), acc_states, counter
+        if len(parts) == 1:
+            return parts[0], acc_states, counter
+        return replace(BoolOp(op=And(), values=parts), source), acc_states, counter
+
+    if len(rewritten_parts) == 1:
+        return rewritten_parts[0], current_states, counter
+    result = BoolOp(op=And(), values=rewritten_parts)
+    return replace(result, source), current_states, counter
+
+
 # ─── Embed Transformer ────────────────────────────────────────────────────────
 
 
@@ -1463,6 +1921,10 @@ class EmbedTransformer(NodeTransformer):
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
+        # EDCG declarations: populated by -edcg_acc, -edcg_pass, -edcg_pred directives.
+        transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
+        transformer._edcg_passes: set[str] = set()      # set of pass names
+        transformer._edcg_preds: dict[str, tuple[int, list[str]]] = {}  # pred → (visible_arity, [acc/pass names])
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
@@ -1612,7 +2074,7 @@ class EmbedTransformer(NodeTransformer):
             case BinOp(left=lhs, op=RShift(), right=rhs) if (
                 transformer._scope_depth == 0
             ):
-                # DCG rule: head >> (body)
+                # DCG / EDCG rule: head >> (body)
                 # Parse LHS for pushback: (head, [pushback]) >> (body)
                 pushback = None
                 if isinstance(lhs, Tuple) and len(lhs.elts) == 2:
@@ -1633,8 +2095,17 @@ class EmbedTransformer(NodeTransformer):
                 else:
                     return transformer.generic_visit(expr_stmt)
 
-                # Add DCG state args (_dcg0_, _dcg1_) to the head.
                 src = expr_stmt.value
+
+                # Check if this is an EDCG rule.
+                if functor_name in transformer._edcg_preds:
+                    return transformer._rewrite_edcg_rule(
+                        functor_name, orig_pos_args, orig_kw_args,
+                        rhs, pushback, lhs, src, expr_stmt
+                    )
+
+                # Standard DCG rule.
+                # Add DCG state args (_dcg0_, _dcg1_) to the head.
                 dcg_in = replace(Name(id="_dcg0_", ctx=load), src)
                 dcg_out = replace(Name(id="_dcg1_", ctx=load), src)
                 orig_pos_args.append(dcg_in)
@@ -1667,88 +2138,10 @@ class EmbedTransformer(NodeTransformer):
                     )
 
                 # From here: same pipeline as <- rules.
-                arg_field_names = _derive_field_names(orig_pos_args)
-                kwarg_field_names = [kw.arg for kw in orig_kw_args]
-                all_field_names = arg_field_names + kwarg_field_names
-
-                prev_fields = transformer._seen_functors.get(functor_name)
-                if prev_fields is not None:
-                    for i in range(len(arg_field_names)):
-                        if i < len(prev_fields):
-                            arg_field_names[i] = prev_fields[i]
-                    all_field_names = arg_field_names + kwarg_field_names
-
-                # Ensure all synthetic AST nodes have source positions.
-                copy_location(body_expr_raw, src)
-                fix_missing_locations(body_expr_raw)
-
-                # Non-terminal call targets in the rewritten body must be
-                # treated as predicate references (LoadName), not as atom
-                # string constants.  Exclude them from the atom set.
-                dcg_call_names = _collect_call_func_names(body_expr_raw)
-                dcg_atoms = transformer._atoms - dcg_call_names
-                term_transformer = TermTransformer(atoms=dcg_atoms, import_remap=transformer._import_remap)
-                transformed_pos = [
-                    term_transformer.visit(a) for a in orig_pos_args
-                ]
-                transformed_kw = [
-                    term_transformer.visit(kw.value) for kw in orig_kw_args
-                ]
-                body_ast = term_transformer.visit(body_expr_raw)
-
-                anchor = lhs.func if isinstance(lhs, Call) else lhs
-                head_keywords = [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(
-                        arg_field_names, transformed_pos, orig_pos_args
-                    )
-                ] + [
-                    make_keyword_node(fname, term, orig)
-                    for fname, term, orig in zip(
-                        kwarg_field_names, transformed_kw, orig_kw_args
-                    )
-                ]
-                head_ast = replace(
-                    Call(
-                        func=replace(Name(id=functor_name, ctx=load), anchor),
-                        args=[],
-                        keywords=head_keywords,
-                    ),
-                    lhs,
+                return transformer._finalize_dcg_rule(
+                    functor_name, orig_pos_args, orig_kw_args,
+                    body_expr_raw, lhs, src, expr_stmt
                 )
-
-                predicate_ast = node_ast(
-                    "Predicate", src, head=head_ast, body=body_ast
-                )
-                define_stmt = replace(
-                    Expr(
-                        value=replace(
-                            Call(
-                                func=replace(
-                                    Name(id="$define_predicate", ctx=load), src
-                                ),
-                                args=[
-                                    predicate_ast,
-                                    replace(Name(id="$module", ctx=load), src),
-                                ],
-                                keywords=[],
-                            ),
-                            src,
-                        )
-                    ),
-                    expr_stmt,
-                )
-
-                statements = []
-                if functor_name not in transformer._seen_functors:
-                    transformer._seen_functors[functor_name] = all_field_names
-                    statements.append(
-                        _make_functor_class_ast(
-                            functor_name, all_field_names, expr_stmt
-                        )
-                    )
-                statements.append(define_stmt)
-                return statements if len(statements) > 1 else statements[0]
             case Compare(
                 left=left, ops=ops, comparators=comparators,
             ) if (
@@ -1867,10 +2260,17 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_import_from_directive(args, expr_stmt)
         if name == "import_module":
             return transformer._handle_import_module_directive(args, expr_stmt)
+        if name == "edcg_acc":
+            return transformer._handle_edcg_acc_directive(args, expr_stmt)
+        if name == "edcg_pass":
+            return transformer._handle_edcg_pass_directive(args, expr_stmt)
+        if name == "edcg_pred":
+            return transformer._handle_edcg_pred_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
-            f"-table, -shallow, -import_from, -import_module)"
+            f"-table, -shallow, -import_from, -import_module, "
+            f"-edcg_acc, -edcg_pass, -edcg_pred)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -2105,6 +2505,314 @@ class EmbedTransformer(NodeTransformer):
         )
         fix_missing_locations(stmt)
         return stmt
+
+    # ── EDCG directive handlers ─────────────────────────────────────────────
+
+    def _handle_edcg_acc_directive(transformer, args, expr_stmt):
+        """Process ``-edcg_acc(name, Val_, In_, Out_, {Joiner})`` directive.
+
+        Declares a named accumulator with a joiner goal that relates
+        (Value, InputState, OutputState).
+        """
+        if len(args) != 5:
+            raise SyntaxError(
+                "-edcg_acc requires 5 arguments: "
+                "-edcg_acc(name, Val_, In_, Out_, {JoinerGoal})"
+            )
+        name_node, val_node, in_node, out_node, joiner_node = args
+        if not isinstance(name_node, Name):
+            raise SyntaxError(
+                f"-edcg_acc: first argument must be a name, got {dump(name_node)}"
+            )
+        acc_name = name_node.id
+        # Extract variable names from Name nodes.
+        if not isinstance(val_node, Name):
+            raise SyntaxError(
+                f"-edcg_acc: second argument (Val) must be a variable name, got {dump(val_node)}"
+            )
+        if not isinstance(in_node, Name):
+            raise SyntaxError(
+                f"-edcg_acc: third argument (In) must be a variable name, got {dump(in_node)}"
+            )
+        if not isinstance(out_node, Name):
+            raise SyntaxError(
+                f"-edcg_acc: fourth argument (Out) must be a variable name, got {dump(out_node)}"
+            )
+        # Joiner is wrapped in {braces} — a Set node in our AST.
+        if isinstance(joiner_node, Set) and len(joiner_node.elts) == 1:
+            joiner_ast = joiner_node.elts[0]
+        else:
+            joiner_ast = joiner_node
+
+        info = {
+            "val": val_node.id,
+            "in_": in_node.id,
+            "out": out_node.id,
+            "joiner_ast": joiner_ast,
+        }
+        transformer._edcg_accs[acc_name] = info
+        transformer._module_items.append(
+            EdcgAccDecl(
+                acc_name=acc_name,
+                val_var=val_node.id,
+                in_var=in_node.id,
+                out_var=out_node.id,
+                joiner_ast=joiner_ast,
+            )
+        )
+        return replace(Pass(), expr_stmt)
+
+    def _handle_edcg_pass_directive(transformer, args, expr_stmt):
+        """Process ``-edcg_pass(name)`` directive.
+
+        Declares a read-only passed argument that is threaded unchanged
+        through EDCG rules.
+        """
+        if len(args) != 1:
+            raise SyntaxError(
+                "-edcg_pass requires 1 argument: -edcg_pass(name)"
+            )
+        if not isinstance(args[0], Name):
+            raise SyntaxError(
+                f"-edcg_pass: argument must be a name, got {dump(args[0])}"
+            )
+        pass_name = args[0].id
+        transformer._edcg_passes.add(pass_name)
+        transformer._module_items.append(EdcgPassDecl(pass_name=pass_name))
+        return replace(Pass(), expr_stmt)
+
+    def _handle_edcg_pred_directive(transformer, args, expr_stmt):
+        """Process ``-edcg_pred(name, visible_arity, [acc1, pass1, ...])`` directive.
+
+        Declares which accumulators and passed arguments a predicate uses.
+        The hidden parameters are added automatically during DCG rewriting.
+        """
+        if len(args) != 3:
+            raise SyntaxError(
+                "-edcg_pred requires 3 arguments: "
+                "-edcg_pred(name, visible_arity, [acc_or_pass, ...])"
+            )
+        name_node, arity_node, list_node = args
+        if not isinstance(name_node, Name):
+            raise SyntaxError(
+                f"-edcg_pred: first argument must be a name, got {dump(name_node)}"
+            )
+        if not isinstance(arity_node, Constant) or not isinstance(arity_node.value, int):
+            raise SyntaxError(
+                f"-edcg_pred: second argument must be an integer, got {dump(arity_node)}"
+            )
+        if not isinstance(list_node, List):
+            raise SyntaxError(
+                f"-edcg_pred: third argument must be a list, got {dump(list_node)}"
+            )
+        pred_name = name_node.id
+        visible_arity = arity_node.value
+        acc_pass_names = []
+        for item in list_node.elts:
+            if isinstance(item, Name):
+                item_name = item.id
+                if item_name not in transformer._edcg_accs and item_name not in transformer._edcg_passes and item_name != "dcg":
+                    raise SyntaxError(
+                        f"-edcg_pred: '{item_name}' is not a declared accumulator or pass "
+                        f"(declare with -edcg_acc or -edcg_pass before -edcg_pred)"
+                    )
+                acc_pass_names.append(item_name)
+            else:
+                raise SyntaxError(
+                    f"-edcg_pred: list items must be names, got {dump(item)}"
+                )
+        transformer._edcg_preds[pred_name] = (visible_arity, acc_pass_names)
+
+        # Compute full arity: visible + 2 per accumulator + 1 per pass.
+        hidden_count = 0
+        for ap_name in acc_pass_names:
+            if ap_name in transformer._edcg_accs or ap_name == "dcg":
+                hidden_count += 2  # In, Out
+            elif ap_name in transformer._edcg_passes:
+                hidden_count += 1  # read-only, single arg
+        full_arity = visible_arity + hidden_count
+
+        # Pre-register the functor with its full field set so the class
+        # gets the right number of fields.  Field names: visible args use
+        # arg_0..arg_N pattern (will be overridden by first clause), hidden
+        # args use _edcg_{name}_in_, _edcg_{name}_out_, _edcg_{name}_.
+        field_names = [f"arg_{i}" for i in range(visible_arity)]
+        for ap_name in acc_pass_names:
+            if ap_name in transformer._edcg_accs or ap_name == "dcg":
+                field_names.append(f"_edcg_{ap_name}_in_")
+                field_names.append(f"_edcg_{ap_name}_out_")
+            elif ap_name in transformer._edcg_passes:
+                field_names.append(f"_edcg_{ap_name}_")
+
+        transformer._module_items.append(
+            EdcgPredDecl(
+                pred_name=pred_name,
+                visible_arity=visible_arity,
+                acc_pass_names=acc_pass_names,
+            )
+        )
+
+        # Emit the functor class definition if not already seen.
+        if pred_name not in transformer._seen_functors:
+            transformer._seen_functors[pred_name] = field_names
+            return _make_functor_class_ast(pred_name, field_names, expr_stmt)
+        return replace(Pass(), expr_stmt)
+
+    # ── EDCG rule rewriting ─────────────────────────────────────────────────
+
+    def _rewrite_edcg_rule(transformer, functor_name, orig_pos_args, orig_kw_args,
+                            rhs, pushback, lhs, src, expr_stmt):
+        """Rewrite an EDCG ``>>`` rule into an ordinary ``<-`` clause.
+
+        Adds hidden accumulator/pass arguments to the head and rewrites
+        the body to thread multiple named accumulators.
+        """
+        visible_arity, ap_names = transformer._edcg_preds[functor_name]
+
+        # Build initial accumulator/pass state for the body rewriter.
+        acc_states = {}   # acc_name → (in_var, out_var)
+        pass_states = {}  # pass_name → var_name
+
+        for ap_name in ap_names:
+            if ap_name in transformer._edcg_accs or ap_name == "dcg":
+                in_var, out_var = _edcg_acc_vars(ap_name)
+                acc_states[ap_name] = (in_var, out_var)
+                orig_pos_args.append(replace(Name(id=in_var, ctx=load), src))
+                orig_pos_args.append(replace(Name(id=out_var, ctx=load), src))
+            elif ap_name in transformer._edcg_passes:
+                pvar = _edcg_pass_var(ap_name)
+                pass_states[ap_name] = pvar
+                orig_pos_args.append(replace(Name(id=pvar, ctx=load), src))
+
+        # Rewrite the EDCG body.
+        counter = 0
+        body_expr_raw, final_states, counter = _rewrite_edcg_body(
+            rhs, acc_states, pass_states,
+            transformer._edcg_accs, transformer._edcg_passes,
+            transformer._edcg_preds, counter, source=src
+        )
+
+        # Close accumulator chains: if the body didn't fully thread an
+        # accumulator to its out_var, add unification goals.
+        closers = []
+        for acc_name, (orig_in, orig_out) in acc_states.items():
+            final_in, final_out = final_states.get(acc_name, (orig_in, orig_out))
+            # final_in is where the chain currently points; orig_out is
+            # the head's out variable.  If they differ, unify them.
+            if final_in != orig_out:
+                eq = Compare(
+                    left=Name(id=final_in, ctx=load),
+                    ops=[Is()],
+                    comparators=[Name(id=orig_out, ctx=load)],
+                )
+                closers.append(replace(eq, src))
+        if closers:
+            if isinstance(body_expr_raw, BoolOp) and isinstance(body_expr_raw.op, And):
+                body_expr_raw = replace(
+                    BoolOp(op=And(), values=body_expr_raw.values + closers), src
+                )
+            else:
+                body_expr_raw = replace(
+                    BoolOp(op=And(), values=[body_expr_raw] + closers), src
+                )
+
+        if pushback is not None:
+            raise SyntaxError("EDCG rules do not support pushback syntax")
+
+        return transformer._finalize_dcg_rule(
+            functor_name, orig_pos_args, orig_kw_args,
+            body_expr_raw, lhs, src, expr_stmt
+        )
+
+    def _finalize_dcg_rule(transformer, functor_name, orig_pos_args, orig_kw_args,
+                            body_expr_raw, lhs, src, expr_stmt):
+        """Common tail for both DCG and EDCG rule processing.
+
+        Takes the rewritten body AST and emits the functor class definition
+        and $define_predicate call.
+        """
+        arg_field_names = _derive_field_names(orig_pos_args)
+        kwarg_field_names = [kw.arg for kw in orig_kw_args]
+        all_field_names = arg_field_names + kwarg_field_names
+
+        prev_fields = transformer._seen_functors.get(functor_name)
+        if prev_fields is not None:
+            for i in range(len(arg_field_names)):
+                if i < len(prev_fields):
+                    arg_field_names[i] = prev_fields[i]
+            all_field_names = arg_field_names + kwarg_field_names
+
+        # Ensure all synthetic AST nodes have source positions.
+        copy_location(body_expr_raw, src)
+        fix_missing_locations(body_expr_raw)
+
+        # Non-terminal call targets in the rewritten body must be
+        # treated as predicate references (LoadName), not as atom
+        # string constants.  Exclude them from the atom set.
+        dcg_call_names = _collect_call_func_names(body_expr_raw)
+        dcg_atoms = transformer._atoms - dcg_call_names
+        term_transformer = TermTransformer(atoms=dcg_atoms, import_remap=transformer._import_remap)
+        transformed_pos = [
+            term_transformer.visit(a) for a in orig_pos_args
+        ]
+        transformed_kw = [
+            term_transformer.visit(kw.value) for kw in orig_kw_args
+        ]
+        body_ast = term_transformer.visit(body_expr_raw)
+
+        anchor = lhs.func if isinstance(lhs, Call) else lhs
+        head_keywords = [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(
+                arg_field_names, transformed_pos, orig_pos_args
+            )
+        ] + [
+            make_keyword_node(fname, term, orig)
+            for fname, term, orig in zip(
+                kwarg_field_names, transformed_kw, orig_kw_args
+            )
+        ]
+        head_ast = replace(
+            Call(
+                func=replace(Name(id=functor_name, ctx=load), anchor),
+                args=[],
+                keywords=head_keywords,
+            ),
+            lhs,
+        )
+
+        predicate_ast = node_ast(
+            "Predicate", src, head=head_ast, body=body_ast
+        )
+        define_stmt = replace(
+            Expr(
+                value=replace(
+                    Call(
+                        func=replace(
+                            Name(id="$define_predicate", ctx=load), src
+                        ),
+                        args=[
+                            predicate_ast,
+                            replace(Name(id="$module", ctx=load), src),
+                        ],
+                        keywords=[],
+                    ),
+                    src,
+                )
+            ),
+            expr_stmt,
+        )
+
+        statements = []
+        if functor_name not in transformer._seen_functors:
+            transformer._seen_functors[functor_name] = all_field_names
+            statements.append(
+                _make_functor_class_ast(
+                    functor_name, all_field_names, expr_stmt
+                )
+            )
+        statements.append(define_stmt)
+        return statements if len(statements) > 1 else statements[0]
 
     def visit_With(transformer, with_statement):
         first = with_statement.items[0]

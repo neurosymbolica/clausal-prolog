@@ -1001,6 +1001,27 @@ class PrivateDeclaration(Node):
     """Module-level -private([preds...]) directive."""
     items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
 
+@node_class
+class EdcgAccDecl(Node):
+    """EDCG accumulator declaration: -edcg_acc(name, Val, In, Out, Joiner)."""
+    acc_name: str = ""
+    val_var: str = ""       # variable name for the accumulated value
+    in_var: str = ""        # variable name for input state
+    out_var: str = ""       # variable name for output state
+    joiner_ast: Node = None  # type: ignore[assignment] — AST of the joiner goal
+
+@node_class
+class EdcgPassDecl(Node):
+    """EDCG passed-argument declaration: -edcg_pass(name)."""
+    pass_name: str = ""
+
+@node_class
+class EdcgPredDecl(Node):
+    """EDCG predicate declaration: -edcg_pred(name, visible_arity, [acc_or_pass, ...])."""
+    pred_name: str = ""
+    visible_arity: int = 0
+    acc_pass_names: list = field(default_factory=list)  # [str, ...]
+
 
 @node_class
 class AnnAssign(Node):

@@ -1,0 +1,30 @@
+# EDCG counter example: multiple accumulators, passed arguments
+#
+# Demonstrates: counter accumulator, list accumulator, passed scale factor
+
+-module(edcg_counter, [run_scaled(List_, Scale_, Count_, Items_)])
+
+-edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+-edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_pass(scale)
+
+-edcg_pred(scaled_inc, 0, [counter, scale])
+-edcg_pred(collect_and_count, 1, [counter, items, scale])
+-edcg_pred(process_list, 1, [counter, items, scale])
+
+# Increment counter by the scale factor
+scaled_inc >> (scale / S_, [S_] // counter)
+
+# Collect an item and increment the counter
+collect_and_count(X_) >> (scaled_inc, [X_] // items)
+
+# Process a list of items
+process_list([]) >> ([])
+process_list([X_, *Xs_]) >> (collect_and_count(X_), process_list(Xs_))
+
+# Entry point: wraps EDCG call with initial values
+run_scaled(List_, Scale_, Count_, Items_) <- (
+    process_list(List_, _edcg_counter_in_=0, _edcg_counter_out_=Count_,
+                 _edcg_items_in_=[], _edcg_items_out_=Items_,
+                 _edcg_scale_=Scale_)
+)
