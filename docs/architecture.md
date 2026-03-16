@@ -176,7 +176,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order, term inspection, exceptions, I/O |
+| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order, term inspection, exceptions, I/O; constructable PredicateMeta classes for all 75+ builtins |
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |

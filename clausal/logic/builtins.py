@@ -75,12 +75,15 @@ Pythonic aliases (V2-11)
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Callable
 
 import sys as _sys
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import (
+    PredicateMeta, is_term_instance, term_field_names, make_predicate,
+)
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.terms import Compound, KWTerm, term_str as _term_str
 
@@ -116,17 +119,31 @@ def _wrap_db_factory(factory):
 
 _BUILTINS: dict[tuple[str, int], Callable] = {}
 _DB_BUILTINS: dict[tuple[str, int], Callable] = {}
+_BUILTIN_FIELDS: dict[tuple[str, int], tuple[str, ...]] = {}
 
 
-def _builtin(functor: str, arity: int):
+def _extract_fields_simple(fn: Callable) -> tuple[str, ...]:
+    """Extract field names from a simple-mode builtin (strip trail, k)."""
+    params = list(inspect.signature(fn).parameters)
+    return tuple(params[:-2])  # drop trail, k
+
+
+def _extract_fields_trampoline(fn: Callable) -> tuple[str, ...]:
+    """Extract field names from a trampoline builtin (strip this_generator, parent, trail)."""
+    params = list(inspect.signature(fn).parameters)
+    return tuple(params[2:-1])  # drop this_generator, parent, and trail
+
+
+def _builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
     """Decorator: register a function as a stateless built-in (auto-wrapped to trampoline)."""
     def decorator(fn: Callable) -> Callable:
         _BUILTINS[(functor, arity)] = _simple_to_trampoline(fn)
+        _BUILTIN_FIELDS[(functor, arity)] = fields or _extract_fields_simple(fn)
         return fn
     return decorator
 
 
-def _trampoline_builtin(functor: str, arity: int):
+def _trampoline_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
     """Decorator: register a native trampoline-protocol built-in (no wrapping).
 
     Use for builtins that operate on lists or call sub-goals, so they
@@ -137,6 +154,7 @@ def _trampoline_builtin(functor: str, arity: int):
     """
     def decorator(fn: Callable) -> Callable:
         _BUILTINS[(functor, arity)] = fn
+        _BUILTIN_FIELDS[(functor, arity)] = fields or _extract_fields_trampoline(fn)
         return fn
     return decorator
 
@@ -156,10 +174,20 @@ def _ensure_trampoline_dispatch(goal_val):
 
 
 
-def _db_builtin(functor: str, arity: int):
+def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
     """Decorator: register a factory as a db-dependent built-in (auto-wrapped to trampoline)."""
     def decorator(factory: Callable) -> Callable:
         _DB_BUILTINS[(functor, arity)] = _wrap_db_factory(factory)
+        if fields is not None:
+            _BUILTIN_FIELDS[(functor, arity)] = fields
+        else:
+            # For db factories, inspect the inner function they return with a
+            # dummy db.  The inner fn has simple-mode signature: (*args, trail, k).
+            # We can also just look at the factory source to extract.  Use explicit
+            # fields for safety — auto-extract from the factory's inner function
+            # name convention: the inner function is defined inside, so we rely on
+            # the arity to generate generic field names.
+            _BUILTIN_FIELDS[(functor, arity)] = tuple(f"arg{i}" for i in range(arity))
         return factory
     return decorator
 
@@ -702,7 +730,7 @@ def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":
     return candidate if isinstance(candidate, PredicateMeta) else None
 
 
-@_db_builtin("Assert", 1)
+@_db_builtin("Assert", 1, fields=("term",))
 def _assertz_factory(db):
     """assertz(Term) — add Term as a fact at end of its predicate's clause list.
 
@@ -740,7 +768,7 @@ def _assertz_factory(db):
     return assertz__1
 
 
-@_db_builtin("AssertFirst", 1)
+@_db_builtin("AssertFirst", 1, fields=("term",))
 def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
@@ -775,7 +803,7 @@ def _asserta_factory(db):
     return asserta__1
 
 
-@_db_builtin("Retract", 1)
+@_db_builtin("Retract", 1, fields=("term",))
 def _retract_factory(db):
     """retract(Term) — remove the first clause whose head unifies with Term.
 
@@ -856,7 +884,7 @@ def _retract_factory(db):
 # ── Tabling ───────────────────────────────────────────────────────────────────
 
 
-@_db_builtin("ClearTable", 2)
+@_db_builtin("ClearTable", 2, fields=("functor", "arity"))
 def _abolish_table_factory(db):
     """abolish_table(Functor, Arity) — remove cached answers for a tabled predicate."""
 
@@ -873,7 +901,7 @@ def _abolish_table_factory(db):
     return abolish_table__2
 
 
-@_db_builtin("ClearAllTables", 0)
+@_db_builtin("ClearAllTables", 0, fields=())
 def _abolish_all_tables_factory(db):
     """abolish_all_tables — remove all cached tabling answers."""
 
@@ -973,7 +1001,7 @@ def _unbound_keys__2(term, keys_list, trail, k):
     trail.undo(mark)
 
 
-@_db_builtin("Signature", 3)
+@_db_builtin("Signature", 3, fields=("functor_name", "arity", "names"))
 def _signature_factory(db):
     """signature(FunctorName, Arity, Names) — reflect the registered signature."""
     def signature__3(functor_name, arity, names, trail, k):
@@ -1721,13 +1749,18 @@ def _make_call_goal_trampoline(extra_n: int):
 
 
 for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
-    _BUILTINS[("CallGoal", _n + 1)] = _make_call_goal_trampoline(_n)
+    _cg_arity = _n + 1
+    _BUILTINS[("CallGoal", _cg_arity)] = _make_call_goal_trampoline(_n)
+    _BUILTIN_FIELDS[("CallGoal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
 
 # Call/1..8 — aliases: Call(Goal, A1, ...) = CallGoal(Goal, A1, ...)
 for _n in range(1, 9):
     _key = ("CallGoal", _n)
     if _key in _BUILTINS:
         _BUILTINS[("Call", _n)] = _BUILTINS[_key]
+        _BUILTIN_FIELDS[("Call", _n)] = _BUILTIN_FIELDS[_key]
+
+del _n, _cg_arity, _key  # clean up loop variables to avoid shadowing module-level names
 
 
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
@@ -2013,10 +2046,117 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
     yield (parent, DONE)
 
 
+# ── Builtin predicate classes ──────────────────────────────────────────────────
+#
+# Each (functor, arity) in the registries gets a PredicateMeta class so that
+# builtins can be constructed as Python term trees:
+#   Append(X_, [1], Z_)  instead of  Call(func=LoadName('Append'), args=[...])
+#
+# Multi-arity builtins (e.g. MapList/2, MapList/3) are grouped under a
+# MultiArityBuiltin wrapper that dispatches __call__ by argument count.
+
+
+class MultiArityBuiltin:
+    """Wrapper for builtins with multiple arities (e.g. MapList/2 and MapList/3).
+
+    Routes term construction to the correct PredicateMeta class based on the
+    number of positional arguments, and provides arity-based dispatch.
+    """
+    __slots__ = ("_functor", "_arity_classes", "_arity_dispatch_fns")
+
+    def __init__(self, functor: str) -> None:
+        self._functor = functor
+        self._arity_classes: dict[int, PredicateMeta] = {}
+        self._arity_dispatch_fns: dict[int, Callable] = {}
+
+    def _add(self, arity: int, cls: PredicateMeta, dispatch_fn: Callable | None) -> None:
+        self._arity_classes[arity] = cls
+        if dispatch_fn is not None:
+            self._arity_dispatch_fns[arity] = dispatch_fn
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Construct a term, routing to the correct arity class by arg count."""
+        arity = len(args) + len(kwargs)
+        cls = self._arity_classes.get(arity)
+        if cls is None:
+            # Fall back to max arity class and let it fill missing fields
+            cls = self._arity_classes[max(self._arity_classes)]
+        return cls(*args, **kwargs)
+
+    def _get_dispatch(self) -> Callable:
+        """Return an arity-dispatching function for the trampoline."""
+        fns = self._arity_dispatch_fns
+
+        def _dispatch(this_generator, parent, *args):
+            arity = len(args) - 1  # exclude trail
+            fn = fns.get(arity)
+            if fn is None:
+                yield (parent, DONE)
+                return
+            yield from fn(this_generator, parent, *args)
+
+        return _dispatch
+
+    def __repr__(self) -> str:
+        arities = sorted(self._arity_classes)
+        return f"<BuiltinClass {self._functor}/{arities}>"
+
+
+# Populated by _build_all_builtin_classes() at module load time.
+# Maps functor name → PredicateMeta class (single-arity) or MultiArityBuiltin.
+_BUILTIN_CLASSES: dict[str, PredicateMeta | MultiArityBuiltin] = {}
+
+
+def _build_all_builtin_classes() -> None:
+    """Create PredicateMeta classes for all registered builtins.
+
+    Called once at module load.  Groups multi-arity builtins under one name.
+    """
+    # Collect all (functor, arity) → dispatch_fn pairs
+    all_keys: dict[str, list[int]] = {}
+    for functor, arity in list(_BUILTIN_FIELDS):
+        all_keys.setdefault(functor, []).append(arity)
+
+    for functor, arities in all_keys.items():
+        if len(arities) == 1:
+            arity = arities[0]
+            fields = _BUILTIN_FIELDS[(functor, arity)]
+            cls = make_predicate(functor, list(fields))
+            dispatch_fn = _BUILTINS.get((functor, arity))
+            if dispatch_fn is not None:
+                cls._dispatch_fn = dispatch_fn
+            cls._locked = True
+            _BUILTIN_CLASSES[functor] = cls
+        else:
+            wrapper = MultiArityBuiltin(functor)
+            for arity in sorted(arities):
+                fields = _BUILTIN_FIELDS[(functor, arity)]
+                cls = make_predicate(f"{functor}", list(fields))
+                dispatch_fn = _BUILTINS.get((functor, arity))
+                if dispatch_fn is not None:
+                    cls._dispatch_fn = dispatch_fn
+                cls._locked = True
+                wrapper._add(arity, cls, dispatch_fn)
+            _BUILTIN_CLASSES[functor] = wrapper
+
+
+def get_builtin_class(functor: str) -> PredicateMeta | MultiArityBuiltin | None:
+    """Return the constructable class/wrapper for a builtin, or None."""
+    return _BUILTIN_CLASSES.get(functor)
+
+
+# Build classes now that all decorators have run.
+_build_all_builtin_classes()
+
+
 __all__ = [
     "BuiltinPredicate",
+    "MultiArityBuiltin",
     "get_builtin_predicate",
+    "get_builtin_class",
     "get_builtin_dispatch",
     "_BUILTINS",
     "_DB_BUILTINS",
+    "_BUILTIN_CLASSES",
+    "_BUILTIN_FIELDS",
 ]

@@ -171,6 +171,33 @@ Vary/3          Extend/3        UnboundKeys/2
 
 `BuiltinPredicate` wraps a dispatch function (or a db-bound factory result) with the same `_get_dispatch()` protocol as PredicateMeta classes. This means compiled predicate bodies call builtins via the same code path as user predicates.
 
+### Builtin predicate classes
+
+Every builtin also has a constructable `PredicateMeta` class, so you can build term trees in Python without resorting to `Call(func=LoadName(...), ...)`:
+
+```python
+from clausal.logic.builtins import get_builtin_class
+from clausal.logic.variables import Var
+
+Append = get_builtin_class("Append")
+Between = get_builtin_class("Between")
+
+# Positional args
+t = Append([1, 2], [3], Var())  # → Append(l1=[1, 2], l2=[3], l3=Var())
+
+# Keyword args with partial fill — missing fields become Var()
+t2 = Between(low=1, high=10)    # → Between(low=1, high=10, x=Var())
+
+# Pattern matching
+match t:
+    case Append(a, b, c):
+        ...
+```
+
+Multi-arity builtins (`MapList`, `phrase`) use a `MultiArityBuiltin` wrapper that routes construction and dispatch by argument count. See [builtins.md](builtins.md#builtin-predicate-classes) for full details.
+
+Field names are auto-extracted from implementation function signatures (e.g. `Append` has fields `(l1, l2, l3)`, `Between` has `(low, high, x)`). The `_BUILTIN_FIELDS` registry maps `(functor, arity)` to field name tuples.
+
 ---
 
 ## Assert / AssertFirst / Retract from Python

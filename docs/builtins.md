@@ -9,6 +9,55 @@ Notation in signature lines:
 
 ---
 
+## Builtin Predicate Classes
+
+Every built-in predicate has a constructable `PredicateMeta` class, so you can build canonical term trees in Python:
+
+```python
+from clausal.logic.builtins import get_builtin_class
+from clausal.logic.variables import Var
+
+Append = get_builtin_class("Append")
+Between = get_builtin_class("Between")
+
+X_ = Var()
+Z_ = Var()
+
+# Positional construction
+t = Append([1, 2], [3, 4], Z_)
+# → Append(l1=[1, 2], l2=[3, 4], l3=Var())
+
+# Keyword construction with partial fill (missing fields → Var())
+t2 = Between(low=1, high=10)
+# → Between(low=1, high=10, x=Var())
+
+# Pattern matching works via __match_args__
+match t:
+    case Append(a, b, c):
+        print(a, b, c)
+```
+
+Each builtin class is a full `PredicateMeta` with `_fields`, `_functor`, `_arity`, `__eq__`, `__repr__`, and `__match_args__`. Stateless builtins also have `_dispatch_fn` set (so `_get_dispatch()` works directly). DB-dependent builtins (Assert, Retract, etc.) have `_dispatch_fn = None` since they need a live database; use them for term construction only.
+
+**Multi-arity builtins** (MapList/2,3 and phrase/2,3) are wrapped in `MultiArityBuiltin`, which routes `__call__` by argument count:
+
+```python
+MapList = get_builtin_class("MapList")
+MapList(goal, [1, 2])           # → MapList/2 term
+MapList(goal, [1, 2], [2, 4])   # → MapList/3 term
+```
+
+All builtin classes are locked (`_locked = True`) — they cannot be modified via assertz/retract.
+
+**Registry access:**
+- `get_builtin_class(functor)` — returns the class or `MultiArityBuiltin`, or `None`
+- `_BUILTIN_CLASSES` — dict mapping functor name → class/wrapper
+- `_BUILTIN_FIELDS` — dict mapping `(functor, arity)` → field name tuple
+
+**Tests:** `tests/test_builtin_classes.py` (41 tests)
+
+---
+
 ## Control Flow
 
 These are **compiler special forms** — transformed at compile time, not dispatched via the builtin registry.
