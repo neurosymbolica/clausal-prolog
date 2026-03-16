@@ -1,5 +1,7 @@
 """Higher-order builtins: CallGoal/1..8, Call/1..8, MapList/2,3,
-Filter/3, Exclude/3, FoldLeft/4."""
+Filter/3, Exclude/3, FoldLeft/4,
+TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3,
+MaxBy/3, MinBy/3, FilterMap/3."""
 
 from __future__ import annotations
 
@@ -171,6 +173,262 @@ def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
             return
         acc = next_acc
     if unify(v, deref(acc), trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+# ── V3-5: Extended higher-order list predicates ──────────────────────────────
+
+
+def _is_goal(val):
+    """Check if val is a callable goal (closure or predicate with dispatch)."""
+    return callable(val) or hasattr(val, '_get_dispatch')
+
+
+@_trampoline_builtin("TakeWhile", 3)
+def _take_while__3(this_generator, parent, goal, lst, prefix, trail):
+    """TakeWhile(Goal, List, Prefix) — longest prefix where Goal(Elem) succeeds."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    taken = []
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if not found:
+            break
+        taken.append(deref(elem))
+    if unify(prefix, taken, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("DropWhile", 3)
+def _drop_while__3(this_generator, parent, goal, lst, suffix, trail):
+    """DropWhile(Goal, List, Suffix) — drop prefix where Goal(Elem) succeeds."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    i = 0
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if not found:
+            break
+        i += 1
+    if unify(suffix, lst_val[i:], trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Span", 4)
+def _span__4(this_generator, parent, goal, lst, yes, no, trail):
+    """Span(Goal, List, Yes, No) — TakeWhile + DropWhile in one pass."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    taken = []
+    i = 0
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if not found:
+            break
+        taken.append(deref(elem))
+        i += 1
+    if unify(yes, taken, trail) and unify(no, lst_val[i:], trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("GroupBy", 3)
+def _group_by__3(this_generator, parent, goal, lst, groups, trail):
+    """GroupBy(Goal, List, Groups) — group consecutive elements by key via Goal(Elem, Key)."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    result: list[list] = []
+    prev_key = object()  # sentinel
+    for elem in lst_val:
+        key = Var()
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(mark)
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        k = deref(key)
+        trail.undo(mark)
+        if k == prev_key and result:
+            result[-1].append(deref(elem))
+        else:
+            result.append([deref(elem)])
+            prev_key = k
+    if unify(groups, result, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("SortBy", 3)
+def _sort_by__3(this_generator, parent, goal, lst, sorted_lst, trail):
+    """SortBy(Goal, List, Sorted) — sort List by key projected via Goal(Elem, Key)."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    keyed: list[tuple] = []
+    for elem in lst_val:
+        key = Var()
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(mark)
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        k = deref(key)
+        trail.undo(mark)
+        keyed.append((k, deref(elem)))
+    try:
+        keyed.sort(key=lambda pair: pair[0])
+    except TypeError:
+        keyed.sort(key=lambda pair: (type(pair[0]).__name__, repr(pair[0])))
+    result = [e for _, e in keyed]
+    if unify(sorted_lst, result, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("MaxBy", 3)
+def _max_by__3(this_generator, parent, goal, lst, maximum, trail):
+    """MaxBy(Goal, List, Max) — element with largest projected key via Goal(Elem, Key)."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not lst_val or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    best_key = None
+    best_elem = None
+    for elem in lst_val:
+        key = Var()
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(mark)
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        k = deref(key)
+        trail.undo(mark)
+        if best_key is None or k > best_key:
+            best_key = k
+            best_elem = deref(elem)
+    if best_elem is not None:
+        m = trail.mark()
+        if unify(maximum, best_elem, trail):
+            yield (parent, None)
+        trail.undo(m)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("MinBy", 3)
+def _min_by__3(this_generator, parent, goal, lst, minimum, trail):
+    """MinBy(Goal, List, Min) — element with smallest projected key via Goal(Elem, Key)."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not lst_val or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    best_key = None
+    best_elem = None
+    for elem in lst_val:
+        key = Var()
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        _st = yield (sg, None)
+        if _st is DONE:
+            trail.undo(mark)
+            trail.undo(outer_mark)
+            yield (parent, DONE)
+            return
+        k = deref(key)
+        trail.undo(mark)
+        if best_key is None or k < best_key:
+            best_key = k
+            best_elem = deref(elem)
+    if best_elem is not None:
+        m = trail.mark()
+        if unify(minimum, best_elem, trail):
+            yield (parent, None)
+        trail.undo(m)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("FilterMap", 3)
+def _filter_map__3(this_generator, parent, goal, lst, result, trail):
+    """FilterMap(Goal, List, Result) — map+filter: keep mapped value when Goal(Elem, Out) succeeds."""
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not _is_goal(goal_val):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        out = Var()
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), out, trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        if found:
+            kept.append(deref(out))
+        trail.undo(mark)
+    if unify(result, kept, trail):
         yield (parent, None)
     trail.undo(outer_mark)
     yield (parent, DONE)

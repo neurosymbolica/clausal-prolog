@@ -1,6 +1,7 @@
 """List builtins: In/2, InCheck/2, Append/3, Length/2, Last/2, Reverse/2,
 GetItem/3, Flatten/2, MergeSort/2, Sort/2, Permutation/2, Select/3,
-Subtract/3, Intersection/3, Union/3, ToSet/2, SumList/2, MaxList/2, MinList/2."""
+Subtract/3, Intersection/3, Union/3, ToSet/2, SumList/2, MaxList/2, MinList/2,
+Take/3, Drop/3, SplitAt/4, Zip/3, Replicate/3, SplitWith/3."""
 
 from __future__ import annotations
 
@@ -335,6 +336,115 @@ def _min_list__2(this_generator, parent, lst, minimum, trail):
             return
         mark = trail.mark()
         if unify(minimum, m, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+# ── V3-5: Extended list predicates ────────────────────────────────────────────
+
+
+@_trampoline_builtin("Take", 3)
+def _take__3(this_generator, parent, n, lst, taken, trail):
+    """Take(N, List, Taken) — Taken is the first N elements of List."""
+    n_val, lst_val = deref(n), deref(lst)
+    if isinstance(n_val, int) and isinstance(lst_val, list):
+        result = lst_val[:n_val] if n_val >= 0 else []
+        mark = trail.mark()
+        if unify(taken, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Drop", 3)
+def _drop__3(this_generator, parent, n, lst, rest, trail):
+    """Drop(N, List, Rest) — Rest is List after dropping the first N elements."""
+    n_val, lst_val = deref(n), deref(lst)
+    if isinstance(n_val, int) and isinstance(lst_val, list):
+        result = lst_val[n_val:] if n_val >= 0 else lst_val
+        mark = trail.mark()
+        if unify(rest, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("SplitAt", 4)
+def _split_at__4(this_generator, parent, n, lst, left, right, trail):
+    """SplitAt(N, List, Left, Right) — split List at index N."""
+    n_val, lst_val = deref(n), deref(lst)
+    if isinstance(n_val, int) and isinstance(lst_val, list):
+        idx = max(0, min(n_val, len(lst_val)))
+        mark = trail.mark()
+        if unify(left, lst_val[:idx], trail) and unify(right, lst_val[idx:], trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Zip", 3)
+def _zip__3(this_generator, parent, l1, l2, pairs, trail):
+    """Zip(L1, L2, Pairs) — Pairs is a list of [X, Y] from L1 and L2."""
+    l1_val, l2_val = deref(l1), deref(l2)
+    if isinstance(l1_val, list) and isinstance(l2_val, list):
+        result = [[a, b] for a, b in zip(l1_val, l2_val)]
+        mark = trail.mark()
+        if unify(pairs, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Replicate", 3)
+def _replicate__3(this_generator, parent, n, elem, lst, trail):
+    """Replicate(N, Elem, List) — List is N copies of Elem."""
+    n_val = deref(n)
+    elem_val = deref(elem)
+    if isinstance(n_val, int) and n_val >= 0:
+        result = [elem_val] * n_val
+        mark = trail.mark()
+        if unify(lst, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("SplitWith", 3)
+def _split_with__3(this_generator, parent, sep, lst, parts, trail):
+    """SplitWith(Sep, List, Parts) — split List by separator Sep into sublists.
+
+    Modes:
+      SplitWith(+Sep, +List, -Parts) — split
+      SplitWith(+Sep, -List, +Parts) — join (flatten Parts interleaved with Sep)
+    """
+    sep_val = deref(sep)
+    lst_val = deref(lst)
+    parts_val = deref(parts)
+
+    if isinstance(lst_val, list):
+        # Split mode
+        result: list[list] = [[]]
+        for item in lst_val:
+            if deref(item) == sep_val:
+                result.append([])
+            else:
+                result[-1].append(deref(item))
+        mark = trail.mark()
+        if unify(parts, result, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    elif isinstance(parts_val, list):
+        # Join mode: interleave parts with separator
+        joined: list = []
+        for i, part in enumerate(parts_val):
+            p = deref(part)
+            if isinstance(p, list):
+                joined.extend(p)
+            if i < len(parts_val) - 1:
+                joined.append(sep_val)
+        mark = trail.mark()
+        if unify(lst, joined, trail):
             yield (parent, None)
         trail.undo(mark)
     yield (parent, DONE)

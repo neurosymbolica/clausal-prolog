@@ -1005,6 +1005,79 @@ Minimum element of a non-empty numeric list.
 
 ---
 
+### `Take/3`
+```
+Take(+N, +List, -Taken)
+```
+First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N = 0`, returns `[]`.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_take__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `Drop/3`
+```
+Drop(+N, +List, -Rest)
+```
+`List` after dropping the first `N` elements. If `N >= len(List)`, returns `[]`.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_drop__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `SplitAt/4`
+```
+SplitAt(+N, +List, -Left, -Right)
+```
+Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Clamps to list bounds.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_split_at__4`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `Zip/3`
+```
+Zip(+List1, +List2, -Pairs)
+```
+Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter list.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_zip__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `Replicate/3`
+```
+Replicate(+N, +Elem, -List)
+```
+`List` of `N` copies of `Elem`.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_replicate__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `SplitWith/3`
+```
+SplitWith(+Sep, +List, -Parts)    % split mode
+SplitWith(+Sep, -List, +Parts)    % join mode
+```
+Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleaves `Parts` with `Sep`.
+
+**Implementation:** `clausal/logic/builtins/lists.py` (`_split_with__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
 ### `Unzip/3`
 ```
 Unzip(?Pairs, ?Keys, ?Values)
@@ -1102,6 +1175,102 @@ Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumu
 **Implementation:** `clausal/logic/builtins.py:1639`
 **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
 **Python tests:** `tests/test_higher_order.py`
+
+---
+
+### `TakeWhile/3`
+```
+TakeWhile(+Goal, +List, -Prefix)
+```
+Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_take_while__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `DropWhile/3`
+```
+DropWhile(+Goal, +List, -Suffix)
+```
+Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_drop_while__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `Span/4`
+```
+Span(+Goal, +List, -Yes, -No)
+```
+`TakeWhile` + `DropWhile` in one pass. `Yes` is the longest prefix where `Goal` succeeds; `No` is the rest.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_span__4`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `GroupBy/3`
+```
+GroupBy(+Goal, +List, -Groups)
+```
+Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with equal consecutive keys are collected into sublists.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_group_by__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `SortBy/3`
+```
+SortBy(+Goal, +List, -Sorted)
+```
+Sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys).
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_sort_by__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `MaxBy/3`
+```
+MaxBy(+Goal, +List, -Max)
+```
+Element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_max_by__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `MinBy/3`
+```
+MinBy(+Goal, +List, -Min)
+```
+Element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_min_by__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
+
+---
+
+### `FilterMap/3`
+```
+FilterMap(+Goal, +List, -Result)
+```
+Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` when the goal succeeds, skips the element when it fails.
+
+**Implementation:** `clausal/logic/builtins/higher_order.py` (`_filter_map__3`)
+**Clausal tests:** `tests/fixtures/list_util.clausal`
+**Python tests:** `tests/test_list_util.py`
 
 ---
 
@@ -1236,6 +1405,7 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/builtins_arith.clausal` | `Between/3`, `Succ/2`, `Plus/3`, `Abs/2`, `Max/3`, `Min/3` |
 | `tests/fixtures/builtins_lists.clausal` | `In/2`, `InCheck/2`, `Append/3`, `Length/2`, `Last/2`, `Reverse/2`, `GetItem/3`, `Flatten/2`, `MergeSort/2`, `Sort/2`, `Permutation/2`, `Select/3`, `Subtract/3`, `Intersection/3`, `Union/3`, `ToSet/2`, `SumList/2`, `MaxList/2`, `MinList/2`, `Unzip/3`, `PairKeys/2`, `PairValues/2` |
 | `tests/fixtures/builtins_higher_order.clausal` | `MapList/2`, `MapList/3`, `Filter/3`, `Exclude/3`, `FoldLeft/4` |
+| `tests/fixtures/list_util.clausal` | `Take/3`, `Drop/3`, `SplitAt/4`, `Zip/3`, `Replicate/3`, `SplitWith/3`, `TakeWhile/3`, `DropWhile/3`, `Span/4`, `GroupBy/3`, `SortBy/3`, `MaxBy/3`, `MinBy/3`, `FilterMap/3` |
 | `tests/fixtures/builtins_keywords.clausal` | `Vary/3`, `Extend/3`, `UnboundKeys/2`, `Signature/3` |
 | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
 | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
