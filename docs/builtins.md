@@ -1673,6 +1673,85 @@ Nondeterministic — generates one solution for each `datetime.date` in `[Start,
 
 ---
 
+## YAML (`yaml_module` module)
+
+Standard library module wrapping Python's PyYAML. Import via `-import_from(yaml_module, [Read, Write, Get, ...])`. Data is represented as **native Python objects** — `dict`, `list`, `str`, `int`, `float`, `bool`, `None` — exactly what `yaml.safe_load` returns. Any Python method can be called on them via `++()` interop. See [yaml.md](yaml.md) for full documentation.
+
+Only `yaml.safe_load` is used (no arbitrary object construction from YAML tags).
+
+### `Read/2`
+
+```
+Read(+YamlString, -Data)
+```
+
+Parse a YAML string into a Python object (dict/list/scalar). Fails on invalid YAML.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `Write/2`
+
+```
+Write(+Data, -YamlString)
+```
+
+Serialize a Python object to a YAML string (block style, human-readable).
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `ReadAll/2`
+
+```
+ReadAll(+YamlString, -DocList)
+```
+
+Parse a multi-document YAML string (with `---` separators) into a list of Python objects.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `WriteAll/2`
+
+```
+WriteAll(+DocList, -YamlString)
+```
+
+Serialize a list of Python objects to a multi-document YAML string.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `ReadFile/2`
+
+```
+ReadFile(+Path, -Data)
+```
+
+Read and parse a YAML file. Fails if the file does not exist or contains invalid YAML.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `WriteFile/2`
+
+```
+WriteFile(+Path, +Data)
+```
+
+Write a Python object as YAML to a file.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+
+### `Get/3`
+
+```
+Get(+Data, +Path, -Value)
+```
+
+Navigate a nested dict/list structure. `Path` is a single key (string or int) or a list of keys for nested access. Fails if any key is missing or index is out of range.
+
+**Implementation:** `clausal/modules/yaml_module.py`
+**Python tests:** `tests/test_yaml_module.py`
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
@@ -1735,3 +1814,5 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/clpb_circuit.clausal` | `Sat/1`, `BoolLabeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
 | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
 | `tests/test_date_time.py` | `Now`, `NowUTC`, `Today`, `Date`, `Time`, `DateTime`, `TimeDelta`, `DateAdd`, `DateSub`, `DateDiff`, `FormatDate`, `ParseDate`, `DayOfWeek`, `DateBetween` (64 tests) |
+| `tests/test_yaml_module.py` | `Read`, `Write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
+| `tests/fixtures/yaml_basic.clausal` | `Read`, `Write`, `Get` — parsing, nested access, round-trip |

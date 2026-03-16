@@ -430,3 +430,4 @@ Currently provides:
 - **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, FindAll/3
 - **`log`** — GetLogger/1,2, Debug/1,2, Info/1,2, Warning/1,2, Error/1,2, Critical/1,2, Log/3, SetLevel/2, GetLevel/2, IsEnabledFor/2, StreamHandler/2, FileHandler/2, SetFormatter/2, AddHandler/2, RemoveHandler/2, BasicConfig/1. See [logging.md](logging.md)
 - **`date_time`** — Now/1, NowUTC/1, Today/1, Date/4, Time/4, DateTime/7, TimeDelta/3, DateAdd/3, DateSub/3, DateDiff/3, FormatDate/3, ParseDate/3, DayOfWeek/2, DateBetween/3. All predicates produce and consume real Python `datetime` objects (`datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta`) — not custom term types. See [builtins.md](builtins.md#date--time-date_time-module)
+- **`yaml_module`** — Read/2, Write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)

@@ -14,6 +14,7 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "greenlet",
+    "pyyaml>=6.0",
 ]
 
 [tool.setuptools.packages.find]
