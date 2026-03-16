@@ -595,6 +595,155 @@ phrase(push_all([1, 2, 3]), [[]], Rest)  # → Rest = [[3, 2, 1]]
 
 ---
 
+## Extended DCGs — EDCGs
+
+Standard DCGs thread a single state (the difference list). **Extended DCGs** add support for **multiple named accumulators** and **read-only passed arguments**, all threaded automatically through `>>` rules. This eliminates the boilerplate of manually encoding multiple states into a single compound value.
+
+EDCGs are based on Peter Van Roy's 1989 design and use three directives to declare the threading:
+
+### Declaring accumulators
+
+An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
+
+```python
+# Numeric counter: Out = In + Value
+-edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+
+# List accumulator: prepend items
+-edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+
+# Product accumulator: Out = In * Value
+-edcg_acc(product, X_, In_, Out_, {Out_ := In_ * X_})
+```
+
+The joiner goal can be any clausal goal wrapped in `{braces}`. The variable names (`X_`, `In_`, `Out_`) are placeholders — they get substituted with actual variables during rewriting.
+
+### Declaring passed arguments
+
+A **passed argument** is a read-only value threaded unchanged through all sub-calls:
+
+```python
+-edcg_pass(config)
+-edcg_pass(scale)
+```
+
+### Declaring predicates
+
+Each EDCG predicate must declare its **visible arity** and which accumulators/passes it uses:
+
+```python
+-edcg_pred(inc, 0, [counter])           # 0 visible args, uses counter
+-edcg_pred(process, 1, [counter, items]) # 1 visible arg, uses counter + items
+-edcg_pred(parse, 0, [counter, dcg])     # uses counter + standard DCG list
+-edcg_pred(scaled_inc, 0, [counter, scale])  # accumulator + passed arg
+```
+
+The special name `dcg` refers to the standard DCG difference-list accumulator. Include it when your EDCG rule also parses tokens.
+
+### EDCG rule syntax
+
+EDCG rules use `>>` just like standard DCGs, with additional operators:
+
+```python
+# Push a value to a named accumulator: [value] // acc_name
+inc >> ([1] // counter)
+
+# Read current accumulator value: acc_name / Var_
+get_and_inc(V_) >> (counter / V_, [1] // counter)
+
+# Read a passed argument: pass_name / Var_
+scaled_inc >> (scale / S_, [S_] // counter)
+
+# Terminal list (requires 'dcg' in the predicate's accumulator list)
+token(T_) >> ([T_], [1] // counter)
+
+# Inline goals don't thread accumulators
+inc_if_positive >> (counter / N_, {N_ >= 0}, [1] // counter)
+
+# Sub-calls: accumulators are threaded automatically
+count3 >> (inc, inc, inc)
+
+# Empty body: all accumulators pass through unchanged
+noop >> ([])
+```
+
+The `//` operator pushes a value through the accumulator's joiner goal. The `/` operator reads the current state without modifying it.
+
+### Multiple accumulators
+
+A single rule can update multiple accumulators simultaneously:
+
+```python
+-edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+-edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_pred(process, 1, [counter, items])
+
+# Each push targets a specific accumulator by name
+process(X_) >> ([1] // counter, [X_] // items)
+```
+
+When a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
+
+```python
+-edcg_pred(inc_only, 0, [counter])          # only counter
+-edcg_pred(do_both, 1, [counter, items])    # counter + items
+
+inc_only >> ([1] // counter)
+do_both(X_) >> (inc_only, [X_] // items)    # inc_only threads counter only
+```
+
+### Calling EDCG predicates
+
+EDCG predicates are compiled to ordinary predicates with hidden arguments appended in declaration order: 2 per accumulator (in, out) + 1 per pass. You can call them from regular `<-` clauses using keyword syntax:
+
+```python
+# -edcg_pred(count_elems, 1, [len])
+# Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
+my_length(L_, N_) <- count_elems(L_, _edcg_len_in_=0, _edcg_len_out_=N_)
+```
+
+Or positionally — hidden args follow visible args in the order declared:
+
+```python
+# count_elems(List, len_in, len_out)
+my_length(L_, N_) <- count_elems(L_, 0, N_)
+```
+
+### Complete example: counter with scale factor
+
+```python
+-module(example, [run_scaled(List_, Scale_, Count_, Items_)])
+
+-edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+-edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_pass(scale)
+
+-edcg_pred(scaled_inc, 0, [counter, scale])
+-edcg_pred(collect_and_count, 1, [counter, items, scale])
+-edcg_pred(process_list, 1, [counter, items, scale])
+
+scaled_inc >> (scale / S_, [S_] // counter)
+collect_and_count(X_) >> (scaled_inc, [X_] // items)
+
+process_list([]) >> ([])
+process_list([X_, *Xs_]) >> (collect_and_count(X_), process_list(Xs_))
+
+run_scaled(List_, Scale_, Count_, Items_) <- (
+    process_list(List_, _edcg_counter_in_=0, _edcg_counter_out_=Count_,
+                 _edcg_items_in_=[], _edcg_items_out_=Items_,
+                 _edcg_scale_=Scale_)
+)
+```
+
+### Design notes
+
+- **Purely syntactic**: EDCG `>>` rules are rewritten to ordinary `<-` clauses before compilation. No runtime support needed.
+- **Backward compatible**: Rules without `-edcg_pred` declarations continue to use standard DCG rewriting.
+- **`//` for push, `/` for read**: These use Python's floor-division and division operators respectively.
+- **Accumulator order matters**: Hidden args are appended in the order listed in `-edcg_pred`. When calling from `<-` clauses, match this order.
+
+---
+
 ## Meta-predicates
 
 Meta-predicates are higher-order predicates that take goals as arguments. They are compiled as special forms — the goal argument is compiled inline, not passed as a runtime value.
@@ -811,6 +960,14 @@ not_a >> (not ["a"], [X]),                # negation
 (peek(T), [T]) >> ([T]),                  # pushback/semicontext
 phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
 phrase(digit(D), [3], REST),              # phrase/3 — partial parse
+
+# EDCGs — extended DCGs with named accumulators
+-edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})  # declare accumulator
+-edcg_pass(config)                                       # declare passed arg
+-edcg_pred(inc, 0, [counter])                            # declare pred's hidden args
+inc >> ([1] // counter)                   # [value] // acc — push to accumulator
+get(V_) >> (counter / V_)                 # acc / Var — read current value
+scaled >> (scale / S_, [S_] // counter)   # pass / Var — read passed arg
 
 # Python interop (V2-16) — ++() evaluates Python at search time
 N_ is ++len(L_),                       # call Python builtin

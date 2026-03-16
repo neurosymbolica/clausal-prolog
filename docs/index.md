@@ -18,7 +18,7 @@ for solution in clausal.query(fib(10, N)):
 
 - **Pure Python syntax** — all clausal code is valid Python. No separate parser, no foreign syntax to learn.
 - **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
-- **Full-featured** — tabling, CLP(FD), DCGs, modules, term expansion, goal expansion, reified if-then-else.
+- **Full-featured** — tabling, CLP(FD), DCGs, EDCGs, modules, term expansion, goal expansion, reified if-then-else.
 - **Fast** — C extension for unification/trails, first-argument indexing, groundness-keyed dispatch, bytecode caching.
 
 ---
