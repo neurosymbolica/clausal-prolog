@@ -1526,6 +1526,153 @@ Call `logging.basicConfig()` with a dict of options (level, format, datefmt, fil
 
 ---
 
+## Date & Time (`date_time` module)
+
+Standard library module wrapping Python's `datetime`. Import via `-import_from(date_time, [Now, Today, Date, ...])`. All predicates produce and consume **real Python `datetime` objects** — `datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta` — not custom term types. Unification uses Python's native `==`. Any `datetime` method can be called via `++()` interop (e.g. `S_ is ++D_.isoformat()`).
+
+### `Now/1`
+```
+Now(-DT)
+```
+Unify `DT` with `datetime.datetime.now()` (naive, local time).
+
+**Implementation:** `clausal/modules/date_time.py`
+**Python tests:** `tests/test_date_time.py`
+
+---
+
+### `NowUTC/1`
+```
+NowUTC(-DT)
+```
+Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `Today/1`
+```
+Today(-D)
+```
+Unify `D` with `datetime.date.today()`.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `Date/4`
+```
+Date(?Year, ?Month, ?Day, ?DateObj)
+```
+Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, Day)`. If `DateObj` is a `datetime.date` (or `datetime.datetime`), decomposes into `Year`, `Month`, `Day`. Fails on invalid dates (e.g. month 13, Feb 29 in non-leap year).
+
+**Implementation:** `clausal/modules/date_time.py`
+**Python tests:** `tests/test_date_time.py`
+
+---
+
+### `Time/4`
+```
+Time(?Hour, ?Minute, ?Second, ?TimeObj)
+```
+Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, Second)`. If `TimeObj` is a `datetime.time`, decomposes into `Hour`, `Minute`, `Second`.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DateTime/7`
+```
+DateTime(?Year, ?Month, ?Day, ?Hour, ?Minute, ?Second, ?DtObj)
+```
+Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month, Day, Hour, Minute, Second)`. If `DtObj` is a `datetime.datetime`, decomposes into all six components.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `TimeDelta/3`
+```
+TimeDelta(?Days, ?Seconds, ?TdObj)
+```
+Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, seconds=Seconds)`. If `TdObj` is a `datetime.timedelta`, decomposes into `Days` and `Seconds`.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DateAdd/3`
+```
+DateAdd(+DateOrDatetime, +Timedelta, -Result)
+```
+`Result = DateOrDatetime + Timedelta`. Both inputs must be ground.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DateSub/3`
+```
+DateSub(+DateOrDatetime, +Timedelta, -Result)
+```
+`Result = DateOrDatetime - Timedelta`. Both inputs must be ground.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DateDiff/3`
+```
+DateDiff(+D1, +D2, -Timedelta)
+```
+`Timedelta = D1 - D2`. Both inputs must be `datetime.date` or `datetime.datetime`. Result is a `datetime.timedelta` (may be negative).
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `FormatDate/3`
+```
+FormatDate(+DateOrDatetime, +FormatStr, -ResultStr)
+```
+`ResultStr = DateOrDatetime.strftime(FormatStr)`. Works with `datetime.date`, `datetime.time`, and `datetime.datetime`.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `ParseDate/3`
+```
+ParseDate(+String, +FormatStr, -DatetimeObj)
+```
+`DatetimeObj = datetime.datetime.strptime(String, FormatStr)`. Fails if the string does not match the format.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DayOfWeek/2`
+```
+DayOfWeek(+DateOrDatetime, -Weekday)
+```
+`Weekday = DateOrDatetime.weekday()`. Monday = 0, Sunday = 6.
+
+**Implementation:** `clausal/modules/date_time.py`
+
+---
+
+### `DateBetween/3`
+```
+DateBetween(+Start, +End, -D)
+```
+Nondeterministic — generates one solution for each `datetime.date` in `[Start, End]` (inclusive). Fails if `Start > End`. This is the only date_time predicate that backtracks.
+
+**Implementation:** `clausal/modules/date_time.py`
+**Python tests:** `tests/test_date_time.py`
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
@@ -1587,3 +1734,4 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
 | `tests/fixtures/clpb_circuit.clausal` | `Sat/1`, `BoolLabeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
 | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
+| `tests/test_date_time.py` | `Now`, `NowUTC`, `Today`, `Date`, `Time`, `DateTime`, `TimeDelta`, `DateAdd`, `DateSub`, `DateDiff`, `FormatDate`, `ParseDate`, `DayOfWeek`, `DateBetween` (64 tests) |

@@ -271,3 +271,34 @@ _deref_walk(t)  # → fib(n=7, result=13)
 ```
 
 `_deref_walk` handles `Compound`, PredicateMeta instances, lists, and scalars recursively.
+
+---
+
+## Python Objects as Terms
+
+Any Python object can serve as a ground term in clausal. The C `unify` function handles non-Var, non-special objects via Python's `==` operator. This means standard library types like `datetime.date`, `datetime.datetime`, `datetime.time`, and `datetime.timedelta` work as first-class terms without any wrapping:
+
+```python
+import datetime as dt
+from clausal.logic.variables import Var, Trail, unify, deref
+
+trail = Trail()
+v = Var()
+unify(v, dt.date(2026, 3, 16), trail)
+deref(v)  # → datetime.date(2026, 3, 16)
+
+# Same date unifies; different dates fail
+unify(dt.date(2026, 3, 16), dt.date(2026, 3, 16), trail)  # → True
+unify(dt.date(2026, 3, 16), dt.date(2026, 3, 17), trail)  # → False
+```
+
+The `date_time` standard library module provides relational predicates (`Date/4`, `DateTime/7`, etc.) for constructing and decomposing these objects. But the objects themselves are ordinary Python — you can call any method via `++()` interop:
+
+```
+-import_from(date_time, [Date, FormatDate])
+
+IsoDate(Y_, M_, D_, S_) <- (
+    Date(Y_, M_, D_, Dt_)
+    and S_ is ++Dt_.isoformat()
+)
+```
