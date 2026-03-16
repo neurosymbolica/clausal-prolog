@@ -4,6 +4,8 @@
 
 `clausal.logic.compiler` translates predicate clauses into Python generator functions. Each compiled function implements a complete search over all clauses of a predicate: attempting each clause in order, setting up variable bindings via the Trail, running the clause body, yielding solutions, and undoing bindings on backtracking.
 
+`clausal.logic.compiler_v2` orchestrates module-level compilation — coordinating imports, directives, term expansion, clause assertion, and per-predicate compilation into a single pipeline. See [Module-level pipeline](#module-level-pipeline-v2) below.
+
 Two compilation strategies are available:
 
 | Strategy | Function | Stack growth | Use for |
@@ -336,3 +338,93 @@ class _DbDispatchAdapter:
 ```
 
 This gives the same `_get_dispatch()` call interface as a real PredicateMeta class, so the compiled call site (`fname._get_dispatch()(args, trail, k)`) is unchanged.
+
+---
+
+## Module-level pipeline (V2)
+
+`clausal.logic.compiler_v2.compile_module()` orchestrates the full module compilation pipeline. The import hook (`PredicateLoader.exec_module`) drives this after executing the Phase A bytecode.
+
+### Two-phase architecture
+
+```
+Phase A: Source → EmbedTransformer → module_items + Python AST bytecode
+Phase B: compile_module(predicate_nodes, module_items, module_dict) → compiled predicates
+```
+
+**Phase A** (AST transform time):
+- `EmbedTransformer` transforms `.clausal` source into Python AST
+- Accumulates `_module_items`: `DirectiveItem`, `ImportFromItem`, `ImportModuleItem`, `ModuleDeclItem`, `PrivateDeclItem`
+- Bytecode is cached in `__pycache__/` via `SourceLoader`
+
+**Phase B** (module exec time):
+- Bytecode execution creates PredicateMeta classes and collects `Predicate` nodes
+- `compile_module()` takes over from there
+
+### compile_module steps
+
+```python
+compile_module(predicate_nodes, module_items, module_dict, module_name)
+```
+
+| Step | What happens |
+|---|---|
+| 0. Imports | `_process_imports()` — execute `-import_from` and `-import_module` directives, populating `module_dict`. Bare module names (e.g. `regex`) are resolved via `clausal.modules` fallback. |
+| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [term_expansion.md](term_expansion.md) |
+| 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
+| 2. Directives | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
+| 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
+| 4. Assert clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. Clauses are synced to `pred_cls._clauses` |
+| 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
+| 6. Tabling | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
+| 7. Locking | Non-dynamic predicates are locked (`pred_cls._lock()`) to prevent runtime modification |
+
+### How predicate nodes are collected
+
+During Phase A bytecode execution, the import hook provides closures:
+
+- `$define_predicate(pred, lm)` — appends the `Predicate` node to a list (instead of asserting immediately as in the v1 pipeline)
+- `$assert_fact(term)` — converts the ground term to a `Predicate` node and appends
+
+This defers compilation until all clauses and directives are known, enabling term expansion to see and rewrite the full module before anything is compiled.
+
+### .pyc caching
+
+Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `source_to_code()` doesn't run — the transform is skipped entirely. Module items (directives/imports) are re-parsed from source in a lightweight pass since they aren't part of the bytecode cache. See [caching.md](caching.md).
+
+---
+
+## Goal expansion (V3-3)
+
+`clausal.logic.goal_expansion.run_goal_expansion()` walks clause bodies and applies built-in goal transformations between term expansion and directive processing. It recurses into `And`, `Or`, `Not`, and `IfExpr` nodes, applying expansion rules to leaf goals.
+
+### Regex auto-binding
+
+When a `Match/2` or `Search/2` call has a static pattern string containing ALLCAPS or trailing-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
+
+```
+# Source:
+parse(S, YEAR, MONTH) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
+
+# After expansion (conceptual):
+parse(S, YEAR, MONTH) <- (
+    Match(_re_0, S, _groups) and
+    YEAR is ++_groups["YEAR"] and
+    MONTH is ++_groups["MONTH"]
+)
+```
+
+The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. Group-to-variable mapping uses `_collect_vars_from_term()` to find clause variables by field name (lowercased, stripped of trailing underscore).
+
+Lowercase named groups are NOT auto-bound — they function as regex-only groups (useful for backreferences). This gives explicit control over which groups leak into the logic variable namespace.
+
+### Pattern pre-compilation
+
+All static patterns (string literals) in `Match` and `Search` calls are pre-compiled via `re.compile()` and stored in `module_dict`. The goal's pattern argument is replaced with a `LoadName` referencing the compiled object. Dynamic patterns (f-strings, variables) are left unchanged.
+
+### `clausal.modules` — standard library package
+
+`clausal/modules/` is a Python package that acts as the standard library search path for Clausal module imports. A `ModulesFinder` meta path finder (registered in `import_hook.py`) redirects bare module names to `clausal.modules.<name>`, so `-import_from(regex, [Match, ...])` resolves to `clausal.modules.regex` transparently.
+
+Currently provides:
+- **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, FindAll/3

@@ -3,18 +3,21 @@
 ## Layer stack
 
 ```
+clausal.modules              standard library modules (regex, …)
+clausal.logic.goal_expansion body-goal rewriting pass (V3-3)
+clausal.logic.compiler_v2    module-level compilation pipeline (V3-2)
+clausal.logic.term_expansion TermExpansion/4 rewrite engine (V3-2)
 clausal.logic.tabling (wfs)  well-founded semantics (V2-7)
 clausal.logic.clpfd          CLP(FD) finite-domain constraints (V2-6)
 clausal.logic.constraints    dif/2 via attribute variables (V2-5)
 clausal.logic.tabling        SLG resolution (V2-4b)
-clausal.logic.runtime        (planned) database, SLD search
 clausal.logic.compiler       Prolog-style predicates → Python generator AST
 clausal.continuation_search  greenlet-based search iterator
 clausal.trampoline           generator trampoline, stack-safe CPS
 clausal.logic.variables      C extension: unification, trails, backtracking, AttVars
-clausal.term_rewriting       DSL syntax → AST
+clausal.term_rewriting       DSL syntax → AST (DCG >> rewriting, q() quasi-quotation)
 clausal.simple_ast           term representation (homoiconic)
-clausal.import_hook          transparent import; IPython integration
+clausal.import_hook          transparent import; module system (V3-1); ModulesFinder
 ```
 
 Each layer builds on the one below. Python code and logic code can interact at any layer.
@@ -188,3 +191,9 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Control exceptions | Done — throw/1, catch/3, halt/0, halt/1 (V2-14) |
 | I/O builtins | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support (V2-15) |
 | Python interop | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper (V2-16) |
+| DCGs | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading (V2-17) |
+| Module system | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution (V3-1) |
+| Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture (V3-2) |
+| Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection (V3-2) |
+| Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation (V3-3) |
+| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module (Match, Search, Replace, Split, FindAll) (V3-3) |
