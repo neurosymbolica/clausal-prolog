@@ -1,0 +1,5 @@
+# Term expansion: suppress all items
+TermExpansion(Term_, "none", M0_, M0_) <- True
+
+foo("a"),
+foo("b"),
