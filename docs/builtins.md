@@ -1353,6 +1353,179 @@ Unify `String` with the `term_str` representation of `Term` (structured, with qu
 
 ---
 
+## Logging (`log` module)
+
+Standard library module wrapping Python's `logging`. Import via `-import_from(log, [...])`. See [logging.md](logging.md) for full documentation.
+
+All logging predicates always succeed (side-effect only). Messages below the logger's configured level are silently discarded.
+
+### `GetLogger/1`, `GetLogger/2`
+```
+GetLogger(-Logger)
+GetLogger(+Name, -Logger)
+```
+Unify `Logger` with a Python `logging.Logger` instance. Arity-1 returns the default `"clausal"` logger. Same name always returns same logger instance.
+
+**Implementation:** `clausal/modules/log.py`
+**Python tests:** `tests/test_logging_module.py`
+
+---
+
+### `Debug/1`, `Debug/2`
+```
+Debug(+Msg)
+Debug(+Logger, +Msg)
+```
+Log at DEBUG level. Arity-1 uses default `"clausal"` logger.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `Info/1`, `Info/2`
+```
+Info(+Msg)
+Info(+Logger, +Msg)
+```
+Log at INFO level.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `Warning/1`, `Warning/2`
+```
+Warning(+Msg)
+Warning(+Logger, +Msg)
+```
+Log at WARNING level.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `Error/1`, `Error/2`
+```
+Error(+Msg)
+Error(+Logger, +Msg)
+```
+Log at ERROR level.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `Critical/1`, `Critical/2`
+```
+Critical(+Msg)
+Critical(+Logger, +Msg)
+```
+Log at CRITICAL level.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `Log/3`
+```
+Log(+Logger, +Level, +Msg)
+```
+Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or integer.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `SetLevel/2`
+```
+SetLevel(+Logger, +Level)
+```
+Set the logger's effective level.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `GetLevel/2`
+```
+GetLevel(+Logger, -Level)
+```
+Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `IsEnabledFor/2`
+```
+IsEnabledFor(+Logger, +Level)
+```
+Succeeds if the logger would process a message at `Level`; fails otherwise. The only logging predicate that can fail.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `StreamHandler/2`
+```
+StreamHandler(+StreamName, -Handler)
+```
+Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `FileHandler/2`
+```
+FileHandler(+Path, -Handler)
+```
+Create a `logging.FileHandler` for the given path.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `SetFormatter/2`
+```
+SetFormatter(+Handler, +FormatString)
+```
+Set a `logging.Formatter` on the handler using Python format string syntax.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `AddHandler/2`
+```
+AddHandler(+Logger, +Handler)
+```
+Add a handler to the logger.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `RemoveHandler/2`
+```
+RemoveHandler(+Logger, +Handler)
+```
+Remove a handler from the logger.
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
+### `BasicConfig/1`
+```
+BasicConfig(+Opts)
+```
+Call `logging.basicConfig()` with a dict of options (level, format, datefmt, filename, filemode, stream).
+
+**Implementation:** `clausal/modules/log.py`
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
@@ -1413,3 +1586,4 @@ The following are not builtins in the registry — they are syntax forms compile
 | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
 | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
 | `tests/fixtures/clpb_circuit.clausal` | `Sat/1`, `BoolLabeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
+| `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |

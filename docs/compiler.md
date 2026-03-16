@@ -428,3 +428,4 @@ All static patterns (string literals) in `Match` and `Search` calls are pre-comp
 
 Currently provides:
 - **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, FindAll/3
+- **`log`** — GetLogger/1,2, Debug/1,2, Info/1,2, Warning/1,2, Error/1,2, Critical/1,2, Log/3, SetLevel/2, GetLevel/2, IsEnabledFor/2, StreamHandler/2, FileHandler/2, SetFormatter/2, AddHandler/2, RemoveHandler/2, BasicConfig/1. See [logging.md](logging.md)

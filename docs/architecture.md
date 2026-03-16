@@ -3,7 +3,7 @@
 ## Layer stack
 
 ```
-clausal.modules              standard library modules (regex, …)
+clausal.modules              standard library modules (regex, log, …)
 clausal.logic.goal_expansion body-goal rewriting pass (V3-3)
 clausal.logic.compiler_v2    module-level compilation pipeline (V3-2)
 clausal.logic.term_expansion TermExpansion/4 rewrite engine (V3-2)
@@ -196,4 +196,4 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture (V3-2) |
 | Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection (V3-2) |
 | Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation (V3-3) |
-| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module (Match, Search, Replace, Split, FindAll) (V3-3) |
+| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module (V3-3), `log` module (structured logging wrapping Python's `logging`) |
