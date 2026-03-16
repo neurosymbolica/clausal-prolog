@@ -1,0 +1,3 @@
+# Module that provides TermExpansion rules for import.
+# Duplicates each item (one-to-many expansion).
+TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True

@@ -50,6 +50,10 @@ def run_term_expansion(
     Separates TermExpansion clauses from regular items, compiles the
     expansion rules, then applies them to each regular item.
 
+    Also checks ``module_dict`` for imported modules whose LogicModule
+    carries ``_te_predicate_nodes`` — these are TermExpansion clauses
+    from ``-import_from`` directives processed earlier in the pipeline.
+
     Returns the (possibly rewritten) list of predicate nodes.  If no
     TermExpansion clauses exist, returns predicate_nodes unchanged
     (zero overhead).
@@ -75,15 +79,33 @@ def run_term_expansion(
         else:
             regular_items.append(node)
 
-    # Step 2: If no expansion clauses, return unchanged (zero overhead).
-    if not expansion_clauses:
+    # Step 1b: Check for imported TermExpansion rules.
+    imported_te_clauses = _collect_imported_te_clauses(module_dict)
+
+    # Step 2: If no expansion clauses (local or imported), return unchanged.
+    if not expansion_clauses and not imported_te_clauses:
         return predicate_nodes
 
     # Step 3: Compile TermExpansion clauses into a mini logic module.
-    expansion_module = _compile_expansion_rules(expansion_clauses, module_dict)
+    # Imported rules come first (lower priority), then local rules.
+    all_te_clauses = imported_te_clauses + expansion_clauses
+    expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
+
+    # Store local TE predicate nodes for downstream importers.
+    # Attach to both the LogicModule and the TermExpansion class (if present)
+    # so that -import_from(mod, [TermExpansion]) can pick them up.
+    if expansion_clauses:
+        lm = module_dict.get("$module")
+        if lm is not None:
+            lm._te_predicate_nodes = list(expansion_clauses)
+        te_cls = module_dict.get("TermExpansion")
+        if isinstance(te_cls, PredicateMeta):
+            te_cls._te_predicate_nodes = list(expansion_clauses)
 
     # Step 4: Initialize module state: module([], [], "nil")
-    module_state = _make_module_state([], [], "nil")
+    # Use the same module class from the expansion module so unification works.
+    mod_cls = expansion_module.module_dict["module"]
+    module_state = mod_cls([], [], "nil")
 
     # Step 5: Expand each regular item.
     expanded = []
@@ -103,6 +125,44 @@ def run_term_expansion(
     return init_items + expanded + final_items
 
 
+def _collect_imported_te_clauses(module_dict: dict) -> list:
+    """Collect TermExpansion predicate nodes from imported modules.
+
+    Checks two sources:
+    1. Python modules in ``module_dict`` whose ``$module`` LogicModule
+       carries ``_te_predicate_nodes``.
+    2. PredicateMeta classes named ``TermExpansion`` that carry
+       ``_te_predicate_nodes`` (set when a module with TE rules is loaded).
+
+    This allows both ``-import_module(mod)`` and
+    ``-import_from(mod, [TermExpansion])`` to provide expansion rules.
+    """
+    import types
+    seen = set()  # avoid duplicates
+    result = []
+
+    for value in module_dict.values():
+        # Case 1: imported Python module with $module
+        if isinstance(value, types.ModuleType):
+            lm = value.__dict__.get("$module")
+            if lm is not None:
+                te_nodes = getattr(lm, "_te_predicate_nodes", None)
+                if te_nodes and id(te_nodes) not in seen:
+                    seen.add(id(te_nodes))
+                    result.extend(te_nodes)
+        # Case 2: imported TermExpansion PredicateMeta class
+        elif (
+            isinstance(value, PredicateMeta)
+            and getattr(value, "__name__", "") == "TermExpansion"
+        ):
+            te_nodes = getattr(value, "_te_predicate_nodes", None)
+            if te_nodes and id(te_nodes) not in seen:
+                seen.add(id(te_nodes))
+                result.extend(te_nodes)
+
+    return result
+
+
 def _make_module_state(init_list, final_list, user_state):
     """Create a module(Init, Final, State) term."""
     module_cls = make_predicate("module", ["init", "final", "state"])
@@ -112,8 +172,12 @@ def _make_module_state(init_list, final_list, user_state):
 def _compile_expansion_rules(expansion_clauses, module_dict):
     """Compile TermExpansion clauses into a mini LogicModule."""
     from clausal.logic.database import Module as LogicModule
+    from clausal.logic.builtins import structural_unify
 
     lm = LogicModule("_term_expansion_", module_dict=dict(module_dict))
+    # Use structural_unify so PredicateMeta terms (e.g. module state) can be
+    # destructured in TE clause bodies.  C-level unify only handles Var/list/tuple.
+    lm.module_dict["unify"] = structural_unify
 
     # Create the TermExpansion PredicateMeta class.
     te_cls = make_predicate("TermExpansion", ["term", "expansion", "module_before", "module_after"])
@@ -192,9 +256,36 @@ def _extract_init_final(module_state):
     except (AttributeError, TypeError):
         init, final = [], []
 
-    if not isinstance(init, list):
-        init = []
-    if not isinstance(final, list):
-        final = []
+    init = _flatten_cons_list(init)
+    final = _flatten_cons_list(final)
 
     return init, final
+
+
+def _flatten_cons_list(value):
+    """Convert a possibly-cons Python list to a flat list of items.
+
+    Clausal ``[H | T]`` produces a Python list ``[BitOr(H, T)]``.
+    Walk the chain to collect all heads.  Plain lists pass through.
+    """
+    from clausal.logic.variables import deref as _deref
+    from clausal.pythonic_ast.nodes import BitOr
+
+    if not isinstance(value, list):
+        return []
+
+    result = []
+    for item in value:
+        item = _deref(item)
+        if isinstance(item, BitOr):
+            # Walk the cons chain: BitOr(head, tail)
+            node = item
+            while isinstance(node, BitOr):
+                result.append(_deref(node.left))
+                node = _deref(node.right)
+            # Tail: if it's a non-empty list, extend
+            if isinstance(node, list):
+                result.extend(_flatten_cons_list(node))
+        else:
+            result.append(item)
+    return result

@@ -1,0 +1,6 @@
+# Imports TermExpansion rules from expansion_provider.
+# The imported TE rule duplicates each item.
+-import_from(expansion_provider, [TermExpansion])
+
+color("red"),
+color("green"),

@@ -64,12 +64,13 @@ def compile_module(
     logic_module = LogicModule(module_name, module_dict=module_dict)
     db = logic_module.db
 
-    # ── Step 0: Term expansion (before directive processing) ────────────
+    # ── Step 0: Process imports (before term expansion, so imported TE
+    #    rules are available) ──────────────────────────────────────────────
+    _process_imports(module_items, module_dict)
+
+    # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
     predicate_nodes = run_term_expansion(predicate_nodes, module_dict)
-
-    # ── Step 1: Process imports ──────────────────────────────────────────
-    _process_imports(module_items, module_dict)
 
     # ── Step 2: Process directives ───────────────────────────────────────
     _process_directives(module_items, db)

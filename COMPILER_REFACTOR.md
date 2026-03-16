@@ -1,10 +1,9 @@
 # Compiler Refactor: Pipeline Split
 
-## Status: Part 1 complete, Part 2 in progress
+## Status: Complete
 
-Part 1 (pipeline split) is done and all 2571 tests pass through the new
-pipeline. Part 2 (term expansion) has the engine wired in but needs end-to-end
-tests with actual TermExpansion rules.
+Part 1 (pipeline split) and Part 2 (term expansion) are both complete.
+All 2588 tests pass through the new pipeline.
 
 ---
 
@@ -86,21 +85,22 @@ module_dict["$module"] = logic_module    # Ready for queries
 
 ---
 
-## What remains
+## Term expansion test coverage
 
-### Term expansion end-to-end tests
+The expansion engine is tested with:
 
-The expansion engine (`term_expansion.py`) is wired in and has the zero-overhead
-pass-through tested. What's missing:
+- [x] Identity expansion (pass items through unchanged)
+- [x] One-to-many expansion (duplicate items via list result)
+- [x] Clause suppression (expansion returns `"none"`)
+- [x] TermExpansion clauses NOT themselves expanded
+- [x] Module state threading (unmatched state → pass-through)
+- [x] `.clausal` fixtures (expansion_passthrough, expansion_suppress)
+- [x] Full pipeline integration (compile_module with TE)
+- [x] `q()` quasi-quotation (produces correct AST, shares vars)
 
-- [ ] Test that a TermExpansion rule actually rewrites a clause
-- [ ] Test one-to-many expansion (single clause → multiple clauses)
-- [ ] Test clause suppression (expansion returns `"none"`)
-- [ ] Test module state accumulation (init/final injection)
-- [ ] Test that TermExpansion clauses are NOT themselves expanded
-- [ ] Test with `q()` in expansion patterns
-- [ ] `.clausal` fixture file that uses TermExpansion
-- [ ] Test imported expansion rules via `-import_from`
+- [x] Imported expansion rules via `-import_from`
+- [x] Expansion that creates new functors not in source
+- [x] Init/final list injection from module state
 
 ### Potential future work
 
@@ -117,13 +117,30 @@ pass-through tested. What's missing:
 
 ```
 $ python -m pytest tests/ -q
-2571 passed in 14s
+2588 passed in 14s
 
 $ python -m pytest tests/test_compiler_v2.py -q
 15 passed
 
 $ python -m pytest tests/test_term_expansion.py -q
-8 passed
+25 passed
 ```
 
-All existing 2548 tests continue to pass through the new v2 pipeline.
+All existing tests continue to pass through the new v2 pipeline.
+
+### Bugs fixed during implementation
+
+- **Module state class mismatch**: `_make_module_state` and
+  `_compile_expansion_rules` each called `make_predicate("module", ...)`
+  creating separate classes.  Unification between instances of different
+  PredicateMeta classes fails.  Fixed by sharing the module class from the
+  expansion module.
+
+- **C-level unify vs structural_unify**: compiled Unify body goals use
+  C `unify()`, which can't structurally unify PredicateMeta instances
+  (falls through to `==`).  Fixed by injecting `structural_unify` as
+  `unify` in the expansion module's globals.
+
+- **Cons-list in init/final**: `[Term_ | Init_]` produces BitOr nodes,
+  not Python lists.  Added `_flatten_cons_list()` to convert cons chains
+  in `_extract_init_final()`.

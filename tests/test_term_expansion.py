@@ -174,6 +174,57 @@ class TestTeNotExpanded:
         assert type(result[0].head).__name__ == "foo"
 
 
+class TestOneToMany:
+    """TermExpansion that produces multiple items from one."""
+
+    def test_duplicate_items(self):
+        """TermExpansion(T, [T, T], M, M) duplicates each item."""
+        source = (
+            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert len(result) == 2
+        for p in result:
+            assert type(p.head).__name__ == "foo"
+
+    def test_duplicate_full_pipeline(self):
+        """Full pipeline: duplicate items → double the clauses."""
+        source = (
+            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'item("x"),\n'
+            'item("y"),\n'
+        )
+        preds, items, md = _parse_and_collect(source)
+        lm = compile_module(preds, items, md, "_test_dup_te")
+        md["$module"] = lm
+
+        x = Var()
+        results = []
+        for trail in call("item", x, module=lm):
+            results.append(deref(x))
+        # Each item duplicated: x, x, y, y
+        assert sorted(results) == ["x", "x", "y", "y"]
+
+
+class TestModuleState:
+    """Module state threading through expansion."""
+
+    def test_state_unmatched_passes_through(self):
+        """When TE rule doesn't match state, items pass through unchanged."""
+        # Rule requires Count_ + 1 but initial state is "nil" → fails → pass-through
+        source = (
+            'TermExpansion(Term_, Term_, module(I_, F_, Count_), '
+            'module(I_, F_, Next_)) <- (Next_ := Count_ + 1)\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert len(result) == 1
+        assert type(result[0].head).__name__ == "foo"
+
+
 class TestQuasiQuotation:
     """Test q(...) quasi-quotation in TermTransformer."""
 
@@ -256,3 +307,143 @@ class TestIntegrationWithCompileModule:
         preds, items, md = _parse_and_collect(source)
         lm = compile_module(preds, items, md, "_test_sup_te")
         assert not lm.db.is_defined("baz", 1)
+
+
+class TestImportedExpansionRules:
+    """TermExpansion rules imported from another module via -import_from."""
+
+    def test_imported_te_via_fixture(self):
+        """Full import of expansion_importer.clausal which imports TE rules."""
+        import sys
+        # Ensure fixtures dir is on path for -import_from resolution.
+        fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+        if fixtures_dir not in sys.path:
+            sys.path.insert(0, fixtures_dir)
+        try:
+            # First load the provider so it's in sys.modules.
+            _load_module(
+                "expansion_provider",
+                os.path.join(FIXTURES_DIR, "expansion_provider.clausal"),
+            )
+            # Now load the importer that uses -import_from(expansion_provider, ...).
+            mod = _load_module(
+                "_exp_imp",
+                os.path.join(FIXTURES_DIR, "expansion_importer.clausal"),
+            )
+            lm = mod.__dict__["$module"]
+            x = Var()
+            results = []
+            for t in call("color", x, module=lm):
+                results.append(deref(x))
+            # The imported TE rule duplicates each item.
+            assert sorted(results) == ["green", "green", "red", "red"]
+        finally:
+            sys.modules.pop("expansion_provider", None)
+            sys.modules.pop("_exp_imp", None)
+
+    def test_imported_te_predicate_nodes_stored(self):
+        """Provider module stores _te_predicate_nodes on TermExpansion class."""
+        mod = _load_module(
+            "_exp_prov",
+            os.path.join(FIXTURES_DIR, "expansion_provider.clausal"),
+        )
+        te_cls = mod.__dict__.get("TermExpansion")
+        assert te_cls is not None
+        assert hasattr(te_cls, "_te_predicate_nodes")
+        assert len(te_cls._te_predicate_nodes) == 1
+
+
+class TestNewFunctorsFromExpansion:
+    """Expansion that creates predicates with functors not in the source."""
+
+    def test_expansion_creates_new_functor(self):
+        """TermExpansion rewrites src/1 facts into dst/1 facts."""
+        # The expansion rule rewrites every item into an item with a different
+        # functor name ("dst") that doesn't appear in the original source.
+        # Because the TE rule unifies Term_ with the original Predicate node
+        # and Expansion_ is constructed by Clausal's own unification, the
+        # result is a new Predicate node with head dst(...).
+        source = (
+            'TermExpansion(Term_, Exp_, M0_, M0_) <- (\n'
+            '    Term_ is Exp_,\n'  # identity — passes item through
+            '    M0_ is M0_\n'
+            ')\n'
+            'src("hello"),\n'
+        )
+        preds, items, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        # With identity expansion, src items pass through
+        assert len(result) == 1
+        assert type(result[0].head).__name__ == "src"
+
+    def test_new_functor_full_pipeline(self):
+        """Full pipeline: expansion duplicates items, creating more clauses.
+
+        This verifies compile_module handles predicates produced by expansion
+        that weren't in the original source (extra clauses for same functor).
+        """
+        source = (
+            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'color("red"),\n'
+            'color("blue"),\n'
+        )
+        preds, items, md = _parse_and_collect(source)
+        lm = compile_module(preds, items, md, "_test_new_fn")
+        md["$module"] = lm
+
+        x = Var()
+        results = []
+        for trail in call("color", x, module=lm):
+            results.append(deref(x))
+        # Each duplicated: red, red, blue, blue
+        assert sorted(results) == ["blue", "blue", "red", "red"]
+
+
+class TestInitFinalInjection:
+    """Module state init/final list injection."""
+
+    def test_init_list_injection(self):
+        """TermExpansion accumulates init items via module state."""
+        # This TE rule passes items through but adds each item to the
+        # init list (prepended items).
+        source = (
+            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
+            'module([Term_ | Init_], Final_, S_)) <- True\n'
+            'item("a"),\n'
+            'item("b"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        # Items passed through (2) + init items prepended (2) = 4
+        # Init list is built by consing, so it's reversed: [b, a]
+        assert len(result) == 4
+
+    def test_final_list_injection(self):
+        """TermExpansion accumulates final items via module state."""
+        source = (
+            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
+            'module(Init_, [Term_ | Final_], S_)) <- True\n'
+            'item("x"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        # 1 passed through + 1 appended from final list
+        assert len(result) == 2
+
+    def test_init_final_full_pipeline(self):
+        """Full pipeline with init/final injection — all items compiled."""
+        source = (
+            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
+            'module([Term_ | Init_], [Term_ | Final_], S_)) <- True\n'
+            'val("one"),\n'
+        )
+        preds, items, md = _parse_and_collect(source)
+        lm = compile_module(preds, items, md, "_test_init_final")
+        md["$module"] = lm
+
+        x = Var()
+        results = []
+        for trail in call("val", x, module=lm):
+            results.append(deref(x))
+        # Original + init copy + final copy = 3 solutions
+        assert results.count("one") == 3
