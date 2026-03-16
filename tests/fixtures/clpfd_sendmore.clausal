@@ -1,13 +1,13 @@
-Sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
-    InDomain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
-    and AllDifferent([S_, E_, N_, D_, M_, O_, R_, Y_])
-    and S_ != 0
-    and M_ != 0
-    and Label([S_, E_, N_, D_, M_, O_, R_, Y_])
-    and (Send_ := S_ * 1000 + E_ * 100 + N_ * 10 + D_)
-    and (More_ := M_ * 1000 + O_ * 100 + R_ * 10 + E_)
-    and (Money_ := M_ * 10000 + O_ * 1000 + N_ * 100 + E_ * 10 + Y_)
-    and (Sum_ := Send_ + More_)
-    and Sum_ == Money_
+Sendmoney(S, E, N, D, M, O, R, Y) <- (
+    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
+    AllDifferent([S, E, N, D, M, O, R, Y]),
+    S != 0,
+    M != 0,
+    Label([S, E, N, D, M, O, R, Y]),
+    Send := S * 1000 + E * 100 + N * 10 + D,
+    More := M * 1000 + O * 100 + R * 10 + E,
+    Money := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    Sum := Send + More),
+    Sum == Money,
 )
 
