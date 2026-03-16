@@ -215,8 +215,8 @@ class TestModuleState:
         """When TE rule doesn't match state, items pass through unchanged."""
         # Rule requires Count_ + 1 but initial state is "nil" → fails → pass-through
         source = (
-            'TermExpansion(Term_, Term_, module(I_, F_, Count_), '
-            'module(I_, F_, Next_)) <- (Next_ := Count_ + 1)\n'
+            'TermExpansion(Term_, Term_, ModuleExpansionState(I_, F_, Count_), '
+            'ModuleExpansionState(I_, F_, Next_)) <- (Next_ := Count_ + 1)\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -407,8 +407,8 @@ class TestInitFinalInjection:
         # This TE rule passes items through but adds each item to the
         # init list (prepended items).
         source = (
-            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
-            'module([Term_ | Init_], Final_, S_)) <- True\n'
+            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
+            'ModuleExpansionState([Term_ | Init_], Final_, S_)) <- True\n'
             'item("a"),\n'
             'item("b"),\n'
         )
@@ -421,8 +421,8 @@ class TestInitFinalInjection:
     def test_final_list_injection(self):
         """TermExpansion accumulates final items via module state."""
         source = (
-            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
-            'module(Init_, [Term_ | Final_], S_)) <- True\n'
+            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
+            'ModuleExpansionState(Init_, [Term_ | Final_], S_)) <- True\n'
             'item("x"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -433,8 +433,8 @@ class TestInitFinalInjection:
     def test_init_final_full_pipeline(self):
         """Full pipeline with init/final injection — all items compiled."""
         source = (
-            'TermExpansion(Term_, Term_, module(Init_, Final_, S_), '
-            'module([Term_ | Init_], [Term_ | Final_], S_)) <- True\n'
+            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
+            'ModuleExpansionState([Term_ | Init_], [Term_ | Final_], S_)) <- True\n'
             'val("one"),\n'
         )
         preds, items, md = _parse_and_collect(source)

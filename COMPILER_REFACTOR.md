@@ -131,9 +131,9 @@ All existing tests continue to pass through the new v2 pipeline.
 ### Bugs fixed during implementation
 
 - **Module state class mismatch**: `_make_module_state` and
-  `_compile_expansion_rules` each called `make_predicate("module", ...)`
+  `_compile_expansion_rules` each called `make_predicate("ModuleExpansionState", ...)`
   creating separate classes.  Unification between instances of different
-  PredicateMeta classes fails.  Fixed by sharing the module class from the
+  PredicateMeta classes fails.  Fixed by sharing the class from the
   expansion module.
 
 - **C-level unify vs structural_unify**: compiled Unify body goals use

@@ -10,7 +10,7 @@ Protocol::
 
 - TERM: runtime Predicate node being expanded
 - EXPANSION: single Predicate, list of Predicates, or atom ``"none"`` (suppress)
-- MODULE_BEFORE: ``module(InitList, FinalList, UserState)``
+- MODULE_BEFORE: ``ModuleExpansionState(InitList, FinalList, UserState)``
 - MODULE_AFTER: same, updated
 
 Module state is threaded through all items left-to-right.  Items that
@@ -102,9 +102,9 @@ def run_term_expansion(
         if isinstance(te_cls, PredicateMeta):
             te_cls._te_predicate_nodes = list(expansion_clauses)
 
-    # Step 4: Initialize module state: module([], [], "nil")
-    # Use the same module class from the expansion module so unification works.
-    mod_cls = expansion_module.module_dict["module"]
+    # Step 4: Initialize module state: ModuleExpansionState([], [], "nil")
+    # Use the same class from the expansion module so unification works.
+    mod_cls = expansion_module.module_dict["ModuleExpansionState"]
     module_state = mod_cls([], [], "nil")
 
     # Step 5: Expand each regular item.
@@ -164,8 +164,8 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
 
 
 def _make_module_state(init_list, final_list, user_state):
-    """Create a module(Init, Final, State) term."""
-    module_cls = make_predicate("module", ["init", "final", "state"])
+    """Create a ModuleExpansionState(Init, Final, State) term."""
+    module_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
     return module_cls(init_list, final_list, user_state)
 
 
@@ -183,9 +183,9 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     te_cls = make_predicate("TermExpansion", ["term", "expansion", "module_before", "module_after"])
     lm.module_dict["TermExpansion"] = te_cls
 
-    # Also ensure "module" class exists for state threading.
-    mod_cls = make_predicate("module", ["init", "final", "state"])
-    lm.module_dict["module"] = mod_cls
+    # Also ensure ModuleExpansionState class exists for state threading.
+    mod_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
+    lm.module_dict["ModuleExpansionState"] = mod_cls
 
     # Assert each expansion clause.
     for pred_node in expansion_clauses:
