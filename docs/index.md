@@ -97,4 +97,5 @@ for s in m.query(grandparent("tom", G)):
 | [Date/Time](date_time.md) | Date, time, and datetime predicates |
 | [Logging](logging.md) | Structured logging predicates |
 | [UUID](uuid.md) | UUID generation and inspection |
+| [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
 | [SQLite](sqlite.md) | SQLite database predicates |
