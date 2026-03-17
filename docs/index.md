@@ -100,3 +100,4 @@ for s in m.query(grandparent("tom", G)):
 | [UUID](uuid.md) | UUID generation and inspection |
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
 | [SQLite](sqlite.md) | SQLite database predicates |
+| [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |

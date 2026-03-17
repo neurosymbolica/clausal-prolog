@@ -14,6 +14,7 @@ Canonical modules (``py.*`` subpackage):
 - ``py.sympy``    — Sym, Simplify, Expand, Factor, Solve, SolveAll, Diff, Integrate, Limit, Series, Subs, FreeVars, ToSympy, FromSympy
 - ``py.uuid``     — UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, ...
 - ``py.sqlite``   — SQLiteConnect, SQLiteQuery, SQLiteExec, SQLiteTable, ...
+- ``py.spacy``    — LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText, TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity, EntityList, Sentence, SentenceList, Similarity, NounChunk
 
 Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 
@@ -24,4 +25,5 @@ Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 - ``sympy_module``→ ``py.sympy``
 - ``uuid_mod``    → ``py.uuid``
 - ``sqlite``      → ``py.sqlite``
+- ``spacy_module``→ ``py.spacy``
 """
