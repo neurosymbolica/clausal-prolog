@@ -1096,6 +1096,29 @@ def _dotted_name_from_ast(node):
     return None
 
 
+# Map bare import names to ``clausal.modules.<file_basename>`` for the
+# generated ``from … import …`` AST node.  Only names listed here are
+# rewritten; other bare names are left for the import hook / meta-path
+# finders to resolve.  An alias is needed when the Clausal module name
+# would shadow a Python stdlib module (e.g. ``uuid`` ships as
+# ``clausal/modules/uuid_mod.py``).
+_IMPORT_ALIASES: dict[str, str] = {
+    "uuid": "uuid_mod",
+}
+
+
+def _resolve_import_path(module_path: str) -> str:
+    """Rewrite aliased import paths to avoid stdlib collisions.
+
+    Only names in ``_IMPORT_ALIASES`` are rewritten to their qualified
+    ``clausal.modules.*`` form.  All other paths are returned unchanged.
+    """
+    mapped = _IMPORT_ALIASES.get(module_path)
+    if mapped is not None:
+        return f"clausal.modules.{mapped}"
+    return module_path
+
+
 def _parse_pred_arity_args(args, directive_name):
     """Parse ``pred/arity, ...`` arguments from a directive AST.
 
@@ -2471,8 +2494,14 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(
             ImportFromItem(module=module_path, names=import_names)
         )
+        # Resolve the module path for the generated ImportFrom AST node.
+        # Bare names are mapped to ``clausal.modules.<name>`` so the
+        # generated ``from ... import ...`` reaches our stdlib modules.
+        # Aliases handle name collisions with Python's stdlib (e.g.
+        # ``uuid`` → ``clausal.modules.uuid_mod``).
+        resolved = _resolve_import_path(module_path)
         stmt = replace(
-            ImportFrom(module=module_path, names=aliases, level=0),
+            ImportFrom(module=resolved, names=aliases, level=0),
             expr_stmt,
         )
         fix_missing_locations(stmt)
@@ -2499,10 +2528,18 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(
             ImportModuleItem(module=module_path)
         )
-        stmt = replace(
-            Import(names=[alias(name=module_path)]),
-            expr_stmt,
-        )
+        resolved = _resolve_import_path(module_path)
+        if resolved != module_path:
+            # Aliased module: ``import clausal.modules.uuid_mod as uuid``
+            stmt = replace(
+                Import(names=[alias(name=resolved, asname=module_path)]),
+                expr_stmt,
+            )
+        else:
+            stmt = replace(
+                Import(names=[alias(name=module_path)]),
+                expr_stmt,
+            )
         fix_missing_locations(stmt)
         return stmt
 

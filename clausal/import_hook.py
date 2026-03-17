@@ -324,12 +324,29 @@ class ModulesFinder(MetaPathFinder):
 
     _MODULES_PKG = "clausal.modules"
 
+    # Map bare import names to module file basenames when they differ
+    # (e.g. ``uuid`` → ``uuid_mod`` to avoid shadowing Python's stdlib).
+    _ALIASES: dict[str, str] = {
+        "uuid": "uuid_mod",
+    }
+
+    # Guard against re-entrant imports (e.g. uuid_mod.py does
+    # ``import uuid as _uuid`` which would re-enter this finder).
+    _resolving: set[str] = set()
+
     def find_spec(self, fullname, path, target=None):
         # Only redirect top-level names (no dots) that we actually provide.
         if "." in fullname:
             return None
-        qualified = f"{self._MODULES_PKG}.{fullname}"
-        spec = importlib.util.find_spec(qualified)
+        if fullname in self._resolving:
+            return None
+        mapped = self._ALIASES.get(fullname, fullname)
+        qualified = f"{self._MODULES_PKG}.{mapped}"
+        self._resolving.add(fullname)
+        try:
+            spec = importlib.util.find_spec(qualified)
+        finally:
+            self._resolving.discard(fullname)
         if spec is None:
             return None
         # Load the qualified module and alias it under the bare name.

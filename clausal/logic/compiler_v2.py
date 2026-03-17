@@ -139,12 +139,18 @@ def compile_module(
     return logic_module
 
 
+_MODULE_ALIASES: dict[str, str] = {
+    "uuid": "uuid_mod",
+}
+
+
 def _resolve_module(module_path: str):
-    """Import a module, falling back to clausal.modules.<name> if not found."""
+    """Import a module, trying clausal.modules first (with alias mapping)."""
+    mapped = _MODULE_ALIASES.get(module_path, module_path)
     try:
+        return importlib.import_module(f"clausal.modules.{mapped}")
+    except (ModuleNotFoundError, ImportError):
         return importlib.import_module(module_path)
-    except ModuleNotFoundError:
-        return importlib.import_module(f"clausal.modules.{module_path}")
 
 
 def _process_imports(module_items: list, module_dict: dict) -> None:
@@ -158,6 +164,10 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     module_dict[local_name] = getattr(mod, orig_name)
                 else:
                     module_dict[name_spec] = getattr(mod, name_spec)
+            # Also store the module object under the user-facing name so
+            # that dotted-name resolution (e.g. ``uuid.Uuid4``) works in
+            # the compiler's _inject_call_targets.
+            module_dict[item.module] = mod
         elif isinstance(item, ImportModuleItem):
             mod = _resolve_module(item.module)
             # Store the top-level name (e.g., "foo" for "foo.bar.baz").

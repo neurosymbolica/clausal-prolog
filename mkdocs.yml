@@ -61,6 +61,7 @@ nav:
     - Date & Time: date_time.md
     - YAML: yaml.md
     - SQLite: sqlite.md
+    - UUIDs: uuid.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
