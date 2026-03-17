@@ -1,0 +1,30 @@
+-import_from(sympy_module, [Latex, Pretty, Sym])
+
+# ── Latex/2 ──────────────────────────────────────────────────────────────────
+
+Test("latex simple") <- (
+    Latex(X**2 + 1, S),
+    ++("x^{2}" in S)
+)
+
+Test("latex fraction") <- (
+    Latex(1 / X, S),
+    ++("frac" in S)
+)
+
+Test("latex integer") <- (
+    Latex(42, S),
+    S == "42"
+)
+
+# ── Pretty/2 ─────────────────────────────────────────────────────────────────
+
+Test("pretty integer") <- (
+    Pretty(42, S),
+    S == "42"
+)
+
+Test("pretty expression") <- (
+    Pretty(X**2, S),
+    ++("2" in S)
+)

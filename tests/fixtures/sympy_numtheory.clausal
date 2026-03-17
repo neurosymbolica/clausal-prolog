@@ -1,0 +1,79 @@
+-import_from(sympy_module, [IsPrime, NextPrime, FactorInt, Divisors,
+                             GcdSym, LcmSym])
+
+# ── IsPrime/1 ────────────────────────────────────────────────────────────────
+
+Test("is prime 7") <- IsPrime(7)
+Test("is prime 11") <- IsPrime(11)
+Test("not prime 4") <- (not IsPrime(4))
+Test("not prime 1") <- (not IsPrime(1))
+
+# ── NextPrime/2 ──────────────────────────────────────────────────────────────
+
+Test("next prime after 7") <- (
+    NextPrime(7, P),
+    P == 11
+)
+
+Test("next prime after 10") <- (
+    NextPrime(10, P),
+    P == 11
+)
+
+Test("next prime after 1") <- (
+    NextPrime(1, P),
+    P == 2
+)
+
+# ── FactorInt/2 ──────────────────────────────────────────────────────────────
+
+Test("factor 12") <- (
+    FactorInt(12, F),
+    F is ++{2: 2, 3: 1}
+)
+
+Test("factor prime") <- (
+    FactorInt(13, F),
+    F is ++{13: 1}
+)
+
+Test("factor 360") <- (
+    FactorInt(360, F),
+    F is ++{2: 3, 3: 2, 5: 1}
+)
+
+# ── Divisors/2 ───────────────────────────────────────────────────────────────
+
+Test("divisors 12") <- (
+    Divisors(12, D),
+    D == [1, 2, 3, 4, 6, 12]
+)
+
+Test("divisors prime") <- (
+    Divisors(7, D),
+    D == [1, 7]
+)
+
+# ── GcdSym/3 ─────────────────────────────────────────────────────────────────
+
+Test("gcd integers") <- (
+    GcdSym(12, 8, R),
+    R == 4
+)
+
+Test("gcd polynomials") <- (
+    GcdSym(X**2 - 1, X - 1, R),
+    R == X - 1
+)
+
+# ── LcmSym/3 ─────────────────────────────────────────────────────────────────
+
+Test("lcm integers") <- (
+    LcmSym(4, 6, R),
+    R == 12
+)
+
+Test("lcm polynomials") <- (
+    LcmSym(X - 1, X + 1, R),
+    R == X**2 - 1
+)

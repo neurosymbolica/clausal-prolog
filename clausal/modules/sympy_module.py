@@ -847,6 +847,307 @@ def _inf_1(result, trail, k):
         yield None
 
 
+# ── Algebra extras ─────────────────────────────────────────────────────────
+
+
+def _collect_3(term, var, result, trail, k):
+    """Collect/3: collect terms by powers of var."""
+    term = deref(term)
+    var = deref(var)
+    try:
+        ctx, expr, var_expr = _convert_multi(term, var)
+        out = _to_pyval(_sp.collect(expr, var_expr))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _cancel_2(term, result, trail, k):
+    """Cancel/2: cancel common factors in a rational expression."""
+    term = deref(term)
+    try:
+        out = _to_pyval(_sp.cancel(to_sympy(term)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _apart_2(term, result, trail, k):
+    """Apart/2: partial fraction decomposition w.r.t. the single free variable."""
+    term = deref(term)
+    try:
+        out = _to_pyval(_sp.apart(to_sympy(term)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _apart_3(term, var, result, trail, k):
+    """Apart/3: partial fraction decomposition w.r.t. specified variable."""
+    term = deref(term)
+    var = deref(var)
+    try:
+        ctx, expr, var_expr = _convert_multi(term, var)
+        out = _to_pyval(_sp.apart(expr, var_expr))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _together_2(term, result, trail, k):
+    """Together/2: combine fractions over a common denominator."""
+    term = deref(term)
+    try:
+        out = _to_pyval(_sp.together(to_sympy(term)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _degree_2(term, result, trail, k):
+    """Degree/2: polynomial degree w.r.t. the single free variable."""
+    term = deref(term)
+    try:
+        expr = to_sympy(term)
+        free = list(expr.free_symbols)
+        if len(free) != 1:
+            return
+        out = int(_sp.degree(expr, free[0]))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _degree_3(term, var, result, trail, k):
+    """Degree/3: polynomial degree w.r.t. specified variable."""
+    term = deref(term)
+    var = deref(var)
+    try:
+        ctx, expr, var_expr = _convert_multi(term, var)
+        out = int(_sp.degree(expr, var_expr))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _coeffs_3(term, var, result, trail, k):
+    """Coeffs/3: list of polynomial coefficients [highest degree first]."""
+    term = deref(term)
+    var = deref(var)
+    try:
+        ctx, expr, var_expr = _convert_multi(term, var)
+        poly = _sp.Poly(expr, var_expr)
+        out = [_to_pyval(c) for c in poly.all_coeffs()]
+    except (TypeError, ValueError, _sp.GeneratorsNeeded):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _roots_3(this_generator, parent, equation, var, root, trail):
+    """Roots/3: nondeterministic — yields (root, multiplicity) pairs."""
+    equation = deref(equation)
+    var = deref(var)
+    try:
+        ctx, eq_expr, var_expr = _convert_multi(equation, var)
+        root_dict = _sp.roots(eq_expr, var_expr)
+    except (TypeError, ValueError):
+        yield (parent, DONE)
+        return
+    for r, mult in root_dict.items():
+        mark = trail.mark()
+        pair = (_to_pyval(r), int(mult))
+        if unify(root, pair, trail):
+            yield (parent, None)
+        trail.undo(mark)
+    yield (parent, DONE)
+
+
+# ── Trig ───────────────────────────────────────────────────────────────────
+
+
+def _trig_simp_2(term, result, trail, k):
+    """TrigSimp/2: simplify trigonometric expressions."""
+    term = deref(term)
+    try:
+        out = _to_pyval(_sp.trigsimp(to_sympy(term)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _expand_trig_2(term, result, trail, k):
+    """ExpandTrig/2: expand trig functions (e.g. sin(a+b) → sin(a)cos(b)+cos(a)sin(b))."""
+    term = deref(term)
+    try:
+        out = _to_pyval(_sp.expand_trig(to_sympy(term)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+# ── Printing ───────────────────────────────────────────────────────────────
+
+
+def _latex_2(term, result, trail, k):
+    """Latex/2: convert expression to LaTeX string."""
+    term = deref(term)
+    try:
+        s = _sp.latex(to_sympy(term))
+    except (TypeError, ValueError):
+        return
+    if unify(result, s, trail):
+        yield None
+
+
+def _pretty_2(term, result, trail, k):
+    """Pretty/2: convert expression to Unicode pretty-print string."""
+    term = deref(term)
+    try:
+        s = _sp.pretty(to_sympy(term), use_unicode=True)
+    except (TypeError, ValueError):
+        return
+    if unify(result, s, trail):
+        yield None
+
+
+def _mathml_2(term, result, trail, k):
+    """MathML/2: convert expression to MathML string."""
+    term = deref(term)
+    try:
+        from sympy.printing.mathml import mathml
+        s = mathml(to_sympy(term))
+    except (TypeError, ValueError, ImportError):
+        return
+    if unify(result, s, trail):
+        yield None
+
+
+# ── Number theory ──────────────────────────────────────────────────────────
+
+
+def _is_prime_1(n, trail, k):
+    """IsPrime/1: succeeds if n is prime."""
+    n = deref(n)
+    if isinstance(n, int) and _sp.isprime(n):
+        yield None
+
+
+def _next_prime_2(n, result, trail, k):
+    """NextPrime/2: smallest prime greater than n."""
+    n = deref(n)
+    if not isinstance(n, int):
+        return
+    if unify(result, int(_sp.nextprime(n)), trail):
+        yield None
+
+
+def _factor_int_2(n, result, trail, k):
+    """FactorInt/2: prime factorization as dict {prime: exponent}."""
+    n = deref(n)
+    if not isinstance(n, int):
+        return
+    try:
+        d = {int(p): int(e) for p, e in _sp.factorint(n).items()}
+    except (TypeError, ValueError):
+        return
+    if unify(result, d, trail):
+        yield None
+
+
+def _divisors_2(n, result, trail, k):
+    """Divisors/2: sorted list of positive divisors."""
+    n = deref(n)
+    if not isinstance(n, int):
+        return
+    try:
+        out = [int(d) for d in _sp.divisors(n)]
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _gcd_sym_3(a, b, result, trail, k):
+    """GcdSym/3: symbolic GCD of two expressions."""
+    a = deref(a)
+    b = deref(b)
+    try:
+        ctx, sa, sb = _convert_multi(a, b)
+        out = _to_pyval(_sp.gcd(sa, sb))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _lcm_sym_3(a, b, result, trail, k):
+    """LcmSym/3: symbolic LCM of two expressions."""
+    a = deref(a)
+    b = deref(b)
+    try:
+        ctx, sa, sb = _convert_multi(a, b)
+        out = _to_pyval(_sp.lcm(sa, sb))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+# ── Special functions ──────────────────────────────────────────────────────
+
+
+def _summation_4(term, var, low, high, result, trail, k):
+    """Summation/5: symbolic summation of term for var from low to high."""
+    term = deref(term)
+    var = deref(var)
+    low = deref(low)
+    high = deref(high)
+    try:
+        ctx, expr, var_expr, lo, hi = _convert_multi(term, var, low, high)
+        out = _to_pyval(_sp.summation(expr, (var_expr, lo, hi)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _product_sym_4(term, var, low, high, result, trail, k):
+    """ProductSym/5: symbolic product of term for var from low to high."""
+    term = deref(term)
+    var = deref(var)
+    low = deref(low)
+    high = deref(high)
+    try:
+        ctx, expr, var_expr, lo, hi = _convert_multi(term, var, low, high)
+        out = _to_pyval(_sp.product(expr, (var_expr, lo, hi)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
+def _binomial_3(n, k_val, result, trail, k):
+    """Binomial/3: binomial coefficient C(n, k)."""
+    n = deref(n)
+    k_val = deref(k_val)
+    try:
+        out = _to_pyval(_sp.binomial(to_sympy(n), to_sympy(k_val)))
+    except (TypeError, ValueError):
+        return
+    if unify(result, out, trail):
+        yield None
+
+
 # ── Build and export predicate objects ──────────────────────────────────────
 
 Sym = _SympyPredicate("Sym")
@@ -902,3 +1203,73 @@ SymStr._register(2, _simple_to_trampoline(_sym_str_2))
 
 Inf = _SympyPredicate("Inf")
 Inf._register(1, _simple_to_trampoline(_inf_1))
+
+# Algebra extras
+Collect = _SympyPredicate("Collect")
+Collect._register(3, _simple_to_trampoline(_collect_3))
+
+Cancel = _SympyPredicate("Cancel")
+Cancel._register(2, _simple_to_trampoline(_cancel_2))
+
+Apart = _SympyPredicate("Apart")
+Apart._register(2, _simple_to_trampoline(_apart_2))
+Apart._register(3, _simple_to_trampoline(_apart_3))
+
+Together = _SympyPredicate("Together")
+Together._register(2, _simple_to_trampoline(_together_2))
+
+Degree = _SympyPredicate("Degree")
+Degree._register(2, _simple_to_trampoline(_degree_2))
+Degree._register(3, _simple_to_trampoline(_degree_3))
+
+Coeffs = _SympyPredicate("Coeffs")
+Coeffs._register(3, _simple_to_trampoline(_coeffs_3))
+
+Roots = _SympyPredicate("Roots")
+Roots._register(3, _roots_3)
+
+# Trig
+TrigSimp = _SympyPredicate("TrigSimp")
+TrigSimp._register(2, _simple_to_trampoline(_trig_simp_2))
+
+ExpandTrig = _SympyPredicate("ExpandTrig")
+ExpandTrig._register(2, _simple_to_trampoline(_expand_trig_2))
+
+# Printing
+Latex = _SympyPredicate("Latex")
+Latex._register(2, _simple_to_trampoline(_latex_2))
+
+Pretty = _SympyPredicate("Pretty")
+Pretty._register(2, _simple_to_trampoline(_pretty_2))
+
+MathML = _SympyPredicate("MathML")
+MathML._register(2, _simple_to_trampoline(_mathml_2))
+
+# Number theory
+IsPrime = _SympyPredicate("IsPrime")
+IsPrime._register(1, _simple_to_trampoline(_is_prime_1))
+
+NextPrime = _SympyPredicate("NextPrime")
+NextPrime._register(2, _simple_to_trampoline(_next_prime_2))
+
+FactorInt = _SympyPredicate("FactorInt")
+FactorInt._register(2, _simple_to_trampoline(_factor_int_2))
+
+Divisors = _SympyPredicate("Divisors")
+Divisors._register(2, _simple_to_trampoline(_divisors_2))
+
+GcdSym = _SympyPredicate("GcdSym")
+GcdSym._register(3, _simple_to_trampoline(_gcd_sym_3))
+
+LcmSym = _SympyPredicate("LcmSym")
+LcmSym._register(3, _simple_to_trampoline(_lcm_sym_3))
+
+# Special functions
+Summation = _SympyPredicate("Summation")
+Summation._register(5, _simple_to_trampoline(_summation_4))
+
+ProductSym = _SympyPredicate("ProductSym")
+ProductSym._register(5, _simple_to_trampoline(_product_sym_4))
+
+Binomial = _SympyPredicate("Binomial")
+Binomial._register(3, _simple_to_trampoline(_binomial_3))
