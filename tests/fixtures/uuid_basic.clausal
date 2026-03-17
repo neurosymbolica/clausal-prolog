@@ -1,4 +1,4 @@
--import_from(uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt, UUIDVersion, UUIDFields, IsUUID])
+-import_from(py.uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt, UUIDVersion, UUIDFields, IsUUID])
 
 # ── Generation ──────────────────────────────────────────────────────
 

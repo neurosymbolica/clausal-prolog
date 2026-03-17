@@ -27,7 +27,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 
-# ── Dispatch adapter (same pattern as regex.py / uuid_mod.py) ────────────
+# ── Dispatch adapter (same pattern as py/re.py / py/uuid.py) ─────────────
 
 
 class _GraphPredicate:

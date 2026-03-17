@@ -1,4 +1,4 @@
--import_from(regex, [Match, Search, Replace, Split, FindAll])
+-import_from(py.re, [Match, Search, Replace, Split, FindAll])
 
 # Regex predicates — basic tests: Match, Search, Replace, Split, FindAll.
 

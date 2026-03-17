@@ -10,7 +10,7 @@ import datetime as dt
 import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.modules.date_time import (
+from clausal.modules.py.datetime import (
     Now, NowUTC, Today, Date, Time, DateTime, TimeDelta,
     DateAdd, DateSub, DateDiff, FormatDate, ParseDate,
     DayOfWeek, DateBetween,
@@ -558,5 +558,5 @@ class TestAdapters:
         assert callable(DateBetween._get_dispatch())
 
     def test_repr(self):
-        assert "date_time.Date" in repr(Date)
-        assert "date_time.DateBetween" in repr(DateBetween)
+        assert "datetime.Date" in repr(Date)
+        assert "datetime.DateBetween" in repr(DateBetween)

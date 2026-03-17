@@ -11,7 +11,7 @@ import uuid
 import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.modules.uuid_mod import (
+from clausal.modules.py.uuid import (
     UUIDv4, UUIDv1, UUIDv3, UUIDv5,
     UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt,
     UUIDVersion, UUIDFields, IsUUID,

@@ -1,6 +1,6 @@
 # V3-5: Structured logging — fixture tests
 
--import_from(log, [
+-import_from(py.logging, [
     GetLogger, Debug, Info, Warning, Error, Critical,
     SetLevel, GetLevel, IsEnabledFor, Log,
     AddHandler, RemoveHandler,

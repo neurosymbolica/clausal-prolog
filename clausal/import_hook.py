@@ -325,13 +325,13 @@ class ModulesFinder(MetaPathFinder):
     _MODULES_PKG = "clausal.modules"
 
     # Map bare import names to module file basenames when they differ
-    # (e.g. ``uuid`` → ``uuid_mod`` to avoid shadowing Python's stdlib).
+    # (e.g. ``uuid`` → ``uuid_mod`` shim which re-exports from py/uuid.py).
     _ALIASES: dict[str, str] = {
         "uuid": "uuid_mod",
     }
 
-    # Guard against re-entrant imports (e.g. uuid_mod.py does
-    # ``import uuid as _uuid`` which would re-enter this finder).
+    # Guard against re-entrant imports (e.g. py/uuid.py does
+    # ``_import_stdlib("uuid")`` which would re-enter this finder).
     _resolving: set[str] = set()
 
     def find_spec(self, fullname, path, target=None):

@@ -18,7 +18,7 @@ from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.import_hook import _load_module
 
 # Import the module predicates directly for unit testing.
-from clausal.modules.log import (
+from clausal.modules.py.logging import (
     _get_logger_1, _get_logger_2,
     _set_level_2, _get_level_2, _is_enabled_for_2,
     _log_3, _debug_1, _debug_2, _info_1, _info_2,

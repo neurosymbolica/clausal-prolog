@@ -1,4 +1,4 @@
--import_from(yaml_module, [Read, Write, Get])
+-import_from(py.yaml, [Read, Write, Get])
 
 # ── Basic parsing ────────────────────────────────────────────────────
 

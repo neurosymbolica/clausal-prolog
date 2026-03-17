@@ -1101,7 +1101,7 @@ def _dotted_name_from_ast(node):
 # rewritten; other bare names are left for the import hook / meta-path
 # finders to resolve.  An alias is needed when the Clausal module name
 # would shadow a Python stdlib module (e.g. ``uuid`` ships as
-# ``clausal/modules/uuid_mod.py``).
+# ``clausal/modules/uuid_mod.py`` shim re-exporting from ``py/uuid.py``).
 _IMPORT_ALIASES: dict[str, str] = {
     "uuid": "uuid_mod",
 }

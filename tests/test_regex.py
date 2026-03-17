@@ -47,7 +47,7 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_REGEX_IMPORT = '-import_from(regex, [Match, Search, Replace, Split, FindAll])\n'
+_REGEX_IMPORT = '-import_from(py.re, [Match, Search, Replace, Split, FindAll])\n'
 
 
 def _load(name, src_text, tmp_path):

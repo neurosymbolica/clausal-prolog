@@ -690,7 +690,7 @@ def _inject_call_targets(
                 base_globals[target_name] = obj
                 continue
             # Plain callable or value (e.g. term constructor sin/cos, or
-            # constant inf/pi from sympy_module): inject directly so it
+            # constant inf/pi from py.sympy): inject directly so it
             # can be referenced in compiled term expressions.
             if obj is not None:
                 base_globals[target_name] = obj

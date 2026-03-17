@@ -1,4 +1,4 @@
--import_from(regex, [Match, Search, FindAll])
+-import_from(py.re, [Match, Search, FindAll])
 
 # Regex auto-binding — ALLCAPS group names auto-bind to clause variables.
 
