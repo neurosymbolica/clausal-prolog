@@ -69,12 +69,12 @@ This means `f"{X_}"` and `Write(X_)` show the value if bound, or a placeholder i
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_io.py` (43 tests).
+    Tests are in `tests/test_io.py` (43 tests).
 
-- **Var display**: `__str__`, `__format__`, bound/unbound, nested
-- **Write/Writeln/PrintTerm**: atoms, numbers, strings, compounds, lists, vars
-- **Nl/Tab**: output formatting
-- **WriteToString/TermToString**: term conversion to string
-- **F-string integration**: variable interpolation, multiple vars, expressions
+    - **Var display**: `__str__`, `__format__`, bound/unbound, nested
+    - **Write/Writeln/PrintTerm**: atoms, numbers, strings, compounds, lists, vars
+    - **Nl/Tab**: output formatting
+    - **WriteToString/TermToString**: term conversion to string
+    - **F-string integration**: variable interpolation, multiple vars, expressions

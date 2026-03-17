@@ -169,72 +169,72 @@ Test("nested access") <- (
 
 ---
 
-## Examples
+??? example "Examples"
 
-### Parse a config file
+    ### Parse a config file
 
-```clausal
--import_from(yaml_module, [ReadFile, Get])
+    ```clausal
+    -import_from(yaml_module, [ReadFile, Get])
+    
+    DbConfig(Path_, Host_, Port_, Name_) <- (
+        ReadFile(Path_, Cfg_) and
+        Get(Cfg_, ["database", "host"], Host_) and
+        Get(Cfg_, ["database", "port"], Port_) and
+        Get(Cfg_, ["database", "name"], Name_)
+    )
+    ```
 
-DbConfig(Path_, Host_, Port_, Name_) <- (
-    ReadFile(Path_, Cfg_) and
-    Get(Cfg_, ["database", "host"], Host_) and
-    Get(Cfg_, ["database", "port"], Port_) and
-    Get(Cfg_, ["database", "name"], Name_)
-)
-```
+    ### Round-trip
 
-### Round-trip
+    ```clausal
+    -import_from(yaml_module, [Read, Write, Get])
+    
+    RoundTrip(Yaml_, Key_, Val_) <- (
+        Read(Yaml_, D_) and
+        Write(D_, S_) and
+        Read(S_, D2_) and
+        Get(D2_, Key_, Val_)
+    )
+    ```
 
-```clausal
--import_from(yaml_module, [Read, Write, Get])
+    ### Multi-document Kubernetes manifests
 
-RoundTrip(Yaml_, Key_, Val_) <- (
-    Read(Yaml_, D_) and
-    Write(D_, S_) and
-    Read(S_, D2_) and
-    Get(D2_, Key_, Val_)
-)
-```
+    ```clausal
+    -import_from(yaml_module, [ReadAll, Get])
+    
+    ServiceNames(Yaml_, Names_) <- (
+        ReadAll(Yaml_, Docs_) and
+        MapList([D_, N_] >> Get(D_, ["metadata", "name"], N_), Docs_, Names_)
+    )
+    ```
 
-### Multi-document Kubernetes manifests
+    ### Python interop for complex access
 
-```clausal
--import_from(yaml_module, [ReadAll, Get])
+    ```clausal
+    -import_from(yaml_module, [Read])
+    
+    AllKeys(Yaml_, Keys_) <- (
+        Read(Yaml_, D_) and
+        Keys_ is ++(list(D_.keys()))
+    )
+    ```
 
-ServiceNames(Yaml_, Names_) <- (
-    ReadAll(Yaml_, Docs_) and
-    MapList([D_, N_] >> Get(D_, ["metadata", "name"], N_), Docs_, Names_)
-)
-```
+    ---
 
-### Python interop for complex access
+??? abstract "Implementation"
 
-```clausal
--import_from(yaml_module, [Read])
+    - **Module:** `clausal/modules/yaml_module.py`
+    - **Adapter class:** `_YamlPredicate` (same pattern as `_RegexPredicate`)
+    - **Backend:** PyYAML (`yaml.safe_load`, `yaml.safe_dump`)
+    - **Tests:** `tests/test_yaml_module.py` (45 tests), `tests/fixtures/yaml_basic.clausal` (10 fixture tests)
 
-AllKeys(Yaml_, Keys_) <- (
-    Read(Yaml_, D_) and
-    Keys_ is ++(list(D_.keys()))
-)
-```
+    ---
 
----
+??? abstract "Design decisions"
 
-## Implementation
-
-- **Module:** `clausal/modules/yaml_module.py`
-- **Adapter class:** `_YamlPredicate` (same pattern as `_RegexPredicate`)
-- **Backend:** PyYAML (`yaml.safe_load`, `yaml.safe_dump`)
-- **Tests:** `tests/test_yaml_module.py` (45 tests), `tests/fixtures/yaml_basic.clausal` (10 fixture tests)
-
----
-
-## Design decisions
-
-1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to `KWTerm` or `Compound`. Users access nested data via `Get/3` or `++()` interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
-2. **`safe_load` only** — prevents arbitrary code execution from YAML tags. This is the standard security practice.
-3. **`Get/3` for navigation** — a convenience predicate that avoids verbose `++()` chains for deep nested access. Accepts both single keys and key-path lists.
-4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `Write(...)`, `Get(...)`.
-5. **All predicates are deterministic** — YAML parsing produces exactly one result (or fails). No backtracking.
-6. **Block-style output** — `Write/2` uses `default_flow_style=False` for human-readable YAML output by default.
+    1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to `KWTerm` or `Compound`. Users access nested data via `Get/3` or `++()` interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
+    2. **`safe_load` only** — prevents arbitrary code execution from YAML tags. This is the standard security practice.
+    3. **`Get/3` for navigation** — a convenience predicate that avoids verbose `++()` chains for deep nested access. Accepts both single keys and key-path lists.
+    4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `Write(...)`, `Get(...)`.
+    5. **All predicates are deterministic** — YAML parsing produces exactly one result (or fails). No backtracking.
+    6. **Block-style output** — `Write/2` uses `default_flow_style=False` for human-readable YAML output by default.

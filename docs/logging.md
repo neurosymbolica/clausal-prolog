@@ -229,77 +229,77 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
 
 ---
 
-## Examples
+??? example "Examples"
 
-### Basic usage
+    ### Basic usage
 
-```clausal
--import_from(log, [GetLogger, Info, Warning, SetLevel])
+    ```clausal
+    -import_from(log, [GetLogger, Info, Warning, SetLevel])
+    
+    Init(L_) <- (
+        GetLogger("myapp", L_) and
+        SetLevel(L_, "info") and
+        Info(L_, "Application started")
+    )
+    
+    ProcessItem(L_, Item_) <- (
+        Item_ > 0 and Info(L_, f"Processing item {Item_}")
+    )
+    ProcessItem(L_, Item_) <- (
+        Item_ =< 0 and Warning(L_, f"Skipping invalid item {Item_}")
+    )
+    ```
 
-Init(L_) <- (
-    GetLogger("myapp", L_) and
-    SetLevel(L_, "info") and
-    Info(L_, "Application started")
-)
+    ### Custom handler and formatter
 
-ProcessItem(L_, Item_) <- (
-    Item_ > 0 and Info(L_, f"Processing item {Item_}")
-)
-ProcessItem(L_, Item_) <- (
-    Item_ =< 0 and Warning(L_, f"Skipping invalid item {Item_}")
-)
-```
+    ```clausal
+    -import_from(log, [
+        GetLogger, Info, SetLevel,
+        StreamHandler, FileHandler, SetFormatter, AddHandler
+    ])
+    
+    SetupLogging(L_) <- (
+        GetLogger("myapp", L_) and
+        SetLevel(L_, "debug") and
+        FileHandler("/var/log/myapp.log", Fh_) and
+        SetFormatter(Fh_, "%(asctime)s [%(levelname)s] %(name)s: %(message)s") and
+        AddHandler(L_, Fh_) and
+        StreamHandler("stderr", Sh_) and
+        SetFormatter(Sh_, "%(levelname)s: %(message)s") and
+        AddHandler(L_, Sh_)
+    )
+    ```
 
-### Custom handler and formatter
+    ### Logger hierarchy
 
-```clausal
--import_from(log, [
-    GetLogger, Info, SetLevel,
-    StreamHandler, FileHandler, SetFormatter, AddHandler
-])
+    ```clausal
+    -import_from(log, [GetLogger, Info, SetLevel])
+    
+    Setup <- (
+        GetLogger("myapp", Parent_) and
+        SetLevel(Parent_, "info") and
+        GetLogger("myapp.db", DbLog_) and
+        SetLevel(DbLog_, "debug") and
+        Info(DbLog_, "DB logger inherits parent's handlers")
+    )
+    ```
 
-SetupLogging(L_) <- (
-    GetLogger("myapp", L_) and
-    SetLevel(L_, "debug") and
-    FileHandler("/var/log/myapp.log", Fh_) and
-    SetFormatter(Fh_, "%(asctime)s [%(levelname)s] %(name)s: %(message)s") and
-    AddHandler(L_, Fh_) and
-    StreamHandler("stderr", Sh_) and
-    SetFormatter(Sh_, "%(levelname)s: %(message)s") and
-    AddHandler(L_, Sh_)
-)
-```
+    ---
 
-### Logger hierarchy
+??? abstract "Implementation"
 
-```clausal
--import_from(log, [GetLogger, Info, SetLevel])
+    - **Module:** `clausal/modules/log.py`
+    - **Adapter class:** `_LoggingPredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
+    - **Backend:** Python's `logging` module — all predicates delegate to `logging.Logger` methods
+    - **Tests:** `tests/test_logging_module.py` (67 tests), `tests/fixtures/logging_basic.clausal` (30 fixture tests)
 
-Setup <- (
-    GetLogger("myapp", Parent_) and
-    SetLevel(Parent_, "info") and
-    GetLogger("myapp.db", DbLog_) and
-    SetLevel(DbLog_, "debug") and
-    Info(DbLog_, "DB logger inherits parent's handlers")
-)
-```
+    ---
 
----
+??? abstract "Design decisions"
 
-## Implementation
-
-- **Module:** `clausal/modules/log.py`
-- **Adapter class:** `_LoggingPredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
-- **Backend:** Python's `logging` module — all predicates delegate to `logging.Logger` methods
-- **Tests:** `tests/test_logging_module.py` (67 tests), `tests/fixtures/logging_basic.clausal` (30 fixture tests)
-
----
-
-## Design decisions
-
-1. **Logger objects are opaque Python values** — passed around via unification, not inspectable as terms.
-2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the Clausal predicate succeeds regardless.
-3. **`IsEnabledFor/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
-4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
-5. **f-string messages** — no special formatting needed; Clausal's V2-15 f-string support handles interpolation with auto-deref of logic variables.
-6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.
+    1. **Logger objects are opaque Python values** — passed around via unification, not inspectable as terms.
+    2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the Clausal predicate succeeds regardless.
+    3. **`IsEnabledFor/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
+    4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
+    5. **f-string messages** — no special formatting needed; Clausal's V2-15 f-string support handles interpolation with auto-deref of logic variables.
+    6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.

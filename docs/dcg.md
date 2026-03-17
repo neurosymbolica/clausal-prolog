@@ -219,17 +219,17 @@ valid_sentence(S_) <- phrase(sentence, S_)
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_dcg.py` (47 tests).
+    Tests are in `tests/test_dcg.py` (47 tests).
 
-- **Terminals**: single, multiple, empty
-- **Non-terminals**: chaining, extra args
-- **Inline goals**: CLP(FD) constraints, arithmetic
-- **Conjunction/disjunction**: multiple alternatives
-- **Negation**: `not [terminal]`
-- **Pushback**: peek without consuming
-- **Recursive rules**: `ab` grammar
-- **phrase/2,3**: full parse, partial parse, remainder
-- **State threading**: counter, tree counting, accumulator
-- **Fixture integration**: `dcg_grammar.clausal` with mixed rules and regular predicates
+    - **Terminals**: single, multiple, empty
+    - **Non-terminals**: chaining, extra args
+    - **Inline goals**: CLP(FD) constraints, arithmetic
+    - **Conjunction/disjunction**: multiple alternatives
+    - **Negation**: `not [terminal]`
+    - **Pushback**: peek without consuming
+    - **Recursive rules**: `ab` grammar
+    - **phrase/2,3**: full parse, partial parse, remainder
+    - **State threading**: counter, tree counting, accumulator
+    - **Fixture integration**: `dcg_grammar.clausal` with mixed rules and regular predicates

@@ -116,13 +116,13 @@ The old `_predicate_loader` global is set to `None` for backward compatibility d
 
 ---
 
-## Test coverage
+??? info "Test coverage"
 
-`tests/test_pycache.py` covers:
-- `.pyc` file creation and correct path
-- Cache hit verification (`source_to_code` not called on second import)
-- Cache invalidation on source modification
-- Query correctness from cached bytecode (facts and rules)
-- Dynamic predicates remain unlocked after cached load
-- `sys.dont_write_bytecode` suppression
-- Deferred compilation: `compile_predicate` called once per predicate, not once per clause
+    `tests/test_pycache.py` covers:
+    - `.pyc` file creation and correct path
+    - Cache hit verification (`source_to_code` not called on second import)
+    - Cache invalidation on source modification
+    - Query correctness from cached bytecode (facts and rules)
+    - Dynamic predicates remain unlocked after cached load
+    - `sys.dont_write_bytecode` suppression
+    - Deferred compilation: `compile_predicate` called once per predicate, not once per clause

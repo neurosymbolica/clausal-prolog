@@ -27,17 +27,17 @@ These two kinds of AI have complementary strengths. A self-driving car, for exam
 
 Marrying these in Python — the lingua franca of machine learning — is the goal.
 
-## Design principles
+??? abstract "Design principles"
 
-**Genuine integration, not interop.** The logic system runs on the Python VM. Logic predicates and Python functions call into each other with no subprocess overhead, no re-entrancy issues, no marshalling across a process boundary.
+    **Genuine integration, not interop.** The logic system runs on the Python VM. Logic predicates and Python functions call into each other with no subprocess overhead, no re-entrancy issues, no marshalling across a process boundary.
 
-**Python syntax throughout.** All syntax is valid Python syntax, acceptable to the Python parser. No new parser is required. This means logic code can be syntax-highlighted, linted, and processed by standard Python tooling.
+    **Python syntax throughout.** All syntax is valid Python syntax, acceptable to the Python parser. No new parser is required. This means logic code can be syntax-highlighted, linted, and processed by standard Python tooling.
 
-**Pythonic, not puristic.** Python culture allows breaking rules. Calling Python from within logic code is supported without apology. Side effects, I/O, and mutable state can coexist with backtracking — the programmer understands what they are doing.
+    **Pythonic, not puristic.** Python culture allows breaking rules. Calling Python from within logic code is supported without apology. Side effects, I/O, and mutable state can coexist with backtracking — the programmer understands what they are doing.
 
-**Homoiconicity.** Python code can be extracted as AST nodes and manipulated by the logic system or by Python code. This unlocks powerful compile-time transformations and meta-programming that are essentially impossible in standard Python.
+    **Homoiconicity.** Python code can be extracted as AST nodes and manipulated by the logic system or by Python code. This unlocks powerful compile-time transformations and meta-programming that are essentially impossible in standard Python.
 
-**Compile once.** The AST transformation overhead is paid once, at import time. Transformed bytecode is cached by Python's standard import machinery.
+    **Compile once.** The AST transformation overhead is paid once, at import time. Transformed bytecode is cached by Python's standard import machinery.
 
 ## What clausal provides
 

@@ -121,16 +121,16 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_regex.py` (93 tests).
+    Tests are in `tests/test_regex.py` (93 tests).
 
-- **Match/2**: digits, anchoring, email, empty, unicode
-- **Match/3**: named groups, positional groups, no match
-- **Auto-binding**: ALLCAPS groups, trailing-underscore groups
-- **Search/2,3**: unanchored search, group extraction
-- **Replace/4**: whitespace, digit removal, backreferences
-- **Split/3**: comma, whitespace
-- **FindAll/3**: multiple matches, no matches
-- **Edge cases**: dynamic patterns, pattern variables
-- **Fixture integration**: `regex_basic.clausal` (25 tests), `regex_autobind.clausal` (17 tests)
+    - **Match/2**: digits, anchoring, email, empty, unicode
+    - **Match/3**: named groups, positional groups, no match
+    - **Auto-binding**: ALLCAPS groups, trailing-underscore groups
+    - **Search/2,3**: unanchored search, group extraction
+    - **Replace/4**: whitespace, digit removal, backreferences
+    - **Split/3**: comma, whitespace
+    - **FindAll/3**: multiple matches, no matches
+    - **Edge cases**: dynamic patterns, pattern variables
+    - **Fixture integration**: `regex_basic.clausal` (25 tests), `regex_autobind.clausal` (17 tests)

@@ -80,124 +80,124 @@ The builtins `ClearTable/2` and `ClearAllTables/0` are also available from withi
 
 ---
 
-## Design
+??? abstract "Design"
 
-### Three-path dispatch
+    ### Three-path dispatch
 
-A tabled predicate's dispatch function is wrapped so that each call takes one of three paths based on the table state:
+    A tabled predicate's dispatch function is wrapped so that each call takes one of three paths based on the table state:
 
-| Path | Condition | Behaviour |
-|---|---|---|
-| **COMPLETE** | Table entry exists and is complete | Yield all cached answers directly. No dispatch call. |
-| **CONSUMER** | Table entry exists but still evaluating | Yield currently known answers, then *suspend*. The leader will resume this consumer when new answers arrive. |
-| **LEADER** | No table entry for this subgoal | Create a new table entry, drive the original dispatch, collect answers, then run the completion phase to resume suspended consumers. |
+    | Path | Condition | Behaviour |
+    |---|---|---|
+    | **COMPLETE** | Table entry exists and is complete | Yield all cached answers directly. No dispatch call. |
+    | **CONSUMER** | Table entry exists but still evaluating | Yield currently known answers, then *suspend*. The leader will resume this consumer when new answers arrive. |
+    | **LEADER** | No table entry for this subgoal | Create a new table entry, drive the original dispatch, collect answers, then run the completion phase to resume suspended consumers. |
 
-### Variant checking
+    ### Variant checking
 
-Subgoal identity is determined by *variant checking*: two calls are the same subgoal if their arguments match after replacing all unbound variables with a common placeholder. `make_subgoal_key(args, trail)` normalises each argument via `_normalize_for_key`, which:
+    Subgoal identity is determined by *variant checking*: two calls are the same subgoal if their arguments match after replacing all unbound variables with a common placeholder. `make_subgoal_key(args, trail)` normalises each argument via `_normalize_for_key`, which:
 
-- derefs bound variables
-- replaces unbound `Var` with the `_VAR` sentinel
-- recursively normalises lists, `Compound` terms, and `PredicateMeta` instances
+    - derefs bound variables
+    - replaces unbound `Var` with the `_VAR` sentinel
+    - recursively normalises lists, `Compound` terms, and `PredicateMeta` instances
 
-The table store maps `(functor, arity, variant_key)` → `TableEntry`.
+    The table store maps `(functor, arity, variant_key)` → `TableEntry`.
 
-### Answer freezing
+    ### Answer freezing
 
-When a solution is found, the current arg bindings are *frozen* — fully dereferenced into a ground tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each frozen answer.
+    When a solution is found, the current arg bindings are *frozen* — fully dereferenced into a ground tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each frozen answer.
 
-### TableEntry
+    ### TableEntry
 
-```python
-class TableEntry:
-    status: str                   # "evaluating" | "complete"
-    answers: list[tuple]          # frozen answer tuples, in discovery order
-    answer_set: set               # for O(1) duplicate detection
-    suspended: list               # SuspendedConsumer instances
-    conditions: list              # parallel to answers: frozenset[DelayedNegation] | _FAILED
-    _current_delays: set          # accumulates DelayedNegation during current derivation
-```
+    ```python
+    class TableEntry:
+        status: str                   # "evaluating" | "complete"
+        answers: list[tuple]          # frozen answer tuples, in discovery order
+        answer_set: set               # for O(1) duplicate detection
+        suspended: list               # SuspendedConsumer instances
+        conditions: list              # parallel to answers: frozenset[DelayedNegation] | _FAILED
+        _current_delays: set          # accumulates DelayedNegation during current derivation
+    ```
 
-`conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `"undefined"`, or `False` accordingly.
+    `conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `"undefined"`, or `False` accordingly.
 
-### SuspendedConsumer
+    ### SuspendedConsumer
 
-```python
-class SuspendedConsumer:
-    generator    # the consumer's StepGenerator
-    parent       # routing key for intercepting yields
-    args         # call args (for unification with new answers)
-    trail        # the consumer's Trail
-    answers_seen # index into entry.answers — how many already yielded
-```
+    ```python
+    class SuspendedConsumer:
+        generator    # the consumer's StepGenerator
+        parent       # routing key for intercepting yields
+        args         # call args (for unification with new answers)
+        trail        # the consumer's Trail
+        answers_seen # index into entry.answers — how many already yielded
+    ```
 
----
+    ---
 
-## Implementation
+??? abstract "Implementation"
 
-### Trampoline-mode wrapper
+    ### Trampoline-mode wrapper
 
-The primary implementation (`make_tabled_wrapper_trampoline`) wraps a trampoline-mode dispatch function. It follows the trampoline protocol: yields `(target, value)` tuples.
+    The primary implementation (`make_tabled_wrapper_trampoline`) wraps a trampoline-mode dispatch function. It follows the trampoline protocol: yields `(target, value)` tuples.
 
-**Leader path:**
+    **Leader path:**
 
-1. Create a `TableEntry` with status `"evaluating"`. Push it onto the leader context stack.
-2. Spawn a `StepGenerator` over the original dispatch.
-3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
-4. When the inner dispatch is exhausted, enter the *completion phase*.
-5. After completion, run `_resolve_conditions` to simplify delayed negations (WFS).
-6. Pop the leader from the context stack and mark `"complete"`.
+    1. Create a `TableEntry` with status `"evaluating"`. Push it onto the leader context stack.
+    2. Spawn a `StepGenerator` over the original dispatch.
+    3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
+    4. When the inner dispatch is exhausted, enter the *completion phase*.
+    5. After completion, run `_resolve_conditions` to simplify delayed negations (WFS).
+    6. Pop the leader from the context stack and mark `"complete"`.
 
-**Consumer path:**
+    **Consumer path:**
 
-1. Yield all currently known answers from the table entry.
-2. Register a `SuspendedConsumer` on the entry.
-3. Yield `(parent, _TABLING_SUSPEND)`. The trampoline intercepts this sentinel and sends `DONE` to the consumer's parent, so the parent's while-loop exits normally.
-4. When the leader resumes the consumer (sending `_TABLING_RESUME`), yield any answers accumulated since the last suspension.
-5. If the table is still evaluating, re-suspend for another round.
+    1. Yield all currently known answers from the table entry.
+    2. Register a `SuspendedConsumer` on the entry.
+    3. Yield `(parent, _TABLING_SUSPEND)`. The trampoline intercepts this sentinel and sends `DONE` to the consumer's parent, so the parent's while-loop exits normally.
+    4. When the leader resumes the consumer (sending `_TABLING_RESUME`), yield any answers accumulated since the last suspension.
+    5. If the table is still evaluating, re-suspend for another round.
 
-**Completion phase:**
+    **Completion phase:**
 
-After the original dispatch is exhausted, the leader resumes each suspended consumer via a mini-trampoline:
+    After the original dispatch is exhausted, the leader resumes each suspended consumer via a mini-trampoline:
 
-1. Send `_TABLING_RESUME` to the consumer's generator.
-2. Drive the consumer, intercepting yields directed at the consumer's (dead) parent:
-   - `(parent, None)` → consumer found a solution → freeze and `add_answer`; if new, yield to leader's caller.
-   - `(parent, DONE)` → consumer finished.
-   - `(parent, _TABLING_SUSPEND)` → consumer re-suspends for the next round.
-   - Other `(gen, value)` → sub-call from consumer body → forward through the mini-trampoline.
-3. Repeat until a fixpoint: no new answers are discovered in a full round.
-4. Send `DONE` to any remaining suspended consumers for cleanup.
-5. Run `_resolve_conditions(entry, table_store)` to resolve WFS delayed negations.
-6. Pop the leader context stack.
-7. Mark the table entry `"complete"`.
+    1. Send `_TABLING_RESUME` to the consumer's generator.
+    2. Drive the consumer, intercepting yields directed at the consumer's (dead) parent:
+       - `(parent, None)` → consumer found a solution → freeze and `add_answer`; if new, yield to leader's caller.
+       - `(parent, DONE)` → consumer finished.
+       - `(parent, _TABLING_SUSPEND)` → consumer re-suspends for the next round.
+       - Other `(gen, value)` → sub-call from consumer body → forward through the mini-trampoline.
+    3. Repeat until a fixpoint: no new answers are discovered in a full round.
+    4. Send `DONE` to any remaining suspended consumers for cleanup.
+    5. Run `_resolve_conditions(entry, table_store)` to resolve WFS delayed negations.
+    6. Pop the leader context stack.
+    7. Mark the table entry `"complete"`.
 
-### Simple-mode wrapper
+    ### Simple-mode wrapper
 
-`make_tabled_wrapper_simple` provides a simpler variant for simple-mode dispatch. It uses fixpoint iteration instead of suspension:
+    `make_tabled_wrapper_simple` provides a simpler variant for simple-mode dispatch. It uses fixpoint iteration instead of suspension:
 
-1. Create a `TableEntry`.
-2. Repeatedly run the original dispatch until no new answers appear (fixpoint).
-3. Mark complete.
-4. Yield all answers.
+    1. Create a `TableEntry`.
+    2. Repeatedly run the original dispatch until no new answers appear (fixpoint).
+    3. Mark complete.
+    4. Yield all answers.
 
-Consumer calls during evaluation yield currently known answers and return (no suspension mechanism in simple mode).
+    Consumer calls during evaluation yield currently known answers and return (no suspension mechanism in simple mode).
 
-### Simple-mode adapter
+    ### Simple-mode adapter
 
-`_trampoline_to_simple_adapter` bridges a trampoline-mode tabled wrapper to simple-mode callers. It creates a `StepGenerator` root and drives a mini-trampoline, yielding `None` per solution (simple protocol). It intercepts `_TABLING_SUSPEND` by sending `DONE` to the suspended generator.
+    `_trampoline_to_simple_adapter` bridges a trampoline-mode tabled wrapper to simple-mode callers. It creates a `StepGenerator` root and drives a mini-trampoline, yielding `None` per solution (simple protocol). It intercepts `_TABLING_SUSPEND` by sending `DONE` to the suspended generator.
 
-### Sentinels
+    ### Sentinels
 
-| Sentinel | Direction | Meaning |
-|---|---|---|
-| `_TABLING_SUSPEND` | consumer → trampoline | "Park me; I'm waiting for more answers" |
-| `_TABLING_RESUME` | leader → consumer | "Wake up; check for new answers" |
-| `_FAILED` | internal | Marks an invalidated conditional answer (WFS) |
+    | Sentinel | Direction | Meaning |
+    |---|---|---|
+    | `_TABLING_SUSPEND` | consumer → trampoline | "Park me; I'm waiting for more answers" |
+    | `_TABLING_RESUME` | leader → consumer | "Wake up; check for new answers" |
+    | `_FAILED` | internal | Marks an invalidated conditional answer (WFS) |
 
-`_TABLING_SUSPEND` and `_TABLING_RESUME` are distinct from the trampoline's `DONE` sentinel. The trampoline and `solutions()` function intercept `_TABLING_SUSPEND` and convert it to `DONE` so that non-tabling-aware code (callers of the tabled predicate) never sees these sentinels.
+    `_TABLING_SUSPEND` and `_TABLING_RESUME` are distinct from the trampoline's `DONE` sentinel. The trampoline and `solutions()` function intercept `_TABLING_SUSPEND` and convert it to `DONE` so that non-tabling-aware code (callers of the tabled predicate) never sees these sentinels.
 
----
+    ---
 
 ## Database integration
 
@@ -323,48 +323,48 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
 
 ---
 
-## Test coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_tabling.py` (46 tests), `tests/test_slg_termination.py` (20 tests), and `tests/test_wfs.py` (31 tests).
+    Tests are in `tests/test_tabling.py` (46 tests), `tests/test_slg_termination.py` (20 tests), and `tests/test_wfs.py` (31 tests).
 
-**Unit tests** (`test_tabling.py`):
-- `TableEntry` state management, duplicate suppression, ordering
-- Key computation: ground scalars, bound/unbound vars, lists, compounds, variant matching
-- Answer freezing and unification
-- Simple-mode wrapper: basic dispatch, cache hit
-- Trampoline-mode wrapper: basic, multiple answers, adapter
-- Database integration: table store, abolish, auto-invalidation on Assert/Retract
+    **Unit tests** (`test_tabling.py`):
+    - `TableEntry` state management, duplicate suppression, ordering
+    - Key computation: ground scalars, bound/unbound vars, lists, compounds, variant matching
+    - Answer freezing and unification
+    - Simple-mode wrapper: basic dispatch, cache hit
+    - Trampoline-mode wrapper: basic, multiple answers, adapter
+    - Database integration: table store, abolish, auto-invalidation on Assert/Retract
 
-**Integration tests** (`test_tabling.py`):
-- Tabled fibonacci (fib/2): basic, zero, one, cache hit, ground query success/failure
-- Cyclic path (1→2→3→1): termination, all pairs, per-node queries, ground queries, table completion
-- Multiple tabled predicates (anc/2 + desc/2): mutual use, correctness
-- Import hook: directive metadata, predicate wrapping, non-tabled predicates unaffected
-- Abolish and recompute
+    **Integration tests** (`test_tabling.py`):
+    - Tabled fibonacci (fib/2): basic, zero, one, cache hit, ground query success/failure
+    - Cyclic path (1→2→3→1): termination, all pairs, per-node queries, ground queries, table completion
+    - Multiple tabled predicates (anc/2 + desc/2): mutual use, correctness
+    - Import hook: directive metadata, predicate wrapping, non-tabled predicates unaffected
+    - Abolish and recompute
 
-**SLG termination tests** (`test_slg_termination.py`):
-- Left-recursive transitive closure on an acyclic graph — the canonical example that diverges without tabling
-- Same generation (Bancilhon et al. 1986) — reflexive, sibling, cousin, cross-level, negative cases
-- Mutual recursion through two tabled predicates on a cyclic graph
+    **SLG termination tests** (`test_slg_termination.py`):
+    - Left-recursive transitive closure on an acyclic graph — the canonical example that diverges without tabling
+    - Same generation (Bancilhon et al. 1986) — reflexive, sibling, cousin, cross-level, negative cases
+    - Mutual recursion through two tabled predicates on a cyclic graph
 
-**WFS tests** (`test_wfs.py`):
-- `DelayedNegation`: equality, hashing, repr
-- `TableEntry` conditions: default unconditional, with delays, truth values (true/false/undefined)
-- Leader context stack: empty, push/pop, nesting
-- `_naf_tabled`: complete table (match/no match), skips failed, evaluating table delays, no entry, var args
-- `_resolve_conditions`: unconditional passthrough, resolve to true, resolve to false, unfounded self-reference, multiple delays partial resolution
-- Positive-only regression: tabled fib and cyclic path still work
-- Complete table NAF: immediate check on complete table
-- Symmetric win/move: both win(1) and win(2) are undefined
-- Asymmetric win/move: win("a") is true
-- No negation cycle: tabled with NAF but no cycle → standard behavior
-- `query_wfs` API: returns list with truth annotations
+    **WFS tests** (`test_wfs.py`):
+    - `DelayedNegation`: equality, hashing, repr
+    - `TableEntry` conditions: default unconditional, with delays, truth values (true/false/undefined)
+    - Leader context stack: empty, push/pop, nesting
+    - `_naf_tabled`: complete table (match/no match), skips failed, evaluating table delays, no entry, var args
+    - `_resolve_conditions`: unconditional passthrough, resolve to true, resolve to false, unfounded self-reference, multiple delays partial resolution
+    - Positive-only regression: tabled fib and cyclic path still work
+    - Complete table NAF: immediate check on complete table
+    - Symmetric win/move: both win(1) and win(2) are undefined
+    - Asymmetric win/move: win("a") is true
+    - No negation cycle: tabled with NAF but no cycle → standard behavior
+    - `query_wfs` API: returns list with truth annotations
 
-**Fixtures:**
-- `tests/fixtures/tabled_fib.clausal` — tabled fibonacci
-- `tests/fixtures/tabled_path.clausal` — tabled cyclic path (1→2→3→1)
-- `tests/fixtures/tabled_left_rec.clausal` — left-recursive path on acyclic graph (1→2→3→4)
-- `tests/fixtures/tabled_same_gen.clausal` — same-generation problem
-- `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
-- `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
-- `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win("a") true)
+    **Fixtures:**
+    - `tests/fixtures/tabled_fib.clausal` — tabled fibonacci
+    - `tests/fixtures/tabled_path.clausal` — tabled cyclic path (1→2→3→1)
+    - `tests/fixtures/tabled_left_rec.clausal` — left-recursive path on acyclic graph (1→2→3→4)
+    - `tests/fixtures/tabled_same_gen.clausal` — same-generation problem
+    - `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
+    - `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
+    - `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win("a") true)

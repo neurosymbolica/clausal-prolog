@@ -180,33 +180,33 @@ Both reifiable and general ITE work in trampoline mode. The then/else branches c
 
 ---
 
-## Python API
+??? example "Python API"
 
-```python
-from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.logic.constraints import reify_eq
-from clausal.logic.clpfd import reify_fd
+    ```python
+    from clausal.logic.variables import Var, Trail, deref, unify
+    from clausal.logic.constraints import reify_eq
+    from clausal.logic.clpfd import reify_fd
+    
+    trail = Trail()
+    
+    # Ground cases — deterministic
+    assert reify_eq(1, 1, trail) is True
+    assert reify_eq(1, 2, trail) is False
+    
+    # Undetermined — no bindings left behind
+    x = Var()
+    assert reify_eq(x, 42, trail) is None
+    assert deref(x) is x  # x still unbound
+    
+    # CLP(FD) reification
+    assert reify_fd("lt", 3, 5, trail) is True
+    assert reify_fd("lt", 5, 3, trail) is False
+    
+    y = Var()
+    assert reify_fd("eq", y, 3, trail) is None
+    ```
 
-trail = Trail()
-
-# Ground cases — deterministic
-assert reify_eq(1, 1, trail) is True
-assert reify_eq(1, 2, trail) is False
-
-# Undetermined — no bindings left behind
-x = Var()
-assert reify_eq(x, 42, trail) is None
-assert deref(x) is x  # x still unbound
-
-# CLP(FD) reification
-assert reify_fd("lt", 3, 5, trail) is True
-assert reify_fd("lt", 5, 3, trail) is False
-
-y = Var()
-assert reify_fd("eq", y, 3, trail) is None
-```
-
----
+    ---
 
 ## Why Not Committed Choice
 
@@ -256,20 +256,20 @@ Key properties:
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_reified_ite.py` (99 tests).
+    Tests are in `tests/test_reified_ite.py` (99 tests).
 
-- **`reify_eq` unit tests** (20): identical var, ground equal/incompatible (int, str, type mismatch), undetermined (var-int, int-var, two vars), bound var equal/inequal, Compound (same/different/different functor/with var), PredicateMeta (same/different), lists (same/different/with var), no side effects
-- **`reify_fd` unit tests** (10): ground eq/ne/lt/ge true/false, undetermined with vars
-- **Reified ITE equality** (6): ground true/false, undetermined explores both — simple + trampoline modes
-- **Reified ITE dif** (3): ground dif true/false, undetermined with swapped branches
-- **Reified ITE FD** (4): ground lt/eq true/false
-- **General ITE** (4): succeeding/failing condition — simple + trampoline modes
-- **Control flow** (6): no-else (conjunction), nested ITE, binding preservation, conjunction body
-- **Multi-solution ITE** (2): multi-solution condition, binding preservation
-- **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
-- **Tabled ITE** (2): tabled condition with true/false paths
-- **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
-- **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-If, `.clausal` file integration — simple + trampoline modes
-- **`once()` .clausal integration** (1): `once_member.clausal` fixture
+    - **`reify_eq` unit tests** (20): identical var, ground equal/incompatible (int, str, type mismatch), undetermined (var-int, int-var, two vars), bound var equal/inequal, Compound (same/different/different functor/with var), PredicateMeta (same/different), lists (same/different/with var), no side effects
+    - **`reify_fd` unit tests** (10): ground eq/ne/lt/ge true/false, undetermined with vars
+    - **Reified ITE equality** (6): ground true/false, undetermined explores both — simple + trampoline modes
+    - **Reified ITE dif** (3): ground dif true/false, undetermined with swapped branches
+    - **Reified ITE FD** (4): ground lt/eq true/false
+    - **General ITE** (4): succeeding/failing condition — simple + trampoline modes
+    - **Control flow** (6): no-else (conjunction), nested ITE, binding preservation, conjunction body
+    - **Multi-solution ITE** (2): multi-solution condition, binding preservation
+    - **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
+    - **Tabled ITE** (2): tabled condition with true/false paths
+    - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
+    - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-If, `.clausal` file integration — simple + trampoline modes
+    - **`once()` .clausal integration** (1): `once_member.clausal` fixture

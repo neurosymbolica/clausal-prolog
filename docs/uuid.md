@@ -116,26 +116,26 @@ IsUUID(U_)
 
 ---
 
-## Examples
+??? example "Examples"
 
-### Session tokens
+    ### Session tokens
 
-```clausal
--import_from(uuid, [UUIDv4, UUIDStr])
+    ```clausal
+    -import_from(uuid, [UUIDv4, UUIDStr])
+    
+    NewSession(USERID_, TOKEN_) <- (
+        UUIDv4(U_) and
+        UUIDStr(U_, TOKEN_)
+    )
+    ```
 
-NewSession(USERID_, TOKEN_) <- (
-    UUIDv4(U_) and
-    UUIDStr(U_, TOKEN_)
-)
-```
+    ### Deterministic IDs
 
-### Deterministic IDs
-
-```clausal
--import_from(uuid, [UUIDv5, UUIDStr])
-
-ResourceId(TYPE_, NAME_, ID_) <- (
-    UUIDv5("url", NAME_, U_) and
-    UUIDStr(U_, ID_)
-)
-```
+    ```clausal
+    -import_from(uuid, [UUIDv5, UUIDStr])
+    
+    ResourceId(TYPE_, NAME_, ID_) <- (
+        UUIDv5("url", NAME_, U_) and
+        UUIDStr(U_, ID_)
+    )
+    ```

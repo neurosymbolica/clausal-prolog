@@ -469,14 +469,14 @@ Function and constant names follow SymPy's conventions where possible:
 
 ---
 
-## Test coverage
+??? info "Test coverage"
 
-- `tests/test_sympy_module.py` — 50 Python tests (conversion layer, predicates via API)
-- `tests/fixtures/sympy_basic.clausal` — 32 tests (core calculus, solve, series, chaining, multivariate)
-- `tests/fixtures/sympy_algebra.clausal` — 14 tests (collect, cancel, apart, together, degree, coeffs, roots)
-- `tests/fixtures/sympy_trig.clausal` — 5 tests (trigsimp, expand_trig, exp/log)
-- `tests/fixtures/sympy_printing.clausal` — 5 tests (latex, pretty)
-- `tests/fixtures/sympy_numtheory.clausal` — 18 tests (isprime, nextprime, factorint, divisors, gcd, lcm)
-- `tests/fixtures/sympy_special.clausal` — 8 tests (summation, product, binomial)
+    - `tests/test_sympy_module.py` — 50 Python tests (conversion layer, predicates via API)
+    - `tests/fixtures/sympy_basic.clausal` — 32 tests (core calculus, solve, series, chaining, multivariate)
+    - `tests/fixtures/sympy_algebra.clausal` — 14 tests (collect, cancel, apart, together, degree, coeffs, roots)
+    - `tests/fixtures/sympy_trig.clausal` — 5 tests (trigsimp, expand_trig, exp/log)
+    - `tests/fixtures/sympy_printing.clausal` — 5 tests (latex, pretty)
+    - `tests/fixtures/sympy_numtheory.clausal` — 18 tests (isprime, nextprime, factorint, divisors, gcd, lcm)
+    - `tests/fixtures/sympy_special.clausal` — 8 tests (summation, product, binomial)
 
-Total: **132 tests**.
+    Total: **132 tests**.

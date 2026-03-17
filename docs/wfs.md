@@ -46,33 +46,33 @@ for r in results:
 
 ---
 
-## Implementation Overview
+??? abstract "Implementation Overview"
 
-### Delayed Negation
+    ### Delayed Negation
 
-When `not Goal` is encountered for a tabled predicate and the answer is not yet determined:
+    When `not Goal` is encountered for a tabled predicate and the answer is not yet determined:
 
-1. The negation is **delayed** rather than immediately evaluated
-2. A conditional answer is recorded: "this answer holds if the delayed condition resolves"
-3. After the top-level computation completes, `_resolve_conditions` processes all conditional answers
+    1. The negation is **delayed** rather than immediately evaluated
+    2. A conditional answer is recorded: "this answer holds if the delayed condition resolves"
+    3. After the top-level computation completes, `_resolve_conditions` processes all conditional answers
 
-### `_naf_tabled` Runtime
+    ### `_naf_tabled` Runtime
 
-For tabled predicates, negation-as-failure uses `_naf_tabled` instead of the standard `_found`-flag pattern. This integrates with the tabling engine to correctly handle:
+    For tabled predicates, negation-as-failure uses `_naf_tabled` instead of the standard `_found`-flag pattern. This integrates with the tabling engine to correctly handle:
 
-- Incomplete tables (computation still in progress)
-- Conditional answers (answers with delayed conditions)
-- Cyclic dependencies
+    - Incomplete tables (computation still in progress)
+    - Conditional answers (answers with delayed conditions)
+    - Cyclic dependencies
 
-### Conditional Answer Resolution
+    ### Conditional Answer Resolution
 
-After all tables reach a fixpoint, `_resolve_conditions` iterates over conditional answers and attempts to resolve them:
+    After all tables reach a fixpoint, `_resolve_conditions` iterates over conditional answers and attempts to resolve them:
 
-- If all conditions are satisfied → answer becomes true
-- If any condition is violated → answer is removed
-- If conditions are cyclic → answer remains undefined
+    - If all conditions are satisfied → answer becomes true
+    - If any condition is violated → answer is removed
+    - If conditions are cyclic → answer remains undefined
 
----
+    ---
 
 ## Requirements
 
@@ -104,11 +104,11 @@ With the cyclic graph a→b→c→a, `wins` has no definite winners — all posi
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests cover:
+    Tests cover:
 
-- **Delayed negation**: basic recursive negation, cyclic dependencies
-- **Conditional answers**: resolution after fixpoint
-- **query_wfs API**: truth annotations, undefined answers
-- **Integration with tabling**: SLG resolution + WFS
+    - **Delayed negation**: basic recursive negation, cyclic dependencies
+    - **Conditional answers**: resolution after fixpoint
+    - **query_wfs API**: truth annotations, undefined answers
+    - **Integration with tabling**: SLG resolution + WFS

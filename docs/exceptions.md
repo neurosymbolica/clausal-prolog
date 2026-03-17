@@ -82,51 +82,51 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
 ---
 
-## Examples
+??? example "Examples"
 
-**Catch a type error:**
-```
-check_int(X_, R_) <- Catch(
-    (X_ > 0 and R_ is "positive"),
-    error(type_error(_, _), _),
-    R_ is "not a number"
-)
-```
+    **Catch a type error:**
+    ```
+    check_int(X_, R_) <- Catch(
+        (X_ > 0 and R_ is "positive"),
+        error(type_error(_, _), _),
+        R_ is "not a number"
+    )
+    ```
 
-**Re-throw after logging:**
-```
-logged_div(X_, Y_, R_) <- Catch(
-    (R_ := X_ / Y_),
-    E_,
-    (Write(E_) and Throw(E_))
-)
-```
+    **Re-throw after logging:**
+    ```
+    logged_div(X_, Y_, R_) <- Catch(
+        (R_ := X_ / Y_),
+        E_,
+        (Write(E_) and Throw(E_))
+    )
+    ```
 
-**Catch-all:**
-```
-safe_run(Goal_, R_) <- Catch(
-    (CallGoal(Goal_) and R_ is "ok"),
-    _,
-    R_ is "error"
-)
-```
+    **Catch-all:**
+    ```
+    safe_run(Goal_, R_) <- Catch(
+        (CallGoal(Goal_) and R_ is "ok"),
+        _,
+        R_ is "error"
+    )
+    ```
 
----
+    ---
 
-## Python API
+??? example "Python API"
 
-```python
-from clausal.logic.exceptions import LogicException, type_error, instantiation_error
+    ```python
+    from clausal.logic.exceptions import LogicException, type_error, instantiation_error
+    
+    # Build an error term
+    err = type_error("integer", "foo")
+    # → Compound('error', (Compound('type_error', ('integer', 'foo')), ...))
+    
+    # Raise from Python
+    raise LogicException(err)
+    ```
 
-# Build an error term
-err = type_error("integer", "foo")
-# → Compound('error', (Compound('type_error', ('integer', 'foo')), ...))
-
-# Raise from Python
-raise LogicException(err)
-```
-
----
+    ---
 
 ## Compiler Integration
 
@@ -136,12 +136,12 @@ raise LogicException(err)
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_exceptions.py` (31 tests).
+    Tests are in `tests/test_exceptions.py` (31 tests).
 
-- **Throw**: ground term, string, structured error, uncaught surfaces as LogicException
-- **Catch**: matching/non-matching catcher, nested catch, recovery goal, variable catcher (catch-all)
-- **Halt**: exit code 0, exit code N, raises SystemExit
-- **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
-- **Import integration**: `.clausal` file with catch/throw
+    - **Throw**: ground term, string, structured error, uncaught surfaces as LogicException
+    - **Catch**: matching/non-matching catcher, nested catch, recovery goal, variable catcher (catch-all)
+    - **Halt**: exit code 0, exit code N, raises SystemExit
+    - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
+    - **Import integration**: `.clausal` file with catch/throw

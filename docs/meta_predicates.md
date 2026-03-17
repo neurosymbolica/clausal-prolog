@@ -183,30 +183,28 @@ double_positives(Xs_, Rs_) <- FilterMap(
 
 ---
 
-## Combining Meta-Predicates with Lambdas
+??? tip "Combining Meta-Predicates with Lambdas"
 
-Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
+    Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
 
-```
-# FindAll with inline goal — no lambda required
-squares(Ns_, Sqs_) <- FindAll(Sq_, (In(X_, Ns_) and (Sq_ := X_ * X_)), Sqs_)
+    ```
+    # FindAll with inline goal — no lambda required
+    squares(Ns_, Sqs_) <- FindAll(Sq_, (In(X_, Ns_) and (Sq_ := X_ * X_)), Sqs_)
 
-# ForAll with inline condition and action
-all_positive(Ns_) <- ForAll(In(X_, Ns_), X_ > 0)
-```
+    # ForAll with inline condition and action
+    all_positive(Ns_) <- ForAll(In(X_, Ns_), X_ > 0)
+    ```
 
-Higher-order list predicates take closures, so lambdas are the natural fit:
+    Higher-order list predicates take closures, so lambdas are the natural fit:
 
-```
-# Filter with lambda
-positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
-```
+    ```
+    # Filter with lambda
+    positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+    ```
 
-See [Lambdas](lambdas.md) for full lambda syntax and semantics.
+    See [Lambdas](lambdas.md) for full lambda syntax and semantics.
 
----
+??? info "Test coverage"
 
-## Test Coverage
-
-- `tests/test_meta.py` (23 tests): FindAll, BagOf, SetOf, ForAll, Call/N, `.clausal` integration
-- `tests/test_higher_order.py` (28 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4
+    - `tests/test_meta.py` (23 tests): FindAll, BagOf, SetOf, ForAll, Call/N, `.clausal` integration
+    - `tests/test_higher_order.py` (28 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4

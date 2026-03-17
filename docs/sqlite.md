@@ -198,64 +198,64 @@ ShowSchema(Col_, Type_) <- (
 
 ---
 
-## Examples
+??? example "Examples"
 
-### CRUD operations
+    ### CRUD operations
 
-```clausal
--import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
+    ```clausal
+    -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
+    
+    Init <- (
+        SQLiteConnect(":memory:", "app") and
+        SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
+    )
+    
+    AddNote(Body_) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [Body_])
+    
+    AllNotes(Id_, Body_) <- SQLiteQuery("app", "SELECT id, body FROM notes", (Id_, Body_))
+    
+    SearchNotes(Term_, Body_) <- (
+        SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [Term_], Body_)
+    )
+    ```
 
-Init <- (
-    SQLiteConnect(":memory:", "app") and
-    SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
-)
+    ### Joining tables
 
-AddNote(Body_) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [Body_])
+    ```clausal
+    -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
+    
+    Setup <- (
+        SQLiteConnect(":memory:", "hr") and
+        SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)") and
+        SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)") and
+        SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')") and
+        SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')") and
+        SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)") and
+        SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
+    )
+    
+    EmpDept(Emp_, Dept_) <- (
+        Setup and
+        SQLiteQuery("hr",
+            "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
+            (Emp_, Dept_))
+    )
+    ```
 
-AllNotes(Id_, Body_) <- SQLiteQuery("app", "SELECT id, body FROM notes", (Id_, Body_))
+    ### Schema exploration
 
-SearchNotes(Term_, Body_) <- (
-    SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [Term_], Body_)
-)
-```
+    ```clausal
+    -import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
+    
+    Describe(Db_) <- (
+        SQLiteTable(Db_, Table_) and
+        ++print(f"\n{Table_}:") and
+        SQLiteColumn(Db_, Table_, Col_, Type_) and
+        ++print(f"  {Col_} {Type_}")
+    )
+    ```
 
-### Joining tables
-
-```clausal
--import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
-
-Setup <- (
-    SQLiteConnect(":memory:", "hr") and
-    SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)") and
-    SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)") and
-    SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')") and
-    SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')") and
-    SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)") and
-    SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
-)
-
-EmpDept(Emp_, Dept_) <- (
-    Setup and
-    SQLiteQuery("hr",
-        "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
-        (Emp_, Dept_))
-)
-```
-
-### Schema exploration
-
-```clausal
--import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
-
-Describe(Db_) <- (
-    SQLiteTable(Db_, Table_) and
-    ++print(f"\n{Table_}:") and
-    SQLiteColumn(Db_, Table_, Col_, Type_) and
-    ++print(f"  {Col_} {Type_}")
-)
-```
-
----
+    ---
 
 ## Safety
 
@@ -265,20 +265,20 @@ Describe(Db_) <- (
 
 ---
 
-## Implementation
+??? abstract "Implementation"
 
-- **Module:** `clausal/modules/sqlite.py`
-- **Adapter class:** `_SQLitePredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
-- **Backend:** Python's `sqlite3` module (stdlib, always available)
-- **Tests:** `tests/test_sqlite.py` (37 tests: 31 unit + 6 `.clausal` integration)
+    - **Module:** `clausal/modules/sqlite.py`
+    - **Adapter class:** `_SQLitePredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
+    - **Backend:** Python's `sqlite3` module (stdlib, always available)
+    - **Tests:** `tests/test_sqlite.py` (37 tests: 31 unit + 6 `.clausal` integration)
 
----
+    ---
 
-## Design decisions
+??? abstract "Design decisions"
 
-1. **Named connection aliases** — connections are identified by string aliases, not opaque handles. This makes them easy to reference across predicates in `.clausal` files where values must be ground or logic variables.
-2. **Idempotent connect** — `SQLiteConnect` with an existing alias succeeds silently. This simplifies predicates that call a shared `setup` predicate from multiple entry points.
-3. **Auto-commit on exec** — `SQLiteExec` commits after each statement. For multi-statement atomicity, use Python's transaction support via `++()` interop.
-4. **Single-column unwrap** — `SQLiteQuery` unwraps single-column rows to bare values (not 1-tuples), making common patterns like `SELECT name FROM ...` cleaner.
-5. **Nondeterministic iteration** — `SQLiteQuery`, `SQLiteTable`, `SQLiteColumn`, and `SQLiteCurrentConnection` yield one solution per row/item on backtracking, following the standard Prolog database query pattern.
-6. **No C FFI** — unlike prosqlite (SWI-Prolog) which wraps libsqlite3 via C, this module delegates entirely to Python's `sqlite3` stdlib. Zero external dependencies.
+    1. **Named connection aliases** — connections are identified by string aliases, not opaque handles. This makes them easy to reference across predicates in `.clausal` files where values must be ground or logic variables.
+    2. **Idempotent connect** — `SQLiteConnect` with an existing alias succeeds silently. This simplifies predicates that call a shared `setup` predicate from multiple entry points.
+    3. **Auto-commit on exec** — `SQLiteExec` commits after each statement. For multi-statement atomicity, use Python's transaction support via `++()` interop.
+    4. **Single-column unwrap** — `SQLiteQuery` unwraps single-column rows to bare values (not 1-tuples), making common patterns like `SELECT name FROM ...` cleaner.
+    5. **Nondeterministic iteration** — `SQLiteQuery`, `SQLiteTable`, `SQLiteColumn`, and `SQLiteCurrentConnection` yield one solution per row/item on backtracking, following the standard Prolog database query pattern.
+    6. **No C FFI** — unlike prosqlite (SWI-Prolog) which wraps libsqlite3 via C, this module delegates entirely to Python's `sqlite3` stdlib. Zero external dependencies.

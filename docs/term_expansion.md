@@ -113,7 +113,7 @@ The V3-2 compiler pipeline orchestrates both expansions:
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-- `tests/test_term_expansion.py` (25 tests): pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, q() quasi-quotation, full pipeline integration
-- `tests/test_regex.py` (93 tests): goal expansion for regex auto-binding and precompilation
+    - `tests/test_term_expansion.py` (25 tests): pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, q() quasi-quotation, full pipeline integration
+    - `tests/test_regex.py` (93 tests): goal expansion for regex auto-binding and precompilation

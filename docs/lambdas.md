@@ -238,33 +238,33 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ---
 
-## Python API
+??? example "Python API"
 
-Lambdas are a `.clausal` file feature — they are compiled from source by the term transformer and compiler. From pure Python, you can construct the equivalent term tree manually:
+    Lambdas are a `.clausal` file feature — they are compiled from source by the term transformer and compiler. From pure Python, you can construct the equivalent term tree manually:
 
-```python
-from clausal.pythonic_ast import nodes as sa
-from clausal.terms import Evaluate, Add, LoadName
-from clausal.logic.variables import Var
+    ```python
+    from clausal.pythonic_ast import nodes as sa
+    from clausal.terms import Evaluate, Add, LoadName
+    from clausal.logic.variables import Var
+    
+    result = Var()
+    lam = sa.Lambda(
+        params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
+        body=Evaluate(left=result, right=Add(left=LoadName(name="X_"), right=1)),
+    )
+    ```
 
-result = Var()
-lam = sa.Lambda(
-    params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
-    body=Evaluate(left=result, right=Add(left=LoadName(name="X_"), right=1)),
-)
-```
+    In practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
 
-In practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
+    ---
 
----
+??? info "Test coverage"
 
-## Test coverage
+    Tests are in `tests/test_lambdas.py` and `tests/test_higher_order.py`.
 
-Tests are in `tests/test_lambdas.py` and `tests/test_higher_order.py`.
-
-- **TermTransformer**: arrow syntax produces Lambda nodes, param generates LoadName (not Var), captures enclosing Var, body vars don't leak, nested lambda capture, anonymous `_`, Python lambda rejected
-- **Compiler**: produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
-- **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
-- **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
-- **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `:=` arithmetic
-- **Higher-order builtins** (V2-11): MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)
+    - **TermTransformer**: arrow syntax produces Lambda nodes, param generates LoadName (not Var), captures enclosing Var, body vars don't leak, nested lambda capture, anonymous `_`, Python lambda rejected
+    - **Compiler**: produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
+    - **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
+    - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
+    - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `:=` arithmetic
+    - **Higher-order builtins** (V2-11): MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)

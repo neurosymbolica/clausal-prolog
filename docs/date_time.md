@@ -142,16 +142,16 @@ This is nondeterministic — it succeeds once for each date in the range.
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_date_time.py`.
+    Tests are in `tests/test_date_time.py`.
 
-- **Now/NowUTC/Today**: current timestamps
-- **Date/4**: construct, decompose, invalid values
-- **Time/4**: construct, decompose
-- **DateTime/7**: construct, decompose
-- **TimeDelta/3**: construct, decompose
-- **DateAdd/DateSub/DateDiff**: arithmetic
-- **FormatDate/ParseDate**: strftime/strptime
-- **DayOfWeek**: weekday computation
-- **DateBetween**: date range enumeration
+    - **Now/NowUTC/Today**: current timestamps
+    - **Date/4**: construct, decompose, invalid values
+    - **Time/4**: construct, decompose
+    - **DateTime/7**: construct, decompose
+    - **TimeDelta/3**: construct, decompose
+    - **DateAdd/DateSub/DateDiff**: arithmetic
+    - **FormatDate/ParseDate**: strftime/strptime
+    - **DayOfWeek**: weekday computation
+    - **DateBetween**: date range enumeration

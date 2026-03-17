@@ -143,12 +143,12 @@ Directives apply to the entire module — they cannot be scoped to individual cl
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_directives.py` (21 tests).
+    Tests are in `tests/test_directives.py` (21 tests).
 
-- **Dynamic**: predicate metadata, runtime assert/retract, locking of non-dynamic predicates
-- **Discontiguous**: scattered clause collection
-- **Table**: tabling metadata, SLG resolution
-- **Parsing**: directive syntax recognition, arity extraction
-- **Import-level locking**: predicates locked after load, dynamic predicates remain mutable
+    - **Dynamic**: predicate metadata, runtime assert/retract, locking of non-dynamic predicates
+    - **Discontiguous**: scattered clause collection
+    - **Table**: tabling metadata, SLG resolution
+    - **Parsing**: directive syntax recognition, arity extraction
+    - **Import-level locking**: predicates locked after load, dynamic predicates remain mutable

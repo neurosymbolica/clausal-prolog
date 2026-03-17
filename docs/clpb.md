@@ -92,46 +92,46 @@ solve(X_, Y_) <- (
 
 ---
 
-## Examples
+??? example "Examples"
 
-### Half Adder
+    ### Half Adder
 
-```
-HalfAdder(X_, Y_, Sum_, Carry_) <- (
-    Sat(BoolEq(Sum_, X_ ^ Y_))
-    and Sat(BoolEq(Carry_, X_ & Y_))
-)
-```
+    ```
+    HalfAdder(X_, Y_, Sum_, Carry_) <- (
+        Sat(BoolEq(Sum_, X_ ^ Y_))
+        and Sat(BoolEq(Carry_, X_ & Y_))
+    )
+    ```
 
-### Pigeon-Hole (unsatisfiable)
+    ### Pigeon-Hole (unsatisfiable)
 
-3 pigeons in 2 holes — no solution exists:
+    3 pigeons in 2 holes — no solution exists:
 
-```
-PigeonHole() <- (
-    Sat(P11_ | P12_)
-    and Sat(P21_ | P22_)
-    and Sat(P31_ | P32_)
-    and Sat(~(P11_ & P21_))
-    and Sat(~(P11_ & P31_))
-    and Sat(~(P21_ & P31_))
-    and Sat(~(P12_ & P22_))
-    and Sat(~(P12_ & P32_))
-    and Sat(~(P22_ & P32_))
-    and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
-)
-# no solutions
-```
+    ```
+    PigeonHole() <- (
+        Sat(P11_ | P12_)
+        and Sat(P21_ | P22_)
+        and Sat(P31_ | P32_)
+        and Sat(~(P11_ & P21_))
+        and Sat(~(P11_ & P31_))
+        and Sat(~(P21_ & P31_))
+        and Sat(~(P12_ & P22_))
+        and Sat(~(P12_ & P32_))
+        and Sat(~(P22_ & P32_))
+        and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
+    )
+    # no solutions
+    ```
 
-### Circuit Equivalence
+    ### Circuit Equivalence
 
-Verify De Morgan's law via tautology check:
+    Verify De Morgan's law via tautology check:
 
-```
-Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
-```
+    ```
+    Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
+    ```
 
----
+    ---
 
 ## BDD Internals
 
@@ -159,35 +159,35 @@ When `Sat()` is called with variables that already have constraints, all connect
 
 ---
 
-## Python API
+??? example "Python API"
 
-```python
-from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.logic.clpb import sat, taut, sat_count, bool_labeling, BoolEq
-from clausal.pythonic_ast.nodes import BitAnd, BitOr, BitXor, Invert
+    ```python
+    from clausal.logic.variables import Var, Trail, deref, unify
+    from clausal.logic.clpb import sat, taut, sat_count, bool_labeling, BoolEq
+    from clausal.pythonic_ast.nodes import BitAnd, BitOr, BitXor, Invert
+    
+    trail = Trail()
+    x, y = Var(), Var()
+    
+    # Post constraint: X XOR Y
+    sat(BitXor(left=x, right=y), trail)
+    
+    # Enumerate solutions
+    for _ in bool_labeling([x, y], trail):
+        print(deref(x), deref(y))   # 0 1, then 1 0
+    
+    # Tautology check
+    t = Var()
+    taut(BitOr(left=x, right=Invert(operand=x)), t, Trail())
+    # t = 1
+    
+    # Model counting
+    n = Var()
+    sat_count(BitXor(left=Var(), right=Var()), n, Trail())
+    # n = 2
+    ```
 
-trail = Trail()
-x, y = Var(), Var()
-
-# Post constraint: X XOR Y
-sat(BitXor(left=x, right=y), trail)
-
-# Enumerate solutions
-for _ in bool_labeling([x, y], trail):
-    print(deref(x), deref(y))   # 0 1, then 1 0
-
-# Tautology check
-t = Var()
-taut(BitOr(left=x, right=Invert(operand=x)), t, Trail())
-# t = 1
-
-# Model counting
-n = Var()
-sat_count(BitXor(left=Var(), right=Var()), n, Trail())
-# n = 2
-```
-
----
+    ---
 
 ## Interaction with Other Constraints
 
@@ -195,18 +195,18 @@ CLP(B) uses attribute key `"clpb"`, independent of CLP(FD) (`"fd"`) and dif/2 (`
 
 ---
 
-## Test Coverage
+??? info "Test coverage"
 
-Tests are in `tests/test_clpb.py` (87 tests).
+    Tests are in `tests/test_clpb.py` (87 tests).
 
-- **BDD operations**: make_node, apply, restrict, _expr_to_bdd
-- **Sat**: forcing, contradiction, tautology, sequential conjunction
-- **Taut**: tautology/contradiction/indeterminate
-- **SatCount**: various formulas
-- **BoolLabeling**: unconstrained, constrained
-- **Attribute hook**: bind, merge, incompatible
-- **Trail safety**: backtrack, labeling
-- **Half adder**: complete truth table
-- **Full adder**: 5 input combinations
-- **Pigeon-hole**: unsatisfiable
-- **Circuit equivalence**: De Morgan's law
+    - **BDD operations**: make_node, apply, restrict, _expr_to_bdd
+    - **Sat**: forcing, contradiction, tautology, sequential conjunction
+    - **Taut**: tautology/contradiction/indeterminate
+    - **SatCount**: various formulas
+    - **BoolLabeling**: unconstrained, constrained
+    - **Attribute hook**: bind, merge, incompatible
+    - **Trail safety**: backtrack, labeling
+    - **Half adder**: complete truth table
+    - **Full adder**: 5 input combinations
+    - **Pigeon-hole**: unsatisfiable
+    - **Circuit equivalence**: De Morgan's law
