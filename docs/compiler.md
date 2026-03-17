@@ -48,9 +48,15 @@ def fib__2(arg0, arg1, trail, k):
 | `Var()` (unbound) | `MatchAs(name="_vN")` — capture into local name |
 | Integer / string literal | `MatchValue(IntLiteral(N))` — exact match |
 | PredicateMeta term `fib(n=_v, ...)` | `MatchClass(fib, patterns)` — structural match |
-| List `[HEAD, *TAIL]` | `MatchAs(name="_listN")` + deferred list guard (see below) |
+| List `[HEAD, *TAIL]` | `MatchAs(name="_lcapN")` + deferred list guard (see below) |
+| `DictTerm({"k": V, ...})` | `MatchAs(name="_dcapN")` + dict unify guard |
+| `SetTerm({1, 2, 3})` | `MatchAs(name="_scapN")` + set unify guard |
 
 **Repeated head variables**: if the same logic variable appears in two different head positions, the second occurrence gets a generated alias name (`_vN__dupM`). The body is wrapped in `if unify(original, alias, trail):` before the continuation runs.
+
+**Dict patterns** (`DictTerm`): dicts in head positions are compiled as wildcard captures. A "dict guard" pre-allocates `Var()` objects for variable values, constructs the expected `DictTerm`, and wraps the body in `if unify(captured, expected_dict, trail):`. This leverages the C-level `__unify__` protocol for pairwise value unification.
+
+**Set patterns** (`SetTerm` / `SetLiteral`): sets in head positions are compiled as wildcard captures with a unify guard against a constructed `SetTerm`. Since set elements are ground, unification reduces to element equality.
 
 **List patterns**: lists in head positions are compiled as wildcard captures (`MatchAs`) rather than `MatchSequence`. A separate "list guard" records the pattern structure. Two runtime functions handle list unification bidirectionally:
 

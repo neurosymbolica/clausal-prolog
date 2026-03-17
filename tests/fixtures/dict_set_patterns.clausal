@@ -1,0 +1,77 @@
+# tests/fixtures/dict_set_patterns.clausal
+# Phase 2: DictTerm and SetTerm pattern matching in clause heads and bodies.
+
+# ── DictTerm in clause heads ──
+
+# Ground dict matching
+point_type({"x": 0, "y": 0}, "origin"),
+point_type({"x": 1, "y": 0}, "x_axis"),
+point_type({"x": 0, "y": 1}, "y_axis"),
+
+# Dict pattern with variables in values
+get_x({"x": X, "y": Y_}, X),
+get_y({"x": X_, "y": Y}, Y),
+
+# Nested dict pattern
+get_city({"address": {"city": CITY}}, CITY),
+
+# Dict construction in body
+make_point(X, Y, P) <- (P is {"x": X, "y": Y})
+
+# ── SetTerm in clause heads ──
+
+colors({1, 2, 3}),
+primary({"red", "green", "blue"}),
+
+# ── Tests ──
+
+# --- Test: ground dict matching ---
+Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE) and TYPE is "origin")
+Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE) and TYPE is "x_axis")
+
+# --- Test: dict value extraction ---
+Test("get_x") <- (get_x({"x": 42, "y": 99}, X) and X is 42)
+Test("get_y") <- (get_y({"x": 10, "y": 20}, Y) and Y is 20)
+
+# --- Test: nested dict ---
+Test("nested city") <- (
+    get_city({"address": {"city": "London"}}, C) and C is "London"
+)
+
+# --- Test: dict construction in body ---
+Test("make_point") <- (
+    make_point(3, 4, P) and
+    get_x(P, X) and X is 3 and
+    get_y(P, Y) and Y is 4
+)
+
+# --- Test: dict unification in body ---
+Test("dict unify") <- (
+    D is {"a": 1, "b": 2} and
+    D is {"a": X, "b": Y} and
+    X is 1 and Y is 2
+)
+
+# --- Test: dict fails on key mismatch ---
+Test("dict key mismatch fails") <- (
+    not ({"a": 1} is {"b": 1})
+)
+
+# --- Test: set ground matching ---
+Test("set match") <- (colors(S) and S is {1, 2, 3})
+
+# --- Test: set primary ---
+Test("set primary") <- (primary(S) and S is {"red", "green", "blue"})
+
+# --- Test: set mismatch fails ---
+Test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))
+
+# --- Test: dict var unifies ---
+Test("var binds dict") <- (
+    X is {"key": "val"} and
+    X is {"key": Y} and
+    Y is "val"
+)
+
+# --- Test: empty dict ---
+Test("empty dict") <- ({} is {})

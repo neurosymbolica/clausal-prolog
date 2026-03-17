@@ -907,6 +907,31 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         PyTuple_Check(t2) || PyList_Check(t2))
         return 0;
 
+    /* __unify__ protocol: delegate to Python method if present.
+     * Allows custom term types (DictTerm, SetTerm, etc.) to define their own
+     * unification behaviour without hardcoding each type in the C extension.
+     * The method signature is: __unify__(other, trail) -> bool
+     */
+    {
+        PyObject *hook = PyObject_GetAttrString(t1, "__unify__");
+        if (hook) {
+            PyObject *result = PyObject_CallFunctionObjArgs(
+                hook, t2, (PyObject *)trail, NULL);
+            Py_DECREF(hook);
+            if (result == NULL) return -1;
+            if (result == Py_NotImplemented) {
+                Py_DECREF(result);
+                /* Fall through to == comparison */
+            } else {
+                int r = PyObject_IsTrue(result);
+                Py_DECREF(result);
+                return r;
+            }
+        } else {
+            PyErr_Clear();
+        }
+    }
+
     int cmp = PyObject_RichCompareBool(t1, t2, Py_EQ);
     if (cmp < 0) return -1;
     return cmp;

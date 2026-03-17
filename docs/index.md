@@ -83,6 +83,7 @@ for s in m.query(grandparent("tom", G)):
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
 | [Predicates](predicates.md) | How predicates work as Python classes (PredicateMeta) |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
+| [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
 | [Constraints](constraints.md) | Dif/2 and CLP(FD) finite-domain constraints |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |

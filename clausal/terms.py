@@ -201,6 +201,20 @@ class DictTerm:
         from .logic.variables import occurs_check
         return any(occurs_check(var, v) for v in self._data.values())
 
+    def __unify__(self, other, trail):
+        """Called by C do_unify: pairwise value unification."""
+        if not isinstance(other, DictTerm):
+            return NotImplemented
+        if self._data.keys() != other._data.keys():
+            return False
+        from .logic.variables import unify
+        mark = trail.mark()
+        for key in self._data:
+            if not unify(self._data[key], other._data[key], trail):
+                trail.undo(mark)
+                return False
+        return True
+
 
 # ── SetTerm — unification-aware set ──────────────────────────────────────────
 
@@ -233,6 +247,12 @@ class SetTerm:
     def __repr__(self):
         inner = ", ".join(repr(e) for e in sorted(self._elements, key=repr))
         return f"SetTerm({{{inner}}})"
+
+    def __unify__(self, other, trail):
+        """Called by C do_unify: element-wise equality (elements are ground)."""
+        if not isinstance(other, SetTerm):
+            return NotImplemented
+        return self._elements == other._elements
 
 
 # ── Cons / list helpers ────────────────────────────────────────────────────────

@@ -466,6 +466,14 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
     if isinstance(term, SetTerm):
         return []
 
+    # SetLiteral (AST node): elements may contain vars
+    from clausal.pythonic_ast.nodes import SetLiteral as _SL  # noqa: PLC0415
+    if isinstance(term, _SL):
+        result = []
+        for e in term.elements:
+            result.extend(_collect_vars(e, seen))
+        return result
+
     # KWTerm: recurse into field values
     from clausal.terms import KWTerm  # noqa: PLC0415
     if isinstance(term, KWTerm):
@@ -873,6 +881,36 @@ def term_to_ast_expr(
         return ast.Dict(
             keys=[term_to_ast_expr(k, var_context, eval_arith=eval_arith) for k in term.keys()],
             values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
+        )
+
+    from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
+    if isinstance(term, DictTerm):
+        return _call(
+            _name("DictTerm"),
+            ast.Dict(
+                keys=[term_to_ast_expr(k, var_context, eval_arith=eval_arith) for k in term.keys()],
+                values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
+            ),
+        )
+
+    if isinstance(term, SetTerm):
+        return _call(
+            _name("SetTerm"),
+            ast.List(
+                elts=[ast.Constant(value=e) for e in sorted(term.elements, key=repr)],
+                ctx=ast.Load(),
+            ),
+        )
+
+    # SetLiteral (AST node from visit_Set): emit SetTerm([elem, ...]) constructor
+    from clausal.pythonic_ast.nodes import SetLiteral as _SetLiteral_t  # noqa: PLC0415
+    if isinstance(term, _SetLiteral_t):
+        return _call(
+            _name("SetTerm"),
+            ast.List(
+                elts=[term_to_ast_expr(e, var_context, eval_arith=eval_arith) for e in term.elements],
+                ctx=ast.Load(),
+            ),
         )
 
     if isinstance(term, Compound):
@@ -3467,9 +3505,12 @@ def compile_predicate_trampoline(
         reify_fd as _reify_fd_fn,
     )
     from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.terms import DictTerm as _DictTerm_t, SetTerm as _SetTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm_t,
+        "DictTerm": _DictTerm_t,
+        "SetTerm": _SetTerm_t,
         "Var": Var,
         "unify": unify,
         "deref": deref,
@@ -3850,6 +3891,37 @@ def head_to_match_pattern(
                 list_guards.append((cap_name, before, star, after, guard_vc))
         return ast.MatchAs(pattern=None, name=cap_name)
 
+    # DictTerm → wildcard capture + unify guard (pairwise value unification)
+    from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm  # noqa: PLC0415
+    if isinstance(term, _DictTerm):
+        # Register Var values in var_context so they get python names
+        for val in term.values():
+            if is_var(val) and val._id not in var_context:
+                name = _var_python_name(val)
+                var_context[val._id] = name
+                if _list_reg_ids is not None:
+                    _list_reg_ids.add(val._id)
+        cap_name = f"_dcap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            guard_vc = dict(var_context)
+            list_guards.append(("dict", cap_name, term, guard_vc))
+        return ast.MatchAs(pattern=None, name=cap_name)
+
+    # SetTerm → wildcard capture + unify guard (set equality)
+    if isinstance(term, _SetTerm):
+        cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("set", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
+
+    # SetLiteral (AST node) → wildcard capture + unify guard
+    from clausal.pythonic_ast.nodes import SetLiteral as _SetLiteral  # noqa: PLC0415
+    if isinstance(term, _SetLiteral):
+        cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("set_literal", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
+
     # Compound(functor, args) → MatchClass on Compound
     if isinstance(term, Compound):
         f = term.functor
@@ -4226,11 +4298,69 @@ def compile_head_to_match_case(
             orelse=[],
         )]
 
+    # Emit dict/set guards: isinstance check + unify
+    dict_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] == "dict"]
+    set_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] in ("set", "set_literal")]
+    if dict_guards or set_guards:
+        from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm  # noqa: PLC0415
+        dict_set_stmts: list[ast.stmt] = []
+        # Pre-allocate Vars for dict value patterns
+        _ds_alloc_seen: set[str] = set()
+        for _, _cap, dt, _vc in dict_guards:
+            for val in dt.values():
+                if is_var(val) and val._id in _vc:
+                    vname = _vc[val._id]
+                    if vname not in _ds_alloc_seen:
+                        _ds_alloc_seen.add(vname)
+                        dict_set_stmts.append(_assign(vname, _call(_name("Var"))))
+
+        for _, cap_name, dt, vc in dict_guards:
+            # Build DictTerm({k: var_or_const, ...}) expression
+            dict_keys_ast = []
+            dict_vals_ast = []
+            for key in dt.keys():
+                dict_keys_ast.append(ast.Constant(value=key))
+                val = dt[key]
+                if is_var(val) and val._id in vc:
+                    dict_vals_ast.append(_name(vc[val._id]))
+                else:
+                    dict_vals_ast.append(term_to_ast_expr(val, vc))
+            expected_expr = _call(
+                _name("DictTerm"),
+                ast.Dict(keys=dict_keys_ast, values=dict_vals_ast),
+            )
+            inner = [ast.If(
+                test=_call(_name("unify"), _name(cap_name), expected_expr, _name(trail_name)),
+                body=inner,
+                orelse=[],
+            )]
+
+        for tag, cap_name, st in set_guards:
+            if tag == "set":
+                # SetTerm (runtime value): elements are ground, emit constants
+                elts = [ast.Constant(value=e) for e in sorted(st.elements, key=repr)]
+            else:
+                # SetLiteral (AST node): elements are term values, convert via term_to_ast_expr
+                elts = [term_to_ast_expr(e, var_context) for e in st.elements]
+            expected_expr = _call(
+                _name("SetTerm"),
+                ast.List(elts=elts, ctx=ast.Load()),
+            )
+            inner = [ast.If(
+                test=_call(_name("unify"), _name(cap_name), expected_expr, _name(trail_name)),
+                body=inner,
+                orelse=[],
+            )]
+
+        inner = dict_set_stmts + inner
+
     # Emit list guards: input destructuring + deferred output construction
-    if list_guards:
+    # Filter out dict/set guards from list_guards
+    actual_list_guards = [g for g in list_guards if g[0] not in ("dict", "set", "set_literal")]
+    if actual_list_guards:
         # Separate single-star and multi-star guards
-        single_star_guards = [g for g in list_guards if len(g) == 5]
-        multi_star_guards = [g for g in list_guards if len(g) == 4]
+        single_star_guards = [g for g in actual_list_guards if len(g) == 5]
+        multi_star_guards = [g for g in actual_list_guards if len(g) == 4]
 
         # Pre-allocate Var() for list-pattern vars (not captured by match pattern)
         def _flatten_elems(items):
@@ -4245,7 +4375,7 @@ def compile_head_to_match_case(
 
         list_var_allocs: list[ast.stmt] = []
         _alloc_seen: set[str] = set()
-        for guard in list_guards:
+        for guard in actual_list_guards:
             if len(guard) == 5:
                 _cap_name, _before, _star, _after, _vc = guard
                 elems = _flatten_elems(_before + ([_star] if _star is not None else []) + _after)
@@ -4804,9 +4934,12 @@ def compile_predicate_shallow(
         reify_fd as _reify_fd_fn_s,
     )
     from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.terms import DictTerm as _DictTerm_s, SetTerm as _SetTerm_s  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm,
+        "DictTerm": _DictTerm_s,
+        "SetTerm": _SetTerm_s,
         "Var": Var,
         "unify": unify,
         "deref": deref,

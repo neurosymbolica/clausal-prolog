@@ -39,7 +39,7 @@ from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
 from .logic.predicate import PredicateMeta
 from .logic.variables import Var, Trail, unify, deref, walk
-from .terms import Compound, KWTerm
+from .terms import Compound, KWTerm, DictTerm, SetTerm
 
 # Pipeline selection flag.  Set to True to use the new pipeline-split path.
 _USE_V2_PIPELINE = True
@@ -133,6 +133,8 @@ predicate_builtins["$ast"] = ast
 predicate_builtins["PredicateMeta"] = PredicateMeta
 predicate_builtins["Var"] = Var
 predicate_builtins["Compound"] = Compound
+predicate_builtins["DictTerm"] = DictTerm
+predicate_builtins["SetTerm"] = SetTerm
 predicate_builtins["Trail"] = Trail
 predicate_builtins["unify"] = unify
 predicate_builtins["deref"] = deref

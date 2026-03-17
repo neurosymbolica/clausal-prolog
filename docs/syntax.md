@@ -278,6 +278,45 @@ Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread s
 
 ---
 
+## Dicts
+
+Python dict literals in `.clausal` files create `DictTerm` objects — unification-aware dictionaries. Keys must be ground; values may be logic variables.
+
+```python
+# Ground dict fact
+point({"x": 0, "y": 0}),
+
+# Dict pattern in head — X binds during unification
+get_x({"x": X, "y": Y_}, X),
+
+# Dict construction in body
+make_point(X, Y, P) <- (P is {"x": X, "y": Y})
+
+# Nested dicts
+get_city({"address": {"city": C}}, C),
+```
+
+Two dicts unify iff they have the same keys and values unify pairwise. A variable unifies with a dict by binding to it.
+
+See [dicts_sets.md](dicts_sets.md) for the full design.
+
+---
+
+## Sets
+
+Python set literals in `.clausal` files create `SetTerm` objects — unification-aware sets. Elements must be ground (hashable).
+
+```python
+colors({1, 2, 3}),
+primary({"red", "green", "blue"}),
+```
+
+Two sets unify iff they contain the same elements (order irrelevant). Variables in set elements are not supported.
+
+See [dicts_sets.md](dicts_sets.md) for details.
+
+---
+
 ## Strings
 
 Strings prefixed with `u""` are lists of character atoms:
@@ -892,6 +931,15 @@ Atom, 'an atom', '+'   # atoms (titlecase or quoted string)
 
 # Strings
 u"hello"               # list of character atoms
+
+# Dicts (DictTerm — keys ground, values may be Vars)
+{"x": 1, "y": 2}              # ground dict
+{"x": X, "y": Y_}             # dict with variable values
+{"addr": {"city": C}}         # nested dict
+
+# Sets (SetTerm — elements must be ground)
+{1, 2, 3}                     # set of integers
+{"red", "green", "blue"}      # set of strings
 
 # Unification
 X is Y,                # unify

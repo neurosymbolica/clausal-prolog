@@ -17,7 +17,7 @@ from clausal.templating.term_rewriting import (
     _make_functor_class_ast,
 )
 from clausal.logic.variables import Var as RealVar
-from clausal.terms import ArithConstraint
+from clausal.terms import ArithConstraint, DictTerm, SetTerm
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -27,6 +27,8 @@ def _ns():
     ns = {name: getattr(sa, name) for name in sa.__all__}
     ns['Var'] = lambda: '<Var>'   # mock; returns a sentinel string
     ns['ArithConstraint'] = ArithConstraint
+    ns['DictTerm'] = DictTerm
+    ns['SetTerm'] = SetTerm
     return ns
 
 
@@ -384,10 +386,10 @@ def test_set_literal():
 
 
 def test_dict_literal():
-    node = term_eval("{'k': v}", sa.DictLiteral)
-    assert len(node.keys) == 1
-    assert node.keys[0] == 'k'   # plain Python string, not StringLiteral
-    assert isinstance(node.values[0], sa.LoadName)
+    node = term_eval("{'k': v}", DictTerm)
+    assert len(node) == 1
+    assert 'k' in node
+    assert isinstance(node['k'], sa.LoadName)
 
 
 # ── TermTransformer: call expressions ─────────────────────────────────────────

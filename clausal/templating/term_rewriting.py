@@ -551,22 +551,43 @@ class TermTransformer(NodeTransformer):
         return constant
 
     def visit_Dict(transformer, dict_expr):
-        keys = list_ast(
-            [
-                (
-                    transformer.visit(key)
-                    if key is not None
-                    else replace(Constant(value=None), dict_expr)
-                )
-                for key in dict_expr.keys
-            ],
+        # If any key is None, this is a **splat dict — fall back to DictLiteral
+        # (full splat/merge support is Phase 3).
+        has_splat = any(k is None for k in dict_expr.keys)
+        if has_splat:
+            keys = list_ast(
+                [
+                    (
+                        transformer.visit(key)
+                        if key is not None
+                        else replace(Constant(value=None), dict_expr)
+                    )
+                    for key in dict_expr.keys
+                ],
+                dict_expr,
+            )
+            values = list_ast(
+                [transformer.visit(value_node) for value_node in dict_expr.values],
+                dict_expr,
+            )
+            return node_ast("DictLiteral", dict_expr, keys=keys, values=values)
+
+        # Emit DictTerm({k1: v1, k2: v2, ...}) constructor call.
+        # Keys and values are transformed recursively.
+        key_asts = [transformer.visit(k) for k in dict_expr.keys]
+        val_asts = [transformer.visit(v) for v in dict_expr.values]
+        dict_arg = replace(
+            Dict(keys=key_asts, values=val_asts),
             dict_expr,
         )
-        values = list_ast(
-            [transformer.visit(value_node) for value_node in dict_expr.values],
+        return replace(
+            Call(
+                func=replace(Name(id="DictTerm", ctx=load), dict_expr),
+                args=[dict_arg],
+                keywords=[],
+            ),
             dict_expr,
         )
-        return node_ast("DictLiteral", dict_expr, keys=keys, values=values)
 
     def visit_DictComp(transformer, dict_comprehension):
         clauses = [
