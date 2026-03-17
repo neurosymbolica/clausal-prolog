@@ -1751,7 +1751,6 @@ Navigate a nested dict/list structure. `Path` is a single key (string or int) or
 **Python tests:** `tests/test_yaml_module.py`
 
 ---
-
 ## Operator Syntax (Compiler Special Forms)
 
 The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.

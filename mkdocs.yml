@@ -45,18 +45,33 @@ nav:
     - Predicates: predicates.md
     - Lambdas: lambdas.md
     - If-Then-Else: reified_ite.md
-    - Constraints: constraints.md
+    - DCGs: dcg.md
+    - Exceptions: exceptions.md
+    - Directives: directives.md
+  - Constraints:
+    - Dif & CLP(FD): constraints.md
+    - CLP(B): clpb.md
   - Builtins:
     - Predicate Index: builtins.md
+    - Meta & Higher-Order: meta_predicates.md
+    - I/O: io.md
     - Logging: logging.md
+  - Standard Library:
+    - Regex: regex.md
+    - Date & Time: date_time.md
+    - YAML: yaml.md
+    - SQLite: sqlite.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
     - Import System: import.md
     - Indexing: indexing.md
     - Tabling: tabling.md
+    - Well-Founded Semantics: wfs.md
+    - Term & Goal Expansion: term_expansion.md
     - Caching: caching.md
   - Python Integration: python_integration.md
+  - Examples: examples.md
 
 markdown_extensions:
   - pymdownx.highlight:

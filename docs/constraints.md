@@ -360,11 +360,11 @@ Tests are in `tests/test_clpfd.py` (74 tests).
 
 ---
 
-## CLP(B) — Boolean constraints
+## CLP(B) — Boolean Constraints
 
-CLP(B) provides constraint logic programming over Booleans, enabling SAT solving, tautology checking, model counting, and combinatorial problems as first-class logic programming. The implementation follows Markus Triska's reference design using reduced ordered BDDs (Binary Decision Diagrams).
+CLP(B) provides constraint logic programming over Booleans via reduced ordered BDDs. See the dedicated [CLP(B)](clpb.md) page for full documentation including operators, builtins, BDD internals, and examples.
 
-The implementation lives in `clausal.logic.clpb`.
+Quick reference:
 
 ### Operator syntax
 

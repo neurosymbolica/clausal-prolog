@@ -302,3 +302,66 @@ IsoDate(Y_, M_, D_, S_) <- (
     and S_ is ++Dt_.isoformat()
 )
 ```
+
+---
+
+## `++()` — Python Escape (V2-16)
+
+The `++()` operator evaluates an arbitrary Python expression at search time with logic variables automatically dereferenced. It wraps the expression in a `PyThunk` lambda that is called with deref'd values.
+
+### As a Value
+
+Use `++expr` on the right side of `is` to compute a Python value:
+
+```
+list_len(L_, N_) <- (N_ is ++len(L_))
+to_upper(S_, R_) <- (R_ is ++S_.upper())
+inc(X_, R_) <- (R_ is ++(X_ + 1))
+first(L_, R_) <- (R_ is ++L_[0])
+get_key(D_, K_, R_) <- (R_ is ++D_[K_])
+join_words(W_, R_) <- (R_ is ++", ".join(W_))
+double_all(L_, R_) <- (R_ is ++[x*2 for x in L_])
+```
+
+Any valid Python expression works inside `++()`: function calls, method calls, subscripts, dict access, list comprehensions, arithmetic, and string formatting.
+
+### As a Goal
+
+Use `++expr` as a standalone goal for side effects:
+
+```
+show(X_) <- ++print(X_)
+```
+
+When used as a goal, `++()` evaluates the expression (for its side effect) and always succeeds once.
+
+Goals and values can be mixed in a clause body:
+
+```
+process(X_, R_) <- (
+    ++print(X_),
+    R_ is ++(X_ * 2)
+)
+```
+
+### Multiple Variables
+
+All logic variables in the expression are dereferenced before evaluation:
+
+```
+add_len(A_, B_, R_) <- (R_ is ++(len(A_) + len(B_)))
+```
+
+### Per-Solution Evaluation
+
+`PyThunk` values are evaluated fresh for each solution during backtracking:
+
+```
+Item(1), Item(2), Item(3),
+Doubled(R_) <- (Item(X_), R_ is ++(X_ * 2))
+# yields R_ = 2, 4, 6
+```
+
+### Implementation
+
+The `++` syntax is detected by `visit_UnaryOp` in `term_rewriting.py` as `UAdd(UAdd(expr))`. The compiler emits a `_pyt_<id>(deref(...))` call wrapping the expression in a `PyThunk` lambda from `clausal/terms.py`.
