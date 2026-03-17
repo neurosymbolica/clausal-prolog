@@ -13,8 +13,8 @@ import pytest
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.uuid_mod import (
     UUIDv4, UUIDv1, UUIDv3, UUIDv5,
-    UuidStr, UuidHex, UuidUrn, UuidBytes, UuidInt,
-    UuidVersion, UuidFields, IsUuid,
+    UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt,
+    UUIDVersion, UUIDFields, IsUUID,
     _uuid4_1, _uuid1_1, _uuid3_3, _uuid5_3,
     _uuid_str_2, _uuid_hex_2, _uuid_urn_2, _uuid_bytes_2, _uuid_int_2,
     _uuid_version_2, _uuid_fields_7, _is_uuid_1,
@@ -47,7 +47,7 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
-_UUID_IMPORT = '-import_from(uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UuidStr, UuidHex, UuidUrn, UuidBytes, UuidInt, UuidVersion, UuidFields, IsUuid])\n'
+_UUID_IMPORT = '-import_from(uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt, UUIDVersion, UUIDFields, IsUUID])\n'
 
 
 def _load(name, src_text, tmp_path):
@@ -171,10 +171,10 @@ class TestUuid5:
         assert len(solutions) == 1
 
 
-# ── UuidStr ──────────────────────────────────────────────────────────────
+# ── UUIDStr ──────────────────────────────────────────────────────────────
 
 
-class TestUuidStr:
+class TestUUIDStr:
     def test_decompose(self):
         u = uuid.uuid4()
         s = Var()
@@ -213,10 +213,10 @@ class TestUuidStr:
         assert len(results) == 0
 
 
-# ── UuidHex ──────────────────────────────────────────────────────────────
+# ── UUIDHex ──────────────────────────────────────────────────────────────
 
 
-class TestUuidHex:
+class TestUUIDHex:
     def test_decompose(self):
         u = uuid.uuid4()
         h = Var()
@@ -244,10 +244,10 @@ class TestUuidHex:
         assert len(results) == 0
 
 
-# ── UuidUrn ──────────────────────────────────────────────────────────────
+# ── UUIDUrn ──────────────────────────────────────────────────────────────
 
 
-class TestUuidUrn:
+class TestUUIDUrn:
     def test_decompose(self):
         u = uuid.uuid4()
         urn = Var()
@@ -270,10 +270,10 @@ class TestUuidUrn:
         assert deref(u_out) == u_in
 
 
-# ── UuidBytes ────────────────────────────────────────────────────────────
+# ── UUIDBytes ────────────────────────────────────────────────────────────
 
 
-class TestUuidBytes:
+class TestUUIDBytes:
     def test_decompose(self):
         u = uuid.uuid4()
         b = Var()
@@ -301,10 +301,10 @@ class TestUuidBytes:
         assert len(results) == 0
 
 
-# ── UuidInt ──────────────────────────────────────────────────────────────
+# ── UUIDInt ──────────────────────────────────────────────────────────────
 
 
-class TestUuidInt:
+class TestUUIDInt:
     def test_decompose(self):
         u = uuid.uuid4()
         n = Var()
@@ -332,10 +332,10 @@ class TestUuidInt:
         assert len(results) == 0
 
 
-# ── UuidVersion ──────────────────────────────────────────────────────────
+# ── UUIDVersion ──────────────────────────────────────────────────────────
 
 
-class TestUuidVersion:
+class TestUUIDVersion:
     def test_version_v4(self):
         u = uuid.uuid4()
         v = Var()
@@ -370,10 +370,10 @@ class TestUuidVersion:
         assert len(results) == 0
 
 
-# ── UuidFields ───────────────────────────────────────────────────────────
+# ── UUIDFields ───────────────────────────────────────────────────────────
 
 
-class TestUuidFields:
+class TestUUIDFields:
     def test_decompose(self):
         u = uuid.uuid4()
         tl, tm, th, csh, csl, node = Var(), Var(), Var(), Var(), Var(), Var()
@@ -393,10 +393,10 @@ class TestUuidFields:
         assert len(results) == 0
 
 
-# ── IsUuid ───────────────────────────────────────────────────────────────
+# ── IsUUID ───────────────────────────────────────────────────────────────
 
 
-class TestIsUuid:
+class TestIsUUID:
     def test_uuid_passes(self):
         u = uuid.uuid4()
         results, _ = simple_solutions(_is_uuid_1, u)
@@ -455,27 +455,27 @@ class TestEdgeCases:
 
 class TestClausalInline:
     def test_uuid4_in_clausal(self, tmp_path):
-        mod = _load("ui1", 'Test <- (UUIDv4(U_) and IsUuid(U_))\n', tmp_path)
+        mod = _load("ui1", 'Test <- (UUIDv4(U_) and IsUUID(U_))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_str_roundtrip_clausal(self, tmp_path):
-        mod = _load("ui2", 'Test <- (UUIDv4(U_) and UuidStr(U_, S_) and UuidStr(U2_, S_) and UuidStr(U2_, S2_) and S_ == S2_)\n', tmp_path)
+        mod = _load("ui2", 'Test <- (UUIDv4(U_) and UUIDStr(U_, S_) and UUIDStr(U2_, S_) and UUIDStr(U2_, S2_) and S_ == S2_)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid3_clausal(self, tmp_path):
-        mod = _load("ui3", 'Test <- (UUIDv3("dns", "example.com", U_) and UuidVersion(U_, 3))\n', tmp_path)
+        mod = _load("ui3", 'Test <- (UUIDv3("dns", "example.com", U_) and UUIDVersion(U_, 3))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid5_clausal(self, tmp_path):
-        mod = _load("ui4", 'Test <- (UUIDv5("url", "test", U_) and UuidVersion(U_, 5))\n', tmp_path)
+        mod = _load("ui4", 'Test <- (UUIDv5("url", "test", U_) and UUIDVersion(U_, 5))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_int_clausal(self, tmp_path):
-        mod = _load("ui5", 'Test <- (UUIDv4(U_) and UuidInt(U_, N_) and UuidInt(U2_, N_) and UuidInt(U2_, N2_) and N_ == N2_)\n', tmp_path)
+        mod = _load("ui5", 'Test <- (UUIDv4(U_) and UUIDInt(U_, N_) and UUIDInt(U2_, N_) and UUIDInt(U2_, N2_) and N_ == N2_)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_hex_clausal(self, tmp_path):
-        mod = _load("ui6", 'Test <- (UUIDv4(U_) and UuidHex(U_, H_) and UuidHex(U2_, H_) and UuidHex(U2_, H2_) and H_ == H2_)\n', tmp_path)
+        mod = _load("ui6", 'Test <- (UUIDv4(U_) and UUIDHex(U_, H_) and UUIDHex(U2_, H_) and UUIDHex(U2_, H2_) and H_ == H2_)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
 

@@ -3,12 +3,12 @@
 Provides relational predicates for generating, converting, and inspecting
 UUIDs.  Import via::
 
-    -import_from(uuid, [UUIDv4, UuidStr, UuidVersion, IsUuid])
+    -import_from(uuid, [UUIDv4, UUIDStr, UUIDVersion, IsUUID])
 
 Or via module import::
 
     -import_module(uuid)
-    # then use uuid.UUIDv4(U_), uuid.UuidStr(U_, S_), etc.
+    # then use uuid.UUIDv4(U_), uuid.UUIDStr(U_, S_), etc.
 
 Python interop
 --------------
@@ -149,7 +149,7 @@ def _uuid5_3(ns, name, u, trail, k):
 
 
 def _uuid_str_2(u, s, trail, k):
-    """UuidStr/2: bidirectional — UUID ↔ hyphenated string.
+    """UUIDStr/2: bidirectional — UUID ↔ hyphenated string.
 
     If U is ground UUID: decompose → S = str(U).
     If S is ground string: construct → U = uuid.UUID(S).
@@ -168,7 +168,7 @@ def _uuid_str_2(u, s, trail, k):
 
 
 def _uuid_hex_2(u, h, trail, k):
-    """UuidHex/2: bidirectional — UUID ↔ 32-char hex string.
+    """UUIDHex/2: bidirectional — UUID ↔ 32-char hex string.
 
     If U is ground UUID: decompose → H = U.hex.
     If H is ground string: construct → U = uuid.UUID(hex=H).
@@ -187,7 +187,7 @@ def _uuid_hex_2(u, h, trail, k):
 
 
 def _uuid_urn_2(u, urn, trail, k):
-    """UuidUrn/2: bidirectional — UUID ↔ URN string.
+    """UUIDUrn/2: bidirectional — UUID ↔ URN string.
 
     If U is ground UUID: decompose → Urn = U.urn.
     If Urn is ground string: construct → U from URN.
@@ -206,7 +206,7 @@ def _uuid_urn_2(u, urn, trail, k):
 
 
 def _uuid_bytes_2(u, b, trail, k):
-    """UuidBytes/2: bidirectional — UUID ↔ 16-byte bytes.
+    """UUIDBytes/2: bidirectional — UUID ↔ 16-byte bytes.
 
     If U is ground UUID: decompose → B = U.bytes.
     If B is ground bytes: construct → U = uuid.UUID(bytes=B).
@@ -225,7 +225,7 @@ def _uuid_bytes_2(u, b, trail, k):
 
 
 def _uuid_int_2(u, n, trail, k):
-    """UuidInt/2: bidirectional — UUID ↔ 128-bit integer.
+    """UUIDInt/2: bidirectional — UUID ↔ 128-bit integer.
 
     If U is ground UUID: decompose → N = U.int.
     If N is ground int: construct → U = uuid.UUID(int=N).
@@ -247,7 +247,7 @@ def _uuid_int_2(u, n, trail, k):
 
 
 def _uuid_version_2(u, v, trail, k):
-    """UuidVersion/2: UuidVersion(UUID, Version) — extract version number."""
+    """UUIDVersion/2: UUIDVersion(UUID, Version) — extract version number."""
     u = deref(u)
     if not isinstance(u, _uuid.UUID):
         return
@@ -256,9 +256,9 @@ def _uuid_version_2(u, v, trail, k):
 
 
 def _uuid_fields_7(u, tl, tm, th, csh, csl, node, trail, k):
-    """UuidFields/7: decompose UUID into 6 integer fields.
+    """UUIDFields/7: decompose UUID into 6 integer fields.
 
-    UuidFields(UUID, TimeLow, TimeMid, TimeHiVersion, ClkSeqHi, ClkSeqLo, Node).
+    UUIDFields(UUID, TimeLow, TimeMid, TimeHiVersion, ClkSeqHi, ClkSeqLo, Node).
     """
     u = deref(u)
     if not isinstance(u, _uuid.UUID):
@@ -277,7 +277,7 @@ def _uuid_fields_7(u, tl, tm, th, csh, csl, node, trail, k):
 
 
 def _is_uuid_1(u, trail, k):
-    """IsUuid/1: type test — succeeds if U is a uuid.UUID."""
+    """IsUUID/1: type test — succeeds if U is a uuid.UUID."""
     u = deref(u)
     if isinstance(u, _uuid.UUID):
         yield None
@@ -297,26 +297,26 @@ UUIDv3._register(3, _simple_to_trampoline(_uuid3_3))
 UUIDv5 = _UuidPredicate("UUIDv5")
 UUIDv5._register(3, _simple_to_trampoline(_uuid5_3))
 
-UuidStr = _UuidPredicate("UuidStr")
-UuidStr._register(2, _simple_to_trampoline(_uuid_str_2))
+UUIDStr = _UuidPredicate("UUIDStr")
+UUIDStr._register(2, _simple_to_trampoline(_uuid_str_2))
 
-UuidHex = _UuidPredicate("UuidHex")
-UuidHex._register(2, _simple_to_trampoline(_uuid_hex_2))
+UUIDHex = _UuidPredicate("UUIDHex")
+UUIDHex._register(2, _simple_to_trampoline(_uuid_hex_2))
 
-UuidUrn = _UuidPredicate("UuidUrn")
-UuidUrn._register(2, _simple_to_trampoline(_uuid_urn_2))
+UUIDUrn = _UuidPredicate("UUIDUrn")
+UUIDUrn._register(2, _simple_to_trampoline(_uuid_urn_2))
 
-UuidBytes = _UuidPredicate("UuidBytes")
-UuidBytes._register(2, _simple_to_trampoline(_uuid_bytes_2))
+UUIDBytes = _UuidPredicate("UUIDBytes")
+UUIDBytes._register(2, _simple_to_trampoline(_uuid_bytes_2))
 
-UuidInt = _UuidPredicate("UuidInt")
-UuidInt._register(2, _simple_to_trampoline(_uuid_int_2))
+UUIDInt = _UuidPredicate("UUIDInt")
+UUIDInt._register(2, _simple_to_trampoline(_uuid_int_2))
 
-UuidVersion = _UuidPredicate("UuidVersion")
-UuidVersion._register(2, _simple_to_trampoline(_uuid_version_2))
+UUIDVersion = _UuidPredicate("UUIDVersion")
+UUIDVersion._register(2, _simple_to_trampoline(_uuid_version_2))
 
-UuidFields = _UuidPredicate("UuidFields")
-UuidFields._register(7, _simple_to_trampoline(_uuid_fields_7))
+UUIDFields = _UuidPredicate("UUIDFields")
+UUIDFields._register(7, _simple_to_trampoline(_uuid_fields_7))
 
-IsUuid = _UuidPredicate("IsUuid")
-IsUuid._register(1, _simple_to_trampoline(_is_uuid_1))
+IsUUID = _UuidPredicate("IsUUID")
+IsUUID._register(1, _simple_to_trampoline(_is_uuid_1))

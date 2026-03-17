@@ -5,16 +5,16 @@
 The `uuid` module provides predicates for generating, converting, and inspecting UUIDs backed by Python's `uuid` module. It produces and consumes real `uuid.UUID` objects.
 
 ```clausal
--import_from(uuid, [UUIDv4, UuidStr, UuidVersion, IsUuid])
+-import_from(uuid, [UUIDv4, UUIDStr, UUIDVersion, IsUUID])
 
-MakeId(Id_) <- (
+MakeId(ID_) <- (
     UUIDv4(U_) and
-    UuidStr(U_, Id_)
+    UUIDStr(U_, ID_)
 )
 
 Main <- (
-    MakeId(Id_) and
-    ++print(f"Generated ID: {Id_}")
+    MakeId(ID_) and
+    ++print(f"Generated ID: {ID_}")
 )
 ```
 
@@ -25,7 +25,7 @@ Or via module import:
 
 Main <- (
     uuid.UUIDv4(U_) and
-    uuid.UuidStr(U_, S_) and
+    uuid.UUIDStr(U_, S_) and
     ++print(S_)
 )
 ```
@@ -37,8 +37,8 @@ Main <- (
 ```clausal
 -import_from(uuid, [
     UUIDv4, UUIDv1, UUIDv3, UUIDv5,
-    UuidStr, UuidHex, UuidUrn, UuidBytes, UuidInt,
-    UuidVersion, UuidFields, IsUuid
+    UUIDStr, UUIDHex, UUIDUrn, UUIDBytes, UUIDInt,
+    UUIDVersion, UUIDFields, IsUUID
 ])
 ```
 
@@ -52,8 +52,8 @@ The module name is `uuid` in Clausal (internally mapped to `uuid_mod` to avoid s
 |-----------|------|-------------|
 | `UUIDv4(U)` | `-U` | Random v4 UUID |
 | `UUIDv1(U)` | `-U` | Time-based v1 UUID |
-| `UUIDv3(Ns, Name, U)` | `+Ns, +Name, -U` | MD5 namespace UUID |
-| `UUIDv5(Ns, Name, U)` | `+Ns, +Name, -U` | SHA-1 namespace UUID |
+| `UUIDv3(NS, NAME, U)` | `+NS, +NAME, -U` | MD5 namespace UUID |
+| `UUIDv5(NS, NAME, U)` | `+NS, +NAME, -U` | SHA-1 namespace UUID |
 
 ### Namespace aliases
 
@@ -79,21 +79,21 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `UuidStr(U, S)` | `?U, ?S` | UUID ↔ hyphenated string (`"550e8400-e29b-..."`) |
-| `UuidHex(U, H)` | `?U, ?H` | UUID ↔ 32-char hex string |
-| `UuidUrn(U, Urn)` | `?U, ?Urn` | UUID ↔ URN string (`"urn:uuid:..."`) |
-| `UuidBytes(U, B)` | `?U, ?B` | UUID ↔ 16-byte `bytes` object |
-| `UuidInt(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
+| `UUIDStr(U, S)` | `?U, ?S` | UUID ↔ hyphenated string (`"550e8400-e29b-..."`) |
+| `UUIDHex(U, H)` | `?U, ?H` | UUID ↔ 32-char hex string |
+| `UUIDUrn(U, URN)` | `?U, ?URN` | UUID ↔ URN string (`"urn:uuid:..."`) |
+| `UUIDBytes(U, B)` | `?U, ?B` | UUID ↔ 16-byte `bytes` object |
+| `UUIDInt(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
 
 ```clausal
 % Generate a UUID and get its string form
-UUIDv4(U_) and UuidStr(U_, S_)
+UUIDv4(U_) and UUIDStr(U_, S_)
 
 % Parse a UUID from a string
-UuidStr(U_, "550e8400-e29b-41d4-a716-446655440000")
+UUIDStr(U_, "550e8400-e29b-41d4-a716-446655440000")
 
 % Convert to hex
-UuidHex(U_, "550e8400e29b41d4a716446655440000")
+UUIDHex(U_, "550e8400e29b41d4a716446655440000")
 ```
 
 ---
@@ -102,16 +102,16 @@ UuidHex(U_, "550e8400e29b41d4a716446655440000")
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `UuidVersion(U, V)` | `+U, -V` | Extract version number (1, 3, 4, 5) |
-| `UuidFields(U, TL, TM, TH, CSH, CSL, Node)` | `+U, -TL, -TM, -TH, -CSH, -CSL, -Node` | Decompose into 6 integer fields |
-| `IsUuid(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
+| `UUIDVersion(U, V)` | `+U, -V` | Extract version number (1, 3, 4, 5) |
+| `UUIDFields(U, TL, TM, TH, CSH, CSL, NODE)` | `+U, -TL, -TM, -TH, -CSH, -CSL, -NODE` | Decompose into 6 integer fields |
+| `IsUUID(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
 
 ```clausal
 % Check that a UUID is version 4
-UUIDv4(U_) and UuidVersion(U_, 4)
+UUIDv4(U_) and UUIDVersion(U_, 4)
 
 % Type-check
-IsUuid(U_)
+IsUUID(U_)
 ```
 
 ---
@@ -121,21 +121,21 @@ IsUuid(U_)
 ### Session tokens
 
 ```clausal
--import_from(uuid, [UUIDv4, UuidStr])
+-import_from(uuid, [UUIDv4, UUIDStr])
 
-NewSession(UserId_, Token_) <- (
+NewSession(USERID_, TOKEN_) <- (
     UUIDv4(U_) and
-    UuidStr(U_, Token_)
+    UUIDStr(U_, TOKEN_)
 )
 ```
 
 ### Deterministic IDs
 
 ```clausal
--import_from(uuid, [UUIDv5, UuidStr])
+-import_from(uuid, [UUIDv5, UUIDStr])
 
-ResourceId(Type_, Name_, Id_) <- (
-    UUIDv5("url", Name_, U_) and
-    UuidStr(U_, Id_)
+ResourceId(TYPE_, NAME_, ID_) <- (
+    UUIDv5("url", NAME_, U_) and
+    UUIDStr(U_, ID_)
 )
 ```
