@@ -352,7 +352,14 @@ class ModulesFinder(MetaPathFinder):
         # Load the qualified module and alias it under the bare name.
         mod = importlib.import_module(qualified)
         sys.modules[fullname] = mod
-        return ModuleSpec(fullname, spec.loader, origin=spec.origin)
+        new_spec = ModuleSpec(fullname, spec.loader, origin=spec.origin)
+        # Propagate submodule_search_locations for packages (e.g. ``py``)
+        # so that ``py.sympy``, ``py.uuid``, etc. are resolvable.
+        if spec.submodule_search_locations is not None:
+            new_spec.submodule_search_locations = list(
+                spec.submodule_search_locations
+            )
+        return new_spec
 
 
 sys.meta_path[:] = [PredicateFinder(), ModulesFinder(), *sys.meta_path]

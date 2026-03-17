@@ -12,4 +12,14 @@ Available modules:
 - ``date_time``   — Now, Today, Date, Time, DateTime, TimeDelta, ...
 - ``yaml_module`` — Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get
 - ``sympy_module`` — Sym, Simplify, Expand, Factor, Solve, SolveAll, Diff, Integrate, Limit, Series, Subs, FreeVars, ToSympy, FromSympy
+
+Python-named aliases (``py.*`` subpackage):
+
+- ``py.re``       — same as ``regex``
+- ``py.logging``  — same as ``log``
+- ``py.datetime`` — same as ``date_time``
+- ``py.yaml``     — same as ``yaml_module``
+- ``py.sympy``    — same as ``sympy_module``
+- ``py.uuid``     — same as ``uuid`` / ``uuid_mod``
+- ``py.sqlite``   — same as ``sqlite``
 """
