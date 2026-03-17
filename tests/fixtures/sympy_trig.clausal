@@ -1,37 +1,33 @@
--import_from(sympy_module, [TrigSimp, ExpandTrig, SymEqual, Sym])
+-import_from(sympy_module, [TrigSimp, ExpandTrig, Simplify,
+                             sin, cos, tan, exp, log, SymEqual])
 
 # ── TrigSimp/2 ───────────────────────────────────────────────────────────────
 
 Test("trig simp pythagorean") <- (
-    Sym("x", X),
-    EXPR is ++(++__import__("sympy").sin(X)**2 + ++__import__("sympy").cos(X)**2),
-    TrigSimp(EXPR, R),
+    TrigSimp(sin(X)**2 + cos(X)**2, R),
     R == 1
 )
 
 Test("trig simp double angle") <- (
-    Sym("x", X),
-    EXPR is ++(2 * ++__import__("sympy").sin(X) * ++__import__("sympy").cos(X)),
-    TrigSimp(EXPR, R),
-    S is ++str(R),
-    S == "sin(2*x)"
+    TrigSimp(2 * sin(X) * cos(X), R),
+    R == sin(2*X)
 )
 
 # ── ExpandTrig/2 ─────────────────────────────────────────────────────────────
 
 Test("expand trig sum") <- (
-    Sym("x", X),
-    Sym("y", Y),
-    EXPR is ++(++__import__("sympy").sin(X + Y)),
-    ExpandTrig(EXPR, R),
-    S is ++str(R),
-    S == "sin(x)*cos(y) + sin(y)*cos(x)"
+    ExpandTrig(sin(X + Y), R),
+    R == sin(X)*cos(Y) + sin(Y)*cos(X)
 )
 
 Test("expand trig double") <- (
-    Sym("x", X),
-    EXPR is ++(++__import__("sympy").cos(2*X)),
-    ExpandTrig(EXPR, R),
-    S is ++str(R),
-    S == "2*cos(x)**2 - 1"
+    ExpandTrig(cos(2*X), R),
+    R == 2*cos(X)**2 - 1
+)
+
+# ── Mixed: trig + calculus ───────────────────────────────────────────────────
+
+Test("simplify exp log") <- (
+    Simplify(exp(log(X)), R),
+    R == X
 )

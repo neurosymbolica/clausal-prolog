@@ -1148,6 +1148,44 @@ def _binomial_3(n, k_val, result, trail, k):
         yield None
 
 
+# ── Math function constructors ──────────────────────────────────────────────
+#
+# These are callable objects that build Compound terms.  In .clausal files:
+#     -import_from(sympy_module, [sin, cos, exp, Diff])
+#     Test("diff sin") <- (Diff(sin(X), X, R), R == cos(X))
+#
+# sin(X) → Compound("sin", (X,)) which to_sympy converts to sympy.sin(Symbol).
+
+
+class _MathFunc:
+    """Callable that produces Compound("name", args) terms."""
+
+    __slots__ = ("_name",)
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __call__(self, *args):
+        return Compound(self._name, args)
+
+    def __repr__(self) -> str:
+        return self._name
+
+
+sin = _MathFunc("sin")
+cos = _MathFunc("cos")
+tan = _MathFunc("tan")
+asin = _MathFunc("asin")
+acos = _MathFunc("acos")
+atan = _MathFunc("atan")
+exp = _MathFunc("exp")
+log = _MathFunc("log")
+ln = _MathFunc("ln")
+sqrt = _MathFunc("sqrt")
+factorial = _MathFunc("factorial")
+abs_ = _MathFunc("abs")
+
+
 # ── Build and export predicate objects ──────────────────────────────────────
 
 Sym = _SympyPredicate("Sym")

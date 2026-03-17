@@ -681,6 +681,12 @@ def _inject_call_targets(
             if obj is not None and hasattr(obj, "_get_dispatch"):
                 base_globals[target_name] = obj
                 continue
+            # Plain callable (e.g. term constructor like sin, cos from
+            # sympy_module): inject directly so it can be called in
+            # term expressions.
+            if obj is not None and callable(obj):
+                base_globals[target_name] = obj
+                continue
             # For -import_from remapped names (e.g.
             # "tests.fixtures.utils.Helper"), resolve via sys.modules.
             # The dotted key is "module.path.PredName"; the module is
