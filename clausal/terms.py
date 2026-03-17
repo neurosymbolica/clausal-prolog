@@ -151,6 +151,90 @@ class KWTerm:
         return KWTerm(self._functor, **new_fields)
 
 
+# ── DictTerm — unification-aware dictionary ───────────────────────────────────
+
+
+class DictTerm:
+    """Unification-aware dictionary term.
+
+    Keys must be ground (str, int, or other hashable atoms).
+    Values may be Vars, participating in unification.
+
+    Two DictTerms unify iff they have the same key set and values unify pairwise.
+    """
+    __slots__ = ("_data",)
+
+    def __init__(self, data: dict):
+        self._data = dict(data)  # defensive copy
+
+    @property
+    def data(self) -> dict:
+        return self._data
+
+    def keys(self):   return self._data.keys()
+    def values(self): return self._data.values()
+    def items(self):  return self._data.items()
+    def __len__(self): return len(self._data)
+    def __getitem__(self, key): return self._data[key]
+    def __contains__(self, key): return key in self._data
+
+    def __eq__(self, other):
+        return isinstance(other, DictTerm) and self._data == other._data
+
+    def __hash__(self):
+        return hash(frozenset(self._data.items()))
+
+    def __repr__(self):
+        inner = ", ".join(f"{k!r}: {v!r}" for k, v in self._data.items())
+        return f"DictTerm({{{inner}}})"
+
+    # ── Protocol hooks for C extension ──
+
+    def __walk__(self):
+        """Called by C do_walk: return new DictTerm with walked values."""
+        from .logic.variables import walk
+        new_data = {k: walk(v) for k, v in self._data.items()}
+        return DictTerm(new_data)
+
+    def __occurs_check__(self, var):
+        """Called by C do_occurs_check: check if var appears in any value."""
+        from .logic.variables import occurs_check
+        return any(occurs_check(var, v) for v in self._data.values())
+
+
+# ── SetTerm — unification-aware set ──────────────────────────────────────────
+
+
+class SetTerm:
+    """Unification-aware set term.
+
+    Elements must be ground (hashable). Backed by frozenset for immutability.
+    Two SetTerms unify iff they contain the same elements.
+    """
+    __slots__ = ("_elements",)
+
+    def __init__(self, elements):
+        self._elements = frozenset(elements)
+
+    @property
+    def elements(self) -> frozenset:
+        return self._elements
+
+    def __len__(self): return len(self._elements)
+    def __contains__(self, item): return item in self._elements
+    def __iter__(self): return iter(self._elements)
+
+    def __eq__(self, other):
+        return isinstance(other, SetTerm) and self._elements == other._elements
+
+    def __hash__(self):
+        return hash(self._elements)
+
+    def __repr__(self):
+        inner = ", ".join(repr(e) for e in sorted(self._elements, key=repr))
+        return f"SetTerm({{{inner}}})"
+
+
 # ── Cons / list helpers ────────────────────────────────────────────────────────
 
 def list_to_cons(lst: list) -> object:
@@ -236,6 +320,12 @@ def term_str(t: Any) -> str:
     if isinstance(t, KWTerm):
         args = ", ".join(f"{k}={term_str(v)}" for k, v in t.items())
         return f"{t.functor}({args})"
+    if isinstance(t, DictTerm):
+        inner = ", ".join(f"{term_str(k)}: {term_str(v)}" for k, v in t.items())
+        return "{" + inner + "}"
+    if isinstance(t, SetTerm):
+        inner = ", ".join(term_str(e) for e in sorted(t.elements, key=repr))
+        return "{" + inner + "}"
 
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -269,6 +359,8 @@ __all__ = [
     "Var",
     # New term types
     "Compound",
+    "DictTerm",
+    "SetTerm",
     "KWTerm",
     "ArithConstraint",
     "PyThunk",

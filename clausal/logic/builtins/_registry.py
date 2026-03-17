@@ -14,7 +14,7 @@ from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names, make_predicate,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, DictTerm, SetTerm, KWTerm
 
 
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
@@ -177,6 +177,21 @@ def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
                 trail.undo(mark)
                 return False
         return True
+
+    # DictTerm ↔ DictTerm (same key set, values unify pairwise)
+    if isinstance(t1, DictTerm) and isinstance(t2, DictTerm):
+        if t1.keys() != t2.keys():
+            return False
+        mark = trail.mark()
+        for key in t1.keys():
+            if not structural_unify(t1[key], t2[key], trail):
+                trail.undo(mark)
+                return False
+        return True
+
+    # SetTerm ↔ SetTerm (same elements — elements must be ground)
+    if isinstance(t1, SetTerm) and isinstance(t2, SetTerm):
+        return t1.elements == t2.elements
 
     # Fall back to C unify for all other combinations (atoms, tuples, etc.)
     return bool(unify(t1, t2, trail))

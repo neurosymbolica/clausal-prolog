@@ -454,6 +454,18 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
             result.extend(_collect_vars(v, seen))
         return result
 
+    # DictTerm: recurse into values (keys are ground)
+    from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
+    if isinstance(term, DictTerm):
+        result = []
+        for v in term.values():
+            result.extend(_collect_vars(v, seen))
+        return result
+
+    # SetTerm: elements must be ground, no vars to collect
+    if isinstance(term, SetTerm):
+        return []
+
     # KWTerm: recurse into field values
     from clausal.terms import KWTerm  # noqa: PLC0415
     if isinstance(term, KWTerm):

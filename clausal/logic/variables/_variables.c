@@ -766,6 +766,19 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
         }
         return 0;
     }
+    /* __occurs_check__ protocol: delegate to Python method if present */
+    {
+        PyObject *hook = PyObject_GetAttrString(term, "__occurs_check__");
+        if (hook) {
+            PyObject *result = PyObject_CallOneArg(hook, (PyObject *)var);
+            Py_DECREF(hook);
+            if (!result) return -1;
+            int r = PyObject_IsTrue(result);
+            Py_DECREF(result);
+            return r;
+        }
+        PyErr_Clear();
+    }
     return 0;
 }
 
@@ -1117,6 +1130,16 @@ do_walk(PyObject *term, int depth)
             PyList_SET_ITEM(result, i, elem);
         }
         return result;
+    }
+    /* __walk__ protocol: delegate to Python method if present */
+    {
+        PyObject *hook = PyObject_GetAttrString(term, "__walk__");
+        if (hook) {
+            PyObject *result = PyObject_CallNoArgs(hook);
+            Py_DECREF(hook);
+            return result;  /* NULL propagates error */
+        }
+        PyErr_Clear();
     }
     Py_INCREF(term);
     return term;
