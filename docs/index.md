@@ -90,3 +90,11 @@ for s in m.query(grandparent("tom", G)):
 | [Import System](import.md) | `.clausal` file loading, module directives, qualified calls |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
+| **Standard Library Modules** | |
+| [Regex](regex.md) | Pattern matching, group extraction, auto-binding |
+| [Symbolic Math](sympy.md) | SymPy integration — calculus, algebra, number theory |
+| [YAML](yaml.md) | YAML parsing and generation |
+| [Date/Time](date_time.md) | Date, time, and datetime predicates |
+| [Logging](logging.md) | Structured logging predicates |
+| [UUID](uuid.md) | UUID generation and inspection |
+| [SQLite](sqlite.md) | SQLite database predicates |
