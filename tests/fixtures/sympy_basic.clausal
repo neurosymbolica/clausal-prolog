@@ -1,6 +1,6 @@
 -import_from(sympy_module, [Simplify, Expand, Factor, Solve, SolveAll,
                              Diff, Integrate, Limit, Series, Subs,
-                             FreeVars, SymEqual, SymStr, Inf,
+                             FreeVars, SymEqual, SymStr, inf,
                              Sym, ToSympy, FromSympy])
 
 # SymPy integration — native Clausal terms. No Sym(), no ++() for math.
@@ -117,8 +117,7 @@ Test("limit x→0 of x+1") <- (
 )
 
 Test("limit 1/x at inf") <- (
-    Inf(INF),
-    Limit(1/X, X, INF, R),
+    Limit(1/X, X, inf, R),
     R == 0
 )
 

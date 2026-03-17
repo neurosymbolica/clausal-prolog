@@ -3,11 +3,12 @@
 Provides symbolic math predicates that accept **native Clausal terms**
 directly — no ``Sym()`` bootstrapping or ``++()`` escaping required::
 
-    -import_from(sympy_module, [Simplify, Solve, Diff, Integrate, SymEqual])
+    -import_from(sympy_module, [Simplify, Solve, Diff, sin, cos, inf])
 
-    Test("basic") <- Simplify(X**2 + 2*X + 1, (X + 1)**2)
-    Test("solve") <- (Solve(X**2 - 4, X, S) and S == 2)
-    Test("diff")  <- SymEqual(Diff(X**3, X), 3*X**2)
+    Test("basic")    <- Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
+    Test("solve")    <- (Solve(X**2 - 4, X, S), S == 2)
+    Test("diff sin") <- (Diff(sin(X), X, R), R == cos(X))
+    Test("limit")    <- (Limit(1/X, X, inf, R), R == 0)
 
 Design
 ------
@@ -21,9 +22,15 @@ Unbound Vars are auto-named alphabetically in discovery order:
 first Var → ``x``, second → ``y``, etc.  This gives readable ``str()``
 output without requiring explicit ``Sym("x", X)`` calls.
 
-Results are SymPy expressions (opaque from Clausal's POV) for chaining.
-Numeric results (Integer, Float) are collapsed to Python int/float.
-Use ``SymEqual/2`` for symbolic equality and ``SymStr/2`` for display.
+Results are wrapped in ``SymExpr``, which overrides ``__eq__`` to do
+symbolic comparison.  This means Clausal's native ``==`` works::
+
+    Diff(X**3, X, R), R == 3*X**2
+
+Numeric results (Integer, Float) are collapsed to plain Python values.
+
+Math functions (``sin``, ``cos``, ``exp``, ``log``, ``sqrt``, etc.) and
+constants (``inf``, ``pi``, ``E``) are importable as term constructors.
 """
 
 from __future__ import annotations
@@ -418,43 +425,49 @@ class SymExpr:
     def __repr__(self) -> str:
         return str(self._expr)
 
-    # ── Arithmetic — delegates to SymPy for ++() expressions ───────────
+    # ── Arithmetic — delegates to SymPy, re-wraps result ───────────────
+
+    def _wrap(self, result):
+        """Re-wrap SymPy result so == keeps working through chains."""
+        if isinstance(result, _sp.Basic):
+            return _to_pyval(result)
+        return result
 
     def __add__(self, other):
-        return self._expr + (other._expr if isinstance(other, SymExpr) else other)
+        return self._wrap(self._expr + (other._expr if isinstance(other, SymExpr) else other))
 
     def __radd__(self, other):
-        return (other._expr if isinstance(other, SymExpr) else other) + self._expr
+        return self._wrap((other._expr if isinstance(other, SymExpr) else other) + self._expr)
 
     def __mul__(self, other):
-        return self._expr * (other._expr if isinstance(other, SymExpr) else other)
+        return self._wrap(self._expr * (other._expr if isinstance(other, SymExpr) else other))
 
     def __rmul__(self, other):
-        return (other._expr if isinstance(other, SymExpr) else other) * self._expr
+        return self._wrap((other._expr if isinstance(other, SymExpr) else other) * self._expr)
 
     def __sub__(self, other):
-        return self._expr - (other._expr if isinstance(other, SymExpr) else other)
+        return self._wrap(self._expr - (other._expr if isinstance(other, SymExpr) else other))
 
     def __rsub__(self, other):
-        return (other._expr if isinstance(other, SymExpr) else other) - self._expr
+        return self._wrap((other._expr if isinstance(other, SymExpr) else other) - self._expr)
 
     def __pow__(self, other):
-        return self._expr ** (other._expr if isinstance(other, SymExpr) else other)
+        return self._wrap(self._expr ** (other._expr if isinstance(other, SymExpr) else other))
 
     def __rpow__(self, other):
-        return (other._expr if isinstance(other, SymExpr) else other) ** self._expr
+        return self._wrap((other._expr if isinstance(other, SymExpr) else other) ** self._expr)
 
     def __truediv__(self, other):
-        return self._expr / (other._expr if isinstance(other, SymExpr) else other)
+        return self._wrap(self._expr / (other._expr if isinstance(other, SymExpr) else other))
 
     def __rtruediv__(self, other):
-        return (other._expr if isinstance(other, SymExpr) else other) / self._expr
+        return self._wrap((other._expr if isinstance(other, SymExpr) else other) / self._expr)
 
     def __neg__(self):
-        return -self._expr
+        return self._wrap(-self._expr)
 
     def __pos__(self):
-        return self._expr
+        return self._wrap(self._expr)
 
 
 # ── Result helpers ──────────────────────────────────────────────────────────
@@ -838,7 +851,7 @@ def _sym_str_2(term, result, trail, k):
         yield None
 
 
-# ── Predicate: Inf/1 — SymPy infinity ──────────────────────────────────────
+# ── Predicate: Inf/1 — SymPy infinity (kept for backward compat) ───────────
 
 
 def _inf_1(result, trail, k):
@@ -1078,7 +1091,7 @@ def _divisors_2(n, result, trail, k):
 
 
 def _gcd_sym_3(a, b, result, trail, k):
-    """GcdSym/3: symbolic GCD of two expressions."""
+    """Gcd/3: symbolic GCD of two expressions."""
     a = deref(a)
     b = deref(b)
     try:
@@ -1091,7 +1104,7 @@ def _gcd_sym_3(a, b, result, trail, k):
 
 
 def _lcm_sym_3(a, b, result, trail, k):
-    """LcmSym/3: symbolic LCM of two expressions."""
+    """Lcm/3: symbolic LCM of two expressions."""
     a = deref(a)
     b = deref(b)
     try:
@@ -1107,7 +1120,7 @@ def _lcm_sym_3(a, b, result, trail, k):
 
 
 def _summation_4(term, var, low, high, result, trail, k):
-    """Summation/5: symbolic summation of term for var from low to high."""
+    """Sum/5: symbolic summation of term for var from low to high."""
     term = deref(term)
     var = deref(var)
     low = deref(low)
@@ -1122,7 +1135,7 @@ def _summation_4(term, var, low, high, result, trail, k):
 
 
 def _product_sym_4(term, var, low, high, result, trail, k):
-    """ProductSym/5: symbolic product of term for var from low to high."""
+    """Product/5: symbolic product of term for var from low to high."""
     term = deref(term)
     var = deref(var)
     low = deref(low)
@@ -1183,7 +1196,14 @@ log = _MathFunc("log")
 ln = _MathFunc("ln")
 sqrt = _MathFunc("sqrt")
 factorial = _MathFunc("factorial")
-abs_ = _MathFunc("abs")
+Abs = _MathFunc("abs")
+
+# Constants — usable directly in term expressions:
+#     -import_from(sympy_module, [Limit, inf])
+#     Limit(1/X, X, inf, R)
+inf = _sp.oo
+pi = _sp.pi
+e = _sp.E
 
 
 # ── Build and export predicate objects ──────────────────────────────────────
@@ -1296,18 +1316,18 @@ FactorInt._register(2, _simple_to_trampoline(_factor_int_2))
 Divisors = _SympyPredicate("Divisors")
 Divisors._register(2, _simple_to_trampoline(_divisors_2))
 
-GcdSym = _SympyPredicate("GcdSym")
-GcdSym._register(3, _simple_to_trampoline(_gcd_sym_3))
+Gcd = _SympyPredicate("Gcd")
+Gcd._register(3, _simple_to_trampoline(_gcd_sym_3))
 
-LcmSym = _SympyPredicate("LcmSym")
-LcmSym._register(3, _simple_to_trampoline(_lcm_sym_3))
+Lcm = _SympyPredicate("Lcm")
+Lcm._register(3, _simple_to_trampoline(_lcm_sym_3))
 
 # Special functions
-Summation = _SympyPredicate("Summation")
-Summation._register(5, _simple_to_trampoline(_summation_4))
+Sum = _SympyPredicate("Sum")
+Sum._register(5, _simple_to_trampoline(_summation_4))
 
-ProductSym = _SympyPredicate("ProductSym")
-ProductSym._register(5, _simple_to_trampoline(_product_sym_4))
+Product = _SympyPredicate("Product")
+Product._register(5, _simple_to_trampoline(_product_sym_4))
 
 Binomial = _SympyPredicate("Binomial")
 Binomial._register(3, _simple_to_trampoline(_binomial_3))

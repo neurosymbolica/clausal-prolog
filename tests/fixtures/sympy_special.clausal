@@ -1,31 +1,31 @@
--import_from(sympy_module, [Summation, ProductSym, Binomial, SymEqual, Inf])
+-import_from(sympy_module, [Sum, Product, Binomial, SymEqual, Inf])
 
-# ── Summation/5 ──────────────────────────────────────────────────────────────
+# ── Sum/5 ──────────────────────────────────────────────────────────────
 
 Test("sum of i from 1 to N") <- (
-    Summation(I, I, 1, N, R),
+    Sum(I, I, 1, N, R),
     R == N*(N + 1)/2
 )
 
 Test("sum of i^2 from 1 to 5") <- (
-    Summation(I**2, I, 1, 5, R),
+    Sum(I**2, I, 1, 5, R),
     R == 55
 )
 
 Test("sum of constants") <- (
-    Summation(3, I, 1, N, R),
+    Sum(3, I, 1, N, R),
     R == 3*N
 )
 
-# ── ProductSym/5 ─────────────────────────────────────────────────────────────
+# ── Product/5 ─────────────────────────────────────────────────────────────
 
 Test("product 1 to 5") <- (
-    ProductSym(I, I, 1, 5, R),
+    Product(I, I, 1, 5, R),
     R == 120
 )
 
 Test("product symbolic") <- (
-    ProductSym(X, X, 1, N, R),
+    Product(X, X, 1, N, R),
     S is ++str(R),
     ++("factorial" in S)
 )

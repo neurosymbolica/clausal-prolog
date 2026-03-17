@@ -1,5 +1,5 @@
 -import_from(sympy_module, [IsPrime, NextPrime, FactorInt, Divisors,
-                             GcdSym, LcmSym])
+                             Gcd, Lcm])
 
 # ── IsPrime/1 ────────────────────────────────────────────────────────────────
 
@@ -54,26 +54,26 @@ Test("divisors prime") <- (
     D == [1, 7]
 )
 
-# ── GcdSym/3 ─────────────────────────────────────────────────────────────────
+# ── Gcd/3 ─────────────────────────────────────────────────────────────────
 
 Test("gcd integers") <- (
-    GcdSym(12, 8, R),
+    Gcd(12, 8, R),
     R == 4
 )
 
 Test("gcd polynomials") <- (
-    GcdSym(X**2 - 1, X - 1, R),
+    Gcd(X**2 - 1, X - 1, R),
     R == X - 1
 )
 
-# ── LcmSym/3 ─────────────────────────────────────────────────────────────────
+# ── Lcm/3 ─────────────────────────────────────────────────────────────────
 
 Test("lcm integers") <- (
-    LcmSym(4, 6, R),
+    Lcm(4, 6, R),
     R == 12
 )
 
 Test("lcm polynomials") <- (
-    LcmSym(X - 1, X + 1, R),
+    Lcm(X - 1, X + 1, R),
     R == X**2 - 1
 )

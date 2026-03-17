@@ -602,6 +602,11 @@ def _dotted_name_from_loadattr(node) -> str | None:
 def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     """Collect (fname, arity) pairs from Call(LoadName/LoadAttr) nodes in clause bodies.
 
+    Also collects bare LoadName references with dotted names (from
+    ``_import_remap``) so that non-callable imports like constants
+    (``inf``, ``pi``) get injected into compiled function globals.
+    These use arity -1 as a sentinel.
+
     Used to inject predicate class references (or _DbDispatchAdapter shims)
     into the compiled function's globals so that ``fname._get_dispatch()``
     resolves at runtime.
@@ -617,6 +622,9 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
             if dotted is not None:
                 n_kwargs = len(term.kwargs) if term.kwargs else 0
                 targets.add((dotted, len(term.args) + n_kwargs))
+        # Non-Call LoadName with a dot — imported constant/value reference
+        elif isinstance(term, LoadName) and "." in term.name:
+            targets.add((term.name, -1))
         if isinstance(term, list):
             for e in term:
                 _walk(e)
@@ -681,10 +689,10 @@ def _inject_call_targets(
             if obj is not None and hasattr(obj, "_get_dispatch"):
                 base_globals[target_name] = obj
                 continue
-            # Plain callable (e.g. term constructor like sin, cos from
-            # sympy_module): inject directly so it can be called in
-            # term expressions.
-            if obj is not None and callable(obj):
+            # Plain callable or value (e.g. term constructor sin/cos, or
+            # constant inf/pi from sympy_module): inject directly so it
+            # can be referenced in compiled term expressions.
+            if obj is not None:
                 base_globals[target_name] = obj
                 continue
             # For -import_from remapped names (e.g.
