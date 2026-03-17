@@ -1,0 +1,119 @@
+-import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
+                       Score, Transform, Algorithm, Learned, Param, MakeEst,
+                       FitTransform, PredictProba, DecisionFunction])
+
+# ── Algorithm enumeration ────────────────────────────────────────────
+
+Test("algorithm random_forest is classifier") <- (
+    Algorithm("random_forest", "classifier")
+)
+
+Test("algorithm pca is transformer") <- (
+    Algorithm("pca", "transformer")
+)
+
+Test("algorithm kmeans is clusterer") <- (
+    Algorithm("kmeans", "clusterer")
+)
+
+# ── Dataset loading ──────────────────────────────────────────────────
+
+Test("load iris dataset") <- (
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+# ── Fit and predict (classification) ────────────────────────────────
+
+Test("fit and predict random forest on iris") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10}), D_, F_) and
+    F_ is ("Fitted", E_, H_) and
+    D_ is ("Dataset", X_, Y_) and
+    Predict(F_, X_, P_)
+)
+
+# ── Fit and score ────────────────────────────────────────────────────
+
+Test("fit and score logistic regression on iris") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("logistic_regression", {"max_iter": 200}), D_, F_) and
+    Score(F_, D_, S_) and
+    S_ > 0.5
+)
+
+# ── Transform (PCA) ─────────────────────────────────────────────────
+
+Test("fit and transform pca") <- (
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_) and
+    Fit(Est("pca", {"n_components": 2}), ("Dataset", X_, None), F_) and
+    Transform(F_, X_, T_)
+)
+
+# ── FitTransform ─────────────────────────────────────────────────────
+
+Test("fit_transform standard scaler") <- (
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_) and
+    FitTransform(Est("standard_scaler", {}), ("Dataset", X_, None), T_, F_) and
+    F_ is ("Fitted", E_, H_)
+)
+
+# ── Fit/4 (raw X, Y) ────────────────────────────────────────────────
+
+Test("fit with raw X and Y") <- (
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_) and
+    Fit(Est("random_forest", {"n_estimators": 10}), X_, Y_, F_) and
+    Score(F_, D_, S_) and
+    S_ > 0.5
+)
+
+# ── Learned attributes ──────────────────────────────────────────────
+
+Test("learned feature importances") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10}), D_, F_) and
+    Learned(F_, "feature_importances", FI_)
+)
+
+Test("learned n_features_in") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10}), D_, F_) and
+    Learned(F_, "n_features_in", N_) and
+    N_ == 4
+)
+
+# ── Param ────────────────────────────────────────────────────────────
+
+Test("param from est term") <- (
+    Param(Est("svc", {"C": 2.0, "kernel": "rbf"}), "C", V_) and
+    V_ == 2.0
+)
+
+# ── MakeEst ──────────────────────────────────────────────────────────
+
+Test("make est fills defaults") <- (
+    MakeEst("random_forest", {"n_estimators": 200}, E_) and
+    E_ is ("Est", A_, P_) and
+    A_ == "random_forest"
+)
+
+# ── PredictProba ─────────────────────────────────────────────────────
+
+Test("predict proba on iris") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    PredictProba(F_, X_, PROBA_)
+)
+
+# ── SVC with decision_function ───────────────────────────────────────
+
+Test("svc decision function on iris") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("svc", {"kernel": "linear"}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    DecisionFunction(F_, X_, SCORES_)
+)

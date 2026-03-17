@@ -1,0 +1,64 @@
+-import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict,
+                       Score, Pipeline, PipelineStep, Learned, SplitData])
+
+# ── Pipeline construction and fitting ────────────────────────────────
+
+Test("pipeline scaler + logistic regression") <- (
+    Pipeline([("scaler", Est("standard_scaler", {})),
+              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+             PIPE_) and
+    LoadDataset("iris", D_) and
+    Fit(PIPE_, D_, F_) and
+    Score(F_, D_, S_) and
+    S_ > 0.5
+)
+
+# ── Pipeline predict ─────────────────────────────────────────────────
+
+Test("pipeline predict") <- (
+    Pipeline([("scaler", Est("standard_scaler", {})),
+              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+             PIPE_) and
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_) and
+    Fit(PIPE_, D_, F_) and
+    Predict(F_, X_, P_)
+)
+
+# ── PipelineStep ─────────────────────────────────────────────────────
+
+Test("pipeline step extraction") <- (
+    Pipeline([("scaler", Est("standard_scaler", {})),
+              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+             PIPE_) and
+    LoadDataset("iris", D_) and
+    Fit(PIPE_, D_, F_) and
+    PipelineStep(F_, "scaler", SCALER_FITTED_) and
+    Learned(SCALER_FITTED_, "mean", M_)
+)
+
+# ── Pipeline with PCA ────────────────────────────────────────────────
+
+Test("pipeline pca + classifier") <- (
+    Pipeline([("pca", Est("pca", {"n_components": 2})),
+              ("clf", Est("random_forest", {"n_estimators": 10}))],
+             PIPE_) and
+    LoadDataset("iris", D_) and
+    Fit(PIPE_, D_, F_) and
+    Score(F_, D_, S_) and
+    S_ > 0.5
+)
+
+# ── Pipeline with train/test split ───────────────────────────────────
+
+Test("pipeline with split") <- (
+    Pipeline([("scaler", Est("standard_scaler", {})),
+              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+             PIPE_) and
+    LoadDataset("iris", D_) and
+    SplitData(D_, 0.2, 42, SPL_) and
+    SPL_ is ("Split", TRAIN_, TEST_) and
+    Fit(PIPE_, TRAIN_, F_) and
+    Score(F_, TEST_, S_) and
+    S_ > 0.5
+)

@@ -1,0 +1,74 @@
+-import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict,
+                       Score, Metric, CrossValScore, CrossValidate,
+                       ConfusionMatrix, PredictProba, SplitData, kfold])
+
+# ── Metric/4: classification metrics ────────────────────────────────
+
+Test("accuracy metric") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    Predict(F_, X_, P_) and
+    Metric("accuracy", Y_, P_, S_) and
+    S_ > 0.8
+)
+
+# ── Score/4 with explicit metric ─────────────────────────────────────
+
+Test("score with accuracy metric") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("logistic_regression", {"max_iter": 200}), D_, F_) and
+    Score(F_, D_, "accuracy", S_) and
+    S_ > 0.5
+)
+
+# ── Regression metrics ───────────────────────────────────────────────
+
+Test("r2 metric on diabetes") <- (
+    LoadDataset("diabetes", D_) and
+    Fit(Est("ridge", {}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    Predict(F_, X_, P_) and
+    Metric("r2", Y_, P_, S_)
+)
+
+Test("mse metric on diabetes") <- (
+    LoadDataset("diabetes", D_) and
+    Fit(Est("ridge", {}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    Predict(F_, X_, P_) and
+    Metric("mse", Y_, P_, S_) and
+    S_ > 0.0
+)
+
+# ── CrossValScore ────────────────────────────────────────────────────
+
+Test("cross val score on iris") <- (
+    LoadDataset("iris", D_) and
+    CrossValScore(Est("logistic_regression", {"max_iter": 200}),
+                  D_, kfold(3), SCORES_)
+)
+
+Test("cross val score with metric") <- (
+    LoadDataset("iris", D_) and
+    CrossValScore(Est("logistic_regression", {"max_iter": 200}),
+                  D_, kfold(3), "accuracy", SCORES_)
+)
+
+# ── CrossValidate ────────────────────────────────────────────────────
+
+Test("cross validate multiple metrics") <- (
+    LoadDataset("iris", D_) and
+    CrossValidate(Est("logistic_regression", {"max_iter": 200}),
+                  D_, kfold(3), ["accuracy", "f1_weighted"], R_)
+)
+
+# ── ConfusionMatrix ──────────────────────────────────────────────────
+
+Test("confusion matrix on iris") <- (
+    LoadDataset("iris", D_) and
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D_, F_) and
+    D_ is ("Dataset", X_, Y_) and
+    Predict(F_, X_, P_) and
+    ConfusionMatrix(Y_, P_, M_)
+)

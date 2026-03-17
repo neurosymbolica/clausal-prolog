@@ -1,0 +1,85 @@
+-import_from(sklearn, [Est, Dataset, Split, LoadDataset, SplitData, MakeDataset,
+                       Fit, Score, EncodeLabels, Binarize, Normalize,
+                       PolynomialFeatures])
+
+# ── Dataset loading ──────────────────────────────────────────────────
+
+Test("load diabetes dataset") <- (
+    LoadDataset("diabetes", D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+Test("load wine dataset") <- (
+    LoadDataset("wine", D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+Test("load breast cancer dataset") <- (
+    LoadDataset("breast_cancer", D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+# ── SplitData ────────────────────────────────────────────────────────
+
+Test("split iris data") <- (
+    LoadDataset("iris", D_) and
+    SplitData(D_, 0.2, S_) and
+    S_ is ("Split", TRAIN_, TEST_) and
+    TRAIN_ is ("Dataset", XTRAIN_, YTRAIN_) and
+    TEST_ is ("Dataset", XTEST_, YTEST_)
+)
+
+Test("split with seed is reproducible") <- (
+    LoadDataset("iris", D_) and
+    SplitData(D_, 0.3, 42, S1_) and
+    SplitData(D_, 0.3, 42, S2_)
+)
+
+# ── Train/test workflow ──────────────────────────────────────────────
+
+Test("split then fit then score") <- (
+    LoadDataset("iris", D_) and
+    SplitData(D_, 0.2, 42, S_) and
+    S_ is ("Split", TRAIN_, TEST_) and
+    Fit(Est("logistic_regression", {"max_iter": 200}), TRAIN_, F_) and
+    Score(F_, TEST_, SC_) and
+    SC_ > 0.5
+)
+
+# ── MakeDataset ──────────────────────────────────────────────────────
+
+Test("make classification dataset") <- (
+    MakeDataset("classification",
+                {"n_samples": 100, "n_features": 5, "n_classes": 2,
+                 "n_informative": 3, "random_state": 42},
+                D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+Test("make regression dataset") <- (
+    MakeDataset("regression",
+                {"n_samples": 100, "n_features": 5, "random_state": 42},
+                D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+Test("make blobs dataset") <- (
+    MakeDataset("blobs",
+                {"n_samples": 100, "centers": 3, "random_state": 42},
+                D_) and
+    D_ is ("Dataset", X_, Y_)
+)
+
+# ── EncodeLabels ─────────────────────────────────────────────────────
+
+Test("encode labels") <- (
+    EncodeLabels(["cat", "dog", "cat", "bird", "dog"], ENC_, MAP_)
+)
+
+# ── Normalize ────────────────────────────────────────────────────────
+
+Test("normalize l2") <- (
+    LoadDataset("iris", D_) and
+    D_ is ("Dataset", X_, Y_) and
+    Normalize(X_, "l2", N_)
+)

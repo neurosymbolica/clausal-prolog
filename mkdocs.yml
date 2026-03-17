@@ -63,6 +63,8 @@ nav:
     - SQLite: sqlite.md
     - spaCy NLP: spacy.md
     - UUIDs: uuid.md
+    - Graphs: graphs.md
+    - scikit-learn: sklearn.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md

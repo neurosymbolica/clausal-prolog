@@ -330,6 +330,7 @@ class ModulesFinder(MetaPathFinder):
     # (e.g. ``uuid`` → ``uuid_mod`` shim which re-exports from py/uuid.py).
     _ALIASES: dict[str, str] = {
         "uuid": "uuid_mod",
+        "sklearn": "py.sklearn",
     }
 
     # Guard against re-entrant imports (e.g. py/uuid.py does

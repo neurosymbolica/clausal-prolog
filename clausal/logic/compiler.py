@@ -58,7 +58,7 @@ from clausal.terms import (
     Call, LoadName, LoadAttr,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
-from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral
+from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral, DictLiteral, SetLiteral
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.codegen import functiondef_to_function
@@ -846,6 +846,13 @@ def term_to_ast_expr(
             ctx=ast.Load(),
         )
 
+    if isinstance(term, TupleLiteral):
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        return ast.Tuple(
+            elts=[_rec(e) for e in term.elements],
+            ctx=ast.Load(),
+        )
+
     if isinstance(term, list):
         # If the list contains a StarUnpack, use _build_star_list helper
         # to safely handle unbound Vars at runtime.
@@ -912,6 +919,17 @@ def term_to_ast_expr(
                 ctx=ast.Load(),
             ),
         )
+
+    if isinstance(term, DictLiteral):
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        return ast.Dict(
+            keys=[_rec(k) if k is not None else None for k in term.keys],
+            values=[_rec(v) for v in term.values],
+        )
+
+    if isinstance(term, SetLiteral):
+        _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+        return ast.Set(elts=[_rec(e) for e in term.elements])
 
     if isinstance(term, Compound):
         f = term.functor
