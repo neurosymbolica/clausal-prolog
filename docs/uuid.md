@@ -5,10 +5,10 @@
 The `uuid` module provides predicates for generating, converting, and inspecting UUIDs backed by Python's `uuid` module. It produces and consumes real `uuid.UUID` objects.
 
 ```clausal
--import_from(uuid, [Uuid4, UuidStr, UuidVersion, IsUuid])
+-import_from(uuid, [UUIDv4, UuidStr, UuidVersion, IsUuid])
 
 MakeId(Id_) <- (
-    Uuid4(U_) and
+    UUIDv4(U_) and
     UuidStr(U_, Id_)
 )
 
@@ -24,7 +24,7 @@ Or via module import:
 -import_module(uuid)
 
 Main <- (
-    uuid.Uuid4(U_) and
+    uuid.UUIDv4(U_) and
     uuid.UuidStr(U_, S_) and
     ++print(S_)
 )
@@ -36,7 +36,7 @@ Main <- (
 
 ```clausal
 -import_from(uuid, [
-    Uuid4, Uuid1, Uuid3, Uuid5,
+    UUIDv4, UUIDv1, UUIDv3, UUIDv5,
     UuidStr, UuidHex, UuidUrn, UuidBytes, UuidInt,
     UuidVersion, UuidFields, IsUuid
 ])
@@ -50,14 +50,14 @@ The module name is `uuid` in Clausal (internally mapped to `uuid_mod` to avoid s
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Uuid4(U)` | `-U` | Random v4 UUID |
-| `Uuid1(U)` | `-U` | Time-based v1 UUID |
-| `Uuid3(Ns, Name, U)` | `+Ns, +Name, -U` | MD5 namespace UUID |
-| `Uuid5(Ns, Name, U)` | `+Ns, +Name, -U` | SHA-1 namespace UUID |
+| `UUIDv4(U)` | `-U` | Random v4 UUID |
+| `UUIDv1(U)` | `-U` | Time-based v1 UUID |
+| `UUIDv3(Ns, Name, U)` | `+Ns, +Name, -U` | MD5 namespace UUID |
+| `UUIDv5(Ns, Name, U)` | `+Ns, +Name, -U` | SHA-1 namespace UUID |
 
 ### Namespace aliases
 
-For `Uuid3` and `Uuid5`, the namespace argument accepts string aliases or raw `uuid.UUID` objects:
+For `UUIDv3` and `UUIDv5`, the namespace argument accepts string aliases or raw `uuid.UUID` objects:
 
 | Alias | UUID constant |
 |-------|---------------|
@@ -67,8 +67,8 @@ For `Uuid3` and `Uuid5`, the namespace argument accepts string aliases or raw `u
 | `"x500"` | `uuid.NAMESPACE_X500` |
 
 ```clausal
-Uuid3("dns", "example.com", U_)
-Uuid5("url", "https://example.com", U_)
+UUIDv3("dns", "example.com", U_)
+UUIDv5("url", "https://example.com", U_)
 ```
 
 ---
@@ -87,7 +87,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
 ```clausal
 % Generate a UUID and get its string form
-Uuid4(U_) and UuidStr(U_, S_)
+UUIDv4(U_) and UuidStr(U_, S_)
 
 % Parse a UUID from a string
 UuidStr(U_, "550e8400-e29b-41d4-a716-446655440000")
@@ -108,7 +108,7 @@ UuidHex(U_, "550e8400e29b41d4a716446655440000")
 
 ```clausal
 % Check that a UUID is version 4
-Uuid4(U_) and UuidVersion(U_, 4)
+UUIDv4(U_) and UuidVersion(U_, 4)
 
 % Type-check
 IsUuid(U_)
@@ -121,10 +121,10 @@ IsUuid(U_)
 ### Session tokens
 
 ```clausal
--import_from(uuid, [Uuid4, UuidStr])
+-import_from(uuid, [UUIDv4, UuidStr])
 
 NewSession(UserId_, Token_) <- (
-    Uuid4(U_) and
+    UUIDv4(U_) and
     UuidStr(U_, Token_)
 )
 ```
@@ -132,10 +132,10 @@ NewSession(UserId_, Token_) <- (
 ### Deterministic IDs
 
 ```clausal
--import_from(uuid, [Uuid5, UuidStr])
+-import_from(uuid, [UUIDv5, UuidStr])
 
 ResourceId(Type_, Name_, Id_) <- (
-    Uuid5("url", Name_, U_) and
+    UUIDv5("url", Name_, U_) and
     UuidStr(U_, Id_)
 )
 ```

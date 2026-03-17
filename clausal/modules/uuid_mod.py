@@ -3,12 +3,12 @@
 Provides relational predicates for generating, converting, and inspecting
 UUIDs.  Import via::
 
-    -import_from(uuid, [Uuid4, UuidStr, UuidVersion, IsUuid])
+    -import_from(uuid, [UUIDv4, UuidStr, UuidVersion, IsUuid])
 
 Or via module import::
 
     -import_module(uuid)
-    # then use uuid.Uuid4(U_), uuid.UuidStr(U_, S_), etc.
+    # then use uuid.UUIDv4(U_), uuid.UuidStr(U_, S_), etc.
 
 Python interop
 --------------
@@ -285,17 +285,17 @@ def _is_uuid_1(u, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Uuid4 = _UuidPredicate("Uuid4")
-Uuid4._register(1, _simple_to_trampoline(_uuid4_1))
+UUIDv4 = _UuidPredicate("UUIDv4")
+UUIDv4._register(1, _simple_to_trampoline(_uuid4_1))
 
-Uuid1 = _UuidPredicate("Uuid1")
-Uuid1._register(1, _simple_to_trampoline(_uuid1_1))
+UUIDv1 = _UuidPredicate("UUIDv1")
+UUIDv1._register(1, _simple_to_trampoline(_uuid1_1))
 
-Uuid3 = _UuidPredicate("Uuid3")
-Uuid3._register(3, _simple_to_trampoline(_uuid3_3))
+UUIDv3 = _UuidPredicate("UUIDv3")
+UUIDv3._register(3, _simple_to_trampoline(_uuid3_3))
 
-Uuid5 = _UuidPredicate("Uuid5")
-Uuid5._register(3, _simple_to_trampoline(_uuid5_3))
+UUIDv5 = _UuidPredicate("UUIDv5")
+UUIDv5._register(3, _simple_to_trampoline(_uuid5_3))
 
 UuidStr = _UuidPredicate("UuidStr")
 UuidStr._register(2, _simple_to_trampoline(_uuid_str_2))
