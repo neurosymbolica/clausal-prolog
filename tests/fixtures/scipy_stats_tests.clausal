@@ -1,0 +1,70 @@
+-import_from(scipy_stats, [StatsMean, StatsPearsonCorrelation, StatsLinearRegression, StatsTTest1Sample,
+    StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsChiSquare,
+    StatsKs2samp, StatsShapiro, ResultGet])
+
+# StatsMean: mean of [1,2,3] = 2.0
+Test("mean of list") <- (
+    StatsMean(++([1.0, 2.0, 3.0]), RESULT) and
+    DIFF is ++(abs(float(RESULT) - 2.0)) and
+    DIFF < 1e-9)
+
+# StatsPearsonCorrelation: perfect positive correlation
+Test("pearsonr perfect correlation") <- (
+    StatsPearsonCorrelation(++([1.0, 2.0, 3.0]), ++([1.0, 2.0, 3.0]), RESULT) and
+    ResultGet(RESULT, 'statistic', STAT) and
+    DIFF is ++(abs(float(STAT) - 1.0)) and
+    DIFF < 1e-9)
+
+# StatsLinearRegression: y = 2*x has slope=2, intercept=0
+Test("linregress slope") <- (
+    StatsLinearRegression(++([1.0, 2.0, 3.0]), ++([2.0, 4.0, 6.0]), RESULT) and
+    ResultGet(RESULT, 'slope', SLOPE) and
+    DIFF is ++(abs(float(SLOPE) - 2.0)) and
+    DIFF < 1e-9)
+
+# StatsTTest1Sample: data with mean 2.0 vs popmean 2.0, stat near 0
+Test("ttest1samp mean equal") <- (
+    StatsTTest1Sample(++([1.0, 2.0, 3.0]), 2.0, RESULT) and
+    ResultGet(RESULT, 'statistic', STAT) and
+    ABS is ++(abs(float(STAT))) and
+    ABS < 1e-9)
+
+# StatsNormalPdf: norm.pdf(0) = 1/sqrt(2*pi)
+Test("norm pdf at zero") <- (
+    StatsNormalPdf(0.0, RESULT) and
+    EXPECTED is ++(1.0 / __import__('math').sqrt(2 * __import__('math').pi)) and
+    DIFF is ++(abs(float(RESULT) - float(EXPECTED))) and
+    DIFF < 1e-9)
+
+# StatsNormalCdf: norm.cdf(0) = 0.5
+Test("norm cdf at zero") <- (
+    StatsNormalCdf(0.0, RESULT) and
+    DIFF is ++(abs(float(RESULT) - 0.5)) and
+    DIFF < 1e-9)
+
+# StatsNormalPpf: ppf(0.5) = 0 (median of standard normal)
+Test("norm ppf median") <- (
+    StatsNormalPpf(0.5, RESULT) and
+    ABS is ++(abs(float(RESULT))) and
+    ABS < 1e-9)
+
+# StatsChiSquare: uniform counts, statistic = 0
+Test("chisquare uniform") <- (
+    StatsChiSquare(++([10, 10, 10]), RESULT) and
+    ResultGet(RESULT, 'statistic', STAT) and
+    ABS is ++(abs(float(STAT))) and
+    ABS < 1e-9)
+
+# StatsKs2samp: identical samples, statistic = 0
+Test("ks2samp identical") <- (
+    StatsKs2samp(++([1.0, 2.0, 3.0]), ++([1.0, 2.0, 3.0]), RESULT) and
+    ResultGet(RESULT, 'statistic', STAT) and
+    ABS is ++(abs(float(STAT))) and
+    ABS < 1e-9)
+
+# StatsShapiro: returns a dict with statistic and pvalue
+Test("shapiro returns dict") <- (
+    StatsShapiro(++([1.0, 2.0, 3.0, 4.0, 5.0]), RESULT) and
+    ResultGet(RESULT, 'statistic', STAT2) and
+    ResultGet(RESULT, 'pvalue', PVAL) and
+    PVAL >= 0.0)
