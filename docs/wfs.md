@@ -2,7 +2,7 @@
 
 Well-Founded Semantics provides a sound three-valued treatment of negation for tabled predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined**.
 
-The implementation extends `clausal/logic/tabling.py` (V2-7).
+The implementation extends `clausal/logic/tabling.py`.
 
 ---
 

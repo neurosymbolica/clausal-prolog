@@ -121,7 +121,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 ### Messages and f-strings
 
-Messages are Python strings. Clausal's f-string support (V2-15) means interpolation works naturally:
+Messages are Python strings. Clausal's f-string support means interpolation works naturally:
 
 ```clausal
 Info(L_, f"User {UserID_} logged in from {IP_}")
@@ -301,5 +301,5 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the Clausal predicate succeeds regardless.
     3. **`IsEnabledFor/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
     4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
-    5. **f-string messages** — no special formatting needed; Clausal's V2-15 f-string support handles interpolation with auto-deref of logic variables.
+    5. **f-string messages** — no special formatting needed; Clausal's f-string support handles interpolation with auto-deref of logic variables.
     6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.

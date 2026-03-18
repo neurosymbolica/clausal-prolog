@@ -94,7 +94,7 @@ Fact normalization: ground values in functor field positions are replaced with f
 
 ## Deferred compilation
 
-Prior to V2-3, each `$define_predicate` / `$assert_fact` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
+Previously, each `$define_predicate` / `$assert_fact` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
 
 With deferred compilation, assertions and compilation are separated:
 - During `exec()`, each `$define_predicate` / `$assert_fact` only asserts the clause and records the predicate in a pending dict.

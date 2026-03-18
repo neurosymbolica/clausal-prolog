@@ -2,7 +2,6 @@
 
 Clausal provides meta-predicates for collecting solutions and higher-order list predicates for functional-style list processing. Meta-predicates are compiler special forms (compiled inline); higher-order list predicates are builtins that take goal closures.
 
-Added in V2-10 (meta-predicates) and V2-11 (higher-order list builtins).
 
 ---
 

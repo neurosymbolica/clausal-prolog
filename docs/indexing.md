@@ -178,7 +178,7 @@ The current implementation indexes only scalar values. These are not indexed (th
 
 ---
 
-??? info "Testing (V2-1)"
+??? info "Testing"
 
     `tests/test_first_arg_index.py` covers:
 
@@ -193,21 +193,21 @@ The current implementation indexes only scalar values. These are not indexed (th
     ---
     ---
 
-# Groundness-Keyed Dispatch (V2-2)
+# Groundness-Keyed Dispatch
 
-V2-2 generalises first-argument indexing to **multi-argument indexing** with a runtime selector. Instead of indexing only on `arg0`, the compiler analyses every argument position and builds an independent index for each one that has useful discriminating power. At call time, a lightweight selector inspects which arguments are ground and dispatches to the best available index.
+Groundness-keyed dispatch generalises first-argument indexing to **multi-argument indexing** with a runtime selector. Instead of indexing only on `arg0`, the compiler analyses every argument position and builds an independent index for each one that has useful discriminating power. At call time, a lightweight selector inspects which arguments are ground and dispatches to the best available index.
 
 ## Motivation
 
-First-argument indexing (V2-1) only helps when the first argument is ground. Many predicates are queried in multiple modes:
+First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
 ```
-color("red", Temp_)      # first arg ground  → V2-1 handles this
-color(Name_, "warm")     # second arg ground → V2-1 can't help
+color("red", Temp_)      # first arg ground  → first-arg index handles this
+color(Name_, "warm")     # second arg ground → first-arg index can't help
 color(Name_, Temp_)      # neither ground    → full scan either way
 ```
 
-With V2-2, querying `color(Name_, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
+With groundness-keyed dispatch, querying `color(Name_, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
 
 ??? abstract "Design"
 
@@ -249,7 +249,7 @@ With V2-2, querying `color(Name_, "warm")` uses a second-argument index and jump
     fallback_fn = all_clauses_fn         # for when no arg is ground
     ```
 
-    Each plan's `idx_dict` maps values to compiled sub-functions (exactly like V2-1 buckets), and `default_fn` handles values not in the index at that position. The `fallback_fn` is the full linear-scan function used when all arguments are unbound.
+    Each plan's `idx_dict` maps values to compiled sub-functions (exactly like first-arg index buckets), and `default_fn` handles values not in the index at that position. The `fallback_fn` is the full linear-scan function used when all arguments are unbound.
 
     ### Runtime selector
 
@@ -276,11 +276,11 @@ With V2-2, querying `color(Name_, "warm")` uses a second-argument index and jump
         yield from fallback_fn(*args)        # all-Var fallback
     ```
 
-    **Single-position fast path:** when only one position is indexable, the loop is eliminated and the selector degenerates to the same structure as V2-1 — no performance regression.
+    **Single-position fast path:** when only one position is indexable, the loop is eliminated and the selector degenerates to the same structure as first-argument indexing — no performance regression.
 
     ### Trampoline mode
 
-    The trampoline selector accounts for the different argument layout (`this_generator, parent, arg0, ..., trail`) by offsetting position indices by 2. Sub-functions use `emit_done=False` as in V2-1 — the selector emits the final `yield (parent, DONE)`.
+    The trampoline selector accounts for the different argument layout (`this_generator, parent, arg0, ..., trail`) by offsetting position indices by 2. Sub-functions use `emit_done=False` as in first-argument indexing — the selector emits the final `yield (parent, DONE)`.
 
 ## Example: colour database
 
@@ -306,11 +306,11 @@ Plans sorted by selectivity: position 0 first, then position 1.
 | `color("red", "warm")` | arg0 ground → pos-0 index → bucket["red"] | 1 |
 | `color(X_, Y_)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
 
-## Interaction with V2-1
+## Interaction with first-argument indexing
 
-V2-2 fully subsumes V2-1. The `compile_predicate` and `compile_predicate_trampoline` functions now use `_analyze_index_positions` instead of `_build_first_arg_index`. When only position 0 is indexable, the result is behaviourally identical to V2-1.
+Groundness-keyed dispatch fully subsumes first-argument indexing. The `compile_predicate` and `compile_predicate_trampoline` functions use `_analyze_index_positions` instead of `_build_first_arg_index`. When only position 0 is indexable, the result is behaviourally identical to first-argument indexing.
 
-The V2-1 functions (`_extract_first_arg_key`, `_build_first_arg_index`, `_make_indexed_dispatch_simple`, `_make_indexed_dispatch_trampoline`) are retained as thin wrappers or standalone utilities for backward compatibility with tests that reference them directly.
+The first-arg index functions (`_extract_first_arg_key`, `_build_first_arg_index`, `_make_indexed_dispatch_simple`, `_make_indexed_dispatch_trampoline`) are retained as thin wrappers or standalone utilities for backward compatibility with tests that reference them directly.
 
 ## Interaction with dynamic predicates
 
@@ -324,17 +324,17 @@ No changes to the invalidation mechanism. When `assertz` or `retract` modifies a
 
 ---
 
-??? info "Testing (V2-2)"
+??? info "Testing"
 
     `tests/test_groundness_dispatch.py` covers:
 
     - **Generalised key extraction**: arbitrary position, Var+Unify at non-first positions, PredicateMeta second field
-    - **Per-position index building**: position 0 matches V2-1, position 1 index, `n_distinct` field
+    - **Per-position index building**: position 0 index, position 1 index, `n_distinct` field
     - **Position analysis**: both positions indexable, single-position detection, selectivity sorting, three-arg predicates
     - **Second-arg lookup (simple mode)**: ground second arg, ground first arg, both ground, neither ground, no-match, three-arg middle/last ground
     - **Second-arg lookup (trampoline mode)**: same scenarios
     - **Different-mode dispatch**: same predicate queried in four modes (first-ground, second-ground, both-ground, neither-ground)
     - **Mixed clauses**: var-headed clauses in position-specific buckets, true catch-all clauses (Var at all positions)
     - **Dynamic re-indexing**: `assertz` triggers multi-plan recompile (both modes)
-    - **Backward compatibility**: single-position matches V2-1, below-threshold still works
+    - **Backward compatibility**: single-position matches first-argument indexing, below-threshold still works
     - **PredicateMeta integration**: second-field lookup on PredicateMeta facts

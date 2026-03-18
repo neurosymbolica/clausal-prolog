@@ -2,7 +2,7 @@
 
 Tabling memoises subgoal calls and their computed answers. When a recursive call encounters a subgoal that is already being evaluated, the caller *suspends* and waits for answers rather than re-entering the computation. This prevents infinite loops on left-recursive and mutually recursive predicates and is a prerequisite for well-founded semantics.
 
-The implementation lives in `clausal.logic.tabling` (V2-4b).
+The implementation lives in `clausal.logic.tabling`.
 
 ---
 
@@ -241,7 +241,7 @@ The architecture doc notes that tabling is easier on generators than on a WAM. H
 
 ---
 
-## Well-founded semantics (V2-7)
+## Well-founded semantics
 
 When a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). WFS provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
 

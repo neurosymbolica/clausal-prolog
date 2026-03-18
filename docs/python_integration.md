@@ -112,7 +112,7 @@ if trail is not None:
 
 ---
 
-## `query_wfs` — results with truth annotations (V2-7)
+## `query_wfs` — results with truth annotations
 
 ```python
 from clausal.logic.solve import query_wfs
@@ -305,7 +305,7 @@ IsoDate(Y_, M_, D_, S_) <- (
 
 ---
 
-## `++()` — Python Escape (V2-16)
+## `++()` — Python Escape
 
 The `++()` operator evaluates an arbitrary Python expression at search time with logic variables automatically dereferenced. It wraps the expression in a `PyThunk` lambda that is called with deref'd values.
 

@@ -4,20 +4,20 @@
 
 ```
 clausal.modules              standard library modules (regex, log, …)
-clausal.logic.goal_expansion body-goal rewriting pass (V3-3)
-clausal.logic.compiler_v2    module-level compilation pipeline (V3-2)
-clausal.logic.term_expansion TermExpansion/4 rewrite engine (V3-2)
-clausal.logic.tabling (wfs)  well-founded semantics (V2-7)
-clausal.logic.clpfd          CLP(FD) finite-domain constraints (V2-6)
-clausal.logic.constraints    dif/2 via attribute variables (V2-5)
-clausal.logic.tabling        SLG resolution (V2-4b)
+clausal.logic.goal_expansion body-goal rewriting pass
+clausal.logic.compiler_v2    module-level compilation pipeline
+clausal.logic.term_expansion TermExpansion/4 rewrite engine
+clausal.logic.tabling (wfs)  well-founded semantics
+clausal.logic.clpfd          CLP(FD) finite-domain constraints
+clausal.logic.constraints    dif/2 via attribute variables
+clausal.logic.tabling        SLG resolution
 clausal.logic.compiler       Prolog-style predicates → Python generator AST
 clausal.continuation_search  greenlet-based search iterator
 clausal.trampoline           generator trampoline, stack-safe CPS
 clausal.logic.variables      C extension: unification, trails, backtracking, AttVars
 clausal.term_rewriting       DSL syntax → AST (DCG >> rewriting, q() quasi-quotation)
 clausal.simple_ast           term representation (homoiconic)
-clausal.import_hook          transparent import; module system (V3-1); ModulesFinder
+clausal.import_hook          transparent import; module system; ModulesFinder
 ```
 
 Each layer builds on the one below. Python code and logic code can interact at any layer.
@@ -117,11 +117,11 @@ The key insight is that **tabling is easier to implement on coroutines/generator
 
 The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, variant_key)` to `TableEntry` objects that track status, cached answers, and suspended consumers. See [tabling.md](tabling.md) for full details.
 
-### Well-founded semantics (V2-7)
+### Well-founded semantics
 
 Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *undefined*. It gives a principled treatment of negation in the presence of recursion — the "undefined" value propagates through mutually recursive negations rather than looping or giving arbitrary results.
 
-WFS is implemented directly in `clausal.logic.tabling` (V2-7), extending the existing SLG machinery with delayed negation and conditional answer resolution. When `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
+WFS is implemented directly in `clausal.logic.tabling`, extending the existing SLG machinery with delayed negation and conditional answer resolution. When `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
 
 - Negation of a completed table with no matching answer → **true** (delay removed)
 - Negation of a completed table with an unconditional matching answer → **false** (answer invalidated)
@@ -178,22 +178,22 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
 | `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order, term inspection, exceptions, I/O; constructable PredicateMeta classes for all 75+ builtins |
 | `clausal.logic.solve` | Done — call/solve/query/once |
-| Predicate indexing | Done — groundness-keyed multi-arg dispatch (V2-2) |
-| Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader (V2-3) |
-| `clausal.logic.tabling` | Done — SLG resolution, variant tabling (V2-4b) |
-| `clausal.logic.constraints` | Done — dif/2 via attributed variables (V2-5) |
-| `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints (V2-6) |
-| Well-founded semantics | Done — delayed negation, conditional answers (V2-7) |
-| Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N (V2-10) |
-| Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft (V2-11) |
-| Arithmetic builtins | Done — Sign, Gcd, DivMod (V2-12) |
-| Term inspection | Done — CopyTerm, TermVariables, NumberVars (V2-13) |
-| Control exceptions | Done — throw/1, catch/3, halt/0, halt/1 (V2-14) |
-| I/O builtins | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support (V2-15) |
-| Python interop | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper (V2-16) |
-| DCGs | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading (V2-17) |
-| Module system | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution (V3-1) |
-| Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture (V3-2) |
-| Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection (V3-2) |
-| Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation (V3-3) |
-| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module (V3-3), `log` module (structured logging wrapping Python's `logging`), `date_time` module (relational date/time using Python `datetime` objects) |
+| Predicate indexing | Done — groundness-keyed multi-arg dispatch |
+| Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |
+| `clausal.logic.tabling` | Done — SLG resolution, variant tabling |
+| `clausal.logic.constraints` | Done — dif/2 via attributed variables |
+| `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints |
+| Well-founded semantics | Done — delayed negation, conditional answers |
+| Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N |
+| Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft |
+| Arithmetic builtins | Done — Sign, Gcd, DivMod |
+| Term inspection | Done — CopyTerm, TermVariables, NumberVars |
+| Control exceptions | Done — throw/1, catch/3, halt/0, halt/1 |
+| I/O builtins | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support |
+| Python interop | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper |
+| DCGs | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading |
+| Module system | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution |
+| Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture |
+| Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
+| Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation |
+| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module, `log` module (structured logging wrapping Python's `logging`), `date_time` module (relational date/time using Python `datetime` objects) |

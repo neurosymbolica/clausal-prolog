@@ -1,4 +1,4 @@
-# Clausal — Reified If-Then-Else (V2-8)
+# Clausal — Reified If-Then-Else
 
 ## Overview
 

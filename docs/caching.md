@@ -1,4 +1,4 @@
-# Clausal — Bytecode Caching (V2-3)
+# Clausal — Bytecode Caching
 
 ## Overview
 
@@ -8,7 +8,7 @@ When a `.clausal` file is imported, two expensive operations occur:
 
 2. **Predicate compilation** — each predicate's clauses are compiled into dispatch functions via `compile_predicate`.
 
-V2-3 addresses both:
+Both are addressed:
 - **`.pyc` caching** eliminates step 1 on subsequent imports by caching the transformed bytecode.
 - **Deferred compilation** reduces step 2 from O(N^2) to O(N) per predicate by compiling once after all clauses are asserted, rather than recompiling after each clause.
 
@@ -59,7 +59,7 @@ These calls still execute at import time (they assert clauses), but the parsing 
 
 Predicate **compilation** (the `compile_predicate` step that produces dispatch functions) is not cached in the `.pyc`. It runs every import. This is because dispatch functions depend on runtime state (module globals, cross-predicate references) that cannot be serialized into bytecode.
 
-A future V2-3b could cache dispatch functions separately, but the current approach already eliminates the most expensive per-import cost.
+A future enhancement could cache dispatch functions separately, but the current approach already eliminates the most expensive per-import cost.
 
 ---
 

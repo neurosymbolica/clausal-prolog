@@ -2,7 +2,7 @@
 
 CLP(B) provides constraint logic programming over Booleans, enabling SAT solving, tautology checking, model counting, and combinatorial problems. The implementation follows Markus Triska's design using reduced ordered BDDs (Binary Decision Diagrams).
 
-The implementation lives in `clausal/logic/clpb.py` (V3-4).
+The implementation lives in `clausal/logic/clpb.py`.
 
 !!! note
     For CLP(FD) (finite-domain integer constraints) and Dif/2 (disequality), see [Constraints](constraints.md).

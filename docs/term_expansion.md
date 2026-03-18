@@ -2,7 +2,7 @@
 
 Term expansion and goal expansion are compile-time transformation passes that rewrite clauses and goals before compilation. They enable metaprogramming, syntactic sugar, and optimization.
 
-Added in V3-2 (term expansion) and V3-3 (goal expansion).
+Term expansion and goal expansion are separate compilation passes.
 
 ---
 
@@ -99,7 +99,7 @@ Goal expansion runs after term expansion and before compilation:
 
 ## Pipeline
 
-The V3-2 compiler pipeline orchestrates both expansions:
+The compiler pipeline orchestrates both expansions:
 
 ```
 .clausal source

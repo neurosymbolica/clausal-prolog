@@ -4,8 +4,8 @@ Clausal supports constraint logic programming through attributed variables. The 
 
 Two constraint solvers are built in:
 
-- **Dif/2** — disequality constraint (`clausal.logic.constraints`, V2-5)
-- **CLP(FD)** — finite-domain constraints (`clausal.logic.clpfd`, V2-6)
+- **Dif/2** — disequality constraint (`clausal.logic.constraints`)
+- **CLP(FD)** — finite-domain constraints (`clausal.logic.clpfd`)
 
 ---
 
@@ -44,7 +44,7 @@ constrained(X_, Y_) <- (
 | `X_ is not Y_` | Constraint: must end up different | `Dif(X, Y)` |
 | `not (X_ is Y_)` | Immediate: don't unify right now | `\=(X, Y)` |
 
-The `is not` operator changed from Prolog `\=` (immediate) to Prolog `dif/2` (constraint) in V2-5. The old immediate-check semantics are still available as `not (X_ is Y_)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
+The `is not` operator uses `dif/2` constraint semantics rather than immediate `\=`. The old immediate-check semantics are still available as `not (X_ is Y_)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
 
 ??? example "Examples"
 
@@ -166,7 +166,7 @@ The `is not` operator changed from Prolog `\=` (immediate) to Prolog `dif/2` (co
 
 CLP(FD) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) constraint operators.
 
-The implementation lives in `clausal.logic.clpfd` (V2-6).
+The implementation lives in `clausal.logic.clpfd`.
 
 ### Operator semantics
 

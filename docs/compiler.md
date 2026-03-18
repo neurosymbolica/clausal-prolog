@@ -76,12 +76,12 @@ Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops o
 | `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
 | `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — dif/2 constraint (see [constraints.md](constraints.md)) |
 | `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
-| `StructuralEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality (V2-6) |
-| `StructuralNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality (V2-6) |
-| `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison (V2-6) |
+| `StructuralEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality |
+| `StructuralNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality |
+| `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
-| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (WFS, V2-7). |
+| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (well-founded semantics). |
 | `IfExpr(test, body, orelse)` | Reified ITE: three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. See [reified_ite.md](reified_ite.md). |
 | `Call(LoadName("Once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
 | `Call(LoadName("FindAll"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
@@ -209,7 +209,7 @@ Both `trampoline` and `solutions` are available from `clausal.logic.trampoline` 
 
 Negation-as-failure (`Not`) in trampoline mode compiles the inner goal in **simple mode** (a plain `for`-loop driver), not trampoline mode. This avoids the complexity of suspending and resuming the inner generator through the trampoline.
 
-### WFS: tabled NAF (V2-7)
+### WFS: tabled NAF
 
 When `Not(operand=Call(LoadName(f), ...))` targets a tabled predicate (detected via `db.is_tabled(f, arity)`), the compiler emits a call to `_naf_tabled` instead of the inline NAF generator pattern:
 
@@ -226,7 +226,7 @@ trail.undo(_m)
 
 ---
 
-## Meta-predicates (V2-10)
+## Meta-predicates
 
 `FindAll/3`, `BagOf/3`, `SetOf/3`, and `ForAll/2` are compiled as **special forms** — not as builtin predicate calls, but as inline AST patterns emitted directly by `compile_goal`. This is necessary because the inner goal must be compiled at compile time (not dispatched at runtime).
 
@@ -400,7 +400,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ---
 
-## Goal expansion (V3-3)
+## Goal expansion
 
 `clausal.logic.goal_expansion.run_goal_expansion()` walks clause bodies and applies built-in goal transformations between term expansion and directive processing. It recurses into `And`, `Or`, `Not`, and `IfExpr` nodes, applying expansion rules to leaf goals.
 

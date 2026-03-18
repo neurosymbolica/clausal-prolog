@@ -2,7 +2,7 @@
 
 Lambdas are anonymous clauses that can be passed as arguments to higher-order predicates. They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
 
-The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`CallGoal` builtins). Added in V2-9.
+The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`CallGoal` builtins).
 
 ---
 
@@ -185,7 +185,7 @@ Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
 
 ## Lambdas with meta-predicates
 
-Lambdas combine naturally with `FindAll`, `BagOf`, `SetOf`, and `ForAll` (V2-10). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
+Lambdas combine naturally with `FindAll`, `BagOf`, `SetOf`, and `ForAll`. The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
 ```
 # Collect squares of a list using a lambda
@@ -205,7 +205,7 @@ Since `FindAll` and friends are compiler special forms, the goal argument is com
 
 ---
 
-## Lambdas with higher-order list predicates (V2-11)
+## Lambdas with higher-order list predicates
 
 The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — are the primary consumers of lambdas. Unlike meta-predicates, these take a **callable goal closure** as a runtime argument, so lambdas are essential:
 
@@ -267,4 +267,4 @@ All higher-order list predicates use **committed choice** — they take the firs
     - **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
     - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `:=` arithmetic
-    - **Higher-order builtins** (V2-11): MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)
+    - **Higher-order builtins**: MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)

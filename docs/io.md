@@ -2,7 +2,6 @@
 
 Clausal provides built-in predicates for formatted output and term-to-string conversion. The `.clausal` file format also supports f-string interpolation for string construction.
 
-Added in V2-15.
 
 ---
 

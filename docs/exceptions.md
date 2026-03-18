@@ -2,7 +2,7 @@
 
 Clausal provides structured exception handling via `throw/1`, `catch/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
 
-The implementation lives in `clausal/logic/exceptions.py` (V2-14).
+The implementation lives in `clausal/logic/exceptions.py`.
 
 ---
 

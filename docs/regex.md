@@ -2,7 +2,7 @@
 
 The `regex` standard library module provides regular expression predicates for `.clausal` files. It wraps Python's `re` module with a relational interface, including auto-binding of named capture groups to logic variables.
 
-The implementation lives in `clausal/modules/regex.py` (V3-3).
+The implementation lives in `clausal/modules/regex.py`.
 
 ---
 

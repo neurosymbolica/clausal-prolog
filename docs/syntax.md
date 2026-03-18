@@ -21,7 +21,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | Operator | Meaning |
 |---|---|
 | `--expr` | Python expression embedded inside a logic term |
-| `++expr` | In Python context: logic term inside a Python expression. In `.clausal` context: evaluate Python expression at search time (V2-16) |
+| `++expr` | In Python context: logic term inside a Python expression. In `.clausal` context: evaluate Python expression at search time |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
 
 `--` was chosen because:
@@ -348,7 +348,7 @@ Simple variable references like `f"{X_}"` and `f"{NAME}"` work correctly. Format
 
 ---
 
-## Python interop — `++()` escape (V2-16)
+## Python interop — `++()` escape
 
 The `++()` operator evaluates an arbitrary Python expression at search time. Logic variables inside the expression are automatically dereferenced.
 
@@ -451,7 +451,7 @@ See [lambdas.md](lambdas.md) for the full design, compilation details, and examp
 
 ---
 
-## Definite Clause Grammars — `>>` (V2-17)
+## Definite Clause Grammars — `>>`
 
 DCG rules provide syntactic sugar for difference-list grammars. Each `>>` rule compiles to an ordinary `<-` clause with two extra hidden arguments (input list, remaining list) threaded through the body. This is the same approach as Prolog's `-->`, using Python's `>>` operator instead.
 
@@ -833,7 +833,7 @@ Call(Goal_, Arg1_, Arg2_),             # Call/3: invoke Goal_ with two extra arg
 
 `Call/1` through `Call/8` are available (as are `CallGoal/1` through `CallGoal/8`).
 
-### Higher-order list predicates (V2-11)
+### Higher-order list predicates
 
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
@@ -949,7 +949,7 @@ not (X is Y),          # immediate check (don't unify right now)
 # Arithmetic
 (N := X + 1),          # evaluate RHS, unify with LHS
 
-# CLP(FD) constraints (V2-6)
+# CLP(FD) constraints
 X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
@@ -987,19 +987,19 @@ module/(Terms),
 CallGoal((X_ <- (R_ := X_ + 1)), 5)                             # R_ = 6
 CallGoal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)                 # multi-param
 
-# Meta-predicates (V2-10)
+# Meta-predicates
 FindAll(X_, In(X_, [1,2,3]), Bag_),          # Bag_ = [1,2,3]
 BagOf(X_, In(X_, List_), Bag_),              # fails if List_ empty
 SetOf(X_, In(X_, Xs_), Bag_),               # deduplicates
 ForAll(In(X_, Ns_), X_ > 0),               # universal quantification
 Call(Goal_, Arg1_),                          # Call/2 (alias for CallGoal/2)
 
-# F-strings (V2-15) — logic variables auto-deref at search time
+# F-strings — logic variables auto-deref at search time
 Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
 Writeln(f"{X:.2f}"),                   # format specs work
 S_ := f"{X} and {Y}",                 # capture as string
 
-# DCGs (V2-17) — >> defines grammar rules with difference lists
+# DCGs — >> defines grammar rules with difference lists
 greeting >> (["hello", "world"]),          # terminal sequence
 sentence >> (noun_phrase, verb_phrase),    # non-terminal chain
 digit(D) >> ([D], {D >= 0}, {D <= 9}),    # args + inline goals
@@ -1017,7 +1017,7 @@ inc >> ([1] // counter)                   # [value] // acc — push to accumulat
 get(V_) >> (counter / V_)                 # acc / Var — read current value
 scaled >> (scale / S_, [S_] // counter)   # pass / Var — read passed arg
 
-# Python interop (V2-16) — ++() evaluates Python at search time
+# Python interop — ++() evaluates Python at search time
 N_ is ++len(L_),                       # call Python builtin
 R_ is ++S_.upper(),                    # method call on deref'd var
 R_ is ++(X_ + 1),                      # Python arithmetic
@@ -1025,7 +1025,7 @@ R_ is ++L_[0],                         # subscript access
 R_ is ++D_[K_],                        # dict access
 ++print(X_),                           # side-effect goal
 
-# Higher-order list predicates (V2-11)
+# Higher-order list predicates
 MapList(Goal_, [1, 2, 3]),                   # check Goal_ on each element
 MapList(Goal_, Xs_, Ys_),                    # map Goal_(X, Y) over list
 Filter(Goal_, List_, Kept_),                 # keep where Goal_ succeeds
