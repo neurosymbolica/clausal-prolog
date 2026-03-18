@@ -87,6 +87,7 @@ from clausal.logic.compiler import (
     compile_goal_trampoline,
 )
 from clausal.logic.database import Clause, Database
+from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Compound
 from clausal.pythonic_ast.nodes import (
@@ -511,3 +512,196 @@ class TestOrMarkElimination:
             else:
                 gen, val = gen.send(val)
         assert results == [1, 2], f"Expected [1, 2], got {results}"
+
+
+# ── Phase 6: single combined traversal ────────────────────────────────────────
+
+
+class TestSinglePassTraversal:
+    """Phase 6: _collect_globals_info gathers types, thunks, and call targets
+    in one pass over the clause tree.  These tests verify that the combined
+    result is equivalent to running the three separate collectors.
+    """
+
+    def _make_clauses_with_call(self):
+        """Two-clause predicate Foo/1 whose body calls Bar/1."""
+        x, y = Var(), Var()
+        clauses = [
+            Clause(head=Compound("Foo", (x,)), body=[
+                Call(func=LoadName(name="Bar"), args=[x], kwargs=[]),
+            ]),
+            Clause(head=Compound("Foo", (y,)), body=[]),
+        ]
+        return clauses
+
+    def test_call_targets_collected(self):
+        from clausal.logic.compiler import _collect_globals_info, _collect_call_targets
+        clauses = self._make_clauses_with_call()
+        _, _, targets_combined = _collect_globals_info(clauses)
+        targets_separate = _collect_call_targets(clauses)
+        assert targets_combined == targets_separate, (
+            "Combined traversal call targets differ from separate _collect_call_targets"
+        )
+
+    def test_head_types_collected(self):
+        """User-defined term classes from heads are collected."""
+        from clausal.logic.compiler import _collect_globals_info, _collect_head_types
+        MyTerm = make_predicate("MyTerm", ("val",))
+        t1, t2 = MyTerm(val=1), MyTerm(val=2)
+        clauses = [
+            Clause(head=t1, body=[]),
+            Clause(head=t2, body=[]),
+        ]
+        types_combined, _, _ = _collect_globals_info(clauses)
+        types_separate = _collect_head_types(clauses)
+        assert types_combined == types_separate, (
+            "Combined traversal head types differ from _collect_head_types"
+        )
+
+    def test_py_thunks_collected(self):
+        """PyThunk lambdas in clause bodies are collected."""
+        from clausal.logic.compiler import _collect_globals_info, _collect_py_thunks
+        from clausal.terms import PyThunk
+        v = Var()
+        thunk = PyThunk(fn=lambda x: x, var_objects=[v])
+        clauses = [
+            Clause(
+                head=Compound("F", (v,)),
+                body=[thunk],
+            )
+        ]
+        _, thunks_combined, _ = _collect_globals_info(clauses)
+        thunks_separate = _collect_py_thunks(clauses)
+        assert thunks_combined == thunks_separate, (
+            "Combined traversal py-thunks differ from _collect_py_thunks"
+        )
+
+    def test_single_pass_same_result_as_three_passes(self):
+        """Full equivalence: combined result matches three separate collections."""
+        from clausal.logic.compiler import (
+            _collect_globals_info, _collect_head_types,
+            _collect_py_thunks, _collect_call_targets,
+        )
+        clauses = self._make_clauses_with_call()
+        types_c, thunks_c, targets_c = _collect_globals_info(clauses)
+        assert types_c == _collect_head_types(clauses)
+        assert thunks_c == _collect_py_thunks(clauses)
+        assert targets_c == _collect_call_targets(clauses)
+
+
+# ── Phase 7: locked-dispatch caching ──────────────────────────────────────────
+
+
+class TestLockedDispatchCaching:
+    """Phase 7: when calling a locked (non-dynamic) predicate, the compiled
+    code should reference a pre-captured dispatch function (_disp_Name_N)
+    rather than calling Name._get_dispatch() on every invocation.
+    """
+
+    def _make_locked_callee(self):
+        """Return a locked PredicateMeta for Bar/1 with a compiled dispatch."""
+        from clausal.logic.compiler import compile_predicate_trampoline
+        Bar = make_predicate("Bar", ("x",))
+        db = Database()
+        v = Var()
+        db.assertz(Clause(head=Compound("Bar", (v,)), body=[]))
+        compile_predicate_trampoline("Bar", 1, db.clauses_for("Bar", 1), db)
+        Bar._locked = True
+        Bar._dispatch_fn = db.get_dispatch("Bar", 1)
+        return Bar
+
+    def test_disp_key_in_globals_for_locked_callee(self):
+        """_disp_Bar_1 is injected into base_globals when Bar is locked+compiled."""
+        from clausal.logic.compiler import compile_predicate_trampoline
+        Bar = self._make_locked_callee()
+        db = Database()
+        v = Var()
+        clauses = [
+            Clause(
+                head=Compound("Foo", (v,)),
+                body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
+            )
+        ]
+        fn = compile_predicate_trampoline("Foo", 1, clauses, db=db, globals_={"Bar": Bar})
+        assert "_disp_Bar_1" in fn.__globals__, (
+            "_disp_Bar_1 should be pre-captured in compiled function globals for locked Bar"
+        )
+
+    def test_no_get_dispatch_call_in_bytecode_for_locked(self):
+        """Bytecode for a call to a locked predicate should not use _get_dispatch()."""
+        import dis, io
+        from clausal.logic.compiler import compile_predicate_trampoline
+        Bar = self._make_locked_callee()
+        db = Database()
+        v = Var()
+        clauses = [
+            Clause(
+                head=Compound("Foo", (v,)),
+                body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
+            )
+        ]
+        fn = compile_predicate_trampoline("Foo", 1, clauses, db=db, globals_={"Bar": Bar})
+        out = io.StringIO()
+        dis.dis(fn, file=out)
+        bytecode = out.getvalue()
+        assert "_disp_Bar_1" in bytecode, "Compiled code should reference _disp_Bar_1"
+        assert "get_dispatch" not in bytecode, (
+            "Compiled code should NOT call _get_dispatch() for locked predicate"
+        )
+
+    def test_unlocked_predicate_still_uses_get_dispatch(self):
+        """An unlocked (dynamic) predicate still emits fname._get_dispatch()."""
+        import dis, io
+        from clausal.logic.compiler import compile_predicate_trampoline
+        Baz = make_predicate("Baz", ("x",))
+        # NOT locked
+        assert not Baz._locked
+        db = Database()
+        v = Var()
+        clauses = [
+            Clause(
+                head=Compound("Foo", (v,)),
+                body=[Call(func=LoadName(name="Baz"), args=[v], kwargs=[])],
+            )
+        ]
+        fn = compile_predicate_trampoline("Foo", 1, clauses, db=db, globals_={"Baz": Baz})
+        out = io.StringIO()
+        dis.dis(fn, file=out)
+        bytecode = out.getvalue()
+        assert "get_dispatch" in bytecode, (
+            "Unlocked predicate should still use _get_dispatch() at runtime"
+        )
+        assert "_disp_Baz_1" not in fn.__globals__, (
+            "_disp_Baz_1 should NOT be cached for unlocked predicate"
+        )
+
+    def test_locked_dispatch_correctness(self):
+        """Behavioral: a call compiled with cached dispatch still finds solutions."""
+        from clausal.logic.compiler import compile_predicate_trampoline
+        from clausal.logic.trampoline import StepGenerator, DONE as _DONE
+        Bar = self._make_locked_callee()
+        db = Database()
+        v = Var()
+        result_var = Var()
+        clauses = [
+            Clause(
+                head=Compound("Foo", (v,)),
+                body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
+            )
+        ]
+        fn = compile_predicate_trampoline("Foo", 1, clauses, db=db, globals_={"Bar": Bar})
+        from clausal.logic.variables import Trail
+        trail = Trail()
+        arg = Var()
+        solutions = []
+        root = StepGenerator(fn, None, arg, trail)
+        gen, val = root.send(None)
+        while True:
+            if gen is None:
+                if val is _DONE:
+                    break
+                solutions.append(True)
+                gen, val = root.send(None)
+            else:
+                gen, val = gen.send(val)
+        assert solutions, "Expected at least one solution from Foo calling locked Bar"

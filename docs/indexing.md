@@ -158,7 +158,7 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
 
     - Head pattern compilation, body goal compilation, variable pre-allocation, and call target injection all work identically.
     - All sub-functions share the same `base_globals` dict, so they have access to the same builtins, predicate classes, and call targets.
-    - The call to `_inject_call_targets` and `_collect_head_types` uses the **full** clause list, not the subset — ensuring all needed names are available in every sub-function.
+    - The `_collect_globals_info` + `_inject_resolved_targets` pass uses the **full** clause list, not the subset — ensuring all needed names are available in every sub-function.
 
     Sub-functions get distinct names (`{functor}__all`, `{functor}__b0`, `{functor}__dflt`) to avoid collisions when compiled via `functiondef_to_function`.
 

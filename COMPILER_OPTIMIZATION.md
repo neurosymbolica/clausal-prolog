@@ -725,7 +725,7 @@ the `_d_i` locals that Phase 5 uses in `isinstance(_d1, list)` guards. Phase
 
 ---
 
-### Phase 6 — Merge clause-traversal passes at compile time
+### Phase 6 — Merge clause-traversal passes at compile time ✓ DONE
 
 **Target:** `_collect_head_types` (compiler.py:510), `_collect_py_thunks`
 (compiler.py:542), `_collect_call_targets` (compiler.py:622), called together
@@ -777,7 +777,7 @@ recompile). It is lower priority than Phases 1–4.
 
 ---
 
-### Phase 7 — Cache `_get_dispatch()` for locked predicates
+### Phase 7 — Cache `_get_dispatch()` for locked predicates ✓ DONE
 
 **Target:** `_dispatch_call_iter_trampoline`, compiler.py:2559–2573
 
