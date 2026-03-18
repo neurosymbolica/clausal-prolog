@@ -436,7 +436,7 @@ deref(x)  # 42
 | Dict builtins: `IsDict`, `DictSize`, `DictKeys`, `DictValues`, `DictPairs`, `DictGet`, `DictPut`, `DictPutPairs`, `DictRemove`, `DictMerge`, `GenDict`, `SubDict` | Done |
 | Set builtins: `IsSet`, `SetSize`, `SetList`, `SetUnion`, `SetIntersection`, `SetSubtract`, `SetSymDiff`, `SetSubset`, `SetDisjoint`, `SetAdd`, `SetRemove`, `GenSet` | Done |
 | Splat sugar: `{**old, "k": v}` in clause bodies | Done |
-| Mutable variants (`MutableDict`/`MutableSet`) with trail-backed undo | Planned |
+| `trail.record(callable)` — generic callback hook for backtrackable mutable state | Done |
 
 ---
 
@@ -445,4 +445,4 @@ deref(x)  # 42
 - **No variable keys**: Dict keys must be ground. `{X: 1}` where `X` is an unbound variable is not supported.
 - **No variable set elements**: Set elements must be ground/hashable.
 - **Splat requires bound DictTerm**: `{**OLD, "k": v}` requires `OLD` to be a bound `DictTerm` at runtime. Unbound `OLD` raises `AttributeError` on `.data` access.
-- **No mutable variants yet**: `MutableDict`/`MutableSet` with trail-backed undo are planned but not implemented.
+- **No mutable variants**: Mutable dict/set types were considered and rejected — the `++()` Python escape covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.

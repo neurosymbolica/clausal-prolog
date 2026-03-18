@@ -30,6 +30,36 @@ deref(v)              # → v  (unbound again)
 
 Every solve call creates a fresh `Trail` if you don't provide one. Bindings are live as long as the generator is suspended mid-iteration. Once the generator is exhausted or you stop iterating, it is safe to call `deref` on any Var that was bound during a yielded solution.
 
+### `trail.record(callable)` — custom undo callbacks
+
+Any no-arg callable can be pushed onto the trail. It is called (in LIFO order) when `trail.undo()` processes that entry during backtracking. Exceptions raised by the callable are silently cleared so undo always completes.
+
+This is the extension point for backtrackable mutations of arbitrary Python state:
+
+```python
+d = {}
+_ABSENT = object()
+
+def trailed_put(key, value, trail):
+    old = d.get(key, _ABSENT)
+    def undo():
+        if old is _ABSENT:
+            d.pop(key, None)
+        else:
+            d[key] = old
+    trail.record(undo)
+    d[key] = value
+
+mark = trail.mark()
+trailed_put("x", 1, trail)
+trailed_put("y", 2, trail)
+# d == {"x": 1, "y": 2}
+trail.undo(mark)
+# d == {}
+```
+
+In practice most Clausal code does not need this — `++()` covers imperative Python accumulation with obvious syntax, and `DictTerm` / `SetTerm` functional updates are sufficient for logic-programming patterns.
+
 ---
 
 ## `call` — drive a named predicate
