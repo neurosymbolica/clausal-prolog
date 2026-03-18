@@ -255,6 +255,234 @@ class SetTerm:
         return self._elements == other._elements
 
 
+# ── Dimensioned — number with physical dimensions ─────────────────────────────
+
+
+class UnitsMismatch(Exception):
+    """Raised when dimensioned quantities with incompatible units are combined."""
+
+
+def _dims_str(dims: dict) -> str:
+    """Human-readable dimension string, e.g. 'm·s^-2'."""
+    if not dims:
+        return "1"
+    parts = []
+    for k in sorted(dims):
+        v = dims[k]
+        parts.append(str(k) if v == 1 else f"{k}^{v}")
+    return "·".join(parts)
+
+
+class Dimensioned:
+    """A number with physical dimensions for dimensional analysis.
+
+    ``dims`` maps dimension keys (arbitrary atoms/strings) to integer exponents.
+    Zero-valued exponents are removed automatically.  The empty dict means
+    dimensionless.  Internally all values are stored in SI base units; named-unit
+    predicates (``Meter``, ``Newton``, ``Watt``, …) in ``clausal.modules.units``
+    handle scaling on the way in/out.
+
+    Arithmetic:
+        - ``+`` / ``-`` require identical dimension dicts; raises ``UnitsMismatch``
+          otherwise.
+        - ``*`` / ``/`` merge dimension dicts by addition / subtraction.
+        - ``**`` scales every exponent by an integer constant; raises
+          ``UnitsMismatch`` if the exponent is non-integer or has dimensions.
+        - Plain numeric scalars (int/float) can be multiplied/divided freely.
+
+    Clausal protocol:
+        - ``__unify__`` — checks dims equality then unifies values.
+        - ``__walk__`` / ``__occurs_check__`` — delegate to the wrapped value.
+    """
+
+    __slots__ = ("_value", "_dims")
+
+    def __init__(self, value, dims: dict) -> None:
+        object.__setattr__(self, "_value", value)
+        object.__setattr__(self, "_dims", {k: v for k, v in dims.items() if v != 0})
+
+    # ── Properties ──────────────────────────────────────────────────────────
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def dims(self) -> dict:
+        return dict(self._dims)
+
+    # ── Internal helpers ────────────────────────────────────────────────────
+
+    def _require_same_dims(self, other: "Dimensioned", op: str) -> None:
+        if not isinstance(other, Dimensioned):
+            raise UnitsMismatch(
+                f"Cannot {op} dimensioned ({_dims_str(self._dims)}) "
+                f"with plain value {other!r}"
+            )
+        if self._dims != other._dims:
+            raise UnitsMismatch(
+                f"Unit mismatch for {op}: "
+                f"{_dims_str(self._dims)} vs {_dims_str(other._dims)}"
+            )
+
+    @staticmethod
+    def _merge_dims(a: dict, b: dict, sign: int) -> dict:
+        """Return a merged dims dict: a + sign*b, zeros removed."""
+        result = dict(a)
+        for k, v in b.items():
+            new_v = result.get(k, 0) + sign * v
+            if new_v:
+                result[k] = new_v
+            else:
+                result.pop(k, None)
+        return result
+
+    # ── Arithmetic ──────────────────────────────────────────────────────────
+
+    def __add__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Dimensioned(self._value + other, {})
+        self._require_same_dims(other, "add")
+        return Dimensioned(self._value + other._value, self._dims)
+
+    def __radd__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Dimensioned(other + self._value, {})
+        return NotImplemented
+
+    def __sub__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Dimensioned(self._value - other, {})
+        self._require_same_dims(other, "subtract")
+        return Dimensioned(self._value - other._value, self._dims)
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Dimensioned(other - self._value, {})
+        return NotImplemented
+
+    def __mul__(self, other):
+        if isinstance(other, Dimensioned):
+            new_dims = self._merge_dims(self._dims, other._dims, +1)
+            return Dimensioned(self._value * other._value, new_dims)
+        return Dimensioned(self._value * other, self._dims)
+
+    def __rmul__(self, other):
+        return Dimensioned(other * self._value, self._dims)
+
+    def __truediv__(self, other):
+        if isinstance(other, Dimensioned):
+            new_dims = self._merge_dims(self._dims, other._dims, -1)
+            return Dimensioned(self._value / other._value, new_dims)
+        return Dimensioned(self._value / other, self._dims)
+
+    def __rtruediv__(self, other):
+        new_dims = {k: -v for k, v in self._dims.items()}
+        return Dimensioned(other / self._value, new_dims)
+
+    def __pow__(self, exp):
+        if isinstance(exp, Dimensioned):
+            if exp._dims:
+                raise UnitsMismatch("Exponent cannot have dimensions")
+            exp = exp._value
+        if not isinstance(exp, int):
+            if self._dims:
+                raise UnitsMismatch(
+                    f"Exponent must be an integer constant for dimensional "
+                    f"quantities, got {exp!r}"
+                )
+            # Dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
+            return Dimensioned(self._value ** exp, {})
+        new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
+        return Dimensioned(self._value ** exp, new_dims)
+
+    def __neg__(self):
+        return Dimensioned(-self._value, self._dims)
+
+    def __abs__(self):
+        return Dimensioned(abs(self._value), self._dims)
+
+    def __pos__(self):
+        return self
+
+    # ── Comparisons (same dims required) ────────────────────────────────────
+
+    def _cmp_value(self, other):
+        """Return (self_val, other_val) after verifying same dims, or raise."""
+        if isinstance(other, Dimensioned):
+            if self._dims != other._dims:
+                raise UnitsMismatch(
+                    f"Cannot compare {_dims_str(self._dims)} "
+                    f"with {_dims_str(other._dims)}"
+                )
+            return self._value, other._value
+        if not self._dims:
+            return self._value, other
+        raise UnitsMismatch(
+            f"Cannot compare dimensioned ({_dims_str(self._dims)}) "
+            f"with plain value {other!r}"
+        )
+
+    def __lt__(self, other):
+        a, b = self._cmp_value(other)
+        return a < b
+
+    def __le__(self, other):
+        a, b = self._cmp_value(other)
+        return a <= b
+
+    def __gt__(self, other):
+        a, b = self._cmp_value(other)
+        return a > b
+
+    def __ge__(self, other):
+        a, b = self._cmp_value(other)
+        return a >= b
+
+    def __eq__(self, other):
+        if isinstance(other, Dimensioned):
+            return self._dims == other._dims and self._value == other._value
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self._value, frozenset(self._dims.items())))
+
+    # ── Representation ───────────────────────────────────────────────────────
+
+    def __repr__(self) -> str:
+        return f"Dimensioned({self._value!r}, {self._dims!r})"
+
+    def __str__(self) -> str:
+        return f"{self._value} {_dims_str(self._dims)}"
+
+    def __format__(self, spec: str) -> str:
+        return format(str(self), spec)
+
+    # ── Clausal unification protocol ─────────────────────────────────────────
+
+    def __walk__(self) -> "Dimensioned":
+        """Called by C do_walk: walk the value, preserve dims."""
+        from .logic.variables import walk
+        new_value = walk(self._value)
+        if new_value is self._value:
+            return self
+        return Dimensioned(new_value, self._dims)
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check: check if var appears in value."""
+        from .logic.variables import occurs_check
+        return occurs_check(var, self._value)
+
+    def __unify__(self, other, trail) -> bool:
+        """Called by C do_unify: dims must match exactly; values are unified."""
+        if not isinstance(other, Dimensioned):
+            return NotImplemented
+        if self._dims != other._dims:
+            return False
+        from .logic.variables import unify
+        return unify(self._value, other._value, trail)
+
+
 # ── Cons / list helpers ────────────────────────────────────────────────────────
 
 def list_to_cons(lst: list) -> object:

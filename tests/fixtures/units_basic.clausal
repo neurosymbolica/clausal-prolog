@@ -1,0 +1,272 @@
+-import_from(py.units, [
+    Meter, Kilogram, Second, Ampere, Kelvin,
+    Kilometer, Centimeter, Gram, Minute, Hour,
+    Newton, Joule, Watt, Hertz,
+    Volt, Ampere, Ohm, Coulomb,
+    Bar, Dimensionless,
+    IsLength, IsArea, IsVolume, IsMass, IsTime,
+    IsVelocity, IsAcceleration, IsForce, IsEnergy, IsPower,
+    IsPressure, IsFrequency, IsVoltage, IsResistance, IsCharge,
+    IsDimensionless, IsDimensioned,
+    ValueOf, DimensionOf, MakeDimensioned, StripDimensions,
+    SpeedOfLight, StandardGravity])
+
+# SI base unit constructors: check by unification (reverse mode)
+
+Test("meter roundtrip") <- (
+    Meter(5, D),
+    Meter(5, D)
+)
+
+Test("kilogram roundtrip") <- (
+    Kilogram(70, D),
+    Kilogram(70, D)
+)
+
+Test("second roundtrip") <- (
+    Second(60, D),
+    Second(60, D)
+)
+
+Test("kelvin roundtrip") <- (
+    Kelvin(300, D),
+    Kelvin(300, D)
+)
+
+Test("newton roundtrip") <- (
+    Newton(9.8, F),
+    Newton(9.8, F)
+)
+
+Test("joule roundtrip") <- (
+    Joule(100, E),
+    Joule(100, E)
+)
+
+Test("hertz roundtrip") <- (
+    Hertz(440, D),
+    Hertz(440, D)
+)
+
+Test("ohm roundtrip") <- (
+    Ohm(10, R),
+    Ohm(10, R)
+)
+
+Test("volt roundtrip") <- (
+    Volt(230, V),
+    Volt(230, V)
+)
+
+Test("coulomb roundtrip") <- (
+    Coulomb(3, C),
+    Coulomb(3, C)
+)
+
+# Reverse mode: extract numeric value via unit predicate
+
+Test("meter reverse") <- (
+    Meter(7, D),
+    Meter(X, D),
+    X == 7
+)
+
+Test("centimeter roundtrip") <- (
+    Centimeter(200, D),
+    Centimeter(X, D),
+    ERR := ++(abs(X - 200.0)),
+    ERR < 1.0e-9
+)
+
+# Scaled unit constructors: check stored value via unit pred in reverse
+
+Test("kilometer stores as meters") <- (
+    Kilometer(1, D),
+    Meter(1000.0, D)
+)
+
+Test("gram stores as kilograms") <- (
+    Gram(1000, D),
+    Kilogram(1.0, D)
+)
+
+Test("minute stores as seconds") <- (
+    Minute(5, D),
+    Second(300.0, D)
+)
+
+Test("hour stores as seconds") <- (
+    Hour(2, D),
+    Second(7200.0, D)
+)
+
+# Arithmetic: check results by unification with named unit pred
+
+Test("velocity from distance over time") <- (
+    Meter(100, D),
+    Second(10, T),
+    V := D / T,
+    ValueOf(V, 10.0),
+    IsVelocity(V)
+)
+
+Test("acceleration from velocity over time") <- (
+    Meter(20, D),
+    Second(2, T),
+    V := D / T,
+    A := V / T,
+    ValueOf(A, 5.0),
+    IsAcceleration(A)
+)
+
+Test("force from mass times acceleration") <- (
+    Meter(20, D),
+    Second(2, T),
+    V := D / T,
+    A := V / T,
+    Kilogram(3, M),
+    F := M * A,
+    Newton(15.0, F)
+)
+
+Test("area from side squared") <- (
+    Meter(4, SIDE),
+    AREA := SIDE ** 2,
+    ValueOf(AREA, 16),
+    IsArea(AREA)
+)
+
+Test("volume from side cubed") <- (
+    Meter(2, SIDE),
+    VOL := SIDE ** 3,
+    ValueOf(VOL, 8),
+    IsVolume(VOL)
+)
+
+Test("add two forces") <- (
+    Newton(3, F1),
+    Newton(7, F2),
+    TOTAL := F1 + F2,
+    Newton(10, TOTAL)
+)
+
+Test("subtract forces") <- (
+    Newton(10, F1),
+    Newton(4, F2),
+    DIFF := F1 - F2,
+    Newton(6, DIFF)
+)
+
+Test("scale force by scalar") <- (
+    Newton(5, F),
+    F2 := F * 3,
+    Newton(15, F2)
+)
+
+Test("dims cancel in division") <- (
+    Meter(50, D),
+    Meter(10, D2),
+    RATIO := D / D2,
+    Dimensionless(5.0, RATIO)
+)
+
+Test("ohms law") <- (
+    Volt(12, V),
+    Ampere(3, I),
+    R := V / I,
+    Ohm(4.0, R)
+)
+
+Test("power from current squared times resistance") <- (
+    Ampere(2, I),
+    Ohm(5, RES),
+    P := I * I * RES,
+    Watt(20, P)
+)
+
+Test("watt joule per second") <- (
+    Joule(3600, E),
+    Second(60, T),
+    P := E / T,
+    Watt(60.0, P)
+)
+
+Test("kinetic energy") <- (
+    Kilogram(4, M),
+    Meter(3, D),
+    Second(1, T),
+    SPD := D / T,
+    KE := M * SPD ** 2,
+    HALF := KE / 2,
+    ERR is ++(abs(HALF.value - 18.0)),
+    ERR < 1.0e-9,
+    IsEnergy(HALF)
+)
+
+Test("bar stores as pascals") <- (
+    Bar(1, D),
+    ERR is ++(abs(D.value - 100000.0)),
+    ERR < 1.0e-6,
+    IsPressure(D)
+)
+
+Test("make dimensioned from dict") <- (
+    DIMS := ++{"kg": 1, "m": 1, "s": -2},
+    MakeDimensioned(10, DIMS, D),
+    Newton(10, D)
+)
+
+# Physical constants used in expressions via ++
+
+Test("rest energy e=mc2") <- (
+    E := ++(Kilogram(1) * SpeedOfLight ** 2),
+    IsEnergy(E),
+    ERR is ++(abs(E.value - 8.987551787368176e+16)),
+    ERR < 1.0e6
+)
+
+Test("weight from standard gravity") <- (
+    W := ++(Kilogram(70) * StandardGravity),
+    IsForce(W),
+    ERR is ++(abs(W.value - 686.4655)),
+    ERR < 1.0e-3
+)
+
+# Dimension type checks: dedicated tests, one predicate each
+
+Test("isdimensioned") <- (Newton(1, F), IsDimensioned(F))
+
+Test("isdimensionless on plain number") <- IsDimensionless(42)
+
+Test("dimensionless roundtrip") <- (
+    Dimensionless(5.0, D),
+    Dimensionless(5.0, D)
+)
+
+Test("islength") <- (Meter(1, D), IsLength(D))
+
+Test("ismass") <- (Kilogram(1, D), IsMass(D))
+
+Test("istime") <- (Second(1, D), IsTime(D))
+
+Test("isfrequency") <- (Hertz(1, D), IsFrequency(D))
+
+Test("isforce") <- (Newton(1, D), IsForce(D))
+
+Test("isenergy") <- (Joule(1, D), IsEnergy(D))
+
+Test("ispower") <- (Watt(1, D), IsPower(D))
+
+Test("ispressure") <- (Bar(1, D), IsPressure(D))
+
+Test("isvoltage") <- (Volt(1, D), IsVoltage(D))
+
+Test("isresistance") <- (Ohm(1, D), IsResistance(D))
+
+Test("ischarge") <- (Coulomb(1, D), IsCharge(D))
+
+Test("valueof and stripdimensions") <- (
+    Newton(9.8, F),
+    ValueOf(F, 9.8),
+    StripDimensions(F, 9.8)
+)

@@ -6,7 +6,7 @@ Top-level public API (Step 7 and later).
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import Compound, KWTerm
+from clausal.terms import Compound, KWTerm, Dimensioned, UnitsMismatch
 from clausal.logic.builtins import (
     structural_unify,
     get_builtin_class,
@@ -46,6 +46,8 @@ __all__ = [
     "Trail",
     "Compound",
     "KWTerm",
+    "Dimensioned",
+    "UnitsMismatch",
     "deref",
     "unify",
     "structural_unify",
