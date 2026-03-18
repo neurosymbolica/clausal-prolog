@@ -170,7 +170,7 @@ Only simple dotted name chains are supported. Computed attribute access or metho
 1. **`_handle_import_from_directive`** on `EmbedTransformer` parses the directive, emits a Python `from ... import` statement, and records a remap (`{local_name: "full.module.path.Name"}`) in `_import_remap`.
 2. The remap is passed to every `TermTransformer` instance created for clause heads and bodies.
 3. When `TermTransformer.visit_Name` sees a name in the remap, it emits `LoadName(name="full.module.path.Name")` instead of `LoadName(name="Name")`.
-4. The compiler's `_collect_call_targets` collects the dotted name. `_inject_call_targets` resolves it — first by attribute traversal from globals (for `-import_module` qualified calls), then by `sys.modules` lookup (for `-import_from` remapped names).
+4. The compiler's `_collect_globals_info` collects the dotted name as a call target. `_inject_resolved_targets` resolves it — first by attribute traversal from globals (for `-import_module` qualified calls), then by `sys.modules` lookup (for `-import_from` remapped names).
 5. The resolved `PredicateMeta` class is stored under the dotted key in the compiled function's globals dict. Dict keys don't need to be valid Python identifiers — `"myapp.graphs.utils.Reachable"` works fine.
 
 ### Cross-module calls from Python

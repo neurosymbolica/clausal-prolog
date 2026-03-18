@@ -147,6 +147,48 @@ predicate_builtins["BoolEq"] = BoolEq
 predicate_builtins["BoolImpl"] = BoolImpl
 
 
+def _preseed_py_submodules(module_items) -> None:
+    """Ensure ``sys.modules["py.X"]`` entries exist for any ``py.*`` imports.
+
+    When a .clausal file uses ``-import_from(py.re, …)``, the generated
+    bytecode contains ``from py.re import …``.  Python's import machinery
+    checks ``sys.modules["py"].__path__`` before invoking meta-path finders,
+    so if pytest's single-file ``py.py`` is already cached in sys.modules the
+    import fails with "'py' is not a package".
+
+    This helper pre-seeds the relevant entries from ``clausal.modules.py.*``
+    before ``exec()`` runs, bypassing the stale cache problem.
+    """
+    from clausal.pythonic_ast.nodes import ImportFromDirective, ImportModuleDirective
+
+    _MODULES_PKG = "clausal.modules"
+    needs_py_pkg = False
+
+    for item in module_items:
+        mod_path = None
+        if isinstance(item, ImportFromDirective):
+            mod_path = item.module
+        elif isinstance(item, ImportModuleDirective):
+            mod_path = item.module
+        if mod_path and mod_path.startswith("py.") and "." not in mod_path[3:]:
+            needs_py_pkg = True
+            subname = mod_path[3:]
+            full_key = mod_path          # e.g. "py.re"
+            qualified = f"{_MODULES_PKG}.py.{subname}"
+            if full_key not in sys.modules:
+                try:
+                    mod = importlib.import_module(qualified)
+                    sys.modules[full_key] = mod
+                except (ImportError, ModuleNotFoundError):
+                    pass
+
+    if needs_py_pkg and not hasattr(sys.modules.get("py"), "__path__"):
+        try:
+            sys.modules["py"] = importlib.import_module(f"{_MODULES_PKG}.py")
+        except (ImportError, ModuleNotFoundError):
+            pass
+
+
 # ── Loader ───────────────────────────────────────────────────────────────────
 
 
@@ -252,7 +294,6 @@ class PredicateLoader(SourceLoader):
             )
         )
         code = self.get_code(module.__name__)
-        exec(code, module_dict)
 
         # _last_transformer is set by source_to_code.  If the code came
         # from .pyc cache, source_to_code didn't run, so we need to
@@ -272,6 +313,15 @@ class PredicateLoader(SourceLoader):
                 transformer = EmbedTransformer()
                 transformer.visit(tree)
                 module_items = transformer._module_items
+
+        # Pre-seed sys.modules for any ``py.*`` imports in this file.
+        # Python's import machinery checks parent.__path__ before calling
+        # meta-path finders, so ``from py.re import …`` will fail if
+        # sys.modules["py"] is pytest's single-file non-package ``py.py``.
+        # Seeding the entries here ensures exec() below sees a valid package.
+        _preseed_py_submodules(module_items)
+
+        exec(code, module_dict)
 
         # Phase B: compile from collected ModuleAST.
         logic_module = compile_module(
@@ -338,6 +388,35 @@ class ModulesFinder(MetaPathFinder):
     _resolving: set[str] = set()
 
     def find_spec(self, fullname, path, target=None):
+        # Handle py.X imports directly: redirect to clausal.modules.py.X.
+        # This is required because pytest's ``py`` package (a single-file
+        # non-package module) may already be in sys.modules by the time
+        # clausal's import hook is installed, causing ``from py.re import …``
+        # to fail with "'py' is not a package".  Intercepting dotted py.*
+        # names here bypasses that stale cache entry.
+        if fullname.startswith("py.") and "." not in fullname[3:]:
+            subname = fullname[3:]  # e.g. "re", "logging", "sklearn"
+            qualified = f"{self._MODULES_PKG}.py.{subname}"
+            if fullname in self._resolving:
+                return None
+            self._resolving.add(fullname)
+            try:
+                spec = importlib.util.find_spec(qualified)
+            except (ModuleNotFoundError, ValueError):
+                spec = None
+            finally:
+                self._resolving.discard(fullname)
+            if spec is None:
+                return None
+            # Ensure sys.modules["py"] is our package so submodule lookup works.
+            if not hasattr(sys.modules.get("py"), "__path__"):
+                sys.modules["py"] = importlib.import_module(
+                    f"{self._MODULES_PKG}.py"
+                )
+            mod = importlib.import_module(qualified)
+            sys.modules[fullname] = mod
+            new_spec = ModuleSpec(fullname, spec.loader, origin=spec.origin)
+            return new_spec
         # Only redirect top-level names (no dots) that we actually provide.
         if "." in fullname:
             return None
