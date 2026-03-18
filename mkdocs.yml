@@ -46,6 +46,7 @@ nav:
     - Lambdas: lambdas.md
     - If-Then-Else: reified_ite.md
     - DCGs: dcg.md
+    - Dicts and Sets: dicts_sets.md
     - Exceptions: exceptions.md
     - Directives: directives.md
   - Constraints:

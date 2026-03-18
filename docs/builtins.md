@@ -754,6 +754,207 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 
 ---
 
+## Dict and Set Predicates
+
+Dict and set builtins operate on `DictTerm` and `SetTerm` values. Plain Python `dict` and `set` are not accepted. See [Dicts and Sets](dicts_sets.md) for the full design.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/dict_set.py`
+    **Python tests:** `tests/test_dict_set_builtins.py` (79 tests)
+    **Fixture:** `tests/fixtures/dict_set_builtins.clausal`
+
+### `IsDict/1`
+```
+IsDict(+Term)
+```
+Succeeds if `Term` is a `DictTerm`.
+
+---
+
+### `DictSize/2`
+```
+DictSize(+Dict, -N)
+```
+`N` is the number of keys in `Dict`.
+
+---
+
+### `DictKeys/2`
+```
+DictKeys(+Dict, -Keys)
+```
+`Keys` is the sorted list of keys (sorted by `repr` for cross-type determinism).
+
+---
+
+### `DictValues/2`
+```
+DictValues(+Dict, -Values)
+```
+`Values` is the list of values in key-sorted order.
+
+---
+
+### `DictPairs/2`
+```
+DictPairs(?Dict, ?Pairs)
+```
+Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
+
+---
+
+### `DictGet/3`
+```
+DictGet(+Key, +Dict, ?Value)
+```
+Semidet lookup. Fails if `Key` is absent or unbound.
+
+---
+
+### `DictPut/4`
+```
+DictPut(+Key, +Value, +OldDict, -NewDict)
+```
+Functional update: `NewDict` is `OldDict` with `Key → Value` set. Returns a new `DictTerm`.
+
+---
+
+### `DictPutPairs/3`
+```
+DictPutPairs(+Pairs, +OldDict, -NewDict)
+```
+Bulk update from a `[[Key, Value], ...]` list. Equivalent to repeated `DictPut/4`.
+
+---
+
+### `DictRemove/3`
+```
+DictRemove(+Key, +OldDict, -NewDict)
+```
+`NewDict` is `OldDict` without `Key`. Fails if `Key` is absent.
+
+---
+
+### `DictMerge/3`
+```
+DictMerge(+D1, +D2, -Merged)
+```
+Union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
+
+---
+
+### `GenDict/3`
+```
+GenDict(?Key, +Dict, ?Value)
+```
+Nondeterministic enumeration. Yields one `Key`/`Value` binding per solution on backtracking. Can be filtered by binding `Key` before the call.
+
+---
+
+### `SubDict/2`
+```
+SubDict(+Pattern, +Dict)
+```
+Partial dict matching. Succeeds when every key in `Pattern` is present in `Dict` and the values unify. Extra keys in `Dict` are ignored. See [SubDict](dicts_sets.md#partial-dict-matching--subdict2) for examples.
+
+---
+
+### `IsSet/1`
+```
+IsSet(+Term)
+```
+Succeeds if `Term` is a `SetTerm`.
+
+---
+
+### `SetSize/2`
+```
+SetSize(+Set, -N)
+```
+`N` is the cardinality of `Set`.
+
+---
+
+### `SetList/2`
+```
+SetList(?Set, ?List)
+```
+Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
+
+---
+
+### `SetUnion/3`
+```
+SetUnion(+S1, +S2, -Union)
+```
+Set union.
+
+---
+
+### `SetIntersection/3`
+```
+SetIntersection(+S1, +S2, -Inter)
+```
+Set intersection.
+
+---
+
+### `SetSubtract/3`
+```
+SetSubtract(+S1, +S2, -Diff)
+```
+`Diff` = elements in `S1` not in `S2`.
+
+---
+
+### `SetSymDiff/3`
+```
+SetSymDiff(+S1, +S2, -Sym)
+```
+Symmetric difference: elements in exactly one of `S1`, `S2`.
+
+---
+
+### `SetSubset/2`
+```
+SetSubset(+Sub, +Super)
+```
+Succeeds if `Sub` is a subset of `Super` (including equal sets and the empty set).
+
+---
+
+### `SetDisjoint/2`
+```
+SetDisjoint(+S1, +S2)
+```
+Succeeds if `S1` and `S2` share no elements.
+
+---
+
+### `SetAdd/3`
+```
+SetAdd(+Elem, +OldSet, -NewSet)
+```
+`NewSet` is `OldSet` with `Elem` added. No-op if already present.
+
+---
+
+### `SetRemove/3`
+```
+SetRemove(+Elem, +OldSet, -NewSet)
+```
+`NewSet` is `OldSet` with `Elem` removed. No-op if absent.
+
+---
+
+### `GenSet/2`
+```
+GenSet(?Elem, +Set)
+```
+Nondeterministic enumeration of set elements. Order is deterministic (sorted by `repr`).
+
+---
+
 ## Arithmetic
 
 Arithmetic **evaluation** uses `:=` (e.g., `Y_ := X_ * 2`). The predicates below provide relational arithmetic usable in both input and output modes.

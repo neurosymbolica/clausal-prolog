@@ -1104,9 +1104,33 @@ def term_to_ast_expr(
 
     if isinstance(term, DictLiteral):
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
-        return ast.Dict(
-            keys=[_rec(k) if k is not None else None for k in term.keys],
-            values=[_rec(v) for v in term.values],
+        has_splat = any(k is None for k in term.keys)
+        if not has_splat:
+            # No splats: plain dict used as DictTerm constructor argument.
+            return ast.Dict(
+                keys=[_rec(k) for k in term.keys],
+                values=[_rec(v) for v in term.values],
+            )
+        # Splat dict sugar: {**OLD, k: v} → DictTerm({**deref(OLD).data, k: v})
+        # Splat values are DictTerms; access .data to get the underlying dict.
+        py_keys = []
+        py_vals = []
+        for k, v in zip(term.keys, term.values):
+            if k is None:
+                py_keys.append(None)
+                py_vals.append(
+                    ast.Attribute(
+                        value=_call(_name("deref"), _rec(v)),
+                        attr="data",
+                        ctx=ast.Load(),
+                    )
+                )
+            else:
+                py_keys.append(_rec(k))
+                py_vals.append(_rec(v))
+        return _call(
+            _name("DictTerm"),
+            ast.Dict(keys=py_keys, values=py_vals),
         )
 
     if isinstance(term, SetLiteral):

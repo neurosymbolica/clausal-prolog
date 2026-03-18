@@ -74,6 +74,43 @@ This means dict patterns in heads work bidirectionally — they match incoming `
 
 Dict literals in clause bodies construct `DictTerm` objects at runtime. Logic variables in values are dereferenced at construction time if bound, or remain as `Var` objects if unbound.
 
+### Splat sugar
+
+Python's dict unpacking syntax `{**old, "k": v}` is supported in clause bodies. It constructs a new `DictTerm` by merging:
+
+```python
+# Add or overwrite a key
+update_name(OLD, NAME, NEW) <- (NEW is {**OLD, "name": NAME})
+
+# Merge two dicts (right side wins on conflict)
+merge_defaults(DEFAULTS, OVERRIDES, RESULT) <-
+    (RESULT is {**DEFAULTS, **OVERRIDES})
+```
+
+This compiles to `DictTerm({**deref(OLD).data, "name": NAME})` at runtime. The splat argument must be a bound `DictTerm` at call time.
+
+### Partial dict matching — `SubDict/2`
+
+`SubDict(Pattern, Dict)` succeeds when `Pattern`'s keys are a subset of `Dict`'s keys and the values for those keys unify pairwise. Extra keys in `Dict` are ignored.
+
+```python
+# Extract the name field from any dict
+get_name(PERSON, NAME) <- SubDict({"name": NAME}, PERSON)
+
+# Check role without caring about other fields
+is_admin(PERSON) <- SubDict({"role": "admin"}, PERSON)
+```
+
+Compare with full unification:
+
+```python
+# Full unification: PERSON must have EXACTLY these two keys
+exact(PERSON, NAME) <- PERSON is {"name": NAME, "role": "admin"},
+
+# Partial match: PERSON may have any other keys
+partial(PERSON, NAME) <- SubDict({"name": NAME, "role": "admin"}, PERSON)
+```
+
 ### Backtracking
 
 `DictTerm` unification is fully backtrackable. If a pairwise value unification fails partway through, all bindings made so far are undone via the trail.
@@ -109,7 +146,234 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 ### Variables in sets
 
-**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use lists with `In/2` or `gen_set/2` (planned builtins).
+**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use `GenSet/2` to enumerate elements.
+
+---
+
+## Dict builtins
+
+All dict builtins are in `clausal/logic/builtins/dict_set.py`. They use `DictTerm` for all dict arguments — plain Python dicts are not accepted.
+
+### `IsDict/1`
+```
+IsDict(+Term)
+```
+Succeeds if `Term` is a `DictTerm`.
+
+### `DictSize/2`
+```
+DictSize(+Dict, -N)
+```
+`N` is the number of keys in `Dict`.
+
+### `DictKeys/2`
+```
+DictKeys(+Dict, -Keys)
+```
+`Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
+
+### `DictValues/2`
+```
+DictValues(+Dict, -Values)
+```
+`Values` is the list of values in key-sorted order (same ordering as `DictKeys`).
+
+### `DictPairs/2`
+```
+DictPairs(?Dict, ?Pairs)
+```
+Bidirectional conversion between a `DictTerm` and a list of `[Key, Value]` 2-element lists.
+
+```python
+# Dict → pairs
+DictPairs({"a": 1, "b": 2}, PAIRS)
+# PAIRS = [["a", 1], ["b", 2]]  (sorted by key)
+
+# Pairs → dict
+DictPairs(DICT, [["x", 10], ["y", 20]])
+# DICT = DictTerm({"x": 10, "y": 20})
+```
+
+### `DictGet/3`
+```
+DictGet(+Key, +Dict, ?Value)
+```
+Semidet: succeeds if `Key` is in `Dict` and `Value` unifies with `Dict[Key]`. Fails if the key is absent or `Key` is unbound.
+
+```python
+DictGet("name", {"name": "Alice", "age": 30}, NAME)
+# NAME = "Alice"
+```
+
+### `DictPut/4`
+```
+DictPut(+Key, +Value, +OldDict, -NewDict)
+```
+`NewDict` is `OldDict` with `Key → Value` inserted or overwritten. Returns a new `DictTerm`; the original is unchanged.
+
+```python
+DictPut("b", 99, {"a": 1, "b": 0}, NEW)
+# NEW = DictTerm({"a": 1, "b": 99})
+```
+
+### `DictPutPairs/3`
+```
+DictPutPairs(+Pairs, +OldDict, -NewDict)
+```
+Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. Equivalent to calling `DictPut/4` for each pair in order.
+
+```python
+DictPutPairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
+# NEW = DictTerm({"a": 1, "b": 2, "c": 3})
+```
+
+### `DictRemove/3`
+```
+DictRemove(+Key, +OldDict, -NewDict)
+```
+`NewDict` is `OldDict` without `Key`. Fails if `Key` is not present.
+
+```python
+DictRemove("b", {"a": 1, "b": 2, "c": 3}, NEW)
+# NEW = DictTerm({"a": 1, "c": 3})
+```
+
+### `DictMerge/3`
+```
+DictMerge(+D1, +D2, -Merged)
+```
+`Merged` is the union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
+
+```python
+DictMerge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
+# MERGED = DictTerm({"a": 1, "b": 99, "c": 3})
+```
+
+### `GenDict/3`
+```
+GenDict(?Key, +Dict, ?Value)
+```
+Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. Equivalent to SWI's `gen_assoc/3`.
+
+```python
+# Enumerate all pairs
+GenDict(KEY, {"a": 1, "b": 2}, VALUE)
+# → KEY="a", VALUE=1
+# → KEY="b", VALUE=2 (on backtrack)
+
+# Filter by key
+GenDict("a", {"a": 1, "b": 2}, VALUE)
+# → VALUE=1 (only one solution)
+```
+
+### `SubDict/2`
+```
+SubDict(+Pattern, +Dict)
+```
+Partial dict matching: succeeds when every key in `Pattern` is also in `Dict`, and the corresponding values unify. Extra keys in `Dict` are ignored.
+
+```python
+SubDict({"name": NAME}, {"name": "Alice", "age": 30})
+# → NAME = "Alice"
+
+SubDict({"role": "admin"}, {"name": "Bob", "role": "admin", "dept": "eng"})
+# → succeeds
+
+SubDict({"role": "admin"}, {"name": "Alice", "role": "user"})
+# → fails (value mismatch)
+
+SubDict({"z": 1}, {"x": 1, "y": 2})
+# → fails (key absent)
+```
+
+---
+
+## Set builtins
+
+### `IsSet/1`
+```
+IsSet(+Term)
+```
+Succeeds if `Term` is a `SetTerm`.
+
+### `SetSize/2`
+```
+SetSize(+Set, -N)
+```
+`N` is the cardinality of `Set`.
+
+### `SetList/2`
+```
+SetList(?Set, ?List)
+```
+Bidirectional conversion between a `SetTerm` and a sorted list.
+
+```python
+# Set → list (sorted)
+SetList({3, 1, 2}, LIST)  # LIST = [1, 2, 3]
+
+# List → set (duplicates removed)
+SetList(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
+```
+
+### `SetUnion/3`
+```
+SetUnion(+S1, +S2, -Union)
+```
+`Union` is the set union of `S1` and `S2`.
+
+### `SetIntersection/3`
+```
+SetIntersection(+S1, +S2, -Inter)
+```
+`Inter` is the set intersection of `S1` and `S2`.
+
+### `SetSubtract/3`
+```
+SetSubtract(+S1, +S2, -Diff)
+```
+`Diff` is `S1` minus `S2` (elements in `S1` not in `S2`).
+
+### `SetSymDiff/3`
+```
+SetSymDiff(+S1, +S2, -Sym)
+```
+`Sym` is the symmetric difference of `S1` and `S2` (elements in exactly one of the two sets).
+
+### `SetSubset/2`
+```
+SetSubset(+Sub, +Super)
+```
+Succeeds if every element of `Sub` is also in `Super`. An empty set is a subset of any set.
+
+### `SetDisjoint/2`
+```
+SetDisjoint(+S1, +S2)
+```
+Succeeds if `S1` and `S2` have no elements in common.
+
+### `SetAdd/3`
+```
+SetAdd(+Elem, +OldSet, -NewSet)
+```
+`NewSet` is `OldSet` with `Elem` added. If `Elem` is already present, `NewSet = OldSet`.
+
+### `SetRemove/3`
+```
+SetRemove(+Elem, +OldSet, -NewSet)
+```
+`NewSet` is `OldSet` with `Elem` removed. If `Elem` is absent, `NewSet = OldSet`.
+
+### `GenSet/2`
+```
+GenSet(?Elem, +Set)
+```
+Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).
+
+```python
+GenSet(ELEM, {"a", "b", "c"})
+# → ELEM="a", ELEM="b", ELEM="c" (on backtrack)
+```
 
 ---
 
@@ -139,7 +403,7 @@ from clausal.terms import DictTerm, SetTerm
 d = DictTerm({"x": 1, "y": 2})
 s = SetTerm([1, 2, 3])
 
-# Access
+# DictTerm access
 d["x"]          # 1
 d.keys()        # dict_keys(["x", "y"])
 d.values()      # dict_values([1, 2])
@@ -147,6 +411,7 @@ d.items()       # dict_items([("x", 1), ("y", 2)])
 len(d)          # 2
 "x" in d        # True
 
+# SetTerm access
 len(s)          # 3
 1 in s          # True
 list(s)         # [1, 2, 3] (iteration order unspecified)
@@ -168,16 +433,16 @@ deref(x)  # 42
 |---|---|
 | `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks, `structural_unify` support | Done |
 | `__unify__` protocol in C, AST transform (`visit_Dict` → `DictTerm`), compiler head/body support | Done |
-| Dict builtins: `dict_pairs`, `dict_get`, `dict_put`, `dict_merge`, `gen_dict`, `<<` partial matching | Planned |
-| Set builtins: `set_union`, `set_intersection`, `set_subtract`, `gen_set`, `is_set` | Planned |
+| Dict builtins: `IsDict`, `DictSize`, `DictKeys`, `DictValues`, `DictPairs`, `DictGet`, `DictPut`, `DictPutPairs`, `DictRemove`, `DictMerge`, `GenDict`, `SubDict` | Done |
+| Set builtins: `IsSet`, `SetSize`, `SetList`, `SetUnion`, `SetIntersection`, `SetSubtract`, `SetSymDiff`, `SetSubset`, `SetDisjoint`, `SetAdd`, `SetRemove`, `GenSet` | Done |
+| Splat sugar: `{**old, "k": v}` in clause bodies | Done |
 | Mutable variants (`MutableDict`/`MutableSet`) with trail-backed undo | Planned |
 
 ---
 
 ## Limitations
 
-- **No `**splat` in DictTerm**: `{**old, key: new_val}` (dict unpacking) is not yet supported in term context. This is planned as syntactic sugar for `dict_put`/`dict_merge`.
 - **No variable keys**: Dict keys must be ground. `{X: 1}` where `X` is an unbound variable is not supported.
 - **No variable set elements**: Set elements must be ground/hashable.
-- **No partial dict matching yet**: SWI-style `Select :< From` (sub-dict matching) is not yet implemented.
-- **No dict/set builtins yet**: Operations like `dict_get`, `set_union` are not yet implemented.
+- **Splat requires bound DictTerm**: `{**OLD, "k": v}` requires `OLD` to be a bound `DictTerm` at runtime. Unbound `OLD` raises `AttributeError` on `.data` access.
+- **No mutable variants yet**: `MutableDict`/`MutableSet` with trail-backed undo are planned but not implemented.
