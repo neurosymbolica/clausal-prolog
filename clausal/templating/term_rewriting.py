@@ -505,21 +505,6 @@ class TermTransformer(NodeTransformer):
                 body=transformer.visit(body_ast),
             )
 
-        # Detect 'X == +Y': StructuralEq with a UnaryPlus right-hand side → ArithConstraint stub.
-        # Emits ArithConstraint(expr=StructuralEq(X, Y)) so the compiler can raise NotImplementedError.
-        if (
-            len(operators) == 1
-            and isinstance(operators[0], Eq)
-            and isinstance(comparators[0], UnaryOp)
-            and isinstance(comparators[0].op, UAdd)
-        ):
-            eq_node = node_ast(
-                "StructuralEq",
-                compare,
-                left=transformer.visit(left),
-                right=transformer.visit(comparators[0].operand),
-            )
-            return node_ast("ArithConstraint", compare, expr=eq_node)
 
         if len(operators) == 1:
             class_name = CMPOP_CLS[type(operators[0])]

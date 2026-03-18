@@ -3,7 +3,7 @@
     Kilometer, Centimeter, Gram, Minute, Hour,
     Newton, Joule, Watt, Hertz,
     Volt, Ampere, Ohm, Coulomb,
-    Bar, Dimensionless,
+    Bar, Dimensionless, Dimensioned,
     IsLength, IsArea, IsVolume, IsMass, IsTime,
     IsVelocity, IsAcceleration, IsForce, IsEnergy, IsPower,
     IsPressure, IsFrequency, IsVoltage, IsResistance, IsCharge,
@@ -11,56 +11,87 @@
     ValueOf, DimensionOf, MakeDimensioned, StripDimensions,
     SpeedOfLight, StandardGravity])
 
-# SI base unit constructors: check by unification (reverse mode)
+# SI base unit constructors: roundtrip via Dimensioned(VAL, dims) unification
+# Each test:
+#   1. Passes Dimensioned(VAL, {pred: exp, ...}) to the predicate, binding VAL
+#   2. Confirms VAL equals the expected number
+#   3. Cross-checks the result against a value built from SI base unit arithmetic
+#      (assigning the SI expression to a fresh var first avoids the == ++ issue)
 
 Test("meter roundtrip") <- (
-    Meter(5, D),
-    Meter(5, D)
+    PARTIAL := ++(Dimensioned(VAL_, {Meter: 1})),
+    Meter(5, PARTIAL),
+    VAL_ == 5,
+    PARTIAL == ++(Meter(1) * 5)
+)
+
+Test("Var in value") <- (
+    Meter(VAL, MV),
+    MV is ++Meter(42),
+    VAL == 42
 )
 
 Test("kilogram roundtrip") <- (
-    Kilogram(70, D),
-    Kilogram(70, D)
+    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1})),
+    Kilogram(70, PARTIAL),
+    VAL_ == 70,
+    PARTIAL == ++(Kilogram(1) * 70)
 )
 
 Test("second roundtrip") <- (
-    Second(60, D),
-    Second(60, D)
+    PARTIAL := ++(Dimensioned(VAL_, {Second: 1})),
+    Second(60, PARTIAL),
+    VAL_ == 60,
+    PARTIAL == ++(Second(1) * 60)
 )
 
 Test("kelvin roundtrip") <- (
-    Kelvin(300, D),
-    Kelvin(300, D)
+    PARTIAL := ++(Dimensioned(VAL_, {Kelvin: 1})),
+    Kelvin(300, PARTIAL),
+    VAL_ == 300,
+    PARTIAL == ++(Kelvin(1) * 300)
 )
 
 Test("newton roundtrip") <- (
-    Newton(9.8, F),
-    Newton(9.8, F)
+    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 1, Second: -2})),
+    Newton(9.8, PARTIAL),
+    VAL_ == 9.8,
+    PARTIAL == ++(Kilogram(1) * Meter(1) / Second(1)**2 * 9.8)
 )
 
 Test("joule roundtrip") <- (
-    Joule(100, E),
-    Joule(100, E)
+    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -2})),
+    Joule(100, PARTIAL),
+    VAL_ == 100,
+    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**2 * 100)
 )
 
 Test("hertz roundtrip") <- (
-    Hertz(440, D),
-    Hertz(440, D)
+    PARTIAL := ++(Dimensioned(VAL_, {Second: -1})),
+    Hertz(440, PARTIAL),
+    VAL_ == 440,
+    PARTIAL == ++(1 / Second(1) * 440)
 )
 
 Test("ohm roundtrip") <- (
-    Ohm(10, R),
-    Ohm(10, R)
+    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -3, Ampere: -2})),
+    Ohm(10, PARTIAL),
+    VAL_ == 10,
+    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**3 / Ampere(1)**2 * 10)
 )
 
 Test("volt roundtrip") <- (
-    Volt(230, V),
-    Volt(230, V)
+    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -3, Ampere: -1})),
+    Volt(230, PARTIAL),
+    VAL_ == 230,
+    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**3 / Ampere(1) * 230)
 )
 
 Test("coulomb roundtrip") <- (
-    Coulomb(3, C),
-    Coulomb(3, C)
+    PARTIAL := ++(Dimensioned(VAL_, {Ampere: 1, Second: 1})),
+    Coulomb(3, PARTIAL),
+    VAL_ == 3,
+    PARTIAL == ++(Ampere(1) * Second(1) * 3)
 )
 
 # Reverse mode: extract numeric value via unit predicate
@@ -211,7 +242,7 @@ Test("bar stores as pascals") <- (
 )
 
 Test("make dimensioned from dict") <- (
-    DIMS := ++{"kg": 1, "m": 1, "s": -2},
+    DIMS := ++{Kilogram: 1, Meter: 1, Second: -2},
     MakeDimensioned(10, DIMS, D),
     Newton(10, D)
 )
@@ -239,8 +270,10 @@ Test("isdimensioned") <- (Newton(1, F), IsDimensioned(F))
 Test("isdimensionless on plain number") <- IsDimensionless(42)
 
 Test("dimensionless roundtrip") <- (
-    Dimensionless(5.0, D),
-    Dimensionless(5.0, D)
+    PARTIAL := ++(Dimensioned(VAL_, {})),
+    Dimensionless(5.0, PARTIAL),
+    VAL_ == 5.0,
+    PARTIAL == ++(Dimensioned(5.0, {}))
 )
 
 Test("islength") <- (Meter(1, D), IsLength(D))

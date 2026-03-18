@@ -33,7 +33,6 @@ from clausal.terms import (
     Add, Sub, Mult, FloorDiv, Mod, Negate,
     Call, LoadName,
     Compound,
-    ArithConstraint,
 )
 
 
@@ -295,9 +294,6 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[1], ast.For)
         assert isinstance(stmts[2], ast.If)
 
-    def test_arith_constraint_raises(self):
-        with pytest.raises(NotImplementedError, match="CLP"):
-            compile_goal(ArithConstraint(expr=42), self._db(), {}, "trail", [ast.Pass()])
 
     def test_unknown_goal_raises(self):
         with pytest.raises(NotImplementedError):

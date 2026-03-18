@@ -58,20 +58,6 @@ class Compound:
         return f"{f}({args_str})"
 
 
-@dataclass
-class ArithConstraint:
-    """Stub node for the future CLP(FD) arithmetic constraint operator (==+).
-
-    Constructed by the transformer when it sees ``X ==+ expr`` or ``X == +expr``.
-    The compiler raises NotImplementedError when it encounters this node, marking
-    the CLP(FD) integration point.
-    """
-    expr: Any
-    position: tuple | None = field(default=None, repr=False, compare=False)
-
-    def __str__(self) -> str:
-        return f"==+({term_str(self.expr)})"
-
 
 # ── Open-world keyword term ────────────────────────────────────────────────────
 
@@ -262,14 +248,20 @@ class UnitsMismatch(Exception):
     """Raised when dimensioned quantities with incompatible units are combined."""
 
 
+def _dim_name(k) -> str:
+    """Return a short display name for a dimension key (predicate or string)."""
+    return k._name if hasattr(k, "_name") else str(k)
+
+
 def _dims_str(dims: dict) -> str:
     """Human-readable dimension string, e.g. 'm·s^-2'."""
     if not dims:
         return "1"
     parts = []
-    for k in sorted(dims):
+    for k in sorted(dims, key=_dim_name):
         v = dims[k]
-        parts.append(str(k) if v == 1 else f"{k}^{v}")
+        name = _dim_name(k)
+        parts.append(name if v == 1 else f"{name}^{v}")
     return "·".join(parts)
 
 
@@ -441,11 +433,26 @@ class Dimensioned:
 
     def __eq__(self, other):
         if isinstance(other, Dimensioned):
-            return self._dims == other._dims and self._value == other._value
+            if self._dims != other._dims:
+                return False
+            # Walk through any logic-variable bindings before comparing values.
+            try:
+                from .logic.variables import walk as _walk
+                sv = _walk(self._value)
+                ov = _walk(other._value)
+            except Exception:
+                sv = self._value
+                ov = other._value
+            return sv == ov
         return NotImplemented
 
     def __hash__(self):
-        return hash((self._value, frozenset(self._dims.items())))
+        try:
+            from .logic.variables import walk as _walk
+            sv = _walk(self._value)
+        except Exception:
+            sv = self._value
+        return hash((sv, frozenset(self._dims.items())))
 
     # ── Representation ───────────────────────────────────────────────────────
 
@@ -563,7 +570,7 @@ def term_str(t: Any) -> str:
         return "[" + ", ".join(term_str(e) for e in t) + "]"
     if isinstance(t, Var):
         return repr(t)
-    if isinstance(t, (Compound, ArithConstraint)):
+    if isinstance(t, Compound):
         return str(t)
     if isinstance(t, KWTerm):
         args = ", ".join(f"{k}={term_str(v)}" for k, v in t.items())
@@ -610,7 +617,6 @@ __all__ = [
     "SetTerm",
 
     "KWTerm",
-    "ArithConstraint",
     "PyThunk",
     "FStringThunk",
     # Helpers

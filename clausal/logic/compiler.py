@@ -49,7 +49,6 @@ from clausal.logic.variables import Var, is_var, deref, unify
 from clausal.logic.trampoline import Step, DONE, StepGenerator
 from clausal.terms import (
     Compound,
-    ArithConstraint,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
@@ -2083,12 +2082,6 @@ def compile_goal(
                 _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
 
-        # ── CLP(FD) stub ─────────────────────────────────────────────────────
-        case ArithConstraint():
-            raise NotImplementedError(
-                "CLP(FD) arithmetic constraints (==+) are not yet implemented"
-            )
-
         # ── throw(Term) — raise LogicException ────────────────────────────
         case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
             return _compile_throw(term_arg, var_context)
@@ -3253,11 +3246,6 @@ def compile_goal_trampoline(
                 ),
                 _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
-
-        case ArithConstraint():
-            raise NotImplementedError(
-                "CLP(FD) arithmetic constraints (==+) are not yet implemented"
-            )
 
         # ── throw(Term) — raise LogicException ────────────────────────────
         case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):

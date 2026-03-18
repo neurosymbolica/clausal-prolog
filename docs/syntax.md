@@ -867,13 +867,6 @@ Arithmetic operators inside a constraint domain imply constraints, not evaluatio
 )
 ```
 
-Shorthand constraint operators (usable in single goals):
-
-| Operator | Meaning |
-|---|---|
-| `==+`, `!=+`, `>+`, `<+`, `>=+`, `<=+` | numeric comparison |
-| `==~`, `!=~`, `>~`, `<~`, `>=~`, `<=~` | standard order of terms |
-
 Note: `<=` always means less-than-or-equal in constraint context. Implication uses `implies` or the `<-` arrow.
 
 ---

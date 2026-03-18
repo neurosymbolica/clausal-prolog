@@ -104,7 +104,43 @@ class _UnitsPredicate:
         return f"units.{self._name}/{arities}"
 
 
-# ── Unit constructor factory ─────────────────────────────────────────────────
+# ── Unit constructor factories ───────────────────────────────────────────────
+
+
+def _make_unit_pred_base(name: str) -> _UnitsPredicate:
+    """Create a base SI unit predicate that uses itself as the dimension key.
+
+    We construct the pred object first so it can appear as its own key in the
+    ``dims`` dict — e.g. ``{Metre: 1}`` — without a circular-definition problem.
+    """
+    pred = _UnitsPredicate(name)
+    pred._scale = 1.0
+    frozen_dims = {pred: 1}   # pred already exists; self-referential key is fine
+    pred._dims = frozen_dims
+
+    def _impl(x, d, trail, k):
+        v = deref(x)
+        dv = deref(d)
+        if not is_var(v):
+            raw = v._value if isinstance(v, Dimensioned) and not v.dims else v
+            target = Dimensioned(raw, frozen_dims)
+            if unify(dv, target, trail):
+                yield None
+        elif isinstance(dv, Dimensioned) and dv.dims == frozen_dims:
+            raw_val = dv.value
+            if not is_var(raw_val):
+                if unify(v, raw_val, trail):
+                    yield None
+            else:
+                if unify(v, raw_val, trail):
+                    yield None
+        elif is_var(v) and is_var(dv):
+            target = Dimensioned(v, frozen_dims)
+            if unify(dv, target, trail):
+                yield None
+
+    pred._register(2, _simple_to_trampoline(_impl))
+    return pred
 
 
 def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicate:
@@ -171,22 +207,24 @@ def _make_is_dim_pred(name: str, dims: dict) -> _UnitsPredicate:
 # ═════════════════════════════════════════════════════════════════════════════
 # SI base unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
+# Each base unit predicate is its own dimension key: Metre(5, D) gives
+# Dimensioned(5, {Metre: 1}).  This avoids stringly-typed dimension dicts.
 
 # Length
-Metre        = _make_unit_pred("Metre",        {"m": 1})
+Metre        = _make_unit_pred_base("Metre")
 Meter        = Metre   # American spelling alias
 # Mass
-Kilogram     = _make_unit_pred("Kilogram",     {"kg": 1})
+Kilogram     = _make_unit_pred_base("Kilogram")
 # Time
-Second       = _make_unit_pred("Second",       {"s": 1})
+Second       = _make_unit_pred_base("Second")
 # Electric current
-Ampere       = _make_unit_pred("Ampere",       {"A": 1})
+Ampere       = _make_unit_pred_base("Ampere")
 # Thermodynamic temperature (ratio scale only — no Celsius/Fahrenheit)
-Kelvin       = _make_unit_pred("Kelvin",       {"K": 1})
+Kelvin       = _make_unit_pred_base("Kelvin")
 # Amount of substance
-Mole         = _make_unit_pred("Mole",         {"mol": 1})
+Mole         = _make_unit_pred_base("Mole")
 # Luminous intensity
-Candela      = _make_unit_pred("Candela",      {"cd": 1})
+Candela      = _make_unit_pred_base("Candela")
 # Dimensionless (empty dims) — wraps a plain number as Dimensioned({})
 Dimensionless = _make_unit_pred("Dimensionless", {})
 
@@ -194,126 +232,126 @@ Dimensionless = _make_unit_pred("Dimensionless", {})
 # Scaled length units  (all normalise to metres)
 # ═════════════════════════════════════════════════════════════════════════════
 
-Kilometer    = _make_unit_pred("Kilometer",    {"m": 1}, scale=1_000.0)
-Centimeter   = _make_unit_pred("Centimeter",   {"m": 1}, scale=1e-2)
-Millimeter   = _make_unit_pred("Millimeter",   {"m": 1}, scale=1e-3)
-Micrometer   = _make_unit_pred("Micrometer",   {"m": 1}, scale=1e-6)
-Nanometer    = _make_unit_pred("Nanometer",    {"m": 1}, scale=1e-9)
-Inch         = _make_unit_pred("Inch",         {"m": 1}, scale=0.0254)
-Foot         = _make_unit_pred("Foot",         {"m": 1}, scale=0.3048)
-Yard         = _make_unit_pred("Yard",         {"m": 1}, scale=0.9144)
-Mile         = _make_unit_pred("Mile",         {"m": 1}, scale=1_609.344)
-NauticalMile = _make_unit_pred("NauticalMile", {"m": 1}, scale=1_852.0)
-LightYear    = _make_unit_pred("LightYear",    {"m": 1}, scale=9.461e15)
-AstronomicalUnit = _make_unit_pred("AstronomicalUnit", {"m": 1}, scale=1.496e11)
+Kilometer    = _make_unit_pred("Kilometer",    {Metre: 1}, scale=1_000.0)
+Centimeter   = _make_unit_pred("Centimeter",   {Metre: 1}, scale=1e-2)
+Millimeter   = _make_unit_pred("Millimeter",   {Metre: 1}, scale=1e-3)
+Micrometer   = _make_unit_pred("Micrometer",   {Metre: 1}, scale=1e-6)
+Nanometer    = _make_unit_pred("Nanometer",    {Metre: 1}, scale=1e-9)
+Inch         = _make_unit_pred("Inch",         {Metre: 1}, scale=0.0254)
+Foot         = _make_unit_pred("Foot",         {Metre: 1}, scale=0.3048)
+Yard         = _make_unit_pred("Yard",         {Metre: 1}, scale=0.9144)
+Mile         = _make_unit_pred("Mile",         {Metre: 1}, scale=1_609.344)
+NauticalMile = _make_unit_pred("NauticalMile", {Metre: 1}, scale=1_852.0)
+LightYear    = _make_unit_pred("LightYear",    {Metre: 1}, scale=9.461e15)
+AstronomicalUnit = _make_unit_pred("AstronomicalUnit", {Metre: 1}, scale=1.496e11)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Scaled mass units  (all normalise to kilograms)
 # ═════════════════════════════════════════════════════════════════════════════
 
-Gram         = _make_unit_pred("Gram",         {"kg": 1}, scale=1e-3)
-Milligram    = _make_unit_pred("Milligram",    {"kg": 1}, scale=1e-6)
-Microgram    = _make_unit_pred("Microgram",    {"kg": 1}, scale=1e-9)
-Tonne        = _make_unit_pred("Tonne",        {"kg": 1}, scale=1_000.0)
-Pound        = _make_unit_pred("Pound",        {"kg": 1}, scale=0.45359237)
-Ounce        = _make_unit_pred("Ounce",        {"kg": 1}, scale=0.028349523125)
+Gram         = _make_unit_pred("Gram",         {Kilogram: 1}, scale=1e-3)
+Milligram    = _make_unit_pred("Milligram",    {Kilogram: 1}, scale=1e-6)
+Microgram    = _make_unit_pred("Microgram",    {Kilogram: 1}, scale=1e-9)
+Tonne        = _make_unit_pred("Tonne",        {Kilogram: 1}, scale=1_000.0)
+Pound        = _make_unit_pred("Pound",        {Kilogram: 1}, scale=0.45359237)
+Ounce        = _make_unit_pred("Ounce",        {Kilogram: 1}, scale=0.028349523125)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Scaled time units  (all normalise to seconds)
 # ═════════════════════════════════════════════════════════════════════════════
 
-Millisecond  = _make_unit_pred("Millisecond",  {"s": 1}, scale=1e-3)
-Microsecond  = _make_unit_pred("Microsecond",  {"s": 1}, scale=1e-6)
-Nanosecond   = _make_unit_pred("Nanosecond",   {"s": 1}, scale=1e-9)
-Minute       = _make_unit_pred("Minute",       {"s": 1}, scale=60.0)
-Hour         = _make_unit_pred("Hour",         {"s": 1}, scale=3_600.0)
-Day          = _make_unit_pred("Day",          {"s": 1}, scale=86_400.0)
-Week         = _make_unit_pred("Week",         {"s": 1}, scale=604_800.0)
-JulianYear   = _make_unit_pred("JulianYear",   {"s": 1}, scale=31_557_600.0)
+Millisecond  = _make_unit_pred("Millisecond",  {Second: 1}, scale=1e-3)
+Microsecond  = _make_unit_pred("Microsecond",  {Second: 1}, scale=1e-6)
+Nanosecond   = _make_unit_pred("Nanosecond",   {Second: 1}, scale=1e-9)
+Minute       = _make_unit_pred("Minute",       {Second: 1}, scale=60.0)
+Hour         = _make_unit_pred("Hour",         {Second: 1}, scale=3_600.0)
+Day          = _make_unit_pred("Day",          {Second: 1}, scale=86_400.0)
+Week         = _make_unit_pred("Week",         {Second: 1}, scale=604_800.0)
+JulianYear   = _make_unit_pred("JulianYear",   {Second: 1}, scale=31_557_600.0)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Named derived SI units
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Mechanics
-Newton   = _make_unit_pred("Newton",   {"kg": 1, "m": 1, "s": -2})          # N  = kg·m/s²
-Joule    = _make_unit_pred("Joule",    {"kg": 1, "m": 2, "s": -2})          # J  = N·m
-Watt     = _make_unit_pred("Watt",     {"kg": 1, "m": 2, "s": -3})          # W  = J/s
-Pascal   = _make_unit_pred("Pascal",   {"kg": 1, "m": -1, "s": -2})         # Pa = N/m²
-Hertz    = _make_unit_pred("Hertz",    {"s": -1})                            # Hz = 1/s
-Gray     = _make_unit_pred("Gray",     {"m": 2, "s": -2})                   # Gy = J/kg
-Sievert  = _make_unit_pred("Sievert",  {"m": 2, "s": -2})                   # Sv = J/kg
+Newton   = _make_unit_pred("Newton",   {Kilogram: 1, Metre: 1, Second: -2})          # N  = kg·m/s²
+Joule    = _make_unit_pred("Joule",    {Kilogram: 1, Metre: 2, Second: -2})          # J  = N·m
+Watt     = _make_unit_pred("Watt",     {Kilogram: 1, Metre: 2, Second: -3})          # W  = J/s
+Pascal   = _make_unit_pred("Pascal",   {Kilogram: 1, Metre: -1, Second: -2})         # Pa = N/m²
+Hertz    = _make_unit_pred("Hertz",    {Second: -1})                                 # Hz = 1/s
+Gray     = _make_unit_pred("Gray",     {Metre: 2, Second: -2})                       # Gy = J/kg
+Sievert  = _make_unit_pred("Sievert",  {Metre: 2, Second: -2})                       # Sv = J/kg
 
 # Electromagnetism
-Volt     = _make_unit_pred("Volt",     {"kg": 1, "m": 2, "s": -3, "A": -1}) # V  = W/A
-Coulomb  = _make_unit_pred("Coulomb",  {"A": 1, "s": 1})                    # C  = A·s
-Farad    = _make_unit_pred("Farad",    {"kg": -1, "m": -2, "s": 4, "A": 2}) # F  = C/V
-Ohm      = _make_unit_pred("Ohm",      {"kg": 1, "m": 2, "s": -3, "A": -2}) # Ω  = V/A
-Siemens  = _make_unit_pred("Siemens",  {"kg": -1, "m": -2, "s": 3, "A": 2}) # S  = 1/Ω
-Weber    = _make_unit_pred("Weber",    {"kg": 1, "m": 2, "s": -2, "A": -1}) # Wb = V·s
-Tesla    = _make_unit_pred("Tesla",    {"kg": 1, "s": -2, "A": -1})         # T  = Wb/m²
-Henry    = _make_unit_pred("Henry",    {"kg": 1, "m": 2, "s": -2, "A": -2}) # H  = Wb/A
+Volt     = _make_unit_pred("Volt",     {Kilogram: 1, Metre: 2, Second: -3, Ampere: -1})  # V  = W/A
+Coulomb  = _make_unit_pred("Coulomb",  {Ampere: 1, Second: 1})                           # C  = A·s
+Farad    = _make_unit_pred("Farad",    {Kilogram: -1, Metre: -2, Second: 4, Ampere: 2})  # F  = C/V
+Ohm      = _make_unit_pred("Ohm",      {Kilogram: 1, Metre: 2, Second: -3, Ampere: -2}) # Ω  = V/A
+Siemens  = _make_unit_pred("Siemens",  {Kilogram: -1, Metre: -2, Second: 3, Ampere: 2}) # S  = 1/Ω
+Weber    = _make_unit_pred("Weber",    {Kilogram: 1, Metre: 2, Second: -2, Ampere: -1}) # Wb = V·s
+Tesla    = _make_unit_pred("Tesla",    {Kilogram: 1, Second: -2, Ampere: -1})            # T  = Wb/m²
+Henry    = _make_unit_pred("Henry",    {Kilogram: 1, Metre: 2, Second: -2, Ampere: -2}) # H  = Wb/A
 
 # Photometry
-Lumen    = _make_unit_pred("Lumen",    {"cd": 1})                            # lm = cd·sr (sr dimensionless)
-Lux      = _make_unit_pred("Lux",      {"cd": 1, "m": -2})                  # lx = lm/m²
+Lumen    = _make_unit_pred("Lumen",    {Candela: 1})                                # lm = cd·sr (sr dimensionless)
+Lux      = _make_unit_pred("Lux",      {Candela: 1, Metre: -2})                     # lx = lm/m²
 
 # Chemistry / thermodynamics
-Katal    = _make_unit_pred("Katal",    {"mol": 1, "s": -1})                 # kat = mol/s
+Katal    = _make_unit_pred("Katal",    {Mole: 1, Second: -1})                       # kat = mol/s
 
 # Scaled pressure
-Bar      = _make_unit_pred("Bar",      {"kg": 1, "m": -1, "s": -2}, scale=1e5)
-Millibar = _make_unit_pred("Millibar", {"kg": 1, "m": -1, "s": -2}, scale=100.0)
-Atmosphere = _make_unit_pred("Atmosphere", {"kg": 1, "m": -1, "s": -2}, scale=101_325.0)
+Bar      = _make_unit_pred("Bar",      {Kilogram: 1, Metre: -1, Second: -2}, scale=1e5)
+Millibar = _make_unit_pred("Millibar", {Kilogram: 1, Metre: -1, Second: -2}, scale=100.0)
+Atmosphere = _make_unit_pred("Atmosphere", {Kilogram: 1, Metre: -1, Second: -2}, scale=101_325.0)
 PoundsPerSquareInch = _make_unit_pred(
-    "PoundsPerSquareInch", {"kg": 1, "m": -1, "s": -2}, scale=6_894.757
+    "PoundsPerSquareInch", {Kilogram: 1, Metre: -1, Second: -2}, scale=6_894.757
 )
 
 # Scaled energy
-Electronvolt = _make_unit_pred("Electronvolt", {"kg": 1, "m": 2, "s": -2}, scale=1.602176634e-19)
-Calorie      = _make_unit_pred("Calorie",      {"kg": 1, "m": 2, "s": -2}, scale=4.184)
-Kilocalorie  = _make_unit_pred("Kilocalorie",  {"kg": 1, "m": 2, "s": -2}, scale=4_184.0)
-KilowattHour = _make_unit_pred("KilowattHour", {"kg": 1, "m": 2, "s": -2}, scale=3_600_000.0)
+Electronvolt = _make_unit_pred("Electronvolt", {Kilogram: 1, Metre: 2, Second: -2}, scale=1.602176634e-19)
+Calorie      = _make_unit_pred("Calorie",      {Kilogram: 1, Metre: 2, Second: -2}, scale=4.184)
+Kilocalorie  = _make_unit_pred("Kilocalorie",  {Kilogram: 1, Metre: 2, Second: -2}, scale=4_184.0)
+KilowattHour = _make_unit_pred("KilowattHour", {Kilogram: 1, Metre: 2, Second: -2}, scale=3_600_000.0)
 
 # Scaled power
-Kilowatt     = _make_unit_pred("Kilowatt",     {"kg": 1, "m": 2, "s": -3}, scale=1_000.0)
-Horsepower   = _make_unit_pred("Horsepower",   {"kg": 1, "m": 2, "s": -3}, scale=745.69987)
+Kilowatt     = _make_unit_pred("Kilowatt",     {Kilogram: 1, Metre: 2, Second: -3}, scale=1_000.0)
+Horsepower   = _make_unit_pred("Horsepower",   {Kilogram: 1, Metre: 2, Second: -3}, scale=745.69987)
 
 # Scaled speed
 KilometerPerHour = _make_unit_pred(
-    "KilometerPerHour", {"m": 1, "s": -1}, scale=1.0 / 3.6
+    "KilometerPerHour", {Metre: 1, Second: -1}, scale=1.0 / 3.6
 )
-MilePerHour  = _make_unit_pred("MilePerHour",  {"m": 1, "s": -1}, scale=0.44704)
-Knot         = _make_unit_pred("Knot",         {"m": 1, "s": -1}, scale=1_852.0 / 3600.0)
+MilePerHour  = _make_unit_pred("MilePerHour",  {Metre: 1, Second: -1}, scale=0.44704)
+Knot         = _make_unit_pred("Knot",         {Metre: 1, Second: -1}, scale=1_852.0 / 3600.0)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Dimension-type predicates
 # ═════════════════════════════════════════════════════════════════════════════
 
-IsLength               = _make_is_dim_pred("IsLength",               {"m": 1})
-IsArea                 = _make_is_dim_pred("IsArea",                  {"m": 2})
-IsVolume               = _make_is_dim_pred("IsVolume",                {"m": 3})
-IsMass                 = _make_is_dim_pred("IsMass",                  {"kg": 1})
-IsTime                 = _make_is_dim_pred("IsTime",                  {"s": 1})
-IsFrequency            = _make_is_dim_pred("IsFrequency",             {"s": -1})
-IsVelocity             = _make_is_dim_pred("IsVelocity",              {"m": 1, "s": -1})
-IsAcceleration         = _make_is_dim_pred("IsAcceleration",          {"m": 1, "s": -2})
-IsForce                = _make_is_dim_pred("IsForce",                 {"kg": 1, "m": 1, "s": -2})
-IsEnergy               = _make_is_dim_pred("IsEnergy",                {"kg": 1, "m": 2, "s": -2})
-IsPower                = _make_is_dim_pred("IsPower",                 {"kg": 1, "m": 2, "s": -3})
-IsPressure             = _make_is_dim_pred("IsPressure",              {"kg": 1, "m": -1, "s": -2})
-IsElectricCurrent      = _make_is_dim_pred("IsElectricCurrent",       {"A": 1})
-IsVoltage              = _make_is_dim_pred("IsVoltage",               {"kg": 1, "m": 2, "s": -3, "A": -1})
-IsCharge               = _make_is_dim_pred("IsCharge",                {"A": 1, "s": 1})
-IsResistance           = _make_is_dim_pred("IsResistance",            {"kg": 1, "m": 2, "s": -3, "A": -2})
-IsCapacitance          = _make_is_dim_pred("IsCapacitance",           {"kg": -1, "m": -2, "s": 4, "A": 2})
-IsInductance           = _make_is_dim_pred("IsInductance",            {"kg": 1, "m": 2, "s": -2, "A": -2})
-IsMagneticFlux         = _make_is_dim_pred("IsMagneticFlux",          {"kg": 1, "m": 2, "s": -2, "A": -1})
-IsMagneticFluxDensity  = _make_is_dim_pred("IsMagneticFluxDensity",   {"kg": 1, "s": -2, "A": -1})
-IsTemperature          = _make_is_dim_pred("IsTemperature",           {"K": 1})
-IsAmountOfSubstance    = _make_is_dim_pred("IsAmountOfSubstance",     {"mol": 1})
-IsLuminousIntensity    = _make_is_dim_pred("IsLuminousIntensity",     {"cd": 1})
-IsIlluminance          = _make_is_dim_pred("IsIlluminance",           {"cd": 1, "m": -2})
+IsLength               = _make_is_dim_pred("IsLength",               {Metre: 1})
+IsArea                 = _make_is_dim_pred("IsArea",                  {Metre: 2})
+IsVolume               = _make_is_dim_pred("IsVolume",                {Metre: 3})
+IsMass                 = _make_is_dim_pred("IsMass",                  {Kilogram: 1})
+IsTime                 = _make_is_dim_pred("IsTime",                  {Second: 1})
+IsFrequency            = _make_is_dim_pred("IsFrequency",             {Second: -1})
+IsVelocity             = _make_is_dim_pred("IsVelocity",              {Metre: 1, Second: -1})
+IsAcceleration         = _make_is_dim_pred("IsAcceleration",          {Metre: 1, Second: -2})
+IsForce                = _make_is_dim_pred("IsForce",                 {Kilogram: 1, Metre: 1, Second: -2})
+IsEnergy               = _make_is_dim_pred("IsEnergy",                {Kilogram: 1, Metre: 2, Second: -2})
+IsPower                = _make_is_dim_pred("IsPower",                 {Kilogram: 1, Metre: 2, Second: -3})
+IsPressure             = _make_is_dim_pred("IsPressure",              {Kilogram: 1, Metre: -1, Second: -2})
+IsElectricCurrent      = _make_is_dim_pred("IsElectricCurrent",       {Ampere: 1})
+IsVoltage              = _make_is_dim_pred("IsVoltage",               {Kilogram: 1, Metre: 2, Second: -3, Ampere: -1})
+IsCharge               = _make_is_dim_pred("IsCharge",                {Ampere: 1, Second: 1})
+IsResistance           = _make_is_dim_pred("IsResistance",            {Kilogram: 1, Metre: 2, Second: -3, Ampere: -2})
+IsCapacitance          = _make_is_dim_pred("IsCapacitance",           {Kilogram: -1, Metre: -2, Second: 4, Ampere: 2})
+IsInductance           = _make_is_dim_pred("IsInductance",            {Kilogram: 1, Metre: 2, Second: -2, Ampere: -2})
+IsMagneticFlux         = _make_is_dim_pred("IsMagneticFlux",          {Kilogram: 1, Metre: 2, Second: -2, Ampere: -1})
+IsMagneticFluxDensity  = _make_is_dim_pred("IsMagneticFluxDensity",   {Kilogram: 1, Second: -2, Ampere: -1})
+IsTemperature          = _make_is_dim_pred("IsTemperature",           {Kelvin: 1})
+IsAmountOfSubstance    = _make_is_dim_pred("IsAmountOfSubstance",     {Mole: 1})
+IsLuminousIntensity    = _make_is_dim_pred("IsLuminousIntensity",     {Candela: 1})
+IsIlluminance          = _make_is_dim_pred("IsIlluminance",           {Candela: 1, Metre: -2})
 
 
 def _is_dimensionless_impl(d, trail, k):

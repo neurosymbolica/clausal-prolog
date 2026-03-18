@@ -17,7 +17,7 @@ from clausal.templating.term_rewriting import (
     _make_functor_class_ast,
 )
 from clausal.logic.variables import Var as RealVar
-from clausal.terms import ArithConstraint, DictTerm, SetTerm
+from clausal.terms import DictTerm, SetTerm
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -26,7 +26,6 @@ def _ns():
     """Namespace with all simple_ast names + a mock Var constructor + terms extras."""
     ns = {name: getattr(sa, name) for name in sa.__all__}
     ns['Var'] = lambda: '<Var>'   # mock; returns a sentinel string
-    ns['ArithConstraint'] = ArithConstraint
     ns['DictTerm'] = DictTerm
     ns['SetTerm'] = SetTerm
     return ns
@@ -225,26 +224,8 @@ def test_walrus_is_arithmetic():
     assert isinstance(node.right, sa.Add)
 
 
-# ── TermTransformer: ArithConstraint (==+ / == +expr) ────────────────────────
-
-def test_arith_constraint():
-    # a == +b  →  ArithConstraint(expr=Eq(a, b))
-    node = term_eval("a == +b", ArithConstraint)
-    assert isinstance(node.expr, sa.StructuralEq)
-    assert node.expr.left.name == 'a'
-    assert node.expr.right.name == 'b'
-
-
-def test_arith_constraint_expression():
-    # x == +(y + 1)  →  ArithConstraint(expr=Eq(x, Add(y, 1)))
-    node = term_eval("x == +(y + 1)", ArithConstraint)
-    assert isinstance(node.expr, sa.StructuralEq)
-    assert node.expr.left.name == 'x'
-    assert isinstance(node.expr.right, sa.Add)
-
-
 def test_plain_eq_not_arith_constraint():
-    # a == b (no unary plus) → Eq, not ArithConstraint
+    # a == b → StructuralEq
     node = term_eval("a == b", sa.StructuralEq)
     assert node.left.name == 'a'
     assert node.right.name == 'b'
