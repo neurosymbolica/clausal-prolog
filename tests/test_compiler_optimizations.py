@@ -16,6 +16,64 @@ Phase 2 — ITE duplicate compilation:
 Phase 3 — Redundant Or mark:
     A compiled disjunction should contain exactly one trail.mark() call,
     not two.
+
+─────────────────────────────────────────────────────────────────────────────
+FRAGILITY NOTES
+─────────────────────────────────────────────────────────────────────────────
+
+These are white-box structural tests.  They are inherently coupled to
+implementation details and will need updating if those details change.
+The specific fragilities are documented below so that a future maintainer
+knows what to expect when a test breaks.
+
+TestDerefOnce
+  • _count_calls_to("deref", func_def) walks the entire FunctionDef,
+    including body statements.  The tests use fact-only predicates
+    (empty bodies) to avoid body goals that call deref() internally.
+    A predicate with body goals that internally call deref() would inflate
+    the count and cause spurious failures; change the fixture or scope the
+    walk to only the top-level assignment statements.
+  • test_match_subjects_use_deref_locals and test_deref_locals_assigned_
+    before_first_match are coupled to the naming convention "_d0", "_d1",
+    … chosen in _build_predicate_trampoline_funcdef.  If that naming
+    changes (e.g. to "_arg0_d") both tests need updating.
+
+TestITENoDuplication
+  • The navigation helpers (_outer_if, _undetermined_block, etc.) rely on
+    the exact statement count and structure of the compiled ITE output:
+      stmts[0]        = _reif = _reify_eq(...)   (exactly one pre-stmt)
+      stmts[1]        = ast.If(...)              (the branch node)
+      undetermined[1] = If(unify, ...)           (eq variant)
+      undetermined[3] = If(_dif,  ...)           (eq variant)
+      undetermined[1] = If(fd_true,  ...)        (fd variant)
+      undetermined[4] = If(fd_false, ...)        (fd variant)
+    Any change to the number or order of statements in the ITE output —
+    e.g. adding a pre-allocation statement, reordering the undetermined
+    block — will shift these indices and break the tests silently (wrong
+    node selected → `is` check passes vacuously or fails with a confusing
+    message).  If ITE compilation changes, update the index comments and
+    verify the assertions against the new generated code with
+    ast.unparse(ast.Module(body=stmts, type_ignores=[])).
+  • The identity tests (true_branch is unify_if.body) are the right
+    approach for verifying shared object reuse, but they depend on the
+    compiler actually placing the same list object in both positions.
+    If the compiler is refactored to copy rather than share (e.g. using
+    list(then_stmts) to avoid shared-node AST issues), the identity checks
+    will fail even though the optimization is logically equivalent.
+
+TestOrMarkElimination
+  • Using Or(True, True) as a probe is robust: True compiles to k_stmts
+    directly with no trail operations, so all marks/undos counted belong
+    to the Or itself.  This is the least fragile class.
+  • The mark/undo counts are coupled to the trail parameter being named
+    "trail" in the compiled output.  _count_method_calls("trail", "mark")
+    matches obj.attr calls where the object is literally named "trail".
+    If the parameter is renamed in the generated function, these counts
+    will drop to zero and all tests will spuriously pass.
+  • test_or_mark_is_first_statement assumes Or produces no preamble
+    statements (e.g. no variable pre-allocations) before the mark.
+    That is currently true for Or(True, True) with no body vars, but
+    could change if pre-allocation logic is moved earlier.
 """
 
 from __future__ import annotations
