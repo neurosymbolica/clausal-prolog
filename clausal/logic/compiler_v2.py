@@ -161,9 +161,17 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
             for name_spec in item.names:
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
-                    module_dict[local_name] = getattr(mod, orig_name)
+                    value = getattr(mod, orig_name)
+                    module_dict[local_name] = value
+                    # Also store under the dotted key ("module.OrigName") so
+                    # that _inject_call_targets can resolve it when the compiler
+                    # emits LoadName(name="module.OrigName") for remapped imports.
+                    module_dict[f"{item.module}.{orig_name}"] = value
                 else:
-                    module_dict[name_spec] = getattr(mod, name_spec)
+                    value = getattr(mod, name_spec)
+                    module_dict[name_spec] = value
+                    # Dotted key for compiler resolution (e.g. "py.sympy.inf").
+                    module_dict[f"{item.module}.{name_spec}"] = value
             # Also store the module object under the user-facing name so
             # that dotted-name resolution (e.g. ``uuid.Uuid4``) works in
             # the compiler's _inject_call_targets.

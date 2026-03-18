@@ -822,6 +822,11 @@ def _inject_call_targets(
                 if resolved is not None and hasattr(resolved, "_get_dispatch"):
                     base_globals[target_name] = resolved
                     continue
+            # Check globals_ directly — handles non-predicate values stored
+            # under dotted keys by _process_imports (e.g. "py.sympy.inf").
+            if globals_ and target_name in globals_:
+                base_globals[target_name] = globals_[target_name]
+                continue
             # Check builtins for dotted keys (e.g. "re.FindAll").
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
