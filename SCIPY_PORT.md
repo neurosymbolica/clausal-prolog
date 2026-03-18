@@ -229,7 +229,7 @@ variadic scipy functions take:
 | 2 | `scipy.linalg` | ✅ done — `clausal/modules/py/scipy_linalg.py` |
 | 3 | `scipy.optimize` | ✅ done — `clausal/modules/py/scipy_optimize.py`, 56 tests + 9 .clausal |
 | 4 | `scipy.stats` (tests + distributions) | ⬜ next — Tier 2/3 |
-| 5 | `scipy.integrate` | ⬜ Tier 2 |
+| 5 | `scipy.integrate` | ✅ done — `clausal/modules/py/scipy_integrate.py`, 55 tests |
 | 6 | `scipy.interpolate` | ⬜ Tier 3, high value |
 | 7 | `scipy.fft` | ⬜ pure, straightforward |
 | 8 | `scipy.ndimage` | ⬜ pure, domain-specific |
