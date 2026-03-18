@@ -8,176 +8,151 @@
 ])
 
 Test("cross distance shape") <- (
-    XA is ++([[0.0, 0.0], [1.0, 0.0]]) and
-    XB is ++([[0.0, 1.0]]) and
-    CrossDistance(XA, XB, D) and
-    ROWS is ++(D.shape[0]) and
-    COLS is ++(D.shape[1]) and
-    ROWS == 2 and
+    CrossDistance([[0.0, 0.0], [1.0, 0.0]], [[0.0, 1.0]], D),
+    ROWS is ++(D.shape[0]),
+    COLS is ++(D.shape[1]),
+    ROWS == 2,
     COLS == 1)
 
 Test("cross distance euclidean known value") <- (
-    XA is ++([[0.0, 0.0]]) and
-    XB is ++([[3.0, 4.0]]) and
-    CrossDistance(XA, XB, 'euclidean', D) and
-    V is ++(float(D[0, 0])) and
+    CrossDistance([[0.0, 0.0]], [[3.0, 4.0]], 'euclidean', D),
+    V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)
 
 Test("cross distance with kwargs") <- (
-    XA is ++([[0.0, 0.0]]) and
-    XB is ++([[1.0, 0.0], [0.0, 1.0]]) and
-    CrossDistance(XA, XB, 'minkowski', ++({'p': 1}), D) and
-    V0 is ++(float(D[0, 0])) and
-    V1 is ++(float(D[0, 1])) and
-    ++(abs(V0 - 1.0)) < 1e-10 and
+    CrossDistance([[0.0, 0.0]], [[1.0, 0.0], [0.0, 1.0]], 'minkowski', {'p': 1}, D),
+    V0 is ++(float(D[0, 0])),
+    V1 is ++(float(D[0, 1])),
+    ++(abs(V0 - 1.0)) < 1e-10,
     ++(abs(V1 - 1.0)) < 1e-10)
 
 Test("pairwise distance length") <- (
-    X is ++([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]) and
-    PairwiseDistance(X, D) and
-    LEN is ++(len(D)) and
+    PairwiseDistance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], D),
+    LEN is ++(len(D)),
     LEN == 3)
 
 Test("pairwise distance euclidean 3-4-5") <- (
-    X is ++([[0.0, 0.0], [3.0, 4.0]]) and
-    PairwiseDistance(X, 'euclidean', D) and
-    V is ++(float(D[0])) and
+    PairwiseDistance([[0.0, 0.0], [3.0, 4.0]], 'euclidean', D),
+    V is ++(float(D[0])),
     ++(abs(V - 5.0)) < 1e-10)
 
 Test("squareform round-trip") <- (
-    X is ++([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]) and
-    PairwiseDistance(X, 'euclidean', CONDENSED) and
-    SquareForm(CONDENSED, SQUARE) and
-    ROWS is ++(SQUARE.shape[0]) and
-    COLS is ++(SQUARE.shape[1]) and
-    ROWS == 3 and
+    PairwiseDistance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], 'euclidean', CONDENSED),
+    SquareForm(CONDENSED, SQUARE),
+    ROWS is ++(SQUARE.shape[0]),
+    COLS is ++(SQUARE.shape[1]),
+    ROWS == 3,
     COLS == 3)
 
 Test("point distance euclidean 3-4-5") <- (
-    PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D) and
+    PointDistance('euclidean', [0.0, 0.0], [3.0, 4.0], D),
     ++(abs(D - 5.0)) < 1e-10)
 
 Test("point distance cityblock") <- (
-    PointDistance('cityblock', ++([0.0, 0.0]), ++([1.0, 2.0]), D) and
+    PointDistance('cityblock', [0.0, 0.0], [1.0, 2.0], D),
     ++(abs(D - 3.0)) < 1e-10)
 
 Test("kdtree make returns handle") <- (
-    DATA is ++([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]) and
-    MakeKdTree(DATA, H) and
-    ++(isinstance(H, int)) and
+    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    ++(isinstance(H, int)),
     Free(H))
 
 Test("kdtree query nearest neighbour") <- (
-    DATA is ++([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]) and
-    MakeKdTree(DATA, H) and
-    Q is ++([[0.9, 0.0]]) and
-    KdTreeQuery(H, Q, R) and
-    IDX is ++(int(R['indices'][0])) and
-    IDX == 1 and
+    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    KdTreeQuery(H, [[0.9, 0.0]], R),
+    IDX is ++(int(R['indices'][0])),
+    IDX == 1,
     Free(H))
 
 Test("kdtree query k=2") <- (
-    DATA is ++([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]) and
-    MakeKdTree(DATA, H) and
-    Q is ++([[0.0, 0.0]]) and
-    KdTreeQuery(H, Q, 2, R) and
-    DISTS is ++(R['distances'][0]) and
-    ++(float(DISTS[0])) < 1e-10 and
+    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    KdTreeQuery(H, [[0.0, 0.0]], 2, R),
+    DISTS is ++(R['distances'][0]),
+    ++(float(DISTS[0])) < 1e-10,
     Free(H))
 
 Test("kdtree query ball finds neighbours in radius") <- (
-    DATA is ++([[0.0, 0.0], [0.5, 0.0], [2.0, 0.0]]) and
-    MakeKdTree(DATA, H) and
-    KdTreeQueryBall(H, ++([0.0, 0.0]), 1.0, R) and
-    LEN is ++(len(R)) and
-    ++(LEN >= 2) and
+    MakeKdTree([[0.0, 0.0], [0.5, 0.0], [2.0, 0.0]], H),
+    KdTreeQueryBall(H, [0.0, 0.0], 1.0, R),
+    LEN is ++(len(R)),
+    ++(LEN >= 2),
     Free(H))
 
 Test("convex hull make returns handle") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]]) and
-    MakeConvexHull(PTS, H) and
-    ++(isinstance(H, int)) and
+    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    ++(isinstance(H, int)),
     Free(H))
 
 Test("convex hull vertices count") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]]) and
-    MakeConvexHull(PTS, H) and
-    ConvexHullAttr(H, 'vertices', V) and
-    ++(len(V) >= 3) and
+    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    ConvexHullAttr(H, 'vertices', V),
+    ++(len(V) >= 3),
     Free(H))
 
 Test("convex hull area unit square") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]]) and
-    MakeConvexHull(PTS, H) and
-    ConvexHullAttr(H, 'area', A) and
-    ++(abs(A - 4.0)) < 1e-6 and
+    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    ConvexHullAttr(H, 'area', A),
+    ++(abs(A - 4.0)) < 1e-6,
     Free(H))
 
 Test("delaunay make returns handle") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.5,1.0]]) and
-    MakeDelaunay(PTS, H) and
-    ++(isinstance(H, int)) and
+    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    ++(isinstance(H, int)),
     Free(H))
 
 Test("delaunay find simplex interior point") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.5,1.0]]) and
-    MakeDelaunay(PTS, H) and
-    XI is ++([[0.5, 0.3]]) and
-    DelaunayFindSimplex(H, XI, IDX) and
-    ++(int(IDX[0]) >= 0) and
+    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    DelaunayFindSimplex(H, [[0.5, 0.3]], IDX),
+    ++(int(IDX[0]) >= 0),
     Free(H))
 
 Test("delaunay find simplex exterior point returns -1") <- (
-    PTS is ++([[0.0,0.0],[1.0,0.0],[0.5,1.0]]) and
-    MakeDelaunay(PTS, H) and
-    XI is ++([[5.0, 5.0]]) and
-    DelaunayFindSimplex(H, XI, IDX) and
-    ++(int(IDX[0]) == -1) and
+    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    DelaunayFindSimplex(H, [[5.0, 5.0]], IDX),
+    ++(int(IDX[0]) == -1),
     Free(H))
 
 Test("rotation from rotvec apply identity") <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 0.0]), H) and
-    V is ++([1.0, 0.0, 0.0]) and
-    RotationApply(H, V, OUT) and
-    ++(abs(float(OUT[0]) - 1.0)) < 1e-10 and
-    ++(abs(float(OUT[1]))) < 1e-10 and
+    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
+    RotationApply(H, [1.0, 0.0, 0.0], OUT),
+    ++(abs(float(OUT[0]) - 1.0)) < 1e-10,
+    ++(abs(float(OUT[1]))) < 1e-10,
     Free(H))
 
 Test("rotation as quat from identity rotvec") <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 0.0]), H) and
-    RotationAs(H, 'quat', Q) and
-    LEN is ++(len(Q)) and
-    LEN == 4 and
+    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
+    RotationAs(H, 'quat', Q),
+    LEN is ++(len(Q)),
+    LEN == 4,
     Free(H))
 
 Test("rotation as matrix from identity") <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 0.0]), H) and
-    RotationAs(H, 'matrix', M) and
-    ROWS is ++(M.shape[0]) and
-    COLS is ++(M.shape[1]) and
-    ROWS == 3 and
-    COLS == 3 and
+    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
+    RotationAs(H, 'matrix', M),
+    ROWS is ++(M.shape[0]),
+    COLS is ++(M.shape[1]),
+    ROWS == 3,
+    COLS == 3,
     Free(H))
 
 Test("rotation inverse of identity is identity") <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 0.0]), H) and
-    RotationInverse(H, HINV) and
-    V is ++([1.0, 0.0, 0.0]) and
-    RotationApply(HINV, V, OUT) and
-    ++(abs(float(OUT[0]) - 1.0)) < 1e-10 and
-    Free(H) and Free(HINV))
+    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
+    RotationInverse(H, HINV),
+    RotationApply(HINV, [1.0, 0.0, 0.0], OUT),
+    ++(abs(float(OUT[0]) - 1.0)) < 1e-10,
+    Free(H),
+    Free(HINV))
 
 Test("rotation compose two 90 degree z rotations") <- (
-    RV is ++([0.0, 0.0, 1.5707963267948966]) and
-    MakeRotation('rotvec', RV, H1) and
-    MakeRotation('rotvec', RV, H2) and
-    RotationCompose(H1, H2, HC) and
-    V is ++([1.0, 0.0, 0.0]) and
-    RotationApply(HC, V, OUT) and
-    ++(abs(float(OUT[0]) - (-1.0))) < 1e-6 and
-    Free(H1) and Free(H2) and Free(HC))
+    MakeRotation('rotvec', [0.0, 0.0, 1.5707963267948966], H1),
+    MakeRotation('rotvec', [0.0, 0.0, 1.5707963267948966], H2),
+    RotationCompose(H1, H2, HC),
+    RotationApply(HC, [1.0, 0.0, 0.0], OUT),
+    ++(abs(float(OUT[0]) - (-1.0))) < 1e-6,
+    Free(H1),
+    Free(H2),
+    Free(HC))
 
 Test("free handle succeeds") <- (
-    DATA is ++([[0.0, 0.0], [1.0, 0.0]]) and
-    MakeKdTree(DATA, H) and
+    MakeKdTree([[0.0, 0.0], [1.0, 0.0]], H),
     Free(H))

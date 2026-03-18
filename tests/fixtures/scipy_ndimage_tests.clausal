@@ -13,112 +13,97 @@
                               FindObjects,
                               CenterOfMass])
 
-#Gaussian filter of constant array returns constant array
+# Gaussian filter of constant array returns constant array
 Test("gaussian filter constant") <- (
-    INPUT is ++([1.0, 1.0, 1.0, 1.0, 1.0]) and
-    GaussianFilter(INPUT, ++(1.0), RESULT) and
-    V is ++(float(RESULT[2])) and
-    DIFF is ++(abs(V - 1.0)) and
+    GaussianFilter([1.0, 1.0, 1.0, 1.0, 1.0], 1.0, RESULT),
+    V is ++(float(RESULT[2])),
+    DIFF is ++(abs(V - 1.0)),
     DIFF < 1e-6)
 
-#Uniform filter of constant array returns constant array
+# Uniform filter of constant array returns constant array
 Test("uniform filter constant") <- (
-    INPUT is ++([2.0, 2.0, 2.0, 2.0, 2.0]) and
-    UniformFilter(INPUT, RESULT) and
-    V is ++(float(RESULT[2])) and
-    DIFF is ++(abs(V - 2.0)) and
+    UniformFilter([2.0, 2.0, 2.0, 2.0, 2.0], RESULT),
+    V is ++(float(RESULT[2])),
+    DIFF is ++(abs(V - 2.0)),
     DIFF < 1e-6)
 
-#Uniform filter with explicit size
+# Uniform filter with explicit size
 Test("uniform filter with size") <- (
-    INPUT is ++([1.0, 2.0, 3.0, 4.0, 5.0]) and
-    UniformFilter(INPUT, ++(3), RESULT) and
-    LEN is ++(len(RESULT)) and
+    UniformFilter([1.0, 2.0, 3.0, 4.0, 5.0], 3, RESULT),
+    LEN is ++(len(RESULT)),
     LEN == 5)
 
-#Convolve with identity kernel [0,1,0] returns same array
+# Convolve with identity kernel [0,1,0] returns same array
 Test("convolve identity kernel") <- (
-    INPUT is ++([1.0, 2.0, 3.0, 4.0, 5.0]) and
-    KERNEL is ++([0.0, 1.0, 0.0]) and
-    Convolve(INPUT, KERNEL, RESULT) and
-    V is ++(float(RESULT[2])) and
-    DIFF is ++(abs(V - 3.0)) and
+    Convolve([1.0, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 0.0], RESULT),
+    V is ++(float(RESULT[2])),
+    DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)
 
-#Label: two separate regions in a one-dimensional array
+# Label: two separate regions in a one-dimensional array
 Test("label two regions") <- (
-    INPUT is ++([1, 1, 0, 1, 1]) and
-    Label(INPUT, RESULT) and
-    N is ++(int(RESULT['num_features'])) and
+    Label([1, 1, 0, 1, 1], RESULT),
+    N is ++(int(RESULT['num_features'])),
     N == 2)
 
-#Binary erosion of solid block shrinks it
+# Binary erosion of solid block shrinks it
 Test("binary erosion shrinks") <- (
-    INPUT is ++([False, True, True, True, False]) and
-    BinaryErosion(INPUT, RESULT) and
-    CENTER is ++(bool(RESULT[2])) and
-    CENTER == True and
-    EDGE is ++(bool(RESULT[1])) and
+    BinaryErosion([False, True, True, True, False], RESULT),
+    CENTER is ++(bool(RESULT[2])),
+    CENTER == True,
+    EDGE is ++(bool(RESULT[1])),
     EDGE == False)
 
-#Binary dilation of single True expands it
+# Binary dilation of single True expands it
 Test("binary dilation expands") <- (
-    INPUT is ++([False, False, True, False, False]) and
-    BinaryDilation(INPUT, RESULT) and
-    LEFT is ++(bool(RESULT[1])) and
-    LEFT == True and
-    RIGHT is ++(bool(RESULT[3])) and
+    BinaryDilation([False, False, True, False, False], RESULT),
+    LEFT is ++(bool(RESULT[1])),
+    LEFT == True,
+    RIGHT is ++(bool(RESULT[3])),
     RIGHT == True)
 
-#Binary opening (erosion then dilation): removes isolated points
+# Binary opening (erosion then dilation): removes isolated points
 Test("binary opening removes isolated") <- (
-    INPUT is ++([False, True, False, True, True, True, False]) and
-    BinaryOpening(INPUT, RESULT) and
-    ISOLATED is ++(bool(RESULT[1])) and
+    BinaryOpening([False, True, False, True, True, True, False], RESULT),
+    ISOLATED is ++(bool(RESULT[1])),
     ISOLATED == False)
 
-#Binary closing (dilation then erosion): fills small gaps
+# Binary closing (dilation then erosion): fills small gaps
 Test("binary closing fills gap") <- (
-    INPUT is ++([True, True, False, True, True]) and
-    BinaryClosing(INPUT, RESULT) and
-    GAP is ++(bool(RESULT[2])) and
+    BinaryClosing([True, True, False, True, True], RESULT),
+    GAP is ++(bool(RESULT[2])),
     GAP == True)
 
-#Zoom: scale a one-dimensional array up by factor 2
+# Zoom: scale a one-dimensional array up by factor 2
 Test("zoom scales up") <- (
-    INPUT is ++([1.0, 2.0, 3.0]) and
-    Zoom(INPUT, ++(2.0), RESULT) and
-    LEN is ++(len(RESULT)) and
+    Zoom([1.0, 2.0, 3.0], 2.0, RESULT),
+    LEN is ++(len(RESULT)),
     LEN == 6)
 
-#Rotate two-dimensional array by 0 degrees returns same shape
+# Rotate two-dimensional array by 0 degrees returns same shape
 Test("rotate zero degrees") <- (
-    INPUT is ++([[1.0, 2.0], [3.0, 4.0]]) and
-    Rotate(INPUT, ++(0.0), RESULT) and
-    ROWS is ++(RESULT.shape[0]) and
-    COLS is ++(RESULT.shape[1]) and
-    ROWS == 2 and
+    Rotate([[1.0, 2.0], [3.0, 4.0]], 0.0, RESULT),
+    ROWS is ++(RESULT.shape[0]),
+    COLS is ++(RESULT.shape[1]),
+    ROWS == 2,
     COLS == 2)
 
-#Shift one-dimensional array by 0 returns same values
+# Shift one-dimensional array by 0 returns same values
 Test("shift by zero") <- (
-    INPUT is ++([1.0, 2.0, 3.0, 4.0, 5.0]) and
-    Shift(INPUT, ++(0.0), RESULT) and
-    V is ++(float(RESULT[2])) and
-    DIFF is ++(abs(V - 3.0)) and
+    Shift([1.0, 2.0, 3.0, 4.0, 5.0], 0.0, RESULT),
+    V is ++(float(RESULT[2])),
+    DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)
 
-#FindObjects: two regions give two slice entries
+# FindObjects: two regions give two slice entries
 Test("find objects two regions") <- (
-    INPUT is ++([1, 1, 0, 2, 2]) and
-    FindObjects(INPUT, RESULT) and
-    LEN is ++(len(RESULT)) and
+    FindObjects([1, 1, 0, 2, 2], RESULT),
+    LEN is ++(len(RESULT)),
     LEN == 2)
 
-#CenterOfMass of uniform one-dimensional array is at centre
+# CenterOfMass of uniform one-dimensional array is at centre
 Test("center of mass uniform") <- (
-    INPUT is ++([1.0, 1.0, 1.0, 1.0, 1.0]) and
-    CenterOfMass(INPUT, COM) and
-    C is ++(float(COM[0])) and
-    DIFF is ++(abs(C - 2.0)) and
+    CenterOfMass([1.0, 1.0, 1.0, 1.0, 1.0], COM),
+    C is ++(float(COM[0])),
+    DIFF is ++(abs(C - 2.0)),
     DIFF < 1e-6)
