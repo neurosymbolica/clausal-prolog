@@ -1,0 +1,108 @@
+-import_from(scipy_interpolate, [MakeSpline, MakeCubic, MakePCHIP,
+    MakeAkima, MakeRegularGrid,
+    EvalSpline, EvalRegularGrid,
+    SplineIntegral, SplineDerivative, SplineRoots,
+    Free])
+
+# MakeCubic + EvalSpline: x^2 should pass through knots
+Test("cubic spline eval at knots") <- (
+    MakeCubic(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    EvalSpline(H, ++([1.0, 2.0, 3.0]), VALS) and
+    V1 is ++(float(VALS[0])) and
+    V2 is ++(float(VALS[1])) and
+    V3 is ++(float(VALS[2])) and
+    ++(abs(V1 - 1.0)) < 1e-8 and
+    ++(abs(V2 - 4.0)) < 1e-8 and
+    ++(abs(V3 - 9.0)) < 1e-8 and
+    Free(H))
+
+# MakeSpline: BSpline through 5 points, eval at endpoints
+Test("make interp spline eval endpoints") <- (
+    MakeSpline(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    EvalSpline(H, ++([0.0, 4.0]), VALS) and
+    V0 is ++(float(VALS[0])) and
+    V4 is ++(float(VALS[1])) and
+    ++(abs(V0 - 0.0)) < 1e-8 and
+    ++(abs(V4 - 16.0)) < 1e-8 and
+    Free(H))
+
+# MakeSpline with explicit k=3
+Test("make interp spline with k") <- (
+    MakeSpline(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), 3, H) and
+    EvalSpline(H, ++([2.0]), VALS) and
+    V2 is ++(float(VALS[0])) and
+    ++(abs(V2 - 4.0)) < 1e-8 and
+    Free(H))
+
+# MakePCHIP: monotone cubic through x^2, check endpoints
+Test("pchip eval at endpoints") <- (
+    MakePCHIP(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    EvalSpline(H, ++([0.0, 4.0]), VALS) and
+    V0 is ++(float(VALS[0])) and
+    V4 is ++(float(VALS[1])) and
+    ++(abs(V0 - 0.0)) < 1e-8 and
+    ++(abs(V4 - 16.0)) < 1e-8 and
+    Free(H))
+
+# MakeAkima: eval at x=2, y should be 4
+Test("akima eval at interior point") <- (
+    MakeAkima(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    EvalSpline(H, ++([2.0]), VALS) and
+    V2 is ++(float(VALS[0])) and
+    ++(abs(V2 - 4.0)) < 1e-6 and
+    Free(H))
+
+# SplineIntegral: integral of x^2 from 0 to 3 = 9
+Test("spline integral of x squared") <- (
+    MakeCubic(++([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]),
+                    ++([0.0, 1.0, 4.0, 9.0, 16.0, 25.0]), H) and
+    SplineIntegral(H, 0.0, 3.0, AREA) and
+    DIFF is ++(abs(float(AREA) - 9.0)) and
+    DIFF < 1e-5 and
+    Free(H))
+
+# SplineIntegral: integral of constant 1 from 0 to 5 = 5
+Test("spline integral of constant") <- (
+    MakeCubic(++([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]),
+                    ++([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]), H) and
+    SplineIntegral(H, 0.0, 5.0, AREA) and
+    DIFF is ++(abs(float(AREA) - 5.0)) and
+    DIFF < 1e-10 and
+    Free(H))
+
+# SplineDerivative: d/dx x^2 at x=2 should be ~4
+Test("spline derivative of x squared") <- (
+    MakeCubic(++([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]),
+                    ++([0.0, 1.0, 4.0, 9.0, 16.0, 25.0, 36.0, 49.0, 64.0, 81.0]), H) and
+    SplineDerivative(H, HD) and
+    EvalSpline(HD, ++([2.0]), DVALS) and
+    DV is ++(float(DVALS[0])) and
+    ++(abs(DV - 4.0)) < 1e-4 and
+    Free(H) and
+    Free(HD))
+
+# SplineDerivative with explicit order
+Test("spline derivative order 1") <- (
+    MakeCubic(++([0.0, 1.0, 2.0, 3.0, 4.0]),
+                    ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    SplineDerivative(H, 1, HD) and
+    EvalSpline(HD, ++([1.0]), DVALS) and
+    DV is ++(float(DVALS[0])) and
+    ++(abs(DV - 2.0)) < 0.2 and
+    Free(H) and
+    Free(HD))
+
+# SplineRoots: y = x - 2, root at x=2
+Test("spline roots linear") <- (
+    MakeCubic(++([0.0, 2.0, 4.0]), ++([- 2.0, 0.0, 2.0]), H) and
+    SplineRoots(H, ROOTS) and
+    NROOTS is ++(len(ROOTS)) and
+    NROOTS == 1 and
+    ROOT0 is ++(float(ROOTS[0])) and
+    ++(abs(ROOT0 - 2.0)) < 1e-10 and
+    Free(H))
+
+# Free: handle is released (just checks it succeeds)
+Test("free handle succeeds") <- (
+    MakeSpline(++([0.0, 1.0, 2.0, 3.0, 4.0]), ++([0.0, 1.0, 4.0, 9.0, 16.0]), H) and
+    Free(H))

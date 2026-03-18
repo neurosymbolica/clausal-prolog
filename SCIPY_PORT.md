@@ -230,7 +230,7 @@ variadic scipy functions take:
 | 3 | `scipy.optimize` | ✅ done — `clausal/modules/py/scipy_optimize.py`, 56 tests + 9 .clausal |
 | 4 | `scipy.stats` (tests + distributions) | ⬜ next — Tier 2/3 |
 | 5 | `scipy.integrate` | ✅ done — `clausal/modules/py/scipy_integrate.py`, 55 tests |
-| 6 | `scipy.interpolate` | ⬜ Tier 3, high value |
+| 6 | `scipy.interpolate` | ✅ done — `clausal/modules/py/scipy_interpolate.py`, tests + docs |
 | 7 | `scipy.fft` | ⬜ pure, straightforward |
 | 8 | `scipy.ndimage` | ⬜ pure, domain-specific |
 | 9 | `scipy.signal` | ⬜ mixed, domain-specific |
@@ -994,71 +994,71 @@ StatsFrozenFree(HANDLE=)
 ### MODULE: scipy.interpolate
 **Tier 3 — handle predicates**
 **SciPy source**: `scipy.interpolate`
-**Predicate prefix**: `Interp`
+**Predicate prefix**: none (module name acts as namespace)
 
 All objects are constructed with `Make*` predicates, used with `Eval*`
-predicates, and released with `InterpFree`.
+predicates, and released with `Free`.
 
 ```
-InterpMakeSpline(X=, Y=, K=3, BC_TYPE=None, AXIS=0, RESULT=HANDLE)
+MakeSpline(X=, Y=, K=3, BC_TYPE=None, AXIS=0, RESULT=HANDLE)
     → scipy.interpolate.make_interp_spline(x, y, k=K, bc_type=BC_TYPE)
     # Recommended 1D spline constructor; returns BSpline object
 
-InterpEvalSpline(HANDLE=, X=, NU=0, EXTRAPOLATE=None, RESULT=)
+EvalSpline(HANDLE=, X=, NU=0, EXTRAPOLATE=None, RESULT=)
     # Evaluate spline (or its NU-th derivative) at points X
 
-InterpMakeCubic(X=, Y=, AXIS=0, BC_TYPE='not-a-knot', EXTRAPOLATE=None,
+MakeCubic(X=, Y=, AXIS=0, BC_TYPE='not-a-knot', EXTRAPOLATE=None,
                 RESULT=HANDLE)
     → scipy.interpolate.CubicSpline(x, y, ...)
 
-InterpMakePchip(X=, Y=, AXIS=0, EXTRAPOLATE=None, RESULT=HANDLE)
+MakePCHIP(X=, Y=, AXIS=0, EXTRAPOLATE=None, RESULT=HANDLE)
     → scipy.interpolate.PchipInterpolator(x, y, ...)
     # Monotone cubic; good for data with outliers
 
-InterpMakeAkima(X=, Y=, AXIS=0, RESULT=HANDLE)
+MakeAkima(X=, Y=, AXIS=0, RESULT=HANDLE)
     → scipy.interpolate.Akima1DInterpolator(x, y)
 
-InterpMakeLinear1d(X=, Y=, KIND='linear', AXIS=0, BOUNDS_ERROR=True,
+MakeLinear1D(X=, Y=, KIND='linear', AXIS=0, BOUNDS_ERROR=True,
                    FILL_VALUE=nan, ASSUME_SORTED=False, RESULT=HANDLE)
     → scipy.interpolate.interp1d(x, y, kind=KIND, ...)
     # Supports: 'linear','nearest','nearest-up','zero','slinear',
     #   'quadratic','cubic','previous','next'
 
-InterpMakeRegularGrid(POINTS=, VALUES=, METHOD='linear', BOUNDS_ERROR=True,
+MakeRegularGrid(POINTS=, VALUES=, METHOD='linear', BOUNDS_ERROR=True,
                       FILL_VALUE=nan, RESULT=HANDLE)
     → scipy.interpolate.RegularGridInterpolator(points, values, ...)
     # N-D interpolation on a regular (rectilinear) grid
 
-InterpEvalRegularGrid(HANDLE=, XI=, METHOD=None, RESULT=)
+EvalRegularGrid(HANDLE=, XI=, METHOD=None, RESULT=)
     # XI: array of query points shape (..., ndim)
 
-InterpMakeRbf(X=, Y=, FUNCTION='multiquadric', EPSILON=None, SMOOTH=0,
+MakeRadialBasis(X=, Y=, FUNCTION='multiquadric', EPSILON=None, SMOOTH=0,
               NORM='euclidean', MODE='1-D', RESULT=HANDLE)
     → scipy.interpolate.RBFInterpolator(x, y, ...)
     # Radial basis function interpolation
 
-InterpEvalRbf(HANDLE=, X=, RESULT=)
+EvalRadialBasis(HANDLE=, X=, RESULT=)
 
-InterpSplineIntegral(HANDLE=, A=, B=, RESULT=)
+SplineIntegral(HANDLE=, A=, B=, RESULT=)
     # Definite integral of spline from A to B
     # Calls handle.integrate(a, b)
 
-InterpSplineDerivative(HANDLE=, ORDER=1, RESULT=NEW_HANDLE)
+SplineDerivative(HANDLE=, ORDER=1, RESULT=NEW_HANDLE)
     # Returns a new spline handle representing the derivative
 
-InterpSplineRoots(HANDLE=, RESULT=)
+SplineRoots(HANDLE=, RESULT=)
     # Returns roots (zero-crossings) of the spline
 
-InterpFree(HANDLE=)
+Free(HANDLE=)
     # Release handle from Python-side registry
 ```
 
 **Interpolation pipeline pattern**:
 ```
-InterpMakeSpline(X=xs, Y=ys, K=3, RESULT=H),
-InterpEvalSpline(HANDLE=H, X=new_xs, NU=0, RESULT=YInterp),
-InterpSplineIntegral(HANDLE=H, A=0.0, B=10.0, RESULT=Area),
-InterpFree(HANDLE=H).
+MakeSpline(X=xs, Y=ys, K=3, RESULT=H),
+EvalSpline(HANDLE=H, X=new_xs, NU=0, RESULT=YInterp),
+SplineIntegral(HANDLE=H, A=0.0, B=10.0, RESULT=Area),
+Free(HANDLE=H).
 ```
 
 ---
@@ -1587,7 +1587,7 @@ documented as examples in each module's implementation:
 | **ODE integration** | `IntegrateSolveIvp` → `IntegrateResultGet(t)` + `(y)` |
 | **Spectral analysis** | `FftRfft` → process → `FftIrfft` |
 | **Filter-then-apply** | `SignalButter(OUTPUT='sos')` → `SignalSosfiltfilt` |
-| **Spline interpolation** | `InterpMakeSpline` → `InterpEvalSpline` → `InterpSplineIntegral` → `InterpFree` |
+| **Spline interpolation** | `MakeSpline` → `EvalSpline` → `SplineIntegral` → `Free` |
 | **Hierarchical clustering** | `ClusterLinkage` → `ClusterFcluster` |
 | **k-means** | `ClusterWhiten` → `ClusterKmeans2` → `ClusterVq` |
 | **LP / MIP** | `OptimizeLinearConstraint` + `OptimizeBounds` → `OptimizeMilp` |
