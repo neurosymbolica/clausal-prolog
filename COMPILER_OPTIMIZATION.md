@@ -360,7 +360,7 @@ predicates (marked with `-dynamic`) it must remain live.
 
 ## Part 3 — Optimization phases
 
-### Phase 1 — Deref-once in match subjects
+### Phase 1 — Deref-once in match subjects ✓ DONE
 
 **Target:** `_build_predicate_trampoline_funcdef`, compiler.py:3388–3456
 
@@ -425,7 +425,7 @@ automatically.
 
 ---
 
-### Phase 2 — Fix duplicate branch compilation in reified ITE
+### Phase 2 — Fix duplicate branch compilation in reified ITE ✓ DONE
 
 **Target:** `_compile_reified_ite_eq_trampoline` (compiler.py:3098) and
 `_compile_reified_ite_fd_trampoline` (compiler.py:3143)
@@ -507,7 +507,7 @@ undetermined = [
 
 ---
 
-### Phase 3 — Remove redundant mark in disjunction
+### Phase 3 — Remove redundant mark in disjunction ✓ DONE
 
 **Target:** `compile_goal_trampoline`, Or case, compiler.py:2722–2738
 
@@ -656,7 +656,7 @@ container and the deref-once subject are unchanged.
 
 ---
 
-### Phase 5 — Deep indexing via structural pattern trie
+### Phase 5 — Deep indexing via structural pattern trie ✓ DONE
 
 **Target:** new helper `_build_pattern_trie`, called from
 `_build_predicate_trampoline_funcdef` after Phase 4
