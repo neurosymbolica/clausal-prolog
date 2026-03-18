@@ -94,6 +94,7 @@ from clausal.pythonic_ast.nodes import (
     Or, Unify as Is, IfExpr, Gt,
     Call, LoadName,
 )
+from clausal.logic.builtins.database_ops import _normalize_fact_clause
 
 
 # ── AST walking helpers ────────────────────────────────────────────────────────
@@ -705,3 +706,386 @@ class TestLockedDispatchCaching:
             else:
                 gen, val = gen.send(val)
         assert solutions, "Expected at least one solution from Foo calling locked Bar"
+
+
+# ── Phase 9: multi-argument indexing ──────────────────────────────────────────
+
+
+def _run_trampoline(fn, *args):
+    """Drive a trampoline-mode dispatch function, returning all solutions.
+
+    Each solution is a snapshot of the deref'd ``args[0]`` value.
+    """
+    from clausal.logic.trampoline import StepGenerator, DONE as _DONE
+    trail = Trail()
+    root = StepGenerator(fn, None, *args, trail)
+    results = []
+    gen, val = root.send(None)
+    while True:
+        if gen is None:
+            if val is _DONE:
+                break
+            # Collect all Var args deref'd at solution time.
+            results.append(tuple(deref(a) for a in args if isinstance(a, Var)))
+            gen, val = root.send(None)
+        else:
+            gen, val = gen.send(val)
+    return results
+
+
+class TestCompoundKeyIndexing:
+    """Phase 9a: predicates with Compound or PredicateMeta heads at argument
+    positions should be bucketed by ``(functor, arity)`` key, not lumped
+    into the default bucket.
+    """
+
+    def _make_shape_predicate(self):
+        """Shape/2: (shape_term, first_dimension).  All compound-headed.
+
+        Shape(circle(R),       R)    <- true
+        Shape(rect(W, H),      W)    <- true
+        Shape(triangle(A,B,C), A)    <- true
+        Shape(sq(S),           S)    <- true
+
+        The first arg is always a Compound, so compound-key indexing applies.
+        Each clause's second arg is a Var shared with the inner arg of the
+        first compound — i.e. Shape is called with a concrete compound and
+        the second arg receives the first inner argument.
+        """
+        from clausal.logic.compiler import compile_predicate_trampoline
+        db = Database()
+        r, w, h, a, b, c, s = [Var() for _ in range(7)]
+        clauses = [
+            Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[]),
+            Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[]),
+            Clause(head=Compound("Shape", (Compound("triangle", (a, b, c)), a)), body=[]),
+            Clause(head=Compound("Shape", (Compound("sq", (s,)), s)), body=[]),
+        ]
+        for cl in clauses:
+            db.assertz(cl)
+        fn = compile_predicate_trampoline("Shape", 2, clauses, db)
+        return fn, clauses, db
+
+    def test_compound_keys_extracted_at_compile_time(self):
+        """_extract_arg_key returns (functor, arity) tuples for Compound heads."""
+        from clausal.logic.compiler import _extract_arg_key
+        r, w, h = Var(), Var(), Var()
+        cl_circle = Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[])
+        cl_rect   = Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[])
+        key_circle = _extract_arg_key(cl_circle, 0, 2)
+        key_rect   = _extract_arg_key(cl_rect,   0, 2)
+        assert key_circle == ("circle", 1), \
+            f"Expected ('circle', 1), got {key_circle!r}"
+        assert key_rect == ("rect", 2), \
+            f"Expected ('rect', 2), got {key_rect!r}"
+
+    def test_compound_arg_builds_arg_index(self):
+        """_build_arg_index yields distinct buckets for compound-headed clauses."""
+        from clausal.logic.compiler import _build_arg_index
+        r, w, h, a, b, c, s2 = [Var() for _ in range(7)]
+        clauses = [
+            Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[]),
+            Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[]),
+            Clause(head=Compound("Shape", (Compound("triangle", (a, b, c)), a)), body=[]),
+            Clause(head=Compound("Shape", (Compound("sq", (s2,)), s2)), body=[]),
+        ]
+        idx = _build_arg_index(clauses, 2, 0)
+        assert idx is not None, "Expected an index for compound-headed clauses"
+        assert idx["n_distinct"] == 4, \
+            f"Expected 4 distinct keys, got {idx['n_distinct']}"
+        assert ("circle", 1) in idx["buckets"]
+        assert ("rect",   2) in idx["buckets"]
+        assert ("triangle", 3) in idx["buckets"]
+
+    def test_compound_key_dispatch_circle(self):
+        """Shape(circle(42), Q) → Q=42 via compound-key bucket dispatch."""
+        fn, _, _ = self._make_shape_predicate()
+        q = Var()
+        solutions = _run_trampoline(fn, Compound("circle", (42,)), q)
+        assert solutions == [(42,)], f"Expected [(42,)], got {solutions}"
+
+    def test_compound_key_dispatch_rect(self):
+        """Shape(rect(3, 4), Q) → Q=3 (first inner arg of rect)."""
+        fn, _, _ = self._make_shape_predicate()
+        q = Var()
+        solutions = _run_trampoline(fn, Compound("rect", (3, 4)), q)
+        assert solutions == [(3,)], f"Expected [(3,)], got {solutions}"
+
+    def test_compound_key_dispatch_wrong_functor(self):
+        """Shape(cylinder(5), Q) → no solution (no 'cylinder' bucket or default)."""
+        fn, _, _ = self._make_shape_predicate()
+        q = Var()
+        solutions = _run_trampoline(fn, Compound("cylinder", (5,)), q)
+        assert solutions == [], f"Expected [], got {solutions}"
+
+    def test_compound_key_distinct_from_scalar_keys(self):
+        """('circle', 1) tuple key does not collide with int/str scalar keys."""
+        from clausal.logic.compiler import _build_arg_index
+        v = Var()
+        # Mix: scalar keys and compound keys in same predicate
+        clauses = [
+            Clause(head=Compound("F", (1, v)), body=[]),
+            Clause(head=Compound("F", (2, v)), body=[]),
+            Clause(head=Compound("F", (Compound("a", (v,)), v)), body=[]),
+            Clause(head=Compound("F", (Compound("b", (v,)), v)), body=[]),
+        ]
+        idx = _build_arg_index(clauses, 2, 0)
+        assert idx is not None
+        assert idx["n_distinct"] == 4, \
+            f"Expected 4 distinct keys (int 1, int 2, ('a',1), ('b',1)), got {idx['n_distinct']}"
+        assert 1 in idx["buckets"]
+        assert ("a", 1) in idx["buckets"]
+
+    def test_predicate_meta_compound_key(self):
+        """PredicateMeta heads also produce (class_name, field_count) index keys."""
+        from clausal.logic.compiler import _extract_arg_key
+        MyTerm = make_predicate("MyTerm", ("val",))
+        t = MyTerm(val=1)
+        cl = Clause(head=Compound("Foo", (t, Var())), body=[])
+        key = _extract_arg_key(cl, 0, 2)
+        assert key == ("MyTerm", 1), f"Expected ('MyTerm', 1), got {key!r}"
+
+
+class TestSecondaryIndexing:
+    """Phase 9c: secondary (hierarchical) dispatch — two-level index on
+    (pos_i, pos_j).  This test class verifies both structural properties
+    (the right dispatch factory is selected) and behavioral correctness
+    (all queries return the right answers under partial and full groundness).
+    """
+
+    def _make_color_predicate(self):
+        """Color/3: (name, category, brightness).  Normalized (Var+Is) clauses.
+
+        Six clauses — all facts normalized via _normalize_fact_clause so that
+        output-mode queries (unbound arg0/arg2) work correctly:
+            Color(red,    warm, light), Color(orange, warm, dark),
+            Color(blue,   cool, light), Color(green,  cool, dark),
+            Color(white, neutral, light), Color(black, neutral, dark).
+
+        Arg 0 (name): 6 distinct values.  Best single index.
+        Arg 1 (category): 3 distinct values.
+        Arg 2 (brightness): 2 distinct values.
+
+        NOTE: with 6 facts, _analyze_joint_index_positions uses min_gain=1.5,
+        so a joint pair needs > 9 distinct keys to trigger 9b/9c.  Since the
+        best single-arg index on arg0 already has 6 distinct keys and every
+        joint also has at most 6, Phase 9b/9c are NOT activated for this
+        predicate — single-arg dispatch on arg0 is used.  The secondary-index
+        unit tests therefore test _build_secondary_index directly rather than
+        relying on the compiler to activate it.
+        """
+        from clausal.logic.compiler import compile_predicate_trampoline
+        db = Database()
+        facts = [
+            ("red",    "warm",    "light"),
+            ("orange", "warm",    "dark"),
+            ("blue",   "cool",    "light"),
+            ("green",  "cool",    "dark"),
+            ("white",  "neutral", "light"),
+            ("black",  "neutral", "dark"),
+        ]
+        clauses = [
+            _normalize_fact_clause(Compound("Color", (n, c, b)))
+            for n, c, b in facts
+        ]
+        for cl in clauses:
+            db.assertz(cl)
+        fn = compile_predicate_trampoline("Color", 3, clauses, db)
+        return fn, clauses, db
+
+    def test_secondary_index_builds_correctly(self):
+        """_build_secondary_index on normalized clauses: 3 level-0, 2 level-1 each."""
+        from clausal.logic.compiler import _build_secondary_index
+        facts = [
+            ("red",    "warm",    "light"),
+            ("orange", "warm",    "dark"),
+            ("blue",   "cool",    "light"),
+            ("green",  "cool",    "dark"),
+            ("white",  "neutral", "light"),
+            ("black",  "neutral", "dark"),
+        ]
+        clauses = [
+            _normalize_fact_clause(Compound("Color", (n, c, b)))
+            for n, c, b in facts
+        ]
+        sec = _build_secondary_index(clauses, 3, 1, 2)
+        assert sec is not None, "Secondary index should be built"
+        assert sec["pos_i"] == 1
+        assert sec["pos_j"] == 2
+        assert sec["n_level0"] == 3  # warm, cool, neutral
+        for ki, (l1_buckets, _) in sec["level0"].items():
+            assert l1_buckets is not None, \
+                f"Level-1 index should exist for key {ki!r}"
+            assert len(l1_buckets) == 2, \
+                f"Expected 2 brightness buckets for {ki!r}, got {len(l1_buckets)}"
+
+    def test_all_ground_exact_match(self):
+        """Color(blue, cool, light) → exactly one solution."""
+        fn, _, _ = self._make_color_predicate()
+        solutions = _run_trampoline(fn, "blue", "cool", "light")
+        assert len(solutions) == 1, f"Expected 1 solution, got {solutions}"
+
+    def test_all_ground_no_match(self):
+        """Color(blue, warm, light) → no solution (blue is not warm)."""
+        fn, _, _ = self._make_color_predicate()
+        solutions = _run_trampoline(fn, "blue", "warm", "light")
+        assert solutions == [], f"Expected [], got {solutions}"
+
+    def test_partial_ground_first_arg(self):
+        """Color(X, warm, B) — single-arg dispatch on arg1 returns warm facts."""
+        fn, _, _ = self._make_color_predicate()
+        x, b = Var(), Var()
+        solutions = _run_trampoline(fn, x, "warm", b)
+        names = sorted(s[0] for s in solutions)
+        assert names == ["orange", "red"], f"Expected [orange, red], got {names}"
+
+    def test_partial_ground_third_arg(self):
+        """Color(X, C, light) — light facts via arg2 single-arg index."""
+        fn, _, _ = self._make_color_predicate()
+        x, c = Var(), Var()
+        solutions = _run_trampoline(fn, x, c, "light")
+        names = sorted(s[0] for s in solutions)
+        assert names == ["blue", "red", "white"], f"Expected [blue,red,white], got {names}"
+
+    def test_fully_unbound_returns_all(self):
+        """Color(X, C, B) with all unbound → all 6 facts."""
+        fn, _, _ = self._make_color_predicate()
+        x, c, b = Var(), Var(), Var()
+        solutions = _run_trampoline(fn, x, c, b)
+        assert len(solutions) == 6, f"Expected 6 solutions, got {len(solutions)}"
+
+
+class TestJointKeyIndexing:
+    """Phase 9b: flat joint (ki, kj) dispatch.  We construct a predicate where
+    the single-arg selectivity is poor on every argument individually, but
+    the joint (arg0, arg1) pair uniquely identifies each clause.  By setting
+    coverage ≥ _JOINT_COVERAGE_THRESHOLD we force the 9b path.
+    """
+
+    def _make_pair_predicate(self):
+        """Combo/3: (group, subtype, result).  Normalized (Var+Is) clauses.
+
+        6 facts where arg2 (result) is NOT unique — each group has two subtypes
+        that share result "hot" and "cold":
+
+            Combo(fire,  dry,   hot)   Combo(fire,  wet,   cold)
+            Combo(ice,   dry,   cold)  Combo(ice,   wet,   hot)
+            Combo(wind,  dry,   hot)   Combo(wind,  wet,   cold)
+
+        Arg 0 (group):   3 distinct → n_distinct=3
+        Arg 1 (subtype): 2 distinct → n_distinct=2
+        Arg 2 (result):  2 distinct → n_distinct=2
+        Joint(0, 1):     6 distinct → 6 > 3 * 1.5 = 4.5 → triggers joint/secondary
+
+        With coverage = 1.0 (all clauses have both arg0 and arg1 ground) and
+        _JOINT_COVERAGE_THRESHOLD = 0.8, Phase 9b (flat joint) is activated.
+        """
+        from clausal.logic.compiler import compile_predicate_trampoline
+        db = Database()
+        facts = [
+            ("fire", "dry", "hot"),
+            ("fire", "wet", "cold"),
+            ("ice",  "dry", "cold"),
+            ("ice",  "wet", "hot"),
+            ("wind", "dry", "hot"),
+            ("wind", "wet", "cold"),
+        ]
+        clauses = [
+            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            for g, s, r in facts
+        ]
+        for cl in clauses:
+            db.assertz(cl)
+        fn = compile_predicate_trampoline("Combo", 3, clauses, db)
+        return fn, clauses, db
+
+    def test_joint_index_built_for_high_coverage(self):
+        """_build_joint_arg_index yields 6 distinct (group, subtype) pairs."""
+        from clausal.logic.compiler import _build_joint_arg_index
+        facts = [
+            ("fire", "dry", "hot"), ("fire", "wet", "cold"),
+            ("ice",  "dry", "cold"), ("ice",  "wet", "hot"),
+            ("wind", "dry", "hot"), ("wind", "wet", "cold"),
+        ]
+        clauses = [
+            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            for g, s, r in facts
+        ]
+        idx = _build_joint_arg_index(clauses, 3, 0, 1)
+        assert idx is not None, "Joint index should be built"
+        assert idx["n_distinct"] == 6, \
+            f"Expected 6 joint keys, got {idx['n_distinct']}"
+        assert idx["coverage"] == 1.0, \
+            f"Expected 100% coverage, got {idx['coverage']}"
+
+    def test_analyze_joint_finds_improvement(self):
+        """_analyze_joint_index_positions identifies the (arg0, arg1) pair."""
+        from clausal.logic.compiler import (
+            _analyze_joint_index_positions, _analyze_index_positions,
+        )
+        facts = [
+            ("fire", "dry", "hot"), ("fire", "wet", "cold"),
+            ("ice",  "dry", "cold"), ("ice",  "wet", "hot"),
+            ("wind", "dry", "hot"), ("wind", "wet", "cold"),
+        ]
+        clauses = [
+            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            for g, s, r in facts
+        ]
+        singles = _analyze_index_positions(clauses, 3)
+        assert singles, "Expected single-arg indexes"
+        best_single_distinct = singles[0][1]["n_distinct"]
+        assert best_single_distinct == 3, \
+            f"Expected best=3 (fire/ice/wind), got {best_single_distinct}"
+        result = _analyze_joint_index_positions(clauses, 3, singles)
+        assert result is not None, \
+            "Expected joint improvement: (fire,dry) etc. discriminates better than arg0 alone"
+        pos_i, pos_j, joint = result
+        assert joint["n_distinct"] == 6, \
+            f"Expected 6 joint keys, got {joint['n_distinct']}"
+
+    def test_both_args_ground_exact_match(self):
+        """Combo(fire, dry, R) → R = hot."""
+        fn, _, _ = self._make_pair_predicate()
+        result = Var()
+        solutions = _run_trampoline(fn, "fire", "dry", result)
+        assert solutions == [("hot",)], f"Expected [('hot',)], got {solutions}"
+
+    def test_both_args_ground_opposite(self):
+        """Combo(fire, wet, R) → R = cold."""
+        fn, _, _ = self._make_pair_predicate()
+        result = Var()
+        solutions = _run_trampoline(fn, "fire", "wet", result)
+        assert solutions == [("cold",)], f"Expected [('cold',)], got {solutions}"
+
+    def test_both_args_ground_no_match(self):
+        """Combo(earth, dry, R) → no solution."""
+        fn, _, _ = self._make_pair_predicate()
+        result = Var()
+        solutions = _run_trampoline(fn, "earth", "dry", result)
+        assert solutions == [], f"Expected [], got {solutions}"
+
+    def test_first_arg_only_ground(self):
+        """Combo(fire, S, R) → two solutions: (dry,hot) and (wet,cold)."""
+        fn, _, _ = self._make_pair_predicate()
+        s, r = Var(), Var()
+        solutions = _run_trampoline(fn, "fire", s, r)
+        pairs = sorted((sol[0], sol[1]) for sol in solutions)
+        assert pairs == [("dry", "hot"), ("wet", "cold")], \
+            f"Expected [(dry,hot),(wet,cold)], got {pairs}"
+
+    def test_second_arg_only_ground(self):
+        """Combo(G, dry, R) → fire/hot, ice/cold, wind/hot."""
+        fn, _, _ = self._make_pair_predicate()
+        g, r = Var(), Var()
+        solutions = _run_trampoline(fn, g, "dry", r)
+        groups = sorted(sol[0] for sol in solutions)
+        assert groups == ["fire", "ice", "wind"], \
+            f"Expected [fire, ice, wind], got {groups}"
+
+    def test_fully_unbound_returns_all(self):
+        """Combo(G, S, R) with all unbound → 6 solutions."""
+        fn, _, _ = self._make_pair_predicate()
+        g, s, r = Var(), Var(), Var()
+        solutions = _run_trampoline(fn, g, s, r)
+        assert len(solutions) == 6, f"Expected 6 solutions, got {len(solutions)}"
