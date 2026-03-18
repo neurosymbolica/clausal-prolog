@@ -1,0 +1,224 @@
+-import_from(scipy_special, [Gamma, GammaLog, GammaSign, BetaLog, Digamma, Polygamma,
+    Factorial, Comb, Perm,
+    Erf, ErfComplement, ErfInverse, ErfComplementInverse,
+    NormalCdf, NormalCdfInverse,
+    BesselJ, BesselY, BesselJReal, BesselYReal, BesselK, BesselI,
+    BesselJZeros, SphericalBesselJ,
+    EllipticK, EllipticE, EllipticKIncomplete, EllipticEIncomplete,
+    Hypergeometric1F1, Hypergeometric2F1, Hypergeometric0F1,
+    Entr, KlDivergence, LogSumExp,
+    AssocLegendre, LegendrePoly, ChebyshevT, ChebyshevU,
+    HermiteH, GeneralizedLaguerre,
+    CubeRoot, Exp10, Exp2, Sigmoid, Logit, LambertW, XLogY, XLog1pY])
+
+# ── Gamma function ───────────────────────────────────────────────────────────
+
+Test("gamma 5") <- (Gamma(5.0, R) and DIFF is ++(abs(float(R) - 24.0)) and DIFF < 1e-9)
+
+Test("gamma 0.5 sqrt pi") <- (Gamma(0.5, R) and DIFF is ++(abs(float(R) - 1.7724538509055159)) and DIFF < 1e-9)
+
+# ── GammaLog and GammaSign ───────────────────────────────────────────────────
+
+Test("gammalog 10") <- (GammaLog(10.0, R) and DIFF is ++(abs(float(R) - 12.801827480081469)) and DIFF < 1e-9)
+
+Test("gammasign positive") <- (GammaSign(2.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("gammasign negative") <- (GammaSign(-0.5, R) and DIFF is ++(abs(float(R) - (-1.0))) and DIFF < 1e-9)
+
+# ── BetaLog ──────────────────────────────────────────────────────────────────
+
+Test("betalog 2 3") <- (BetaLog(2.0, 3.0, R) and DIFF is ++(abs(float(R) - (-2.4849066497880004))) and DIFF < 1e-9)
+
+Test("betalog 1 1 is zero") <- (BetaLog(1.0, 1.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+# ── Digamma and Polygamma ────────────────────────────────────────────────────
+
+Test("digamma 1") <- (Digamma(1.0, R) and DIFF is ++(abs(float(R) - (-0.5772156649015329))) and DIFF < 1e-9)
+
+Test("digamma 2") <- (Digamma(2.0, R) and DIFF is ++(abs(float(R) - 0.4227843350984671)) and DIFF < 1e-9)
+
+Test("polygamma 0 1") <- (Polygamma(0, 1.0, R) and DIFF is ++(abs(float(R) - (-0.5772156649015329))) and DIFF < 1e-9)
+
+Test("polygamma 1 1") <- (Polygamma(1, 1.0, R) and R > 1.6 and R < 1.7)
+
+# ── Factorial ────────────────────────────────────────────────────────────────
+
+Test("factorial 5 inexact") <- (Factorial(5, R) and DIFF is ++(abs(float(R) - 120.0)) and DIFF < 1e-9)
+
+Test("factorial 5 exact") <- (Factorial(5, True, R) and R == 120)
+
+Test("factorial 0") <- (Factorial(0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+# ── Comb ─────────────────────────────────────────────────────────────────────
+
+Test("comb 5 2 inexact") <- (Comb(5, 2, R) and DIFF is ++(abs(float(R) - 10.0)) and DIFF < 1e-9)
+
+Test("comb 5 2 exact") <- (Comb(5, 2, True, R) and R == 10)
+
+Test("comb 6 3") <- (Comb(6, 3, R) and DIFF is ++(abs(float(R) - 20.0)) and DIFF < 1e-9)
+
+# ── Perm ─────────────────────────────────────────────────────────────────────
+
+Test("perm 5 2") <- (Perm(5, 2, R) and DIFF is ++(abs(float(R) - 20.0)) and DIFF < 1e-9)
+
+Test("perm 4 4") <- (Perm(4, 4, R) and DIFF is ++(abs(float(R) - 24.0)) and DIFF < 1e-9)
+
+# ── Error function ───────────────────────────────────────────────────────────
+
+Test("erf 0") <- (Erf(0.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("erf 1") <- (Erf(1.0, R) and DIFF is ++(abs(float(R) - 0.8427007929497148)) and DIFF < 1e-9)
+
+Test("erfc 1") <- (ErfComplement(1.0, R) and DIFF is ++(abs(float(R) - 0.15729920705028516)) and DIFF < 1e-9)
+
+Test("erfc 0 is 1") <- (ErfComplement(0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("erfinv 0.5") <- (ErfInverse(0.5, R) and DIFF is ++(abs(float(R) - 0.4769362762044699)) and DIFF < 1e-9)
+
+Test("erfcinv 0.5") <- (ErfComplementInverse(0.5, R) and DIFF is ++(abs(float(R) - 0.4769362762044699)) and DIFF < 1e-9)
+
+# ── Normal CDF ───────────────────────────────────────────────────────────────
+
+Test("normal cdf 0 is 0.5") <- (NormalCdf(0.0, R) and DIFF is ++(abs(float(R) - 0.5)) and DIFF < 1e-9)
+
+Test("normal cdf 1") <- (NormalCdf(1.0, R) and DIFF is ++(abs(float(R) - 0.8413447460685429)) and DIFF < 1e-9)
+
+Test("normal cdf inverse 0.5 is 0") <- (NormalCdfInverse(0.5, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("normal cdf inverse 0.84") <- (NormalCdfInverse(0.8413447460685429, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-6)
+
+# ── Bessel functions ─────────────────────────────────────────────────────────
+
+Test("besselj 0 0") <- (BesselJ(0, 0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("besselj 1 1") <- (BesselJ(1, 1.0, R) and DIFF is ++(abs(float(R) - 0.4400505857449335)) and DIFF < 1e-9)
+
+Test("bessely 0 1") <- (BesselY(0, 1.0, R) and DIFF is ++(abs(float(R) - 0.08825696421567697)) and DIFF < 1e-9)
+
+Test("bessely 1 1") <- (BesselY(1, 1.0, R) and R > -0.782 and R < -0.780)
+
+Test("besseljreal 0.5 1") <- (BesselJReal(0.5, 1.0, R) and DIFF is ++(abs(float(R) - 0.6713967071418032)) and DIFF < 1e-9)
+
+Test("besseljreal 1.5 2") <- (BesselJReal(1.5, 2.0, R) and R > 0.49 and R < 0.51)
+
+Test("besselyreal 0.5 1") <- (BesselYReal(0.5, 1.0, R) and R > -0.44 and R < -0.43)
+
+Test("besselyreal 1.5 2") <- (BesselYReal(1.5, 2.0, R) and R > -0.397 and R < -0.394)
+
+Test("besselk 0 1") <- (BesselK(0, 1.0, R) and DIFF is ++(abs(float(R) - 0.4210244382407083)) and DIFF < 1e-9)
+
+Test("besselk 1 1") <- (BesselK(1, 1.0, R) and R > 0.6 and R < 0.7)
+
+Test("besseli 0 1") <- (BesselI(0, 1.0, R) and DIFF is ++(abs(float(R) - 1.2660658777520082)) and DIFF < 1e-9)
+
+Test("besseli 1 1") <- (BesselI(1, 1.0, R) and R > 0.56 and R < 0.57)
+
+Test("besseljzeros 0 first zero") <- (BesselJZeros(0, 1, ZEROS) and LEN is ++(len(list(ZEROS))) and LEN == 1)
+
+Test("besseljzeros 0 three zeros") <- (BesselJZeros(0, 3, ZEROS) and LEN is ++(len(list(ZEROS))) and LEN == 3)
+
+Test("spherical besselj 0 at 0 is 1") <- (SphericalBesselJ(0, 0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("spherical besselj 1 at 0 is 0") <- (SphericalBesselJ(1, 0.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+# ── Elliptic integrals ───────────────────────────────────────────────────────
+
+Test("elliptic k 0 is pi/2") <- (EllipticK(0.0, R) and DIFF is ++(abs(float(R) - 1.5707963267948966)) and DIFF < 1e-9)
+
+Test("elliptic k 0.5") <- (EllipticK(0.5, R) and R > 1.85 and R < 1.86)
+
+Test("elliptic e 0 is pi/2") <- (EllipticE(0.0, R) and DIFF is ++(abs(float(R) - 1.5707963267948966)) and DIFF < 1e-9)
+
+Test("elliptic e 0.5") <- (EllipticE(0.5, R) and R > 1.350 and R < 1.352)
+
+Test("elliptic k incomplete") <- (EllipticKIncomplete(0.5, 0.5, R) and R > 0.0 and R < 2.0)
+
+Test("elliptic e incomplete") <- (EllipticEIncomplete(0.5, 0.5, R) and R > 0.0 and R < 2.0)
+
+# ── Hypergeometric functions ─────────────────────────────────────────────────
+
+Test("hyp1f1 1 2 0.5") <- (Hypergeometric1F1(1.0, 2.0, 0.5, R) and DIFF is ++(abs(float(R) - 1.2974425414002564)) and DIFF < 1e-9)
+
+Test("hyp1f1 identity at 0") <- (Hypergeometric1F1(1.0, 1.0, 0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("hyp2f1 0.5 0.5 1.5 0.25") <- (Hypergeometric2F1(0.5, 0.5, 1.5, 0.25, R) and DIFF is ++(abs(float(R) - 1.047197551196598)) and DIFF < 1e-9)
+
+Test("hyp2f1 at 0 is 1") <- (Hypergeometric2F1(1.0, 1.0, 2.0, 0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("hyp0f1 2 0.5") <- (Hypergeometric0F1(2.0, 0.5, R) and DIFF is ++(abs(float(R) - 1.2717234563121371)) and DIFF < 1e-9)
+
+Test("hyp0f1 at 0 is 1") <- (Hypergeometric0F1(1.0, 0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+# ── Information theory ───────────────────────────────────────────────────────
+
+Test("entr 0.5") <- (Entr(0.5, R) and DIFF is ++(abs(float(R) - 0.34657359027997264)) and DIFF < 1e-9)
+
+Test("entr 1 is 0") <- (Entr(1.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("kl divergence equal") <- (KlDivergence(0.5, 0.5, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("kl divergence positive") <- (KlDivergence(0.5, 0.25, R) and R > 0.0)
+
+Test("log sum exp scalar 1") <- (LogSumExp(1.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("log sum exp scalar 0") <- (LogSumExp(0.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+# ── Orthogonal polynomials ───────────────────────────────────────────────────
+
+Test("assoc legendre m0 v0 x0.5") <- (AssocLegendre(0, 0, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("assoc legendre m0 v1 x0.5") <- (AssocLegendre(0, 1, 0.5, R) and DIFF is ++(abs(float(R) - 0.5)) and DIFF < 1e-9)
+
+Test("legendre poly 0") <- (LegendrePoly(0, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("legendre poly 1") <- (LegendrePoly(1, 0.5, R) and DIFF is ++(abs(float(R) - 0.5)) and DIFF < 1e-9)
+
+Test("chebyshev t 0") <- (ChebyshevT(0, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("chebyshev t 1") <- (ChebyshevT(1, 0.5, R) and DIFF is ++(abs(float(R) - 0.5)) and DIFF < 1e-9)
+
+Test("chebyshev u 0") <- (ChebyshevU(0, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("chebyshev u 1") <- (ChebyshevU(1, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("hermite h 0") <- (HermiteH(0, 1.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("hermite h 1") <- (HermiteH(1, 1.0, R) and DIFF is ++(abs(float(R) - 2.0)) and DIFF < 1e-9)
+
+Test("generalized laguerre 0 1 0.5") <- (GeneralizedLaguerre(0, 1.0, 0.5, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("generalized laguerre 1 1 0") <- (GeneralizedLaguerre(1, 1.0, 0.0, R) and DIFF is ++(abs(float(R) - 2.0)) and DIFF < 1e-9)
+
+# ── Convenience / misc ───────────────────────────────────────────────────────
+
+Test("cube root 8") <- (CubeRoot(8.0, R) and DIFF is ++(abs(float(R) - 2.0)) and DIFF < 1e-9)
+
+Test("cube root negative") <- (CubeRoot(-8.0, R) and DIFF is ++(abs(float(R) - (-2.0))) and DIFF < 1e-9)
+
+Test("exp10 2") <- (Exp10(2.0, R) and DIFF is ++(abs(float(R) - 100.0)) and DIFF < 1e-9)
+
+Test("exp10 0 is 1") <- (Exp10(0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("exp2 3") <- (Exp2(3.0, R) and DIFF is ++(abs(float(R) - 8.0)) and DIFF < 1e-9)
+
+Test("exp2 0 is 1") <- (Exp2(0.0, R) and DIFF is ++(abs(float(R) - 1.0)) and DIFF < 1e-9)
+
+Test("sigmoid 0 is 0.5") <- (Sigmoid(0.0, R) and DIFF is ++(abs(float(R) - 0.5)) and DIFF < 1e-9)
+
+Test("sigmoid large is 1") <- (Sigmoid(100.0, R) and R > 0.9999)
+
+Test("logit 0.5 is 0") <- (Logit(0.5, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("logit 0.75 positive") <- (Logit(0.75, R) and R > 1.09 and R < 1.10)
+
+Test("lambert w 1") <- (LambertW(1.0, W) and W > 0.5 and W < 0.6)
+
+Test("lambert w 0 is 0") <- (LambertW(0.0, W) and DIFF is ++(abs(float(W) - 0.0)) and DIFF < 1e-9)
+
+Test("xlogy 2 3") <- (XLogY(2.0, 3.0, R) and DIFF is ++(abs(float(R) - 2.1972245773362196)) and DIFF < 1e-9)
+
+Test("xlogy 0 anything is 0") <- (XLogY(0.0, 5.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
+
+Test("xlog1py 2 3") <- (XLog1pY(2.0, 3.0, R) and DIFF is ++(abs(float(R) - 2.772588722239781)) and DIFF < 1e-9)
+
+Test("xlog1py 0 anything is 0") <- (XLog1pY(0.0, 5.0, R) and DIFF is ++(abs(float(R) - 0.0)) and DIFF < 1e-9)
