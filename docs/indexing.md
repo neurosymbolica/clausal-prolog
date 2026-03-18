@@ -31,13 +31,13 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
     |---|---|---|
     | Literal scalar (int, str, float, bytes, bool, None) | The value itself | Specific bucket for that value |
     | Var with `Unify(var, scalar)` in body (normalized fact) | The scalar value | Specific bucket |
-    | Compound term (`circle(R)`, `rect(W,H)`, …) | `(functor, arity)` tuple | Specific bucket — Phase 9a |
-    | PredicateMeta instance | `(class_name, field_count)` tuple | Specific bucket — Phase 9a |
-    | Var with `Unify(var, compound)` in body | `(functor, arity)` tuple | Specific bucket — Phase 9a |
+    | Compound term (`circle(R)`, `rect(W,H)`, …) | `(functor, arity)` tuple | Specific bucket |
+    | PredicateMeta instance | `(class_name, field_count)` tuple | Specific bucket |
+    | Var with `Unify(var, compound)` in body | `(functor, arity)` tuple | Specific bucket |
     | Unbound Var (no body unification) | `_INDEX_VAR` sentinel | Default bucket |
     | List or other non-indexable value | `_INDEX_VAR` sentinel | Default bucket |
 
-    The Var+Unify pattern comes from fact normalization (`_normalize_dataclass_fact` / `_normalize_fact_clause`), which replaces ground head values with fresh Vars and adds `Unify(var, value)` goals to the body. This is the standard representation for facts in clausal — the indexer recognises it and extracts the original ground value, including compound-term values (Phase 9a).
+    The Var+Unify pattern comes from fact normalization (`_normalize_dataclass_fact` / `_normalize_fact_clause`), which replaces ground head values with fresh Vars and adds `Unify(var, value)` goals to the body. This is the standard representation for facts in clausal — the indexer recognises it and extracts the original ground value, including compound-term values.
 
     ### Bucket merging
 
@@ -165,7 +165,7 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
 
     Sub-functions get distinct names (`{functor}__all`, `{functor}__b0`, `{functor}__dflt`) to avoid collisions when compiled via `functiondef_to_function`.
 
-    ### Bucket head lifting (Phase 8)
+    ### Bucket head lifting
 
     The `.clausal` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color("red", "warm")` is stored as:
 
@@ -212,7 +212,7 @@ The following remain in the default bucket (no bucket discrimination):
 - **Lists** — including empty lists. List first-args could be indexed by structure (empty vs cons), but this is deferred.
 - **Nested structures** — only the top-level functor/arity is extracted; argument positions *inside* a compound term are not recursively indexed.
 
-Scalar values, Compound terms (via functor/arity), and PredicateMeta instances are all indexed as of Phase 9a.
+Scalar values, Compound terms (via functor/arity), and PredicateMeta instances are all indexed.
 
 ---
 
@@ -264,7 +264,7 @@ With groundness-keyed dispatch, querying `color(Name_, "warm")` uses a second-ar
 
     ### Generalised key extraction
 
-    `_extract_arg_key(clause, pos, arity)` generalises `_extract_first_arg_key` to work on any argument position. Classification rules (Phase 9a extended):
+    `_extract_arg_key(clause, pos, arity)` generalises `_extract_first_arg_key` to work on any argument position. Classification rules:
 
     | Arg at position `pos` | Key | Bucket |
     |---|---|---|
@@ -374,7 +374,7 @@ No changes to the invalidation mechanism. When `assertz` or `retract` modifies a
 
 ## Limitations
 
-- **No cross-position indexing** (single-arg only): positions are checked independently; the selector picks the single best ground position at runtime. Phase 9b/9c extend this — see below.
+- **No cross-position indexing** (single-arg only): positions are checked independently; the selector picks the single best ground position at runtime. Multi-argument indexing extends this — see below.
 - **Compilation cost**: each indexable position produces its own set of sub-functions (buckets + default). For a predicate with `P` indexable positions and `K` average distinct keys, compilation produces roughly `P * K` sub-functions.
 
 ---
@@ -396,19 +396,19 @@ No changes to the invalidation mechanism. When `assertz` or `retract` modifies a
 
 ---
 
-# Multi-Argument Indexing (Phase 9)
+# Multi-Argument Indexing
 
-Single-arg groundness-keyed dispatch picks the *best single position* that is ground. Phase 9 extends this in three steps:
+Single-arg groundness-keyed dispatch picks the *best single position* that is ground. Multi-argument indexing extends this in three steps:
 
-- **9a** — Compound terms and PredicateMeta instances are now indexable (via functor/arity tuples).
-- **9b** — *Flat joint key*: index on `(argI, argJ)` pairs when both are ground and the pair uniquely discriminates clauses much better than any single arg.
-- **9c** — *Secondary (hierarchical) dispatch*: two-level index on `(argI, argJ)` that also handles partial groundness (`argI` ground, `argJ` unbound) without falling all the way back to the full scan.
+- **Compound keys** — Compound terms and PredicateMeta instances are indexable (via functor/arity tuples).
+- **Flat joint key** — index on `(argI, argJ)` pairs when both are ground and the pair uniquely discriminates clauses much better than any single arg.
+- **Secondary (hierarchical) dispatch** — two-level index on `(argI, argJ)` that also handles partial groundness (`argI` ground, `argJ` unbound) without falling all the way back to the full scan.
 
 ---
 
-## Phase 9a — Compound functor/arity keys
+## Compound functor/arity keys
 
-Before Phase 9a, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
+Without compound-key indexing, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
 
 ```
 Shape(circle(R),       R) <- true
@@ -419,7 +419,7 @@ Shape(sq(S),           S) <- true
 
 had no indexing at all on `arg0`, even though the four clauses are perfectly discriminated by functor name.
 
-After Phase 9a, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
+With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
 
 ```
 Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
@@ -429,7 +429,7 @@ Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
 
 ---
 
-## Phase 9b — Flat joint key
+## Flat joint key
 
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
@@ -459,9 +459,9 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 
 ---
 
-## Phase 9c — Secondary (hierarchical) dispatch
+## Secondary (hierarchical) dispatch
 
-When joint coverage < 80%, Phase 9c is preferred over 9b.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
+When joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
 ```
 Level 0: {argI_key → (level1_buckets_or_None, level1_all_clauses)}
@@ -503,18 +503,18 @@ Secondary indexing never regresses relative to single-arg: the worst case is ide
 
 ## Compiler integration
 
-Both Phase 9b and 9c are integrated into `compile_predicate_trampoline` and `compile_predicate_shallow`.  After single-arg plans are built, the compiler checks for a multi-arg opportunity:
+Both flat joint and secondary dispatch are integrated into `compile_predicate_trampoline` and `compile_predicate_shallow`.  After single-arg plans are built, the compiler checks for a multi-arg opportunity:
 
 ```python
 joint_result = _analyze_joint_index_positions(clauses, arity, index_positions)
 if joint_result is not None:
     pos_i, pos_j, joint_info = joint_result
     if joint_info["coverage"] < _JOINT_COVERAGE_THRESHOLD:
-        # Phase 9c — secondary dispatch
+        # secondary dispatch (low joint coverage)
         sec = _build_secondary_index(clauses, arity, pos_i, pos_j)
         fn = _make_secondary_dispatch_trampoline(sec, ...)
     else:
-        # Phase 9b — flat joint dispatch
+        # flat joint dispatch (high joint coverage)
         fn = _make_joint_dispatch_trampoline(pos_i, pos_j, ...)
 else:
     fn = _make_groundness_dispatch_trampoline(plans, fallback_fn, DONE)
@@ -526,9 +526,9 @@ else:
 
 ??? info "Testing"
 
-    `tests/test_compiler_optimizations.py` covers Phase 9 in three test classes:
+    `tests/test_compiler_optimizations.py` covers multi-argument indexing in three test classes:
 
-    **TestCompoundKeyIndexing** (Phase 9a):
+    **TestCompoundKeyIndexing**:
 
     - `_extract_arg_key` returns `(functor, arity)` tuples for Compound heads
     - `_build_arg_index` yields distinct buckets for compound-headed clauses
@@ -537,7 +537,7 @@ else:
     - Scalar keys and compound-tuple keys coexist without collision
     - PredicateMeta heads produce `(class_name, field_count)` keys
 
-    **TestSecondaryIndexing** (Phase 9c):
+    **TestSecondaryIndexing**:
 
     - `_build_secondary_index` structure: 3 level-0 keys, 2 level-1 keys each
     - All-ground exact match and no-match
@@ -545,7 +545,7 @@ else:
     - `argJ` ground, `argI` unbound → correct single-arg fallback via arg-1 plan
     - Fully unbound → all 6 facts
 
-    **TestJointKeyIndexing** (Phase 9b):
+    **TestJointKeyIndexing**:
 
     - `_build_joint_arg_index` returns 6 distinct `(group, subtype)` pairs
     - `_analyze_joint_index_positions` identifies the correct pair
@@ -553,3 +553,132 @@ else:
     - First-arg-only ground → two solutions from single-I fallback
     - Second-arg-only ground → three solutions from single-J fallback
     - Fully unbound → all 6 facts
+
+---
+
+# Call-Site Bucket Specialisation
+
+The indexing optimisations described above all apply to the *callee*: how quickly a called predicate routes an incoming query to the right bucket of clauses. Call-site specialisation optimises the *caller*: when a call passes a statically-known literal to a locked predicate, the dispatch closure is bypassed entirely and the bucket function is referenced directly.
+
+## Motivation
+
+Without call-site specialisation, a call to a locked predicate looks like:
+
+```python
+# base_globals["_disp_Color_1"] = Color._dispatch_fn  (captured at compile time)
+StepGenerator(_disp_Color_1, this_generator, 'red', trail)
+```
+
+At runtime `_disp_Color_1` is the dispatch closure. It calls `deref(args[0])`, computes `_runtime_arg_key`, and does a dict lookup. But when the call site already has `'red'` as a literal, the bucket to call is known at compile time — the runtime lookup is redundant.
+
+With call-site specialisation the same call becomes:
+
+```python
+# base_globals["Color.bucket(pos=0, 'red')"] = <bucket fn>  (injected at compile time)
+StepGenerator(Color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+```
+
+One deref, one dict lookup, and the dispatch closure itself are all eliminated.
+
+The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier, but Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup on the function's globals, so any string works. `ast.unparse()` renders it verbatim, making generated code self-documenting.
+
+## Priority table
+
+| Condition at call site | Dispatch expression emitted |
+|---|---|
+| Two static args, joint bucket exists | `"Foo.bucket(pos=(0,1), ('red', 2))"` |
+| One static arg, single-pos bucket exists | `"Foo.bucket(pos=0, 'red')"` |
+| Locked predicate, no static match | `_disp_Foo_2` (cached dispatch closure) |
+| Dynamic predicate | `Foo._get_dispatch()` |
+
+## Key invariants
+
+**Locked-only.** Only call sites targeting a predicate with `_locked=True` at the caller's compile time are specialised. Dynamic predicates always go through `._get_dispatch()` because their clause set may change at runtime.
+
+**`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. When a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `_get_dispatch()` — which is correct.
+
+**Recompilation safety.** Lazy recompile (triggered by `assertz`/`retract`) calls `compile_predicate_trampoline` from scratch, overwriting `_dispatch_fn` and `_index_plans` atomically. Call-site specialisation only ever applies to calls *to* locked predicates; locked predicates never change after locking. Callers of dynamic predicates are never specialised and are therefore unaffected by dynamic recompilation.
+
+??? abstract "Implementation"
+
+    **Bucket dict exposure** — `_index_plans`. After building all bucket functions inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate class:
+
+    ```python
+    pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
+    ```
+
+    Joint and hierarchical variants are stored as `_index_plans_joint` and `_index_plans_hierarchical` respectively. If the predicate has no indexing (below threshold), `_index_plans` is set to `{}` to clear any stale value from a previous compilation.
+
+    **`_static_call_key(arg_expr)`** — Mirrors `_runtime_arg_key` for compile-time AST analysis:
+
+    ```python
+    def _static_call_key(arg_expr: ast.expr) -> Any | None:
+        if isinstance(arg_expr, ast.Constant):
+            return arg_expr.value           # int, str, float, bool, None
+        if isinstance(arg_expr, ast.Call):
+            func = arg_expr.func
+            if isinstance(func, ast.Name):
+                return (func.id, len(arg_expr.args) + len(arg_expr.keywords))
+            if isinstance(func, ast.Attribute):
+                return (func.attr, len(arg_expr.args) + len(arg_expr.keywords))
+        return None                         # variable or unknown
+    ```
+
+    **Key naming helpers:**
+
+    ```python
+    _bucket_key("Color", 0, "red")            →  "Color.bucket(pos=0, 'red')"
+    _joint_bucket_key("Pair", 0, 1, "x", 2)  →  "Pair.bucket(pos=(0,1), ('x',2))"
+    ```
+
+    **`_inject_bucket_refs_trampoline(clauses, base_globals)`** — Scans all clause bodies, finds call sites where the callee is locked and has `_index_plans`, converts the term-level argument to an AST expression via `term_to_ast_expr`, calls `_static_call_key`, and if a match is found injects the bucket function into `base_globals` and records the mapping in `_compile_context_local.bucket_ref_map` / `joint_bucket_ref_map`.
+
+    **`_dispatch_call_trampoline` extension** — Before the locked dispatch check, consults `bucket_ref_map` and `joint_bucket_ref_map` (joint tried first, being more selective):
+
+    ```python
+    gkey = brmap.get((fname, arity, pos, key))
+    if gkey is not None:
+        return ast.Call(
+            func=_name("StepGenerator"),
+            args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
+                + arg_exprs + [_name(trail_name)],
+            keywords=[],
+        )
+    ```
+
+    **Wiring** — `_inject_bucket_refs_trampoline` is called in `compile_predicate_trampoline` immediately after `_inject_resolved_targets`. The context maps are initialised before the `try` block and restored in `finally` (re-entrant, thread-safe via `threading.local`).
+
+??? info "Testing"
+
+    `tests/test_callsite_specialization.py` covers call-site specialisation in four test classes:
+
+    **TestIndexPlansExposed / TestIndexPlansJoint**:
+
+    - `_index_plans` is populated for indexed predicates (integer and atom keys)
+    - Keys are ints (positions), values are dicts mapping index keys to callables
+    - `_index_plans` is set to `{}` below the threshold or on recompilation to fewer clauses
+    - `_index_plans_joint` is populated when joint dispatch is used; keys are `(pi, pj)` tuples, values are dicts of `(ki, kj)` tuples
+
+    **TestStaticCallKey**:
+
+    - Integer, string, float, bool, None constants → value itself
+    - `ast.Name` (variable) → `None`
+    - `ast.Call` with `ast.Name` func → `(id, n_args)` tuple
+    - `ast.Call` with `ast.Attribute` func → `(attr, n_args)` tuple
+    - `ast.List` → `None`
+
+    **TestBucketKeyNaming**:
+
+    - Atom, integer, second-position, compound-key variants
+    - Joint key format; asymmetry between `(0,1)` and `(1,0)` orderings
+
+    **TestInjectBucketRefs** and **TestCallsiteCorrectnessAndFallback**:
+
+    - Bucket fn injected into `base_globals` for literal arg call
+    - `bucket_ref_map` entry created with correct `(fname, arity, pos, key)` tuple
+    - No injection for variable args, unlocked predicates, unknown keys
+    - Injected fn is identical to `_index_plans[pos][key]`
+    - Idempotent: second call does not replace an already-injected entry
+    - Multiple literal calls in different clauses each get their own bucket ref
+    - Dynamic predicates not specialised
+    - Self-recursive unlocked predicates not specialised

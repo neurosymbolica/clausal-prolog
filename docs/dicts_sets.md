@@ -109,7 +109,7 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 ### Variables in sets
 
-**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use lists with `In/2` or `gen_set/2` (Phase 3 builtins).
+**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use lists with `In/2` or `gen_set/2` (planned builtins).
 
 ---
 
@@ -164,20 +164,20 @@ deref(x)  # 42
 
 ## Current status
 
-| Phase | Status | What |
-|---|---|---|
-| Phase 1 | Done | `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks, `structural_unify` support |
-| Phase 2 | Done | `__unify__` protocol in C, AST transform (`visit_Dict` → `DictTerm`), compiler head/body support |
-| Phase 3 | Planned | Dict builtins: `dict_pairs`, `dict_get`, `dict_put`, `dict_merge`, `gen_dict`, `<<` partial matching |
-| Phase 4 | Planned | Set builtins: `set_union`, `set_intersection`, `set_subtract`, `gen_set`, `is_set` |
-| Phase 5 | Planned | Mutable variants (`MutableDict`/`MutableSet`) with trail-backed undo |
+| Feature | Status |
+|---|---|
+| `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks, `structural_unify` support | Done |
+| `__unify__` protocol in C, AST transform (`visit_Dict` → `DictTerm`), compiler head/body support | Done |
+| Dict builtins: `dict_pairs`, `dict_get`, `dict_put`, `dict_merge`, `gen_dict`, `<<` partial matching | Planned |
+| Set builtins: `set_union`, `set_intersection`, `set_subtract`, `gen_set`, `is_set` | Planned |
+| Mutable variants (`MutableDict`/`MutableSet`) with trail-backed undo | Planned |
 
 ---
 
 ## Limitations
 
-- **No `**splat` in DictTerm**: `{**old, key: new_val}` (dict unpacking) is not yet supported in term context. This is planned for Phase 3 as syntactic sugar for `dict_put`/`dict_merge`.
+- **No `**splat` in DictTerm**: `{**old, key: new_val}` (dict unpacking) is not yet supported in term context. This is planned as syntactic sugar for `dict_put`/`dict_merge`.
 - **No variable keys**: Dict keys must be ground. `{X: 1}` where `X` is an unbound variable is not supported.
 - **No variable set elements**: Set elements must be ground/hashable.
-- **No partial dict matching yet**: SWI-style `Select :< From` (sub-dict matching) is Phase 3.
-- **No dict/set builtins yet**: Operations like `dict_get`, `set_union` are Phase 3/4.
+- **No partial dict matching yet**: SWI-style `Select :< From` (sub-dict matching) is not yet implemented.
+- **No dict/set builtins yet**: Operations like `dict_get`, `set_union` are not yet implemented.

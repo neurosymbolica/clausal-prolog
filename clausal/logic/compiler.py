@@ -2736,6 +2736,85 @@ def _assign_yield_step(
     return _assign(target, ast.Yield(value=_step_expr(gen_expr, value_expr)))
 
 
+def _inject_bucket_refs_trampoline(
+    clauses: list,
+    base_globals: dict,
+) -> None:
+    """Phase 10d: pre-scan clause bodies for statically-known call-site args.
+
+    For each Call in a clause body where the callee is a locked predicate with
+    ``_index_plans`` and one (or two) arguments are statically known literals
+    or compound constructors, injects the matching bucket function into
+    ``base_globals`` and records the mapping in
+    ``_compile_context_local.bucket_ref_map`` /
+    ``_compile_context_local.joint_bucket_ref_map`` so that
+    :func:`_dispatch_call_trampoline` can emit a direct bucket reference.
+    """
+    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+
+    brmap: dict = {}
+    jbrmap: dict = {}
+
+    for clause in clauses:
+        for goal in clause.body:
+            # Identify Call(LoadName | LoadAttr) nodes
+            if not (isinstance(goal, Call) and isinstance(goal.func, (LoadName, LoadAttr))):
+                continue
+            if isinstance(goal.func, LoadName):
+                fname = goal.func.name
+            else:
+                fname = _dotted_name_from_loadattr(goal.func)
+                if fname is None:
+                    continue
+
+            n_kwargs = len(goal.kwargs) if goal.kwargs else 0
+            arity = len(goal.args) + n_kwargs
+
+            pred_obj = base_globals.get(fname)
+            if not isinstance(pred_obj, PredicateMeta):
+                continue
+            if not getattr(pred_obj, "_locked", False):
+                continue
+            if not hasattr(pred_obj, "_index_plans"):
+                continue
+
+            # Convert term args to AST exprs (fresh var_context — we only care
+            # about constants, not variable names)
+            arg_exprs = [term_to_ast_expr(a, {}) for a in goal.args]
+
+            # Single-position bucket specialisation
+            for pos, idx_dict in pred_obj._index_plans.items():
+                if pos >= len(arg_exprs):
+                    continue
+                key = _static_call_key(arg_exprs[pos])
+                if key is None or key not in idx_dict:
+                    continue
+                gkey = _bucket_key(fname, pos, key)
+                if gkey not in base_globals:
+                    base_globals[gkey] = idx_dict[key]
+                brmap[(fname, arity, pos, key)] = gkey
+
+            # Joint bucket specialisation (Phase 9b)
+            if hasattr(pred_obj, "_index_plans_joint"):
+                for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+                    if pi >= len(arg_exprs) or pj >= len(arg_exprs):
+                        continue
+                    ki = _static_call_key(arg_exprs[pi])
+                    kj = _static_call_key(arg_exprs[pj])
+                    if ki is None or kj is None:
+                        continue
+                    jkey = (ki, kj)
+                    if jkey not in jdict:
+                        continue
+                    gkey = _joint_bucket_key(fname, pi, pj, ki, kj)
+                    if gkey not in base_globals:
+                        base_globals[gkey] = jdict[jkey]
+                    jbrmap[(fname, arity, pi, pj, ki, kj)] = gkey
+
+    _compile_context_local.bucket_ref_map = brmap
+    _compile_context_local.joint_bucket_ref_map = jbrmap
+
+
 def _dispatch_call_trampoline(
     fname: str,
     arity: int,
@@ -2751,7 +2830,47 @@ def _dispatch_call_trampoline(
 
     Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a pre-captured
     dispatch function in base_globals) instead of ``fname._get_dispatch()``.
+
+    Phase 10: if a statically-known argument matches an indexed position of the
+    callee, emits a direct bucket-function reference (bypassing the dispatch
+    closure entirely).
     """
+    # Phase 10: direct bucket ref for statically-known indexed argument
+    brmap = getattr(_compile_context_local, "bucket_ref_map", {})
+    jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
+
+    # Try joint first (more selective — two args constrain the bucket further)
+    for pos_i in range(arity):
+        for pos_j in range(arity):
+            if pos_i == pos_j or pos_i >= len(arg_exprs) or pos_j >= len(arg_exprs):
+                continue
+            ki = _static_call_key(arg_exprs[pos_i])
+            kj = _static_call_key(arg_exprs[pos_j])
+            if ki is None or kj is None:
+                continue
+            gkey = jbrmap.get((fname, arity, pos_i, pos_j, ki, kj))
+            if gkey is not None:
+                return ast.Call(
+                    func=_name("StepGenerator"),
+                    args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
+                        + arg_exprs + [_name(trail_name)],
+                    keywords=[],
+                )
+
+    # Try single-position bucket
+    for pos, arg_expr in enumerate(arg_exprs):
+        key = _static_call_key(arg_expr)
+        if key is None:
+            continue
+        gkey = brmap.get((fname, arity, pos, key))
+        if gkey is not None:
+            return ast.Call(
+                func=_name("StepGenerator"),
+                args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
+                    + arg_exprs + [_name(trail_name)],
+                keywords=[],
+            )
+
     # Phase 7: use cached dispatch name for locked predicates
     dk = _disp_key(fname, arity)
     locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
@@ -4010,7 +4129,16 @@ def compile_predicate_trampoline(
     _locked_keys = frozenset(k for k in base_globals if k.startswith("_disp_"))
     _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
     _compile_context_local.locked_dispatch_keys = _locked_keys
+    # Phase 10f: initialise bucket-ref maps for call-site specialisation.
+    _prev_brmap = getattr(_compile_context_local, "bucket_ref_map", {})
+    _prev_jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
+    _compile_context_local.bucket_ref_map = {}
+    _compile_context_local.joint_bucket_ref_map = {}
     try:
+        # Phase 10d: inject bucket refs for statically-known call-site args.
+        # Must run after _inject_resolved_targets (which populates base_globals
+        # with callee predicate classes) but before building funcdef ASTs.
+        _inject_bucket_refs_trampoline(clauses, base_globals)
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
@@ -4053,6 +4181,13 @@ def compile_predicate_trampoline(
                 )
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 plans.append((pos, idx_dict, pos_default_fn))
+
+            # Phase 10a: expose single-position bucket dicts on the predicate
+            # class so that call-site specialisation can look up bucket functions
+            # for statically-known argument values without invoking the dispatch
+            # closure at runtime.
+            if pred_cls is not None:
+                pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
 
             # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
             # Try secondary (hierarchical) dispatch first; fall back to joint
@@ -4148,6 +4283,11 @@ def compile_predicate_trampoline(
                             fn = _make_secondary_dispatch_trampoline(
                                 sec, level0_compiled, level0_default_fn,
                                 fallback_fn, DONE)
+                            # Phase 10a: expose hierarchical bucket dicts.
+                            if pred_cls is not None:
+                                pred_cls._index_plans_hierarchical = {
+                                    (pos_i, pos_j): level0_compiled
+                                }
                     else:
                         # Phase 9b — flat joint key dispatch (high coverage).
                         joint_dict: dict = {}
@@ -4194,10 +4334,18 @@ def compile_predicate_trampoline(
                             joint_dict, joint_default_fn,
                             single_i, single_j,
                             fallback_fn, DONE)
+                        # Phase 10a: expose joint bucket dict.
+                        if pred_cls is not None:
+                            pred_cls._index_plans_joint = {(pos_i, pos_j): joint_dict}
             if fn is None:
                 fn = _make_groundness_dispatch_trampoline(
                     plans, fallback_fn, DONE)
         else:
+            # Phase 10a: no indexing — clear any stale _index_plans from a
+            # previous compilation (e.g. after retract reduced clause count
+            # below the indexing threshold).
+            if pred_cls is not None:
+                pred_cls._index_plans = {}
             func_def = _build_predicate_trampoline_funcdef(
                 functor, arity, clauses, _effective_db, body_compiler,
             )
@@ -4205,6 +4353,9 @@ def compile_predicate_trampoline(
             fn = functiondef_to_function(func_def, globals_=base_globals)
     finally:
         _compile_context_local.locked_dispatch_keys = _prev_locked_keys
+        # Phase 10f: restore bucket-ref maps.
+        _compile_context_local.bucket_ref_map = _prev_brmap
+        _compile_context_local.joint_bucket_ref_map = _prev_jbrmap
 
     def _recompile_trampoline() -> Callable:
         if db is not None:
@@ -5174,6 +5325,45 @@ def _runtime_arg_key(a: Any) -> Any:
         cls = type(a)
         return (cls.__name__, len(cls._fields))
     return _INDEX_VAR
+
+
+def _static_call_key(arg_expr: ast.expr) -> Any | None:
+    """Return the index key if *arg_expr* is statically known at compile time.
+
+    Mirrors :func:`_runtime_arg_key` for the compile-time call-site analysis
+    path.  Returns ``None`` if the argument is a variable or otherwise unknown.
+    """
+    if isinstance(arg_expr, ast.Constant):
+        # scalar: int, str, float, bool, None — key is the value itself
+        return arg_expr.value
+    if isinstance(arg_expr, ast.Call):
+        # compound term constructor: Dog(_v_name, _v_age) or mod.Dog(...)
+        func = arg_expr.func
+        if isinstance(func, ast.Name):
+            n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            return (func.id, n_args)
+        if isinstance(func, ast.Attribute):
+            n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            return (func.attr, n_args)
+    return None
+
+
+def _bucket_key(fname: str, pos: int, key: Any) -> str:
+    """Readable globals key for a single-position bucket function.
+
+    The returned string is used as an ``ast.Name`` id and as a
+    ``base_globals`` key.  It is not a valid Python identifier (it contains
+    dots, brackets, and quotes) so generated code won't re-parse, but
+    ``ast.unparse()`` renders it readably and ``compile(ast_tree, ...)``
+    resolves it via a plain dict lookup.
+    """
+    return f"{fname}.bucket(pos={pos}, {key!r})"
+
+
+def _joint_bucket_key(fname: str, pos_i: int, pos_j: int,
+                      ki: Any, kj: Any) -> str:
+    """Readable globals key for a joint (two-position) bucket function."""
+    return f"{fname}.bucket(pos=({pos_i},{pos_j}), ({ki!r},{kj!r}))"
 
 
 def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
