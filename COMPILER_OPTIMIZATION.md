@@ -953,6 +953,640 @@ compiles correctly.
 
 ---
 
+---
+
+### Phase 9 — Multi-argument indexing
+
+**Target:** `_extract_arg_key` (compiler.py:4997), `_analyze_index_positions`
+(compiler.py:5097), `_make_groundness_dispatch_trampoline` (compiler.py:5220),
+and their simple-mode counterparts.
+
+**Background and prior art:**
+
+The current V2-2 groundness-keyed dispatch handles multi-argument indexing in
+the simplest way: scan all argument positions in descending selectivity order
+and use the first one that is ground at call time.  This is sometimes called
+"argN indexing" or "first-instantiated-argument indexing" (Scryer Prolog also
+uses this pattern).
+
+Modern Prologs go further:
+
+- **SWI-Prolog (JITI)** — JIT-builds indexes on demand; evaluates single-arg
+  quality via `unique / (σ(bucket_sizes) + 1)`; searches pairs `(argI, argJ)`
+  when no single arg is adequate; applies deep indexing recursively inside
+  compound-term buckets.  Configurable via `:- index p/n-[1,2]`; inspectable
+  via `jiti_list/0`.
+- **XSB** — programmer-declared joint indexes `*(1)+3` (combine deep-indexed
+  arg 1 with arg 3's main functor), trie indexing for fact tables.
+- **YAP** — demand-driven (JIT) with fragmented indexing tree for efficient
+  assert/retract; introduced the algorithm later adopted by SWI-Prolog.
+- **Ciao** — source-level transformation via `index/1` declarations with
+  per-argument specifiers (`+`, `*`, `i`, `?`, `n`).
+
+There are three independent gaps in clausal's current implementation, each
+addressable separately:
+
+| Gap | Impact | Complexity |
+|-----|--------|------------|
+| 9a: Compound/functor key | High — all predicate-class heads currently unindexed | Low |
+| 9b: Joint key `(argI, argJ)` | Medium — helps when no single arg is selective | Medium |
+| 9c: Secondary (hierarchical) dispatch | Medium — improves partial-groundness cases | Medium |
+
+---
+
+#### Phase 9a — Compound functor/arity as index key
+
+**The current gap:**
+
+`_INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))` — compound
+terms (`Compound` nodes and `PredicateMeta` instances) all return `_INDEX_VAR`,
+falling into the default bucket.  A predicate like:
+
+```
+Shape(circle(R)) <- ...
+Shape(rect(W, H)) <- ...
+Shape(triangle(A, B, C)) <- ...
+```
+
+currently gets no indexing at all on arg 0, even though the three clauses are
+perfectly discriminated by functor name.
+
+**What changes:**
+
+Extend `_extract_arg_key` to return a `("functor", arity)` tuple for compound
+arguments.  The existing bucketing and dispatch machinery then works
+transparently — dicts keyed on tuples are as fast as dicts keyed on scalars
+in Python.
+
+```python
+# After: in _extract_arg_key, after the _INDEXABLE_TYPES check:
+
+# Compound node (Compound("circle", [R]))
+if isinstance(arg, Compound):
+    return (arg.functor, len(arg.args))
+
+# PredicateMeta instance (circle(r=R))
+if is_term_instance(arg):
+    cls = type(arg)
+    return (cls.__name__, len(cls._fields))
+```
+
+The Var+Unify pattern lookup (lines 5026–5033) must also be extended to handle
+the case where `goal.right` / `goal.left` is a `Compound` or PredicateMeta
+instance rather than a scalar — the same functor/arity key extraction applies.
+
+**At dispatch time** (inside `_make_groundness_dispatch_trampoline`), the
+`deref`-ed arg value is tested via `is_var` before the dict lookup exactly as
+now; the dict simply has `("circle", 1)` etc. as keys instead of integers.
+
+**Impact example:**
+
+```python
+# Before: all 3 clauses in the same "default" bucket — O(3) per call
+Shape(circle(R)) <- ...
+Shape(rect(W, H)) <- ...
+Shape(triangle(A, B, C)) <- ...
+
+# After: 3 distinct buckets keyed on ("circle",1), ("rect",2), ("triangle",3)
+# O(1) dispatch when arg0 is ground
+```
+
+**Implementation steps:**
+
+1. In `_extract_arg_key` (compiler.py:4997), after the `_INDEXABLE_TYPES` check
+   and before the `is_var` check, add:
+   ```python
+   if isinstance(arg, Compound):
+       return (arg.functor, len(arg.args))
+   if is_term_instance(arg):
+       cls = type(arg)
+       return (cls.__name__, len(cls._fields))
+   ```
+
+2. In the same function, extend the Var+Unify pattern scan to also return
+   functor/arity keys when the matched term is a `Compound` or PredicateMeta.
+
+3. No changes needed to `_build_arg_index`, `_analyze_index_positions`, or the
+   dispatch generators — they are already key-type-agnostic.
+
+4. Run: `pytest` — all tests must pass.  Confirm with `predicate_to_source`
+   that a compound-headed predicate now shows distinct bucket functions.
+
+**Dependencies:** None.  Can be done in any order relative to other phases.
+
+---
+
+#### Phase 9b — Joint key indexing for `(argI, argJ)` pairs
+
+**Motivation:**
+
+Some predicates have poor discrimination on every single argument but excellent
+discrimination on argument *pairs*.  Example:
+
+```
+Color(red,   primary)   <- true
+Color(blue,  primary)   <- true
+Color(yellow,primary)   <- true
+Color(green, secondary) <- true
+Color(orange,secondary) <- true
+Color(purple,secondary) <- true
+```
+
+Arg 0 has 6 distinct values (perfect), but consider a case where arg 0 has
+many repeats while arg 1 alone also does — only the combination discriminates
+well.  This arises naturally in multi-field database-style fact tables.
+
+**Design — flat joint key:**
+
+Add `_build_joint_arg_index(clauses, arity, pos_i, pos_j)` that keys on
+`(key_i, key_j)` tuples.  A joint key is only usable when **both** args are
+ground at call time.
+
+```python
+def _build_joint_arg_index(clauses, arity, pos_i, pos_j, threshold=_INDEX_THRESHOLD):
+    """Partition clauses by the combined key (key_i, key_j).
+
+    Returns None if fewer than *threshold* clauses have both args indexable.
+    """
+    keys = []
+    for c in clauses:
+        ki = _extract_arg_key(c, pos_i, arity)
+        kj = _extract_arg_key(c, pos_j, arity)
+        keys.append((ki, kj) if ki is not _INDEX_VAR and kj is not _INDEX_VAR
+                    else _INDEX_VAR)
+    # build buckets exactly as _build_arg_index does, but keyed on (ki, kj)
+    ...
+```
+
+**Quality criterion:**
+
+Only build a joint index when it provides strictly better discrimination than
+any single-argument index:
+
+```python
+best_single = max(len(idx["buckets"]) for _, idx in single_arg_indexes)
+joint_distinct = len(set(k for k in keys if k is not _INDEX_VAR))
+if joint_distinct > best_single * JOINT_INDEX_MIN_GAIN:  # e.g. 1.5×
+    build joint index
+```
+
+**Generated dispatch logic:**
+
+The dispatch closure becomes a three-level decision:
+
+```python
+def dispatch(*args):
+    parent = args[1]
+    _ai = deref(args[pos_i + 2])
+    _aj = deref(args[pos_j + 2])
+    # 1. Both ground → joint lookup (O(1))
+    if not is_var(_ai) and not is_var(_aj):
+        _jk = (_ai, _aj)
+        try:
+            _bfn = joint_idx.get(_jk)
+        except TypeError:
+            _bfn = None
+        if _bfn is not None:
+            yield from _bfn(*args)
+        else:
+            yield from joint_default_fn(*args)
+    # 2. Only pos_i ground → single-arg fallback on pos_i
+    elif not is_var(_ai):
+        yield from single_i_dispatch(*args)
+    # 3. Only pos_j ground → single-arg fallback on pos_j
+    elif not is_var(_aj):
+        yield from single_j_dispatch(*args)
+    # 4. Neither ground → full fallback
+    else:
+        yield from fallback_fn(*args)
+    yield (parent, _DONE)
+```
+
+**Pair selection:**
+
+Rather than evaluating all O(arity²) pairs (expensive for wide predicates),
+use the heuristic: only consider pairs `(pos_best, pos_k)` where `pos_best` is
+the most selective single-arg position and `pos_k` ranges over the remaining
+positions.  This is O(arity) pair evaluations, same cost as single-arg
+analysis.
+
+**Implementation steps:**
+
+1. Add `_build_joint_arg_index(clauses, arity, pos_i, pos_j)` near
+   `_build_arg_index`.
+
+2. Add `_analyze_joint_index_positions(clauses, arity, single_indexes)` that
+   takes the already-computed single-arg indexes, selects the best single-arg
+   position, and evaluates pairs `(best, k)` for `k != best`.  Returns the
+   `(pos_i, pos_j, joint_index_info)` triple with best discrimination, or
+   `None` if no pair beats the best single-arg index.
+
+3. In `compile_predicate_trampoline` (and simple-mode twin), after computing
+   `single_indexes`, call `_analyze_joint_index_positions`.  If a joint index
+   is found, compile it:
+   - One **joint bucket** function per `(ki, kj)` pair
+   - A **joint default** function for clauses with `_INDEX_VAR` in either
+     position
+   - Single-arg fallbacks for partial groundness (re-use the existing
+     single-arg dispatch for `pos_i` and `pos_j`)
+
+4. Integrate the new joint dispatch via a new
+   `_make_joint_dispatch_trampoline` (analogous to
+   `_make_groundness_dispatch_trampoline`).
+
+5. Run: `pytest tests/test_groundness_dispatch.py` and full suite.
+
+**Dependencies:** Phase 9a (compound keys) must be in place first so joint
+keys also benefit from compound-term discrimination.
+
+---
+
+#### Phase 9c — Secondary (hierarchical) dispatch
+
+**Motivation:**
+
+Phase 9b builds a flat `(ki, kj)` hash table — the best choice when both
+arguments are almost always ground.  But for predicates where argument `i` is
+frequently ground but `j` is only sometimes ground, a **hierarchical** (two-
+level) structure is more efficient:
+
+- Level 0: hash on `arg_i` → sub-bucket
+- Level 1: within sub-bucket, hash on `arg_j` → clause list (or small scan)
+
+With secondary indexing:
+- `arg_i` ground, `arg_j` unbound: O(1) level-0 lookup + O(k) scan of level-1 keys
+- Both ground: O(1) + O(1) two-level lookup
+
+With flat joint key:
+- `arg_i` ground, `arg_j` unbound: must fall through to single-arg `arg_i`
+  dispatch anyway (the joint table is unusable)
+- Both ground: O(1) flat lookup — same as secondary
+
+So secondary indexing strictly dominates for the partial-groundness cases,
+while matching flat joint key for the both-ground case.
+
+This approach is architecturally described in SWI-Prolog's indexing internals
+("largely prepared for secondary indexes") and is implemented in XSB's joint
+index directive `*(1)+3`.
+
+**Structure:**
+
+```python
+# Compile-time construction:
+level0 = {}
+for key0, bucket in arg_i_index["buckets"].items():
+    # Build a level-1 index over this bucket on arg_j
+    level1_idx = _build_arg_index(bucket, arity, pos_j,
+                                  threshold=2)  # lower threshold for sub-buckets
+    if level1_idx:
+        # level0 value: (level1_dict, default_for_level1_fn)
+        level0[key0] = (level1_idx["buckets"],
+                        compile_bucket(level1_idx["defaults"]))
+    else:
+        # sub-bucket too small to index — store directly
+        level0[key0] = (None, compile_bucket(bucket))
+```
+
+**Generated dispatch:**
+
+```python
+def dispatch(*args):
+    parent = args[1]
+    _ai = deref(args[pos_i + 2])
+    if is_var(_ai):
+        yield from fallback_fn(*args)
+    else:
+        try:
+            _level1 = level0_dict.get(_ai)
+        except TypeError:
+            _level1 = None
+        if _level1 is None:
+            yield from level0_default_fn(*args)
+        else:
+            level1_buckets, level1_default_fn = _level1
+            _aj = deref(args[pos_j + 2])
+            if is_var(_aj) or level1_buckets is None:
+                yield from level1_default_fn(*args)
+            else:
+                try:
+                    _bfn = level1_buckets.get(_aj)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from level1_default_fn(*args)
+    yield (parent, _DONE)
+```
+
+**When to use secondary vs. flat joint:**
+
+Use secondary indexing (9c) in preference to flat joint (9b) when the primary
+argument (`pos_i`) is the most selective single-arg position *and* the
+predicate has at least one argument that is sometimes (but not always) ground.
+A simple heuristic: if the coverage of joint-indexable clauses (both args
+ground in all clauses) is <80%, prefer secondary.
+
+**Implementation steps:**
+
+1. Add `_build_secondary_index(clauses, arity, pos_i, pos_j)` that returns a
+   nested dict structure: `{key_i: (level1_buckets_or_None, default_fn)}`.
+
+2. Add `_make_secondary_dispatch_trampoline(pos_i, pos_j, level0_dict,
+   level0_default_fn, fallback_fn, done)`.
+
+3. In `compile_predicate_trampoline`, select between phase-9b flat joint and
+   phase-9c secondary based on coverage heuristic, or always prefer secondary
+   (simpler rule).
+
+4. Run: `pytest` — full suite must pass.
+
+**Dependencies:** Phases 9a and 9b should be complete first so the secondary
+index inherits compound-key support.  Phase 9c is independent of 9b if
+implemented directly, but 9b provides useful groundwork.
+
+---
+
+#### Phase 9 — Generated code: what to look for
+
+The `clausal/tools/visualize.predicate_to_source` helper shows only the
+**inner match function** (the per-clause matching code).  It does **not** show
+the outer groundness-dispatch closure, which is a runtime Python closure built
+by `_make_groundness_dispatch_trampoline`.  To inspect both layers, use:
+
+```python
+import inspect
+from clausal.import_hook import PredicateFinder
+import sys
+sys.meta_path.insert(0, PredicateFinder())
+sys.path.insert(0, 'tests/fixtures')
+
+import color2_test as m           # example: Color2/2
+db = getattr(m, '$module').db
+
+# Outer dispatch closure:
+print(inspect.getsource(db.get_dispatch('Color2', 2)))
+
+# Bucket function (no source available from exec'd code; inspect closure vars):
+disp = db.get_dispatch('Color2', 2)
+for cell in disp.__closure__:
+    try:
+        v = cell.cell_contents
+        if isinstance(v, list) and v and isinstance(v[0], tuple):
+            for pos, idx_dict, dflt_fn in v:
+                print(f'pos={pos}, keys={list(idx_dict.keys())}')
+    except: pass
+
+# Inner match function (clauses only):
+from clausal.tools.visualize import predicate_to_source
+print(predicate_to_source('Color2', 2, db.clauses_for('Color2', 2), db, trampoline=True))
+```
+
+**Current generated dispatch closure** (from `inspect.getsource`):
+
+```python
+def dispatch(*args):
+    parent = args[1]
+    for _pos, _idx_dict, _dflt_fn in plans:
+        _a = deref(args[_pos + 2])
+        if not is_var(_a):
+            try:
+                _bfn = _idx_dict.get(_a)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from _dflt_fn(*args)
+            yield (parent, done)
+            return
+    yield from fallback_fn(*args)
+    yield (parent, done)
+```
+
+For `Color2/2` with 6 string-keyed facts, the existing dispatch:
+- Builds `plans = [(0, {'red': fn, 'orange': fn, …}, dflt), (1, {'warm': fn, 'cool': fn}, dflt)]`
+- When `arg0='red'` (ground): routes to `plans[0]` bucket immediately — O(1)
+- When only `arg1='warm'` (ground): falls through `plans[0]` (arg0 unbound), hits `plans[1]` — still O(1) for arg1
+
+**What is missing for compound-term heads (Phase 9a):**
+
+Given a predicate `Shape/2`:
+```
+Shape(circle(R), A) <- A := R * R
+Shape(rect(W, H), A) <- A := W * H
+Shape(triangle(B, Ht), A) <- A := B * Ht / 2
+Shape(polygon(N, S), A) <- A := N * S
+Shape(oval(Rx, Ry), A) <- A := Rx * Ry
+```
+
+**Current behavior** — all five clauses return `_INDEX_VAR` from
+`_extract_arg_key` (the compound arg is not a scalar, and the Var+Unify
+fallback only checks `_INDEXABLE_TYPES`).  `_analyze_index_positions` finds
+only arg1 (all `_INDEX_VAR` there too) — no indexing at all.  Every call
+does a full 5-clause linear scan.
+
+**After Phase 9a** — `_extract_arg_key` returns `('circle', 1)`, `('rect', 2)`,
+`('triangle', 2)`, `('polygon', 2)`, `('oval', 2)`.  The plans list gains:
+
+```python
+plans = [(0, {('circle',1): fn_circle, ('rect',2): fn_rect,
+              ('triangle',2): fn_tri, ('polygon',2): fn_poly,
+              ('oval',2): fn_oval}, dflt_fn)]
+```
+
+When `arg0=circle(5)` (ground):
+```python
+_a = deref(args[2])    # = circle(5) instance
+# not a scalar — but is_var(_a) is False
+_key = _a              # dispatched by identity... WRONG
+```
+
+Wait — the dispatch closure currently calls `_idx_dict.get(_a)` where `_a` is
+the dereffed argument value.  For Phase 9a to work, the dispatch must hash the
+argument using the **same key extraction** logic as the compile-time analysis —
+not the raw value.  A `circle(5)` instance at runtime will not match the
+compile-time key `('circle', 1)` in the dict.
+
+**The necessary runtime key extraction:**
+
+The dispatch closure must be extended to convert a runtime compound argument
+to a functor/arity tuple before the dict lookup.  The cleanest approach is a
+small helper `_runtime_arg_key(arg)` that mirrors `_extract_arg_key` for
+ground values:
+
+```python
+def _runtime_arg_key(a):
+    """Convert a dereffed ground arg to its dispatch key."""
+    if isinstance(a, _INDEXABLE_TYPES):
+        return a                          # scalar — key is value itself
+    if isinstance(a, Compound):
+        return (a.functor, len(a.args))   # compound — key is functor/arity
+    if is_term_instance(a):
+        cls = type(a)
+        return (cls.__name__, len(cls._fields))
+    return _INDEX_VAR                     # unhashable / unknown
+```
+
+This function must be emitted into the generated dispatch closure (added to
+`base_globals` under a stable name, e.g. `_arg_key`).
+
+**After Phase 9a — expected dispatch closure shape:**
+
+```python
+def dispatch(*args):
+    parent = args[1]
+    for _pos, _idx_dict, _dflt_fn in plans:
+        _a = deref(args[_pos + 2])
+        if not is_var(_a):
+            _k = _arg_key(_a)             # NEW: extract canonical key
+            if _k is not _INDEX_VAR:
+                try:
+                    _bfn = _idx_dict.get(_k)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from _dflt_fn(*args)
+                yield (parent, done)
+                return
+    yield from fallback_fn(*args)
+    yield (parent, done)
+```
+
+**After Phase 9a — bucket function for `('circle', 1)`:**
+
+With Phase 8 (body-to-head lifting) extended to handle compound terms, the
+lifted clause has `circle(R)` in head position 0, producing a `MatchClass`
+pattern.  The bucket function would look like:
+
+```python
+def Shape__p0_b_circle1(this_generator, _tramp_parent, arg0, arg1, trail):
+    _d0 = deref(arg0)
+    _d1 = deref(arg1)
+    match (_d0, _d1):
+        case [circle(_v_r), _v_a]:    # MatchClass(circle, [_v_r])
+            _mark = trail.mark()
+            try:
+                _gen1 = StepGenerator(Is._get_dispatch(), this_generator,
+                                      _v_a, Mult(_v_r, _v_r), trail)
+                _st2 = (yield (_gen1, None))
+                while _st2 is not _DONE:
+                    yield (_tramp_parent, None)
+                    _st2 = (yield (_gen1, None))
+            finally:
+                trail.undo(_mark)
+    yield (_tramp_parent, _DONE)
+```
+
+Note the `case [circle(_v_r), _v_a]` pattern: this is a Python structural
+pattern match on the `circle` class using `__match_args__`.  The `circle`
+class (a `PredicateMeta` instance with `_fields = ('r',)`) must be in
+`base_globals` for this to compile.  This is handled by the existing
+`_collect_head_types` machinery once Phase 8's lifting puts the compound into
+the head.
+
+**Phase 8 compound-lifting dependency:**
+
+Phase 8 (`_lift_clause_at_pos`) currently only lifts scalar terms
+(`_INDEXABLE_TYPES`).  For Phase 9a to yield the full benefit (O(1) bucket
+dispatch with no body unification overhead), Phase 8 must also lift compound
+terms.  The check in `_lift_clause_at_pos` should be extended:
+
+```python
+# Current (Phase 8 as designed):
+if goal.left is arg and isinstance(goal.right, _INDEXABLE_TYPES):
+    return goal.right
+
+# Extended for Phase 9a:
+if goal.left is arg and (isinstance(goal.right, _INDEXABLE_TYPES)
+                         or isinstance(goal.right, Compound)
+                         or is_term_instance(goal.right)):
+    return goal.right
+```
+
+This is a small change to Phase 8 but must be done before Phase 9a testing to
+confirm full optimization.
+
+---
+
+#### Phase 9 — Interaction with existing phases
+
+- **Phase 8 (body-to-head unification lifting)** must be extended (see above)
+  to handle compound terms for Phase 9a to eliminate body unification overhead.
+  The extension is small (2 extra isinstance checks) but is a hard dependency
+  for the bucket functions to use `MatchClass` patterns rather than
+  `MatchValue` wildcards.
+
+- **Phase 5 (deep indexing via structural trie)** is complementary to Phase 9:
+  Phase 5 generates intra-function trie dispatch (inside a single compiled
+  predicate function, before the match), while Phase 9 generates inter-function
+  dispatch (at the groundness-dispatch-closure level, routing to bucket
+  functions).  Both can coexist: the Phase 9 dispatch closure routes to a
+  bucket function that itself uses a Phase-5 structural trie.
+
+---
+
+#### Phase 9 — Interaction with future "specialized functions for known args"
+
+A planned future optimization (call it **Phase 10: call-site specialization**)
+will generate additional specialized predicate functions for call sites where
+argument values are statically known at compile time.  For example, a call
+`Color2('red', CAT)` in a clause body would, instead of:
+
+```python
+StepGenerator(Color2._get_dispatch(), this_generator, 'red', _v_cat, trail)
+```
+
+emit a direct reference to the pre-compiled bucket function for arg0='red':
+
+```python
+StepGenerator(Color2__p0_b_red, this_generator, 'red', _v_cat, trail)
+```
+
+bypassing the dispatch closure entirely.
+
+**Phase 9 enables Phase 10** — the bucket functions that Phase 9 compiles are
+exactly the specialized functions Phase 10 needs.  There is no conflict, but
+there is a coupling:
+
+1. **Bucket function accessibility:** Currently bucket functions are captured
+   inside the dispatch closure as local variables (`idx_dict` values) and are
+   not accessible from outside.  Phase 10 needs to reach them by argument
+   value key.  The fix: store bucket dicts in a side-accessible structure on
+   the predicate class or in `db`:
+
+   ```python
+   # When building bucket dict during compilation:
+   pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
+   # or equivalently on the Database:
+   db.set_index_plans(functor, arity, plans)
+   ```
+
+   Phase 10 can then look up `Color2._index_plans[0]['red']` at call-site
+   compile time without needing to invoke the dispatch closure.
+
+2. **Key format:** Phase 10's static analysis must use the same key extraction
+   as Phase 9a (`_runtime_arg_key` / `_extract_arg_key`).  For scalar args this
+   is trivial (the value is the key).  For compound args it is the
+   `(functor, arity)` tuple.  The `_runtime_arg_key` helper (introduced in 9a)
+   should be made available for both compile-time and runtime use.
+
+3. **Dynamic predicates:** Phase 7 already distinguishes locked vs. dynamic
+   predicates for dispatch caching.  The same guard applies to Phase 10: only
+   locked predicates can have their bucket functions captured at call-site
+   compile time.  Dynamic predicates must continue using the runtime dispatch
+   closure.
+
+4. **Recompilation:** When a predicate is dynamically asserted/retracted and
+   recompiled (lazy recompile), both the dispatch closure and the bucket dicts
+   are replaced atomically (same recompile call).  Phase 10's cached bucket
+   references in caller code would become stale — the same problem Phase 7
+   avoids by only caching locked predicates.  No new problem introduced.
+
+---
+
 ## Part 4 — Suggested implementation order
 
 | Phase | What | Type | Complexity | Priority |
@@ -965,11 +1599,17 @@ compiles correctly.
 | 7 | Cache dispatch for locked predicates | Runtime: attr lookup per call | Medium | Medium |
 | 8 | Body-to-head unification lifting | Runtime: 3 ops/clause in buckets | Small | Medium |
 | 5 | Deep indexing via pattern trie | Runtime: O(1) structural dispatch | Large | High (long term) |
+| 9a | Compound functor/arity key | Runtime: O(1) for compound heads | Small | High |
+| 9b | Joint key `(argI, argJ)` dispatch | Runtime: O(1) for two-arg tables | Medium | Medium |
+| 9c | Secondary (hierarchical) dispatch | Runtime: O(1)+partial-ground cases | Medium | Medium |
 
 Phases 2 and 3 are trivial one-liner fixes; do them first to clear the
 backlog.  Phase 1 is the highest-value runtime change and is the prerequisite
 for Phase 4.  Phase 4 is the prerequisite for Phase 5.  Phases 6 and 7 are
-independent and can be interleaved anywhere after Phase 1.
+independent and can be interleaved anywhere after Phase 1.  Phase 9a is
+independent of all prior phases and can be done at any time — it is the
+highest-value addition in Phase 9.  Phase 9b depends on 9a.  Phase 9c
+depends on 9a; can be done before or instead of 9b.
 
 ---
 
