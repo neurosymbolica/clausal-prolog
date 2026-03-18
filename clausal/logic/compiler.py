@@ -473,11 +473,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
     if isinstance(term, SetTerm):
         return []
 
-    # MutableDict / MutableSet: opaque Python objects, no logic vars inside
-    from clausal.terms import MutableDict, MutableSet  # noqa: PLC0415
-    if isinstance(term, (MutableDict, MutableSet)):
-        return []
-
     # SetLiteral (AST node): elements may contain vars
     from clausal.pythonic_ast.nodes import SetLiteral as _SL  # noqa: PLC0415
     if isinstance(term, _SL):
@@ -611,37 +606,6 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
 
     _walk(term)
     return types
-
-
-def _collect_opaque_from_term(term: Any) -> dict[str, Any]:
-    """Return a name→instance dict for MutableDict/MutableSet objects in *term*.
-
-    These are opaque Python values that cannot be reconstructed by the compiler
-    (unlike DictTerm/SetTerm which are pure).  Each instance is injected into
-    the compiled function's globals under a stable key ``_opaque_<id(obj)>``.
-    ``term_to_ast_expr`` emits a LoadName referencing the same key.
-    """
-    from clausal.terms import MutableDict, MutableSet  # noqa: PLC0415
-
-    opaques: dict[str, Any] = {}
-
-    def _walk(t: Any) -> None:
-        from clausal.logic.variables import deref  # noqa: PLC0415
-        t = deref(t)
-        if isinstance(t, (MutableDict, MutableSet)):
-            opaques[f"_opaque_{id(t)}"] = t
-        elif isinstance(t, Compound):
-            for a in t.args:
-                _walk(a)
-        elif isinstance(t, list):
-            for e in t:
-                _walk(e)
-        elif is_term_instance(t):
-            for name in term_field_names(t):
-                _walk(getattr(t, name))
-
-    _walk(term)
-    return opaques
 
 
 def _dotted_name_from_loadattr(node) -> str | None:
@@ -1108,12 +1072,7 @@ def term_to_ast_expr(
             values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
         )
 
-    from clausal.terms import DictTerm, SetTerm, MutableDict, MutableSet  # noqa: PLC0415
-
-    # MutableDict / MutableSet: opaque objects injected into globals by
-    # _collect_opaque_from_term; reference them by their unique key.
-    if isinstance(term, (MutableDict, MutableSet)):
-        return _name(f"_opaque_{id(term)}")
+    from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
 
     if isinstance(term, DictTerm):
         return _call(
