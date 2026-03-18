@@ -162,6 +162,40 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
 
     Sub-functions get distinct names (`{functor}__all`, `{functor}__b0`, `{functor}__dflt`) to avoid collisions when compiled via `functiondef_to_function`.
 
+    ### Bucket head lifting (Phase 8)
+
+    The `.clausal` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color("red", "warm")` is stored as:
+
+    ```
+    head = color(arg_0=Var(_5), arg_1=Var(_6))
+    body = [Unify(left=Var(_5), right="red"), Unify(left=Var(_6), right="warm")]
+    ```
+
+    Inside a bucket function for arg_0 = `"red"`, the body goal `Unify(Var(_5), "red")` is guaranteed to succeed — the dispatch layer already confirmed the argument is `"red"`. The resulting `trail.mark()` + `unify()` + `trail.undo()` triple is wasted work.
+
+    Before bucket compilation, `_lift_clause_at_pos(clause, pos)` removes this redundant Unify and places the ground value directly in the head. The head pattern compiler then emits `MatchValue("red")` instead of a wildcard capture, eliminating the three wasted operations:
+
+    ```python
+    # Before (wildcard + body unify):
+    case [_v0, _v1]:
+        _mark = trail.mark()
+        try:
+            _m = trail.mark()
+            if unify(_v0, "red", trail):   # always succeeds in this bucket
+                ...
+            trail.undo(_m)
+        finally: trail.undo(_mark)
+
+    # After (MatchValue — always matches in bucket context):
+    case ["red", _v1]:
+        _mark = trail.mark()
+        try:
+            ...
+        finally: trail.undo(_mark)
+    ```
+
+    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(Name_, "warm")`) remain fully correct. Only bucket functions are affected.
+
     ### Lazy recompile integration
 
     No changes to the Database or PredicateMeta invalidation mechanism were needed. When `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.

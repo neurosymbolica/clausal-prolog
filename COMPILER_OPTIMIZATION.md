@@ -824,6 +824,133 @@ where `_disp_Foo_2 = Foo._get_dispatch()` is captured once into
 
 5. Run: `pytest` — all tests must pass.
 
+### Phase 8 — Body-to-head unification lifting in indexed bucket functions ✓ DONE
+
+**Target:** Indexed bucket compilation loop, `compile_predicate_trampoline`,
+compiler.py:3951–3965
+
+**Background:** The `.clausal` term rewriter normalises every clause head to
+all-Var arguments, moving ground values into body `Unify` goals.  A fact
+`Edge(1, 2)` is stored as:
+
+```
+head = Edge(arg_0=Var(_5), arg_1=Var(_6))
+body = [Unify(left=Var(_5), right=1), Unify(left=Var(_6), right=2)]
+```
+
+When V2-2 groundness dispatch compiles the **bucket function** for arg_0 = 1,
+the compiled clause still contains `unify(_v5, 1, trail)` — a call that is
+guaranteed to succeed (because the dispatch already confirmed arg_0 is 1) and
+therefore wastes a `trail.mark()` + `unify()` + `trail.undo()` triple.
+
+**What changes:** For each bucket function at indexed position `pos` with
+bucket key `val`, apply `_lift_clause_at_pos(clause, pos)` to each clause
+before building the funcdef.  The helper:
+
+1. Finds the `Unify(Var_at_pos, val)` goal in the clause body's clean prefix
+   (a contiguous run of `Unify` goals before the first non-`Unify` goal).
+2. Replaces `Var_at_pos` in the head with `val`.
+3. Removes that `Unify` goal from the body.
+
+The resulting clause has a concrete term (`val`) at head position `pos`,
+causing `head_to_match_pattern` to emit a `MatchValue` (or `MatchClass` for
+compound terms) pattern instead of a wildcard capture.  The now-absent body
+`Unify` eliminates the mark/unify/undo triple.
+
+**Safety:** Bucket functions are called **only when arg_pos is already ground**
+(guaranteed by `_make_groundness_dispatch_trampoline`).  The fallback function
+(called for unbound args) always uses the **original, unlifted** clauses, so
+unbound-argument queries remain fully correct.
+
+**Before** (bucket for `Edge/2`, arg0 = 1):
+
+```python
+def Edge__p0_b0(this_generator, _tramp_parent, arg0, arg1, trail):
+    _d0 = deref(arg0)          # = 1, guaranteed by dispatch
+    _d1 = deref(arg1)
+    match (_d0, _d1):
+        case [_v5, _v6]:
+            _mark = trail.mark()
+            try:
+                _m14 = trail.mark()
+                if unify(_v5, 1, trail):   # always succeeds — wasted
+                    _m13 = trail.mark()
+                    if unify(_v6, 2, trail):
+                        yield (_tramp_parent, None)
+                    trail.undo(_m13)
+                trail.undo(_m14)           # wasted
+            finally:
+                trail.undo(_mark)
+    ...
+```
+
+**After** (Phase 8 lifts `Unify(Var5, 1)` into the head):
+
+```python
+def Edge__p0_b0(this_generator, _tramp_parent, arg0, arg1, trail):
+    _d0 = deref(arg0)          # = 1, matches MatchValue(1) below
+    _d1 = deref(arg1)
+    match (_d0, _d1):
+        case [1, _v6]:          # MatchValue(1) — always matches in bucket
+            _mark = trail.mark()
+            try:
+                _m13 = trail.mark()
+                if unify(_v6, 2, trail):   # still needed: arg1 may be unbound
+                    yield (_tramp_parent, None)
+                trail.undo(_m13)
+            finally:
+                trail.undo(_mark)
+    ...
+```
+
+**Eliminated per clause per call in the bucket path:**
+- 1 × `trail.mark()` (_m14)
+- 1 × `unify(_v5, 1, trail)` (guaranteed-succeed)
+- 1 × `trail.undo(_m14)`
+- 1 nesting level in the try block
+
+**Implementation steps:**
+
+1. Add `_lift_clause_at_pos(clause: Clause, pos: int) -> Clause` near
+   `_get_head_arg` (compiler.py:3583).  The function:
+   - Extracts the head arg at `pos`; returns `clause` unchanged if it is not
+     an unbound Var.
+   - Scans `clause.body` left-to-right through the clean prefix (stops at the
+     first non-`Unify` goal).
+   - Looks for `Unify(Var_vid, term)` or `Unify(term, Var_vid)` where
+     `Var_vid._id == head_arg._id` and `term` is not itself an unbound Var.
+   - Returns a new `Clause` with `term` at head position `pos` and the
+     matching `Unify` removed from the body.
+
+2. In the indexed bucket loop (`compile_predicate_trampoline`, lines
+   3953–3959), transform each bucket's clauses before building the funcdef:
+   ```python
+   for key, bucket_clauses in index["buckets"].items():
+       lifted_bucket = [_lift_clause_at_pos(cl, pos) for cl in bucket_clauses]
+       # Supply any new head types introduced by lifting to base_globals
+       _lifted_ht, _, _ = _collect_globals_info(lifted_bucket)
+       base_globals.update(_lifted_ht)
+       bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+       bdef = _build_predicate_trampoline_funcdef(
+           bname, arity, lifted_bucket,
+           _effective_db, body_compiler, emit_done=False,
+       )
+       idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+   ```
+   The fallback function (line 3943) and the per-position default function
+   (line 3960) continue to use the **original** `clauses` / `index["defaults"]`
+   — no change.
+
+3. Run: `pytest` — all tests must pass.  Use the visualiser to confirm bucket
+   functions show `case [1, _v6]:` instead of `case [_v5, _v6]:` for ground
+   facts.
+
+**Note on globals:** For simple scalar lifts (int, str, atom — the common
+case), `_lifted_ht` is empty and `base_globals.update` is a no-op.  For
+compound-term lifts (e.g. `X = f(A, B)` → head contains `f(A, B)`), the
+helper's class is added to globals so that the emitted `MatchClass` pattern
+compiles correctly.
+
 ---
 
 ## Part 4 — Suggested implementation order
@@ -836,6 +963,7 @@ where `_disp_Foo_2 = Foo._get_dispatch()` is captured once into
 | 4 | Single match per predicate | Structural cleanup + trie prep | Small | Medium |
 | 6 | Merge clause traversal passes | Compile-time | Medium | Medium |
 | 7 | Cache dispatch for locked predicates | Runtime: attr lookup per call | Medium | Medium |
+| 8 | Body-to-head unification lifting | Runtime: 3 ops/clause in buckets | Small | Medium |
 | 5 | Deep indexing via pattern trie | Runtime: O(1) structural dispatch | Large | High (long term) |
 
 Phases 2 and 3 are trivial one-liner fixes; do them first to clear the

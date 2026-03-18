@@ -3591,6 +3591,81 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
     return None
 
 
+def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
+    """Phase 8: lift the body Unify for head position *pos* into the head.
+
+    In bucket compilation contexts the indexed argument is already guaranteed
+    ground by the dispatch layer.  Any leading body ``Unify(Var_at_pos, val)``
+    is therefore redundant and can be absorbed into the head, letting
+    ``head_to_match_pattern`` emit a ``MatchValue``/``MatchClass`` pattern
+    rather than a wildcard capture.  This eliminates one ``trail.mark()`` +
+    ``unify(...)`` + ``trail.undo()`` triple per clause per invocation.
+
+    The transformation is a no-op when:
+    - the head arg at *pos* is already a concrete term (not a Var), or
+    - no matching ``Unify`` is found in the body's clean prefix (the
+      contiguous run of ``Unify`` goals before the first non-``Unify`` goal).
+
+    Only called from the indexed bucket path — the fallback function always
+    uses the original unlifted clauses.
+    """
+    head = clause.head
+    # Extract the head arg at pos
+    if isinstance(head, Compound):
+        if pos >= len(head.args):
+            return clause
+        head_arg = deref(head.args[pos])
+    elif is_term_instance(head):
+        fields = list(term_field_names(head))
+        if pos >= len(fields):
+            return clause
+        head_arg = deref(getattr(head, fields[pos]))
+    else:
+        return clause
+
+    # Only lift when the head arg is an unbound Var
+    if not is_var(head_arg):
+        return clause
+    vid = head_arg._id
+
+    # Scan the body clean prefix for Unify(Var_vid, term) or Unify(term, Var_vid)
+    # Stop at the first non-Unify goal (that is the clean-prefix boundary).
+    unify_idx = None
+    lift_term = None
+    for i, goal in enumerate(clause.body):
+        if not isinstance(goal, Unify):
+            break  # end of clean prefix
+        left_d = deref(goal.left)
+        right_d = deref(goal.right)
+        if is_var(left_d) and left_d._id == vid and not is_var(right_d):
+            unify_idx = i
+            lift_term = goal.right   # use original (not deref'd) for nested Vars
+            break
+        if is_var(right_d) and right_d._id == vid and not is_var(left_d):
+            unify_idx = i
+            lift_term = goal.left
+            break
+        # Other Unify for a different var — keep scanning
+
+    if unify_idx is None:
+        return clause  # no liftable unification found
+
+    # Rebuild head with lift_term at pos
+    if isinstance(head, Compound):
+        new_args = list(head.args)
+        new_args[pos] = lift_term
+        new_head = Compound(head.functor, tuple(new_args))
+    else:  # is_term_instance
+        fields = list(term_field_names(head))
+        new_kwargs = {f: getattr(head, f) for f in fields}
+        new_kwargs[fields[pos]] = lift_term
+        new_head = type(head)(**new_kwargs)
+
+    # Remove the matched Unify from the body
+    new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]
+    return Clause(head=new_head, body=new_body)
+
+
 def _classify_list_key(arg: Any) -> str:
     """Classify a head argument as ``"nil"``, ``"cons"``, ``"var"``, or ``"other"``.
 
@@ -3951,9 +4026,24 @@ def compile_predicate_trampoline(
             for pos, index in index_positions:
                 idx_dict: dict = {}
                 for key, bucket_clauses in index["buckets"].items():
+                    # Phase 8: lift the indexed-position body Unify into the
+                    # head so that head_to_match_pattern emits a MatchValue/
+                    # MatchClass pattern instead of a wildcard capture.
+                    # The bucket function is only called when arg_pos is
+                    # ground (guaranteed by dispatch), so the removed Unify
+                    # would always succeed — lifting is semantically safe.
+                    lifted_bucket = [
+                        _lift_clause_at_pos(cl, pos) for cl in bucket_clauses
+                    ]
+                    # No extra globals update needed: any compound type that
+                    # appears in the lifted head was already in the original
+                    # clause body and collected by _collect_globals_info(clauses)
+                    # above.  Calling it again on lifted_bucket would
+                    # re-collect term-node classes (Unify, In, …) and
+                    # clobber predicate entries set by _inject_resolved_targets.
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
                     bdef = _build_predicate_trampoline_funcdef(
-                        bname, arity, bucket_clauses,
+                        bname, arity, lifted_bucket,
                         _effective_db, body_compiler, emit_done=False,
                     )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
