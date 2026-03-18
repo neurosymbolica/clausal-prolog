@@ -73,6 +73,7 @@ nav:
     - scipy.interpolate: scipy_interpolate.md
     - scipy.fft: scipy_fft.md
     - scipy.ndimage: scipy_ndimage.md
+    - scipy.spatial: scipy_spatial.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
