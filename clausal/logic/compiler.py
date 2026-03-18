@@ -1750,11 +1750,12 @@ def compile_goal(
             right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts)
             # Note: both branches share var_context; body-only vars in Or
             # branches that differ between branches are a known POC limitation.
+            # After trail.undo(mark) the trail is already back at mark, so the
+            # second _assign_mark would be a no-op — omit it.
             return [
                 _assign_mark(mark, trail_name),
                 *left_stmts,
                 _undo_stmt(mark, trail_name),
-                _assign_mark(mark, trail_name),
                 *right_stmts,
                 _undo_stmt(mark, trail_name),
             ]
@@ -2728,11 +2729,12 @@ def compile_goal_trampoline(
             right_stmts = compile_goal_trampoline(
                 r, db, var_context, trail_name, k_stmts, self_name, parent_name
             )
+            # After trail.undo(mark) the trail is already back at mark, so the
+            # second _assign_mark would be a no-op — omit it.
             return [
                 _assign_mark(mark, trail_name),
                 *left_stmts,
                 _undo_stmt(mark, trail_name),
-                _assign_mark(mark, trail_name),
                 *right_stmts,
                 _undo_stmt(mark, trail_name),
             ]
@@ -3108,12 +3110,12 @@ def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail
 
     if swap:
         true_stmts, false_stmts = else_stmts, then_stmts
+        unify_branch, dif_branch = else_stmts, then_stmts
     else:
         true_stmts, false_stmts = then_stmts, else_stmts
+        unify_branch, dif_branch = then_stmts, else_stmts
 
     mark = _fresh("_m")
-    unify_branch = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    dif_branch = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -3155,15 +3157,13 @@ def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail
     else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     mark = _fresh("_m")
-    fd_then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    fd_else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     undetermined = [
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), fd_then_stmts),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
         _undo_stmt(mark, trail_name),
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), fd_else_stmts),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
         _undo_stmt(mark, trail_name),
     ]
 
@@ -3407,6 +3407,20 @@ def _build_predicate_trampoline_funcdef(
 
     all_stmts: list[ast.stmt] = []
 
+    if clauses and arity > 0:
+        # Deref each argument once into a local before the clause match arms.
+        # All N clauses share the same deref'd locals — no need to re-deref per clause.
+        deref_names = [f"_d{i}" for i in range(arity)]
+        for i, arg in enumerate(arg_names):
+            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+        subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
+    else:
+        # arity==0 or no clauses: subject is still needed for the match shape
+        subject = ast.Tuple(
+            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
+            ctx=ast.Load(),
+        )
+
     for clause in clauses:
         var_context: dict[int, str] = {}
         _head_arg_patterns(clause.head, var_context, arity)
@@ -3416,10 +3430,6 @@ def _build_predicate_trampoline_funcdef(
             body_stmts=body_stmts,
             var_context=var_context,
             arity=arity,
-        )
-        subject = ast.Tuple(
-            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
-            ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
@@ -4832,6 +4842,18 @@ def _build_predicate_funcdef(
 
     all_stmts: list[ast.stmt] = []
 
+    if clauses and arity > 0:
+        # Deref each argument once into a local before the clause match arms.
+        deref_names = [f"_d{i}" for i in range(arity)]
+        for i, arg in enumerate(arg_names):
+            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+        subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
+    else:
+        subject = ast.Tuple(
+            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
+            ctx=ast.Load(),
+        )
+
     for clause in clauses:
         var_context: dict[int, str] = {}
         _head_arg_patterns(clause.head, var_context, arity)
@@ -4841,10 +4863,6 @@ def _build_predicate_funcdef(
             body_stmts=body_stmts,
             var_context=var_context,
             arity=arity,
-        )
-        subject = ast.Tuple(
-            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
-            ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
