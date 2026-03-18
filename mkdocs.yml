@@ -65,6 +65,9 @@ nav:
     - UUIDs: uuid.md
     - Graphs: graphs.md
     - scikit-learn: sklearn.md
+    - scipy.special: scipy_special.md
+    - scipy.linalg: scipy_linalg.md
+    - scipy.optimize: scipy_optimize.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md

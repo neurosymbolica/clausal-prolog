@@ -103,3 +103,4 @@ for s in m.query(grandparent("tom", G)):
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
 | [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
 | [scipy.linalg](scipy_linalg.md) | Linear algebra — solvers, decompositions, matrix functions, factorisations |
+| [scipy.optimize](scipy_optimize.md) | Optimisation — minimisation, root finding, curve fitting, linear programming |
