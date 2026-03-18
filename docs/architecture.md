@@ -49,15 +49,20 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 
 The simplest approach — nested Python generators that `yield` solutions up a chain — has linear overhead per solution proportional to the search depth, and hits Python's recursion limit for deep recursive predicates. `yield from` in Python is designed for shallow nesting; it is not a substitute for tail-call elimination.
 
+To make this concrete: a left-recursive predicate like `append/3` called on a list of length N creates a call stack N frames deep. Each frame is a generator that `yield from`s the next. Python's default recursion limit is 1000; at list length 1000 you get a `RecursionError`. Raising `sys.setrecursionlimit` helps, but the limit is a safety valve against unbounded stack growth, not a solution to it. Stack frames are large (several hundred bytes each), and truly deep recursion (e.g., a search over a graph with millions of nodes) will exhaust memory long before any limit you can set.
+
 `asyncio` is worse: `await` has similar overhead, and the stack depth limit before segfault is lower than with plain generators.
 
 ### CPS + trampoline
 
 Logic predicates compiled to continuation-passing style (CPS) avoid the linear yield-chain overhead, but CPS requires tail-call optimisation — which Python does not provide and almost certainly never will (Guido's explicit position).
 
-The solution is a **trampoline**: a driver loop that receives the next continuation to execute, rather than having continuations call each other directly. This gives:
+The solution is a **trampoline**: a driver loop that receives the next continuation to execute, rather than having continuations call each other directly. Instead of each predicate calling the next predicate (which grows the call stack), each predicate *yields* a description of what to call next, and the trampoline loop (a single function on the Python stack) dispatches it. The stack depth remains constant regardless of the depth of the logic search.
 
-- true tail-call elimination (constant stack depth)
+This gives:
+
+- **bounded stack depth** — the trampoline loop runs at a fixed stack depth; deep or infinitely recursive predicates do not exhaust the Python call stack or trigger `RecursionError`
+- true tail-call elimination (constant stack depth for deterministic chains)
 - the ability to interrupt execution for timeouts, concurrency, asyncio interop
 - a point of control that can be swapped (e.g. a C trampoline for reduced overhead)
 
