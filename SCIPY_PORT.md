@@ -231,7 +231,7 @@ variadic scipy functions take:
 | 4 | `scipy.stats` (tests + distributions) | ⬜ next — Tier 2/3 |
 | 5 | `scipy.integrate` | ✅ done — `clausal/modules/py/scipy_integrate.py`, 55 tests |
 | 6 | `scipy.interpolate` | ✅ done — `clausal/modules/py/scipy_interpolate.py`, tests + docs |
-| 7 | `scipy.fft` | ⬜ pure, straightforward |
+| 7 | `scipy.fft` | ✅ done — `clausal/modules/py/scipy_fft.py`, 58 tests + 7 .clausal + docs |
 | 8 | `scipy.ndimage` | ⬜ pure, domain-specific |
 | 9 | `scipy.signal` | ⬜ mixed, domain-specific |
 | 10 | `scipy.spatial` | ⬜ Tier 1 (distances) + Tier 3 (trees) |
@@ -541,52 +541,52 @@ LinalgChoSolve(C_LOWER=, B=, OVERWRITE_B=False, CHECK_FINITE=True, RESULT=)
 ### MODULE: scipy.fft
 **Tier 1 — pure functions**
 **SciPy source**: `scipy.fft`
-**Predicate prefix**: `Fft`
+**Predicate prefix**: `FFT`
 
 ```
-FftFft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
+FFTFFT(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.fft(x, ...)
 
-FftIfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
+FFTIfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.ifft(x, ...)
 
-FftFft2(X=, S=None, AXES=(-2,-1), NORM=None, WORKERS=None, RESULT=)
+FFTFFT2(X=, S=None, AXES=(-2,-1), NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.fft2(x, ...)
 
-FftIfft2(X=, S=None, AXES=(-2,-1), NORM=None, WORKERS=None, RESULT=)
+FFTIfft2(X=, S=None, AXES=(-2,-1), NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.ifft2(x, ...)
 
-FftFftn(X=, S=None, AXES=None, NORM=None, WORKERS=None, RESULT=)
+FFTFFTn(X=, S=None, AXES=None, NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.fftn(x, ...)
 
-FftRfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
+FFTRfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.rfft(x, ...)             # real input → half-spectrum
 
-FftIrfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
+FFTIrfft(X=, N=None, AXIS=-1, NORM=None, WORKERS=None, RESULT=)
     → scipy.fft.irfft(x, ...)
 
-FftDct(X=, TYPE=2, N=None, AXIS=-1, NORM=None, OVERWRITE_X=False,
+FFTDct(X=, TYPE=2, N=None, AXIS=-1, NORM=None, OVERWRITE_X=False,
        WORKERS=None, ORTHOGONALIZE=None, RESULT=)
     → scipy.fft.dct(x, ...)              # discrete cosine transform
 
-FftIdct(X=, TYPE=2, N=None, AXIS=-1, NORM=None, OVERWRITE_X=False,
+FFTIdct(X=, TYPE=2, N=None, AXIS=-1, NORM=None, OVERWRITE_X=False,
         WORKERS=None, ORTHOGONALIZE=None, RESULT=)
     → scipy.fft.idct(x, ...)
 
-FftFftfreq(N=, D=1.0, RESULT=)
+FFTFFTfreq(N=, D=1.0, RESULT=)
     → scipy.fft.fftfreq(n, d=D)          # sample frequencies for fft output
 
-FftRfftfreq(N=, D=1.0, RESULT=)
+FFTRfftfreq(N=, D=1.0, RESULT=)
     → scipy.fft.rfftfreq(n, d=D)
 
-FftFftshift(X=, AXES=None, RESULT=)
+FFTFFTshift(X=, AXES=None, RESULT=)
     → scipy.fft.fftshift(x, ...)         # shift zero-freq to centre
 
-FftIfftshift(X=, AXES=None, RESULT=)
+FFTIfftshift(X=, AXES=None, RESULT=)
     → scipy.fft.ifftshift(x, ...)
 ```
 
-**Common pipeline**: `FftRfft` → process spectrum → `FftIrfft`
+**Common pipeline**: `FFTRfft` → process spectrum → `FFTIrfft`
 
 ---
 
@@ -1292,7 +1292,7 @@ SignalConvolve(IN1=, IN2=, MODE='full', METHOD='auto', RESULT=)
 SignalCorrelate(IN1=, IN2=, MODE='full', METHOD='auto', RESULT=)
     → scipy.signal.correlate(in1, in2, ...)
 
-SignalFftconvolve(IN1=, IN2=, MODE='full', AXES=None, RESULT=)
+SignalFFTconvolve(IN1=, IN2=, MODE='full', AXES=None, RESULT=)
     → scipy.signal.fftconvolve(in1, in2, ...)
 ```
 
@@ -1585,7 +1585,7 @@ documented as examples in each module's implementation:
 |------|-------|
 | **Curve fitting** | `OptimizeCurveFit` → inspect `popt`, `pcov` |
 | **ODE integration** | `IntegrateSolveIvp` → `IntegrateResultGet(t)` + `(y)` |
-| **Spectral analysis** | `FftRfft` → process → `FftIrfft` |
+| **Spectral analysis** | `FFTRfft` → process → `FFTIrfft` |
 | **Filter-then-apply** | `SignalButter(OUTPUT='sos')` → `SignalSosfiltfilt` |
 | **Spline interpolation** | `MakeSpline` → `EvalSpline` → `SplineIntegral` → `Free` |
 | **Hierarchical clustering** | `ClusterLinkage` → `ClusterFcluster` |
