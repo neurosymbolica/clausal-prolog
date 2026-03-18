@@ -101,3 +101,5 @@ for s in m.query(grandparent("tom", G)):
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
 | [SQLite](sqlite.md) | SQLite database predicates |
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
+| [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
+| [scipy.linalg](scipy_linalg.md) | Linear algebra — solvers, decompositions, matrix functions, factorisations |
