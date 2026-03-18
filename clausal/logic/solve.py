@@ -113,6 +113,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         _collect_vars,
         _var_python_name,
         _collect_types_from_term,
+        _collect_opaque_from_term,
     )
 
     db = module.db
@@ -129,6 +130,9 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # Also collect user-defined dataclass types that appear in the goal args
     # so that term_to_ast_expr can reference them in the compiled code.
     extra_globals.update(_collect_types_from_term(goal))
+    # Collect opaque Python values (MutableDict, MutableSet) so that
+    # term_to_ast_expr can reference them by their _opaque_<id> key.
+    extra_globals.update(_collect_opaque_from_term(goal))
 
     def _query_body_compiler(clause: Clause, var_context: dict) -> list:
         # Pre-populate var_context so _preallocate_body_vars skips user Vars

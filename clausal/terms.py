@@ -255,6 +255,143 @@ class SetTerm:
         return self._elements == other._elements
 
 
+# ── Mutable variants with Trail-backed undo ───────────────────────────────────
+
+_ABSENT = object()  # sentinel: key was not present
+
+
+class MutableDict:
+    """Mutable dict with backtrackable updates via Trail.
+
+    Use this when you need to accumulate key-value pairs inside a search
+    (e.g. inside findall or a recursive accumulator) without paying the
+    O(N) copy cost of DictTerm functional updates.
+
+    All mutations are recorded on the Trail so backtracking undoes them.
+    Call ``freeze()`` to obtain an immutable ``DictTerm`` snapshot.
+
+    Not a term — does not participate in unification.
+    """
+    __slots__ = ("_data",)
+
+    def __init__(self, initial=None):
+        self._data = dict(initial) if initial else {}
+
+    # ── read access ────────────────────────────────────────────────────────
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __len__(self):
+        return len(self._data)
+
+    def keys(self):   return self._data.keys()
+    def values(self): return self._data.values()
+    def items(self):  return self._data.items()
+
+    # ── trailed mutations ──────────────────────────────────────────────────
+
+    def put(self, key, value, trail):
+        """Set key → value, recording the old value on trail for undo."""
+        old = self._data.get(key, _ABSENT)
+        data = self._data
+
+        def _undo():
+            if old is _ABSENT:
+                data.pop(key, None)
+            else:
+                data[key] = old
+
+        trail.record(_undo)
+        self._data[key] = value
+
+    def remove(self, key, trail):
+        """Remove key, recording on trail for undo. No-op if key absent."""
+        if key not in self._data:
+            return
+        old = self._data[key]
+        data = self._data
+
+        def _undo():
+            data[key] = old
+
+        trail.record(_undo)
+        del self._data[key]
+
+    # ── conversion ────────────────────────────────────────────────────────
+
+    def freeze(self):
+        """Return an immutable DictTerm snapshot of the current state."""
+        return DictTerm(self._data)
+
+    def __repr__(self):
+        inner = ", ".join(f"{k!r}: {v!r}" for k, v in self._data.items())
+        return f"MutableDict({{{inner}}})"
+
+
+class MutableSet:
+    """Mutable set with backtrackable updates via Trail.
+
+    Like MutableDict but for sets.  Elements must be ground (hashable).
+    All mutations are recorded on the Trail so backtracking undoes them.
+    Call ``freeze()`` to obtain an immutable ``SetTerm`` snapshot.
+
+    Not a term — does not participate in unification.
+    """
+    __slots__ = ("_data",)
+
+    def __init__(self, initial=None):
+        self._data = set(initial) if initial else set()
+
+    # ── read access ────────────────────────────────────────────────────────
+
+    def __contains__(self, elem): return elem in self._data
+    def __len__(self):            return len(self._data)
+    def __iter__(self):           return iter(self._data)
+
+    # ── trailed mutations ──────────────────────────────────────────────────
+
+    def add(self, elem, trail):
+        """Add elem, recording on trail for undo. No-op if already present."""
+        if elem in self._data:
+            return
+        data = self._data
+
+        def _undo():
+            data.discard(elem)
+
+        trail.record(_undo)
+        self._data.add(elem)
+
+    def remove(self, elem, trail):
+        """Remove elem, recording on trail for undo. No-op if absent."""
+        if elem not in self._data:
+            return
+        data = self._data
+
+        def _undo():
+            data.add(elem)
+
+        trail.record(_undo)
+        self._data.remove(elem)
+
+    # ── conversion ────────────────────────────────────────────────────────
+
+    def freeze(self):
+        """Return an immutable SetTerm snapshot of the current state."""
+        return SetTerm(self._data)
+
+    def __repr__(self):
+        inner = ", ".join(repr(e) for e in sorted(self._data, key=repr))
+        return f"MutableSet({{{inner}}})"
+
+
 # ── Cons / list helpers ────────────────────────────────────────────────────────
 
 def list_to_cons(lst: list) -> object:
@@ -346,6 +483,12 @@ def term_str(t: Any) -> str:
     if isinstance(t, SetTerm):
         inner = ", ".join(term_str(e) for e in sorted(t.elements, key=repr))
         return "{" + inner + "}"
+    if isinstance(t, MutableDict):
+        inner = ", ".join(f"{term_str(k)}: {term_str(v)}" for k, v in t.items())
+        return "MutableDict({" + inner + "})"
+    if isinstance(t, MutableSet):
+        inner = ", ".join(term_str(e) for e in sorted(t, key=repr))
+        return "MutableSet({" + inner + "})"
 
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -381,6 +524,8 @@ __all__ = [
     "Compound",
     "DictTerm",
     "SetTerm",
+    "MutableDict",
+    "MutableSet",
     "KWTerm",
     "ArithConstraint",
     "PyThunk",

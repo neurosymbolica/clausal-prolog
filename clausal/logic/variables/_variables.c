@@ -392,7 +392,7 @@ static PyTypeObject AttVarType = {
  * each get their own wakeup slice.
  * ================================================================ */
 
-typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1 } TrailEntryKind;
+typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2 } TrailEntryKind;
 
 typedef struct {
     TrailEntryKind kind;
@@ -406,6 +406,9 @@ typedef struct {
             PyObject *key;         /* owned ref */
             PyObject *old_attr;    /* owned ref, NULL = key was absent */
         } attr;
+        struct {
+            PyObject *fn;          /* callable(), owned ref */
+        } callback;
     } u;
 } TrailEntry;
 
@@ -445,10 +448,13 @@ Trail_dealloc(TrailObject *self)
         if (e->kind == TRAIL_BINDING) {
             Py_DECREF(e->u.binding.var);
             Py_XDECREF(e->u.binding.old_value);
-        } else {
+        } else if (e->kind == TRAIL_ATTR) {
             Py_DECREF(e->u.attr.attvar);
             Py_DECREF(e->u.attr.key);
             Py_XDECREF(e->u.attr.old_attr);
+        } else {
+            /* TRAIL_CALLBACK */
+            Py_DECREF(e->u.callback.fn);
         }
     }
     PyMem_Free(self->entries);
@@ -464,10 +470,13 @@ Trail_traverse(TrailObject *self, visitproc visit, void *arg)
         if (e->kind == TRAIL_BINDING) {
             Py_VISIT(e->u.binding.var);
             Py_VISIT(e->u.binding.old_value);
-        } else {
+        } else if (e->kind == TRAIL_ATTR) {
             Py_VISIT(e->u.attr.attvar);
             Py_VISIT(e->u.attr.key);
             Py_VISIT(e->u.attr.old_attr);
+        } else {
+            /* TRAIL_CALLBACK */
+            Py_VISIT(e->u.callback.fn);
         }
     }
     Py_VISIT(self->wakeup_list);
@@ -484,10 +493,13 @@ Trail_clear(TrailObject *self)
         if (e->kind == TRAIL_BINDING) {
             Py_DECREF(e->u.binding.var);
             Py_XDECREF(e->u.binding.old_value);
-        } else {
+        } else if (e->kind == TRAIL_ATTR) {
             Py_DECREF(e->u.attr.attvar);
             Py_DECREF(e->u.attr.key);
             Py_XDECREF(e->u.attr.old_attr);
+        } else {
+            /* TRAIL_CALLBACK */
+            Py_DECREF(e->u.callback.fn);
         }
     }
     Py_CLEAR(self->wakeup_list);
@@ -567,6 +579,25 @@ trail_push_attr(TrailObject *trail, AttVarObject *attvar,
 }
 
 /*
+ * trail_push_callback — record a Python no-arg callable to be called on undo.
+ *
+ * When trail_undo_to processes a TRAIL_CALLBACK entry it calls fn() with no
+ * arguments.  Exceptions are cleared (undo must always complete).
+ *
+ * The trail takes an owned reference to fn.
+ */
+static int
+trail_push_callback(TrailObject *trail, PyObject *fn)
+{
+    if (trail_grow(trail) < 0) return -1;
+    TrailEntry *e = &trail->entries[trail->length++];
+    e->kind = TRAIL_CALLBACK;
+    Py_INCREF(fn);
+    e->u.callback.fn = fn;
+    return 0;
+}
+
+/*
  * trail_enqueue_wakeup — append (attvar, bound_to) to trail->wakeup_list.
  *
  * Does nothing if wakeup_list is NULL (i.e. we are not inside py_unify).
@@ -606,7 +637,7 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
             Py_XDECREF(var->binding);
             var->binding = old;    /* transfer ownership: trail → var */
             Py_DECREF(var);
-        } else {
+        } else if (e->kind == TRAIL_ATTR) {
             /* Restore attribute */
             AttVarObject *av  = (AttVarObject *)e->u.attr.attvar;
             PyObject     *key = e->u.attr.key;
@@ -624,6 +655,15 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
             Py_DECREF(e->u.attr.attvar);
             Py_DECREF(key);
             Py_XDECREF(old);    /* release trail's owned ref */
+        } else {
+            /* TRAIL_CALLBACK — call fn() to perform undo */
+            PyObject *fn  = e->u.callback.fn;
+            PyObject *ret = PyObject_CallNoArgs(fn);
+            if (ret == NULL)
+                PyErr_Clear();  /* undo must always complete */
+            else
+                Py_DECREF(ret);
+            Py_DECREF(fn);
         }
     }
     trail->length = mark;
@@ -663,6 +703,35 @@ Trail_reset(TrailObject *self, PyObject *Py_UNUSED(args))
 }
 
 static PyObject *
+Trail_record(TrailObject *self, PyObject *fn)
+{
+    /* trail.record(callable) — push a no-arg undo callback onto the trail.
+     *
+     * The callable will be invoked (with no arguments) when trail.undo()
+     * processes this entry during backtracking.  Exceptions raised by the
+     * callable are silently cleared so that undo always completes.
+     *
+     * Typical usage from Python::
+     *
+     *     old = self._data.get(key, _ABSENT)
+     *     def _undo():
+     *         if old is _ABSENT:
+     *             self._data.pop(key, None)
+     *         else:
+     *             self._data[key] = old
+     *     trail.record(_undo)
+     *     self._data[key] = value
+     */
+    if (!PyCallable_Check(fn)) {
+        PyErr_SetString(PyExc_TypeError, "trail.record() argument must be callable");
+        return NULL;
+    }
+    if (trail_push_callback(self, fn) < 0)
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 Trail_repr(TrailObject *self)
 {
     return PyUnicode_FromFormat("Trail(length=%zd)", self->length);
@@ -689,6 +758,13 @@ static PyMethodDef Trail_methods[] = {
      "reset()\n"
      "\n"
      "Undo every binding and attribute change on this trail (undo(0))."},
+    {"record", (PyCFunction)Trail_record, METH_O,
+     "record(callable)\n"
+     "\n"
+     "Push a no-arg undo callback onto the trail.  The callable will be\n"
+     "invoked (with no arguments) when trail.undo() processes this entry\n"
+     "during backtracking.  Useful for recording mutable-state mutations\n"
+     "that must be reversed on backtrack (e.g. MutableDict, MutableSet)."},
     {NULL, NULL, 0, NULL}
 };
 
