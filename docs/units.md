@@ -47,6 +47,29 @@ single named unit predicate works. For compound or unusual units, use
 custom := ++(Kilogram(1) * Meter(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
 ```
 
+### `n()` — dimensionless literal
+
+An empty-argument call on any numeric literal produces a dimensionless
+`Dimensioned(n, {})`:
+
+```python
+42()      # → Dimensioned(42,   {})
+3.14()    # → Dimensioned(3.14, {})
+0()       # → Dimensioned(0,    {})
+```
+
+This is equivalent to `++(Dimensioned(n, {}))` or calling the `Dimensionless`
+predicate. The value participates in unit arithmetic — dividing two compatible
+quantities to get a ratio is a common result:
+
+```python
+RATIO := 50(Meter) / 10(Meter)   # → Dimensioned(5.0, {})
+IsDimensionless(RATIO)            # succeeds
+RATIO == 5.0()                    # succeeds
+```
+
+`IsDimensionless` also succeeds for plain Python ints/floats.
+
 ### `X(Unit)` — dimension constraint on a variable
 
 When the callee is a logic variable, `X(Unit)` desugars to `HasUnits(X, Unit)`:
@@ -257,6 +280,29 @@ unify(v, Newton(9.8), trail)   # fires hook → checks dims → binds v
 
 The hook fires on unification, checks dims match, and rejects if they don't.
 The constraint is undone if the trail is rewound past the mark where it was posted.
+
+---
+
+## Catching unit errors
+
+`UnitsMismatch` is a plain Python exception raised when incompatible units are
+combined inside `++()` escapes. It is catchable via `catch/3` using the
+`python_error(ClassName, Message)` pattern:
+
+```python
+catch(
+    ++(Meter(3) + Second(2)),           # raises UnitsMismatch
+    python_error("UnitsMismatch", MSG), # MSG bound to the error string
+    1 == 1                              # recovery goal
+)
+```
+
+The `python_error/2` term is the general form for any Python exception that
+escapes through a `++()` escape — see [Exception Handling](exceptions.md) for
+the full treatment.
+
+If the catcher pattern does not match the raised exception, the exception is
+re-raised and continues to propagate.
 
 ---
 

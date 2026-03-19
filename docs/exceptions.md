@@ -38,6 +38,20 @@ safe_div(X_, Y_, R_) <- Catch(
 
 If the thrown term does not unify with Catcher, the exception propagates to the next enclosing `Catch` or surfaces as a Python `LogicException`.
 
+`catch/3` also intercepts **plain Python exceptions** raised inside the goal
+(including from `++()` escapes). These are wrapped as
+`python_error(ClassName, Message)` so the catcher can match on them:
+
+```python
+catch(
+    ++(some_python_call()),
+    python_error("ValueError", MSG),
+    handle_error(MSG)
+)
+```
+
+If the Python exception does not match the catcher it is re-raised unchanged.
+
 ### halt/0, halt/1
 
 ```
@@ -128,20 +142,54 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     ---
 
+## python_error/2
+
+Any plain Python exception that escapes through a `++()` escape or other
+Python-level code inside a goal is automatically wrapped:
+
+```
+python_error(ClassName, Message)
+```
+
+where `ClassName` is the exception class name (a string) and `Message` is
+`str(exc)`. This term can be matched in a catcher pattern:
+
+```python
+# Catch any Python exception
+catch(Goal, python_error(_, _), Recovery)
+
+# Catch a specific class
+catch(Goal, python_error("UnitsMismatch", Msg), handle(Msg))
+
+# Catch several classes with disjunction
+catch(Goal, python_error("ValueError", _), recovery_a)
+catch(Goal, python_error("TypeError",  _), recovery_b)
+```
+
+`python_error/2` is a `Compound` term — it unifies structurally with standard
+term unification including variable args.
+
+---
+
 ## Compiler Integration
 
 - `Throw(term)` compiles to `raise LogicException(term)`
-- `Catch(goal, catcher, recovery)` compiles to a try/except block that unifies the caught `LogicException.term` against the catcher pattern
+- `Catch(goal, catcher, recovery)` compiles to a `try/except Exception` block;
+  `LogicException` yields `.term` directly, any other Python exception is
+  wrapped as `python_error(ClassName, Message)` before being unified against
+  the catcher pattern
 - `Halt()` / `Halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
 
 ---
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_exceptions.py` (31 tests).
+    Tests are in `tests/test_exceptions.py` (31 tests) and
+    `tests/test_units.py::TestPythonExceptionCatch` (5 tests).
 
     - **Throw**: ground term, string, structured error, uncaught surfaces as LogicException
     - **Catch**: matching/non-matching catcher, nested catch, recovery goal, variable catcher (catch-all)
+    - **Python exceptions**: `UnitsMismatch` caught as `python_error/2`, message bound, recovery skipped when no error, unmatched exception re-raised
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
-    - **Import integration**: `.clausal` file with catch/throw
+    - **Import integration**: `.clausal` file with catch/throw and python_error patterns
