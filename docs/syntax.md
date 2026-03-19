@@ -392,6 +392,27 @@ process(X_, R_) <- (
 
 Under the hood, `++expr` wraps the Python expression in a lambda whose parameters shadow the module-scope Var names. The compiler emits `thunk_fn(deref(v0), deref(v1), ...)`. Any Python expression works — method calls, builtins, arithmetic, subscripts, etc.
 
+### Unit-literal sugar — `n(Unit)`
+
+A special case of the `++()` pattern: when a numeric literal is used as the
+callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
+
+```python
+5(Meter)          # → ++(Meter(5))    → Dimensioned(5, {Meter: 1})
+9.8(Newton)       # → ++(Newton(9.8)) → Dimensioned(9.8, {kg:1, m:1, s:-2})
+-3(Second)        # → Dimensioned(-3, {Second: 1})  (negation applied after)
+```
+
+When a **logic variable** is used as the callable instead, `X(Unit)` becomes a
+goal that posts a dimension constraint on `X`:
+
+```python
+F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton value
+F is 9.8(Newton)  # binds F; hook checks dims match
+```
+
+See [Physical Units](units.md) for the full reference.
+
 ---
 
 ## Compound terms and goals

@@ -11,93 +11,92 @@
     ValueOf, DimensionOf, MakeDimensioned, StripDimensions,
     SpeedOfLight, StandardGravity])
 
-# SI base unit constructors: roundtrip via Dimensioned(VAL, dims) unification
+# SI base unit constructors: roundtrip via forward + reverse mode
 # Each test:
-#   1. Passes Dimensioned(VAL, {pred: exp, ...}) to the predicate, binding VAL
-#   2. Confirms VAL equals the expected number
-#   3. Cross-checks the result against a value built from SI base unit arithmetic
-#      (assigning the SI expression to a fresh var first avoids the == ++ issue)
+#   1. Forward mode: build a ground Dimensioned from a number
+#   2. Reverse mode: extract the number back via the same predicate
+#   3. Cross-checks the result against a value built with n(Unit) sugar
 
 Test("meter roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Meter: 1})),
     Meter(5, PARTIAL),
+    Meter(VAL_, PARTIAL),
     VAL_ == 5,
-    PARTIAL == ++(Meter(1) * 5)
+    PARTIAL == 5(Meter)
 )
 
 Test("Var in value") <- (
+    Meter(42, MV),
     Meter(VAL, MV),
-    MV is ++Meter(42),
     VAL == 42
 )
 
 Test("kilogram roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1})),
     Kilogram(70, PARTIAL),
+    Kilogram(VAL_, PARTIAL),
     VAL_ == 70,
-    PARTIAL == ++(Kilogram(1) * 70)
+    PARTIAL == 70(Kilogram)
 )
 
 Test("second roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Second: 1})),
     Second(60, PARTIAL),
+    Second(VAL_, PARTIAL),
     VAL_ == 60,
-    PARTIAL == ++(Second(1) * 60)
+    PARTIAL == 60(Second)
 )
 
 Test("kelvin roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kelvin: 1})),
     Kelvin(300, PARTIAL),
+    Kelvin(VAL_, PARTIAL),
     VAL_ == 300,
-    PARTIAL == ++(Kelvin(1) * 300)
+    PARTIAL == 300(Kelvin)
 )
 
 Test("newton roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 1, Second: -2})),
     Newton(9.8, PARTIAL),
+    Newton(VAL_, PARTIAL),
     VAL_ == 9.8,
-    PARTIAL == ++(Kilogram(1) * Meter(1) / Second(1)**2 * 9.8)
+    PARTIAL == 9.8(Newton)
 )
 
 Test("joule roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -2})),
     Joule(100, PARTIAL),
+    Joule(VAL_, PARTIAL),
     VAL_ == 100,
-    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**2 * 100)
+    PARTIAL == 100(Joule)
 )
 
 Test("hertz roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Second: -1})),
     Hertz(440, PARTIAL),
+    Hertz(VAL_, PARTIAL),
     VAL_ == 440,
-    PARTIAL == ++(1 / Second(1) * 440)
+    PARTIAL == 440(Hertz)
 )
 
 Test("ohm roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -3, Ampere: -2})),
     Ohm(10, PARTIAL),
+    Ohm(VAL_, PARTIAL),
     VAL_ == 10,
-    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**3 / Ampere(1)**2 * 10)
+    PARTIAL == 10(Ohm)
 )
 
 Test("volt roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Kilogram: 1, Meter: 2, Second: -3, Ampere: -1})),
     Volt(230, PARTIAL),
+    Volt(VAL_, PARTIAL),
     VAL_ == 230,
-    PARTIAL == ++(Kilogram(1) * Meter(1)**2 / Second(1)**3 / Ampere(1) * 230)
+    PARTIAL == 230(Volt)
 )
 
 Test("coulomb roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {Ampere: 1, Second: 1})),
     Coulomb(3, PARTIAL),
+    Coulomb(VAL_, PARTIAL),
     VAL_ == 3,
-    PARTIAL == ++(Ampere(1) * Second(1) * 3)
+    PARTIAL == 3(Coulomb)
 )
 
 # Reverse mode: extract numeric value via unit predicate
 
 Test("meter reverse") <- (
-    Meter(7, D),
+    D := 7(Meter),
     Meter(X, D),
     X == 7
 )
@@ -112,38 +111,38 @@ Test("centimeter roundtrip") <- (
 # Scaled unit constructors: check stored value via unit pred in reverse
 
 Test("kilometer stores as meters") <- (
-    Kilometer(1, D),
+    D := 1(Kilometer),
     Meter(1000.0, D)
 )
 
 Test("gram stores as kilograms") <- (
-    Gram(1000, D),
+    D := 1000(Gram),
     Kilogram(1.0, D)
 )
 
 Test("minute stores as seconds") <- (
-    Minute(5, D),
+    D := 5(Minute),
     Second(300.0, D)
 )
 
 Test("hour stores as seconds") <- (
-    Hour(2, D),
+    D := 2(Hour),
     Second(7200.0, D)
 )
 
 # Arithmetic: check results by unification with named unit pred
 
 Test("velocity from distance over time") <- (
-    Meter(100, D),
-    Second(10, T),
+    D := 100(Meter),
+    T := 10(Second),
     V := D / T,
     ValueOf(V, 10.0),
     IsVelocity(V)
 )
 
 Test("acceleration from velocity over time") <- (
-    Meter(20, D),
-    Second(2, T),
+    D := 20(Meter),
+    T := 2(Second),
     V := D / T,
     A := V / T,
     ValueOf(A, 5.0),
@@ -151,82 +150,69 @@ Test("acceleration from velocity over time") <- (
 )
 
 Test("force from mass times acceleration") <- (
-    Meter(20, D),
-    Second(2, T),
+    D := 20(Meter),
+    T := 2(Second),
     V := D / T,
     A := V / T,
-    Kilogram(3, M),
+    M := 3(Kilogram),
     F := M * A,
     Newton(15.0, F)
 )
 
 Test("area from side squared") <- (
-    Meter(4, SIDE),
+    SIDE := 4(Meter),
     AREA := SIDE ** 2,
     ValueOf(AREA, 16),
     IsArea(AREA)
 )
 
 Test("volume from side cubed") <- (
-    Meter(2, SIDE),
+    SIDE := 2(Meter),
     VOL := SIDE ** 3,
     ValueOf(VOL, 8),
     IsVolume(VOL)
 )
 
 Test("add two forces") <- (
-    Newton(3, F1),
-    Newton(7, F2),
-    TOTAL := F1 + F2,
+    TOTAL := 3(Newton) + 7(Newton),
     Newton(10, TOTAL)
 )
 
 Test("subtract forces") <- (
-    Newton(10, F1),
-    Newton(4, F2),
-    DIFF := F1 - F2,
+    DIFF := 10(Newton) - 4(Newton),
     Newton(6, DIFF)
 )
 
 Test("scale force by scalar") <- (
-    Newton(5, F),
-    F2 := F * 3,
+    F2 := 5(Newton) * 3,
     Newton(15, F2)
 )
 
 Test("dims cancel in division") <- (
-    Meter(50, D),
-    Meter(10, D2),
-    RATIO := D / D2,
+    RATIO := 50(Meter) / 10(Meter),
     Dimensionless(5.0, RATIO)
 )
 
 Test("ohms law") <- (
-    Volt(12, V),
-    Ampere(3, I),
-    R := V / I,
+    R := 12(Volt) / 3(Ampere),
     Ohm(4.0, R)
 )
 
 Test("power from current squared times resistance") <- (
-    Ampere(2, I),
-    Ohm(5, RES),
+    I := 2(Ampere),
+    RES := 5(Ohm),
     P := I * I * RES,
     Watt(20, P)
 )
 
 Test("watt joule per second") <- (
-    Joule(3600, E),
-    Second(60, T),
-    P := E / T,
+    P := 3600(Joule) / 60(Second),
     Watt(60.0, P)
 )
 
 Test("kinetic energy") <- (
-    Kilogram(4, M),
-    Meter(3, D),
-    Second(1, T),
-    SPD := D / T,
+    M := 4(Kilogram),
+    SPD := 3(Meter) / 1(Second),
     KE := M * SPD ** 2,
     HALF := KE / 2,
     ERR is ++(abs(HALF.value - 18.0)),
@@ -235,7 +221,7 @@ Test("kinetic energy") <- (
 )
 
 Test("bar stores as pascals") <- (
-    Bar(1, D),
+    D := 1(Bar),
     ERR is ++(abs(D.value - 100000.0)),
     ERR < 1.0e-6,
     IsPressure(D)
@@ -263,43 +249,64 @@ Test("weight from standard gravity") <- (
     ERR < 1.0e-3
 )
 
-# Dimension type checks: dedicated tests, one predicate each
+# Dimension type checks: one predicate each
 
-Test("isdimensioned") <- (Newton(1, F), IsDimensioned(F))
+Test("isdimensioned") <- IsDimensioned(1(Newton))
 
 Test("isdimensionless on plain number") <- IsDimensionless(42)
 
 Test("dimensionless roundtrip") <- (
-    PARTIAL := ++(Dimensioned(VAL_, {})),
     Dimensionless(5.0, PARTIAL),
+    Dimensionless(VAL_, PARTIAL),
     VAL_ == 5.0,
     PARTIAL == ++(Dimensioned(5.0, {}))
 )
 
-Test("islength") <- (Meter(1, D), IsLength(D))
+Test("islength") <- IsLength(1(Meter))
 
-Test("ismass") <- (Kilogram(1, D), IsMass(D))
+Test("ismass") <- IsMass(1(Kilogram))
 
-Test("istime") <- (Second(1, D), IsTime(D))
+Test("istime") <- IsTime(1(Second))
 
-Test("isfrequency") <- (Hertz(1, D), IsFrequency(D))
+Test("isfrequency") <- IsFrequency(1(Hertz))
 
-Test("isforce") <- (Newton(1, D), IsForce(D))
+Test("isforce") <- IsForce(1(Newton))
 
-Test("isenergy") <- (Joule(1, D), IsEnergy(D))
+Test("isenergy") <- IsEnergy(1(Joule))
 
-Test("ispower") <- (Watt(1, D), IsPower(D))
+Test("ispower") <- IsPower(1(Watt))
 
-Test("ispressure") <- (Bar(1, D), IsPressure(D))
+Test("ispressure") <- IsPressure(1(Bar))
 
-Test("isvoltage") <- (Volt(1, D), IsVoltage(D))
+Test("isvoltage") <- IsVoltage(1(Volt))
 
-Test("isresistance") <- (Ohm(1, D), IsResistance(D))
+Test("isresistance") <- IsResistance(1(Ohm))
 
-Test("ischarge") <- (Coulomb(1, D), IsCharge(D))
+Test("ischarge") <- IsCharge(1(Coulomb))
 
 Test("valueof and stripdimensions") <- (
-    Newton(9.8, F),
+    F := 9.8(Newton),
     ValueOf(F, 9.8),
     StripDimensions(F, 9.8)
+)
+
+# Unit constraint sugar: X(Unit) posts an AttVar constraint on X
+
+Test("constraint accepts matching unit") <- (
+    F(Newton),
+    F is 9.8(Newton),
+    IsForce(F)
+)
+
+Test("constraint rejects wrong unit") <- (
+    not (F(Newton), F is 1(Second))
+)
+
+Test("constraint propagates through arithmetic") <- (
+    D(Meter),
+    T(Second),
+    D is 100(Meter),
+    T is 10(Second),
+    V := D / T,
+    IsVelocity(V)
 )

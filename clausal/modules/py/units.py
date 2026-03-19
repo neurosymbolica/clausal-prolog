@@ -34,7 +34,7 @@ from __future__ import annotations
 from typing import Callable
 
 from clausal.terms import Dimensioned, UnitsMismatch
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import deref, is_var, unify, get_attr
 from clausal.logic.trampoline import DONE
 
 
@@ -119,6 +119,7 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     pred._dims = frozen_dims
 
     def _impl(x, d, trail, k):
+        from clausal.logic.units_constraint import constrain_var_dims
         v = deref(x)
         dv = deref(d)
         if not is_var(v):
@@ -127,16 +128,10 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
             if unify(dv, target, trail):
                 yield None
         elif isinstance(dv, Dimensioned) and dv.dims == frozen_dims:
-            raw_val = dv.value
-            if not is_var(raw_val):
-                if unify(v, raw_val, trail):
-                    yield None
-            else:
-                if unify(v, raw_val, trail):
-                    yield None
+            if unify(v, dv.value, trail):
+                yield None
         elif is_var(v) and is_var(dv):
-            target = Dimensioned(v, frozen_dims)
-            if unify(dv, target, trail):
+            if constrain_var_dims(dv, frozen_dims, trail):
                 yield None
 
     pred._register(2, _simple_to_trampoline(_impl))
@@ -153,6 +148,7 @@ def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicat
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
 
     def _impl(x, d, trail, k):
+        from clausal.logic.units_constraint import constrain_var_dims
         v = deref(x)
         dv = deref(d)
         if not is_var(v):
@@ -162,21 +158,13 @@ def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicat
             if unify(dv, target, trail):
                 yield None
         elif isinstance(dv, Dimensioned) and dv.dims == frozen_dims:
-            # Reverse: extract the number from a fully-ground Dimensioned.
-            raw_val = dv.value
-            if not is_var(raw_val):
-                result = raw_val / scale if scale != 1.0 else raw_val
-                if unify(v, result, trail):
-                    yield None
-            else:
-                # Value inside D is still a logic variable; wrap it bidirectionally.
-                scaled_var = raw_val  # scale=1 assumed; non-1 scale with var unsupported
-                if scale == 1.0 and unify(v, scaled_var, trail):
-                    yield None
-        elif is_var(v) and is_var(dv) and scale == 1.0:
-            # Both unbound: bind D to Dimensioned(X, dims) — X stays free.
-            target = Dimensioned(v, frozen_dims)
-            if unify(dv, target, trail):
+            # Reverse: extract the number from a ground Dimensioned.
+            result = dv.value / scale if scale != 1.0 else dv.value
+            if unify(v, result, trail):
+                yield None
+        elif is_var(v) and is_var(dv):
+            # Both unbound: post a dimensional constraint on D.
+            if constrain_var_dims(dv, frozen_dims, trail):
                 yield None
         # else: cannot determine — fail silently
 
@@ -444,14 +432,24 @@ StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre2 / Kelvin4
 
 
 def _dimension_of_impl(d, dims_out, trail, k):
-    """DimensionOf(Dimensioned, Dims): unify Dims with a dict of the dimensions."""
+    """DimensionOf(D, Dims): unify Dims with the dimension dict of D.
+
+    Works for ground Dimensioned values and for uninstantiated AttVars that
+    carry a dimensional constraint.
+    """
     from clausal.terms import DictTerm
+    from clausal.logic.units_constraint import UNITS_KEY
     dv = deref(d)
-    if not isinstance(dv, Dimensioned):
-        return
-    dims_term = DictTerm(dv.dims)
-    if unify(deref(dims_out), dims_term, trail):
-        yield None
+    if isinstance(dv, Dimensioned):
+        dims_term = DictTerm(dv.dims)
+        if unify(deref(dims_out), dims_term, trail):
+            yield None
+    elif is_var(dv):
+        state = get_attr(dv, UNITS_KEY)
+        if state is not None:
+            dims_term = DictTerm(state.dims)
+            if unify(deref(dims_out), dims_term, trail):
+                yield None
 
 
 def _value_of_impl(d, value_out, trail, k):
@@ -492,3 +490,6 @@ StripDimensions._register(2, _simple_to_trampoline(_value_of_impl))  # alias
 
 MakeDimensioned = _UnitsPredicate("MakeDimensioned")
 MakeDimensioned._register(3, _simple_to_trampoline(_make_dimensioned_impl))
+
+# Register the "units" attribute hook for AttVar-based dimensional variables.
+import clausal.logic.units_constraint as _units_constraint  # noqa: F401

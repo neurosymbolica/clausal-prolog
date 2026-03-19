@@ -284,7 +284,10 @@ class Dimensioned:
 
     Clausal protocol:
         - ``__unify__`` — checks dims equality then unifies values.
-        - ``__walk__`` / ``__occurs_check__`` — delegate to the wrapped value.
+
+    Uninstantiated dimensioned slots are plain ``AttVar`` objects carrying a
+    ``"units"`` attribute (see ``clausal.logic.units_constraint``).  A
+    ``Dimensioned`` always holds a ground numeric value — never a logic var.
     """
 
     __slots__ = ("_value", "_dims")
@@ -433,26 +436,11 @@ class Dimensioned:
 
     def __eq__(self, other):
         if isinstance(other, Dimensioned):
-            if self._dims != other._dims:
-                return False
-            # Walk through any logic-variable bindings before comparing values.
-            try:
-                from .logic.variables import walk as _walk
-                sv = _walk(self._value)
-                ov = _walk(other._value)
-            except Exception:
-                sv = self._value
-                ov = other._value
-            return sv == ov
+            return self._dims == other._dims and self._value == other._value
         return NotImplemented
 
     def __hash__(self):
-        try:
-            from .logic.variables import walk as _walk
-            sv = _walk(self._value)
-        except Exception:
-            sv = self._value
-        return hash((sv, frozenset(self._dims.items())))
+        return hash((self._value, frozenset(self._dims.items())))
 
     # ── Representation ───────────────────────────────────────────────────────
 
@@ -466,19 +454,6 @@ class Dimensioned:
         return format(str(self), spec)
 
     # ── Clausal unification protocol ─────────────────────────────────────────
-
-    def __walk__(self) -> "Dimensioned":
-        """Called by C do_walk: walk the value, preserve dims."""
-        from .logic.variables import walk
-        new_value = walk(self._value)
-        if new_value is self._value:
-            return self
-        return Dimensioned(new_value, self._dims)
-
-    def __occurs_check__(self, var) -> bool:
-        """Called by C do_occurs_check: check if var appears in value."""
-        from .logic.variables import occurs_check
-        return occurs_check(var, self._value)
 
     def __unify__(self, other, trail) -> bool:
         """Called by C do_unify: dims must match exactly; values are unified."""

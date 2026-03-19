@@ -452,6 +452,36 @@ class TermTransformer(NodeTransformer):
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
             func_node = visit(replace(Name(id=call.func.value, ctx=load), call.func))
+        elif (
+            isinstance(call.func, Constant)
+            and isinstance(call.func.value, (int, float))
+            and len(call.args) == 1
+            and isinstance(call.args[0], Name)
+            and not call.keywords
+        ):
+            # n(Unit) — unit application sugar: 5(Metre) → ++(Metre(5))
+            inner = Call(func=call.args[0], args=[call.func], keywords=[])
+            return _build_py_thunk_ast(transformer, call, inner, [])
+        elif (
+            isinstance(call.func, Name)
+            and _is_logic_var_name(call.func.id)
+            and len(call.args) == 1
+            and isinstance(call.args[0], Name)
+            and not call.keywords
+        ):
+            # X(Unit) — unit constraint sugar: X(Metre) → HasUnits(X, Metre)
+            has_units_func = node_ast(
+                "LoadName", call,
+                name=replace(Constant(value="HasUnits"), call),
+            )
+            var_arg = visit(call.func)
+            unit_arg = visit(call.args[0])
+            return node_ast(
+                "Call", call,
+                func=has_units_func,
+                args=list_ast([var_arg, unit_arg], call),
+                kwargs=list_ast([], call),
+            )
         else:
             func_node = visit(call.func)
         positional_args = [visit(argument) for argument in call.args]

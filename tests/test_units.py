@@ -17,11 +17,12 @@ import pytest
 
 from clausal import Var
 from clausal.terms import Dimensioned, UnitsMismatch, DictTerm
-from clausal.logic.variables import Trail, Var as LVar, deref, unify
+from clausal.logic.variables import Trail, Var as LVar, deref, unify, get_attr, put_attr
 from clausal.logic.solve import _drive_trampoline
 from clausal.modules.py.units import (
     Metre, Kilogram, Second, Ampere, Kelvin, Mole, Candela,
 )
+from clausal.logic.units_constraint import UNITS_KEY, UnitState
 
 
 # ── Test helper ──────────────────────────────────────────────────────────────
@@ -297,50 +298,87 @@ class TestUnificationProtocol:
         trail = Trail()
         assert not unify(d(3, m=1), d(3, s=1), trail)
 
-    def test_unify_variable_value(self):
-        trail = Trail()
-        x = Var()
-        target = d(x, m=1)
-        if unify(target, d(5, m=1), trail):
-            from clausal.logic.variables import deref
-            assert deref(x) == 5
-
     def test_unify_var_with_dimensioned(self):
         trail = Trail()
         v = Var()
         assert unify(v, d(10, kg=1), trail)
-        from clausal.logic.variables import deref
         assert deref(v) == d(10, kg=1)
-
-    def test_walk_follows_var_in_value(self):
-        trail = Trail()
-        x = Var()
-        dim_x = d(x, m=1)
-        unify(x, 7, trail)
-        walked = dim_x.__walk__()
-        assert walked.value == 7
-        assert walked.dims == {Metre: 1}
-
-    def test_walk_returns_self_when_ground(self):
-        x = d(5, m=1)
-        assert x.__walk__() is x
-
-    def test_occurs_check_in_value(self):
-        x = Var()
-        dim_x = d(x, m=1)
-        assert dim_x.__occurs_check__(x)
-
-    def test_occurs_check_absent(self):
-        x = Var()
-        y = Var()
-        dim_x = d(x, m=1)
-        assert not dim_x.__occurs_check__(y)
 
     def test_unify_not_dimensioned_returns_not_implemented(self):
         trail = Trail()
         x = d(1, m=1)
         result = x.__unify__(42, trail)
         assert result is NotImplemented
+
+    # ── AttVar-based dimensional constraint tests ────────────────────────────
+
+    def test_attvar_unit_constraint_fires_on_bind(self):
+        """Binding a constrained AttVar to a matching Dimensioned succeeds."""
+        trail = Trail()
+        v = Var()
+        put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert unify(v, d(5, m=1), trail)
+        assert deref(v) == d(5, m=1)
+
+    def test_attvar_unit_constraint_fails_wrong_dims(self):
+        """Binding to a Dimensioned with wrong dims fails."""
+        trail = Trail()
+        v = Var()
+        put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert not unify(v, d(5, s=1), trail)
+
+    def test_attvar_unit_constraint_fails_plain_number(self):
+        """Binding a dimensioned constraint to a plain number fails."""
+        trail = Trail()
+        v = Var()
+        put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert not unify(v, 5, trail)
+
+    def test_attvar_dimensionless_constraint_accepts_plain_number(self):
+        """A dimensionless constraint accepts a plain number."""
+        trail = Trail()
+        v = Var()
+        put_attr(v, UNITS_KEY, UnitState({}), trail)
+        assert unify(v, 42, trail)
+
+    def test_two_attvar_unit_constraints_merge_compatible(self):
+        """Unifying two vars with identical unit constraints succeeds."""
+        trail = Trail()
+        x = Var()
+        y = Var()
+        put_attr(x, UNITS_KEY, UnitState({Metre: 1}), trail)
+        put_attr(y, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert unify(x, y, trail)
+        # The surviving (older) var still carries the constraint.
+        assert get_attr(deref(x), UNITS_KEY).dims == {Metre: 1}
+
+    def test_two_attvar_unit_constraints_fail_incompatible(self):
+        """Unifying vars with incompatible unit constraints fails."""
+        trail = Trail()
+        x = Var()
+        y = Var()
+        put_attr(x, UNITS_KEY, UnitState({Metre: 1}), trail)
+        put_attr(y, UNITS_KEY, UnitState({Second: 1}), trail)
+        assert not unify(x, y, trail)
+
+    def test_attvar_constraint_transfers_to_unconstrained_var(self):
+        """When constrained var is unified with unconstrained var, constraint transfers."""
+        trail = Trail()
+        x = Var()
+        y = Var()
+        put_attr(x, UNITS_KEY, UnitState({Kilogram: 1}), trail)
+        assert unify(x, y, trail)
+        assert get_attr(deref(y), UNITS_KEY).dims == {Kilogram: 1}
+
+    def test_attvar_unit_constraint_backtracks(self):
+        """put_attr via trail correctly undoes on backtrack."""
+        trail = Trail()
+        v = Var()
+        mark = trail.mark()
+        put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert get_attr(v, UNITS_KEY) is not None
+        trail.undo(mark)
+        assert get_attr(v, UNITS_KEY) is None
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -819,18 +857,18 @@ class TestEdgeCases:
         result = base ** exp
         assert result == d(8, m=3)
 
-    def test_unify_two_vars_in_dimensioned(self):
-        """Two Dimensioned terms with Var values unify vars together."""
+    def test_attvar_vars_merge_then_bind(self):
+        """Two unit-constrained vars are merged; binding one binds both."""
         trail = Trail()
         x = Var()
         y = Var()
-        dx = d(x, m=1)
-        dy = d(y, m=1)
-        assert unify(dx, dy, trail)
-        from clausal.logic.variables import deref
-        # x and y are now aliased
-        unify(x, 10, trail)
-        assert deref(y) == 10
+        put_attr(x, UNITS_KEY, UnitState({Metre: 1}), trail)
+        put_attr(y, UNITS_KEY, UnitState({Metre: 1}), trail)
+        assert unify(x, y, trail)
+        # Bind the merged slot to a matching Dimensioned.
+        assert unify(deref(x), d(10, m=1), trail)
+        assert deref(x) == d(10, m=1)
+        assert deref(y) == d(10, m=1)
 
     def test_format_dunder(self):
         """__format__ returns string."""
@@ -929,3 +967,192 @@ class TestPhysicalConstants:
     def test_gravitational_constant_dims(self):
         from clausal.modules.py.units import GravitationalConstant
         assert GravitationalConstant.dims == {Metre: 3, Kilogram: -1, Second: -2}
+
+
+# ── Sugar tests ───────────────────────────────────────────────────────────────
+
+
+class TestUnitsSugar:
+    """Tests for n(Unit) and X(Unit) syntactic sugar."""
+
+    # ── HasUnits/2 builtin (direct Python via run()) ──────────────────────────
+
+    def _has_units_pred(self):
+        """Return a callable suitable for run() that wraps HasUnits/2."""
+        import clausal.modules.py.units  # ensure units_constraint is imported
+        from clausal.logic.builtins._registry import get_builtin_predicate
+        return get_builtin_predicate("HasUnits", 2)
+
+    def test_has_units_ground_match(self):
+        from clausal.modules.py.units import Newton
+        results = run(self._has_units_pred(), Newton(9.8), Newton)
+        assert len(results) == 1
+
+    def test_has_units_ground_mismatch(self):
+        from clausal.modules.py.units import Newton, Metre
+        results = run(self._has_units_pred(), Newton(9.8), Metre)
+        assert results == []
+
+    def test_has_units_unbound_var_posts_constraint(self):
+        from clausal.modules.py.units import Metre
+        from clausal.logic.variables import Var, get_attr
+        from clausal.logic.units_constraint import UNITS_KEY
+        # run() creates Var from string — check constraint posted via second binding
+        v = Var()
+        trail = Trail()
+        from clausal.logic.units_constraint import constrain_var_dims
+        pred = self._has_units_pred()
+        from clausal.logic.solve import _drive_trampoline
+        dispatch = pred._get_dispatch()
+        found = False
+        for _ in _drive_trampoline(dispatch, trail, v, Metre):
+            found = True
+            state = get_attr(v, UNITS_KEY)
+            assert state is not None
+            assert state.dims == Metre._dims
+        assert found
+
+    def test_has_units_unbound_var_backtracks(self):
+        from clausal.modules.py.units import Metre
+        from clausal.logic.variables import Var, get_attr
+        from clausal.logic.units_constraint import UNITS_KEY
+        v = Var()
+        trail = Trail()
+        mark = trail.mark()
+        pred = self._has_units_pred()
+        dispatch = pred._get_dispatch()
+        from clausal.logic.solve import _drive_trampoline
+        for _ in _drive_trampoline(dispatch, trail, v, Metre):
+            break
+        assert get_attr(v, UNITS_KEY) is not None
+        trail.undo(mark)
+        assert get_attr(v, UNITS_KEY) is None
+
+    def test_has_units_already_constrained_match(self):
+        from clausal.modules.py.units import Metre
+        from clausal.logic.variables import Var
+        from clausal.logic.units_constraint import constrain_var_dims
+        v = Var()
+        trail = Trail()
+        constrain_var_dims(v, Metre._dims, trail)
+        results = run(self._has_units_pred(), v, Metre)
+        assert len(results) == 1
+
+    def test_has_units_already_constrained_conflict(self):
+        from clausal.modules.py.units import Metre, Second
+        from clausal.logic.variables import Var
+        from clausal.logic.units_constraint import constrain_var_dims
+        v = Var()
+        trail = Trail()
+        constrain_var_dims(v, Metre._dims, trail)
+        results = run(self._has_units_pred(), v, Second)
+        assert results == []
+
+    # ── n(Unit) sugar: inline Clausal source ──────────────────────────────────
+
+    def test_numeric_sugar_basic(self, tmp_path):
+        """5(Metre) produces the same Dimensioned as Metre(5)."""
+        import os
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D1 := ++(Metre(5)), D2 := 5(Metre), D1 == D2)\n"
+        )
+        p = tmp_path / "sugar_basic.clausal"
+        p.write_text(src)
+        mod = _load_module("sugar_basic", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_numeric_sugar_float(self, tmp_path):
+        """9.8(Newton) produces Dimensioned(9.8, Newton._dims)."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Newton])\n"
+            "Test <- (D1 := ++(Newton(9.8)), D2 := 9.8(Newton), D1 == D2)\n"
+        )
+        p = tmp_path / "sugar_float.clausal"
+        p.write_text(src)
+        mod = _load_module("sugar_float", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_numeric_sugar_negation(self, tmp_path):
+        """-5(Metre) produces Dimensioned(-5, ...)."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := -5(Metre), V := ++(D.value), V == -5)\n"
+        )
+        p = tmp_path / "sugar_neg.clausal"
+        p.write_text(src)
+        mod = _load_module("sugar_neg", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_numeric_sugar_addition(self, tmp_path):
+        """5(Metre) + 3(Metre) == 8(Metre)."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (S := 5(Metre) + 3(Metre), S == 8(Metre))\n"
+        )
+        p = tmp_path / "sugar_add.clausal"
+        p.write_text(src)
+        mod = _load_module("sugar_add", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    # ── X(Unit) goal sugar: inline Clausal source ─────────────────────────────
+
+    def test_var_sugar_on_dimensioned(self, tmp_path):
+        """X(Metre) on a Dimensioned(5, Metre) succeeds."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := 5(Metre), D(Metre))\n"
+        )
+        p = tmp_path / "var_sugar_match.clausal"
+        p.write_text(src)
+        mod = _load_module("var_sugar_match", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_var_sugar_mismatch_fails(self, tmp_path):
+        """X(Metre) on a Dimensioned(5, Second) fails."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- (D := 5(Second), D(Metre))\n"
+        )
+        p = tmp_path / "var_sugar_fail.clausal"
+        p.write_text(src)
+        mod = _load_module("var_sugar_fail", str(p)).__dict__["$module"]
+        assert not any(True for _ in call("Test", module=mod))
+
+    def test_var_sugar_posts_constraint(self, tmp_path):
+        """X(Metre) on an unbound var posts the units constraint and allows binding."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (X(Metre), X is 5(Metre))\n"
+        )
+        p = tmp_path / "var_sugar_post.clausal"
+        p.write_text(src)
+        mod = _load_module("var_sugar_post", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_var_sugar_constraint_rejects_wrong_unit(self, tmp_path):
+        """X(Metre) then unify X with a Second value — fails."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- (X(Metre), X is 5(Second))\n"
+        )
+        p = tmp_path / "var_sugar_reject.clausal"
+        p.write_text(src)
+        mod = _load_module("var_sugar_reject", str(p)).__dict__["$module"]
+        assert not any(True for _ in call("Test", module=mod))
