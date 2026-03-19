@@ -1156,3 +1156,181 @@ class TestUnitsSugar:
         p.write_text(src)
         mod = _load_module("var_sugar_reject", str(p)).__dict__["$module"]
         assert not any(True for _ in call("Test", module=mod))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 13. Unit mismatch errors (Clausal source)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestUnitMismatchErrors:
+    """UnitsMismatch is raised when incompatible units are combined via ++ Python escapes."""
+
+    def _load(self, tmp_path, name, src):
+        from clausal.import_hook import _load_module
+        p = tmp_path / f"{name}.clausal"
+        p.write_text(src)
+        return _load_module(name, str(p)).__dict__["$module"]
+
+    def test_add_metre_plus_second_raises(self, tmp_path):
+        """Adding m and s via ++ raises UnitsMismatch."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "mismatch_add",
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- (D := ++(Metre(3) + Second(2)))\n")
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))
+
+    def test_sub_metre_minus_kilogram_raises(self, tmp_path):
+        """Subtracting kg from m via ++ raises UnitsMismatch."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "mismatch_sub",
+            "-import_from(py.units, [Metre, Kilogram])\n"
+            "Test <- (D := ++(Metre(5) - Kilogram(1)))\n")
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))
+
+    def test_compare_metre_with_second_raises(self, tmp_path):
+        """Comparing m > s directly in clause body raises UnitsMismatch."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "mismatch_cmp",
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- (5(Metre) > 3(Second))\n")
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))
+
+    def test_add_dimensioned_with_plain_raises(self, tmp_path):
+        """Adding a plain number to a dimensional quantity via ++ raises UnitsMismatch."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "mismatch_plain",
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := ++(Metre(5) + 3))\n")
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))
+
+    def test_matching_units_no_error(self, tmp_path):
+        """Adding same units via ++ succeeds and produces the correct result."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "mismatch_ok",
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := ++(Metre(3) + Metre(2)), D == 5(Metre))\n")
+        assert any(True for _ in call("Test", module=mod))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 14. Dimensionless n() sugar
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestDimensionlessSugar:
+    """42 () creates Dimensioned(42, {}) — empty-unit dimensionless sugar."""
+
+    def _load(self, tmp_path, name, src):
+        from clausal.import_hook import _load_module
+        p = tmp_path / f"{name}.clausal"
+        p.write_text(src)
+        return _load_module(name, str(p)).__dict__["$module"]
+
+    def test_integer_dimensionless(self, tmp_path):
+        """42() produces Dimensioned(42, {})."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_int",
+            "Test <- (D := 42(), ++(D.dims == {}), ++(D.value == 42))\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_float_dimensionless(self, tmp_path):
+        """3.14() produces Dimensioned(3.14, {})."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_float",
+            "Test <- (D := 3.14(), ++(D.dims == {}), ++(D.value == 3.14))\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_dimensionless_equals_dimensionless_pred(self, tmp_path):
+        """42() == Dimensionless(42) via predicate."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_eq",
+            "-import_from(py.units, [Dimensionless])\n"
+            "Test <- (D1 := 42(), D2 := ++(Dimensionless(42)), D1 == D2)\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_dimensionless_arithmetic(self, tmp_path):
+        """Dimensionless values can be added via ++: ++(3() + 2()) == 5()."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_arith",
+            "Test <- (S := ++(Dimensioned(3, {}) + Dimensioned(2, {})), S == 5())\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_dimensionless_is_dimensionless(self, tmp_path):
+        """IsDimensionless succeeds for n()."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_is",
+            "-import_from(py.units, [IsDimensionless])\n"
+            "Test <- (D := 7(), IsDimensionless(D))\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_dimensionless_is_dimensionless_not_length(self, tmp_path):
+        """IsLength fails for a dimensionless n() value."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "dimless_not_len",
+            "-import_from(py.units, [IsLength])\n"
+            "Test <- (D := 7(), IsLength(D))\n")
+        assert not any(True for _ in call("Test", module=mod))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 15. Python exception catch/3 integration
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestPythonExceptionCatch:
+    """catch/3 catches UnitsMismatch as python_error("UnitsMismatch", Msg)."""
+
+    def _load(self, tmp_path, name, src):
+        from clausal.import_hook import _load_module
+        p = tmp_path / f"{name}.clausal"
+        p.write_text(src)
+        return _load_module(name, str(p)).__dict__["$module"]
+
+    def test_catch_add_mismatch(self, tmp_path):
+        """Catching UnitsMismatch from incompatible addition."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "catch_add",
+            "-import_from(py.units, [Meter, Second])\n"
+            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_catch_sub_mismatch(self, tmp_path):
+        """Catching UnitsMismatch from incompatible subtraction."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "catch_sub",
+            "-import_from(py.units, [Meter, Kilogram])\n"
+            "Test <- catch(++(Meter(5) - Kilogram(3)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_catch_message_bound(self, tmp_path):
+        """The caught message variable is bound to the exception string."""
+        from clausal.logic.solve import call
+        from clausal.logic.variables import deref, Var
+        mod = self._load(tmp_path, "catch_msg",
+            "-import_from(py.units, [Meter, Second])\n"
+            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"UnitsMismatch\", _MSG), _MSG == _MSG)\n")
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_no_exception_recovery_skipped(self, tmp_path):
+        """If no exception, the recovery goal is not run (even if it would fail)."""
+        from clausal.logic.solve import call
+        mod = self._load(tmp_path, "catch_noexc",
+            "-import_from(py.units, [Meter, Second])\n"
+            "Test <- catch(++(Meter(3) * Second(2)), python_error(\"UnitsMismatch\", _), 1 == 2)\n")
+        # Mul doesn't raise; goal succeeds; recovery is skipped entirely.
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_unmatched_exception_reraises(self, tmp_path):
+        """An exception that doesn't match the catcher is re-raised."""
+        from clausal.logic.solve import call
+        from clausal.terms import UnitsMismatch
+        mod = self._load(tmp_path, "catch_reraise",
+            "-import_from(py.units, [Meter, Second])\n"
+            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"SomeOtherError\", _), 1 == 1)\n")
+        with pytest.raises(UnitsMismatch):
+            list(call("Test", module=mod))

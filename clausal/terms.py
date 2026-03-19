@@ -57,6 +57,20 @@ class Compound:
         f = self.functor if isinstance(self.functor, str) else term_str(self.functor)
         return f"{f}({args_str})"
 
+    def __unify__(self, other, trail) -> bool:
+        """Structural unification: same functor and arity, args unified pairwise."""
+        if not isinstance(other, Compound):
+            return NotImplemented
+        if self.functor != other.functor or len(self.args) != len(other.args):
+            return False
+        from .logic.variables import unify
+        mark = trail.mark()
+        for a, b in zip(self.args, other.args):
+            if not unify(a, b, trail):
+                trail.undo(mark)
+                return False
+        return True
+
 
 
 # ── Open-world keyword term ────────────────────────────────────────────────────

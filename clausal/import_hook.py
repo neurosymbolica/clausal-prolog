@@ -139,9 +139,10 @@ predicate_builtins["Trail"] = Trail
 predicate_builtins["unify"] = unify
 predicate_builtins["deref"] = deref
 predicate_builtins["walk"] = walk
-from clausal.terms import PyThunk, FStringThunk
+from clausal.terms import PyThunk, FStringThunk, Dimensioned
 predicate_builtins["PyThunk"] = PyThunk
 predicate_builtins["FStringThunk"] = FStringThunk  # alias for PyThunk
+predicate_builtins["Dimensioned"] = Dimensioned
 from clausal.logic.clpb import BoolEq, BoolImpl
 predicate_builtins["BoolEq"] = BoolEq
 predicate_builtins["BoolImpl"] = BoolImpl

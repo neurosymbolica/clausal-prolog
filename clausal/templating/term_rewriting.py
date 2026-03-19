@@ -455,6 +455,19 @@ class TermTransformer(NodeTransformer):
         elif (
             isinstance(call.func, Constant)
             and isinstance(call.func.value, (int, float))
+            and len(call.args) == 0
+            and not call.keywords
+        ):
+            # n() — dimensionless sugar: 42() → ++(Dimensioned(42, {}))
+            inner = Call(
+                func=replace(Name(id="Dimensioned", ctx=load), call),
+                args=[call.func, replace(Dict(keys=[], values=[]), call)],
+                keywords=[],
+            )
+            return _build_py_thunk_ast(transformer, call, inner, [])
+        elif (
+            isinstance(call.func, Constant)
+            and isinstance(call.func.value, (int, float))
             and len(call.args) == 1
             and isinstance(call.args[0], Name)
             and not call.keywords

@@ -3,6 +3,7 @@
     Newton, Joule, Watt,
     Volt, Ampere, Ohm,
     IsForce, IsEnergy, IsPower, IsArea, IsResistance, IsVelocity,
+    IsDimensionless,
     ValueOf])
 
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
@@ -103,4 +104,32 @@ Test("clpfd power from voltage squared") <- (
     Ohm(R_INT, RESIST),
     P := VOLTAGE * VOLTAGE / RESIST,
     IsPower(P)
+)
+
+# Dimensionless ratio: find integer numerator and denominator (1..10) where
+# the ratio num/den equals 2, then verify it is dimensionless.
+# Wrap as Meter/Meter so units cancel.
+Test("clpfd dimensionless ratio") <- (
+    InDomain([NUM, DEN], 1, 10),
+    Label([NUM, DEN]),
+    PROD := NUM // DEN,
+    PROD == 2,
+    NUM == PROD * DEN,
+    Meter(NUM, D_NUM),
+    Meter(DEN, D_DEN),
+    RATIO := D_NUM / D_DEN,
+    IsDimensionless(RATIO)
+)
+
+# Unit-mismatch guard via constraint: label F and T from the same domain,
+# verify that wrapping as Newton and assigning to a Second-constrained slot
+# fails (no solution), confirming constraint rejection is CLP(FD)-compatible.
+Test("clpfd constraint rejects wrong unit") <- (
+    not (
+        InDomain([F_INT], 1, 5),
+        Label([F_INT]),
+        Newton(F_INT, F),
+        S(Second),
+        S is F
+    )
 )

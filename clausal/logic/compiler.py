@@ -2321,6 +2321,12 @@ def _compile_catch(
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in simple mode.
 
+    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
+    Python exceptions are wrapped as ``python_error(ClassName, Message)`` so
+    that Clausal code can match on them::
+
+        catch(Goal, python_error("UnitsMismatch", _), Recovery)
+
     Generates::
 
         _catch_mark_N = trail.mark()
@@ -2330,20 +2336,26 @@ def _compile_catch(
         try:
             for _ in _catch_gen_N():
                 <k_stmts>
-        except _LogicException as _exc_N:
+        except Exception as _exc_N:
+            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
+                      else _python_error_term(_exc_N)
             trail.undo(_catch_mark_N)
             _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _exc_N.term, trail):
+            if unify(<catcher_expr>, _term_N, trail):
                 def _catch_rec_N():
                     <compiled recovery with k = [yield None]>
                     return; yield
                 for _ in _catch_rec_N():
                     <k_stmts>
+            else:
+                trail.undo(_catch_um_N)
+                raise
             trail.undo(_catch_um_N)
     """
     catch_mark = _fresh("_catch_m")
     gen_name = _fresh("_catch_gen")
     exc_name = _fresh("_exc")
+    term_name = _fresh("_term")
     unify_mark = _fresh("_catch_um")
     rec_gen_name = _fresh("_catch_rec")
 
@@ -2399,17 +2411,26 @@ def _compile_catch(
         orelse=[],
     )
 
-    # except block: undo trail, match catcher, run recovery; else re-raise
+    # term extraction: _LogicException carries .term; Python exceptions are wrapped
+    term_extract = _assign(
+        term_name,
+        ast.IfExp(
+            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
+            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+        ),
+    )
+
+    # except block: extract term, undo trail, match catcher, run recovery; else re-raise
     except_body: list[ast.stmt] = [
+        term_extract,
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(
                 _name("unify"),
                 catcher_expr,
-                ast.Attribute(
-                    value=_name(exc_name), attr="term", ctx=ast.Load(),
-                ),
+                _name(term_name),
                 _name(trail_name),
             ),
             body=[rec_fn, rec_loop],
@@ -2422,7 +2443,7 @@ def _compile_catch(
     ]
 
     handler = ast.ExceptHandler(
-        type=_name("_LogicException"),
+        type=_name("Exception"),
         name=exc_name,
         body=except_body,
     )
@@ -2453,6 +2474,9 @@ def _compile_catch_trampoline(
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in trampoline mode.
 
+    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
+    Python exceptions are wrapped as ``python_error(ClassName, Message)``.
+
     Generates::
 
         _catch_mark_N = trail.mark()
@@ -2462,19 +2486,25 @@ def _compile_catch_trampoline(
             while _st_N is not _DONE:
                 <k_stmts>
                 _st_N = (yield (_gen_N, None))
-        except _LogicException as _exc_N:
+        except Exception as _exc_N:
+            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
+                      else _python_error_term(_exc_N)
             trail.undo(_catch_mark_N)
             _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _exc_N.term, trail):
+            if unify(<catcher_expr>, _term_N, trail):
                 _gen_rec_N = StepGenerator(rec_dispatch, this_generator, ..., trail)
                 _st_rec_N = (yield (_gen_rec_N, None))
                 while _st_rec_N is not _DONE:
                     <k_stmts>
                     _st_rec_N = (yield (_gen_rec_N, None))
+            else:
+                trail.undo(_catch_um_N)
+                raise
             trail.undo(_catch_um_N)
     """
     catch_mark = _fresh("_catch_m")
     exc_name = _fresh("_exc")
+    term_name = _fresh("_term")
     unify_mark = _fresh("_catch_um")
 
     catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
@@ -2489,17 +2519,26 @@ def _compile_catch_trampoline(
         recovery, db, var_context, trail_name, k_stmts, self_name,
     )
 
-    # except block: undo trail, match catcher, run recovery; else re-raise
+    # term extraction: _LogicException carries .term; Python exceptions are wrapped
+    term_extract = _assign(
+        term_name,
+        ast.IfExp(
+            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
+            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+        ),
+    )
+
+    # except block: extract term, undo trail, match catcher, run recovery; else re-raise
     except_body: list[ast.stmt] = [
+        term_extract,
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(
                 _name("unify"),
                 catcher_expr,
-                ast.Attribute(
-                    value=_name(exc_name), attr="term", ctx=ast.Load(),
-                ),
+                _name(term_name),
                 _name(trail_name),
             ),
             body=recovery_stmts or [ast.Pass()],
@@ -2512,7 +2551,7 @@ def _compile_catch_trampoline(
     ]
 
     handler = ast.ExceptHandler(
-        type=_name("_LogicException"),
+        type=_name("Exception"),
         name=exc_name,
         body=except_body,
     )
@@ -4088,7 +4127,10 @@ def compile_predicate_trampoline(
         fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
         reify_fd as _reify_fd_fn,
     )
-    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException as _LogicException_cls,
+        python_error_term as _python_error_term_fn,
+    )
     from clausal.terms import DictTerm as _DictTerm_t, SetTerm as _SetTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -4120,6 +4162,7 @@ def compile_predicate_trampoline(
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
+        "_python_error_term": _python_error_term_fn,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -4136,6 +4179,9 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # python_error is used as a term constructor in catch/3 catcher patterns.
+    # Override any _DbDispatchAdapter that _inject_resolved_targets may have set.
+    base_globals["python_error"] = lambda *args: Compound("python_error", args)
 
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
@@ -6126,7 +6172,10 @@ def compile_predicate_shallow(
         fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
         reify_fd as _reify_fd_fn_s,
     )
-    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException as _LogicException_cls,
+        python_error_term as _python_error_term_fn_s,
+    )
     from clausal.terms import DictTerm as _DictTerm_s, SetTerm as _SetTerm_s  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -6156,6 +6205,7 @@ def compile_predicate_shallow(
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
+        "_python_error_term": _python_error_term_fn_s,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
@@ -6170,6 +6220,9 @@ def compile_predicate_shallow(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # python_error is used as a term constructor in catch/3 catcher patterns.
+    # Override any _DbDispatchAdapter that _inject_resolved_targets may have set.
+    base_globals["python_error"] = lambda *args: Compound("python_error", args)
 
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:

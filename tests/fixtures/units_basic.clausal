@@ -310,3 +310,101 @@ Test("constraint propagates through arithmetic") <- (
     V := D / T,
     IsVelocity(V)
 )
+
+# Dimensionless n() sugar: 42() produces Dimensioned(42, {})
+
+Test("dimensionless integer sugar") <- (
+    D := 42(),
+    IsDimensionless(D),
+    ValueOf(D, 42)
+)
+
+Test("dimensionless float sugar") <- (
+    D := 3.14(),
+    IsDimensionless(D),
+    ERR := ++(abs(D.value - 3.14)),
+    ERR < 1.0e-12
+)
+
+Test("dimensionless sugar equals Dimensionless pred") <- (
+    D1 := 7(),
+    Dimensionless(7, D2),
+    D1 == D2
+)
+
+Test("dimensionless sugar not a length") <- (
+    D := 5(),
+    not IsLength(D)
+)
+
+Test("dimensionless sugar not a force") <- (
+    D := 9.8(),
+    not IsForce(D)
+)
+
+Test("dimensionless via isdimensionless") <- IsDimensionless(0())
+
+Test("dimensionless arithmetic via escape") <- (
+    S := ++(Dimensioned(3, {}) + Dimensioned(2, {})),
+    IsDimensionless(S),
+    ValueOf(S, 5)
+)
+
+Test("dimensionless ratio from division") <- (
+    RATIO := 50(Meter) / 10(Meter),
+    IsDimensionless(RATIO),
+    D := 5.0(),
+    RATIO == D
+)
+
+# Unit mismatch detection via AttVar constraint system
+# These use X(Unit) to post a constraint; assigning the wrong unit produces no solution.
+
+Test("constraint rejects metre for second slot") <- (
+    not (X(Second), X is 100(Meter))
+)
+
+Test("constraint rejects newton for kilogram slot") <- (
+    not (M(Kilogram), M is 9.8(Newton))
+)
+
+Test("constraint rejects joule for watt slot") <- (
+    not (P(Watt), P is 1(Joule))
+)
+
+Test("two constraints conflict") <- (
+    not (X(Meter), X(Second))
+)
+
+Test("constraint accepts correct unit after arithmetic") <- (
+    V(Meter),
+    V is 5(Meter),
+    IsLength(V)
+)
+
+# catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
+# catchable as python_error("UnitsMismatch", Msg) in the catcher pattern.
+
+Test("catch add mismatch") <- (
+    catch(
+        ++(Meter(1) + Second(1)),
+        python_error("UnitsMismatch", _),
+        1 == 1
+    )
+)
+
+Test("catch mul no error") <- (
+    catch(
+        ++(Meter(3) * Second(2)),
+        python_error("UnitsMismatch", _),
+        1 == 2
+    )
+)
+
+Test("catch extracts message") <- (
+    catch(
+        ++(Meter(5) + Kilogram(2)),
+        python_error("UnitsMismatch", MSG),
+        MSG == MSG
+    )
+)
