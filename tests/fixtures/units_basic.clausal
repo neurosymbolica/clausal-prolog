@@ -3,17 +3,17 @@
     Kilometer, Centimeter, Gram, Minute, Hour,
     Newton, Joule, Watt, Hertz,
     Volt, Ampere, Ohm, Coulomb,
-    Bar, Dimensionless, Dimensioned,
+    Bar, Dimensionless, Quantity,
     IsLength, IsArea, IsVolume, IsMass, IsTime,
     IsVelocity, IsAcceleration, IsForce, IsEnergy, IsPower,
     IsPressure, IsFrequency, IsVoltage, IsResistance, IsCharge,
-    IsDimensionless, IsDimensioned,
-    StripDimensions, DimensionOf, MakeDimensioned, StripDimensions,
+    IsDimensionless, IsQuantity,
+    StripDimensions, DimensionOf, MakeQuantity, StripDimensions,
     SpeedOfLight, StandardGravity])
 
 # SI base unit constructors: roundtrip via forward + reverse mode
 # Each test:
-#   1. Forward mode: build a ground Dimensioned from a number
+#   1. Forward mode: build a ground Quantity from a number
 #   2. Reverse mode: extract the number back via the same predicate
 #   3. Cross-checks the result against a value built with n(Unit) sugar
 
@@ -229,7 +229,7 @@ Test("bar stores as pascals") <- (
 
 Test("make dimensioned from dict") <- (
     DIMS := ++{Kilogram: 1, Metre: 1, Second: -2},
-    MakeDimensioned(10, DIMS, D),
+    MakeQuantity(10, DIMS, D),
     Newton(10, D)
 )
 
@@ -251,7 +251,7 @@ Test("weight from standard gravity") <- (
 
 # Dimension type checks: one predicate each
 
-Test("isdimensioned") <- IsDimensioned(1(Newton))
+Test("isdimensioned") <- IsQuantity(1(Newton))
 
 Test("isdimensionless on plain number") <- IsDimensionless(42)
 
@@ -259,7 +259,7 @@ Test("dimensionless roundtrip") <- (
     Dimensionless(5.0, PARTIAL),
     Dimensionless(VAL_, PARTIAL),
     VAL_ == 5.0,
-    PARTIAL == ++(Dimensioned(5.0, {}))
+    PARTIAL == ++(Quantity(5.0, {}))
 )
 
 Test("islength") <- IsLength(1(Metre))
@@ -311,7 +311,7 @@ Test("constraint propagates through arithmetic") <- (
     IsVelocity(V)
 )
 
-# Dimensionless n() sugar: 42() produces Dimensioned(42, {})
+# Dimensionless n() sugar: 42() produces Quantity(42, {})
 
 Test("dimensionless integer sugar") <- (
     D := 42(),
@@ -345,7 +345,7 @@ Test("dimensionless sugar not a force") <- (
 Test("dimensionless via isdimensionless") <- IsDimensionless(0())
 
 Test("dimensionless arithmetic via escape") <- (
-    S := ++(Dimensioned(3, {}) + Dimensioned(2, {})),
+    S := ++(Quantity(3, {}) + Quantity(2, {})),
     IsDimensionless(S),
     StripDimensions(S, 5)
 )

@@ -458,9 +458,9 @@ class TermTransformer(NodeTransformer):
             and len(call.args) == 0
             and not call.keywords
         ):
-            # n() — dimensionless sugar: 42() → ++(Dimensioned(42, {}))
+            # n() — dimensionless sugar: 42() → ++(Quantity(42, {}))
             inner = Call(
-                func=replace(Name(id="Dimensioned", ctx=load), call),
+                func=replace(Name(id="Quantity", ctx=load), call),
                 args=[call.func, replace(Dict(keys=[], values=[]), call)],
                 keywords=[],
             )

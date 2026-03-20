@@ -256,7 +256,7 @@ class SetTerm:
         return self._elements == other._elements
 
 
-# ── Dimensioned — number with physical dimensions ─────────────────────────────
+# ── Quantity — number with physical dimensions ────────────────────────────────
 
 
 class UnitsMismatch(Exception):
@@ -280,7 +280,7 @@ def _dims_str(dims: dict) -> str:
     return "·".join(parts)
 
 
-class Dimensioned:
+class Quantity:
     """A number with physical dimensions for dimensional analysis.
 
     ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
@@ -302,7 +302,7 @@ class Dimensioned:
 
     Uninstantiated dimensioned slots are plain ``AttVar`` objects carrying a
     ``"units"`` attribute (see ``clausal.logic.units_constraint``).  A
-    ``Dimensioned`` always holds a ground numeric value — never a logic var.
+    ``Quantity`` always holds a ground numeric value — never a logic var.
     """
 
     __slots__ = ("_value", "_dims")
@@ -323,8 +323,8 @@ class Dimensioned:
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
-    def _require_same_dims(self, other: "Dimensioned", op: str) -> None:
-        if not isinstance(other, Dimensioned):
+    def _require_same_dims(self, other: "Quantity", op: str) -> None:
+        if not isinstance(other, Quantity):
             raise UnitsMismatch(
                 f"Cannot {op} dimensioned ({_dims_str(self._dims)}) "
                 f"with plain value {other!r}"
@@ -351,47 +351,47 @@ class Dimensioned:
 
     def __add__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Dimensioned(self._value + other, {})
+            return Quantity(self._value + other, {})
         self._require_same_dims(other, "add")
-        return Dimensioned(self._value + other._value, self._dims)
+        return Quantity(self._value + other._value, self._dims)
 
     def __radd__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Dimensioned(other + self._value, {})
+            return Quantity(other + self._value, {})
         return NotImplemented
 
     def __sub__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Dimensioned(self._value - other, {})
+            return Quantity(self._value - other, {})
         self._require_same_dims(other, "subtract")
-        return Dimensioned(self._value - other._value, self._dims)
+        return Quantity(self._value - other._value, self._dims)
 
     def __rsub__(self, other):
         if isinstance(other, (int, float)) and not self._dims:
-            return Dimensioned(other - self._value, {})
+            return Quantity(other - self._value, {})
         return NotImplemented
 
     def __mul__(self, other):
-        if isinstance(other, Dimensioned):
+        if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, +1)
-            return Dimensioned(self._value * other._value, new_dims)
-        return Dimensioned(self._value * other, self._dims)
+            return Quantity(self._value * other._value, new_dims)
+        return Quantity(self._value * other, self._dims)
 
     def __rmul__(self, other):
-        return Dimensioned(other * self._value, self._dims)
+        return Quantity(other * self._value, self._dims)
 
     def __truediv__(self, other):
-        if isinstance(other, Dimensioned):
+        if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, -1)
-            return Dimensioned(self._value / other._value, new_dims)
-        return Dimensioned(self._value / other, self._dims)
+            return Quantity(self._value / other._value, new_dims)
+        return Quantity(self._value / other, self._dims)
 
     def __rtruediv__(self, other):
         new_dims = {k: -v for k, v in self._dims.items()}
-        return Dimensioned(other / self._value, new_dims)
+        return Quantity(other / self._value, new_dims)
 
     def __pow__(self, exp):
-        if isinstance(exp, Dimensioned):
+        if isinstance(exp, Quantity):
             if exp._dims:
                 raise UnitsMismatch("Exponent cannot have dimensions")
             exp = exp._value
@@ -402,15 +402,15 @@ class Dimensioned:
                     f"quantities, got {exp!r}"
                 )
             # Dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
-            return Dimensioned(self._value ** exp, {})
+            return Quantity(self._value ** exp, {})
         new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
-        return Dimensioned(self._value ** exp, new_dims)
+        return Quantity(self._value ** exp, new_dims)
 
     def __neg__(self):
-        return Dimensioned(-self._value, self._dims)
+        return Quantity(-self._value, self._dims)
 
     def __abs__(self):
-        return Dimensioned(abs(self._value), self._dims)
+        return Quantity(abs(self._value), self._dims)
 
     def __pos__(self):
         return self
@@ -419,7 +419,7 @@ class Dimensioned:
 
     def _cmp_value(self, other):
         """Return (self_val, other_val) after verifying same dims, or raise."""
-        if isinstance(other, Dimensioned):
+        if isinstance(other, Quantity):
             if self._dims != other._dims:
                 raise UnitsMismatch(
                     f"Cannot compare {_dims_str(self._dims)} "
@@ -450,7 +450,7 @@ class Dimensioned:
         return a >= b
 
     def __eq__(self, other):
-        if isinstance(other, Dimensioned):
+        if isinstance(other, Quantity):
             return self._dims == other._dims and self._value == other._value
         return NotImplemented
 
@@ -460,7 +460,7 @@ class Dimensioned:
     # ── Representation ───────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
-        return f"Dimensioned({self._value!r}, {self._dims!r})"
+        return f"Quantity({self._value!r}, {self._dims!r})"
 
     def __str__(self) -> str:
         return f"{self._value} {_dims_str(self._dims)}"
@@ -472,7 +472,7 @@ class Dimensioned:
 
     def __unify__(self, other, trail) -> bool:
         """Called by C do_unify: dims must match exactly; values are unified."""
-        if not isinstance(other, Dimensioned):
+        if not isinstance(other, Quantity):
             return NotImplemented
         if self._dims != other._dims:
             return False

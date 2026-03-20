@@ -80,7 +80,7 @@ Test("clpfd power multiple of 3") <- (
 )
 
 # Force F = m * a: find integer mass 1..5 and acceleration 1..5 giving F = 20 N.
-# Then wrap each as a Dimensioned and recompute to verify.
+# Then wrap each as a Quantity and recompute to verify.
 Test("clpfd force equals mass times accel") <- (
     InDomain([M_INT, A_INT], 1, 5),
     Label([M_INT, A_INT]),

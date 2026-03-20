@@ -1,22 +1,22 @@
-"""Tests for Dimensioned terms and the units module.
+"""Tests for Quantity terms and the units module.
 
 Covers:
-  - Dimensioned arithmetic (add, sub, mul, div, pow, neg, abs)
+  - Quantity arithmetic (add, sub, mul, div, pow, neg, abs)
   - UnitsMismatch on incompatible operations
   - Comparison operators
   - Clausal unification protocol (__unify__, __walk__, __occurs_check__)
   - Named-unit constructor predicates (forward + reverse modes)
   - Scaled unit predicates
   - Dimension-type predicates (IsForce, IsEnergy, …)
-  - Utility predicates (DimensionOf, StripDimensions, MakeDimensioned, StripDimensions)
-  - IsDimensionless / IsDimensioned
+  - Utility predicates (DimensionOf, StripDimensions, MakeQuantity, StripDimensions)
+  - IsDimensionless / IsQuantity
   - Python interop via is/2 evaluator through query()
 """
 
 import pytest
 
 from clausal import Var
-from clausal.terms import Dimensioned, UnitsMismatch, DictTerm
+from clausal.terms import Quantity, UnitsMismatch, DictTerm
 from clausal.logic.variables import Trail, Var as LVar, deref, unify, get_attr, put_attr
 from clausal.logic.solve import _drive_trampoline
 from clausal.modules.py.units import (
@@ -63,33 +63,33 @@ _DIM_KEY = {
 
 
 def d(value, **kwargs):
-    """Shorthand: d(5, m=1) → Dimensioned(5, {Metre: 1})."""
-    return Dimensioned(value, {_DIM_KEY[k]: v for k, v in kwargs.items() if v != 0})
+    """Shorthand: d(5, m=1) → Quantity(5, {Metre: 1})."""
+    return Quantity(value, {_DIM_KEY[k]: v for k, v in kwargs.items() if v != 0})
 
 
 def approx_d(value, **dims):
-    """Create a Dimensioned and round its value for float comparison."""
+    """Create a Quantity and round its value for float comparison."""
     return d(value, **dims)
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Dimensioned construction and display
+# 1. Quantity construction and display
 # ════════════════════════════════════════════════════════════════════════════
 
 
-class TestDimensionedBasics:
+class TestQuantityBasics:
     def test_zero_exponents_removed(self):
-        x = Dimensioned(1, {Metre: 1, Second: 0})
+        x = Quantity(1, {Metre: 1, Second: 0})
         assert x.dims == {Metre: 1}
 
     def test_empty_dims_is_dimensionless(self):
-        x = Dimensioned(42, {})
+        x = Quantity(42, {})
         assert x.dims == {}
         assert x.value == 42
 
     def test_repr(self):
         x = d(3, m=1, s=-2)
-        assert "Dimensioned" in repr(x)
+        assert "Quantity" in repr(x)
         assert "3" in repr(x)
 
     def test_str(self):
@@ -234,8 +234,8 @@ class TestArithmetic:
             d(4, m=1) ** d(2, s=1)
 
     def test_pow_dimensionless_exponent_integer_value(self):
-        # Exponent is Dimensioned but dimensionless with integer value
-        exp = d(2, **{})  # dimensionless Dimensioned
+        # Exponent is Quantity but dimensionless with integer value
+        exp = d(2, **{})  # dimensionless Quantity
         result = d(3, m=1) ** exp
         assert result == d(9, m=2)
 
@@ -313,7 +313,7 @@ class TestUnificationProtocol:
     # ── AttVar-based dimensional constraint tests ────────────────────────────
 
     def test_attvar_unit_constraint_fires_on_bind(self):
-        """Binding a constrained AttVar to a matching Dimensioned succeeds."""
+        """Binding a constrained AttVar to a matching Quantity succeeds."""
         trail = Trail()
         v = Var()
         put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
@@ -321,7 +321,7 @@ class TestUnificationProtocol:
         assert deref(v) == d(5, m=1)
 
     def test_attvar_unit_constraint_fails_wrong_dims(self):
-        """Binding to a Dimensioned with wrong dims fails."""
+        """Binding to a Quantity with wrong dims fails."""
         trail = Trail()
         v = Var()
         put_attr(v, UNITS_KEY, UnitState({Metre: 1}), trail)
@@ -705,12 +705,12 @@ class TestIsPredicates:
         self._check(IsDimensionless, d(5, m=1), False)
 
     def test_is_dimensioned_pass(self):
-        from clausal.modules.py.units import IsDimensioned
-        self._check(IsDimensioned, d(5, m=1), True)
+        from clausal.modules.py.units import IsQuantity
+        self._check(IsQuantity, d(5, m=1), True)
 
     def test_is_dimensioned_fail_for_plain_number(self):
-        from clausal.modules.py.units import IsDimensioned
-        sols = run(IsDimensioned, 42)
+        from clausal.modules.py.units import IsQuantity
+        sols = run(IsQuantity, 42)
         assert not sols
 
 
@@ -745,12 +745,12 @@ class TestUtilityPredicates:
         assert sols[0]["V"] == 42
 
     def test_make_dimensioned(self):
-        from clausal.modules.py.units import MakeDimensioned
+        from clausal.modules.py.units import MakeQuantity
         dims = DictTerm({Kilogram: 1, Metre: 1, Second: -2})
-        sols = run(MakeDimensioned, 10, dims, "D")
+        sols = run(MakeQuantity, 10, dims, "D")
         assert sols
         result = sols[0]["D"]
-        assert isinstance(result, Dimensioned)
+        assert isinstance(result, Quantity)
         assert result.value == 10
         assert result.dims == {Kilogram: 1, Metre: 1, Second: -2}
 
@@ -771,7 +771,7 @@ class TestUtilityPredicates:
 
 
 class TestArithmeticViaIs:
-    """Verify Dimensioned arithmetic works when values are passed through is/2."""
+    """Verify Quantity arithmetic works when values are passed through is/2."""
 
     def test_force_from_mass_times_acceleration(self):
         """F = m * a — multiplication gives correct force dimensions."""
@@ -835,7 +835,7 @@ class TestArithmeticViaIs:
 
 class TestEdgeCases:
     def test_dimensionless_times_dimensioned(self):
-        """Dimensionless Dimensioned * Dimensioned merges (empty + dims = dims)."""
+        """Dimensionless Quantity * Quantity merges (empty + dims = dims)."""
         scalar = d(2.0, **{})
         length = d(3, m=1)
         result = scalar * length
@@ -851,9 +851,9 @@ class TestEdgeCases:
         assert result == d(3.0, **{})
 
     def test_pow_with_dimensionless_dimensioned_int_value(self):
-        """Pow where exponent is a dimensionless Dimensioned with integer value."""
+        """Pow where exponent is a dimensionless Quantity with integer value."""
         base = d(2, m=1)
-        exp = Dimensioned(3, {})
+        exp = Quantity(3, {})
         result = base ** exp
         assert result == d(8, m=3)
 
@@ -865,7 +865,7 @@ class TestEdgeCases:
         put_attr(x, UNITS_KEY, UnitState({Metre: 1}), trail)
         put_attr(y, UNITS_KEY, UnitState({Metre: 1}), trail)
         assert unify(x, y, trail)
-        # Bind the merged slot to a matching Dimensioned.
+        # Bind the merged slot to a matching Quantity.
         assert unify(deref(x), d(10, m=1), trail)
         assert deref(x) == d(10, m=1)
         assert deref(y) == d(10, m=1)
@@ -893,7 +893,7 @@ class TestEdgeCases:
         assert energy.value == 1000
 
     def test_pow_half_dimensionless(self):
-        """** 0.5 is allowed for dimensionless Dimensioned."""
+        """** 0.5 is allowed for dimensionless Quantity."""
         result = d(9.0, **{}) ** 0.5
         assert result.dims == {}
         assert pytest.approx(result.value) == 3.0
@@ -1051,7 +1051,7 @@ class TestUnitsSugar:
     # ── n(Unit) sugar: inline Clausal source ──────────────────────────────────
 
     def test_numeric_sugar_basic(self, tmp_path):
-        """5(Metre) produces the same Dimensioned as Metre(5)."""
+        """5(Metre) produces the same Quantity as Metre(5)."""
         import os
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
@@ -1065,7 +1065,7 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_numeric_sugar_float(self, tmp_path):
-        """9.8(Newton) produces Dimensioned(9.8, Newton._dims)."""
+        """9.8(Newton) produces Quantity(9.8, Newton._dims)."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
@@ -1078,7 +1078,7 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_numeric_sugar_negation(self, tmp_path):
-        """-5(Metre) produces Dimensioned(-5, ...)."""
+        """-5(Metre) produces Quantity(-5, ...)."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
@@ -1106,7 +1106,7 @@ class TestUnitsSugar:
     # ── X(Unit) goal sugar: inline Clausal source ─────────────────────────────
 
     def test_var_sugar_on_dimensioned(self, tmp_path):
-        """X(Metre) on a Dimensioned(5, Metre) succeeds."""
+        """X(Metre) on a Quantity(5, Metre) succeeds."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
@@ -1119,7 +1119,7 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_var_sugar_mismatch_fails(self, tmp_path):
-        """X(Metre) on a Dimensioned(5, Second) fails."""
+        """X(Metre) on a Quantity(5, Second) fails."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
@@ -1223,7 +1223,7 @@ class TestUnitMismatchErrors:
 
 
 class TestDimensionlessSugar:
-    """42 () creates Dimensioned(42, {}) — empty-unit dimensionless sugar."""
+    """42 () creates Quantity(42, {}) — empty-unit dimensionless sugar."""
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
@@ -1232,14 +1232,14 @@ class TestDimensionlessSugar:
         return _load_module(name, str(p)).__dict__["$module"]
 
     def test_integer_dimensionless(self, tmp_path):
-        """42() produces Dimensioned(42, {})."""
+        """42() produces Quantity(42, {})."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_int",
             "Test <- (D := 42(), ++(D.dims == {}), ++(D.value == 42))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_float_dimensionless(self, tmp_path):
-        """3.14() produces Dimensioned(3.14, {})."""
+        """3.14() produces Quantity(3.14, {})."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_float",
             "Test <- (D := 3.14(), ++(D.dims == {}), ++(D.value == 3.14))\n")
@@ -1257,7 +1257,7 @@ class TestDimensionlessSugar:
         """Dimensionless values can be added via ++: ++(3() + 2()) == 5()."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_arith",
-            "Test <- (S := ++(Dimensioned(3, {}) + Dimensioned(2, {})), S == 5())\n")
+            "Test <- (S := ++(Quantity(3, {}) + Quantity(2, {})), S == 5())\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless(self, tmp_path):

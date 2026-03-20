@@ -5,7 +5,7 @@ attribute whose value is a ``UnitState(dims)`` — analogous to how CLP(FD)
 stores ``FDVar(domain, constraints)`` under ``"fd"``.
 
 When the AttVar is unified the hook:
-  - checks that a Dimensioned binding has matching dims;
+  - checks that a Quantity binding has matching dims;
   - transfers or merges the constraint when unified with another variable;
   - rejects plain numbers unless the constraint is dimensionless.
 
@@ -68,11 +68,11 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
     *bound_to*   — the value (or variable) the AttVar was unified with.
     """
     # Import here to avoid circular imports at module load time.
-    from clausal.terms import Dimensioned
+    from clausal.terms import Quantity
 
     bound_to = deref(bound_to)
 
-    if isinstance(bound_to, Dimensioned):
+    if isinstance(bound_to, Quantity):
         # Binding to a ground measurement — check dimensions match.
         return bound_to.dims == attr_value.dims
 
@@ -102,17 +102,17 @@ from clausal.logic.builtins._registry import _builtin  # noqa: E402
 def _has_units(d, unit_pred, trail, k):
     """HasUnits(D, UnitPred): D must be (or become) dimensioned in UnitPred's dims.
 
-    - D is a ground Dimensioned  → check dims match
+    - D is a ground Quantity  → check dims match
     - D is an unbound AttVar     → post the "units" constraint
     - anything else              → fail
     """
-    from clausal.terms import Dimensioned  # avoid circular import at module load
+    from clausal.terms import Quantity  # avoid circular import at module load
 
     if unit_pred._dims is None:
         return
     dv = deref(d)
     dims = unit_pred._dims
-    if isinstance(dv, Dimensioned):
+    if isinstance(dv, Quantity):
         if dv.dims == dims:
             yield None
     elif is_var(dv):

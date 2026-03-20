@@ -1,6 +1,6 @@
 # Physical Units
 
-Dimensional analysis via `Dimensioned(value, dims)` terms, with full arithmetic,
+Dimensional analysis via `Quantity(value, dims)` terms, with full arithmetic,
 named-unit predicates, and syntactic sugar for writing measurements inline.
 
 ---
@@ -11,9 +11,9 @@ named-unit predicates, and syntactic sugar for writing measurements inline.
 -import_from(py.units, [Metre, Kilogram, Second, Newton, IsForce, StripDimensions])
 
 # Build a dimensioned value with n(Unit) sugar
-distance := 100(Metre)          # Dimensioned(100, {Metre: 1})
-time_    := 9.58(Second)        # Dimensioned(9.58, {Second: 1})
-speed    := distance / time_    # Dimensioned(10.4…, {Metre: 1, Second: -1})
+distance := 100(Metre)          # Quantity(100, {Metre: 1})
+time_    := 9.58(Second)        # Quantity(9.58, {Second: 1})
+speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
 
 # Check dimension type
 IsForce(9.8(Newton))
@@ -33,9 +33,9 @@ F is 9.8(Newton)                # binds F, hook checks dims match
 ### `n(Unit)` — literal measurement
 
 ```python
-5(Metre)          # → Dimensioned(5,   {Metre: 1})
-9.8(Newton)       # → Dimensioned(9.8, {Kilogram: 1, Metre: 1, Second: -2})
--3(Second)        # → Dimensioned(-3,  {Second: 1})
+5(Metre)          # → Quantity(5,   {Metre: 1})
+9.8(Newton)       # → Quantity(9.8, {Kilogram: 1, Metre: 1, Second: -2})
+-3(Second)        # → Quantity(-3,  {Second: 1})
 ```
 
 Python parses `5(Metre)` as a call — the transformer intercepts it and rewrites
@@ -50,20 +50,20 @@ custom := ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton
 ### `n()` — dimensionless literal
 
 An empty-argument call on any numeric literal produces a dimensionless
-`Dimensioned(n, {})`:
+`Quantity(n, {})`:
 
 ```python
-42()      # → Dimensioned(42,   {})
-3.14()    # → Dimensioned(3.14, {})
-0()       # → Dimensioned(0,    {})
+42()      # → Quantity(42,   {})
+3.14()    # → Quantity(3.14, {})
+0()       # → Quantity(0,    {})
 ```
 
-This is equivalent to `++(Dimensioned(n, {}))` or calling the `Dimensionless`
+This is equivalent to `++(Quantity(n, {}))` or calling the `Dimensionless`
 predicate. The value participates in unit arithmetic — dividing two compatible
 quantities to get a ratio is a common result:
 
 ```python
-RATIO := 50(Metre) / 10(Metre)   # → Dimensioned(5.0, {})
+RATIO := 50(Metre) / 10(Metre)   # → Quantity(5.0, {})
 IsDimensionless(RATIO)            # succeeds
 RATIO == 5.0()                    # succeeds
 ```
@@ -98,12 +98,12 @@ F is 1(Second)         # hook rejects: Newton dims ≠ Second dims
 
 ---
 
-## `Dimensioned` term
+## `Quantity` term
 
 ```python
-from clausal.terms import Dimensioned, UnitsMismatch
+from clausal.terms import Quantity, UnitsMismatch
 
-d = Dimensioned(10.0, {Metre: 1, Second: -1})  # 10 m/s
+d = Quantity(10.0, {Metre: 1, Second: -1})  # 10 m/s
 d.value   # 10.0
 d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ```
@@ -112,7 +112,7 @@ d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 (not strings) to integer exponents. Zero exponents are removed on construction.
 The empty proxy `{}` is dimensionless.
 
-`Dimensioned` holds a ground numeric value — never a logic variable. An
+`Quantity` holds a ground numeric value — never a logic variable. An
 uninstantiated dimensioned slot is a plain Var with a `"units"` AttVar
 constraint (see below).
 
@@ -146,15 +146,15 @@ Import in `.clausal` files:
 -import_from(py.units, [Metre, Newton, IsForce, StripDimensions])
 ```
 
-### Named-unit predicates — `Unit(Number, Dimensioned)`
+### Named-unit predicates — `Unit(Number, Quantity)`
 
 Bidirectional, arity 2:
 
-- **Forward** (`Number` given): unify `Dimensioned` with `Dimensioned(Number * scale, dims)`.
-- **Reverse** (`Dimensioned` given): unify `Number` with `value / scale`.
+- **Forward** (`Number` given): unify `Quantity` with `Quantity(Number * scale, dims)`.
+- **Reverse** (`Quantity` given): unify `Number` with `value / scale`.
 
 The `n(Unit)` sugar (`5(Metre)`) calls `Unit(n)` as a plain Python call
-(arity 1), returning `Dimensioned` directly. The two-argument predicate
+(arity 1), returning `Quantity` directly. The two-argument predicate
 form is still useful for reverse mode and for pattern matching in clause heads.
 
 #### SI base units
@@ -209,16 +209,16 @@ Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `PoundsPerSquareInch`,
 `Electronvolt`, `Calorie`, `Kilocalorie`, `KilowattHour`, `Kilowatt`,
 `Horsepower`, `KilometerPerHour`, `MilePerHour`, `Knot`
 
-### Dimension-check predicates — `IsXxx(Dimensioned)`
+### Dimension-check predicates — `IsXxx(Quantity)`
 
-Succeed iff the argument is a `Dimensioned` with the expected dimension dict.
+Succeed iff the argument is a `Quantity` with the expected dimension dict.
 
 `IsLength`, `IsArea`, `IsVolume`, `IsMass`, `IsTime`, `IsFrequency`,
 `IsVelocity`, `IsAcceleration`, `IsForce`, `IsEnergy`, `IsPower`, `IsPressure`,
 `IsElectricCurrent`, `IsVoltage`, `IsCharge`, `IsResistance`, `IsCapacitance`,
 `IsInductance`, `IsMagneticFlux`, `IsMagneticFluxDensity`, `IsTemperature`,
 `IsAmountOfSubstance`, `IsLuminousIntensity`, `IsIlluminance`,
-`IsDimensionless`, `IsDimensioned`
+`IsDimensionless`, `IsQuantity`
 
 `IsDimensionless` also succeeds for plain Python ints/floats.
 
@@ -228,7 +228,7 @@ Succeed iff the argument is a `Dimensioned` with the expected dimension dict.
 |-------------------------------|-------------|
 | `DimensionOf(D, Dims)`        | Unify `Dims` with a `DictTerm` of the dimension dict |
 | `StripDimensions(D, V)`       | Unify `V` with the numeric component |
-| `MakeDimensioned(V, Dims, D)` | Construct `Dimensioned` from value `V` and `DictTerm` dims |
+| `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
 `DimensionOf` also works on uninstantiated Vars with a dimension constraint —
 it unifies `Dims` with the dims from the AttVar's `"units"` attribute.
@@ -241,11 +241,11 @@ HasUnits(D, UnitPred)
 
 The builtin underlying `X(Unit)` sugar. Succeeds if:
 
-- `D` is a ground `Dimensioned` whose dims match `UnitPred._dims`, or
+- `D` is a ground `Quantity` whose dims match `UnitPred._dims`, or
 - `D` is an unbound Var — posts the `"units"` AttVar constraint and succeeds.
 
 Fails if `D` is bound to something else (wrong dims, plain number with
-non-empty dims, non-Dimensioned term).
+non-empty dims, non-Quantity term).
 
 ### Physical constants
 
@@ -263,7 +263,7 @@ non-empty dims, non-Dimensioned term).
 ## Uninstantiated dimensioned slots (AttVar)
 
 An uninstantiated slot that will eventually hold a measurement uses a plain
-Var with a `"units"` AttVar constraint — **not** `Dimensioned(Var, dims)`.
+Var with a `"units"` AttVar constraint — **not** `Quantity(Var, dims)`.
 
 ```python
 from clausal.logic.variables import Var, Trail
