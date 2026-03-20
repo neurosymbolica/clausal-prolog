@@ -4,7 +4,7 @@
     Volt, Ampere, Ohm,
     IsForce, IsEnergy, IsPower, IsArea, IsResistance, IsVelocity,
     IsDimensionless,
-    StripDimensions])
+    StripUnits])
 
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
 # and verify dimensional correctness.
@@ -17,9 +17,9 @@ Test("clpfd label as newton") <- (
     InDomain([F_INT], 1, 20),
     Label([F_INT]),
     F_INT == 12,
-    Newton(F_INT, F),
+    F := ++(Newton(F_INT)),
     IsForce(F),
-    StripDimensions(F, 12)
+    StripUnits(F, 12)
 )
 
 # Find two distinct integers whose product is 12,
@@ -30,8 +30,8 @@ Test("clpfd rectangle area") <- (
     Label([W, H]),
     PROD := W * H,
     PROD == 12,
-    Metre(W, W_M),
-    Metre(H, H_M),
+    W_M := ++(Metre(W)),
+    H_M := ++(Metre(H)),
     AREA := W_M * H_M,
     IsArea(AREA)
 )
@@ -44,8 +44,8 @@ Test("clpfd ohms law integer") <- (
     R_INT := V_INT // I_INT,
     R_INT == 4,
     V_INT == R_INT * I_INT,
-    Volt(V_INT, VOLTAGE),
-    Ampere(I_INT, CURRENT),
+    VOLTAGE := ++(Volt(V_INT)),
+    CURRENT := ++(Ampere(I_INT)),
     R := VOLTAGE / CURRENT,
     IsResistance(R)
 )
@@ -58,14 +58,14 @@ Test("clpfd kinetic energy") <- (
     Label([M_INT, V_INT]),
     TWICE_KE := M_INT * V_INT ** 2,
     TWICE_KE == 50,
-    Kilogram(M_INT, MASS),
-    Metre(V_INT, D),
-    Second(1, T),
+    MASS := ++(Kilogram(M_INT)),
+    D := ++(Metre(V_INT)),
+    T := 1(Second),
     SPD := D / T,
     KE := MASS * SPD ** 2,
     HALF := KE / 2,
     IsEnergy(HALF),
-    StripDimensions(HALF, 25)
+    StripUnits(HALF, 25)
 )
 
 # Generate integer power values, filter those divisible by 3,
@@ -75,7 +75,7 @@ Test("clpfd power multiple of 3") <- (
     Label([P_INT]),
     MOD := P_INT % 3,
     MOD == 0,
-    Watt(P_INT, P),
+    P := ++(Watt(P_INT)),
     IsPower(P)
 )
 
@@ -86,9 +86,9 @@ Test("clpfd force equals mass times accel") <- (
     Label([M_INT, A_INT]),
     F_INT := M_INT * A_INT,
     F_INT == 20,
-    Newton(F_INT, F),
+    F := ++(Newton(F_INT)),
     IsForce(F),
-    StripDimensions(F, 20)
+    StripUnits(F, 20)
 )
 
 # Power = V^2 / R: find integers V in 1..12, R in 1..6 where V^2 / R = 12.
@@ -100,8 +100,8 @@ Test("clpfd power from voltage squared") <- (
     RATIO := VSQUARED // R_INT,
     RATIO == 12,
     VSQUARED == RATIO * R_INT,
-    Volt(V_INT, VOLTAGE),
-    Ohm(R_INT, RESIST),
+    VOLTAGE := ++(Volt(V_INT)),
+    RESIST := ++(Ohm(R_INT)),
     P := VOLTAGE * VOLTAGE / RESIST,
     IsPower(P)
 )
@@ -115,8 +115,8 @@ Test("clpfd dimensionless ratio") <- (
     PROD := NUM // DEN,
     PROD == 2,
     NUM == PROD * DEN,
-    Metre(NUM, D_NUM),
-    Metre(DEN, D_DEN),
+    D_NUM := ++(Metre(NUM)),
+    D_DEN := ++(Metre(DEN)),
     RATIO := D_NUM / D_DEN,
     IsDimensionless(RATIO)
 )
@@ -128,7 +128,7 @@ Test("clpfd constraint rejects wrong unit") <- (
     not (
         InDomain([F_INT], 1, 5),
         Label([F_INT]),
-        Newton(F_INT, F),
+        F := ++(Newton(F_INT)),
         S(Second),
         S is F
     )

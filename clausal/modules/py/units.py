@@ -1,30 +1,26 @@
 """clausal.modules.py.units — Physical units and dimensional analysis.
 
-Provides named-unit constructor predicates and dimension-check predicates
-for use with ``Quantity`` values.
+Provides unit constructors and dimension-check predicates for use with
+``Quantity`` values.
 
 All values are stored internally in SI base units (m, kg, s, A, K, mol, cd).
-Non-SI unit predicates (Kilometer, Gram, Hour, …) scale on the way in and out.
+Non-SI units (Kilometer, Gram, Hour, …) scale on the way in.
 
 Usage in .clausal files::
 
-    -import_from(py.units, [Meter, Newton, Watt, IsForce, IsEnergy, ...])
+    -import_from(py.units, [Metre, Newton, Watt, IsForce, IsEnergy, ...])
 
-Usage from Python::
-
-    from clausal.modules.py.units import Meter, Newton, IsForce
-    from clausal import query
-    results = list(query(Newton(10, 'D'), 'D'))
-
-Named unit predicates (arity 2):  UnitName(Number, Quantity)
-    Number ↔ Quantity conversion, bidirectional.
+    D := 5(Metre)          # build a length Quantity
+    D := ++(Metre(5))      # equivalent explicit form
+    StripUnits(D, V)  # extract the numeric value
+    D == 5(Metre)          # check value and unit together
 
 Dimension-check predicates (arity 1): IsXxx(Quantity)
     Succeed iff the argument is a Quantity with the expected dimension dict.
 
 Utility predicates:
     DimensionOf(Quantity, Dims)   — extract dims as DictTerm
-    StripDimensions(Quantity, V)  — extract numeric value
+    StripUnits(Quantity, V)  — extract numeric value
     MakeQuantity(Value, Dims, D)  — construct from value + DictTerm dims
 """
 
@@ -115,61 +111,22 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     pred = _UnitsPredicate(name)
     frozen_dims = {pred: 1}   # pred already exists; self-referential key is fine
     pred._dims = frozen_dims
-
-    def _impl(x, d, trail):
-        from clausal.logic.units_constraint import constrain_var_dims
-        v = deref(x)
-        dv = deref(d)
-        if not is_var(v):
-            raw = v._value if isinstance(v, Quantity) and not v.dims else v
-            target = Quantity(raw, frozen_dims)
-            if unify(dv, target, trail):
-                yield None
-        elif isinstance(dv, Quantity) and dv.dims == frozen_dims:
-            if unify(v, dv.value, trail):
-                yield None
-        elif is_var(v) and is_var(dv):
-            if constrain_var_dims(dv, frozen_dims, trail):
-                yield None
-
-    pred._register(2, _simple_to_trampoline(_impl))
     return pred
 
 
 def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicate:
-    """Build a bidirectional unit predicate UnitName(Number, Quantity).
+    """Build a unit predicate callable from Python.
 
-    Forward  — Number is ground: D = Quantity(Number * scale, dims)
-    Reverse  — D is a Quantity with matching dims: Number = D.value / scale
-    Mixed    — scale=1 and Number is Var: wrap Var inside Quantity
+    ``Unit(value)`` returns ``Quantity(value * scale, dims)`` directly, for
+    use in Python arithmetic expressions via the ``++`` escape::
+
+        D := ++(Metre(5))          # explicit form
+        D := 5(Metre)              # n(Unit) sugar, equivalent
     """
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
-
-    def _impl(x, d, trail):
-        from clausal.logic.units_constraint import constrain_var_dims
-        v = deref(x)
-        dv = deref(d)
-        if not is_var(v):
-            # Forward: given a concrete number (or Quantity scalar), produce D.
-            raw = v._value if isinstance(v, Quantity) and not v.dims else v
-            target = Quantity(raw * scale if scale != 1.0 else raw, frozen_dims)
-            if unify(dv, target, trail):
-                yield None
-        elif isinstance(dv, Quantity) and dv.dims == frozen_dims:
-            # Reverse: extract the number from a ground Quantity.
-            result = dv.value / scale if scale != 1.0 else dv.value
-            if unify(v, result, trail):
-                yield None
-        elif is_var(v) and is_var(dv):
-            # Both unbound: post a dimensional constraint on D.
-            if constrain_var_dims(dv, frozen_dims, trail):
-                yield None
-        # else: cannot determine — fail silently
-
     pred = _UnitsPredicate(name)
     pred._dims = frozen_dims
     pred._scale = scale
-    pred._register(2, _simple_to_trampoline(_impl))
     return pred
 
 
@@ -193,8 +150,8 @@ def _make_is_dim_pred(name: str, dims: dict) -> _UnitsPredicate:
 # ═════════════════════════════════════════════════════════════════════════════
 # SI base unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
-# Each base unit predicate is its own dimension key: Metre(5, D) gives
-# Quantity(5, {Metre: 1}).  This avoids stringly-typed dimension dicts.
+# Each base unit uses itself as the dimension key: Metre gives {Metre: 1}.
+# This avoids stringly-typed dimension dicts.
 
 # Length
 Metre        = _make_unit_pred_base("Metre")
@@ -442,7 +399,7 @@ def _dimension_of_impl(d, dims_out, trail):
 
 
 def _strip_dimensions_impl(d, value_out, trail):
-    """StripDimensions(Quantity, Value): unify Value with the numeric component."""
+    """StripUnits(Quantity, Value): unify Value with the numeric component."""
     dv = deref(d)
     if not isinstance(dv, Quantity):
         return
@@ -471,8 +428,8 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail):
 DimensionOf = _UnitsPredicate("DimensionOf")
 DimensionOf._register(2, _simple_to_trampoline(_dimension_of_impl))
 
-StripDimensions = _UnitsPredicate("StripDimensions")
-StripDimensions._register(2, _simple_to_trampoline(_strip_dimensions_impl))
+StripUnits = _UnitsPredicate("StripUnits")
+StripUnits._register(2, _simple_to_trampoline(_strip_dimensions_impl))
 
 MakeQuantity = _UnitsPredicate("MakeQuantity")
 MakeQuantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))

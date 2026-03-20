@@ -8,7 +8,7 @@ named-unit predicates, and syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units, [Metre, Kilogram, Second, Newton, IsForce, StripDimensions])
+-import_from(py.units, [Metre, Kilogram, Second, Newton, IsForce, StripUnits])
 
 # Build a dimensioned value with n(Unit) sugar
 distance := 100(Metre)          # Quantity(100, {Metre: 1})
@@ -19,7 +19,7 @@ speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
 IsForce(9.8(Newton))
 
 # Extract numeric component
-StripDimensions(9.8(Newton), V),        # V = 9.8
+StripUnits(9.8(Newton), V),        # V = 9.8
 
 # Constrain an unbound variable to a dimension
 F(Newton),                      # F must eventually be bound to a Newton value
@@ -143,7 +143,7 @@ Dimensionless values (`dims == {}`) interoperate freely with plain numbers.
 Import in `.clausal` files:
 
 ```python
--import_from(py.units, [Metre, Newton, IsForce, StripDimensions])
+-import_from(py.units, [Metre, Newton, IsForce, StripUnits])
 ```
 
 ### Named-unit predicates — `Unit(Number, Quantity)`
@@ -227,7 +227,7 @@ Succeed iff the argument is a `Quantity` with the expected dimension dict.
 | Predicate                     | Description |
 |-------------------------------|-------------|
 | `DimensionOf(D, Dims)`        | Unify `Dims` with a `DictTerm` of the dimension dict |
-| `StripDimensions(D, V)`       | Unify `V` with the numeric component |
+| `StripUnits(D, V)`       | Unify `V` with the numeric component |
 | `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
 `DimensionOf` also works on uninstantiated Vars with a dimension constraint —

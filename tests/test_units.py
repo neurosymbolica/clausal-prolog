@@ -8,7 +8,7 @@ Covers:
   - Named-unit constructor predicates (forward + reverse modes)
   - Scaled unit predicates
   - Dimension-type predicates (IsForce, IsEnergy, …)
-  - Utility predicates (DimensionOf, StripDimensions, MakeQuantity, StripDimensions)
+  - Utility predicates (DimensionOf, StripUnits, MakeQuantity)
   - IsDimensionless / IsQuantity
   - Python interop via is/2 evaluator through query()
 """
@@ -382,15 +382,13 @@ class TestUnificationProtocol:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 5. SI base unit predicates (forward mode)
+# 5. SI base unit constructors (Python __call__)
 # ════════════════════════════════════════════════════════════════════════════
 
 
 class TestSIBaseUnits:
     def _fwd(self, pred, number):
-        sols = run(pred, number, "D")
-        assert sols, f"{pred} produced no solutions"
-        return sols[0]["D"]
+        return pred(number)
 
     def test_meter(self):
         from clausal.modules.py.units import Metre
@@ -422,59 +420,19 @@ class TestSIBaseUnits:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 6. SI base unit predicates (reverse mode)
-# ════════════════════════════════════════════════════════════════════════════
-
-
-class TestSIBaseUnitsReverse:
-    def _rev(self, pred, dimensioned):
-        sols = run(pred, "X", dimensioned)
-        assert sols
-        return sols[0]["X"]
-
-    def test_meter_reverse(self):
-        from clausal.modules.py.units import Metre
-        assert self._rev(Metre, d(7, m=1)) == 7
-
-    def test_kilogram_reverse(self):
-        from clausal.modules.py.units import Kilogram
-        assert self._rev(Kilogram, d(4.5, kg=1)) == 4.5
-
-    def test_second_reverse(self):
-        from clausal.modules.py.units import Second
-        assert self._rev(Second, d(60, s=1)) == 60
-
-    def test_wrong_dims_no_solution(self):
-        from clausal.modules.py.units import Metre
-        sols = run(Metre, "X", d(5, s=1))
-        assert sols == []
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# 7. Scaled unit predicates
+# 7. Scaled unit constructors (Python __call__)
 # ════════════════════════════════════════════════════════════════════════════
 
 
 class TestScaledUnits:
     def _fwd(self, pred, number):
-        sols = run(pred, number, "D")
-        assert sols
-        return sols[0]["D"]
-
-    def _rev(self, pred, dimensioned):
-        sols = run(pred, "X", dimensioned)
-        assert sols
-        return sols[0]["X"]
+        return pred(number)
 
     def test_kilometer_forward(self):
         from clausal.modules.py.units import Kilometer
         result = self._fwd(Kilometer, 1)
         assert result.dims == {Metre: 1}
         assert pytest.approx(result.value) == 1000.0
-
-    def test_kilometer_reverse(self):
-        from clausal.modules.py.units import Kilometer
-        assert pytest.approx(self._rev(Kilometer, d(2000.0, m=1))) == 2.0
 
     def test_centimeter_forward(self):
         from clausal.modules.py.units import Centimeter
@@ -487,10 +445,6 @@ class TestScaledUnits:
         result = self._fwd(Gram, 500)
         assert result.dims == {Kilogram: 1}
         assert pytest.approx(result.value) == 0.5
-
-    def test_gram_reverse(self):
-        from clausal.modules.py.units import Gram
-        assert pytest.approx(self._rev(Gram, d(0.25, kg=1))) == 250.0
 
     def test_tonne_forward(self):
         from clausal.modules.py.units import Tonne
@@ -508,10 +462,6 @@ class TestScaledUnits:
         result = self._fwd(Hour, 2)
         assert pytest.approx(result.value) == 7200.0
 
-    def test_hour_reverse(self):
-        from clausal.modules.py.units import Hour
-        assert pytest.approx(self._rev(Hour, d(3600.0, s=1))) == 1.0
-
     def test_foot_forward(self):
         from clausal.modules.py.units import Foot
         result = self._fwd(Foot, 1)
@@ -524,15 +474,13 @@ class TestScaledUnits:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 8. Named derived unit predicates
+# 8. Named derived unit constructors (Python __call__)
 # ════════════════════════════════════════════════════════════════════════════
 
 
 class TestDerivedUnits:
     def _fwd(self, pred, number):
-        sols = run(pred, number, "D")
-        assert sols
-        return sols[0]["D"]
+        return pred(number)
 
     def test_newton(self):
         from clausal.modules.py.units import Newton
@@ -676,20 +624,16 @@ class TestIsPredicates:
 
     def test_dimensionless_forward(self):
         from clausal.modules.py.units import Dimensionless
-        assert run(Dimensionless, 7, "D")[0]["D"] == d(7, **{})
+        assert Dimensionless(7) == d(7, **{})
 
-    def test_dimensionless_reverse(self):
-        from clausal.modules.py.units import Dimensionless
-        assert run(Dimensionless, "X", d(7, **{}))[0]["X"] == 7
-
-    def test_dimensionless_check_by_unification(self):
+    def test_dimensionless_check_by_value(self):
         from clausal.modules.py.units import Dimensionless
         ratio = d(5.0, **{})
-        assert run(Dimensionless, 5.0, ratio)
+        assert Dimensionless(5.0) == ratio
 
-    def test_dimensionless_fails_for_dimensioned(self):
+    def test_dimensionless_differs_from_dimensioned(self):
         from clausal.modules.py.units import Dimensionless
-        assert not run(Dimensionless, 5.0, d(5.0, m=1))
+        assert Dimensionless(5.0) != d(5.0, m=1)
 
     def test_is_dimensionless_with_empty_dims(self):
         from clausal.modules.py.units import IsDimensionless
@@ -731,16 +675,16 @@ class TestUtilityPredicates:
         assert dims[Second] == -1
 
     def test_value_of(self):
-        from clausal.modules.py.units import StripDimensions
+        from clausal.modules.py.units import StripUnits
         force = d(9.8, kg=1, m=1, s=-2)
-        sols = run(StripDimensions, force, "V")
+        sols = run(StripUnits, force, "V")
         assert sols
         assert sols[0]["V"] == 9.8
 
     def test_strip_dimensions(self):
-        from clausal.modules.py.units import StripDimensions
+        from clausal.modules.py.units import StripUnits
         x = d(42, m=2)
-        sols = run(StripDimensions, x, "V")
+        sols = run(StripUnits, x, "V")
         assert sols
         assert sols[0]["V"] == 42
 
@@ -760,8 +704,8 @@ class TestUtilityPredicates:
         assert not sols
 
     def test_value_of_plain_number_fails(self):
-        from clausal.modules.py.units import StripDimensions
-        sols = run(StripDimensions, 42, "V")
+        from clausal.modules.py.units import StripUnits
+        sols = run(StripUnits, 42, "V")
         assert not sols
 
 
@@ -820,8 +764,8 @@ class TestArithmeticViaIs:
         from clausal.modules.py.units import Newton, Second
 
         # impulse = force * time
-        force = run(Newton, 5, "F")[0]["F"]
-        time = run(Second, 3, "T")[0]["T"]
+        force = Newton(5)
+        time = Second(3)
         impulse = force * time
         # impulse dims: kg·m/s (momentum)
         assert impulse.dims == {Kilogram: 1, Metre: 1, Second: -1}
