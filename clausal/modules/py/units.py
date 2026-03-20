@@ -24,9 +24,8 @@ Dimension-check predicates (arity 1): IsXxx(Dimensioned)
 
 Utility predicates:
     DimensionOf(Dimensioned, Dims)   — extract dims as DictTerm
-    ValueOf(Dimensioned, Value)      — extract numeric value
+    StripDimensions(Dimensioned, V)  — extract numeric value
     MakeDimensioned(Value, Dims, D)  — construct from value + DictTerm dims
-    StripDimensions(Dimensioned, V)  — alias for ValueOf
 """
 
 from __future__ import annotations
@@ -42,9 +41,9 @@ from clausal.logic.trampoline import DONE
 
 
 def _simple_to_trampoline(simple_fn: Callable) -> Callable:
-    """Wrap a simple-mode generator fn(*args, trail, k=None) → trampoline."""
+    """Wrap a simple-mode generator fn(*args, trail) → trampoline."""
     def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
+        for _ in simple_fn(*args):
             yield (parent, None)
         yield (parent, DONE)
     return trampoline_fn
@@ -114,11 +113,10 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     ``dims`` dict — e.g. ``{Metre: 1}`` — without a circular-definition problem.
     """
     pred = _UnitsPredicate(name)
-    pred._scale = 1.0
     frozen_dims = {pred: 1}   # pred already exists; self-referential key is fine
     pred._dims = frozen_dims
 
-    def _impl(x, d, trail, k):
+    def _impl(x, d, trail):
         from clausal.logic.units_constraint import constrain_var_dims
         v = deref(x)
         dv = deref(d)
@@ -147,7 +145,7 @@ def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicat
     """
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
 
-    def _impl(x, d, trail, k):
+    def _impl(x, d, trail):
         from clausal.logic.units_constraint import constrain_var_dims
         v = deref(x)
         dv = deref(d)
@@ -182,7 +180,7 @@ def _make_is_dim_pred(name: str, dims: dict) -> _UnitsPredicate:
     """Build an IsXxx(D) predicate: succeed iff D is Dimensioned with dims."""
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
 
-    def _impl(d, trail, k):
+    def _impl(d, trail):
         dv = deref(d)
         if isinstance(dv, Dimensioned) and dv.dims == frozen_dims:
             yield None
@@ -200,7 +198,6 @@ def _make_is_dim_pred(name: str, dims: dict) -> _UnitsPredicate:
 
 # Length
 Metre        = _make_unit_pred_base("Metre")
-Meter        = Metre   # American spelling alias
 # Mass
 Kilogram     = _make_unit_pred_base("Kilogram")
 # Time
@@ -342,7 +339,7 @@ IsLuminousIntensity    = _make_is_dim_pred("IsLuminousIntensity",     {Candela: 
 IsIlluminance          = _make_is_dim_pred("IsIlluminance",           {Candela: 1, Metre: -2})
 
 
-def _is_dimensionless_impl(d, trail, k):
+def _is_dimensionless_impl(d, trail):
     """IsDimensionless: succeed for Dimensioned with no dims, or plain numbers."""
     dv = deref(d)
     if isinstance(dv, Dimensioned) and not dv.dims:
@@ -351,7 +348,7 @@ def _is_dimensionless_impl(d, trail, k):
         yield None
 
 
-def _is_dimensioned_impl(d, trail, k):
+def _is_dimensioned_impl(d, trail):
     """IsDimensioned: succeed for any Dimensioned value."""
     dv = deref(d)
     if isinstance(dv, Dimensioned):
@@ -368,14 +365,6 @@ IsDimensioned._register(1, _simple_to_trampoline(_is_dimensioned_impl))
 # ═════════════════════════════════════════════════════════════════════════════
 # Unit vectors: Dimensioned(1, ...) values for building expressions
 # ═════════════════════════════════════════════════════════════════════════════
-
-# Powers of base units
-Metre2    = Metre(1)**2
-Metre3    = Metre(1)**3
-Second2   = Second(1)**2
-Second3   = Second(1)**3
-Ampere2   = Ampere(1)**2
-Kelvin4   = Kelvin(1)**4
 
 # Named derived SI units aliased to their Dimensioned unit vector
 SI_Frequency            = Hertz(1)
@@ -395,10 +384,10 @@ SI_LuminousFlux         = Lumen(1)
 SI_Illuminance          = Lux(1)
 
 # Unnamed compound SI dimensions
-SI_Area         = Metre2
-SI_Volume       = Metre3
+SI_Area         = Metre(1)**2
+SI_Volume       = Metre(1)**3
 SI_Velocity     = Metre(1) / Second(1)
-SI_Acceleration = Metre(1) / Second2
+SI_Acceleration = Metre(1) / Second(1)**2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -417,13 +406,13 @@ BoltzmannConstant     = 1.380649e-23      * SI_Energy / Kelvin(1)
 AvogadroConstant      = 6.02214076e23     / Mole(1)
 ElementaryCharge      = 1.602176634e-19   * SI_Charge
 StandardGravity       = 9.80665           * SI_Acceleration
-GravitationalConstant = 6.67430e-11       * Metre3 / Kilogram(1) / Second2
+GravitationalConstant = 6.67430e-11       * Metre(1)**3 / Kilogram(1) / Second(1)**2
 AtomicMassUnit        = 1.66053906660e-27 * Kilogram(1)
 ElectronMass          = 9.1093837015e-31  * Kilogram(1)
 ProtonMass            = 1.67262192369e-27 * Kilogram(1)
-VacuumPermeability    = 1.25663706212e-6  * Kilogram(1) * Metre(1) / Second2 / Ampere2
-VacuumPermittivity    = 8.8541878128e-12  * Second2 * Second2 / Kilogram(1) / Metre3 * Ampere2
-StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre2 / Kelvin4
+VacuumPermeability    = 1.25663706212e-6  * Kilogram(1) * Metre(1) / Second(1)**2 / Ampere(1)**2
+VacuumPermittivity    = 8.8541878128e-12  * Second(1)**4 / Kilogram(1) / Metre(1)**3 * Ampere(1)**2
+StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre(1)**2 / Kelvin(1)**4
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -431,7 +420,7 @@ StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre2 / Kelvin4
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def _dimension_of_impl(d, dims_out, trail, k):
+def _dimension_of_impl(d, dims_out, trail):
     """DimensionOf(D, Dims): unify Dims with the dimension dict of D.
 
     Works for ground Dimensioned values and for uninstantiated AttVars that
@@ -452,8 +441,8 @@ def _dimension_of_impl(d, dims_out, trail, k):
                 yield None
 
 
-def _value_of_impl(d, value_out, trail, k):
-    """ValueOf(Dimensioned, Value): unify Value with the numeric component."""
+def _strip_dimensions_impl(d, value_out, trail):
+    """StripDimensions(Dimensioned, Value): unify Value with the numeric component."""
     dv = deref(d)
     if not isinstance(dv, Dimensioned):
         return
@@ -461,7 +450,7 @@ def _value_of_impl(d, value_out, trail, k):
         yield None
 
 
-def _make_dimensioned_impl(value, dims_in, d_out, trail, k):
+def _make_dimensioned_impl(value, dims_in, d_out, trail):
     """MakeDimensioned(Value, Dims, D): construct Dimensioned from value + dims dict."""
     from clausal.terms import DictTerm
     v = deref(value)
@@ -482,11 +471,8 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail, k):
 DimensionOf = _UnitsPredicate("DimensionOf")
 DimensionOf._register(2, _simple_to_trampoline(_dimension_of_impl))
 
-ValueOf = _UnitsPredicate("ValueOf")
-ValueOf._register(2, _simple_to_trampoline(_value_of_impl))
-
 StripDimensions = _UnitsPredicate("StripDimensions")
-StripDimensions._register(2, _simple_to_trampoline(_value_of_impl))  # alias
+StripDimensions._register(2, _simple_to_trampoline(_strip_dimensions_impl))
 
 MakeDimensioned = _UnitsPredicate("MakeDimensioned")
 MakeDimensioned._register(3, _simple_to_trampoline(_make_dimensioned_impl))

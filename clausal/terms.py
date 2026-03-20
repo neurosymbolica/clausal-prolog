@@ -15,6 +15,7 @@ statement.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 from .logic.variables import Var
@@ -282,10 +283,10 @@ def _dims_str(dims: dict) -> str:
 class Dimensioned:
     """A number with physical dimensions for dimensional analysis.
 
-    ``dims`` maps dimension keys (arbitrary atoms/strings) to integer exponents.
+    ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
     Zero-valued exponents are removed automatically.  The empty dict means
     dimensionless.  Internally all values are stored in SI base units; named-unit
-    predicates (``Meter``, ``Newton``, ``Watt``, …) in ``clausal.modules.units``
+    predicates (``Metre``, ``Newton``, ``Watt``, …) in ``clausal.modules.units``
     handle scaling on the way in/out.
 
     Arithmetic:
@@ -307,8 +308,8 @@ class Dimensioned:
     __slots__ = ("_value", "_dims")
 
     def __init__(self, value, dims: dict) -> None:
-        object.__setattr__(self, "_value", value)
-        object.__setattr__(self, "_dims", {k: v for k, v in dims.items() if v != 0})
+        self._value = value
+        self._dims = MappingProxyType({k: v for k, v in dims.items() if v != 0})
 
     # ── Properties ──────────────────────────────────────────────────────────
 
@@ -317,8 +318,8 @@ class Dimensioned:
         return self._value
 
     @property
-    def dims(self) -> dict:
-        return dict(self._dims)
+    def dims(self) -> MappingProxyType:
+        return self._dims
 
     # ── Internal helpers ────────────────────────────────────────────────────
 

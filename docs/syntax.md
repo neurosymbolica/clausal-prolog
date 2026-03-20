@@ -398,7 +398,7 @@ A special case of the `++()` pattern: when a numeric literal is used as the
 callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 
 ```python
-5(Meter)          # → ++(Meter(5))    → Dimensioned(5, {Meter: 1})
+5(Metre)          # → ++(Metre(5))    → Dimensioned(5, {Metre: 1})
 9.8(Newton)       # → ++(Newton(9.8)) → Dimensioned(9.8, {kg:1, m:1, s:-2})
 -3(Second)        # → Dimensioned(-3, {Second: 1})  (negation applied after)
 ```

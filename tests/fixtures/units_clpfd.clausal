@@ -1,10 +1,10 @@
 -import_from(py.units, [
-    Meter, Kilogram, Second,
+    Metre, Kilogram, Second,
     Newton, Joule, Watt,
     Volt, Ampere, Ohm,
     IsForce, IsEnergy, IsPower, IsArea, IsResistance, IsVelocity,
     IsDimensionless,
-    ValueOf])
+    StripDimensions])
 
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
 # and verify dimensional correctness.
@@ -19,7 +19,7 @@ Test("clpfd label as newton") <- (
     F_INT == 12,
     Newton(F_INT, F),
     IsForce(F),
-    ValueOf(F, 12)
+    StripDimensions(F, 12)
 )
 
 # Find two distinct integers whose product is 12,
@@ -30,8 +30,8 @@ Test("clpfd rectangle area") <- (
     Label([W, H]),
     PROD := W * H,
     PROD == 12,
-    Meter(W, W_M),
-    Meter(H, H_M),
+    Metre(W, W_M),
+    Metre(H, H_M),
     AREA := W_M * H_M,
     IsArea(AREA)
 )
@@ -59,13 +59,13 @@ Test("clpfd kinetic energy") <- (
     TWICE_KE := M_INT * V_INT ** 2,
     TWICE_KE == 50,
     Kilogram(M_INT, MASS),
-    Meter(V_INT, D),
+    Metre(V_INT, D),
     Second(1, T),
     SPD := D / T,
     KE := MASS * SPD ** 2,
     HALF := KE / 2,
     IsEnergy(HALF),
-    ValueOf(HALF, 25)
+    StripDimensions(HALF, 25)
 )
 
 # Generate integer power values, filter those divisible by 3,
@@ -88,7 +88,7 @@ Test("clpfd force equals mass times accel") <- (
     F_INT == 20,
     Newton(F_INT, F),
     IsForce(F),
-    ValueOf(F, 20)
+    StripDimensions(F, 20)
 )
 
 # Power = V^2 / R: find integers V in 1..12, R in 1..6 where V^2 / R = 12.
@@ -108,15 +108,15 @@ Test("clpfd power from voltage squared") <- (
 
 # Dimensionless ratio: find integer numerator and denominator (1..10) where
 # the ratio num/den equals 2, then verify it is dimensionless.
-# Wrap as Meter/Meter so units cancel.
+# Wrap as Metre/Metre so units cancel.
 Test("clpfd dimensionless ratio") <- (
     InDomain([NUM, DEN], 1, 10),
     Label([NUM, DEN]),
     PROD := NUM // DEN,
     PROD == 2,
     NUM == PROD * DEN,
-    Meter(NUM, D_NUM),
-    Meter(DEN, D_DEN),
+    Metre(NUM, D_NUM),
+    Metre(DEN, D_DEN),
     RATIO := D_NUM / D_DEN,
     IsDimensionless(RATIO)
 )

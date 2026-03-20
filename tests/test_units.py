@@ -8,7 +8,7 @@ Covers:
   - Named-unit constructor predicates (forward + reverse modes)
   - Scaled unit predicates
   - Dimension-type predicates (IsForce, IsEnergy, …)
-  - Utility predicates (DimensionOf, ValueOf, MakeDimensioned, StripDimensions)
+  - Utility predicates (DimensionOf, StripDimensions, MakeDimensioned, StripDimensions)
   - IsDimensionless / IsDimensioned
   - Python interop via is/2 evaluator through query()
 """
@@ -393,8 +393,8 @@ class TestSIBaseUnits:
         return sols[0]["D"]
 
     def test_meter(self):
-        from clausal.modules.py.units import Meter
-        assert self._fwd(Meter, 5) == d(5, m=1)
+        from clausal.modules.py.units import Metre
+        assert self._fwd(Metre, 5) == d(5, m=1)
 
     def test_kilogram(self):
         from clausal.modules.py.units import Kilogram
@@ -433,8 +433,8 @@ class TestSIBaseUnitsReverse:
         return sols[0]["X"]
 
     def test_meter_reverse(self):
-        from clausal.modules.py.units import Meter
-        assert self._rev(Meter, d(7, m=1)) == 7
+        from clausal.modules.py.units import Metre
+        assert self._rev(Metre, d(7, m=1)) == 7
 
     def test_kilogram_reverse(self):
         from clausal.modules.py.units import Kilogram
@@ -445,8 +445,8 @@ class TestSIBaseUnitsReverse:
         assert self._rev(Second, d(60, s=1)) == 60
 
     def test_wrong_dims_no_solution(self):
-        from clausal.modules.py.units import Meter
-        sols = run(Meter, "X", d(5, s=1))
+        from clausal.modules.py.units import Metre
+        sols = run(Metre, "X", d(5, s=1))
         assert sols == []
 
 
@@ -731,9 +731,9 @@ class TestUtilityPredicates:
         assert dims[Second] == -1
 
     def test_value_of(self):
-        from clausal.modules.py.units import ValueOf
+        from clausal.modules.py.units import StripDimensions
         force = d(9.8, kg=1, m=1, s=-2)
-        sols = run(ValueOf, force, "V")
+        sols = run(StripDimensions, force, "V")
         assert sols
         assert sols[0]["V"] == 9.8
 
@@ -760,8 +760,8 @@ class TestUtilityPredicates:
         assert not sols
 
     def test_value_of_plain_number_fails(self):
-        from clausal.modules.py.units import ValueOf
-        sols = run(ValueOf, 42, "V")
+        from clausal.modules.py.units import StripDimensions
+        sols = run(StripDimensions, 42, "V")
         assert not sols
 
 
@@ -912,8 +912,8 @@ class TestUnitPredicateCall:
         assert Kilogram(5) == d(5, kg=1)
 
     def test_meter_call(self):
-        from clausal.modules.py.units import Meter
-        assert Meter(3) == d(3, m=1)
+        from clausal.modules.py.units import Metre
+        assert Metre(3) == d(3, m=1)
 
     def test_newton_call(self):
         from clausal.modules.py.units import Newton
@@ -1283,7 +1283,7 @@ class TestDimensionlessSugar:
 
 
 class TestPythonExceptionCatch:
-    """Catch/2 and CatchRecover/3 treat Python exceptions as plain logic terms."""
+    """catch/3 catches UnitsMismatch as python_error("UnitsMismatch", Msg)."""
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
@@ -1292,43 +1292,45 @@ class TestPythonExceptionCatch:
         return _load_module(name, str(p)).__dict__["$module"]
 
     def test_catch_add_mismatch(self, tmp_path):
-        """Catching UnitsMismatch from incompatible addition via Catch/2."""
+        """Catching UnitsMismatch from incompatible addition."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_add",
-            "-import_from(py.units, [Meter, Second])\n"
-            "Test <- Catch(++(Meter(1) + Second(1)), UnitsMismatch(_))\n")
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_sub_mismatch(self, tmp_path):
-        """Catching UnitsMismatch from incompatible subtraction via Catch/2."""
+        """Catching UnitsMismatch from incompatible subtraction."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_sub",
-            "-import_from(py.units, [Meter, Kilogram])\n"
-            "Test <- Catch(++(Meter(5) - Kilogram(3)), UnitsMismatch(_))\n")
+            "-import_from(py.units, [Metre, Kilogram])\n"
+            "Test <- catch(++(Metre(5) - Kilogram(3)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_message_bound(self, tmp_path):
-        """The error variable is bound to the exception term; message accessible."""
+        """The caught message variable is bound to the exception string."""
         from clausal.logic.solve import call
+        from clausal.logic.variables import deref, Var
         mod = self._load(tmp_path, "catch_msg",
-            "-import_from(py.units, [Meter, Second])\n"
-            "Test <- (Catch(++(Meter(1) + Second(1)), UnitsMismatch(MSG_)), MSG_ == MSG_)\n")
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"UnitsMismatch\", _MSG), _MSG == _MSG)\n")
         assert any(True for _ in call("Test", module=mod))
 
-    def test_no_exception_transparent(self, tmp_path):
-        """If no exception, Catch/2 is transparent — goal solutions pass through."""
+    def test_no_exception_recovery_skipped(self, tmp_path):
+        """If no exception, the recovery goal is not run (even if it would fail)."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_noexc",
-            "-import_from(py.units, [Meter, Second])\n"
-            "Test <- Catch(++(Meter(3) * Second(2)), _)\n")
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- catch(++(Metre(3) * Second(2)), python_error(\"UnitsMismatch\", _), 1 == 2)\n")
+        # Mul doesn't raise; goal succeeds; recovery is skipped entirely.
         assert any(True for _ in call("Test", module=mod))
 
     def test_unmatched_exception_reraises(self, tmp_path):
-        """catch/3 with a non-matching catcher still re-raises."""
+        """An exception that doesn't match the catcher is re-raised."""
         from clausal.logic.solve import call
         from clausal.terms import UnitsMismatch
         mod = self._load(tmp_path, "catch_reraise",
-            "-import_from(py.units, [Meter, Second])\n"
-            "Test <- catch(++(Meter(1) + Second(1)), SomeOtherError(_), 1 == 1)\n")
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"SomeOtherError\", _), 1 == 1)\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))

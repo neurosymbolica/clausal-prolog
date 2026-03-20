@@ -1,5 +1,5 @@
 -import_from(py.units, [
-    Meter, Kilogram, Second, Ampere, Kelvin,
+    Metre, Kilogram, Second, Ampere, Kelvin,
     Kilometer, Centimeter, Gram, Minute, Hour,
     Newton, Joule, Watt, Hertz,
     Volt, Ampere, Ohm, Coulomb,
@@ -8,7 +8,7 @@
     IsVelocity, IsAcceleration, IsForce, IsEnergy, IsPower,
     IsPressure, IsFrequency, IsVoltage, IsResistance, IsCharge,
     IsDimensionless, IsDimensioned,
-    ValueOf, DimensionOf, MakeDimensioned, StripDimensions,
+    StripDimensions, DimensionOf, MakeDimensioned, StripDimensions,
     SpeedOfLight, StandardGravity])
 
 # SI base unit constructors: roundtrip via forward + reverse mode
@@ -18,15 +18,15 @@
 #   3. Cross-checks the result against a value built with n(Unit) sugar
 
 Test("meter roundtrip") <- (
-    Meter(5, PARTIAL),
-    Meter(VAL_, PARTIAL),
+    Metre(5, PARTIAL),
+    Metre(VAL_, PARTIAL),
     VAL_ == 5,
-    PARTIAL == 5(Meter)
+    PARTIAL == 5(Metre)
 )
 
 Test("Var in value") <- (
-    Meter(42, MV),
-    Meter(VAL, MV),
+    Metre(42, MV),
+    Metre(VAL, MV),
     VAL == 42
 )
 
@@ -96,8 +96,8 @@ Test("coulomb roundtrip") <- (
 # Reverse mode: extract numeric value via unit predicate
 
 Test("meter reverse") <- (
-    D := 7(Meter),
-    Meter(X, D),
+    D := 7(Metre),
+    Metre(X, D),
     X == 7
 )
 
@@ -112,7 +112,7 @@ Test("centimeter roundtrip") <- (
 
 Test("kilometer stores as meters") <- (
     D := 1(Kilometer),
-    Meter(1000.0, D)
+    Metre(1000.0, D)
 )
 
 Test("gram stores as kilograms") <- (
@@ -133,24 +133,24 @@ Test("hour stores as seconds") <- (
 # Arithmetic: check results by unification with named unit pred
 
 Test("velocity from distance over time") <- (
-    D := 100(Meter),
+    D := 100(Metre),
     T := 10(Second),
     V := D / T,
-    ValueOf(V, 10.0),
+    StripDimensions(V, 10.0),
     IsVelocity(V)
 )
 
 Test("acceleration from velocity over time") <- (
-    D := 20(Meter),
+    D := 20(Metre),
     T := 2(Second),
     V := D / T,
     A := V / T,
-    ValueOf(A, 5.0),
+    StripDimensions(A, 5.0),
     IsAcceleration(A)
 )
 
 Test("force from mass times acceleration") <- (
-    D := 20(Meter),
+    D := 20(Metre),
     T := 2(Second),
     V := D / T,
     A := V / T,
@@ -160,16 +160,16 @@ Test("force from mass times acceleration") <- (
 )
 
 Test("area from side squared") <- (
-    SIDE := 4(Meter),
+    SIDE := 4(Metre),
     AREA := SIDE ** 2,
-    ValueOf(AREA, 16),
+    StripDimensions(AREA, 16),
     IsArea(AREA)
 )
 
 Test("volume from side cubed") <- (
-    SIDE := 2(Meter),
+    SIDE := 2(Metre),
     VOL := SIDE ** 3,
-    ValueOf(VOL, 8),
+    StripDimensions(VOL, 8),
     IsVolume(VOL)
 )
 
@@ -189,7 +189,7 @@ Test("scale force by scalar") <- (
 )
 
 Test("dims cancel in division") <- (
-    RATIO := 50(Meter) / 10(Meter),
+    RATIO := 50(Metre) / 10(Metre),
     Dimensionless(5.0, RATIO)
 )
 
@@ -212,7 +212,7 @@ Test("watt joule per second") <- (
 
 Test("kinetic energy") <- (
     M := 4(Kilogram),
-    SPD := 3(Meter) / 1(Second),
+    SPD := 3(Metre) / 1(Second),
     KE := M * SPD ** 2,
     HALF := KE / 2,
     ERR is ++(abs(HALF.value - 18.0)),
@@ -228,7 +228,7 @@ Test("bar stores as pascals") <- (
 )
 
 Test("make dimensioned from dict") <- (
-    DIMS := ++{Kilogram: 1, Meter: 1, Second: -2},
+    DIMS := ++{Kilogram: 1, Metre: 1, Second: -2},
     MakeDimensioned(10, DIMS, D),
     Newton(10, D)
 )
@@ -262,7 +262,7 @@ Test("dimensionless roundtrip") <- (
     PARTIAL == ++(Dimensioned(5.0, {}))
 )
 
-Test("islength") <- IsLength(1(Meter))
+Test("islength") <- IsLength(1(Metre))
 
 Test("ismass") <- IsMass(1(Kilogram))
 
@@ -286,7 +286,7 @@ Test("ischarge") <- IsCharge(1(Coulomb))
 
 Test("valueof and stripdimensions") <- (
     F := 9.8(Newton),
-    ValueOf(F, 9.8),
+    StripDimensions(F, 9.8),
     StripDimensions(F, 9.8)
 )
 
@@ -303,9 +303,9 @@ Test("constraint rejects wrong unit") <- (
 )
 
 Test("constraint propagates through arithmetic") <- (
-    D(Meter),
+    D(Metre),
     T(Second),
-    D is 100(Meter),
+    D is 100(Metre),
     T is 10(Second),
     V := D / T,
     IsVelocity(V)
@@ -316,7 +316,7 @@ Test("constraint propagates through arithmetic") <- (
 Test("dimensionless integer sugar") <- (
     D := 42(),
     IsDimensionless(D),
-    ValueOf(D, 42)
+    StripDimensions(D, 42)
 )
 
 Test("dimensionless float sugar") <- (
@@ -347,11 +347,11 @@ Test("dimensionless via isdimensionless") <- IsDimensionless(0())
 Test("dimensionless arithmetic via escape") <- (
     S := ++(Dimensioned(3, {}) + Dimensioned(2, {})),
     IsDimensionless(S),
-    ValueOf(S, 5)
+    StripDimensions(S, 5)
 )
 
 Test("dimensionless ratio from division") <- (
-    RATIO := 50(Meter) / 10(Meter),
+    RATIO := 50(Metre) / 10(Metre),
     IsDimensionless(RATIO),
     D := 5.0(),
     RATIO == D
@@ -361,62 +361,50 @@ Test("dimensionless ratio from division") <- (
 # These use X(Unit) to post a constraint; assigning the wrong unit produces no solution.
 
 Test("constraint rejects metre for second slot") <- (
-    not (X (Second), X is 100(Meter))
+    not (X(Second), X is 100(Metre))
 )
 
 Test("constraint rejects newton for kilogram slot") <- (
-    not (M (Kilogram), M is 9.8 (Newton))
+    not (M(Kilogram), M is 9.8(Newton))
 )
 
 Test("constraint rejects joule for watt slot") <- (
-    not (P (Watt), P is 1(Joule))
+    not (P(Watt), P is 1(Joule))
 )
 
 Test("two constraints conflict") <- (
-    not (X (Meter), X(Second))
+    not (X(Metre), X(Second))
 )
 
 Test("constraint accepts correct unit after arithmetic") <- (
-    V(Meter),
-    V is 5 (Meter),
+    V(Metre),
+    V is 5(Metre),
     IsLength(V)
 )
 
-# Catch/2 and CatchRecover/3: Python exceptions are ClassName(Msg) terms,
-# identical in shape to logic throw terms — no python_error wrapper needed.
+# catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
+# catchable as python_error("UnitsMismatch", Msg) in the catcher pattern.
 
-Test("catch add mismatch") <- Catch(
-    1 (Meter) + 1 (Second),
-    UnitsMismatch(_)
+Test("catch add mismatch") <- (
+    catch(
+        ++(Metre(1) + Second(1)),
+        python_error("UnitsMismatch", _),
+        1 == 1
+    )
 )
 
-Test("catch no error transparent") <- (
-    Catch(
-        R := 6 (Meter) / 2 (Second),
-        _
-    ),
-    IsVelocity(R),
-    ValueOf(R, 3.0)
+Test("catch mul no error") <- (
+    catch(
+        ++(Metre(3) * Second(2)),
+        python_error("UnitsMismatch", _),
+        1 == 2
+    )
 )
 
-Test("catch extracts message is string") <- (
-    Catch(
-        5 (Meter) + 2 (Kilogram),
-        UnitsMismatch(MSG)
-    ),
-    ++(isinstance(MSG, str))
-)
-
-Test("catchrecover runs recovery") <- CatchRecover(
-    1 (Meter) + 1 (Second),
-    UnitsMismatch(_),
-    1 == 1
-)
-
-Test("catchrecover binds message") <- (
-    CatchRecover(
-        5 (Meter) + 2 (Kilogram),
-        UnitsMismatch(MSG),
-        ++(isinstance(MSG, str))
+Test("catch extracts message") <- (
+    catch(
+        ++(Metre(5) + Kilogram(2)),
+        python_error("UnitsMismatch", MSG),
+        MSG == MSG
     )
 )

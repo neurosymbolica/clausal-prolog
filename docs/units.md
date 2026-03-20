@@ -8,18 +8,18 @@ named-unit predicates, and syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units, [Meter, Kilogram, Second, Newton, IsForce, ValueOf])
+-import_from(py.units, [Metre, Kilogram, Second, Newton, IsForce, StripDimensions])
 
 # Build a dimensioned value with n(Unit) sugar
-distance := 100(Meter)          # Dimensioned(100, {Meter: 1})
+distance := 100(Metre)          # Dimensioned(100, {Metre: 1})
 time_    := 9.58(Second)        # Dimensioned(9.58, {Second: 1})
-speed    := distance / time_    # Dimensioned(10.4…, {Meter: 1, Second: -1})
+speed    := distance / time_    # Dimensioned(10.4…, {Metre: 1, Second: -1})
 
 # Check dimension type
 IsForce(9.8(Newton))
 
 # Extract numeric component
-ValueOf(9.8(Newton), V),        # V = 9.8
+StripDimensions(9.8(Newton), V),        # V = 9.8
 
 # Constrain an unbound variable to a dimension
 F(Newton),                      # F must eventually be bound to a Newton value
@@ -33,18 +33,18 @@ F is 9.8(Newton)                # binds F, hook checks dims match
 ### `n(Unit)` — literal measurement
 
 ```python
-5(Meter)          # → Dimensioned(5,   {Meter: 1})
-9.8(Newton)       # → Dimensioned(9.8, {Kilogram: 1, Meter: 1, Second: -2})
+5(Metre)          # → Dimensioned(5,   {Metre: 1})
+9.8(Newton)       # → Dimensioned(9.8, {Kilogram: 1, Metre: 1, Second: -2})
 -3(Second)        # → Dimensioned(-3,  {Second: 1})
 ```
 
-Python parses `5(Meter)` as a call — the transformer intercepts it and rewrites
-it to `++(Meter(5))`. Any numeric literal (int or float) combined with a
+Python parses `5(Metre)` as a call — the transformer intercepts it and rewrites
+it to `++(Metre(5))`. Any numeric literal (int or float) combined with a
 single named unit predicate works. For compound or unusual units, use
 `++()` directly:
 
 ```python
-custom := ++(Kilogram(1) * Meter(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
+custom := ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
 ```
 
 ### `n()` — dimensionless literal
@@ -63,7 +63,7 @@ predicate. The value participates in unit arithmetic — dividing two compatible
 quantities to get a ratio is a common result:
 
 ```python
-RATIO := 50(Meter) / 10(Meter)   # → Dimensioned(5.0, {})
+RATIO := 50(Metre) / 10(Metre)   # → Dimensioned(5.0, {})
 IsDimensionless(RATIO)            # succeeds
 RATIO == 5.0()                    # succeeds
 ```
@@ -103,13 +103,14 @@ F is 1(Second)         # hook rejects: Newton dims ≠ Second dims
 ```python
 from clausal.terms import Dimensioned, UnitsMismatch
 
-d = Dimensioned(10.0, {Meter: 1, Second: -1})  # 10 m/s
+d = Dimensioned(10.0, {Metre: 1, Second: -1})  # 10 m/s
 d.value   # 10.0
-d.dims    # {<_UnitsPredicate Meter>: 1, <_UnitsPredicate Second>: -1}
+d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ```
 
-`dims` maps unit-predicate objects (not strings) to integer exponents. Zero
-exponents are removed on construction. The empty dict `{}` is dimensionless.
+`dims` returns an immutable `MappingProxyType` mapping unit-predicate objects
+(not strings) to integer exponents. Zero exponents are removed on construction.
+The empty proxy `{}` is dimensionless.
 
 `Dimensioned` holds a ground numeric value — never a logic variable. An
 uninstantiated dimensioned slot is a plain Var with a `"units"` AttVar
@@ -142,7 +143,7 @@ Dimensionless values (`dims == {}`) interoperate freely with plain numbers.
 Import in `.clausal` files:
 
 ```python
--import_from(py.units, [Meter, Newton, IsForce, ValueOf])
+-import_from(py.units, [Metre, Newton, IsForce, StripDimensions])
 ```
 
 ### Named-unit predicates — `Unit(Number, Dimensioned)`
@@ -152,7 +153,7 @@ Bidirectional, arity 2:
 - **Forward** (`Number` given): unify `Dimensioned` with `Dimensioned(Number * scale, dims)`.
 - **Reverse** (`Dimensioned` given): unify `Number` with `value / scale`.
 
-The `n(Unit)` sugar (`5(Meter)`) calls `Unit(n)` as a plain Python call
+The `n(Unit)` sugar (`5(Metre)`) calls `Unit(n)` as a plain Python call
 (arity 1), returning `Dimensioned` directly. The two-argument predicate
 form is still useful for reverse mode and for pattern matching in clause heads.
 
@@ -160,7 +161,7 @@ form is still useful for reverse mode and for pattern matching in clause heads.
 
 | Predicate  | Dims          | Scale |
 |------------|---------------|-------|
-| `Meter`    | `{Meter: 1}`  | 1     |
+| `Metre`    | `{Metre: 1}`  | 1     |
 | `Kilogram` | `{Kilogram: 1}` | 1   |
 | `Second`   | `{Second: 1}` | 1     |
 | `Ampere`   | `{Ampere: 1}` | 1     |
@@ -226,8 +227,7 @@ Succeed iff the argument is a `Dimensioned` with the expected dimension dict.
 | Predicate                     | Description |
 |-------------------------------|-------------|
 | `DimensionOf(D, Dims)`        | Unify `Dims` with a `DictTerm` of the dimension dict |
-| `ValueOf(D, V)`               | Unify `V` with the numeric component |
-| `StripDimensions(D, V)`       | Alias for `ValueOf` |
+| `StripDimensions(D, V)`       | Unify `V` with the numeric component |
 | `MakeDimensioned(V, Dims, D)` | Construct `Dimensioned` from value `V` and `DictTerm` dims |
 
 `DimensionOf` also works on uninstantiated Vars with a dimension constraint —
@@ -286,30 +286,23 @@ The constraint is undone if the trail is rewound past the mark where it was post
 ## Catching unit errors
 
 `UnitsMismatch` is a plain Python exception raised when incompatible units are
-combined inside `++()` escapes. It is catchable via `Catch/2` — Python
-exceptions appear as `ClassName(Message)` terms, identical in shape to logic
-`throw/1` terms:
+combined inside `++()` escapes. It is catchable via `catch/3` using the
+`python_error(ClassName, Message)` pattern:
 
-```
-Catch(
-    ++(Meter(3) + Second(2)),   # raises UnitsMismatch
-    UnitsMismatch(MSG)          # MSG bound to the error string
+```python
+catch(
+    ++(Metre(3) + Second(2)),           # raises UnitsMismatch
+    python_error("UnitsMismatch", MSG), # MSG bound to the error string
+    1 == 1                              # recovery goal
 )
 ```
 
-To run a recovery goal after catching, use `CatchRecover/3`:
+The `python_error/2` term is the general form for any Python exception that
+escapes through a `++()` escape — see [Exception Handling](exceptions.md) for
+the full treatment.
 
-```
-CatchRecover(
-    ++(Meter(3) + Second(2)),
-    UnitsMismatch(MSG),
-    (Write(MSG), fallback_result(RESULT))
-)
-```
-
-For selective catching with re-raise on mismatch, use `catch/3` with the same
-`ClassName(Message)` pattern. See [Exception Handling](exceptions.md) for the
-full treatment.
+If the catcher pattern does not match the raised exception, the exception is
+re-raised and continues to propagate.
 
 ---
 
@@ -319,9 +312,9 @@ full treatment.
   offset (non-ratio) scales. Only ratio-scale units work correctly.
 - **Integer-only exponents in `Pow`**: `area ** 0.5` raises `UnitsMismatch`.
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
-  (`Meter`, `Kilogram`, etc.) are the keys in `dims`. Custom dimension keys
+  (`Metre`, `Kilogram`, etc.) are the keys in `dims`. Custom dimension keys
   are supported — any hashable Python value works.
 - **`n(Unit)` limitation**: the unit argument must be a bare name — a named
   unit predicate visible in scope. Compound unit expressions
-  (`Kilogram * Meter / Second**2`) cannot appear as the arg; use `++()` or
+  (`Kilogram * Metre / Second**2`) cannot appear as the arg; use `++()` or
   a named predicate (`Newton`).

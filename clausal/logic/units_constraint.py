@@ -65,8 +65,7 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
     """Called when an AttVar with a ``"units"`` attribute is unified.
 
     *attr_value* — the UnitState carried by the variable being bound.
-    *bound_to*   — the value (or variable) the AttVar was unified with,
-                   already dereffed by the C extension before calling this.
+    *bound_to*   — the value (or variable) the AttVar was unified with.
     """
     # Import here to avoid circular imports at module load time.
     from clausal.terms import Dimensioned
