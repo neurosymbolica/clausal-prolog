@@ -470,6 +470,25 @@ class TermTransformer(NodeTransformer):
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
             func_node = visit(replace(Name(id=call.func.value, ctx=load), call.func))
+        # HasUnits(X, compound_unit) — auto-wrap compound unit expr in PyThunk
+        # so it evaluates as Python rather than being compiled as a Clausal term.
+        elif (
+            isinstance(call.func, Name)
+            and call.func.id == "HasUnits"
+            and len(call.args) == 2
+            and _is_unit_expr(call.args[1])
+            and not isinstance(call.args[1], Name)
+            and not call.keywords
+        ):
+            first_arg = visit(call.args[0])
+            unit_thunk = _build_py_thunk_ast(transformer, call, call.args[1], [])
+            func_node = visit(call.func)
+            return node_ast(
+                "Call", call,
+                func=func_node,
+                args=list_ast([first_arg, unit_thunk], call),
+                kwargs=list_ast([], call),
+            )
         elif (
             isinstance(call.func, Constant)
             and isinstance(call.func.value, (int, float))
@@ -487,11 +506,16 @@ class TermTransformer(NodeTransformer):
             isinstance(call.func, Constant)
             and isinstance(call.func.value, (int, float))
             and len(call.args) == 1
-            and isinstance(call.args[0], Name)
+            and _is_unit_expr(call.args[0])
             and not call.keywords
         ):
-            # n(Unit) — unit application sugar: 5(Metre) → ++(Metre(5))
-            inner = Call(func=call.args[0], args=[call.func], keywords=[])
+            # n(Unit) — unit application sugar: 5(Metre) → ++(Quantity(5, Metre))
+            # Also handles compound units: 5(Metre/Second) → ++(Quantity(5, Metre/Second))
+            inner = Call(
+                func=replace(Name(id="Quantity", ctx=load), call),
+                args=[call.func, call.args[0]],
+                keywords=[],
+            )
             return _build_py_thunk_ast(transformer, call, inner, [])
         elif (
             isinstance(call.func, Name)
@@ -500,26 +524,17 @@ class TermTransformer(NodeTransformer):
             and _is_unit_expr(call.args[0])
             and not call.keywords
         ):
-            # X(Unit) — unit constraint sugar: X(Metre) → HasUnits(X, Metre)
-            # Also handles compound expressions: X(Metre**2), X(Metre/Second), etc.
-            # Compound expressions must be wrapped in a PyThunk so they are
-            # evaluated as Python (not rewritten as Clausal term nodes).
-            has_units_func = node_ast(
-                "LoadName", call,
-                name=replace(Constant(value="HasUnits"), call),
-            )
-            var_arg = visit(call.func)
+            # X(Unit) — construction sugar: MY_VAL(Newton) → ++(Quantity(MY_VAL, Newton))
+            # In expression position: wraps a runtime value in a Quantity.
+            # For dimension checks/constraints in goal position, use HasUnits(X, Unit) explicitly.
+            var_name = call.func.id
             raw_unit = call.args[0]
-            if isinstance(raw_unit, Name):
-                unit_arg = visit(raw_unit)
-            else:
-                unit_arg = _build_py_thunk_ast(transformer, call, raw_unit, [])
-            return node_ast(
-                "Call", call,
-                func=has_units_func,
-                args=list_ast([var_arg, unit_arg], call),
-                kwargs=list_ast([], call),
+            inner = Call(
+                func=replace(Name(id="Quantity", ctx=load), call),
+                args=[replace(Name(id=var_name, ctx=load), call), raw_unit],
+                keywords=[],
             )
+            return _build_py_thunk_ast(transformer, call, inner, [var_name])
         else:
             func_node = visit(call.func)
         positional_args = [visit(argument) for argument in call.args]

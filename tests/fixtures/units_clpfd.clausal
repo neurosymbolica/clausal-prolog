@@ -2,8 +2,7 @@
     Metre, Kilogram, Second,
     Newton, Joule, Watt,
     Volt, Ampere, Ohm,
-    IsForce, IsEnergy, IsPower, IsArea, IsResistance, IsVelocity,
-    IsDimensionless,
+    Dimensionless,
     StripUnits])
 
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
@@ -18,7 +17,7 @@ Test("clpfd label as newton") <- (
     Label([F_INT]),
     F_INT == 12,
     F := ++(Newton(F_INT)),
-    IsForce(F),
+    HasUnits(F, Newton),
     StripUnits(F, 12)
 )
 
@@ -33,11 +32,11 @@ Test("clpfd rectangle area") <- (
     W_M := ++(Metre(W)),
     H_M := ++(Metre(H)),
     AREA := W_M * H_M,
-    IsArea(AREA)
+    HasUnits(AREA, Metre**2)
 )
 
 # Find integer voltage and current (1..20) with V/I = 4,
-# wrap as Volt/Ampere, compute resistance, verify IsResistance.
+# wrap as Volt/Ampere, compute resistance, verify resistance.
 Test("clpfd ohms law integer") <- (
     InDomain([V_INT, I_INT], 1, 20),
     Label([V_INT, I_INT]),
@@ -47,11 +46,11 @@ Test("clpfd ohms law integer") <- (
     VOLTAGE := ++(Volt(V_INT)),
     CURRENT := ++(Ampere(I_INT)),
     R := VOLTAGE / CURRENT,
-    IsResistance(R)
+    HasUnits(R, Ohm)
 )
 
 # Find integer mass (1..5 kg) and speed (1..5 m/s) where mass * speed^2 == 50,
-# compute kinetic energy, verify IsEnergy.
+# compute kinetic energy, verify energy.
 # m=2, v=5: 2*KE = 2 * 5^2 = 50 -> KE = 25 J
 Test("clpfd kinetic energy") <- (
     InDomain([M_INT, V_INT], 1, 5),
@@ -64,19 +63,19 @@ Test("clpfd kinetic energy") <- (
     SPD := D / T,
     KE := MASS * SPD ** 2,
     HALF := KE / 2,
-    IsEnergy(HALF),
+    HasUnits(HALF, Joule),
     StripUnits(HALF, 25)
 )
 
 # Generate integer power values, filter those divisible by 3,
-# wrap as Watt and verify IsPower.
+# wrap as Watt and verify power.
 Test("clpfd power multiple of 3") <- (
     InDomain([P_INT], 1, 30),
     Label([P_INT]),
     MOD := P_INT % 3,
     MOD == 0,
     P := ++(Watt(P_INT)),
-    IsPower(P)
+    HasUnits(P, Watt)
 )
 
 # Force F = m * a: find integer mass 1..5 and acceleration 1..5 giving F = 20 N.
@@ -87,7 +86,7 @@ Test("clpfd force equals mass times accel") <- (
     F_INT := M_INT * A_INT,
     F_INT == 20,
     F := ++(Newton(F_INT)),
-    IsForce(F),
+    HasUnits(F, Newton),
     StripUnits(F, 20)
 )
 
@@ -103,7 +102,7 @@ Test("clpfd power from voltage squared") <- (
     VOLTAGE := ++(Volt(V_INT)),
     RESIST := ++(Ohm(R_INT)),
     P := VOLTAGE * VOLTAGE / RESIST,
-    IsPower(P)
+    HasUnits(P, Watt)
 )
 
 # Dimensionless ratio: find integer numerator and denominator (1..10) where
@@ -118,7 +117,7 @@ Test("clpfd dimensionless ratio") <- (
     D_NUM := ++(Metre(NUM)),
     D_DEN := ++(Metre(DEN)),
     RATIO := D_NUM / D_DEN,
-    IsDimensionless(RATIO)
+    HasUnits(RATIO, Dimensionless)
 )
 
 # Unit-mismatch guard via constraint: label F and T from the same domain,
@@ -129,7 +128,7 @@ Test("clpfd constraint rejects wrong unit") <- (
         InDomain([F_INT], 1, 5),
         Label([F_INT]),
         F := ++(Newton(F_INT)),
-        S(Second),
+        HasUnits(S, Second),
         S is F
     )
 )

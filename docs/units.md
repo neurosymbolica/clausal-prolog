@@ -8,21 +8,21 @@ named-unit predicates, and syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units, [Metre, Kilogram, Second, Newton, IsForce, StripUnits])
+-import_from(py.units, [Metre, Kilogram, Second, Newton, StripUnits])
 
 # Build a dimensioned value with n(Unit) sugar
 distance := 100(Metre)          # Quantity(100, {Metre: 1})
 time_    := 9.58(Second)        # Quantity(9.58, {Second: 1})
 speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
 
-# Check dimension type
-IsForce(9.8(Newton))
+# Check dimension type via HasUnits
+HasUnits(speed, Metre/Second)   # succeeds: dims match
 
 # Extract numeric component
 StripUnits(9.8(Newton), V),        # V = 9.8
 
 # Constrain an unbound variable to a dimension
-F(Newton),                      # F must eventually be bound to a Newton value
+HasUnits(F, Newton),            # F must eventually be bound to a Newton value
 F is 9.8(Newton)                # binds F, hook checks dims match
 ```
 
@@ -39,8 +39,9 @@ F is 9.8(Newton)                # binds F, hook checks dims match
 ```
 
 Python parses `5(Metre)` as a call — the transformer intercepts it and rewrites
-it to `++(Metre(5))`. Any numeric literal (int or float) combined with a
-single named unit predicate works. For compound or unusual units, use
+it to `++(Quantity(5, Metre))`. Any numeric literal (int or float) combined with a
+single named unit predicate works. Compound unit expressions also work:
+`5(Metre/Second)` → `++(Quantity(5, Metre/Second))`. For unusual units, use
 `++()` directly:
 
 ```python
@@ -64,18 +65,28 @@ quantities to get a ratio is a common result:
 
 ```python
 RATIO := 50(Metre) / 10(Metre)   # → Quantity(5.0, {})
-IsDimensionless(RATIO)            # succeeds
+HasUnits(RATIO, Dimensionless)    # succeeds
 RATIO == 5.0()                    # succeeds
 ```
 
-`IsDimensionless` also succeeds for plain Python ints/floats.
+### `X(Unit)` — construction from a runtime value
 
-### `X(Unit)` — dimension constraint on a variable
-
-When the callee is a logic variable, `X(Unit)` desugars to `HasUnits(X, Unit)`:
+When the callee is a logic variable, `MY_VAL(Unit)` desugars to `++(Quantity(MY_VAL, Unit))`:
 
 ```python
-F(Newton)              # → HasUnits(F, Newton)
+N := 9.8
+F := N(Newton)    # → ++(Quantity(N, Newton)) = Quantity(9.8, {Newton dims})
+```
+
+This is the runtime-value counterpart of `9.8(Newton)` — same construction, variable value.
+Compound unit expressions work too: `N(Metre/Second)`.
+
+### `HasUnits(X, Unit)` — dimension constraint / check
+
+For dimension constraints (goal position), use `HasUnits` explicitly:
+
+```python
+HasUnits(F, Newton)              # → HasUnits(F, Newton)
 ```
 
 `HasUnits/2` posts an AttVar constraint on `F`: any subsequent unification
@@ -84,17 +95,24 @@ The constraint backtracks correctly with the trail.
 
 ```python
 # Constraint posted, then satisfied
-F(Newton),
+HasUnits(F, Newton),
 F is 9.8(Newton),      # hook checks {Newton dims} == {Newton dims} → OK
-IsForce(F)             # succeeds
+HasUnits(F, Newton)    # check: succeeds
 
 # Constraint posted, then violated → entire conjunction fails
-F(Newton),
+HasUnits(F, Newton),
 F is 1(Second)         # hook rejects: Newton dims ≠ Second dims
 ```
 
-`X(Unit)` produces a **goal**, not a value. It cannot appear on the RHS of
-`:=` — that position expects an expression.
+Compound unit expressions work directly in `HasUnits`:
+
+```python
+HasUnits(V, Metre/Second)          # velocity constraint
+HasUnits(A, Metre/Second**2)       # acceleration constraint
+HasUnits(F, Kilogram*Metre/Second**2)  # force constraint
+```
+
+`HasUnits` cannot appear on the RHS of `:=` — that position expects an expression.
 
 ---
 
@@ -143,19 +161,13 @@ Dimensionless values (`dims == {}`) interoperate freely with plain numbers.
 Import in `.clausal` files:
 
 ```python
--import_from(py.units, [Metre, Newton, IsForce, StripUnits])
+-import_from(py.units, [Metre, Newton, StripUnits])
 ```
 
-### Named-unit predicates — `Unit(Number, Quantity)`
+### Named-unit predicates
 
-Bidirectional, arity 2:
-
-- **Forward** (`Number` given): unify `Quantity` with `Quantity(Number * scale, dims)`.
-- **Reverse** (`Quantity` given): unify `Number` with `value / scale`.
-
-The `n(Unit)` sugar (`5(Metre)`) calls `Unit(n)` as a plain Python call
-(arity 1), returning `Quantity` directly. The two-argument predicate
-form is still useful for reverse mode and for pattern matching in clause heads.
+`Unit(value)` called from Python (via `++` escape or `n(Unit)` sugar) returns
+`Quantity(value * scale, dims)` directly.
 
 #### SI base units
 
@@ -209,19 +221,6 @@ Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `PoundsPerSquareInch`,
 `Electronvolt`, `Calorie`, `Kilocalorie`, `KilowattHour`, `Kilowatt`,
 `Horsepower`, `KilometerPerHour`, `MilePerHour`, `Knot`
 
-### Dimension-check predicates — `IsXxx(Quantity)`
-
-Succeed iff the argument is a `Quantity` with the expected dimension dict.
-
-`IsLength`, `IsArea`, `IsVolume`, `IsMass`, `IsTime`, `IsFrequency`,
-`IsVelocity`, `IsAcceleration`, `IsForce`, `IsEnergy`, `IsPower`, `IsPressure`,
-`IsElectricCurrent`, `IsVoltage`, `IsCharge`, `IsResistance`, `IsCapacitance`,
-`IsInductance`, `IsMagneticFlux`, `IsMagneticFluxDensity`, `IsTemperature`,
-`IsAmountOfSubstance`, `IsLuminousIntensity`, `IsIlluminance`,
-`IsDimensionless`, `IsQuantity`
-
-`IsDimensionless` also succeeds for plain Python ints/floats.
-
 ### Utility predicates
 
 | Predicate                     | Description |
@@ -239,7 +238,7 @@ it unifies `Dims` with the dims from the AttVar's `"units"` attribute.
 HasUnits(D, UnitPred)
 ```
 
-The builtin underlying `X(Unit)` sugar. Succeeds if:
+Explicit dimension check/constraint predicate. Succeeds if:
 
 - `D` is a ground `Quantity` whose dims match `UnitPred._dims`, or
 - `D` is an unbound Var — posts the `"units"` AttVar constraint and succeeds.
@@ -314,7 +313,8 @@ re-raised and continues to propagate.
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
   (`Metre`, `Kilogram`, etc.) are the keys in `dims`. Custom dimension keys
   are supported — any hashable Python value works.
-- **`n(Unit)` limitation**: the unit argument must be a bare name — a named
-  unit predicate visible in scope. Compound unit expressions
-  (`Kilogram * Metre / Second**2`) cannot appear as the arg; use `++()` or
-  a named predicate (`Newton`).
+- **`n(Unit)` compound unit support**: compound unit expressions now work
+  as the `n(Unit)` arg: `5(Metre/Second)`, `10(Metre**2)`, etc. — the
+  transformer wraps them via `Quantity(n, compound_unit)`.
+  Compound expressions also work in `HasUnits`:
+  `HasUnits(V, Metre/Second)`, `HasUnits(A, Metre/Second**2)`, `HasUnits(F, Kilogram*Metre/Second**2)`.

@@ -307,9 +307,16 @@ class Quantity:
 
     __slots__ = ("_value", "_dims")
 
-    def __init__(self, value, dims: dict) -> None:
-        self._value = value
-        self._dims = MappingProxyType({k: v for k, v in dims.items() if v != 0})
+    def __init__(self, value, dims) -> None:
+        if hasattr(dims, '_dims') and hasattr(dims, '_scale'):
+            # dims is a _UnitsPredicate — extract dims dict and apply scale
+            actual_value = value * dims._scale if dims._scale != 1.0 else value
+            actual_dims = dims._dims
+        else:
+            actual_value = value
+            actual_dims = dims
+        self._value = actual_value
+        self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
 
     # ── Properties ──────────────────────────────────────────────────────────
 

@@ -5,11 +5,9 @@ Covers:
   - UnitsMismatch on incompatible operations
   - Comparison operators
   - Clausal unification protocol (__unify__, __walk__, __occurs_check__)
-  - Named-unit constructor predicates (forward + reverse modes)
+  - Named-unit constructor predicates
   - Scaled unit predicates
-  - Dimension-type predicates (IsForce, IsEnergy, …)
   - Utility predicates (DimensionOf, StripUnits, MakeQuantity)
-  - IsDimensionless / IsQuantity
   - Python interop via is/2 evaluator through query()
 """
 
@@ -541,122 +539,6 @@ class TestDerivedUnits:
         assert pytest.approx(result.value) == 3_600_000.0
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# 9. Dimension-type predicates
-# ════════════════════════════════════════════════════════════════════════════
-
-
-class TestIsPredicates:
-    def _check(self, pred, dimensioned, should_succeed):
-        sols = run(pred, dimensioned)
-        if should_succeed:
-            assert sols, f"{pred} should succeed for {dimensioned}"
-        else:
-            assert not sols, f"{pred} should fail for {dimensioned}"
-
-    def test_is_length_pass(self):
-        from clausal.modules.py.units import IsLength
-        self._check(IsLength, d(5, m=1), True)
-
-    def test_is_length_fail(self):
-        from clausal.modules.py.units import IsLength
-        self._check(IsLength, d(5, s=1), False)
-
-    def test_is_area_pass(self):
-        from clausal.modules.py.units import IsArea
-        self._check(IsArea, d(4, m=2), True)
-
-    def test_is_volume_pass(self):
-        from clausal.modules.py.units import IsVolume
-        self._check(IsVolume, d(1, m=3), True)
-
-    def test_is_mass_pass(self):
-        from clausal.modules.py.units import IsMass
-        self._check(IsMass, d(70, kg=1), True)
-
-    def test_is_time_pass(self):
-        from clausal.modules.py.units import IsTime
-        self._check(IsTime, d(60, s=1), True)
-
-    def test_is_frequency_pass(self):
-        from clausal.modules.py.units import IsFrequency
-        self._check(IsFrequency, d(440, s=-1), True)
-
-    def test_is_velocity_pass(self):
-        from clausal.modules.py.units import IsVelocity
-        self._check(IsVelocity, d(10, m=1, s=-1), True)
-
-    def test_is_acceleration_pass(self):
-        from clausal.modules.py.units import IsAcceleration
-        self._check(IsAcceleration, d(9.8, m=1, s=-2), True)
-
-    def test_is_force_pass(self):
-        from clausal.modules.py.units import IsForce
-        self._check(IsForce, d(10, kg=1, m=1, s=-2), True)
-
-    def test_is_force_fail_on_energy(self):
-        from clausal.modules.py.units import IsForce
-        self._check(IsForce, d(10, kg=1, m=2, s=-2), False)
-
-    def test_is_energy_pass(self):
-        from clausal.modules.py.units import IsEnergy
-        self._check(IsEnergy, d(100, kg=1, m=2, s=-2), True)
-
-    def test_is_power_pass(self):
-        from clausal.modules.py.units import IsPower
-        self._check(IsPower, d(60, kg=1, m=2, s=-3), True)
-
-    def test_is_pressure_pass(self):
-        from clausal.modules.py.units import IsPressure
-        self._check(IsPressure, d(101325, kg=1, m=-1, s=-2), True)
-
-    def test_is_voltage_pass(self):
-        from clausal.modules.py.units import IsVoltage
-        self._check(IsVoltage, d(230, kg=1, m=2, s=-3, A=-1), True)
-
-    def test_is_charge_pass(self):
-        from clausal.modules.py.units import IsCharge
-        self._check(IsCharge, d(1, A=1, s=1), True)
-
-    def test_is_temperature_pass(self):
-        from clausal.modules.py.units import IsTemperature
-        self._check(IsTemperature, d(300, K=1), True)
-
-    def test_dimensionless_forward(self):
-        from clausal.modules.py.units import Dimensionless
-        assert Dimensionless(7) == d(7, **{})
-
-    def test_dimensionless_check_by_value(self):
-        from clausal.modules.py.units import Dimensionless
-        ratio = d(5.0, **{})
-        assert Dimensionless(5.0) == ratio
-
-    def test_dimensionless_differs_from_dimensioned(self):
-        from clausal.modules.py.units import Dimensionless
-        assert Dimensionless(5.0) != d(5.0, m=1)
-
-    def test_is_dimensionless_with_empty_dims(self):
-        from clausal.modules.py.units import IsDimensionless
-        self._check(IsDimensionless, d(1.0, **{}), True)
-
-    def test_is_dimensionless_with_plain_float(self):
-        from clausal.modules.py.units import IsDimensionless
-        sols = run(IsDimensionless, 3.14)
-        assert sols
-
-    def test_is_dimensionless_fail_for_length(self):
-        from clausal.modules.py.units import IsDimensionless
-        self._check(IsDimensionless, d(5, m=1), False)
-
-    def test_is_dimensioned_pass(self):
-        from clausal.modules.py.units import IsQuantity
-        self._check(IsQuantity, d(5, m=1), True)
-
-    def test_is_dimensioned_fail_for_plain_number(self):
-        from clausal.modules.py.units import IsQuantity
-        sols = run(IsQuantity, 42)
-        assert not sols
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # 10. Utility predicates
@@ -1105,58 +987,84 @@ class TestUnitsSugar:
         mod = _load_module("sugar_add", str(p)).__dict__["$module"]
         assert any(True for _ in call("Test", module=mod))
 
-    # ── X(Unit) goal sugar: inline Clausal source ─────────────────────────────
+    # ── X(Unit) expression sugar: construction ─────────────────────────────────
 
-    def test_var_sugar_on_dimensioned(self, tmp_path):
-        """X(Metre) on a Quantity(5, Metre) succeeds."""
+    def test_var_sugar_constructs_quantity(self, tmp_path):
+        """MY_VAL(Metre) in expression position constructs Quantity(MY_VAL, Metre)."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := 5(Metre), D(Metre))\n"
+            "Test <- (N := 5, D := N(Metre), D == 5(Metre))\n"
         )
-        p = tmp_path / "var_sugar_match.clausal"
+        p = tmp_path / "var_sugar_construct.clausal"
         p.write_text(src)
-        mod = _load_module("var_sugar_match", str(p)).__dict__["$module"]
+        mod = _load_module("var_sugar_construct", str(p)).__dict__["$module"]
         assert any(True for _ in call("Test", module=mod))
 
-    def test_var_sugar_mismatch_fails(self, tmp_path):
-        """X(Metre) on a Quantity(5, Second) fails."""
+    def test_var_sugar_compound_constructs(self, tmp_path):
+        """MY_VAL(Metre/Second) constructs a velocity Quantity."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (D := 5(Second), D(Metre))\n"
+            "Test <- (N := 10, V := N(Metre/Second), HasUnits(V, Metre/Second))\n"
         )
-        p = tmp_path / "var_sugar_fail.clausal"
+        p = tmp_path / "var_sugar_compound.clausal"
         p.write_text(src)
-        mod = _load_module("var_sugar_fail", str(p)).__dict__["$module"]
+        mod = _load_module("var_sugar_compound", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_has_units_check_passes(self, tmp_path):
+        """HasUnits(D, Metre) succeeds when D is a Metre Quantity."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := 5(Metre), HasUnits(D, Metre))\n"
+        )
+        p = tmp_path / "has_units_match.clausal"
+        p.write_text(src)
+        mod = _load_module("has_units_match", str(p)).__dict__["$module"]
+        assert any(True for _ in call("Test", module=mod))
+
+    def test_has_units_check_fails(self, tmp_path):
+        """HasUnits(D, Metre) fails when D has Second dims."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        src = (
+            "-import_from(py.units, [Metre, Second])\n"
+            "Test <- (D := 5(Second), HasUnits(D, Metre))\n"
+        )
+        p = tmp_path / "has_units_fail.clausal"
+        p.write_text(src)
+        mod = _load_module("has_units_fail", str(p)).__dict__["$module"]
         assert not any(True for _ in call("Test", module=mod))
 
-    def test_var_sugar_posts_constraint(self, tmp_path):
-        """X(Metre) on an unbound var posts the units constraint and allows binding."""
+    def test_has_units_posts_constraint(self, tmp_path):
+        """HasUnits(X, Metre) on unbound var posts the units constraint."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (X(Metre), X is 5(Metre))\n"
+            "Test <- (HasUnits(X, Metre), X is 5(Metre))\n"
         )
-        p = tmp_path / "var_sugar_post.clausal"
+        p = tmp_path / "has_units_constrain.clausal"
         p.write_text(src)
-        mod = _load_module("var_sugar_post", str(p)).__dict__["$module"]
+        mod = _load_module("has_units_constrain", str(p)).__dict__["$module"]
         assert any(True for _ in call("Test", module=mod))
 
-    def test_var_sugar_constraint_rejects_wrong_unit(self, tmp_path):
-        """X(Metre) then unify X with a Second value — fails."""
+    def test_has_units_constraint_rejects_wrong_unit(self, tmp_path):
+        """HasUnits(X, Metre) then unify with Second — fails."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (X(Metre), X is 5(Second))\n"
+            "Test <- (HasUnits(X, Metre), X is 5(Second))\n"
         )
-        p = tmp_path / "var_sugar_reject.clausal"
+        p = tmp_path / "has_units_reject.clausal"
         p.write_text(src)
-        mod = _load_module("var_sugar_reject", str(p)).__dict__["$module"]
+        mod = _load_module("has_units_reject", str(p)).__dict__["$module"]
         assert not any(True for _ in call("Test", module=mod))
 
 
@@ -1263,19 +1171,19 @@ class TestDimensionlessSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless(self, tmp_path):
-        """IsDimensionless succeeds for n()."""
+        """HasUnits(D, Dimensionless) succeeds for n()."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_is",
-            "-import_from(py.units, [IsDimensionless])\n"
-            "Test <- (D := 7(), IsDimensionless(D))\n")
+            "-import_from(py.units, [Dimensionless])\n"
+            "Test <- (D := 7(), HasUnits(D, Dimensionless))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless_not_length(self, tmp_path):
-        """IsLength fails for a dimensionless n() value."""
+        """HasUnits(D, Metre) fails for a dimensionless n() value."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_not_len",
-            "-import_from(py.units, [IsLength])\n"
-            "Test <- (D := 7(), IsLength(D))\n")
+            "-import_from(py.units, [Metre])\n"
+            "Test <- (D := 7(), HasUnits(D, Metre))\n")
         assert not any(True for _ in call("Test", module=mod))
 
 

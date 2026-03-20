@@ -1,26 +1,23 @@
 """clausal.modules.py.units — Physical units and dimensional analysis.
 
-Provides unit constructors and dimension-check predicates for use with
-``Quantity`` values.
+Provides unit constructors for use with ``Quantity`` values.
 
 All values are stored internally in SI base units (m, kg, s, A, K, mol, cd).
 Non-SI units (Kilometer, Gram, Hour, …) scale on the way in.
 
 Usage in .clausal files::
 
-    -import_from(py.units, [Metre, Newton, Watt, IsForce, IsEnergy, ...])
+    -import_from(py.units, [Metre, Newton, Watt, StripUnits])
 
     D := 5(Metre)          # build a length Quantity
     D := ++(Metre(5))      # equivalent explicit form
-    StripUnits(D, V)  # extract the numeric value
+    StripUnits(D, V)       # extract the numeric value
     D == 5(Metre)          # check value and unit together
-
-Dimension-check predicates (arity 1): IsXxx(Quantity)
-    Succeed iff the argument is a Quantity with the expected dimension dict.
+    D(Metre/Second)        # check or constrain dimension via X(Unit) sugar
 
 Utility predicates:
     DimensionOf(Quantity, Dims)   — extract dims as DictTerm
-    StripUnits(Quantity, V)  — extract numeric value
+    StripUnits(Quantity, V)       — extract numeric value
     MakeQuantity(Value, Dims, D)  — construct from value + DictTerm dims
 """
 
@@ -161,22 +158,6 @@ def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicat
     return pred
 
 
-# ── Dimension-check predicate factory ────────────────────────────────────────
-
-
-def _make_is_dim_pred(name: str, dims: dict) -> _UnitsPredicate:
-    """Build an IsXxx(D) predicate: succeed iff D is Quantity with dims."""
-    frozen_dims = {k: v for k, v in dims.items() if v != 0}
-
-    def _impl(d, trail):
-        dv = deref(d)
-        if isinstance(dv, Quantity) and dv.dims == frozen_dims:
-            yield None
-
-    pred = _UnitsPredicate(name)
-    pred._register(1, _simple_to_trampoline(_impl))
-    return pred
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI base unit predicates
@@ -296,58 +277,6 @@ KilometerPerHour = _make_unit_pred(
 )
 MilePerHour  = _make_unit_pred("MilePerHour",  {Metre: 1, Second: -1}, scale=0.44704)
 Knot         = _make_unit_pred("Knot",         {Metre: 1, Second: -1}, scale=1_852.0 / 3600.0)
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Dimension-type predicates
-# ═════════════════════════════════════════════════════════════════════════════
-
-IsLength               = _make_is_dim_pred("IsLength",               {Metre: 1})
-IsArea                 = _make_is_dim_pred("IsArea",                  {Metre: 2})
-IsVolume               = _make_is_dim_pred("IsVolume",                {Metre: 3})
-IsMass                 = _make_is_dim_pred("IsMass",                  {Kilogram: 1})
-IsTime                 = _make_is_dim_pred("IsTime",                  {Second: 1})
-IsFrequency            = _make_is_dim_pred("IsFrequency",             {Second: -1})
-IsVelocity             = _make_is_dim_pred("IsVelocity",              {Metre: 1, Second: -1})
-IsAcceleration         = _make_is_dim_pred("IsAcceleration",          {Metre: 1, Second: -2})
-IsForce                = _make_is_dim_pred("IsForce",                 {Kilogram: 1, Metre: 1, Second: -2})
-IsEnergy               = _make_is_dim_pred("IsEnergy",                {Kilogram: 1, Metre: 2, Second: -2})
-IsPower                = _make_is_dim_pred("IsPower",                 {Kilogram: 1, Metre: 2, Second: -3})
-IsPressure             = _make_is_dim_pred("IsPressure",              {Kilogram: 1, Metre: -1, Second: -2})
-IsElectricCurrent      = _make_is_dim_pred("IsElectricCurrent",       {Ampere: 1})
-IsVoltage              = _make_is_dim_pred("IsVoltage",               {Kilogram: 1, Metre: 2, Second: -3, Ampere: -1})
-IsCharge               = _make_is_dim_pred("IsCharge",                {Ampere: 1, Second: 1})
-IsResistance           = _make_is_dim_pred("IsResistance",            {Kilogram: 1, Metre: 2, Second: -3, Ampere: -2})
-IsCapacitance          = _make_is_dim_pred("IsCapacitance",           {Kilogram: -1, Metre: -2, Second: 4, Ampere: 2})
-IsInductance           = _make_is_dim_pred("IsInductance",            {Kilogram: 1, Metre: 2, Second: -2, Ampere: -2})
-IsMagneticFlux         = _make_is_dim_pred("IsMagneticFlux",          {Kilogram: 1, Metre: 2, Second: -2, Ampere: -1})
-IsMagneticFluxDensity  = _make_is_dim_pred("IsMagneticFluxDensity",   {Kilogram: 1, Second: -2, Ampere: -1})
-IsTemperature          = _make_is_dim_pred("IsTemperature",           {Kelvin: 1})
-IsAmountOfSubstance    = _make_is_dim_pred("IsAmountOfSubstance",     {Mole: 1})
-IsLuminousIntensity    = _make_is_dim_pred("IsLuminousIntensity",     {Candela: 1})
-IsIlluminance          = _make_is_dim_pred("IsIlluminance",           {Candela: 1, Metre: -2})
-
-
-def _is_dimensionless_impl(d, trail):
-    """IsDimensionless: succeed for Quantity with no dims, or plain numbers."""
-    dv = deref(d)
-    if isinstance(dv, Quantity) and not dv.dims:
-        yield None
-    elif isinstance(dv, (int, float)) and not isinstance(dv, bool):
-        yield None
-
-
-def _is_dimensioned_impl(d, trail):
-    """IsQuantity: succeed for any Quantity value."""
-    dv = deref(d)
-    if isinstance(dv, Quantity):
-        yield None
-
-
-IsDimensionless = _UnitsPredicate("IsDimensionless")
-IsDimensionless._register(1, _simple_to_trampoline(_is_dimensionless_impl))
-
-IsQuantity = _UnitsPredicate("IsQuantity")
-IsQuantity._register(1, _simple_to_trampoline(_is_dimensioned_impl))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
