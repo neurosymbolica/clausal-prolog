@@ -887,6 +887,64 @@ class TestUnitPredicateCall:
         assert pytest.approx(r.value) == 4.0
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# Unit predicate arithmetic (dims combinators)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestUnitPredicateArithmetic:
+    """_UnitsPredicate arithmetic produces dimension descriptors for HasUnits."""
+
+    def test_pow_produces_correct_dims(self):
+        from clausal.modules.py.units import Metre
+        area = Metre ** 2
+        assert area._dims == {Metre: 2}
+
+    def test_div_produces_correct_dims(self):
+        from clausal.modules.py.units import Metre, Second
+        velocity = Metre / Second
+        assert velocity._dims == {Metre: 1, Second: -1}
+
+    def test_mul_produces_correct_dims(self):
+        from clausal.modules.py.units import Kilogram, Metre
+        kg_m = Kilogram * Metre
+        assert kg_m._dims == {Kilogram: 1, Metre: 1}
+
+    def test_compound_force_dims(self):
+        from clausal.modules.py.units import Kilogram, Metre, Second, Newton
+        force = Kilogram * Metre / Second ** 2
+        assert force._dims == Newton._dims
+
+    def test_acceleration_dims(self):
+        from clausal.modules.py.units import Metre, Second
+        acc = Metre / Second ** 2
+        assert acc._dims == {Metre: 1, Second: -2}
+
+    def test_pow_fractional_not_useful_but_legal(self):
+        from clausal.modules.py.units import Metre
+        # Metre**-1 is a valid descriptor (e.g. wavenumber)
+        inv = Metre ** -1
+        assert inv._dims == {Metre: -1}
+
+    def test_descriptor_matches_quantity_dims(self):
+        from clausal.modules.py.units import Metre, Second
+        velocity_desc = Metre / Second
+        velocity_qty = Metre(10) / Second(1)
+        assert velocity_qty.dims == velocity_desc._dims
+
+    def test_area_descriptor_matches_quantity_dims(self):
+        from clausal.modules.py.units import Metre
+        area_desc = Metre ** 2
+        area_qty = Metre(4) ** 2
+        assert area_qty.dims == area_desc._dims
+
+    def test_compound_desc_mismatch(self):
+        from clausal.modules.py.units import Metre, Second
+        area_desc = Metre ** 2
+        velocity_qty = Metre(10) / Second(1)
+        assert velocity_qty.dims != area_desc._dims
+
+
 class TestPhysicalConstants:
     def test_speed_of_light_dims(self):
         from clausal.modules.py.units import SpeedOfLight

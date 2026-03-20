@@ -234,6 +234,46 @@ Test("constraint propagates through arithmetic") <- (
     IsVelocity(V)
 )
 
+# Compound unit expressions: X(Metre**2), X(Metre/Second), etc.
+# These use unit arithmetic on _UnitsPredicate objects to form dimension
+# descriptors that the X(Unit) constraint sugar passes to HasUnits.
+
+Test("area check via compound expr") <- (
+    A := 4(Metre) ** 2,
+    A(Metre**2)
+)
+
+Test("area constraint via compound expr") <- (
+    A(Metre**2),
+    A := 4(Metre) ** 2,
+    IsArea(A)
+)
+
+Test("velocity check via compound expr") <- (
+    V := 10(Metre) / 1(Second),
+    V(Metre/Second)
+)
+
+Test("velocity constraint via compound expr") <- (
+    V(Metre/Second),
+    V := 10(Metre) / 1(Second),
+    IsVelocity(V)
+)
+
+Test("acceleration check via compound expr") <- (
+    A := 9.8(Metre) / 1(Second) ** 2,
+    A(Metre/Second**2)
+)
+
+Test("force compound dims check") <- (
+    F := 9.8(Newton),
+    F(Kilogram*Metre/Second**2)
+)
+
+Test("compound dims constraint rejects wrong unit") <- (
+    not (A(Metre**2), A is 5(Metre))
+)
+
 # Dimensionless n() sugar: 42() produces Quantity(42, {})
 
 Test("dimensionless integer sugar") <- (

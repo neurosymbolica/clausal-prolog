@@ -309,6 +309,24 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier.isupper()
 
 
+def _is_unit_expr(node) -> bool:
+    """True for AST nodes that form a valid unit-type expression.
+
+    Accepts plain Names (e.g. ``Metre``) and compound expressions built from
+    ``*``, ``/``, ``**`` with Names and numeric Constants as leaves — e.g.
+    ``Metre**2``, ``Metre/Second``, ``Kilogram*Metre/Second**2``.
+    """
+    if isinstance(node, Name):
+        return True
+    if isinstance(node, Constant) and isinstance(node.value, (int, float)):
+        return True
+    if isinstance(node, UnaryOp) and isinstance(node.op, USub):
+        return isinstance(node.operand, Constant)
+    if isinstance(node, BinOp) and isinstance(node.op, (Pow, Mult, Div)):
+        return _is_unit_expr(node.left) and _is_unit_expr(node.right)
+    return False
+
+
 def _collect_logic_var_names(node) -> list[str]:
     """Collect logic variable names from an AST node in first-occurrence order."""
     ordered: list[str] = []
@@ -479,16 +497,23 @@ class TermTransformer(NodeTransformer):
             isinstance(call.func, Name)
             and _is_logic_var_name(call.func.id)
             and len(call.args) == 1
-            and isinstance(call.args[0], Name)
+            and _is_unit_expr(call.args[0])
             and not call.keywords
         ):
             # X(Unit) — unit constraint sugar: X(Metre) → HasUnits(X, Metre)
+            # Also handles compound expressions: X(Metre**2), X(Metre/Second), etc.
+            # Compound expressions must be wrapped in a PyThunk so they are
+            # evaluated as Python (not rewritten as Clausal term nodes).
             has_units_func = node_ast(
                 "LoadName", call,
                 name=replace(Constant(value="HasUnits"), call),
             )
             var_arg = visit(call.func)
-            unit_arg = visit(call.args[0])
+            raw_unit = call.args[0]
+            if isinstance(raw_unit, Name):
+                unit_arg = visit(raw_unit)
+            else:
+                unit_arg = _build_py_thunk_ast(transformer, call, raw_unit, [])
             return node_ast(
                 "Call", call,
                 func=has_units_func,

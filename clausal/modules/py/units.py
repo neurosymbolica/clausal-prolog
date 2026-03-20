@@ -48,6 +48,13 @@ def _simple_to_trampoline(simple_fn: Callable) -> Callable:
 # ── Predicate adapter (supports multi-arity) ─────────────────────────────────
 
 
+def _dims_combine(dims1: dict, dims2: dict, sign: int = 1) -> dict:
+    result = dict(dims1)
+    for k, v in dims2.items():
+        result[k] = result.get(k, 0) + sign * v
+    return {k: v for k, v in result.items() if v != 0}
+
+
 class _UnitsPredicate:
     """Adapter providing ``_get_dispatch()`` for a units predicate.
 
@@ -93,6 +100,30 @@ class _UnitsPredicate:
             value * self._scale if self._scale != 1.0 else value,
             self._dims,
         )
+
+    def __mul__(self, other: "_UnitsPredicate") -> "_UnitsPredicate":
+        if not isinstance(other, _UnitsPredicate):
+            return NotImplemented
+        result = _UnitsPredicate(f"({self._name}*{other._name})")
+        result._dims = _dims_combine(self._dims or {}, other._dims or {})
+        result._scale = self._scale * other._scale
+        return result
+
+    def __truediv__(self, other: "_UnitsPredicate") -> "_UnitsPredicate":
+        if not isinstance(other, _UnitsPredicate):
+            return NotImplemented
+        result = _UnitsPredicate(f"({self._name}/{other._name})")
+        result._dims = _dims_combine(self._dims or {}, other._dims or {}, sign=-1)
+        result._scale = self._scale / other._scale
+        return result
+
+    def __pow__(self, exp: int | float) -> "_UnitsPredicate":
+        if not isinstance(exp, (int, float)):
+            return NotImplemented
+        result = _UnitsPredicate(f"({self._name}**{exp})")
+        result._dims = {k: v * exp for k, v in (self._dims or {}).items() if v * exp != 0}
+        result._scale = self._scale ** exp
+        return result
 
     def __repr__(self) -> str:
         arities = sorted(self._dispatch_fns)
