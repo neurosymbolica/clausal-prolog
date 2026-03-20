@@ -2092,6 +2092,20 @@ def compile_goal(
                 goal_arg, catcher, recovery, db, var_context, trail_name, k_stmts,
             )
 
+        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+            return _compile_catch(
+                goal_arg, error_var, True, db, var_context, trail_name, k_stmts,
+                always_catch=True,
+            )
+
+        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+            return _compile_catch(
+                goal_arg, error_var, recovery, db, var_context, trail_name, k_stmts,
+                always_catch=True,
+            )
+
         # ── halt/0, halt/1 — exit ────────────────────────────────────────
         case Call(func=LoadName(name="halt"), args=[], kwargs=[]):
             return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
@@ -2296,6 +2310,22 @@ def _compile_find_all_core(
 # ── throw/catch compilation (V2-14) ─────────────────────────────────────────
 
 
+def _catcher_to_structural(term: Any) -> Any:
+    """Recursively convert Call nodes to Compound in a catcher term.
+
+    ``catch/3`` catcher patterns and ``Catch/2`` error patterns appear in
+    *term* position, not goal position. ``Call(LoadName("Foo"), [arg])``
+    should construct ``Compound("Foo", (arg,))`` at runtime, not call the
+    dispatch function for ``Foo``. This avoids collisions with
+    ``_inject_call_targets`` which replaces functor names with
+    ``_DbDispatchAdapter`` objects that are not callable as constructors.
+    """
+    if isinstance(term, Call) and isinstance(term.func, LoadName) and not term.kwargs:
+        new_args = [_catcher_to_structural(a) for a in term.args]
+        return Compound(term.func.name, tuple(new_args))
+    return term
+
+
 def _compile_throw(
     term_arg: Any,
     var_context: dict[int, str],
@@ -2318,14 +2348,17 @@ def _compile_catch(
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
+    always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in simple mode.
 
     Catches both ``throw/1`` (LogicException) and plain Python exceptions.
-    Python exceptions are wrapped as ``python_error(ClassName, Message)`` so
-    that Clausal code can match on them::
+    Python exceptions are wrapped as ``ClassName(Message)`` so that Clausal
+    code can match them the same way as logic terms::
 
-        catch(Goal, python_error("UnitsMismatch", _), Recovery)
+        catch(Goal, UnitsMismatch(_), Recovery)
+        Catch(Goal, Error)                # always_catch=True, recovery=True
+        CatchRecover(Goal, Error, Recovery)  # always_catch=True
 
     Generates::
 
@@ -2359,7 +2392,7 @@ def _compile_catch(
     unify_mark = _fresh("_catch_um")
     rec_gen_name = _fresh("_catch_rec")
 
-    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
 
     # Compile inner goal as sub-generator (simple mode)
     inner_stmts = compile_goal(goal_arg, db, var_context, trail_name, [_yield_none_stmt()])
@@ -2421,7 +2454,12 @@ def _compile_catch(
         ),
     )
 
-    # except block: extract term, undo trail, match catcher, run recovery; else re-raise
+    # except block: extract term, undo trail, match catcher, run recovery
+    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    orelse_stmts: list[ast.stmt] = (
+        [] if always_catch
+        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
+    )
     except_body: list[ast.stmt] = [
         term_extract,
         _undo_stmt(catch_mark, trail_name),
@@ -2434,10 +2472,7 @@ def _compile_catch(
                 _name(trail_name),
             ),
             body=[rec_fn, rec_loop],
-            orelse=[
-                _undo_stmt(unify_mark, trail_name),
-                ast.Raise(),  # re-raise if catcher doesn't match
-            ],
+            orelse=orelse_stmts or [ast.Pass()],
         ),
         _undo_stmt(unify_mark, trail_name),
     ]
@@ -2471,11 +2506,12 @@ def _compile_catch_trampoline(
     trail_name: str,
     k_stmts: list[ast.stmt],
     self_name: str,
+    always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in trampoline mode.
 
     Catches both ``throw/1`` (LogicException) and plain Python exceptions.
-    Python exceptions are wrapped as ``python_error(ClassName, Message)``.
+    Python exceptions are wrapped as ``ClassName(Message)``.
 
     Generates::
 
@@ -2507,7 +2543,7 @@ def _compile_catch_trampoline(
     term_name = _fresh("_term")
     unify_mark = _fresh("_catch_um")
 
-    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
 
     # Compile goal as trampoline call
     goal_stmts = compile_goal_trampoline(
@@ -2529,7 +2565,12 @@ def _compile_catch_trampoline(
         ),
     )
 
-    # except block: extract term, undo trail, match catcher, run recovery; else re-raise
+    # except block: extract term, undo trail, match catcher, run recovery
+    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    orelse_stmts_t: list[ast.stmt] = (
+        [] if always_catch
+        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
+    )
     except_body: list[ast.stmt] = [
         term_extract,
         _undo_stmt(catch_mark, trail_name),
@@ -2542,10 +2583,7 @@ def _compile_catch_trampoline(
                 _name(trail_name),
             ),
             body=recovery_stmts or [ast.Pass()],
-            orelse=[
-                _undo_stmt(unify_mark, trail_name),
-                ast.Raise(),  # re-raise if catcher doesn't match
-            ],
+            orelse=orelse_stmts_t or [ast.Pass()],
         ),
         _undo_stmt(unify_mark, trail_name),
     ]
@@ -3295,6 +3333,20 @@ def compile_goal_trampoline(
             return _compile_catch_trampoline(
                 goal_arg, catcher, recovery, db, var_context,
                 trail_name, k_stmts, self_name,
+            )
+
+        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+            return _compile_catch_trampoline(
+                goal_arg, error_var, True, db, var_context,
+                trail_name, k_stmts, self_name, always_catch=True,
+            )
+
+        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+            return _compile_catch_trampoline(
+                goal_arg, error_var, recovery, db, var_context,
+                trail_name, k_stmts, self_name, always_catch=True,
             )
 
         # ── halt/0, halt/1 — exit ────────────────────────────────────────
@@ -4179,10 +4231,6 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
-    # python_error is used as a term constructor in catch/3 catcher patterns.
-    # Override any _DbDispatchAdapter that _inject_resolved_targets may have set.
-    base_globals["python_error"] = lambda *args: Compound("python_error", args)
-
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
@@ -6220,10 +6268,6 @@ def compile_predicate_shallow(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
-    # python_error is used as a term constructor in catch/3 catcher patterns.
-    # Override any _DbDispatchAdapter that _inject_resolved_targets may have set.
-    base_globals["python_error"] = lambda *args: Compound("python_error", args)
-
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
         pred_cls = base_globals.get(functor)

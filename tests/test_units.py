@@ -1283,7 +1283,7 @@ class TestDimensionlessSugar:
 
 
 class TestPythonExceptionCatch:
-    """catch/3 catches UnitsMismatch as python_error("UnitsMismatch", Msg)."""
+    """Catch/2 and CatchRecover/3 treat Python exceptions as plain logic terms."""
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
@@ -1292,45 +1292,43 @@ class TestPythonExceptionCatch:
         return _load_module(name, str(p)).__dict__["$module"]
 
     def test_catch_add_mismatch(self, tmp_path):
-        """Catching UnitsMismatch from incompatible addition."""
+        """Catching UnitsMismatch from incompatible addition via Catch/2."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_add",
             "-import_from(py.units, [Meter, Second])\n"
-            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+            "Test <- Catch(++(Meter(1) + Second(1)), UnitsMismatch(_))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_sub_mismatch(self, tmp_path):
-        """Catching UnitsMismatch from incompatible subtraction."""
+        """Catching UnitsMismatch from incompatible subtraction via Catch/2."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_sub",
             "-import_from(py.units, [Meter, Kilogram])\n"
-            "Test <- catch(++(Meter(5) - Kilogram(3)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+            "Test <- Catch(++(Meter(5) - Kilogram(3)), UnitsMismatch(_))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_message_bound(self, tmp_path):
-        """The caught message variable is bound to the exception string."""
+        """The error variable is bound to the exception term; message accessible."""
         from clausal.logic.solve import call
-        from clausal.logic.variables import deref, Var
         mod = self._load(tmp_path, "catch_msg",
             "-import_from(py.units, [Meter, Second])\n"
-            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"UnitsMismatch\", _MSG), _MSG == _MSG)\n")
+            "Test <- (Catch(++(Meter(1) + Second(1)), UnitsMismatch(MSG_)), MSG_ == MSG_)\n")
         assert any(True for _ in call("Test", module=mod))
 
-    def test_no_exception_recovery_skipped(self, tmp_path):
-        """If no exception, the recovery goal is not run (even if it would fail)."""
+    def test_no_exception_transparent(self, tmp_path):
+        """If no exception, Catch/2 is transparent — goal solutions pass through."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_noexc",
             "-import_from(py.units, [Meter, Second])\n"
-            "Test <- catch(++(Meter(3) * Second(2)), python_error(\"UnitsMismatch\", _), 1 == 2)\n")
-        # Mul doesn't raise; goal succeeds; recovery is skipped entirely.
+            "Test <- Catch(++(Meter(3) * Second(2)), _)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_unmatched_exception_reraises(self, tmp_path):
-        """An exception that doesn't match the catcher is re-raised."""
+        """catch/3 with a non-matching catcher still re-raises."""
         from clausal.logic.solve import call
         from clausal.terms import UnitsMismatch
         mod = self._load(tmp_path, "catch_reraise",
             "-import_from(py.units, [Meter, Second])\n"
-            "Test <- catch(++(Meter(1) + Second(1)), python_error(\"SomeOtherError\", _), 1 == 1)\n")
+            "Test <- catch(++(Meter(1) + Second(1)), SomeOtherError(_), 1 == 1)\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))

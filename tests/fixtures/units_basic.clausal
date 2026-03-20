@@ -361,50 +361,62 @@ Test("dimensionless ratio from division") <- (
 # These use X(Unit) to post a constraint; assigning the wrong unit produces no solution.
 
 Test("constraint rejects metre for second slot") <- (
-    not (X(Second), X is 100(Meter))
+    not (X (Second), X is 100(Meter))
 )
 
 Test("constraint rejects newton for kilogram slot") <- (
-    not (M(Kilogram), M is 9.8(Newton))
+    not (M (Kilogram), M is 9.8 (Newton))
 )
 
 Test("constraint rejects joule for watt slot") <- (
-    not (P(Watt), P is 1(Joule))
+    not (P (Watt), P is 1(Joule))
 )
 
 Test("two constraints conflict") <- (
-    not (X(Meter), X(Second))
+    not (X (Meter), X(Second))
 )
 
 Test("constraint accepts correct unit after arithmetic") <- (
     V(Meter),
-    V is 5(Meter),
+    V is 5 (Meter),
     IsLength(V)
 )
 
-# catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
-# catchable as python_error("UnitsMismatch", Msg) in the catcher pattern.
+# Catch/2 and CatchRecover/3: Python exceptions are ClassName(Msg) terms,
+# identical in shape to logic throw terms — no python_error wrapper needed.
 
-Test("catch add mismatch") <- (
-    catch(
-        ++(Meter(1) + Second(1)),
-        python_error("UnitsMismatch", _),
-        1 == 1
-    )
+Test("catch add mismatch") <- Catch(
+    1 (Meter) + 1 (Second),
+    UnitsMismatch(_)
 )
 
-Test("catch mul no error") <- (
-    catch(
-        ++(Meter(3) * Second(2)),
-        python_error("UnitsMismatch", _),
-        1 == 2
-    )
+Test("catch no error transparent") <- (
+    Catch(
+        R := 6 (Meter) / 2 (Second),
+        _
+    ),
+    IsVelocity(R),
+    ValueOf(R, 3.0)
 )
 
-Test("catch extracts message") <- (
-    catch(
-        ++(Meter(5) + Kilogram(2)),
-        python_error("UnitsMismatch", MSG),
-        MSG == MSG
+Test("catch extracts message is string") <- (
+    Catch(
+        5 (Meter) + 2 (Kilogram),
+        UnitsMismatch(MSG)
+    ),
+    ++(isinstance(MSG, str))
+)
+
+Test("catchrecover runs recovery") <- CatchRecover(
+    1 (Meter) + 1 (Second),
+    UnitsMismatch(_),
+    1 == 1
+)
+
+Test("catchrecover binds message") <- (
+    CatchRecover(
+        5 (Meter) + 2 (Kilogram),
+        UnitsMismatch(MSG),
+        ++(isinstance(MSG, str))
     )
 )

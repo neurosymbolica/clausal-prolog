@@ -116,13 +116,40 @@ Raise a logic-level exception carrying `Term`. The exception propagates through 
 
 ---
 
+### `Catch/2`
+```
+Catch(+Goal, ?Error)
+```
+Execute `Goal`. If an exception is raised (logic or Python), unify `Error` against the exception term and succeed. If `Goal` succeeds without throwing, `Catch/2` is transparent — all solutions pass through.
+
+Python exceptions appear as `ClassName(Message)` — the same shape as any logic term — so no special handling is needed. `Catch/2` never re-raises; it is equivalent to `catch(Goal, Error, true)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`)
+    **Python tests:** `tests/test_units.py::TestPythonExceptionCatch`
+
+---
+
+### `CatchRecover/3`
+```
+CatchRecover(+Goal, ?Error, +Recovery)
+```
+Execute `Goal`. If an exception is raised, unify `Error` against the exception term, then execute `Recovery`. Like `Catch/2` but with an explicit recovery goal.
+
+`CatchRecover` never re-raises. For selective catch with re-raise on mismatch, use `catch/3`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`)
+
+---
+
 ### `catch/3`
 ```
 catch(+Goal, ?Catcher, +Recovery)
 ```
-Execute `Goal`. If `Goal` throws a `LogicException`, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
+Execute `Goal`. If `Goal` throws, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
 
-Trail bindings from the failing goal are undone before recovery runs. The `Catcher` can be a variable (catches everything) or a specific term (selective).
+Python exceptions are wrapped as `ClassName(Message)` before unification against `Catcher`. Trail bindings from the failing goal are undone before recovery runs.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`, `_compile_catch_trampoline`)

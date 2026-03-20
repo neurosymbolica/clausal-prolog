@@ -1,6 +1,6 @@
 # Exception Handling
 
-Clausal provides structured exception handling via `throw/1`, `catch/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
+Clausal provides structured exception handling via `throw/1`, `catch/3`, `Catch/2`, `CatchRecover/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
 
 The implementation lives in `clausal/logic/exceptions.py`.
 
@@ -18,34 +18,71 @@ Throw(error(type_error(integer, foo), context))
 
 Any term can be thrown — strings, atoms, or structured error terms.
 
-### catch/3
+### Catch/2
 
-Catches exceptions matching a pattern:
+Catches any exception and binds the error term to a variable or pattern:
 
 ```
-safe_div(X_, Y_, R_) <- Catch(
+Catch(Goal, ERROR)
+```
+
+- **Goal** — the goal to execute; all solutions pass through if no exception
+- **ERROR** — unified against the thrown term on exception; may be a variable (catches all) or a structured pattern (selective catch with no re-raise on mismatch)
+
+`Catch/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms.
+
+```
+# Catch any exception
+Catch(Goal, ERROR)
+
+# Catch a specific Python exception by class
+Catch(++(some_python_call()), ValueError(MSG))
+
+# Catch a structured logic error
+Catch(Goal, error(type_error(_, _), _))
+```
+
+### CatchRecover/3
+
+Like `Catch/2` but with an explicit recovery goal:
+
+```
+CatchRecover(Goal, ERROR, Recovery)
+```
+
+- **Goal** — the goal to execute
+- **ERROR** — unified against the thrown term on exception
+- **Recovery** — goal run after ERROR is bound; has access to ERROR's bindings
+
+`CatchRecover` never re-raises on pattern mismatch. For selective catch with re-raise on mismatch, use `catch/3`.
+
+### catch/3
+
+The standard form with selective matching and re-raise on mismatch:
+
+```
+safe_div(X_, Y_, R_) <- catch(
     (R_ := X_ / Y_),
     error(evaluation_error(zero_divisor), _),
     R_ is "undefined"
 )
 ```
 
-`Catch(Goal, Catcher, Recovery)`:
+`catch(Goal, Catcher, Recovery)`:
 
 - **Goal** — the goal to execute
-- **Catcher** — a pattern that the thrown term is unified against
+- **Catcher** — a pattern unified against the thrown term; re-raises if no match
 - **Recovery** — the goal to execute if the exception matches
 
-If the thrown term does not unify with Catcher, the exception propagates to the next enclosing `Catch` or surfaces as a Python `LogicException`.
-
 `catch/3` also intercepts **plain Python exceptions** raised inside the goal
-(including from `++()` escapes). These are wrapped as
-`python_error(ClassName, Message)` so the catcher can match on them:
+(including from `++()` escapes). These are wrapped as `ClassName(Message)` — a
+`Compound` whose functor is the exception class name — so the catcher can match
+them the same way as logic throw terms:
 
-```python
+```
 catch(
     ++(some_python_call()),
-    python_error("ValueError", MSG),
+    ValueError(MSG),
     handle_error(MSG)
 )
 ```
@@ -60,6 +97,24 @@ done_with_code() <- Halt(1)
 ```
 
 `Halt()` raises `SystemExit(0)`. `Halt(N)` raises `SystemExit(N)`.
+
+---
+
+## Unified Exception Representation
+
+Both logic `throw/1` terms and Python exceptions are represented as plain
+Clausal terms during catch. Python exceptions become `Compound(ClassName,
+(message,))` — the same structural shape as any predicate term — so there is
+no distinction between catching a logic throw and catching a Python exception:
+
+```
+# Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
+# Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
+
+Catch(Goal, ERROR)          # always catches, binds ERROR
+CatchRecover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
+catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
+```
 
 ---
 
@@ -92,7 +147,7 @@ except LogicException as e:
     print(e.term)  # the thrown term
 ```
 
-Uncaught `Throw` goals surface as `LogicException` in Python code. Caught exceptions (via `Catch`) never leave the logic layer.
+Uncaught `Throw` goals surface as `LogicException` in Python code. Caught exceptions (via `Catch`/`catch`) never leave the logic layer.
 
 ---
 
@@ -100,16 +155,33 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch a type error:**
     ```
-    check_int(X_, R_) <- Catch(
+    check_int(X_, R_) <- catch(
         (X_ > 0 and R_ is "positive"),
         error(type_error(_, _), _),
         R_ is "not a number"
     )
     ```
 
+    **Catch a Python exception (no recovery needed):**
+    ```
+    safe_parse(S_, R_) <- (
+        Catch(++(int(S_)), ValueError(_)),
+        R_ is "parse error"
+    )
+    ```
+
+    **CatchRecover with error access:**
+    ```
+    logged_op(X_, Y_, R_) <- CatchRecover(
+        (R_ := X_ / Y_),
+        ERR_,
+        (Write(ERR_) and R_ is "error")
+    )
+    ```
+
     **Re-throw after logging:**
     ```
-    logged_div(X_, Y_, R_) <- Catch(
+    logged_div(X_, Y_, R_) <- catch(
         (R_ := X_ / Y_),
         E_,
         (Write(E_) and Throw(E_))
@@ -118,10 +190,9 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch-all:**
     ```
-    safe_run(Goal_, R_) <- Catch(
-        (CallGoal(Goal_) and R_ is "ok"),
-        _,
-        R_ is "error"
+    safe_run(Goal_, R_) <- (
+        Catch(CallGoal(Goal_), _),
+        R_ is "ok"
     )
     ```
 
@@ -131,53 +202,26 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     ```python
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
-    
+
     # Build an error term
     err = type_error("integer", "foo")
     # → Compound('error', (Compound('type_error', ('integer', 'foo')), ...))
-    
+
     # Raise from Python
     raise LogicException(err)
     ```
 
     ---
 
-## python_error/2
-
-Any plain Python exception that escapes through a `++()` escape or other
-Python-level code inside a goal is automatically wrapped:
-
-```
-python_error(ClassName, Message)
-```
-
-where `ClassName` is the exception class name (a string) and `Message` is
-`str(exc)`. This term can be matched in a catcher pattern:
-
-```python
-# Catch any Python exception
-catch(Goal, python_error(_, _), Recovery)
-
-# Catch a specific class
-catch(Goal, python_error("UnitsMismatch", Msg), handle(Msg))
-
-# Catch several classes with disjunction
-catch(Goal, python_error("ValueError", _), recovery_a)
-catch(Goal, python_error("TypeError",  _), recovery_b)
-```
-
-`python_error/2` is a `Compound` term — it unifies structurally with standard
-term unification including variable args.
-
----
-
 ## Compiler Integration
 
 - `Throw(term)` compiles to `raise LogicException(term)`
-- `Catch(goal, catcher, recovery)` compiles to a `try/except Exception` block;
+- `catch(goal, catcher, recovery)` compiles to a `try/except Exception` block;
   `LogicException` yields `.term` directly, any other Python exception is
-  wrapped as `python_error(ClassName, Message)` before being unified against
-  the catcher pattern
+  wrapped as `ClassName(message)` before being unified against the catcher pattern;
+  re-raises if no match
+- `Catch(goal, error)` — like `catch/3` but always catches (no re-raise); recovery = `true`
+- `CatchRecover(goal, error, recovery)` — like `catch/3` but always catches (no re-raise)
 - `Halt()` / `Halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
 
 ---
@@ -189,7 +233,7 @@ term unification including variable args.
 
     - **Throw**: ground term, string, structured error, uncaught surfaces as LogicException
     - **Catch**: matching/non-matching catcher, nested catch, recovery goal, variable catcher (catch-all)
-    - **Python exceptions**: `UnitsMismatch` caught as `python_error/2`, message bound, recovery skipped when no error, unmatched exception re-raised
+    - **Python exceptions**: `UnitsMismatch` caught via `Catch/2` as `UnitsMismatch(Msg)`, message bound, transparent when no error, unmatched exception re-raised via `catch/3`
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
-    - **Import integration**: `.clausal` file with catch/throw and python_error patterns
+    - **Import integration**: `.clausal` file with catch/throw patterns

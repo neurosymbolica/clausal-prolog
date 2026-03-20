@@ -31,13 +31,16 @@ class LogicException(Exception):
 def python_error_term(exc: Exception) -> Compound:
     """Convert a Python exception to a catchable logic term.
 
-    Produces ``python_error(ClassName, Message)`` so that .clausal code can
-    match on the exception type and/or message::
+    Produces ``ClassName(Message)`` — a Compound whose functor is the
+    exception class name and whose single argument is the message string.
+    This allows .clausal code to match Python exceptions the same way as
+    logic ``throw/1`` terms::
 
-        catch(Goal, python_error("UnitsMismatch", MSG), Recovery)
-        catch(Goal, python_error(_, _), Recovery)   % any Python error
+        catch(Goal, UnitsMismatch(MSG), Recovery)
+        catch(Goal, _, Recovery)   % any exception
+        Catch(Goal, UnitsMismatch(MSG))
     """
-    return Compound("python_error", (type(exc).__name__, str(exc)))
+    return Compound(type(exc).__name__, (str(exc),))
 
 
 # ── Structured error term helpers ─────────────────────────────────────────────
