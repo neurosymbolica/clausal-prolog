@@ -74,6 +74,8 @@ nav:
     - scipy.fft: scipy_fft.md
     - scipy.ndimage: scipy_ndimage.md
     - scipy.spatial: scipy_spatial.md
+    - scipy.constants: scipy_constants.md
+    - scipy.differentiate: scipy_differentiate.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md

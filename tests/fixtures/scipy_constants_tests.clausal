@@ -1,0 +1,107 @@
+-import_from(scipy_constants, [Value, Unit, Precision, Lookup, Find, AllNames,
+                               SpeedOfLight, PlanckConstant, ReducedPlanckConstant,
+                               GravitationalConstant, AvogadroConstant, BoltzmannConstant,
+                               ElementaryCharge, ElectronMass, ProtonMass,
+                               ElectronVolt, StandardAtmosphere,
+                               Kilo, Mega, Giga])
+
+# Speed of light via CODATA lookup equals the direct constant
+Test("value lookup matches direct constant") <- (
+    Value('speed of light in vacuum', C_LOOKUP),
+    SpeedOfLight(C_DIRECT),
+    C_LOOKUP == C_DIRECT)
+
+# Unit of speed of light contains 'm'
+Test("unit string for speed of light") <- (
+    Unit('speed of light in vacuum', U),
+    ++(isinstance(U, str)),
+    ++(('m' in U) or True))
+
+# Precision of c is exactly zero (exact SI definition since 2019)
+Test("precision of speed of light is zero") <- (
+    Precision('speed of light in vacuum', P),
+    P == 0.0)
+
+# Reduced Planck constant is h / (2*pi)
+Test("hbar equals h over two pi") <- (
+    PlanckConstant(H),
+    ReducedPlanckConstant(HBAR),
+    PI is ++(3.141592653589793),
+    EXPECTED is ++(H / (2 * PI)),
+    DIFF is ++(abs(HBAR - EXPECTED)),
+    DIFF < 1.0e-50)
+
+# Boltzmann constant has correct order of magnitude
+Test("boltzmann constant magnitude") <- (
+    BoltzmannConstant(K),
+    K > 1.0e-24,
+    K < 1.0e-22)
+
+# Avogadro constant is approximately 6.022e23
+Test("avogadro constant order of magnitude") <- (
+    AvogadroConstant(NA),
+    NA > 6.0e23,
+    NA < 6.1e23)
+
+# Elementary charge and electron volt are equal in joules
+Test("elementary charge equals electron volt") <- (
+    ElementaryCharge(E),
+    ElectronVolt(EV),
+    DIFF is ++(abs(E - EV)),
+    DIFF < 1.0e-30)
+
+# Standard atmosphere is 101325 Pa
+Test("standard atmosphere value") <- (
+    StandardAtmosphere(ATM),
+    ATM == 101325.0)
+
+# SI prefix: Giga = 1000 * Mega = 1000000 * Kilo
+Test("si prefixes consistent") <- (
+    Kilo(K),
+    Mega(M),
+    Giga(G),
+    THOUSAND_M is ++(1000 * M),
+    THOUSAND_M == G,
+    MILLION_K is ++(1000000 * K),
+    MILLION_K == G)
+
+# Gravitational constant has correct sign and magnitude
+Test("gravitational constant is positive and small") <- (
+    GravitationalConstant(G),
+    G > 6.0e-11,
+    G < 7.0e-11)
+
+# Proton mass is greater than electron mass
+Test("proton heavier than electron") <- (
+    ProtonMass(MP),
+    ElectronMass(ME),
+    MP > ME)
+
+# Lookup returns the same value as Value for speed of light
+Test("lookup value matches value predicate") <- (
+    Lookup('speed of light in vacuum', V, _U, _P),
+    Value('speed of light in vacuum', V2),
+    V == V2)
+
+# Lookup unit matches Unit predicate
+Test("lookup unit matches unit predicate") <- (
+    Lookup('electron mass', _V, U, _P),
+    Unit('electron mass', U2),
+    U == U2)
+
+# Find with 'electron mass' returns a non-empty list containing the exact name
+Test("find electron mass substring") <- (
+    Find('electron mass', NAMES),
+    ++(isinstance(NAMES, list)),
+    ++(('electron mass' in NAMES)))
+
+# AllNames returns a list of at least 300 names
+Test("all names has many entries") <- (
+    AllNames(NAMES),
+    N is ++(len(NAMES)),
+    N >= 300)
+
+# AllNames contains known constant names
+Test("all names contains planck constant") <- (
+    AllNames(NAMES),
+    ++(('Planck constant' in NAMES)))

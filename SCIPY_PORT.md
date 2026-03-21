@@ -237,7 +237,7 @@ variadic scipy functions take:
 | 10 | `scipy.spatial` | ⬜ Tier 1 (distances) + Tier 3 (trees) |
 | 11 | `scipy.sparse` + `scipy.sparse.linalg` | ⬜ niche but important |
 | 12 | `scipy.cluster` | ✅ done — `clausal/modules/py/scipy_cluster.py`, 52 Python tests + 8 .clausal + docs |
-| 13 | `scipy.constants`, `scipy.differentiate` | ⬜ trivial, do last |
+| 13 | `scipy.constants`, `scipy.differentiate` | ✅ done — `clausal/modules/py/scipy_constants.py`, `clausal/modules/py/scipy_differentiate.py`, 101 tests + 21 .clausal + docs |
 
 ---
 
