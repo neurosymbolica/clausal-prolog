@@ -41,7 +41,7 @@ from __future__ import annotations
 import threading as _threading
 from typing import Callable
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 
@@ -139,16 +139,10 @@ def _pred(name: str, *arity_fns) -> _SciPyStatsPredicate:
 
 # ── Result normalization helpers ──────────────────────────────────────────
 
-def _to_dict(r) -> dict:
-    """Convert a scipy result object to a plain dict."""
-    if isinstance(r, dict):
-        return r
-    if hasattr(r, '_asdict'):
-        return dict(r._asdict())
-    if hasattr(r, '__dict__'):
-        return dict(r.__dict__)
-    # field-by-field fallback
-    return r
+# ── Result normalization helpers ──────────────────────────────────────────
+
+def _stat_pvalue(r) -> dict:
+    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
 
 
 # ── Descriptive statistics (Tier 1) ──────────────────────────────────────
@@ -182,7 +176,6 @@ StatsHarmonicMean = _pred("StatsHarmonicMean",
 
 
 def _mode_result(r) -> dict:
-    import numpy as _np
     # scipy >= 1.11 mode returns scalar; older returns array
     mode_val = r.mode
     count_val = r.count
@@ -222,31 +215,17 @@ StatsMedianAbsoluteDeviation = _pred("StatsMedianAbsoluteDeviation",
 
 # ── Correlation and regression (Tier 2) ──────────────────────────────────
 
-def _pearsonr_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsPearsonCorrelation = _pred("StatsPearsonCorrelation",
-    (3, _dispatch_fn(lambda x, y: _pearsonr_result(_st().pearsonr(x, y)))),
+    (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().pearsonr(x, y)))),
 )
-
-
-def _spearmanr_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
 
 StatsSpearmanCorrelation = _pred("StatsSpearmanCorrelation",
-    (2, _dispatch_fn(lambda a: _spearmanr_result(_st().spearmanr(a)))),
-    (3, _dispatch_fn(lambda a, b: _spearmanr_result(_st().spearmanr(a, b)))),
+    (2, _dispatch_fn(lambda a: _stat_pvalue(_st().spearmanr(a)))),
+    (3, _dispatch_fn(lambda a, b: _stat_pvalue(_st().spearmanr(a, b)))),
 )
 
-
-def _kendalltau_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsKendallTau = _pred("StatsKendallTau",
-    (3, _dispatch_fn(lambda x, y: _kendalltau_result(_st().kendalltau(x, y)))),
+    (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().kendalltau(x, y)))),
 )
 
 
@@ -284,7 +263,7 @@ StatsTheilSlopes = _pred("StatsTheilSlopes",
 # ── Parametric hypothesis tests (Tier 2) ─────────────────────────────────
 
 def _ttest_result(r) -> dict:
-    d = {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
+    d = _stat_pvalue(r)
     if hasattr(r, 'df'):
         d['df'] = float(r.df)
     return d
@@ -304,13 +283,9 @@ StatsTTestRelated = _pred("StatsTTestRelated",
 )
 
 
-def _chisquare_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsChiSquare = _pred("StatsChiSquare",
-    (2, _dispatch_fn(lambda f_obs: _chisquare_result(_st().chisquare(f_obs)))),
-    (3, _dispatch_fn(lambda f_obs, f_exp: _chisquare_result(_st().chisquare(f_obs, f_exp=f_exp)))),
+    (2, _dispatch_fn(lambda f_obs: _stat_pvalue(_st().chisquare(f_obs)))),
+    (3, _dispatch_fn(lambda f_obs, f_exp: _stat_pvalue(_st().chisquare(f_obs, f_exp=f_exp)))),
 )
 
 
@@ -328,71 +303,42 @@ StatsChiSquareContingency = _pred("StatsChiSquareContingency",
 )
 
 
-def _fisher_exact_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsFisherExact = _pred("StatsFisherExact",
-    (2, _dispatch_fn(lambda table: _fisher_exact_result(_st().fisher_exact(table)))),
+    (2, _dispatch_fn(lambda table: _stat_pvalue(_st().fisher_exact(table)))),
 )
 
 
 # ── Nonparametric tests (Tier 2) ──────────────────────────────────────────
 
-def _mwu_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsMannWhitneyU = _pred("StatsMannWhitneyU",
-    (3, _dispatch_fn(lambda x, y: _mwu_result(_st().mannwhitneyu(x, y)))),
+    (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().mannwhitneyu(x, y)))),
 )
 
-
-def _wilcoxon_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsWilcoxon = _pred("StatsWilcoxon",
-    (2, _dispatch_fn(lambda x: _wilcoxon_result(_st().wilcoxon(x)))),
-    (3, _dispatch_fn(lambda x, y: _wilcoxon_result(_st().wilcoxon(x, y)))),
+    (2, _dispatch_fn(lambda x: _stat_pvalue(_st().wilcoxon(x)))),
+    (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().wilcoxon(x, y)))),
 )
 
 
 def _kruskal_call(groups):
     """StatsKruskal takes a list of arrays; unpack for scipy."""
-    r = _st().kruskal(*groups)
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
+    return _stat_pvalue(_st().kruskal(*groups))
 
 
 StatsKruskal = _pred("StatsKruskal",
     (2, _dispatch_fn(_kruskal_call)),
 )
 
-
-def _ks2samp_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsKs2samp = _pred("StatsKs2samp",
-    (3, _dispatch_fn(lambda data1, data2: _ks2samp_result(_st().ks_2samp(data1, data2)))),
+    (3, _dispatch_fn(lambda data1, data2: _stat_pvalue(_st().ks_2samp(data1, data2)))),
 )
-
-
-def _normaltest_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
 
 StatsNormalityTest = _pred("StatsNormalityTest",
-    (2, _dispatch_fn(lambda a: _normaltest_result(_st().normaltest(a)))),
+    (2, _dispatch_fn(lambda a: _stat_pvalue(_st().normaltest(a)))),
 )
 
-
-def _shapiro_result(r) -> dict:
-    return {'statistic': float(r.statistic), 'pvalue': float(r.pvalue)}
-
-
 StatsShapiro = _pred("StatsShapiro",
-    (2, _dispatch_fn(lambda x: _shapiro_result(_st().shapiro(x)))),
+    (2, _dispatch_fn(lambda x: _stat_pvalue(_st().shapiro(x)))),
 )
 
 
@@ -576,8 +522,63 @@ class _StatsFrozenMethodPredicate(_SciPyStatsPredicate):
 
 
 StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
-StatsFrozenCdf = _StatsFrozenMethodPredicate("StatsFrozenCdf", "cdf")
+# StatsFrozenPpf kept unidirectional for backward compatibility:
 StatsFrozenPpf = _StatsFrozenMethodPredicate("StatsFrozenPpf", "ppf")
+
+
+class _StatsFrozenCdfPredicate(_SciPyStatsPredicate):
+    """StatsFrozenCdf(HANDLE, X, P) — bidirectional CDF / quantile.
+
+    HANDLE ground always.
+    X ground, P unbound → P = dist.cdf(x)
+    P ground, X unbound → X = dist.ppf(p)
+    Both ground          → consistency check via cdf
+    """
+
+    def __init__(self):
+        super().__init__("StatsFrozenCdf")
+
+    def _get_dispatch(self):
+        return self._dispatch
+
+    def _dispatch(self, this_generator, parent, *args):
+        trail      = args[-1]
+        handle_raw = args[0]
+        x_raw      = args[1]
+        p_raw      = args[2]
+        handle     = deref(handle_raw)
+        x          = deref(x_raw)
+        p          = deref(p_raw)
+
+        try:
+            dist = _lookup_handle(int(handle))
+        except Exception:
+            yield (parent, DONE)
+            return
+
+        if not is_var(x) and is_var(p):
+            out = float(dist.cdf(x))
+            if unify(p_raw, out, trail):
+                yield (parent, None)
+
+        elif is_var(x) and not is_var(p):
+            out = float(dist.ppf(p))
+            if unify(x_raw, out, trail):
+                yield (parent, None)
+
+        elif not is_var(x) and not is_var(p):
+            out = float(dist.cdf(x))
+            try:
+                ok = bool(unify(p_raw, out, trail))
+            except (ValueError, TypeError):
+                ok = False
+            if ok:
+                yield (parent, None)
+
+        yield (parent, DONE)
+
+
+StatsFrozenCdf = _StatsFrozenCdfPredicate()
 
 
 class _StatsFrozenRvsPredicate(_SciPyStatsPredicate):

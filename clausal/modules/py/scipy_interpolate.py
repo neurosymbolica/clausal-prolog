@@ -92,7 +92,7 @@ from __future__ import annotations
 import threading as _threading
 from typing import Callable
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 
@@ -366,10 +366,82 @@ MakeRadialBasis = _pred("MakeRadialBasis",
 # ── EvalSpline ───────────────────────────────────────────────────────
 # Evaluate a spline (or its NU-th derivative) at points X.
 # Works for BSpline, CubicSpline, PchipInterpolator, Akima1DInterpolator.
+# Arity-3 form is bidirectional: given Y, find X via brentq root-finding.
+
+def _eval_spline_bwd(interp, y_target):
+    """Find x such that interp(x) == y_target via brentq."""
+    import scipy.optimize as _opt
+    # Determine search bounds from spline knot range
+    t = interp.t if hasattr(interp, 't') else interp.x
+    a, b = float(t[0]), float(t[-1])
+    try:
+        x = _opt.brentq(lambda v: float(interp(v)) - float(y_target), a, b)
+        return x
+    except ValueError:
+        raise ValueError(
+            f"No root found for spline in [{a}, {b}]: "
+            f"target {y_target} may be outside range")
+
+
+def _eval_spline_bidir(this_generator, parent, *args):
+    """Bidirectional dispatch for EvalSpline(HANDLE, X, RESULT).
+
+    HANDLE always ground.
+    X ground, RESULT unbound → forward evaluation.
+    RESULT ground, X unbound → backward root-finding via brentq.
+    Both ground              → consistency check.
+    """
+    trail      = args[-1]
+    handle_raw = args[0]
+    x_raw      = args[1]
+    result_raw = args[2]
+    handle     = deref(handle_raw)
+    x          = deref(x_raw)
+    y          = deref(result_raw)
+
+    try:
+        obj = _lookup_handle(int(handle))
+    except Exception:
+        yield (parent, DONE)
+        return
+
+    if not is_var(x) and is_var(y):
+        try:
+            out = obj(x)
+        except Exception:
+            yield (parent, DONE)
+            return
+        if unify(result_raw, out, trail):
+            yield (parent, None)
+
+    elif is_var(x) and not is_var(y):
+        try:
+            out = _eval_spline_bwd(obj, y)
+        except Exception:
+            yield (parent, DONE)
+            return
+        if unify(x_raw, out, trail):
+            yield (parent, None)
+
+    elif not is_var(x) and not is_var(y):
+        # both ground: consistency check
+        try:
+            out = obj(x)
+        except Exception:
+            yield (parent, DONE)
+            return
+        try:
+            ok = bool(unify(result_raw, out, trail))
+        except (ValueError, TypeError):
+            ok = False
+        if ok:
+            yield (parent, None)
+
+    yield (parent, DONE)
+
 
 EvalSpline = _pred("EvalSpline",
-    (3, _eval_dispatch(lambda obj, x:
-        obj(x))),
+    (3, _eval_spline_bidir),
     (4, _eval_dispatch(lambda obj, x, nu:
         obj(x, nu=int(nu)))),
 )
