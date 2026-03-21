@@ -7,10 +7,10 @@ The `yaml_module` module provides predicates for parsing and generating YAML, ba
 ```clausal
 -import_from(yaml_module, [Read, Write, Get])
 
-ParseConfig(Path_, Host_, Port_) <- (
-    ReadFile(Path_, D_) and
-    Get(D_, ["server", "host"], Host_) and
-    Get(D_, ["server", "port"], Port_)
+ParseConfig(PATH, HOST, PORT) <- (
+    ReadFile(PATH, D) and
+    Get(D, ["server", "host"], HOST) and
+    Get(D, ["server", "port"], PORT)
 )
 ```
 
@@ -19,9 +19,9 @@ Or via module import:
 ```clausal
 -import_module(yaml_module)
 
-ParseConfig(Path_, Host_) <- (
-    yaml_module.ReadFile(Path_, D_) and
-    yaml_module.Get(D_, ["server", "host"], Host_)
+ParseConfig(PATH, HOST) <- (
+    yaml_module.ReadFile(PATH, D) and
+    yaml_module.Get(D, ["server", "host"], HOST)
 )
 ```
 
@@ -52,7 +52,7 @@ YAML data maps directly to Python types:
 | Boolean (`true`/`false`) | `bool` |
 | Null (`null`, `~`) | `None` |
 
-These are the exact objects produced by `yaml.safe_load`. Any Python method can be called on them via `++()` interop — e.g., `Keys_ is ++(D_.keys())` or `Len_ is ++len(Items_)`.
+These are the exact objects produced by `yaml.safe_load`. Any Python method can be called on them via `++()` interop — e.g., `KEYS is ++(D.keys())` or `LEN is ++len(ITEMS)`.
 
 ---
 
@@ -66,7 +66,7 @@ Only `yaml.safe_load` is used — no arbitrary Python object construction from Y
 
 ### `Read/2`
 
-```
+```clausal
 Read(+YamlString, -Data)
 ```
 
@@ -74,14 +74,14 @@ Parse a YAML string into a Python object. Fails on invalid YAML.
 
 ```clausal
 Test("parse mapping") <- (
-    Read("name: alice\nage: 30", D_) and
-    Get(D_, "name", "alice")
+    Read("name: alice\nage: 30", D) and
+    Get(D, "name", "alice")
 )
 ```
 
 ### `ReadAll/2`
 
-```
+```clausal
 ReadAll(+YamlString, -DocList)
 ```
 
@@ -89,21 +89,21 @@ Parse a multi-document YAML string (documents separated by `---`) into a list of
 
 ```clausal
 Test("multi-doc") <- (
-    ReadAll("a: 1\n---\nb: 2", Docs_) and
-    Docs_ == [{"a": 1}, {"b": 2}]
+    ReadAll("a: 1\n---\nb: 2", DOCS) and
+    DOCS == [{"a": 1}, {"b": 2}]
 )
 ```
 
 ### `ReadFile/2`
 
-```
+```clausal
 ReadFile(+Path, -Data)
 ```
 
 Read and parse a YAML file from disk. Fails if the file does not exist or contains invalid YAML.
 
 ```clausal
-LoadConfig(Path_, Cfg_) <- ReadFile(Path_, Cfg_)
+LoadConfig(PATH, CFG) <- ReadFile(PATH, CFG)
 ```
 
 ---
@@ -112,7 +112,7 @@ LoadConfig(Path_, Cfg_) <- ReadFile(Path_, Cfg_)
 
 ### `Write/2`
 
-```
+```clausal
 Write(+Data, -YamlString)
 ```
 
@@ -120,15 +120,15 @@ Serialize a Python object to a YAML string. Uses block style (`default_flow_styl
 
 ```clausal
 Test("serialize") <- (
-    Write({"x": 1, "y": 2}, S_) and
-    Read(S_, D_) and
-    Get(D_, "x", 1)
+    Write({"x": 1, "y": 2}, S) and
+    Read(S, D) and
+    Get(D, "x", 1)
 )
 ```
 
 ### `WriteAll/2`
 
-```
+```clausal
 WriteAll(+DocList, -YamlString)
 ```
 
@@ -136,7 +136,7 @@ Serialize a list of Python objects to a multi-document YAML string with `---` se
 
 ### `WriteFile/2`
 
-```
+```clausal
 WriteFile(+Path, +Data)
 ```
 
@@ -148,22 +148,22 @@ Write a Python object as YAML to a file. Always succeeds if the write completes;
 
 ### `Get/3`
 
-```
+```clausal
 Get(+Data, +Path, -Value)
 ```
 
 Navigate a nested dict/list structure by key path. `Path` can be:
 
-- A single key: `Get(D_, "name", V_)` — looks up `D_["name"]`
-- A single index: `Get(D_, 0, V_)` — looks up `D_[0]`
-- A list of keys/indices: `Get(D_, ["server", "port"], V_)` — walks `D_["server"]["port"]`
+- A single key: `Get(D, "name", V)` — looks up `D["name"]`
+- A single index: `Get(D, 0, V)` — looks up `D[0]`
+- A list of keys/indices: `Get(D, ["server", "port"], V)` — walks `D["server"]["port"]`
 
 Fails if any key is missing or index is out of range.
 
 ```clausal
 Test("nested access") <- (
-    Read("items:\n  - name: first\n  - name: second", D_) and
-    Get(D_, ["items", 1, "name"], "second")
+    Read("items:\n  - name: first\n  - name: second", D) and
+    Get(D, ["items", 1, "name"], "second")
 )
 ```
 
@@ -176,11 +176,11 @@ Test("nested access") <- (
     ```clausal
     -import_from(yaml_module, [ReadFile, Get])
     
-    DbConfig(Path_, Host_, Port_, Name_) <- (
-        ReadFile(Path_, Cfg_) and
-        Get(Cfg_, ["database", "host"], Host_) and
-        Get(Cfg_, ["database", "port"], Port_) and
-        Get(Cfg_, ["database", "name"], Name_)
+    DbConfig(PATH, HOST, PORT, NAME) <- (
+        ReadFile(PATH, CFG) and
+        Get(CFG, ["database", "host"], HOST) and
+        Get(CFG, ["database", "port"], PORT) and
+        Get(CFG, ["database", "name"], NAME)
     )
     ```
 
@@ -189,11 +189,11 @@ Test("nested access") <- (
     ```clausal
     -import_from(yaml_module, [Read, Write, Get])
     
-    RoundTrip(Yaml_, Key_, Val_) <- (
-        Read(Yaml_, D_) and
-        Write(D_, S_) and
-        Read(S_, D2_) and
-        Get(D2_, Key_, Val_)
+    RoundTrip(YAML, KEY, VAL) <- (
+        Read(YAML, D) and
+        Write(D, S) and
+        Read(S, D2) and
+        Get(D2, KEY, VAL)
     )
     ```
 
@@ -202,9 +202,9 @@ Test("nested access") <- (
     ```clausal
     -import_from(yaml_module, [ReadAll, Get])
     
-    ServiceNames(Yaml_, Names_) <- (
-        ReadAll(Yaml_, Docs_) and
-        MapList([D_, N_] >> Get(D_, ["metadata", "name"], N_), Docs_, Names_)
+    ServiceNames(YAML, NAMES) <- (
+        ReadAll(YAML, DOCS) and
+        MapList([D, N] >> Get(D, ["metadata", "name"], N), DOCS, NAMES)
     )
     ```
 
@@ -213,9 +213,9 @@ Test("nested access") <- (
     ```clausal
     -import_from(yaml_module, [Read])
     
-    AllKeys(Yaml_, Keys_) <- (
-        Read(Yaml_, D_) and
-        Keys_ is ++(list(D_.keys()))
+    AllKeys(YAML, KEYS) <- (
+        Read(YAML, D) and
+        KEYS is ++(list(D.keys()))
     )
     ```
 

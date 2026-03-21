@@ -4,33 +4,35 @@ DCGs are a notation for defining grammars and other list-processing tasks. Claus
 
 The implementation lives in `clausal/templating/term_rewriting.py` (source-level rewriting) and `clausal/logic/builtins.py` (`phrase/2,3`).
 
+*The `-table` directive is often used with DCGs to memoize recursive grammar rules. See [Directives](directives.md).*
+
 ---
 
 ## Syntax
 
 Grammar rules use `>>` instead of `<-`:
 
-```
+```clausal
 greeting >> (["hello", "world"])
 ```
 
 This rewrites to a clause with two hidden arguments (the input list and the remainder list):
 
-```
-greeting(S0_, S_) <- Append(["hello", "world"], S_, S0_)
+```clausal
+greeting(S0, S) <- Append(["hello", "world"], S, S0)
 ```
 
 ### Terminals
 
 Terminals are list literals — they consume tokens from the input:
 
-```
+```clausal
 greeting >> (["hello", "world"])
 ```
 
 The empty list `[]` matches without consuming any input:
 
-```
+```clausal
 epsilon >> ([])
 ```
 
@@ -38,7 +40,7 @@ epsilon >> ([])
 
 Non-terminals are predicate references — they delegate to other grammar rules:
 
-```
+```clausal
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 ```
 
@@ -48,31 +50,31 @@ This chains three grammar rules: `noun_phrase` consumes some tokens, then `verb_
 
 DCG rules can have extra arguments beyond the hidden state pair:
 
-```
-digit(D_) >> ([D_], {D_ >= 0}, {D_ <= 9})
+```clausal
+digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
 ### Inline Goals
 
 Curly braces `{...}` embed arbitrary Clausal goals inside a grammar rule. They do not consume input:
 
-```
-digit(D_) >> ([D_], {D_ >= 0}, {D_ <= 9})
+```clausal
+digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
-The goals `D_ >= 0` and `D_ <= 9` are CLP(FD) constraints checked without consuming tokens.
+The goals `D >= 0` and `D <= 9` are CLP(FD) constraints checked without consuming tokens.
 
 ### Conjunction and Disjunction
 
 Multiple items in a rule are joined with `,` (conjunction):
 
-```
+```clausal
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 ```
 
 Alternatives use `or`:
 
-```
+```clausal
 noun_phrase >> (["the", "dog"] or ["the", "cat"] or ["a", "bird"])
 verb_phrase >> (["chases"] or ["sees"] or ["likes"])
 ```
@@ -81,8 +83,8 @@ verb_phrase >> (["chases"] or ["sees"] or ["likes"])
 
 `not` tests that a terminal does NOT match:
 
-```
-not_a >> (not ["a"], [X_])
+```clausal
+not_a >> (not ["a"], [X])
 ```
 
 This matches any single token that is not `"a"`.
@@ -91,17 +93,17 @@ This matches any single token that is not `"a"`.
 
 A rule can peek at the next token without consuming it using pushback notation:
 
-```
-(look_ahead(T_), [T_]) >> ([T_])
+```clausal
+(look_ahead(T), [T]) >> ([T])
 ```
 
-The left side `(look_ahead(T_), [T_])` means: match `look_ahead(T_)` and push back `[T_]`. The right side `([T_])` consumes `T_`. Net effect: `T_` is unified with the next token but remains in the input.
+The left side `(look_ahead(T), [T])` means: match `look_ahead(T)` and push back `[T]`. The right side `([T])` consumes `T`. Net effect: `T` is unified with the next token but remains in the input.
 
 ### Recursive Rules
 
 DCG rules can be recursive:
 
-```
+```clausal
 ab >> (["a"], ab)
 ab >> (["b"], ab)
 ab >> ([])
@@ -119,8 +121,8 @@ The `phrase` builtin invokes a grammar rule on an input list.
 
 `phrase(RuleName, InputList)` — parse InputList with the named rule, succeeding if the entire list is consumed:
 
-```
-valid_sentence(S_) <- phrase(sentence, S_)
+```clausal
+valid_sentence(S) <- phrase(sentence, S)
 ```
 
 Query: `valid_sentence(["the", "dog", "chases", "the", "cat"])` succeeds.
@@ -129,9 +131,9 @@ Query: `valid_sentence(["the", "dog", "chases", "the", "cat"])` succeeds.
 
 `phrase(RuleName, S0, S)` — parse with explicit remainder. S is the unconsumed suffix:
 
-```
+```clausal
 # Parse and get remainder
-partial_parse(Input_, Rest_) <- phrase(noun_phrase, Input_, Rest_)
+partial_parse(INPUT, REST) <- phrase(noun_phrase, INPUT, REST)
 ```
 
 `phrase/3` is also used for state threading (see below).
@@ -140,8 +142,8 @@ partial_parse(Input_, Rest_) <- phrase(noun_phrase, Input_, Rest_)
 
 For rules with extra arguments, pass them as part of the rule:
 
-```
-phrase(digit(D_), [5])    # D_ = 5
+```clausal
+phrase(digit(D), [5])    # D = 5
 ```
 
 ---
@@ -154,54 +156,54 @@ DCGs are a general state-passing mechanism — not just for parsing lists of tok
 
 Two helper non-terminals provide state access:
 
-```
+```clausal
 # state/1: read current state (passthrough)
-(state(S_), [S_]) >> ([S_])
+(state(S), [S]) >> ([S])
 
 # state/2: read old state, replace with new
-(state2(S0_, S_), [S_]) >> ([S0_])
+(state2(S0, S), [S]) >> ([S0])
 ```
 
 ### Counter Example
 
 Thread an integer counter through `phrase/3`:
 
-```
-inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))
+```clausal
+inc >> (state(N0), {N := N0 + 1}, state2(_, N))
 
 count3 >> (inc, inc, inc)
 ```
 
 Usage:
 
-```
-# phrase(count3, [0], [N_])  →  N_ = 3
+```clausal
+# phrase(count3, [0], [N])  →  N = 3
 ```
 
-The initial state `[0]` is passed as the input list; the final state `[N_]` is the remainder.
+The initial state `[0]` is passed as the input list; the final state `[N]` is the remainder.
 
 ### Tree Leaf Counting
 
 Thread a counter to count leaves in a binary tree:
 
-```
-count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))
-count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))
+```clausal
+count_leaves("leaf") >> (state(N0), {N := N0 + 1}, state2(_, N))
+count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
-num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])
+num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])
 ```
 
 ### Accumulator
 
 Thread a list accumulator to collect items:
 
-```
-push(X_) >> (state(Acc0_), {Acc_ is [X_, *Acc0_]}, state2(_, Acc_))
+```clausal
+push(X) >> (state(ACC0), {ACC is [X, *ACC0]}, state2(_, ACC))
 
 push_all([]) >> ([])
-push_all([X_, *Xs_]) >> (push(X_), push_all(Xs_))
+push_all([X, *XS]) >> (push(X), push_all(XS))
 
-collect_items(XS_, R_) <- phrase(push_all(XS_), [[]], [R_])
+collect_items(XS, R) <- phrase(push_all(XS), [[]], [R])
 ```
 
 ---
@@ -210,11 +212,11 @@ collect_items(XS_, R_) <- phrase(push_all(XS_), [[]], [R_])
 
 DCG rules and regular `<-` clauses can coexist in the same module:
 
-```
+```clausal
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 
 # Regular predicate that uses the DCG rule
-valid_sentence(S_) <- phrase(sentence, S_)
+valid_sentence(S) <- phrase(sentence, S)
 ```
 
 ---

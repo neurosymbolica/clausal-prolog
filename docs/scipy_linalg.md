@@ -6,13 +6,13 @@ The `scipy_linalg` module wraps [`scipy.linalg`](https://docs.scipy.org/doc/scip
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_linalg, [Solve, SingularValueDecompose, Inverse, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_linalg, [Solve, SingularValueDecompose, ...])
 ```
 
@@ -26,7 +26,7 @@ Predicates fall into two tiers depending on whether the result is a single array
 
 **Tier 2 — result dict**: RESULT is unified with a Python dict. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields by name.
 
-```
+```clausal
 SingularValueDecompose(A, RESULT),
 ResultGet(RESULT, 'u', U),
 ResultGet(RESULT, 's', S),
@@ -72,7 +72,7 @@ LU and QR are kept as-is — they are the standard letter names for the matrix f
 
 ### Linear system solvers
 
-```
+```clausal
 Solve(A, B, X)                     # bidirectional (A always ground)
     B ground, X unbound → X = solve(A, B)   # forward: solve A @ X = B
     X ground, B unbound → B = A @ X         # backward: compute right-hand side
@@ -95,10 +95,10 @@ SolveTriangular(A, B, LOWER, RESULT)
 
 Example:
 
-```
-SolveSystem(A_, B_, X_) <- (
-    Solve(A_, B_, X_) and
-    ++print(f"Solution: {X_}")
+```clausal
+SolveSystem(A, B, X) <- (
+    Solve(A, B, X) and
+    ++print(f"Solution: {X}")
 )
 ```
 
@@ -108,7 +108,7 @@ SolveSystem(A_, B_, X_) <- (
 
 All decomposition predicates are **bidirectional**: the forward direction decomposes `A` into factor dict `R`; the backward direction recomposes `A` from `R` using plain numpy.
 
-```
+```clausal
 LuDecompose(A, R)              # bidirectional
     A ground → R = {p, l, u}   (A = P @ L @ U)
     R ground → A = P @ L @ U   (recompose)
@@ -152,11 +152,11 @@ Schur(A, OUTPUT, RESULT)       # unidirectional (arity-3)
 
 Example — extract singular values:
 
-```
-LargestSingularValue(A_, S1_) <- (
-    SingularValueDecompose(A_, DECOMP_) and
-    ResultGet(DECOMP_, 's', S_) and
-    S1_ is ++S_[0]
+```clausal
+LargestSingularValue(A, S1) <- (
+    SingularValueDecompose(A, DECOMP) and
+    ResultGet(DECOMP, 's', S) and
+    S1 is ++S[0]
 )
 ```
 
@@ -164,7 +164,7 @@ LargestSingularValue(A_, S1_) <- (
 
 ### Matrix functions
 
-```
+```clausal
 Inverse(A, RESULT)             # bidirectional (self-inverse)
     A ground, RESULT unbound → RESULT = inv(A)
     RESULT ground, A unbound → A = inv(RESULT)   # inv is self-inverse
@@ -196,11 +196,11 @@ MatrixFunction(A, FUNC, RESULT)
 
 Example — check positive definiteness via eigenvalues:
 
-```
-IsPositiveDefinite(A_) <- (
-    EigenDecomposeHermitian(A_, D_) and
-    ResultGet(D_, 'eigenvalues', VALS_) and
-    ++all(v > 0 for v in VALS_)
+```clausal
+IsPositiveDefinite(A) <- (
+    EigenDecomposeHermitian(A, D) and
+    ResultGet(D, 'eigenvalues', VALS) and
+    ++all(v > 0 for v in VALS)
 )
 ```
 
@@ -210,7 +210,7 @@ IsPositiveDefinite(A_) <- (
 
 When solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `Solve` repeatedly.
 
-```
+```clausal
 LuFactor(A, RESULT)
     RESULT: opaque factorisation record (passed to LuSolve)
 
@@ -229,10 +229,10 @@ CholeskySolve(C_LOWER, B, RESULT)
 
 Example — solve multiple right-hand sides efficiently:
 
-```
-SolveMultiple(A_, RHS_LIST_, SOLUTIONS_) <- (
-    LuFactor(A_, LU_) and
-    MapList([B_]>>(LuSolve(LU_, B_, X_), X_), RHS_LIST_, SOLUTIONS_)
+```clausal
+SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
+    LuFactor(A, LU) and
+    MapList([B]>>(LuSolve(LU, B, X), X), RHS_LIST, SOLUTIONS)
 )
 ```
 
@@ -240,7 +240,7 @@ SolveMultiple(A_, RHS_LIST_, SOLUTIONS_) <- (
 
 ### ResultGet
 
-```
+```clausal
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from a Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate
@@ -253,23 +253,23 @@ ResultGet(RESULT, FIELD, VALUE)
 
 ## Complete example — principal component analysis
 
-```
+```clausal
 -import_from(scipy_linalg, [SingularValueDecompose, ResultGet])
 
 # Compute the top-K principal components of a data matrix X
 # (rows = observations, columns = features; X should be mean-centred)
-PrincipalComponents(X_, K_, COMPONENTS_) <- (
-    SingularValueDecompose(X_, SVD_) and
-    ResultGet(SVD_, 'vh', Vh_) and
-    COMPONENTS_ is ++Vh_[:K_]
+PrincipalComponents(X, K, COMPONENTS) <- (
+    SingularValueDecompose(X, SVD) and
+    ResultGet(SVD, 'vh', VH) and
+    COMPONENTS is ++VH[:K]
 )
 
-ExplainedVariance(X_, K_, RATIO_) <- (
-    SingularValueDecompose(X_, SVD_) and
-    ResultGet(SVD_, 's', S_) and
-    TOTAL_ is ++float((S_ ** 2).sum()) and
-    TOP_K_ is ++float((S_[:K_] ** 2).sum()) and
-    RATIO_ is TOP_K_ / TOTAL_
+ExplainedVariance(X, K, RATIO) <- (
+    SingularValueDecompose(X, SVD) and
+    ResultGet(SVD, 's', S) and
+    TOTAL is ++float((S ** 2).sum()) and
+    TOP_K is ++float((S[:K] ** 2).sum()) and
+    RATIO is TOP_K / TOTAL
 )
 ```
 
@@ -282,3 +282,7 @@ ExplainedVariance(X_, K_, RATIO_) <- (
 - `EigenDecompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
 - `MatrixExpLog` (logm direction) and `MatrixSquareRoot` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
 - Predicates fail (no solution) when `ResultGet` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.
+
+---
+
+*See also: [scipy.sparse](scipy_sparse.md) — sparse matrix solvers.*

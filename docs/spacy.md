@@ -46,7 +46,7 @@ Models are loaded once and kept in a module-level registry under string aliases.
 
 ### `LoadModel/1`
 
-```
+```clausal
 LoadModel(+Name)
 ```
 
@@ -58,7 +58,7 @@ LoadModel("en_core_web_sm")
 
 ### `LoadModel/2`
 
-```
+```clausal
 LoadModel(+Name, +Alias)
 ```
 
@@ -71,7 +71,7 @@ LoadModel("en_core_web_lg", "en_lg")
 
 ### `UnloadModel/1`
 
-```
+```clausal
 UnloadModel(+Alias)
 ```
 
@@ -79,7 +79,7 @@ Remove the model from the registry. **Fails** if the alias is not registered.
 
 ### `CurrentModel/1`
 
-```
+```clausal
 CurrentModel(?Alias)
 ```
 
@@ -95,7 +95,7 @@ ListModels(A) <- CurrentModel(A)
 
 ### `Process/3`
 
-```
+```clausal
 Process(+Alias, +Text, -Doc)
 ```
 
@@ -130,7 +130,7 @@ A token is represented as a plain Python dict with keys:
 
 ### `Token/2`
 
-```
+```clausal
 Token(+Doc, -Tok)
 ```
 
@@ -142,7 +142,7 @@ AllTokens(DOC, TOK) <- Token(DOC, TOK)
 
 ### `Token/3`
 
-```
+```clausal
 Token(+Doc, ?Index, -Tok)
 ```
 
@@ -155,7 +155,7 @@ IndexedTokens(DOC, I, TOK) <- Token(DOC, I, TOK)
 
 ### `TokenText/2`
 
-```
+```clausal
 TokenText(+Tok, ?Text)
 ```
 
@@ -167,7 +167,7 @@ IsApple(TOK) <- TokenText(TOK, "Apple")
 
 ### `TokenList/2`
 
-```
+```clausal
 TokenList(+Doc, -Tokens)
 ```
 
@@ -185,7 +185,7 @@ All annotation predicates take a token dict as their first argument and unify th
 
 ### `Pos/2`
 
-```
+```clausal
 Pos(+Tok, ?Tag)
 ```
 
@@ -196,7 +196,7 @@ Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"
 
 ### `Tag/2`
 
-```
+```clausal
 Tag(+Tok, ?FineTag)
 ```
 
@@ -204,7 +204,7 @@ Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for E
 
 ### `Lemma/2`
 
-```
+```clausal
 Lemma(+Tok, ?Lem)
 ```
 
@@ -212,7 +212,7 @@ Lemmatised form of the token (e.g. `"run"` for `"running"`).
 
 ### `Dep/2`
 
-```
+```clausal
 Dep(+Tok, ?Label)
 ```
 
@@ -220,7 +220,7 @@ Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
 
 ### `Head/2`
 
-```
+```clausal
 Head(+Tok, ?HeadText)
 ```
 
@@ -228,7 +228,7 @@ Surface form of the syntactic head token.
 
 ### `Shape/2`
 
-```
+```clausal
 Shape(+Tok, ?Shp)
 ```
 
@@ -236,7 +236,7 @@ Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 
 ### `IsAlpha/1`
 
-```
+```clausal
 IsAlpha(+Tok)
 ```
 
@@ -244,7 +244,7 @@ IsAlpha(+Tok)
 
 ### `IsStop/1`
 
-```
+```clausal
 IsStop(+Tok)
 ```
 
@@ -258,7 +258,7 @@ An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `e
 
 ### `Entity/2`
 
-```
+```clausal
 Entity(+Doc, -Ent)
 ```
 
@@ -270,7 +270,7 @@ Orgs(DOC, ENT) <- (Entity(DOC, ENT) and T is ++ENT["label"] and T == "ORG")
 
 ### `Entity/3`
 
-```
+```clausal
 Entity(+Doc, +Label, -Ent)
 ```
 
@@ -283,7 +283,7 @@ Orgs(DOC, ENT) <- Entity(DOC, "ORG", ENT)
 
 ### `EntityList/2`
 
-```
+```clausal
 EntityList(+Doc, -Ents)
 ```
 
@@ -297,7 +297,7 @@ Sentences are plain strings (the `.text` of each spaCy `Span`).
 
 ### `Sentence/2`
 
-```
+```clausal
 Sentence(+Doc, -Sent)
 ```
 
@@ -305,7 +305,7 @@ Sentence(+Doc, -Sent)
 
 ### `SentenceList/2`
 
-```
+```clausal
 SentenceList(+Doc, -Sents)
 ```
 
@@ -320,7 +320,7 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 
 ### `Similarity/4`
 
-```
+```clausal
 Similarity(+Alias, +Text1, +Text2, -Score)
 ```
 
@@ -343,7 +343,7 @@ A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_te
 
 ### `NounChunk/2`
 
-```
+```clausal
 NounChunk(+Doc, -Chunk)
 ```
 

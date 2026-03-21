@@ -155,31 +155,31 @@ A logic variable unifies with a `SetTerm` by binding to it.
 All dict builtins are in `clausal/logic/builtins/dict_set.py`. They use `DictTerm` for all dict arguments — plain Python dicts are not accepted.
 
 ### `IsDict/1`
-```
+```clausal
 IsDict(+Term)
 ```
 Succeeds if `Term` is a `DictTerm`.
 
 ### `DictSize/2`
-```
+```clausal
 DictSize(+Dict, -N)
 ```
 `N` is the number of keys in `Dict`.
 
 ### `DictKeys/2`
-```
+```clausal
 DictKeys(+Dict, -Keys)
 ```
 `Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
 
 ### `DictValues/2`
-```
+```clausal
 DictValues(+Dict, -Values)
 ```
 `Values` is the list of values in key-sorted order (same ordering as `DictKeys`).
 
 ### `DictPairs/2`
-```
+```clausal
 DictPairs(?Dict, ?Pairs)
 ```
 Bidirectional conversion between a `DictTerm` and a list of `[Key, Value]` 2-element lists.
@@ -195,7 +195,7 @@ DictPairs(DICT, [["x", 10], ["y", 20]])
 ```
 
 ### `DictGet/3`
-```
+```clausal
 DictGet(+Key, +Dict, ?Value)
 ```
 Semidet: succeeds if `Key` is in `Dict` and `Value` unifies with `Dict[Key]`. Fails if the key is absent or `Key` is unbound.
@@ -206,7 +206,7 @@ DictGet("name", {"name": "Alice", "age": 30}, NAME)
 ```
 
 ### `DictPut/4`
-```
+```clausal
 DictPut(+Key, +Value, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` with `Key → Value` inserted or overwritten. Returns a new `DictTerm`; the original is unchanged.
@@ -217,7 +217,7 @@ DictPut("b", 99, {"a": 1, "b": 0}, NEW)
 ```
 
 ### `DictPutPairs/3`
-```
+```clausal
 DictPutPairs(+Pairs, +OldDict, -NewDict)
 ```
 Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. Equivalent to calling `DictPut/4` for each pair in order.
@@ -228,7 +228,7 @@ DictPutPairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
 ```
 
 ### `DictRemove/3`
-```
+```clausal
 DictRemove(+Key, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is not present.
@@ -239,7 +239,7 @@ DictRemove("b", {"a": 1, "b": 2, "c": 3}, NEW)
 ```
 
 ### `DictMerge/3`
-```
+```clausal
 DictMerge(+D1, +D2, -Merged)
 ```
 `Merged` is the union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
@@ -250,7 +250,7 @@ DictMerge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
 ```
 
 ### `GenDict/3`
-```
+```clausal
 GenDict(?Key, +Dict, ?Value)
 ```
 Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. Equivalent to SWI's `gen_assoc/3`.
@@ -267,7 +267,7 @@ GenDict("a", {"a": 1, "b": 2}, VALUE)
 ```
 
 ### `SubDict/2`
-```
+```clausal
 SubDict(+Pattern, +Dict)
 ```
 Partial dict matching: succeeds when every key in `Pattern` is also in `Dict`, and the corresponding values unify. Extra keys in `Dict` are ignored.
@@ -291,19 +291,19 @@ SubDict({"z": 1}, {"x": 1, "y": 2})
 ## Set builtins
 
 ### `IsSet/1`
-```
+```clausal
 IsSet(+Term)
 ```
 Succeeds if `Term` is a `SetTerm`.
 
 ### `SetSize/2`
-```
+```clausal
 SetSize(+Set, -N)
 ```
 `N` is the cardinality of `Set`.
 
 ### `SetList/2`
-```
+```clausal
 SetList(?Set, ?List)
 ```
 Bidirectional conversion between a `SetTerm` and a sorted list.
@@ -317,55 +317,55 @@ SetList(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
 ```
 
 ### `SetUnion/3`
-```
+```clausal
 SetUnion(+S1, +S2, -Union)
 ```
 `Union` is the set union of `S1` and `S2`.
 
 ### `SetIntersection/3`
-```
+```clausal
 SetIntersection(+S1, +S2, -Inter)
 ```
 `Inter` is the set intersection of `S1` and `S2`.
 
 ### `SetSubtract/3`
-```
+```clausal
 SetSubtract(+S1, +S2, -Diff)
 ```
 `Diff` is `S1` minus `S2` (elements in `S1` not in `S2`).
 
 ### `SetSymDiff/3`
-```
+```clausal
 SetSymDiff(+S1, +S2, -Sym)
 ```
 `Sym` is the symmetric difference of `S1` and `S2` (elements in exactly one of the two sets).
 
 ### `SetSubset/2`
-```
+```clausal
 SetSubset(+Sub, +Super)
 ```
 Succeeds if every element of `Sub` is also in `Super`. An empty set is a subset of any set.
 
 ### `SetDisjoint/2`
-```
+```clausal
 SetDisjoint(+S1, +S2)
 ```
 Succeeds if `S1` and `S2` have no elements in common.
 
 ### `SetAdd/3`
-```
+```clausal
 SetAdd(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` added. If `Elem` is already present, `NewSet = OldSet`.
 
 ### `SetRemove/3`
-```
+```clausal
 SetRemove(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` removed. If `Elem` is absent, `NewSet = OldSet`.
 
 ### `GenSet/2`
-```
+```clausal
 GenSet(?Elem, +Set)
 ```
 Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).

@@ -429,7 +429,7 @@ This gives the same `_get_dispatch()` call interface as a real PredicateMeta cla
 
 ### Two-phase architecture
 
-```
+```clausal
 Phase A: Source → EmbedTransformer → module_items + Python AST bytecode
 Phase B: compile_module(predicate_nodes, module_items, module_dict) → compiled predicates
 ```
@@ -484,7 +484,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 When a `Match/2` or `Search/2` call has a static pattern string containing ALLCAPS or trailing-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
 
-```
+```clausal
 # Source:
 parse(S, YEAR, MONTH) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 

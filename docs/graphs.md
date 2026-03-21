@@ -8,11 +8,11 @@ The `graphs` module provides predicates for graph creation, traversal, pathfindi
 -import_from(graphs, [Vertices, ShortestPath, IsConnected])
 
 Main <- (
-    G_ = [["a", "b"], ["b", "c"], ["a", "c"]] and
-    Vertices(G_, V_) and
-    ++print(f"Vertices: {V_}") and
-    ShortestPath(G_, "a", "c", P_) and
-    ++print(f"Shortest path: {P_}")
+    G = [["a", "b"], ["b", "c"], ["a", "c"]] and
+    Vertices(G, V) and
+    ++print(f"Vertices: {V}") and
+    ShortestPath(G, "a", "c", P) and
+    ++print(f"Shortest path: {P}")
 )
 ```
 
@@ -22,9 +22,9 @@ Or via module import:
 -import_module(graphs)
 
 Main <- (
-    G_ = [["a", "b"], ["b", "c"]] and
-    graphs.Vertices(G_, V_) and
-    graphs.IsConnected(G_)
+    G = [["a", "b"], ["b", "c"]] and
+    graphs.Vertices(G, V) and
+    graphs.IsConnected(G)
 )
 ```
 
@@ -64,9 +64,9 @@ Main <- (
 | `Degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
 
 ```clausal
-Vertices([["a", "b"], ["b", "c"]], V_)    % V_ = ["a", "b", "c"]
-Neighbors([["a", "b"], ["b", "c"]], "b", N_)  % N_ = ["a", "c"]
-Degree([["a", "b"], ["b", "c"]], "b", D_)     % D_ = 2
+Vertices([["a", "b"], ["b", "c"]], V)    % V = ["a", "b", "c"]
+Neighbors([["a", "b"], ["b", "c"]], "b", N)  % N = ["a", "c"]
+Degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
 ```
 
 ---
@@ -88,8 +88,8 @@ Degree([["a", "b"], ["b", "c"]], "b", D_)     % D_ = 2
 | `DepthFirstNodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | DFS preorder node ordering from source |
 
 ```clausal
-BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N_)
-% N_ = ["a", "b", "c", "d"]
+BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
+% N = ["a", "b", "c", "d"]
 ```
 
 ---
@@ -104,16 +104,16 @@ BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N_)
 
 ```clausal
 % Enumerate all paths
-FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P_)
-% P_ = ["a", "b", "c"]  then  P_ = ["a", "c"]
+FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P)
+% P = ["a", "b", "c"]  then  P = ["a", "c"]
 
 % Shortest path in a weighted graph
-ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P_)
-% P_ = ["a", "b", "c"]
+ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P)
+% P = ["a", "b", "c"]
 
 % Cost of a path
-PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C_)
-% C_ = 8
+PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
+% C = 8
 ```
 
 ---
@@ -127,11 +127,11 @@ PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C_)
 | `HasCycle(Edges)` | `+Edges` | Succeeds if the directed graph contains a cycle |
 
 ```clausal
-ConnectedComponents([["a", "b"], ["c", "d"]], C_)
-% C_ = [["a", "b"], ["c", "d"]]
+ConnectedComponents([["a", "b"], ["c", "d"]], C)
+% C = [["a", "b"], ["c", "d"]]
 
-TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O_)
-% O_ = ["a", "b", "c"]
+TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O)
+% O = ["a", "b", "c"]
 ```
 
 ---
@@ -144,8 +144,8 @@ TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O_)
 | `MinSpanningTree(Edges, Tree, Cost)` | `+Edges, -Tree, -Cost` | Minimum spanning tree via Prim's algorithm |
 
 ```clausal
-MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T_, C_)
-% T_ = [["a", "b", 1], ["b", "c", 2]]   C_ = 3
+MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
+% T = [["a", "b", 1], ["b", "c", 2]]   C = 3
 ```
 
 ---
@@ -158,6 +158,6 @@ MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T_, C_)
 | `MergeGraphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | Union of two edge lists |
 
 ```clausal
-ReverseEdges([["a", "b"], ["c", "d"]], R_)
-% R_ = [["b", "a"], ["d", "c"]]
+ReverseEdges([["a", "b"], ["c", "d"]], R)
+% R = [["b", "a"], ["d", "c"]]
 ```

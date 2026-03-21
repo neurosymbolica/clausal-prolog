@@ -13,12 +13,12 @@ These are compiled inline by the compiler — they are not dispatched as builtin
 
 `FindAll(Template, Goal, Bag)` — collect all instances of Template for which Goal succeeds.
 
-```
-squares(Ns_, Sqs_) <- (
+```clausal
+squares(NS, SQS) <- (
     FindAll(
-        Sq_,
-        (In(X_, Ns_) and (Sq_ := X_ * X_)),
-        Sqs_,
+        SQ,
+        (In(X, NS) and (SQ := X * X)),
+        SQS,
     )
 )
 ```
@@ -29,9 +29,9 @@ If Goal has no solutions, Bag is unified with `[]`.
 
 `BagOf(Template, Goal, Bag)` — like FindAll, but **fails** if Goal has no solutions. Also respects `^` (existential quantification) for free variables.
 
-```
-adults(People_, Adults_) <- (
-    BagOf(P_, (In(P_, People_) and age(P_, A_) and A_ >= 18), Adults_)
+```clausal
+adults(PEOPLE, ADULTS) <- (
+    BagOf(P, (In(P, PEOPLE) and age(P, A) and A >= 18), ADULTS)
 )
 ```
 
@@ -39,16 +39,16 @@ adults(People_, Adults_) <- (
 
 `SetOf(Template, Goal, Set)` — like BagOf, but returns a **sorted list with duplicates removed**.
 
-```
-unique_members(Xs_, Us_) <- SetOf(X_, In(X_, Xs_), Us_)
+```clausal
+unique_members(XS, US) <- SetOf(X, In(X, XS), US)
 ```
 
 ### ForAll/2
 
 `ForAll(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds.
 
-```
-all_positive(Xs_) <- ForAll(In(X_, Xs_), X_ > 0)
+```clausal
+all_positive(XS) <- ForAll(In(X, XS), X > 0)
 ```
 
 ---
@@ -57,15 +57,15 @@ all_positive(Xs_) <- ForAll(In(X_, Xs_), X_ > 0)
 
 `Call/1..8` invokes a goal closure with 0–7 extra arguments. `CallGoal/1..8` are aliases.
 
-```
-apply(Goal_, X_) <- Call(Goal_, X_)
-apply2(Goal_, X_, Y_) <- Call(Goal_, X_, Y_)
+```clausal
+apply(GOAL, X) <- Call(GOAL, X)
+apply2(GOAL, X, Y) <- Call(GOAL, X, Y)
 ```
 
 These are primarily used with [lambdas](lambdas.md):
 
-```
-test(R_) <- Call((X_ <- (R_ := X_ + 1)), 5)
+```clausal
+test(R) <- Call((X <- (R := X + 1)), 5)
 ```
 
 ---
@@ -78,91 +78,91 @@ These builtins take a goal as their first argument — either a **lambda** (goal
 
 `MapList(Goal, List)` — succeeds if Goal succeeds for every element of List.
 
-```
+```clausal
 # With a lambda
-all_positive(Xs_) <- MapList((X_ <- (X_ > 0)), Xs_)
+all_positive(XS) <- MapList((X <- (X > 0)), XS)
 
 # With a builtin predicate
-all_numbers(Xs_) <- MapList(IsNumber, Xs_)
+all_numbers(XS) <- MapList(IsNumber, XS)
 ```
 
 ### MapList/3
 
 `MapList(Goal, List, ResultList)` — apply a binary goal to each element, collecting results.
 
-```
-doubles(Xs_, Ys_) <- MapList(((X_, Y_) <- (Y_ := X_ * 2)), Xs_, Ys_)
+```clausal
+doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
 ```
 
 ### Filter/3
 
 `Filter(Goal, List, Filtered)` — keep elements for which Goal succeeds.
 
-```
+```clausal
 # With a lambda
-positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # With a builtin predicate
-keep_numbers(Xs_, Ns_) <- Filter(IsNumber, Xs_, Ns_)
+keep_numbers(XS, NS) <- Filter(IsNumber, XS, NS)
 ```
 
 ### Exclude/3
 
 `Exclude(Goal, List, Remaining)` — keep elements for which Goal fails (complement of Filter).
 
-```
-remove_zeros(Xs_, Rs_) <- Exclude((X_ <- (X_ is 0)), Xs_, Rs_)
+```clausal
+remove_zeros(XS, RS) <- Exclude((X <- (X is 0)), XS, RS)
 ```
 
 ### FoldLeft/4
 
 `FoldLeft(Goal, List, Acc0, Result)` — left fold with a ternary goal closure.
 
-```
-fold_sum(Xs_, S_) <- FoldLeft(((E_, A_, R_) <- (R_ := A_ + E_)), Xs_, 0, S_)
-fold_product(Xs_, P_) <- FoldLeft(((E_, A_, R_) <- (R_ := A_ * E_)), Xs_, 1, P_)
+```clausal
+fold_sum(XS, S) <- FoldLeft(((ELEM, ACC, R) <- (R := ACC + ELEM)), XS, 0, S)
+fold_product(XS, P) <- FoldLeft(((ELEM, ACC, R) <- (R := ACC * ELEM)), XS, 1, P)
 ```
 
 ### TakeWhile/3
 
 `TakeWhile(Goal, List, Prefix)` — longest prefix where Goal succeeds for each consecutive element.
 
-```
-take_pos(Xs_, Ps_) <- TakeWhile((X_ <- (X_ > 0)), Xs_, Ps_)
-# take_pos([3, 1, -2, 4], Ps_) → Ps_ = [3, 1]
+```clausal
+take_pos(XS, PS) <- TakeWhile((X <- (X > 0)), XS, PS)
+# take_pos([3, 1, -2, 4], PS) → PS = [3, 1]
 ```
 
 ### DropWhile/3
 
 `DropWhile(Goal, List, Suffix)` — suffix after dropping the longest prefix where Goal succeeds.
 
-```
-drop_pos(Xs_, Rs_) <- DropWhile((X_ <- (X_ > 0)), Xs_, Rs_)
-# drop_pos([3, 1, -2, 4], Rs_) → Rs_ = [-2, 4]
+```clausal
+drop_pos(XS, RS) <- DropWhile((X <- (X > 0)), XS, RS)
+# drop_pos([3, 1, -2, 4], RS) → RS = [-2, 4]
 ```
 
 ### Span/4
 
 `Span(Goal, List, Yes, No)` — TakeWhile + DropWhile in one pass.
 
-```
-split_pos(Xs_, Yes_, No_) <- Span((X_ <- (X_ > 0)), Xs_, Yes_, No_)
+```clausal
+split_pos(XS, YES, NO) <- Span((X <- (X > 0)), XS, YES, NO)
 ```
 
 ### GroupBy/3
 
 `GroupBy(Goal, List, Groups)` — group consecutive elements by key projected via `Goal(Elem, Key)`.
 
-```
-by_sign(Xs_, Gs_) <- GroupBy(((X_, K_) <- If(X_ > 0, K_ is "pos", K_ is "neg")), Xs_, Gs_)
+```clausal
+by_sign(XS, GS) <- GroupBy(((X, K) <- If(X > 0, K is "pos", K is "neg")), XS, GS)
 ```
 
 ### SortBy/3
 
 `SortBy(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
 
-```
-sort_by_abs(Xs_, Ss_) <- SortBy(((X_, K_) <- (K_ := abs(X_))), Xs_, Ss_)
+```clausal
+sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K := abs(X))), XS, SS)
 ```
 
 ### MaxBy/3, MinBy/3
@@ -173,10 +173,10 @@ sort_by_abs(Xs_, Ss_) <- SortBy(((X_, K_) <- (K_ := abs(X_))), Xs_, Ss_)
 
 `FilterMap(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
 
-```
-double_positives(Xs_, Rs_) <- FilterMap(
-    ((X_, Y_) <- (X_ > 0 and (Y_ := X_ * 2))),
-    Xs_, Rs_
+```clausal
+double_positives(XS, RS) <- FilterMap(
+    ((X, Y) <- (X > 0 and (Y := X * 2))),
+    XS, RS
 )
 ```
 
@@ -194,22 +194,22 @@ double_positives(Xs_, Rs_) <- FilterMap(
 
     Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
 
-    ```
+    ```clausal
     # FindAll with inline goal — no lambda required
-    squares(Ns_, Sqs_) <- FindAll(Sq_, (In(X_, Ns_) and (Sq_ := X_ * X_)), Sqs_)
+    squares(NS, SQS) <- FindAll(SQ, (In(X, NS) and (SQ := X * X)), SQS)
 
     # ForAll with inline condition and action
-    all_positive(Ns_) <- ForAll(In(X_, Ns_), X_ > 0)
+    all_positive(NS) <- ForAll(In(X, NS), X > 0)
     ```
 
     Higher-order list predicates take either lambdas or predicate references:
 
-    ```
+    ```clausal
     # Filter with lambda
-    positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+    positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
     # Filter with a builtin predicate directly
-    keep_ints(Xs_, Is_) <- Filter(IsInt, Xs_, Is_)
+    keep_ints(XS, IS) <- Filter(IsInt, XS, IS)
     ```
 
     See [Lambdas](lambdas.md) for full lambda syntax and semantics.

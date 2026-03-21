@@ -8,13 +8,13 @@ The implementation lives in `clausal/modules/regex.py`.
 
 ## Import
 
-```
+```clausal
 -import_from(regex, [Match, Search, Replace, Split, FindAll])
 ```
 
 Or via module import:
 
-```
+```clausal
 -import_module(regex)
 # then use regex.Match(...), regex.Search(...), etc.
 ```
@@ -27,7 +27,7 @@ Or via module import:
 
 `Match(Pattern, String)` — succeeds if Pattern matches String (anchored at start):
 
-```
+```clausal
 Match(r"\d+", "123")           # succeeds
 Match(r"\d+", "abc")           # fails
 Match(r"\d+$", "123abc")       # fails (no match at end)
@@ -37,65 +37,65 @@ Match(r"\d+$", "123abc")       # fails (no match at end)
 
 `Match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
 
-```
-Match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G_)
-# G_ = {"year": "2026", "month": "03"}
+```clausal
+Match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G)
+# G = {"year": "2026", "month": "03"}
 
-Match(r"(\d+)-(\d+)", "42-99", G_)
-# G_ = ("42", "99")
+Match(r"(\d+)-(\d+)", "42-99", G)
+# G = ("42", "99")
 ```
 
 ### Auto-Binding
 
 Named groups using ALLCAPS or trailing-underscore names are automatically bound to corresponding clause variables at compile time (via goal expansion):
 
-```
+```clausal
 Test("auto-bind YEAR") <- (
-    YEAR_ is "2026" and
+    YEAR is "2026" and
     Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03")
 )
 ```
 
-The goal expansion pass detects `(?P<YEAR>...)` and generates code to unify the `YEAR` group with the `YEAR_` variable.
+The goal expansion pass detects `(?P<YEAR>...)` and generates code to unify the `YEAR` group with the `YEAR` variable.
 
 ### Search/2, Search/3
 
 Like Match but unanchored — finds the pattern anywhere in the string:
 
-```
+```clausal
 Search(r"\d+", "abc123def")    # succeeds
 Search(r"\d+", "abcdef")       # fails
 
-Search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G_)
-# G_ = {"key": "bar", "val": "baz"}
+Search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G)
+# G = {"key": "bar", "val": "baz"}
 ```
 
 ### Replace/4
 
 `Replace(Pattern, Replacement, String, Result)` — regex substitution:
 
-```
-Replace(r"\s+", " ", "a  b   c", R_)          # R_ = "a b c"
-Replace(r"\d+", "", "a1b2c3", R_)              # R_ = "abc"
-Replace(r"(\w+)", r"[\1]", "hi lo", R_)        # R_ = "[hi] [lo]"
+```clausal
+Replace(r"\s+", " ", "a  b   c", R)          # R = "a b c"
+Replace(r"\d+", "", "a1b2c3", R)              # R = "abc"
+Replace(r"(\w+)", r"[\1]", "hi lo", R)        # R = "[hi] [lo]"
 ```
 
 ### Split/3
 
 `Split(Pattern, String, Fragments)` — split string by pattern:
 
-```
-Split(r",\s*", "a, b, c", F_)     # F_ = ["a", "b", "c"]
-Split(r"\s+", "x y z", F_)        # F_ = ["x", "y", "z"]
+```clausal
+Split(r",\s*", "a, b, c", F)     # F = ["a", "b", "c"]
+Split(r"\s+", "x y z", F)        # F = ["x", "y", "z"]
 ```
 
 ### FindAll/3
 
 `FindAll(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match:
 
-```
-FindAll(r"\d+", "a1b23c456", D_)
-# D_ = "1", then "23", then "456"
+```clausal
+FindAll(r"\d+", "a1b23c456", D)
+# D = "1", then "23", then "456"
 ```
 
 Fails if no matches are found.
@@ -112,9 +112,9 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) detects string-liter
 
 Patterns can be variables or f-strings:
 
-```
+```clausal
 Test("dynamic match") <- Match(f"^{"hello"}", "hello world")
-Test("dynamic pattern") <- (PAT_ is r"\d+", Match(PAT_, "42"))
+Test("dynamic pattern") <- (PAT is r"\d+", Match(PAT, "42"))
 ```
 
 Dynamic patterns are compiled at runtime (no precompilation).

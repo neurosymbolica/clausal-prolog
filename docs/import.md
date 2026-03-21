@@ -110,7 +110,7 @@ This is safe because no predicate is queried during module load — `.clausal` f
 
 ### `-import_from` — selective import
 
-```
+```clausal
 -import_from(myapp.graphs.utils, [ShortestPath, Reachable])
 ```
 
@@ -118,20 +118,20 @@ This emits `from myapp.graphs.utils import ShortestPath, Reachable` in the gener
 
 Imported predicates can be used in clause bodies just like locally-defined ones:
 
-```
-Connected(X_, Y_) <- Reachable(X_, Y_)
+```clausal
+Connected(X, Y) <- Reachable(X, Y)
 ```
 
 #### Aliases
 
-```
+```clausal
 -import_from(myapp.graphs.utils, [alias(Reachable, Reach)])
 ```
 
 Generates `from myapp.graphs.utils import Reachable as Reach`. Use the alias name in clause bodies:
 
-```
-Connected(X_, Y_) <- Reach(X_, Y_)
+```clausal
+Connected(X, Y) <- Reach(X, Y)
 ```
 
 Alias names must be **TitleCase** (multi-character). Single uppercase letters like `R` are treated as logic variables by the name resolver and will not work as aliases.
@@ -142,25 +142,25 @@ Behind the scenes, imported predicates are stored under a fully-qualified dotted
 
 ### `-import_module` — whole-module import with qualified calls
 
-```
+```clausal
 -import_module(myapp.graphs.utils)
 ```
 
 This emits `import myapp.graphs.utils` in the generated Python code. The module object lands in globals. Predicates are accessed via qualified (dotted) names:
 
-```
-Connected(X_, Y_) <- myapp.graphs.utils.Reachable(X_, Y_)
+```clausal
+Connected(X, Y) <- myapp.graphs.utils.Reachable(X, Y)
 ```
 
 Qualified calls are resolved at compile time: the compiler walks the dotted attribute chain, finds the `PredicateMeta` class, and stores it under the dotted key `"myapp.graphs.utils.Reachable"` in compiled globals. At runtime, `_get_dispatch()` is called on that class — no attribute lookup overhead on every call.
 
 ### Restrictions on qualified names
 
-The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (trailing underscore like `X_`, or ALL-CAPS like `FOO`) are rejected with a `SyntaxError`:
+The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or trailing underscore like `X_`) are rejected with a `SyntaxError`:
 
-```
-Bad(X_) <- X_.foo(X_)      # SyntaxError: Logic variable 'X_' cannot appear
-Bad(X_) <- mod.X_(X_)      # SyntaxError: Logic variable 'X_' cannot appear
+```clausal
+Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
+Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
 ```
 
 Only simple dotted name chains are supported. Computed attribute access or method calls are not valid in predicate position.

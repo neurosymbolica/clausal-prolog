@@ -12,7 +12,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
 
 Raises an exception with a structured error term:
 
-```
+```clausal
 Throw(error(type_error(integer, foo), context))
 ```
 
@@ -22,7 +22,7 @@ Any term can be thrown — strings, atoms, or structured error terms.
 
 Catches any exception and binds the error term to a variable or pattern:
 
-```
+```clausal
 Catch(Goal, ERROR)
 ```
 
@@ -31,7 +31,7 @@ Catch(Goal, ERROR)
 
 `Catch/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms.
 
-```
+```clausal
 # Catch any exception
 Catch(Goal, ERROR)
 
@@ -46,7 +46,7 @@ Catch(Goal, error(type_error(_, _), _))
 
 Like `Catch/2` but with an explicit recovery goal:
 
-```
+```clausal
 CatchRecover(Goal, ERROR, Recovery)
 ```
 
@@ -60,11 +60,11 @@ CatchRecover(Goal, ERROR, Recovery)
 
 The standard form with selective matching and re-raise on mismatch:
 
-```
-safe_div(X_, Y_, R_) <- catch(
-    (R_ := X_ / Y_),
+```clausal
+safe_div(X, Y, R) <- catch(
+    (R := X / Y),
     error(evaluation_error(zero_divisor), _),
-    R_ is "undefined"
+    R is "undefined"
 )
 ```
 
@@ -79,7 +79,7 @@ safe_div(X_, Y_, R_) <- catch(
 `Compound` whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
 
-```
+```clausal
 catch(
     ++(some_python_call()),
     ValueError(MSG),
@@ -91,7 +91,7 @@ If the Python exception does not match the catcher it is re-raised unchanged.
 
 ### halt/0, halt/1
 
-```
+```clausal
 done() <- Halt()
 done_with_code() <- Halt(1)
 ```
@@ -107,7 +107,7 @@ Clausal terms during catch. Python exceptions become `Compound(ClassName,
 (message,))` — the same structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
 
-```
+```clausal
 # Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
 # Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
 
@@ -154,45 +154,45 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 ??? example "Examples"
 
     **Catch a type error:**
-    ```
-    check_int(X_, R_) <- catch(
-        (X_ > 0 and R_ is "positive"),
+    ```clausal
+    check_int(X, R) <- catch(
+        (X > 0 and R is "positive"),
         error(type_error(_, _), _),
-        R_ is "not a number"
+        R is "not a number"
     )
     ```
 
     **Catch a Python exception (no recovery needed):**
-    ```
-    safe_parse(S_, R_) <- (
-        Catch(++(int(S_)), ValueError(_)),
-        R_ is "parse error"
+    ```clausal
+    safe_parse(S, R) <- (
+        Catch(++(int(S)), ValueError(_)),
+        R is "parse error"
     )
     ```
 
     **CatchRecover with error access:**
-    ```
-    logged_op(X_, Y_, R_) <- CatchRecover(
-        (R_ := X_ / Y_),
-        ERR_,
-        (Write(ERR_) and R_ is "error")
+    ```clausal
+    logged_op(X, Y, R) <- CatchRecover(
+        (R := X / Y),
+        ERR,
+        (Write(ERR) and R is "error")
     )
     ```
 
     **Re-throw after logging:**
-    ```
-    logged_div(X_, Y_, R_) <- catch(
-        (R_ := X_ / Y_),
-        E_,
-        (Write(E_) and Throw(E_))
+    ```clausal
+    logged_div(X, Y, R) <- catch(
+        (R := X / Y),
+        E,
+        (Write(E) and Throw(E))
     )
     ```
 
     **Catch-all:**
-    ```
-    safe_run(Goal_, R_) <- (
-        Catch(CallGoal(Goal_), _),
-        R_ is "ok"
+    ```clausal
+    safe_run(GOAL, R) <- (
+        Catch(CallGoal(GOAL), _),
+        R is "ok"
     )
     ```
 
@@ -237,3 +237,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
     - **Import integration**: `.clausal` file with catch/throw patterns
+
+---
+
+*See also: [Builtins](builtins.md) — for a list of built-in predicates that can throw exceptions.*

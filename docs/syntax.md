@@ -4,6 +4,8 @@ Clausal does not follow ISO Prolog syntax. It uses Python syntax throughout — 
 
 The tradeoffs this creates (mainly around the unification operator and some operators) are documented below, with the reasoning behind each choice.
 
+> **Quick navigation:** [Variables](#variables) · [Operators](#operators) · [Clauses & Rules](#clauses-and-rules) · [Lists](#lists) · [Arithmetic](#arithmetic) · [Constraints](#constraints) · [DCGs](#dcgs) · [Cheatsheet](#cheatsheet)
+
 ---
 
 ## The key rule
@@ -83,7 +85,7 @@ Inside a logical term:
 - identifiers in `TitleCase` or `lowercase` that are not logic variable names are atoms
 - string literals are atoms (except those prefixed with `u"..."`)
 
-```python
+```clausal
 # These are equivalent:
 Atom is 'Atom',
 (x is not 2) is 'is not'(x, 2),
@@ -109,7 +111,7 @@ PascalCase keeps the builtin namespace cleanly separate from both Python keyword
 
 Unification is written with `is`:
 
-```python
+```clausal
 X is 42,
 X is Y,
 X is not Y,   # disequality constraint (dif/2)
@@ -131,7 +133,7 @@ The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify
 
 To evaluate an arithmetic expression and bind the result to a variable, use the walrus operator `:=`:
 
-```python
+```clausal
 fib(N, RESULT) <- (
     N > 1,
     N1 := N - 1,
@@ -156,7 +158,7 @@ The corresponding AST node is `Evaluate(left, right)`. The compiler applies `ari
 
 The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) (Constraint Logic Programming over Finite Domains) operators. They post constraints on integer variables rather than performing immediate checks.
 
-```python
+```clausal
 bounded(X) <- (
     InDomain(X, 1, 10)
     and X > 3
@@ -187,7 +189,7 @@ See [constraints.md](constraints.md) for the full CLP(FD) design, including doma
 
 ## Horn clauses
 
-```python
+```clausal
 Head <- Body,
 ```
 
@@ -198,18 +200,18 @@ The `<-` operator denotes a Horn clause (rule). It will never be added to Python
 The body after `<-` must be one of:
 
 - **A single call** — no parentheses needed:
-  ```python
+  ```clausal
   sorted_asc([_]),
   palindrome(XS) <- reverse(XS, XS),
   ```
 
 - **A bare name** — no parentheses needed:
-  ```python
+  ```clausal
   always_true <- true,
   ```
 
 - **Anything else** — parenthesized:
-  ```python
+  ```clausal
   safe_max(X, Y, X) <- (X >= Y),
   fib(N, RESULT) <- (
       N > 1,
@@ -225,7 +227,7 @@ This rule exists because Python's parser sees `<-` as `<` followed by unary `-`.
 
 Attempting to write an unparenthesized operator body produces a clear error:
 
-```
+```clausal
 SyntaxError: clause body must be parenthesized or a single call:
     write  head <- (body)  or  head <- goal(X)
 ```
@@ -234,7 +236,7 @@ SyntaxError: clause body must be parenthesized or a single call:
 
 Multiple goals in a body are separated by commas, with each goal on its own line:
 
-```python
+```clausal
 is_permutation(XS, YS) <- (
     Length(XS, N),
     Length(YS, N),
@@ -245,21 +247,21 @@ is_permutation(XS, YS) <- (
 
 Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
 
-```python
+```clausal
 test("fails") <- (not (X is 1 and X is 2)),
 test("either") <- (X is 1 or X is 2),
 ```
 
 Facts (trivially true rules) are written without a body:
 
-```python
+```clausal
 parent(tom, bob),
 parent(bob, ann),
 ```
 
 Grammar rules (Definite Clause Grammars):
 
-```python
+```clausal
 Rule > ListDescription,
 ```
 
@@ -267,7 +269,7 @@ Rule > ListDescription,
 
 ## Lists
 
-```python
+```clausal
 []               # empty list (singleton)
 [a, 1, X]        # a simple list
 [FIRST, *REST]   # head/tail decomposition
@@ -282,12 +284,12 @@ Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread s
 
 Python dict literals in `.clausal` files create `DictTerm` objects — unification-aware dictionaries. Keys must be ground; values may be logic variables.
 
-```python
+```clausal
 # Ground dict fact
 point({"x": 0, "y": 0}),
 
 # Dict pattern in head — X binds during unification
-get_x({"x": X, "y": Y_}, X),
+get_x({"x": X, "y": Y}, X),
 
 # Dict construction in body
 make_point(X, Y, P) <- (P is {"x": X, "y": Y})
@@ -306,7 +308,7 @@ See [dicts_sets.md](dicts_sets.md) for the full design.
 
 Python set literals in `.clausal` files create `SetTerm` objects — unification-aware sets. Elements must be ground (hashable).
 
-```python
+```clausal
 colors({1, 2, 3}),
 primary({"red", "green", "blue"}),
 ```
@@ -321,7 +323,7 @@ See [dicts_sets.md](dicts_sets.md) for details.
 
 Strings prefixed with `u""` are lists of character atoms:
 
-```python
+```clausal
 u"ABC" is [A, B, C] is ['A', 'B', 'C'],
 ```
 
@@ -333,7 +335,7 @@ All list operations apply to strings. Plain string literals (without `u`) are at
 
 Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
-```python
+```clausal
 greet(NAME) <- Writeln(f"Hello, {NAME}!"),
 
 show_pair(X, Y) <- Writeln(f"{X} and {Y}"),
@@ -344,7 +346,7 @@ show_price(ITEM, PRICE) <- Writeln(f"{ITEM}: ${PRICE:.2f}"),
 
 Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
 
-Simple variable references like `f"{X_}"` and `f"{NAME}"` work correctly. Format specs (`:.2f`, `:>10`, etc.) and conversions (`!r`, `!s`) are fully supported. Python expressions inside f-strings (like `f"{len(L_)}"` or `f"{S_.upper()}"`) also work — the entire f-string is wrapped in a lambda that receives dereferenced values.
+Simple variable references like `f"{X}"` and `f"{NAME}"` work correctly. Format specs (`:.2f`, `:>10`, etc.) and conversions (`!r`, `!s`) are fully supported. Python expressions inside f-strings (like `f"{len(L)}"` or `f"{S.upper()}"`) also work — the entire f-string is wrapped in a lambda that receives dereferenced values.
 
 ---
 
@@ -354,39 +356,39 @@ The `++()` operator evaluates an arbitrary Python expression at search time. Log
 
 **As a value** (inside `is`):
 
-```python
+```clausal
 # Call a Python builtin
-list_len(L_, N_) <- (N_ is ++len(L_)),
+list_len(L, N) <- (N is ++len(L)),
 
 # Method call on a dereferenced variable
-to_upper(S_, R_) <- (R_ is ++S_.upper()),
+to_upper(S, R) <- (R is ++S.upper()),
 
 # Arithmetic
-inc(X_, R_) <- (R_ is ++(X_ + 1)),
+inc(X, R) <- (R is ++(X + 1)),
 
 # Subscript access
-first(L_, R_) <- (R_ is ++L_[0]),
+first(L, R) <- (R is ++L[0]),
 
 # Dict access
-get_key(D_, K_, R_) <- (R_ is ++D_[K_]),
+get_key(D, K, R) <- (R is ++D[K]),
 
 # Multiple logic variables
-add_len(A_, B_, R_) <- (R_ is ++(len(A_) + len(B_))),
+add_len(A, B, R) <- (R is ++(len(A) + len(B))),
 
 # No logic variables (pure Python)
-get_pi(R_) <- (R_ is ++(3.14159)),
+get_pi(R) <- (R is ++(3.14159)),
 ```
 
 **As a goal** (side effects):
 
-```python
+```clausal
 # Print as a goal
-show(X_) <- ++print(X_),
+show(X) <- ++print(X),
 
 # Goal followed by continuation
-process(X_, R_) <- (
-    ++print(X_),
-    R_ is ++(X_ * 2)
+process(X, R) <- (
+    ++print(X),
+    R is ++(X * 2)
 ),
 ```
 
@@ -397,7 +399,7 @@ Under the hood, `++expr` wraps the Python expression in a lambda whose parameter
 A special case of the `++()` pattern: when a numeric literal is used as the
 callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 
-```python
+```clausal
 5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
 9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
 -3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
@@ -406,7 +408,7 @@ callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 When a **logic variable** is used as the callable instead, `X(Unit)` becomes a
 goal that posts a dimension constraint on `X`:
 
-```python
+```clausal
 F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton value
 F is 9.8(Newton)  # binds F; hook checks dims match
 ```
@@ -417,20 +419,16 @@ See [Physical Units](units.md) for the full reference.
 
 ## Compound terms and goals
 
-```python
+```clausal
 goal(A, B),            # compound goal
-A.goal(B),             # equivalent infix form (syntactic sugar)
-A .goal,               # postfix form of goal(A)
 not goal,              # negation as failure
 ```
-
-The infix and postfix forms allow natural English-style reading of predicates that take a "subject" argument.
 
 ---
 
 ## Immediate goals
 
-```python
+```clausal
 + goal,     # assert/call immediately ('+' distinguishes from a fact)
 - term,     # retract term
 ```
@@ -439,9 +437,13 @@ The infix and postfix forms allow natural English-style reading of predicates th
 
 ## Module qualification
 
-```python
-module/(Terms),
+Predicates from imported modules are called with dotted notation after loading the module:
+
+```clausal
+utils.Double(X, Y),    # qualified call after -import_module(utils)
 ```
+
+See [Directives](directives.md) and [Import System](import.md) for details.
 
 ---
 
@@ -449,21 +451,21 @@ module/(Terms),
 
 Lambdas are anonymous clauses — goal closures passed as arguments to higher-order predicates. They use the same `head <- body` arrow syntax as clause definitions:
 
-```python
-# One-arg lambda — X_ is a parameter, Result_ is captured
-apply(Result_, Val_) <- CallGoal((X_ <- (Result_ := X_ + 1)), Val_)
+```clausal
+# One-arg lambda — X is a parameter, RESULT is captured
+apply(RESULT, VAL) <- CallGoal((X <- (RESULT := X + 1)), VAL)
 
 # Two-arg lambda
-apply_add(A_, B_, R_) <- CallGoal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)
+apply_add(A, B, R) <- CallGoal(((X, Y) <- (R := X + Y)), A, B)
 
 # Zero-arg lambda
-run_goal(Result_) <- CallGoal((() <- (Result_ is 42)))
+run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z_, R_) <- CallGoal((X_ <- (R_ := X_ + Z_)), 10)
+add_z(Z, R) <- CallGoal((X <- (R := X + Z)), 10)
 
 # Conjunction body — parenthesize each := subgoal
-transform(R_) <- CallGoal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
+transform(R) <- CallGoal(((X, Y) <- ((T := X + 1) and (Y := T * 2))), 5, R)
 ```
 
 Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
@@ -478,7 +480,7 @@ DCG rules provide syntactic sugar for difference-list grammars. Each `>>` rule c
 
 ### Basic syntax
 
-```python
+```clausal
 # Terminal — consume literal tokens from the input list
 greeting >> (["hello", "world"])
 
@@ -493,7 +495,7 @@ epsilon >> ([])
 
 DCG predicates can have extra arguments beyond the hidden state:
 
-```python
+```clausal
 # Extra arg D, plus inline goals {D >= 0} and {D <= 9}
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
@@ -502,7 +504,7 @@ Inline goals are written with `{...}` (Python set literal syntax). They execute 
 
 ### Conjunction and disjunction
 
-```python
+```clausal
 # Conjunction — comma-separated tuple (primary style)
 rule >> (a, b, c)
 
@@ -515,7 +517,7 @@ letter >> (["a"] or ["b"] or ["c"])
 
 ### Negation
 
-```python
+```clausal
 # Negation as failure — state passes through
 not_a >> (not ["a"], [X])
 ```
@@ -524,7 +526,7 @@ not_a >> (not ["a"], [X])
 
 The LHS can be a tuple `(head, [pushback_tokens])` to push tokens back onto the input after matching:
 
-```python
+```clausal
 # Peek at next token without consuming it
 (look_ahead(T), [T]) >> ([T])
 ```
@@ -535,7 +537,7 @@ After the body matches `[T]`, the pushback `[T]` is prepended to the remainder.
 
 Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 
-```python
+```clausal
 # phrase/2 — must consume the entire input list
 valid_sentence(S) <- phrase(sentence, S)
 
@@ -549,7 +551,7 @@ phrase(digit(D), [3, "plus", 4], REST)
 
 When using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
 
-```python
+```clausal
 # Correct: PredicateMeta classes created with proper field counts
 -module(my_grammar, [greeting(S0, S), digit(D, S0, S)])
 
@@ -561,7 +563,7 @@ When using `-module(...)`, DCG predicates must be declared with their full signa
 
 The `>>` rewriting is purely syntactic — it transforms DCG rules into ordinary `<-` clauses before the compiler sees them:
 
-```python
+```clausal
 # This DCG rule:
 greeting >> (["hello", "world"])
 
@@ -569,7 +571,7 @@ greeting >> (["hello", "world"])
 greeting(S0, S) <- (S0 is ["hello", "world", *S])
 ```
 
-```python
+```clausal
 # This DCG rule:
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 
@@ -587,7 +589,7 @@ DCGs are not just for parsing — they are a **general state-passing mechanism**
 
 Two reusable nonterminals form the core of state-passing DCGs:
 
-```python
+```clausal
 # Read current state (passthrough — state is not modified)
 (state(S), [S]) >> ([S])
 
@@ -601,7 +603,7 @@ Two reusable nonterminals form the core of state-passing DCGs:
 
 Thread a counter through `phrase/3`:
 
-```python
+```clausal
 # Increment: read counter, add 1, write new counter
 inc >> (state(N0), {N := N0 + 1}, state(_, N))
 
@@ -617,7 +619,7 @@ phrase(count3, [10], [N])  # → N = 13
 
 #### Tree leaf counting
 
-```python
+```clausal
 # Trees as "leaf" or [Left, Right]
 count_leaves("leaf") >> (state(N0), {N := N0 + 1}, state(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
@@ -633,13 +635,13 @@ num_leaves(["leaf", ["leaf", "leaf"]], N)  # → N = 3
 
 #### Accumulator: collecting items
 
-```python
+```clausal
 # Push item onto accumulator state
-push(X) >> (state(Acc0), {Acc is [X, *Acc0]}, state(_, Acc))
+push(X) >> (state(ACC0), {ACC is [X, *ACC0]}, state(_, ACC))
 
 # Push all items from a list
 push_all([]) >> ([])
-push_all([X, *Xs]) >> (push(X), push_all(Xs))
+push_all([X, *XS]) >> (push(X), push_all(XS))
 ```
 
 ```python
@@ -665,24 +667,24 @@ EDCGs are based on Peter Van Roy's 1989 design and use three directives to decla
 
 An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
 
-```python
+```clausal
 # Numeric counter: Out = In + Value
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+-edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
 
 # List accumulator: prepend items
--edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 
 # Product accumulator: Out = In * Value
--edcg_acc(product, X_, In_, Out_, {Out_ := In_ * X_})
+-edcg_acc(product, X, IN, OUT, {OUT := IN * X})
 ```
 
-The joiner goal can be any clausal goal wrapped in `{braces}`. The variable names (`X_`, `In_`, `Out_`) are placeholders — they get substituted with actual variables during rewriting.
+The joiner goal can be any clausal goal wrapped in `{braces}`. The variable names (`X`, `IN`, `OUT`) are placeholders — they get substituted with actual variables during rewriting.
 
 ### Declaring passed arguments
 
 A **passed argument** is a read-only value threaded unchanged through all sub-calls:
 
-```python
+```clausal
 -edcg_pass(config)
 -edcg_pass(scale)
 ```
@@ -691,7 +693,7 @@ A **passed argument** is a read-only value threaded unchanged through all sub-ca
 
 Each EDCG predicate must declare its **visible arity** and which accumulators/passes it uses:
 
-```python
+```clausal
 -edcg_pred(inc, 0, [counter])           # 0 visible args, uses counter
 -edcg_pred(process, 1, [counter, items]) # 1 visible arg, uses counter + items
 -edcg_pred(parse, 0, [counter, dcg])     # uses counter + standard DCG list
@@ -704,21 +706,21 @@ The special name `dcg` refers to the standard DCG difference-list accumulator. I
 
 EDCG rules use `>>` just like standard DCGs, with additional operators:
 
-```python
+```clausal
 # Push a value to a named accumulator: [value] // acc_name
 inc >> ([1] // counter)
 
-# Read current accumulator value: acc_name / Var_
-get_and_inc(V_) >> (counter / V_, [1] // counter)
+# Read current accumulator value: acc_name / Var
+get_and_inc(V) >> (counter / V, [1] // counter)
 
-# Read a passed argument: pass_name / Var_
-scaled_inc >> (scale / S_, [S_] // counter)
+# Read a passed argument: pass_name / Var
+scaled_inc >> (scale / S, [S] // counter)
 
 # Terminal list (requires 'dcg' in the predicate's accumulator list)
-token(T_) >> ([T_], [1] // counter)
+token(T) >> ([T], [1] // counter)
 
 # Inline goals don't thread accumulators
-inc_if_positive >> (counter / N_, {N_ >= 0}, [1] // counter)
+inc_if_positive >> (counter / N, {N >= 0}, [1] // counter)
 
 # Sub-calls: accumulators are threaded automatically
 count3 >> (inc, inc, inc)
@@ -733,65 +735,65 @@ The `//` operator pushes a value through the accumulator's joiner goal. The `/` 
 
 A single rule can update multiple accumulators simultaneously:
 
-```python
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
--edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+```clausal
+-edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 -edcg_pred(process, 1, [counter, items])
 
 # Each push targets a specific accumulator by name
-process(X_) >> ([1] // counter, [X_] // items)
+process(X) >> ([1] // counter, [X] // items)
 ```
 
 When a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
 
-```python
+```clausal
 -edcg_pred(inc_only, 0, [counter])          # only counter
 -edcg_pred(do_both, 1, [counter, items])    # counter + items
 
 inc_only >> ([1] // counter)
-do_both(X_) >> (inc_only, [X_] // items)    # inc_only threads counter only
+do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
 ```
 
 ### Calling EDCG predicates
 
 EDCG predicates are compiled to ordinary predicates with hidden arguments appended in declaration order: 2 per accumulator (in, out) + 1 per pass. You can call them from regular `<-` clauses using keyword syntax:
 
-```python
+```clausal
 # -edcg_pred(count_elems, 1, [len])
 # Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
-my_length(L_, N_) <- count_elems(L_, _edcg_len_in_=0, _edcg_len_out_=N_)
+my_length(L, N) <- count_elems(L, _edcg_len_in_=0, _edcg_len_out_=N)
 ```
 
 Or positionally — hidden args follow visible args in the order declared:
 
-```python
+```clausal
 # count_elems(List, len_in, len_out)
-my_length(L_, N_) <- count_elems(L_, 0, N_)
+my_length(L, N) <- count_elems(L, 0, N)
 ```
 
 ### Complete example: counter with scale factor
 
-```python
--module(example, [run_scaled(List_, Scale_, Count_, Items_)])
+```clausal
+-module(example, [run_scaled(LIST, SCALE, COUNT, ITEMS)])
 
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
--edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 -edcg_pass(scale)
 
 -edcg_pred(scaled_inc, 0, [counter, scale])
 -edcg_pred(collect_and_count, 1, [counter, items, scale])
 -edcg_pred(process_list, 1, [counter, items, scale])
 
-scaled_inc >> (scale / S_, [S_] // counter)
-collect_and_count(X_) >> (scaled_inc, [X_] // items)
+scaled_inc >> (scale / S, [S] // counter)
+collect_and_count(X) >> (scaled_inc, [X] // items)
 
 process_list([]) >> ([])
-process_list([X_, *Xs_]) >> (collect_and_count(X_), process_list(Xs_))
+process_list([X, *XS]) >> (collect_and_count(X), process_list(XS))
 
-run_scaled(List_, Scale_, Count_, Items_) <- (
-    process_list(List_, _edcg_counter_in_=0, _edcg_counter_out_=Count_,
-                 _edcg_items_in_=[], _edcg_items_out_=Items_,
-                 _edcg_scale_=Scale_)
+run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
+    process_list(LIST, _edcg_counter_in_=0, _edcg_counter_out_=COUNT,
+                 _edcg_items_in_=[], _edcg_items_out_=ITEMS,
+                 _edcg_scale_=SCALE)
 )
 ```
 
@@ -810,21 +812,21 @@ Meta-predicates are higher-order predicates that take goals as arguments. They a
 
 ### All-solutions predicates
 
-```python
+```clausal
 # Collect all X where In(X, [1,2,3]) into Bag
-FindAll(X_, In(X_, [1, 2, 3]), Bag_),
+FindAll(X, In(X, [1, 2, 3]), BAG),
 
 # Same but with a filter — only X > 1
-FindAll(X_, (In(X_, [1, 2, 3]) and X_ > 1), Bag_),
+FindAll(X, (In(X, [1, 2, 3]) and X > 1), BAG),
 
 # Cartesian product — template can be any term
-FindAll([X_, Y_], (In(X_, [a, b]) and In(Y_, [1, 2])), Bag_),
+FindAll([X, Y], (In(X, [a, b]) and In(Y, [1, 2])), BAG),
 
 # BagOf fails if no solutions (FindAll succeeds with [])
-BagOf(X_, In(X_, List_), Bag_),
+BagOf(X, In(X, LIST), BAG),
 
 # SetOf deduplicates results (preserving first-occurrence order)
-SetOf(X_, In(X_, [1, 1, 2, 2, 3]), Bag_),   # Bag_ = [1, 2, 3]
+SetOf(X, In(X, [1, 1, 2, 2, 3]), BAG),   # BAG = [1, 2, 3]
 ```
 
 | Predicate | Empty result |
@@ -835,10 +837,10 @@ SetOf(X_, In(X_, [1, 1, 2, 2, 3]), Bag_),   # Bag_ = [1, 2, 3]
 
 ### Universal quantification
 
-```python
+```clausal
 # Succeeds iff Action holds for every solution of Cond
-ForAll(In(X_, [2, 4, 6]), X_ > 0),   # succeeds
-ForAll(In(X_, [2, -1, 6]), X_ > 0),  # fails
+ForAll(In(X, [2, 4, 6]), X > 0),   # succeeds
+ForAll(In(X, [2, -1, 6]), X > 0),  # fails
 ```
 
 `ForAll(Cond, Action)` is equivalent to `not (Cond and not Action)`.
@@ -847,9 +849,9 @@ ForAll(In(X_, [2, -1, 6]), X_ > 0),  # fails
 
 `Call/N` invokes a goal closure with extra arguments. It is an alias for `CallGoal/N`:
 
-```python
-CallGoal((X_ <- (X_ > 0)), 5),        # CallGoal/2: succeeds
-Call(Goal_, Arg1_, Arg2_),             # Call/3: invoke Goal_ with two extra args
+```clausal
+CallGoal((X <- (X > 0)), 5),        # CallGoal/2: succeeds
+Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 ```
 
 `Call/1` through `Call/8` are available (as are `CallGoal/1` through `CallGoal/8`).
@@ -858,21 +860,21 @@ Call(Goal_, Arg1_, Arg2_),             # Call/3: invoke Goal_ with two extra arg
 
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
-```python
+```clausal
 # MapList/2 — check Goal(Elem) succeeds for every element
-MapList((X_ <- (X_ > 0)), [1, 2, 3]),              # succeeds
+MapList((X <- (X > 0)), [1, 2, 3]),              # succeeds
 
 # MapList/3 — map Goal(X, Y) over list, collect results
-MapList(((X_, Y_) <- (Y_ := X_ * 2)), [1, 2, 3], Ys_),  # Ys_ = [2, 4, 6]
+MapList(((X, Y) <- (Y := X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
 
 # Filter/3 — keep elements where Goal(Elem) succeeds
-Filter((X_ <- (X_ > 0)), [1, -2, 3, -4], R_),      # R_ = [1, 3]
+Filter((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
 
 # Exclude/3 — keep elements where Goal(Elem) fails
-Exclude((X_ <- (X_ > 0)), [1, -2, 3, -4], R_),     # R_ = [-2, -4]
+Exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
 
 # FoldLeft/4 — left fold with Goal(Elem, Acc0, Acc1)
-FoldLeft(((E_, A_, R_) <- (R_ := A_ + E_)), [1, 2, 3], 0, Sum_),  # Sum_ = 6
+FoldLeft(((E, A, R) <- (R := A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 ```
 
 ---
@@ -881,7 +883,7 @@ FoldLeft(((E_, A_, R_) <- (R_ := A_ + E_)), [1, 2, 3], 0, Sum_),  # Sum_ = 6
 
 Arithmetic operators inside a constraint domain imply constraints, not evaluation. The domain is applied using the `--` escape:
 
-```python
+```clausal
 (--clpz)(
     X < 43,
     42 <= X,
@@ -928,7 +930,7 @@ This gives a symmetric and concise way to integrate Python side effects with Pro
 
 ## Syntax cheat sheet
 
-```python
+```clausal
 # Variables (ALL-CAPS preferred; trailing-underscore also valid)
 X, HEAD, REST          # ALL-CAPS logic variables
 X_, head_, rest_       # trailing-underscore style (also valid)
@@ -948,7 +950,7 @@ u"hello"               # list of character atoms
 
 # Dicts (DictTerm — keys ground, values may be Vars)
 {"x": 1, "y": 2}              # ground dict
-{"x": X, "y": Y_}             # dict with variable values
+{"x": X, "y": Y}              # dict with variable values
 {"addr": {"city": C}}         # nested dict
 
 # Sets (SetTerm — elements must be ground)
@@ -971,47 +973,43 @@ X <= Y,                # less-or-equal constraint
 InDomain(X, 1, 10),    # post finite domain
 AllDifferent([X,Y,Z]), # pairwise disequality
 Label([X, Y, Z]),      # enumerate solutions (first-fail)
-Equivalent(X, Y),      # structural equality (old == behavior)
+Equivalent(X, Y),      # structural equality
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
 Head <- (Body),        # operator body (parens required)
 Fact,                  # fact (trivially true)
-Rule > ListDescription,    # DCG rule
+Rule >> ListDescription,   # DCG rule
 
 # Goals
 goal(A, B),            # compound goal
-A.goal(B),             # infix sugar
 not goal,              # negation as failure
 + goal,                # immediate goal
 - term,                # retract
 
 # Module qualification
-module/(Terms),
+utils.Double(X, Y),    # qualified call (after -import_module(utils))
 
 # Escaping
 --python_expr          # Python inside logic term
 ++logic_term           # logic term inside Python expression
 ~~python_expr          # capture as AST node
 
-# Constraint domains
-(--clpz)(X > 0, X < 10),
-
 # Lambdas (anonymous clauses)
-CallGoal((X_ <- (R_ := X_ + 1)), 5)                             # R_ = 6
-CallGoal(((X_, Y_) <- (R_ := X_ + Y_)), A_, B_)                 # multi-param
+CallGoal((X <- (R := X + 1)), 5)                             # R = 6
+CallGoal(((X, Y) <- (R := X + Y)), A, B)                 # multi-param
 
 # Meta-predicates
-FindAll(X_, In(X_, [1,2,3]), Bag_),          # Bag_ = [1,2,3]
-BagOf(X_, In(X_, List_), Bag_),              # fails if List_ empty
-SetOf(X_, In(X_, Xs_), Bag_),               # deduplicates
-ForAll(In(X_, Ns_), X_ > 0),               # universal quantification
-Call(Goal_, Arg1_),                          # Call/2 (alias for CallGoal/2)
+FindAll(X, In(X, [1,2,3]), BAG),          # BAG = [1,2,3]
+BagOf(X, In(X, LIST), BAG),              # fails if LIST empty
+SetOf(X, In(X, XS), BAG),               # deduplicates
+ForAll(In(X, NS), X > 0),               # universal quantification
+Call(GOAL, ARG1),                          # Call/2 (alias for CallGoal/2)
 
 # F-strings — logic variables auto-deref at search time
 Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
 Writeln(f"{X:.2f}"),                   # format specs work
-S_ := f"{X} and {Y}",                 # capture as string
+S := f"{X} and {Y}",                 # capture as string
 
 # DCGs — >> defines grammar rules with difference lists
 greeting >> (["hello", "world"]),          # terminal sequence
@@ -1023,29 +1021,29 @@ not_a >> (not ["a"], [X]),                # negation
 phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
 phrase(digit(D), [3], REST),              # phrase/3 — partial parse
 
-# EDCGs — extended DCGs with named accumulators
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})  # declare accumulator
--edcg_pass(config)                                       # declare passed arg
--edcg_pred(inc, 0, [counter])                            # declare pred's hidden args
+# EDCGs — EXPERIMENTAL (directive parsing only, no end-to-end rewriting yet)
+-edcg_acc(counter, X, IN, OUT, {OUT := IN + X})  # declare accumulator
+-edcg_pass(config)                                # declare passed arg
+-edcg_pred(inc, 0, [counter])                     # declare pred's hidden args
 inc >> ([1] // counter)                   # [value] // acc — push to accumulator
-get(V_) >> (counter / V_)                 # acc / Var — read current value
-scaled >> (scale / S_, [S_] // counter)   # pass / Var — read passed arg
+get(V) >> (counter / V)                   # acc / Var — read current value
+scaled >> (scale / S, [S] // counter)     # pass / Var — read passed arg
 
 # Python interop — ++() evaluates Python at search time
-N_ is ++len(L_),                       # call Python builtin
-R_ is ++S_.upper(),                    # method call on deref'd var
-R_ is ++(X_ + 1),                      # Python arithmetic
-R_ is ++L_[0],                         # subscript access
-R_ is ++D_[K_],                        # dict access
-++print(X_),                           # side-effect goal
+N is ++len(L),                       # call Python builtin
+R is ++S.upper(),                    # method call on deref'd var
+R is ++(X + 1),                      # Python arithmetic
+R is ++L[0],                         # subscript access
+R is ++D[K],                         # dict access
+++print(X),                          # side-effect goal
 
 # Higher-order list predicates
-MapList(Goal_, [1, 2, 3]),                   # check Goal_ on each element
-MapList(Goal_, Xs_, Ys_),                    # map Goal_(X, Y) over list
-Filter(Goal_, List_, Kept_),                 # keep where Goal_ succeeds
-Exclude(Goal_, List_, Removed_),             # keep where Goal_ fails
-FoldLeft(Goal_, List_, Acc0_, Result_),      # left fold with Goal_(Elem, Acc, Next)
-GetItem(Index_, List_, Elem_),               # 0-based index access
-InCheck(Elem_, List_),                       # deterministic membership check
-Unpack(Term_, List_),                        # decompose/construct term
+MapList(GOAL, [1, 2, 3]),                   # check GOAL on each element
+MapList(GOAL, XS, YS),                      # map GOAL(X, Y) over list
+Filter(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
+Exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
+FoldLeft(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
+GetItem(INDEX, LIST, ELEM),                 # 0-based index access
+InCheck(ELEM, LIST),                        # deterministic membership check
+Unpack(TERM, LIST),                         # decompose/construct term
 ```

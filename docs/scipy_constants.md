@@ -6,7 +6,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_constants, [Value, Unit, Precision, Lookup, Find, AllNames,
                                 SpeedOfLight, PlanckConstant,
                                 ReducedPlanckConstant, GravitationalConstant,
@@ -18,7 +18,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_constants, [Value, Unit, ...])
 ```
 
@@ -72,7 +72,7 @@ Look up a CODATA physical constant value by its full name string.
 - `NAME`: CODATA name string, e.g. `'speed of light in vacuum'`, `'Planck constant'`, `'Boltzmann constant'`
 - `RESULT`: float value in SI units
 
-```
+```clausal
 Value('speed of light in vacuum', C),   % C = 299792458.0 m/s
 Value('Planck constant', H),            % H = 6.626070e-34 J·s
 Value('elementary charge', E)           % E = 1.602177e-19 C
@@ -90,7 +90,7 @@ Access all three CODATA fields for a constant in a single call.
 - `UNIT`: string, the SI unit
 - `UNCERTAINTY`: float, absolute uncertainty (not relative — use `Precision` for relative)
 
-```
+```clausal
 Lookup('electron mass', V, U, ERR)
 % V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
 ```
@@ -106,7 +106,7 @@ Search the CODATA database by substring; returns all matching constant names.
 - `SUBSTRING`: string to search for (case-sensitive, uses `scipy.constants.find`)
 - `NAMES`: list of matching name strings; empty list if no match
 
-```
+```clausal
 Find('electron mass', NAMES)
 % NAMES = ['alpha particle-electron mass ratio',
 %           'deuteron-electron mass ratio', 'electron mass', ...]
@@ -123,7 +123,7 @@ Return all CODATA constant names as a list.
 
 - `NAMES`: list of all name strings in `scipy.constants.physical_constants`
 
-```
+```clausal
 AllNames(NAMES),
 ++(len(NAMES))   % 300+ depending on scipy version
 ```
@@ -136,7 +136,7 @@ Return the SI unit string for a named CODATA constant.
 
 - `RESULT`: a string such as `'m s^-1'` or `'J s'`
 
-```
+```clausal
 Unit('speed of light in vacuum', U)  % U = 'm s^-1'
 ```
 
@@ -148,7 +148,7 @@ Return the relative uncertainty of a named CODATA constant.
 
 - `RESULT`: float, e.g. `0.0` for exact definitions, `2.2e-5` for G
 
-```
+```clausal
 Precision('Newtonian constant of gravitation', P)  % P > 0 (G has uncertainty)
 Precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
 ```
@@ -223,7 +223,7 @@ SI giga prefix: 1 × 10⁹.
 
 ## Example
 
-```
+```clausal
 -import_from(scipy_constants, [SpeedOfLight, BoltzmannConstant,
                                 AvogadroConstant, Value, Unit])
 

@@ -12,7 +12,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 In `.clausal` files, use the `If` function call:
 
-```
+```clausal
 If(condition, then_goal, else_goal)
 ```
 
@@ -23,20 +23,20 @@ All three arguments are required.
 ### Examples
 
 **Ground branching — deterministic:**
-```
-classify(X_, L_) <- If(X_ >= 0, L_ is "positive", L_ is "negative")
+```clausal
+classify(X, L) <- If(X >= 0, L is "positive", L is "negative")
 ```
 
 **Undetermined branching — explores both paths:**
-```
-check(X_, R_) <- If(X_ is 1, R_ is "equal", R_ is "different")
+```clausal
+check(X, R) <- If(X is 1, R is "equal", R is "different")
 ```
 
-When `X_` is unbound, this produces two solutions: `X_=1, R_="equal"` and `dif(X_,1), R_="different"`.
+When `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
 
 **Nested ITE:**
-```
-grade(S_, G_) <- If(S_ >= 90, G_ is "A", If(S_ >= 80, G_ is "B", G_ is "C"))
+```clausal
+grade(S, G) <- If(S >= 90, G is "A", If(S >= 80, G is "B", G is "C"))
 ```
 
 ---
@@ -68,14 +68,14 @@ The compiler distinguishes two kinds of conditions:
 
 | Condition | Reified via | Undetermined: then path | Undetermined: else path |
 |---|---|---|---|
-| `X_ is Y_` | `reify_eq` | `unify(X, Y)` | `dif(X, Y)` |
-| `X_ is not Y_` | `reify_eq` (inverted) | `dif(X, Y)` | `unify(X, Y)` |
-| `X_ == Y_` | `reify_fd("eq")` | `fd_eq(X, Y)` | `fd_ne(X, Y)` |
-| `X_ != Y_` | `reify_fd("ne")` | `fd_ne(X, Y)` | `fd_eq(X, Y)` |
-| `X_ < Y_` | `reify_fd("lt")` | `fd_lt(X, Y)` | `fd_ge(X, Y)` |
-| `X_ <= Y_` | `reify_fd("le")` | `fd_le(X, Y)` | `fd_gt(X, Y)` |
-| `X_ > Y_` | `reify_fd("gt")` | `fd_gt(X, Y)` | `fd_le(X, Y)` |
-| `X_ >= Y_` | `reify_fd("ge")` | `fd_ge(X, Y)` | `fd_lt(X, Y)` |
+| `X is Y` | `reify_eq` | `unify(X, Y)` | `dif(X, Y)` |
+| `X is not Y` | `reify_eq` (inverted) | `dif(X, Y)` | `unify(X, Y)` |
+| `X == Y` | `reify_fd("eq")` | `fd_eq(X, Y)` | `fd_ne(X, Y)` |
+| `X != Y` | `reify_fd("ne")` | `fd_ne(X, Y)` | `fd_eq(X, Y)` |
+| `X < Y` | `reify_fd("lt")` | `fd_lt(X, Y)` | `fd_ge(X, Y)` |
+| `X <= Y` | `reify_fd("le")` | `fd_le(X, Y)` | `fd_gt(X, Y)` |
+| `X > Y` | `reify_fd("gt")` | `fd_gt(X, Y)` | `fd_le(X, Y)` |
+| `X >= Y` | `reify_fd("ge")` | `fd_ge(X, Y)` | `fd_lt(X, Y)` |
 
 **Non-reifiable conditions** (arbitrary predicate calls, `in`, etc.) use a single-evaluation pattern with a `_found` flag:
 
@@ -119,7 +119,7 @@ The `If(condition, then, else)` call syntax is parsed into an `IfExpr` AST node,
 
 ### Generated code (reifiable equality condition)
 
-For `If(X_ is 1, R_ is "yes", R_ is "no")`:
+For `If(X is 1, R is "yes", R is "no")`:
 
 ```python
 _reif_0 = _reify_eq(X_, 1, trail)

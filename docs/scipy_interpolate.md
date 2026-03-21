@@ -6,13 +6,13 @@ The `scipy_interpolate` module wraps [`scipy.interpolate`](https://docs.scipy.or
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_interpolate, [MakeSpline, EvalSpline, ...])
 ```
 
@@ -32,7 +32,7 @@ Handles are opaque integers. They are valid until `Free` is called.
 
 ## Pipeline pattern
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline,
     SplineIntegral, SplineDerivative, Free])
 
@@ -70,7 +70,7 @@ Predicate names use full English words where scipy uses abbreviations:
 
 #### `MakeSpline` — recommended 1-D spline
 
-```
+```clausal
 MakeSpline(X, Y, RESULT)
 MakeSpline(X, Y, K, RESULT)
 MakeSpline(X, Y, K, BC_TYPE, RESULT)
@@ -84,7 +84,7 @@ MakeSpline(X, Y, K, BC_TYPE, RESULT)
 
 #### `MakeCubic` — cubic spline with configurable boundary conditions
 
-```
+```clausal
 MakeCubic(X, Y, RESULT)
 MakeCubic(X, Y, BC_TYPE, RESULT)
     → scipy.interpolate.CubicSpline(x, y, bc_type=BC_TYPE)
@@ -94,7 +94,7 @@ MakeCubic(X, Y, BC_TYPE, RESULT)
 
 #### `MakePCHIP` — monotone cubic (good for noisy data)
 
-```
+```clausal
 MakePCHIP(X, Y, RESULT)
 MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
     → scipy.interpolate.PchipInterpolator(x, y, extrapolate=EXTRAPOLATE)
@@ -104,7 +104,7 @@ MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
 
 #### `MakeAkima` — Akima 1-D interpolator
 
-```
+```clausal
 MakeAkima(X, Y, RESULT)
     → scipy.interpolate.Akima1DInterpolator(x, y)
     Less sensitive to outliers than cubic splines.
@@ -112,7 +112,7 @@ MakeAkima(X, Y, RESULT)
 
 #### `MakeLinear1D` — legacy piecewise interpolation
 
-```
+```clausal
 MakeLinear1D(X, Y, RESULT)
 MakeLinear1D(X, Y, KIND, RESULT)
     → scipy.interpolate.interp1d(x, y, kind=KIND)
@@ -123,7 +123,7 @@ MakeLinear1D(X, Y, KIND, RESULT)
 
 #### `MakeRegularGrid` — N-D interpolation on a regular grid
 
-```
+```clausal
 MakeRegularGrid(POINTS, VALUES, RESULT)
 MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
     → scipy.interpolate.RegularGridInterpolator(points, values, method=METHOD)
@@ -134,7 +134,7 @@ MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
 
 #### `MakeRadialBasis` — radial basis function interpolation
 
-```
+```clausal
 MakeRadialBasis(X, Y, RESULT)
 MakeRadialBasis(X, Y, FUNCTION, RESULT)
 MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
@@ -156,7 +156,7 @@ MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
 Works with handles from `MakeSpline`, `MakeCubic`,
 `MakePCHIP`, `MakeAkima`, and `MakeLinear1D`.
 
-```
+```clausal
 EvalSpline(HANDLE, X, Y)                   # bidirectional (arity-3)
     X ground, Y unbound → Y = spline(x)    # forward: evaluate at query point(s)
     Y ground, X unbound → X = root-find    # backward: find x such that spline(x) = y
@@ -173,27 +173,27 @@ EvalSpline(HANDLE, X, NU, RESULT)          # unidirectional (arity-4)
 
 Example — invert a spline to find the input that gives a target output:
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakePCHIP, EvalSpline, Free])
 
 # Forward: evaluate the interpolator at x=2.5
-SplineForward(XS_, YS_, RESULT_) <- (
-    MakePCHIP(XS_, YS_, H_) and
-    EvalSpline(H_, 2.5, RESULT_) and
-    Free(H_)
+SplineForward(XS, YS, RESULT) <- (
+    MakePCHIP(XS, YS, H) and
+    EvalSpline(H, 2.5, RESULT) and
+    Free(H)
 )
 
 # Backward: find x such that spline(x) = target value
-SplineInvert(XS_, YS_, TARGET_, X_) <- (
-    MakePCHIP(XS_, YS_, H_) and
-    EvalSpline(H_, X_, TARGET_) and
-    Free(H_)
+SplineInvert(XS, YS, TARGET, X) <- (
+    MakePCHIP(XS, YS, H) and
+    EvalSpline(H, X, TARGET) and
+    Free(H)
 )
 ```
 
 #### `EvalRegularGrid` — evaluate an N-D regular-grid interpolator
 
-```
+```clausal
 EvalRegularGrid(HANDLE, XI, RESULT)
 EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
     HANDLE: integer from MakeRegularGrid
@@ -204,7 +204,7 @@ EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
 
 #### `EvalRadialBasis` — evaluate an RBF interpolator
 
-```
+```clausal
 EvalRadialBasis(HANDLE, X, RESULT)
     HANDLE: integer from MakeRadialBasis
     X:      2-D array of query points, shape (n_query, n_dims)
@@ -220,7 +220,7 @@ These predicates operate on handles from any of the 1-D spline constructors
 
 #### `SplineIntegral` — definite integral
 
-```
+```clausal
 SplineIntegral(HANDLE, A, B, RESULT)
     Compute the definite integral of the spline from A to B.
     HANDLE: spline handle
@@ -230,7 +230,7 @@ SplineIntegral(HANDLE, A, B, RESULT)
 
 #### `SplineDerivative` — derivative spline
 
-```
+```clausal
 SplineDerivative(HANDLE, RESULT)
 SplineDerivative(HANDLE, ORDER, RESULT)
     Return a new HANDLE for the ORDER-th derivative of the spline.
@@ -240,7 +240,7 @@ SplineDerivative(HANDLE, ORDER, RESULT)
 
 #### `SplineRoots` — zero-crossings
 
-```
+```clausal
 SplineRoots(HANDLE, RESULT)
     Return the real roots (zero-crossings) of the spline within its domain.
     RESULT: Python list of root values
@@ -251,7 +251,7 @@ SplineRoots(HANDLE, RESULT)
 
 ### Lifecycle: `Free`
 
-```
+```clausal
 Free(HANDLE)
     Release HANDLE from the handle registry.
     Always succeeds, even if HANDLE is not registered.
@@ -265,7 +265,7 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 
 ### 1-D spline fitting and evaluation
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeCubic, EvalSpline, Free])
 
 % Fit a cubic spline to sample data and evaluate at new points.
@@ -278,7 +278,7 @@ FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
 
 ### Spline integration and derivative
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeCubic, SplineIntegral,
     SplineDerivative, EvalSpline, Free])
 
@@ -295,7 +295,7 @@ SplineAnalysis(XS, YS, AREA, DERIV_AT_2) <- (
 
 ### N-D interpolation on a regular grid
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeRegularGrid, EvalRegularGrid, Free])
 
 GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
@@ -307,7 +307,7 @@ GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
 
 ### Radial basis function interpolation
 
-```
+```clausal
 -import_from(scipy_interpolate, [MakeRadialBasis, EvalRadialBasis, Free])
 
 RbfInterp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (

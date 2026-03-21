@@ -6,13 +6,13 @@ The `scipy_integrate` module wraps [`scipy.integrate`](https://docs.scipy.org/do
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_integrate, [Quad, Trapezoid, SolveInitialValueProblem, ResultGet, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_integrate, [Quad, Trapezoid, ...])
 ```
 
@@ -24,7 +24,7 @@ Or via the canonical `py.*` path:
 
 `CumulativeTrapezoid`, `Trapezoid`, and `Simpson` return a NumPy array or scalar directly in `RESULT`.
 
-```
+```clausal
 Trapezoid(++([1.0, 2.0, 3.0]), RESULT),
 % RESULT is unified with 4.0
 ```
@@ -33,7 +33,7 @@ Trapezoid(++([1.0, 2.0, 3.0]), RESULT),
 
 Quadrature and ODE predicates (`Quad`, `DoubleQuad`, `TripleQuad`, `NQuad`, `QuadVec`, `SolveInitialValueProblem`, `OdeIntegrate`) return a Python dict in `RESULT`. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
 
-```
+```clausal
 Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159), RESULT),
 ResultGet(RESULT, 'value', V),
 ResultGet(RESULT, 'error', E).
@@ -64,7 +64,7 @@ Predicate names use full English words; scipy abbreviations are expanded:
 
 ### Scalar quadrature
 
-```
+```clausal
 Quad(FUNC, A, B, RESULT)
     Adaptive integration of FUNC(x) from A to B (QUADPACK DQAGS/DQAGSE).
     RESULT: dict {value, error}
@@ -80,12 +80,12 @@ Quad(FUNC, A, B, ARGS, LIMIT, EPSABS, EPSREL, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_integrate, [Quad, ResultGet])
 
-IntegrateSin(V_) <- (
-    Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT_) and
-    ResultGet(RESULT_, 'value', V_)
+IntegrateSin(V) <- (
+    Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT) and
+    ResultGet(RESULT, 'value', V)
 )
 ```
 
@@ -93,7 +93,7 @@ IntegrateSin(V_) <- (
 
 ### Multi-dimensional quadrature
 
-```
+```clausal
 DoubleQuad(FUNC, A, B, GFUN, HFUN, RESULT)
     Double integral of FUNC(y, x) over a<=x<=b, gfun(x)<=y<=hfun(x).
     FUNC:  callable FUNC(y, x) → scalar
@@ -124,7 +124,7 @@ QuadVec(FUNC, A, B, RESULT)
 
 ### ODE solvers
 
-```
+```clausal
 SolveInitialValueProblem(FUN, T_SPAN, Y0, RESULT)
     Solve dy/dt = FUN(t, y), y(T_SPAN[0]) = Y0, integrate to T_SPAN[1].
     FUN:    callable FUN(t, y) → array of derivatives
@@ -154,18 +154,18 @@ OdeIntegrate(FUNC, Y0, T, ARGS, RESULT)
 
 Example — exponential decay:
 
-```
+```clausal
 -import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
 
-ExponentialDecay(T_FINAL_, Y_FINAL_) <- (
+ExponentialDecay(T_FINAL, Y_FINAL) <- (
     SolveInitialValueProblem(
         ++(lambda t, y: [-y[0]]),
-        ++([0.0, float(T_FINAL_)]),
+        ++([0.0, float(T_FINAL)]),
         ++([1.0]),
-        RESULT_) and
-    ResultGet(RESULT_, 'success', True) and
-    ResultGet(RESULT_, 'y', Y_) and
-    Y_FINAL_ is ++(float(Y_[0, -1]))
+        RESULT) and
+    ResultGet(RESULT, 'success', True) and
+    ResultGet(RESULT, 'y', Y) and
+    Y_FINAL is ++(float(Y[0, -1]))
 )
 ```
 
@@ -175,7 +175,7 @@ ExponentialDecay(T_FINAL_, Y_FINAL_) <- (
 
 These predicates operate on arrays of sample values.
 
-```
+```clausal
 CumulativeTrapezoid(Y, RESULT)
     Cumulatively integrate Y using the composite trapezoidal rule.
     Y:      1-D array of sample values (uniform spacing dx=1)
@@ -202,19 +202,19 @@ Simpson(Y, X, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_integrate, [Trapezoid, CumulativeTrapezoid])
 
-TrapezoidIntegral(Y_, RESULT_) <- Trapezoid(Y_, RESULT_).
+TrapezoidIntegral(Y, RESULT) <- Trapezoid(Y, RESULT).
 
-CumulativeIntegral(Y_, CUMULATIVE_) <- CumulativeTrapezoid(Y_, CUMULATIVE_).
+CumulativeIntegral(Y, CUMULATIVE) <- CumulativeTrapezoid(Y, CUMULATIVE).
 ```
 
 ---
 
 ### ResultGet
 
-```
+```clausal
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: dict returned by a Tier 2 predicate
@@ -238,46 +238,46 @@ Common fields by predicate:
 
 ### Quadrature: integrate sin over [0, π]
 
-```
+```clausal
 -import_from(scipy_integrate, [Quad, ResultGet])
 
-SinIntegral(VALUE_) <- (
+SinIntegral(VALUE) <- (
     Quad(++(lambda x: __import__('math').sin(x)),
          ++(0.0),
          ++(3.14159265358979),
-         RESULT_) and
-    ResultGet(RESULT_, 'value', VALUE_)
+         RESULT) and
+    ResultGet(RESULT, 'value', VALUE)
 )
 ```
 
 ### ODE: logistic growth
 
-```
+```clausal
 -import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
 
 % dy/dt = r*y*(1 - y/K), y(0) = y0
-LogisticGrowth(R_, K_, Y0_, T_FINAL_, Y_FINAL_) <- (
+LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
     SolveInitialValueProblem(
-        ++(lambda t, y: [R_ * y[0] * (1.0 - y[0] / K_)]),
-        ++([0.0, float(T_FINAL_)]),
-        ++([float(Y0_)]),
+        ++(lambda t, y: [R * y[0] * (1.0 - y[0] / K)]),
+        ++([0.0, float(T_FINAL)]),
+        ++([float(Y0)]),
         'RK45',
-        RESULT_) and
-    ResultGet(RESULT_, 'success', True) and
-    ResultGet(RESULT_, 'y', Y_) and
-    Y_FINAL_ is ++(float(Y_[0, -1]))
+        RESULT) and
+    ResultGet(RESULT, 'success', True) and
+    ResultGet(RESULT, 'y', Y) and
+    Y_FINAL is ++(float(Y[0, -1]))
 )
 ```
 
 ### Sampled integration
 
-```
+```clausal
 -import_from(scipy_integrate, [Trapezoid, Simpson, CumulativeTrapezoid])
 
 % Integrate a sampled signal using multiple methods
-CompareIntegrals(Y_, TRAP_, SIMP_) <- (
-    Trapezoid(Y_, TRAP_) and
-    Simpson(Y_, SIMP_)
+CompareIntegrals(Y, TRAP, SIMP) <- (
+    Trapezoid(Y, TRAP) and
+    Simpson(Y, SIMP)
 )
 ```
 

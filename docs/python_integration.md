@@ -1,5 +1,7 @@
 # Clausal — Python Integration
 
+> Most clausal programs are written as `.clausal` files and queried with `clausal.query()`. This page covers the lower-level Python API for embedding logic programming in Python applications, testing, and advanced use cases.
+
 ## Overview
 
 Clausal predicates are callable from Python code through a clean query API. The API covers:
@@ -164,7 +166,7 @@ Built-in predicates are available in every module without explicit import. They 
 
 **Stateless builtins** — stored in `_BUILTINS` as dispatch functions:
 
-```
+```clausal
 In/2            InCheck/2       Append/3        Length/2
 Reverse/2       Last/2          GetItem/3       Flatten/2
 Sort/2          MergeSort/2     Permutation/2   Select/3
@@ -188,13 +190,13 @@ Nl/0            Tab/1           WriteToString/2 TermToString/2
 
 **Compiler special forms** — compiled inline, not dispatched as builtins:
 
-```
+```clausal
 FindAll/3       BagOf/3         SetOf/3         ForAll/2
 ```
 
 **DB-dependent builtins** — stored in `_DB_BUILTINS` as factory callables; instantiated lazily with the live `Database`:
 
-```
+```clausal
 Assert/1        AssertFirst/1   Retract/1       Signature/3
 Vary/3          Extend/3        UnboundKeys/2
 ```
@@ -324,12 +326,12 @@ unify(dt.date(2026, 3, 16), dt.date(2026, 3, 17), trail)  # → False
 
 The `date_time` standard library module provides relational predicates (`Date/4`, `DateTime/7`, etc.) for constructing and decomposing these objects. But the objects themselves are ordinary Python — you can call any method via `++()` interop:
 
-```
+```clausal
 -import_from(date_time, [Date, FormatDate])
 
-IsoDate(Y_, M_, D_, S_) <- (
-    Date(Y_, M_, D_, Dt_)
-    and S_ is ++Dt_.isoformat()
+IsoDate(Y, M, D, S) <- (
+    Date(Y, M, D, DT)
+    and S is ++DT.isoformat()
 )
 ```
 
@@ -343,14 +345,14 @@ The `++()` operator evaluates an arbitrary Python expression at search time with
 
 Use `++expr` on the right side of `is` to compute a Python value:
 
-```
-list_len(L_, N_) <- (N_ is ++len(L_))
-to_upper(S_, R_) <- (R_ is ++S_.upper())
-inc(X_, R_) <- (R_ is ++(X_ + 1))
-first(L_, R_) <- (R_ is ++L_[0])
-get_key(D_, K_, R_) <- (R_ is ++D_[K_])
-join_words(W_, R_) <- (R_ is ++", ".join(W_))
-double_all(L_, R_) <- (R_ is ++[x*2 for x in L_])
+```clausal
+list_len(L, N) <- (N is ++len(L))
+to_upper(S, R) <- (R is ++S.upper())
+inc(X, R) <- (R is ++(X + 1))
+first(L, R) <- (R is ++L[0])
+get_key(D, K, R) <- (R is ++D[K])
+join_words(W, R) <- (R is ++", ".join(W))
+double_all(L, R) <- (R is ++[x*2 for x in L])
 ```
 
 Any valid Python expression works inside `++()`: function calls, method calls, subscripts, dict access, list comprehensions, arithmetic, and string formatting.
@@ -359,18 +361,18 @@ Any valid Python expression works inside `++()`: function calls, method calls, s
 
 Use `++expr` as a standalone goal for side effects:
 
-```
-show(X_) <- ++print(X_)
+```clausal
+show(X) <- ++print(X)
 ```
 
 When used as a goal, `++()` evaluates the expression (for its side effect) and always succeeds once.
 
 Goals and values can be mixed in a clause body:
 
-```
-process(X_, R_) <- (
-    ++print(X_),
-    R_ is ++(X_ * 2)
+```clausal
+process(X, R) <- (
+    ++print(X),
+    R is ++(X * 2)
 )
 ```
 
@@ -378,18 +380,18 @@ process(X_, R_) <- (
 
 All logic variables in the expression are dereferenced before evaluation:
 
-```
-add_len(A_, B_, R_) <- (R_ is ++(len(A_) + len(B_)))
+```clausal
+add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 ```
 
 ### Per-Solution Evaluation
 
 `PyThunk` values are evaluated fresh for each solution during backtracking:
 
-```
+```clausal
 Item(1), Item(2), Item(3),
-Doubled(R_) <- (Item(X_), R_ is ++(X_ * 2))
-# yields R_ = 2, 4, 6
+Doubled(R) <- (Item(X), R is ++(X * 2))
+# yields R = 2, 4, 6
 ```
 
 ### Implementation

@@ -9,11 +9,11 @@ Since Python's `logging` module is the backend, all of Python's handler ecosyste
 ```clausal
 -import_from(log, [GetLogger, Info, Debug, Warning, Error, SetLevel])
 
-Main(Name_) <- (
-    GetLogger("myapp", L_) and
-    SetLevel(L_, "debug") and
-    Debug(L_, f"Starting with name={Name_}")  and
-    Info(L_, f"Hello, {Name_}!")
+Main(NAME) <- (
+    GetLogger("myapp", L) and
+    SetLevel(L, "debug") and
+    Debug(L, f"Starting with name={NAME}")  and
+    Info(L, f"Hello, {NAME}!")
 )
 ```
 
@@ -23,8 +23,8 @@ Or via module import:
 -import_module(log)
 
 Main <- (
-    log.GetLogger("myapp", L_) and
-    log.Info(L_, "ready")
+    log.GetLogger("myapp", L) and
+    log.Info(L, "ready")
 )
 ```
 
@@ -68,7 +68,7 @@ All logging predicates **always succeed** — they are side-effects. A message b
 
 ### `Debug/1`, `Debug/2`
 
-```
+```clausal
 Debug(+Msg)
 Debug(+Logger, +Msg)
 ```
@@ -77,7 +77,7 @@ Log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
 
 ### `Info/1`, `Info/2`
 
-```
+```clausal
 Info(+Msg)
 Info(+Logger, +Msg)
 ```
@@ -86,7 +86,7 @@ Log at INFO level.
 
 ### `Warning/1`, `Warning/2`
 
-```
+```clausal
 Warning(+Msg)
 Warning(+Logger, +Msg)
 ```
@@ -95,7 +95,7 @@ Log at WARNING level.
 
 ### `Error/1`, `Error/2`
 
-```
+```clausal
 Error(+Msg)
 Error(+Logger, +Msg)
 ```
@@ -104,7 +104,7 @@ Log at ERROR level.
 
 ### `Critical/1`, `Critical/2`
 
-```
+```clausal
 Critical(+Msg)
 Critical(+Logger, +Msg)
 ```
@@ -113,7 +113,7 @@ Log at CRITICAL level.
 
 ### `Log/3`
 
-```
+```clausal
 Log(+Logger, +Level, +Msg)
 ```
 
@@ -124,7 +124,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 Messages are Python strings. Clausal's f-string support means interpolation works naturally:
 
 ```clausal
-Info(L_, f"User {UserID_} logged in from {IP_}")
+Info(L, f"User {USERID} logged in from {IP}")
 ```
 
 Logic variables in f-strings are auto-dereferenced at search time.
@@ -135,18 +135,18 @@ Logic variables in f-strings are auto-dereferenced at search time.
 
 ### `GetLogger/1`, `GetLogger/2`
 
-```
+```clausal
 GetLogger(-Logger)
 GetLogger(+Name, -Logger)
 ```
 
 Unify `Logger` with a Python `logging.Logger` instance. The arity-1 form returns the default `"clausal"` logger. Logger objects are opaque — they unify via identity, not structure.
 
-Python's logger hierarchy applies: `GetLogger("myapp.db", L_)` creates a child of `"myapp"`. Calling `GetLogger` with the same name always returns the same logger instance.
+Python's logger hierarchy applies: `GetLogger("myapp.db", L)` creates a child of `"myapp"`. Calling `GetLogger` with the same name always returns the same logger instance.
 
 ### `SetLevel/2`
 
-```
+```clausal
 SetLevel(+Logger, +Level)
 ```
 
@@ -154,7 +154,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 
 ### `GetLevel/2`
 
-```
+```clausal
 GetLevel(+Logger, -Level)
 ```
 
@@ -162,16 +162,16 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 
 ### `IsEnabledFor/2`
 
-```
+```clausal
 IsEnabledFor(+Logger, +Level)
 ```
 
 **Succeeds** if the logger would process a message at `Level`; **fails** otherwise. This is the one logging predicate that can fail — useful for guarding expensive message construction:
 
 ```clausal
-Process(L_, Data_) <- (
-    (IsEnabledFor(L_, "debug") and Debug(L_, f"Processing: {Data_}") or True) and
-    do_work(Data_)
+Process(L, DATA) <- (
+    (IsEnabledFor(L, "debug") and Debug(L, f"Processing: {DATA}") or True) and
+    do_work(DATA)
 )
 ```
 
@@ -181,7 +181,7 @@ Process(L_, Data_) <- (
 
 ### `StreamHandler/2`
 
-```
+```clausal
 StreamHandler(+StreamName, -Handler)
 ```
 
@@ -189,7 +189,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 
 ### `FileHandler/2`
 
-```
+```clausal
 FileHandler(+Path, -Handler)
 ```
 
@@ -197,7 +197,7 @@ Create a `logging.FileHandler` that writes to the given file path.
 
 ### `SetFormatter/2`
 
-```
+```clausal
 SetFormatter(+Handler, +FormatString)
 ```
 
@@ -205,7 +205,7 @@ Set a `logging.Formatter` on the handler using Python's format string syntax (e.
 
 ### `AddHandler/2`
 
-```
+```clausal
 AddHandler(+Logger, +Handler)
 ```
 
@@ -213,7 +213,7 @@ Add a handler to the logger.
 
 ### `RemoveHandler/2`
 
-```
+```clausal
 RemoveHandler(+Logger, +Handler)
 ```
 
@@ -221,7 +221,7 @@ Remove a handler from the logger.
 
 ### `BasicConfig/1`
 
-```
+```clausal
 BasicConfig(+Opts)
 ```
 
@@ -236,17 +236,17 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ```clausal
     -import_from(log, [GetLogger, Info, Warning, SetLevel])
     
-    Init(L_) <- (
-        GetLogger("myapp", L_) and
-        SetLevel(L_, "info") and
-        Info(L_, "Application started")
+    Init(L) <- (
+        GetLogger("myapp", L) and
+        SetLevel(L, "info") and
+        Info(L, "Application started")
     )
-    
-    ProcessItem(L_, Item_) <- (
-        Item_ > 0 and Info(L_, f"Processing item {Item_}")
+
+    ProcessItem(L, ITEM) <- (
+        ITEM > 0 and Info(L, f"Processing item {ITEM}")
     )
-    ProcessItem(L_, Item_) <- (
-        Item_ =< 0 and Warning(L_, f"Skipping invalid item {Item_}")
+    ProcessItem(L, ITEM) <- (
+        ITEM =< 0 and Warning(L, f"Skipping invalid item {ITEM}")
     )
     ```
 
@@ -258,15 +258,15 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
         StreamHandler, FileHandler, SetFormatter, AddHandler
     ])
     
-    SetupLogging(L_) <- (
-        GetLogger("myapp", L_) and
-        SetLevel(L_, "debug") and
-        FileHandler("/var/log/myapp.log", Fh_) and
-        SetFormatter(Fh_, "%(asctime)s [%(levelname)s] %(name)s: %(message)s") and
-        AddHandler(L_, Fh_) and
-        StreamHandler("stderr", Sh_) and
-        SetFormatter(Sh_, "%(levelname)s: %(message)s") and
-        AddHandler(L_, Sh_)
+    SetupLogging(L) <- (
+        GetLogger("myapp", L) and
+        SetLevel(L, "debug") and
+        FileHandler("/var/log/myapp.log", FH) and
+        SetFormatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s") and
+        AddHandler(L, FH) and
+        StreamHandler("stderr", SH) and
+        SetFormatter(SH, "%(levelname)s: %(message)s") and
+        AddHandler(L, SH)
     )
     ```
 
@@ -276,11 +276,11 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     -import_from(log, [GetLogger, Info, SetLevel])
     
     Setup <- (
-        GetLogger("myapp", Parent_) and
-        SetLevel(Parent_, "info") and
-        GetLogger("myapp.db", DbLog_) and
-        SetLevel(DbLog_, "debug") and
-        Info(DbLog_, "DB logger inherits parent's handlers")
+        GetLogger("myapp", PARENT) and
+        SetLevel(PARENT, "info") and
+        GetLogger("myapp.db", DBLOG) and
+        SetLevel(DBLOG, "debug") and
+        Info(DBLOG, "DB logger inherits parent's handlers")
     )
     ```
 

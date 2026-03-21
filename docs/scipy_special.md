@@ -6,13 +6,13 @@ The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/sc
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_special, [Gamma, Erf, BesselJ, EllipticK, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_special, [Gamma, Erf, BesselJ, ...])
 ```
 
@@ -62,7 +62,7 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 
 ### Gamma and related
 
-```
+```clausal
 Gamma(X, RESULT)
     RESULT = Γ(x)
 
@@ -94,10 +94,10 @@ Perm(N, K, EXACT, RESULT)             # EXACT=True returns an integer
 
 Example:
 
-```
-ComputeCoefficients(N_, K_, COEFF_) <- (
-    Comb(N_, K_, COEFF_) and
-    ++print(f"C({N_},{K_}) = {COEFF_}")
+```clausal
+ComputeCoefficients(N, K, COEFF) <- (
+    Comb(N, K, COEFF) and
+    ++print(f"C({N},{K}) = {COEFF}")
 )
 ```
 
@@ -107,7 +107,7 @@ ComputeCoefficients(N_, K_, COEFF_) <- (
 
 These predicates are **bidirectional relations**: they dispatch on argument groundness, running forward or backward depending on which arguments are bound.
 
-```
+```clausal
 Erf(X, Y)
     X ground, Y unbound → Y = erf(x)
     Y ground, X unbound → X = erfinv(y)   # inverse direction
@@ -126,7 +126,7 @@ NormalCdf(X, P)
 
 Example — bidirectional NormalCdf acts as both CDF and quantile function:
 
-```
+```clausal
 # Forward: P = Φ(1.96) ≈ 0.975
 NormalCdf(1.96, P)
 
@@ -134,10 +134,10 @@ NormalCdf(1.96, P)
 NormalCdf(X, 0.975)
 
 # Round-trip
-CheckQuantile(X_) <- (
-    NormalCdf(X_, P_) and
-    NormalCdf(X2_, P_) and
-    DIFF is ++(abs(float(X2_) - float(X_))) and
+CheckQuantile(X) <- (
+    NormalCdf(X, P) and
+    NormalCdf(X2, P) and
+    DIFF is ++(abs(float(X2) - float(X))) and
     DIFF < 1e-9
 )
 ```
@@ -146,7 +146,7 @@ CheckQuantile(X_) <- (
 
 ### Incomplete gamma, beta, and Box-Cox (bidirectional)
 
-```
+```clausal
 GammaInc(A, X, Y)
     A fixed (always ground).
     X ground, Y unbound → Y = gammainc(a, x)    # regularised lower incomplete gamma
@@ -180,11 +180,11 @@ Boxcox1p(Lambda, X, Y)
 
 Example — round-trip through Box-Cox transform:
 
-```
-BoxcoxRoundTrip(Lam_, X_) <- (
-    Boxcox(Lam_, X_, Y_) and
-    Boxcox(Lam_, X2_, Y_) and
-    DIFF is ++(abs(float(X2_) - float(X_))) and
+```clausal
+BoxcoxRoundTrip(LAM, X) <- (
+    Boxcox(LAM, X, Y) and
+    Boxcox(LAM, X2, Y) and
+    DIFF is ++(abs(float(X2) - float(X))) and
     DIFF < 1e-9
 )
 ```
@@ -193,7 +193,7 @@ BoxcoxRoundTrip(Lam_, X_) <- (
 
 ### Bessel functions
 
-```
+```clausal
 BesselJ(N, X, RESULT)       # J_n(x), first kind, integer order
 BesselY(N, X, RESULT)       # Y_n(x), second kind, integer order
 
@@ -214,7 +214,7 @@ SphericalBesselJ(N, Z, DERIVATIVE, RESULT)  # derivative=DERIVATIVE
 
 ### Elliptic integrals
 
-```
+```clausal
 EllipticK(M, RESULT)
     RESULT = K(m) = ∫₀^{π/2} (1 − m sin²θ)^{−½} dθ   # complete, first kind
 
@@ -232,7 +232,7 @@ EllipticEIncomplete(PHI, M, RESULT)
 
 ### Hypergeometric functions
 
-```
+```clausal
 Hypergeometric1F1(A, B, X, RESULT)
     RESULT = ₁F₁(a; b; x)   # confluent / Kummer's function
 
@@ -247,7 +247,7 @@ Hypergeometric0F1(B, X, RESULT)
 
 ### Information theory
 
-```
+```clausal
 Entr(X, RESULT)
     RESULT = −x log(x)   # entropy element-wise; 0 when x=0
 
@@ -260,10 +260,10 @@ LogSumExp(A, AXIS, B, KEEPDIMS, RESULT)     # with axis, weights, keepdims
 
 Example — stable log-sum using `LogSumExp`:
 
-```
-StableLogProb(LOGITS_, LP_) <- (
-    LogSumExp(LOGITS_, Z_) and
-    LP_ is ++(LOGITS_ - float(Z_))
+```clausal
+StableLogProb(LOGITS, LP) <- (
+    LogSumExp(LOGITS, Z) and
+    LP is ++(LOGITS - float(Z))
 )
 ```
 
@@ -271,7 +271,7 @@ StableLogProb(LOGITS_, LP_) <- (
 
 ### Orthogonal polynomials
 
-```
+```clausal
 AssocLegendre(M, V, X, RESULT)
     RESULT = P_v^m(x)   # associated Legendre function; M is the order, V the degree
 
@@ -295,7 +295,7 @@ GeneralizedLaguerre(N, ALPHA, X, RESULT)
 
 ### Convenience / misc
 
-```
+```clausal
 CubeRoot(X, RESULT)
     RESULT = x^(1/3)   # works correctly for negative x
 
@@ -324,22 +324,22 @@ XLog1pY(X, Y, RESULT)
 
 ## Complete example — Gaussian process kernel
 
-```
+```clausal
 -import_from(scipy_special, [Gamma, BesselK, BesselJZeros])
 
 # Matérn 5/2 covariance function value at distance D
-Matern52(D_, NU_5_2_, RESULT_) <- (
+Matern52(D, NU_5_2, RESULT) <- (
     SQRT5 is ++(5.0 ** 0.5) and
-    ARG_ is SQRT5 * D_ and
-    TERM1_ is ARG_ and
-    TERM2_ is ARG_ * ARG_ / 3.0 and
-    RESULT_ is ++(float(NU_5_2_) * (1.0 + float(TERM1_) + float(TERM2_)) * 2.718281828 ** (-(float(TERM1_))))
+    ARG is SQRT5 * D and
+    TERM1 is ARG and
+    TERM2 is ARG * ARG / 3.0 and
+    RESULT is ++(float(NU_5_2) * (1.0 + float(TERM1) + float(TERM2)) * 2.718281828 ** (-(float(TERM1))))
 )
 
 # First zero of J_0 (wave antinodes)
-FirstAntinode(ZERO_) <- (
-    BesselJZeros(0, 1, ZEROS_) and
-    ZERO_ is ++float(list(ZEROS_)[0])
+FirstAntinode(ZERO) <- (
+    BesselJZeros(0, 1, ZEROS) and
+    ZERO is ++float(list(ZEROS)[0])
 )
 ```
 

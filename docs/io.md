@@ -17,15 +17,15 @@ Clausal provides built-in predicates for formatted output and term-to-string con
 
 ### Examples
 
-```
-greet(Name_) <- (Write("Hello, ") and Write(Name_) and Nl())
+```clausal
+greet(NAME) <- (Write("Hello, ") and Write(NAME) and Nl())
 
-show_all(Xs_) <- (
-    In(X_, Xs_)
-    and Writeln(X_)
+show_all(XS) <- (
+    In(X, XS)
+    and Writeln(X)
 )
 
-indented(X_) <- (Tab(4) and Writeln(X_))
+indented(X) <- (Tab(4) and Writeln(X))
 ```
 
 ---
@@ -37,8 +37,8 @@ indented(X_) <- (Tab(4) and Writeln(X_))
 | `WriteToString` | 2 | `WriteToString(Term, String)` — unify String with the Write representation |
 | `TermToString` | 2 | `TermToString(Term, String)` — unify String with the str() representation |
 
-```
-format_pair(K_, V_, S_) <- WriteToString(K_ - V_, S_)
+```clausal
+format_pair(K, V, S) <- WriteToString(K - V, S)
 ```
 
 ---
@@ -47,9 +47,9 @@ format_pair(K_, V_, S_) <- WriteToString(K_ - V_, S_)
 
 In `.clausal` files, f-strings are supported for string construction. Logic variables are automatically dereferenced before interpolation:
 
-```
-describe(Name_, Age_, S_) <- (
-    S_ is f"Name: {Name_}, Age: {Age_}"
+```clausal
+describe(NAME, AGE, S) <- (
+    S is f"Name: {NAME}, Age: {AGE}"
 )
 ```
 
@@ -64,7 +64,7 @@ Logic variables have `__str__` and `__format__` methods (in the C extension) tha
 - Bound var: displays the bound value
 - Unbound var: displays `_VarN` (unique ID)
 
-This means `f"{X_}"` and `Write(X_)` show the value if bound, or a placeholder if unbound.
+This means `f"{X}"` and `Write(X)` show the value if bound, or a placeholder if unbound.
 
 ---
 
@@ -77,3 +77,7 @@ This means `f"{X_}"` and `Write(X_)` show the value if bound, or a placeholder i
     - **Nl/Tab**: output formatting
     - **WriteToString/TermToString**: term conversion to string
     - **F-string integration**: variable interpolation, multiple vars, expressions
+
+---
+
+*See also: [Python Integration](python_integration.md) — using `++()` escape for Python calls inside logic goals.*

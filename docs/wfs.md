@@ -10,20 +10,20 @@ The implementation extends `clausal/logic/tabling.py`.
 
 WFS is required when a program has **recursion through negation** on tabled predicates:
 
-```
+```clausal
 -table(wins/1)
 
-wins(X_) <- (
-    move(X_, Y_)
-    and not wins(Y_)
+wins(X) <- (
+    move(X, Y)
+    and not wins(Y)
 )
 ```
 
-Without WFS, `not wins(Y_)` would loop or produce incorrect answers. With WFS:
+Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
 
-- If `wins(Y_)` is provably true → negation fails
-- If `wins(Y_)` is provably false → negation succeeds
-- If `wins(Y_)` is undefined (cyclic dependency) → the answer is marked "undefined"
+- If `wins(Y)` is provably true → negation fails
+- If `wins(Y)` is provably false → negation succeeds
+- If `wins(Y)` is undefined (cyclic dependency) → the answer is marked "undefined"
 
 ---
 
@@ -78,7 +78,7 @@ for r in results:
 
 WFS only applies to **tabled** predicates:
 
-```
+```clausal
 -table(pred/arity)
 ```
 
@@ -90,14 +90,14 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
 
 ### Game Theory: Winning Positions
 
-```
+```clausal
 -table(wins/1)
 
 move(a, b),
 move(b, c),
 move(c, a),
 
-wins(X_) <- (move(X_, Y_) and not wins(Y_))
+wins(X) <- (move(X, Y) and not wins(Y))
 ```
 
 With the cyclic graph a→b→c→a, `wins` has no definite winners — all positions are "undefined" under WFS.

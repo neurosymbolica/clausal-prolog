@@ -1,6 +1,5 @@
 site_name: Clausal
 site_description: Logic programming embedded in Python
-site_url: https://clausal.example.io/
 
 theme:
   name: material
@@ -39,6 +38,7 @@ nav:
   - Home: index.md
   - Getting Started:
     - Project Goals: goals.md
+    - Tutorial: tutorial.md
     - Syntax: syntax.md
     - Testing: testing.md
   - Language:

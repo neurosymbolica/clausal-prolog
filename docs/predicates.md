@@ -1,5 +1,46 @@
 # Clausal — Predicate System
 
+## Defining predicates in .clausal files
+
+Predicates are defined in `.clausal` files using Python syntax with a trailing comma. Each clause is either a **fact** (always true) or a **rule** (true when its body succeeds).
+
+```clausal
+# A fact: color/2 is true for these specific arguments
+color(red, warm),
+color(blue, cool),
+color(green, cool),
+
+# A rule: warm_color/1 is true when color(C, warm) succeeds
+warm_color(C) <- color(C, warm),
+```
+
+Fields are inferred from the clause heads — no separate declaration needed. The predicate `color` has fields `(arg0, arg1)`, and `warm_color` has field `(arg0,)`.
+
+### Multiple clauses
+
+A predicate can have multiple clauses (tried in order):
+
+```clausal
+max(X, Y, X) <- X >= Y,
+max(X, Y, Y) <- X < Y,
+```
+
+### Recursive predicates
+
+```clausal
+length([], 0),
+length([_ | REST], N) <- (
+    length(REST, N1)
+    and N := N1 + 1
+),
+```
+
+---
+
+## Python API (advanced)
+
+> For most use cases, define predicates in `.clausal` files. This section covers the lower-level Python API for embedding or advanced use.
+
 ## Overview
 
 In clausal, every predicate **is** a Python class. The class serves simultaneously as:
@@ -119,7 +160,7 @@ for _ in fib._get_dispatch()(N1, A, trail, k):
 
 Predicates start **unlocked** and are locked after the module finishes loading. Once locked, `_assertz`, `_asserta`, and `_retract` raise `RuntimeError`:
 
-```
+```clausal
 RuntimeError: Predicate fib/2 is locked. Use dynamic() to allow runtime assertion.
 ```
 
@@ -170,3 +211,7 @@ Both work for PredicateMeta instances and `@dataclass` instances — useful for 
 >>> make_predicate("bar", ["x"])
 <Predicate bar/1, 0 clause(s), uncompiled>
 ```
+
+---
+
+*See also: [Architecture](architecture.md) — how predicates fit into the execution model.*

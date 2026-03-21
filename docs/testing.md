@@ -6,13 +6,13 @@ Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inlin
 
 Any `.clausal` file can include test clauses of the form:
 
-```
+```clausal
 test("description") <- goal1, goal2, ...
 ```
 
 A test passes if its body succeeds (produces at least one solution). Tests live alongside the predicates they exercise:
 
-```
+```clausal
 fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
@@ -55,7 +55,7 @@ python -m pytest clausal/examples/fibonacci.clausal -v
 
 Output looks like:
 
-```
+```clausal
 clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
 clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
 ```
@@ -77,3 +77,7 @@ Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if 
 - Use `==` for CLP(FD) arithmetic equality on computed results: `test("check") <- (some_pred(X), X == expected)`. For ground integers this behaves like equality; for Vars it posts a CLP(FD) constraint.
 - Use `equivalent(X, Y)` for structural equality (the old `==` behavior) when comparing non-integer terms.
 - Use `:=` for arithmetic: `test("arith") <- (N := 2 + 3, N == 5)`.
+
+---
+
+*See also: [Examples](examples.md) — for real test predicates used in example programs.*

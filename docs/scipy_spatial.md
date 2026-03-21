@@ -5,13 +5,13 @@ Provides spatial distance functions and spatial data-structure predicates from
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_spatial, [CrossDistance, PairwiseDistance, MakeKdTree, ...])
 ```
 
 or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_spatial, [CrossDistance, ...])
 ```
 
@@ -34,7 +34,7 @@ or via the canonical `py.*` path:
 
 ### CrossDistance
 
-```
+```clausal
 CrossDistance(XA, XB, RESULT)
 CrossDistance(XA, XB, METRIC, RESULT)
 CrossDistance(XA, XB, METRIC, KWARGS, RESULT)
@@ -48,14 +48,14 @@ Wraps `scipy.spatial.distance.cdist`.
 - `KWARGS`: Python dict of extra metric-specific keyword arguments, or `None`
 - `RESULT`: `(m × n)` distance matrix
 
-```
+```clausal
 CrossDistance(++([[0.0, 0.0]]), ++([[3.0, 4.0]]), 'euclidean', D),
 V is ++(float(D[0, 0]))   % V = 5.0
 ```
 
 ### PairwiseDistance
 
-```
+```clausal
 PairwiseDistance(X, RESULT)
 PairwiseDistance(X, METRIC, RESULT)
 PairwiseDistance(X, METRIC, KWARGS, RESULT)
@@ -67,28 +67,28 @@ Wraps `scipy.spatial.distance.pdist`.
 - `X`: array of shape `(n, d)`
 - `RESULT`: condensed distance vector of length `n*(n-1)/2`
 
-```
+```clausal
 PairwiseDistance(++([[0.0,0.0],[3.0,4.0]]), 'euclidean', D),
 V is ++(float(D[0]))   % V = 5.0
 ```
 
 ### SquareForm
 
-```
+```clausal
 SquareForm(X, RESULT)
 ```
 
 Convert between a condensed distance vector and a square distance matrix.
 Wraps `scipy.spatial.distance.squareform`.
 
-```
+```clausal
 PairwiseDistance(PTS, CONDENSED),
 SquareForm(CONDENSED, SQUARE)   % SQUARE is the full n×n matrix
 ```
 
 ### PointDistance
 
-```
+```clausal
 PointDistance(METRIC, X, Y, RESULT)
 ```
 
@@ -99,7 +99,7 @@ metric.
 - `X`, `Y`: 1-D arrays or lists
 - `RESULT`: float scalar
 
-```
+```clausal
 PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
 ```
 
@@ -109,7 +109,7 @@ PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
 
 ### MakeKdTree
 
-```
+```clausal
 MakeKdTree(DATA, RESULT)
 MakeKdTree(DATA, LEAFSIZE, RESULT)
 ```
@@ -123,7 +123,7 @@ Wraps `scipy.spatial.KDTree`.
 
 ### KdTreeQuery
 
-```
+```clausal
 KdTreeQuery(HANDLE, X, RESULT)
 KdTreeQuery(HANDLE, X, K, RESULT)
 ```
@@ -134,7 +134,7 @@ Query the KD-tree for the `K` nearest neighbours of each point in `X`.
 - `K`: number of neighbours (default 1)
 - `RESULT`: dict with keys `'distances'` and `'indices'`
 
-```
+```clausal
 MakeKdTree(DATA, KD),
 KdTreeQuery(KD, QUERY, 3, R),
 NEAREST is ++(R['indices'])
@@ -142,7 +142,7 @@ NEAREST is ++(R['indices'])
 
 ### KdTreeQueryBall
 
-```
+```clausal
 KdTreeQueryBall(HANDLE, X, RADIUS, RESULT)
 ```
 
@@ -152,7 +152,7 @@ Find all points within `RADIUS` of each query point.
 
 ### KdTreeQueryPairs
 
-```
+```clausal
 KdTreeQueryPairs(HANDLE, RADIUS, RESULT)
 ```
 
@@ -166,7 +166,7 @@ Find all pairs of points in the tree within `RADIUS` of each other.
 
 ### MakeConvexHull
 
-```
+```clausal
 MakeConvexHull(POINTS, RESULT)
 ```
 
@@ -178,7 +178,7 @@ Wraps `scipy.spatial.ConvexHull`.
 
 ### ConvexHullAttr
 
-```
+```clausal
 ConvexHullAttr(HANDLE, ATTR, RESULT)
 ```
 
@@ -194,7 +194,7 @@ Retrieve an attribute of the `ConvexHull` object.
 | `'neighbors'` | int array | Neighbour facet indices |
 | `'coplanar'` | int array | Coplanar points not on hull |
 
-```
+```clausal
 MakeConvexHull(PTS, H),
 ConvexHullAttr(H, 'volume', VOL),
 Free(H)
@@ -206,7 +206,7 @@ Free(H)
 
 ### MakeDelaunay
 
-```
+```clausal
 MakeDelaunay(POINTS, RESULT)
 ```
 
@@ -217,7 +217,7 @@ Wraps `scipy.spatial.Delaunay`.
 
 ### DelaunayFindSimplex
 
-```
+```clausal
 DelaunayFindSimplex(HANDLE, XI, RESULT)
 DelaunayFindSimplex(HANDLE, XI, BRUTEFORCE, RESULT)
 ```
@@ -228,7 +228,7 @@ Find the simplex containing each point in `XI`.
 - `BRUTEFORCE`: if `True`, bypass spatial index (default `False`)
 - `RESULT`: int array; `-1` for points outside the triangulation
 
-```
+```clausal
 MakeDelaunay(PTS, H),
 DelaunayFindSimplex(H, ++([[0.5, 0.3]]), IDX),
 ++(int(IDX[0]) >= 0)   % point is inside
@@ -242,7 +242,7 @@ Wraps `scipy.spatial.transform.Rotation`.
 
 ### MakeRotation
 
-```
+```clausal
 MakeRotation(METHOD, DATA, RESULT)
 ```
 
@@ -260,7 +260,7 @@ Construct a rotation from a given representation.
 
 ### RotationApply
 
-```
+```clausal
 RotationApply(HANDLE, VECTORS, RESULT)
 RotationApply(HANDLE, VECTORS, INVERSE, RESULT)
 ```
@@ -272,7 +272,7 @@ Apply the rotation to an array of 3-D vectors.
 
 ### RotationAs
 
-```
+```clausal
 RotationAs(HANDLE, FORM, RESULT)
 RotationAs(HANDLE, FORM, SEQ, RESULT)
 ```
@@ -284,7 +284,7 @@ Export the rotation to a different representation.
 
 ### RotationCompose
 
-```
+```clausal
 RotationCompose(HANDLE_A, HANDLE_B, RESULT)
 ```
 
@@ -293,7 +293,7 @@ Returns a new handle.
 
 ### RotationInverse
 
-```
+```clausal
 RotationInverse(HANDLE, RESULT)
 ```
 
@@ -303,7 +303,7 @@ Return the inverse of the rotation as a new handle.
 
 ## Lifecycle — Free
 
-```
+```clausal
 Free(HANDLE)
 ```
 
@@ -314,7 +314,7 @@ handle is unknown or already freed.
 
 ## Complete Example
 
-```
+```clausal
 -import_from(scipy_spatial, [CrossDistance, MakeKdTree, KdTreeQuery,
                               MakeRotation, RotationApply, RotationAs, Free])
 

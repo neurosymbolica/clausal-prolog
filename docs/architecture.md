@@ -2,7 +2,7 @@
 
 ## Layer stack
 
-```
+```clausal
 clausal.modules              standard library modules (regex, log, …)
 clausal.logic.goal_expansion body-goal rewriting pass
 clausal.logic.compiler_v2    module-level compilation pipeline

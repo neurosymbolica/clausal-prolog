@@ -10,11 +10,13 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
 
 Classic Fibonacci sequence with pattern-matching base cases:
 
-```
+```clausal
 Fib(N=0, F=0),
 Fib(N=1, F=1),
-Fib(N_, F_) <- (N_ > 1 and ...)
+Fib(N, F) <- (N > 1 and ...)
 ```
+
+*See: [Tabling](tabling.md), [Arithmetic builtins](builtins.md#arithmetic)*
 
 ### peano.clausal
 
@@ -35,9 +37,13 @@ Two sorting algorithms:
 - `NaiveSort/2` — permutation sort (generate-and-test)
 - `Qsort/2` — quicksort with partition
 
+*See: [List builtins](builtins.md#lists)*
+
 ### nqueens.clausal
 
 N-Queens puzzle using CLP(FD) constraints: `InDomain`, `AllDifferent`, and diagonal constraint checking.
+
+*See: [CLP(FD) constraints](constraints.md)*
 
 ### hanoi.clausal
 
@@ -59,7 +65,7 @@ Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an
 
 Classic Sudoku solver using CLP(FD) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `AllDifferent` constraints, then labels. Includes three sample puzzles.
 
-```
+```clausal
 Sudoku(ROWS) <- (
     ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     Flatten(ROWS, VS),
@@ -73,9 +79,13 @@ Sudoku(ROWS) <- (
 
 Features: nested star-list patterns (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as higher-order arguments (`MapList(AllDifferent, ...)`), recursive transpose.
 
+*See: [CLP(FD)](constraints.md), [Higher-order predicates](meta_predicates.md)*
+
 ### map_coloring.clausal
 
 Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `Dif/2` (disequality constraints).
+
+*See: [Dif/2](constraints.md#dif2)*
 
 ---
 
@@ -85,13 +95,19 @@ Four-color map coloring: given a map of regions and adjacency constraints, finds
 
 Lambda (goal closure) examples: `ApplyVal`, `AddOne`, `AddZ`, `DoubleVal`, and more. Demonstrates variable capture, multi-arg closures, and conjunction bodies.
 
+*See: [Lambdas](lambdas.md)*
+
 ### higher_order.clausal
 
 Higher-order list predicates: `Doubles` (MapList/3), `AllPositive` (MapList/2), `KeepPositive` (Filter/3), `RemoveNegative` (Exclude/3), and `FoldSum` (FoldLeft/4).
 
+*See: [Higher-order predicates](meta_predicates.md)*
+
 ### meta_predicates.clausal
 
 Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMembers` (SetOf/3), `AllPositive` (ForAll/2).
+
+*See: [Meta-predicates](meta_predicates.md)*
 
 ---
 
@@ -101,32 +117,25 @@ Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMe
 
 DCG state threading patterns: counter (`inc`, `count3`), tree leaf counting (`count_leaves`, `num_leaves`), and accumulator (`push`, `push_all`, `collect_items`).
 
+*See: [DCGs](dcg.md)*
+
 ---
 
 ## Running Examples
 
-Import any example as a module:
+Add test predicates to any example file, then run with pytest:
 
-```python
-import clausal.examples.fibonacci as fib
-
-from clausal.logic.solve import call
-from clausal.logic.variables import Var, deref
-
-N, F = Var(), Var()
-for trail in call("Fib", 10, F, module=fib.__dict__["$module"]):
-    print(deref(F))  # 55
+```clausal
+# In your .clausal file
+test("fib 10") <- fib(10, 55),
 ```
 
-Or use the query API:
+Or query from Python:
 
 ```python
-from clausal.logic.solve import query
-from clausal.logic.variables import Var
-from clausal.terms import Call, LoadName
+import clausal
+from clausal.examples import fibonacci
 
-N, F = Var(), Var()
-goal = Call(LoadName("Fib"), (N, F))
-for bindings in query(goal, {"N": N, "F": F}, module=fib.__dict__["$module"]):
-    print(bindings)
+for s in clausal.query(fibonacci.fib(10, F)):
+    print(s[F])  # 55
 ```

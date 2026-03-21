@@ -15,12 +15,12 @@ Python's bitwise operators express Boolean formulas:
 
 | Operator | Meaning |
 |---|---|
-| `X_ & Y_` | AND |
-| `X_ \| Y_` | OR |
-| `X_ ^ Y_` | XOR |
-| `~X_` | NOT |
-| `BoolEq(X_, Y_)` | Equivalence (iff) |
-| `BoolImpl(X_, Y_)` | Implication (X → Y) |
+| `X & Y` | AND |
+| `X \| Y` | OR |
+| `X ^ Y` | XOR |
+| `~X` | NOT |
+| `BoolEq(X, Y)` | Equivalence (iff) |
+| `BoolImpl(X, Y)` | Implication (X → Y) |
 
 Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 
@@ -39,53 +39,53 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 
 Posts a Boolean constraint. Fails immediately if the formula is unsatisfiable:
 
-```
-Sat(X_ & Y_)                # both must be 1
-Sat(X_ | Y_)                # at least one must be 1
-Sat(~X_)                     # X must be 0
-Sat(BoolEq(X_, Y_))         # X ↔ Y (equivalence)
-Sat(BoolImpl(X_, Y_))       # X → Y (implication)
+```clausal
+Sat(X & Y)                # both must be 1
+Sat(X | Y)                # at least one must be 1
+Sat(~X)                     # X must be 0
+Sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+Sat(BoolImpl(X, Y))       # X → Y (implication)
 ```
 
 Multiple `Sat` calls on shared variables build a single constraint network:
 
-```
-Sat(X_ | Y_), Sat(~X_ | Z_), Sat(Y_ & Z_)
+```clausal
+Sat(X | Y), Sat(~X | Z), Sat(Y & Z)
 ```
 
 ### Taut/2
 
 Tests if a formula is a tautology, contradiction, or neither:
 
-```
+```clausal
 # De Morgan's law — tautology
-Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
+Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 
 # Contradiction
-Taut(X_ & ~X_, T_)                          # T_ = 0
+Taut(X & ~X, T)                          # T = 0
 
 # Neither (indeterminate) — Taut fails
-Taut(X_ | Y_, T_)                            # fails
+Taut(X | Y, T)                            # fails
 ```
 
 ### SatCount/2
 
 Counts the number of satisfying assignments:
 
-```
-SatCount(X_ ^ Y_, N_)       # N_ = 2  (XOR has 2 solutions)
-SatCount(X_ & Y_, N_)       # N_ = 1  (AND has 1 solution)
-SatCount(X_ | Y_, N_)       # N_ = 3  (OR has 3 solutions)
+```clausal
+SatCount(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
+SatCount(X & Y, N)       # N = 1  (AND has 1 solution)
+SatCount(X | Y, N)       # N = 3  (OR has 3 solutions)
 ```
 
 ### BoolLabeling/1
 
 Enumerates all 0/1 assignments for a list of variables:
 
-```
-solve(X_, Y_) <- (
-    Sat(X_ ^ Y_)
-    and BoolLabeling([X_, Y_])
+```clausal
+solve(X, Y) <- (
+    Sat(X ^ Y)
+    and BoolLabeling([X, Y])
 )
 # yields (0, 1) and (1, 0)
 ```
@@ -96,10 +96,10 @@ solve(X_, Y_) <- (
 
     ### Half Adder
 
-    ```
-    HalfAdder(X_, Y_, Sum_, Carry_) <- (
-        Sat(BoolEq(Sum_, X_ ^ Y_))
-        and Sat(BoolEq(Carry_, X_ & Y_))
+    ```clausal
+    HalfAdder(X, Y, SUM, CARRY) <- (
+        Sat(BoolEq(SUM, X ^ Y))
+        and Sat(BoolEq(CARRY, X & Y))
     )
     ```
 
@@ -107,18 +107,18 @@ solve(X_, Y_) <- (
 
     3 pigeons in 2 holes — no solution exists:
 
-    ```
+    ```clausal
     PigeonHole() <- (
-        Sat(P11_ | P12_)
-        and Sat(P21_ | P22_)
-        and Sat(P31_ | P32_)
-        and Sat(~(P11_ & P21_))
-        and Sat(~(P11_ & P31_))
-        and Sat(~(P21_ & P31_))
-        and Sat(~(P12_ & P22_))
-        and Sat(~(P12_ & P32_))
-        and Sat(~(P22_ & P32_))
-        and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
+        Sat(P11 | P12)
+        and Sat(P21 | P22)
+        and Sat(P31 | P32)
+        and Sat(~(P11 & P21))
+        and Sat(~(P11 & P31))
+        and Sat(~(P21 & P31))
+        and Sat(~(P12 & P22))
+        and Sat(~(P12 & P32))
+        and Sat(~(P22 & P32))
+        and BoolLabeling([P11, P12, P21, P22, P31, P32])
     )
     # no solutions
     ```
@@ -127,8 +127,8 @@ solve(X_, Y_) <- (
 
     Verify De Morgan's law via tautology check:
 
-    ```
-    Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
+    ```clausal
+    Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
     ```
 
     ---

@@ -5,13 +5,13 @@ from `scipy.sparse` and `scipy.sparse.linalg` as importable clausal predicates.
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_sparse, [MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye, ...])
 ```
 
 or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_sparse, [MakeCSR, ...])
 ```
 
@@ -36,7 +36,7 @@ HANDLE.  Pass the HANDLE to conversion, inspection, or linalg predicates.
 
 ### MakeCSR
 
-```
+```clausal
 MakeCSR(DATA, INDICES, INDPTR, RESULT)
 MakeCSR(DATA, INDICES, INDPTR, SHAPE, RESULT)
 MakeCSR(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
@@ -52,7 +52,7 @@ Wraps `scipy.sparse.csr_matrix((data, indices, indptr), shape=SHAPE, dtype=DTYPE
 - `DTYPE`: NumPy dtype string, e.g. `'float64'` (optional)
 - `RESULT`: integer HANDLE
 
-```
+```clausal
 DATA is ++([1.0, 2.0, 3.0]),
 IDX  is ++([0, 1, 2]),
 PTR  is ++([0, 1, 2, 3]),
@@ -61,7 +61,7 @@ MakeCSR(DATA, IDX, PTR, H)
 
 ### MakeCSC
 
-```
+```clausal
 MakeCSC(DATA, INDICES, INDPTR, RESULT)
 MakeCSC(DATA, INDICES, INDPTR, SHAPE, RESULT)
 MakeCSC(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
@@ -74,7 +74,7 @@ pointers.
 
 ### MakeCOO
 
-```
+```clausal
 MakeCOO(DATA, ROW, COL, RESULT)
 MakeCOO(DATA, ROW, COL, SHAPE, RESULT)
 ```
@@ -87,7 +87,7 @@ Wraps `scipy.sparse.coo_matrix((data, (row, col)), shape=SHAPE)`.
 - `SHAPE`: `(rows, cols)` tuple (optional)
 - `RESULT`: integer HANDLE
 
-```
+```clausal
 DATA is ++([1.0, 2.0]),
 ROW  is ++([0, 1]),
 COL  is ++([1, 0]),
@@ -96,7 +96,7 @@ MakeCOO(DATA, ROW, COL, ++(tuple([2, 2])), H)
 
 ### MakeDiagonals
 
-```
+```clausal
 MakeDiagonals(DIAGONALS, RESULT)
 MakeDiagonals(DIAGONALS, OFFSETS, RESULT)
 MakeDiagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
@@ -111,14 +111,14 @@ Wraps `scipy.sparse.diags(diagonals, offsets=OFFSETS, shape=SHAPE)`.
 - `SHAPE`: `(rows, cols)` tuple (optional)
 - `RESULT`: integer HANDLE
 
-```
+```clausal
 MakeDiagonals(++([1.0, 2.0, 3.0]), H)        % 3x3 identity-like diagonal
 MakeDiagonals(++([1.0, 2.0]), 1, ++(tuple([3, 3])), H)   % superdiagonal
 ```
 
 ### MakeEye
 
-```
+```clausal
 MakeEye(N, RESULT)
 MakeEye(N, M, RESULT)
 MakeEye(N, M, K, RESULT)
@@ -132,7 +132,7 @@ Wraps `scipy.sparse.eye(N, M=M, k=K)`.
 - `K`: diagonal offset (0 = main diagonal, default = 0)
 - `RESULT`: integer HANDLE
 
-```
+```clausal
 MakeEye(4, H),
 ToDense(H, D)   % D is the 4x4 identity matrix
 ```
@@ -143,7 +143,7 @@ ToDense(H, D)   % D is the 4x4 identity matrix
 
 ### ToDense
 
-```
+```clausal
 ToDense(HANDLE, RESULT)
 ToDense(HANDLE, ORDER, RESULT)
 ```
@@ -157,7 +157,7 @@ Wraps `handle.toarray(order=ORDER)`.
 
 ### FromDense
 
-```
+```clausal
 FromDense(DENSE, RESULT)
 FromDense(DENSE, FORMAT, RESULT)
 ```
@@ -169,7 +169,7 @@ Convert a dense array to a sparse matrix handle.
   Default (arity 2) is `'csr'`.
 - `RESULT`: integer HANDLE
 
-```
+```clausal
 A is ++([[1.0, 0.0], [0.0, 2.0]]),
 FromDense(A, 'csc', H)
 ```
@@ -180,13 +180,13 @@ FromDense(A, 'csc', H)
 
 ### Shape
 
-```
+```clausal
 Shape(HANDLE, RESULT)
 ```
 
 Return the shape of the sparse matrix as a `(rows, cols)` tuple.
 
-```
+```clausal
 Shape(H, S),
 R is ++(S[0]),
 C is ++(S[1])
@@ -194,7 +194,7 @@ C is ++(S[1])
 
 ### NonzeroCount
 
-```
+```clausal
 NonzeroCount(HANDLE, RESULT)
 ```
 
@@ -206,7 +206,7 @@ Return the number of stored (non-zero) elements (`handle.nnz`).
 
 ### Solve
 
-```
+```clausal
 Solve(A, B, RESULT)
 Solve(A, B, PERMC_SPEC, RESULT)
 Solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
@@ -222,7 +222,7 @@ Wraps `scipy.sparse.linalg.spsolve(a, b, permc_spec=..., use_umfpack=...)`.
 - `USE_UMFPACK`: boolean, use UMFPACK if available (default `True`)
 - `RESULT`: dense solution array X
 
-```
+```clausal
 MakeCSR(DATA, IDX, PTR, ++(tuple([3, 3])), A),
 Solve(A, B, X),
 Free(A)
@@ -230,7 +230,7 @@ Free(A)
 
 ### EigenDecomposeHermitian
 
-```
+```clausal
 EigenDecomposeHermitian(A, RESULT)
 EigenDecomposeHermitian(A, K, RESULT)
 ```
@@ -243,14 +243,14 @@ sparse matrix.  Wraps `scipy.sparse.linalg.eigsh(a, k=K)`.
 - `RESULT`: dict with keys `'eigenvalues'` (1-D array) and
   `'eigenvectors'` (n × K array)
 
-```
+```clausal
 EigenDecomposeHermitian(H, 3, R),
 EV is ++(R['eigenvalues'])    % 3 smallest eigenvalues
 ```
 
 ### SingularValueDecompose
 
-```
+```clausal
 SingularValueDecompose(A, RESULT)
 SingularValueDecompose(A, K, RESULT)
 ```
@@ -263,7 +263,7 @@ Wraps `scipy.sparse.linalg.svds(a, k=K)`.
 - `RESULT`: dict with keys `'u'` (left singular vectors, n × K),
   `'s'` (singular values, length K), `'vt'` (right singular vectors, K × m)
 
-```
+```clausal
 SingularValueDecompose(H, 2, R),
 S is ++(R['s'])    % 2 largest singular values
 ```
@@ -274,7 +274,7 @@ S is ++(R['s'])    % 2 largest singular values
 
 ### Free
 
-```
+```clausal
 Free(HANDLE)
 ```
 
@@ -285,7 +285,7 @@ Call `Free` when the handle is no longer needed to avoid memory leaks.
 
 ## Usage example
 
-```
+```clausal
 -import_from(scipy_sparse, [MakeCSR, Solve, NonzeroCount, Free])
 
 solve_sparse(DATA, IDX, PTR, SHAPE, B, X) <- (

@@ -6,7 +6,7 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_cluster, [Linkage, FlatCluster, Dendrogram,
                               Cophenet, Inconsistent,
                               KMeans2, KMeans, VectorQuantize, Whiten,
@@ -15,7 +15,7 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_cluster, [Linkage, FlatCluster, ...])
 ```
 
@@ -61,7 +61,7 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 - `OPTIMAL_ORDERING`: reorder leaves to minimise distance (default `False`)
 - `RESULT`: ndarray of shape `(n-1, 4)` — the linkage matrix `Z`
 
-```
+```clausal
 Linkage(DATA, 'ward', Z),
 % Z is the linkage matrix for ward hierarchical clustering
 ```
@@ -79,7 +79,7 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 - `DEPTH`: depth for inconsistency calculation (default `2`)
 - `RESULT`: ndarray of shape `(n,)` — integer cluster assignment for each observation
 
-```
+```clausal
 Linkage(DATA, 'ward', Z),
 FlatCluster(Z, 3, 'maxclust', LABELS),
 % LABELS[i] is the cluster number for observation i
@@ -95,7 +95,7 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 - `TRUNCATE_MODE`: `None`, `'lastp'`, or `'level'`
 - `RESULT`: dict with keys `icoord`, `dcoord`, `ivl`, `leaves`, `color_list`
 
-```
+```clausal
 Linkage(DATA, 'ward', Z),
 Dendrogram(Z, D),
 ResultGet(D, 'leaves', LEAVES),
@@ -112,7 +112,7 @@ Compute cophenetic distances from linkage matrix `Z`.
 - Without `Y`: `RESULT` is the condensed cophenetic distance array (ndarray of length `n*(n-1)/2`)
 - With `Y` (condensed pairwise distances): `RESULT` is `dict {'c': float, 'd': ndarray}` where `c` is the cophenetic correlation coefficient and `d` is the cophenetic distance array
 
-```
+```clausal
 Linkage(DATA, 'ward', Z),
 Y is ++(pdist(DATA)),
 Cophenet(Z, Y, RESULT),
@@ -130,7 +130,7 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 - `DEPTH`: number of levels to consider (default `2`)
 - `RESULT`: ndarray of shape `(n-1, 4)` — each row is `[mean, std, count, inconsistency_coefficient]`
 
-```
+```clausal
 Linkage(DATA, 'ward', Z),
 Inconsistent(Z, STATS),
 % STATS[i, 3] is the inconsistency coefficient for merge i
@@ -151,7 +151,7 @@ k-means clustering with explicit re-initialisation (`scipy.cluster.vq.kmeans2`).
 - `SEED`: random seed for reproducibility
 - `RESULT`: dict `{'centroid': ndarray shape (K, D), 'label': ndarray shape (N,)}`
 
-```
+```clausal
 KMeans2(DATA, 3, RESULT),
 ResultGet(RESULT, 'centroid', CENTROIDS),
 ResultGet(RESULT, 'label', LABELS),
@@ -168,7 +168,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 - `ITERATIONS`: maximum iterations (default `10`)
 - `RESULT`: dict `{'codebook': ndarray shape (K, D), 'distortion': float}`
 
-```
+```clausal
 KMeans(DATA, 2, RESULT),
 ResultGet(RESULT, 'codebook', CODEBOOK),
 ResultGet(RESULT, 'distortion', D),
@@ -187,7 +187,7 @@ Assign each observation in `OBS` to the nearest code in `CODE_BOOK`.
   - `code[i]` — index of nearest centroid for observation `i`
   - `dist[i]` — Euclidean distance to that centroid
 
-```
+```clausal
 KMeans(DATA, 2, KR),
 ResultGet(KR, 'codebook', CODEBOOK),
 VectorQuantize(DATA, CODEBOOK, VQR),
@@ -203,7 +203,7 @@ Normalise observations by dividing each feature by its standard deviation.
 - `OBS`: ndarray of shape `(N, D)`
 - `RESULT`: ndarray of shape `(N, D)` with each column standardised to unit variance
 
-```
+```clausal
 Whiten(RAW_DATA, NORMALISED),
 KMeans2(NORMALISED, 3, RESULT),
 ```
@@ -220,7 +220,7 @@ Extract a named field from a Tier 2 result dict.
 - `FIELD`: string key
 - `VALUE`: unified with `RESULT[FIELD]`
 
-```
+```clausal
 KMeans(DATA, 2, R),
 ResultGet(R, 'codebook', CODEBOOK),
 ResultGet(R, 'distortion', D),
@@ -230,7 +230,7 @@ ResultGet(R, 'distortion', D),
 
 ## Typical pipeline
 
-```
+```clausal
 % 1. Load and whiten data
 Whiten(RAW_DATA, DATA),
 

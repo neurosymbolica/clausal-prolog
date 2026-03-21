@@ -6,13 +6,13 @@ The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/refe
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_fft, [FFTransform, RealFFT, ...])
 ```
 
@@ -36,7 +36,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 | `DiscreteSineTransform(X, Y)` | `dst(x)` | `idst(y)` |
 | `FFTShift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
-```
+```clausal
 FFTransform(++(np.array([1,0,0,0])), RESULT),
 % RESULT is unified with the complex spectrum array
 ```
@@ -78,7 +78,7 @@ All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, et
 
 ### 1-D transforms
 
-```
+```clausal
 FFTransform(X, Y)                  # bidirectional
     X ground, Y unbound → Y = fft(x)   # forward DFT
     Y ground, X unbound → X = ifft(y)  # backward (inverse DFT)
@@ -92,13 +92,13 @@ FFTransform(X, N, Y)               # bidirectional; N always ground
 
 Example — frequency analysis of a sine wave:
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform, FFTFrequencies])
 
-FrequencySpectrum(SIGNAL_, FREQS_, SPECTRUM_) <- (
-    FFTransform(SIGNAL_, SPECTRUM_) and
-    LEN_ is ++(len(SIGNAL_)) and
-    FFTFrequencies(LEN_, FREQS_)
+FrequencySpectrum(SIGNAL, FREQS, SPECTRUM) <- (
+    FFTransform(SIGNAL, SPECTRUM) and
+    LEN is ++(len(SIGNAL)) and
+    FFTFrequencies(LEN, FREQS)
 )
 ```
 
@@ -106,7 +106,7 @@ FrequencySpectrum(SIGNAL_, FREQS_, SPECTRUM_) <- (
 
 ### 2-D transforms
 
-```
+```clausal
 FFTransform2D(X, Y)                # bidirectional
     X ground, Y unbound → Y = fft2(x)   # 2-D forward DFT over last two axes
     Y ground, X unbound → X = ifft2(y)  # backward (2-D inverse DFT)
@@ -120,12 +120,12 @@ FFTransform2D(X, S, Y)             # bidirectional; S always ground
 
 Example — round-trip:
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform2D])
 
-RoundTrip2D(IMAGE_, RECOVERED_) <- (
-    FFTransform2D(IMAGE_, SPECTRUM_) and
-    FFTransform2D(RECOVERED_, SPECTRUM_)
+RoundTrip2D(IMAGE, RECOVERED) <- (
+    FFTransform2D(IMAGE, SPECTRUM) and
+    FFTransform2D(RECOVERED, SPECTRUM)
 )
 ```
 
@@ -133,7 +133,7 @@ RoundTrip2D(IMAGE_, RECOVERED_) <- (
 
 ### N-D transforms
 
-```
+```clausal
 FFTransformND(X, Y)                # bidirectional
     X ground, Y unbound → Y = fftn(x)   # N-D forward DFT over all axes
     Y ground, X unbound → X = ifftn(y)  # backward (N-D inverse DFT)
@@ -150,7 +150,7 @@ FFTransformND(X, S, Y)             # bidirectional; S always ground
 
 `RealFFT` exploits conjugate symmetry to halve storage for real signals. The output of `RealFFT` has length `N//2 + 1`.
 
-```
+```clausal
 RealFFT(X, Y)                      # bidirectional
     X ground, Y unbound → Y = rfft(x)   forward: complex half-spectrum of length N//2 + 1
     Y ground, X unbound → X = irfft(y)  backward: real array of length 2*(len(Y)-1)
@@ -163,15 +163,15 @@ RealFFT(X, N, Y)                   # bidirectional; N always ground
 
 Example — filter a 1-D signal in the frequency domain:
 
-```
+```clausal
 -import_from(scipy_fft, [RealFFT])
 
-LowPassFilter(SIGNAL_, CUTOFF_BIN_, FILTERED_) <- (
-    RealFFT(SIGNAL_, SPECTRUM_) and
-    ZEROED_ is ++(
-        [SPECTRUM_[i] if i < int(CUTOFF_BIN_) else 0.0
-         for i in range(len(SPECTRUM_))]) and
-    RealFFT(FILTERED_, ++ZEROED_)
+LowPassFilter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
+    RealFFT(SIGNAL, SPECTRUM) and
+    ZEROED is ++(
+        [SPECTRUM[i] if i < int(CUTOFF_BIN) else 0.0
+         for i in range(len(SPECTRUM))]) and
+    RealFFT(FILTERED, ++ZEROED)
 )
 ```
 
@@ -179,7 +179,7 @@ LowPassFilter(SIGNAL_, CUTOFF_BIN_, FILTERED_) <- (
 
 ### Cosine and sine transforms
 
-```
+```clausal
 DiscreteCosineTransform(X, Y)              # bidirectional
     X ground, Y unbound → Y = dct(x)   (type-2 default)
     Y ground, X unbound → X = idct(y)
@@ -209,7 +209,7 @@ DCT types:
 
 ### Utility
 
-```
+```clausal
 FFTFrequencies(N, RESULT)
     DFT sample frequencies for a length-N transform with unit sample spacing.
     RESULT: real array of length N
@@ -235,15 +235,15 @@ FFTShift(X, Y)                     # bidirectional
 
 Example — plot-ready spectrum:
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform, FFTFrequencies, FFTShift])
 
-CentredSpectrum(SIGNAL_, FREQS_CENTRED_, SPECTRUM_CENTRED_) <- (
-    LEN_ is ++(len(SIGNAL_)) and
-    FFTransform(SIGNAL_, SPECTRUM_) and
-    FFTFrequencies(LEN_, FREQS_) and
-    FFTShift(SPECTRUM_, SPECTRUM_CENTRED_) and
-    FFTShift(FREQS_, FREQS_CENTRED_)
+CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
+    LEN is ++(len(SIGNAL)) and
+    FFTransform(SIGNAL, SPECTRUM) and
+    FFTFrequencies(LEN, FREQS) and
+    FFTShift(SPECTRUM, SPECTRUM_CENTRED) and
+    FFTShift(FREQS, FREQS_CENTRED)
 )
 ```
 
@@ -253,40 +253,40 @@ CentredSpectrum(SIGNAL_, FREQS_CENTRED_, SPECTRUM_CENTRED_) <- (
 
 ### Round-trip: 1-D signal
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform])
 
-TestRoundTrip(SIGNAL_) <- (
-    FFTransform(SIGNAL_, SPECTRUM_) and
-    FFTransform(RECOVERED_, SPECTRUM_) and
+TestRoundTrip(SIGNAL) <- (
+    FFTransform(SIGNAL, SPECTRUM) and
+    FFTransform(RECOVERED, SPECTRUM) and
     % check first element recovered correctly
-    ERR_ is ++(abs(float(RECOVERED_[0].real) - float(SIGNAL_[0]))) and
-    ERR_ < 1e-10
+    ERR is ++(abs(float(RECOVERED[0].real) - float(SIGNAL[0]))) and
+    ERR < 1e-10
 )
 ```
 
 ### Convolution via FFT
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform])
 
 % Linear convolution of two equal-length signals (circular; pad as needed)
-FFTConvolve(A_, B_, RESULT_) <- (
-    FFTransform(A_, FA_) and
-    FFTransform(B_, FB_) and
-    PRODUCT_ is ++(FA_ * FB_) and
-    FFTransform(RESULT_, ++PRODUCT_)
+FFTConvolve(A, B, RESULT) <- (
+    FFTransform(A, FA) and
+    FFTransform(B, FB) and
+    PRODUCT is ++(FA * FB) and
+    FFTransform(RESULT, ++PRODUCT)
 )
 ```
 
 ### Image spectrum (2-D)
 
-```
+```clausal
 -import_from(scipy_fft, [FFTransform2D, FFTShift])
 
-ImageSpectrum(IMAGE_, CENTRED_SPECTRUM_) <- (
-    FFTransform2D(IMAGE_, SPECTRUM_) and
-    FFTShift(SPECTRUM_, CENTRED_SPECTRUM_)
+ImageSpectrum(IMAGE, CENTRED_SPECTRUM) <- (
+    FFTransform2D(IMAGE, SPECTRUM) and
+    FFTShift(SPECTRUM, CENTRED_SPECTRUM)
 )
 ```
 

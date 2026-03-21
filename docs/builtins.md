@@ -68,12 +68,39 @@ Notation in signature lines:
 
     ---
 
+## Summary
+
+| Category | Predicates |
+|---|---|
+| [Control Flow](#control-flow) | Once, Not, If/3, throw/1, Catch/2, CatchRecover/3, catch/3, halt/0,1 |
+| [Meta-Predicates](#meta-predicates) | FindAll/3, BagOf/3, SetOf/3, ForAll/2 |
+| [Higher-Order Call](#higher-order-call) | Call/1..8, CallGoal/1..8 |
+| [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
+| [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3 |
+| [Runtime Database](#runtime-database) | Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0 |
+| [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
+| [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
+| [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2 |
+| [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
+| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1 |
+| [Dict and Set Predicates](#dict-and-set-predicates) | IsDict/1, DictGet/3, DictPut/4, DictMerge/3, GenDict/3, SubDict/2, IsSet/1, SetUnion/3, SetSubset/2, GenSet/2 |
+| [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3 |
+| [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
+| [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2 |
+| [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
+| [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
+| [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
+| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `:=`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
+
+---
+
 ## Control Flow
 
 These are **compiler special forms** — transformed at compile time, not dispatched via the builtin registry.
 
 ### `Once/1`
-```
+```clausal
 Once(+Goal)
 ```
 Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions.
@@ -86,7 +113,7 @@ Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has
 ---
 
 ### `Not/1`
-```
+```clausal
 not +Goal
 ```
 Negation as failure (NAF). Succeeds if `Goal` has no solutions. Written as `not goal` in clause bodies.
@@ -100,7 +127,7 @@ For tabled predicates, uses well-founded semantics (delayed negation via `_naf_t
 ---
 
 ### `If/3` (If-Then-Else)
-```
+```clausal
 If(+Cond, +Then, +Else)
 ```
 If `Cond` has a solution, run `Then`; otherwise run `Else`. Soft-cut: only the first solution of `Cond` is tried. Compiles to a reified if-then-else that propagates constraints in both branches.
@@ -113,7 +140,7 @@ If `Cond` has a solution, run `Then`; otherwise run `Else`. Soft-cut: only the f
 ---
 
 ### `throw/1`
-```
+```clausal
 throw(+Term)
 ```
 Raise a logic-level exception carrying `Term`. The exception propagates through the generator/trampoline chain until caught by `catch/3` or surfaces as a Python `LogicException`.
@@ -127,7 +154,7 @@ Raise a logic-level exception carrying `Term`. The exception propagates through 
 ---
 
 ### `Catch/2`
-```
+```clausal
 Catch(+Goal, ?Error)
 ```
 Execute `Goal`. If an exception is raised (logic or Python), unify `Error` against the exception term and succeed. If `Goal` succeeds without throwing, `Catch/2` is transparent — all solutions pass through.
@@ -141,7 +168,7 @@ Python exceptions appear as `ClassName(Message)` — the same shape as any logic
 ---
 
 ### `CatchRecover/3`
-```
+```clausal
 CatchRecover(+Goal, ?Error, +Recovery)
 ```
 Execute `Goal`. If an exception is raised, unify `Error` against the exception term, then execute `Recovery`. Like `Catch/2` but with an explicit recovery goal.
@@ -154,7 +181,7 @@ Execute `Goal`. If an exception is raised, unify `Error` against the exception t
 ---
 
 ### `catch/3`
-```
+```clausal
 catch(+Goal, ?Catcher, +Recovery)
 ```
 Execute `Goal`. If `Goal` throws, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
@@ -169,7 +196,7 @@ Python exceptions are wrapped as `ClassName(Message)` before unification against
 ---
 
 ### `halt/0`, `halt/1`
-```
+```clausal
 halt
 halt(+Code)
 ```
@@ -186,7 +213,7 @@ Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1
 These are **compiler special forms** recognized by name in `compile_goal`/`compile_goal_trampoline`. Inner goals compile in simple mode as sub-generators.
 
 ### `FindAll/3`
-```
+```clausal
 FindAll(+Template, +Goal, -Bag)
 ```
 Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succeeds with `[]` if `Goal` has no solutions.
@@ -199,7 +226,7 @@ Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succe
 ---
 
 ### `BagOf/3`
-```
+```clausal
 BagOf(+Template, +Goal, -Bag)
 ```
 Like `FindAll/3` but fails if `Goal` has no solutions. Bag preserves duplicate solutions.
@@ -212,7 +239,7 @@ Like `FindAll/3` but fails if `Goal` has no solutions. Bag preserves duplicate s
 ---
 
 ### `SetOf/3`
-```
+```clausal
 SetOf(+Template, +Goal, -Set)
 ```
 Like `BagOf/3` but removes duplicates and sorts the result.
@@ -225,7 +252,7 @@ Like `BagOf/3` but removes duplicates and sorts the result.
 ---
 
 ### `ForAll/2`
-```
+```clausal
 ForAll(+Cond, +Action)
 ```
 Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`.
@@ -240,7 +267,7 @@ Universal quantification: succeeds if `Action` succeeds for every solution of `C
 ## Higher-Order Call
 
 ### `Call/1..8`
-```
+```clausal
 Call(+Goal)
 Call(+Goal, +A1)
 Call(+Goal, +A1, +A2)
@@ -257,7 +284,7 @@ Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended.
 ---
 
 ### `CallGoal/1`, `CallGoal/2`, `CallGoal/3`
-```
+```clausal
 CallGoal(+Goal)
 CallGoal(+Goal, +A1)
 CallGoal(+Goal, +A1, +A2)
@@ -274,7 +301,7 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 ## DCG (Definite Clause Grammars)
 
 ### `phrase/2`
-```
+```clausal
 phrase(+RuleBody, +List)
 ```
 Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate class (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). Equivalent to calling the rule with `List` as the input state and `[]` as the output state.
@@ -286,7 +313,7 @@ Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is
 ---
 
 ### `phrase/3`
-```
+```clausal
 phrase(+RuleBody, +List, ?Rest)
 ```
 Invoke a DCG rule for partial parsing. Like `phrase/2`, but the remaining unconsumed input is unified with `Rest` instead of requiring `[]`.
@@ -302,7 +329,7 @@ Also used for **state-passing DCGs**: encode state as a single-element list `[St
 ## Term Inspection
 
 ### `Functor/3`
-```
+```clausal
 Functor(+Term, -Name, -Arity)   % decompose
 Functor(-Term, +Name, +Arity)   % construct
 ```
@@ -316,7 +343,7 @@ Decompose a term into its functor name and arity, or construct a term from a nam
 ---
 
 ### `Arg/3`
-```
+```clausal
 Arg(+N, +Term, -Arg)
 ```
 Unify `Arg` with the `N`-th argument of `Term` (1-based indexing).
@@ -329,7 +356,7 @@ Unify `Arg` with the `N`-th argument of `Term` (1-based indexing).
 ---
 
 ### `Unpack/2`
-```
+```clausal
 Unpack(+Term, -List)   % decompose: List = [Functor | Args]
 Unpack(-Term, +List)   % construct: Term from [Functor | Args]
 ```
@@ -343,7 +370,7 @@ Decompose a term to `[functor | args]` list, or construct a term from such a lis
 ---
 
 ### `CopyTerm/2`
-```
+```clausal
 CopyTerm(+Original, -Copy)
 ```
 Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
@@ -356,7 +383,7 @@ Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replace
 ---
 
 ### `TermVariables/2`
-```
+```clausal
 TermVariables(+Term, -Vars)
 ```
 Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-right with duplicates removed (same `Var` appearing multiple times in `Term` appears only once in `Vars`). Bound variables are followed and not collected.
@@ -369,7 +396,7 @@ Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-righ
 ---
 
 ### `NumberVars/3`
-```
+```clausal
 NumberVars(+Term, +Start, -End)
 ```
 Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$VAR", (N,))` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
@@ -386,7 +413,7 @@ Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$V
 These predicates require a live `Database` reference (`_DB_BUILTINS`). They recompile the affected predicate after modification.
 
 ### `Assert/1`
-```
+```clausal
 Assert(+Clause)
 ```
 Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fails on locked (non-dynamic) predicates. Ground compound facts are normalized to `Var+Is` form for output-mode queries.
@@ -399,7 +426,7 @@ Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fai
 ---
 
 ### `AssertFirst/1`
-```
+```clausal
 AssertFirst(+Clause)
 ```
 Add `Clause` at the **front** of its predicate's clause list.
@@ -412,7 +439,7 @@ Add `Clause` at the **front** of its predicate's clause list.
 ---
 
 ### `Retract/1`
-```
+```clausal
 Retract(+Term)
 ```
 Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails on locked predicates.
@@ -425,7 +452,7 @@ Remove the **first** clause whose head unifies with `Term`. Not backtrackable �
 ---
 
 ### `ClearTable/2`
-```
+```clausal
 ClearTable(+Functor, +Arity)
 ```
 Remove all cached answers for the named tabled predicate, forcing re-computation on the next call.
@@ -438,7 +465,7 @@ Remove all cached answers for the named tabled predicate, forcing re-computation
 ---
 
 ### `ClearAllTables/0`
-```
+```clausal
 ClearAllTables
 ```
 Remove all cached tabling answers for every predicate in the current database.
@@ -455,7 +482,7 @@ Remove all cached tabling answers for every predicate in the current database.
 These predicates operate on `KWTerm` (open-world keyword terms) and `PredicateMeta` term instances.
 
 ### `Vary/3`
-```
+```clausal
 Vary(+Overrides, +Term, -NewTerm)
 ```
 Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on functor dataclass instances and `KWTerm`.
@@ -468,7 +495,7 @@ Produce a copy of `Term` with field values replaced by `Overrides` (a Python `di
 ---
 
 ### `Extend/3`
-```
+```clausal
 Extend(+Additions, +Term, -NewTerm)
 ```
 Produce a copy of `Term` (must be a `KWTerm`) with additional fields from `Additions` (a Python `dict`). Dataclass terms have fixed schemas so only `KWTerm` is supported.
@@ -481,7 +508,7 @@ Produce a copy of `Term` (must be a `KWTerm`) with additional fields from `Addit
 ---
 
 ### `UnboundKeys/2`
-```
+```clausal
 UnboundKeys(+Term, -Keys)
 ```
 Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term`.
@@ -494,7 +521,7 @@ Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term
 ---
 
 ### `Signature/3`
-```
+```clausal
 Signature(+FunctorName, +Arity, -Names)
 ```
 Reflect the registered parameter name list for the predicate `FunctorName/Arity`. Fails if no signature is registered.
@@ -509,7 +536,7 @@ Reflect the registered parameter name list for the predicate `FunctorName/Arity`
 ## Constraint Predicates
 
 ### `Dif/2`
-```
+```clausal
 Dif(+X, +Y)
 ```
 Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a constraint if either is unbound). Implemented via attributed variables; propagates through unification.
@@ -522,7 +549,7 @@ Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a co
 ---
 
 ### `Eq/3` (reified)
-```
+```clausal
 Eq(+X, +Y, -T)
 ```
 Reified equality. `T` is unified with `True` if `X = Y`, `False` if `Dif(X, Y)`. Suspends if neither is determined yet.
@@ -535,7 +562,7 @@ Reified equality. `T` is unified with `True` if `X = Y`, `False` if `Dif(X, Y)`.
 ---
 
 ### `DifT/3` (reified)
-```
+```clausal
 DifT(+X, +Y, -T)
 ```
 Reified disequality. `T` is `True` if `Dif(X, Y)`, `False` if `X = Y`.
@@ -552,7 +579,7 @@ Reified disequality. `T` is `True` if `Dif(X, Y)`, `False` if `X = Y`.
 CLP(FD) operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
 
 ### `InDomain/3`
-```
+```clausal
 InDomain(+VarOrList, +Lo, +Hi)
 ```
 Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variables.
@@ -565,7 +592,7 @@ Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variabl
 ---
 
 ### `Label/1`
-```
+```clausal
 Label(+Vars)
 ```
 Enumerate concrete values for a list of FD-constrained variables, backtracking over all consistent assignments.
@@ -578,7 +605,7 @@ Enumerate concrete values for a list of FD-constrained variables, backtracking o
 ---
 
 ### `AllDifferent/1`
-```
+```clausal
 AllDifferent(+Vars)
 ```
 Post an all-different constraint on a list of FD variables. Propagates bounds and eliminates assigned values from other domains.
@@ -591,7 +618,7 @@ Post an all-different constraint on a list of FD variables. Propagates bounds an
 ---
 
 ### `Equivalent/2`
-```
+```clausal
 Equivalent(+T1, +T2)
 ```
 Structural equality test (old `==` behavior before CLP(FD) remapping). Succeeds if `T1` and `T2` are structurally identical after dereferencing.
@@ -608,10 +635,10 @@ Structural equality test (old `==` behavior before CLP(FD) remapping). Succeeds 
 CLP(B) uses reduced ordered BDDs (Binary Decision Diagrams) for Boolean constraint solving. Expressions use Python's bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), plus `BoolEq` (equivalence) and `BoolImpl` (implication) term constructors.
 
 ### `Sat/1`
-```
+```clausal
 Sat(+Expr)
 ```
-Post a Boolean constraint. The expression must evaluate to true. Fails if unsatisfiable. Propagates forced values (e.g., `Sat(X_ & Y_)` forces both to 1).
+Post a Boolean constraint. The expression must evaluate to true. Fails if unsatisfiable. Propagates forced values (e.g., `Sat(X & Y)` forces both to 1).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
@@ -621,7 +648,7 @@ Post a Boolean constraint. The expression must evaluate to true. Fails if unsati
 ---
 
 ### `Taut/2`
-```
+```clausal
 Taut(+Expr, -T)
 ```
 Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. Fail if indeterminate.
@@ -634,7 +661,7 @@ Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. F
 ---
 
 ### `SatCount/2`
-```
+```clausal
 SatCount(+Expr, -N)
 ```
 Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
@@ -647,7 +674,7 @@ Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
 ---
 
 ### `BoolLabeling/1`
-```
+```clausal
 BoolLabeling(+Vars)
 ```
 Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all satisfying assignments.
@@ -662,7 +689,7 @@ Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all s
 ## Type Checks
 
 ### `IsVar/1`
-```
+```clausal
 IsVar(?X)
 ```
 Succeeds if `X` is an unbound logic variable.
@@ -675,7 +702,7 @@ Succeeds if `X` is an unbound logic variable.
 ---
 
 ### `IsBound/1`
-```
+```clausal
 IsBound(?X)
 ```
 Succeeds if `X` is bound (not an unbound `Var`).
@@ -688,7 +715,7 @@ Succeeds if `X` is bound (not an unbound `Var`).
 ---
 
 ### `IsStr/1`
-```
+```clausal
 IsStr(+X)
 ```
 Succeeds if `X` is a Python `str` (the atom equivalent).
@@ -701,7 +728,7 @@ Succeeds if `X` is a Python `str` (the atom equivalent).
 ---
 
 ### `IsNumber/1`
-```
+```clausal
 IsNumber(+X)
 ```
 Succeeds if `X` is an `int` or `float` (excludes `bool`).
@@ -714,7 +741,7 @@ Succeeds if `X` is an `int` or `float` (excludes `bool`).
 ---
 
 ### `IsInt/1`
-```
+```clausal
 IsInt(+X)
 ```
 Succeeds if `X` is an `int` (excludes `bool`).
@@ -727,7 +754,7 @@ Succeeds if `X` is an `int` (excludes `bool`).
 ---
 
 ### `IsFloat/1`
-```
+```clausal
 IsFloat(+X)
 ```
 Succeeds if `X` is a Python `float`.
@@ -740,7 +767,7 @@ Succeeds if `X` is a Python `float`.
 ---
 
 ### `IsCompound/1`
-```
+```clausal
 IsCompound(+X)
 ```
 Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `PredicateMeta` instance with at least one field).
@@ -753,7 +780,7 @@ Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `Pre
 ---
 
 ### `IsCallable/1`
-```
+```clausal
 IsCallable(+X)
 ```
 Succeeds if `X` is an atom (string) or a compound term.
@@ -766,7 +793,7 @@ Succeeds if `X` is an atom (string) or a compound term.
 ---
 
 ### `IsList/1`
-```
+```clausal
 IsList(+X)
 ```
 Succeeds if `X` is a Python `list`.
@@ -779,7 +806,7 @@ Succeeds if `X` is a Python `list`.
 ---
 
 ### `IsGround/1`
-```
+```clausal
 IsGround(+X)
 ```
 Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
@@ -801,7 +828,7 @@ Dict and set builtins operate on `DictTerm` and `SetTerm` values. Plain Python `
     **Fixture:** `tests/fixtures/dict_set_builtins.clausal`
 
 ### `IsDict/1`
-```
+```clausal
 IsDict(+Term)
 ```
 Succeeds if `Term` is a `DictTerm`.
@@ -809,7 +836,7 @@ Succeeds if `Term` is a `DictTerm`.
 ---
 
 ### `DictSize/2`
-```
+```clausal
 DictSize(+Dict, -N)
 ```
 `N` is the number of keys in `Dict`.
@@ -817,7 +844,7 @@ DictSize(+Dict, -N)
 ---
 
 ### `DictKeys/2`
-```
+```clausal
 DictKeys(+Dict, -Keys)
 ```
 `Keys` is the sorted list of keys (sorted by `repr` for cross-type determinism).
@@ -825,7 +852,7 @@ DictKeys(+Dict, -Keys)
 ---
 
 ### `DictValues/2`
-```
+```clausal
 DictValues(+Dict, -Values)
 ```
 `Values` is the list of values in key-sorted order.
@@ -833,7 +860,7 @@ DictValues(+Dict, -Values)
 ---
 
 ### `DictPairs/2`
-```
+```clausal
 DictPairs(?Dict, ?Pairs)
 ```
 Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
@@ -841,7 +868,7 @@ Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pair
 ---
 
 ### `DictGet/3`
-```
+```clausal
 DictGet(+Key, +Dict, ?Value)
 ```
 Semidet lookup. Fails if `Key` is absent or unbound.
@@ -849,7 +876,7 @@ Semidet lookup. Fails if `Key` is absent or unbound.
 ---
 
 ### `DictPut/4`
-```
+```clausal
 DictPut(+Key, +Value, +OldDict, -NewDict)
 ```
 Functional update: `NewDict` is `OldDict` with `Key → Value` set. Returns a new `DictTerm`.
@@ -857,7 +884,7 @@ Functional update: `NewDict` is `OldDict` with `Key → Value` set. Returns a ne
 ---
 
 ### `DictPutPairs/3`
-```
+```clausal
 DictPutPairs(+Pairs, +OldDict, -NewDict)
 ```
 Bulk update from a `[[Key, Value], ...]` list. Equivalent to repeated `DictPut/4`.
@@ -865,7 +892,7 @@ Bulk update from a `[[Key, Value], ...]` list. Equivalent to repeated `DictPut/4
 ---
 
 ### `DictRemove/3`
-```
+```clausal
 DictRemove(+Key, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is absent.
@@ -873,7 +900,7 @@ DictRemove(+Key, +OldDict, -NewDict)
 ---
 
 ### `DictMerge/3`
-```
+```clausal
 DictMerge(+D1, +D2, -Merged)
 ```
 Union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
@@ -881,7 +908,7 @@ Union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
 ---
 
 ### `GenDict/3`
-```
+```clausal
 GenDict(?Key, +Dict, ?Value)
 ```
 Nondeterministic enumeration. Yields one `Key`/`Value` binding per solution on backtracking. Can be filtered by binding `Key` before the call.
@@ -889,7 +916,7 @@ Nondeterministic enumeration. Yields one `Key`/`Value` binding per solution on b
 ---
 
 ### `SubDict/2`
-```
+```clausal
 SubDict(+Pattern, +Dict)
 ```
 Partial dict matching. Succeeds when every key in `Pattern` is present in `Dict` and the values unify. Extra keys in `Dict` are ignored. See [SubDict](dicts_sets.md#partial-dict-matching--subdict2) for examples.
@@ -897,7 +924,7 @@ Partial dict matching. Succeeds when every key in `Pattern` is present in `Dict`
 ---
 
 ### `IsSet/1`
-```
+```clausal
 IsSet(+Term)
 ```
 Succeeds if `Term` is a `SetTerm`.
@@ -905,7 +932,7 @@ Succeeds if `Term` is a `SetTerm`.
 ---
 
 ### `SetSize/2`
-```
+```clausal
 SetSize(+Set, -N)
 ```
 `N` is the cardinality of `Set`.
@@ -913,7 +940,7 @@ SetSize(+Set, -N)
 ---
 
 ### `SetList/2`
-```
+```clausal
 SetList(?Set, ?List)
 ```
 Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
@@ -921,7 +948,7 @@ Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are re
 ---
 
 ### `SetUnion/3`
-```
+```clausal
 SetUnion(+S1, +S2, -Union)
 ```
 Set union.
@@ -929,7 +956,7 @@ Set union.
 ---
 
 ### `SetIntersection/3`
-```
+```clausal
 SetIntersection(+S1, +S2, -Inter)
 ```
 Set intersection.
@@ -937,7 +964,7 @@ Set intersection.
 ---
 
 ### `SetSubtract/3`
-```
+```clausal
 SetSubtract(+S1, +S2, -Diff)
 ```
 `Diff` = elements in `S1` not in `S2`.
@@ -945,7 +972,7 @@ SetSubtract(+S1, +S2, -Diff)
 ---
 
 ### `SetSymDiff/3`
-```
+```clausal
 SetSymDiff(+S1, +S2, -Sym)
 ```
 Symmetric difference: elements in exactly one of `S1`, `S2`.
@@ -953,7 +980,7 @@ Symmetric difference: elements in exactly one of `S1`, `S2`.
 ---
 
 ### `SetSubset/2`
-```
+```clausal
 SetSubset(+Sub, +Super)
 ```
 Succeeds if `Sub` is a subset of `Super` (including equal sets and the empty set).
@@ -961,7 +988,7 @@ Succeeds if `Sub` is a subset of `Super` (including equal sets and the empty set
 ---
 
 ### `SetDisjoint/2`
-```
+```clausal
 SetDisjoint(+S1, +S2)
 ```
 Succeeds if `S1` and `S2` share no elements.
@@ -969,7 +996,7 @@ Succeeds if `S1` and `S2` share no elements.
 ---
 
 ### `SetAdd/3`
-```
+```clausal
 SetAdd(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` added. No-op if already present.
@@ -977,7 +1004,7 @@ SetAdd(+Elem, +OldSet, -NewSet)
 ---
 
 ### `SetRemove/3`
-```
+```clausal
 SetRemove(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` removed. No-op if absent.
@@ -985,7 +1012,7 @@ SetRemove(+Elem, +OldSet, -NewSet)
 ---
 
 ### `GenSet/2`
-```
+```clausal
 GenSet(?Elem, +Set)
 ```
 Nondeterministic enumeration of set elements. Order is deterministic (sorted by `repr`).
@@ -994,10 +1021,10 @@ Nondeterministic enumeration of set elements. Order is deterministic (sorted by 
 
 ## Arithmetic
 
-Arithmetic **evaluation** uses `:=` (e.g., `Y_ := X_ * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
+Arithmetic **evaluation** uses `:=` (e.g., `Y := X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
 
 ### `Between/3`
-```
+```clausal
 Between(+Low, +High, ?X)
 ```
 Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
@@ -1010,7 +1037,7 @@ Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) 
 ---
 
 ### `Succ/2`
-```
+```clausal
 Succ(?X, ?Y)   % Y = X + 1
 ```
 Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y - 1`. Both must be non-negative integers.
@@ -1023,7 +1050,7 @@ Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y -
 ---
 
 ### `Plus/3`
-```
+```clausal
 Plus(?X, ?Y, ?Z)   % Z = X + Y
 ```
 Relational addition: any two of `X`, `Y`, `Z` determine the third.
@@ -1036,7 +1063,7 @@ Relational addition: any two of `X`, `Y`, `Z` determine the third.
 ---
 
 ### `Abs/2`
-```
+```clausal
 Abs(+X, -Y)   % Y = abs(X)
 ```
 Absolute value.
@@ -1049,7 +1076,7 @@ Absolute value.
 ---
 
 ### `Max/3`
-```
+```clausal
 Max(+X, +Y, -Z)   % Z = max(X, Y)
 ```
 ??? info "Implementation & tests"
@@ -1060,7 +1087,7 @@ Max(+X, +Y, -Z)   % Z = max(X, Y)
 ---
 
 ### `Min/3`
-```
+```clausal
 Min(+X, +Y, -Z)   % Z = min(X, Y)
 ```
 ??? info "Implementation & tests"
@@ -1073,7 +1100,7 @@ Min(+X, +Y, -Z)   % Z = min(X, Y)
 ## List Predicates
 
 ### `In/2`
-```
+```clausal
 In(?Elem, +List)
 ```
 Enumerate or check membership. Backtracks over all elements.
@@ -1086,7 +1113,7 @@ Enumerate or check membership. Backtracks over all elements.
 ---
 
 ### `InCheck/2`
-```
+```clausal
 InCheck(+Elem, +List)
 ```
 Deterministic membership check. Succeeds at most once; no backtracking.
@@ -1099,7 +1126,7 @@ Deterministic membership check. Succeeds at most once; no backtracking.
 ---
 
 ### `Append/3`
-```
+```clausal
 Append(?L1, ?L2, ?L3)   % L3 = L1 ++ L2
 ```
 List concatenation. Works in all modes: given any two, determines the third. Backtracks over splits when `L3` is bound and `L1`/`L2` are unbound.
@@ -1112,7 +1139,7 @@ List concatenation. Works in all modes: given any two, determines the third. Bac
 ---
 
 ### `Length/2`
-```
+```clausal
 Length(+List, -N)   % N = len(List)
 Length(-List, +N)   % construct list of N fresh vars
 ```
@@ -1126,7 +1153,7 @@ List length in both directions.
 ---
 
 ### `Last/2`
-```
+```clausal
 Last(+List, -Elem)
 ```
 Unify `Elem` with the last element of `List`.
@@ -1139,7 +1166,7 @@ Unify `Elem` with the last element of `List`.
 ---
 
 ### `Reverse/2`
-```
+```clausal
 Reverse(+List, -Rev)
 ```
 ??? info "Implementation & tests"
@@ -1150,7 +1177,7 @@ Reverse(+List, -Rev)
 ---
 
 ### `GetItem/3`
-```
+```clausal
 GetItem(+N, +List, -Elem)   % 0-based
 ```
 Get the element at 0-based index `N`.
@@ -1163,7 +1190,7 @@ Get the element at 0-based index `N`.
 ---
 
 ### `Flatten/2`
-```
+```clausal
 Flatten(+Nested, -Flat)
 ```
 Recursively flatten a nested list structure.
@@ -1176,7 +1203,7 @@ Recursively flatten a nested list structure.
 ---
 
 ### `MergeSort/2`
-```
+```clausal
 MergeSort(+List, -Sorted)
 ```
 Sort `List` preserving duplicate elements (stable sort).
@@ -1189,7 +1216,7 @@ Sort `List` preserving duplicate elements (stable sort).
 ---
 
 ### `Sort/2`
-```
+```clausal
 Sort(+List, -Sorted)
 ```
 Sort `List` removing duplicate elements.
@@ -1202,7 +1229,7 @@ Sort `List` removing duplicate elements.
 ---
 
 ### `Permutation/2`
-```
+```clausal
 Permutation(+List, -Perm)
 ```
 Enumerate all permutations of `List` via backtracking.
@@ -1215,7 +1242,7 @@ Enumerate all permutations of `List` via backtracking.
 ---
 
 ### `Select/3`
-```
+```clausal
 Select(?Elem, +List, -Rest)
 ```
 Select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtracks over all positions where `Elem` appears.
@@ -1228,7 +1255,7 @@ Select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtrac
 ---
 
 ### `Subtract/3`
-```
+```clausal
 Subtract(+Set1, +Set2, -Diff)
 ```
 List difference: elements in `Set1` not in `Set2`.
@@ -1241,7 +1268,7 @@ List difference: elements in `Set1` not in `Set2`.
 ---
 
 ### `Intersection/3`
-```
+```clausal
 Intersection(+Set1, +Set2, -Inter)
 ```
 Elements present in both `Set1` and `Set2`.
@@ -1254,7 +1281,7 @@ Elements present in both `Set1` and `Set2`.
 ---
 
 ### `Union/3`
-```
+```clausal
 Union(+Set1, +Set2, -Union)
 ```
 Elements in `Set1` or `Set2`, with duplicates removed.
@@ -1267,7 +1294,7 @@ Elements in `Set1` or `Set2`, with duplicates removed.
 ---
 
 ### `ToSet/2`
-```
+```clausal
 ToSet(+List, -Set)
 ```
 Remove duplicates from `List` preserving the first-occurrence order.
@@ -1280,7 +1307,7 @@ Remove duplicates from `List` preserving the first-occurrence order.
 ---
 
 ### `SumList/2`
-```
+```clausal
 SumList(+List, -Sum)
 ```
 Sum all numeric elements of `List`.
@@ -1293,7 +1320,7 @@ Sum all numeric elements of `List`.
 ---
 
 ### `MaxList/2`
-```
+```clausal
 MaxList(+List, -Max)
 ```
 Maximum element of a non-empty numeric list.
@@ -1306,7 +1333,7 @@ Maximum element of a non-empty numeric list.
 ---
 
 ### `MinList/2`
-```
+```clausal
 MinList(+List, -Min)
 ```
 Minimum element of a non-empty numeric list.
@@ -1319,7 +1346,7 @@ Minimum element of a non-empty numeric list.
 ---
 
 ### `Take/3`
-```
+```clausal
 Take(+N, +List, -Taken)
 ```
 First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N = 0`, returns `[]`.
@@ -1332,7 +1359,7 @@ First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N 
 ---
 
 ### `Drop/3`
-```
+```clausal
 Drop(+N, +List, -Rest)
 ```
 `List` after dropping the first `N` elements. If `N >= len(List)`, returns `[]`.
@@ -1345,7 +1372,7 @@ Drop(+N, +List, -Rest)
 ---
 
 ### `SplitAt/4`
-```
+```clausal
 SplitAt(+N, +List, -Left, -Right)
 ```
 Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Clamps to list bounds.
@@ -1358,7 +1385,7 @@ Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Cla
 ---
 
 ### `Zip/3`
-```
+```clausal
 Zip(+List1, +List2, -Pairs)
 ```
 Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter list.
@@ -1371,7 +1398,7 @@ Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter
 ---
 
 ### `Replicate/3`
-```
+```clausal
 Replicate(+N, +Elem, -List)
 ```
 `List` of `N` copies of `Elem`.
@@ -1384,7 +1411,7 @@ Replicate(+N, +Elem, -List)
 ---
 
 ### `SplitWith/3`
-```
+```clausal
 SplitWith(+Sep, +List, -Parts)    % split mode
 SplitWith(+Sep, -List, +Parts)    % join mode
 ```
@@ -1398,7 +1425,7 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 ---
 
 ### `Unzip/3`
-```
+```clausal
 Unzip(?Pairs, ?Keys, ?Values)
 ```
 Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in both directions.
@@ -1411,7 +1438,7 @@ Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in 
 ---
 
 ### `PairKeys/2`
-```
+```clausal
 PairKeys(+Pairs, -Keys)
 ```
 Extract the key (first element) from each pair.
@@ -1424,7 +1451,7 @@ Extract the key (first element) from each pair.
 ---
 
 ### `PairValues/2`
-```
+```clausal
 PairValues(+Pairs, -Values)
 ```
 Extract the value (second element) from each pair.
@@ -1441,7 +1468,7 @@ Extract the value (second element) from each pair.
 These predicates accept a **goal argument** (a lambda or named predicate). The goal is called for each list element; failures propagate as in standard higher-order patterns.
 
 ### `MapList/2`
-```
+```clausal
 MapList(+Goal, +List)
 ```
 Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any element fails.
@@ -1454,7 +1481,7 @@ Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any elem
 ---
 
 ### `MapList/3`
-```
+```clausal
 MapList(+Goal, +Xs, -Ys)
 ```
 Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` per element.
@@ -1467,7 +1494,7 @@ Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` p
 ---
 
 ### `Filter/3`
-```
+```clausal
 Filter(+Goal, +List, -Included)
 ```
 Filter `List` keeping only elements for which `Goal(Elem)` succeeds.
@@ -1480,7 +1507,7 @@ Filter `List` keeping only elements for which `Goal(Elem)` succeeds.
 ---
 
 ### `Exclude/3`
-```
+```clausal
 Exclude(+Goal, +List, -Excluded)
 ```
 Filter `List` keeping only elements for which `Goal(Elem)` **fails**.
@@ -1493,7 +1520,7 @@ Filter `List` keeping only elements for which `Goal(Elem)` **fails**.
 ---
 
 ### `FoldLeft/4`
-```
+```clausal
 FoldLeft(+Goal, +List, +V0, -V)
 ```
 Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result.
@@ -1506,7 +1533,7 @@ Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumu
 ---
 
 ### `TakeWhile/3`
-```
+```clausal
 TakeWhile(+Goal, +List, -Prefix)
 ```
 Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
@@ -1519,7 +1546,7 @@ Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
 ---
 
 ### `DropWhile/3`
-```
+```clausal
 DropWhile(+Goal, +List, -Suffix)
 ```
 Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
@@ -1532,7 +1559,7 @@ Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
 ---
 
 ### `Span/4`
-```
+```clausal
 Span(+Goal, +List, -Yes, -No)
 ```
 `TakeWhile` + `DropWhile` in one pass. `Yes` is the longest prefix where `Goal` succeeds; `No` is the rest.
@@ -1545,7 +1572,7 @@ Span(+Goal, +List, -Yes, -No)
 ---
 
 ### `GroupBy/3`
-```
+```clausal
 GroupBy(+Goal, +List, -Groups)
 ```
 Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with equal consecutive keys are collected into sublists.
@@ -1558,7 +1585,7 @@ Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with
 ---
 
 ### `SortBy/3`
-```
+```clausal
 SortBy(+Goal, +List, -Sorted)
 ```
 Sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys).
@@ -1571,7 +1598,7 @@ Sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order
 ---
 
 ### `MaxBy/3`
-```
+```clausal
 MaxBy(+Goal, +List, -Max)
 ```
 Element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list.
@@ -1584,7 +1611,7 @@ Element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on
 ---
 
 ### `MinBy/3`
-```
+```clausal
 MinBy(+Goal, +List, -Min)
 ```
 Element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list.
@@ -1597,7 +1624,7 @@ Element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails o
 ---
 
 ### `FilterMap/3`
-```
+```clausal
 FilterMap(+Goal, +List, -Result)
 ```
 Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` when the goal succeeds, skips the element when it fails.
@@ -1612,10 +1639,10 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 ## I/O
 
 ### `Write/1`
-```
+```clausal
 Write(+Term)
 ```
-Print `Term` to stdout without a trailing newline. Strings are printed as-is; other values use `str()`. Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X_}"` derefs `X_` at search time.
+Print `Term` to stdout without a trailing newline. Strings are printed as-is; other values use `str()`. Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X}"` derefs `X` at search time.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`Write/1`)
@@ -1624,7 +1651,7 @@ Print `Term` to stdout without a trailing newline. Strings are printed as-is; ot
 ---
 
 ### `Writeln/1`
-```
+```clausal
 Writeln(+Term)
 ```
 Like `Write/1` but appends a newline.
@@ -1636,7 +1663,7 @@ Like `Write/1` but appends a newline.
 ---
 
 ### `PrintTerm/1`
-```
+```clausal
 PrintTerm(+Term)
 ```
 Print the structured `term_str` representation of `Term` (strings are quoted, compounds show functor/args) followed by a newline. Useful for debugging.
@@ -1648,7 +1675,7 @@ Print the structured `term_str` representation of `Term` (strings are quoted, co
 ---
 
 ### `Nl/0`
-```
+```clausal
 Nl
 ```
 Print a newline to stdout. Equivalent to `Write("\n")`.
@@ -1660,7 +1687,7 @@ Print a newline to stdout. Equivalent to `Write("\n")`.
 ---
 
 ### `Tab/1`
-```
+```clausal
 Tab(+N)
 ```
 Print `N` spaces to stdout. `N` must be a bound non-negative integer.
@@ -1672,7 +1699,7 @@ Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 ---
 
 ### `WriteToString/2`
-```
+```clausal
 WriteToString(+Term, -String)
 ```
 Unify `String` with the `Write`-style string representation of `Term` (strings pass through, others use `str()`). Does not print anything.
@@ -1684,7 +1711,7 @@ Unify `String` with the `Write`-style string representation of `Term` (strings p
 ---
 
 ### `TermToString/2`
-```
+```clausal
 TermToString(+Term, -String)
 ```
 Unify `String` with the `term_str` representation of `Term` (structured, with quoted strings). Does not print anything.
@@ -1702,7 +1729,7 @@ Standard library module wrapping Python's `logging`. Import via `-import_from(lo
 All logging predicates always succeed (side-effect only). Messages below the logger's configured level are silently discarded.
 
 ### `GetLogger/1`, `GetLogger/2`
-```
+```clausal
 GetLogger(-Logger)
 GetLogger(+Name, -Logger)
 ```
@@ -1715,7 +1742,7 @@ Unify `Logger` with a Python `logging.Logger` instance. Arity-1 returns the defa
 ---
 
 ### `Debug/1`, `Debug/2`
-```
+```clausal
 Debug(+Msg)
 Debug(+Logger, +Msg)
 ```
@@ -1727,7 +1754,7 @@ Log at DEBUG level. Arity-1 uses default `"clausal"` logger.
 ---
 
 ### `Info/1`, `Info/2`
-```
+```clausal
 Info(+Msg)
 Info(+Logger, +Msg)
 ```
@@ -1739,7 +1766,7 @@ Log at INFO level.
 ---
 
 ### `Warning/1`, `Warning/2`
-```
+```clausal
 Warning(+Msg)
 Warning(+Logger, +Msg)
 ```
@@ -1751,7 +1778,7 @@ Log at WARNING level.
 ---
 
 ### `Error/1`, `Error/2`
-```
+```clausal
 Error(+Msg)
 Error(+Logger, +Msg)
 ```
@@ -1763,7 +1790,7 @@ Log at ERROR level.
 ---
 
 ### `Critical/1`, `Critical/2`
-```
+```clausal
 Critical(+Msg)
 Critical(+Logger, +Msg)
 ```
@@ -1775,7 +1802,7 @@ Log at CRITICAL level.
 ---
 
 ### `Log/3`
-```
+```clausal
 Log(+Logger, +Level, +Msg)
 ```
 Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or integer.
@@ -1786,7 +1813,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or in
 ---
 
 ### `SetLevel/2`
-```
+```clausal
 SetLevel(+Logger, +Level)
 ```
 Set the logger's effective level.
@@ -1797,7 +1824,7 @@ Set the logger's effective level.
 ---
 
 ### `GetLevel/2`
-```
+```clausal
 GetLevel(+Logger, -Level)
 ```
 Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
@@ -1808,7 +1835,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
 ---
 
 ### `IsEnabledFor/2`
-```
+```clausal
 IsEnabledFor(+Logger, +Level)
 ```
 Succeeds if the logger would process a message at `Level`; fails otherwise. The only logging predicate that can fail.
@@ -1819,7 +1846,7 @@ Succeeds if the logger would process a message at `Level`; fails otherwise. The 
 ---
 
 ### `StreamHandler/2`
-```
+```clausal
 StreamHandler(+StreamName, -Handler)
 ```
 Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
@@ -1830,7 +1857,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 ---
 
 ### `FileHandler/2`
-```
+```clausal
 FileHandler(+Path, -Handler)
 ```
 Create a `logging.FileHandler` for the given path.
@@ -1841,7 +1868,7 @@ Create a `logging.FileHandler` for the given path.
 ---
 
 ### `SetFormatter/2`
-```
+```clausal
 SetFormatter(+Handler, +FormatString)
 ```
 Set a `logging.Formatter` on the handler using Python format string syntax.
@@ -1852,7 +1879,7 @@ Set a `logging.Formatter` on the handler using Python format string syntax.
 ---
 
 ### `AddHandler/2`
-```
+```clausal
 AddHandler(+Logger, +Handler)
 ```
 Add a handler to the logger.
@@ -1863,7 +1890,7 @@ Add a handler to the logger.
 ---
 
 ### `RemoveHandler/2`
-```
+```clausal
 RemoveHandler(+Logger, +Handler)
 ```
 Remove a handler from the logger.
@@ -1874,7 +1901,7 @@ Remove a handler from the logger.
 ---
 
 ### `BasicConfig/1`
-```
+```clausal
 BasicConfig(+Opts)
 ```
 Call `logging.basicConfig()` with a dict of options (level, format, datefmt, filename, filemode, stream).
@@ -1886,10 +1913,10 @@ Call `logging.basicConfig()` with a dict of options (level, format, datefmt, fil
 
 ## Date & Time (`date_time` module)
 
-Standard library module wrapping Python's `datetime`. Import via `-import_from(date_time, [Now, Today, Date, ...])`. All predicates produce and consume **real Python `datetime` objects** — `datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta` — not custom term types. Unification uses Python's native `==`. Any `datetime` method can be called via `++()` interop (e.g. `S_ is ++D_.isoformat()`).
+Standard library module wrapping Python's `datetime`. Import via `-import_from(date_time, [Now, Today, Date, ...])`. All predicates produce and consume **real Python `datetime` objects** — `datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta` — not custom term types. Unification uses Python's native `==`. Any `datetime` method can be called via `++()` interop (e.g. `S is ++D.isoformat()`).
 
 ### `Now/1`
-```
+```clausal
 Now(-DT)
 ```
 Unify `DT` with `datetime.datetime.now()` (naive, local time).
@@ -1901,7 +1928,7 @@ Unify `DT` with `datetime.datetime.now()` (naive, local time).
 ---
 
 ### `NowUTC/1`
-```
+```clausal
 NowUTC(-DT)
 ```
 Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
@@ -1912,7 +1939,7 @@ Unify `DT` with `datetime.datetime.now(datetime.timezone.utc)` (timezone-aware).
 ---
 
 ### `Today/1`
-```
+```clausal
 Today(-D)
 ```
 Unify `D` with `datetime.date.today()`.
@@ -1923,7 +1950,7 @@ Unify `D` with `datetime.date.today()`.
 ---
 
 ### `Date/4`
-```
+```clausal
 Date(?Year, ?Month, ?Day, ?DateObj)
 ```
 Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, Day)`. If `DateObj` is a `datetime.date` (or `datetime.datetime`), decomposes into `Year`, `Month`, `Day`. Fails on invalid dates (e.g. month 13, Feb 29 in non-leap year).
@@ -1935,7 +1962,7 @@ Bidirectional. If `DateObj` is unbound, constructs `datetime.date(Year, Month, D
 ---
 
 ### `Time/4`
-```
+```clausal
 Time(?Hour, ?Minute, ?Second, ?TimeObj)
 ```
 Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, Second)`. If `TimeObj` is a `datetime.time`, decomposes into `Hour`, `Minute`, `Second`.
@@ -1946,7 +1973,7 @@ Bidirectional. If `TimeObj` is unbound, constructs `datetime.time(Hour, Minute, 
 ---
 
 ### `DateTime/7`
-```
+```clausal
 DateTime(?Year, ?Month, ?Day, ?Hour, ?Minute, ?Second, ?DtObj)
 ```
 Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month, Day, Hour, Minute, Second)`. If `DtObj` is a `datetime.datetime`, decomposes into all six components.
@@ -1957,7 +1984,7 @@ Bidirectional. If `DtObj` is unbound, constructs `datetime.datetime(Year, Month,
 ---
 
 ### `TimeDelta/3`
-```
+```clausal
 TimeDelta(?Days, ?Seconds, ?TdObj)
 ```
 Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, seconds=Seconds)`. If `TdObj` is a `datetime.timedelta`, decomposes into `Days` and `Seconds`.
@@ -1968,7 +1995,7 @@ Bidirectional. If `TdObj` is unbound, constructs `datetime.timedelta(days=Days, 
 ---
 
 ### `DateAdd/3`
-```
+```clausal
 DateAdd(+DateOrDatetime, +Timedelta, -Result)
 ```
 `Result = DateOrDatetime + Timedelta`. Both inputs must be ground.
@@ -1979,7 +2006,7 @@ DateAdd(+DateOrDatetime, +Timedelta, -Result)
 ---
 
 ### `DateSub/3`
-```
+```clausal
 DateSub(+DateOrDatetime, +Timedelta, -Result)
 ```
 `Result = DateOrDatetime - Timedelta`. Both inputs must be ground.
@@ -1990,7 +2017,7 @@ DateSub(+DateOrDatetime, +Timedelta, -Result)
 ---
 
 ### `DateDiff/3`
-```
+```clausal
 DateDiff(+D1, +D2, -Timedelta)
 ```
 `Timedelta = D1 - D2`. Both inputs must be `datetime.date` or `datetime.datetime`. Result is a `datetime.timedelta` (may be negative).
@@ -2001,7 +2028,7 @@ DateDiff(+D1, +D2, -Timedelta)
 ---
 
 ### `FormatDate/3`
-```
+```clausal
 FormatDate(+DateOrDatetime, +FormatStr, -ResultStr)
 ```
 `ResultStr = DateOrDatetime.strftime(FormatStr)`. Works with `datetime.date`, `datetime.time`, and `datetime.datetime`.
@@ -2012,7 +2039,7 @@ FormatDate(+DateOrDatetime, +FormatStr, -ResultStr)
 ---
 
 ### `ParseDate/3`
-```
+```clausal
 ParseDate(+String, +FormatStr, -DatetimeObj)
 ```
 `DatetimeObj = datetime.datetime.strptime(String, FormatStr)`. Fails if the string does not match the format.
@@ -2023,7 +2050,7 @@ ParseDate(+String, +FormatStr, -DatetimeObj)
 ---
 
 ### `DayOfWeek/2`
-```
+```clausal
 DayOfWeek(+DateOrDatetime, -Weekday)
 ```
 `Weekday = DateOrDatetime.weekday()`. Monday = 0, Sunday = 6.
@@ -2034,7 +2061,7 @@ DayOfWeek(+DateOrDatetime, -Weekday)
 ---
 
 ### `DateBetween/3`
-```
+```clausal
 DateBetween(+Start, +End, -D)
 ```
 Nondeterministic — generates one solution for each `datetime.date` in `[Start, End]` (inclusive). Fails if `Start > End`. This is the only date_time predicate that backtracks.
@@ -2053,7 +2080,7 @@ Only `yaml.safe_load` is used (no arbitrary object construction from YAML tags).
 
 ### `Read/2`
 
-```
+```clausal
 Read(+YamlString, -Data)
 ```
 
@@ -2064,7 +2091,7 @@ Parse a YAML string into a Python object (dict/list/scalar). Fails on invalid YA
 
 ### `Write/2`
 
-```
+```clausal
 Write(+Data, -YamlString)
 ```
 
@@ -2075,7 +2102,7 @@ Serialize a Python object to a YAML string (block style, human-readable).
 
 ### `ReadAll/2`
 
-```
+```clausal
 ReadAll(+YamlString, -DocList)
 ```
 
@@ -2086,7 +2113,7 @@ Parse a multi-document YAML string (with `---` separators) into a list of Python
 
 ### `WriteAll/2`
 
-```
+```clausal
 WriteAll(+DocList, -YamlString)
 ```
 
@@ -2097,7 +2124,7 @@ Serialize a list of Python objects to a multi-document YAML string.
 
 ### `ReadFile/2`
 
-```
+```clausal
 ReadFile(+Path, -Data)
 ```
 
@@ -2108,7 +2135,7 @@ Read and parse a YAML file. Fails if the file does not exist or contains invalid
 
 ### `WriteFile/2`
 
-```
+```clausal
 WriteFile(+Path, +Data)
 ```
 
@@ -2119,7 +2146,7 @@ Write a Python object as YAML to a file.
 
 ### `Get/3`
 
-```
+```clausal
 Get(+Data, +Path, -Value)
 ```
 
@@ -2136,17 +2163,17 @@ The following are not builtins in the registry — they are syntax forms compile
 
 | Syntax | Meaning | Compiler location |
 |--------|---------|-------------------|
-| `X_ is Y_` | Unification (structural) | `compiler.py:1415` |
-| `X_ is not Y_` | Disequality constraint (`Dif/2`) | `compiler.py:1436` |
-| `X_ := Expr` | Arithmetic evaluation then unify | `compiler.py` (`Evaluate`) |
-| `X_ == Y_` | CLP(FD) equality constraint | `compiler.py:1444` |
-| `X_ != Y_` | CLP(FD) disequality constraint | `compiler.py:1451` |
-| `X_ < Y_` | CLP(FD) less-than constraint | `compiler.py:1459` |
-| `X_ <= Y_` | CLP(FD) less-or-equal constraint | `compiler.py:1466` |
-| `X_ > Y_` | CLP(FD) greater-than constraint | `compiler.py:1473` |
-| `X_ >= Y_` | CLP(FD) greater-or-equal constraint | `compiler.py:1480` |
-| `X_ in Coll` | For-loop over collection | `compiler.py:1570` |
-| `X_ not in Coll` | Negated membership check | `compiler.py:1594` |
+| `X is Y` | Unification (structural) | `compiler.py:1415` |
+| `X is not Y` | Disequality constraint (`Dif/2`) | `compiler.py:1436` |
+| `X := Expr` | Arithmetic evaluation then unify | `compiler.py` (`Evaluate`) |
+| `X == Y` | CLP(FD) equality constraint | `compiler.py:1444` |
+| `X != Y` | CLP(FD) disequality constraint | `compiler.py:1451` |
+| `X < Y` | CLP(FD) less-than constraint | `compiler.py:1459` |
+| `X <= Y` | CLP(FD) less-or-equal constraint | `compiler.py:1466` |
+| `X > Y` | CLP(FD) greater-than constraint | `compiler.py:1473` |
+| `X >= Y` | CLP(FD) greater-or-equal constraint | `compiler.py:1480` |
+| `X in Coll` | For-loop over collection | `compiler.py:1570` |
+| `X not in Coll` | Negated membership check | `compiler.py:1594` |
 | `not Goal` | Negation as failure | `compiler.py:1507` |
 | `If(Cond, Then, Else)` | If-Then-Else | `compiler.py` (`_compile_ite`) |
 

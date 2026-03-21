@@ -54,26 +54,6 @@ results = list(clausal.solve(fib(10, F)))
 # F binds to 55
 ```
 
-Or define predicates inline:
-
-```python
-from clausal import Module
-
-m = Module("family")
-
-with m:
-    parent("tom", "bob"),
-    parent("tom", "liz"),
-    parent("bob", "ann"),
-
-    grandparent(X, Z) <- (
-        parent(X, Y) and parent(Y, Z)
-    ),
-
-for s in m.query(grandparent("tom", G)):
-    print(s[G])  # ann
-```
-
 ---
 
 ## What's inside
@@ -81,7 +61,7 @@ for s in m.query(grandparent("tom", G)):
 | Section | What you'll find |
 |---|---|
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
-| [Predicates](predicates.md) | How predicates work as Python classes (PredicateMeta) |
+| [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
 | [Constraints](constraints.md) | Dif/2, CLP(FD) finite-domain constraints, and CLP(R) real-domain constraints |
@@ -112,3 +92,7 @@ for s in m.query(grandparent("tom", G)):
 | [scipy.fft](scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
 | [scipy.ndimage](scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
 | [scipy.spatial](scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
+| [Testing](testing.md) | Writing test predicates, running the test suite |
+| [DCGs](dcg.md) | Definite Clause Grammars for parsing |
+| [Exceptions](exceptions.md) | throw/catch, structured error terms |
+| [CLP(B)](clpb.md) | Boolean constraint programming |

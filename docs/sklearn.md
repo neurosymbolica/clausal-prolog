@@ -7,11 +7,11 @@ The `sklearn` module provides predicates for machine learning via [scikit-learn]
 ```clausal
 -import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict, Score])
 
-TrainAndPredict(ALGO_, DATASET_, PREDS_) <- (
-    LoadDataset(DATASET_, D_) and
-    Fit(Est(ALGO_, {}), D_, F_) and
-    D_ is ("Dataset", X_, Y_) and
-    Predict(F_, X_, PREDS_)
+TrainAndPredict(ALGO, DATASET, PREDS) <- (
+    LoadDataset(DATASET, D) and
+    Fit(Est(ALGO, {}), D, F) and
+    D is ("Dataset", X, Y) and
+    Predict(F, X, PREDS)
 )
 ```
 
@@ -21,10 +21,10 @@ Or via module import:
 -import_module(sklearn)
 
 Main <- (
-    sklearn.LoadDataset("iris", D_) and
-    sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D_, F_) and
-    sklearn.Score(F_, D_, S_) and
-    ++print(f"Accuracy: {S_}")
+    sklearn.LoadDataset("iris", D) and
+    sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F) and
+    sklearn.Score(F, D, S) and
+    ++print(f"Accuracy: {S}")
 )
 ```
 
@@ -63,10 +63,10 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 ```clausal
 % Destructure a dataset
-LoadDataset("iris", D_) and D_ is ("Dataset", X_, Y_)
+LoadDataset("iris", D) and D is ("Dataset", X, Y)
 
 % Destructure a fitted model
-Fit(Est("svc", {}), D_, F_) and F_ is ("Fitted", E_, H_)
+Fit(Est("svc", {}), D, F) and F is ("Fitted", E, H)
 ```
 
 ---
@@ -98,7 +98,7 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
 Algorithm("random_forest", "classifier")
 
 % Enumerate all regressors
-Algorithm(ALGO_, "regressor")
+Algorithm(ALGO, "regressor")
 ```
 
 ---
@@ -116,14 +116,14 @@ Algorithm(ALGO_, "regressor")
 
 ```clausal
 % Load and split iris
-LoadDataset("iris", D_) and
-SplitData(D_, 0.2, 42, S_) and
-S_ is ("Split", TRAIN_, TEST_)
+LoadDataset("iris", D) and
+SplitData(D, 0.2, 42, S) and
+S is ("Split", TRAIN, TEST)
 
 % Synthetic classification data
 MakeDataset("classification",
             {"n_samples": 200, "n_features": 5, "random_state": 42},
-            D_)
+            D)
 ```
 
 ---
@@ -142,16 +142,16 @@ MakeDataset("classification",
 
 ```clausal
 % Classification workflow
-LoadDataset("iris", D_) and
-Fit(Est("random_forest", {"n_estimators": 100}), D_, F_) and
-D_ is ("Dataset", X_, Y_) and
-Predict(F_, X_, PREDS_)
+LoadDataset("iris", D) and
+Fit(Est("random_forest", {"n_estimators": 100}), D, F) and
+D is ("Dataset", X, Y) and
+Predict(F, X, PREDS)
 
 % PCA transform
-LoadDataset("iris", D_) and
-D_ is ("Dataset", X_, Y_) and
-Fit(Est("pca", {"n_components": 2}), ("Dataset", X_, None), F_) and
-Transform(F_, X_, REDUCED_)
+LoadDataset("iris", D) and
+D is ("Dataset", X, Y) and
+Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F) and
+Transform(F, X, REDUCED)
 ```
 
 ---
@@ -173,15 +173,15 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 ```clausal
 % Score a classifier
-Score(F_, D_, S_) and S_ > 0.9
+Score(F, D, S) and S > 0.9
 
 % 3-fold cross-validation
 CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-              D_, 3, SCORES_)
+              D, 3, SCORES)
 
 % Multi-metric CV
 CrossValidate(Est("logistic_regression", {"max_iter": 200}),
-              D_, 3, ["accuracy", "f1_weighted"], R_)
+              D, 3, ["accuracy", "f1_weighted"], R)
 ```
 
 **Cross-validation strategies**: pass an integer for stratified K-fold (recommended for classification), or use `kfold(K)` for plain K-fold.
@@ -200,10 +200,10 @@ Steps are a list of `(name, Est(...))` tuples:
 ```clausal
 Pipeline([("scaler", Est("standard_scaler", {})),
           ("clf", Est("logistic_regression", {"max_iter": 200}))],
-         PIPE_) and
-LoadDataset("iris", D_) and
-Fit(PIPE_, D_, F_) and
-Score(F_, D_, S_)
+         PIPE) and
+LoadDataset("iris", D) and
+Fit(PIPE, D, F) and
+Score(F, D, S)
 ```
 
 ---
@@ -220,12 +220,12 @@ Score(F_, D_, S_)
 | `SearchResults(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
 ```clausal
-LoadDataset("iris", D_) and
+LoadDataset("iris", D) and
 GridSearch(Est("svc", {}),
            {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
-           D_, 3, BEST_) and
-BestParams(BEST_, PARAMS_) and
-BestScore(BEST_, SCORE_)
+           D, 3, BEST) and
+BestParams(BEST, PARAMS) and
+BestScore(BEST, SCORE)
 ```
 
 ---
@@ -237,8 +237,8 @@ BestScore(BEST_, SCORE_)
 | `Learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
 ```clausal
-Fit(Est("random_forest", {"n_estimators": 10}), D_, F_) and
-Learned(F_, "feature_importances", FI_)
+Fit(Est("random_forest", {"n_estimators": 10}), D, F) and
+Learned(F, "feature_importances", FI)
 ```
 
 ---
@@ -271,14 +271,14 @@ Learned(F_, "feature_importances", FI_)
                            ConfusionMatrix, Learned])
 
     % Load, split, train, evaluate
-    IrisWorkflow(SCORE_, IMPORTANCES_) <- (
-        LoadDataset("iris", D_) and
-        SplitData(D_, 0.2, 42, S_) and
-        S_ is ("Split", TRAIN_, TEST_) and
+    IrisWorkflow(SCORE, IMPORTANCES) <- (
+        LoadDataset("iris", D) and
+        SplitData(D, 0.2, 42, S) and
+        S is ("Split", TRAIN, TEST) and
         Fit(Est("random_forest", {"n_estimators": 100, "random_state": 42}),
-            TRAIN_, F_) and
-        Score(F_, TEST_, SCORE_) and
-        Learned(F_, "feature_importances", IMPORTANCES_)
+            TRAIN, F) and
+        Score(F, TEST, SCORE) and
+        Learned(F, "feature_importances", IMPORTANCES)
     )
     ```
 
@@ -288,16 +288,16 @@ Learned(F_, "feature_importances", FI_)
     -import_from(sklearn, [Est, LoadDataset, Pipeline, Fit, Score,
                            GridSearch, BestParams, BestScore])
 
-    SearchBestPipeline(PARAMS_, SCORE_) <- (
-        LoadDataset("iris", D_) and
+    SearchBestPipeline(PARAMS, SCORE) <- (
+        LoadDataset("iris", D) and
         Pipeline([("scaler", Est("standard_scaler", {})),
                   ("clf", Est("svc", {}))],
-                 PIPE_) and
-        GridSearch(PIPE_,
+                 PIPE) and
+        GridSearch(PIPE,
                    {"clf__C": [0.1, 1.0, 10.0],
                     "clf__kernel": ["rbf", "linear"]},
-                   D_, 5, "accuracy", BEST_) and
-        BestParams(BEST_, PARAMS_) and
-        BestScore(BEST_, SCORE_)
+                   D, 5, "accuracy", BEST) and
+        BestParams(BEST, PARAMS) and
+        BestScore(BEST, SCORE)
     )
     ```

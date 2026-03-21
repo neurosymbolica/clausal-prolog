@@ -10,18 +10,18 @@ The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/temp
 
 Arrow lambdas use `head <- body` — the same syntax as clause definitions, making them anonymous clauses:
 
-```
+```clausal
 # One-arg lambda
-apply_val(Result_, Val_) <- CallGoal((X_ <- (Result_ is X_)), Val_)
+apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
 
 # Two-arg lambda with arithmetic
-test(R_) <- CallGoal(((X_, Y_) <- (Y_ := X_ + 1)), 5, R_)
+test(R) <- CallGoal(((X, Y) <- (Y := X + 1)), 5, R)
 
 # Zero-arg lambda
-run_goal(Result_) <- CallGoal((() <- (Result_ is 42)))
+run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z_, R_) <- CallGoal((X_ <- (R_ := X_ + Z_)), 10)
+add_z(Z, R) <- CallGoal((X <- (R := X + Z)), 10)
 ```
 
 The head is a variable (single param) or tuple of variables (multiple params). The body is any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
@@ -30,20 +30,20 @@ The head is a variable (single param) or tuple of variables (multiple params). T
 
 Multiple goals are joined with `and`. Parenthesize each `:=` subgoal separately:
 
-```
-transform(R_) <- CallGoal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), 5, R_)
+```clausal
+transform(R) <- CallGoal(((X, Y) <- ((T := X + 1) and (Y := T * 2))), 5, R)
 ```
 
 ### Why arrow syntax?
 
 Arrow lambdas are homoiconic — they look like the clause definitions they represent:
 
-```
+```clausal
 # Clause definition (statement level)
-double(X_, Y_) <- (Y_ := X_ + X_)
+double(X, Y) <- (Y := X + X)
 
 # Anonymous clause (expression level) — same syntax
-apply_double(V_, R_) <- CallGoal((X_ <- (double(X_, R_))), V_)
+apply_double(V, R) <- CallGoal((X <- (double(X, R))), V)
 ```
 
 Python's `lambda` syntax is not supported in `.clausal` files.
@@ -54,13 +54,13 @@ Python's `lambda` syntax is not supported in `.clausal` files.
 
 Lambdas capture variables from the enclosing clause implicitly, using Python's native closure semantics. No `in` declaration or explicit free-variable marking is needed.
 
-```
-# Z_ and Result_ are captured from the enclosing clause head.
-# X_ is a lambda parameter.
-captured_add(Z_, Result_) <- CallGoal((X_ <- (Result_ := X_ + Z_)), 10)
+```clausal
+# Z and RESULT are captured from the enclosing clause head.
+# X is a lambda parameter.
+captured_add(Z, RESULT) <- CallGoal((X <- (RESULT := X + Z)), 10)
 ```
 
-When queried as `captured_add(3, R_)`, this yields `R_ = 13`: the lambda captures `Z_` (bound to 3) and `Result_` from the clause, receives `X_` = 10 as a parameter, and evaluates `Result_ := 10 + 3`.
+When queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT := 10 + 3`.
 
 ### How capture works
 
@@ -68,19 +68,19 @@ Variables fall into three categories inside a lambda body:
 
 | Category | Example | How it works |
 |---|---|---|
-| **Parameter** | `X_` in `X_ <- (...)` | Function argument of the compiled lambda |
-| **Captured** | `Z_` used in body but defined in enclosing clause | Python closure over the enclosing scope's Var |
-| **Body-local** | `T_` first appearing inside the lambda body | Fresh `Var()` allocated inside the lambda function |
+| **Parameter** | `X` in `X <- (...)` | Function argument of the compiled lambda |
+| **Captured** | `Z` used in body but defined in enclosing clause | Python closure over the enclosing scope's Var |
+| **Body-local** | `T` first appearing inside the lambda body | Fresh `Var()` allocated inside the lambda function |
 
-Captured variables share the same `Var` object as the enclosing clause. When the enclosing clause binds `Z_` to a value, the lambda sees that binding through the shared reference. This is correct because Python closures capture by reference, and logic variables are mutable (via trail-based binding).
+Captured variables share the same `Var` object as the enclosing clause. When the enclosing clause binds `Z` to a value, the lambda sees that binding through the shared reference. This is correct because Python closures capture by reference, and logic variables are mutable (via trail-based binding).
 
 ### Parameter shadowing
 
 If a lambda parameter has the same name as an enclosing variable, the parameter shadows it:
 
-```
-# X_ in the lambda body refers to the parameter, not the clause-head X_
-test(X_) <- CallGoal((X_ <- (X_ is 42)), _)
+```clausal
+# X in the lambda body refers to the parameter, not the clause-head X
+test(X) <- CallGoal((X <- (X is 42)), _)
 ```
 
 ---
@@ -99,27 +99,27 @@ Lambdas are invoked with the `CallGoal` builtin, which takes a goal closure and 
 
 The extra arguments are passed as positional parameters to the lambda:
 
-```
-# lambda receives X_ = 5
-CallGoal((X_ <- (X_ > 0)), 5)
+```clausal
+# lambda receives X = 5
+CallGoal((X <- (X > 0)), 5)
 
-# lambda receives X_ = 5, Y_ = Result_
-CallGoal(((X_, Y_) <- (Y_ := X_ * 2)), 5, Result_)
+# lambda receives X = 5, Y = RESULT
+CallGoal(((X, Y) <- (Y := X * 2)), 5, RESULT)
 ```
 
 ### Multi-solution lambdas
 
 A lambda can produce multiple solutions. If the lambda body calls a multi-solution predicate, each solution is propagated to the caller:
 
-```
+```clausal
 color("red"),
 color("green"),
 color("blue"),
 
-get_color(C_) <- CallGoal((X_ <- (color(X_) and C_ is X_)), _)
+get_color(C) <- CallGoal((X <- (color(X) and C is X)), _)
 ```
 
-Querying `get_color(C_)` yields three solutions: `C_ = "red"`, `C_ = "green"`, `C_ = "blue"`.
+Querying `get_color(C)` yields three solutions: `C = "red"`, `C = "green"`, `C = "blue"`.
 
 ---
 
@@ -127,10 +127,10 @@ Querying `get_color(C_)` yields three solutions: `C_ = "red"`, `C_ = "green"`, `
 
 Lambda bodies can call user-defined predicates. Internally, this works through the `_tramp_call` bridge, which adapts between the lambda's simple-mode execution and the predicate's trampoline-mode dispatch:
 
-```
-double(X_, Y_) <- (Y_ := X_ + X_)
+```clausal
+double(X, Y) <- (Y := X + X)
 
-apply_double(Val_, Result_) <- CallGoal((X_ <- (double(X_, Result_))), Val_)
+apply_double(VAL, RESULT) <- CallGoal((X <- (double(X, RESULT))), VAL)
 ```
 
 This is transparent — no special syntax is needed. The bridge (`_tramp_call`) handles the protocol mismatch automatically.
@@ -141,8 +141,8 @@ This is transparent — no special syntax is needed. The bridge (`_tramp_call`) 
 
 Lambdas compile to **simple-mode** Python generator functions. A lambda like:
 
-```
-(X_, Y_) <- (Y_ := X_ + Z_)
+```clausal
+(X, Y) <- (Y := X + Z)
 ```
 
 compiles to approximately:
@@ -175,8 +175,8 @@ When a lambda appears as an argument to a predicate call, the compiler **hoists*
 
 `_` in a lambda body is the anonymous variable — each occurrence is a fresh `Var()`:
 
-```
-get_color(C_) <- CallGoal((X_ <- (color(X_) and C_ is X_)), _)
+```clausal
+get_color(C) <- CallGoal((X <- (color(X) and C is X)), _)
 ```
 
 Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
@@ -187,18 +187,18 @@ Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
 
 Lambdas combine naturally with `FindAll`, `BagOf`, `SetOf`, and `ForAll`. The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
-```
+```clausal
 # Collect squares of a list using a lambda
-squares(Ns_, Sqs_) <- (
+squares(NS, SQS) <- (
     FindAll(
-        Sq_,
-        (In(X_, Ns_) and (Sq_ := X_ * X_)),
-        Sqs_,
+        SQ,
+        (In(X, NS) and (SQ := X * X)),
+        SQS,
     )
 )
 
 # Filter with ForAll
-all_positive(Ns_) <- ForAll(In(X_, Ns_), X_ > 0)
+all_positive(NS) <- ForAll(In(X, NS), X > 0)
 ```
 
 Since `FindAll` and friends are compiler special forms, the goal argument is compiled inline — it is not passed as a closure. This means any goal expression works directly as the second argument, without needing to wrap it in a lambda.
@@ -209,30 +209,30 @@ Since `FindAll` and friends are compiler special forms, the goal argument is com
 
 The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
-```
+```clausal
 # Builtin predicates can be passed directly — no lambda needed
-all_numbers(Xs_) <- MapList(IsNumber, Xs_)
-keep_ints(Xs_, Is_) <- Filter(IsInt, Xs_, Is_)
-incremented(Xs_, Ys_) <- MapList(Succ, Xs_, Ys_)
+all_numbers(XS) <- MapList(IsNumber, XS)
+keep_ints(XS, IS) <- Filter(IsInt, XS, IS)
+incremented(XS, YS) <- MapList(Succ, XS, YS)
 ```
 
 When the goal logic is more complex than a single predicate call, lambdas are the natural choice:
 
-```
+```clausal
 # MapList/3 — double every element
-doubles(Xs_, Ys_) <- MapList(((X_, Y_) <- (Y_ := X_ * 2)), Xs_, Ys_)
+doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
 
 # MapList/2 — check all positive
-all_pos(Xs_) <- MapList((X_ <- (X_ > 0)), Xs_)
+all_pos(XS) <- MapList((X <- (X > 0)), XS)
 
 # Filter/3 — filter positive elements
-positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # Exclude/3 — remove even elements
-remove_evens(Xs_, Rs_) <- Exclude((X_ <- (M_ := X_ % 2 and M_ is 0)), Xs_, Rs_)
+remove_evens(XS, RS) <- Exclude((X <- (M := X % 2 and M is 0)), XS, RS)
 
 # FoldLeft/4 — sum a list
-fold_sum(Xs_, S_) <- FoldLeft(((E_, A_, R_) <- (R_ := A_ + E_)), Xs_, 0, S_)
+fold_sum(XS, S) <- FoldLeft(((E, A, R) <- (R := A + E)), XS, 0, S)
 ```
 
 All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element. This is consistent with the Pythonic philosophy and sufficient for lambda goals, which are typically deterministic.
@@ -241,7 +241,7 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ## Limitations
 
-- **Lambdas are only supported as predicate call arguments.** Using a lambda in other positions (e.g., `X_ is (X_ <- ...)`) raises `NotImplementedError`.
+- **Lambdas are only supported as predicate call arguments.** Using a lambda in other positions (e.g., `X is (X <- ...)`) raises `NotImplementedError`.
 - **Nested lambdas are supported** for variable capture but are an edge case. Inner lambdas can reference outer lambda parameters via closure.
 - **No pattern-matching on parameters.** Lambda parameters are positional arguments, not patterns. Use a predicate clause for pattern matching.
 

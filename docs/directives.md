@@ -6,7 +6,7 @@ Directives are module-level declarations in `.clausal` files that control predic
 
 ## Module Declaration
 
-```
+```clausal
 -module(my_module, [Pred1(A, B), Pred2(X)])
 ```
 
@@ -14,7 +14,7 @@ Declares the module name and its public exports. The export list specifies which
 
 ### -private
 
-```
+```clausal
 -private([Helper(X, Y), Edge(A, B)])
 ```
 
@@ -28,13 +28,13 @@ Declares predicates that are internal to the module. Private predicates get prop
 
 Import specific predicates from another module:
 
-```
+```clausal
 -import_from(utils, [Double, Helper])
 ```
 
 With aliasing:
 
-```
+```clausal
 -import_from(utils, [alias(Double, MyDouble)])
 ```
 
@@ -44,11 +44,11 @@ This imports `Double` from `utils` but makes it available locally as `MyDouble`.
 
 Import all exported predicates from a module:
 
-```
+```clausal
 -import_module(utils)
 ```
 
-Imported predicates are accessed via qualified names: `utils.Double(X_, Y_)`.
+Imported predicates are accessed via qualified names: `utils.Double(X, Y)`.
 
 See [Import System](import.md) for full details.
 
@@ -58,7 +58,7 @@ See [Import System](import.md) for full details.
 
 ### -dynamic
 
-```
+```clausal
 -dynamic(color/2)
 ```
 
@@ -66,7 +66,7 @@ Marks a predicate as dynamic — its clauses can be modified at runtime via `Ass
 
 ### -table
 
-```
+```clausal
 -table(path/2)
 ```
 
@@ -76,7 +76,7 @@ See [Tabling](tabling.md) for details.
 
 ### -discontiguous
 
-```
+```clausal
 -discontiguous(helper/1)
 ```
 
@@ -84,7 +84,7 @@ Allows clauses for a predicate to be scattered throughout the file rather than g
 
 ### -meta_predicate
 
-```
+```clausal
 -meta_predicate(map(2, +, -))
 ```
 
@@ -92,7 +92,7 @@ Declares the meta-predicate calling convention. Used by the module system for co
 
 ### -shallow
 
-```
+```clausal
 -shallow(lookup/2)
 ```
 
@@ -102,19 +102,22 @@ Compiles a predicate in simple (non-trampoline) mode. This avoids the overhead o
 
 ## EDCG Directives
 
+!!! warning "Experimental"
+    EDCG directives are parsed but end-to-end rewriting is not yet implemented.
+
 Extended DCGs allow multiple named accumulators and passed arguments to be threaded through grammar rules automatically.
 
 ### -edcg_acc
 
-```
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
+```clausal
+-edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
 ```
 
 Declares a named accumulator with its joining operation. Arguments: name, value variable, input state, output state, and joiner goal.
 
 ### -edcg_pass
 
-```
+```clausal
 -edcg_pass(scale)
 ```
 
@@ -122,7 +125,7 @@ Declares a passed argument — a value that threads through EDCG nonterminals wi
 
 ### -edcg_pred
 
-```
+```clausal
 -edcg_pred(scaled_inc, 0, [counter, scale])
 ```
 

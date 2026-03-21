@@ -21,7 +21,7 @@ Clausal's comparison operators are shared between CLP(FD) and CLP(R). The domain
 
 **Dispatch rule:** if either operand is a `float` literal or a variable declared with `InReal`, the constraint goes to CLP(R). Otherwise it goes to CLP(FD).
 
-This means `X_ * X_ == 2.0` (with undeclared `X_`) automatically enters CLP(R) because `2.0` is a float. No special operators or brace syntax needed.
+This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(R) because `2.0` is a float. No special operators or brace syntax needed.
 
 ---
 
@@ -38,19 +38,19 @@ This means `X_ * X_ == 2.0` (with undeclared `X_`) automatically enters CLP(R) b
 
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
-```
-InReal(X_)                    % X ∈ [-∞, +∞]
-InReal(X_, 0.0, 1.0)          % X ∈ [0, 1]
-InReal([X_, Y_, Z_], -5.0, 5.0)   % all three ∈ [-5, 5]
+```clausal
+InReal(X)                    % X ∈ [-∞, +∞]
+InReal(X, 0.0, 1.0)          % X ∈ [0, 1]
+InReal([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
 ```
 
 ### LabelReal/1 and LabelReal/2
 
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(FD)).
 
-```
-LabelReal([X_, Y_])            % bisect to IEEE float precision
-LabelReal([X_, Y_], 1.0e-9)   % bisect until width ≤ 1e-9
+```clausal
+LabelReal([X, Y])            % bisect to IEEE float precision
+LabelReal([X, Y], 1.0e-9)   % bisect until width ≤ 1e-9
 ```
 
 Without an `Eps`, bisection continues until the midpoint equals an endpoint in IEEE arithmetic — the interval is indistinguishable from a point. With `Eps`, it stops when `hi - lo ≤ Eps`.
@@ -63,37 +63,37 @@ Each branch of the bisection is a separate solution. Use `LabelReal` after posti
 
 ### Linear constraints
 
-```
+```clausal
 % Two-variable linear system: 2x + 3y = 12, x - y = 1
-linear_system(X_, Y_) <- (
-    InReal(X_, -100.0, 100.0)
-    and InReal(Y_, -100.0, 100.0)
-    and 2.0 * X_ + 3.0 * Y_ == 12.0
-    and X_ - Y_ == 1.0
-    and LabelReal([X_, Y_], 1.0e-9)
+linear_system(X, Y) <- (
+    InReal(X, -100.0, 100.0)
+    and InReal(Y, -100.0, 100.0)
+    and 2.0 * X + 3.0 * Y == 12.0
+    and X - Y == 1.0
+    and LabelReal([X, Y], 1.0e-9)
 )
 % → X ≈ 3.0, Y ≈ 2.0
 ```
 
 ### Non-linear constraints
 
-```
+```clausal
 % Unit circle (first quadrant)
-unit_circle(X_, Y_) <- (
-    InReal(X_, 0.0, 1.0)
-    and InReal(Y_, 0.0, 1.0)
-    and X_ * X_ + Y_ * Y_ == 1.0
-    and LabelReal([X_, Y_], 1.0e-9)
+unit_circle(X, Y) <- (
+    InReal(X, 0.0, 1.0)
+    and InReal(Y, 0.0, 1.0)
+    and X * X + Y * Y == 1.0
+    and LabelReal([X, Y], 1.0e-9)
 )
 % → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
 ```
 
-```
+```clausal
 % Square root: find x where x^2 = 2
-sqrt2(X_) <- (
-    InReal(X_, 0.0, 2.0)
-    and X_ * X_ == 2.0
-    and LabelReal([X_], 1.0e-12)
+sqrt2(X) <- (
+    InReal(X, 0.0, 2.0)
+    and X * X == 2.0
+    and LabelReal([X], 1.0e-12)
 )
 % → X ≈ 1.4142135623730951
 ```
@@ -102,29 +102,29 @@ sqrt2(X_) <- (
 
 Integer and real variables can appear together. When an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
-```
+```clausal
 % Worker schedule: integer hours, real cost
-task(Hours_, Cost_) <- (
-    InDomain(Hours_, 1, 8)         % integer hours (CLP(FD))
-    and InReal(Cost_, 10.0, 100.0) % real cost (CLP(R))
-    and Cost_ >= Hours_ * 12.5     % mixes FD + real
-    and Hours_ <= 6
-    and Label([Hours_])
-    and LabelReal([Cost_], 1.0e-6)
+task(HOURS, COST) <- (
+    InDomain(HOURS, 1, 8)         % integer hours (CLP(FD))
+    and InReal(COST, 10.0, 100.0) % real cost (CLP(R))
+    and COST >= HOURS * 12.5     % mixes FD + real
+    and HOURS <= 6
+    and Label([HOURS])
+    and LabelReal([COST], 1.0e-6)
 )
 ```
 
-In this example, `Hours_` keeps its FD domain `{1..8}` even after participating in the real constraint `Cost_ >= Hours_ * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
+In this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
 
 You can also add an FD domain to a variable that already has a real interval:
 
-```
+```clausal
 % Start with a real constraint, then restrict to integers
-mixed(X_) <- (
-    InReal(X_, 0.0, 100.0)
-    and X_ * X_ <= 50.0
-    and InDomain(X_, 1, 10)    % adds FD domain alongside real
-    and Label([X_])
+mixed(X) <- (
+    InReal(X, 0.0, 100.0)
+    and X * X <= 50.0
+    and InDomain(X, 1, 10)    % adds FD domain alongside real
+    and Label([X])
 )
 ```
 
@@ -132,13 +132,13 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ### Float literals trigger CLP(R) automatically
 
-```
+```clausal
 % No InReal needed — the float literal 9.0 triggers CLP(R)
-pythagorean_real(X_, Y_) <- (
-    InReal(X_, 0.0, 10.0)
-    and InReal(Y_, 0.0, 10.0)
-    and X_ * X_ + Y_ * Y_ == 25.0
-    and LabelReal([X_, Y_], 1.0e-6)
+pythagorean_real(X, Y) <- (
+    InReal(X, 0.0, 10.0)
+    and InReal(Y, 0.0, 10.0)
+    and X * X + Y * Y == 25.0
+    and LabelReal([X, Y], 1.0e-6)
 )
 ```
 

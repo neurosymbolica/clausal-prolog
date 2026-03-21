@@ -6,13 +6,13 @@ The `scipy_stats` module wraps [`scipy.stats`](https://docs.scipy.org/doc/scipy/
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_stats, [StatsMean, StatsPearsonCorrelation, ResultGet, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_stats, [StatsMean, ...])
 ```
 
@@ -71,7 +71,7 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 
 ### Descriptive statistics (Tier 1)
 
-```
+```clausal
 StatsDescribe(A, RESULT)
     Compute several descriptive statistics of the data in A.
     RESULT: dict {nobs, minmax, mean, variance, skewness, kurtosis}
@@ -115,14 +115,14 @@ StatsMedianAbsoluteDeviation(X, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsMean, StatsDescribe, ResultGet])
 
-Summarise(DATA_, MEAN_) <- (
-    StatsMean(DATA_, MEAN_) and
-    StatsDescribe(DATA_, DESC_) and
-    ResultGet(DESC_, 'variance', VAR_) and
-    ++print(f"mean={float(MEAN_):.3f}, var={float(VAR_):.3f}")
+Summarise(DATA, MEAN) <- (
+    StatsMean(DATA, MEAN) and
+    StatsDescribe(DATA, DESC) and
+    ResultGet(DESC, 'variance', VAR) and
+    ++print(f"mean={float(MEAN):.3f}, var={float(VAR):.3f}")
 )
 ```
 
@@ -130,7 +130,7 @@ Summarise(DATA_, MEAN_) <- (
 
 ### Correlation and regression (Tier 2)
 
-```
+```clausal
 StatsPearsonCorrelation(X, Y, RESULT)
     Pearson correlation coefficient and p-value.
     RESULT: dict {statistic, pvalue}
@@ -160,13 +160,13 @@ StatsTheilSlopes(Y, X, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsLinearRegression, ResultGet])
 
-LinearFit(X_, Y_, SLOPE_, INTERCEPT_) <- (
-    StatsLinearRegression(X_, Y_, RESULT_) and
-    ResultGet(RESULT_, 'slope', SLOPE_) and
-    ResultGet(RESULT_, 'intercept', INTERCEPT_)
+LinearFit(X, Y, SLOPE, INTERCEPT) <- (
+    StatsLinearRegression(X, Y, RESULT) and
+    ResultGet(RESULT, 'slope', SLOPE) and
+    ResultGet(RESULT, 'intercept', INTERCEPT)
 )
 ```
 
@@ -174,7 +174,7 @@ LinearFit(X_, Y_, SLOPE_, INTERCEPT_) <- (
 
 ### Parametric hypothesis tests (Tier 2)
 
-```
+```clausal
 StatsTTest1Sample(A, POPMEAN, RESULT)
     One-sample t-test: is the mean of A different from POPMEAN?
     RESULT: dict {statistic, pvalue, df}
@@ -208,12 +208,12 @@ StatsFisherExact(TABLE, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsTTestIndependent, ResultGet])
 
-TwoGroupTest(GROUP_A_, GROUP_B_, PVAL_) <- (
-    StatsTTestIndependent(GROUP_A_, GROUP_B_, False, RESULT_) and
-    ResultGet(RESULT_, 'pvalue', PVAL_)
+TwoGroupTest(GROUP_A, GROUP_B, PVAL) <- (
+    StatsTTestIndependent(GROUP_A, GROUP_B, False, RESULT) and
+    ResultGet(RESULT, 'pvalue', PVAL)
 )
 ```
 
@@ -221,7 +221,7 @@ TwoGroupTest(GROUP_A_, GROUP_B_, PVAL_) <- (
 
 ### Nonparametric tests (Tier 2)
 
-```
+```clausal
 StatsMannWhitneyU(X, Y, RESULT)
     Mann-Whitney U rank test.
     RESULT: dict {statistic, pvalue}
@@ -252,12 +252,12 @@ StatsShapiro(X, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsKruskal, ResultGet])
 
-GroupDifference(GROUPS_, PVAL_) <- (
-    StatsKruskal(GROUPS_, RESULT_) and
-    ResultGet(RESULT_, 'pvalue', PVAL_)
+GroupDifference(GROUPS, PVAL) <- (
+    StatsKruskal(GROUPS, RESULT) and
+    ResultGet(RESULT, 'pvalue', PVAL)
 )
 ```
 
@@ -265,7 +265,7 @@ GroupDifference(GROUPS_, PVAL_) <- (
 
 ### Distribution evaluation (Tier 1 functional)
 
-```
+```clausal
 StatsDist(DIST, METHOD, X, RESULT)
     Call scipy.stats.<DIST>.<METHOD>(X) for any distribution and method.
     DIST:   string name of a scipy.stats distribution (e.g. 'norm', 'expon')
@@ -304,19 +304,19 @@ StatsNormalRvs(LOC, SCALE, SIZE, RESULT)
 
 Example:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsNormalPdf, StatsNormalCdf, StatsDist])
 
 % Probability that X ~ N(0,1) falls in [-1, 1]
-NormalInterval(P_) <- (
-    StatsNormalCdf(1.0, HIGH_) and
-    StatsNormalCdf(-1.0, LOW_) and
-    P_ is ++(float(HIGH_) - float(LOW_))
+NormalInterval(P) <- (
+    StatsNormalCdf(1.0, HIGH) and
+    StatsNormalCdf(-1.0, LOW) and
+    P is ++(float(HIGH) - float(LOW))
 )
 
 % Generic: exponential distribution entropy
-ExponEntropy(H_) <- (
-    StatsDist('expon', 'entropy', H_)
+ExponEntropy(H) <- (
+    StatsDist('expon', 'entropy', H)
 )
 ```
 
@@ -326,7 +326,7 @@ ExponEntropy(H_) <- (
 
 Freeze a distribution with fixed parameters, then evaluate it repeatedly without re-creating the distribution object each time.
 
-```
+```clausal
 StatsFreezeDist(DIST, PARAMS_DICT, RESULT)
     Create a frozen scipy.stats distribution.
     DIST:        string name of a scipy.stats distribution (e.g. 'norm', 'beta')
@@ -359,37 +359,37 @@ StatsFrozenFree(HANDLE)
 
 Example — reuse a frozen beta distribution:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
                             StatsFrozenStats, StatsFrozenFree])
 
-BetaAnalysis(HANDLE_) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), HANDLE_) and
-    StatsFrozenPdf(HANDLE_, 0.3, PDF_) and
-    StatsFrozenCdf(HANDLE_, 0.3, CDF_) and
-    StatsFrozenStats(HANDLE_, STATS_) and
-    ++print(f"pdf={float(PDF_):.4f}, cdf={float(CDF_):.4f}") and
-    StatsFrozenFree(HANDLE_)
+BetaAnalysis(HANDLE) <- (
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), HANDLE) and
+    StatsFrozenPdf(HANDLE, 0.3, PDF) and
+    StatsFrozenCdf(HANDLE, 0.3, CDF) and
+    StatsFrozenStats(HANDLE, STATS) and
+    ++print(f"pdf={float(PDF):.4f}, cdf={float(CDF):.4f}") and
+    StatsFrozenFree(HANDLE)
 )
 ```
 
 Example — bidirectional `StatsFrozenCdf` as CDF and quantile function:
 
-```
+```clausal
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
 
 # Forward: P = CDF(0.3) for Beta(2, 5)
-BetaCdf(P_) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H_) and
-    StatsFrozenCdf(H_, 0.3, P_) and
-    StatsFrozenFree(H_)
+BetaCdf(P) <- (
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H) and
+    StatsFrozenCdf(H, 0.3, P) and
+    StatsFrozenFree(H)
 )
 
 # Backward: X = quantile at P=0.5 (median) for Beta(2, 5)
-BetaMedian(X_) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H_) and
-    StatsFrozenCdf(H_, X_, 0.5) and
-    StatsFrozenFree(H_)
+BetaMedian(X) <- (
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H) and
+    StatsFrozenCdf(H, X, 0.5) and
+    StatsFrozenFree(H)
 )
 ```
 
@@ -397,7 +397,7 @@ BetaMedian(X_) <- (
 
 ### ResultGet
 
-```
+```clausal
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate (or an object with an attribute)
@@ -432,3 +432,7 @@ Common fields by predicate:
 - **`StatsNormalRvs` 1-arity**: the RESULT argument is the sole argument before `trail` — omit LOC, SCALE, and SIZE for a single standard-normal variate.
 - **Frozen distributions**: integer handles are module-global. Always call `StatsFrozenFree` when done to avoid memory leaks in long-running programmes.
 - **Exceptions**: predicates fail (no solution) when scipy raises an exception. This includes invalid input (e.g. non-square contingency tables for `StatsFisherExact`) and degenerate data.
+
+---
+
+*See also: [scipy.special](scipy_special.md) — special functions used by statistical distributions.*

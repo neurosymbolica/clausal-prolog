@@ -17,11 +17,11 @@ Two constraint solvers are built in:
 
 In `.clausal` files, `is not` has dif semantics:
 
-```
-safe_assign(X_, Y_) <- (
-    X_ is not Y_
-    and X_ is 1
-    and Y_ is 2
+```clausal
+safe_assign(X, Y) <- (
+    X is not Y
+    and X is 1
+    and Y is 2
 )
 ```
 
@@ -29,11 +29,11 @@ This succeeds because X and Y end up with different values (1 and 2), even thoug
 
 The builtin `Dif/2` can also be called explicitly:
 
-```
-constrained(X_, Y_) <- (
-    Dif(X_, Y_)
-    and X_ is 1
-    and Y_ is 2
+```clausal
+constrained(X, Y) <- (
+    Dif(X, Y)
+    and X is 1
+    and Y is 2
 )
 ```
 
@@ -41,32 +41,32 @@ constrained(X_, Y_) <- (
 
 | Clausal syntax | Semantics | Prolog equivalent |
 |---|---|---|
-| `X_ is not Y_` | Constraint: must end up different | `Dif(X, Y)` |
-| `not (X_ is Y_)` | Immediate: don't unify right now | `\=(X, Y)` |
+| `X is not Y` | Constraint: must end up different | `Dif(X, Y)` |
+| `not (X is Y)` | Immediate: don't unify right now | `\=(X, Y)` |
 
-The `is not` operator uses `dif/2` constraint semantics rather than immediate `\=`. The old immediate-check semantics are still available as `not (X_ is Y_)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
+The `is not` operator uses `dif/2` constraint semantics rather than immediate `\=`. The old immediate-check semantics are still available as `not (X is Y)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
 
 ??? example "Examples"
 
     **Constraint succeeds — terms stay different:**
-    ```
-    X_ is not Y_, X_ is 1, Y_ is 2    # succeeds: 1 ≠ 2
+    ```clausal
+    X is not Y, X is 1, Y is 2    # succeeds: 1 ≠ 2
     ```
 
     **Constraint fails — terms become equal:**
-    ```
-    X_ is not Y_, X_ is 1, Y_ is 1    # fails: dif violated when Y=1
+    ```clausal
+    X is not Y, X is 1, Y is 1    # fails: dif violated when Y=1
     ```
 
     **Multiple constraints:**
-    ```
-    X_ is not 1, X_ is not 2, X_ is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
-    X_ is not 1, X_ is not 2, X_ is 1    # fails: dif(X, 1) violated
+    ```clausal
+    X is not 1, X is not 2, X is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
+    X is not 1, X is not 2, X is 1    # fails: dif(X, 1) violated
     ```
 
     **Immediate check (old semantics):**
-    ```
-    not (X_ is Y_)    # fails if X and Y are both unbound (they CAN unify)
+    ```clausal
+    not (X is Y)    # fails if X and Y are both unbound (they CAN unify)
     ```
 
     ---
@@ -263,43 +263,43 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 ### Syntax examples
 
 **Domain declaration and labeling:**
-```
-solve(X_) <- (
-    InDomain(X_, 1, 10)
-    and Label([X_])
+```clausal
+solve(X) <- (
+    InDomain(X, 1, 10)
+    and Label([X])
 )
 ```
 
 **Chained comparison (natural Python syntax):**
-```
-bounded(X_) <- (1 <= X_ and X_ <= 10 and Label([X_]))
+```clausal
+bounded(X) <- (1 <= X and X <= 10 and Label([X]))
 ```
 
-Since `<=` is CLP(FD), `1 <= X_` and `X_ <= 10` naturally constrain X's domain.
+Since `<=` is CLP(FD), `1 <= X` and `X <= 10` naturally constrain X's domain.
 
 **N-Queens via AllDifferent:**
-```
-queens(N_, Qs_) <- (
-    InDomain(Qs_, 1, N_)
-    and AllDifferent(Qs_)
-    and Label(Qs_)
-    and check_diagonals(Qs_)
+```clausal
+queens(N, QS) <- (
+    InDomain(QS, 1, N)
+    and AllDifferent(QS)
+    and Label(QS)
+    and check_diagonals(QS)
 )
 ```
 
 **SEND + MORE = MONEY:**
-```
-sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
-    InDomain([S_, E_, N_, D_, M_, O_, R_, Y_], 0, 9)
-    and AllDifferent([S_, E_, N_, D_, M_, O_, R_, Y_])
-    and S_ != 0
-    and M_ != 0
-    and Label([S_, E_, N_, D_, M_, O_, R_, Y_])
-    and (Send_ := S_ * 1000 + E_ * 100 + N_ * 10 + D_)
-    and (More_ := M_ * 1000 + O_ * 100 + R_ * 10 + E_)
-    and (Money_ := M_ * 10000 + O_ * 1000 + N_ * 100 + E_ * 10 + Y_)
-    and (Sum_ := Send_ + More_)
-    and Sum_ == Money_
+```clausal
+sendmoney(S, E, N, D, M, O, R, Y) <- (
+    InDomain([S, E, N, D, M, O, R, Y], 0, 9)
+    and AllDifferent([S, E, N, D, M, O, R, Y])
+    and S != 0
+    and M != 0
+    and Label([S, E, N, D, M, O, R, Y])
+    and (Send := S * 1000 + E * 100 + N * 10 + D)
+    and (More := M * 1000 + O * 100 + R * 10 + E)
+    and (Money := M * 10000 + O * 1000 + N * 100 + E * 10 + Y)
+    and (Sum := Send + More)
+    and Sum == Money
 )
 ```
 
@@ -374,12 +374,12 @@ Python's bitwise operators are used for Boolean expressions:
 
 | Operator | Meaning |
 |---|---|
-| `X_ & Y_` | AND |
-| `X_ \| Y_` | OR |
-| `X_ ^ Y_` | XOR |
-| `~X_` | NOT |
-| `BoolEq(X_, Y_)` | Equivalence (iff) |
-| `BoolImpl(X_, Y_)` | Implication (X→Y) |
+| `X & Y` | AND |
+| `X \| Y` | OR |
+| `X ^ Y` | XOR |
+| `~X` | NOT |
+| `BoolEq(X, Y)` | Equivalence (iff) |
+| `BoolImpl(X, Y)` | Implication (X→Y) |
 
 These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`, `BitXor`, and `Invert` nodes pass through `term_to_ast_expr` as structural terms and are walked by `_expr_to_bdd` at runtime.
 
@@ -428,56 +428,56 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 ### Syntax examples
 
 **Posting constraints:**
-```
-Sat(X_ & Y_)                # both must be 1
-Sat(X_ | Y_)                # at least one must be 1
-Sat(~X_)                     # X must be 0
-Sat(BoolEq(X_, Y_))         # X ↔ Y (equivalence)
-Sat(BoolImpl(X_, Y_))       # X → Y (implication)
+```clausal
+Sat(X & Y)                # both must be 1
+Sat(X | Y)                # at least one must be 1
+Sat(~X)                    # X must be 0
+Sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+Sat(BoolImpl(X, Y))       # X → Y (implication)
 ```
 
 **Half adder:**
-```
-HalfAdder(X_, Y_, Sum_, Carry_) <- (
-    Sat(BoolEq(Sum_, X_ ^ Y_))
-    and Sat(BoolEq(Carry_, X_ & Y_))
+```clausal
+HalfAdder(X, Y, SUM, CARRY) <- (
+    Sat(BoolEq(SUM, X ^ Y))
+    and Sat(BoolEq(CARRY, X & Y))
 )
 ```
 
 **Tautology check (De Morgan's law):**
-```
-Taut(BoolEq(~(X_ & Y_), ~X_ | ~Y_), T_)   # T_ = 1
+```clausal
+Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 ```
 
 **Model counting:**
-```
-SatCount(X_ ^ Y_, N_)       # N_ = 2
-SatCount(X_ & Y_, N_)       # N_ = 1
-SatCount(X_ | Y_, N_)       # N_ = 3
+```clausal
+SatCount(X ^ Y, N)       # N = 2
+SatCount(X & Y, N)       # N = 1
+SatCount(X | Y, N)       # N = 3
 ```
 
 **Labeling (enumerate all solutions):**
-```
-solve(X_, Y_) <- (
-    Sat(X_ ^ Y_)
-    and BoolLabeling([X_, Y_])
+```clausal
+solve(X, Y) <- (
+    Sat(X ^ Y)
+    and BoolLabeling([X, Y])
 )
 # yields (0,1) and (1,0)
 ```
 
 **Pigeon-hole (unsatisfiable):**
-```
+```clausal
 PigeonHole() <- (
-    Sat(P11_ | P12_)
-    and Sat(P21_ | P22_)
-    and Sat(P31_ | P32_)
-    and Sat(~(P11_ & P21_))
-    and Sat(~(P11_ & P31_))
-    and Sat(~(P21_ & P31_))
-    and Sat(~(P12_ & P22_))
-    and Sat(~(P12_ & P32_))
-    and Sat(~(P22_ & P32_))
-    and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
+    Sat(P11 | P12)
+    and Sat(P21 | P22)
+    and Sat(P31 | P32)
+    and Sat(~(P11 & P21))
+    and Sat(~(P11 & P31))
+    and Sat(~(P21 & P31))
+    and Sat(~(P12 & P22))
+    and Sat(~(P12 & P32))
+    and Sat(~(P22 & P32))
+    and BoolLabeling([P11, P12, P21, P22, P31, P32])
 )
 # no solutions — 3 pigeons can't fit in 2 holes
 ```
@@ -568,12 +568,12 @@ Quick reference:
 
 The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
 
-```
+```clausal
 % Float literal triggers CLP(R)
-sqrt2(X_) <- (
-    InReal(X_, 0.0, 2.0)
-    and X_ * X_ == 2.0
-    and LabelReal([X_], 1.0e-12)
+sqrt2(X) <- (
+    InReal(X, 0.0, 2.0)
+    and X * X == 2.0
+    and LabelReal([X], 1.0e-12)
 )
 % → X ≈ 1.4142135623730951
 ```

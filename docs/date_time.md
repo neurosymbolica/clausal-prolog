@@ -8,7 +8,7 @@ The implementation lives in `clausal/modules/date_time.py`.
 
 ## Import
 
-```
+```clausal
 -import_from(date_time, [Now, Today, Date, Time, DateTime,
                          TimeDelta, DateAdd, DateSub, DateDiff,
                          FormatDate, ParseDate, DayOfWeek,
@@ -17,7 +17,7 @@ The implementation lives in `clausal/modules/date_time.py`.
 
 Or via module import:
 
-```
+```clausal
 -import_module(date_time)
 # then use date_time.Now(...), date_time.Date(...), etc.
 ```
@@ -37,12 +37,12 @@ All predicates produce and consume standard Python objects:
 
 Unification uses Python's native `==`. Any datetime method can be called via `++()` interop:
 
-```
+```clausal
 -import_from(date_time, [Date, FormatDate])
 
-IsoDate(Y_, M_, D_, S_) <- (
-    Date(Y_, M_, D_, Dt_)
-    and S_ is ++Dt_.isoformat()
+IsoDate(Y, M, D, S) <- (
+    Date(Y, M, D, DT)
+    and S is ++DT.isoformat()
 )
 ```
 
@@ -52,90 +52,90 @@ IsoDate(Y_, M_, D_, S_) <- (
 
 ### Now/1, NowUTC/1, Today/1
 
-```
-Now(Dt_)        # Dt_ = datetime.datetime.now()
-NowUTC(Dt_)     # Dt_ = datetime.datetime.now(UTC)
-Today(D_)       # D_ = datetime.date.today()
+```clausal
+Now(DT)        # DT = datetime.datetime.now()
+NowUTC(DT)     # DT = datetime.datetime.now(UTC)
+Today(D)       # D = datetime.date.today()
 ```
 
 ### Date/4 — Bidirectional
 
 `Date(Year, Month, Day, DateObj)` — construct or decompose:
 
-```
+```clausal
 # Construct
-Date(2026, 3, 16, D_)    # D_ = datetime.date(2026, 3, 16)
+Date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
 
 # Decompose
-Date(Y_, M_, D_, SomeDateObj_)    # Y_, M_, D_ bound to components
+Date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
 ```
 
 ### Time/4 — Bidirectional
 
 `Time(Hour, Minute, Second, TimeObj)`:
 
-```
-Time(14, 30, 0, T_)      # T_ = datetime.time(14, 30, 0)
-Time(H_, M_, S_, T_)      # decompose T_ into components
+```clausal
+Time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
+Time(H, M, S, T)      # decompose T into components
 ```
 
 ### DateTime/7 — Bidirectional
 
 `DateTime(Year, Month, Day, Hour, Minute, Second, DtObj)`:
 
-```
-DateTime(2026, 3, 16, 14, 30, 0, Dt_)
-# Dt_ = datetime.datetime(2026, 3, 16, 14, 30, 0)
+```clausal
+DateTime(2026, 3, 16, 14, 30, 0, DT)
+# DT = datetime.datetime(2026, 3, 16, 14, 30, 0)
 ```
 
 ### TimeDelta/3 — Bidirectional
 
 `TimeDelta(Days, Seconds, TdObj)`:
 
-```
-TimeDelta(7, 0, Td_)     # Td_ = datetime.timedelta(days=7)
-TimeDelta(D_, S_, Td_)    # decompose Td_ into days and seconds
+```clausal
+TimeDelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
+TimeDelta(D, S, TD)    # decompose TD into days and seconds
 ```
 
 ### DateAdd/3, DateSub/3
 
-```
-DateAdd(Date_, Delta_, Result_)    # Result_ = Date_ + Delta_
-DateSub(Date_, Delta_, Result_)    # Result_ = Date_ - Delta_
+```clausal
+DateAdd(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
+DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
 ```
 
 ### DateDiff/3
 
-```
-DateDiff(D1_, D2_, Td_)    # Td_ = D1_ - D2_ (timedelta)
+```clausal
+DateDiff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
 ```
 
 ### FormatDate/3
 
-```
-FormatDate(Dt_, "%Y-%m-%d", S_)    # S_ = "2026-03-16"
+```clausal
+FormatDate(DT, "%Y-%m-%d", S)    # S = "2026-03-16"
 ```
 
 ### ParseDate/3
 
-```
-ParseDate("2026-03-16", "%Y-%m-%d", Dt_)    # Dt_ = datetime.datetime(...)
+```clausal
+ParseDate("2026-03-16", "%Y-%m-%d", DT)    # DT = datetime.datetime(...)
 ```
 
 ### DayOfWeek/2
 
-```
-DayOfWeek(D_, Dow_)    # Dow_ = 0 (Monday) through 6 (Sunday)
+```clausal
+DayOfWeek(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 ```
 
 ### DateBetween/3 — Nondeterministic
 
 `DateBetween(Start, End, D)` — generates each date in the range [Start, End]:
 
-```
+```clausal
 -import_from(date_time, [Date, DateBetween])
 
-WeekDates(Start_, End_, D_) <- DateBetween(Start_, End_, D_)
+WeekDates(START, END, D) <- DateBetween(START, END, D)
 ```
 
 This is nondeterministic — it succeeds once for each date in the range.

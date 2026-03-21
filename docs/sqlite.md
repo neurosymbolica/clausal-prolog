@@ -13,8 +13,8 @@ Main <- (
     SQLiteConnect(":memory:", "mydb") and
     SQLiteExec("mydb", "CREATE TABLE users (name TEXT, age INTEGER)") and
     SQLiteExec("mydb", "INSERT INTO users VALUES (?, ?)", ["alice", 30]) and
-    SQLiteQuery("mydb", "SELECT name FROM users WHERE age > ?", [25], Name_) and
-    ++print(f"Found: {Name_}")
+    SQLiteQuery("mydb", "SELECT name FROM users WHERE age > ?", [25], NAME) and
+    ++print(f"Found: {NAME}")
 )
 ```
 
@@ -26,7 +26,7 @@ Or via module import:
 Main <- (
     sqlite.SQLiteConnect(":memory:", "db") and
     sqlite.SQLiteExec("db", "CREATE TABLE t (x INTEGER)") and
-    sqlite.SQLiteQuery("db", "SELECT x FROM t", X_)
+    sqlite.SQLiteQuery("db", "SELECT x FROM t", X)
 )
 ```
 
@@ -50,7 +50,7 @@ Connections are identified by string aliases. A module-level registry maps alias
 
 ### `SQLiteConnect/2`
 
-```
+```clausal
 SQLiteConnect(+Path, +Alias)
 ```
 
@@ -60,7 +60,7 @@ Open a SQLite database at `Path` and register it under `Alias`. `Path` can be a 
 
 ### `SQLiteDisconnect/1`
 
-```
+```clausal
 SQLiteDisconnect(+Alias)
 ```
 
@@ -68,7 +68,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 
 ### `SQLiteCurrentConnection/1`
 
-```
+```clausal
 SQLiteCurrentConnection(?Alias)
 ```
 
@@ -76,8 +76,8 @@ When `Alias` is unbound, **nondeterministically enumerates** all open connection
 
 ```clausal
 ListDbs <- (
-    SQLiteCurrentConnection(A_) and
-    ++print(f"Open: {A_}")
+    SQLiteCurrentConnection(A) and
+    ++print(f"Open: {A}")
 )
 ```
 
@@ -89,7 +89,7 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 
 ### `SQLiteQuery/3`
 
-```
+```clausal
 SQLiteQuery(+Alias, +SQL, -Row)
 ```
 
@@ -97,31 +97,31 @@ Execute a SELECT query and **nondeterministically iterate** over result rows. Ea
 
 ```clausal
 # Multi-column: Row unifies with a tuple
-AllUsers(Row_) <- SQLiteQuery("db", "SELECT name, age FROM users", Row_)
+AllUsers(ROW) <- SQLiteQuery("db", "SELECT name, age FROM users", ROW)
 
 # Single-column: Row unifies with the value directly
-AllNames(Name_) <- SQLiteQuery("db", "SELECT name FROM users", Name_)
+AllNames(NAME) <- SQLiteQuery("db", "SELECT name FROM users", NAME)
 ```
 
 **Fails** (produces zero solutions) if the query returns no rows.
 
 ### `SQLiteQuery/4`
 
-```
+```clausal
 SQLiteQuery(+Alias, +SQL, +Params, -Row)
 ```
 
 Parameterized query with `?` placeholders. `Params` is a list of values.
 
 ```clausal
-OlderThan(MinAge_, Name_) <- (
-    SQLiteQuery("db", "SELECT name FROM users WHERE age > ?", [MinAge_], Name_)
+OlderThan(MIN_AGE, NAME) <- (
+    SQLiteQuery("db", "SELECT name FROM users WHERE age > ?", [MIN_AGE], NAME)
 )
 ```
 
 ### `SQLiteExec/2`
 
-```
+```clausal
 SQLiteExec(+Alias, +SQL)
 ```
 
@@ -136,30 +136,30 @@ Setup <- (
 
 ### `SQLiteExec/3`
 
-```
+```clausal
 SQLiteExec(+Alias, +SQL, +Params)
 ```
 
 Parameterized DML with `?` placeholders. Auto-commits.
 
 ```clausal
-AddUser(Name_, Age_) <- (
-    SQLiteExec("db", "INSERT INTO users VALUES (?, ?)", [Name_, Age_])
+AddUser(NAME, AGE) <- (
+    SQLiteExec("db", "INSERT INTO users VALUES (?, ?)", [NAME, AGE])
 )
 ```
 
 ### `SQLiteRowCount/3`
 
-```
+```clausal
 SQLiteRowCount(+Alias, +SQL, -Count)
 ```
 
 Execute DML and unify `Count` with the number of affected rows.
 
 ```clausal
-Cleanup(N_) <- (
-    SQLiteRowCount("db", "DELETE FROM sessions WHERE expired = 1", N_) and
-    ++print(f"Removed {N_} expired sessions")
+Cleanup(N) <- (
+    SQLiteRowCount("db", "DELETE FROM sessions WHERE expired = 1", N) and
+    ++print(f"Removed {N} expired sessions")
 )
 ```
 
@@ -169,7 +169,7 @@ Cleanup(N_) <- (
 
 ### `SQLiteTable/2`
 
-```
+```clausal
 SQLiteTable(+Alias, ?TableName)
 ```
 
@@ -178,21 +178,21 @@ When `TableName` is unbound, **nondeterministically enumerates** all table names
 ```clausal
 HasUsersTable <- SQLiteTable("db", "users")
 
-ListTables(T_) <- SQLiteTable("db", T_)
+ListTables(T) <- SQLiteTable("db", T)
 ```
 
 ### `SQLiteColumn/4`
 
-```
+```clausal
 SQLiteColumn(+Alias, +Table, ?ColName, ?ColType)
 ```
 
 Enumerate columns of a table. Yields `(ColName, ColType)` pairs. Column types are SQLite type strings: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
 
 ```clausal
-ShowSchema(Col_, Type_) <- (
-    SQLiteColumn("db", "users", Col_, Type_) and
-    ++print(f"  {Col_}: {Type_}")
+ShowSchema(COL, TYPE) <- (
+    SQLiteColumn("db", "users", COL, TYPE) and
+    ++print(f"  {COL}: {TYPE}")
 )
 ```
 
@@ -210,12 +210,12 @@ ShowSchema(Col_, Type_) <- (
         SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
     )
     
-    AddNote(Body_) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [Body_])
-    
-    AllNotes(Id_, Body_) <- SQLiteQuery("app", "SELECT id, body FROM notes", (Id_, Body_))
-    
-    SearchNotes(Term_, Body_) <- (
-        SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [Term_], Body_)
+    AddNote(BODY) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [BODY])
+
+    AllNotes(ID, BODY) <- SQLiteQuery("app", "SELECT id, body FROM notes", (ID, BODY))
+
+    SearchNotes(TERM, BODY) <- (
+        SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [TERM], BODY)
     )
     ```
 
@@ -234,11 +234,11 @@ ShowSchema(Col_, Type_) <- (
         SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
     )
     
-    EmpDept(Emp_, Dept_) <- (
+    EmpDept(EMP, DEPT) <- (
         Setup and
         SQLiteQuery("hr",
             "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
-            (Emp_, Dept_))
+            (EMP, DEPT))
     )
     ```
 
@@ -247,11 +247,11 @@ ShowSchema(Col_, Type_) <- (
     ```clausal
     -import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
     
-    Describe(Db_) <- (
-        SQLiteTable(Db_, Table_) and
-        ++print(f"\n{Table_}:") and
-        SQLiteColumn(Db_, Table_, Col_, Type_) and
-        ++print(f"  {Col_} {Type_}")
+    Describe(DB) <- (
+        SQLiteTable(DB, TABLE) and
+        ++print(f"\n{TABLE}:") and
+        SQLiteColumn(DB, TABLE, COL, TYPE) and
+        ++print(f"  {COL} {TYPE}")
     )
     ```
 

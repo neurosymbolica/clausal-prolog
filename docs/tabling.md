@@ -10,7 +10,7 @@ The implementation lives in `clausal.logic.tabling`.
 
 Plain SLD resolution (depth-first, left-to-right) diverges on left-recursive definitions. Consider transitive closure over an acyclic graph:
 
-```
+```clausal
 -table(path/2)
 
 edge(1, 2),
@@ -37,7 +37,7 @@ Other classic programs that require tabling:
 
 Mark a predicate as tabled with the `-table` directive:
 
-```
+```clausal
 -table(path/2)
 
 path(X, Y) <- edge(X, Y)
@@ -49,7 +49,7 @@ path(X, Y) <- (
 
 The directive must appear before any clauses for that predicate. Multiple predicates can be tabled in the same module:
 
-```
+```clausal
 -table(reach_a/2)
 -table(reach_b/2)
 ```
@@ -260,27 +260,27 @@ After the SLG leader finishes driving all consumers and no new answers appear, `
 
 ### Example: symmetric game
 
-```
+```clausal
 -table(win/1)
 
 move(1, 2),
 move(2, 1),
 
-win(X_) <- (move(X_, Y_) and not win(Y_))
+win(X) <- (move(X, Y) and not win(Y))
 ```
 
 `win(1)` depends on `not win(2)`, and `win(2)` depends on `not win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
 
 ### Example: asymmetric game
 
-```
+```clausal
 -table(win/1)
 
 move("a", "b"),
 move("b", "a"),
 move("a", "c"),
 
-win(X_) <- (move(X_, Y_) and not win(Y_))
+win(X) <- (move(X, Y) and not win(Y))
 ```
 
 - `win("c")` = false (no moves from "c")

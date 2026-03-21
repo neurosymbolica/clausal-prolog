@@ -7,14 +7,14 @@ The `uuid` module provides predicates for generating, converting, and inspecting
 ```clausal
 -import_from(uuid, [UUIDv4, UUIDStr, UUIDVersion, IsUUID])
 
-MakeId(ID_) <- (
-    UUIDv4(U_) and
-    UUIDStr(U_, ID_)
+MakeId(ID) <- (
+    UUIDv4(U) and
+    UUIDStr(U, ID)
 )
 
 Main <- (
-    MakeId(ID_) and
-    ++print(f"Generated ID: {ID_}")
+    MakeId(ID) and
+    ++print(f"Generated ID: {ID}")
 )
 ```
 
@@ -24,9 +24,9 @@ Or via module import:
 -import_module(uuid)
 
 Main <- (
-    uuid.UUIDv4(U_) and
-    uuid.UUIDStr(U_, S_) and
-    ++print(S_)
+    uuid.UUIDv4(U) and
+    uuid.UUIDStr(U, S) and
+    ++print(S)
 )
 ```
 
@@ -67,8 +67,8 @@ For `UUIDv3` and `UUIDv5`, the namespace argument accepts string aliases or raw 
 | `"x500"` | `uuid.NAMESPACE_X500` |
 
 ```clausal
-UUIDv3("dns", "example.com", U_)
-UUIDv5("url", "https://example.com", U_)
+UUIDv3("dns", "example.com", U)
+UUIDv5("url", "https://example.com", U)
 ```
 
 ---
@@ -87,13 +87,13 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
 ```clausal
 % Generate a UUID and get its string form
-UUIDv4(U_) and UUIDStr(U_, S_)
+UUIDv4(U) and UUIDStr(U, S)
 
 % Parse a UUID from a string
-UUIDStr(U_, "550e8400-e29b-41d4-a716-446655440000")
+UUIDStr(U, "550e8400-e29b-41d4-a716-446655440000")
 
 % Convert to hex
-UUIDHex(U_, "550e8400e29b41d4a716446655440000")
+UUIDHex(U, "550e8400e29b41d4a716446655440000")
 ```
 
 ---
@@ -108,10 +108,10 @@ UUIDHex(U_, "550e8400e29b41d4a716446655440000")
 
 ```clausal
 % Check that a UUID is version 4
-UUIDv4(U_) and UUIDVersion(U_, 4)
+UUIDv4(U) and UUIDVersion(U, 4)
 
 % Type-check
-IsUUID(U_)
+IsUUID(U)
 ```
 
 ---
@@ -123,9 +123,9 @@ IsUUID(U_)
     ```clausal
     -import_from(uuid, [UUIDv4, UUIDStr])
     
-    NewSession(USERID_, TOKEN_) <- (
-        UUIDv4(U_) and
-        UUIDStr(U_, TOKEN_)
+    NewSession(USERID, TOKEN) <- (
+        UUIDv4(U) and
+        UUIDStr(U, TOKEN)
     )
     ```
 
@@ -134,8 +134,8 @@ IsUUID(U_)
     ```clausal
     -import_from(uuid, [UUIDv5, UUIDStr])
     
-    ResourceId(TYPE_, NAME_, ID_) <- (
-        UUIDv5("url", NAME_, U_) and
-        UUIDStr(U_, ID_)
+    ResourceId(TYPE, NAME, ID) <- (
+        UUIDv5("url", NAME, U) and
+        UUIDStr(U, ID)
     )
     ```

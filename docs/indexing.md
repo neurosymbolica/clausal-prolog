@@ -4,14 +4,14 @@
 
 Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).
 
-```
+```clausal
 color("red",   [255,   0,   0]),
 color("green", [  0, 128,   0]),
 color("blue",  [  0,   0, 255]),
 ...  # 200 more colors
 ```
 
-Querying `color("blue", X_)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `"blue"`.
+Querying `color("blue", X)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `"blue"`.
 
 ---
 
@@ -45,13 +45,13 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
 
     ```
     f(1, "a"),          # clause 0, key=1
-    f(X_, "b"),         # clause 1, default
+    f(X, "b"),          # clause 1, default
     f(2, "c"),          # clause 2, key=2
     f(3, "d"),          # clause 3, key=3
-    f(X_, "e"),         # clause 4, default
+    f(X, "e"),          # clause 4, default
     ```
 
-    When querying `f(1, Y_)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
+    When querying `f(1, Y)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
 
     To achieve this, each bucket's clause list **merges the bucket-specific clauses with all default clauses, in their original order:**
 
@@ -197,7 +197,7 @@ Querying `color("blue", X_)` without indexing tries all 203 match blocks. With f
         finally: trail.undo(_mark)
     ```
 
-    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(Name_, "warm")`) remain fully correct. Only bucket functions are affected.
+    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(NAME, "warm")`) remain fully correct. Only bucket functions are affected.
 
     ### Lazy recompile integration
 
@@ -239,13 +239,13 @@ Groundness-keyed dispatch generalises first-argument indexing to **multi-argumen
 
 First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
-```
-color("red", Temp_)      # first arg ground  → first-arg index handles this
-color(Name_, "warm")     # second arg ground → first-arg index can't help
-color(Name_, Temp_)      # neither ground    → full scan either way
+```clausal
+color("red", TEMP)       # first arg ground  → first-arg index handles this
+color(NAME, "warm")      # second arg ground → first-arg index can't help
+color(NAME, TEMP)        # neither ground    → full scan either way
 ```
 
-With groundness-keyed dispatch, querying `color(Name_, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
+With groundness-keyed dispatch, querying `color(NAME, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
 
 ??? abstract "Design"
 
@@ -340,7 +340,7 @@ With groundness-keyed dispatch, querying `color(Name_, "warm")` uses a second-ar
 
 ## Example: colour database
 
-```
+```clausal
 color("red",    "warm"),
 color("blue",   "cool"),
 color("green",  "cool"),
@@ -357,10 +357,10 @@ Plans sorted by selectivity: position 0 first, then position 1.
 
 | Query | Selector path | Clauses tried |
 |---|---|---|
-| `color("blue", X_)` | arg0 ground → pos-0 index → bucket["blue"] | 1 |
-| `color(X_, "cool")` | arg0 Var → skip; arg1 ground → pos-1 index → bucket["cool"] | 2 |
+| `color("blue", X)` | arg0 ground → pos-0 index → bucket["blue"] | 1 |
+| `color(X, "cool")` | arg0 Var → skip; arg1 ground → pos-1 index → bucket["cool"] | 2 |
 | `color("red", "warm")` | arg0 ground → pos-0 index → bucket["red"] | 1 |
-| `color(X_, Y_)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
+| `color(X, Y)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
 
 ## Interaction with first-argument indexing
 
@@ -410,18 +410,18 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 
 Without compound-key indexing, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
 
-```
-Shape(circle(R),       R) <- true
-Shape(rect(W, H),      W) <- true
-Shape(triangle(A,B,C), A) <- true
-Shape(sq(S),           S) <- true
+```clausal
+Shape(circle(R), R) <- true
+Shape(rect(W, H), W) <- true
+Shape(triangle(A, B, C), A) <- true
+Shape(sq(S), S) <- true
 ```
 
 had no indexing at all on `arg0`, even though the four clauses are perfectly discriminated by functor name.
 
 With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
 
-```
+```clausal
 Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
                          idx_dict[("circle", 1)] → circle bucket
                          Q unified with 42
@@ -433,7 +433,7 @@ Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
 
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
-```
+```clausal
 Combo(fire, dry, hot)   Combo(fire, wet, cold)
 Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
 Combo(wind, dry, hot)   Combo(wind, wet, cold)
@@ -447,7 +447,7 @@ Combo(wind, dry, hot)   Combo(wind, wet, cold)
 
 When activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
-```
+```clausal
                          both ground ──→ joint_dict[(ki, kj)] ──→ bucket_fn
                         /                                        └─ default_fn
 dispatch(*args) ───────┤  only argI ground ──→ single-I dispatch
@@ -463,7 +463,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 
 When joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
-```
+```clausal
 Level 0: {argI_key → (level1_buckets_or_None, level1_all_clauses)}
 ```
 
@@ -471,7 +471,7 @@ Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_
 
 **Level-1 default is all clauses in the level-0 bucket** (not just var-headed clauses). This is the key correctness requirement: when `argJ` is unbound at call time, every clause in the level-0 bucket is a potential match and must be tried.
 
-```
+```clausal
                        argI var ──────────────────────────────────→ fallback_fn
                       /
 dispatch(*args) ──────

@@ -6,13 +6,13 @@ The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/sc
 
 ## Import
 
-```
+```clausal
 -import_from(scipy_ndimage, [GaussianFilter, Label, Zoom, ...])
 ```
 
 Or via the canonical `py.*` path:
 
-```
+```clausal
 -import_from(py.scipy_ndimage, [GaussianFilter, ...])
 ```
 
@@ -51,7 +51,7 @@ Predicates are imported from `scipy_ndimage`, so there is no module prefix in th
 
 ### Smoothing filters
 
-```
+```clausal
 GaussianFilter(INPUT, SIGMA, RESULT)
     Gaussian smoothing of INPUT with standard deviation SIGMA.
     INPUT:  N-D real array
@@ -74,11 +74,11 @@ MedianFilter(INPUT, SIZE, RESULT)
 
 Example — smooth a noisy 1-D signal:
 
-```
+```clausal
 -import_from(scipy_ndimage, [GaussianFilter])
 
-SmoothSignal(NOISY_, SMOOTHED_) <- (
-    GaussianFilter(NOISY_, ++(2.0), SMOOTHED_)
+SmoothSignal(NOISY, SMOOTHED) <- (
+    GaussianFilter(NOISY, ++(2.0), SMOOTHED)
 )
 ```
 
@@ -86,7 +86,7 @@ SmoothSignal(NOISY_, SMOOTHED_) <- (
 
 ### Convolution
 
-```
+```clausal
 Convolve(INPUT, WEIGHTS, RESULT)
     N-D discrete convolution of INPUT with kernel WEIGHTS.
     INPUT:    N-D real array
@@ -97,12 +97,12 @@ Convolve(INPUT, WEIGHTS, RESULT)
 
 Example — edge detection with a simple difference kernel:
 
-```
+```clausal
 -import_from(scipy_ndimage, [Convolve])
 
-EdgeDetect(SIGNAL_, EDGES_) <- (
-    KERNEL_ is ++([-1.0, 0.0, 1.0]) and
-    Convolve(SIGNAL_, KERNEL_, EDGES_)
+EdgeDetect(SIGNAL, EDGES) <- (
+    KERNEL is ++([-1.0, 0.0, 1.0]) and
+    Convolve(SIGNAL, KERNEL, EDGES)
 )
 ```
 
@@ -110,7 +110,7 @@ EdgeDetect(SIGNAL_, EDGES_) <- (
 
 ### Connected-component labelling
 
-```
+```clausal
 Label(INPUT, RESULT)
     Label connected components of non-zero values in INPUT.
     INPUT:  N-D integer or boolean array (non-zero = foreground)
@@ -122,12 +122,12 @@ Label(INPUT, RESULT)
 
 Example — count blobs in a binary image:
 
-```
+```clausal
 -import_from(scipy_ndimage, [Label])
 
-CountBlobs(IMAGE_, COUNT_) <- (
-    Label(IMAGE_, LABELED_) and
-    COUNT_ is ++(int(LABELED_['num_features']))
+CountBlobs(IMAGE, COUNT) <- (
+    Label(IMAGE, LABELED) and
+    COUNT is ++(int(LABELED['num_features']))
 )
 ```
 
@@ -138,7 +138,7 @@ CountBlobs(IMAGE_, COUNT_) <- (
 All four predicates operate on boolean (or 0/1 integer) arrays and use the
 default 3×3 (or 3-point in 1-D) structuring element.
 
-```
+```clausal
 BinaryErosion(INPUT, RESULT)
     Erode: keep only True pixels whose entire neighbourhood is True.
     Shrinks foreground objects; removes isolated pixels.
@@ -158,12 +158,12 @@ BinaryClosing(INPUT, RESULT)
 
 Example — remove noise then fill gaps in a binary mask:
 
-```
+```clausal
 -import_from(scipy_ndimage, [BinaryOpening, BinaryClosing])
 
-CleanMask(RAW_MASK_, CLEAN_) <- (
-    BinaryOpening(RAW_MASK_, OPENED_) and
-    BinaryClosing(OPENED_, CLEAN_)
+CleanMask(RAW_MASK, CLEAN) <- (
+    BinaryOpening(RAW_MASK, OPENED) and
+    BinaryClosing(OPENED, CLEAN)
 )
 ```
 
@@ -171,7 +171,7 @@ CleanMask(RAW_MASK_, CLEAN_) <- (
 
 ### Geometric transforms
 
-```
+```clausal
 Zoom(INPUT, ZOOM, RESULT)
     Rescale INPUT by the given zoom factor.
     INPUT:  N-D array
@@ -195,11 +195,11 @@ Shift(INPUT, SHIFT, RESULT)
 
 Example — centre-crop after zoom:
 
-```
+```clausal
 -import_from(scipy_ndimage, [Zoom])
 
-ZoomImage(IMAGE_, FACTOR_, ZOOMED_) <- (
-    Zoom(IMAGE_, FACTOR_, ZOOMED_)
+ZoomImage(IMAGE, FACTOR, ZOOMED) <- (
+    Zoom(IMAGE, FACTOR, ZOOMED)
 )
 ```
 
@@ -207,7 +207,7 @@ ZoomImage(IMAGE_, FACTOR_, ZOOMED_) <- (
 
 ### Measurement
 
-```
+```clausal
 FindObjects(INPUT, RESULT)
     Find bounding-box slices for each labelled component in INPUT.
     INPUT:  integer-labelled array (e.g., the 'label_array' from Label)
@@ -223,12 +223,12 @@ CenterOfMass(INPUT, RESULT)
 
 Example — find the centroid of a blob:
 
-```
+```clausal
 -import_from(scipy_ndimage, [Label, CenterOfMass])
 
-BlobCentroid(BINARY_IMAGE_, CENTROID_) <- (
-    Label(BINARY_IMAGE_, LABELED_) and
-    CenterOfMass(BINARY_IMAGE_, CENTROID_)
+BlobCentroid(BINARY_IMAGE, CENTROID) <- (
+    Label(BINARY_IMAGE, LABELED) and
+    CenterOfMass(BINARY_IMAGE, CENTROID)
 )
 ```
 
@@ -238,35 +238,35 @@ BlobCentroid(BINARY_IMAGE_, CENTROID_) <- (
 
 ### Gaussian smoothing and edge detection
 
-```
+```clausal
 -import_from(scipy_ndimage, [GaussianFilter, Convolve])
 
-ProcessSignal(NOISY_, SMOOTHED_, EDGES_) <- (
-    GaussianFilter(NOISY_, ++(1.5), SMOOTHED_) and
-    KERNEL_ is ++([-1.0, 0.0, 1.0]) and
-    Convolve(SMOOTHED_, KERNEL_, EDGES_)
+ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
+    GaussianFilter(NOISY, ++(1.5), SMOOTHED) and
+    KERNEL is ++([-1.0, 0.0, 1.0]) and
+    Convolve(SMOOTHED, KERNEL, EDGES)
 )
 ```
 
 ### Label and count connected components
 
-```
+```clausal
 -import_from(scipy_ndimage, [Label, FindObjects])
 
-LabelAndLocate(BINARY_, COUNT_, REGIONS_) <- (
-    Label(BINARY_, LABELED_) and
-    COUNT_ is ++(int(LABELED_['num_features'])) and
-    FindObjects(LABELED_['label_array'], REGIONS_)
+LabelAndLocate(BINARY, COUNT, REGIONS) <- (
+    Label(BINARY, LABELED) and
+    COUNT is ++(int(LABELED['num_features'])) and
+    FindObjects(LABELED['label_array'], REGIONS)
 )
 ```
 
 ### Remove small noise blobs with morphological opening
 
-```
+```clausal
 -import_from(scipy_ndimage, [BinaryOpening])
 
-RemoveNoise(RAW_, CLEAN_) <- (
-    BinaryOpening(RAW_, CLEAN_)
+RemoveNoise(RAW, CLEAN) <- (
+    BinaryOpening(RAW, CLEAN)
 )
 ```
 
@@ -288,3 +288,7 @@ RemoveNoise(RAW_, CLEAN_) <- (
   `(centre,)`; for a 2-D array it is `(row, col)`. Index with `++(COM[0])`.
 - Predicates fail (no solution) when scipy raises an exception, or when a
   bound `RESULT` does not unify with the computed value.
+
+---
+
+*See also: [scipy.interpolate](scipy_interpolate.md) — image resampling and interpolation.*
