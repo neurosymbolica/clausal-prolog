@@ -10,9 +10,9 @@ Since Python's `logging` module is the backend, all of Python's handler ecosyste
 -import_from(log, [GetLogger, Info, Debug, Warning, Error, SetLevel])
 
 Main(NAME) <- (
-    GetLogger("myapp", L) and
-    SetLevel(L, "debug") and
-    Debug(L, f"Starting with name={NAME}")  and
+    GetLogger("myapp", L),
+    SetLevel(L, "debug"),
+    Debug(L, f"Starting with name={NAME}"),
     Info(L, f"Hello, {NAME}!")
 )
 ```
@@ -23,7 +23,7 @@ Or via module import:
 -import_module(log)
 
 Main <- (
-    log.GetLogger("myapp", L) and
+    log.GetLogger("myapp", L),
     log.Info(L, "ready")
 )
 ```
@@ -170,7 +170,7 @@ IsEnabledFor(+Logger, +Level)
 
 ```clausal
 Process(L, DATA) <- (
-    (IsEnabledFor(L, "debug") and Debug(L, f"Processing: {DATA}") or True) and
+    (IsEnabledFor(L, "debug"), Debug(L, f"Processing: {DATA}") or True),
     do_work(DATA)
 )
 ```
@@ -237,16 +237,18 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     -import_from(log, [GetLogger, Info, Warning, SetLevel])
     
     Init(L) <- (
-        GetLogger("myapp", L) and
-        SetLevel(L, "info") and
+        GetLogger("myapp", L),
+        SetLevel(L, "info"),
         Info(L, "Application started")
     )
 
     ProcessItem(L, ITEM) <- (
-        ITEM > 0 and Info(L, f"Processing item {ITEM}")
+        ITEM > 0,
+        Info(L, f"Processing item {ITEM}")
     )
     ProcessItem(L, ITEM) <- (
-        ITEM =< 0 and Warning(L, f"Skipping invalid item {ITEM}")
+        ITEM =< 0,
+        Warning(L, f"Skipping invalid item {ITEM}")
     )
     ```
 
@@ -259,13 +261,13 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ])
     
     SetupLogging(L) <- (
-        GetLogger("myapp", L) and
-        SetLevel(L, "debug") and
-        FileHandler("/var/log/myapp.log", FH) and
-        SetFormatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s") and
-        AddHandler(L, FH) and
-        StreamHandler("stderr", SH) and
-        SetFormatter(SH, "%(levelname)s: %(message)s") and
+        GetLogger("myapp", L),
+        SetLevel(L, "debug"),
+        FileHandler("/var/log/myapp.log", FH),
+        SetFormatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s"),
+        AddHandler(L, FH),
+        StreamHandler("stderr", SH),
+        SetFormatter(SH, "%(levelname)s: %(message)s"),
         AddHandler(L, SH)
     )
     ```
@@ -276,10 +278,10 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     -import_from(log, [GetLogger, Info, SetLevel])
     
     Setup <- (
-        GetLogger("myapp", PARENT) and
-        SetLevel(PARENT, "info") and
-        GetLogger("myapp.db", DBLOG) and
-        SetLevel(DBLOG, "debug") and
+        GetLogger("myapp", PARENT),
+        SetLevel(PARENT, "info"),
+        GetLogger("myapp.db", DBLOG),
+        SetLevel(DBLOG, "debug"),
         Info(DBLOG, "DB logger inherits parent's handlers")
     )
     ```

@@ -30,8 +30,8 @@ max(X, Y, Y) <- X < Y,
 ```clausal
 length([], 0),
 length([_ | REST], N) <- (
-    length(REST, N1)
-    and N := N1 + 1
+    length(REST, N1),
+    N := N1 + 1
 ),
 ```
 

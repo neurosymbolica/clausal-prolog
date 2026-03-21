@@ -8,8 +8,8 @@ The `yaml_module` module provides predicates for parsing and generating YAML, ba
 -import_from(yaml_module, [Read, Write, Get])
 
 ParseConfig(PATH, HOST, PORT) <- (
-    ReadFile(PATH, D) and
-    Get(D, ["server", "host"], HOST) and
+    ReadFile(PATH, D),
+    Get(D, ["server", "host"], HOST),
     Get(D, ["server", "port"], PORT)
 )
 ```
@@ -20,7 +20,7 @@ Or via module import:
 -import_module(yaml_module)
 
 ParseConfig(PATH, HOST) <- (
-    yaml_module.ReadFile(PATH, D) and
+    yaml_module.ReadFile(PATH, D),
     yaml_module.Get(D, ["server", "host"], HOST)
 )
 ```
@@ -74,7 +74,7 @@ Parse a YAML string into a Python object. Fails on invalid YAML.
 
 ```clausal
 Test("parse mapping") <- (
-    Read("name: alice\nage: 30", D) and
+    Read("name: alice\nage: 30", D),
     Get(D, "name", "alice")
 )
 ```
@@ -89,7 +89,7 @@ Parse a multi-document YAML string (documents separated by `---`) into a list of
 
 ```clausal
 Test("multi-doc") <- (
-    ReadAll("a: 1\n---\nb: 2", DOCS) and
+    ReadAll("a: 1\n---\nb: 2", DOCS),
     DOCS == [{"a": 1}, {"b": 2}]
 )
 ```
@@ -120,8 +120,8 @@ Serialize a Python object to a YAML string. Uses block style (`default_flow_styl
 
 ```clausal
 Test("serialize") <- (
-    Write({"x": 1, "y": 2}, S) and
-    Read(S, D) and
+    Write({"x": 1, "y": 2}, S),
+    Read(S, D),
     Get(D, "x", 1)
 )
 ```
@@ -162,7 +162,7 @@ Fails if any key is missing or index is out of range.
 
 ```clausal
 Test("nested access") <- (
-    Read("items:\n  - name: first\n  - name: second", D) and
+    Read("items:\n  - name: first\n  - name: second", D),
     Get(D, ["items", 1, "name"], "second")
 )
 ```
@@ -177,9 +177,9 @@ Test("nested access") <- (
     -import_from(yaml_module, [ReadFile, Get])
     
     DbConfig(PATH, HOST, PORT, NAME) <- (
-        ReadFile(PATH, CFG) and
-        Get(CFG, ["database", "host"], HOST) and
-        Get(CFG, ["database", "port"], PORT) and
+        ReadFile(PATH, CFG),
+        Get(CFG, ["database", "host"], HOST),
+        Get(CFG, ["database", "port"], PORT),
         Get(CFG, ["database", "name"], NAME)
     )
     ```
@@ -190,9 +190,9 @@ Test("nested access") <- (
     -import_from(yaml_module, [Read, Write, Get])
     
     RoundTrip(YAML, KEY, VAL) <- (
-        Read(YAML, D) and
-        Write(D, S) and
-        Read(S, D2) and
+        Read(YAML, D),
+        Write(D, S),
+        Read(S, D2),
         Get(D2, KEY, VAL)
     )
     ```
@@ -203,7 +203,7 @@ Test("nested access") <- (
     -import_from(yaml_module, [ReadAll, Get])
     
     ServiceNames(YAML, NAMES) <- (
-        ReadAll(YAML, DOCS) and
+        ReadAll(YAML, DOCS),
         MapList([D, N] >> Get(D, ["metadata", "name"], N), DOCS, NAMES)
     )
     ```
@@ -214,7 +214,7 @@ Test("nested access") <- (
     -import_from(yaml_module, [Read])
     
     AllKeys(YAML, KEYS) <- (
-        Read(YAML, D) and
+        Read(YAML, D),
         KEYS is ++(list(D.keys()))
     )
     ```

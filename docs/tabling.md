@@ -266,7 +266,7 @@ After the SLG leader finishes driving all consumers and no new answers appear, `
 move(1, 2),
 move(2, 1),
 
-win(X) <- (move(X, Y) and not win(Y))
+win(X) <- (move(X, Y), not win(Y)),
 ```
 
 `win(1)` depends on `not win(2)`, and `win(2)` depends on `not win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
@@ -280,7 +280,7 @@ move("a", "b"),
 move("b", "a"),
 move("a", "c"),
 
-win(X) <- (move(X, Y) and not win(Y))
+win(X) <- (move(X, Y), not win(Y)),
 ```
 
 - `win("c")` = false (no moves from "c")

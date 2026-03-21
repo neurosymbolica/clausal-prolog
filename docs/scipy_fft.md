@@ -96,8 +96,8 @@ Example — frequency analysis of a sine wave:
 -import_from(scipy_fft, [FFTransform, FFTFrequencies])
 
 FrequencySpectrum(SIGNAL, FREQS, SPECTRUM) <- (
-    FFTransform(SIGNAL, SPECTRUM) and
-    LEN is ++(len(SIGNAL)) and
+    FFTransform(SIGNAL, SPECTRUM),
+    LEN is ++(len(SIGNAL)),
     FFTFrequencies(LEN, FREQS)
 )
 ```
@@ -124,7 +124,7 @@ Example — round-trip:
 -import_from(scipy_fft, [FFTransform2D])
 
 RoundTrip2D(IMAGE, RECOVERED) <- (
-    FFTransform2D(IMAGE, SPECTRUM) and
+    FFTransform2D(IMAGE, SPECTRUM),
     FFTransform2D(RECOVERED, SPECTRUM)
 )
 ```
@@ -167,10 +167,10 @@ Example — filter a 1-D signal in the frequency domain:
 -import_from(scipy_fft, [RealFFT])
 
 LowPassFilter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
-    RealFFT(SIGNAL, SPECTRUM) and
+    RealFFT(SIGNAL, SPECTRUM),
     ZEROED is ++(
         [SPECTRUM[i] if i < int(CUTOFF_BIN) else 0.0
-         for i in range(len(SPECTRUM))]) and
+         for i in range(len(SPECTRUM))]),
     RealFFT(FILTERED, ++ZEROED)
 )
 ```
@@ -239,10 +239,10 @@ Example — plot-ready spectrum:
 -import_from(scipy_fft, [FFTransform, FFTFrequencies, FFTShift])
 
 CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
-    LEN is ++(len(SIGNAL)) and
-    FFTransform(SIGNAL, SPECTRUM) and
-    FFTFrequencies(LEN, FREQS) and
-    FFTShift(SPECTRUM, SPECTRUM_CENTRED) and
+    LEN is ++(len(SIGNAL)),
+    FFTransform(SIGNAL, SPECTRUM),
+    FFTFrequencies(LEN, FREQS),
+    FFTShift(SPECTRUM, SPECTRUM_CENTRED),
     FFTShift(FREQS, FREQS_CENTRED)
 )
 ```
@@ -257,10 +257,10 @@ CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 -import_from(scipy_fft, [FFTransform])
 
 TestRoundTrip(SIGNAL) <- (
-    FFTransform(SIGNAL, SPECTRUM) and
-    FFTransform(RECOVERED, SPECTRUM) and
+    FFTransform(SIGNAL, SPECTRUM),
+    FFTransform(RECOVERED, SPECTRUM),
     % check first element recovered correctly
-    ERR is ++(abs(float(RECOVERED[0].real) - float(SIGNAL[0]))) and
+    ERR is ++(abs(float(RECOVERED[0].real) - float(SIGNAL[0]))),
     ERR < 1e-10
 )
 ```
@@ -272,9 +272,9 @@ TestRoundTrip(SIGNAL) <- (
 
 % Linear convolution of two equal-length signals (circular; pad as needed)
 FFTConvolve(A, B, RESULT) <- (
-    FFTransform(A, FA) and
-    FFTransform(B, FB) and
-    PRODUCT is ++(FA * FB) and
+    FFTransform(A, FA),
+    FFTransform(B, FB),
+    PRODUCT is ++(FA * FB),
     FFTransform(RESULT, ++PRODUCT)
 )
 ```
@@ -285,7 +285,7 @@ FFTConvolve(A, B, RESULT) <- (
 -import_from(scipy_fft, [FFTransform2D, FFTShift])
 
 ImageSpectrum(IMAGE, CENTRED_SPECTRUM) <- (
-    FFTransform2D(IMAGE, SPECTRUM) and
+    FFTransform2D(IMAGE, SPECTRUM),
     FFTShift(SPECTRUM, CENTRED_SPECTRUM)
 )
 ```

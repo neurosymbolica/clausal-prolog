@@ -96,7 +96,7 @@ Example:
 
 ```clausal
 ComputeCoefficients(N, K, COEFF) <- (
-    Comb(N, K, COEFF) and
+    Comb(N, K, COEFF),
     ++print(f"C({N},{K}) = {COEFF}")
 )
 ```
@@ -135,9 +135,9 @@ NormalCdf(X, 0.975)
 
 # Round-trip
 CheckQuantile(X) <- (
-    NormalCdf(X, P) and
-    NormalCdf(X2, P) and
-    DIFF is ++(abs(float(X2) - float(X))) and
+    NormalCdf(X, P),
+    NormalCdf(X2, P),
+    DIFF is ++(abs(float(X2) - float(X))),
     DIFF < 1e-9
 )
 ```
@@ -182,9 +182,9 @@ Example — round-trip through Box-Cox transform:
 
 ```clausal
 BoxcoxRoundTrip(LAM, X) <- (
-    Boxcox(LAM, X, Y) and
-    Boxcox(LAM, X2, Y) and
-    DIFF is ++(abs(float(X2) - float(X))) and
+    Boxcox(LAM, X, Y),
+    Boxcox(LAM, X2, Y),
+    DIFF is ++(abs(float(X2) - float(X))),
     DIFF < 1e-9
 )
 ```
@@ -262,7 +262,7 @@ Example — stable log-sum using `LogSumExp`:
 
 ```clausal
 StableLogProb(LOGITS, LP) <- (
-    LogSumExp(LOGITS, Z) and
+    LogSumExp(LOGITS, Z),
     LP is ++(LOGITS - float(Z))
 )
 ```
@@ -329,16 +329,16 @@ XLog1pY(X, Y, RESULT)
 
 # Matérn 5/2 covariance function value at distance D
 Matern52(D, NU_5_2, RESULT) <- (
-    SQRT5 is ++(5.0 ** 0.5) and
-    ARG is SQRT5 * D and
-    TERM1 is ARG and
-    TERM2 is ARG * ARG / 3.0 and
+    SQRT5 is ++(5.0 ** 0.5),
+    ARG is SQRT5 * D,
+    TERM1 is ARG,
+    TERM2 is ARG * ARG / 3.0,
     RESULT is ++(float(NU_5_2) * (1.0 + float(TERM1) + float(TERM2)) * 2.718281828 ** (-(float(TERM1))))
 )
 
 # First zero of J_0 (wave antinodes)
 FirstAntinode(ZERO) <- (
-    BesselJZeros(0, 1, ZEROS) and
+    BesselJZeros(0, 1, ZEROS),
     ZERO is ++float(list(ZEROS)[0])
 )
 ```

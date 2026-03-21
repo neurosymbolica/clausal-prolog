@@ -78,8 +78,8 @@ Example:
 
 ```clausal
 MinimizeQuadratic(RESULT) <- (
-    MinimizeScalar(++(lambda x: (x - 3.0)**2), RESULT) and
-    ResultGet(RESULT, 'x', X) and
+    MinimizeScalar(++(lambda x: (x - 3.0)**2), RESULT),
+    ResultGet(RESULT, 'x', X),
     ++print(f"minimum at x={float(X):.4f}")
 )
 ```
@@ -110,7 +110,7 @@ Example:
 
 RosenbrockMinimum(X) <- (
     Minimize(++(lambda x: (1 - x[0])**2 + 100*(x[1] - x[0]**2)**2),
-             ++([0.0, 0.0]), 'L-BFGS-B', RESULT) and
+             ++([0.0, 0.0]), 'L-BFGS-B', RESULT),
     ResultGet(RESULT, 'x', X)
 )
 ```
@@ -154,7 +154,7 @@ GlobalMin(X) <- (
         ++(lambda x: x[0]**2 * __import__('math').sin(4*x[0])),
         ++([ (-10, 10) ]),
         42,
-        RESULT) and
+        RESULT),
     ResultGet(RESULT, 'x', X)
 )
 ```
@@ -192,7 +192,7 @@ Example — fit an exponential decay:
 
 FitDecay(XDATA, YDATA, PARAMS) <- (
     CurveFit(++(lambda x, a, b: a * __import__('numpy').exp(-b * x)),
-             XDATA, YDATA, ++([1.0, 0.5]), RESULT) and
+             XDATA, YDATA, ++([1.0, 0.5]), RESULT),
     ResultGet(RESULT, 'popt', PARAMS)
 )
 ```
@@ -234,9 +234,9 @@ Example:
 -import_from(scipy_optimize, [RootScalar, ResultGet])
 
 SquareRoot(N, ROOT) <- (
-    N > 0 and
+    N > 0,
     RootScalar(++(lambda x: x**2 - float(N)),
-               'brentq', ++([0.0, float(N) + 1.0]), RESULT) and
+               'brentq', ++([0.0, float(N) + 1.0]), RESULT),
     ResultGet(RESULT, 'root', ROOT)
 )
 ```
@@ -289,7 +289,7 @@ Example — two-variable LP:
 % Maximise x1 + 2*x2 subject to x1 + x2 <= 4, x1,x2 >= 0
 % Equivalent to: minimise -x1 - 2*x2
 LpSolution(X) <- (
-    LinearProgram(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT) and
+    LinearProgram(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT),
     ResultGet(RESULT, 'x', X)
 )
 ```
@@ -300,9 +300,9 @@ Example — MILP with integrality constraints:
 -import_from(scipy_optimize, [MixedIntegerLinearProgram, LinearConstraint, Bounds, ResultGet])
 
 IntegerPlan(X) <- (
-    LinearConstraint(++([[1.0, 1.0]]), ++([0.0]), ++([4.0]), CON) and
-    Bounds(++([0.0, 0.0]), ++([3.0, 3.0]), BDS) and
-    MixedIntegerLinearProgram(++([-1.0, -2.0]), CON, ++([1, 1]), BDS, RESULT) and
+    LinearConstraint(++([[1.0, 1.0]]), ++([0.0]), ++([4.0]), CON),
+    Bounds(++([0.0, 0.0]), ++([3.0, 3.0]), BDS),
+    MixedIntegerLinearProgram(++([-1.0, -2.0]), CON, ++([1, 1]), BDS, RESULT),
     ResultGet(RESULT, 'x', X)
 )
 ```
@@ -349,9 +349,9 @@ RosenbrockMin(X, Y) <- (
         ++(lambda v: (v[0] - 1.0)**2 + 100.0*(v[1] - v[0]**2)**2),
         ++([0.0, 0.0]),
         'L-BFGS-B',
-        RESULT) and
-    ResultGet(RESULT, 'x', V) and
-    X is ++float(V[0]) and
+        RESULT),
+    ResultGet(RESULT, 'x', V),
+    X is ++float(V[0]),
     Y is ++float(V[1])
 )
 ```

@@ -17,10 +17,10 @@ These are compiled inline by the compiler — they are not dispatched as builtin
 squares(NS, SQS) <- (
     FindAll(
         SQ,
-        (In(X, NS) and (SQ := X * X)),
+        (In(X, NS), SQ := X * X),
         SQS,
     )
-)
+),
 ```
 
 If Goal has no solutions, Bag is unified with `[]`.
@@ -31,8 +31,8 @@ If Goal has no solutions, Bag is unified with `[]`.
 
 ```clausal
 adults(PEOPLE, ADULTS) <- (
-    BagOf(P, (In(P, PEOPLE) and age(P, A) and A >= 18), ADULTS)
-)
+    BagOf(P, (In(P, PEOPLE), age(P, A), A >= 18), ADULTS)
+),
 ```
 
 ### SetOf/3
@@ -175,9 +175,9 @@ sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K := abs(X))), XS, SS)
 
 ```clausal
 double_positives(XS, RS) <- FilterMap(
-    ((X, Y) <- (X > 0 and (Y := X * 2))),
+    ((X, Y) <- (X > 0, Y := X * 2)),
     XS, RS
-)
+),
 ```
 
 ### Additional List Predicates
@@ -196,7 +196,7 @@ double_positives(XS, RS) <- FilterMap(
 
     ```clausal
     # FindAll with inline goal — no lambda required
-    squares(NS, SQS) <- FindAll(SQ, (In(X, NS) and (SQ := X * X)), SQS)
+    squares(NS, SQS) <- FindAll(SQ, (In(X, NS), SQ := X * X), SQS),
 
     # ForAll with inline condition and action
     all_positive(NS) <- ForAll(In(X, NS), X > 0)

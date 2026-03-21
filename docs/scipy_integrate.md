@@ -84,7 +84,7 @@ Example:
 -import_from(scipy_integrate, [Quad, ResultGet])
 
 IntegrateSin(V) <- (
-    Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT) and
+    Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT),
     ResultGet(RESULT, 'value', V)
 )
 ```
@@ -162,9 +162,9 @@ ExponentialDecay(T_FINAL, Y_FINAL) <- (
         ++(lambda t, y: [-y[0]]),
         ++([0.0, float(T_FINAL)]),
         ++([1.0]),
-        RESULT) and
-    ResultGet(RESULT, 'success', True) and
-    ResultGet(RESULT, 'y', Y) and
+        RESULT),
+    ResultGet(RESULT, 'success', True),
+    ResultGet(RESULT, 'y', Y),
     Y_FINAL is ++(float(Y[0, -1]))
 )
 ```
@@ -245,7 +245,7 @@ SinIntegral(VALUE) <- (
     Quad(++(lambda x: __import__('math').sin(x)),
          ++(0.0),
          ++(3.14159265358979),
-         RESULT) and
+         RESULT),
     ResultGet(RESULT, 'value', VALUE)
 )
 ```
@@ -262,9 +262,9 @@ LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
         ++([0.0, float(T_FINAL)]),
         ++([float(Y0)]),
         'RK45',
-        RESULT) and
-    ResultGet(RESULT, 'success', True) and
-    ResultGet(RESULT, 'y', Y) and
+        RESULT),
+    ResultGet(RESULT, 'success', True),
+    ResultGet(RESULT, 'y', Y),
     Y_FINAL is ++(float(Y[0, -1]))
 )
 ```
@@ -276,7 +276,7 @@ LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
 
 % Integrate a sampled signal using multiple methods
 CompareIntegrals(Y, TRAP, SIMP) <- (
-    Trapezoid(Y, TRAP) and
+    Trapezoid(Y, TRAP),
     Simpson(Y, SIMP)
 )
 ```

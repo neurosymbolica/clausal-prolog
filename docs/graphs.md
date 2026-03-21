@@ -8,10 +8,10 @@ The `graphs` module provides predicates for graph creation, traversal, pathfindi
 -import_from(graphs, [Vertices, ShortestPath, IsConnected])
 
 Main <- (
-    G = [["a", "b"], ["b", "c"], ["a", "c"]] and
-    Vertices(G, V) and
-    ++print(f"Vertices: {V}") and
-    ShortestPath(G, "a", "c", P) and
+    G = [["a", "b"], ["b", "c"], ["a", "c"]],
+    Vertices(G, V),
+    ++print(f"Vertices: {V}"),
+    ShortestPath(G, "a", "c", P),
     ++print(f"Shortest path: {P}")
 )
 ```
@@ -22,8 +22,8 @@ Or via module import:
 -import_module(graphs)
 
 Main <- (
-    G = [["a", "b"], ["b", "c"]] and
-    graphs.Vertices(G, V) and
+    G = [["a", "b"], ["b", "c"]],
+    graphs.Vertices(G, V),
     graphs.IsConnected(G)
 )
 ```

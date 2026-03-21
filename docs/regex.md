@@ -51,7 +51,7 @@ Named groups using ALLCAPS or trailing-underscore names are automatically bound 
 
 ```clausal
 Test("auto-bind YEAR") <- (
-    YEAR is "2026" and
+    YEAR is "2026",
     Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03")
 )
 ```

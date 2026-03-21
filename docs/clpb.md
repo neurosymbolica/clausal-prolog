@@ -84,8 +84,8 @@ Enumerates all 0/1 assignments for a list of variables:
 
 ```clausal
 solve(X, Y) <- (
-    Sat(X ^ Y)
-    and BoolLabeling([X, Y])
+    Sat(X ^ Y),
+    BoolLabeling([X, Y])
 )
 # yields (0, 1) and (1, 0)
 ```
@@ -98,8 +98,8 @@ solve(X, Y) <- (
 
     ```clausal
     HalfAdder(X, Y, SUM, CARRY) <- (
-        Sat(BoolEq(SUM, X ^ Y))
-        and Sat(BoolEq(CARRY, X & Y))
+        Sat(BoolEq(SUM, X ^ Y)),
+        Sat(BoolEq(CARRY, X & Y))
     )
     ```
 
@@ -109,16 +109,16 @@ solve(X, Y) <- (
 
     ```clausal
     PigeonHole() <- (
-        Sat(P11 | P12)
-        and Sat(P21 | P22)
-        and Sat(P31 | P32)
-        and Sat(~(P11 & P21))
-        and Sat(~(P11 & P31))
-        and Sat(~(P21 & P31))
-        and Sat(~(P12 & P22))
-        and Sat(~(P12 & P32))
-        and Sat(~(P22 & P32))
-        and BoolLabeling([P11, P12, P21, P22, P31, P32])
+        Sat(P11 | P12),
+        Sat(P21 | P22),
+        Sat(P31 | P32),
+        Sat(~(P11 & P21)),
+        Sat(~(P11 & P31)),
+        Sat(~(P21 & P31)),
+        Sat(~(P12 & P22)),
+        Sat(~(P12 & P32)),
+        Sat(~(P22 & P32)),
+        BoolLabeling([P11, P12, P21, P22, P31, P32])
     )
     # no solutions
     ```

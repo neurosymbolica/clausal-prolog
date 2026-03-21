@@ -8,9 +8,9 @@ The `sklearn` module provides predicates for machine learning via [scikit-learn]
 -import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict, Score])
 
 TrainAndPredict(ALGO, DATASET, PREDS) <- (
-    LoadDataset(DATASET, D) and
-    Fit(Est(ALGO, {}), D, F) and
-    D is ("Dataset", X, Y) and
+    LoadDataset(DATASET, D),
+    Fit(Est(ALGO, {}), D, F),
+    D is ("Dataset", X, Y),
     Predict(F, X, PREDS)
 )
 ```
@@ -21,9 +21,9 @@ Or via module import:
 -import_module(sklearn)
 
 Main <- (
-    sklearn.LoadDataset("iris", D) and
-    sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F) and
-    sklearn.Score(F, D, S) and
+    sklearn.LoadDataset("iris", D),
+    sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F),
+    sklearn.Score(F, D, S),
     ++print(f"Accuracy: {S}")
 )
 ```
@@ -63,10 +63,10 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 ```clausal
 % Destructure a dataset
-LoadDataset("iris", D) and D is ("Dataset", X, Y)
+LoadDataset("iris", D), D is ("Dataset", X, Y)
 
 % Destructure a fitted model
-Fit(Est("svc", {}), D, F) and F is ("Fitted", E, H)
+Fit(Est("svc", {}), D, F), F is ("Fitted", E, H)
 ```
 
 ---
@@ -116,8 +116,8 @@ Algorithm(ALGO, "regressor")
 
 ```clausal
 % Load and split iris
-LoadDataset("iris", D) and
-SplitData(D, 0.2, 42, S) and
+LoadDataset("iris", D),
+SplitData(D, 0.2, 42, S),
 S is ("Split", TRAIN, TEST)
 
 % Synthetic classification data
@@ -142,15 +142,15 @@ MakeDataset("classification",
 
 ```clausal
 % Classification workflow
-LoadDataset("iris", D) and
-Fit(Est("random_forest", {"n_estimators": 100}), D, F) and
-D is ("Dataset", X, Y) and
+LoadDataset("iris", D),
+Fit(Est("random_forest", {"n_estimators": 100}), D, F),
+D is ("Dataset", X, Y),
 Predict(F, X, PREDS)
 
 % PCA transform
-LoadDataset("iris", D) and
-D is ("Dataset", X, Y) and
-Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F) and
+LoadDataset("iris", D),
+D is ("Dataset", X, Y),
+Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F),
 Transform(F, X, REDUCED)
 ```
 
@@ -173,7 +173,7 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 ```clausal
 % Score a classifier
-Score(F, D, S) and S > 0.9
+Score(F, D, S), S > 0.9
 
 % 3-fold cross-validation
 CrossValScore(Est("logistic_regression", {"max_iter": 200}),
@@ -200,9 +200,9 @@ Steps are a list of `(name, Est(...))` tuples:
 ```clausal
 Pipeline([("scaler", Est("standard_scaler", {})),
           ("clf", Est("logistic_regression", {"max_iter": 200}))],
-         PIPE) and
-LoadDataset("iris", D) and
-Fit(PIPE, D, F) and
+         PIPE),
+LoadDataset("iris", D),
+Fit(PIPE, D, F),
 Score(F, D, S)
 ```
 
@@ -220,11 +220,11 @@ Score(F, D, S)
 | `SearchResults(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
 ```clausal
-LoadDataset("iris", D) and
+LoadDataset("iris", D),
 GridSearch(Est("svc", {}),
            {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
-           D, 3, BEST) and
-BestParams(BEST, PARAMS) and
+           D, 3, BEST),
+BestParams(BEST, PARAMS),
 BestScore(BEST, SCORE)
 ```
 
@@ -237,7 +237,7 @@ BestScore(BEST, SCORE)
 | `Learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
 ```clausal
-Fit(Est("random_forest", {"n_estimators": 10}), D, F) and
+Fit(Est("random_forest", {"n_estimators": 10}), D, F),
 Learned(F, "feature_importances", FI)
 ```
 
@@ -272,12 +272,12 @@ Learned(F, "feature_importances", FI)
 
     % Load, split, train, evaluate
     IrisWorkflow(SCORE, IMPORTANCES) <- (
-        LoadDataset("iris", D) and
-        SplitData(D, 0.2, 42, S) and
-        S is ("Split", TRAIN, TEST) and
+        LoadDataset("iris", D),
+        SplitData(D, 0.2, 42, S),
+        S is ("Split", TRAIN, TEST),
         Fit(Est("random_forest", {"n_estimators": 100, "random_state": 42}),
-            TRAIN, F) and
-        Score(F, TEST, SCORE) and
+            TRAIN, F),
+        Score(F, TEST, SCORE),
         Learned(F, "feature_importances", IMPORTANCES)
     )
     ```
@@ -289,15 +289,15 @@ Learned(F, "feature_importances", FI)
                            GridSearch, BestParams, BestScore])
 
     SearchBestPipeline(PARAMS, SCORE) <- (
-        LoadDataset("iris", D) and
+        LoadDataset("iris", D),
         Pipeline([("scaler", Est("standard_scaler", {})),
                   ("clf", Est("svc", {}))],
-                 PIPE) and
+                 PIPE),
         GridSearch(PIPE,
                    {"clf__C": [0.1, 1.0, 10.0],
                     "clf__kernel": ["rbf", "linear"]},
-                   D, 5, "accuracy", BEST) and
-        BestParams(BEST, PARAMS) and
+                   D, 5, "accuracy", BEST),
+        BestParams(BEST, PARAMS),
         BestScore(BEST, SCORE)
     )
     ```

@@ -14,9 +14,9 @@ WFS is required when a program has **recursion through negation** on tabled pred
 -table(wins/1)
 
 wins(X) <- (
-    move(X, Y)
-    and not wins(Y)
-)
+    move(X, Y),
+    not wins(Y)
+),
 ```
 
 Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
@@ -97,7 +97,7 @@ move(a, b),
 move(b, c),
 move(c, a),
 
-wins(X) <- (move(X, Y) and not wins(Y))
+wins(X) <- (move(X, Y), not wins(Y)),
 ```
 
 With the cyclic graph a→b→c→a, `wins` has no definite winners — all positions are "undefined" under WFS.

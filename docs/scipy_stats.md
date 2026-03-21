@@ -119,9 +119,9 @@ Example:
 -import_from(scipy_stats, [StatsMean, StatsDescribe, ResultGet])
 
 Summarise(DATA, MEAN) <- (
-    StatsMean(DATA, MEAN) and
-    StatsDescribe(DATA, DESC) and
-    ResultGet(DESC, 'variance', VAR) and
+    StatsMean(DATA, MEAN),
+    StatsDescribe(DATA, DESC),
+    ResultGet(DESC, 'variance', VAR),
     ++print(f"mean={float(MEAN):.3f}, var={float(VAR):.3f}")
 )
 ```
@@ -164,8 +164,8 @@ Example:
 -import_from(scipy_stats, [StatsLinearRegression, ResultGet])
 
 LinearFit(X, Y, SLOPE, INTERCEPT) <- (
-    StatsLinearRegression(X, Y, RESULT) and
-    ResultGet(RESULT, 'slope', SLOPE) and
+    StatsLinearRegression(X, Y, RESULT),
+    ResultGet(RESULT, 'slope', SLOPE),
     ResultGet(RESULT, 'intercept', INTERCEPT)
 )
 ```
@@ -212,7 +212,7 @@ Example:
 -import_from(scipy_stats, [StatsTTestIndependent, ResultGet])
 
 TwoGroupTest(GROUP_A, GROUP_B, PVAL) <- (
-    StatsTTestIndependent(GROUP_A, GROUP_B, False, RESULT) and
+    StatsTTestIndependent(GROUP_A, GROUP_B, False, RESULT),
     ResultGet(RESULT, 'pvalue', PVAL)
 )
 ```
@@ -256,7 +256,7 @@ Example:
 -import_from(scipy_stats, [StatsKruskal, ResultGet])
 
 GroupDifference(GROUPS, PVAL) <- (
-    StatsKruskal(GROUPS, RESULT) and
+    StatsKruskal(GROUPS, RESULT),
     ResultGet(RESULT, 'pvalue', PVAL)
 )
 ```
@@ -309,8 +309,8 @@ Example:
 
 % Probability that X ~ N(0,1) falls in [-1, 1]
 NormalInterval(P) <- (
-    StatsNormalCdf(1.0, HIGH) and
-    StatsNormalCdf(-1.0, LOW) and
+    StatsNormalCdf(1.0, HIGH),
+    StatsNormalCdf(-1.0, LOW),
     P is ++(float(HIGH) - float(LOW))
 )
 
@@ -364,11 +364,11 @@ Example — reuse a frozen beta distribution:
                             StatsFrozenStats, StatsFrozenFree])
 
 BetaAnalysis(HANDLE) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), HANDLE) and
-    StatsFrozenPdf(HANDLE, 0.3, PDF) and
-    StatsFrozenCdf(HANDLE, 0.3, CDF) and
-    StatsFrozenStats(HANDLE, STATS) and
-    ++print(f"pdf={float(PDF):.4f}, cdf={float(CDF):.4f}") and
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), HANDLE),
+    StatsFrozenPdf(HANDLE, 0.3, PDF),
+    StatsFrozenCdf(HANDLE, 0.3, CDF),
+    StatsFrozenStats(HANDLE, STATS),
+    ++print(f"pdf={float(PDF):.4f}, cdf={float(CDF):.4f}"),
     StatsFrozenFree(HANDLE)
 )
 ```
@@ -380,15 +380,15 @@ Example — bidirectional `StatsFrozenCdf` as CDF and quantile function:
 
 # Forward: P = CDF(0.3) for Beta(2, 5)
 BetaCdf(P) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H) and
-    StatsFrozenCdf(H, 0.3, P) and
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H),
+    StatsFrozenCdf(H, 0.3, P),
     StatsFrozenFree(H)
 )
 
 # Backward: X = quantile at P=0.5 (median) for Beta(2, 5)
 BetaMedian(X) <- (
-    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H) and
-    StatsFrozenCdf(H, X, 0.5) and
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H),
+    StatsFrozenCdf(H, X, 0.5),
     StatsFrozenFree(H)
 )
 ```

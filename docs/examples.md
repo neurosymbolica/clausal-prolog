@@ -13,7 +13,7 @@ Classic Fibonacci sequence with pattern-matching base cases:
 ```clausal
 Fib(N=0, F=0),
 Fib(N=1, F=1),
-Fib(N, F) <- (N > 1 and ...)
+Fib(N, F) <- (N > 1, ...)
 ```
 
 *See: [Tabling](tabling.md), [Arithmetic builtins](builtins.md#arithmetic)*

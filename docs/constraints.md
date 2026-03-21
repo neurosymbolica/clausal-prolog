@@ -19,10 +19,10 @@ In `.clausal` files, `is not` has dif semantics:
 
 ```clausal
 safe_assign(X, Y) <- (
-    X is not Y
-    and X is 1
-    and Y is 2
-)
+    X is not Y,
+    X is 1,
+    Y is 2
+),
 ```
 
 This succeeds because X and Y end up with different values (1 and 2), even though at the time of `is not` they are both unbound.
@@ -31,10 +31,10 @@ The builtin `Dif/2` can also be called explicitly:
 
 ```clausal
 constrained(X, Y) <- (
-    Dif(X, Y)
-    and X is 1
-    and Y is 2
-)
+    Dif(X, Y),
+    X is 1,
+    Y is 2
+),
 ```
 
 ### Semantics
@@ -265,14 +265,14 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 **Domain declaration and labeling:**
 ```clausal
 solve(X) <- (
-    InDomain(X, 1, 10)
-    and Label([X])
-)
+    InDomain(X, 1, 10),
+    Label([X])
+),
 ```
 
 **Chained comparison (natural Python syntax):**
 ```clausal
-bounded(X) <- (1 <= X and X <= 10 and Label([X]))
+bounded(X) <- (1 <= X, X <= 10, Label([X])),
 ```
 
 Since `<=` is CLP(FD), `1 <= X` and `X <= 10` naturally constrain X's domain.
@@ -280,27 +280,27 @@ Since `<=` is CLP(FD), `1 <= X` and `X <= 10` naturally constrain X's domain.
 **N-Queens via AllDifferent:**
 ```clausal
 queens(N, QS) <- (
-    InDomain(QS, 1, N)
-    and AllDifferent(QS)
-    and Label(QS)
-    and check_diagonals(QS)
-)
+    InDomain(QS, 1, N),
+    AllDifferent(QS),
+    Label(QS),
+    check_diagonals(QS)
+),
 ```
 
 **SEND + MORE = MONEY:**
 ```clausal
 sendmoney(S, E, N, D, M, O, R, Y) <- (
-    InDomain([S, E, N, D, M, O, R, Y], 0, 9)
-    and AllDifferent([S, E, N, D, M, O, R, Y])
-    and S != 0
-    and M != 0
-    and Label([S, E, N, D, M, O, R, Y])
-    and (Send := S * 1000 + E * 100 + N * 10 + D)
-    and (More := M * 1000 + O * 100 + R * 10 + E)
-    and (Money := M * 10000 + O * 1000 + N * 100 + E * 10 + Y)
-    and (Sum := Send + More)
-    and Sum == Money
-)
+    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
+    AllDifferent([S, E, N, D, M, O, R, Y]),
+    S != 0,
+    M != 0,
+    Label([S, E, N, D, M, O, R, Y]),
+    Send := S * 1000 + E * 100 + N * 10 + D,
+    More := M * 1000 + O * 100 + R * 10 + E,
+    Money := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    Sum := Send + More,
+    Sum == Money
+),
 ```
 
 ??? example "Python API"
@@ -439,9 +439,9 @@ Sat(BoolImpl(X, Y))       # X → Y (implication)
 **Half adder:**
 ```clausal
 HalfAdder(X, Y, SUM, CARRY) <- (
-    Sat(BoolEq(SUM, X ^ Y))
-    and Sat(BoolEq(CARRY, X & Y))
-)
+    Sat(BoolEq(SUM, X ^ Y)),
+    Sat(BoolEq(CARRY, X & Y))
+),
 ```
 
 **Tautology check (De Morgan's law):**
@@ -459,26 +459,26 @@ SatCount(X | Y, N)       # N = 3
 **Labeling (enumerate all solutions):**
 ```clausal
 solve(X, Y) <- (
-    Sat(X ^ Y)
-    and BoolLabeling([X, Y])
-)
+    Sat(X ^ Y),
+    BoolLabeling([X, Y])
+),
 # yields (0,1) and (1,0)
 ```
 
 **Pigeon-hole (unsatisfiable):**
 ```clausal
 PigeonHole() <- (
-    Sat(P11 | P12)
-    and Sat(P21 | P22)
-    and Sat(P31 | P32)
-    and Sat(~(P11 & P21))
-    and Sat(~(P11 & P31))
-    and Sat(~(P21 & P31))
-    and Sat(~(P12 & P22))
-    and Sat(~(P12 & P32))
-    and Sat(~(P22 & P32))
-    and BoolLabeling([P11, P12, P21, P22, P31, P32])
-)
+    Sat(P11 | P12),
+    Sat(P21 | P22),
+    Sat(P31 | P32),
+    Sat(~(P11 & P21)),
+    Sat(~(P11 & P31)),
+    Sat(~(P21 & P31)),
+    Sat(~(P12 & P22)),
+    Sat(~(P12 & P32)),
+    Sat(~(P22 & P32)),
+    BoolLabeling([P11, P12, P21, P22, P31, P32])
+),
 # no solutions — 3 pigeons can't fit in 2 holes
 ```
 
@@ -571,10 +571,10 @@ The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R)
 ```clausal
 % Float literal triggers CLP(R)
 sqrt2(X) <- (
-    InReal(X, 0.0, 2.0)
-    and X * X == 2.0
-    and LabelReal([X], 1.0e-12)
-)
+    InReal(X, 0.0, 2.0),
+    X * X == 2.0,
+    LabelReal([X], 1.0e-12)
+),
 % → X ≈ 1.4142135623730951
 ```
 

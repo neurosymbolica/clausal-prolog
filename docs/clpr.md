@@ -66,11 +66,11 @@ Each branch of the bisection is a separate solution. Use `LabelReal` after posti
 ```clausal
 % Two-variable linear system: 2x + 3y = 12, x - y = 1
 linear_system(X, Y) <- (
-    InReal(X, -100.0, 100.0)
-    and InReal(Y, -100.0, 100.0)
-    and 2.0 * X + 3.0 * Y == 12.0
-    and X - Y == 1.0
-    and LabelReal([X, Y], 1.0e-9)
+    InReal(X, -100.0, 100.0),
+    InReal(Y, -100.0, 100.0),
+    2.0 * X + 3.0 * Y == 12.0,
+    X - Y == 1.0,
+    LabelReal([X, Y], 1.0e-9)
 )
 % → X ≈ 3.0, Y ≈ 2.0
 ```
@@ -80,10 +80,10 @@ linear_system(X, Y) <- (
 ```clausal
 % Unit circle (first quadrant)
 unit_circle(X, Y) <- (
-    InReal(X, 0.0, 1.0)
-    and InReal(Y, 0.0, 1.0)
-    and X * X + Y * Y == 1.0
-    and LabelReal([X, Y], 1.0e-9)
+    InReal(X, 0.0, 1.0),
+    InReal(Y, 0.0, 1.0),
+    X * X + Y * Y == 1.0,
+    LabelReal([X, Y], 1.0e-9)
 )
 % → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
 ```
@@ -91,9 +91,9 @@ unit_circle(X, Y) <- (
 ```clausal
 % Square root: find x where x^2 = 2
 sqrt2(X) <- (
-    InReal(X, 0.0, 2.0)
-    and X * X == 2.0
-    and LabelReal([X], 1.0e-12)
+    InReal(X, 0.0, 2.0),
+    X * X == 2.0,
+    LabelReal([X], 1.0e-12)
 )
 % → X ≈ 1.4142135623730951
 ```
@@ -105,12 +105,12 @@ Integer and real variables can appear together. When an FD variable is involved 
 ```clausal
 % Worker schedule: integer hours, real cost
 task(HOURS, COST) <- (
-    InDomain(HOURS, 1, 8)         % integer hours (CLP(FD))
-    and InReal(COST, 10.0, 100.0) % real cost (CLP(R))
-    and COST >= HOURS * 12.5     % mixes FD + real
-    and HOURS <= 6
-    and Label([HOURS])
-    and LabelReal([COST], 1.0e-6)
+    InDomain(HOURS, 1, 8),         % integer hours (CLP(FD))
+    InReal(COST, 10.0, 100.0),     % real cost (CLP(R))
+    COST >= HOURS * 12.5,          % mixes FD + real
+    HOURS <= 6,
+    Label([HOURS]),
+    LabelReal([COST], 1.0e-6)
 )
 ```
 
@@ -121,10 +121,10 @@ You can also add an FD domain to a variable that already has a real interval:
 ```clausal
 % Start with a real constraint, then restrict to integers
 mixed(X) <- (
-    InReal(X, 0.0, 100.0)
-    and X * X <= 50.0
-    and InDomain(X, 1, 10)    % adds FD domain alongside real
-    and Label([X])
+    InReal(X, 0.0, 100.0),
+    X * X <= 50.0,
+    InDomain(X, 1, 10),    % adds FD domain alongside real
+    Label([X])
 )
 ```
 
@@ -135,10 +135,10 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 ```clausal
 % No InReal needed — the float literal 9.0 triggers CLP(R)
 pythagorean_real(X, Y) <- (
-    InReal(X, 0.0, 10.0)
-    and InReal(Y, 0.0, 10.0)
-    and X * X + Y * Y == 25.0
-    and LabelReal([X, Y], 1.0e-6)
+    InReal(X, 0.0, 10.0),
+    InReal(Y, 0.0, 10.0),
+    X * X + Y * Y == 25.0,
+    LabelReal([X, Y], 1.0e-6)
 )
 ```
 

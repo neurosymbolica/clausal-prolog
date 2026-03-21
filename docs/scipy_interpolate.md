@@ -37,9 +37,9 @@ Handles are opaque integers. They are valid until `Free` is called.
     SplineIntegral, SplineDerivative, Free])
 
 SplineWorkflow(XS, YS, QUERY_XS, VALUES, AREA) <- (
-    MakeSpline(XS, YS, 3, HANDLE) and
-    EvalSpline(HANDLE, QUERY_XS, VALUES) and
-    SplineIntegral(HANDLE, 0.0, 10.0, AREA) and
+    MakeSpline(XS, YS, 3, HANDLE),
+    EvalSpline(HANDLE, QUERY_XS, VALUES),
+    SplineIntegral(HANDLE, 0.0, 10.0, AREA),
     Free(HANDLE)
 )
 ```
@@ -178,15 +178,15 @@ Example — invert a spline to find the input that gives a target output:
 
 # Forward: evaluate the interpolator at x=2.5
 SplineForward(XS, YS, RESULT) <- (
-    MakePCHIP(XS, YS, H) and
-    EvalSpline(H, 2.5, RESULT) and
+    MakePCHIP(XS, YS, H),
+    EvalSpline(H, 2.5, RESULT),
     Free(H)
 )
 
 # Backward: find x such that spline(x) = target value
 SplineInvert(XS, YS, TARGET, X) <- (
-    MakePCHIP(XS, YS, H) and
-    EvalSpline(H, X, TARGET) and
+    MakePCHIP(XS, YS, H),
+    EvalSpline(H, X, TARGET),
     Free(H)
 )
 ```
@@ -270,8 +270,8 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 
 % Fit a cubic spline to sample data and evaluate at new points.
 FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
-    MakeCubic(XS, YS, HANDLE) and
-    EvalSpline(HANDLE, QUERY_XS, VALUES) and
+    MakeCubic(XS, YS, HANDLE),
+    EvalSpline(HANDLE, QUERY_XS, VALUES),
     Free(HANDLE)
 )
 ```
@@ -283,12 +283,12 @@ FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
     SplineDerivative, EvalSpline, Free])
 
 SplineAnalysis(XS, YS, AREA, DERIV_AT_2) <- (
-    MakeCubic(XS, YS, H) and
-    SplineIntegral(H, 0.0, 4.0, AREA) and
-    SplineDerivative(H, HD) and
-    EvalSpline(HD, ++([2.0]), DVALS) and
-    DERIV_AT_2 is ++(float(DVALS[0])) and
-    Free(H) and
+    MakeCubic(XS, YS, H),
+    SplineIntegral(H, 0.0, 4.0, AREA),
+    SplineDerivative(H, HD),
+    EvalSpline(HD, ++([2.0]), DVALS),
+    DERIV_AT_2 is ++(float(DVALS[0])),
+    Free(H),
     Free(HD)
 )
 ```
@@ -299,8 +299,8 @@ SplineAnalysis(XS, YS, AREA, DERIV_AT_2) <- (
 -import_from(scipy_interpolate, [MakeRegularGrid, EvalRegularGrid, Free])
 
 GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
-    MakeRegularGrid(POINTS, VALUES, HANDLE) and
-    EvalRegularGrid(HANDLE, QUERY, RESULT) and
+    MakeRegularGrid(POINTS, VALUES, HANDLE),
+    EvalRegularGrid(HANDLE, QUERY, RESULT),
     Free(HANDLE)
 )
 ```
@@ -311,8 +311,8 @@ GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
 -import_from(scipy_interpolate, [MakeRadialBasis, EvalRadialBasis, Free])
 
 RbfInterp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
-    MakeRadialBasis(SAMPLE_PTS, SAMPLE_VALS, 'thin_plate_spline', HANDLE) and
-    EvalRadialBasis(HANDLE, QUERY_PTS, RESULT) and
+    MakeRadialBasis(SAMPLE_PTS, SAMPLE_VALS, 'thin_plate_spline', HANDLE),
+    EvalRadialBasis(HANDLE, QUERY_PTS, RESULT),
     Free(HANDLE)
 )
 ```

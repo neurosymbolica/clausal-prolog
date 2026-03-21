@@ -49,9 +49,10 @@ parent("alice", "carol"),
 parent("bob", "dave"),
 parent("bob", "eve"),
 
-grandparent(GRANDPARENT, GRANDCHILD) <-
-    parent(GRANDPARENT, MIDDLE) and
-    parent(MIDDLE, GRANDCHILD),
+grandparent(GRANDPARENT, GRANDCHILD) <- (
+    parent(GRANDPARENT, MIDDLE),
+    parent(MIDDLE, GRANDCHILD)
+),
 ```
 
 The first four lines are **facts**: `parent("alice", "bob")` means "alice is a parent
@@ -61,7 +62,8 @@ The last block is a **rule**. Read it as: "GRANDPARENT is a grandparent of GRAND
 if there exists some MIDDLE such that GRANDPARENT is a parent of MIDDLE and MIDDLE is
 a parent of GRANDCHILD."
 
-The `<-` arrow means "is true if". The `and` keyword chains goals in the body.
+The `<-` arrow means "is true if". Goals in the body are separated by **commas** and
+the body is wrapped in parentheses.
 
 Query it from Python:
 
@@ -89,10 +91,11 @@ Variables in `.clausal` files are written in **ALLCAPS**: `X`, `PARENT`, `CHILD`
 `RESULT`, `HEAD`, `TAIL`. This makes them easy to spot in a rule.
 
 ```clausal
-sibling(A, B) <-
-    parent(PARENT, A) and
-    parent(PARENT, B) and
-    not (A = B),
+sibling(A, B) <- (
+    parent(PARENT, A),
+    parent(PARENT, B),
+    not (A = B)
+),
 ```
 
 `A` and `B` are logic variables — they stand for "some value". When Clausal tries to
@@ -103,8 +106,7 @@ The **anonymous variable** `_` is a wildcard that matches anything and is never
 reported in results:
 
 ```clausal
-has_child(PERSON) <-
-    parent(PERSON, _),
+has_child(PERSON) <- parent(PERSON, _),
 ```
 
 "PERSON has a child" — we don't care what the child's name is.
@@ -137,23 +139,21 @@ rest(TAIL, [_, *TAIL]),
 `[HEAD, *TAIL]` matches any non-empty list, binding `HEAD` to the first element and
 `TAIL` to the remainder.
 
-### member/2 and append/3
+### In/2 and Append/3
 
-These are built-in predicates. `member(X, LIST)` succeeds once for each element of
-`LIST`:
+These are built-in predicates. `In(X, LIST)` uses Python's `in` operator — it
+succeeds once for each element of `LIST`:
 
 ```clausal
-contains_three(LIST) <-
-    member(3, LIST),
+contains_three(LIST) <- In(3, LIST),
 ```
 
-`append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
+`Append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
 with `SUFFIX` gives `WHOLE`. You can use it forwards (split a list) or backwards
 (build one):
 
 ```clausal
-last(ELEMENT, LIST) <-
-    append(_, [ELEMENT], LIST),
+last(ELEMENT, LIST) <- Append(_, [ELEMENT], LIST),
 ```
 
 ### Pattern matching on lists in clause heads
@@ -163,9 +163,10 @@ putting a pattern in the body:
 
 ```clausal
 sum_list([], 0),
-sum_list([HEAD, *TAIL], TOTAL) <-
-    sum_list(TAIL, SUBTOTAL) and
-    (TOTAL := SUBTOTAL + HEAD),
+sum_list([HEAD, *TAIL], TOTAL) <- (
+    sum_list(TAIL, SUBTOTAL),
+    TOTAL := SUBTOTAL + HEAD
+),
 ```
 
 The first clause handles the empty list. The second peels off `HEAD`, recurses on
@@ -173,9 +174,10 @@ The first clause handles the empty list. The second peels off `HEAD`, recurses o
 
 ```clausal
 double_list([], []),
-double_list([HEAD, *TAIL], [DOUBLED, *REST]) <-
-    (DOUBLED := HEAD * 2) and
-    double_list(TAIL, REST),
+double_list([HEAD, *TAIL], [DOUBLED, *REST]) <- (
+    DOUBLED := HEAD * 2,
+    double_list(TAIL, REST)
+),
 ```
 
 Each clause head matches a different list shape. Clausal tries them top-to-bottom and
@@ -189,15 +191,15 @@ Use the **walrus operator** `(N := expression)` to evaluate an arithmetic expres
 and unify the result with a variable:
 
 ```clausal
-square(N, SQ) <-
-    (SQ := N * N),
+square(N, SQ) <- (SQ := N * N),
 
 factorial(0, 1),
-factorial(N, F) <-
-    N > 0 and
-    (N1 := N - 1) and
-    factorial(N1, F1) and
-    (F := N1 * F1 + F1),
+factorial(N, F) <- (
+    N > 0,
+    N1 := N - 1,
+    factorial(N1, F1),
+    F := N1 * F1 + F1
+),
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
@@ -209,7 +211,10 @@ The standard comparison operators work directly as goals:
 
 ```clausal
 positive(N) <- N > 0,
-between(LOW, HIGH, N) <- N >= LOW and N =< HIGH,
+between(LOW, HIGH, N) <- (
+    N >= LOW,
+    N =< HIGH
+),
 ```
 
 Note: use `=<` for "less than or equal" (to avoid ambiguity with `<=` in Python
@@ -239,11 +244,9 @@ results = [clausal.once(fizzbuzz(n, X))["X"] for n in range(1, 16)]
 `not goal` is **negation as failure**: it succeeds if `goal` has no solutions.
 
 ```clausal
-safe_to_delete(FILE) <-
-    not important(FILE),
+safe_to_delete(FILE) <- not important(FILE),
 
-different(X, Y) <-
-    not (X = Y),
+different(X, Y) <- not (X = Y),
 ```
 
 ### When to use it
@@ -253,9 +256,10 @@ that...". It works correctly when all the relevant facts are already known — t
 classic **closed-world assumption**.
 
 ```clausal
-bachelor(PERSON) <-
-    male(PERSON) and
-    not married(PERSON),
+bachelor(PERSON) <- (
+    male(PERSON),
+    not married(PERSON)
+),
 ```
 
 If `married("alice")` is not in the database, `not married("alice")` succeeds.
@@ -273,8 +277,7 @@ contains 5. Instead, make sure any variables in the negated goal are already bou
 before the `not`:
 
 ```clausal
-no_fives(LIST) <-
-    not member(5, LIST),
+no_fives(LIST) <- not member(5, LIST),
 ```
 
 is fine when `LIST` is passed in fully instantiated; it is not a generator of lists
@@ -287,26 +290,28 @@ the constraints module (see the [constraints guide](constraints.md)).
 
 ## Testing your code
 
-Clausal has a lightweight convention for inline tests. Define predicates whose names
-start with `test_` (or use any name and pass them to pytest):
+Clausal has a lightweight convention for inline tests. Define `Test/1` predicates:
 
 ```clausal
-test_sum_list() <-
-    sum_list([1, 2, 3, 4], TOTAL) and
-    TOTAL = 10,
+Test("sum [1,2,3,4] = 10") <- (
+    sum_list([1, 2, 3, 4], TOTAL),
+    TOTAL = 10
+),
 
-test_double_list() <-
-    double_list([1, 2, 3], RESULT) and
-    RESULT = [2, 4, 6],
+Test("double [1,2,3] = [2,4,6]") <- (
+    double_list([1, 2, 3], RESULT),
+    RESULT = [2, 4, 6]
+),
 
-test_fizzbuzz() <-
-    fizzbuzz(15, WORD) and
-    WORD = "fizzbuzz",
+Test("fizzbuzz 15") <- (
+    fizzbuzz(15, WORD),
+    WORD = "fizzbuzz"
+),
 ```
 
 Run the whole test suite with:
 
-```clausal
+```bash
 python -m pytest
 ```
 
@@ -339,12 +344,12 @@ edge("b", "c"),
 edge("c", "d"),
 edge("b", "d"),
 
-reachable(FROM, TO) <-
-    edge(FROM, TO),
+reachable(FROM, TO) <- edge(FROM, TO),
 
-reachable(FROM, TO) <-
-    edge(FROM, MIDDLE) and
-    reachable(MIDDLE, TO),
+reachable(FROM, TO) <- (
+    edge(FROM, MIDDLE),
+    reachable(MIDDLE, TO)
+),
 ```
 
 There are two clauses for `reachable/2`: the base case (a direct edge) and the

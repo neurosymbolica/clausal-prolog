@@ -8,9 +8,9 @@ The `spacy_module` standard library module exposes spaCy's NLP pipeline as Claus
 -import_from(spacy_module, [LoadModel, Process, Token, Lemma, Entity])
 
 Nouns(DOC, TOK) <- (
-    LoadModel("en_core_web_sm", "nlp") and
-    Process("nlp", DOC, DOC_OBJ) and
-    Token(DOC_OBJ, TOK) and
+    LoadModel("en_core_web_sm", "nlp"),
+    Process("nlp", DOC, DOC_OBJ),
+    Token(DOC_OBJ, TOK),
     Pos(TOK, "NOUN")
 )
 ```
@@ -103,7 +103,7 @@ Run `Text` through the model registered as `Alias` and unify `Doc` with the resu
 
 ```clausal
 setup(DOC) <- (
-    LoadModel("en_core_web_sm", "nlp") and
+    LoadModel("en_core_web_sm", "nlp"),
     Process("nlp", "The quick brown fox jumps.", DOC)
 )
 ```
@@ -265,7 +265,7 @@ Entity(+Doc, -Ent)
 **Nondeterministic.** Yields one solution per entity in the document.
 
 ```clausal
-Orgs(DOC, ENT) <- (Entity(DOC, ENT) and T is ++ENT["label"] and T == "ORG")
+Orgs(DOC, ENT) <- (Entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
 ```
 
 ### `Entity/3`
@@ -328,7 +328,8 @@ Process both texts through the model and unify `Score` with their cosine similar
 
 ```clausal
 Close(T1, T2) <- (
-    Similarity("en", T1, T2, S) and S > 0.8
+    Similarity("en", T1, T2, S),
+    S > 0.8
 )
 ```
 
@@ -351,8 +352,9 @@ NounChunk(+Doc, -Chunk)
 
 ```clausal
 Subjects(DOC, CHUNK) <- (
-    NounChunk(DOC, CHUNK) and
-    D is ++CHUNK["root_dep"] and D == "nsubj"
+    NounChunk(DOC, CHUNK),
+    D is ++CHUNK["root_dep"],
+    D == "nsubj"
 )
 ```
 
@@ -365,27 +367,27 @@ Subjects(DOC, CHUNK) <- (
 
 # Find all noun subjects in a sentence
 NounSubjects(TEXT, LEMMA) <- (
-    LoadModel("en_core_web_sm", "nlp") and
-    Process("nlp", TEXT, DOC) and
-    Token(DOC, TOK) and
-    Pos(TOK, "NOUN") and
-    Dep(TOK, "nsubj") and
+    LoadModel("en_core_web_sm", "nlp"),
+    Process("nlp", TEXT, DOC),
+    Token(DOC, TOK),
+    Pos(TOK, "NOUN"),
+    Dep(TOK, "nsubj"),
     Lemma(TOK, LEMMA)
 )
 
 # Extract all organisation entities
 Orgs(TEXT, ORG_TEXT) <- (
-    LoadModel("en_core_web_sm", "nlp") and
-    Process("nlp", TEXT, DOC) and
-    Entity(DOC, "ORG", ENT) and
+    LoadModel("en_core_web_sm", "nlp"),
+    Process("nlp", TEXT, DOC),
+    Entity(DOC, "ORG", ENT),
     ORG_TEXT is ++ENT["text"]
 )
 
 # Filter tokens by POS and collect as list
 NounLemmas(TEXT, LEMMAS) <- (
-    LoadModel("en_core_web_sm", "nlp") and
-    Process("nlp", TEXT, DOC) and
-    FindAll(L, (Token(DOC, TOK) and Pos(TOK, "NOUN") and Lemma(TOK, L)), LEMMAS)
+    LoadModel("en_core_web_sm", "nlp"),
+    Process("nlp", TEXT, DOC),
+    FindAll(L, (Token(DOC, TOK), Pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
 )
 ```
 

@@ -18,14 +18,14 @@ Clausal provides built-in predicates for formatted output and term-to-string con
 ### Examples
 
 ```clausal
-greet(NAME) <- (Write("Hello, ") and Write(NAME) and Nl())
+greet(NAME) <- (Write("Hello, "), Write(NAME), Nl()),
 
 show_all(XS) <- (
-    In(X, XS)
-    and Writeln(X)
-)
+    In(X, XS),
+    Writeln(X)
+),
 
-indented(X) <- (Tab(4) and Writeln(X))
+indented(X) <- (Tab(4), Writeln(X)),
 ```
 
 ---

@@ -41,8 +41,8 @@ Unification uses Python's native `==`. Any datetime method can be called via `++
 -import_from(date_time, [Date, FormatDate])
 
 IsoDate(Y, M, D, S) <- (
-    Date(Y, M, D, DT)
-    and S is ++DT.isoformat()
+    Date(Y, M, D, DT),
+    S is ++DT.isoformat()
 )
 ```
 

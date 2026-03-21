@@ -160,10 +160,10 @@ The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) (Constrain
 
 ```clausal
 bounded(X) <- (
-    InDomain(X, 1, 10)
-    and X > 3
-    and X < 8
-    and Label([X])
+    InDomain(X, 1, 10),
+    X > 3,
+    X < 8,
+    Label([X])
 )
 ```
 
@@ -464,8 +464,8 @@ run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
 # Captured variable from enclosing clause
 add_z(Z, R) <- CallGoal((X <- (R := X + Z)), 10)
 
-# Conjunction body — parenthesize each := subgoal
-transform(R) <- CallGoal(((X, Y) <- ((T := X + 1) and (Y := T * 2))), 5, R)
+# Conjunction body
+transform(R) <- CallGoal(((X, Y) <- (T := X + 1, Y := T * 2)), 5, R)
 ```
 
 Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
@@ -505,11 +505,8 @@ Inline goals are written with `{...}` (Python set literal syntax). They execute 
 ### Conjunction and disjunction
 
 ```clausal
-# Conjunction — comma-separated tuple (primary style)
+# Conjunction — comma-separated (canonical style)
 rule >> (a, b, c)
-
-# Conjunction — 'and' also works
-rule >> (a and b and c)
 
 # Disjunction
 letter >> (["a"] or ["b"] or ["c"])
@@ -576,7 +573,7 @@ greeting(S0, S) <- (S0 is ["hello", "world", *S])
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 
 # Rewrites to:
-digit(D, S0, S) <- (S0 is [D, *S] and D >= 0 and D <= 9)
+digit(D, S0, S) <- (S0 is [D, *S], D >= 0, D <= 9)
 ```
 
 No changes to the compiler, database, or runtime are needed.

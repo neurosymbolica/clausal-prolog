@@ -490,10 +490,10 @@ parse(S, YEAR, MONTH) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 
 # After expansion (conceptual):
 parse(S, YEAR, MONTH) <- (
-    Match(_re_0, S, _groups) and
-    YEAR is ++_groups["YEAR"] and
+    Match(_re_0, S, _groups),
+    YEAR is ++_groups["YEAR"],
     MONTH is ++_groups["MONTH"]
-)
+),
 ```
 
 The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. Group-to-variable mapping uses `_collect_vars_from_term()` to find clause variables by field name (lowercased, stripped of trailing underscore).

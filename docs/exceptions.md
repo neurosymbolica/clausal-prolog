@@ -156,10 +156,10 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     **Catch a type error:**
     ```clausal
     check_int(X, R) <- catch(
-        (X > 0 and R is "positive"),
+        (X > 0, R is "positive"),
         error(type_error(_, _), _),
         R is "not a number"
-    )
+    ),
     ```
 
     **Catch a Python exception (no recovery needed):**
@@ -175,8 +175,8 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     logged_op(X, Y, R) <- CatchRecover(
         (R := X / Y),
         ERR,
-        (Write(ERR) and R is "error")
-    )
+        (Write(ERR), R is "error")
+    ),
     ```
 
     **Re-throw after logging:**
@@ -184,8 +184,8 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     logged_div(X, Y, R) <- catch(
         (R := X / Y),
         E,
-        (Write(E) and Throw(E))
-    )
+        (Write(E), Throw(E))
+    ),
     ```
 
     **Catch-all:**

@@ -101,7 +101,7 @@ Example — edge detection with a simple difference kernel:
 -import_from(scipy_ndimage, [Convolve])
 
 EdgeDetect(SIGNAL, EDGES) <- (
-    KERNEL is ++([-1.0, 0.0, 1.0]) and
+    KERNEL is ++([-1.0, 0.0, 1.0]),
     Convolve(SIGNAL, KERNEL, EDGES)
 )
 ```
@@ -126,7 +126,7 @@ Example — count blobs in a binary image:
 -import_from(scipy_ndimage, [Label])
 
 CountBlobs(IMAGE, COUNT) <- (
-    Label(IMAGE, LABELED) and
+    Label(IMAGE, LABELED),
     COUNT is ++(int(LABELED['num_features']))
 )
 ```
@@ -162,7 +162,7 @@ Example — remove noise then fill gaps in a binary mask:
 -import_from(scipy_ndimage, [BinaryOpening, BinaryClosing])
 
 CleanMask(RAW_MASK, CLEAN) <- (
-    BinaryOpening(RAW_MASK, OPENED) and
+    BinaryOpening(RAW_MASK, OPENED),
     BinaryClosing(OPENED, CLEAN)
 )
 ```
@@ -227,7 +227,7 @@ Example — find the centroid of a blob:
 -import_from(scipy_ndimage, [Label, CenterOfMass])
 
 BlobCentroid(BINARY_IMAGE, CENTROID) <- (
-    Label(BINARY_IMAGE, LABELED) and
+    Label(BINARY_IMAGE, LABELED),
     CenterOfMass(BINARY_IMAGE, CENTROID)
 )
 ```
@@ -242,8 +242,8 @@ BlobCentroid(BINARY_IMAGE, CENTROID) <- (
 -import_from(scipy_ndimage, [GaussianFilter, Convolve])
 
 ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
-    GaussianFilter(NOISY, ++(1.5), SMOOTHED) and
-    KERNEL is ++([-1.0, 0.0, 1.0]) and
+    GaussianFilter(NOISY, ++(1.5), SMOOTHED),
+    KERNEL is ++([-1.0, 0.0, 1.0]),
     Convolve(SMOOTHED, KERNEL, EDGES)
 )
 ```
@@ -254,8 +254,8 @@ ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
 -import_from(scipy_ndimage, [Label, FindObjects])
 
 LabelAndLocate(BINARY, COUNT, REGIONS) <- (
-    Label(BINARY, LABELED) and
-    COUNT is ++(int(LABELED['num_features'])) and
+    Label(BINARY, LABELED),
+    COUNT is ++(int(LABELED['num_features'])),
     FindObjects(LABELED['label_array'], REGIONS)
 )
 ```

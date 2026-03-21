@@ -8,12 +8,12 @@ The `uuid` module provides predicates for generating, converting, and inspecting
 -import_from(uuid, [UUIDv4, UUIDStr, UUIDVersion, IsUUID])
 
 MakeId(ID) <- (
-    UUIDv4(U) and
+    UUIDv4(U),
     UUIDStr(U, ID)
 )
 
 Main <- (
-    MakeId(ID) and
+    MakeId(ID),
     ++print(f"Generated ID: {ID}")
 )
 ```
@@ -24,8 +24,8 @@ Or via module import:
 -import_module(uuid)
 
 Main <- (
-    uuid.UUIDv4(U) and
-    uuid.UUIDStr(U, S) and
+    uuid.UUIDv4(U),
+    uuid.UUIDStr(U, S),
     ++print(S)
 )
 ```
@@ -87,7 +87,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
 ```clausal
 % Generate a UUID and get its string form
-UUIDv4(U) and UUIDStr(U, S)
+UUIDv4(U), UUIDStr(U, S)
 
 % Parse a UUID from a string
 UUIDStr(U, "550e8400-e29b-41d4-a716-446655440000")
@@ -108,7 +108,7 @@ UUIDHex(U, "550e8400e29b41d4a716446655440000")
 
 ```clausal
 % Check that a UUID is version 4
-UUIDv4(U) and UUIDVersion(U, 4)
+UUIDv4(U), UUIDVersion(U, 4)
 
 % Type-check
 IsUUID(U)
@@ -124,7 +124,7 @@ IsUUID(U)
     -import_from(uuid, [UUIDv4, UUIDStr])
     
     NewSession(USERID, TOKEN) <- (
-        UUIDv4(U) and
+        UUIDv4(U),
         UUIDStr(U, TOKEN)
     )
     ```
@@ -135,7 +135,7 @@ IsUUID(U)
     -import_from(uuid, [UUIDv5, UUIDStr])
     
     ResourceId(TYPE, NAME, ID) <- (
-        UUIDv5("url", NAME, U) and
+        UUIDv5("url", NAME, U),
         UUIDStr(U, ID)
     )
     ```

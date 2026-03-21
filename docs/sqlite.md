@@ -10,10 +10,10 @@ Since Python's `sqlite3` module is the backend, all SQLite features are availabl
 -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery, SQLiteDisconnect])
 
 Main <- (
-    SQLiteConnect(":memory:", "mydb") and
-    SQLiteExec("mydb", "CREATE TABLE users (name TEXT, age INTEGER)") and
-    SQLiteExec("mydb", "INSERT INTO users VALUES (?, ?)", ["alice", 30]) and
-    SQLiteQuery("mydb", "SELECT name FROM users WHERE age > ?", [25], NAME) and
+    SQLiteConnect(":memory:", "mydb"),
+    SQLiteExec("mydb", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    SQLiteExec("mydb", "INSERT INTO users VALUES (?, ?)", ["alice", 30]),
+    SQLiteQuery("mydb", "SELECT name FROM users WHERE age > ?", [25], NAME),
     ++print(f"Found: {NAME}")
 )
 ```
@@ -24,8 +24,8 @@ Or via module import:
 -import_module(sqlite)
 
 Main <- (
-    sqlite.SQLiteConnect(":memory:", "db") and
-    sqlite.SQLiteExec("db", "CREATE TABLE t (x INTEGER)") and
+    sqlite.SQLiteConnect(":memory:", "db"),
+    sqlite.SQLiteExec("db", "CREATE TABLE t (x INTEGER)"),
     sqlite.SQLiteQuery("db", "SELECT x FROM t", X)
 )
 ```
@@ -76,7 +76,7 @@ When `Alias` is unbound, **nondeterministically enumerates** all open connection
 
 ```clausal
 ListDbs <- (
-    SQLiteCurrentConnection(A) and
+    SQLiteCurrentConnection(A),
     ++print(f"Open: {A}")
 )
 ```
@@ -129,7 +129,7 @@ Execute a DDL or DML statement (CREATE, INSERT, UPDATE, DELETE). **Succeeds once
 
 ```clausal
 Setup <- (
-    SQLiteExec("db", "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)") and
+    SQLiteExec("db", "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"),
     SQLiteExec("db", "INSERT INTO items VALUES (1, 'widget')")
 )
 ```
@@ -158,7 +158,7 @@ Execute DML and unify `Count` with the number of affected rows.
 
 ```clausal
 Cleanup(N) <- (
-    SQLiteRowCount("db", "DELETE FROM sessions WHERE expired = 1", N) and
+    SQLiteRowCount("db", "DELETE FROM sessions WHERE expired = 1", N),
     ++print(f"Removed {N} expired sessions")
 )
 ```
@@ -191,7 +191,7 @@ Enumerate columns of a table. Yields `(ColName, ColType)` pairs. Column types ar
 
 ```clausal
 ShowSchema(COL, TYPE) <- (
-    SQLiteColumn("db", "users", COL, TYPE) and
+    SQLiteColumn("db", "users", COL, TYPE),
     ++print(f"  {COL}: {TYPE}")
 )
 ```
@@ -204,9 +204,9 @@ ShowSchema(COL, TYPE) <- (
 
     ```clausal
     -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
-    
+
     Init <- (
-        SQLiteConnect(":memory:", "app") and
+        SQLiteConnect(":memory:", "app"),
         SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
     )
     
@@ -223,19 +223,19 @@ ShowSchema(COL, TYPE) <- (
 
     ```clausal
     -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
-    
+
     Setup <- (
-        SQLiteConnect(":memory:", "hr") and
-        SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)") and
-        SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)") and
-        SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')") and
-        SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')") and
-        SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)") and
+        SQLiteConnect(":memory:", "hr"),
+        SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)"),
+        SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)"),
+        SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')"),
+        SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')"),
+        SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)"),
         SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
     )
-    
+
     EmpDept(EMP, DEPT) <- (
-        Setup and
+        Setup,
         SQLiteQuery("hr",
             "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
             (EMP, DEPT))
@@ -246,11 +246,11 @@ ShowSchema(COL, TYPE) <- (
 
     ```clausal
     -import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
-    
+
     Describe(DB) <- (
-        SQLiteTable(DB, TABLE) and
-        ++print(f"\n{TABLE}:") and
-        SQLiteColumn(DB, TABLE, COL, TYPE) and
+        SQLiteTable(DB, TABLE),
+        ++print(f"\n{TABLE}:"),
+        SQLiteColumn(DB, TABLE, COL, TYPE),
         ++print(f"  {COL} {TYPE}")
     )
     ```

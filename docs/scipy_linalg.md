@@ -97,7 +97,7 @@ Example:
 
 ```clausal
 SolveSystem(A, B, X) <- (
-    Solve(A, B, X) and
+    Solve(A, B, X),
     ++print(f"Solution: {X}")
 )
 ```
@@ -154,8 +154,8 @@ Example — extract singular values:
 
 ```clausal
 LargestSingularValue(A, S1) <- (
-    SingularValueDecompose(A, DECOMP) and
-    ResultGet(DECOMP, 's', S) and
+    SingularValueDecompose(A, DECOMP),
+    ResultGet(DECOMP, 's', S),
     S1 is ++S[0]
 )
 ```
@@ -198,8 +198,8 @@ Example — check positive definiteness via eigenvalues:
 
 ```clausal
 IsPositiveDefinite(A) <- (
-    EigenDecomposeHermitian(A, D) and
-    ResultGet(D, 'eigenvalues', VALS) and
+    EigenDecomposeHermitian(A, D),
+    ResultGet(D, 'eigenvalues', VALS),
     ++all(v > 0 for v in VALS)
 )
 ```
@@ -231,7 +231,7 @@ Example — solve multiple right-hand sides efficiently:
 
 ```clausal
 SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
-    LuFactor(A, LU) and
+    LuFactor(A, LU),
     MapList([B]>>(LuSolve(LU, B, X), X), RHS_LIST, SOLUTIONS)
 )
 ```
@@ -259,16 +259,16 @@ ResultGet(RESULT, FIELD, VALUE)
 # Compute the top-K principal components of a data matrix X
 # (rows = observations, columns = features; X should be mean-centred)
 PrincipalComponents(X, K, COMPONENTS) <- (
-    SingularValueDecompose(X, SVD) and
-    ResultGet(SVD, 'vh', VH) and
+    SingularValueDecompose(X, SVD),
+    ResultGet(SVD, 'vh', VH),
     COMPONENTS is ++VH[:K]
 )
 
 ExplainedVariance(X, K, RATIO) <- (
-    SingularValueDecompose(X, SVD) and
-    ResultGet(SVD, 's', S) and
-    TOTAL is ++float((S ** 2).sum()) and
-    TOP_K is ++float((S[:K] ** 2).sum()) and
+    SingularValueDecompose(X, SVD),
+    ResultGet(SVD, 's', S),
+    TOTAL is ++float((S ** 2).sum()),
+    TOP_K is ++float((S[:K] ** 2).sum()),
     RATIO is TOP_K / TOTAL
 )
 ```
