@@ -72,6 +72,7 @@ results = list(clausal.solve(fib(10, F)))
 | [Import System](import.md) | `.clausal` file loading, module directives, qualified calls |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
+| [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |
 | **Standard Library Modules** | |
 | [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
 | [Regex](regex.md) | Pattern matching, group extraction, auto-binding |

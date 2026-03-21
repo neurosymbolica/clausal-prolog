@@ -14,6 +14,8 @@ from clausal.logic.builtins import (
 )
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.exceptions import LogicException
+from clausal.repl import Solutions
+import clausal.import_hook as _import_hook  # registers .clausal finder on sys.meta_path
 
 
 # ── Export all builtin predicate classes as top-level names ────────────────────
@@ -55,6 +57,7 @@ __all__ = [
     "make_predicate",
     "LogicException",
     "get_builtin_class",
+    "Solutions",
     # All builtin predicate classes
     *_builtin_names,
 ]

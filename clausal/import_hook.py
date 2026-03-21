@@ -258,6 +258,7 @@ class PredicateLoader(SourceLoader):
         """Original pipeline: exec bytecode → $define_predicate → compile."""
         logic_module = LogicModule(module.__name__, module_dict=module_dict)
         module_dict["$module"] = logic_module
+        module.__clausal_module__ = logic_module
         pending = {}
         module_dict["$define_predicate"] = (
             lambda pred, lm: _define_predicate_deferred(
@@ -329,6 +330,7 @@ class PredicateLoader(SourceLoader):
             predicate_nodes, module_items, module_dict, module.__name__,
         )
         module_dict["$module"] = logic_module
+        module.__clausal_module__ = logic_module
 
 
 # Backward-compat alias — prefer _load_module() for new code.
@@ -473,6 +475,84 @@ _simple_ast_builtins["BoolImpl"] = BoolImpl
 _ipython_facts: list = []
 _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 
+from clausal.repl import Solutions as _Solutions, _conj as _clausal_conj
+_simple_ast_builtins["Solutions"] = _Solutions
+_simple_ast_builtins["_clausal_conj"] = _clausal_conj
+
+
+def _uppercase_names_in(node):
+    """Collect uppercase variable names from a post-EmbedTransformer AST subtree.
+
+    After EmbedTransformer, uppercase names appear as ``NAME.value`` attribute
+    nodes.  We extract the ``NAME`` part so we can auto-declare them as Var().
+    """
+    names = set()
+    for n in ast.walk(node):
+        if (isinstance(n, ast.Attribute)
+                and n.attr == 'value'
+                and isinstance(n.value, ast.Name)
+                and n.value.id[0].isupper()):
+            names.add(n.value.id)
+    return names
+
+
+def _var_assign(name, lineno, col_offset):
+    """Build ``NAME = Var()`` as an AST Assign node."""
+    return ast.Assign(
+        targets=[ast.Name(id=name, ctx=ast.Store())],
+        value=ast.Call(
+            func=ast.Name(id='Var', ctx=ast.Load()),
+            args=[], keywords=[],
+        ),
+        lineno=lineno,
+        col_offset=col_offset,
+    )
+
+
+class _StarQueryTransformer(ast.NodeTransformer):
+    """Rewrite ``*(goals)`` expression statements to Solutions calls.
+
+    ``*(Goal(X))``         → ``X = Var(); Solutions(Goal(X))``
+    ``*(A(X), B(X, Y))``   → ``X = Var(); Y = Var(); Solutions(_clausal_conj(A(X), B(X, Y)))``
+
+    Uppercase names in the goals are automatically declared as fresh Var()
+    instances, mirroring Prolog's treatment of variables in queries.
+
+    The form parses as ``Expr(Starred(...))`` which would be a compile-time
+    error in normal Python; we intercept it here before compilation.
+    """
+
+    def visit_Expr(self, node):
+        if not isinstance(node.value, ast.Starred):
+            return self.generic_visit(node)
+        inner = node.value.value
+
+        # Auto-declare uppercase names as fresh Var() before the query.
+        names = _uppercase_names_in(inner)
+        var_nodes = [_var_assign(n, node.lineno, node.col_offset)
+                     for n in sorted(names)]
+
+        # *(A, B, C) → Solutions(_clausal_conj(A, B, C))
+        if isinstance(inner, ast.Tuple):
+            solutions = ast.Expr(value=ast.Call(
+                func=ast.Name(id='Solutions', ctx=ast.Load()),
+                args=[ast.Call(
+                    func=ast.Name(id='_clausal_conj', ctx=ast.Load()),
+                    args=inner.elts,
+                    keywords=[],
+                )],
+                keywords=[],
+            ))
+        else:
+            # *(Goal) → Solutions(Goal)
+            solutions = ast.Expr(value=ast.Call(
+                func=ast.Name(id='Solutions', ctx=ast.Load()),
+                args=[inner],
+                keywords=[],
+            ))
+
+        return var_nodes + [solutions]
+
 
 class _FreshEmbedTransformer(ast.NodeTransformer):
     """Applies a fresh EmbedTransformer to each IPython cell.
@@ -483,7 +563,10 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     def visit(self, tree):
         try:
-            return EmbedTransformer().visit(tree)
+            tree = EmbedTransformer().visit(tree)
+            tree = _StarQueryTransformer().visit(tree)
+            ast.fix_missing_locations(tree)
+            return tree
         except Exception:
             import traceback
             traceback.print_exc()
@@ -514,3 +597,20 @@ def enable_ipython(ipython_globals, shell=None):
                             category=SyntaxWarning)
     shell.ast_transformers.append(_FreshEmbedTransformer())
     ipython_globals.update(_simple_ast_builtins)
+
+
+def _try_auto_enable_ipython():
+    """Auto-enable IPython integration if CLAUSAL_IPYTHON env var is set."""
+    import os
+    if os.environ.get('CLAUSAL_IPYTHON', '').lower() not in ('1', 'true', 'yes', 'y'):
+        return
+    try:
+        from IPython import get_ipython
+        shell = get_ipython()
+        if shell is not None:
+            enable_ipython(shell.user_ns, shell=shell)
+    except Exception:
+        pass
+
+
+_try_auto_enable_ipython()

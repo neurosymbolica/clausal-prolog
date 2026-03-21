@@ -150,12 +150,15 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
 
 def call(
-    functor: str,
+    functor,
     *args: Any,
-    module: Module,
+    module: Module | None = None,
     trail: Trail | None = None,
 ) -> Iterator[Trail]:
-    """Drive a compiled predicate by name; yield the Trail after each solution.
+    """Drive a compiled predicate; yield the Trail after each solution.
+
+    ``functor`` may be either a predicate name string (requires ``module``) or
+    a PredicateMeta class (``module`` is not needed in that case).
 
     Args are passed directly to the compiled dispatch function.  Output-position
     args should be Var objects — they will be bound on the Trail during each
@@ -163,9 +166,10 @@ def call(
 
     Parameters
     ----------
-    functor:  predicate name (without arity suffix)
+    functor:  predicate name string, or a PredicateMeta class
     *args:    arguments; may include Var objects for output positions
-    module:   Module whose database holds the compiled predicate
+    module:   Module whose database holds the compiled predicate (not required
+              when functor is a PredicateMeta class)
     trail:    optional Trail; a fresh one is created if not provided
 
     Yields
@@ -176,27 +180,39 @@ def call(
     ------
     KeyError  if the predicate is not defined in module.
     """
+    # Fast path: predicate class passed directly — no module lookup needed.
+    if hasattr(functor, '_get_dispatch'):
+        dispatch_fn = functor._get_dispatch()
+        if trail is None:
+            trail = Trail()
+        yield from _drive_trampoline(dispatch_fn, trail, *args)
+        return
+
     arity = len(args)
 
     # Phase 5: look up PredicateMeta class from module globals first.
     dispatch_fn = None
-    if module.module_dict is not None:
+    if module is not None and module.module_dict is not None:
         pred_cls = module.module_dict.get(functor)
         if pred_cls is not None and hasattr(pred_cls, '_get_dispatch'):
             dispatch_fn = pred_cls._get_dispatch()
 
     # Phase 6: try builtins before Database fallback.
-    if dispatch_fn is None:
+    if dispatch_fn is None and module is not None:
         from clausal.logic.builtins import get_builtin_predicate  # noqa: PLC0415
         builtin = get_builtin_predicate(functor, arity, module.db)
         if builtin is not None:
             dispatch_fn = builtin._get_dispatch()
 
     # Fall back to Database dispatch lookup (test modules and Compound-head predicates).
-    if dispatch_fn is None:
+    if dispatch_fn is None and module is not None:
         dispatch_fn = module.db.get_dispatch(functor, arity)
 
     if dispatch_fn is None:
+        if module is None:
+            raise KeyError(
+                f"Predicate {functor!r}/{arity}: module is required when functor is a string"
+            )
         raise KeyError(
             f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
         )
