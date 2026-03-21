@@ -13,12 +13,19 @@ import pytest
 from pathlib import Path
 
 from clausal.testing import load_clausal_module, collect_tests, run_test
+from clausal.tools.clear_pycache import clear_pycache
 
 # Ensure test fixtures directory is importable (for -import_from directives
 # between fixture files, e.g. expansion_importer.clausal).
 _fixtures_dir = str(Path(__file__).parent / "tests" / "fixtures")
 if _fixtures_dir not in sys.path:
     sys.path.insert(0, _fixtures_dir)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _clear_pycache_before_tests():
+    """Remove all __pycache__ dirs at the start of the test session."""
+    clear_pycache()
 
 
 def pytest_collect_file(parent, file_path: Path):
