@@ -228,14 +228,14 @@ variadic scipy functions take:
 | 1 | `scipy.special` | ✅ done — `clausal/modules/py/scipy_special.py`, 78 tests |
 | 2 | `scipy.linalg` | ✅ done — `clausal/modules/py/scipy_linalg.py` |
 | 3 | `scipy.optimize` | ✅ done — `clausal/modules/py/scipy_optimize.py`, 56 tests + 9 .clausal |
-| 4 | `scipy.stats` (tests + distributions) | ⬜ next — Tier 2/3 |
+| 4 | `scipy.stats` (tests + distributions) | ✅ done — `clausal/modules/py/scipy_stats.py`, 103 tests |
 | 5 | `scipy.integrate` | ✅ done — `clausal/modules/py/scipy_integrate.py`, 55 tests |
 | 6 | `scipy.interpolate` | ✅ done — `clausal/modules/py/scipy_interpolate.py`, tests + docs |
 | 7 | `scipy.fft` | ✅ done — `clausal/modules/py/scipy_fft.py`, 58 tests + 7 .clausal + docs |
-| 8 | `scipy.ndimage` | ⬜ pure, domain-specific |
-| 9 | `scipy.signal` | ⬜ mixed, domain-specific |
-| 10 | `scipy.spatial` | ⬜ Tier 1 (distances) + Tier 3 (trees) |
-| 11 | `scipy.sparse` + `scipy.sparse.linalg` | ⬜ niche but important |
+| 8 | `scipy.ndimage` | ✅ done — `clausal/modules/py/scipy_ndimage.py`, 79 tests |
+| 9 | `scipy.signal` | ✅ done — `clausal/modules/py/scipy_signal.py`, 97 tests |
+| 10 | `scipy.spatial` | ✅ done — `clausal/modules/py/scipy_spatial.py`, 92 tests |
+| 11 | `scipy.sparse` + `scipy.sparse.linalg` | ✅ done — `clausal/modules/py/scipy_sparse.py`, 79 tests |
 | 12 | `scipy.cluster` | ✅ done — `clausal/modules/py/scipy_cluster.py`, 52 Python tests + 8 .clausal + docs |
 | 13 | `scipy.constants`, `scipy.differentiate` | ✅ done — `clausal/modules/py/scipy_constants.py`, `clausal/modules/py/scipy_differentiate.py`, 101 tests + 21 .clausal + docs |
 
@@ -1318,11 +1318,11 @@ SignalSpectrogram(X=, FS=1.0, WINDOW=('tukey',0.25), NPERSEG=None,
 
 **Filter design → filter application pipeline**:
 ```
-SignalButter(N=4, WN=0.1, BTYPE='low', OUTPUT='sos', RESULT=Filter),
-SignalResultGet(Filter, FIELD='sos', VALUE=SOS),
-SignalSosfiltfilt(SOS=SOS, X=raw_signal, RESULT=Filtered).
+Butterworth(N=4, WN=0.1, BTYPE='low', OUTPUT='sos', RESULT=Filter),
+ResultGet(Filter, FIELD='sos', VALUE=SOS),
+SOSForwardBackwardFilter(SOS=SOS, X=raw_signal, RESULT=Filtered).
 % or with ++ escape:
-% SignalSosfiltfilt(SOS=++Filter['sos'], X=raw_signal, RESULT=Filtered).
+% SOSForwardBackwardFilter(SOS=++Filter['sos'], X=raw_signal, RESULT=Filtered).
 ```
 
 ---
