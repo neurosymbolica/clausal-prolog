@@ -60,17 +60,27 @@ def _read_char() -> str:
 
 
 def _format_bindings(bindings: dict) -> str:
-    """Format a binding dict as ``X = val, Y = val``."""
+    """Format a binding dict as ``X = val, Y = val``, pretty-printed."""
     if not bindings:
         return "true."
-    return ",  ".join(f"{k} = {v!r}" for k, v in bindings.items())
+    import shutil
+    from clausal.terms import term_pformat
+    width = shutil.get_terminal_size(fallback=(80, 24)).columns
+    parts = [(k, term_pformat(v, width=width)) for k, v in bindings.items()]
+    if any("\n" in vstr for _, vstr in parts):
+        return "\n".join(f"{k} = {vstr}" for k, vstr in parts)
+    return ",  ".join(f"{k} = {vstr}" for k, vstr in parts)
 
 
-def _conj(*goals):
+def _conj(*goals, _varnames=None):
     """Execute predicate instances as a Prolog-style conjunction on a shared
     trail and yield one binding dict per combined solution.
 
     Used by the ``*A, B, C`` query syntax rewrite.
+
+    *_varnames* maps user-written variable names to their Var objects so that
+    binding keys use the names the user wrote (e.g. ``ROWS``) rather than the
+    predicate field names (e.g. ``rows``).
     """
     from clausal.logic.predicate import PredicateMeta
     from clausal.logic.variables import Trail, Var
@@ -78,6 +88,7 @@ def _conj(*goals):
     from clausal.logic.solve import _drive_trampoline
 
     trail = Trail()
+    id_to_name = {id(v): n for n, v in (_varnames or {}).items()}
 
     # Collect Var fields across all goals; last occurrence wins so that
     # a meaningful field name (e.g. 'rows') beats a generic one ('arg_1')
@@ -89,7 +100,7 @@ def _conj(*goals):
         for f in type(goal)._fields:
             v = getattr(goal, f)
             if isinstance(v, Var):
-                seen[id(v)] = (f, v)
+                seen[id(v)] = (id_to_name.get(id(v), f), v)
     var_fields = {f: v for f, v in seen.values()}
 
     def _run(remaining):
@@ -111,9 +122,13 @@ def _conj(*goals):
     return _gen()
 
 
-def _iter_from_goal(goal_or_iter):
+def _iter_from_goal(goal_or_iter, _varnames=None):
     """If given a predicate instance, drive it and yield binding dicts.
-    Otherwise pass through as an iterator."""
+    Otherwise pass through as an iterator.
+
+    *_varnames* maps user-written variable names to their Var objects so that
+    binding keys use the names the user wrote rather than predicate field names.
+    """
     from clausal.logic.predicate import PredicateMeta
     if not isinstance(type(goal_or_iter), PredicateMeta):
         return iter(goal_or_iter)
@@ -122,12 +137,15 @@ def _iter_from_goal(goal_or_iter):
     from clausal.logic.variables import walk as _walk
     from clausal.logic.solve import _drive_trampoline
 
+    id_to_name = {id(v): n for n, v in (_varnames or {}).items()}
     cls = type(goal_or_iter)
     dispatch = cls._get_dispatch()
     fields = cls._fields
     args = [getattr(goal_or_iter, f) for f in fields]
-    var_fields = {f: getattr(goal_or_iter, f) for f in fields
-                  if isinstance(getattr(goal_or_iter, f), Var)}
+    var_fields = {
+        id_to_name.get(id(getattr(goal_or_iter, f)), f): getattr(goal_or_iter, f)
+        for f in fields if isinstance(getattr(goal_or_iter, f), Var)
+    }
     trail = Trail()
 
     def _gen():
@@ -158,8 +176,8 @@ class Solutions:
 
     _PROMPT = "   [SPACE/n: next  |  ENTER/.: stop  |  ESC/q: abort  |  a: all]  "
 
-    def __init__(self, goal_or_iter: Any, _read=None):
-        self._iter = _iter_from_goal(goal_or_iter)
+    def __init__(self, goal_or_iter: Any, _varnames=None, _read=None):
+        self._iter = _iter_from_goal(goal_or_iter, _varnames=_varnames)
         # Allow tests to inject a scripted key-reader.
         self._read = _read if _read is not None else _read_char
 

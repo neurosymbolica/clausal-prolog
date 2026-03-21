@@ -532,23 +532,33 @@ class _StarQueryTransformer(ast.NodeTransformer):
         var_nodes = [_var_assign(n, node.lineno, node.col_offset)
                      for n in sorted(names)]
 
-        # *(A, B, C) → Solutions(_clausal_conj(A, B, C))
+        # _varnames={'X': X, 'Y': Y, ...} — passed so binding keys use the
+        # names the user wrote rather than the predicate's field names.
+        varnames_kw = ast.keyword(
+            arg='_varnames',
+            value=ast.Dict(
+                keys=[ast.Constant(value=n) for n in sorted(names)],
+                values=[ast.Name(id=n, ctx=ast.Load()) for n in sorted(names)],
+            ),
+        )
+
+        # *(A, B, C) → Solutions(_clausal_conj(A, B, C, _varnames=...))
         if isinstance(inner, ast.Tuple):
             solutions = ast.Expr(value=ast.Call(
                 func=ast.Name(id='Solutions', ctx=ast.Load()),
                 args=[ast.Call(
                     func=ast.Name(id='_clausal_conj', ctx=ast.Load()),
                     args=inner.elts,
-                    keywords=[],
+                    keywords=[varnames_kw],
                 )],
                 keywords=[],
             ))
         else:
-            # *(Goal) → Solutions(Goal)
+            # *(Goal) → Solutions(Goal, _varnames=...)
             solutions = ast.Expr(value=ast.Call(
                 func=ast.Name(id='Solutions', ctx=ast.Load()),
                 args=[inner],
-                keywords=[],
+                keywords=[varnames_kw],
             ))
 
         return var_nodes + [solutions]

@@ -607,6 +607,95 @@ def term_str(t: Any) -> str:
     return repr(t)
 
 
+# ── Pretty-formatted term representation ──────────────────────────────────────
+
+_PFORMAT_INDENT = "  "
+
+
+def term_pformat(t: Any, depth: int = 0, width: int | None = None) -> str:
+    """Pretty-format a term with indentation for multi-line display.
+
+    Uses standard (non-canonical) form — operators appear in their expected
+    position (infix, prefix).  Short terms are kept on one line; longer
+    terms are expanded with *depth*-level indentation.
+
+    *width* is the line-width budget.  When ``None`` (the default) it is
+    resolved once from the terminal via ``shutil.get_terminal_size()`` and
+    then threaded through all recursive calls so every sub-term uses the
+    same value.
+    """
+    if width is None:
+        import shutil
+        width = shutil.get_terminal_size(fallback=(80, 24)).columns
+
+    flat = term_str(t)
+    if len(flat) + len(_PFORMAT_INDENT) * depth <= width:
+        return flat
+
+    pad = _PFORMAT_INDENT * depth
+    child = depth + 1
+    ipad = _PFORMAT_INDENT * child
+
+    def _join(items: list) -> str:
+        return (",\n" + ipad).join(items)
+
+    def _r(v, d=child):
+        return term_pformat(v, d, width)
+
+    if isinstance(t, list):
+        if not t:
+            return "[]"
+        items = [_r(e) for e in t]
+        return "[\n" + ipad + _join(items) + "\n" + pad + "]"
+
+    if isinstance(t, Compound):
+        if not t.args:
+            return flat
+        functor = t.functor if isinstance(t.functor, str) else _r(t.functor)
+        items = [_r(a) for a in t.args]
+        return functor + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+
+    if isinstance(t, KWTerm):
+        items = [f"{k} = {_r(v)}" for k, v in t.items()]
+        return t.functor + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+
+    if isinstance(t, DictTerm):
+        items = [f"{_r(k)}: {_r(v)}" for k, v in t.items()]
+        return "{\n" + ipad + _join(items) + "\n" + pad + "}"
+
+    if isinstance(t, SetTerm):
+        items = [_r(e) for e in sorted(t.elements, key=repr)]
+        return "{\n" + ipad + _join(items) + "\n" + pad + "}"
+
+    cls = type(t)
+    op = getattr(cls, "op", None)
+
+    if op is not None and hasattr(t, "left") and hasattr(t, "right"):
+        left = _r(t.left)
+        right = _r(t.right)
+        return "(\n" + ipad + left + "\n" + ipad + op + " " + right + "\n" + pad + ")"
+
+    if op is not None and hasattr(t, "operand"):
+        operand = _r(t.operand)
+        if op.isalpha():
+            return op + " " + operand
+        return op + operand
+
+    if isinstance(t, Call):
+        if not t.args:
+            return flat
+        items = [_r(a) for a in t.args]
+        func_str = _r(t.func, depth)
+        return func_str + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+
+    if isinstance(t, Predicate):
+        head = _r(t.head)
+        body = _r(t.body)
+        return head + " <-\n" + ipad + body
+
+    return flat
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 __all__ = [
@@ -624,6 +713,7 @@ __all__ = [
     "list_to_cons",
     "cons_to_list",
     "term_str",
+    "term_pformat",
     # Arithmetic binary operators
     "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod", "Pow",
     # Bitwise / shift binary operators
