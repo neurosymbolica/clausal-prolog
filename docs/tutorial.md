@@ -218,15 +218,15 @@ between(LOW, HIGH, N) <- (
 ```
 
 Note: use `=<` for "less than or equal" (to avoid ambiguity with `<=` in Python
-expressions). `<`, `>`, `>=` work as you'd expect. Use `=:=` and `=\=` to compare
-arithmetic expressions for equality and inequality.
+expressions). `<`, `>`, `>=` work as you'd expect. Use `==` and `!=` for
+arithmetic equality and inequality.
 
 ### A worked example: fizzbuzz
 
 ```clausal
-fizzbuzz(N, "fizzbuzz") <- (N mod 15 =:= 0)
-fizzbuzz(N, "fizz")     <- (N mod 3  =:= 0)
-fizzbuzz(N, "buzz")     <- (N mod 5  =:= 0)
+fizzbuzz(N, "fizzbuzz") <- (N % 15 == 0)
+fizzbuzz(N, "fizz")     <- (N % 3  == 0)
+fizzbuzz(N, "buzz")     <- (N % 5  == 0)
 fizzbuzz(N, N),
 ```
 
