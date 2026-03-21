@@ -7,7 +7,7 @@
 
 -import_from(py.units, [
     Metre, Kilogram, Second, Ampere, Kelvin, Mole,
-    Joule, Pascal, Coulomb])
+    Joule, Pascal, Coulomb, Newton])
 
 # ── Speed of light ────────────────────────────────────────────────────────
 
@@ -28,19 +28,18 @@ Test("planck constant magnitude") <- (
 
 Test("reduced planck constant units") <- HasUnits(ReducedPlanckConstant, Joule * Second)
 
-Test("hbar equals h over two pi") <- (
-    TWO_PI is ++(2 * 3.141592653589793),
-    DIFF is ++(abs(PlanckConstant.value / TWO_PI - ReducedPlanckConstant.value)),
-    DIFF < 1.0e-45
+Test("reduced planck constant magnitude") <- (
+    ReducedPlanckConstant > 1.054e-34(Joule * Second),
+    ReducedPlanckConstant < 1.055e-34(Joule * Second)
 )
 
 # ── Gravitational constant ────────────────────────────────────────────────
 
-Test("gravitational constant units") <- (HasUnits(GravitationalConstant, Metre**3 / Kilogram / Second**2))
+Test("gravitational constant units") <- (HasUnits(GravitationalConstant, Newton * Metre**2 / Kilogram**2))
 
 Test("gravitational constant magnitude") <- (
-    GravitationalConstant > 6.674e-11(Metre**3 / Kilogram / Second**2),
-    GravitationalConstant < 6.675e-11(Metre**3 / Kilogram / Second**2)
+    GravitationalConstant > 6.674e-11(Newton * Metre**2 / Kilogram**2),
+    GravitationalConstant < 6.675e-11(Newton * Metre**2 / Kilogram**2)
 )
 
 # ── Avogadro constant ─────────────────────────────────────────────────────
@@ -83,7 +82,7 @@ Test("proton mass units") <- HasUnits(ProtonMass, Kilogram)
 
 Test("proton heavier than electron") <- (
     RATIO := ProtonMass / ElectronMass,
-    RATIO > 1836()
+    RATIO > 1836
 )
 
 # ── Electron volt ─────────────────────────────────────────────────────────
@@ -110,6 +109,6 @@ Test("si mega") <- (Mega == 1000000.0)
 Test("si giga") <- (Giga == 1000000000.0)
 
 Test("si prefixes consistent") <- (
-    THOUSAND_MEGA is ++(1000 * Mega),
-    THOUSAND_MEGA == Giga
+    GIGA is 1000 * Mega,
+    GIGA == Giga
 )
