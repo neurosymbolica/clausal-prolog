@@ -55,6 +55,24 @@ Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an
 
 ## Constraint Satisfaction
 
+### sudoku.clausal
+
+Classic Sudoku solver using CLP(FD) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `AllDifferent` constraints, then labels. Includes three sample puzzles.
+
+```
+Sudoku(ROWS) <- (
+    ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
+    Flatten(ROWS, VS),
+    InDomain(VS, 1, 9),
+    MapList(AllDifferent, ROWS),
+    Transpose(ROWS, COLUMNS),
+    MapList(AllDifferent, COLUMNS),
+    Blocks(R1, R2, R3), Blocks(R4, R5, R6), Blocks(R7, R8, R9)
+)
+```
+
+Features: nested star-list patterns (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as higher-order arguments (`MapList(AllDifferent, ...)`), recursive transpose.
+
 ### map_coloring.clausal
 
 Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `Dif/2` (disequality constraints).

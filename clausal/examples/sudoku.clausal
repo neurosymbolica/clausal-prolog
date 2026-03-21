@@ -1,0 +1,128 @@
+# Sudoku solver using CLP(FD) constraints.
+# Ported from Markus Triska's sudoku.pl (https://www.metalevel.at/sudoku/)
+# Public domain.
+
+# ── Transpose ────────────────────────────────────────────────────────────────
+
+Transpose([], []),
+
+Transpose([[], *_REST], []),
+
+Transpose(MATRIX, [HEADS, *REST_COLS]) <- (
+    ExtractColumn(MATRIX, HEADS, TAILS),
+    Transpose(TAILS, REST_COLS)
+)
+
+# Extract the first element of each row.
+ExtractColumn([], [], []),
+
+ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (
+    ExtractColumn(ROWS, REST_HEADS, REST_TAILS)
+)
+
+# ── 3x3 block constraints ───────────────────────────────────────────────────
+
+Blocks([], [], []),
+
+Blocks([N1, N2, N3, *NS1], [N4, N5, N6, *NS2], [N7, N8, N9, *NS3]) <- (
+    AllDifferent([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
+    Blocks(NS1, NS2, NS3)
+)
+
+# ── Constraint posting ──────────────────────────────────────────────────────
+
+Sudoku(ROWS) <- (
+    ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
+    Flatten(ROWS, VS),
+    InDomain(VS, 1, 9),
+    MapList(AllDifferent, ROWS),
+    Transpose(ROWS, COLUMNS),
+    MapList(AllDifferent, COLUMNS),
+    Blocks(R1, R2, R3),
+    Blocks(R4, R5, R6),
+    Blocks(R7, R8, R9)
+)
+
+# ── Solve: post constraints + label ─────────────────────────────────────────
+
+Solve(ROWS) <- (
+    Sudoku(ROWS),
+    Flatten(ROWS, VS),
+    Label(VS)
+)
+
+# ── Sample problems ─────────────────────────────────────────────────────────
+
+Problem(1, [[1,_,_,8,_,4,_,_,_],
+            [_,2,_,_,_,_,4,5,6],
+            [_,_,3,2,_,5,_,_,_],
+            [_,_,_,4,_,_,8,_,5],
+            [7,8,9,_,5,_,_,_,_],
+            [_,_,_,_,_,6,2,_,3],
+            [8,_,1,_,_,_,7,_,_],
+            [_,_,_,1,2,3,_,8,_],
+            [2,_,5,_,_,_,_,_,9]]),
+
+Problem(2, [[_,_,2,_,3,_,1,_,_],
+            [_,4,_,_,_,_,_,3,_],
+            [1,_,5,_,_,_,_,8,2],
+            [_,_,_,2,_,_,6,5,_],
+            [9,_,_,_,8,7,_,_,3],
+            [_,_,_,_,4,_,_,_,_],
+            [8,_,_,_,7,_,_,_,4],
+            [_,9,3,1,_,_,_,6,_],
+            [_,_,7,_,6,_,5,_,_]]),
+
+Problem(3, [[1,_,_,_,_,_,_,_,_],
+            [_,_,2,7,4,_,_,_,_],
+            [_,_,_,5,_,_,_,_,4],
+            [_,3,_,_,_,_,_,_,_],
+            [7,5,_,_,_,_,_,_,_],
+            [_,_,_,_,_,9,6,_,_],
+            [_,4,_,_,_,6,_,_,_],
+            [_,_,_,_,_,_,_,7,1],
+            [_,_,_,_,_,1,_,3,_]]),
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+
+Test("transpose empty rows") <- Transpose([[], []], [])
+
+Test("transpose 2x3") <- (
+    Transpose([[1,2,3],[4,5,6]], RESULT),
+    RESULT := [[1,4],[2,5],[3,6]]
+)
+
+Test("blocks base case") <- Blocks([], [], [])
+
+Test("blocks one block") <- (
+    Blocks([1,2,3], [4,5,6], [7,8,9])
+)
+
+Test("problem 1 has a solution") <- (
+    Problem(1, ROWS),
+    Solve(ROWS)
+)
+
+Test("problem 1 full solution") <- (
+    Problem(1, ROWS),
+    Solve(ROWS),
+    ROWS := [[1,5,6,8,9,4,3,2,7],
+             [9,2,8,7,3,1,4,5,6],
+             [4,7,3,2,6,5,9,1,8],
+             [3,6,2,4,1,7,8,9,5],
+             [7,8,9,3,5,2,6,4,1],
+             [5,1,4,9,8,6,2,7,3],
+             [8,3,1,5,4,9,7,6,2],
+             [6,9,7,1,2,3,5,8,4],
+             [2,4,5,6,7,8,1,3,9]]
+)
+
+Test("problem 2 has a solution") <- (
+    Problem(2, ROWS),
+    Solve(ROWS)
+)
+
+Test("problem 3 has a solution") <- (
+    Problem(3, ROWS),
+    Solve(ROWS)
+)

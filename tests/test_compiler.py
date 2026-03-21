@@ -22,6 +22,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator, DONE
+from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.terms import Compound
@@ -673,6 +674,207 @@ class TestHeadListPatterns:
         _, before1, _, _, vc1 = list_guards[0]
         _, before2, _, _, vc2 = list_guards[1]
         assert vc1[h._id] == vc2[h._id]  # same python name
+
+
+class TestNestedStarListPatterns:
+    """Tests for nested star-list patterns like [[HEAD, *TAIL], *ROWS]."""
+
+    def test_nested_star_flattens_to_proxy_var(self):
+        """[[HEAD, *TAIL], *ROWS] → outer guard with proxy + inner sub-guard."""
+        head, tail, rows = Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        p = head_to_match_pattern(
+            [
+                [head, StarUnpack(value=tail)],
+                StarUnpack(value=rows),
+            ],
+            ctx,
+            list_guards=list_guards,
+        )
+        assert isinstance(p, ast.MatchAs)
+        # Should produce 2 guards: outer + inner sub-guard
+        assert len(list_guards) == 2
+        # Outer guard: proxy var + *ROWS
+        _, outer_before, outer_star, outer_after, _ = list_guards[0]
+        assert len(outer_before) == 1
+        proxy = outer_before[0]
+        assert is_var(proxy)         # fresh proxy, not HEAD
+        assert proxy._id != head._id
+        assert is_var(outer_star)    # ROWS
+        # Inner guard: HEAD + *TAIL, target is the proxy
+        inner_cap, inner_before, inner_star, inner_after, _ = list_guards[1]
+        assert inner_cap == ctx[proxy._id]  # target is proxy's python name
+        assert len(inner_before) == 1
+        assert inner_before[0] is head
+        assert inner_star is tail
+        assert inner_after == []
+
+    def test_nested_star_registers_all_vars(self):
+        """All vars (HEAD, TAIL, ROWS, proxy) are registered in var_context."""
+        head, tail, rows = Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern(
+            [[head, StarUnpack(value=tail)], StarUnpack(value=rows)],
+            ctx,
+            list_guards=list_guards,
+        )
+        assert head._id in ctx
+        assert tail._id in ctx
+        assert rows._id in ctx
+
+    def test_double_nested_star(self):
+        """[[[X, *Y], *Z], *W] produces 3 guards."""
+        x, y, z, w = Var(), Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern(
+            [
+                [[x, StarUnpack(value=y)], StarUnpack(value=z)],
+                StarUnpack(value=w),
+            ],
+            ctx,
+            list_guards=list_guards,
+        )
+        assert len(list_guards) == 3
+        # All vars registered
+        assert x._id in ctx
+        assert y._id in ctx
+        assert z._id in ctx
+        assert w._id in ctx
+
+    def test_nested_star_no_star_in_inner(self):
+        """[[A, B], *REST] — inner list has no star, no sub-guard needed."""
+        a, b, rest = Var(), Var(), Var()
+        ctx: dict[int, str] = {}
+        list_guards: list = []
+        head_to_match_pattern(
+            [[a, b], StarUnpack(value=rest)],
+            ctx,
+            list_guards=list_guards,
+        )
+        # Only 1 guard — the inner [A, B] is a plain list (no star), not flattened
+        assert len(list_guards) == 1
+
+
+# ── Integration tests: nested star patterns via .clausal loading ─────────────
+
+
+class TestNestedStarIntegration:
+    """End-to-end tests for nested star-list patterns loaded from .clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request, tmp_path_factory):
+        from clausal.import_hook import _load_module
+        tmp = tmp_path_factory.mktemp("nested_star")
+        p = tmp / "nested_star.clausal"
+        p.write_text(
+            "Extract([[HEAD, *TAIL], *ROWS], HEAD, TAIL, ROWS),\n"
+            "\n"
+            "First([HEAD, *_REST], HEAD),\n"
+            "\n"
+            "Deep([[[X, *Y], *Z], *W], X, Y, Z, W),\n"
+            "\n"
+            "Transpose([], []),\n"
+            "Transpose([[], *_MORE], []),\n"
+            "Transpose(MATRIX, [HEADS, *REST_COLS]) <- (\n"
+            "    ExtractColumn(MATRIX, HEADS, TAILS),\n"
+            "    Transpose(TAILS, REST_COLS)\n"
+            ")\n"
+            "ExtractColumn([], [], []),\n"
+            "ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (\n"
+            "    ExtractColumn(ROWS, REST_HEADS, REST_TAILS)\n"
+            ")\n"
+        )
+        mod = _load_module("nested_star", str(p))
+        request.cls.module = mod.__dict__["$module"]
+
+    def _succeeds(self, functor, *args):
+        for _ in call(functor, *args, module=self.module):
+            return True
+        return False
+
+    def _first(self, functor, *args, out_indices=None):
+        """Call with Vars at out_indices, return first deref'd results."""
+        if out_indices is None:
+            out_indices = [-1]
+        full = list(args)
+        out_vars = []
+        for idx in out_indices:
+            v = Var()
+            out_vars.append(v)
+            if idx == -1:
+                full.append(v)
+            else:
+                full.insert(idx, v)
+        for _ in call(functor, *full, module=self.module):
+            return tuple(deref(v) for v in out_vars)
+        return None
+
+    def test_extract_head_tail_rows(self):
+        h, t, r = Var(), Var(), Var()
+        for _ in call("Extract", [[10, 20, 30], [40, 50]], h, t, r, module=self.module):
+            assert deref(h) == 10
+            assert deref(t) == [20, 30]
+            assert deref(r) == [[40, 50]]
+            return
+        pytest.fail("Extract did not match")
+
+    def test_extract_single_element_inner(self):
+        h, t, r = Var(), Var(), Var()
+        for _ in call("Extract", [[42], [1, 2]], h, t, r, module=self.module):
+            assert deref(h) == 42
+            assert deref(t) == []
+            assert deref(r) == [[1, 2]]
+            return
+        pytest.fail("Extract did not match")
+
+    def test_extract_single_row(self):
+        h, t, r = Var(), Var(), Var()
+        for _ in call("Extract", [[5, 6, 7]], h, t, r, module=self.module):
+            assert deref(h) == 5
+            assert deref(t) == [6, 7]
+            assert deref(r) == []
+            return
+        pytest.fail("Extract did not match")
+
+    def test_first(self):
+        f = Var()
+        for _ in call("First", [7, 8, 9], f, module=self.module):
+            assert deref(f) == 7
+            return
+        pytest.fail("First did not match")
+
+    def test_deep_triple_nesting(self):
+        x, y, z, w = Var(), Var(), Var(), Var()
+        for _ in call("Deep", [[[1, 2, 3], [4, 5]], [6, 7]], x, y, z, w, module=self.module):
+            assert deref(x) == 1
+            assert deref(y) == [2, 3]
+            assert deref(z) == [[4, 5]]
+            assert deref(w) == [[6, 7]]
+            return
+        pytest.fail("Deep did not match")
+
+    def test_transpose_2x3(self):
+        r = Var()
+        for _ in call("Transpose", [[1, 2, 3], [4, 5, 6]], r, module=self.module):
+            assert deref(r) == [[1, 4], [2, 5], [3, 6]]
+            return
+        pytest.fail("Transpose did not match")
+
+    def test_transpose_3x2(self):
+        r = Var()
+        for _ in call("Transpose", [[1, 2], [3, 4], [5, 6]], r, module=self.module):
+            assert deref(r) == [[1, 3, 5], [2, 4, 6]]
+            return
+        pytest.fail("Transpose did not match")
+
+    def test_transpose_empty_rows(self):
+        assert self._succeeds("Transpose", [[], []], [])
+
+    def test_transpose_empty_matrix(self):
+        assert self._succeeds("Transpose", [], [])
 
 
 # ── _head_list_unify_input / _head_list_unify_output ─────────────────────────
