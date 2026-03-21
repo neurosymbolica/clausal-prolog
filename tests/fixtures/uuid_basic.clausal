@@ -3,76 +3,76 @@
 # ── Generation ──────────────────────────────────────────────────────
 
 Test("uuid4 generates") <- (
-    UUIDv4(U_) and
-    IsUUID(U_)
+    UUIDv4(U),
+    IsUUID(U)
 )
 
 Test("uuid1 generates") <- (
-    UUIDv1(U_) and
-    IsUUID(U_)
+    UUIDv1(U),
+    IsUUID(U)
 )
 
 Test("uuid3 deterministic") <- (
-    UUIDv3("dns", "example.com", U1_) and
-    UUIDv3("dns", "example.com", U2_) and
-    UUIDStr(U1_, S1_) and
-    UUIDStr(U2_, S2_) and
-    S1_ == S2_
+    UUIDv3("dns", "example.com", U1),
+    UUIDv3("dns", "example.com", U2),
+    UUIDStr(U1, S1),
+    UUIDStr(U2, S2),
+    S1 == S2
 )
 
 Test("uuid5 deterministic") <- (
-    UUIDv5("url", "https://example.com", U1_) and
-    UUIDv5("url", "https://example.com", U2_) and
-    UUIDStr(U1_, S1_) and
-    UUIDStr(U2_, S2_) and
-    S1_ == S2_
+    UUIDv5("url", "https://example.com", U1),
+    UUIDv5("url", "https://example.com", U2),
+    UUIDStr(U1, S1),
+    UUIDStr(U2, S2),
+    S1 == S2
 )
 
 # ── Conversion roundtrips ──────────────────────────────────────────
 
 Test("uuid str roundtrip") <- (
-    UUIDv4(U_) and
-    UUIDStr(U_, S_) and
-    UUIDStr(U2_, S_) and
-    UUIDStr(U2_, S2_) and
-    S_ == S2_
+    UUIDv4(U),
+    UUIDStr(U, S),
+    UUIDStr(U2, S),
+    UUIDStr(U2, S2),
+    S == S2
 )
 
 Test("uuid hex roundtrip") <- (
-    UUIDv4(U_) and
-    UUIDHex(U_, H_) and
-    UUIDHex(U2_, H_) and
-    UUIDHex(U2_, H2_) and
-    H_ == H2_
+    UUIDv4(U),
+    UUIDHex(U, HEX),
+    UUIDHex(U2, HEX),
+    UUIDHex(U2, HEX2),
+    HEX == HEX2
 )
 
 Test("uuid int roundtrip") <- (
-    UUIDv4(U_) and
-    UUIDInt(U_, N_) and
-    UUIDInt(U2_, N_) and
-    UUIDInt(U2_, N2_) and
-    N_ == N2_
+    UUIDv4(U),
+    UUIDInt(U, N),
+    UUIDInt(U2, N),
+    UUIDInt(U2, N2),
+    N == N2
 )
 
 # ── Inspection ─────────────────────────────────────────────────────
 
 Test("uuid4 version is 4") <- (
-    UUIDv4(U_) and
-    UUIDVersion(U_, 4)
+    UUIDv4(U),
+    UUIDVersion(U, 4)
 )
 
 Test("uuid3 version is 3") <- (
-    UUIDv3("dns", "test", U_) and
-    UUIDVersion(U_, 3)
+    UUIDv3("dns", "test", U),
+    UUIDVersion(U, 3)
 )
 
 Test("uuid5 version is 5") <- (
-    UUIDv5("dns", "test", U_) and
-    UUIDVersion(U_, 5)
+    UUIDv5("dns", "test", U),
+    UUIDVersion(U, 5)
 )
 
 Test("uuid fields decompose") <- (
-    UUIDv4(U_) and
-    UUIDFields(U_, TL_, TM_, TH_, CSH_, CSL_, NODE_) and
-    IsUUID(U_)
+    UUIDv4(U),
+    UUIDFields(U, TIME_LOW, TIME_MID, TIME_HI, CLOCK_SEQ_HI, CLOCK_SEQ_LOW, NODE),
+    IsUUID(U)
 )

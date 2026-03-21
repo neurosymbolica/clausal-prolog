@@ -1,0 +1,176 @@
+-import_from(scipy_sparse, [
+    MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye,
+    ToDense, FromDense, Shape, NonzeroCount,
+    Solve, EigenDecomposeHermitian, SingularValueDecompose,
+    Free
+])
+
+Test("makecsr returns handle") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    MakeCSR(DATA, IDX, PTR, H),
+    ++(isinstance(H, int)),
+    Free(H))
+
+Test("makecsr nnz correct") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    MakeCSR(DATA, IDX, PTR, H),
+    NonzeroCount(H, NNZ),
+    NNZ == 5,
+    Free(H))
+
+Test("makecsc returns handle") <- (
+    DATA is [1.0, 4.0, 3.0, 2.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    MakeCSC(DATA, IDX, PTR, H),
+    ++(isinstance(H, int)),
+    Free(H))
+
+Test("makecoo returns handle") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    ROW is [0, 0, 1, 2, 2],
+    COL is [0, 2, 1, 0, 2],
+    MakeCOO(DATA, ROW, COL, H),
+    ++(isinstance(H, int)),
+    Free(H))
+
+Test("makecoo todense round-trip") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    ROW is [0, 0, 1, 2, 2],
+    COL is [0, 2, 1, 0, 2],
+    SHP is ++(tuple([3, 3])),
+    MakeCOO(DATA, ROW, COL, SHP, H),
+    ToDense(H, D),
+    V00 is ++(float(D[0, 0])),
+    V11 is ++(float(D[1, 1])),
+    ++(abs(V00 - 1.0)) < 1e-10,
+    ++(abs(V11 - 3.0)) < 1e-10,
+    Free(H))
+
+Test("makediags main diagonal") <- (
+    DIAG is [1.0, 2.0, 3.0],
+    MakeDiagonals(DIAG, H),
+    ToDense(H, D),
+    V0 is ++(float(D[0, 0])),
+    V1 is ++(float(D[1, 1])),
+    V2 is ++(float(D[2, 2])),
+    ++(abs(V0 - 1.0)) < 1e-10,
+    ++(abs(V1 - 2.0)) < 1e-10,
+    ++(abs(V2 - 3.0)) < 1e-10,
+    Free(H))
+
+Test("makeeye 3x3 identity") <- (
+    MakeEye(3, H),
+    ToDense(H, D),
+    V00 is ++(float(D[0, 0])),
+    V11 is ++(float(D[1, 1])),
+    V22 is ++(float(D[2, 2])),
+    V01 is ++(float(D[0, 1])),
+    ++(abs(V00 - 1.0)) < 1e-10,
+    ++(abs(V11 - 1.0)) < 1e-10,
+    ++(abs(V22 - 1.0)) < 1e-10,
+    ++(abs(V01)) < 1e-10,
+    Free(H))
+
+Test("makeeye nnz equals n") <- (
+    MakeEye(4, H),
+    NonzeroCount(H, NNZ),
+    NNZ == 4,
+    Free(H))
+
+Test("todense correct shape") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    SHP is ++(tuple([3, 3])),
+    MakeCSR(DATA, IDX, PTR, SHP, H),
+    ToDense(H, D),
+    ROWS is ++(D.shape[0]),
+    COLS is ++(D.shape[1]),
+    ROWS == 3,
+    COLS == 3,
+    Free(H))
+
+Test("todense correct values") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    MakeCSR(DATA, IDX, PTR, H),
+    ToDense(H, D),
+    V02 is ++(float(D[0, 2])),
+    ++(abs(V02 - 2.0)) < 1e-10,
+    Free(H))
+
+Test("fromdense round-trip") <- (
+    A is [[1.0, 0.0], [0.0, 2.0]],
+    FromDense(A, H),
+    ToDense(H, D),
+    V00 is ++(float(D[0, 0])),
+    V11 is ++(float(D[1, 1])),
+    ++(abs(V00 - 1.0)) < 1e-10,
+    ++(abs(V11 - 2.0)) < 1e-10,
+    Free(H))
+
+Test("shape returns tuple") <- (
+    MakeEye(3, H),
+    Shape(H, S),
+    R is ++(S[0]),
+    C is ++(S[1]),
+    R == 3,
+    C == 3,
+    Free(H))
+
+Test("nonzerocount correct") <- (
+    DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
+    IDX is [0, 2, 1, 0, 2],
+    PTR is [0, 2, 3, 5],
+    MakeCSR(DATA, IDX, PTR, H),
+    NonzeroCount(H, NNZ),
+    NNZ == 5,
+    Free(H))
+
+Test("solve linear system") <- (
+    AD is [4.0, 1.0, 1.0, 3.0],
+    AI is [0, 1, 0, 1],
+    AP is [0, 2, 4],
+    SHP is ++(tuple([2, 2])),
+    MakeCSR(AD, AI, AP, SHP, AH),
+    B is [5.0, 4.0],
+    Solve(AH, B, X),
+    X0 is ++(float(X[0])),
+    X1 is ++(float(X[1])),
+    ++(abs(X0 - 1.0)) < 1e-8,
+    ++(abs(X1 - 1.0)) < 1e-8,
+    Free(AH))
+
+Test("eigendecompose hermitian k2") <- (
+    M is [[4.0, 1.0, 0.0, 0.0],
+          [1.0, 3.0, 1.0, 0.0],
+          [0.0, 1.0, 5.0, 1.0],
+          [0.0, 0.0, 1.0, 2.0]],
+    FromDense(M, 'csr', H),
+    EigenDecomposeHermitian(H, 2, R),
+    EV is ++(R['eigenvalues']),
+    LEN is ++(len(EV)),
+    LEN == 2,
+    Free(H))
+
+Test("svd k2 s positive") <- (
+    M is [[1.0, 2.0, 0.0],
+          [0.0, 3.0, 1.0],
+          [1.0, 0.0, 4.0]],
+    FromDense(M, 'csr', H),
+    SingularValueDecompose(H, 2, R),
+    S is ++(R['s']),
+    LEN is ++(len(S)),
+    LEN == 2,
+    ++(all(v > 0 for v in S)),
+    Free(H))
+
+Test("free handle succeeds") <- (
+    MakeEye(3, H),
+    Free(H))

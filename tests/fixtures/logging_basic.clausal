@@ -9,85 +9,97 @@
 
 # ── GetLogger ────────────────────────────────────────────────────────────────
 
-Test("get_logger named") <- GetLogger("test.fixture.named", L_)
+Test("get_logger named") <- GetLogger("test.fixture.named", LOGGER)
 Test("get_logger same name") <- (
-    GetLogger("test.fixture.same", L1_) and
-    GetLogger("test.fixture.same", L2_) and
-    L1_ == L2_
+    GetLogger("test.fixture.same", LOGGER1),
+    GetLogger("test.fixture.same", LOGGER2),
+    LOGGER1 == LOGGER2
 )
-Test("get_logger default") <- GetLogger(L_)
+Test("get_logger default") <- GetLogger(LOGGER)
 
 # ── SetLevel / GetLevel ──────────────────────────────────────────────────────
 
 Test("set_level debug") <- (
-    GetLogger("test.fixture.lvl1", L_) and
-    SetLevel(L_, "debug") and
-    GetLevel(L_, Lv_) and Lv_ == "DEBUG"
+    GetLogger("test.fixture.lvl1", LOGGER),
+    SetLevel(LOGGER, "debug"),
+    GetLevel(LOGGER, LEVEL),
+    LEVEL == "DEBUG"
 )
 Test("set_level warning") <- (
-    GetLogger("test.fixture.lvl2", L_) and
-    SetLevel(L_, "warning") and
-    GetLevel(L_, Lv_) and Lv_ == "WARNING"
+    GetLogger("test.fixture.lvl2", LOGGER),
+    SetLevel(LOGGER, "warning"),
+    GetLevel(LOGGER, LEVEL),
+    LEVEL == "WARNING"
 )
 Test("set_level error") <- (
-    GetLogger("test.fixture.lvl3", L_) and
-    SetLevel(L_, "error") and
-    GetLevel(L_, Lv_) and Lv_ == "ERROR"
+    GetLogger("test.fixture.lvl3", LOGGER),
+    SetLevel(LOGGER, "error"),
+    GetLevel(LOGGER, LEVEL),
+    LEVEL == "ERROR"
 )
 Test("set_level critical") <- (
-    GetLogger("test.fixture.lvl4", L_) and
-    SetLevel(L_, "critical") and
-    GetLevel(L_, Lv_) and Lv_ == "CRITICAL"
+    GetLogger("test.fixture.lvl4", LOGGER),
+    SetLevel(LOGGER, "critical"),
+    GetLevel(LOGGER, LEVEL),
+    LEVEL == "CRITICAL"
 )
 Test("set_level info") <- (
-    GetLogger("test.fixture.lvl5", L_) and
-    SetLevel(L_, "info") and
-    GetLevel(L_, Lv_) and Lv_ == "INFO"
+    GetLogger("test.fixture.lvl5", LOGGER),
+    SetLevel(LOGGER, "info"),
+    GetLevel(LOGGER, LEVEL),
+    LEVEL == "INFO"
 )
 
 # ── IsEnabledFor ─────────────────────────────────────────────────────────────
 
 Test("enabled_for yes") <- (
-    GetLogger("test.fixture.en1", L_) and
-    SetLevel(L_, "debug") and
-    IsEnabledFor(L_, "info")
+    GetLogger("test.fixture.en1", LOGGER),
+    SetLevel(LOGGER, "debug"),
+    IsEnabledFor(LOGGER, "info")
 )
 Test("enabled_for no") <- (
-    GetLogger("test.fixture.en2", L_) and
-    SetLevel(L_, "error") and
-    not IsEnabledFor(L_, "debug")
+    GetLogger("test.fixture.en2", LOGGER),
+    SetLevel(LOGGER, "error"),
+    not IsEnabledFor(LOGGER, "debug")
 )
 Test("enabled_for same level") <- (
-    GetLogger("test.fixture.en3", L_) and
-    SetLevel(L_, "warning") and
-    IsEnabledFor(L_, "warning")
+    GetLogger("test.fixture.en3", LOGGER),
+    SetLevel(LOGGER, "warning"),
+    IsEnabledFor(LOGGER, "warning")
 )
 
 # ── Logging predicates always succeed ────────────────────────────────────────
 
 Test("debug succeeds") <- (
-    GetLogger("test.fixture.d", L_) and Debug(L_, "debug msg")
+    GetLogger("test.fixture.d", LOGGER),
+    Debug(LOGGER, "debug msg")
 )
 Test("info succeeds") <- (
-    GetLogger("test.fixture.i", L_) and Info(L_, "info msg")
+    GetLogger("test.fixture.i", LOGGER),
+    Info(LOGGER, "info msg")
 )
 Test("warning succeeds") <- (
-    GetLogger("test.fixture.w", L_) and Warning(L_, "warning msg")
+    GetLogger("test.fixture.w", LOGGER),
+    Warning(LOGGER, "warning msg")
 )
 Test("error succeeds") <- (
-    GetLogger("test.fixture.e", L_) and Error(L_, "error msg")
+    GetLogger("test.fixture.e", LOGGER),
+    Error(LOGGER, "error msg")
 )
 Test("critical succeeds") <- (
-    GetLogger("test.fixture.c", L_) and Critical(L_, "critical msg")
+    GetLogger("test.fixture.c", LOGGER),
+    Critical(LOGGER, "critical msg")
 )
 
 # ── Log/3 ────────────────────────────────────────────────────────────────────
 
 Test("log at info") <- (
-    GetLogger("test.fixture.log3", L_) and Log(L_, "info", "generic")
+    GetLogger("test.fixture.log3", LOGGER),
+    Log(LOGGER, "info", "generic")
 )
 Test("log at debug") <- (
-    GetLogger("test.fixture.log3d", L_) and Log(L_, "debug", "dbg")
+    GetLogger("test.fixture.log3d", LOGGER),
+    Log(LOGGER, "debug", "dbg")
 )
 
 # ── Arity-1 shorthand ───────────────────────────────────────────────────────
@@ -100,28 +112,28 @@ Test("critical arity 1") <- Critical("default critical")
 
 # ── StreamHandler / AddHandler ───────────────────────────────────────────────
 
-Test("stream_handler stdout") <- StreamHandler("stdout", H_)
-Test("stream_handler stderr") <- StreamHandler("stderr", H_)
+Test("stream_handler stdout") <- StreamHandler("stdout", HANDLER)
+Test("stream_handler stderr") <- StreamHandler("stderr", HANDLER)
 Test("add_handler") <- (
-    GetLogger("test.fixture.ah", L_) and
-    StreamHandler("stderr", H_) and
-    AddHandler(L_, H_) and
-    RemoveHandler(L_, H_)
+    GetLogger("test.fixture.ah", LOGGER),
+    StreamHandler("stderr", HANDLER),
+    AddHandler(LOGGER, HANDLER),
+    RemoveHandler(LOGGER, HANDLER)
 )
 
 # ── SetFormatter ─────────────────────────────────────────────────────────────
 
 Test("set_formatter") <- (
-    StreamHandler("stderr", H_) and
-    SetFormatter(H_, "%(levelname)s: %(message)s")
+    StreamHandler("stderr", HANDLER),
+    SetFormatter(HANDLER, "%(levelname)s: %(message)s")
 )
 
 # ── Logger hierarchy ────────────────────────────────────────────────────────
 
 Test("logger hierarchy") <- (
-    GetLogger("test.fixture.parent", P_) and
-    GetLogger("test.fixture.parent.child", C_) and
-    GetLevel(P_, Lp_) and
-    GetLevel(C_, Lc_) and
+    GetLogger("test.fixture.parent", PARENT),
+    GetLogger("test.fixture.parent.child", CHILD),
+    GetLevel(PARENT, PARENT_LEVEL),
+    GetLevel(CHILD, CHILD_LEVEL),
     True
 )

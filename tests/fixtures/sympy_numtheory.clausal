@@ -29,17 +29,17 @@ Test("next prime after 1") <- (
 
 Test("factor 12") <- (
     FactorInt(12, F),
-    F is ++{2: 2, 3: 1}
+    F is {2: 2, 3: 1}
 )
 
 Test("factor prime") <- (
     FactorInt(13, F),
-    F is ++{13: 1}
+    F is {13: 1}
 )
 
 Test("factor 360") <- (
     FactorInt(360, F),
-    F is ++{2: 3, 3: 2, 5: 1}
+    F is {2: 3, 3: 2, 5: 1}
 )
 
 # ── Divisors/2 ───────────────────────────────────────────────────────────────

@@ -5,52 +5,52 @@
 # ── GridSearch ───────────────────────────────────────────────────────
 
 Test("grid search svc on iris") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
-               D_, kfold(3), BEST_) and
-    Score(BEST_, D_, S_) and
-    S_ > 0.5
+               DATASET, kfold(3), BEST),
+    Score(BEST, DATASET, SCORE),
+    SCORE > 0.5
 )
 
 # ── GridSearch with metric ───────────────────────────────────────────
 
 Test("grid search with accuracy metric") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
-               D_, 3, "accuracy", BEST_) and
-    BestScore(BEST_, SCORE_) and
-    SCORE_ > 0.5
+               DATASET, 3, "accuracy", BEST),
+    BestScore(BEST, SCORE),
+    SCORE > 0.5
 )
 
 # ── BestParams ───────────────────────────────────────────────────────
 
 Test("best params from grid search") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf", "linear"]},
-               D_, kfold(3), BEST_) and
-    BestParams(BEST_, PARAMS_)
+               DATASET, kfold(3), BEST),
+    BestParams(BEST, PARAMS)
 )
 
 # ── SearchResults ────────────────────────────────────────────────────
 
 Test("search results from grid search") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
-               D_, kfold(3), BEST_) and
-    SearchResults(BEST_, RESULTS_)
+               DATASET, kfold(3), BEST),
+    SearchResults(BEST, RESULTS)
 )
 
 # ── RandomSearch ─────────────────────────────────────────────────────
 
 Test("random search on iris") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     RandomSearch(Est("random_forest", {}),
                  {"n_estimators": [10, 50, 100], "max_depth": [3, 5, 10]},
-                 D_, kfold(3), 5, BEST_) and
-    Score(BEST_, D_, S_) and
-    S_ > 0.5
+                 DATASET, kfold(3), 5, BEST),
+    Score(BEST, DATASET, SCORE),
+    SCORE > 0.5
 )

@@ -3,66 +3,66 @@
 # ── Basic parsing ────────────────────────────────────────────────────
 
 Test("parse scalar int") <- (
-    Read("42", N_) and
-    N_ == 42
+    Read("42", N),
+    N == 42
 )
 
 Test("parse scalar string") <- (
-    Read("hello", S_) and
-    S_ == "hello"
+    Read("hello", S),
+    S == "hello"
 )
 
 Test("parse mapping") <- (
-    Read("name: alice\nage: 30", D_) and
-    Get(D_, "name", "alice") and
-    Get(D_, "age", 30)
+    Read("name: alice\nage: 30", DATA),
+    Get(DATA, "name", "alice"),
+    Get(DATA, "age", 30)
 )
 
 Test("parse sequence") <- (
-    Read("[1, 2, 3]", D_) and
-    D_ == [1, 2, 3]
+    Read("[1, 2, 3]", DATA),
+    DATA == [1, 2, 3]
 )
 
 Test("parse bool and null") <- (
-    Read("flag: true\nval: null", D_) and
-    Get(D_, "flag", True) and
-    Get(D_, "val", None)
+    Read("flag: true\nval: null", DATA),
+    Get(DATA, "flag", True),
+    Get(DATA, "val", None)
 )
 
 Test("parse nested mapping") <- (
-    Read("server:\n  host: localhost\n  port: 8080", D_) and
-    Get(D_, ["server", "host"], "localhost") and
-    Get(D_, ["server", "port"], 8080)
+    Read("server:\n  host: localhost\n  port: 8080", DATA),
+    Get(DATA, ["server", "host"], "localhost"),
+    Get(DATA, ["server", "port"], 8080)
 )
 
 # ── Nested access ────────────────────────────────────────────────────
 
 Test("list of maps") <- (
-    Read("- name: alice\n  age: 30\n- name: bob\n  age: 25", D_) and
-    Get(D_, [0, "name"], "alice") and
-    Get(D_, [1, "age"], 25)
+    Read("- name: alice\n  age: 30\n- name: bob\n  age: 25", DATA),
+    Get(DATA, [0, "name"], "alice"),
+    Get(DATA, [1, "age"], 25)
 )
 
 Test("config pattern") <- (
-    Read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", D_) and
-    Get(D_, ["database", "host"], "db.example.com") and
-    Get(D_, ["database", "port"], 5432)
+    Read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", DATA),
+    Get(DATA, ["database", "host"], "db.example.com"),
+    Get(DATA, ["database", "port"], 5432)
 )
 
 # ── Round-trip ───────────────────────────────────────────────────────
 
 Test("round trip mapping") <- (
-    Read("x: 1\ny: 2", D_) and
-    Write(D_, S_) and
-    Read(S_, D2_) and
-    Get(D2_, "x", 1) and
-    Get(D2_, "y", 2)
+    Read("x: 1\ny: 2", DATA),
+    Write(DATA, YAML),
+    Read(YAML, DATA2),
+    Get(DATA2, "x", 1),
+    Get(DATA2, "y", 2)
 )
 
 Test("write and read back") <- (
-    Read("a: 1\nb:\n- 2\n- 3", D_) and
-    Write(D_, S_) and
-    Read(S_, D2_) and
-    Get(D2_, "a", 1) and
-    Get(D2_, ["b", 0], 2)
+    Read("a: 1\nb:\n- 2\n- 3", DATA),
+    Write(DATA, YAML),
+    Read(YAML, DATA2),
+    Get(DATA2, "a", 1),
+    Get(DATA2, ["b", 0], 2)
 )

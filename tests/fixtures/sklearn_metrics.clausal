@@ -5,70 +5,70 @@
 # ── Metric/4: classification metrics ────────────────────────────────
 
 Test("accuracy metric") <- (
-    LoadDataset("iris", D_) and
-    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D_, F_) and
-    D_ is ("Dataset", X_, Y_) and
-    Predict(F_, X_, P_) and
-    Metric("accuracy", Y_, P_, S_) and
-    S_ > 0.8
+    LoadDataset("iris", DATASET),
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
+    DATASET is ("Dataset", X, Y),
+    Predict(FITTED, X, PREDS),
+    Metric("accuracy", Y, PREDS, SCORE),
+    SCORE > 0.8
 )
 
 # ── Score/4 with explicit metric ─────────────────────────────────────
 
 Test("score with accuracy metric") <- (
-    LoadDataset("iris", D_) and
-    Fit(Est("logistic_regression", {"max_iter": 200}), D_, F_) and
-    Score(F_, D_, "accuracy", S_) and
-    S_ > 0.5
+    LoadDataset("iris", DATASET),
+    Fit(Est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
+    Score(FITTED, DATASET, "accuracy", SCORE),
+    SCORE > 0.5
 )
 
 # ── Regression metrics ───────────────────────────────────────────────
 
 Test("r2 metric on diabetes") <- (
-    LoadDataset("diabetes", D_) and
-    Fit(Est("ridge", {}), D_, F_) and
-    D_ is ("Dataset", X_, Y_) and
-    Predict(F_, X_, P_) and
-    Metric("r2", Y_, P_, S_)
+    LoadDataset("diabetes", DATASET),
+    Fit(Est("ridge", {}), DATASET, FITTED),
+    DATASET is ("Dataset", X, Y),
+    Predict(FITTED, X, PREDS),
+    Metric("r2", Y, PREDS, SCORE)
 )
 
 Test("mse metric on diabetes") <- (
-    LoadDataset("diabetes", D_) and
-    Fit(Est("ridge", {}), D_, F_) and
-    D_ is ("Dataset", X_, Y_) and
-    Predict(F_, X_, P_) and
-    Metric("mse", Y_, P_, S_) and
-    S_ > 0.0
+    LoadDataset("diabetes", DATASET),
+    Fit(Est("ridge", {}), DATASET, FITTED),
+    DATASET is ("Dataset", X, Y),
+    Predict(FITTED, X, PREDS),
+    Metric("mse", Y, PREDS, SCORE),
+    SCORE > 0.0
 )
 
 # ── CrossValScore ────────────────────────────────────────────────────
 
 Test("cross val score on iris") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-                  D_, kfold(3), SCORES_)
+                  DATASET, kfold(3), SCORES)
 )
 
 Test("cross val score with metric") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-                  D_, kfold(3), "accuracy", SCORES_)
+                  DATASET, kfold(3), "accuracy", SCORES)
 )
 
 # ── CrossValidate ────────────────────────────────────────────────────
 
 Test("cross validate multiple metrics") <- (
-    LoadDataset("iris", D_) and
+    LoadDataset("iris", DATASET),
     CrossValidate(Est("logistic_regression", {"max_iter": 200}),
-                  D_, kfold(3), ["accuracy", "f1_weighted"], R_)
+                  DATASET, kfold(3), ["accuracy", "f1_weighted"], RESULTS)
 )
 
 # ── ConfusionMatrix ──────────────────────────────────────────────────
 
 Test("confusion matrix on iris") <- (
-    LoadDataset("iris", D_) and
-    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D_, F_) and
-    D_ is ("Dataset", X_, Y_) and
-    Predict(F_, X_, P_) and
-    ConfusionMatrix(Y_, P_, M_)
+    LoadDataset("iris", DATASET),
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
+    DATASET is ("Dataset", X, Y),
+    Predict(FITTED, X, PREDS),
+    ConfusionMatrix(Y, PREDS, MATRIX)
 )

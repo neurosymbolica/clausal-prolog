@@ -1,0 +1,33 @@
+-import_from(scipy_integrate, [Quad, SolveInitialValueProblem, Trapezoid, Simpson, CumulativeTrapezoid, ResultGet])
+
+# Quad: integral of sin(x) from 0 to pi ≈ 2.0
+Test("quad sin 0 to pi") <- (
+    Quad(++(lambda x: __import__('math').sin(x)), 0.0, 3.14159265358979, RESULT),
+    ResultGet(RESULT, 'value', V),
+    DIFF is ++(abs(float(V) - 2.0)),
+    DIFF < 1e-4)
+
+# SolveInitialValueProblem: dy/dt = -y, y(0)=1, check success
+Test("solve ivp exponential decay") <- (
+    SolveInitialValueProblem(++(lambda t, y: [-y[0]]), [0.0, 1.0], [1.0], RESULT),
+    ResultGet(RESULT, 'success', S),
+    S == True)
+
+# Trapezoid: [1, 2, 3] dx=1 → 4.0
+Test("trapezoid uniform") <- (
+    Trapezoid([1.0, 2.0, 3.0], RESULT),
+    DIFF is ++(abs(float(RESULT) - 4.0)),
+    DIFF < 1e-10)
+
+# Simpson: [1, 4, 1] with h=1 → h/3*(1+16+1) = 6.0
+Test("simpson parabola") <- (
+    Simpson([1.0, 4.0, 1.0], RESULT),
+    DIFF is ++(abs(float(RESULT) - 6.0)),
+    DIFF < 1e-10)
+
+# CumulativeTrapezoid: [1, 2, 3] dx=1 → [1.5, 4.0]
+Test("cumulative trapezoid") <- (
+    CumulativeTrapezoid([1.0, 2.0, 3.0], RESULT),
+    V0 is ++(float(RESULT[0])),
+    DIFF is ++(abs(V0 - 1.5)),
+    DIFF < 1e-10)

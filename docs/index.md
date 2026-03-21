@@ -102,3 +102,12 @@ for s in m.query(grandparent("tom", G)):
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
 | [SQLite](sqlite.md) | SQLite database predicates |
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
+| [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
+| [scipy.linalg](scipy_linalg.md) | Linear algebra — solvers, decompositions, matrix functions, factorisations |
+| [scipy.optimize](scipy_optimize.md) | Optimisation — minimisation, root finding, curve fitting, linear programming |
+| [scipy.integrate](scipy_integrate.md) | Numerical integration — quadrature, ODE solvers, sampled-data methods |
+| [scipy.interpolate](scipy_interpolate.md) | Interpolation — splines, PCHIP, Akima, regular grids, radial basis functions |
+| [scipy.stats](scipy_stats.md) | Statistics — descriptive stats, hypothesis tests, distributions |
+| [scipy.fft](scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
+| [scipy.ndimage](scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
+| [scipy.spatial](scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
