@@ -43,7 +43,7 @@ from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
-    Negate, Compound, term_str,
+    Negate, Compound, term_str, DictTerm,
 )
 
 
@@ -1070,7 +1070,7 @@ def _factor_int_2(n, result, trail, k):
     if not isinstance(n, int):
         return
     try:
-        d = {int(p): int(e) for p, e in _sp.factorint(n).items()}
+        d = DictTerm({int(p): int(e) for p, e in _sp.factorint(n).items()})
     except (TypeError, ValueError):
         return
     if unify(result, d, trail):

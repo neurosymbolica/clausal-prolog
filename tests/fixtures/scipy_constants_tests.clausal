@@ -3,7 +3,7 @@
     GravitationalConstant, AvogadroConstant, BoltzmannConstant,
     ElementaryCharge, ElectronMass, ProtonMass,
     ElectronVolt, StandardAtmosphere,
-    Kilo, Mega, Giga])
+    Pi, Kilo, Mega, Giga])
 
 -import_from(py.units, [
     Metre, Kilogram, Second, Ampere, Kelvin, Mole,
@@ -31,6 +31,11 @@ Test("reduced planck constant units") <- HasUnits(ReducedPlanckConstant, Joule *
 Test("reduced planck constant magnitude") <- (
     ReducedPlanckConstant > 1.054e-34(Joule * Second),
     ReducedPlanckConstant < 1.055e-34(Joule * Second)
+)
+
+Test("hbar equals h over two pi") <- (
+    HBAR_COMPUTED := PlanckConstant / (2 * Pi),
+    ReducedPlanckConstant == HBAR_COMPUTED
 )
 
 # ── Gravitational constant ────────────────────────────────────────────────

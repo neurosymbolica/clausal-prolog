@@ -19,7 +19,8 @@ import threading
 import pytest
 
 try:
-    import spacy as _spacy_check
+    import spacy as _spacy_check  # noqa: F811
+    import spacy
     try:
         _spacy_check.load("en_core_web_sm")
         _SPACY_OK = True

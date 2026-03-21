@@ -11,7 +11,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "greenlet",
     "pyyaml>=6.0",

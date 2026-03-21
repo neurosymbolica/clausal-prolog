@@ -213,6 +213,8 @@ def _init_quantities():
     mod.ElectronVolt          = q("eV",   u.Joule)
     mod.StandardAtmosphere    = q("atm",  u.Pascal)
 
+    mod.Pi = float(sc.pi)
+
     mod.Kilo = float(sc.kilo)
     mod.Mega = float(sc.mega)
     mod.Giga = float(sc.giga)
