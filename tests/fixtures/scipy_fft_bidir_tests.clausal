@@ -1,0 +1,266 @@
+-import_from(scipy_fft, [FFTransform, FFTransform2D, FFTransformND,
+                          RealFFT, DiscreteCosineTransform,
+                          DiscreteSineTransform, FFTShift])
+
+# ── FFTransform (arity-2) ────────────────────────────────────────────────
+
+# forward
+Test("fft forward") <- (
+    SIG := ++(__import__('numpy').array([1.0, 0.0, -1.0, 0.0])),
+    FFTransform(SIG, SPEC),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fft']).fft([1.0, 0.0, -1.0, 0.0])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(SPEC - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("fft backward") <- (
+    SPEC := ++(__import__('scipy.fft', fromlist=['fft']).fft([1.0, 2.0, 3.0, 4.0])),
+    FFTransform(RECOVERED, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(RECOVERED) - __import__('numpy').array([1.0, 2.0, 3.0, 4.0])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("fft both unbound fails") <- (not FFTransform(_, _))
+
+# round-trip
+Test("fft round-trip") <- (
+    SIGNAL := ++(__import__('numpy').array([1.0, 2.0, 3.0, 4.0])),
+    FFTransform(SIGNAL, SPEC),
+    FFTransform(RECOVERED, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(RECOVERED) - SIGNAL))),
+    DIFF < 1e-10)
+
+# ── FFTransform (arity-3 with N) ─────────────────────────────────────────
+
+# forward with N (zero-pad)
+Test("fft arity-3 forward") <- (
+    SIG := ++(__import__('numpy').array([1.0, 2.0])),
+    FFTransform(SIG, 4, SPEC),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fft']).fft([1.0, 2.0], n=4)),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(SPEC - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward with N
+Test("fft arity-3 backward") <- (
+    SPEC := ++(__import__('scipy.fft', fromlist=['fft']).fft([1.0, 2.0, 3.0, 4.0])),
+    FFTransform(RECOVERED, 4, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(RECOVERED) - __import__('numpy').array([1.0, 2.0, 3.0, 4.0])))),
+    DIFF < 1e-10)
+
+# ── FFTransform2D ────────────────────────────────────────────────────────
+
+# forward
+Test("fft2d forward") <- (
+    A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransform2D(A, F),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fft2']).fft2([[1.0, 2.0], [3.0, 4.0]])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(F - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("fft2d backward") <- (
+    SPEC := ++(__import__('scipy.fft', fromlist=['fft2']).fft2([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransform2D(RECOVERED, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(RECOVERED) - __import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("fft2d both unbound fails") <- (not FFTransform2D(_, _))
+
+# round-trip
+Test("fft2d round-trip") <- (
+    A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransform2D(A, F),
+    FFTransform2D(A2, F),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(A2) - A))),
+    DIFF < 1e-10)
+
+# arity-3 with shape
+Test("fft2d arity-3 forward") <- (
+    A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransform2D(A, ++(tuple([4, 4])), F),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fft2']).fft2([[1.0, 2.0], [3.0, 4.0]], s=(4, 4))),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(F - EXPECTED))),
+    DIFF < 1e-10)
+
+# ── FFTransformND ────────────────────────────────────────────────────────
+
+# forward
+Test("fftnd forward") <- (
+    A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransformND(A, F),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fftn']).fftn([[1.0, 2.0], [3.0, 4.0]])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(F - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("fftnd backward") <- (
+    SPEC := ++(__import__('scipy.fft', fromlist=['fftn']).fftn([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransformND(RECOVERED, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(RECOVERED) - __import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("fftnd both unbound fails") <- (not FFTransformND(_, _))
+
+# round-trip
+Test("fftnd round-trip") <- (
+    A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
+    FFTransformND(A, F),
+    FFTransformND(A2, F),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        __import__('numpy').real(A2) - A))),
+    DIFF < 1e-10)
+
+# ── RealFFT (arity-2) ───────────────────────────────────────────────────
+
+# forward
+Test("rfft forward") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0, 4.0])),
+    RealFFT(X, R),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['rfft']).rfft([1.0, 2.0, 3.0, 4.0])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(R - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("rfft backward") <- (
+    SPEC := ++(__import__('scipy.fft', fromlist=['rfft']).rfft([1.0, 2.0, 3.0, 4.0])),
+    RealFFT(X2, SPEC),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        X2 - __import__('numpy').array([1.0, 2.0, 3.0, 4.0])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("rfft both unbound fails") <- (not RealFFT(_, _))
+
+# round-trip
+Test("rfft round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0, 4.0])),
+    RealFFT(X, R),
+    RealFFT(X2, R),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# arity-3 with N
+Test("rfft arity-3 forward") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0])),
+    RealFFT(X, 4, R),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['rfft']).rfft([1.0, 2.0], n=4)),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(R - EXPECTED))),
+    DIFF < 1e-10)
+
+Test("rfft arity-3 round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0, 4.0])),
+    RealFFT(X, 4, R),
+    RealFFT(X2, 4, R),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# ── DiscreteCosineTransform ──────────────────────────────────────────────
+
+# forward
+Test("dct forward") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 1.0])),
+    DiscreteCosineTransform(X, C),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['dct']).dct([1.0, 2.0, 1.0])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(C - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("dct backward") <- (
+    COEFFS := ++(__import__('scipy.fft', fromlist=['dct']).dct([1.0, 2.0, 1.0])),
+    DiscreteCosineTransform(X2, COEFFS),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        X2 - __import__('numpy').array([1.0, 2.0, 1.0])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("dct both unbound fails") <- (not DiscreteCosineTransform(_, _))
+
+# round-trip
+Test("dct round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 1.0])),
+    DiscreteCosineTransform(X, C),
+    DiscreteCosineTransform(X2, C),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# arity-3 with type
+Test("dct arity-3 type 2 round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0])),
+    DiscreteCosineTransform(X, 2, C),
+    DiscreteCosineTransform(X2, 2, C),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# ── DiscreteSineTransform ────────────────────────────────────────────────
+
+# forward
+Test("dst forward") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 1.0])),
+    DiscreteSineTransform(X, S),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['dst']).dst([1.0, 2.0, 1.0])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(S - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("dst backward") <- (
+    COEFFS := ++(__import__('scipy.fft', fromlist=['dst']).dst([1.0, 2.0, 1.0])),
+    DiscreteSineTransform(X2, COEFFS),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        X2 - __import__('numpy').array([1.0, 2.0, 1.0])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("dst both unbound fails") <- (not DiscreteSineTransform(_, _))
+
+# round-trip
+Test("dst round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 1.0])),
+    DiscreteSineTransform(X, S),
+    DiscreteSineTransform(X2, S),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# arity-3 with type
+Test("dst arity-3 type 2 round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0])),
+    DiscreteSineTransform(X, 2, S),
+    DiscreteSineTransform(X2, 2, S),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)
+
+# ── FFTShift ─────────────────────────────────────────────────────────────
+
+# forward
+Test("fftshift forward") <- (
+    X := ++(__import__('numpy').array([0.0, 1.0, 2.0, 3.0])),
+    FFTShift(X, S),
+    EXPECTED := ++(__import__('scipy.fft', fromlist=['fftshift']).fftshift([0.0, 1.0, 2.0, 3.0])),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(S - EXPECTED))),
+    DIFF < 1e-10)
+
+# backward
+Test("fftshift backward") <- (
+    SHIFTED := ++(__import__('scipy.fft', fromlist=['fftshift']).fftshift([0.0, 1.0, 2.0, 3.0])),
+    FFTShift(X2, SHIFTED),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
+        X2 - __import__('numpy').array([0.0, 1.0, 2.0, 3.0])))),
+    DIFF < 1e-10)
+
+# both unbound
+Test("fftshift both unbound fails") <- (not FFTShift(_, _))
+
+# round-trip
+Test("fftshift round-trip") <- (
+    X := ++(__import__('numpy').array([1.0, 2.0, 3.0, 4.0])),
+    FFTShift(X, S),
+    FFTShift(X2, S),
+    DIFF is ++(__import__('numpy').max(__import__('numpy').abs(X2 - X))),
+    DIFF < 1e-10)

@@ -6,7 +6,7 @@ from clausal.modules.py.scipy_linalg import (  # noqa: F401
     LuDecompose, QrDecompose, SingularValueDecompose,
     Cholesky, EigenDecompose, EigenDecomposeHermitian, Schur,
     Inverse, PseudoInverse, Determinant, Norm,
-    MatrixExponential, MatrixLogarithm, MatrixSquareRoot, MatrixFunction,
+    MatrixExpLog, MatrixSquareRoot, MatrixFunction,
     LuFactor, LuSolve, CholeskyFactor, CholeskySolve,
     ResultGet,
 )

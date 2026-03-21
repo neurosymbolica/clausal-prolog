@@ -13,7 +13,7 @@ from clausal.modules.py.scipy_stats import (  # noqa: F401
     StatsNormalityTest, StatsShapiro,
     StatsDist,
     StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsNormalRvs,
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf, StatsFrozenPpf,
+    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
     StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree,
     ResultGet,
 )

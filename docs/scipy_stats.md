@@ -337,11 +337,10 @@ StatsFreezeDist(DIST, PARAMS_DICT, RESULT)
 StatsFrozenPdf(HANDLE, X, RESULT)
     PDF of the frozen distribution at point X.
 
-StatsFrozenCdf(HANDLE, X, RESULT)
-    CDF of the frozen distribution at point X.
-
-StatsFrozenPpf(HANDLE, Q, RESULT)
-    Quantile (inverse CDF) of the frozen distribution at probability Q.
+StatsFrozenCdf(HANDLE, X, P)          # bidirectional
+    X ground, P unbound → P = dist.cdf(x)   # forward: evaluate CDF
+    P ground, X unbound → X = dist.ppf(p)   # backward: compute quantile (inverse CDF)
+    Both ground         → consistency check: succeeds iff dist.cdf(x) ≈ p
 
 StatsFrozenRvs(HANDLE, RESULT)
     Single random variate from the frozen distribution.
@@ -371,6 +370,26 @@ BetaAnalysis(HANDLE_) <- (
     StatsFrozenStats(HANDLE_, STATS_) and
     ++print(f"pdf={float(PDF_):.4f}, cdf={float(CDF_):.4f}") and
     StatsFrozenFree(HANDLE_)
+)
+```
+
+Example — bidirectional `StatsFrozenCdf` as CDF and quantile function:
+
+```
+-import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
+
+# Forward: P = CDF(0.3) for Beta(2, 5)
+BetaCdf(P_) <- (
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H_) and
+    StatsFrozenCdf(H_, 0.3, P_) and
+    StatsFrozenFree(H_)
+)
+
+# Backward: X = quantile at P=0.5 (median) for Beta(2, 5)
+BetaMedian(X_) <- (
+    StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H_) and
+    StatsFrozenCdf(H_, X_, 0.5) and
+    StatsFrozenFree(H_)
 )
 ```
 

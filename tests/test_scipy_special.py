@@ -20,8 +20,8 @@ from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_special import (
     Gamma, GammaLog, GammaSign, BetaLog, Digamma, Polygamma,
     Factorial, Comb, Perm,
-    Erf, ErfComplement, ErfInverse, ErfComplementInverse,
-    NormalCdf, NormalCdfInverse,
+    Erf, ErfComplement,
+    NormalCdf,
     BesselJ, BesselY, BesselJReal, BesselYReal, BesselK, BesselI,
     BesselJZeros, SphericalBesselJ,
     EllipticK, EllipticE, EllipticKIncomplete, EllipticEIncomplete,
@@ -29,7 +29,7 @@ from clausal.modules.py.scipy_special import (
     Entr, KlDivergence, LogSumExp,
     AssocLegendre, LegendrePoly, ChebyshevT, ChebyshevU,
     HermiteH, GeneralizedLaguerre,
-    CubeRoot, Exp10, Exp2, Sigmoid, Logit, LambertW, XLogY, XLog1pY,
+    CubeRoot, Exp10, Exp2, Logit, LambertW, XLogY, XLog1pY,
 )
 
 
@@ -41,6 +41,23 @@ def _drive(pred, *args):
     dispatch = pred._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, *args, result, trail)
+    for parent, sentinel in gen:
+        if sentinel is DONE:
+            return None
+        if sentinel is None:
+            return deref(result)
+    return None
+
+
+def _drive_bwd(pred, *args):
+    """Call predicate in backward direction: first arg is unbound Var, rest are ground.
+
+    For a bidirectional predicate Pred(X, Y): binds X (result) given Y (ground).
+    """
+    result = Var()
+    dispatch = pred._get_dispatch()
+    trail = Trail()
+    gen = dispatch(None, None, result, *args, trail)
     for parent, sentinel in gen:
         if sentinel is DONE:
             return None
@@ -179,13 +196,15 @@ class TestErfInverse:
     def test_round_trip(self):
         x = 0.5
         erf_x = _drive(Erf, x)
-        inv = _drive(ErfInverse, erf_x)
+        # Backward direction of Erf: Erf(result_var, erf_x) → result_var = erfinv(erf_x)
+        inv = _drive_bwd(Erf, erf_x)
         assert approx(inv, x)
 
 
 class TestErfComplementInverse:
     def test_basic(self):
-        r = _drive(ErfComplementInverse, 0.5)
+        # Backward direction of ErfComplement: ErfComplement(result_var, 0.5) → result_var = erfcinv(0.5)
+        r = _drive_bwd(ErfComplement, 0.5)
         assert approx(r, sc.erfcinv(0.5))
 
 
@@ -201,12 +220,13 @@ class TestNormalCdf:
 
 class TestNormalCdfInverse:
     def test_half(self):
-        r = _drive(NormalCdfInverse, 0.5)
+        # Backward direction of NormalCdf: NormalCdf(result_var, 0.5) → result_var = ndtri(0.5)
+        r = _drive_bwd(NormalCdf, 0.5)
         assert approx(r, 0.0)
 
     def test_round_trip(self):
         p = 0.975
-        x = _drive(NormalCdfInverse, p)
+        x = _drive_bwd(NormalCdf, p)
         back = _drive(NormalCdf, x)
         assert approx(back, p)
 
@@ -431,16 +451,19 @@ class TestExp2:
 
 class TestSigmoid:
     def test_zero_input(self):
-        r = _drive(Sigmoid, 0.0)
+        # Backward direction of Logit: Logit(result_var, 0.0) → result_var = expit(0.0)
+        r = _drive_bwd(Logit, 0.0)
         assert approx(r, 0.5)
 
     def test_large_input(self):
-        r = _drive(Sigmoid, 100.0)
+        # Backward direction of Logit: expit(100.0) ≈ 1.0
+        r = _drive_bwd(Logit, 100.0)
         assert approx(r, 1.0)
 
     def test_round_trip_with_logit(self):
         x = 0.3
-        sig = _drive(Sigmoid, x)
+        # expit(x) via backward Logit, then logit(sig) via forward Logit should give back x
+        sig = _drive_bwd(Logit, x)
         back = _drive(Logit, sig)
         assert approx(back, x)
 

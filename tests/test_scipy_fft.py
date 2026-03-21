@@ -18,13 +18,13 @@ import numpy as np
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_fft import (
-    FFTransform, InverseFFT,
-    FFTransform2D, InverseFFT2D,
+    FFTransform,
+    FFTransform2D,
     FFTransformND,
-    RealFFT, InverseRealFFT,
-    DiscreteCosineTransform, InverseDiscreteCosineTransform,
+    RealFFT,
+    DiscreteCosineTransform,
     FFTFrequencies, RealFFTFrequencies,
-    FFTShift, InverseFFTShift,
+    FFTShift,
 )
 
 
@@ -44,6 +44,40 @@ def _drive(pred, *args):
     return None
 
 
+def _drive_bwd(pred, *args):
+    """Call predicate in backward direction: first arg is unbound Var, rest are ground.
+
+    For a bidirectional predicate Pred(X, Y): binds X (result) given Y (ground).
+    """
+    result = Var()
+    dispatch = pred._get_dispatch()
+    trail = Trail()
+    gen = dispatch(None, None, result, *args, trail)
+    for parent, sentinel in gen:
+        if sentinel is DONE:
+            return None
+        if sentinel is None:
+            return deref(result)
+    return None
+
+
+def _drive_bwd_n(pred, n, spectrum):
+    """Call arity-3 bidirectional predicate backward: Pred(result_var, N, spectrum).
+
+    Used for transforms with an optional length/shape argument N.
+    """
+    result = Var()
+    dispatch = pred._get_dispatch()
+    trail = Trail()
+    gen = dispatch(None, None, result, n, spectrum, trail)
+    for parent, sentinel in gen:
+        if sentinel is DONE:
+            return None
+        if sentinel is None:
+            return deref(result)
+    return None
+
+
 def _fails_with_wrong_result(pred, *args):
     """Return True if predicate yields no solution when RESULT is wrong."""
     trail = Trail()
@@ -52,6 +86,7 @@ def _fails_with_wrong_result(pred, *args):
     gen = dispatch(None, None, *args, result_bound, trail)
     solutions = [s for s in gen if s[1] is None]
     return len(solutions) == 0
+
 
 
 # ── TestFFT ───────────────────────────────────────────────────────────────
@@ -96,26 +131,34 @@ class TestInverseFFT:
     def test_round_trip(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
         spectrum = _drive(FFTransform, x)
-        recovered = _drive(InverseFFT, spectrum)
+        # Backward direction of FFTransform: FFTransform(result_var, spectrum) → result_var = ifft(spectrum)
+        recovered = _drive_bwd(FFTransform, spectrum)
         assert recovered is not None
         assert np.allclose(recovered.real, x, atol=1e-10)
 
     def test_dc_only_to_constant(self):
         # ifft([4,0,0,0]) → [1,1,1,1]
         spectrum = np.array([4.0+0j, 0.0, 0.0, 0.0])
-        result = _drive(InverseFFT, spectrum)
+        result = _drive_bwd(FFTransform, spectrum)
         assert result is not None
         assert np.allclose(result.real, np.ones(4), atol=1e-10)
 
     def test_with_output_length(self):
         spectrum = np.array([4.0+0j, 0.0, 0.0, 0.0])
-        result = _drive(InverseFFT, spectrum, 4)
+        # Backward direction with N: FFTransform(result_var, N, spectrum)
+        result = _drive_bwd_n(FFTransform, 4, spectrum)
         assert result is not None
         assert len(result) == 4
 
     def test_wrong_result_fails(self):
+        # Consistency check: FFTransform(wrong_x, spectrum) where wrong_x ≠ ifft(spectrum) fails
         spectrum = np.array([4.0+0j, 0.0, 0.0, 0.0])
-        assert _fails_with_wrong_result(InverseFFT, spectrum)
+        wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
+        trail = Trail()
+        dispatch = FFTransform._get_dispatch()
+        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
 
 
 # ── TestFFTransform2D ─────────────────────────────────────────────────────
@@ -152,14 +195,21 @@ class TestInverseFFT2D:
     def test_round_trip(self):
         x = np.array([[1.0, 2.0], [3.0, 4.0]])
         spectrum = _drive(FFTransform2D, x)
-        recovered = _drive(InverseFFT2D, spectrum)
+        # Backward direction of FFTransform2D: FFTransform2D(result_var, spectrum) → result_var = ifft2(spectrum)
+        recovered = _drive_bwd(FFTransform2D, spectrum)
         assert recovered is not None
         assert np.allclose(recovered.real, x, atol=1e-10)
 
     def test_wrong_result_fails(self):
+        # Consistency check: FFTransform2D(wrong_x, spectrum) where wrong_x ≠ ifft2(spectrum) fails
         x = np.ones((2, 2))
         spectrum = _drive(FFTransform2D, x)
-        assert _fails_with_wrong_result(InverseFFT2D, spectrum)
+        wrong_x = np.full((2, 2), 99.0)
+        trail = Trail()
+        dispatch = FFTransform2D._get_dispatch()
+        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
 
 
 # ── TestFFTransformND ─────────────────────────────────────────────────────
@@ -175,7 +225,8 @@ class TestFFTransformND:
     def test_2d_round_trip(self):
         x = np.array([[1.0, 2.0], [3.0, 4.0]])
         spectrum = _drive(FFTransformND, x)
-        recovered = _drive(InverseFFT2D, spectrum)
+        # Backward direction of FFTransform2D: ifft2(spectrum)
+        recovered = _drive_bwd(FFTransform2D, spectrum)
         assert recovered is not None
         assert np.allclose(recovered.real, x, atol=1e-10)
 
@@ -231,26 +282,34 @@ class TestInverseRealFFT:
     def test_round_trip(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
         spectrum = _drive(RealFFT, x)
-        recovered = _drive(InverseRealFFT, spectrum)
+        # Backward direction of RealFFT: RealFFT(result_var, spectrum) → result_var = irfft(spectrum)
+        recovered = _drive_bwd(RealFFT, spectrum)
         assert recovered is not None
         assert np.allclose(recovered, x, atol=1e-10)
 
     def test_output_is_real(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
         spectrum = _drive(RealFFT, x)
-        result = _drive(InverseRealFFT, spectrum)
+        result = _drive_bwd(RealFFT, spectrum)
         assert result is not None
         assert result.dtype in (np.float32, np.float64, float)
 
     def test_with_output_length(self):
         spectrum = np.array([4.0+0j, 0.0+0j, 0.0+0j])
-        result = _drive(InverseRealFFT, spectrum, 4)
+        # Backward direction with N: RealFFT(result_var, N, spectrum)
+        result = _drive_bwd_n(RealFFT, 4, spectrum)
         assert result is not None
         assert len(result) == 4
 
     def test_wrong_result_fails(self):
+        # Consistency check: RealFFT(wrong_x, spectrum) where wrong_x ≠ irfft(spectrum) fails
         spectrum = np.array([4.0+0j, 0.0, 0.0])
-        assert _fails_with_wrong_result(InverseRealFFT, spectrum)
+        wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
+        trail = Trail()
+        dispatch = RealFFT._get_dispatch()
+        gen = dispatch(None, None, wrong_x, spectrum, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
 
 
 # ── TestDiscreteCosineTransform ───────────────────────────────────────────
@@ -290,20 +349,28 @@ class TestInverseDiscreteCosineTransform:
     def test_round_trip(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
         coeffs = _drive(DiscreteCosineTransform, x)
-        recovered = _drive(InverseDiscreteCosineTransform, coeffs)
+        # Backward direction of DiscreteCosineTransform: DCT(result_var, coeffs) → result_var = idct(coeffs)
+        recovered = _drive_bwd(DiscreteCosineTransform, coeffs)
         assert recovered is not None
         assert np.allclose(recovered, x, atol=1e-10)
 
     def test_type_2_round_trip(self):
         x = np.array([1.0, 0.0, -1.0, 0.0])
         coeffs = _drive(DiscreteCosineTransform, x, 2)
-        recovered = _drive(InverseDiscreteCosineTransform, coeffs, 2)
+        # Backward direction with TYPE: DiscreteCosineTransform(result_var, TYPE, coeffs)
+        recovered = _drive_bwd_n(DiscreteCosineTransform, 2, coeffs)
         assert recovered is not None
         assert np.allclose(recovered, x, atol=1e-10)
 
     def test_wrong_result_fails(self):
+        # Consistency check: DiscreteCosineTransform(wrong_x, coeffs) where wrong_x ≠ idct(coeffs) fails
         coeffs = np.array([8.0, 0.0, 0.0, 0.0])
-        assert _fails_with_wrong_result(InverseDiscreteCosineTransform, coeffs)
+        wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
+        trail = Trail()
+        dispatch = DiscreteCosineTransform._get_dispatch()
+        gen = dispatch(None, None, wrong_x, coeffs, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
 
 
 # ── TestFFTFrequencies ────────────────────────────────────────────────────
@@ -398,20 +465,27 @@ class TestInverseFFTShift:
     def test_round_trip_1d(self):
         x = np.array([0.0, 1.0, 2.0, 3.0])
         shifted = _drive(FFTShift, x)
-        recovered = _drive(InverseFFTShift, shifted)
+        # Backward direction of FFTShift: FFTShift(result_var, shifted) → result_var = ifftshift(shifted)
+        recovered = _drive_bwd(FFTShift, shifted)
         assert recovered is not None
         assert np.allclose(recovered, x, atol=1e-10)
 
     def test_round_trip_2d(self):
         x = np.array([[1.0, 2.0], [3.0, 4.0]])
         shifted = _drive(FFTShift, x)
-        recovered = _drive(InverseFFTShift, shifted)
+        recovered = _drive_bwd(FFTShift, shifted)
         assert recovered is not None
         assert np.allclose(recovered, x, atol=1e-10)
 
     def test_wrong_result_fails(self):
-        x = np.array([2.0, 3.0, 0.0, 1.0])
-        assert _fails_with_wrong_result(InverseFFTShift, x)
+        # Consistency check: FFTShift(wrong_x, shifted) where wrong_x ≠ ifftshift(shifted) fails
+        shifted = np.array([2.0, 3.0, 0.0, 1.0])
+        wrong_x = np.array([9.0, 9.0, 9.0, 9.0])
+        trail = Trail()
+        dispatch = FFTShift._get_dispatch()
+        gen = dispatch(None, None, wrong_x, shifted, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
 
 
 # ── Fixture integration ───────────────────────────────────────────────────

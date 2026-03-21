@@ -10,7 +10,7 @@ Tiers
 - **Tier 1** (array inputs → array result):
     Solve, SolveTriangular, Cholesky,
     Inverse, PseudoInverse, Determinant, Norm,
-    MatrixExponential, MatrixLogarithm, MatrixSquareRoot,
+    MatrixExpLog, MatrixSquareRoot,
     MatrixFunction, LuSolve, CholeskySolve
 
 - **Tier 2** (returns result dict; use ResultGet to access fields):
@@ -53,8 +53,7 @@ Matrix functions:
     Determinant(A, RESULT)
     Norm(A, RESULT)
     Norm(A, ORD, RESULT)
-    MatrixExponential(A, RESULT)
-    MatrixLogarithm(A, RESULT)
+    MatrixExpLog(A, B)                         # bidirectional: expm(a) / logm(b)
     MatrixSquareRoot(A, RESULT)
     MatrixFunction(A, FUNC, RESULT)            # FUNC: Python callable
 
@@ -433,15 +432,6 @@ MatrixExpLog = _pred_bidir("MatrixExpLog",
     (2, _bidir_dispatch(
             make_quantity_aware(_la_fn("expm"), REQUIRE_DIMENSIONLESS),
             _la_fn("logm"))),
-)
-
-# Backward-compatibility aliases — kept unidirectional:
-MatrixExponential = _pred("MatrixExponential",
-    (2, _dispatch_fn(make_quantity_aware(_la_fn("expm"), REQUIRE_DIMENSIONLESS))),
-)
-
-MatrixLogarithm = _pred("MatrixLogarithm",
-    (2, _dispatch_fn(make_quantity_aware(_la_fn("logm"), REQUIRE_DIMENSIONLESS))),
 )
 
 MatrixSquareRoot = _pred("MatrixSquareRoot",

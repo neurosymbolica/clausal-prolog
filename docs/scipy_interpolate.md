@@ -157,12 +157,38 @@ Works with handles from `MakeSpline`, `MakeCubic`,
 `MakePCHIP`, `MakeAkima`, and `MakeLinear1D`.
 
 ```
-EvalSpline(HANDLE, X, RESULT)
-EvalSpline(HANDLE, X, NU, RESULT)
+EvalSpline(HANDLE, X, Y)                   # bidirectional (arity-3)
+    X ground, Y unbound → Y = spline(x)    # forward: evaluate at query point(s)
+    Y ground, X unbound → X = root-find    # backward: find x such that spline(x) = y
+    Both ground         → consistency check: succeeds iff spline(x) ≈ y
+
+EvalSpline(HANDLE, X, NU, RESULT)          # unidirectional (arity-4)
     HANDLE: integer from any Make1D predicate
-    X:      array of query points
+    X:      query point(s)
     NU:     derivative order (default 0 = function value)
-    RESULT: array of interpolated values
+    RESULT: interpolated value(s) at X
+```
+
+**Backward direction**: uses `scipy.optimize.brentq` root-finding over the spline's domain `[x_min, x_max]`. Succeeds with a single root for monotone splines; fails (no solution) when the target `Y` is outside the spline's range or the spline is not monotone over the whole domain. Use a monotone constructor (`MakePCHIP`) when the backward direction must be reliable.
+
+Example — invert a spline to find the input that gives a target output:
+
+```
+-import_from(scipy_interpolate, [MakePCHIP, EvalSpline, Free])
+
+# Forward: evaluate the interpolator at x=2.5
+SplineForward(XS_, YS_, RESULT_) <- (
+    MakePCHIP(XS_, YS_, H_) and
+    EvalSpline(H_, 2.5, RESULT_) and
+    Free(H_)
+)
+
+# Backward: find x such that spline(x) = target value
+SplineInvert(XS_, YS_, TARGET_, X_) <- (
+    MakePCHIP(XS_, YS_, H_) and
+    EvalSpline(H_, X_, TARGET_) and
+    Free(H_)
+)
 ```
 
 #### `EvalRegularGrid` — evaluate an N-D regular-grid interpolator

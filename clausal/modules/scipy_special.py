@@ -4,8 +4,8 @@ from clausal.modules.py.scipy_special import (  # noqa: F401
     _ScipySpecialPredicate, _dispatch_fn, _sp_fn, _sp_kw, _pred, _sp,
     Gamma, GammaLog, GammaSign, BetaLog, Digamma, Polygamma,
     Factorial, Comb, Perm,
-    Erf, ErfComplement, ErfInverse, ErfComplementInverse,
-    NormalCdf, NormalCdfInverse,
+    Erf, ErfComplement,
+    NormalCdf,
     BesselJ, BesselY, BesselJReal, BesselYReal, BesselK, BesselI,
     BesselJZeros, SphericalBesselJ,
     EllipticK, EllipticE, EllipticKIncomplete, EllipticEIncomplete,
@@ -13,5 +13,5 @@ from clausal.modules.py.scipy_special import (  # noqa: F401
     Entr, KlDivergence, LogSumExp,
     AssocLegendre, LegendrePoly, ChebyshevT, ChebyshevU,
     HermiteH, GeneralizedLaguerre,
-    CubeRoot, Exp10, Exp2, Sigmoid, Logit, LambertW, XLogY, XLog1pY,
+    CubeRoot, Exp10, Exp2, Logit, LambertW, XLogY, XLog1pY,
 )

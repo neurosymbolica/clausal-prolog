@@ -1,6 +1,6 @@
 # scipy.special — Mathematical Special Functions
 
-The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal predicates. All predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result.
+The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal predicates. Most predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result. Several predicates are **bidirectional relations** that dispatch on argument groundness, supporting both forward evaluation and backward inversion.
 
 ---
 
@@ -29,16 +29,22 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 | `scipy.special.gammasgn` | `GammaSign` |
 | `scipy.special.betaln` | `BetaLog` |
 | `scipy.special.erfc` | `ErfComplement` |
-| `scipy.special.erfinv` | `ErfInverse` |
-| `scipy.special.erfcinv` | `ErfComplementInverse` |
+| `scipy.special.erfinv` | `Erf` backward direction |
+| `scipy.special.erfcinv` | `ErfComplement` backward direction |
 | `scipy.special.ndtr` | `NormalCdf` |
-| `scipy.special.ndtri` | `NormalCdfInverse` |
+| `scipy.special.ndtri` | `NormalCdf` backward direction |
 | `scipy.special.jn`, `jv` | `BesselJ`, `BesselJReal` |
 | `scipy.special.yn`, `yv` | `BesselY`, `BesselYReal` |
 | `scipy.special.kn` | `BesselK` |
 | `scipy.special.iv` | `BesselI` |
 | `scipy.special.hyp1f1` | `Hypergeometric1F1` |
-| `scipy.special.expit` | `Sigmoid` |
+| `scipy.special.expit` | `Logit` backward direction |
+| `scipy.special.logit` | `Logit` (bidirectional: logit ↔ sigmoid) |
+| `scipy.special.gammainc` | `GammaInc` (bidirectional) |
+| `scipy.special.gammaincc` | `GammaIncComplement` (bidirectional) |
+| `scipy.special.betainc` | `BetaInc` (bidirectional) |
+| `scipy.special.boxcox` | `Boxcox` (bidirectional; Lambda first) |
+| `scipy.special.boxcox1p` | `Boxcox1p` (bidirectional; Lambda first) |
 | `scipy.special.cbrt` | `CubeRoot` |
 | `scipy.special.kl_div` | `KlDivergence` |
 | `scipy.special.logsumexp` | `LogSumExp` |
@@ -99,33 +105,86 @@ ComputeCoefficients(N_, K_, COEFF_) <- (
 
 ### Error functions
 
-```
-Erf(X, RESULT)
-    RESULT = erf(x) = (2/√π) ∫₀ˣ exp(−t²) dt
-
-ErfComplement(X, RESULT)
-    RESULT = erfc(x) = 1 − erf(x)
-
-ErfInverse(Y, RESULT)
-    RESULT = erf⁻¹(y)
-
-ErfComplementInverse(Y, RESULT)
-    RESULT = erfc⁻¹(y)
-
-NormalCdf(X, RESULT)
-    RESULT = Φ(x) = ½ erfc(−x/√2)   # standard normal CDF
-
-NormalCdfInverse(P, RESULT)
-    RESULT = Φ⁻¹(p)   # probit / quantile function
-```
-
-Example — round-trip through the normal CDF:
+These predicates are **bidirectional relations**: they dispatch on argument groundness, running forward or backward depending on which arguments are bound.
 
 ```
-CheckQuantile(P_, X_) <- (
-    NormalCdfInverse(P_, X_) and
-    NormalCdf(X_, P2_) and
-    DIFF is ++(abs(float(P2_) - float(P_))) and
+Erf(X, Y)
+    X ground, Y unbound → Y = erf(x)
+    Y ground, X unbound → X = erfinv(y)   # inverse direction
+    Both ground         → consistency check: succeeds iff erf(x) ≈ y
+
+ErfComplement(X, Y)
+    X ground, Y unbound → Y = erfc(x)
+    Y ground, X unbound → X = erfcinv(y)
+    Both ground         → consistency check: succeeds iff erfc(x) ≈ y
+
+NormalCdf(X, P)
+    X ground, P unbound → P = Φ(x)   # standard normal CDF
+    P ground, X unbound → X = Φ⁻¹(p) # probit / quantile function
+    Both ground         → consistency check: succeeds iff Φ(x) ≈ p
+```
+
+Example — bidirectional NormalCdf acts as both CDF and quantile function:
+
+```
+# Forward: P = Φ(1.96) ≈ 0.975
+NormalCdf(1.96, P)
+
+# Backward: X = Φ⁻¹(0.975) ≈ 1.96
+NormalCdf(X, 0.975)
+
+# Round-trip
+CheckQuantile(X_) <- (
+    NormalCdf(X_, P_) and
+    NormalCdf(X2_, P_) and
+    DIFF is ++(abs(float(X2_) - float(X_))) and
+    DIFF < 1e-9
+)
+```
+
+---
+
+### Incomplete gamma, beta, and Box-Cox (bidirectional)
+
+```
+GammaInc(A, X, Y)
+    A fixed (always ground).
+    X ground, Y unbound → Y = gammainc(a, x)    # regularised lower incomplete gamma
+    Y ground, X unbound → X = gammaincinv(a, y)
+    Both ground         → consistency check: succeeds iff gammainc(a, x) ≈ y
+
+GammaIncComplement(A, X, Y)
+    A fixed.
+    X ground, Y unbound → Y = gammaincc(a, x)   # upper tail
+    Y ground, X unbound → X = gammainccinv(a, y)
+    Both ground         → consistency check: succeeds iff gammaincc(a, x) ≈ y
+
+BetaInc(A, B, X, Y)
+    A, B fixed.
+    X ground, Y unbound → Y = betainc(a, b, x)
+    Y ground, X unbound → X = betaincinv(a, b, y)
+    Both ground         → consistency check: succeeds iff betainc(a, b, x) ≈ y
+
+Boxcox(Lambda, X, Y)
+    Lambda fixed (always first argument).
+    X ground, Y unbound → Y = boxcox(x, lambda)
+    Y ground, X unbound → X = inv_boxcox(y, lambda)
+    Both ground         → consistency check: succeeds iff boxcox(x, lambda) ≈ y
+
+Boxcox1p(Lambda, X, Y)
+    Lambda fixed (always first argument).
+    X ground, Y unbound → Y = boxcox1p(x, lambda)
+    Y ground, X unbound → X = inv_boxcox1p(y, lambda)
+    Both ground         → consistency check: succeeds iff boxcox1p(x, lambda) ≈ y
+```
+
+Example — round-trip through Box-Cox transform:
+
+```
+BoxcoxRoundTrip(Lam_, X_) <- (
+    Boxcox(Lam_, X_, Y_) and
+    Boxcox(Lam_, X2_, Y_) and
+    DIFF is ++(abs(float(X2_) - float(X_))) and
     DIFF < 1e-9
 )
 ```
@@ -246,11 +305,10 @@ Exp10(X, RESULT)
 Exp2(X, RESULT)
     RESULT = 2^x
 
-Sigmoid(X, RESULT)
-    RESULT = 1 / (1 + exp(−x))   # logistic / expit function
-
-Logit(X, RESULT)
-    RESULT = log(x / (1−x))   # inverse of Sigmoid
+Logit(X, Y)                        # bidirectional
+    X ground, Y unbound → Y = log(x / (1−x))      # logit function
+    Y ground, X unbound → X = 1 / (1 + exp(−y))   # sigmoid / expit (inverse)
+    Both ground         → consistency check: succeeds iff logit(x) ≈ y
 
 LambertW(Z, RESULT)               # principal branch (k=0)
 LambertW(Z, K, TOL, RESULT)       # branch K with tolerance TOL

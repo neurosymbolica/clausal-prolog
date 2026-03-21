@@ -30,7 +30,7 @@ from clausal.modules.py.scipy_stats import (
     StatsNormalityTest, StatsShapiro,
     StatsDist,
     StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsNormalRvs,
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf, StatsFrozenPpf,
+    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
     StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree,
     ResultGet,
 )
@@ -753,10 +753,12 @@ class TestStatsFreezeDist:
                 handle = deref(result)
                 break
 
+        # Backward direction of StatsFrozenCdf: StatsFrozenCdf(handle, x_var, 0.5)
+        # x_var unbound, p=0.5 ground → x_var = dist.ppf(0.5)
         ppf_result = Var()
-        ppf_dispatch = StatsFrozenPpf._get_dispatch()
+        cdf_dispatch = StatsFrozenCdf._get_dispatch()
         trail2 = Trail()
-        gen2 = ppf_dispatch(None, None, handle, 0.5, ppf_result, trail2)
+        gen2 = cdf_dispatch(None, None, handle, ppf_result, 0.5, trail2)
         val = None
         for parent, sentinel in gen2:
             if sentinel is None:

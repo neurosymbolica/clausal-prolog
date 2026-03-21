@@ -29,7 +29,7 @@ Tiers
     StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsNormalRvs
 
 - **Tier 3** — frozen distribution handles:
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf, StatsFrozenPpf,
+    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
     StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree
 
 Helper:
@@ -491,7 +491,7 @@ StatsFreezeDist = _StatsFreezePredicate()
 
 
 class _StatsFrozenMethodPredicate(_SciPyStatsPredicate):
-    """Base for StatsFrozenPdf, StatsFrozenCdf, StatsFrozenPpf."""
+    """Base for StatsFrozenPdf."""
 
     def __init__(self, name: str, method_name: str):
         super().__init__(name)
@@ -522,8 +522,6 @@ class _StatsFrozenMethodPredicate(_SciPyStatsPredicate):
 
 
 StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
-# StatsFrozenPpf kept unidirectional for backward compatibility:
-StatsFrozenPpf = _StatsFrozenMethodPredicate("StatsFrozenPpf", "ppf")
 
 
 class _StatsFrozenCdfPredicate(_SciPyStatsPredicate):

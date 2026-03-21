@@ -7,13 +7,13 @@ The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/refe
 ## Import
 
 ```
--import_from(scipy_fft, [FFTransform, InverseFFT, RealFFT, FFTFrequencies, FFTShift, ...])
+-import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```
--import_from(py.scipy_fft, [FFTransform, InverseFFT, ...])
+-import_from(py.scipy_fft, [FFTransform, RealFFT, ...])
 ```
 
 ---
@@ -21,6 +21,20 @@ Or via the canonical `py.*` path:
 ## Tier
 
 All predicates are **Tier 1 — pure functions**: NumPy array in, NumPy array (or scalar array) directly in `RESULT`. No result dicts, no `ResultGet` needed.
+
+## Bidirectionality
+
+The core transform predicates are **bidirectional relations**: they dispatch on argument groundness, running forward or backward depending on which arguments are bound.
+
+| Bidirectional predicate | Forward | Backward |
+|---|---|---|
+| `FFTransform(X, Y)` | `fft(x)` | `ifft(y)` |
+| `FFTransform2D(X, Y)` | `fft2(x)` | `ifft2(y)` |
+| `FFTransformND(X, Y)` | `fftn(x)` | `ifftn(y)` |
+| `RealFFT(X, Y)` | `rfft(x)` | `irfft(y)` |
+| `DiscreteCosineTransform(X, Y)` | `dct(x)` | `idct(y)` |
+| `DiscreteSineTransform(X, Y)` | `dst(x)` | `idst(y)` |
+| `FFTShift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
 ```
 FFTransform(++(np.array([1,0,0,0])), RESULT),
@@ -35,25 +49,28 @@ Abbreviations that are the universal name are kept as-is; others are spelled out
 
 | scipy function | Clausal predicate |
 |---|---|
-| `fft` | `FFTransform` |
-| `ifft` | `InverseFFT` |
-| `fft2` | `FFTransform2D` |
-| `ifft2` | `InverseFFT2D` |
-| `fftn` | `FFTransformND` |
-| `rfft` | `RealFFT` |
-| `irfft` | `InverseRealFFT` |
-| `dct` | `DiscreteCosineTransform` |
-| `idct` | `InverseDiscreteCosineTransform` |
+| `fft` | `FFTransform` forward |
+| `ifft` | `FFTransform` backward |
+| `fft2` | `FFTransform2D` forward |
+| `ifft2` | `FFTransform2D` backward |
+| `fftn` | `FFTransformND` forward |
+| `ifftn` | `FFTransformND` backward |
+| `rfft` | `RealFFT` forward |
+| `irfft` | `RealFFT` backward |
+| `dct` | `DiscreteCosineTransform` forward |
+| `idct` | `DiscreteCosineTransform` backward |
+| `dst` | `DiscreteSineTransform` forward |
+| `idst` | `DiscreteSineTransform` backward |
 | `fftfreq` | `FFTFrequencies` |
 | `rfftfreq` | `RealFFTFrequencies` |
-| `fftshift` | `FFTShift` |
-| `ifftshift` | `InverseFFTShift` |
+| `fftshift` | `FFTShift` forward |
+| `ifftshift` | `FFTShift` backward |
 
 **Why `FFTransform` instead of `FFT`?**
 
 In `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a logic variable, not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `FFTransform`, `FFTransform2D`, and `FFTransformND` introduces lowercase letters, making them unambiguously predicate names.
 
-All other predicates in this module (`InverseFFT`, `RealFFT`, `FFTShift`, `FFTFrequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
+All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
 
 ---
 
@@ -62,20 +79,15 @@ All other predicates in this module (`InverseFFT`, `RealFFT`, `FFTShift`, `FFTFr
 ### 1-D transforms
 
 ```
-FFTransform(X, RESULT)
-    1-D forward Discrete Fourier Transform of array X.
+FFTransform(X, Y)                  # bidirectional
+    X ground, Y unbound → Y = fft(x)   # forward DFT
+    Y ground, X unbound → X = ifft(y)  # backward (inverse DFT)
+    Both ground         → consistency check: succeeds iff fft(x) ≈ y
     X:      real or complex 1-D array
-    RESULT: complex array of length len(X)
+    Y:      complex array of length len(X)
 
-FFTransform(X, N, RESULT)
-    N: output length; zero-pads or truncates X to length N before computing.
-
-InverseFFT(X, RESULT)
-    1-D inverse DFT.
-    RESULT: complex array of length len(X)
-
-InverseFFT(X, N, RESULT)
-    N: output length.
+FFTransform(X, N, Y)               # bidirectional; N always ground
+    N: output length (zero-pads or truncates).
 ```
 
 Example — frequency analysis of a sine wave:
@@ -95,29 +107,25 @@ FrequencySpectrum(SIGNAL_, FREQS_, SPECTRUM_) <- (
 ### 2-D transforms
 
 ```
-FFTransform2D(X, RESULT)
-    2-D forward DFT over the last two axes.
+FFTransform2D(X, Y)                # bidirectional
+    X ground, Y unbound → Y = fft2(x)   # 2-D forward DFT over last two axes
+    Y ground, X unbound → X = ifft2(y)  # backward (2-D inverse DFT)
+    Both ground         → consistency check: succeeds iff fft2(x) ≈ y
     X:      2-D real or complex array
-    RESULT: complex array of the same shape
+    Y:      complex array of the same shape
 
-FFTransform2D(X, S, RESULT)
+FFTransform2D(X, S, Y)             # bidirectional; S always ground
     S: output shape as (rows, cols); zero-pads or truncates X to this shape.
-
-InverseFFT2D(X, RESULT)
-    2-D inverse DFT.
-
-InverseFFT2D(X, S, RESULT)
-    S: output shape.
 ```
 
 Example — round-trip:
 
 ```
--import_from(scipy_fft, [FFTransform2D, InverseFFT2D])
+-import_from(scipy_fft, [FFTransform2D])
 
 RoundTrip2D(IMAGE_, RECOVERED_) <- (
     FFTransform2D(IMAGE_, SPECTRUM_) and
-    InverseFFT2D(SPECTRUM_, RECOVERED_)
+    FFTransform2D(RECOVERED_, SPECTRUM_)
 )
 ```
 
@@ -126,11 +134,13 @@ RoundTrip2D(IMAGE_, RECOVERED_) <- (
 ### N-D transforms
 
 ```
-FFTransformND(X, RESULT)
-    N-D forward DFT over all axes of array X.
-    RESULT: complex array of the same shape
+FFTransformND(X, Y)                # bidirectional
+    X ground, Y unbound → Y = fftn(x)   # N-D forward DFT over all axes
+    Y ground, X unbound → X = ifftn(y)  # backward (N-D inverse DFT)
+    Both ground         → consistency check: succeeds iff fftn(x) ≈ y
+    Y:      complex array of the same shape as X
 
-FFTransformND(X, S, RESULT)
+FFTransformND(X, S, Y)             # bidirectional; S always ground
     S: list of output lengths, one per axis.
 ```
 
@@ -138,59 +148,52 @@ FFTransformND(X, S, RESULT)
 
 ### Real-input transforms
 
-`RealFFT` and `InverseRealFFT` exploit conjugate symmetry to halve storage for
-real signals. The output of `RealFFT` has length `N//2 + 1`.
+`RealFFT` exploits conjugate symmetry to halve storage for real signals. The output of `RealFFT` has length `N//2 + 1`.
 
 ```
-RealFFT(X, RESULT)
-    Real-input forward FFT of 1-D real array X.
-    X:      1-D real array of length N
-    RESULT: complex array of length N//2 + 1
+RealFFT(X, Y)                      # bidirectional
+    X ground, Y unbound → Y = rfft(x)   forward: complex half-spectrum of length N//2 + 1
+    Y ground, X unbound → X = irfft(y)  backward: real array of length 2*(len(Y)-1)
+    Both ground         → consistency check: succeeds iff rfft(x) ≈ y
+    Note: assumes even-length original signal when going backward without N.
 
-RealFFT(X, N, RESULT)
-    N: output length before FFT (pads/truncates X).
-
-InverseRealFFT(X, RESULT)
-    Inverse of RealFFT; produces a real-valued output.
-    X:      complex half-spectrum of length N//2 + 1
-    RESULT: real array of length 2*(len(X)-1)
-    Note: assumes even-length original signal.
-
-InverseRealFFT(X, N, RESULT)
-    N: explicit output length (required for odd-length originals).
+RealFFT(X, N, Y)                   # bidirectional; N always ground
+    N: explicit length for unambiguous round-trips of odd-length originals.
 ```
 
 Example — filter a 1-D signal in the frequency domain:
 
 ```
--import_from(scipy_fft, [RealFFT, InverseRealFFT])
+-import_from(scipy_fft, [RealFFT])
 
 LowPassFilter(SIGNAL_, CUTOFF_BIN_, FILTERED_) <- (
     RealFFT(SIGNAL_, SPECTRUM_) and
     ZEROED_ is ++(
         [SPECTRUM_[i] if i < int(CUTOFF_BIN_) else 0.0
          for i in range(len(SPECTRUM_))]) and
-    InverseRealFFT(++ZEROED_, FILTERED_)
+    RealFFT(FILTERED_, ++ZEROED_)
 )
 ```
 
 ---
 
-### Cosine transforms
+### Cosine and sine transforms
 
 ```
-DiscreteCosineTransform(X, RESULT)
-    DCT type-2 (the default) of 1-D array X.
-    RESULT: real array of the same length
+DiscreteCosineTransform(X, Y)              # bidirectional
+    X ground, Y unbound → Y = dct(x)   (type-2 default)
+    Y ground, X unbound → X = idct(y)
+    Both ground         → consistency check: succeeds iff dct(x) ≈ y
 
-DiscreteCosineTransform(X, TYPE, RESULT)
+DiscreteCosineTransform(X, TYPE, Y)        # bidirectional; TYPE always ground
     TYPE: integer 1–4 selecting the DCT variant.
 
-InverseDiscreteCosineTransform(X, RESULT)
-    Inverse DCT type-2.  InverseDCT(DCT(x)) ≈ x.
+DiscreteSineTransform(X, Y)                # bidirectional
+    X ground, Y unbound → Y = dst(x)   (type-2 default)
+    Y ground, X unbound → X = idst(y)
+    Both ground         → consistency check: succeeds iff dst(x) ≈ y
 
-InverseDiscreteCosineTransform(X, TYPE, RESULT)
-    TYPE: must match the type used in DiscreteCosineTransform.
+DiscreteSineTransform(X, TYPE, Y)          # bidirectional; TYPE always ground
 ```
 
 DCT types:
@@ -224,13 +227,10 @@ RealFFTFrequencies(N, RESULT)
 RealFFTFrequencies(N, D, RESULT)
     D: sample spacing.
 
-FFTShift(X, RESULT)
-    Shift the zero-frequency component to the centre of the spectrum.
-    Input index 0 (DC) moves to index N//2.
-    Useful for plotting: low frequencies appear in the middle.
-
-InverseFFTShift(X, RESULT)
-    Inverse of FFTShift.  InverseFFTShift(FFTShift(X)) = X.
+FFTShift(X, Y)                     # bidirectional
+    X ground, Y unbound → Y = fftshift(x)   (DC to centre)
+    Y ground, X unbound → X = ifftshift(y)  (DC back to index 0)
+    Both ground         → consistency check: succeeds iff fftshift(x) ≈ y
 ```
 
 Example — plot-ready spectrum:
@@ -254,11 +254,11 @@ CentredSpectrum(SIGNAL_, FREQS_CENTRED_, SPECTRUM_CENTRED_) <- (
 ### Round-trip: 1-D signal
 
 ```
--import_from(scipy_fft, [FFTransform, InverseFFT])
+-import_from(scipy_fft, [FFTransform])
 
 TestRoundTrip(SIGNAL_) <- (
     FFTransform(SIGNAL_, SPECTRUM_) and
-    InverseFFT(SPECTRUM_, RECOVERED_) and
+    FFTransform(RECOVERED_, SPECTRUM_) and
     % check first element recovered correctly
     ERR_ is ++(abs(float(RECOVERED_[0].real) - float(SIGNAL_[0]))) and
     ERR_ < 1e-10
@@ -268,15 +268,14 @@ TestRoundTrip(SIGNAL_) <- (
 ### Convolution via FFT
 
 ```
--import_from(scipy_fft, [FFTransform, InverseFFT])
+-import_from(scipy_fft, [FFTransform])
 
 % Linear convolution of two equal-length signals (circular; pad as needed)
 FFTConvolve(A_, B_, RESULT_) <- (
-    FA_ is ++(list(__import__('clausal.modules.py.scipy_fft', fromlist=['FFTransform']))),
     FFTransform(A_, FA_) and
     FFTransform(B_, FB_) and
     PRODUCT_ is ++(FA_ * FB_) and
-    InverseFFT(++PRODUCT_, RESULT_)
+    FFTransform(RESULT_, ++PRODUCT_)
 )
 ```
 
@@ -296,10 +295,10 @@ ImageSpectrum(IMAGE_, CENTRED_SPECTRUM_) <- (
 ## Notes
 
 - **Array inputs**: pass Python lists or NumPy arrays via `++()`.
-- **Complex output**: `FFTransform`, `InverseFFT`, `FFTransform2D`, `InverseFFT2D`, `FFTransformND`,
+- **Complex output**: `FFTransform`, `FFTransform2D`, `FFTransformND`,
   `RealFFT` all return complex128 arrays. Use `++(x.real)` to extract the
   real part.
-- **InverseRealFFT output length**: by default, output length is
+- **RealFFT backward output length**: by default, output length is
   `2 * (len(X) - 1)`, which assumes the original signal had even length.
   Pass `N` explicitly for odd-length originals.
 - **Normalisation**: the default (un-normalised) convention is `fft` followed

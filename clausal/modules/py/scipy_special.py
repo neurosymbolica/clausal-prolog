@@ -22,13 +22,10 @@ Gamma/related:
     Comb(N, K, RESULT)  /  Comb(N, K, EXACT, RESULT)  /  Comb(N, K, EXACT, REPETITION, RESULT)
     Perm(N, K, RESULT)  /  Perm(N, K, EXACT, RESULT)
 
-Error functions:
-    Erf(X, RESULT)
-    ErfComplement(X, RESULT)         # 1 - erf(x)
-    ErfInverse(Y, RESULT)            # inverse of erf
-    ErfComplementInverse(Y, RESULT)  # inverse of erfc
-    NormalCdf(X, RESULT)             # Φ(x), area under standard normal
-    NormalCdfInverse(P, RESULT)      # Φ^{-1}(p), probit / quantile function
+Error functions (bidirectional):
+    Erf(X, Y)                        # forward: erf(x); backward: erfinv(y)
+    ErfComplement(X, Y)              # forward: erfc(x); backward: erfcinv(y)
+    NormalCdf(X, P)                  # forward: Φ(x); backward: Φ⁻¹(p) (probit)
 
 Bessel functions:
     BesselJ(N, X, RESULT)            # J_n(x), integer order
@@ -68,8 +65,7 @@ Convenience / misc:
     CubeRoot(X, RESULT)              # x^(1/3), works for negative x
     Exp10(X, RESULT)                 # 10^x
     Exp2(X, RESULT)                  # 2^x
-    Sigmoid(X, RESULT)               # 1/(1+exp(-x)), logistic function
-    Logit(X, RESULT)                 # log(x/(1-x))
+    Logit(X, Y)                      # bidirectional: logit(x) / expit(y) (sigmoid)
     LambertW(Z, RESULT)  /  LambertW(Z, K, TOL, RESULT)
     XLogY(X, Y, RESULT)              # x·log(y), safe at x=0
     XLog1pY(X, Y, RESULT)            # x·log(1+y), safe at x=0, y=-1
@@ -269,23 +265,10 @@ ErfComplement = _pred_bidir("ErfComplement",
     (2, _bidir_q(_sp_fn("erfc"), _sp_fn("erfcinv"))),
 )
 
-# Backward-compatibility aliases — kept unidirectional:
-ErfInverse = _pred("ErfInverse",
-    (2, _sp_fn("erfinv")),
-)
-
-ErfComplementInverse = _pred("ErfComplementInverse",
-    (2, _sp_fn("erfcinv")),
-)
-
 NormalCdf = _pred_bidir("NormalCdf",
     (2, _bidir_q(_sp_fn("ndtr"), _sp_fn("ndtri"))),
 )
 
-# Backward-compatibility alias — kept unidirectional:
-NormalCdfInverse = _pred("NormalCdfInverse",
-    (2, _sp_fn("ndtri")),
-)
 
 
 # ── Bessel functions ──────────────────────────────────────────────────────
@@ -415,10 +398,6 @@ Exp10 = _pred("Exp10",
 
 Exp2 = _pred("Exp2",
     (2, _sp_fn("exp2")),
-)
-
-Sigmoid = _pred("Sigmoid",
-    (2, _sp_fn("expit")),
 )
 
 Logit = _pred_bidir("Logit",

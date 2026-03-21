@@ -23,7 +23,7 @@ from clausal.modules.py.scipy_linalg import (
     LuDecompose, QrDecompose, SingularValueDecompose,
     Cholesky, EigenDecompose, EigenDecomposeHermitian, Schur,
     Inverse, PseudoInverse, Determinant, Norm,
-    MatrixExponential, MatrixLogarithm, MatrixSquareRoot, MatrixFunction,
+    MatrixExpLog, MatrixSquareRoot, MatrixFunction,
     LuFactor, LuSolve, CholeskyFactor, CholeskySolve,
     ResultGet,
 )
@@ -56,6 +56,23 @@ def _drive_result_get(result_dict, field):
             return None
         if sentinel is None:
             return deref(value)
+    return None
+
+
+def _drive_bwd(pred, *args):
+    """Call predicate in backward direction: first arg is unbound Var, rest are ground.
+
+    For a bidirectional predicate Pred(X, Y): binds X (result) given Y (ground).
+    """
+    result = Var()
+    dispatch = pred._get_dispatch()
+    trail = Trail()
+    gen = dispatch(None, None, result, *args, trail)
+    for parent, sentinel in gen:
+        if sentinel is DONE:
+            return None
+        if sentinel is None:
+            return deref(result)
     return None
 
 
@@ -399,12 +416,13 @@ class TestNorm:
 class TestMatrixExponential:
     def test_zero_matrix(self):
         Z = np.zeros((2, 2))
-        r = _drive(MatrixExponential, Z)
+        # Forward direction of MatrixExpLog: MatrixExpLog(Z, result_var) → result_var = expm(Z)
+        r = _drive(MatrixExpLog, Z)
         assert approx_array(r, np.eye(2))
 
     def test_diagonal(self):
         D = np.diag([1.0, 2.0])
-        r = _drive(MatrixExponential, D)
+        r = _drive(MatrixExpLog, D)
         expected = np.diag([math.e, math.e ** 2])
         assert approx_array(r, expected, rtol=1e-6)
 
@@ -413,12 +431,13 @@ class TestMatrixExponential:
 
 class TestMatrixLogarithm:
     def test_identity(self):
-        r = _drive(MatrixLogarithm, np.eye(2))
+        # Backward direction of MatrixExpLog: MatrixExpLog(result_var, I) → result_var = logm(I)
+        r = _drive_bwd(MatrixExpLog, np.eye(2))
         assert approx_array(np.real(r), np.zeros((2, 2)))
 
     def test_expm_logm_roundtrip(self, spd_2x2):
-        log_m = _drive(MatrixLogarithm, spd_2x2)
-        r = _drive(MatrixExponential, np.real(log_m))
+        log_m = _drive_bwd(MatrixExpLog, spd_2x2)
+        r = _drive(MatrixExpLog, np.real(log_m))
         assert approx_array(np.real(r), spd_2x2, rtol=1e-5)
 
 
@@ -439,7 +458,7 @@ class TestMatrixSquareRoot:
 class TestMatrixFunction:
     def test_exp_via_matrix_function(self, spd_2x2):
         r = _drive(MatrixFunction, spd_2x2, np.exp)
-        expected_expm = _drive(MatrixExponential, spd_2x2)
+        expected_expm = _drive(MatrixExpLog, spd_2x2)
         assert approx_array(np.real(r), np.real(expected_expm), rtol=1e-5)
 
     def test_identity_fn(self):

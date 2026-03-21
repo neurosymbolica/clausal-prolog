@@ -55,8 +55,8 @@ Predicate names use full English words; scipy's terse abbreviations are expanded
 | `scipy.linalg.pinv` | `PseudoInverse` |
 | `scipy.linalg.det` | `Determinant` |
 | `scipy.linalg.norm` | `Norm` |
-| `scipy.linalg.expm` | `MatrixExponential` |
-| `scipy.linalg.logm` | `MatrixLogarithm` |
+| `scipy.linalg.expm` | `MatrixExpLog` forward |
+| `scipy.linalg.logm` | `MatrixExpLog` backward |
 | `scipy.linalg.sqrtm` | `MatrixSquareRoot` |
 | `scipy.linalg.funm` | `MatrixFunction` |
 | `scipy.linalg.lu_factor` | `LuFactor` |
@@ -73,10 +73,12 @@ LU and QR are kept as-is — they are the standard letter names for the matrix f
 ### Linear system solvers
 
 ```
-Solve(A, B, RESULT)
-    RESULT = X such that A @ X = B
+Solve(A, B, X)                     # bidirectional (A always ground)
+    B ground, X unbound → X = solve(A, B)   # forward: solve A @ X = B
+    X ground, B unbound → B = A @ X         # backward: compute right-hand side
+    Both ground         → consistency check: succeeds iff solve(A, B) ≈ X
 
-Solve(A, B, ASSUME_A, RESULT)
+Solve(A, B, ASSUME_A, RESULT)      # unidirectional (arity-4)
     ASSUME_A: 'gen' (default), 'sym', 'her', or 'pos'
     Allows faster solvers when the matrix structure is known
 
@@ -104,35 +106,47 @@ SolveSystem(A_, B_, X_) <- (
 
 ### Matrix decompositions
 
+All decomposition predicates are **bidirectional**: the forward direction decomposes `A` into factor dict `R`; the backward direction recomposes `A` from `R` using plain numpy.
+
 ```
-LuDecompose(A, RESULT)
-    RESULT: dict {p, l, u}   — A = P @ L @ U
+LuDecompose(A, R)              # bidirectional
+    A ground → R = {p, l, u}   (A = P @ L @ U)
+    R ground → A = P @ L @ U   (recompose)
+    Both ground → consistency check
 
-QrDecompose(A, RESULT)
-    RESULT: dict {q, r}      — A = Q @ R
+QrDecompose(A, R)              # bidirectional
+    A ground → R = {q, r}      (A = Q @ R)
+    R ground → A = Q @ R       (recompose)
+    Both ground → consistency check
 
-SingularValueDecompose(A, RESULT)
-    RESULT: dict {u, s, vh}  — A = U @ diag(s) @ Vh
+SingularValueDecompose(A, R)   # bidirectional
+    A ground → R = {u, s, vh}  (A = U @ diag(s) @ Vh)
+    R ground → A = U @ diag(s) @ Vh   (recompose)
+    Both ground → consistency check
 
-Cholesky(A, RESULT)
-    RESULT: upper triangular factor U such that U.T @ U = A
-    A must be symmetric positive definite
+Cholesky(A, R)                 # bidirectional (arity-2)
+    A ground → R = upper triangular factor U (U.T @ U = A)
+    R ground → A = R.T @ R     (recompose)
+    Both ground → consistency check
 
-Cholesky(A, LOWER, RESULT)
+Cholesky(A, LOWER, RESULT)     # unidirectional (arity-3)
     LOWER=True: returns lower triangular L such that L @ L.T = A
 
-EigenDecompose(A, RESULT)
-    RESULT: dict {eigenvalues, eigenvectors}
-    General (non-symmetric) matrix; eigenvalues may be complex
+EigenDecompose(A, R)           # bidirectional
+    A ground → R = {eigenvalues, eigenvectors}
+    R ground → A = V @ diag(λ) @ inv(V)
+    Both ground → consistency check
 
-EigenDecomposeHermitian(A, RESULT)
-    RESULT: dict {eigenvalues, eigenvectors}
-    Symmetric/Hermitian A; eigenvalues are real, eigenvectors orthonormal
+EigenDecomposeHermitian(A, R)  # bidirectional
+    Symmetric/Hermitian specialisation; same recomposition.
+    Both ground → consistency check
 
-Schur(A, RESULT)
-    RESULT: dict {t, z}      — A = Z @ T @ Z.T (real Schur form)
+Schur(A, R)                    # bidirectional (arity-2)
+    A ground → R = {t, z}      (A = Z @ T @ Z.H)
+    R ground → A = Z @ T @ Z.H (recompose)
+    Both ground → consistency check
 
-Schur(A, OUTPUT, RESULT)
+Schur(A, OUTPUT, RESULT)       # unidirectional (arity-3)
     OUTPUT: 'real' (default) or 'complex'
 ```
 
@@ -151,8 +165,9 @@ LargestSingularValue(A_, S1_) <- (
 ### Matrix functions
 
 ```
-Inverse(A, RESULT)
-    RESULT = A⁻¹
+Inverse(A, RESULT)             # bidirectional (self-inverse)
+    A ground, RESULT unbound → RESULT = inv(A)
+    RESULT ground, A unbound → A = inv(RESULT)   # inv is self-inverse
 
 PseudoInverse(A, RESULT)
     RESULT = A⁺   # Moore-Penrose pseudoinverse; works for non-square A
@@ -166,18 +181,17 @@ Norm(A, RESULT)
 Norm(A, ORD, RESULT)
     ORD: None (default), 'fro', 'nuc', 1, -1, 2, -2, inf, -inf
 
-MatrixExponential(A, RESULT)
-    RESULT = e^A   # matrix exponential (not element-wise)
-
-MatrixLogarithm(A, RESULT)
-    RESULT = log(A)   # matrix logarithm; inverse of MatrixExponential
+MatrixExpLog(A, B)                 # bidirectional
+    A ground, B unbound → B = expm(A)   # matrix exponential
+    B ground, A unbound → A = logm(B)   # matrix logarithm
+    Both ground         → consistency check: succeeds iff expm(A) ≈ B
 
 MatrixSquareRoot(A, RESULT)
     RESULT = A^{1/2}   # matrix square root; RESULT @ RESULT ≈ A
 
 MatrixFunction(A, FUNC, RESULT)
     RESULT = f(A) where FUNC is a Python callable applied via eigendecomposition
-    Example: MatrixFunction(A, np.exp, RESULT) is equivalent to MatrixExponential(A, RESULT)
+    Example: MatrixFunction(A, np.exp, RESULT) is equivalent to MatrixExpLog(A, RESULT) forward direction
 ```
 
 Example — check positive definiteness via eigenvalues:
@@ -266,5 +280,5 @@ ExplainedVariance(X_, K_, RATIO_) <- (
 - All array inputs are passed to scipy without copying; avoid mutating them after the call.
 - Tier 2 result dicts are plain Python dicts — they can be passed to `++` escapes for further NumPy processing.
 - `EigenDecompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
-- `MatrixLogarithm` and `MatrixSquareRoot` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
+- `MatrixExpLog` (logm direction) and `MatrixSquareRoot` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
 - Predicates fail (no solution) when `ResultGet` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.

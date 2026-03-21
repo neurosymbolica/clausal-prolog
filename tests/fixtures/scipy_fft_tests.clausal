@@ -1,10 +1,6 @@
--import_from(scipy_fft, [FFTransform, InverseFFT,
-                          FFTransform2D, InverseFFT2D,
-                          FFTransformND,
-                          RealFFT, InverseRealFFT,
-                          DiscreteCosineTransform, InverseDiscreteCosineTransform,
-                          FFTFrequencies, RealFFTFrequencies,
-                          FFTShift, InverseFFTShift])
+-import_from(scipy_fft, [FFTransform, FFTransform2D, FFTransformND,
+                          RealFFT, DiscreteCosineTransform,
+                          FFTFrequencies, RealFFTFrequencies, FFTShift])
 
 # FFTransform of constant signal [1,1,1,1] - DC component should be 4.0
 Test("fft constant signal") <- (
@@ -13,11 +9,11 @@ Test("fft constant signal") <- (
     DIFF is ++(abs(float(DC) - 4.0)),
     DIFF < 1e-10)
 
-# FFTransform round-trip: InverseFFT(FFTransform(x)) should recover x
+# FFTransform round-trip: backward direction should recover original
 Test("fft round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
     FFTransform(X, SPECTRUM),
-    InverseFFT(SPECTRUM, RECOVERED),
+    FFTransform(RECOVERED, SPECTRUM),
     ERR is ++(abs(float(RECOVERED[0].real) - 1.0)),
     ERR < 1e-10)
 
@@ -44,21 +40,21 @@ Test("real fft frequencies non negative") <- (
     F0 is ++(float(FREQS[0])),
     F0 == 0.0)
 
-# FFTShift then InverseFFTShift recovers original
+# FFTShift round-trip via backward direction
 Test("fft shift and inverse") <- (
     X is [0.0, 1.0, 2.0, 3.0],
     FFTShift(X, SHIFTED),
-    InverseFFTShift(SHIFTED, RECOVERED),
+    FFTShift(RECOVERED, SHIFTED),
     V0 is ++(float(RECOVERED[0])),
     V0 == 0.0,
     V1 is ++(float(RECOVERED[1])),
     DIFF is ++(abs(V1 - 1.0)),
     DIFF < 1e-10)
 
-# DiscreteCosineTransform round-trip via InverseDiscreteCosineTransform
+# DiscreteCosineTransform round-trip via backward direction
 Test("dct round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
     DiscreteCosineTransform(X, COEFFS),
-    InverseDiscreteCosineTransform(COEFFS, RECOVERED),
+    DiscreteCosineTransform(RECOVERED, COEFFS),
     ERR is ++(abs(float(RECOVERED[0]) - 1.0)),
     ERR < 1e-10)

@@ -3,55 +3,43 @@
 Provides fast Fourier transform routines from scipy.fft as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(scipy_fft, [FFTransform, InverseFFT, FFTShift, FFTFrequencies, ...])
+    -import_from(scipy_fft, [FFTransform, RealFFT, FFTShift, FFTFrequencies, ...])
 
 All predicates are **Tier 1 — pure functions**: accept NumPy arrays and
 return transformed arrays directly in RESULT.
 
 Predicate catalogue
 -------------------
-1-D transforms:
-    FFTransform(X, RESULT)               — 1-D forward DFT
-    FFTransform(X, N, RESULT)            — with output length N
+All core transforms are bidirectional: X ground → forward; RESULT ground → inverse.
 
-    InverseFFT(X, RESULT)               — 1-D inverse DFT
-    InverseFFT(X, N, RESULT)            — with output length N
+1-D transforms:
+    FFTransform(X, Y)                    — fft(x) / ifft(y)
+    FFTransform(X, N, Y)                 — with output length N
 
 2-D transforms:
-    FFTransform2D(X, RESULT)             — 2-D forward DFT
-    FFTransform2D(X, S, RESULT)          — with output shape S=(rows, cols)
-
-    InverseFFT2D(X, RESULT)             — 2-D inverse DFT
-    InverseFFT2D(X, S, RESULT)          — with output shape S
+    FFTransform2D(X, Y)                  — fft2(x) / ifft2(y)
+    FFTransform2D(X, S, Y)               — with output shape S=(rows, cols)
 
 N-D transforms:
-    FFTransformND(X, RESULT)             — N-D forward DFT over all axes
-    FFTransformND(X, S, RESULT)          — with output shape S (list of lengths)
+    FFTransformND(X, Y)                  — fftn(x) / ifftn(y)
+    FFTransformND(X, S, Y)               — with output shape S (list of lengths)
 
-Real-input transforms (output length n//2+1):
-    RealFFT(X, RESULT)                  — real-input forward FFT
-    RealFFT(X, N, RESULT)               — with output length N
+Real-input transforms:
+    RealFFT(X, Y)                        — rfft(x) / irfft(y)
+    RealFFT(X, N, Y)                     — with output/input length N
 
-    InverseRealFFT(X, RESULT)           — inverse of RealFFT; real-valued output
-    InverseRealFFT(X, N, RESULT)        — with output length N (must be even for
-                                          symmetric spectrum)
-
-Cosine transforms:
-    DiscreteCosineTransform(X, RESULT)           — DCT type-2 (default)
-    DiscreteCosineTransform(X, TYPE, RESULT)     — with explicit type (1–4)
-
-    InverseDiscreteCosineTransform(X, RESULT)    — IDCT type-2
-    InverseDiscreteCosineTransform(X, TYPE, RESULT)
+Cosine / Sine transforms:
+    DiscreteCosineTransform(X, Y)        — dct(x) / idct(y)
+    DiscreteCosineTransform(X, TYPE, Y)  — with explicit type (1–4)
+    DiscreteSineTransform(X, Y)          — dst(x) / idst(y)
+    DiscreteSineTransform(X, TYPE, Y)    — with explicit type
 
 Utility:
-    FFTFrequencies(N, RESULT)           — DFT sample frequencies for length-N output
-    FFTFrequencies(N, D, RESULT)        — with sample spacing D (default 1.0)
-
-    RealFFTFrequencies(N, RESULT)       — frequencies for length-N real FFT
-    RealFFTFrequencies(N, D, RESULT)    — with sample spacing D
-
-    FFTShift(X, RESULT)                 — shift zero-frequency component to centre
-    InverseFFTShift(X, RESULT)          — inverse of FFTShift
+    FFTFrequencies(N, RESULT)            — DFT sample frequencies for length-N output
+    FFTFrequencies(N, D, RESULT)         — with sample spacing D (default 1.0)
+    RealFFTFrequencies(N, RESULT)        — frequencies for length-N real FFT
+    RealFFTFrequencies(N, D, RESULT)     — with sample spacing D
+    FFTShift(X, Y)                       — fftshift(x) / ifftshift(y)
 """
 
 from __future__ import annotations
@@ -191,14 +179,6 @@ FFTransform = _pred_bidir("FFTransform",
             make_quantity_aware(lambda y, n: _fft().ifft(y, n=n), PASS_THROUGH_FIRST))),
 )
 
-# Backward-compatibility alias — kept unidirectional:
-InverseFFT = _pred("InverseFFT",
-    (2, _dispatch_fn(lambda x:
-        _fft().ifft(x))),
-    (3, _dispatch_fn(lambda x, n:
-        _fft().ifft(x, n=n))),
-)
-
 
 # ── 2-D transforms ────────────────────────────────────────────────────────
 
@@ -207,14 +187,6 @@ FFTransform2D = _pred_bidir("FFTransform2D",
     (3, _fft_bidir_n(
             make_quantity_aware(lambda x, s: _fft().fft2(x, s=s), PASS_THROUGH_FIRST),
             make_quantity_aware(lambda y, s: _fft().ifft2(y, s=s), PASS_THROUGH_FIRST))),
-)
-
-# Backward-compatibility alias — kept unidirectional:
-InverseFFT2D = _pred("InverseFFT2D",
-    (2, _dispatch_fn(lambda x:
-        _fft().ifft2(x))),
-    (3, _dispatch_fn(lambda x, s:
-        _fft().ifft2(x, s=s))),
 )
 
 
@@ -237,14 +209,6 @@ RealFFT = _pred_bidir("RealFFT",
             make_quantity_aware(lambda y, n: _fft().irfft(y, n=n), PASS_THROUGH_FIRST))),
 )
 
-# Backward-compatibility alias — kept unidirectional:
-InverseRealFFT = _pred("InverseRealFFT",
-    (2, _dispatch_fn(lambda x:
-        _fft().irfft(x))),
-    (3, _dispatch_fn(lambda x, n:
-        _fft().irfft(x, n=n))),
-)
-
 
 # ── Cosine / Sine transforms ──────────────────────────────────────────────
 
@@ -255,14 +219,6 @@ DiscreteCosineTransform = _pred_bidir("DiscreteCosineTransform",
             make_quantity_aware(lambda y, dct_type: _fft().idct(y, type=dct_type), PASS_THROUGH_FIRST))),
 )
 
-# Backward-compatibility alias — kept unidirectional:
-InverseDiscreteCosineTransform = _pred("InverseDiscreteCosineTransform",
-    (2, _dispatch_fn(lambda x:
-        _fft().idct(x))),
-    (3, _dispatch_fn(lambda x, dct_type:
-        _fft().idct(x, type=dct_type))),
-)
-
 DiscreteSineTransform = _pred_bidir("DiscreteSineTransform",
     (2, _bidir_dispatch(_fft_fn("dst"), _fft_fn("idst"))),
     (3, _fft_bidir_n(
@@ -270,12 +226,6 @@ DiscreteSineTransform = _pred_bidir("DiscreteSineTransform",
             make_quantity_aware(lambda y, dst_type: _fft().idst(y, type=dst_type), PASS_THROUGH_FIRST))),
 )
 
-InverseDiscreteSineTransform = _pred("InverseDiscreteSineTransform",
-    (2, _dispatch_fn(lambda x:
-        _fft().idst(x))),
-    (3, _dispatch_fn(lambda x, dst_type:
-        _fft().idst(x, type=dst_type))),
-)
 
 
 # ── Utility ───────────────────────────────────────────────────────────────
@@ -298,9 +248,3 @@ FFTShift = _pred_bidir("FFTShift",
     (2, _bidir_dispatch(_fft_fn("fftshift"), _fft_fn("ifftshift"))),
 )
 # Note: _fft_fn already wraps with PASS_THROUGH_FIRST, so both directions propagate units.
-
-# Backward-compatibility alias — kept unidirectional:
-InverseFFTShift = _pred("InverseFFTShift",
-    (2, _dispatch_fn(lambda x:
-        _fft().ifftshift(x))),
-)
