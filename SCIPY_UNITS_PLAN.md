@@ -9,7 +9,7 @@ to work transparently through all scipy wrapper predicates.
 |-------|-----------|--------|
 | 1 | `_scipy_units.py` (shared infrastructure) | ✅ Done |
 | 2 | `scipy_linalg.py` | ✅ Done |
-| 3 | `scipy_differentiate.py` | ⬜ Pending |
+| 3 | `scipy_differentiate.py` | ✅ Done |
 | 4 | `scipy_integrate.py` | ⬜ Pending |
 | 5 | `scipy_interpolate.py` | ⬜ Pending |
 | 6 | `scipy_special.py`, `scipy_fft.py` | ✅ Done |

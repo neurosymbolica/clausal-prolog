@@ -531,6 +531,35 @@ The intended workflow:
 
 ---
 
+## Dimensional analysis with SciPy predicates
+
+SciPy wrapper predicates are quantity-aware: when `Quantity` inputs are
+passed, units are stripped before calling SciPy, and the result is re-wrapped
+with correctly propagated dimensions.  When plain inputs are passed, SciPy is
+called directly with zero overhead.
+
+Each SciPy predicate falls into one of four categories:
+
+| Category | Behaviour | Examples |
+|---|---|---|
+| **Require dimensionless** | Raises `UnitsMismatch` if any input has non-empty dims | `scipy_special` (Gamma, Erf, Bessel, ...) |
+| **Pass-through** | Output dims = input dims | `scipy_fft` (FFT, IFFT, ...) |
+| **Algebraic propagation** | Output dims computed from input dims by a fixed rule | `scipy_linalg` (Solve, Norm, Det, ...), `scipy_differentiate` (Derivative, Jacobian, Hessian) |
+| **Intrinsically dimensionless** | Inputs stripped, output is always plain | `scipy_stats` test statistics, `scipy_cluster` labels |
+
+### Modules with quantity support
+
+| Module | Status | Notes |
+|---|---|---|
+| `scipy_linalg` | Supported | Full algebraic propagation for all predicates |
+| `scipy_special` | Supported | Requires dimensionless inputs |
+| `scipy_fft` | Supported | Pass-through (output dims = input dims) |
+| `scipy_differentiate` | Supported | `df` dims = `f_dims - x_dims`; callable probing detects `f` output dims |
+
+See each module's documentation for details.
+
+---
+
 ## Design notes
 
 - **No offset scales**: `Celsius`/`Fahrenheit` are unsupported.
