@@ -145,9 +145,9 @@ d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ```
 
 Contains: SI base unit predicates, scaled SI unit predicates, named derived SI
-unit predicates, SI prefix constants, SI abbreviations, SI unit vectors,
-physical constants, and utility predicates (`HasUnits`, `StripUnits`,
-`DimensionOf`, `MakeQuantity`).
+unit predicates, SI prefix constants, IEC binary prefix constants, SI
+abbreviations, SI unit vectors, digital information units, physical constants,
+and utility predicates (`HasUnits`, `StripUnits`, `DimensionOf`, `MakeQuantity`).
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
@@ -178,6 +178,14 @@ Used with `n(Unit)` sugar.
 `A` and `K` are omitted as aliases — single uppercase letters are logic
 variables in Clausal.
 
+**Digital information base unit** (IEC 80000-13):
+
+| Alias | Full name | Dims        | IEC symbol |
+|-------|-----------|-------------|------------|
+| —     | `Bit`     | `{Bit: 1}`  | bit        |
+
+`Bit` uses itself as the dimension key, exactly like the SI base units.
+
 ---
 
 ### Scaled SI unit predicates
@@ -197,6 +205,54 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
 `Millisecond` (`ms`), `Microsecond` (`us`), `Nanosecond` (`ns`),
 `Minute` (`min`), `Hour` (`hr`), `Day`, `Week`, `JulianYear`
+
+#### Digital information (stored as bits)
+
+`Bit` is the base unit (IEC 80000-13).  All values are normalised to bits.
+
+```python
+-import_from(py.units, [Bit, Byte, Kilobyte, Gigabyte, Kibibyte, Gibibyte,
+                        Kilobit, Megabit, kibi, mebi, gibi, tebi])
+
+size   := 4(Gibibyte)                    # Quantity(34_359_738_368, {Bit: 1})
+rate   := 100(Megabit)                   # Quantity(100_000_000,    {Bit: 1})
+custom := ++(512 * mebi * Byte(1))       # 512 MiB via binary prefix
+```
+
+Decimal (SI-prefixed) byte multiples:
+
+| Predicate   | Stored as bits | Alias |
+|-------------|----------------|-------|
+| `Byte`      | 8              | —     |
+| `Kilobyte`  | 8 × 10³        | —     |
+| `Megabyte`  | 8 × 10⁶        | —     |
+| `Gigabyte`  | 8 × 10⁹        | —     |
+| `Terabyte`  | 8 × 10¹²       | —     |
+
+Decimal bit multiples:
+
+| Predicate   | Stored as bits |
+|-------------|----------------|
+| `Kilobit`   | 10³            |
+| `Megabit`   | 10⁶            |
+| `Gigabit`   | 10⁹            |
+
+Binary (IEC-prefixed) byte multiples:
+
+| Predicate   | Stored as bits  |
+|-------------|-----------------|
+| `Kibibyte`  | 8 × 2¹⁰         |
+| `Mebibyte`  | 8 × 2²⁰         |
+| `Gibibyte`  | 8 × 2³⁰         |
+| `Tebibyte`  | 8 × 2⁴⁰         |
+
+Binary bit multiples:
+
+| Predicate   | Stored as bits |
+|-------------|----------------|
+| `Kibibit`   | 2¹⁰            |
+| `Mebibit`   | 2²⁰            |
+| `Gibibit`   | 2³⁰            |
 
 #### Named derived SI units
 
@@ -267,6 +323,29 @@ are available but must be imported explicitly.
 `micro` has no safe alias: `μ` is not a valid Python identifier.  The
 per-unit abbreviations `ms`, `mg`, `mm`, `us`, `um` encode both prefix and
 unit together.
+
+#### IEC binary prefix constants
+
+Plain Python numbers — use inside `++()` by multiplying against a unit vector:
+
+```python
+++(4   * gibi * Byte(1))    # 4 GiB  →  Quantity(4 × 2³⁰ × 8, {Bit: 1})
+++(512 * mebi * Byte(1))    # 512 MiB
+++(100 * kibi * Bit(1))     # 100 Kib
+```
+
+| Name   | Value  | IEC symbol |
+|--------|--------|------------|
+| `kibi` | 2¹⁰    | Ki         |
+| `mebi` | 2²⁰    | Mi         |
+| `gibi` | 2³⁰    | Gi         |
+| `tebi` | 2⁴⁰    | Ti         |
+| `pebi` | 2⁵⁰    | Pi         |
+| `exbi` | 2⁶⁰    | Ei         |
+
+The IEC symbol abbreviations (`Ki`, `Mi`, `Gi`, …) start with an uppercase
+letter and are not provided as aliases — in Clausal an identifier starting with
+an uppercase letter is a logic variable.
 
 ---
 
@@ -463,6 +542,11 @@ The intended workflow:
 - **SI prefixes are plain numbers**: `kilo = 1e3`, `milli = 1e-3`, etc.
   They cannot appear inside `n(Unit)` parentheses; use multiplication in
   a `++()` escape instead.
+- **IEC binary prefixes are plain numbers**: `kibi = 2¹⁰`, `mebi = 2²⁰`, etc.
+  Same rules as SI prefixes — multiply against a unit vector in `++()`.
+- **`Bit` is the information base unit** (IEC 80000-13): all byte and
+  prefixed-bit predicates store internally in bits, so arithmetic between them
+  works without conversion.
 - **Imperial units are Quantity unit vectors**: `inch`, `foot`, `pound_mass`,
   etc.  Multiply by a scalar in a `++()` escape.  `HasUnits` checks work
   normally since the dimensions are identical to their SI equivalents.

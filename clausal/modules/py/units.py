@@ -196,6 +196,8 @@ Mole         = _make_unit_pred_base("Mole")
 Candela      = _make_unit_pred_base("Candela")
 # Dimensionless (empty dims) — wraps a plain number as Quantity({})
 Dimensionless = _make_unit_pred("Dimensionless", {})
+# Digital information (IEC 80000-13)
+Bit          = _make_unit_pred_base("Bit")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI prefix constants
@@ -233,6 +235,21 @@ atto:  float = 1e-18
 zepto: float = 1e-21
 yocto: float = 1e-24
 
+# ── IEC binary prefix constants (powers of 1024) ──────────────────────────────
+# Plain numbers — multiply against unit vectors in ++ expressions:
+#
+#     ++(4 * gibi * Byte(1))        # 4 GiB  →  Quantity(4_294_967_296 * 8, {Bit: 1})
+#     ++(100 * mebi * Byte(1))      # 100 MiB
+#
+# These are NOT predicates and cannot appear inside n(Unit) parentheses.
+
+kibi: float = 2**10    # 1_024
+mebi: float = 2**20    # 1_048_576
+gibi: float = 2**30    # 1_073_741_824
+tebi: float = 2**40
+pebi: float = 2**50
+exbi: float = 2**60
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Scaled SI unit predicates  (all normalise to SI base units)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -263,6 +280,32 @@ Hour         = _make_unit_pred("Hour",         {Second: 1}, scale=3_600.0)
 Day          = _make_unit_pred("Day",          {Second: 1}, scale=86_400.0)
 Week         = _make_unit_pred("Week",         {Second: 1}, scale=604_800.0)
 JulianYear   = _make_unit_pred("JulianYear",   {Second: 1}, scale=31_557_600.0)
+
+# ── Information (stored as bits) ──────────────────────────────────────────────
+# Bit is the IEC 80000-13 base unit; all values are normalised to bits.
+
+Byte         = _make_unit_pred("Byte",         {Bit: 1}, scale=8.0)
+
+# Decimal (SI-prefixed) multiples — use existing kilo/mega/… constants with
+# Byte(1) or Bit(1) for arbitrary compound expressions.
+Kilobyte     = _make_unit_pred("Kilobyte",     {Bit: 1}, scale=8e3)
+Megabyte     = _make_unit_pred("Megabyte",     {Bit: 1}, scale=8e6)
+Gigabyte     = _make_unit_pred("Gigabyte",     {Bit: 1}, scale=8e9)
+Terabyte     = _make_unit_pred("Terabyte",     {Bit: 1}, scale=8e12)
+
+Kilobit      = _make_unit_pred("Kilobit",      {Bit: 1}, scale=1e3)
+Megabit      = _make_unit_pred("Megabit",      {Bit: 1}, scale=1e6)
+Gigabit      = _make_unit_pred("Gigabit",      {Bit: 1}, scale=1e9)
+
+# Binary (IEC-prefixed) multiples
+Kibibyte     = _make_unit_pred("Kibibyte",     {Bit: 1}, scale=8 * 2**10)
+Mebibyte     = _make_unit_pred("Mebibyte",     {Bit: 1}, scale=8 * 2**20)
+Gibibyte     = _make_unit_pred("Gibibyte",     {Bit: 1}, scale=8 * 2**30)
+Tebibyte     = _make_unit_pred("Tebibyte",     {Bit: 1}, scale=8 * 2**40)
+
+Kibibit      = _make_unit_pred("Kibibit",      {Bit: 1}, scale=float(2**10))
+Mebibit      = _make_unit_pred("Mebibit",      {Bit: 1}, scale=float(2**20))
+Gibibit      = _make_unit_pred("Gibibit",      {Bit: 1}, scale=float(2**30))
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Named derived SI unit predicates

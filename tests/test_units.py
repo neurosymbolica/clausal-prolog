@@ -1459,3 +1459,190 @@ class TestImperialUnits:
         from clausal.modules.py.imperial import mph
         speed = 60 * mph
         assert pytest.approx(speed.value, rel=1e-5) == 26.8224
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Digital information units (IEC 80000-13)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestInformationUnits:
+    """Bit is the base unit; all values are stored internally in bits."""
+
+    # ── Base unit ─────────────────────────────────────────────────────────────
+
+    def test_bit_is_base_unit(self):
+        from clausal.modules.py.units import Bit
+        result = Bit(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 1
+
+    def test_bit_dim_key_is_predicate(self):
+        from clausal.modules.py.units import Bit
+        key = list(Bit(1).dims.keys())[0]
+        assert key is Bit
+
+    # ── Byte = 8 bits ─────────────────────────────────────────────────────────
+
+    def test_byte_is_8_bits(self):
+        from clausal.modules.py.units import Bit, Byte
+        result = Byte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8.0
+
+    def test_byte_10_is_80_bits(self):
+        from clausal.modules.py.units import Bit, Byte
+        assert Byte(10).value == 80.0
+
+    # ── Decimal (SI-prefixed) byte multiples ──────────────────────────────────
+
+    def test_kilobyte_forward(self):
+        from clausal.modules.py.units import Bit, Kilobyte
+        result = Kilobyte(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 8_000.0
+
+    def test_megabyte_forward(self):
+        from clausal.modules.py.units import Bit, Megabyte
+        result = Megabyte(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 8_000_000.0
+
+    def test_gigabyte_forward(self):
+        from clausal.modules.py.units import Bit, Gigabyte
+        result = Gigabyte(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 8_000_000_000.0
+
+    def test_terabyte_forward(self):
+        from clausal.modules.py.units import Bit, Terabyte
+        result = Terabyte(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 8e12
+
+    # ── Decimal (SI-prefixed) bit multiples ───────────────────────────────────
+
+    def test_kilobit_forward(self):
+        from clausal.modules.py.units import Bit, Kilobit
+        result = Kilobit(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 1_000.0
+
+    def test_megabit_forward(self):
+        from clausal.modules.py.units import Bit, Megabit
+        result = Megabit(100)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 100_000_000.0
+
+    def test_gigabit_forward(self):
+        from clausal.modules.py.units import Bit, Gigabit
+        result = Gigabit(1)
+        assert result.dims == {Bit: 1}
+        assert pytest.approx(result.value) == 1_000_000_000.0
+
+    # ── Binary (IEC-prefixed) byte multiples ──────────────────────────────────
+
+    def test_kibibyte_forward(self):
+        from clausal.modules.py.units import Bit, Kibibyte
+        result = Kibibyte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8 * 1024
+
+    def test_mebibyte_forward(self):
+        from clausal.modules.py.units import Bit, Mebibyte
+        result = Mebibyte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8 * 2**20
+
+    def test_gibibyte_forward(self):
+        from clausal.modules.py.units import Bit, Gibibyte
+        result = Gibibyte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8 * 2**30
+
+    def test_tebibyte_forward(self):
+        from clausal.modules.py.units import Bit, Tebibyte
+        result = Tebibyte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8 * 2**40
+
+    # ── Binary (IEC-prefixed) bit multiples ───────────────────────────────────
+
+    def test_kibibit_forward(self):
+        from clausal.modules.py.units import Bit, Kibibit
+        result = Kibibit(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 2**10
+
+    def test_mebibit_forward(self):
+        from clausal.modules.py.units import Bit, Mebibit
+        result = Mebibit(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 2**20
+
+    def test_gibibit_forward(self):
+        from clausal.modules.py.units import Bit, Gibibit
+        result = Gibibit(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 2**30
+
+    # ── Binary prefix constants ───────────────────────────────────────────────
+
+    def test_kibi_value(self):
+        from clausal.modules.py.units import kibi
+        assert kibi == 1024
+
+    def test_mebi_value(self):
+        from clausal.modules.py.units import mebi
+        assert mebi == 2**20
+
+    def test_gibi_value(self):
+        from clausal.modules.py.units import gibi
+        assert gibi == 2**30
+
+    def test_tebi_value(self):
+        from clausal.modules.py.units import tebi
+        assert tebi == 2**40
+
+    def test_pebi_value(self):
+        from clausal.modules.py.units import pebi
+        assert pebi == 2**50
+
+    def test_exbi_value(self):
+        from clausal.modules.py.units import exbi
+        assert exbi == 2**60
+
+    # ── Binary prefix used in expression ─────────────────────────────────────
+
+    def test_gibi_times_byte_vector(self):
+        from clausal.modules.py.units import Bit, Byte, gibi
+        result = 4 * gibi * Byte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 4 * 2**30 * 8
+
+    def test_mebi_times_byte_vector(self):
+        from clausal.modules.py.units import Bit, Byte, mebi
+        result = 100 * mebi * Byte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 100 * 2**20 * 8
+
+    # ── Arithmetic between information quantities ─────────────────────────────
+
+    def test_add_bytes_and_bits(self):
+        """Byte(1) + Bit(8) == Byte(2) since both are {Bit: 1}."""
+        from clausal.modules.py.units import Bit, Byte
+        result = Byte(1) + Bit(8)
+        assert result.dims == {Bit: 1}
+        assert result.value == 16.0
+
+    def test_kibibyte_minus_byte(self):
+        from clausal.modules.py.units import Bit, Kibibyte, Byte
+        result = Kibibyte(1) - Byte(1)
+        assert result.dims == {Bit: 1}
+        assert result.value == 8 * 1023
+
+    def test_information_mismatch_with_length(self):
+        """Adding bits to metres raises UnitsMismatch."""
+        from clausal.modules.py.units import Bit, Metre
+        with pytest.raises(UnitsMismatch):
+            Bit(1) + Metre(1)
