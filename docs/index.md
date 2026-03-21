@@ -84,7 +84,8 @@ for s in m.query(grandparent("tom", G)):
 | [Predicates](predicates.md) | How predicates work as Python classes (PredicateMeta) |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
-| [Constraints](constraints.md) | Dif/2 and CLP(FD) finite-domain constraints |
+| [Constraints](constraints.md) | Dif/2, CLP(FD) finite-domain constraints, and CLP(R) real-domain constraints |
+| [CLP(R)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |

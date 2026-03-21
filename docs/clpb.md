@@ -191,7 +191,9 @@ When `Sat()` is called with variables that already have constraints, all connect
 
 ## Interaction with Other Constraints
 
-CLP(B) uses attribute key `"clpb"`, independent of CLP(FD) (`"fd"`) and dif/2 (`"dif"`). All three hooks fire independently when a variable is bound.
+CLP(B) uses attribute key `"clpb"`, independent of CLP(FD) (`"fd"`), CLP(R) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound.
+
+CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(R) and CLP(FD) — they are distinct types in Clausal's constraint system. If you need to bridge CLP(B) with numeric constraints, bind via `0`/`1`.
 
 ---
 
