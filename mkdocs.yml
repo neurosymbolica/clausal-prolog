@@ -52,6 +52,7 @@ nav:
   - Constraints:
     - Dif & CLP(FD): constraints.md
     - CLP(B): clpb.md
+    - CLP(R): clpr.md
   - Builtins:
     - Predicate Index: builtins.md
     - Meta & Higher-Order: meta_predicates.md
@@ -77,6 +78,11 @@ nav:
     - scipy.spatial: scipy_spatial.md
     - scipy.constants: scipy_constants.md
     - scipy.differentiate: scipy_differentiate.md
+    - scipy.signal: scipy_signal.md
+    - scipy.sparse: scipy_sparse.md
+    - scipy.cluster: scipy_cluster.md
+    - SymPy: sympy.md
+    - Units: units.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
