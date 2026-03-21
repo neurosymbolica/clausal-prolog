@@ -268,3 +268,54 @@ class TestAliases:
         results = sol_var(goal, r)
         assert len(results) == 1
         assert results[0] == ["foo", 1, 2]
+
+
+# ── Builtin predicates as arguments to meta-predicates ────────────────────────
+
+
+class TestBuiltinAsArgument:
+    """Test that builtin predicates can be passed as arguments to higher-order
+    builtins like MapList, Filter, etc."""
+
+    def test_builtin_to_maplist2(self):
+        """IsNumber passed to MapList/2 — succeeds when all elements are numbers."""
+        from clausal.logic.builtins import get_builtin_class
+        is_number = get_builtin_class("IsNumber")
+        assert run_trampoline(_map_list__2, is_number, [1, 2, 3.0]) == 1
+
+    def test_builtin_to_maplist2_fail(self):
+        """IsNumber passed to MapList/2 — fails when a non-number is present."""
+        from clausal.logic.builtins import get_builtin_class
+        is_number = get_builtin_class("IsNumber")
+        assert run_trampoline(_map_list__2, is_number, [1, "a", 3]) == 0
+
+    def test_builtin_to_maplist3(self):
+        """Succ passed to MapList/3 — maps each element to its successor."""
+        from clausal.logic.builtins import get_builtin_class
+        succ = get_builtin_class("Succ")
+        results = run_trampoline_var(_map_list__3, succ, [0, 1, 2])
+        assert results == [[1, 2, 3]]
+
+    def test_builtin_to_filter(self):
+        """IsInt passed to Filter/3 — keeps only integers."""
+        from clausal.logic.builtins import get_builtin_class
+        is_int = get_builtin_class("IsInt")
+        results = run_trampoline_var(_include__3, is_int, [1, 2.5, 3, "x"])
+        assert results == [[1, 3]]
+
+    def test_builtin_to_exclude(self):
+        """IsInt passed to Exclude/3 — removes integers."""
+        from clausal.logic.builtins import get_builtin_class
+        is_int = get_builtin_class("IsInt")
+        results = run_trampoline_var(_exclude__3, is_int, [1, 2.5, 3, "x"])
+        assert results == [[2.5, "x"]]
+
+    def test_builtin_clausal_fixture(self):
+        """Builtins passed as arguments in compiled .clausal code."""
+        from clausal.testing import load_clausal_module, collect_tests, run_test
+        mod = load_clausal_module("tests/fixtures/builtin_as_arg.clausal")
+        tests = collect_tests(mod)
+        assert len(tests) >= 5
+        for desc in tests:
+            r = run_test(mod, desc)
+            assert r.passed, f"Test {desc!r} failed: {r.error}"

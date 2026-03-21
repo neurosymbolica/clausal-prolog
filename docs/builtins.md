@@ -39,6 +39,16 @@ Notation in signature lines:
 
     Each builtin class is a full `PredicateMeta` with `_fields`, `_functor`, `_arity`, `__eq__`, `__repr__`, and `__match_args__`. Stateless builtins also have `_dispatch_fn` set (so `_get_dispatch()` works directly). DB-dependent builtins (Assert, Retract, etc.) have `_dispatch_fn = None` since they need a live database; use them for term construction only.
 
+    **Passing builtins to higher-order predicates:** Builtin predicates can be passed directly as arguments to `MapList`, `Filter`, `Exclude`, `FoldLeft`, `Call/N`, and other higher-order builtins — no lambda wrapper is needed:
+
+    ```
+    AllNumbers(XS) <- MapList(IsNumber, XS)
+    KeepInts(XS, INTS) <- Filter(IsInt, XS, INTS)
+    Incremented(XS, YS) <- MapList(Succ, XS, YS)
+    ```
+
+    This works for any builtin or user-defined predicate whose arity matches what the higher-order predicate expects.
+
     **Multi-arity builtins** (MapList/2,3 and phrase/2,3) are wrapped in `MultiArityBuiltin`, which routes `__call__` by argument count:
 
     ```python

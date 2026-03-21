@@ -4231,6 +4231,15 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Inject builtin predicate classes so bare builtin names (e.g. Member
+    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # _inject_resolved_targets so that BuiltinPredicate adapters for call
+    # targets (which handle DB-dependent builtins correctly) are not
+    # overwritten.  Only fills in names not already in base_globals.
+    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
+        if _bc_name not in base_globals:
+            base_globals[_bc_name] = _bc_val
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
@@ -6268,6 +6277,15 @@ def compile_predicate_shallow(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Inject builtin predicate classes so bare builtin names (e.g. Member
+    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # _inject_resolved_targets so that BuiltinPredicate adapters for call
+    # targets (which handle DB-dependent builtins correctly) are not
+    # overwritten.  Only fills in names not already in base_globals.
+    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
+        if _bc_name not in base_globals:
+            base_globals[_bc_name] = _bc_val
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
