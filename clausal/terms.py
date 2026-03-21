@@ -308,23 +308,18 @@ class Quantity:
     __slots__ = ("_value", "_dims")
 
     def __init__(self, value, dims) -> None:
-        if hasattr(dims, '_dims') and hasattr(dims, '_scale'):
-            # dims is a _UnitsPredicate — extract dims dict and apply scale
-            if dims._scale != 1.0:
-                try:
-                    actual_value = value * dims._scale
-                except TypeError:
-                    # value is a type that doesn't support * (e.g. list) —
-                    # apply scale element-wise
-                    s = dims._scale
-                    actual_value = type(value)(v * s for v in value)
-            else:
-                actual_value = value
+        if isinstance(dims, Quantity):
+            # dims is a Quantity constant (e.g. Kilometer) — multiply:
+            # Quantity(5, Kilometer) → Quantity(5 * 1000, {Metre: 1})
+            self._value = value * dims._value
+            self._dims = dims._dims
+            return
+        if hasattr(dims, '_dims'):
+            # dims is a _UnitsPredicate — extract dims dict
             actual_dims = dims._dims
         else:
-            actual_value = value
             actual_dims = dims
-        self._value = actual_value
+        self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
 
     # ── Properties ──────────────────────────────────────────────────────────
