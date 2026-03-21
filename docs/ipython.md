@@ -53,31 +53,52 @@ valid Python at parse time (it produces a `Starred` AST node) but would be a
 compile-time error; the Clausal AST transformer intercepts it before
 compilation.
 
+The entire expression inside `*(...)` is treated as a **clause body**, not
+ordinary Python.  Operators that have special meaning in Python are rewritten
+into Clausal goals:
+
+| Inside `*(...)` | Goal constructed |
+|----------------|-----------------|
+| `X is Y` | `Unify(left=X, right=Y)` |
+| `X == Y` | `StructuralEq(left=X, right=Y)` |
+| `X != Y` | `StructuralNeq(left=X, right=Y)` |
+| `X < Y` | `Lt(left=X, right=Y)` |
+| `A and B` | `And(left=A, right=B)` |
+| `A or B` | `Or(left=A, right=B)` |
+
 ### Single goal
 
 ```python
 *(Solve(ROWS))
 ```
 
-### Conjunction
+### Conjunction — comma-separated
 
 ```python
 *(Problem(1, ROWS), Sudoku(ROWS))
 ```
 
-All goals share a single `Trail` for correct backtracking across the
-conjunction.
+Multiple comma-separated goals are folded into a left-associative `And` chain
+and share a single solver context for correct backtracking.
+
+### Unification goal
+
+```python
+*(X is ["asdfa", 1, Y, some_term])
+```
+
+`is` inside `*(...)` is **unification**, not Python identity.
 
 ---
 
 ## Variable auto-declaration
 
-Any uppercase name inside a `*(...)` query is automatically assigned a fresh
-`Var()` before the query runs:
+Any uppercase name inside a `*(...)` query is automatically allocated as a
+fresh `Var()` via a walrus assignment embedded in the goal expression itself:
 
 ```python
 *(Member(X, [1, 2, 3]), X > 1)
-# X is declared as Var() automatically
+# X is allocated as Var() automatically
 ```
 
 This mirrors Prolog's convention that uppercase identifiers are variables.  If
@@ -104,6 +125,41 @@ Key bindings follow standard Prolog REPL conventions:
 | `ENTER`, `.` | stop (commit to current solution) |
 | `ESC`, `q` | abort (no output) |
 | `a` | show all remaining solutions |
+
+---
+
+## Terminal colours
+
+In a terminal IPython session (`ipython` command, not Jupyter), ANSI colours
+are enabled automatically.  Unbound variables, atoms, numbers, strings, and
+brackets each get a distinct colour with rainbow bracket-depth cycling.
+
+Control the style from any cell using the injected helpers:
+
+```python
+# Disable colours
+set_style(TermStyle())
+
+# Re-enable default colours
+set_style(TermStyle(colors=ANSI_COLORS))
+
+# Change the anonymous-variable symbol (default: '_')
+set_style(TermStyle(anon_var='?'))
+
+# Custom colour scheme
+set_style(TermStyle(colors={
+    'number':   '\033[33m',
+    'string':   '\033[32m',
+    'atom':     '\033[36m',
+    'var':      '\033[35m',
+    'brackets': ['\033[91m', '\033[93m', '\033[92m', '\033[96m', '\033[94m', '\033[95m'],
+    'reset':    '\033[0m',
+}))
+```
+
+`set_style`, `TermStyle`, and `ANSI_COLORS` are automatically injected into the
+IPython namespace by `enable_ipython`.  Colours are **not** enabled in Jupyter
+kernels, which render output as HTML rather than a terminal.
 
 ---
 

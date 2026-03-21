@@ -232,7 +232,7 @@ class TestTermStr:
     def test_var_unbound(self):
         v = Var()
         s = term_str(v)
-        assert "Var" in s
+        assert s == "_"
 
     def test_compound(self):
         assert term_str(Compound("foo", (1, 2))) == "foo(1, 2)"

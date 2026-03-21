@@ -14,6 +14,7 @@ statement.
 
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
@@ -551,10 +552,97 @@ class PyThunk:
 FStringThunk = PyThunk
 
 
+# ── Term-rendering style ───────────────────────────────────────────────────────
+
+@dataclass
+class TermStyle:
+    """Controls how terms are rendered by :func:`term_str` and :func:`term_pformat`.
+
+    Attributes
+    ----------
+    anon_var : str
+        String printed for an unbound (anonymous) variable.  Default ``'_'``.
+    colors : dict or None
+        ANSI colour map, or ``None`` for no colouring.  Recognised keys:
+
+        ``'number'``
+            int / float / complex literals.
+        ``'string'``
+            Python ``str`` values (rendered with surrounding quotes).
+        ``'atom'``
+            Functor names in compound terms and bare names (``LoadName``).
+        ``'var'``
+            Unbound (anonymous) variables — the *anon_var* string is coloured.
+        ``'brackets'``
+            A list of ANSI codes, one per nesting level.  Cycles when depth
+            exceeds the list length.  Applies to ``(``, ``)``, ``[``, ``]``,
+            ``{``, ``}``.
+        ``'reset'``
+            ANSI reset sequence (default ``'\\033[0m'``).
+    """
+    anon_var: str = '_'
+    colors: dict | None = None
+
+
+#: Ready-made colour scheme using standard ANSI escape codes.
+ANSI_COLORS: dict = {
+    'number':   '\033[33m',    # yellow
+    'string':   '\033[32m',    # green
+    'atom':     '\033[36m',    # cyan
+    'var':      '\033[35m',    # magenta
+    'brackets': ['\033[91m', '\033[93m', '\033[92m', '\033[96m', '\033[94m', '\033[95m'],
+    'reset':    '\033[0m',
+}
+
+_current_style: TermStyle = TermStyle()
+
+
+def get_style() -> TermStyle:
+    """Return the current module-level :class:`TermStyle`."""
+    return _current_style
+
+
+def set_style(style: TermStyle) -> None:
+    """Set the module-level :class:`TermStyle` used by :func:`term_str` and
+    :func:`term_pformat`.
+    """
+    global _current_style
+    _current_style = style
+
+
+_ANSI_ESCAPE = _re.compile(r'\x1b\[[0-9;]*m')
+
+
+def _visible_len(s: str) -> int:
+    """Return the visible (non-ANSI) length of *s*."""
+    return len(_ANSI_ESCAPE.sub('', s))
+
+
+def _c(s: str, kind: str, style: TermStyle, bd: int = 0) -> str:
+    """Wrap *s* with the ANSI escape for *kind* under *style*."""
+    if style.colors is None:
+        return s
+    c = style.colors
+    reset = c.get('reset', '\033[0m')
+    if kind == 'bracket':
+        brackets = c.get('brackets', [])
+        code = brackets[bd % len(brackets)] if brackets else ''
+    else:
+        code = c.get(kind, '')
+    return (code + s + reset) if code else s
+
+
 # ── Readable term representation ───────────────────────────────────────────────
 
-def term_str(t: Any) -> str:
-    """Return a readable string representation of any term."""
+def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
+    """Return a readable string representation of any term.
+
+    *style* controls anonymous-variable display and optional ANSI colouring;
+    defaults to the module-level style (see :func:`set_style`).  *_bd* is the
+    bracket-depth counter used internally for rainbow-bracket colouring.
+    """
+    if style is None:
+        style = _current_style
     if t is None:
         return "None"
     if t is ...:
@@ -562,47 +650,68 @@ def term_str(t: Any) -> str:
     if isinstance(t, bool):
         return str(t)
     if isinstance(t, (int, float, complex)):
-        return repr(t)
+        return _c(repr(t), 'number', style)
     if isinstance(t, str):
-        return repr(t)
+        return _c(repr(t), 'string', style)
     if isinstance(t, bytes):
         return repr(t)
     if isinstance(t, list):
-        return "[" + ", ".join(term_str(e) for e in t) + "]"
+        ob = _c('[', 'bracket', style, _bd)
+        cb = _c(']', 'bracket', style, _bd)
+        return ob + ", ".join(term_str(e, style, _bd + 1) for e in t) + cb
     if isinstance(t, Var):
-        return repr(t)
+        return _c(style.anon_var, 'var', style)
     if isinstance(t, Compound):
-        return str(t)
+        functor_raw = t.functor if isinstance(t.functor, str) else term_str(t.functor, style, _bd)
+        functor_s = _c(functor_raw, 'atom', style) if isinstance(t.functor, str) else functor_raw
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
+        return functor_s + ob + args_str + cb
     if isinstance(t, KWTerm):
-        args = ", ".join(f"{k}={term_str(v)}" for k, v in t.items())
-        return f"{t.functor}({args})"
+        functor_s = _c(t.functor, 'atom', style)
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        args = ", ".join(f"{k}={term_str(v, style, _bd + 1)}" for k, v in t.items())
+        return functor_s + ob + args + cb
     if isinstance(t, DictTerm):
-        inner = ", ".join(f"{term_str(k)}: {term_str(v)}" for k, v in t.items())
-        return "{" + inner + "}"
+        ob = _c('{', 'bracket', style, _bd)
+        cb = _c('}', 'bracket', style, _bd)
+        inner = ", ".join(
+            f"{term_str(k, style, _bd + 1)}: {term_str(v, style, _bd + 1)}"
+            for k, v in t.items()
+        )
+        return ob + inner + cb
     if isinstance(t, SetTerm):
-        inner = ", ".join(term_str(e) for e in sorted(t.elements, key=repr))
-        return "{" + inner + "}"
+        ob = _c('{', 'bracket', style, _bd)
+        cb = _c('}', 'bracket', style, _bd)
+        inner = ", ".join(term_str(e, style, _bd + 1) for e in sorted(t.elements, key=repr))
+        return ob + inner + cb
     cls = type(t)
     op = getattr(cls, "op", None)
 
     # BinOp-style: left op right
     if op is not None and hasattr(t, "left") and hasattr(t, "right"):
-        return f"({term_str(t.left)} {op} {term_str(t.right)})"
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        return ob + term_str(t.left, style, _bd + 1) + f" {op} " + term_str(t.right, style, _bd + 1) + cb
 
     # UnaryOp-style: op operand
     if op is not None and hasattr(t, "operand"):
-        operand_str = term_str(t.operand)
+        operand_str = term_str(t.operand, style, _bd)
         if op.isalpha():
             return f"{op} {operand_str}"
         return f"{op}{operand_str}"
 
     if isinstance(t, Call):
-        args_str = ", ".join(term_str(a) for a in t.args)
-        return f"{term_str(t.func)}({args_str})"
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
+        args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
+        return term_str(t.func, style, _bd) + ob + args_str + cb
     if isinstance(t, LoadName):
-        return t.name
+        return _c(t.name, 'atom', style)
     if isinstance(t, Predicate):
-        return f"{term_str(t.head)} <- {term_str(t.body)}"
+        return f"{term_str(t.head, style, _bd)} <- {term_str(t.body, style, _bd)}"
 
     return repr(t)
 
@@ -612,7 +721,13 @@ def term_str(t: Any) -> str:
 _PFORMAT_INDENT = "  "
 
 
-def term_pformat(t: Any, depth: int = 0, width: int | None = None) -> str:
+def term_pformat(
+    t: Any,
+    depth: int = 0,
+    width: int | None = None,
+    style: TermStyle | None = None,
+    _bd: int = 0,
+) -> str:
     """Pretty-format a term with indentation for multi-line display.
 
     Uses standard (non-canonical) form — operators appear in their expected
@@ -623,13 +738,19 @@ def term_pformat(t: Any, depth: int = 0, width: int | None = None) -> str:
     resolved once from the terminal via ``shutil.get_terminal_size()`` and
     then threaded through all recursive calls so every sub-term uses the
     same value.
+
+    *style* controls anonymous-variable display and optional ANSI colouring;
+    defaults to the module-level style (see :func:`set_style`).  *_bd* is the
+    bracket-depth counter used internally for rainbow-bracket colouring.
     """
+    if style is None:
+        style = _current_style
     if width is None:
         import shutil
         width = shutil.get_terminal_size(fallback=(80, 24)).columns
 
-    flat = term_str(t)
-    if len(flat) + len(_PFORMAT_INDENT) * depth <= width:
+    flat = term_str(t, style, _bd)
+    if _visible_len(flat) + len(_PFORMAT_INDENT) * depth <= width:
         return flat
 
     pad = _PFORMAT_INDENT * depth
@@ -639,41 +760,55 @@ def term_pformat(t: Any, depth: int = 0, width: int | None = None) -> str:
     def _join(items: list) -> str:
         return (",\n" + ipad).join(items)
 
-    def _r(v, d=child):
-        return term_pformat(v, d, width)
+    def _r(v):
+        return term_pformat(v, child, width, style, _bd + 1)
 
     if isinstance(t, list):
         if not t:
-            return "[]"
+            return flat
+        ob = _c('[', 'bracket', style, _bd)
+        cb = _c(']', 'bracket', style, _bd)
         items = [_r(e) for e in t]
-        return "[\n" + ipad + _join(items) + "\n" + pad + "]"
+        return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if isinstance(t, Compound):
         if not t.args:
             return flat
-        functor = t.functor if isinstance(t.functor, str) else _r(t.functor)
+        functor_raw = t.functor if isinstance(t.functor, str) else term_pformat(t.functor, child, width, style, _bd)
+        functor_s = _c(functor_raw, 'atom', style) if isinstance(t.functor, str) else functor_raw
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
         items = [_r(a) for a in t.args]
-        return functor + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+        return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if isinstance(t, KWTerm):
+        functor_s = _c(t.functor, 'atom', style)
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
         items = [f"{k} = {_r(v)}" for k, v in t.items()]
-        return t.functor + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+        return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if isinstance(t, DictTerm):
+        ob = _c('{', 'bracket', style, _bd)
+        cb = _c('}', 'bracket', style, _bd)
         items = [f"{_r(k)}: {_r(v)}" for k, v in t.items()]
-        return "{\n" + ipad + _join(items) + "\n" + pad + "}"
+        return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if isinstance(t, SetTerm):
+        ob = _c('{', 'bracket', style, _bd)
+        cb = _c('}', 'bracket', style, _bd)
         items = [_r(e) for e in sorted(t.elements, key=repr)]
-        return "{\n" + ipad + _join(items) + "\n" + pad + "}"
+        return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     cls = type(t)
     op = getattr(cls, "op", None)
 
     if op is not None and hasattr(t, "left") and hasattr(t, "right"):
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
         left = _r(t.left)
         right = _r(t.right)
-        return "(\n" + ipad + left + "\n" + ipad + op + " " + right + "\n" + pad + ")"
+        return ob + "\n" + ipad + left + "\n" + ipad + op + " " + right + "\n" + pad + cb
 
     if op is not None and hasattr(t, "operand"):
         operand = _r(t.operand)
@@ -684,9 +819,11 @@ def term_pformat(t: Any, depth: int = 0, width: int | None = None) -> str:
     if isinstance(t, Call):
         if not t.args:
             return flat
+        ob = _c('(', 'bracket', style, _bd)
+        cb = _c(')', 'bracket', style, _bd)
         items = [_r(a) for a in t.args]
-        func_str = _r(t.func, depth)
-        return func_str + "(\n" + ipad + _join(items) + "\n" + pad + ")"
+        func_str = term_pformat(t.func, depth, width, style, _bd)
+        return func_str + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if isinstance(t, Predicate):
         head = _r(t.head)
@@ -705,10 +842,14 @@ __all__ = [
     "Compound",
     "DictTerm",
     "SetTerm",
-
     "KWTerm",
     "PyThunk",
     "FStringThunk",
+    # Rendering style
+    "TermStyle",
+    "ANSI_COLORS",
+    "get_style",
+    "set_style",
     # Helpers
     "list_to_cons",
     "cons_to_list",

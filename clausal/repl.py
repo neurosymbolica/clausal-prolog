@@ -128,10 +128,25 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
 
     *_varnames* maps user-written variable names to their Var objects so that
     binding keys use the names the user wrote rather than predicate field names.
+
+    ``True`` is treated as a goal that succeeds once with no bindings (displays
+    as ``true.``).  ``False`` is treated as a goal that fails immediately
+    (displays as ``false.``).
     """
     from clausal.logic.predicate import PredicateMeta
     if not isinstance(type(goal_or_iter), PredicateMeta):
-        return iter(goal_or_iter)
+        if goal_or_iter is True:
+            return iter([{}])
+        if goal_or_iter is False:
+            return iter([])
+        try:
+            return iter(goal_or_iter)
+        except TypeError:
+            raise TypeError(
+                f"Solutions expects a predicate instance or iterator, "
+                f"got {type(goal_or_iter).__name__}: {goal_or_iter!r}\n"
+                f"Hint: Python's 'is' is an identity test, not unification."
+            ) from None
 
     from clausal.logic.variables import Trail, is_var, Var
     from clausal.logic.variables import walk as _walk
@@ -153,6 +168,19 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
             yield {f: _walk(v) for f, v in var_fields.items()}
 
     return _gen()
+
+
+def _run_ipython_goal(goal, variables: dict, ns: dict):
+    """Drive a goal term as a zero-arity query and yield binding dicts.
+
+    *goal* is a simple_ast term (already compiled by TermTransformer).
+    *variables* maps user-written variable names to their Var objects.
+    *ns* is the IPython namespace (used as the logic module's global dict).
+    """
+    from clausal.logic.database import Module
+    from clausal.logic.solve import query
+    module = Module("_ipython_query", module_dict=ns)
+    return query(goal, variables, module)
 
 
 class Solutions:

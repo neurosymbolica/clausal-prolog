@@ -2331,6 +2331,13 @@ class EmbedTransformer(NodeTransformer):
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
+            case Starred():
+                # *(goal_expr) query syntax — leave untouched for
+                # _StarQueryTransformer in IPython, which applies TermTransformer
+                # to the inner expression.  Returning expr_stmt unchanged prevents
+                # EmbedTransformer.visit_Name (X → X.value) from mangling the
+                # names that TermTransformer needs to see as plain Name nodes.
+                return expr_stmt
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):

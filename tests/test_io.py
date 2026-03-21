@@ -312,7 +312,7 @@ class TestPrintTermEdgeCases:
         v = Var()
         t = Trail()
         out = _capture_stdout("PrintTerm", 1, v, t)
-        assert "Var(" in out
+        assert "_" in out
 
 
 # ── WriteToString/2 ───────────────────────────────────────────────────────────
@@ -402,7 +402,7 @@ class TestTermToString:
         vals = solutions(StepGenerator(dispatch, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert len(vals) == 1
-        assert "Var(" in vals[0]
+        assert "_" in vals[0]
 
     def test_compound(self):
         result = Var()

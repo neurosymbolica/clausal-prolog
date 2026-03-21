@@ -34,7 +34,7 @@ import os
 import warnings
 
 from .pythonic_ast import nodes as simple_ast
-from .templating.term_rewriting import EmbedTransformer
+from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule, head_key
 from .logic.compiler import compile_predicate_trampoline, compile_predicate_shallow
 from .logic.predicate import PredicateMeta
@@ -475,93 +475,75 @@ _simple_ast_builtins["BoolImpl"] = BoolImpl
 _ipython_facts: list = []
 _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 
-from clausal.repl import Solutions as _Solutions, _conj as _clausal_conj
+from clausal.repl import Solutions as _Solutions, _run_ipython_goal as _run_ipython_goal
 _simple_ast_builtins["Solutions"] = _Solutions
-_simple_ast_builtins["_clausal_conj"] = _clausal_conj
-
-
-def _uppercase_names_in(node):
-    """Collect uppercase variable names from a post-EmbedTransformer AST subtree.
-
-    After EmbedTransformer, uppercase names appear as ``NAME.value`` attribute
-    nodes.  We extract the ``NAME`` part so we can auto-declare them as Var().
-    """
-    names = set()
-    for n in ast.walk(node):
-        if (isinstance(n, ast.Attribute)
-                and n.attr == 'value'
-                and isinstance(n.value, ast.Name)
-                and n.value.id[0].isupper()):
-            names.add(n.value.id)
-    return names
-
-
-def _var_assign(name, lineno, col_offset):
-    """Build ``NAME = Var()`` as an AST Assign node."""
-    return ast.Assign(
-        targets=[ast.Name(id=name, ctx=ast.Store())],
-        value=ast.Call(
-            func=ast.Name(id='Var', ctx=ast.Load()),
-            args=[], keywords=[],
-        ),
-        lineno=lineno,
-        col_offset=col_offset,
-    )
+_simple_ast_builtins["_run_ipython_goal"] = _run_ipython_goal
 
 
 class _StarQueryTransformer(ast.NodeTransformer):
-    """Rewrite ``*(goals)`` expression statements to Solutions calls.
+    """Rewrite ``*(goal_expr)`` expression statements to Solutions calls.
 
-    ``*(Goal(X))``         → ``X = Var(); Solutions(Goal(X))``
-    ``*(A(X), B(X, Y))``   → ``X = Var(); Y = Var(); Solutions(_clausal_conj(A(X), B(X, Y)))``
+    Inside ``*(…)`` the expression is treated as a clause body goal.
+    ``TermTransformer`` handles variable allocation (via walrus operators) and
+    all operator rewriting (``is`` → ``Unify``, ``and`` → ``And``, etc.).
 
-    Uppercase names in the goals are automatically declared as fresh Var()
-    instances, mirroring Prolog's treatment of variables in queries.
+    ``*(Goal(X))``
+        → ``Solutions(_run_ipython_goal(Goal((X:=Var())), {'X': X}, globals()))``
+
+    ``*(A(X), B(X, Y))``
+        → ``Solutions(_run_ipython_goal(And(left=A((X:=Var())), right=B(X, (Y:=Var()))), {'X': X, 'Y': Y}, globals()))``
 
     The form parses as ``Expr(Starred(...))`` which would be a compile-time
     error in normal Python; we intercept it here before compilation.
+    ``EmbedTransformer.visit_Expr`` leaves ``Starred`` nodes untouched so that
+    ``visit_Name`` (X → X.value) does not mangle names that ``TermTransformer``
+    needs to see as plain ``Name`` nodes.
     """
 
     def visit_Expr(self, node):
         if not isinstance(node.value, ast.Starred):
             return self.generic_visit(node)
         inner = node.value.value
+        tt = TermTransformer()
 
-        # Auto-declare uppercase names as fresh Var() before the query.
-        names = _uppercase_names_in(inner)
-        var_nodes = [_var_assign(n, node.lineno, node.col_offset)
-                     for n in sorted(names)]
-
-        # _varnames={'X': X, 'Y': Y, ...} — passed so binding keys use the
-        # names the user wrote rather than the predicate's field names.
-        varnames_kw = ast.keyword(
-            arg='_varnames',
-            value=ast.Dict(
-                keys=[ast.Constant(value=n) for n in sorted(names)],
-                values=[ast.Name(id=n, ctx=ast.Load()) for n in sorted(names)],
-            ),
-        )
-
-        # *(A, B, C) → Solutions(_clausal_conj(A, B, C, _varnames=...))
         if isinstance(inner, ast.Tuple):
-            solutions = ast.Expr(value=ast.Call(
-                func=ast.Name(id='Solutions', ctx=ast.Load()),
-                args=[ast.Call(
-                    func=ast.Name(id='_clausal_conj', ctx=ast.Load()),
-                    args=inner.elts,
-                    keywords=[varnames_kw],
-                )],
-                keywords=[],
-            ))
+            elts = [tt.visit(e) for e in inner.elts]
+            goal_ast = elts[0]
+            for elt in elts[1:]:
+                goal_ast = ast.fix_missing_locations(ast.copy_location(
+                    ast.Call(
+                        func=ast.Name(id='And', ctx=ast.Load()),
+                        args=[],
+                        keywords=[
+                            ast.keyword(arg='left', value=goal_ast),
+                            ast.keyword(arg='right', value=elt),
+                        ],
+                    ), node,
+                ))
         else:
-            # *(Goal) → Solutions(Goal, _varnames=...)
-            solutions = ast.Expr(value=ast.Call(
-                func=ast.Name(id='Solutions', ctx=ast.Load()),
-                args=[inner],
-                keywords=[varnames_kw],
-            ))
+            goal_ast = tt.visit(inner)
 
-        return var_nodes + [solutions]
+        names = sorted(tt.seen_vars)
+        varnames_ast = ast.Dict(
+            keys=[ast.Constant(value=n) for n in names],
+            values=[ast.Name(id=n, ctx=ast.Load()) for n in names],
+        )
+        solutions = ast.Expr(value=ast.Call(
+            func=ast.Name(id='Solutions', ctx=ast.Load()),
+            args=[ast.Call(
+                func=ast.Name(id='_run_ipython_goal', ctx=ast.Load()),
+                args=[
+                    goal_ast,
+                    varnames_ast,
+                    ast.Call(func=ast.Name(id='globals', ctx=ast.Load()),
+                             args=[], keywords=[]),
+                ],
+                keywords=[],
+            )],
+            keywords=[],
+        ))
+        ast.fix_missing_locations(solutions)
+        return solutions
 
 
 class _FreshEmbedTransformer(ast.NodeTransformer):
@@ -583,6 +565,27 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
             return tree
 
 
+def _auto_enable_colors(shell) -> None:
+    """Enable ANSI term colours if the IPython shell is a colour-capable terminal.
+
+    Only activates for ``TerminalInteractiveShell`` (i.e. the ``ipython``
+    command-line REPL, which uses prompt_toolkit).  Jupyter notebook kernels
+    don't have ``pt_app`` and shouldn't receive raw ANSI escape codes.
+    """
+    try:
+        # pt_app is present on TerminalInteractiveShell (IPython ≥ 7).
+        # It is absent on ZMQInteractiveShell (Jupyter) and plain Python.
+        if not hasattr(shell, 'pt_app'):
+            return
+        # Respect the user's explicit colour preference.
+        if getattr(shell, 'colors', 'Linux') == 'NoColor':
+            return
+        from clausal.terms import set_style, TermStyle, ANSI_COLORS
+        set_style(TermStyle(colors=ANSI_COLORS))
+    except Exception:
+        pass
+
+
 def enable_ipython(ipython_globals, shell=None):
     """Enable the embedding DSL in an IPython session.
 
@@ -594,6 +597,16 @@ def enable_ipython(ipython_globals, shell=None):
     After this:
     - The ``--expr`` syntax rewrites terms into simple_ast constructor calls.
     - All simple_ast names (LoadName, Call, IntLiteral, …) are in scope.
+    - ANSI term colours are auto-enabled for terminal IPython sessions.
+
+    Colour control
+    --------------
+    ``set_style``, ``TermStyle``, and ``ANSI_COLORS`` are injected into the
+    IPython namespace so you can adjust or disable colours at any time::
+
+        set_style(TermStyle())                       # no colours
+        set_style(TermStyle(colors=ANSI_COLORS))     # default colour scheme
+        set_style(TermStyle(anon_var='?'))            # custom anon-var symbol
     """
     if shell is None:
         shell = ipython_globals["get_ipython"]()
@@ -607,6 +620,12 @@ def enable_ipython(ipython_globals, shell=None):
                             category=SyntaxWarning)
     shell.ast_transformers.append(_FreshEmbedTransformer())
     ipython_globals.update(_simple_ast_builtins)
+    # Inject colour-control helpers so users can tweak from any cell.
+    from clausal.terms import set_style as _set_style, TermStyle as _TermStyle, ANSI_COLORS as _ANSI_COLORS
+    ipython_globals['set_style'] = _set_style
+    ipython_globals['TermStyle'] = _TermStyle
+    ipython_globals['ANSI_COLORS'] = _ANSI_COLORS
+    _auto_enable_colors(shell)
 
 
 def _try_auto_enable_ipython():
