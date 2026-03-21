@@ -280,6 +280,24 @@ Knot         = _make_unit_pred("Knot",         {Metre: 1, Second: -1}, scale=1_8
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# SI standard abbreviation aliases
+# ═════════════════════════════════════════════════════════════════════════════
+# Lowercase aliases for the SI base units whose standard symbols are safe to
+# use as Clausal identifiers (i.e. not all-uppercase, which would be parsed
+# as logic variables).
+#
+# Safe to alias:  m, kg, s, mol, cd
+# Not aliased:    A (Ampere) and K (Kelvin) — single uppercase letters are
+#                 logic variables in Clausal; use the full names instead.
+
+m   = Metre
+kg  = Kilogram
+s   = Second
+mol = Mole
+cd  = Candela
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Unit vectors: Quantity(1, ...) values for building expressions
 # ═════════════════════════════════════════════════════════════════════════════
 

@@ -8,22 +8,22 @@ named-unit predicates, and syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units, [Metre, Kilogram, Second, Newton, StripUnits])
+-import_from(py.units, [m, kg, s, Newton, HasUnits, StripUnits])
 
 # Build a dimensioned value with n(Unit) sugar
-distance := 100(Metre)          # Quantity(100, {Metre: 1})
-time_    := 9.58(Second)        # Quantity(9.58, {Second: 1})
+distance := 100(m)              # Quantity(100, {Metre: 1})
+time_    := 9.58(s)             # Quantity(9.58, {Second: 1})
 speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
 
-# Check dimension type via HasUnits
-HasUnits(speed, Metre/Second)   # succeeds: dims match
+# Check dimension type
+HasUnits(speed, m/s)            # succeeds: dims match
 
 # Extract numeric component
-StripUnits(9.8(Newton), V),        # V = 9.8
+StripUnits(9.8(Newton), V)      # V = 9.8
 
 # Constrain an unbound variable to a dimension
-HasUnits(F, Newton),            # F must eventually be bound to a Newton value
-F is 9.8(Newton)                # binds F, hook checks dims match
+HasUnits(F, Newton),            # F must eventually be a Newton quantity
+F is 9.8(Newton)                # binds F; hook checks dims match
 ```
 
 ---
@@ -33,16 +33,21 @@ F is 9.8(Newton)                # binds F, hook checks dims match
 ### `n(Unit)` — literal measurement
 
 ```python
-5(Metre)          # → Quantity(5,   {Metre: 1})
-9.8(Newton)       # → Quantity(9.8, {Kilogram: 1, Metre: 1, Second: -2})
--3(Second)        # → Quantity(-3,  {Second: 1})
+5(m)          # → Quantity(5,   {Metre: 1})
+9.8(Newton)   # → Quantity(9.8, {Kilogram: 1, Metre: 1, Second: -2})
+-3(s)         # → Quantity(-3,  {Second: 1})
 ```
 
-Python parses `5(Metre)` as a call — the transformer intercepts it and rewrites
-it to `++(Quantity(5, Metre))`. Any numeric literal (int or float) combined with a
-single named unit predicate works. Compound unit expressions also work:
-`5(Metre/Second)` → `++(Quantity(5, Metre/Second))`. For unusual units, use
-`++()` directly:
+Python parses `5(m)` as a call — the transformer intercepts it and rewrites it
+to `++(Quantity(5, m))`. Any numeric literal combined with a unit predicate
+works. Compound unit expressions also work:
+
+```python
+5(m/s)        # → Quantity(5,   {Metre: 1, Second: -1})
+10(m**2)      # → Quantity(10,  {Metre: 2})
+```
+
+For unusual constructions, use `++()` directly:
 
 ```python
 custom := ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
@@ -59,60 +64,68 @@ An empty-argument call on any numeric literal produces a dimensionless
 0()       # → Quantity(0,    {})
 ```
 
-This is equivalent to `++(Quantity(n, {}))` or calling the `Dimensionless`
-predicate. The value participates in unit arithmetic — dividing two compatible
-quantities to get a ratio is a common result:
+This is equivalent to `++(Quantity(n, {}))`. The value participates in unit
+arithmetic — dividing two quantities of the same unit to get a ratio is a
+common result:
 
 ```python
-RATIO := 50(Metre) / 10(Metre)   # → Quantity(5.0, {})
-HasUnits(RATIO, Dimensionless)    # succeeds
-RATIO == 5.0()                    # succeeds
+RATIO := 50(m) / 10(m)          # → Quantity(5.0, {})
+HasUnits(RATIO, Dimensionless)   # succeeds
+RATIO == 5.0()                   # succeeds
 ```
 
 ### `X(Unit)` — construction from a runtime value
 
-When the callee is a logic variable, `MY_VAL(Unit)` desugars to `++(Quantity(MY_VAL, Unit))`:
+When the callee is a logic variable, `MY_VAL(Unit)` desugars to
+`++(Quantity(MY_VAL, Unit))`:
 
 ```python
 N := 9.8
-F := N(Newton)    # → ++(Quantity(N, Newton)) = Quantity(9.8, {Newton dims})
+F := N(Newton)          # → ++(Quantity(N, Newton)) = Quantity(9.8, Newton dims)
 ```
 
-This is the runtime-value counterpart of `9.8(Newton)` — same construction, variable value.
-Compound unit expressions work too: `N(Metre/Second)`.
+This is the runtime-value counterpart of `9.8(Newton)` — same construction,
+variable value. Compound unit expressions work too:
+
+```python
+SPEED := 10
+V := SPEED(m/s)         # Quantity(10, {Metre: 1, Second: -1})
+```
 
 ### `HasUnits(X, Unit)` — dimension constraint / check
 
-For dimension constraints (goal position), use `HasUnits` explicitly:
+For dimension checks and constraints (goal position), use `HasUnits` explicitly:
 
 ```python
-HasUnits(F, Newton)              # → HasUnits(F, Newton)
+HasUnits(F, Newton)              # check or constrain: F must have Newton dims
 ```
 
-`HasUnits/2` posts an AttVar constraint on `F`: any subsequent unification
-of `F` fires a hook that checks the bound value has matching dimensions.
-The constraint backtracks correctly with the trail.
+`HasUnits/2` posts an AttVar constraint on `F` if it is unbound: any subsequent
+unification of `F` fires a hook that checks the bound value has matching
+dimensions. The constraint backtracks correctly with the trail.
 
 ```python
 # Constraint posted, then satisfied
 HasUnits(F, Newton),
-F is 9.8(Newton),      # hook checks {Newton dims} == {Newton dims} → OK
-HasUnits(F, Newton)    # check: succeeds
+F is 9.8(Newton),       # hook checks dims match → OK
+HasUnits(F, Newton)     # ground check: still succeeds
 
 # Constraint posted, then violated → entire conjunction fails
 HasUnits(F, Newton),
-F is 1(Second)         # hook rejects: Newton dims ≠ Second dims
+F is 1(s)               # hook rejects: Newton dims ≠ Second dims
 ```
 
-Compound unit expressions work directly in `HasUnits`:
+Compound unit expressions work directly in `HasUnits` — the transformer
+auto-wraps them:
 
 ```python
-HasUnits(V, Metre/Second)          # velocity constraint
-HasUnits(A, Metre/Second**2)       # acceleration constraint
-HasUnits(F, Kilogram*Metre/Second**2)  # force constraint
+HasUnits(V, m/s)                      # velocity check/constraint
+HasUnits(A, m/s**2)                   # acceleration
+HasUnits(F, kg*m/s**2)               # force (same dims as Newton)
 ```
 
-`HasUnits` cannot appear on the RHS of `:=` — that position expects an expression.
+`HasUnits` cannot appear on the RHS of `:=` — that position expects an
+expression.
 
 ---
 
@@ -129,6 +142,14 @@ d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 `dims` returns an immutable `MappingProxyType` mapping unit-predicate objects
 (not strings) to integer exponents. Zero exponents are removed on construction.
 The empty proxy `{}` is dimensionless.
+
+`Quantity` also accepts a unit predicate as its second argument — scale is
+applied automatically:
+
+```python
+Quantity(5, Kilometre)   # → Quantity(5000.0, {Metre: 1})
+Quantity(9.8, Newton)    # → Quantity(9.8, {Kilogram:1, Metre:1, Second:-2})
+```
 
 `Quantity` holds a ground numeric value — never a logic variable. An
 uninstantiated dimensioned slot is a plain Var with a `"units"` AttVar
@@ -161,25 +182,29 @@ Dimensionless values (`dims == {}`) interoperate freely with plain numbers.
 Import in `.clausal` files:
 
 ```python
--import_from(py.units, [Metre, Newton, StripUnits])
+-import_from(py.units, [m, kg, s, Newton, HasUnits, StripUnits])
 ```
+
+### SI base unit abbreviations
+
+The standard SI abbreviations are provided as importable aliases. Note that
+`A` (Ampere) and `K` (Kelvin) are omitted because single uppercase letters are
+parsed as logic variables in Clausal — use the full names instead.
+
+| Alias | Full name  | Dims             | SI symbol |
+|-------|------------|------------------|-----------|
+| `m`   | `Metre`    | `{Metre: 1}`     | m         |
+| `kg`  | `Kilogram` | `{Kilogram: 1}`  | kg        |
+| `s`   | `Second`   | `{Second: 1}`    | s         |
+| `mol` | `Mole`     | `{Mole: 1}`      | mol       |
+| `cd`  | `Candela`  | `{Candela: 1}`   | cd        |
+| —     | `Ampere`   | `{Ampere: 1}`    | A *(clash)* |
+| —     | `Kelvin`   | `{Kelvin: 1}`    | K *(clash)* |
 
 ### Named-unit predicates
 
 `Unit(value)` called from Python (via `++` escape or `n(Unit)` sugar) returns
 `Quantity(value * scale, dims)` directly.
-
-#### SI base units
-
-| Predicate  | Dims          | Scale |
-|------------|---------------|-------|
-| `Metre`    | `{Metre: 1}`  | 1     |
-| `Kilogram` | `{Kilogram: 1}` | 1   |
-| `Second`   | `{Second: 1}` | 1     |
-| `Ampere`   | `{Ampere: 1}` | 1     |
-| `Kelvin`   | `{Kelvin: 1}` | 1     |
-| `Mole`     | `{Mole: 1}`   | 1     |
-| `Candela`  | `{Candela: 1}` | 1    |
 
 #### Scaled length (store as metres)
 
@@ -223,10 +248,10 @@ Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `PoundsPerSquareInch`,
 
 ### Utility predicates
 
-| Predicate                     | Description |
-|-------------------------------|-------------|
-| `DimensionOf(D, Dims)`        | Unify `Dims` with a `DictTerm` of the dimension dict |
-| `StripUnits(D, V)`       | Unify `V` with the numeric component |
+| Predicate                  | Description |
+|----------------------------|-------------|
+| `DimensionOf(D, Dims)`     | Unify `Dims` with a `DictTerm` of the dimension dict |
+| `StripUnits(D, V)`         | Unify `V` with the numeric component |
 | `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
 `DimensionOf` also works on uninstantiated Vars with a dimension constraint —
@@ -248,14 +273,14 @@ non-empty dims, non-Quantity term).
 
 ### Physical constants
 
-| Name                 | Value (SI)                           | Dims |
-|----------------------|--------------------------------------|------|
-| `SpeedOfLight`       | 2.998 × 10⁸ m/s                     | `{m:1, s:-1}` |
-| `PlanckConstant`     | 6.626 × 10⁻³⁴ J·s                  | `{kg:1, m:2, s:-1}` |
-| `BoltzmannConstant`  | 1.381 × 10⁻²³ J/K                  | `{kg:1, m:2, s:-2, K:-1}` |
-| `StandardGravity`    | 9.80665 m/s²                        | `{m:1, s:-2}` |
-| `ElementaryCharge`   | 1.602 × 10⁻¹⁹ C                    | `{A:1, s:1}` |
-| `GravitationalConstant` | 6.674 × 10⁻¹¹ m³/(kg·s²)       | `{m:3, kg:-1, s:-2}` |
+| Name                    | Value (SI)                     | Dims |
+|-------------------------|--------------------------------|------|
+| `SpeedOfLight`          | 2.998 × 10⁸ m/s               | `{m:1, s:-1}` |
+| `PlanckConstant`        | 6.626 × 10⁻³⁴ J·s             | `{kg:1, m:2, s:-1}` |
+| `BoltzmannConstant`     | 1.381 × 10⁻²³ J/K             | `{kg:1, m:2, s:-2, K:-1}` |
+| `StandardGravity`       | 9.80665 m/s²                   | `{m:1, s:-2}` |
+| `ElementaryCharge`      | 1.602 × 10⁻¹⁹ C               | `{A:1, s:1}` |
+| `GravitationalConstant` | 6.674 × 10⁻¹¹ m³/(kg·s²)     | `{m:3, kg:-1, s:-2}` |
 
 ---
 
@@ -300,8 +325,64 @@ The `python_error/2` term is the general form for any Python exception that
 escapes through a `++()` escape — see [Exception Handling](exceptions.md) for
 the full treatment.
 
-If the catcher pattern does not match the raised exception, the exception is
-re-raised and continues to propagate.
+---
+
+## Program verification with `HasUnits`
+
+### Runtime assertions as type checking
+
+`HasUnits` goals are runtime assertions about dimensional types. They can be
+thought of exactly like Python's `assert` statement: present during development
+and testing, removable for production once correctness is established.
+
+The intended workflow:
+
+1. **Development**: annotate inputs, outputs, and intermediate values with
+   `HasUnits` calls. Run tests. Any dimensional error is caught immediately with
+   a precise failure point.
+2. **Verification**: once the test suite passes with all assertions active, the
+   program is known to satisfy its dimensional invariants on those execution
+   paths.
+3. **Production**: strip `HasUnits` goals from compiled code for zero overhead.
+
+This is more expressive than adding `HasUnits` calls into running code manually;
+the key insight is that the test suite *is* the type checker.
+
+### Why this is more powerful than static type systems
+
+Rice's theorem states that no static analysis can decide all semantic properties
+of programs. Dimensional correctness is a semantic property — it depends on the
+runtime values that flow through a program, not just on the syntactic structure.
+A static type system can only approximate this, ruling out some errors but
+necessarily rejecting some valid programs or missing some invalid ones.
+
+Runtime assertions with toggleable checking sidestep this limitation:
+
+- The assertions express the *exact* invariants the program must satisfy, with
+  no approximation.
+- They are checked on real execution paths with real values, including ones
+  that arise only from CLP(FD) search, external input, or runtime arithmetic.
+- They compose freely with all other Clausal constructs: negation-as-failure,
+  `catch/3`, backtracking, constraint solving.
+
+This is the same trade-off as design-by-contract (Eiffel, Python's `assert`,
+Racket contracts): richer expressiveness in exchange for runtime rather than
+compile-time guarantees.
+
+### Compile-time checking
+
+Runtime verification and static analysis are complementary, not mutually
+exclusive. The information encoded in `HasUnits` calls is available at compile
+time — the transformer sees the unit expressions as syntax. A future static
+pass could:
+
+- Infer `Quantity` types for variables bound by `:=`
+- Propagate dimension information through arithmetic expressions
+- Report `HasUnits` calls that are provably unreachable or provably always-failing
+  before the program runs
+
+Such a pass would catch a class of errors earlier without replacing the runtime
+system, which remains the ground truth for correctness.
 
 ---
 
@@ -313,8 +394,6 @@ re-raised and continues to propagate.
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
   (`Metre`, `Kilogram`, etc.) are the keys in `dims`. Custom dimension keys
   are supported — any hashable Python value works.
-- **`n(Unit)` compound unit support**: compound unit expressions now work
-  as the `n(Unit)` arg: `5(Metre/Second)`, `10(Metre**2)`, etc. — the
-  transformer wraps them via `Quantity(n, compound_unit)`.
-  Compound expressions also work in `HasUnits`:
-  `HasUnits(V, Metre/Second)`, `HasUnits(A, Metre/Second**2)`, `HasUnits(F, Kilogram*Metre/Second**2)`.
+- **`A` and `K` aliases omitted**: the standard SI symbols for Ampere and
+  Kelvin are single uppercase letters, which Clausal parses as logic variables.
+  Use `Ampere` and `Kelvin` (or import the full names).
