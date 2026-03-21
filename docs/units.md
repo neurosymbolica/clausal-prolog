@@ -555,6 +555,8 @@ Each SciPy predicate falls into one of four categories:
 | `scipy_special` | Supported | Requires dimensionless inputs |
 | `scipy_fft` | Supported | Pass-through (output dims = input dims) |
 | `scipy_differentiate` | Supported | `df` dims = `f_dims - x_dims`; callable probing detects `f` output dims |
+| `scipy_integrate` | Supported | Array quadrature: `y_dims + x_dims`; callable quadrature: probes `f`, `f_dims + x_dims` |
+| `scipy_interpolate` | Supported | Dims stored in handle; eval/integral/derivative propagate algebraically |
 
 See each module's documentation for details.
 

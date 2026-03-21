@@ -319,6 +319,52 @@ RbfInterp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
 
 ---
 
+## Dimensional analysis (Quantity support)
+
+All interpolation predicates are **quantity-aware**: when `X` and `Y` arrays
+are `Quantity` objects, units are stored in the handle and propagated through
+evaluation, integration, and differentiation.
+
+### How it works
+
+The handle registry stores `(interpolant, x_dims, y_dims)` triples.  When
+`Make*` receives `Quantity` inputs, it strips the values for scipy and records
+the dims.  When no `Quantity` inputs are present, `x_dims` and `y_dims` are
+`None` and all evaluation returns plain values — **zero overhead**.
+
+### Unit propagation rules
+
+| Operation | Output dims |
+|---|---|
+| `EvalSpline(H, X, R)` | `y_dims` |
+| `EvalSpline(H, X, NU, R)` | `y_dims - NU * x_dims` |
+| `SplineIntegral(H, A, B, R)` | `y_dims + x_dims` |
+| `SplineDerivative(H, R)` | new handle with `y_dims - x_dims` |
+| `SplineDerivative(H, ORDER, R)` | new handle with `y_dims - ORDER * x_dims` |
+| `SplineRoots(H, R)` | list of values with `x_dims` |
+| `EvalRegularGrid(H, XI, R)` | `y_dims` |
+| `EvalRadialBasis(H, X, R)` | `y_dims` |
+
+### Example
+
+```
+-import_from(scipy_interpolate, [MakeSpline, EvalSpline, SplineIntegral, Free])
+-import_from(py.units, [Metre, Second, HasUnits])
+
+% Position (m) as a function of time (s)
+Test("spline with units") <- (
+    MakeSpline(++(numpy.array([0.0(Second), 1.0(Second), 2.0(Second)])),
+               ++(numpy.array([0.0(Metre), 5.0(Metre), 20.0(Metre)])),
+               H),
+    EvalSpline(H, 1.0(Second), Y),
+    HasUnits(Y, Metre),
+    SplineIntegral(H, 0.0(Second), 2.0(Second), AREA),
+    HasUnits(AREA, Metre*Second),
+    Free(H))
+```
+
+---
+
 ## Notes
 
 - **Array inputs**: pass NumPy arrays or Python lists via `++()`.

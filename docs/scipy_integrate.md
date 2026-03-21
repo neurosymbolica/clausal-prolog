@@ -283,6 +283,66 @@ CompareIntegrals(Y_, TRAP_, SIMP_) <- (
 
 ---
 
+## Dimensional analysis (Quantity support)
+
+All integration predicates (except ODE solvers) are **quantity-aware**: when
+inputs are `Quantity(value, dims)` objects, units are propagated through the
+result automatically.
+
+### Array-based quadrature
+
+`Trapezoid`, `Simpson`, and `CumulativeTrapezoid` compute output dims as:
+
+| Form | Output dims |
+|---|---|
+| `Trapezoid(Y, X, R)` | `y_dims + x_dims` |
+| `Trapezoid(Y, R)` | `y_dims` (unit spacing is dimensionless) |
+| `Simpson(Y, X, R)` | `y_dims + x_dims` |
+| `CumulativeTrapezoid(Y, X, R)` | `y_dims + x_dims` |
+
+### Callable-based quadrature
+
+`Quad`, `QuadVec`, and other callable quadrature predicates use the same
+probe-strip-wrap pattern as `scipy_differentiate`:
+
+1. **Probe** — call `f(a)` once to discover whether `f` returns a `Quantity`.
+2. **Strip and call** — pass `a.value`, `b.value` to scipy; if `f` is
+   quantity-aware, re-wrap raw values before forwarding to `f`.
+3. **Wrap output** — `value` and `error` fields get dims `f_dims + x_dims`.
+
+### Fast path
+
+When no input is a `Quantity`, scipy is called directly with **zero overhead**.
+
+### ODE solvers (deferred)
+
+`SolveInitialValueProblem` and `OdeIntegrate` do not yet propagate units.
+Their multi-variable state vectors and callable signatures require additional
+design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
+
+### Example
+
+```
+-import_from(scipy_integrate, [Trapezoid, Quad, ResultGet])
+-import_from(py.units, [Metre, Second, Newton, HasUnits])
+
+% Velocity (m/s) integrated over time (s) gives displacement (m)
+Test("trapezoid velocity times time") <- (
+    Trapezoid(++(numpy.array([0.0(Metre/Second), 10.0(Metre/Second), 20.0(Metre/Second)])),
+              ++(numpy.array([0.0(Second), 1.0(Second), 2.0(Second)])),
+              R),
+    HasUnits(R, Metre))
+
+% Quad with quantity-aware function
+Test("quad with units") <- (
+    Quad(++(lambda x: x * 1.0(Newton/Metre)),
+         0.0(Metre), 1.0(Metre), RESULT),
+    ResultGet(RESULT, 'value', V),
+    HasUnits(V, Newton))
+```
+
+---
+
 ## Notes
 
 - **Callables**: pass Python functions via `++()` — e.g. `++(lambda x: math.sin(x))`.

@@ -94,6 +94,10 @@ from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.terms import Quantity, UnitsMismatch
+from clausal.modules.py._scipy_units import (
+    strip_quantity, quantity_dims, merge_dims, wrap_result,
+)
 
 
 # ── Lazy scipy.interpolate import ─────────────────────────────────────────
@@ -120,26 +124,26 @@ def _si():
 
 # ── Handle registry ────────────────────────────────────────────────────────
 
-_INTERP_REGISTRY: dict[int, object] = {}
+_INTERP_REGISTRY: dict[int, tuple] = {}
 _registry_lock = _threading.Lock()
 _registry_counter = [0]
 
 
-def _alloc_handle(obj: object) -> int:
-    """Store *obj* in the registry and return its integer handle."""
+def _alloc_handle(obj: object, x_dims=None, y_dims=None) -> int:
+    """Store *(obj, x_dims, y_dims)* in the registry and return its integer handle."""
     with _registry_lock:
         _registry_counter[0] += 1
         handle = _registry_counter[0]
-        _INTERP_REGISTRY[handle] = obj
+        _INTERP_REGISTRY[handle] = (obj, x_dims, y_dims)
     return handle
 
 
-def _lookup_handle(handle: int) -> object:
-    """Return the object registered under *handle*, or raise KeyError."""
-    obj = _INTERP_REGISTRY.get(handle)
-    if obj is None:
+def _lookup_handle(handle: int) -> tuple:
+    """Return ``(interpolant, x_dims, y_dims)``; dims are ``None`` when no units."""
+    entry = _INTERP_REGISTRY.get(handle)
+    if entry is None:
         raise KeyError(f"Unknown interpolator handle: {handle!r}")
-    return obj
+    return entry
 
 
 # ── Predicate adapter ─────────────────────────────────────────────────────
@@ -191,6 +195,35 @@ def _make_dispatch(constructor: Callable) -> Callable:
         try:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
+        except UnitsMismatch:
+            raise
+        except Exception:
+            yield (parent, DONE)
+            return
+        try:
+            ok = bool(unify(result_var, handle, trail))
+        except (ValueError, TypeError):
+            ok = False
+        if ok:
+            yield (parent, None)
+        yield (parent, DONE)
+    return dispatch
+
+
+def _make_dispatch_units(constructor: Callable) -> Callable:
+    """Like _make_dispatch but extracts Quantity dims from the first two inputs (x, y)."""
+    def dispatch(this_generator, parent, *args):
+        trail = args[-1]
+        result_var = args[-2]
+        inputs = [deref(x) for x in args[:-2]]
+        x_dims = quantity_dims(inputs[0]) if len(inputs) > 0 else None
+        y_dims = quantity_dims(inputs[1]) if len(inputs) > 1 else None
+        stripped = [strip_quantity(v) for v in inputs]
+        try:
+            obj = constructor(*stripped)
+            handle = _alloc_handle(obj, x_dims, y_dims)
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -205,15 +238,20 @@ def _make_dispatch(constructor: Callable) -> Callable:
 
 
 def _eval_dispatch(evaluator: Callable) -> Callable:
-    """Dispatch fn: deref all inputs, call evaluator(obj, inputs...), unify."""
+    """Dispatch fn: deref all inputs, call evaluator(obj, inputs...), unify.
+
+    The evaluator receives ``(interpolant, x_dims, y_dims, *remaining_inputs)``.
+    """
     def dispatch(this_generator, parent, *args):
         trail = args[-1]
         result_var = args[-2]
         raw_inputs = [deref(x) for x in args[:-2]]
         handle_val = raw_inputs[0]
         try:
-            obj = _lookup_handle(int(handle_val))
-            out = evaluator(obj, *raw_inputs[1:])
+            obj, x_dims, y_dims = _lookup_handle(int(handle_val))
+            out = evaluator(obj, x_dims, y_dims, *raw_inputs[1:])
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -239,11 +277,11 @@ def _pred(name: str, *arity_fns) -> _SciPyInterpPredicate:
 # scipy.interpolate.make_interp_spline(x, y, k=3, bc_type=None)
 
 MakeSpline = _pred("MakeSpline",
-    (3, _make_dispatch(lambda x, y:
+    (3, _make_dispatch_units(lambda x, y:
         _si().make_interp_spline(x, y))),
-    (4, _make_dispatch(lambda x, y, k:
+    (4, _make_dispatch_units(lambda x, y, k:
         _si().make_interp_spline(x, y, k=k))),
-    (5, _make_dispatch(lambda x, y, k, bc_type:
+    (5, _make_dispatch_units(lambda x, y, k, bc_type:
         _si().make_interp_spline(x, y, k=k, bc_type=bc_type))),
 )
 
@@ -252,9 +290,9 @@ MakeSpline = _pred("MakeSpline",
 # scipy.interpolate.CubicSpline(x, y, bc_type=...)
 
 MakeCubic = _pred("MakeCubic",
-    (3, _make_dispatch(lambda x, y:
+    (3, _make_dispatch_units(lambda x, y:
         _si().CubicSpline(x, y))),
-    (4, _make_dispatch(lambda x, y, bc_type:
+    (4, _make_dispatch_units(lambda x, y, bc_type:
         _si().CubicSpline(x, y, bc_type=bc_type))),
 )
 
@@ -263,9 +301,9 @@ MakeCubic = _pred("MakeCubic",
 # scipy.interpolate.PchipInterpolator(x, y, extrapolate=...)
 
 MakePCHIP = _pred("MakePCHIP",
-    (3, _make_dispatch(lambda x, y:
+    (3, _make_dispatch_units(lambda x, y:
         _si().PchipInterpolator(x, y))),
-    (4, _make_dispatch(lambda x, y, extrapolate:
+    (4, _make_dispatch_units(lambda x, y, extrapolate:
         _si().PchipInterpolator(x, y, extrapolate=extrapolate))),
 )
 
@@ -274,7 +312,7 @@ MakePCHIP = _pred("MakePCHIP",
 # scipy.interpolate.Akima1DInterpolator(x, y)
 
 MakeAkima = _pred("MakeAkima",
-    (3, _make_dispatch(lambda x, y:
+    (3, _make_dispatch_units(lambda x, y:
         _si().Akima1DInterpolator(x, y))),
 )
 
@@ -286,6 +324,8 @@ def _make_linear1d_arity3(this_generator, parent, *args):
     trail = args[-1]
     result_var = args[-2]
     x, y = deref(args[0]), deref(args[1])
+    x_dims = quantity_dims(x)
+    y_dims = quantity_dims(y)
     try:
         interp1d = getattr(_si(), "interp1d", None)
         if interp1d is None:
@@ -293,8 +333,10 @@ def _make_linear1d_arity3(this_generator, parent, *args):
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            obj = interp1d(x, y)
-        handle = _alloc_handle(obj)
+            obj = interp1d(strip_quantity(x), strip_quantity(y))
+        handle = _alloc_handle(obj, x_dims, y_dims)
+    except UnitsMismatch:
+        raise
     except Exception:
         yield (parent, DONE)
         return
@@ -311,6 +353,8 @@ def _make_linear1d_arity4(this_generator, parent, *args):
     trail = args[-1]
     result_var = args[-2]
     x, y, kind = deref(args[0]), deref(args[1]), deref(args[2])
+    x_dims = quantity_dims(x)
+    y_dims = quantity_dims(y)
     try:
         interp1d = getattr(_si(), "interp1d", None)
         if interp1d is None:
@@ -318,8 +362,10 @@ def _make_linear1d_arity4(this_generator, parent, *args):
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            obj = interp1d(x, y, kind=kind)
-        handle = _alloc_handle(obj)
+            obj = interp1d(strip_quantity(x), strip_quantity(y), kind=kind)
+        handle = _alloc_handle(obj, x_dims, y_dims)
+    except UnitsMismatch:
+        raise
     except Exception:
         yield (parent, DONE)
         return
@@ -342,9 +388,9 @@ MakeLinear1D = _pred("MakeLinear1D",
 # scipy.interpolate.RegularGridInterpolator(points, values, method=...)
 
 MakeRegularGrid = _pred("MakeRegularGrid",
-    (3, _make_dispatch(lambda points, values:
+    (3, _make_dispatch_units(lambda points, values:
         _si().RegularGridInterpolator(points, values))),
-    (4, _make_dispatch(lambda points, values, method:
+    (4, _make_dispatch_units(lambda points, values, method:
         _si().RegularGridInterpolator(points, values, method=method))),
 )
 
@@ -354,11 +400,11 @@ MakeRegularGrid = _pred("MakeRegularGrid",
 # Note: RBFInterpolator(y, d) — first arg is sample points, second is values
 
 MakeRadialBasis = _pred("MakeRadialBasis",
-    (3, _make_dispatch(lambda x, y:
+    (3, _make_dispatch_units(lambda x, y:
         _si().RBFInterpolator(x, y))),
-    (4, _make_dispatch(lambda x, y, function:
+    (4, _make_dispatch_units(lambda x, y, function:
         _si().RBFInterpolator(x, y, kernel=function))),
-    (5, _make_dispatch(lambda x, y, function, smooth:
+    (5, _make_dispatch_units(lambda x, y, function, smooth:
         _si().RBFInterpolator(x, y, kernel=function, smoothing=smooth))),
 )
 
@@ -400,14 +446,18 @@ def _eval_spline_bidir(this_generator, parent, *args):
     y          = deref(result_raw)
 
     try:
-        obj = _lookup_handle(int(handle))
+        obj, x_dims, y_dims = _lookup_handle(int(handle))
     except Exception:
         yield (parent, DONE)
         return
 
     if not is_var(x) and is_var(y):
         try:
-            out = obj(x)
+            x_val = strip_quantity(x)
+            out = obj(x_val)
+            out = wrap_result(out, y_dims) if y_dims else out
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -416,7 +466,11 @@ def _eval_spline_bidir(this_generator, parent, *args):
 
     elif is_var(x) and not is_var(y):
         try:
-            out = _eval_spline_bwd(obj, y)
+            y_val = strip_quantity(y)
+            out = _eval_spline_bwd(obj, y_val)
+            out = wrap_result(out, x_dims) if x_dims else out
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -426,7 +480,11 @@ def _eval_spline_bidir(this_generator, parent, *args):
     elif not is_var(x) and not is_var(y):
         # both ground: consistency check
         try:
-            out = obj(x)
+            x_val = strip_quantity(x)
+            out = obj(x_val)
+            out = wrap_result(out, y_dims) if y_dims else out
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -440,37 +498,64 @@ def _eval_spline_bidir(this_generator, parent, *args):
     yield (parent, DONE)
 
 
+def _eval_spline_nu(obj, x_dims, y_dims, x, nu):
+    """Evaluate spline NU-th derivative at x, with unit propagation."""
+    x_val = strip_quantity(x)
+    raw = obj(x_val, nu=int(nu))
+    if y_dims is None:
+        return raw
+    nu_int = int(nu)
+    if nu_int == 0:
+        out_dims = y_dims
+    else:
+        out_dims = merge_dims(y_dims, x_dims or {}, -nu_int)
+    return wrap_result(raw, out_dims)
+
+
 EvalSpline = _pred("EvalSpline",
     (3, _eval_spline_bidir),
-    (4, _eval_dispatch(lambda obj, x, nu:
-        obj(x, nu=int(nu)))),
+    (4, _eval_dispatch(_eval_spline_nu)),
 )
 
 
 # ── EvalRegularGrid ──────────────────────────────────────────────────
 
+def _eval_regular_grid(obj, x_dims, y_dims, xi, method=None):
+    xi_val = strip_quantity(xi)
+    raw = obj(xi_val) if method is None else obj(xi_val, method=method)
+    return wrap_result(raw, y_dims) if y_dims else raw
+
+
 EvalRegularGrid = _pred("EvalRegularGrid",
-    (3, _eval_dispatch(lambda obj, xi:
-        obj(xi))),
-    (4, _eval_dispatch(lambda obj, xi, method:
-        obj(xi, method=method))),
+    (3, _eval_dispatch(lambda obj, x_dims, y_dims, xi:
+        _eval_regular_grid(obj, x_dims, y_dims, xi))),
+    (4, _eval_dispatch(lambda obj, x_dims, y_dims, xi, method:
+        _eval_regular_grid(obj, x_dims, y_dims, xi, method=method))),
 )
 
 
 # ── EvalRadialBasis ──────────────────────────────────────────────────────────
 
 EvalRadialBasis = _pred("EvalRadialBasis",
-    (3, _eval_dispatch(lambda obj, x:
-        obj(x))),
+    (3, _eval_dispatch(lambda obj, x_dims, y_dims, x:
+        wrap_result(obj(strip_quantity(x)), y_dims) if y_dims else obj(x))),
 )
 
 
 # ── SplineIntegral ───────────────────────────────────────────────────
 # Definite integral from A to B; calls handle.integrate(a, b).
 
+def _spline_integral(obj, x_dims, y_dims, a, b):
+    """Definite integral from a to b; output dims = y_dims + x_dims."""
+    raw = float(obj.integrate(strip_quantity(a), strip_quantity(b)))
+    if y_dims is None:
+        return raw
+    out_dims = merge_dims(y_dims, x_dims or {}, +1)
+    return wrap_result(raw, out_dims)
+
+
 SplineIntegral = _pred("SplineIntegral",
-    (4, _eval_dispatch(lambda obj, a, b:
-        float(obj.integrate(a, b)))),
+    (4, _eval_dispatch(_spline_integral)),
 )
 
 
@@ -484,9 +569,12 @@ def _spline_derivative_arity2(this_generator, parent, *args):
     result_var = args[-2]
     handle_val = deref(args[0])
     try:
-        obj = _lookup_handle(int(handle_val))
+        obj, x_dims, y_dims = _lookup_handle(int(handle_val))
         deriv_obj = obj.derivative()
-        new_handle = _alloc_handle(deriv_obj)
+        new_y_dims = merge_dims(y_dims, x_dims or {}, -1) if y_dims is not None else None
+        new_handle = _alloc_handle(deriv_obj, x_dims, new_y_dims)
+    except UnitsMismatch:
+        raise
     except Exception:
         yield (parent, DONE)
         return
@@ -505,9 +593,12 @@ def _spline_derivative_arity3(this_generator, parent, *args):
     handle_val = deref(args[0])
     order = deref(args[1])
     try:
-        obj = _lookup_handle(int(handle_val))
+        obj, x_dims, y_dims = _lookup_handle(int(handle_val))
         deriv_obj = obj.derivative(nu=int(order))
-        new_handle = _alloc_handle(deriv_obj)
+        new_y_dims = merge_dims(y_dims, x_dims or {}, -int(order)) if y_dims is not None else None
+        new_handle = _alloc_handle(deriv_obj, x_dims, new_y_dims)
+    except UnitsMismatch:
+        raise
     except Exception:
         yield (parent, DONE)
         return
@@ -530,8 +621,16 @@ SplineDerivative = _pred("SplineDerivative",
 # Returns the real roots (zero-crossings) of the spline as a Python list.
 # arity 2: (handle, result)
 
+def _spline_roots(obj, x_dims, y_dims):
+    """Return roots of the spline, wrapped with x_dims if present."""
+    roots = list(obj.roots())
+    if x_dims:
+        return [wrap_result(r, x_dims) for r in roots]
+    return roots
+
+
 SplineRoots = _pred("SplineRoots",
-    (2, _eval_dispatch(lambda obj: list(obj.roots()))),
+    (2, _eval_dispatch(_spline_roots)),
 )
 
 
