@@ -1,24 +1,39 @@
 """clausal.modules.py.units — Physical units and dimensional analysis.
 
-Provides unit constructors for use with ``Quantity`` values.
+Provides SI unit predicates, SI prefix constants, and utility predicates.
 
 All values are stored internally in SI base units (m, kg, s, A, K, mol, cd).
-Non-SI units (Kilometer, Gram, Hour, …) scale on the way in.
+
+Two distinct styles are provided:
+
+**SI unit predicates** — used with the ``n(Unit)`` sugar in ``.clausal`` files::
+
+    D := 5(Metre)          # Quantity(5,   {Metre: 1})
+    F := 9.8(Newton)       # Quantity(9.8, {kg:1, m:1, s:-2})
+    V := 10(m/s)           # Quantity(10,  {Metre:1, Second:-1})
+
+The argument to the parentheses *must* be an SI unit predicate (or a compound
+expression of them).  SI prefix names are plain numbers — they are **not**
+predicates and cannot appear inside the ``n(Unit)`` parentheses.
+
+**SI prefix constants** — plain Python numbers, multiply against unit vectors::
+
+    5 * kilo * Newton(1)        # 5 kN  →  Quantity(5000, {kg:1, m:1, s:-2})
+    100 * nano * Second(1)      # 100 ns →  Quantity(1e-7, {Second:1})
+    1 * mega * Hertz(1)         # 1 MHz  →  Quantity(1e6, {Second:-1})
+
+Imperial and non-SI unit vectors live in ``py.imperial``::
+
+    -import_from(py.imperial, [inch, foot, pound_mass, mph])
 
 Usage in .clausal files::
 
-    -import_from(py.units, [Metre, Newton, Watt, StripUnits])
+    -import_from(py.units, [Metre, Newton, Watt, kilo, StripUnits])
 
-    D := 5(Metre)          # build a length Quantity
-    D := ++(Metre(5))      # equivalent explicit form
-    StripUnits(D, V)       # extract the numeric value
-    D == 5(Metre)          # check value and unit together
-    D(Metre/Second)        # check or constrain dimension via X(Unit) sugar
-
-Utility predicates:
-    DimensionOf(Quantity, Dims)   — extract dims as DictTerm
-    StripUnits(Quantity, V)       — extract numeric value
-    MakeQuantity(Value, Dims, D)  — construct from value + DictTerm dims
+    D := 5(Metre)                        # SI sugar
+    F := 9.8(Newton)                     # SI sugar
+    BIG := ++(5 * kilo * Newton(1))      # prefix via ++
+    StripUnits(D, V)                     # extract numeric value
 """
 
 from __future__ import annotations
@@ -183,36 +198,62 @@ Candela      = _make_unit_pred_base("Candela")
 Dimensionless = _make_unit_pred("Dimensionless", {})
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Scaled length units  (all normalise to metres)
+# SI prefix constants
 # ═════════════════════════════════════════════════════════════════════════════
+# Plain numbers — multiply against unit vectors in ++ expressions:
+#
+#     ++(5 * kilo * Newton(1))       # 5 kN
+#     ++(100 * nano * Second(1))     # 100 ns
+#     ++(2.4 * giga * Hertz(1))      # 2.4 GHz
+#
+# These are NOT predicates and cannot appear inside n(Unit) parentheses.
+# The standard SI symbols for ×10^3…×10^24 are uppercase letters (k is the
+# exception), which are logic variables in Clausal — use the full names.
+# Single-letter abbreviations are provided below for contexts where they are
+# unambiguous; import them explicitly.
+
+yotta: float = 1e24
+zetta: float = 1e21
+exa:   float = 1e18
+peta:  float = 1e15
+tera:  float = 1e12
+giga:  float = 1e9
+mega:  float = 1e6
+kilo:  float = 1e3
+hecto: float = 1e2
+deca:  float = 1e1
+deci:  float = 1e-1
+centi: float = 1e-2
+milli: float = 1e-3
+micro: float = 1e-6
+nano:  float = 1e-9
+pico:  float = 1e-12
+femto: float = 1e-15
+atto:  float = 1e-18
+zepto: float = 1e-21
+yocto: float = 1e-24
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Scaled SI unit predicates  (all normalise to SI base units)
+# ═════════════════════════════════════════════════════════════════════════════
+# These are predicates; use with n(Unit) sugar:   5(Kilometer),  200(Gram)
+
+# ── Scaled length (store as metres) ──────────────────────────────────────────
 
 Kilometer    = _make_unit_pred("Kilometer",    {Metre: 1}, scale=1_000.0)
 Centimeter   = _make_unit_pred("Centimeter",   {Metre: 1}, scale=1e-2)
 Millimeter   = _make_unit_pred("Millimeter",   {Metre: 1}, scale=1e-3)
 Micrometer   = _make_unit_pred("Micrometer",   {Metre: 1}, scale=1e-6)
 Nanometer    = _make_unit_pred("Nanometer",    {Metre: 1}, scale=1e-9)
-Inch         = _make_unit_pred("Inch",         {Metre: 1}, scale=0.0254)
-Foot         = _make_unit_pred("Foot",         {Metre: 1}, scale=0.3048)
-Yard         = _make_unit_pred("Yard",         {Metre: 1}, scale=0.9144)
-Mile         = _make_unit_pred("Mile",         {Metre: 1}, scale=1_609.344)
-NauticalMile = _make_unit_pred("NauticalMile", {Metre: 1}, scale=1_852.0)
-LightYear    = _make_unit_pred("LightYear",    {Metre: 1}, scale=9.461e15)
-AstronomicalUnit = _make_unit_pred("AstronomicalUnit", {Metre: 1}, scale=1.496e11)
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Scaled mass units  (all normalise to kilograms)
-# ═════════════════════════════════════════════════════════════════════════════
+# ── Scaled mass (store as kilograms) ─────────────────────────────────────────
 
 Gram         = _make_unit_pred("Gram",         {Kilogram: 1}, scale=1e-3)
 Milligram    = _make_unit_pred("Milligram",    {Kilogram: 1}, scale=1e-6)
 Microgram    = _make_unit_pred("Microgram",    {Kilogram: 1}, scale=1e-9)
 Tonne        = _make_unit_pred("Tonne",        {Kilogram: 1}, scale=1_000.0)
-Pound        = _make_unit_pred("Pound",        {Kilogram: 1}, scale=0.45359237)
-Ounce        = _make_unit_pred("Ounce",        {Kilogram: 1}, scale=0.028349523125)
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Scaled time units  (all normalise to seconds)
-# ═════════════════════════════════════════════════════════════════════════════
+# ── Scaled time (store as seconds) ───────────────────────────────────────────
 
 Millisecond  = _make_unit_pred("Millisecond",  {Second: 1}, scale=1e-3)
 Microsecond  = _make_unit_pred("Microsecond",  {Second: 1}, scale=1e-6)
@@ -224,7 +265,7 @@ Week         = _make_unit_pred("Week",         {Second: 1}, scale=604_800.0)
 JulianYear   = _make_unit_pred("JulianYear",   {Second: 1}, scale=31_557_600.0)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Named derived SI units
+# Named derived SI unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Mechanics
@@ -253,31 +294,16 @@ Lux      = _make_unit_pred("Lux",      {Candela: 1, Metre: -2})                 
 # Chemistry / thermodynamics
 Katal    = _make_unit_pred("Katal",    {Mole: 1, Second: -1})                       # kat = mol/s
 
-# Scaled pressure
+# Scaled SI pressure (stored as Pascal)
 Bar      = _make_unit_pred("Bar",      {Kilogram: 1, Metre: -1, Second: -2}, scale=1e5)
 Millibar = _make_unit_pred("Millibar", {Kilogram: 1, Metre: -1, Second: -2}, scale=100.0)
 Atmosphere = _make_unit_pred("Atmosphere", {Kilogram: 1, Metre: -1, Second: -2}, scale=101_325.0)
-PoundsPerSquareInch = _make_unit_pred(
-    "PoundsPerSquareInch", {Kilogram: 1, Metre: -1, Second: -2}, scale=6_894.757
-)
 
-# Scaled energy
+# Scaled SI energy (stored as Joule)
 Electronvolt = _make_unit_pred("Electronvolt", {Kilogram: 1, Metre: 2, Second: -2}, scale=1.602176634e-19)
-Calorie      = _make_unit_pred("Calorie",      {Kilogram: 1, Metre: 2, Second: -2}, scale=4.184)
-Kilocalorie  = _make_unit_pred("Kilocalorie",  {Kilogram: 1, Metre: 2, Second: -2}, scale=4_184.0)
-KilowattHour = _make_unit_pred("KilowattHour", {Kilogram: 1, Metre: 2, Second: -2}, scale=3_600_000.0)
 
-# Scaled power
+# Scaled SI power (stored as Watt)
 Kilowatt     = _make_unit_pred("Kilowatt",     {Kilogram: 1, Metre: 2, Second: -3}, scale=1_000.0)
-Horsepower   = _make_unit_pred("Horsepower",   {Kilogram: 1, Metre: 2, Second: -3}, scale=745.69987)
-
-# Scaled speed
-KilometerPerHour = _make_unit_pred(
-    "KilometerPerHour", {Metre: 1, Second: -1}, scale=1.0 / 3.6
-)
-MilePerHour  = _make_unit_pred("MilePerHour",  {Metre: 1, Second: -1}, scale=0.44704)
-Knot         = _make_unit_pred("Knot",         {Metre: 1, Second: -1}, scale=1_852.0 / 3600.0)
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI standard abbreviation aliases
@@ -295,6 +321,40 @@ kg  = Kilogram
 s   = Second
 mol = Mole
 cd  = Candela
+
+# ── Scaled SI unit abbreviations ─────────────────────────────────────────────
+# All are predicates — usable with n(Unit) sugar.
+
+km  = Kilometer
+cm  = Centimeter
+mm  = Millimeter
+um  = Micrometer    # μm — μ is not a valid identifier
+nm  = Nanometer
+
+mg  = Milligram
+ug  = Microgram     # μg
+
+ms  = Millisecond
+us  = Microsecond   # μs
+ns  = Nanosecond
+min = Minute        # shadows Python builtin; import explicitly if needed
+hr  = Hour
+
+# ── SI prefix abbreviations ───────────────────────────────────────────────────
+# Plain numbers — same as the full names above.
+# Uppercase SI symbols (M, G, T, P, E, Z, Y) are logic variables in Clausal
+# and cannot be used.  The following lowercase symbols are safe:
+
+k  = kilo    # 1e3   (standard SI symbol)
+h  = hecto   # 1e2
+da = deca    # 1e1   (two-char: safe)
+d  = deci    # 1e-1
+c  = centi   # 1e-2
+# milli's SI symbol 'm' clashes with Metre — use 'milli' or 'ms'/'mg'/'mm'
+n  = nano    # 1e-9
+p  = pico    # 1e-12
+f  = femto   # 1e-15
+a  = atto    # 1e-18
 
 
 # ═════════════════════════════════════════════════════════════════════════════

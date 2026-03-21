@@ -460,14 +460,16 @@ class TestScaledUnits:
         result = self._fwd(Hour, 2)
         assert pytest.approx(result.value) == 7200.0
 
-    def test_foot_forward(self):
-        from clausal.modules.py.units import Foot
-        result = self._fwd(Foot, 1)
+    def test_foot_unit_vector(self):
+        from clausal.modules.py.imperial import foot
+        result = 1 * foot
+        assert result.dims == {Metre: 1}
         assert pytest.approx(result.value) == 0.3048
 
-    def test_pound_forward(self):
-        from clausal.modules.py.units import Pound
-        result = self._fwd(Pound, 1)
+    def test_pound_unit_vector(self):
+        from clausal.modules.py.imperial import pound_mass
+        result = 1 * pound_mass
+        assert result.dims == {Kilogram: 1}
         assert pytest.approx(result.value) == 0.45359237
 
 
@@ -532,9 +534,9 @@ class TestDerivedUnits:
         assert result.dims == {Kilogram: 1, Metre: -1, Second: -2}
         assert pytest.approx(result.value) == 1e5
 
-    def test_kilowatt_hour_forward(self):
-        from clausal.modules.py.units import KilowattHour
-        result = self._fwd(KilowattHour, 1)
+    def test_kilowatt_hour_unit_vector(self):
+        from clausal.modules.py.imperial import kilowatt_hour
+        result = 1 * kilowatt_hour
         assert result.dims == {Kilogram: 1, Metre: 2, Second: -2}
         assert pytest.approx(result.value) == 3_600_000.0
 
@@ -1244,3 +1246,216 @@ class TestPythonExceptionCatch:
             "Test <- catch(++(Metre(1) + Second(1)), SomeOtherError(_), 1 == 1)\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))
+
+# ════════════════════════════════════════════════════════════════════════════
+# SI prefix constants
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestSIPrefixes:
+    """SI prefix constants are plain numbers — multiply against unit vectors."""
+
+    def test_kilo_is_number(self):
+        from clausal.modules.py.units import kilo
+        assert kilo == 1e3
+        assert isinstance(kilo, float)
+
+    def test_milli_is_number(self):
+        from clausal.modules.py.units import milli
+        assert milli == 1e-3
+
+    def test_mega_is_number(self):
+        from clausal.modules.py.units import mega
+        assert mega == 1e6
+
+    def test_nano_is_number(self):
+        from clausal.modules.py.units import nano
+        assert nano == 1e-9
+
+    def test_kilo_times_unit_vector(self):
+        from clausal.modules.py.units import kilo, Newton
+        result = 5 * kilo * Newton(1)
+        assert result.dims == {Kilogram: 1, Metre: 1, Second: -2}
+        assert pytest.approx(result.value) == 5_000.0
+
+    def test_nano_times_unit_vector(self):
+        from clausal.modules.py.units import nano
+        result = 100 * nano * Second(1)
+        assert result.dims == {Second: 1}
+        assert pytest.approx(result.value) == 1e-7
+
+    def test_mega_times_unit_vector(self):
+        from clausal.modules.py.units import mega, Hertz
+        result = 2.4 * mega * Hertz(1)
+        assert result.dims == {Second: -1}
+        assert pytest.approx(result.value) == 2.4e6
+
+    def test_prefix_abbreviation_k(self):
+        from clausal.modules.py.units import k, kilo
+        assert k == kilo
+
+    def test_prefix_abbreviation_n(self):
+        from clausal.modules.py.units import n, nano
+        assert n == nano
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Imperial and non-SI unit vectors
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestImperialUnits:
+    """Imperial / non-SI unit vectors are Quantity values; multiply by scalar."""
+
+    # ── Length ───────────────────────────────────────────────────────────────
+
+    def test_inch(self):
+        from clausal.modules.py.imperial import inch
+        result = 12 * inch
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value) == 0.3048
+
+    def test_foot(self):
+        from clausal.modules.py.imperial import foot
+        result = 1 * foot
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value) == 0.3048
+
+    def test_yard(self):
+        from clausal.modules.py.imperial import yard
+        result = 1 * yard
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value) == 0.9144
+
+    def test_mile(self):
+        from clausal.modules.py.imperial import mile
+        result = 1 * mile
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value) == 1_609.344
+
+    def test_nautical_mile(self):
+        from clausal.modules.py.imperial import nautical_mile
+        result = 1 * nautical_mile
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value) == 1_852.0
+
+    def test_light_year(self):
+        from clausal.modules.py.imperial import light_year
+        result = 1 * light_year
+        assert result.dims == {Metre: 1}
+        assert pytest.approx(result.value, rel=1e-9) == 9.4607304725808e15
+
+    # ── Mass ─────────────────────────────────────────────────────────────────
+
+    def test_pound_mass(self):
+        from clausal.modules.py.imperial import pound_mass
+        result = 1 * pound_mass
+        assert result.dims == {Kilogram: 1}
+        assert pytest.approx(result.value) == 0.45359237
+
+    def test_ounce_mass(self):
+        from clausal.modules.py.imperial import ounce_mass
+        result = 16 * ounce_mass
+        assert result.dims == {Kilogram: 1}
+        assert pytest.approx(result.value) == pytest.approx(1 * 0.45359237, rel=1e-6)
+
+    # ── Force ─────────────────────────────────────────────────────────────────
+
+    def test_pound_force(self):
+        from clausal.modules.py.imperial import pound_force
+        result = 1 * pound_force
+        assert result.dims == {Kilogram: 1, Metre: 1, Second: -2}
+        assert pytest.approx(result.value) == 4.4482216152605
+
+    # ── Volume ────────────────────────────────────────────────────────────────
+
+    def test_litre(self):
+        from clausal.modules.py.imperial import litre
+        result = 1 * litre
+        assert result.dims == {Metre: 3}
+        assert pytest.approx(result.value) == 1e-3
+
+    def test_gallon_us(self):
+        from clausal.modules.py.imperial import gallon_us
+        result = 1 * gallon_us
+        assert result.dims == {Metre: 3}
+        assert pytest.approx(result.value) == 3.785411784e-3
+
+    # ── Pressure ──────────────────────────────────────────────────────────────
+
+    def test_psi(self):
+        from clausal.modules.py.imperial import psi
+        result = 1 * psi
+        assert result.dims == {Kilogram: 1, Metre: -1, Second: -2}
+        assert pytest.approx(result.value) == 6_894.757
+
+    # ── Energy ────────────────────────────────────────────────────────────────
+
+    def test_calorie(self):
+        from clausal.modules.py.imperial import calorie
+        result = 1 * calorie
+        assert result.dims == {Kilogram: 1, Metre: 2, Second: -2}
+        assert pytest.approx(result.value) == 4.184
+
+    def test_btu(self):
+        from clausal.modules.py.imperial import btu
+        result = 1 * btu
+        assert result.dims == {Kilogram: 1, Metre: 2, Second: -2}
+        assert pytest.approx(result.value) == 1_055.05585262
+
+    def test_kilowatt_hour(self):
+        from clausal.modules.py.imperial import kilowatt_hour
+        result = 1 * kilowatt_hour
+        assert result.dims == {Kilogram: 1, Metre: 2, Second: -2}
+        assert pytest.approx(result.value) == 3_600_000.0
+
+    # ── Power ─────────────────────────────────────────────────────────────────
+
+    def test_horsepower(self):
+        from clausal.modules.py.imperial import horsepower
+        result = 1 * horsepower
+        assert result.dims == {Kilogram: 1, Metre: 2, Second: -3}
+        assert pytest.approx(result.value) == 745.69987
+
+    # ── Speed ─────────────────────────────────────────────────────────────────
+
+    def test_mph(self):
+        from clausal.modules.py.imperial import mph
+        result = 60 * mph
+        assert result.dims == {Metre: 1, Second: -1}
+        assert pytest.approx(result.value) == 26.8224
+
+    def test_knot(self):
+        from clausal.modules.py.imperial import knot
+        result = 1 * knot
+        assert result.dims == {Metre: 1, Second: -1}
+        assert pytest.approx(result.value, rel=1e-6) == 1_852.0 / 3_600.0
+
+    # ── Abbreviations ─────────────────────────────────────────────────────────
+
+    def test_ft_alias(self):
+        from clausal.modules.py.imperial import ft, foot
+        assert ft is foot
+
+    def test_lb_alias(self):
+        from clausal.modules.py.imperial import lb, pound_mass
+        assert lb is pound_mass
+
+    def test_lbf_alias(self):
+        from clausal.modules.py.imperial import lbf, pound_force
+        assert lbf is pound_force
+
+    def test_nmi_alias(self):
+        from clausal.modules.py.imperial import nmi, nautical_mile
+        assert nmi is nautical_mile
+
+    # ── Arithmetic with imperial units ────────────────────────────────────────
+
+    def test_five_feet_twelve_inches_equals_six_feet(self):
+        from clausal.modules.py.imperial import foot, inch
+        assert pytest.approx((5 * foot + 12 * inch).value) == (6 * foot).value
+
+    def test_mph_to_ms(self):
+        from clausal.modules.py.imperial import mph
+        speed = 60 * mph
+        assert pytest.approx(speed.value, rel=1e-5) == 26.8224
