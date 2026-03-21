@@ -93,6 +93,7 @@ nav:
     - Term & Goal Expansion: term_expansion.md
     - Caching: caching.md
   - Python Integration: python_integration.md
+  - IPython / Jupyter: ipython.md
   - Examples: examples.md
 
 markdown_extensions:
