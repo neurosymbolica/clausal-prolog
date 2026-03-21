@@ -70,8 +70,16 @@ from __future__ import annotations
 import threading as _threading
 from typing import Callable
 
-from clausal.logic.variables import deref, unify
+import numpy as _np
+
+from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py._scipy_relations import _bidir_dispatch
+from clausal.terms import Quantity as _Quantity
+from clausal.modules.py._scipy_units import (
+    make_quantity_aware, merge_dims, wrap_result,
+    REQUIRE_DIMENSIONLESS, PASS_THROUGH_FIRST, STRIP_TO_PLAIN,
+)
 
 
 # ── Lazy scipy.linalg import ──────────────────────────────────────────────
@@ -177,118 +185,294 @@ def _pred(name: str, *arity_fns) -> _ScipyLinalgPredicate:
     return p
 
 
+def _pred_bidir(name: str, *arity_dispatches) -> _ScipyLinalgPredicate:
+    """Create a ``_ScipyLinalgPredicate`` from (arity, already-wrapped dispatch_fn) pairs."""
+    p = _ScipyLinalgPredicate(name)
+    for arity, dispatch_fn in arity_dispatches:
+        p._dispatch_fns[arity] = dispatch_fn
+    return p
+
+
+# ── Unit propagators ──────────────────────────────────────────────────────
+
+def _solve_units(dims_list, result):
+    """x dims = b_dims − A_dims.  If A dimensionless, x inherits b_dims."""
+    a_dims = dims_list[0] or {}
+    b_dims = dims_list[1]
+    if b_dims is None:
+        return None
+    out_dims = merge_dims(b_dims, a_dims, -1)
+    return wrap_result(result, out_dims)
+
+
+def _lstsq_units(dims_list, result):
+    """Propagate units through least-squares result dict."""
+    a_dims = dims_list[0] or {}
+    b_dims = dims_list[1]
+    if b_dims is None:
+        return None
+    out = dict(result)
+    x_dims = merge_dims(b_dims, a_dims, -1)
+    out['x'] = wrap_result(result['x'], x_dims)
+    res_dims = merge_dims(b_dims, b_dims, +1)   # residuals: dims b²
+    out['residuals'] = wrap_result(result['residuals'], res_dims)
+    if a_dims:
+        out['s'] = wrap_result(result['s'], a_dims)   # singular values: dims A
+    return out
+
+
+def _qr_units(dims_list, result):
+    """Q is dimensionless; R inherits dims of A."""
+    a_dims = dims_list[0]
+    if not a_dims:
+        return None
+    out = dict(result)
+    out['r'] = wrap_result(result['r'], a_dims)
+    return out
+
+
+def _svd_units(dims_list, result):
+    """U and Vh are dimensionless; singular values S inherit dims of A."""
+    a_dims = dims_list[0]
+    if not a_dims:
+        return None
+    out = dict(result)
+    out['s'] = wrap_result(result['s'], a_dims)
+    return out
+
+
+def _eigen_units(dims_list, result):
+    """Eigenvalues have same dims as A; eigenvectors are dimensionless."""
+    a_dims = dims_list[0]
+    if not a_dims:
+        return None
+    out = dict(result)
+    out['eigenvalues'] = wrap_result(result['eigenvalues'], a_dims)
+    return out
+
+
+def _schur_units(dims_list, result):
+    """Schur form T has same dims as A; unitary factor Z is dimensionless."""
+    a_dims = dims_list[0]
+    if not a_dims:
+        return None
+    out = dict(result)
+    out['t'] = wrap_result(result['t'], a_dims)
+    return out
+
+
+def _inverse_units(dims_list, result):
+    """Inverse dims = negated A dims."""
+    a_dims = dims_list[0]
+    if not a_dims:
+        return None
+    out_dims = merge_dims({}, a_dims, -1)
+    return wrap_result(result, out_dims)
+
+
+def _det_call(inner_call):
+    """Custom Determinant wrapper: captures matrix size for unit propagation.
+
+    Uses matrix shape (n×n) to compute output dims = n · A_dims, which
+    cannot be expressed via the generic make_quantity_aware contract.
+    """
+    def call(*inputs):
+        a = inputs[0]
+        if not isinstance(a, _Quantity):
+            return inner_call(a)
+        a_dims = dict(a.dims)
+        a_val = a.value
+        result = inner_call(a_val)
+        if a_dims:
+            n = a_val.shape[0]   # n×n matrix
+            out_dims = {k: v * n for k, v in a_dims.items()}
+            return wrap_result(result, out_dims)
+        return result
+    return call
+
+
 # ── Linear system solvers ─────────────────────────────────────────────────
 
-Solve = _pred("Solve",
-    (3, _dispatch_fn(_la_fn("solve"))),
-    (4, _dispatch_fn(lambda a, b, assume_a:
-        _la().solve(a, b, assume_a=assume_a))),
+def _solve_bwd(a, x):
+    """Backward direction of Solve(A, B, X): A ground, X ground → B = A @ X."""
+    return _np.dot(a, x)
+
+
+Solve = _pred_bidir("Solve",
+    (3, _bidir_dispatch(make_quantity_aware(_la_fn("solve"), _solve_units), _solve_bwd, n_fixed=1)),
+    (4, _dispatch_fn(make_quantity_aware(
+        lambda a, b, assume_a: _la().solve(a, b, assume_a=assume_a), _solve_units))),
 )
 
 LeastSquares = _pred("LeastSquares",
-    (3, _dispatch_fn(lambda a, b: dict(
-        zip(("x", "residuals", "rank", "s"), _la().lstsq(a, b))))),
+    (3, _dispatch_fn(make_quantity_aware(
+        lambda a, b: dict(zip(("x", "residuals", "rank", "s"), _la().lstsq(a, b))),
+        _lstsq_units))),
 )
 
 SolveTriangular = _pred("SolveTriangular",
-    (3, _dispatch_fn(_la_fn("solve_triangular"))),
-    (4, _dispatch_fn(lambda a, b, lower:
-        _la().solve_triangular(a, b, lower=lower))),
+    (3, _dispatch_fn(make_quantity_aware(_la_fn("solve_triangular"), _solve_units))),
+    (4, _dispatch_fn(make_quantity_aware(
+        lambda a, b, lower: _la().solve_triangular(a, b, lower=lower), _solve_units))),
 )
+
+
+# ── Decomposition recomposition helpers ───────────────────────────────────
+
+def _qr_bwd(result_dict):
+    """A = Q @ R."""
+    return _np.dot(result_dict['q'], result_dict['r'])
+
+
+def _svd_bwd(result_dict):
+    """A = U @ diag(s) @ Vh."""
+    return _np.dot(result_dict['u'],
+           _np.dot(_np.diag(result_dict['s']), result_dict['vh']))
+
+
+def _lu_bwd(result_dict):
+    """A = P @ L @ U."""
+    return _np.dot(result_dict['p'],
+           _np.dot(result_dict['l'], result_dict['u']))
+
+
+def _eigen_bwd(result_dict):
+    """A = V @ diag(λ) @ inv(V)."""
+    v   = result_dict['eigenvectors']
+    lam = result_dict['eigenvalues']
+    return _np.dot(v, _np.dot(_np.diag(lam), _np.linalg.inv(v)))
+
+
+def _schur_bwd(result_dict):
+    """A = Z @ T @ Z.H"""
+    t, z = result_dict['t'], result_dict['z']
+    return _np.dot(z, _np.dot(t, z.conj().T))
+
+
+def _cholesky_bwd(r):
+    """A = R.T @ R  (upper triangular factor)."""
+    return _np.dot(r.T, r)
 
 
 # ── Matrix decompositions ─────────────────────────────────────────────────
 
-LuDecompose = _pred("LuDecompose",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("p", "l", "u"), _la().lu(a))))),
+LuDecompose = _pred_bidir("LuDecompose",
+    (2, _bidir_dispatch(
+            make_quantity_aware(lambda a: dict(zip(("p", "l", "u"), _la().lu(a))), STRIP_TO_PLAIN),
+            _lu_bwd)),
 )
 
-QrDecompose = _pred("QrDecompose",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("q", "r"), _la().qr(a))))),
+QrDecompose = _pred_bidir("QrDecompose",
+    (2, _bidir_dispatch(
+            make_quantity_aware(lambda a: dict(zip(("q", "r"), _la().qr(a))), _qr_units),
+            _qr_bwd)),
 )
 
-SingularValueDecompose = _pred("SingularValueDecompose",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("u", "s", "vh"), _la().svd(a))))),
+SingularValueDecompose = _pred_bidir("SingularValueDecompose",
+    (2, _bidir_dispatch(
+            make_quantity_aware(lambda a: dict(zip(("u", "s", "vh"), _la().svd(a))), _svd_units),
+            _svd_bwd)),
 )
 
-Cholesky = _pred("Cholesky",
-    (2, _dispatch_fn(_la_kw("cholesky", lower=False))),
-    (3, _dispatch_fn(lambda a, lower: _la().cholesky(a, lower=lower))),
+Cholesky = _pred_bidir("Cholesky",
+    (2, _bidir_dispatch(
+            make_quantity_aware(_la_kw("cholesky", lower=False), REQUIRE_DIMENSIONLESS),
+            _cholesky_bwd)),
+    (3, _dispatch_fn(make_quantity_aware(
+        lambda a, lower: _la().cholesky(a, lower=lower), REQUIRE_DIMENSIONLESS))),
 )
 
-EigenDecompose = _pred("EigenDecompose",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("eigenvalues", "eigenvectors"), _la().eig(a))))),
+EigenDecompose = _pred_bidir("EigenDecompose",
+    (2, _bidir_dispatch(
+            make_quantity_aware(
+                lambda a: dict(zip(("eigenvalues", "eigenvectors"), _la().eig(a))),
+                _eigen_units),
+            _eigen_bwd)),
 )
 
-EigenDecomposeHermitian = _pred("EigenDecomposeHermitian",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("eigenvalues", "eigenvectors"), _la().eigh(a))))),
+EigenDecomposeHermitian = _pred_bidir("EigenDecomposeHermitian",
+    (2, _bidir_dispatch(
+            make_quantity_aware(
+                lambda a: dict(zip(("eigenvalues", "eigenvectors"), _la().eigh(a))),
+                _eigen_units),
+            _eigen_bwd)),
 )
 
-Schur = _pred("Schur",
-    (2, _dispatch_fn(lambda a: dict(
-        zip(("t", "z"), _la().schur(a))))),
-    (3, _dispatch_fn(lambda a, output: dict(
-        zip(("t", "z"), _la().schur(a, output=output))))),
+Schur = _pred_bidir("Schur",
+    (2, _bidir_dispatch(
+            make_quantity_aware(
+                lambda a: dict(zip(("t", "z"), _la().schur(a))),
+                _schur_units),
+            _schur_bwd)),
+    (3, _dispatch_fn(make_quantity_aware(
+        lambda a, output: dict(zip(("t", "z"), _la().schur(a, output=output))),
+        _schur_units))),
 )
 
 
 # ── Matrix functions ──────────────────────────────────────────────────────
 
-Inverse = _pred("Inverse",
-    (2, _dispatch_fn(_la_fn("inv"))),
+Inverse = _pred_bidir("Inverse",
+    (2, _bidir_dispatch(make_quantity_aware(_la_fn("inv"), _inverse_units), _la_fn("inv"))),
 )
 
 PseudoInverse = _pred("PseudoInverse",
-    (2, _dispatch_fn(_la_fn("pinv"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("pinv"), _inverse_units))),
 )
 
 Determinant = _pred("Determinant",
-    (2, _dispatch_fn(_la_fn("det"))),
+    (2, _dispatch_fn(_det_call(_la_fn("det")))),
 )
 
 Norm = _pred("Norm",
-    (2, _dispatch_fn(_la_fn("norm"))),
-    (3, _dispatch_fn(lambda a, ord: _la().norm(a, ord=ord))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("norm"), PASS_THROUGH_FIRST))),
+    (3, _dispatch_fn(make_quantity_aware(lambda a, ord: _la().norm(a, ord=ord), PASS_THROUGH_FIRST))),
 )
 
+MatrixExpLog = _pred_bidir("MatrixExpLog",
+    (2, _bidir_dispatch(
+            make_quantity_aware(_la_fn("expm"), REQUIRE_DIMENSIONLESS),
+            _la_fn("logm"))),
+)
+
+# Backward-compatibility aliases — kept unidirectional:
 MatrixExponential = _pred("MatrixExponential",
-    (2, _dispatch_fn(_la_fn("expm"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("expm"), REQUIRE_DIMENSIONLESS))),
 )
 
 MatrixLogarithm = _pred("MatrixLogarithm",
-    (2, _dispatch_fn(_la_fn("logm"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("logm"), REQUIRE_DIMENSIONLESS))),
 )
 
 MatrixSquareRoot = _pred("MatrixSquareRoot",
-    (2, _dispatch_fn(_la_fn("sqrtm"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("sqrtm"), REQUIRE_DIMENSIONLESS))),
 )
 
 MatrixFunction = _pred("MatrixFunction",
-    (3, _dispatch_fn(lambda a, func: _la().funm(a, func))),
+    (3, _dispatch_fn(make_quantity_aware(lambda a, func: _la().funm(a, func), REQUIRE_DIMENSIONLESS))),
 )
 
 
 # ── Two-step factorisation helpers ────────────────────────────────────────
 
 LuFactor = _pred("LuFactor",
-    (2, _dispatch_fn(_la_fn("lu_factor"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("lu_factor"), STRIP_TO_PLAIN))),
 )
 
 LuSolve = _pred("LuSolve",
-    (3, _dispatch_fn(lambda lu_piv, b: _la().lu_solve(lu_piv, b))),
+    # lu_piv is an opaque tuple (no dims); x dims = b_dims via _solve_units
+    (3, _dispatch_fn(make_quantity_aware(
+        lambda lu_piv, b: _la().lu_solve(lu_piv, b), _solve_units))),
 )
 
 CholeskyFactor = _pred("CholeskyFactor",
-    (2, _dispatch_fn(_la_fn("cho_factor"))),
+    (2, _dispatch_fn(make_quantity_aware(_la_fn("cho_factor"), REQUIRE_DIMENSIONLESS))),
 )
 
 CholeskySolve = _pred("CholeskySolve",
-    (3, _dispatch_fn(lambda c_lower, b: _la().cho_solve(c_lower, b))),
+    # c_lower is an opaque tuple (no dims); x dims = b_dims via _solve_units
+    (3, _dispatch_fn(make_quantity_aware(
+        lambda c_lower, b: _la().cho_solve(c_lower, b), _solve_units))),
 )
 
 

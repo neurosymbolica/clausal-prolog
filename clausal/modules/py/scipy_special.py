@@ -82,6 +82,8 @@ from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py._scipy_relations import _bidir_dispatch
+from clausal.modules.py._scipy_units import make_quantity_aware, REQUIRE_DIMENSIONLESS
 
 
 # ── Lazy scipy.special import ─────────────────────────────────────────────
@@ -176,17 +178,42 @@ def _sp_kw(attr: str, **fixed_kwargs) -> Callable:
     return call
 
 
+def _pred_bidir(name: str, *arity_dispatches) -> _ScipySpecialPredicate:
+    """Create a ``_ScipySpecialPredicate`` from (arity, dispatch_fn) pairs.
+
+    ``dispatch_fn`` is an already-constructed trampoline function (the output
+    of ``_bidir_dispatch(...)``), not a raw callable.
+    """
+    p = _ScipySpecialPredicate(name)
+    for arity, dispatch_fn in arity_dispatches:
+        p._dispatch_fns[arity] = dispatch_fn
+    return p
+
+
 def _pred(name: str, *arity_calls) -> _ScipySpecialPredicate:
     """Create a ``_ScipySpecialPredicate`` from (arity, callable) pairs.
 
     ``arity`` is the total number of predicate arguments including RESULT
     but NOT trail.  ``callable`` receives just the *input* arguments
     (i.e. all args except RESULT) and returns the scipy result.
+
+    All callables are wrapped with :func:`make_quantity_aware` using the
+    :data:`~clausal.modules.py._scipy_units.REQUIRE_DIMENSIONLESS` propagator:
+    special functions require dimensionless arguments.
     """
     p = _ScipySpecialPredicate(name)
     for arity, call in arity_calls:
-        p._register(arity, _dispatch_fn(call))
+        p._register(arity, _dispatch_fn(make_quantity_aware(call, REQUIRE_DIMENSIONLESS)))
     return p
+
+
+def _bidir_q(fwd, bwd, n_fixed=0):
+    """Like :func:`_bidir_dispatch` but wraps both callables with REQUIRE_DIMENSIONLESS."""
+    return _bidir_dispatch(
+        make_quantity_aware(fwd, REQUIRE_DIMENSIONLESS),
+        make_quantity_aware(bwd, REQUIRE_DIMENSIONLESS),
+        n_fixed=n_fixed,
+    )
 
 
 # ── Gamma and related ────────────────────────────────────────────────────
@@ -234,14 +261,15 @@ Perm = _pred("Perm",
 
 # ── Error functions ───────────────────────────────────────────────────────
 
-Erf = _pred("Erf",
-    (2, _sp_fn("erf")),
+Erf = _pred_bidir("Erf",
+    (2, _bidir_q(_sp_fn("erf"), _sp_fn("erfinv"))),
 )
 
-ErfComplement = _pred("ErfComplement",
-    (2, _sp_fn("erfc")),
+ErfComplement = _pred_bidir("ErfComplement",
+    (2, _bidir_q(_sp_fn("erfc"), _sp_fn("erfcinv"))),
 )
 
+# Backward-compatibility aliases — kept unidirectional:
 ErfInverse = _pred("ErfInverse",
     (2, _sp_fn("erfinv")),
 )
@@ -250,10 +278,11 @@ ErfComplementInverse = _pred("ErfComplementInverse",
     (2, _sp_fn("erfcinv")),
 )
 
-NormalCdf = _pred("NormalCdf",
-    (2, _sp_fn("ndtr")),
+NormalCdf = _pred_bidir("NormalCdf",
+    (2, _bidir_q(_sp_fn("ndtr"), _sp_fn("ndtri"))),
 )
 
+# Backward-compatibility alias — kept unidirectional:
 NormalCdfInverse = _pred("NormalCdfInverse",
     (2, _sp_fn("ndtri")),
 )
@@ -392,8 +421,37 @@ Sigmoid = _pred("Sigmoid",
     (2, _sp_fn("expit")),
 )
 
-Logit = _pred("Logit",
-    (2, _sp_fn("logit")),
+Logit = _pred_bidir("Logit",
+    (2, _bidir_q(_sp_fn("logit"), _sp_fn("expit"))),
+)
+
+
+# ── Incomplete gamma / beta / Box-Cox ─────────────────────────────────────
+
+GammaInc = _pred_bidir("GammaInc",
+    (3, _bidir_q(_sp_fn("gammainc"), _sp_fn("gammaincinv"), n_fixed=1)),
+)
+
+GammaIncComplement = _pred_bidir("GammaIncComplement",
+    (3, _bidir_q(_sp_fn("gammaincc"), _sp_fn("gammainccinv"), n_fixed=1)),
+)
+
+BetaInc = _pred_bidir("BetaInc",
+    (4, _bidir_q(_sp_fn("betainc"), _sp_fn("betaincinv"), n_fixed=2)),
+)
+
+Boxcox = _pred_bidir("Boxcox",
+    (3, _bidir_q(
+            lambda lam, x: _sp().boxcox(x, lam),
+            lambda lam, y: _sp().inv_boxcox(y, lam),
+            n_fixed=1)),
+)
+
+Boxcox1p = _pred_bidir("Boxcox1p",
+    (3, _bidir_q(
+            lambda lam, x: _sp().boxcox1p(x, lam),
+            lambda lam, y: _sp().inv_boxcox1p(y, lam),
+            n_fixed=1)),
 )
 
 LambertW = _pred("LambertW",
