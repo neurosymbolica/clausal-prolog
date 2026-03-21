@@ -22,7 +22,7 @@ safe_assign(X, Y) <- (
     X is not Y,
     X is 1,
     Y is 2
-),
+)
 ```
 
 This succeeds because X and Y end up with different values (1 and 2), even though at the time of `is not` they are both unbound.
@@ -34,7 +34,7 @@ constrained(X, Y) <- (
     Dif(X, Y),
     X is 1,
     Y is 2
-),
+)
 ```
 
 ### Semantics
@@ -267,12 +267,12 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 solve(X) <- (
     InDomain(X, 1, 10),
     Label([X])
-),
+)
 ```
 
 **Chained comparison (natural Python syntax):**
 ```clausal
-bounded(X) <- (1 <= X, X <= 10, Label([X])),
+bounded(X) <- (1 <= X, X <= 10, Label([X]))
 ```
 
 Since `<=` is CLP(FD), `1 <= X` and `X <= 10` naturally constrain X's domain.
@@ -284,7 +284,7 @@ queens(N, QS) <- (
     AllDifferent(QS),
     Label(QS),
     check_diagonals(QS)
-),
+)
 ```
 
 **SEND + MORE = MONEY:**
@@ -300,7 +300,7 @@ sendmoney(S, E, N, D, M, O, R, Y) <- (
     Money := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
     Sum := Send + More,
     Sum == Money
-),
+)
 ```
 
 ??? example "Python API"
@@ -441,7 +441,7 @@ Sat(BoolImpl(X, Y))       # X → Y (implication)
 HalfAdder(X, Y, SUM, CARRY) <- (
     Sat(BoolEq(SUM, X ^ Y)),
     Sat(BoolEq(CARRY, X & Y))
-),
+)
 ```
 
 **Tautology check (De Morgan's law):**
@@ -461,7 +461,7 @@ SatCount(X | Y, N)       # N = 3
 solve(X, Y) <- (
     Sat(X ^ Y),
     BoolLabeling([X, Y])
-),
+)
 # yields (0,1) and (1,0)
 ```
 
@@ -478,7 +478,7 @@ PigeonHole() <- (
     Sat(~(P12 & P32)),
     Sat(~(P22 & P32)),
     BoolLabeling([P11, P12, P21, P22, P31, P32])
-),
+)
 # no solutions — 3 pigeons can't fit in 2 holes
 ```
 
@@ -574,7 +574,7 @@ sqrt2(X) <- (
     InReal(X, 0.0, 2.0),
     X * X == 2.0,
     LabelReal([X], 1.0e-12)
-),
+)
 % → X ≈ 1.4142135623730951
 ```
 

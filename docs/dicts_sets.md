@@ -105,7 +105,7 @@ Compare with full unification:
 
 ```python
 # Full unification: PERSON must have EXACTLY these two keys
-exact(PERSON, NAME) <- PERSON is {"name": NAME, "role": "admin"},
+exact(PERSON, NAME) <- (PERSON is {"name": NAME, "role": "admin"})
 
 # Partial match: PERSON may have any other keys
 partial(PERSON, NAME) <- SubDict({"name": NAME, "role": "admin"}, PERSON)

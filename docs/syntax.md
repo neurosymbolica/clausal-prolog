@@ -202,7 +202,7 @@ The body after `<-` must be one of:
 - **A single call** — no parentheses needed:
   ```clausal
   sorted_asc([_]),
-  palindrome(XS) <- reverse(XS, XS),
+  palindrome(XS) <- reverse(XS, XS)
   ```
 
 - **A bare name** — no parentheses needed:
@@ -212,7 +212,7 @@ The body after `<-` must be one of:
 
 - **Anything else** — parenthesized:
   ```clausal
-  safe_max(X, Y, X) <- (X >= Y),
+  safe_max(X, Y, X) <- (X >= Y)
   fib(N, RESULT) <- (
       N > 1,
       N1 := N - 1,
@@ -248,8 +248,8 @@ is_permutation(XS, YS) <- (
 Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
 
 ```clausal
-test("fails") <- (not (X is 1 and X is 2)),
-test("either") <- (X is 1 or X is 2),
+test("fails") <- (not (X is 1 and X is 2))
+test("either") <- (X is 1 or X is 2)
 ```
 
 Facts (trivially true rules) are written without a body:
@@ -336,12 +336,12 @@ All list operations apply to strings. Plain string literals (without `u`) are at
 Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
 ```clausal
-greet(NAME) <- Writeln(f"Hello, {NAME}!"),
+greet(NAME) <- Writeln(f"Hello, {NAME}!")
 
-show_pair(X, Y) <- Writeln(f"{X} and {Y}"),
+show_pair(X, Y) <- Writeln(f"{X} and {Y}")
 
 # Format specs work too
-show_price(ITEM, PRICE) <- Writeln(f"{ITEM}: ${PRICE:.2f}"),
+show_price(ITEM, PRICE) <- Writeln(f"{ITEM}: ${PRICE:.2f}")
 ```
 
 Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
@@ -358,38 +358,38 @@ The `++()` operator evaluates an arbitrary Python expression at search time. Log
 
 ```clausal
 # Call a Python builtin
-list_len(L, N) <- (N is ++len(L)),
+list_len(L, N) <- (N is ++len(L))
 
 # Method call on a dereferenced variable
-to_upper(S, R) <- (R is ++S.upper()),
+to_upper(S, R) <- (R is ++S.upper())
 
 # Arithmetic
-inc(X, R) <- (R is ++(X + 1)),
+inc(X, R) <- (R is ++(X + 1))
 
 # Subscript access
-first(L, R) <- (R is ++L[0]),
+first(L, R) <- (R is ++L[0])
 
 # Dict access
-get_key(D, K, R) <- (R is ++D[K]),
+get_key(D, K, R) <- (R is ++D[K])
 
 # Multiple logic variables
-add_len(A, B, R) <- (R is ++(len(A) + len(B))),
+add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 
 # No logic variables (pure Python)
-get_pi(R) <- (R is ++(3.14159)),
+get_pi(R) <- (R is ++(3.14159))
 ```
 
 **As a goal** (side effects):
 
 ```clausal
 # Print as a goal
-show(X) <- ++print(X),
+show(X) <- ++print(X)
 
 # Goal followed by continuation
 process(X, R) <- (
     ++print(X),
     R is ++(X * 2)
-),
+)
 ```
 
 Under the hood, `++expr` wraps the Python expression in a lambda whose parameters shadow the module-scope Var names. The compiler emits `thunk_fn(deref(v0), deref(v1), ...)`. Any Python expression works — method calls, builtins, arithmetic, subscripts, etc.

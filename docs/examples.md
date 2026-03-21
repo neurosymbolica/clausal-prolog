@@ -127,7 +127,7 @@ Add test predicates to any example file, then run with pytest:
 
 ```clausal
 # In your .clausal file
-test("fib 10") <- fib(10, 55),
+test("fib 10") <- fib(10, 55)
 ```
 
 Or query from Python:

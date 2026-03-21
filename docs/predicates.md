@@ -11,7 +11,7 @@ color(blue, cool),
 color(green, cool),
 
 # A rule: warm_color/1 is true when color(C, warm) succeeds
-warm_color(C) <- color(C, warm),
+warm_color(C) <- color(C, warm)
 ```
 
 Fields are inferred from the clause heads — no separate declaration needed. The predicate `color` has fields `(arg0, arg1)`, and `warm_color` has field `(arg0,)`.
@@ -21,8 +21,8 @@ Fields are inferred from the clause heads — no separate declaration needed. Th
 A predicate can have multiple clauses (tried in order):
 
 ```clausal
-max(X, Y, X) <- X >= Y,
-max(X, Y, Y) <- X < Y,
+max(X, Y, X) <- (X >= Y)
+max(X, Y, Y) <- (X < Y)
 ```
 
 ### Recursive predicates
@@ -32,7 +32,7 @@ length([], 0),
 length([_ | REST], N) <- (
     length(REST, N1),
     N := N1 + 1
-),
+)
 ```
 
 ---

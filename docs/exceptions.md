@@ -159,7 +159,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
         (X > 0, R is "positive"),
         error(type_error(_, _), _),
         R is "not a number"
-    ),
+    )
     ```
 
     **Catch a Python exception (no recovery needed):**
@@ -176,7 +176,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
         (R := X / Y),
         ERR,
         (Write(ERR), R is "error")
-    ),
+    )
     ```
 
     **Re-throw after logging:**
@@ -185,7 +185,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
         (R := X / Y),
         E,
         (Write(E), Throw(E))
-    ),
+    )
     ```
 
     **Catch-all:**

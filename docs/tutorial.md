@@ -52,7 +52,7 @@ parent("bob", "eve"),
 grandparent(GRANDPARENT, GRANDCHILD) <- (
     parent(GRANDPARENT, MIDDLE),
     parent(MIDDLE, GRANDCHILD)
-),
+)
 ```
 
 The first four lines are **facts**: `parent("alice", "bob")` means "alice is a parent
@@ -95,7 +95,7 @@ sibling(A, B) <- (
     parent(PARENT, A),
     parent(PARENT, B),
     not (A = B)
-),
+)
 ```
 
 `A` and `B` are logic variables — they stand for "some value". When Clausal tries to
@@ -106,7 +106,7 @@ The **anonymous variable** `_` is a wildcard that matches anything and is never
 reported in results:
 
 ```clausal
-has_child(PERSON) <- parent(PERSON, _),
+has_child(PERSON) <- parent(PERSON, _)
 ```
 
 "PERSON has a child" — we don't care what the child's name is.
@@ -145,7 +145,7 @@ These are built-in predicates. `In(X, LIST)` uses Python's `in` operator — it
 succeeds once for each element of `LIST`:
 
 ```clausal
-contains_three(LIST) <- In(3, LIST),
+contains_three(LIST) <- In(3, LIST)
 ```
 
 `Append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
@@ -153,7 +153,7 @@ with `SUFFIX` gives `WHOLE`. You can use it forwards (split a list) or backwards
 (build one):
 
 ```clausal
-last(ELEMENT, LIST) <- Append(_, [ELEMENT], LIST),
+last(ELEMENT, LIST) <- Append(_, [ELEMENT], LIST)
 ```
 
 ### Pattern matching on lists in clause heads
@@ -166,7 +166,7 @@ sum_list([], 0),
 sum_list([HEAD, *TAIL], TOTAL) <- (
     sum_list(TAIL, SUBTOTAL),
     TOTAL := SUBTOTAL + HEAD
-),
+)
 ```
 
 The first clause handles the empty list. The second peels off `HEAD`, recurses on
@@ -177,7 +177,7 @@ double_list([], []),
 double_list([HEAD, *TAIL], [DOUBLED, *REST]) <- (
     DOUBLED := HEAD * 2,
     double_list(TAIL, REST)
-),
+)
 ```
 
 Each clause head matches a different list shape. Clausal tries them top-to-bottom and
@@ -191,7 +191,7 @@ Use the **walrus operator** `(N := expression)` to evaluate an arithmetic expres
 and unify the result with a variable:
 
 ```clausal
-square(N, SQ) <- (SQ := N * N),
+square(N, SQ) <- (SQ := N * N)
 
 factorial(0, 1),
 factorial(N, F) <- (
@@ -199,7 +199,7 @@ factorial(N, F) <- (
     N1 := N - 1,
     factorial(N1, F1),
     F := N1 * F1 + F1
-),
+)
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
@@ -210,11 +210,11 @@ Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
 The standard comparison operators work directly as goals:
 
 ```clausal
-positive(N) <- N > 0,
+positive(N) <- (N > 0)
 between(LOW, HIGH, N) <- (
     N >= LOW,
     N =< HIGH
-),
+)
 ```
 
 Note: use `=<` for "less than or equal" (to avoid ambiguity with `<=` in Python
@@ -224,9 +224,9 @@ arithmetic expressions for equality and inequality.
 ### A worked example: fizzbuzz
 
 ```clausal
-fizzbuzz(N, "fizzbuzz") <- N mod 15 =:= 0,
-fizzbuzz(N, "fizz")     <- N mod 3  =:= 0,
-fizzbuzz(N, "buzz")     <- N mod 5  =:= 0,
+fizzbuzz(N, "fizzbuzz") <- (N mod 15 =:= 0)
+fizzbuzz(N, "fizz")     <- (N mod 3  =:= 0)
+fizzbuzz(N, "buzz")     <- (N mod 5  =:= 0)
 fizzbuzz(N, N),
 ```
 
@@ -244,9 +244,9 @@ results = [clausal.once(fizzbuzz(n, X))["X"] for n in range(1, 16)]
 `not goal` is **negation as failure**: it succeeds if `goal` has no solutions.
 
 ```clausal
-safe_to_delete(FILE) <- not important(FILE),
+safe_to_delete(FILE) <- (not important(FILE))
 
-different(X, Y) <- not (X = Y),
+different(X, Y) <- (not (X = Y))
 ```
 
 ### When to use it
@@ -259,7 +259,7 @@ classic **closed-world assumption**.
 bachelor(PERSON) <- (
     male(PERSON),
     not married(PERSON)
-),
+)
 ```
 
 If `married("alice")` is not in the database, `not married("alice")` succeeds.
@@ -269,7 +269,7 @@ If `married("alice")` is not in the database, `not married("alice")` succeeds.
 Avoid `not goal` when the variables inside `goal` are unbound. This query:
 
 ```clausal
-not member(5, LIST)
+not In(5, LIST)
 ```
 
 will almost always fail, because Clausal can instantiate `LIST` to something that
@@ -277,7 +277,7 @@ contains 5. Instead, make sure any variables in the negated goal are already bou
 before the `not`:
 
 ```clausal
-no_fives(LIST) <- not member(5, LIST),
+no_fives(LIST) <- (not In(5, LIST))
 ```
 
 is fine when `LIST` is passed in fully instantiated; it is not a generator of lists
@@ -296,17 +296,17 @@ Clausal has a lightweight convention for inline tests. Define `Test/1` predicate
 Test("sum [1,2,3,4] = 10") <- (
     sum_list([1, 2, 3, 4], TOTAL),
     TOTAL = 10
-),
+)
 
 Test("double [1,2,3] = [2,4,6]") <- (
     double_list([1, 2, 3], RESULT),
     RESULT = [2, 4, 6]
-),
+)
 
 Test("fizzbuzz 15") <- (
     fizzbuzz(15, WORD),
     WORD = "fizzbuzz"
-),
+)
 ```
 
 Run the whole test suite with:
@@ -344,12 +344,12 @@ edge("b", "c"),
 edge("c", "d"),
 edge("b", "d"),
 
-reachable(FROM, TO) <- edge(FROM, TO),
+reachable(FROM, TO) <- edge(FROM, TO)
 
 reachable(FROM, TO) <- (
     edge(FROM, MIDDLE),
     reachable(MIDDLE, TO)
-),
+)
 ```
 
 There are two clauses for `reachable/2`: the base case (a direct edge) and the

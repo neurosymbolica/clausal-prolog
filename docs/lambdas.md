@@ -31,7 +31,7 @@ The head is a variable (single param) or tuple of variables (multiple params). T
 Multiple goals are separated with `,` inside `(...)`:
 
 ```clausal
-transform(R) <- CallGoal(((X, Y) <- (T := X + 1, Y := T * 2)), 5, R),
+transform(R) <- CallGoal(((X, Y) <- (T := X + 1, Y := T * 2)), 5, R)
 ```
 
 ### Why arrow syntax?
@@ -116,7 +116,7 @@ color("red"),
 color("green"),
 color("blue"),
 
-get_color(C) <- CallGoal((X <- (color(X), C is X)), _),
+get_color(C) <- CallGoal((X <- (color(X), C is X)), _)
 ```
 
 Querying `get_color(C)` yields three solutions: `C = "red"`, `C = "green"`, `C = "blue"`.
@@ -176,7 +176,7 @@ When a lambda appears as an argument to a predicate call, the compiler **hoists*
 `_` in a lambda body is the anonymous variable — each occurrence is a fresh `Var()`:
 
 ```clausal
-get_color(C) <- CallGoal((X <- (color(X), C is X)), _),
+get_color(C) <- CallGoal((X <- (color(X), C is X)), _)
 ```
 
 Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
@@ -229,7 +229,7 @@ all_pos(XS) <- MapList((X <- (X > 0)), XS)
 positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # Exclude/3 — remove even elements
-remove_evens(XS, RS) <- Exclude((X <- (M := X % 2, M is 0)), XS, RS),
+remove_evens(XS, RS) <- Exclude((X <- (M := X % 2, M is 0)), XS, RS)
 
 # FoldLeft/4 — sum a list
 fold_sum(XS, S) <- FoldLeft(((E, A, R) <- (R := A + E)), XS, 0, S)

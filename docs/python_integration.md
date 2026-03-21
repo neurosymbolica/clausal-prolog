@@ -332,7 +332,7 @@ The `date_time` standard library module provides relational predicates (`Date/4`
 IsoDate(Y, M, D, S) <- (
     Date(Y, M, D, DT),
     S is ++DT.isoformat()
-),
+)
 ```
 
 ---
