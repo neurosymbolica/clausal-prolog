@@ -111,6 +111,7 @@ This is safe because no predicate is queried during module load — `.clausal` f
 ### `-import_from` — selective import
 
 ```clausal
+# skip
 -import_from(myapp.graphs.utils, [ShortestPath, Reachable])
 ```
 
@@ -125,6 +126,7 @@ Connected(X, Y) <- Reachable(X, Y)
 #### Aliases
 
 ```clausal
+# skip
 -import_from(myapp.graphs.utils, [alias(Reachable, Reach)])
 ```
 
@@ -143,6 +145,7 @@ Behind the scenes, imported predicates are stored under a fully-qualified dotted
 ### `-import_module` — whole-module import with qualified calls
 
 ```clausal
+# skip
 -import_module(myapp.graphs.utils)
 ```
 
@@ -159,6 +162,7 @@ Qualified calls are resolved at compile time: the compiler walks the dotted attr
 The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or trailing underscore like `X_`) are rejected with a `SyntaxError`:
 
 ```clausal
+# skip
 Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
 Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
 ```

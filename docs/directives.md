@@ -29,12 +29,14 @@ Declares predicates that are internal to the module. Private predicates get prop
 Import specific predicates from another module:
 
 ```clausal
+# skip
 -import_from(utils, [Double, Helper])
 ```
 
 With aliasing:
 
 ```clausal
+# skip
 -import_from(utils, [alias(Double, MyDouble)])
 ```
 
@@ -45,6 +47,7 @@ This imports `Double` from `utils` but makes it available locally as `MyDouble`.
 Import all exported predicates from a module:
 
 ```clausal
+# skip
 -import_module(utils)
 ```
 
@@ -85,6 +88,7 @@ Allows clauses for a predicate to be scattered throughout the file rather than g
 ### -meta_predicate
 
 ```clausal
+# skip
 -meta_predicate(map(2, +, -))
 ```
 
@@ -126,6 +130,7 @@ Declares a passed argument — a value that threads through EDCG nonterminals wi
 ### -edcg_pred
 
 ```clausal
+# skip
 -edcg_pred(scaled_inc, 0, [counter, scale])
 ```
 

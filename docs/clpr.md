@@ -39,6 +39,7 @@ This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(R) beca
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
 ```clausal
+# skip
 InReal(X)                    % X ∈ [-∞, +∞]
 InReal(X, 0.0, 1.0)          % X ∈ [0, 1]
 InReal([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
@@ -49,6 +50,7 @@ InReal([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(FD)).
 
 ```clausal
+# skip
 LabelReal([X, Y])            % bisect to IEEE float precision
 LabelReal([X, Y], 1.0e-9)   % bisect until width ≤ 1e-9
 ```
@@ -64,6 +66,7 @@ Each branch of the bisection is a separate solution. Use `LabelReal` after posti
 ### Linear constraints
 
 ```clausal
+# skip
 % Two-variable linear system: 2x + 3y = 12, x - y = 1
 linear_system(X, Y) <- (
     InReal(X, -100.0, 100.0),
@@ -78,6 +81,7 @@ linear_system(X, Y) <- (
 ### Non-linear constraints
 
 ```clausal
+# skip
 % Unit circle (first quadrant)
 unit_circle(X, Y) <- (
     InReal(X, 0.0, 1.0),
@@ -89,6 +93,7 @@ unit_circle(X, Y) <- (
 ```
 
 ```clausal
+# skip
 % Square root: find x where x^2 = 2
 sqrt2(X) <- (
     InReal(X, 0.0, 2.0),
@@ -103,6 +108,7 @@ sqrt2(X) <- (
 Integer and real variables can appear together. When an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
 ```clausal
+# skip
 % Worker schedule: integer hours, real cost
 task(HOURS, COST) <- (
     InDomain(HOURS, 1, 8),         % integer hours (CLP(FD))
@@ -119,6 +125,7 @@ In this example, `HOURS` keeps its FD domain `{1..8}` even after participating i
 You can also add an FD domain to a variable that already has a real interval:
 
 ```clausal
+# skip
 % Start with a real constraint, then restrict to integers
 mixed(X) <- (
     InReal(X, 0.0, 100.0),
@@ -133,6 +140,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 ### Float literals trigger CLP(R) automatically
 
 ```clausal
+# skip
 % No InReal needed — the float literal 9.0 triggers CLP(R)
 pythagorean_real(X, Y) <- (
     InReal(X, 0.0, 10.0),

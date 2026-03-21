@@ -49,6 +49,7 @@ Compute the scalar derivative of `F` at point `X` using Richardson extrapolation
 - `RESULT`: result dict — see fields below
 
 ```clausal
+# skip
 Derivative(++(numpy.sin), 0.0, R),
 ResultGet(R, 'df', DF)   % DF ≈ 1.0
 
@@ -79,6 +80,7 @@ Compute the Jacobian matrix of a vector-valued function `F` at point `X`.
 - `RESULT`: result dict — see fields below
 
 ```clausal
+# skip
 Jacobian(++(lambda x: numpy.array([x[0]**2, x[1]**3])),
          ++(numpy.array([2.0, 3.0])), R),
 ResultGet(R, 'df', J)   % J ≈ [[4, 0], [0, 27]]
@@ -105,6 +107,7 @@ Compute the Hessian matrix of a scalar-valued function `F` at point `X`.
 - `RESULT`: result dict — see fields below
 
 ```clausal
+# skip
 Hessian(++(lambda x: x[0]**2 + x[1]**2),
         ++(numpy.array([1.0, 2.0])), R),
 ResultGet(R, 'ddf', H)  % H ≈ [[2, 0], [0, 2]]
@@ -132,6 +135,7 @@ Extract a named field from a differentiation result dict.
 Fails if `FIELD` is not present in `RESULT`.
 
 ```clausal
+# skip
 Derivative(++(lambda x: x**3), 2.0, R),
 ResultGet(R, 'df', DF),    % DF ≈ 12.0
 ResultGet(R, 'error', ERR) % ERR is the estimated error
@@ -142,6 +146,7 @@ ResultGet(R, 'error', ERR) % ERR is the estimated error
 ## Example
 
 ```clausal
+# skip
 -import_from(scipy_differentiate, [Derivative, Jacobian, ResultGet])
 -import_from(numpy, [Array])
 

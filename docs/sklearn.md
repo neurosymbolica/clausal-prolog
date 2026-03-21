@@ -62,6 +62,7 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 | `Split(train, test)` | `("Split", train_dataset, test_dataset)` | Train/test partition |
 
 ```clausal
+# skip
 % Destructure a dataset
 LoadDataset("iris", D), D is ("Dataset", X, Y)
 
@@ -94,6 +95,7 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
     **Clusterers**: `kmeans`, `dbscan`, `agglomerative`
 
 ```clausal
+# skip
 % Check that random_forest is a classifier
 Algorithm("random_forest", "classifier")
 
@@ -115,6 +117,7 @@ Algorithm(ALGO, "regressor")
 | `StratifiedSplit(Dataset, K, Split)` | `+Dataset, +K, -Split` | Stratified K-fold via backtracking |
 
 ```clausal
+# skip
 % Load and split iris
 LoadDataset("iris", D),
 SplitData(D, 0.2, 42, S),
@@ -141,6 +144,7 @@ MakeDataset("classification",
 | `DecisionFunction(Fitted, X, Scores)` | `+Fitted, +X, -Scores` | Decision function scores |
 
 ```clausal
+# skip
 % Classification workflow
 LoadDataset("iris", D),
 Fit(Est("random_forest", {"n_estimators": 100}), D, F),
@@ -172,6 +176,7 @@ Transform(F, X, REDUCED)
 Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"precision"`, `"recall"`, `"roc_auc"`, `"r2"`, `"mse"`, `"mae"`, `"rmse"`.
 
 ```clausal
+# skip
 % Score a classifier
 Score(F, D, S), S > 0.9
 
@@ -198,6 +203,7 @@ CrossValidate(Est("logistic_regression", {"max_iter": 200}),
 Steps are a list of `(name, Est(...))` tuples:
 
 ```clausal
+# skip
 Pipeline([("scaler", Est("standard_scaler", {})),
           ("clf", Est("logistic_regression", {"max_iter": 200}))],
          PIPE),
@@ -220,6 +226,7 @@ Score(F, D, S)
 | `SearchResults(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
 ```clausal
+# skip
 LoadDataset("iris", D),
 GridSearch(Est("svc", {}),
            {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
@@ -237,6 +244,7 @@ BestScore(BEST, SCORE)
 | `Learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
 ```clausal
+# skip
 Fit(Est("random_forest", {"n_estimators": 10}), D, F),
 Learned(F, "feature_importances", FI)
 ```
@@ -266,6 +274,7 @@ Learned(F, "feature_importances", FI)
 ??? example "Complete workflow example"
 
     ```clausal
+# skip
     -import_from(sklearn, [Est, Dataset, Fitted, Split,
                            LoadDataset, SplitData, Fit, Predict, Score,
                            ConfusionMatrix, Learned])
@@ -285,6 +294,7 @@ Learned(F, "feature_importances", FI)
 ??? example "Pipeline with grid search"
 
     ```clausal
+# skip
     -import_from(sklearn, [Est, LoadDataset, Pipeline, Fit, Score,
                            GridSearch, BestParams, BestScore])
 

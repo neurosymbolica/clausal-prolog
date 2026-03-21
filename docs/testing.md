@@ -7,6 +7,7 @@ Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inlin
 Any `.clausal` file can include test clauses of the form:
 
 ```clausal
+# skip
 test("description") <- goal1, goal2, ...
 ```
 
@@ -56,6 +57,7 @@ python -m pytest clausal/examples/fibonacci.clausal -v
 Output looks like:
 
 ```clausal
+# skip
 clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
 clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
 ```

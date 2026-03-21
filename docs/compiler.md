@@ -430,6 +430,7 @@ This gives the same `_get_dispatch()` call interface as a real PredicateMeta cla
 ### Two-phase architecture
 
 ```clausal
+# skip
 Phase A: Source → EmbedTransformer → module_items + Python AST bytecode
 Phase B: compile_module(predicate_nodes, module_items, module_dict) → compiled predicates
 ```

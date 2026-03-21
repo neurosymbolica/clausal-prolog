@@ -15,6 +15,7 @@ Term expansion rewrites module items (clauses, facts, directives) at load time.
 Define `TermExpansion/4` clauses in a `.clausal` file:
 
 ```clausal
+# skip
 TermExpansion(INPUT, OUTPUT, MODULE_STATE, NEW_STATE) <- (
     # transform INPUT into OUTPUT
     ...
@@ -56,6 +57,7 @@ Term expansion can inject initialization and finalization clauses:
 The `q()` function creates term templates in expansion rules:
 
 ```clausal
+# skip
 TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S)
 ```
 
@@ -74,6 +76,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transf
 **Regex auto-binding**: Named capture groups with ALLCAPS or trailing-underscore names are automatically bound to clause variables:
 
 ```clausal
+# skip
 # Before expansion:
 Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
 
@@ -102,6 +105,7 @@ Goal expansion runs after term expansion and before compilation:
 The compiler pipeline orchestrates both expansions:
 
 ```clausal
+# skip
 .clausal source
     → parse (TermTransformer)
     → term expansion (run_term_expansion)

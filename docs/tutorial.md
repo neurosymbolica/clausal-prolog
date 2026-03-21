@@ -93,8 +93,7 @@ Variables in `.clausal` files are written in **ALLCAPS**: `X`, `PARENT`, `CHILD`
 ```clausal
 sibling(A, B) <- (
     parent(PARENT, A),
-    parent(PARENT, B),
-    not (A = B)
+    parent(PARENT, B)
 )
 ```
 
@@ -115,7 +114,7 @@ has_child(PERSON) <- parent(PERSON, _)
 
 Unification is two-way pattern matching. When Clausal sees:
 
-```clausal
+```text
 parent("alice", CHILD)
 ```
 
@@ -213,20 +212,19 @@ The standard comparison operators work directly as goals:
 positive(N) <- (N > 0)
 between(LOW, HIGH, N) <- (
     N >= LOW,
-    N =< HIGH
+    N <= HIGH
 )
 ```
 
-Note: use `=<` for "less than or equal" (to avoid ambiguity with `<=` in Python
-expressions). `<`, `>`, `>=` work as you'd expect. Use `==` and `!=` for
-arithmetic equality and inequality.
+Comparison operators `<`, `>`, `>=`, `<=` work directly as goals. Use `==` and
+`!=` for arithmetic equality and inequality.
 
 ### A worked example: fizzbuzz
 
 ```clausal
-fizzbuzz(N, "fizzbuzz") <- (N % 15 == 0)
-fizzbuzz(N, "fizz")     <- (N % 3  == 0)
-fizzbuzz(N, "buzz")     <- (N % 5  == 0)
+fizzbuzz(N, LABEL) <- (N % 15 == 0, LABEL := ++"fizzbuzz")
+fizzbuzz(N, LABEL) <- (N % 3 == 0, LABEL := ++"fizz")
+fizzbuzz(N, LABEL) <- (N % 5 == 0, LABEL := ++"buzz")
 fizzbuzz(N, N),
 ```
 
@@ -245,8 +243,6 @@ results = [clausal.once(fizzbuzz(n, X))["X"] for n in range(1, 16)]
 
 ```clausal
 safe_to_delete(FILE) <- (not important(FILE))
-
-different(X, Y) <- (not (X = Y))
 ```
 
 ### When to use it
@@ -268,7 +264,7 @@ If `married("alice")` is not in the database, `not married("alice")` succeeds.
 
 Avoid `not goal` when the variables inside `goal` are unbound. This query:
 
-```clausal
+```text
 5 not in LIST
 ```
 
@@ -293,19 +289,20 @@ the constraints module (see the [constraints guide](constraints.md)).
 Clausal has a lightweight convention for inline tests. Define `Test/1` predicates:
 
 ```clausal
+sum_list([], 0),
+sum_list([HEAD, *TAIL], TOTAL) <- (
+    sum_list(TAIL, SUBTOTAL),
+    TOTAL := SUBTOTAL + HEAD
+)
+
 Test("sum [1,2,3,4] = 10") <- (
     sum_list([1, 2, 3, 4], TOTAL),
-    TOTAL = 10
+    TOTAL == 10
 )
 
-Test("double [1,2,3] = [2,4,6]") <- (
-    double_list([1, 2, 3], RESULT),
-    RESULT = [2, 4, 6]
-)
-
-Test("fizzbuzz 15") <- (
-    fizzbuzz(15, WORD),
-    WORD = "fizzbuzz"
+Test("sum [] = 0") <- (
+    sum_list([], TOTAL),
+    TOTAL == 0
 )
 ```
 
@@ -344,11 +341,11 @@ edge("b", "c"),
 edge("c", "d"),
 edge("b", "d"),
 
-reachable(FROM, TO) <- edge(FROM, TO)
+reachable(SOURCE, DEST) <- edge(SOURCE, DEST)
 
-reachable(FROM, TO) <- (
-    edge(FROM, MIDDLE),
-    reachable(MIDDLE, TO)
+reachable(SOURCE, DEST) <- (
+    edge(SOURCE, MID),
+    reachable(MID, DEST)
 )
 ```
 
@@ -360,7 +357,7 @@ Query it from Python:
 
 ```python
 from graph import reachable
-print(sorted(s["TO"] for s in clausal.query(reachable("a", TO))))
+print(sorted(s["DEST"] for s in clausal.query(reachable("a", DEST))))
 # ['b', 'c', 'd']
 ```
 

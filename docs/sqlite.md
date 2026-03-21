@@ -51,6 +51,7 @@ Connections are identified by string aliases. A module-level registry maps alias
 ### `SQLiteConnect/2`
 
 ```clausal
+# skip
 SQLiteConnect(+Path, +Alias)
 ```
 
@@ -61,6 +62,7 @@ Open a SQLite database at `Path` and register it under `Alias`. `Path` can be a 
 ### `SQLiteDisconnect/1`
 
 ```clausal
+# skip
 SQLiteDisconnect(+Alias)
 ```
 
@@ -69,6 +71,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 ### `SQLiteCurrentConnection/1`
 
 ```clausal
+# skip
 SQLiteCurrentConnection(?Alias)
 ```
 
@@ -90,6 +93,7 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 ### `SQLiteQuery/3`
 
 ```clausal
+# skip
 SQLiteQuery(+Alias, +SQL, -Row)
 ```
 
@@ -108,6 +112,7 @@ AllNames(NAME) <- SQLiteQuery("db", "SELECT name FROM users", NAME)
 ### `SQLiteQuery/4`
 
 ```clausal
+# skip
 SQLiteQuery(+Alias, +SQL, +Params, -Row)
 ```
 
@@ -122,6 +127,7 @@ OlderThan(MIN_AGE, NAME) <- (
 ### `SQLiteExec/2`
 
 ```clausal
+# skip
 SQLiteExec(+Alias, +SQL)
 ```
 
@@ -137,6 +143,7 @@ Setup <- (
 ### `SQLiteExec/3`
 
 ```clausal
+# skip
 SQLiteExec(+Alias, +SQL, +Params)
 ```
 
@@ -151,6 +158,7 @@ AddUser(NAME, AGE) <- (
 ### `SQLiteRowCount/3`
 
 ```clausal
+# skip
 SQLiteRowCount(+Alias, +SQL, -Count)
 ```
 
@@ -170,6 +178,7 @@ Cleanup(N) <- (
 ### `SQLiteTable/2`
 
 ```clausal
+# skip
 SQLiteTable(+Alias, ?TableName)
 ```
 
@@ -184,6 +193,7 @@ ListTables(T) <- SQLiteTable("db", T)
 ### `SQLiteColumn/4`
 
 ```clausal
+# skip
 SQLiteColumn(+Alias, +Table, ?ColName, ?ColType)
 ```
 
@@ -203,6 +213,7 @@ ShowSchema(COL, TYPE) <- (
     ### CRUD operations
 
     ```clausal
+# skip
     -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
 
     Init <- (
@@ -222,6 +233,7 @@ ShowSchema(COL, TYPE) <- (
     ### Joining tables
 
     ```clausal
+# skip
     -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
 
     Setup <- (
@@ -245,6 +257,7 @@ ShowSchema(COL, TYPE) <- (
     ### Schema exploration
 
     ```clausal
+# skip
     -import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
 
     Describe(DB) <- (

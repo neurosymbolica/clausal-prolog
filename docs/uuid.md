@@ -67,6 +67,7 @@ For `UUIDv3` and `UUIDv5`, the namespace argument accepts string aliases or raw 
 | `"x500"` | `uuid.NAMESPACE_X500` |
 
 ```clausal
+# skip
 UUIDv3("dns", "example.com", U)
 UUIDv5("url", "https://example.com", U)
 ```
@@ -86,6 +87,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `UUIDInt(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
 
 ```clausal
+# skip
 % Generate a UUID and get its string form
 UUIDv4(U), UUIDStr(U, S)
 
@@ -107,6 +109,7 @@ UUIDHex(U, "550e8400e29b41d4a716446655440000")
 | `IsUUID(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
 
 ```clausal
+# skip
 % Check that a UUID is version 4
 UUIDv4(U), UUIDVersion(U, 4)
 
@@ -121,6 +124,7 @@ IsUUID(U)
     ### Session tokens
 
     ```clausal
+# skip
     -import_from(uuid, [UUIDv4, UUIDStr])
     
     NewSession(USERID, TOKEN) <- (
@@ -132,6 +136,7 @@ IsUUID(U)
     ### Deterministic IDs
 
     ```clausal
+# skip
     -import_from(uuid, [UUIDv5, UUIDStr])
     
     ResourceId(TYPE, NAME, ID) <- (

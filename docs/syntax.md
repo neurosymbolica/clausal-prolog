@@ -86,6 +86,7 @@ Inside a logical term:
 - string literals are atoms (except those prefixed with `u"..."`)
 
 ```clausal
+# skip
 # These are equivalent:
 Atom is 'Atom',
 (x is not 2) is 'is not'(x, 2),
@@ -112,6 +113,7 @@ PascalCase keeps the builtin namespace cleanly separate from both Python keyword
 Unification is written with `is`:
 
 ```clausal
+# skip
 X is 42,
 X is Y,
 X is not Y,   # disequality constraint (dif/2)
@@ -190,6 +192,7 @@ See [constraints.md](constraints.md) for the full CLP(FD) design, including doma
 ## Horn clauses
 
 ```clausal
+# skip
 Head <- Body,
 ```
 
@@ -201,17 +204,20 @@ The body after `<-` must be one of:
 
 - **A single call** — no parentheses needed:
   ```clausal
+# skip
   sorted_asc([_]),
   palindrome(XS) <- reverse(XS, XS)
   ```
 
 - **A bare name** — no parentheses needed:
   ```clausal
+# skip
   always_true <- true,
   ```
 
 - **Anything else** — parenthesized:
   ```clausal
+# skip
   safe_max(X, Y, X) <- (X >= Y)
   fib(N, RESULT) <- (
       N > 1,
@@ -228,6 +234,7 @@ This rule exists because Python's parser sees `<-` as `<` followed by unary `-`.
 Attempting to write an unparenthesized operator body produces a clear error:
 
 ```clausal
+# skip
 SyntaxError: clause body must be parenthesized or a single call:
     write  head <- (body)  or  head <- goal(X)
 ```
@@ -262,6 +269,7 @@ parent(bob, ann),
 Grammar rules (Definite Clause Grammars):
 
 ```clausal
+# skip
 Rule > ListDescription,
 ```
 
@@ -270,6 +278,7 @@ Rule > ListDescription,
 ## Lists
 
 ```clausal
+# skip
 []               # empty list (singleton)
 [a, 1, X]        # a simple list
 [FIRST, *REST]   # head/tail decomposition
@@ -324,6 +333,7 @@ See [dicts_sets.md](dicts_sets.md) for details.
 Strings prefixed with `u""` are lists of character atoms:
 
 ```clausal
+# skip
 u"ABC" is [A, B, C] is ['A', 'B', 'C'],
 ```
 
@@ -400,6 +410,7 @@ A special case of the `++()` pattern: when a numeric literal is used as the
 callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 
 ```clausal
+# skip
 5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
 9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
 -3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
@@ -409,6 +420,7 @@ When a **logic variable** is used as the callable instead, `X(Unit)` becomes a
 goal that posts a dimension constraint on `X`:
 
 ```clausal
+# skip
 F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton value
 F is 9.8(Newton)  # binds F; hook checks dims match
 ```
@@ -429,6 +441,7 @@ not goal,              # negation as failure
 ## Immediate goals
 
 ```clausal
+# skip
 + goal,     # assert/call immediately ('+' distinguishes from a fact)
 - term,     # retract term
 ```
@@ -440,6 +453,7 @@ not goal,              # negation as failure
 Predicates from imported modules are called with dotted notation after loading the module:
 
 ```clausal
+# skip
 utils.Double(X, Y),    # qualified call after -import_module(utils)
 ```
 
@@ -535,6 +549,7 @@ After the body matches `[T]`, the pushback `[T]` is prepended to the remainder.
 Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 
 ```clausal
+# skip
 # phrase/2 — must consume the entire input list
 valid_sentence(S) <- phrase(sentence, S)
 
@@ -587,6 +602,7 @@ DCGs are not just for parsing — they are a **general state-passing mechanism**
 Two reusable nonterminals form the core of state-passing DCGs:
 
 ```clausal
+# skip
 # Read current state (passthrough — state is not modified)
 (state(S), [S]) >> ([S])
 
@@ -691,6 +707,7 @@ A **passed argument** is a read-only value threaded unchanged through all sub-ca
 Each EDCG predicate must declare its **visible arity** and which accumulators/passes it uses:
 
 ```clausal
+# skip
 -edcg_pred(inc, 0, [counter])           # 0 visible args, uses counter
 -edcg_pred(process, 1, [counter, items]) # 1 visible arg, uses counter + items
 -edcg_pred(parse, 0, [counter, dcg])     # uses counter + standard DCG list
@@ -704,6 +721,7 @@ The special name `dcg` refers to the standard DCG difference-list accumulator. I
 EDCG rules use `>>` just like standard DCGs, with additional operators:
 
 ```clausal
+# skip
 # Push a value to a named accumulator: [value] // acc_name
 inc >> ([1] // counter)
 
@@ -744,6 +762,7 @@ process(X) >> ([1] // counter, [X] // items)
 When a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
 
 ```clausal
+# skip
 -edcg_pred(inc_only, 0, [counter])          # only counter
 -edcg_pred(do_both, 1, [counter, items])    # counter + items
 
@@ -756,6 +775,7 @@ do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
 EDCG predicates are compiled to ordinary predicates with hidden arguments appended in declaration order: 2 per accumulator (in, out) + 1 per pass. You can call them from regular `<-` clauses using keyword syntax:
 
 ```clausal
+# skip
 # -edcg_pred(count_elems, 1, [len])
 # Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
 my_length(L, N) <- count_elems(L, _edcg_len_in_=0, _edcg_len_out_=N)
@@ -847,6 +867,7 @@ ForAll(In(X, [2, -1, 6]), X > 0),  # fails
 `Call/N` invokes a goal closure with extra arguments. It is an alias for `CallGoal/N`:
 
 ```clausal
+# skip
 CallGoal((X <- (X > 0)), 5),        # CallGoal/2: succeeds
 Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 ```
@@ -858,6 +879,7 @@ Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
 ```clausal
+# skip
 # MapList/2 — check Goal(Elem) succeeds for every element
 MapList((X <- (X > 0)), [1, 2, 3]),              # succeeds
 
@@ -881,6 +903,7 @@ FoldLeft(((E, A, R) <- (R := A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 Arithmetic operators inside a constraint domain imply constraints, not evaluation. The domain is applied using the `--` escape:
 
 ```clausal
+# skip
 (--clpz)(
     X < 43,
     42 <= X,
@@ -928,6 +951,7 @@ This gives a symmetric and concise way to integrate Python side effects with Pro
 ## Syntax cheat sheet
 
 ```clausal
+# skip
 # Variables (ALL-CAPS preferred; trailing-underscore also valid)
 X, HEAD, REST          # ALL-CAPS logic variables
 X_, head_, rest_       # trailing-underscore style (also valid)

@@ -69,6 +69,7 @@ All logging predicates **always succeed** — they are side-effects. A message b
 ### `Debug/1`, `Debug/2`
 
 ```clausal
+# skip
 Debug(+Msg)
 Debug(+Logger, +Msg)
 ```
@@ -78,6 +79,7 @@ Log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
 ### `Info/1`, `Info/2`
 
 ```clausal
+# skip
 Info(+Msg)
 Info(+Logger, +Msg)
 ```
@@ -87,6 +89,7 @@ Log at INFO level.
 ### `Warning/1`, `Warning/2`
 
 ```clausal
+# skip
 Warning(+Msg)
 Warning(+Logger, +Msg)
 ```
@@ -96,6 +99,7 @@ Log at WARNING level.
 ### `Error/1`, `Error/2`
 
 ```clausal
+# skip
 Error(+Msg)
 Error(+Logger, +Msg)
 ```
@@ -105,6 +109,7 @@ Log at ERROR level.
 ### `Critical/1`, `Critical/2`
 
 ```clausal
+# skip
 Critical(+Msg)
 Critical(+Logger, +Msg)
 ```
@@ -114,6 +119,7 @@ Log at CRITICAL level.
 ### `Log/3`
 
 ```clausal
+# skip
 Log(+Logger, +Level, +Msg)
 ```
 
@@ -124,6 +130,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 Messages are Python strings. Clausal's f-string support means interpolation works naturally:
 
 ```clausal
+# skip
 Info(L, f"User {USERID} logged in from {IP}")
 ```
 
@@ -136,6 +143,7 @@ Logic variables in f-strings are auto-dereferenced at search time.
 ### `GetLogger/1`, `GetLogger/2`
 
 ```clausal
+# skip
 GetLogger(-Logger)
 GetLogger(+Name, -Logger)
 ```
@@ -147,6 +155,7 @@ Python's logger hierarchy applies: `GetLogger("myapp.db", L)` creates a child of
 ### `SetLevel/2`
 
 ```clausal
+# skip
 SetLevel(+Logger, +Level)
 ```
 
@@ -155,6 +164,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 ### `GetLevel/2`
 
 ```clausal
+# skip
 GetLevel(+Logger, -Level)
 ```
 
@@ -163,6 +173,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 ### `IsEnabledFor/2`
 
 ```clausal
+# skip
 IsEnabledFor(+Logger, +Level)
 ```
 
@@ -182,6 +193,7 @@ Process(L, DATA) <- (
 ### `StreamHandler/2`
 
 ```clausal
+# skip
 StreamHandler(+StreamName, -Handler)
 ```
 
@@ -190,6 +202,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 ### `FileHandler/2`
 
 ```clausal
+# skip
 FileHandler(+Path, -Handler)
 ```
 
@@ -198,6 +211,7 @@ Create a `logging.FileHandler` that writes to the given file path.
 ### `SetFormatter/2`
 
 ```clausal
+# skip
 SetFormatter(+Handler, +FormatString)
 ```
 
@@ -206,6 +220,7 @@ Set a `logging.Formatter` on the handler using Python's format string syntax (e.
 ### `AddHandler/2`
 
 ```clausal
+# skip
 AddHandler(+Logger, +Handler)
 ```
 
@@ -214,6 +229,7 @@ Add a handler to the logger.
 ### `RemoveHandler/2`
 
 ```clausal
+# skip
 RemoveHandler(+Logger, +Handler)
 ```
 
@@ -222,6 +238,7 @@ Remove a handler from the logger.
 ### `BasicConfig/1`
 
 ```clausal
+# skip
 BasicConfig(+Opts)
 ```
 
@@ -234,6 +251,7 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ### Basic usage
 
     ```clausal
+# skip
     -import_from(log, [GetLogger, Info, Warning, SetLevel])
     
     Init(L) <- (
@@ -255,6 +273,7 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ### Custom handler and formatter
 
     ```clausal
+# skip
     -import_from(log, [
         GetLogger, Info, SetLevel,
         StreamHandler, FileHandler, SetFormatter, AddHandler
@@ -275,6 +294,7 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ### Logger hierarchy
 
     ```clausal
+# skip
     -import_from(log, [GetLogger, Info, SetLevel])
     
     Setup <- (

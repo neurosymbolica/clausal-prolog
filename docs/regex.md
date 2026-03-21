@@ -38,6 +38,7 @@ Match(r"\d+$", "123abc")       # fails (no match at end)
 `Match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
 
 ```clausal
+# skip
 Match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G)
 # G = {"year": "2026", "month": "03"}
 
@@ -50,6 +51,8 @@ Match(r"(\d+)-(\d+)", "42-99", G)
 Named groups using ALLCAPS or trailing-underscore names are automatically bound to corresponding clause variables at compile time (via goal expansion):
 
 ```clausal
+-import_from(regex, [Match])
+
 Test("auto-bind YEAR") <- (
     YEAR is "2026",
     Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03")
@@ -63,6 +66,7 @@ The goal expansion pass detects `(?P<YEAR>...)` and generates code to unify the 
 Like Match but unanchored — finds the pattern anywhere in the string:
 
 ```clausal
+# skip
 Search(r"\d+", "abc123def")    # succeeds
 Search(r"\d+", "abcdef")       # fails
 
@@ -75,6 +79,7 @@ Search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G)
 `Replace(Pattern, Replacement, String, Result)` — regex substitution:
 
 ```clausal
+# skip
 Replace(r"\s+", " ", "a  b   c", R)          # R = "a b c"
 Replace(r"\d+", "", "a1b2c3", R)              # R = "abc"
 Replace(r"(\w+)", r"[\1]", "hi lo", R)        # R = "[hi] [lo]"
@@ -85,6 +90,7 @@ Replace(r"(\w+)", r"[\1]", "hi lo", R)        # R = "[hi] [lo]"
 `Split(Pattern, String, Fragments)` — split string by pattern:
 
 ```clausal
+# skip
 Split(r",\s*", "a, b, c", F)     # F = ["a", "b", "c"]
 Split(r"\s+", "x y z", F)        # F = ["x", "y", "z"]
 ```
@@ -94,6 +100,7 @@ Split(r"\s+", "x y z", F)        # F = ["x", "y", "z"]
 `FindAll(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match:
 
 ```clausal
+# skip
 FindAll(r"\d+", "a1b23c456", D)
 # D = "1", then "23", then "456"
 ```
@@ -113,7 +120,9 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) detects string-liter
 Patterns can be variables or f-strings:
 
 ```clausal
-Test("dynamic match") <- Match(f"^{"hello"}", "hello world")
+-import_from(regex, [Match])
+
+Test("dynamic match") <- Match(f"^{'hello'}", "hello world")
 Test("dynamic pattern") <- (PAT is r"\d+", Match(PAT, "42"))
 ```
 

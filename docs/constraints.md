@@ -50,22 +50,26 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
     **Constraint succeeds — terms stay different:**
     ```clausal
+# skip
     X is not Y, X is 1, Y is 2    # succeeds: 1 ≠ 2
     ```
 
     **Constraint fails — terms become equal:**
     ```clausal
+# skip
     X is not Y, X is 1, Y is 1    # fails: dif violated when Y=1
     ```
 
     **Multiple constraints:**
     ```clausal
+# skip
     X is not 1, X is not 2, X is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
     X is not 1, X is not 2, X is 1    # fails: dif(X, 1) violated
     ```
 
     **Immediate check (old semantics):**
     ```clausal
+# skip
     not (X is Y)    # fails if X and Y are both unbound (they CAN unify)
     ```
 
@@ -429,6 +433,7 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 
 **Posting constraints:**
 ```clausal
+# skip
 Sat(X & Y)                # both must be 1
 Sat(X | Y)                # at least one must be 1
 Sat(~X)                    # X must be 0
@@ -446,11 +451,13 @@ HalfAdder(X, Y, SUM, CARRY) <- (
 
 **Tautology check (De Morgan's law):**
 ```clausal
+# skip
 Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 ```
 
 **Model counting:**
 ```clausal
+# skip
 SatCount(X ^ Y, N)       # N = 2
 SatCount(X & Y, N)       # N = 1
 SatCount(X | Y, N)       # N = 3
@@ -569,6 +576,7 @@ Quick reference:
 The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
 
 ```clausal
+# skip
 % Float literal triggers CLP(R)
 sqrt2(X) <- (
     InReal(X, 0.0, 2.0),

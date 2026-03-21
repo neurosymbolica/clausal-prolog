@@ -16,6 +16,7 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_cluster, [Linkage, FlatCluster, ...])
 ```
 
@@ -62,6 +63,7 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 - `RESULT`: ndarray of shape `(n-1, 4)` — the linkage matrix `Z`
 
 ```clausal
+# skip
 Linkage(DATA, 'ward', Z),
 % Z is the linkage matrix for ward hierarchical clustering
 ```
@@ -80,6 +82,7 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 - `RESULT`: ndarray of shape `(n,)` — integer cluster assignment for each observation
 
 ```clausal
+# skip
 Linkage(DATA, 'ward', Z),
 FlatCluster(Z, 3, 'maxclust', LABELS),
 % LABELS[i] is the cluster number for observation i
@@ -96,6 +99,7 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 - `RESULT`: dict with keys `icoord`, `dcoord`, `ivl`, `leaves`, `color_list`
 
 ```clausal
+# skip
 Linkage(DATA, 'ward', Z),
 Dendrogram(Z, D),
 ResultGet(D, 'leaves', LEAVES),
@@ -113,6 +117,7 @@ Compute cophenetic distances from linkage matrix `Z`.
 - With `Y` (condensed pairwise distances): `RESULT` is `dict {'c': float, 'd': ndarray}` where `c` is the cophenetic correlation coefficient and `d` is the cophenetic distance array
 
 ```clausal
+# skip
 Linkage(DATA, 'ward', Z),
 Y is ++(pdist(DATA)),
 Cophenet(Z, Y, RESULT),
@@ -131,6 +136,7 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 - `RESULT`: ndarray of shape `(n-1, 4)` — each row is `[mean, std, count, inconsistency_coefficient]`
 
 ```clausal
+# skip
 Linkage(DATA, 'ward', Z),
 Inconsistent(Z, STATS),
 % STATS[i, 3] is the inconsistency coefficient for merge i
@@ -169,6 +175,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 - `RESULT`: dict `{'codebook': ndarray shape (K, D), 'distortion': float}`
 
 ```clausal
+# skip
 KMeans(DATA, 2, RESULT),
 ResultGet(RESULT, 'codebook', CODEBOOK),
 ResultGet(RESULT, 'distortion', D),
@@ -231,6 +238,7 @@ ResultGet(R, 'distortion', D),
 ## Typical pipeline
 
 ```clausal
+# skip
 % 1. Load and whiten data
 Whiten(RAW_DATA, DATA),
 

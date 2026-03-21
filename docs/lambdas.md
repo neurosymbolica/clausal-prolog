@@ -100,6 +100,7 @@ Lambdas are invoked with the `CallGoal` builtin, which takes a goal closure and 
 The extra arguments are passed as positional parameters to the lambda:
 
 ```clausal
+# skip
 # lambda receives X = 5
 CallGoal((X <- (X > 0)), 5)
 
@@ -142,6 +143,7 @@ This is transparent — no special syntax is needed. The bridge (`_tramp_call`) 
 Lambdas compile to **simple-mode** Python generator functions. A lambda like:
 
 ```clausal
+# skip
 (X, Y) <- (Y := X + Z)
 ```
 
@@ -210,6 +212,7 @@ Since `FindAll` and friends are compiler special forms, the goal argument is com
 The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
 ```clausal
+# skip
 # Builtin predicates can be passed directly — no lambda needed
 all_numbers(XS) <- MapList(IsNumber, XS)
 keep_ints(XS, IS) <- Filter(IsInt, XS, IS)

@@ -7,12 +7,14 @@ The `scipy_optimize` module wraps [`scipy.optimize`](https://docs.scipy.org/doc/
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_optimize, [Minimize, MinimizeScalar, ResultGet, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_optimize, [Minimize, MinimizeScalar, ...])
 ```
 
@@ -23,6 +25,7 @@ Or via the canonical `py.*` path:
 All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
 
 ```clausal
+# skip
 Minimize(++(lambda x: x[0]**2 + x[1]**2), ++([1.0, 1.0]), RESULT),
 ResultGet(RESULT, 'x', X),
 ResultGet(RESULT, 'success', OK).
@@ -63,6 +66,7 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 ### Scalar minimisation
 
 ```clausal
+# skip
 MinimizeScalar(FUN, RESULT)
     Minimise a scalar function of one variable (Brent method by default).
     RESULT: dict {x, fun, success, message, nit, nfev}
@@ -89,6 +93,7 @@ MinimizeQuadratic(RESULT) <- (
 ### Multivariate minimisation
 
 ```clausal
+# skip
 Minimize(FUN, X0, RESULT)
     Minimise a multivariate function starting from X0 (BFGS by default).
     FUN:    Python callable accepting a 1-D array, returning a scalar
@@ -122,6 +127,7 @@ RosenbrockMinimum(X) <- (
 These methods search for a global minimum and do not require a gradient.
 
 ```clausal
+# skip
 DifferentialEvolution(FUNC, BOUNDS, RESULT)
     BOUNDS: list of (min, max) pairs, one per variable
     RESULT: dict {x, fun, success, message, nit, nfev, ...}
@@ -164,6 +170,7 @@ GlobalMin(X) <- (
 ### Least-squares and curve fitting
 
 ```clausal
+# skip
 NonlinearLeastSquares(FUN, X0, RESULT)
     Nonlinear least-squares minimisation of sum(FUN(x)**2).
     FUN:    callable returning a 1-D array of residuals
@@ -202,6 +209,7 @@ FitDecay(XDATA, YDATA, PARAMS) <- (
 ### Root finding
 
 ```clausal
+# skip
 RootScalar(F, RESULT)
     Find a root of a scalar function.
     RESULT: dict {root, iterations, function_calls, converged, flag}
@@ -246,6 +254,7 @@ SquareRoot(N, ROOT) <- (
 ### Linear and mixed-integer programming
 
 ```clausal
+# skip
 LinearProgram(C, RESULT)
     Minimise C @ x subject to x >= 0 (no constraints).
     C:      cost vector (1-D array)
@@ -284,6 +293,7 @@ Bounds(LB, UB, RESULT)
 Example — two-variable LP:
 
 ```clausal
+# skip
 -import_from(scipy_optimize, [LinearProgram, ResultGet])
 
 % Maximise x1 + 2*x2 subject to x1 + x2 <= 4, x1,x2 >= 0
@@ -312,6 +322,7 @@ IntegerPlan(X) <- (
 ### ResultGet
 
 ```clausal
+# skip
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate
@@ -338,6 +349,7 @@ Common fields by predicate:
 ## Complete example — Rosenbrock with gradient descent
 
 ```clausal
+# skip
 -import_from(scipy_optimize, [Minimize, ResultGet])
 
 % The Rosenbrock function — minimum at (1, 1) with value 0

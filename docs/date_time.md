@@ -53,6 +53,7 @@ IsoDate(Y, M, D, S) <- (
 ### Now/1, NowUTC/1, Today/1
 
 ```clausal
+# skip
 Now(DT)        # DT = datetime.datetime.now()
 NowUTC(DT)     # DT = datetime.datetime.now(UTC)
 Today(D)       # D = datetime.date.today()
@@ -63,6 +64,7 @@ Today(D)       # D = datetime.date.today()
 `Date(Year, Month, Day, DateObj)` — construct or decompose:
 
 ```clausal
+# skip
 # Construct
 Date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
 
@@ -75,6 +77,7 @@ Date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
 `Time(Hour, Minute, Second, TimeObj)`:
 
 ```clausal
+# skip
 Time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
 Time(H, M, S, T)      # decompose T into components
 ```
@@ -84,6 +87,7 @@ Time(H, M, S, T)      # decompose T into components
 `DateTime(Year, Month, Day, Hour, Minute, Second, DtObj)`:
 
 ```clausal
+# skip
 DateTime(2026, 3, 16, 14, 30, 0, DT)
 # DT = datetime.datetime(2026, 3, 16, 14, 30, 0)
 ```
@@ -93,6 +97,7 @@ DateTime(2026, 3, 16, 14, 30, 0, DT)
 `TimeDelta(Days, Seconds, TdObj)`:
 
 ```clausal
+# skip
 TimeDelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
 TimeDelta(D, S, TD)    # decompose TD into days and seconds
 ```
@@ -100,6 +105,7 @@ TimeDelta(D, S, TD)    # decompose TD into days and seconds
 ### DateAdd/3, DateSub/3
 
 ```clausal
+# skip
 DateAdd(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
 DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
 ```
@@ -107,24 +113,28 @@ DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
 ### DateDiff/3
 
 ```clausal
+# skip
 DateDiff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
 ```
 
 ### FormatDate/3
 
 ```clausal
+# skip
 FormatDate(DT, "%Y-%m-%d", S)    # S = "2026-03-16"
 ```
 
 ### ParseDate/3
 
 ```clausal
+# skip
 ParseDate("2026-03-16", "%Y-%m-%d", DT)    # DT = datetime.datetime(...)
 ```
 
 ### DayOfWeek/2
 
 ```clausal
+# skip
 DayOfWeek(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 ```
 

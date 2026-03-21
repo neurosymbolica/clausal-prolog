@@ -13,6 +13,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
 Raises an exception with a structured error term:
 
 ```clausal
+# skip
 Throw(error(type_error(integer, foo), context))
 ```
 
@@ -23,6 +24,7 @@ Any term can be thrown — strings, atoms, or structured error terms.
 Catches any exception and binds the error term to a variable or pattern:
 
 ```clausal
+# skip
 Catch(Goal, ERROR)
 ```
 
@@ -32,6 +34,7 @@ Catch(Goal, ERROR)
 `Catch/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms.
 
 ```clausal
+# skip
 # Catch any exception
 Catch(Goal, ERROR)
 
@@ -47,6 +50,7 @@ Catch(Goal, error(type_error(_, _), _))
 Like `Catch/2` but with an explicit recovery goal:
 
 ```clausal
+# skip
 CatchRecover(Goal, ERROR, Recovery)
 ```
 
@@ -80,6 +84,7 @@ safe_div(X, Y, R) <- catch(
 them the same way as logic throw terms:
 
 ```clausal
+# skip
 catch(
     ++(some_python_call()),
     ValueError(MSG),
@@ -108,6 +113,7 @@ Clausal terms during catch. Python exceptions become `Compound(ClassName,
 no distinction between catching a logic throw and catching a Python exception:
 
 ```clausal
+# skip
 # Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
 # Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
 
@@ -155,6 +161,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch a type error:**
     ```clausal
+# skip
     check_int(X, R) <- catch(
         (X > 0, R is "positive"),
         error(type_error(_, _), _),
@@ -164,6 +171,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch a Python exception (no recovery needed):**
     ```clausal
+# skip
     safe_parse(S, R) <- (
         Catch(++(int(S)), ValueError(_)),
         R is "parse error"
@@ -172,6 +180,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **CatchRecover with error access:**
     ```clausal
+# skip
     logged_op(X, Y, R) <- CatchRecover(
         (R := X / Y),
         ERR,
@@ -181,6 +190,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Re-throw after logging:**
     ```clausal
+# skip
     logged_div(X, Y, R) <- catch(
         (R := X / Y),
         E,
@@ -190,6 +200,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch-all:**
     ```clausal
+# skip
     safe_run(GOAL, R) <- (
         Catch(CallGoal(GOAL), _),
         R is "ok"

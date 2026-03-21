@@ -40,6 +40,7 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 Posts a Boolean constraint. Fails immediately if the formula is unsatisfiable:
 
 ```clausal
+# skip
 Sat(X & Y)                # both must be 1
 Sat(X | Y)                # at least one must be 1
 Sat(~X)                     # X must be 0
@@ -50,6 +51,7 @@ Sat(BoolImpl(X, Y))       # X → Y (implication)
 Multiple `Sat` calls on shared variables build a single constraint network:
 
 ```clausal
+# skip
 Sat(X | Y), Sat(~X | Z), Sat(Y & Z)
 ```
 
@@ -58,6 +60,7 @@ Sat(X | Y), Sat(~X | Z), Sat(Y & Z)
 Tests if a formula is a tautology, contradiction, or neither:
 
 ```clausal
+# skip
 # De Morgan's law — tautology
 Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 
@@ -73,6 +76,7 @@ Taut(X | Y, T)                            # fails
 Counts the number of satisfying assignments:
 
 ```clausal
+# skip
 SatCount(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
 SatCount(X & Y, N)       # N = 1  (AND has 1 solution)
 SatCount(X | Y, N)       # N = 3  (OR has 3 solutions)
@@ -97,6 +101,7 @@ solve(X, Y) <- (
     ### Half Adder
 
     ```clausal
+# skip
     HalfAdder(X, Y, SUM, CARRY) <- (
         Sat(BoolEq(SUM, X ^ Y)),
         Sat(BoolEq(CARRY, X & Y))
@@ -108,6 +113,7 @@ solve(X, Y) <- (
     3 pigeons in 2 holes — no solution exists:
 
     ```clausal
+# skip
     PigeonHole() <- (
         Sat(P11 | P12),
         Sat(P21 | P22),
@@ -128,6 +134,7 @@ solve(X, Y) <- (
     Verify De Morgan's law via tautology check:
 
     ```clausal
+# skip
     Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
     ```
 

@@ -5,6 +5,7 @@
 The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain Python lists matching the `pairs.py` convention.
 
 ```clausal
+# skip
 -import_from(graphs, [Vertices, ShortestPath, IsConnected])
 
 Main <- (
@@ -19,6 +20,7 @@ Main <- (
 Or via module import:
 
 ```clausal
+# skip
 -import_module(graphs)
 
 Main <- (
@@ -64,6 +66,7 @@ Main <- (
 | `Degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
 
 ```clausal
+# skip
 Vertices([["a", "b"], ["b", "c"]], V)    % V = ["a", "b", "c"]
 Neighbors([["a", "b"], ["b", "c"]], "b", N)  % N = ["a", "c"]
 Degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
@@ -88,6 +91,7 @@ Degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
 | `DepthFirstNodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | DFS preorder node ordering from source |
 
 ```clausal
+# skip
 BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 % N = ["a", "b", "c", "d"]
 ```
@@ -103,6 +107,7 @@ BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 | `PathCost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | Sum of edge weights along a path |
 
 ```clausal
+# skip
 % Enumerate all paths
 FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P)
 % P = ["a", "b", "c"]  then  P = ["a", "c"]
@@ -127,6 +132,7 @@ PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
 | `HasCycle(Edges)` | `+Edges` | Succeeds if the directed graph contains a cycle |
 
 ```clausal
+# skip
 ConnectedComponents([["a", "b"], ["c", "d"]], C)
 % C = [["a", "b"], ["c", "d"]]
 
@@ -144,6 +150,7 @@ TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O)
 | `MinSpanningTree(Edges, Tree, Cost)` | `+Edges, -Tree, -Cost` | Minimum spanning tree via Prim's algorithm |
 
 ```clausal
+# skip
 MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
 % T = [["a", "b", 1], ["b", "c", 2]]   C = 3
 ```
@@ -158,6 +165,7 @@ MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
 | `MergeGraphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | Union of two edge lists |
 
 ```clausal
+# skip
 ReverseEdges([["a", "b"], ["c", "d"]], R)
 % R = [["b", "a"], ["d", "c"]]
 ```

@@ -11,6 +11,7 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
 Classic Fibonacci sequence with pattern-matching base cases:
 
 ```clausal
+# skip
 Fib(N=0, F=0),
 Fib(N=1, F=1),
 Fib(N, F) <- (N > 1, ...)

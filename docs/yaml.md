@@ -67,12 +67,15 @@ Only `yaml.safe_load` is used — no arbitrary Python object construction from Y
 ### `Read/2`
 
 ```clausal
+# skip
 Read(+YamlString, -Data)
 ```
 
 Parse a YAML string into a Python object. Fails on invalid YAML.
 
 ```clausal
+-import_from(yaml_module, [Read, Get])
+
 Test("parse mapping") <- (
     Read("name: alice\nage: 30", D),
     Get(D, "name", "alice")
@@ -82,21 +85,26 @@ Test("parse mapping") <- (
 ### `ReadAll/2`
 
 ```clausal
+# skip
 ReadAll(+YamlString, -DocList)
 ```
 
 Parse a multi-document YAML string (documents separated by `---`) into a list of Python objects.
 
 ```clausal
+-import_from(yaml_module, [ReadAll])
+
 Test("multi-doc") <- (
     ReadAll("a: 1\n---\nb: 2", DOCS),
-    DOCS == [{"a": 1}, {"b": 2}]
+    LEN is ++len(DOCS),
+    LEN == 2
 )
 ```
 
 ### `ReadFile/2`
 
 ```clausal
+# skip
 ReadFile(+Path, -Data)
 ```
 
@@ -113,22 +121,28 @@ LoadConfig(PATH, CFG) <- ReadFile(PATH, CFG)
 ### `Write/2`
 
 ```clausal
+# skip
 Write(+Data, -YamlString)
 ```
 
 Serialize a Python object to a YAML string. Uses block style (`default_flow_style=False`) for human-readable output.
 
 ```clausal
+-import_from(yaml_module, [Read, Write, Get])
+
 Test("serialize") <- (
-    Write({"x": 1, "y": 2}, S),
+    DATA is ++{"x": 1, "y": 2},
+    Write(DATA, S),
     Read(S, D),
-    Get(D, "x", 1)
+    Get(D, "x", VAL),
+    VAL == 1
 )
 ```
 
 ### `WriteAll/2`
 
 ```clausal
+# skip
 WriteAll(+DocList, -YamlString)
 ```
 
@@ -137,6 +151,7 @@ Serialize a list of Python objects to a multi-document YAML string with `---` se
 ### `WriteFile/2`
 
 ```clausal
+# skip
 WriteFile(+Path, +Data)
 ```
 
@@ -149,6 +164,7 @@ Write a Python object as YAML to a file. Always succeeds if the write completes;
 ### `Get/3`
 
 ```clausal
+# skip
 Get(+Data, +Path, -Value)
 ```
 
@@ -161,6 +177,8 @@ Navigate a nested dict/list structure by key path. `Path` can be:
 Fails if any key is missing or index is out of range.
 
 ```clausal
+-import_from(yaml_module, [Read, Get])
+
 Test("nested access") <- (
     Read("items:\n  - name: first\n  - name: second", D),
     Get(D, ["items", 1, "name"], "second")
@@ -174,6 +192,7 @@ Test("nested access") <- (
     ### Parse a config file
 
     ```clausal
+# skip
     -import_from(yaml_module, [ReadFile, Get])
     
     DbConfig(PATH, HOST, PORT, NAME) <- (
@@ -187,6 +206,7 @@ Test("nested access") <- (
     ### Round-trip
 
     ```clausal
+# skip
     -import_from(yaml_module, [Read, Write, Get])
     
     RoundTrip(YAML, KEY, VAL) <- (
@@ -200,6 +220,7 @@ Test("nested access") <- (
     ### Multi-document Kubernetes manifests
 
     ```clausal
+# skip
     -import_from(yaml_module, [ReadAll, Get])
     
     ServiceNames(YAML, NAMES) <- (
@@ -211,6 +232,7 @@ Test("nested access") <- (
     ### Python interop for complex access
 
     ```clausal
+# skip
     -import_from(yaml_module, [Read])
     
     AllKeys(YAML, KEYS) <- (

@@ -174,6 +174,7 @@ sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K := abs(X))), XS, SS)
 `FilterMap(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
 
 ```clausal
+# skip
 double_positives(XS, RS) <- FilterMap(
     ((X, Y) <- (X > 0, Y := X * 2))
     XS, RS
@@ -195,6 +196,7 @@ double_positives(XS, RS) <- FilterMap(
     Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
 
     ```clausal
+# skip
     # FindAll with inline goal — no lambda required
     squares(NS, SQS) <- FindAll(SQ, (In(X, NS), SQ := X * X), SQS)
 
@@ -205,6 +207,7 @@ double_positives(XS, RS) <- FilterMap(
     Higher-order list predicates take either lambdas or predicate references:
 
     ```clausal
+# skip
     # Filter with lambda
     positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 

@@ -240,6 +240,7 @@ Groundness-keyed dispatch generalises first-argument indexing to **multi-argumen
 First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
 ```clausal
+# skip
 color("red", TEMP)       # first arg ground  → first-arg index handles this
 color(NAME, "warm")      # second arg ground → first-arg index can't help
 color(NAME, TEMP)        # neither ground    → full scan either way
@@ -411,6 +412,7 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 Without compound-key indexing, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
 
 ```clausal
+# skip
 Shape(circle(R), R) <- true
 Shape(rect(W, H), W) <- true
 Shape(triangle(A, B, C), A) <- true
@@ -422,6 +424,7 @@ had no indexing at all on `arg0`, even though the four clauses are perfectly dis
 With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
 
 ```clausal
+# skip
 Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
                          idx_dict[("circle", 1)] → circle bucket
                          Q unified with 42
@@ -434,6 +437,7 @@ Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
 ```clausal
+# skip
 Combo(fire, dry, hot)   Combo(fire, wet, cold)
 Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
 Combo(wind, dry, hot)   Combo(wind, wet, cold)
@@ -448,6 +452,7 @@ Combo(wind, dry, hot)   Combo(wind, wet, cold)
 When activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
 ```clausal
+# skip
                          both ground ──→ joint_dict[(ki, kj)] ──→ bucket_fn
                         /                                        └─ default_fn
 dispatch(*args) ───────┤  only argI ground ──→ single-I dispatch
@@ -464,6 +469,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 When joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
 ```clausal
+# skip
 Level 0: {argI_key → (level1_buckets_or_None, level1_all_clauses)}
 ```
 
@@ -472,6 +478,7 @@ Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_
 **Level-1 default is all clauses in the level-0 bucket** (not just var-headed clauses). This is the key correctness requirement: when `argJ` is unbound at call time, every clause in the level-0 bucket is a potential match and must be tried.
 
 ```clausal
+# skip
                        argI var ──────────────────────────────────→ fallback_fn
                       /
 dispatch(*args) ──────

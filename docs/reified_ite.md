@@ -13,6 +13,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 In `.clausal` files, use the `If` function call:
 
 ```clausal
+# skip
 If(condition, then_goal, else_goal)
 ```
 

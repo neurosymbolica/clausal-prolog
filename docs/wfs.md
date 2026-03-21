@@ -79,6 +79,7 @@ for r in results:
 WFS only applies to **tabled** predicates:
 
 ```clausal
+# skip
 -table(pred/arity)
 ```
 

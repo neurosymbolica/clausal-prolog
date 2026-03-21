@@ -7,12 +7,14 @@ The `scipy_stats` module wraps [`scipy.stats`](https://docs.scipy.org/doc/scipy/
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_stats, [StatsMean, StatsPearsonCorrelation, ResultGet, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_stats, [StatsMean, ...])
 ```
 
@@ -72,6 +74,7 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 ### Descriptive statistics (Tier 1)
 
 ```clausal
+# skip
 StatsDescribe(A, RESULT)
     Compute several descriptive statistics of the data in A.
     RESULT: dict {nobs, minmax, mean, variance, skewness, kurtosis}
@@ -131,6 +134,7 @@ Summarise(DATA, MEAN) <- (
 ### Correlation and regression (Tier 2)
 
 ```clausal
+# skip
 StatsPearsonCorrelation(X, Y, RESULT)
     Pearson correlation coefficient and p-value.
     RESULT: dict {statistic, pvalue}
@@ -175,6 +179,7 @@ LinearFit(X, Y, SLOPE, INTERCEPT) <- (
 ### Parametric hypothesis tests (Tier 2)
 
 ```clausal
+# skip
 StatsTTest1Sample(A, POPMEAN, RESULT)
     One-sample t-test: is the mean of A different from POPMEAN?
     RESULT: dict {statistic, pvalue, df}
@@ -222,6 +227,7 @@ TwoGroupTest(GROUP_A, GROUP_B, PVAL) <- (
 ### Nonparametric tests (Tier 2)
 
 ```clausal
+# skip
 StatsMannWhitneyU(X, Y, RESULT)
     Mann-Whitney U rank test.
     RESULT: dict {statistic, pvalue}
@@ -266,6 +272,7 @@ GroupDifference(GROUPS, PVAL) <- (
 ### Distribution evaluation (Tier 1 functional)
 
 ```clausal
+# skip
 StatsDist(DIST, METHOD, X, RESULT)
     Call scipy.stats.<DIST>.<METHOD>(X) for any distribution and method.
     DIST:   string name of a scipy.stats distribution (e.g. 'norm', 'expon')
@@ -305,6 +312,7 @@ StatsNormalRvs(LOC, SCALE, SIZE, RESULT)
 Example:
 
 ```clausal
+# skip
 -import_from(scipy_stats, [StatsNormalPdf, StatsNormalCdf, StatsDist])
 
 % Probability that X ~ N(0,1) falls in [-1, 1]
@@ -327,6 +335,7 @@ ExponEntropy(H) <- (
 Freeze a distribution with fixed parameters, then evaluate it repeatedly without re-creating the distribution object each time.
 
 ```clausal
+# skip
 StatsFreezeDist(DIST, PARAMS_DICT, RESULT)
     Create a frozen scipy.stats distribution.
     DIST:        string name of a scipy.stats distribution (e.g. 'norm', 'beta')
@@ -398,6 +407,7 @@ BetaMedian(X) <- (
 ### ResultGet
 
 ```clausal
+# skip
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate (or an object with an attribute)

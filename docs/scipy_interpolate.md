@@ -7,12 +7,14 @@ The `scipy_interpolate` module wraps [`scipy.interpolate`](https://docs.scipy.or
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_interpolate, [MakeSpline, EvalSpline, ...])
 ```
 
@@ -71,6 +73,7 @@ Predicate names use full English words where scipy uses abbreviations:
 #### `MakeSpline` — recommended 1-D spline
 
 ```clausal
+# skip
 MakeSpline(X, Y, RESULT)
 MakeSpline(X, Y, K, RESULT)
 MakeSpline(X, Y, K, BC_TYPE, RESULT)
@@ -85,6 +88,7 @@ MakeSpline(X, Y, K, BC_TYPE, RESULT)
 #### `MakeCubic` — cubic spline with configurable boundary conditions
 
 ```clausal
+# skip
 MakeCubic(X, Y, RESULT)
 MakeCubic(X, Y, BC_TYPE, RESULT)
     → scipy.interpolate.CubicSpline(x, y, bc_type=BC_TYPE)
@@ -95,6 +99,7 @@ MakeCubic(X, Y, BC_TYPE, RESULT)
 #### `MakePCHIP` — monotone cubic (good for noisy data)
 
 ```clausal
+# skip
 MakePCHIP(X, Y, RESULT)
 MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
     → scipy.interpolate.PchipInterpolator(x, y, extrapolate=EXTRAPOLATE)
@@ -105,6 +110,7 @@ MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
 #### `MakeAkima` — Akima 1-D interpolator
 
 ```clausal
+# skip
 MakeAkima(X, Y, RESULT)
     → scipy.interpolate.Akima1DInterpolator(x, y)
     Less sensitive to outliers than cubic splines.
@@ -113,6 +119,7 @@ MakeAkima(X, Y, RESULT)
 #### `MakeLinear1D` — legacy piecewise interpolation
 
 ```clausal
+# skip
 MakeLinear1D(X, Y, RESULT)
 MakeLinear1D(X, Y, KIND, RESULT)
     → scipy.interpolate.interp1d(x, y, kind=KIND)
@@ -124,6 +131,7 @@ MakeLinear1D(X, Y, KIND, RESULT)
 #### `MakeRegularGrid` — N-D interpolation on a regular grid
 
 ```clausal
+# skip
 MakeRegularGrid(POINTS, VALUES, RESULT)
 MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
     → scipy.interpolate.RegularGridInterpolator(points, values, method=METHOD)
@@ -135,6 +143,7 @@ MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
 #### `MakeRadialBasis` — radial basis function interpolation
 
 ```clausal
+# skip
 MakeRadialBasis(X, Y, RESULT)
 MakeRadialBasis(X, Y, FUNCTION, RESULT)
 MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
@@ -157,6 +166,7 @@ Works with handles from `MakeSpline`, `MakeCubic`,
 `MakePCHIP`, `MakeAkima`, and `MakeLinear1D`.
 
 ```clausal
+# skip
 EvalSpline(HANDLE, X, Y)                   # bidirectional (arity-3)
     X ground, Y unbound → Y = spline(x)    # forward: evaluate at query point(s)
     Y ground, X unbound → X = root-find    # backward: find x such that spline(x) = y
@@ -194,6 +204,7 @@ SplineInvert(XS, YS, TARGET, X) <- (
 #### `EvalRegularGrid` — evaluate an N-D regular-grid interpolator
 
 ```clausal
+# skip
 EvalRegularGrid(HANDLE, XI, RESULT)
 EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
     HANDLE: integer from MakeRegularGrid
@@ -205,6 +216,7 @@ EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
 #### `EvalRadialBasis` — evaluate an RBF interpolator
 
 ```clausal
+# skip
 EvalRadialBasis(HANDLE, X, RESULT)
     HANDLE: integer from MakeRadialBasis
     X:      2-D array of query points, shape (n_query, n_dims)
@@ -221,6 +233,7 @@ These predicates operate on handles from any of the 1-D spline constructors
 #### `SplineIntegral` — definite integral
 
 ```clausal
+# skip
 SplineIntegral(HANDLE, A, B, RESULT)
     Compute the definite integral of the spline from A to B.
     HANDLE: spline handle
@@ -231,6 +244,7 @@ SplineIntegral(HANDLE, A, B, RESULT)
 #### `SplineDerivative` — derivative spline
 
 ```clausal
+# skip
 SplineDerivative(HANDLE, RESULT)
 SplineDerivative(HANDLE, ORDER, RESULT)
     Return a new HANDLE for the ORDER-th derivative of the spline.
@@ -241,6 +255,7 @@ SplineDerivative(HANDLE, ORDER, RESULT)
 #### `SplineRoots` — zero-crossings
 
 ```clausal
+# skip
 SplineRoots(HANDLE, RESULT)
     Return the real roots (zero-crossings) of the spline within its domain.
     RESULT: Python list of root values
@@ -252,6 +267,7 @@ SplineRoots(HANDLE, RESULT)
 ### Lifecycle: `Free`
 
 ```clausal
+# skip
 Free(HANDLE)
     Release HANDLE from the handle registry.
     Always succeeds, even if HANDLE is not registered.
@@ -266,6 +282,7 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 ### 1-D spline fitting and evaluation
 
 ```clausal
+# skip
 -import_from(scipy_interpolate, [MakeCubic, EvalSpline, Free])
 
 % Fit a cubic spline to sample data and evaluate at new points.

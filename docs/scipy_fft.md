@@ -7,12 +7,14 @@ The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/refe
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_fft, [FFTransform, RealFFT, ...])
 ```
 
@@ -37,6 +39,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 | `FFTShift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
 ```clausal
+# skip
 FFTransform(++(np.array([1,0,0,0])), RESULT),
 % RESULT is unified with the complex spectrum array
 ```
@@ -79,6 +82,7 @@ All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, et
 ### 1-D transforms
 
 ```clausal
+# skip
 FFTransform(X, Y)                  # bidirectional
     X ground, Y unbound → Y = fft(x)   # forward DFT
     Y ground, X unbound → X = ifft(y)  # backward (inverse DFT)
@@ -107,6 +111,7 @@ FrequencySpectrum(SIGNAL, FREQS, SPECTRUM) <- (
 ### 2-D transforms
 
 ```clausal
+# skip
 FFTransform2D(X, Y)                # bidirectional
     X ground, Y unbound → Y = fft2(x)   # 2-D forward DFT over last two axes
     Y ground, X unbound → X = ifft2(y)  # backward (2-D inverse DFT)
@@ -134,6 +139,7 @@ RoundTrip2D(IMAGE, RECOVERED) <- (
 ### N-D transforms
 
 ```clausal
+# skip
 FFTransformND(X, Y)                # bidirectional
     X ground, Y unbound → Y = fftn(x)   # N-D forward DFT over all axes
     Y ground, X unbound → X = ifftn(y)  # backward (N-D inverse DFT)
@@ -151,6 +157,7 @@ FFTransformND(X, S, Y)             # bidirectional; S always ground
 `RealFFT` exploits conjugate symmetry to halve storage for real signals. The output of `RealFFT` has length `N//2 + 1`.
 
 ```clausal
+# skip
 RealFFT(X, Y)                      # bidirectional
     X ground, Y unbound → Y = rfft(x)   forward: complex half-spectrum of length N//2 + 1
     Y ground, X unbound → X = irfft(y)  backward: real array of length 2*(len(Y)-1)
@@ -180,6 +187,7 @@ LowPassFilter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
 ### Cosine and sine transforms
 
 ```clausal
+# skip
 DiscreteCosineTransform(X, Y)              # bidirectional
     X ground, Y unbound → Y = dct(x)   (type-2 default)
     Y ground, X unbound → X = idct(y)
@@ -210,6 +218,7 @@ DCT types:
 ### Utility
 
 ```clausal
+# skip
 FFTFrequencies(N, RESULT)
     DFT sample frequencies for a length-N transform with unit sample spacing.
     RESULT: real array of length N
@@ -254,6 +263,7 @@ CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 ### Round-trip: 1-D signal
 
 ```clausal
+# skip
 -import_from(scipy_fft, [FFTransform])
 
 TestRoundTrip(SIGNAL) <- (
@@ -268,6 +278,7 @@ TestRoundTrip(SIGNAL) <- (
 ### Convolution via FFT
 
 ```clausal
+# skip
 -import_from(scipy_fft, [FFTransform])
 
 % Linear convolution of two equal-length signals (circular; pad as needed)

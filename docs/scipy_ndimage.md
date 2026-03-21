@@ -7,12 +7,14 @@ The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/sc
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_ndimage, [GaussianFilter, Label, Zoom, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_ndimage, [GaussianFilter, ...])
 ```
 
@@ -52,6 +54,7 @@ Predicates are imported from `scipy_ndimage`, so there is no module prefix in th
 ### Smoothing filters
 
 ```clausal
+# skip
 GaussianFilter(INPUT, SIGMA, RESULT)
     Gaussian smoothing of INPUT with standard deviation SIGMA.
     INPUT:  N-D real array
@@ -87,6 +90,7 @@ SmoothSignal(NOISY, SMOOTHED) <- (
 ### Convolution
 
 ```clausal
+# skip
 Convolve(INPUT, WEIGHTS, RESULT)
     N-D discrete convolution of INPUT with kernel WEIGHTS.
     INPUT:    N-D real array
@@ -111,6 +115,7 @@ EdgeDetect(SIGNAL, EDGES) <- (
 ### Connected-component labelling
 
 ```clausal
+# skip
 Label(INPUT, RESULT)
     Label connected components of non-zero values in INPUT.
     INPUT:  N-D integer or boolean array (non-zero = foreground)
@@ -139,6 +144,7 @@ All four predicates operate on boolean (or 0/1 integer) arrays and use the
 default 3×3 (or 3-point in 1-D) structuring element.
 
 ```clausal
+# skip
 BinaryErosion(INPUT, RESULT)
     Erode: keep only True pixels whose entire neighbourhood is True.
     Shrinks foreground objects; removes isolated pixels.
@@ -172,6 +178,7 @@ CleanMask(RAW_MASK, CLEAN) <- (
 ### Geometric transforms
 
 ```clausal
+# skip
 Zoom(INPUT, ZOOM, RESULT)
     Rescale INPUT by the given zoom factor.
     INPUT:  N-D array
@@ -208,6 +215,7 @@ ZoomImage(IMAGE, FACTOR, ZOOMED) <- (
 ### Measurement
 
 ```clausal
+# skip
 FindObjects(INPUT, RESULT)
     Find bounding-box slices for each labelled component in INPUT.
     INPUT:  integer-labelled array (e.g., the 'label_array' from Label)

@@ -167,6 +167,7 @@ Built-in predicates are available in every module without explicit import. They 
 **Stateless builtins** — stored in `_BUILTINS` as dispatch functions:
 
 ```clausal
+# skip
 In/2            InCheck/2       Append/3        Length/2
 Reverse/2       Last/2          GetItem/3       Flatten/2
 Sort/2          MergeSort/2     Permutation/2   Select/3
@@ -191,12 +192,14 @@ Nl/0            Tab/1           WriteToString/2 TermToString/2
 **Compiler special forms** — compiled inline, not dispatched as builtins:
 
 ```clausal
+# skip
 FindAll/3       BagOf/3         SetOf/3         ForAll/2
 ```
 
 **DB-dependent builtins** — stored in `_DB_BUILTINS` as factory callables; instantiated lazily with the live `Database`:
 
 ```clausal
+# skip
 Assert/1        AssertFirst/1   Retract/1       Signature/3
 Vary/3          Extend/3        UnboundKeys/2
 ```
@@ -389,6 +392,7 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 `PyThunk` values are evaluated fresh for each solution during backtracking:
 
 ```clausal
+# skip
 Item(1), Item(2), Item(3),
 Doubled(R) <- (Item(X), R is ++(X * 2))
 # yields R = 2, 4, 6

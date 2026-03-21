@@ -21,6 +21,7 @@ Fields are inferred from the clause heads — no separate declaration needed. Th
 A predicate can have multiple clauses (tried in order):
 
 ```clausal
+# skip
 max(X, Y, X) <- (X >= Y)
 max(X, Y, Y) <- (X < Y)
 ```
@@ -28,6 +29,7 @@ max(X, Y, Y) <- (X < Y)
 ### Recursive predicates
 
 ```clausal
+# skip
 length([], 0),
 length([_ | REST], N) <- (
     length(REST, N1),
@@ -161,6 +163,7 @@ for _ in fib._get_dispatch()(N1, A, trail, k):
 Predicates start **unlocked** and are locked after the module finishes loading. Once locked, `_assertz`, `_asserta`, and `_retract` raise `RuntimeError`:
 
 ```clausal
+# skip
 RuntimeError: Predicate fib/2 is locked. Use dynamic() to allow runtime assertion.
 ```
 

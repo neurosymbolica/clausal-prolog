@@ -7,12 +7,14 @@ The `scipy_signal` module wraps [`scipy.signal`](https://docs.scipy.org/doc/scip
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet, ...])
 ```
 
@@ -67,6 +69,7 @@ Filter design predicates return a result dict keyed by the `OUTPUT` format:
 Use `ResultGet` to extract fields:
 
 ```clausal
+# skip
 Butterworth(4, 0.1, 'low', 'sos', FILTER_DESIGN),
 ResultGet(FILTER_DESIGN, 'sos', SOS).
 ```
@@ -74,6 +77,7 @@ ResultGet(FILTER_DESIGN, 'sos', SOS).
 ### Butterworth
 
 ```clausal
+# skip
 Butterworth(N, WN, RESULT)
 Butterworth(N, WN, BTYPE, RESULT)
 Butterworth(N, WN, BTYPE, OUTPUT, RESULT)
@@ -88,6 +92,7 @@ Butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
 ### Bessel
 
 ```clausal
+# skip
 Bessel(N, WN, RESULT)
 Bessel(N, WN, BTYPE, RESULT)
 Bessel(N, WN, BTYPE, OUTPUT, RESULT)
@@ -97,6 +102,7 @@ Bessel(N, WN, BTYPE, OUTPUT, RESULT)
 ### ChebyshevType1
 
 ```clausal
+# skip
 ChebyshevType1(N, RP, WN, RESULT)
 ChebyshevType1(N, RP, WN, BTYPE, RESULT)
 ChebyshevType1(N, RP, WN, BTYPE, OUTPUT, RESULT)
@@ -106,6 +112,7 @@ ChebyshevType1(N, RP, WN, BTYPE, OUTPUT, RESULT)
 ### ChebyshevType2
 
 ```clausal
+# skip
 ChebyshevType2(N, RS, WN, RESULT)
 ChebyshevType2(N, RS, WN, BTYPE, RESULT)
 ChebyshevType2(N, RS, WN, BTYPE, OUTPUT, RESULT)
@@ -115,6 +122,7 @@ ChebyshevType2(N, RS, WN, BTYPE, OUTPUT, RESULT)
 ### Elliptic
 
 ```clausal
+# skip
 Elliptic(N, RP, RS, WN, RESULT)
 Elliptic(N, RP, RS, WN, BTYPE, RESULT)
 Elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
@@ -126,6 +134,7 @@ Elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
 ### FrequencyResponse
 
 ```clausal
+# skip
 FrequencyResponse(B, A, RESULT)
 FrequencyResponse(B, A, NFREQS, RESULT)
     B, A:   filter coefficients (from 'ba' output)
@@ -144,6 +153,7 @@ FrequencyResponse(B, A, NFREQS, RESULT)
 Causal IIR filter using direct-form II transposed implementation.
 
 ```clausal
+# skip
 LinearFilter(B, A, X, RESULT)
 LinearFilter(B, A, X, AXIS, RESULT)
 LinearFilter(B, A, X, AXIS, ZI, RESULT)
@@ -159,6 +169,7 @@ LinearFilter(B, A, X, AXIS, ZI, RESULT)
 Numerically more stable than `LinearFilter` for higher-order filters. Use when `OUTPUT='sos'` in filter design.
 
 ```clausal
+# skip
 SOSFilter(SOS, X, RESULT)
 SOSFilter(SOS, X, AXIS, RESULT)
 SOSFilter(SOS, X, AXIS, ZI, RESULT)
@@ -171,6 +182,7 @@ SOSFilter(SOS, X, AXIS, ZI, RESULT)
 Zero-phase filtering: applies the filter twice (forward then backward), eliminating phase distortion. Signal length must be longer than the filter's padding requirements.
 
 ```clausal
+# skip
 ForwardBackwardFilter(B, A, X, RESULT)
 ForwardBackwardFilter(B, A, X, AXIS, RESULT)
     Produces zero-phase output at the cost of twice the computation.
@@ -182,6 +194,7 @@ ForwardBackwardFilter(B, A, X, AXIS, RESULT)
 SOS form of `ForwardBackwardFilter`. Preferred for high-order filters.
 
 ```clausal
+# skip
 SOSForwardBackwardFilter(SOS, X, RESULT)
 SOSForwardBackwardFilter(SOS, X, AXIS, RESULT)
 ```
@@ -191,6 +204,7 @@ SOSForwardBackwardFilter(SOS, X, AXIS, RESULT)
 Low-pass filter then downsample by integer factor `Q`.
 
 ```clausal
+# skip
 Decimate(X, Q, RESULT)
 Decimate(X, Q, AXIS, RESULT)
     Q: integer decimation factor
@@ -201,6 +215,7 @@ Decimate(X, Q, AXIS, RESULT)
 Resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary rational resampling ratios.
 
 ```clausal
+# skip
 Resample(X, NUM, RESULT)
 Resample(X, NUM, AXIS, RESULT)
     NUM: desired number of output samples
@@ -213,6 +228,7 @@ Resample(X, NUM, AXIS, RESULT)
 ### Convolve
 
 ```clausal
+# skip
 Convolve(IN1, IN2, RESULT)
 Convolve(IN1, IN2, MODE, RESULT)
 Convolve(IN1, IN2, MODE, METHOD, RESULT)
@@ -223,6 +239,7 @@ Convolve(IN1, IN2, MODE, METHOD, RESULT)
 ### Correlate
 
 ```clausal
+# skip
 Correlate(IN1, IN2, RESULT)
 Correlate(IN1, IN2, MODE, RESULT)
 Correlate(IN1, IN2, MODE, METHOD, RESULT)
@@ -235,6 +252,7 @@ Correlate(IN1, IN2, MODE, METHOD, RESULT)
 Convolution via FFT — efficient for large arrays or long filters.
 
 ```clausal
+# skip
 FFTConvolve(IN1, IN2, RESULT)
 FFTConvolve(IN1, IN2, MODE, RESULT)
     Always uses the FFT method.
@@ -250,6 +268,7 @@ FFTConvolve(IN1, IN2, MODE, RESULT)
 Non-averaged power spectral density estimate.
 
 ```clausal
+# skip
 Periodogram(X, RESULT)
 Periodogram(X, FS, RESULT)
     X:      input signal
@@ -264,6 +283,7 @@ Periodogram(X, FS, RESULT)
 Averaged power spectral density estimate using Welch's method. Lower variance than `Periodogram` at the cost of frequency resolution.
 
 ```clausal
+# skip
 Welch(X, RESULT)
 Welch(X, FS, RESULT)
     RESULT: dict {f, Pxx}
@@ -274,6 +294,7 @@ Welch(X, FS, RESULT)
 Short-time Fourier transform power spectral density: time-frequency representation.
 
 ```clausal
+# skip
 Spectrogram(X, RESULT)
 Spectrogram(X, FS, RESULT)
     RESULT: dict {f, t, Sxx}
@@ -287,6 +308,7 @@ Spectrogram(X, FS, RESULT)
 ## ResultGet
 
 ```clausal
+# skip
 ResultGet(RESULT, FIELD, VALUE)
     Extract RESULT[FIELD] → VALUE.
     RESULT must be a dict.  FIELD must be a ground string.
@@ -300,6 +322,7 @@ ResultGet(RESULT, FIELD, VALUE)
 ### Low-pass filter a signal
 
 ```clausal
+# skip
 -import_from(scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet])
 
 LowPassFilter(SIGNAL, CUTOFF_HZ, SAMPLE_RATE, FILTERED) <- (
@@ -312,6 +335,7 @@ LowPassFilter(SIGNAL, CUTOFF_HZ, SAMPLE_RATE, FILTERED) <- (
 ### Inspect frequency response
 
 ```clausal
+# skip
 -import_from(scipy_signal, [Butterworth, FrequencyResponse, ResultGet])
 
 FilterResponse(N, WN, W, H) <- (
@@ -327,6 +351,7 @@ FilterResponse(N, WN, W, H) <- (
 ### Power spectral density with Welch's method
 
 ```clausal
+# skip
 -import_from(scipy_signal, [Welch, ResultGet])
 
 SignalPSD(SIGNAL, SAMPLE_RATE, FREQS, POWER) <- (
@@ -339,6 +364,7 @@ SignalPSD(SIGNAL, SAMPLE_RATE, FREQS, POWER) <- (
 ### Convolve two signals
 
 ```clausal
+# skip
 -import_from(scipy_signal, [FFTConvolve])
 
 SmoothedSignal(SIGNAL, KERNEL, SMOOTHED) <- (

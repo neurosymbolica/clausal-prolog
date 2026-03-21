@@ -7,12 +7,14 @@ The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/sc
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_special, [Gamma, Erf, BesselJ, EllipticK, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_special, [Gamma, Erf, BesselJ, ...])
 ```
 
@@ -63,6 +65,7 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 ### Gamma and related
 
 ```clausal
+# skip
 Gamma(X, RESULT)
     RESULT = Γ(x)
 
@@ -108,6 +111,7 @@ ComputeCoefficients(N, K, COEFF) <- (
 These predicates are **bidirectional relations**: they dispatch on argument groundness, running forward or backward depending on which arguments are bound.
 
 ```clausal
+# skip
 Erf(X, Y)
     X ground, Y unbound → Y = erf(x)
     Y ground, X unbound → X = erfinv(y)   # inverse direction
@@ -127,6 +131,7 @@ NormalCdf(X, P)
 Example — bidirectional NormalCdf acts as both CDF and quantile function:
 
 ```clausal
+# skip
 # Forward: P = Φ(1.96) ≈ 0.975
 NormalCdf(1.96, P)
 
@@ -147,6 +152,7 @@ CheckQuantile(X) <- (
 ### Incomplete gamma, beta, and Box-Cox (bidirectional)
 
 ```clausal
+# skip
 GammaInc(A, X, Y)
     A fixed (always ground).
     X ground, Y unbound → Y = gammainc(a, x)    # regularised lower incomplete gamma
@@ -194,6 +200,7 @@ BoxcoxRoundTrip(LAM, X) <- (
 ### Bessel functions
 
 ```clausal
+# skip
 BesselJ(N, X, RESULT)       # J_n(x), first kind, integer order
 BesselY(N, X, RESULT)       # Y_n(x), second kind, integer order
 
@@ -215,6 +222,7 @@ SphericalBesselJ(N, Z, DERIVATIVE, RESULT)  # derivative=DERIVATIVE
 ### Elliptic integrals
 
 ```clausal
+# skip
 EllipticK(M, RESULT)
     RESULT = K(m) = ∫₀^{π/2} (1 − m sin²θ)^{−½} dθ   # complete, first kind
 
@@ -233,6 +241,7 @@ EllipticEIncomplete(PHI, M, RESULT)
 ### Hypergeometric functions
 
 ```clausal
+# skip
 Hypergeometric1F1(A, B, X, RESULT)
     RESULT = ₁F₁(a; b; x)   # confluent / Kummer's function
 
@@ -248,6 +257,7 @@ Hypergeometric0F1(B, X, RESULT)
 ### Information theory
 
 ```clausal
+# skip
 Entr(X, RESULT)
     RESULT = −x log(x)   # entropy element-wise; 0 when x=0
 
@@ -272,6 +282,7 @@ StableLogProb(LOGITS, LP) <- (
 ### Orthogonal polynomials
 
 ```clausal
+# skip
 AssocLegendre(M, V, X, RESULT)
     RESULT = P_v^m(x)   # associated Legendre function; M is the order, V the degree
 
@@ -296,6 +307,7 @@ GeneralizedLaguerre(N, ALPHA, X, RESULT)
 ### Convenience / misc
 
 ```clausal
+# skip
 CubeRoot(X, RESULT)
     RESULT = x^(1/3)   # works correctly for negative x
 

@@ -7,12 +7,14 @@ The `scipy_linalg` module wraps [`scipy.linalg`](https://docs.scipy.org/doc/scip
 ## Import
 
 ```clausal
+# skip
 -import_from(scipy_linalg, [Solve, SingularValueDecompose, Inverse, ...])
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
+# skip
 -import_from(py.scipy_linalg, [Solve, SingularValueDecompose, ...])
 ```
 
@@ -27,6 +29,7 @@ Predicates fall into two tiers depending on whether the result is a single array
 **Tier 2 — result dict**: RESULT is unified with a Python dict. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields by name.
 
 ```clausal
+# skip
 SingularValueDecompose(A, RESULT),
 ResultGet(RESULT, 'u', U),
 ResultGet(RESULT, 's', S),
@@ -73,6 +76,7 @@ LU and QR are kept as-is — they are the standard letter names for the matrix f
 ### Linear system solvers
 
 ```clausal
+# skip
 Solve(A, B, X)                     # bidirectional (A always ground)
     B ground, X unbound → X = solve(A, B)   # forward: solve A @ X = B
     X ground, B unbound → B = A @ X         # backward: compute right-hand side
@@ -109,6 +113,7 @@ SolveSystem(A, B, X) <- (
 All decomposition predicates are **bidirectional**: the forward direction decomposes `A` into factor dict `R`; the backward direction recomposes `A` from `R` using plain numpy.
 
 ```clausal
+# skip
 LuDecompose(A, R)              # bidirectional
     A ground → R = {p, l, u}   (A = P @ L @ U)
     R ground → A = P @ L @ U   (recompose)
@@ -165,6 +170,7 @@ LargestSingularValue(A, S1) <- (
 ### Matrix functions
 
 ```clausal
+# skip
 Inverse(A, RESULT)             # bidirectional (self-inverse)
     A ground, RESULT unbound → RESULT = inv(A)
     RESULT ground, A unbound → A = inv(RESULT)   # inv is self-inverse
@@ -211,6 +217,7 @@ IsPositiveDefinite(A) <- (
 When solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `Solve` repeatedly.
 
 ```clausal
+# skip
 LuFactor(A, RESULT)
     RESULT: opaque factorisation record (passed to LuSolve)
 
@@ -241,6 +248,7 @@ SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
 ### ResultGet
 
 ```clausal
+# skip
 ResultGet(RESULT, FIELD, VALUE)
     Extract a named field from a Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate
