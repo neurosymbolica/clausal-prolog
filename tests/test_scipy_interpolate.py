@@ -494,3 +494,88 @@ class TestScipyInterpolateFixture:
     ])
     def test_fixture(self, name):
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ── Quantity / dimensional analysis ──────────────────────────────────────
+
+from clausal.terms import Quantity, UnitsMismatch
+from clausal.modules.py.units import Metre, Second, Newton, Kilogram
+
+
+class TestSplineUnits:
+    """Phase 5 — Interpolation with Quantity inputs."""
+
+    def test_make_eval_spline_propagates_y_dims(self):
+        """MakeSpline with Quantity x/y → EvalSpline returns Quantity with y_dims."""
+        x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
+        y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
+        handle = _drive(MakeSpline, x, y)
+        assert handle is not None and isinstance(handle, int)
+        # Evaluate at x=1.0 Second
+        result = _drive(EvalSpline, handle, Quantity(1.0, {Second: 1}))
+        assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
+        assert dict(result.dims) == {Metre: 1}
+        assert float(result.value) == pytest.approx(1.0, abs=0.1)
+        _drive(Free, handle)
+
+    def test_make_eval_spline_plain_fast_path(self):
+        """Plain arrays → plain result, unchanged."""
+        x = np.array([0.0, 1.0, 2.0, 3.0])
+        y = np.array([0.0, 1.0, 4.0, 9.0])
+        handle = _drive(MakeSpline, x, y)
+        assert handle is not None
+        result = _drive(EvalSpline, handle, 1.0)
+        assert not isinstance(result, Quantity)
+        _drive(Free, handle)
+
+    def test_spline_integral_has_y_times_x_dims(self):
+        """SplineIntegral returns Quantity with y_dims + x_dims."""
+        x = Quantity(np.array([0.0, 1.0, 2.0]), {Second: 1})
+        y = Quantity(np.array([1.0, 1.0, 1.0]), {Metre: 1, Second: -1})
+        handle = _drive(MakeSpline, x, y, 1)  # linear
+        assert handle is not None
+        integral = _drive(SplineIntegral, handle,
+                          Quantity(0.0, {Second: 1}), Quantity(2.0, {Second: 1}))
+        assert isinstance(integral, Quantity), f"Expected Quantity, got {type(integral)}"
+        # integral of (m/s) over (s) = m
+        assert dict(integral.dims) == {Metre: 1}
+        assert float(integral.value) == pytest.approx(2.0, abs=0.1)
+        _drive(Free, handle)
+
+    def test_spline_derivative_handle_has_adjusted_dims(self):
+        """SplineDerivative returns a handle whose y_dims = y_dims − x_dims."""
+        x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
+        y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
+        handle = _drive(MakeSpline, x, y)
+        assert handle is not None
+        deriv_handle = _drive(SplineDerivative, handle)
+        assert deriv_handle is not None
+        # Evaluate derivative: dy/dx has dims Metre/Second
+        result = _drive(EvalSpline, deriv_handle, Quantity(1.0, {Second: 1}))
+        assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
+        assert dict(result.dims) == {Metre: 1, Second: -1}
+        _drive(Free, handle)
+        _drive(Free, deriv_handle)
+
+    def test_eval_spline_nu_dims(self):
+        """EvalSpline(HANDLE, X, NU, RESULT) with NU=1 has derivative dims."""
+        x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
+        y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
+        handle = _drive(MakeSpline, x, y)
+        assert handle is not None
+        result = _drive(EvalSpline, handle, Quantity(1.0, {Second: 1}), 1)
+        assert isinstance(result, Quantity)
+        assert dict(result.dims) == {Metre: 1, Second: -1}
+        _drive(Free, handle)
+
+    def test_make_cubic_with_units(self):
+        """MakeCubic stores dims; EvalSpline propagates them."""
+        x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
+        y = Quantity(np.array([0.0, 2.0, 4.0, 6.0]), {Metre: 1})
+        handle = _drive(MakeCubic, x, y)
+        assert handle is not None
+        result = _drive(EvalSpline, handle, Quantity(1.5, {Second: 1}))
+        assert isinstance(result, Quantity)
+        assert dict(result.dims) == {Metre: 1}
+        assert float(result.value) == pytest.approx(3.0, abs=0.1)
+        _drive(Free, handle)

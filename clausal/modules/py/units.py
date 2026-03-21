@@ -77,13 +77,12 @@ class _UnitsPredicate:
         E := ++(Kilogram(1) * SpeedOfLight ** 2)
     """
 
-    __slots__ = ("_name", "_dispatch_fns", "_dims", "_scale")
+    __slots__ = ("_name", "_dispatch_fns", "_dims")
 
     def __init__(self, name: str) -> None:
         self._name = name
         self._dispatch_fns: dict[int, Callable] = {}
         self._dims: dict | None = None
-        self._scale: float = 1.0
 
     def _register(self, arity: int, fn: Callable) -> None:
         self._dispatch_fns[arity] = fn
@@ -102,23 +101,19 @@ class _UnitsPredicate:
         yield from fn(this_generator, parent, *args)
 
     def __call__(self, value) -> "Quantity":
-        """Return ``Quantity(value * scale, dims)`` directly.
+        """Return ``Quantity(value, dims)`` directly.
 
         For use in Python-level arithmetic expressions, not as a Clausal goal.
         """
         if self._dims is None:
             raise TypeError(f"{self._name} does not support direct construction")
-        return Quantity(
-            value * self._scale if self._scale != 1.0 else value,
-            self._dims,
-        )
+        return Quantity(value, self._dims)
 
     def __mul__(self, other: "_UnitsPredicate") -> "_UnitsPredicate":
         if not isinstance(other, _UnitsPredicate):
             return NotImplemented
         result = _UnitsPredicate(f"({self._name}*{other._name})")
         result._dims = _dims_combine(self._dims or {}, other._dims or {})
-        result._scale = self._scale * other._scale
         return result
 
     def __truediv__(self, other: "_UnitsPredicate") -> "_UnitsPredicate":
@@ -126,7 +121,6 @@ class _UnitsPredicate:
             return NotImplemented
         result = _UnitsPredicate(f"({self._name}/{other._name})")
         result._dims = _dims_combine(self._dims or {}, other._dims or {}, sign=-1)
-        result._scale = self._scale / other._scale
         return result
 
     def __pow__(self, exp: int | float) -> "_UnitsPredicate":
@@ -134,7 +128,6 @@ class _UnitsPredicate:
             return NotImplemented
         result = _UnitsPredicate(f"({self._name}**{exp})")
         result._dims = {k: v * exp for k, v in (self._dims or {}).items() if v * exp != 0}
-        result._scale = self._scale ** exp
         return result
 
     def __repr__(self) -> str:
@@ -157,11 +150,11 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     return pred
 
 
-def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicate:
+def _make_unit_pred(name: str, dims: dict) -> _UnitsPredicate:
     """Build a unit predicate callable from Python.
 
-    ``Unit(value)`` returns ``Quantity(value * scale, dims)`` directly, for
-    use in Python arithmetic expressions via the ``++`` escape::
+    ``Unit(value)`` returns ``Quantity(value, dims)`` directly, for use in
+    Python arithmetic expressions via the ``++`` escape::
 
         D := ++(Metre(5))          # explicit form
         D := 5(Metre)              # n(Unit) sugar, equivalent
@@ -169,7 +162,6 @@ def _make_unit_pred(name: str, dims: dict, scale: float = 1.0) -> _UnitsPredicat
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
     pred = _UnitsPredicate(name)
     pred._dims = frozen_dims
-    pred._scale = scale
     return pred
 
 
@@ -214,26 +206,26 @@ Bit          = _make_unit_pred_base("Bit")
 # Single-letter abbreviations are provided below for contexts where they are
 # unambiguous; import them explicitly.
 
-yotta: float = 1e24
-zetta: float = 1e21
-exa:   float = 1e18
-peta:  float = 1e15
-tera:  float = 1e12
-giga:  float = 1e9
-mega:  float = 1e6
-kilo:  float = 1e3
-hecto: float = 1e2
-deca:  float = 1e1
-deci:  float = 1e-1
-centi: float = 1e-2
-milli: float = 1e-3
-micro: float = 1e-6
-nano:  float = 1e-9
-pico:  float = 1e-12
-femto: float = 1e-15
-atto:  float = 1e-18
-zepto: float = 1e-21
-yocto: float = 1e-24
+yotta = 10**24
+zetta = 10**21
+exa   = 10**18
+peta  = 10**15
+tera  = 10**12
+giga  = 10**9
+mega  = 10**6
+kilo  = 1_000
+hecto = 100
+deca  = 10
+deci  = 1e-1
+centi = 1e-2
+milli = 1e-3
+micro = 1e-6
+nano  = 1e-9
+pico  = 1e-12
+femto = 1e-15
+atto  = 1e-18
+zepto = 1e-21
+yocto = 1e-24
 
 # ── IEC binary prefix constants (powers of 1024) ──────────────────────────────
 # Plain numbers — multiply against unit vectors in ++ expressions:
@@ -243,69 +235,71 @@ yocto: float = 1e-24
 #
 # These are NOT predicates and cannot appear inside n(Unit) parentheses.
 
-kibi: float = 2**10    # 1_024
-mebi: float = 2**20    # 1_048_576
-gibi: float = 2**30    # 1_073_741_824
-tebi: float = 2**40
-pebi: float = 2**50
-exbi: float = 2**60
+kibi = 2**10    # 1_024
+mebi = 2**20    # 1_048_576
+gibi = 2**30    # 1_073_741_824
+tebi = 2**40
+pebi = 2**50
+exbi = 2**60
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Scaled SI unit predicates  (all normalise to SI base units)
+# Scaled SI unit constants  (plain Quantity values in SI base units)
 # ═════════════════════════════════════════════════════════════════════════════
-# These are predicates; use with n(Unit) sugar:   5(Kilometer),  200(Gram)
+# These are Quantity constants, not predicates.  Multiply by a scalar:
+#     ++(5 * Kilometer)    → Quantity(5000, {Metre: 1})
+#     ++(200 * Gram)       → Quantity(0.2,  {Kilogram: 1})
+# Or use unit annotation sugar:  5(Kilometer), 200(Gram)
 
 # ── Scaled length (store as metres) ──────────────────────────────────────────
 
-Kilometer    = _make_unit_pred("Kilometer",    {Metre: 1}, scale=1_000.0)
-Centimeter   = _make_unit_pred("Centimeter",   {Metre: 1}, scale=1e-2)
-Millimeter   = _make_unit_pred("Millimeter",   {Metre: 1}, scale=1e-3)
-Micrometer   = _make_unit_pred("Micrometer",   {Metre: 1}, scale=1e-6)
-Nanometer    = _make_unit_pred("Nanometer",    {Metre: 1}, scale=1e-9)
+Kilometer    = Quantity(1_000,   {Metre: 1})
+Centimeter   = Quantity(1e-2,    {Metre: 1})
+Millimeter   = Quantity(1e-3,    {Metre: 1})
+Micrometer   = Quantity(1e-6,    {Metre: 1})
+Nanometer    = Quantity(1e-9,    {Metre: 1})
 
 # ── Scaled mass (store as kilograms) ─────────────────────────────────────────
 
-Gram         = _make_unit_pred("Gram",         {Kilogram: 1}, scale=1e-3)
-Milligram    = _make_unit_pred("Milligram",    {Kilogram: 1}, scale=1e-6)
-Microgram    = _make_unit_pred("Microgram",    {Kilogram: 1}, scale=1e-9)
-Tonne        = _make_unit_pred("Tonne",        {Kilogram: 1}, scale=1_000.0)
+Gram         = Quantity(1e-3,    {Kilogram: 1})
+Milligram    = Quantity(1e-6,    {Kilogram: 1})
+Microgram    = Quantity(1e-9,    {Kilogram: 1})
+Tonne        = Quantity(1_000,   {Kilogram: 1})
 
 # ── Scaled time (store as seconds) ───────────────────────────────────────────
 
-Millisecond  = _make_unit_pred("Millisecond",  {Second: 1}, scale=1e-3)
-Microsecond  = _make_unit_pred("Microsecond",  {Second: 1}, scale=1e-6)
-Nanosecond   = _make_unit_pred("Nanosecond",   {Second: 1}, scale=1e-9)
-Minute       = _make_unit_pred("Minute",       {Second: 1}, scale=60.0)
-Hour         = _make_unit_pred("Hour",         {Second: 1}, scale=3_600.0)
-Day          = _make_unit_pred("Day",          {Second: 1}, scale=86_400.0)
-Week         = _make_unit_pred("Week",         {Second: 1}, scale=604_800.0)
-JulianYear   = _make_unit_pred("JulianYear",   {Second: 1}, scale=31_557_600.0)
+Millisecond  = Quantity(1e-3,    {Second: 1})
+Microsecond  = Quantity(1e-6,    {Second: 1})
+Nanosecond   = Quantity(1e-9,    {Second: 1})
+Minute       = Quantity(60,      {Second: 1})
+Hour         = Quantity(3_600,   {Second: 1})
+Day          = Quantity(86_400,  {Second: 1})
+Week         = Quantity(604_800, {Second: 1})
+JulianYear   = Quantity(31_557_600, {Second: 1})
 
 # ── Information (stored as bits) ──────────────────────────────────────────────
 # Bit is the IEC 80000-13 base unit; all values are normalised to bits.
 
-Byte         = _make_unit_pred("Byte",         {Bit: 1}, scale=8.0)
+Byte         = Quantity(8,       {Bit: 1})
 
-# Decimal (SI-prefixed) multiples — use existing kilo/mega/… constants with
-# Byte(1) or Bit(1) for arbitrary compound expressions.
-Kilobyte     = _make_unit_pred("Kilobyte",     {Bit: 1}, scale=8e3)
-Megabyte     = _make_unit_pred("Megabyte",     {Bit: 1}, scale=8e6)
-Gigabyte     = _make_unit_pred("Gigabyte",     {Bit: 1}, scale=8e9)
-Terabyte     = _make_unit_pred("Terabyte",     {Bit: 1}, scale=8e12)
+# Decimal (SI-prefixed) multiples
+Kilobyte     = Quantity(8_000,           {Bit: 1})
+Megabyte     = Quantity(8_000_000,       {Bit: 1})
+Gigabyte     = Quantity(8_000_000_000,   {Bit: 1})
+Terabyte     = Quantity(8_000_000_000_000, {Bit: 1})
 
-Kilobit      = _make_unit_pred("Kilobit",      {Bit: 1}, scale=1e3)
-Megabit      = _make_unit_pred("Megabit",      {Bit: 1}, scale=1e6)
-Gigabit      = _make_unit_pred("Gigabit",      {Bit: 1}, scale=1e9)
+Kilobit      = Quantity(1_000,           {Bit: 1})
+Megabit      = Quantity(1_000_000,       {Bit: 1})
+Gigabit      = Quantity(1_000_000_000,   {Bit: 1})
 
 # Binary (IEC-prefixed) multiples
-Kibibyte     = _make_unit_pred("Kibibyte",     {Bit: 1}, scale=8 * 2**10)
-Mebibyte     = _make_unit_pred("Mebibyte",     {Bit: 1}, scale=8 * 2**20)
-Gibibyte     = _make_unit_pred("Gibibyte",     {Bit: 1}, scale=8 * 2**30)
-Tebibyte     = _make_unit_pred("Tebibyte",     {Bit: 1}, scale=8 * 2**40)
+Kibibyte     = Quantity(8 * 2**10,  {Bit: 1})
+Mebibyte     = Quantity(8 * 2**20,  {Bit: 1})
+Gibibyte     = Quantity(8 * 2**30,  {Bit: 1})
+Tebibyte     = Quantity(8 * 2**40,  {Bit: 1})
 
-Kibibit      = _make_unit_pred("Kibibit",      {Bit: 1}, scale=float(2**10))
-Mebibit      = _make_unit_pred("Mebibit",      {Bit: 1}, scale=float(2**20))
-Gibibit      = _make_unit_pred("Gibibit",      {Bit: 1}, scale=float(2**30))
+Kibibit      = Quantity(2**10,  {Bit: 1})
+Mebibit      = Quantity(2**20,  {Bit: 1})
+Gibibit      = Quantity(2**30,  {Bit: 1})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Named derived SI unit predicates
@@ -338,15 +332,15 @@ Lux      = _make_unit_pred("Lux",      {Candela: 1, Metre: -2})                 
 Katal    = _make_unit_pred("Katal",    {Mole: 1, Second: -1})                       # kat = mol/s
 
 # Scaled SI pressure (stored as Pascal)
-Bar      = _make_unit_pred("Bar",      {Kilogram: 1, Metre: -1, Second: -2}, scale=1e5)
-Millibar = _make_unit_pred("Millibar", {Kilogram: 1, Metre: -1, Second: -2}, scale=100.0)
-Atmosphere = _make_unit_pred("Atmosphere", {Kilogram: 1, Metre: -1, Second: -2}, scale=101_325.0)
+Bar        = Quantity(1e5,              {Kilogram: 1, Metre: -1, Second: -2})
+Millibar   = Quantity(100,             {Kilogram: 1, Metre: -1, Second: -2})
+Atmosphere = Quantity(101_325,         {Kilogram: 1, Metre: -1, Second: -2})
 
 # Scaled SI energy (stored as Joule)
-Electronvolt = _make_unit_pred("Electronvolt", {Kilogram: 1, Metre: 2, Second: -2}, scale=1.602176634e-19)
+Electronvolt = Quantity(1.602176634e-19, {Kilogram: 1, Metre: 2, Second: -2})
 
 # Scaled SI power (stored as Watt)
-Kilowatt     = _make_unit_pred("Kilowatt",     {Kilogram: 1, Metre: 2, Second: -3}, scale=1_000.0)
+Kilowatt     = Quantity(1_000,         {Kilogram: 1, Metre: 2, Second: -3})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI standard abbreviation aliases
@@ -366,7 +360,7 @@ mol = Mole
 cd  = Candela
 
 # ── Scaled SI unit abbreviations ─────────────────────────────────────────────
-# All are predicates — usable with n(Unit) sugar.
+# Quantity constants — multiply by a scalar: ++(5 * km)
 
 km  = Kilometer
 cm  = Centimeter

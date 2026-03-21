@@ -295,3 +295,125 @@ class TestClausalFixture:
     ])
     def test_fixture(self, name):
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ── Quantity / dimensional analysis ──────────────────────────────────────
+
+from clausal.terms import Quantity, UnitsMismatch
+from clausal.modules.py.units import Metre, Second, Newton, Kilogram
+
+
+def _NpM():
+    """Newton-per-Metre unit predicate."""
+    return Newton / Metre
+
+
+class TestDerivativeUnits:
+    """Phase 3 — Derivative with Quantity inputs."""
+
+    def test_derivative_linear_newton_per_metre(self):
+        """f(x) = x * k (k = 9.8 N/m) → df/dx = 9.8 N/m."""
+        k = Quantity(9.8, _NpM())
+        f = lambda x: x * k
+        result = _drive(Derivative, f, Quantity(1.0, {Metre: 1}))
+        assert result is not None
+        df = result["df"]
+        assert isinstance(df, Quantity), f"Expected Quantity, got {type(df)}"
+        assert df.value == pytest.approx(9.8, rel=1e-6)
+        # dims should be Newton/Metre = {Kilogram: 1, Second: -2}
+        expected_dims = dict((_NpM())._dims)
+        assert dict(df.dims) == expected_dims
+
+    def test_derivative_x_has_input_units(self):
+        """Result 'x' field should preserve input Metre units."""
+        k = Quantity(2.0, _NpM())
+        f = lambda x: x * k
+        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        assert result is not None
+        x = result["x"]
+        assert isinstance(x, Quantity), f"Expected Quantity, got {type(x)}"
+        assert x.value == pytest.approx(3.0)
+        assert dict(x.dims) == {Metre: 1}
+
+    def test_derivative_error_has_df_units(self):
+        """Error estimate has same units as df."""
+        k = Quantity(2.0, _NpM())
+        f = lambda x: x * k
+        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        assert result is not None
+        err = result["error"]
+        assert isinstance(err, Quantity), f"Expected Quantity, got {type(err)}"
+        expected_dims = dict((_NpM())._dims)
+        assert dict(err.dims) == expected_dims
+
+    def test_derivative_plain_function_returns_plain_df(self):
+        """f returns plain float → df is plain (no Quantity wrapping)."""
+        # f strips .value manually → returns float
+        f = lambda x: x.value ** 2
+        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        assert result is not None
+        df = result["df"]
+        assert not isinstance(df, Quantity), f"Expected plain, got Quantity"
+        assert float(df) == pytest.approx(6.0, abs=1e-6)
+
+    def test_derivative_plain_fast_path(self):
+        """No Quantity inputs → plain result, same as before."""
+        result = _drive(Derivative, lambda x: x ** 2, 3.0)
+        assert result is not None
+        df = result["df"]
+        assert not isinstance(df, Quantity)
+        assert float(df) == pytest.approx(6.0, abs=1e-8)
+
+    def test_derivative_dimensionless_quantity(self):
+        """Dimensionless Quantity (dims={}) → x is still wrapped, df depends on f."""
+        f = lambda x: x ** 2  # returns plain float (since Quantity**2 works)
+        result = _drive(Derivative, f, Quantity(3.0, {}))
+        assert result is not None
+        # x should not be wrapped (empty dims)
+        assert not isinstance(result["x"], Quantity)
+
+
+class TestJacobianUnits:
+    """Phase 3 — Jacobian with Quantity inputs."""
+
+    def test_jacobian_linear_map(self):
+        """f: R^n(Metre) → R^n(Newton), Jacobian has dims Newton/Metre."""
+        k = Quantity(9.8, _NpM())
+        # Jacobian requires array input → array output
+        f = lambda x: x * k
+        x0 = Quantity(np.array([1.0, 2.0]), {Metre: 1})
+        result = _drive(Jacobian, f, x0)
+        assert result is not None
+        df = result["df"]
+        assert isinstance(df, Quantity), f"Expected Quantity, got {type(df)}"
+        expected_dims = dict((_NpM())._dims)
+        assert dict(df.dims) == expected_dims
+
+    def test_jacobian_plain_fast_path(self):
+        """No Quantity inputs → plain result."""
+        result = _drive(Jacobian, lambda x: x ** 2, np.array([3.0]))
+        assert result is not None
+        assert not isinstance(result["df"], Quantity)
+
+
+class TestHessianUnits:
+    """Phase 3 — Hessian with Quantity inputs."""
+
+    def test_hessian_with_quantity_x(self):
+        """Hessian with Quantity x, plain f → x in result is wrapped."""
+        # f doesn't accept Quantity (uses indexing), so probe falls back.
+        # x in the result dict should still be wrapped with input dims.
+        f = lambda x: x[0] ** 2 + x[1] ** 2
+        x0 = Quantity(np.array([1.0, 2.0]), {Metre: 1})
+        result = _drive(Hessian, f, x0)
+        assert result is not None
+        # ddf is plain (f doesn't propagate units)
+        ddf = result["ddf"]
+        assert not isinstance(ddf, Quantity)
+        assert float(ddf[0, 0]) == pytest.approx(2.0, rel=1e-4)
+
+    def test_hessian_plain_fast_path(self):
+        """No Quantity inputs → plain result."""
+        result = _drive(Hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
+        assert result is not None
+        assert not isinstance(result["ddf"], Quantity)

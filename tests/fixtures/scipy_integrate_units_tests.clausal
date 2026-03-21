@@ -1,0 +1,13 @@
+-import_from(scipy_integrate, [Quad, Trapezoid, CumulativeTrapezoid, Simpson, ResultGet])
+
+# no units on x - plain fast path (verify existing behaviour is preserved)
+Test("trapezoid plain arrays returns plain") <- (
+    Trapezoid([1.0, 2.0, 3.0], RESULT),
+    DIFF is ++(abs(float(RESULT) - 4.0)),
+    DIFF < 1.0e-10)
+
+Test("quad no units fast path") <- (
+    Quad(++(lambda x: x), 0.0, 1.0, RESULT),
+    ResultGet(RESULT, 'value', V),
+    DIFF is ++(abs(float(V) - 0.5)),
+    DIFF < 1.0e-9)

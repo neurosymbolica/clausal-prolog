@@ -172,3 +172,66 @@ For `Jacobian` and `Hessian`, `success` is a boolean array — some elements may
 
 ### `success=False` policy
 Following the cross-cutting convention in `SCIPY_PORT.md`: a result with `success=False` still allows the predicate to succeed. The caller checks the `success` field. This makes it possible to inspect partial results.
+
+---
+
+## Dimensional analysis (Quantity support)
+
+All differentiation predicates are **quantity-aware**: when `X` is a
+`Quantity(value, dims)`, units are propagated through the result
+automatically.
+
+### How it works
+
+1. **Probe** — the wrapper calls `f(x_quantity)` once to discover whether `f`
+   returns a `Quantity` (with output dims) or a plain number.  If `f` cannot
+   accept a `Quantity` (e.g. it indexes into the array with `x[0]`), the probe
+   fails gracefully and `f` is called with raw values instead.
+
+2. **Strip and call** — `x.value` is passed to scipy; if `f` is
+   quantity-aware, the wrapper re-wraps each raw value in a `Quantity` before
+   forwarding to `f` and strips the result.
+
+3. **Wrap output** — result dict fields are wrapped with the correct output
+   dims:
+
+   | Predicate | `df` / `ddf` dims | `error` dims |
+   |---|---|---|
+   | `Derivative` | `f_dims - x_dims` | same as `df` |
+   | `Jacobian` | `f_dims - x_dims` | same as `df` |
+   | `Hessian` | `f_dims - 2 * x_dims` | same as `ddf` |
+
+   The `'x'` field is wrapped with the input dims.
+
+### Fast path
+
+When `X` is a plain number or array (not a `Quantity`), scipy is called
+directly with **zero additional overhead**.
+
+### Example
+
+```
+-import_from(scipy_differentiate, [Derivative, ResultGet])
+-import_from(py.units, [Metre, Newton, HasUnits])
+
+% f: Metre -> Newton (linear), so df/dx has units Newton/Metre
+Test("derivative units") <- (
+    K is ++(
+        __import__('clausal.terms', fromlist=['Quantity']).Quantity(
+            9.8,
+            __import__('clausal.modules.py.units', fromlist=['Newton','Metre']).Newton
+            / __import__('clausal.modules.py.units', fromlist=['Newton','Metre']).Metre
+        )),
+    Derivative(++(lambda x, k=K: x * k), 1.0(Metre), R),
+    ResultGet(R, 'df', DF),
+    HasUnits(DF, Newton/Metre))
+```
+
+### Limitations
+
+- `Quantity` does not support `__getitem__` (array indexing).  Functions that
+  use `x[0]`, `x[1]`, etc. cannot be probed for output units.  The wrapper
+  falls back to passing raw values; `df` / `ddf` will be plain (unwrapped)
+  but `'x'` in the result is still wrapped with input dims.
+- The probe consumes one extra function evaluation.  For any non-trivial `f`
+  this is negligible relative to scipy's own evaluation count.

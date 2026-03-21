@@ -46,6 +46,11 @@ from typing import Callable
 
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
+from clausal.terms import Quantity, UnitsMismatch
+from clausal.modules.py._scipy_units import (
+    strip_quantity, quantity_dims, merge_dims, wrap_result,
+    probe_function_units, _SCIPY_UNITS_ENABLED,
+)
 
 
 # ── Lazy scipy.differentiate import ───────────────────────────────────────
@@ -134,6 +139,8 @@ def _dispatch_fn(call: Callable, output_key: str) -> Callable:
         try:
             raw = call(*inputs)
             out = _rich_result_to_dict(raw, output_key)
+        except UnitsMismatch:
+            raise
         except Exception:
             yield (parent, DONE)
             return
@@ -151,37 +158,164 @@ def _pred(name: str, *arity_fns) -> _DifferentiatePredicate:
     return p
 
 
+# ── Quantity-aware call wrappers ───────────────────────────────────────────
+
+def _safe_probe(f, x_quantity):
+    """Probe f with a Quantity; return (f_dims, True) or (None, False) on failure.
+
+    Returns ``(dims_dict, True)`` when *f* accepts a Quantity and returns one,
+    ``(None, True)`` when *f* accepts a Quantity but returns a plain value, and
+    ``(None, False)`` when *f* cannot handle a Quantity input at all (e.g. it
+    tries to index into the Quantity object).
+    """
+    try:
+        f_dims = probe_function_units(f, x_quantity)
+        return f_dims, True
+    except Exception:
+        return None, False
+
+
+def _make_f_stripped(f, x_dims, f_accepts_quantity):
+    """Build a function that scipy can call with raw values.
+
+    If *f* accepts Quantity objects, wraps the raw value in a Quantity before
+    calling *f* and strips the result.  Otherwise, passes the raw value
+    directly.
+    """
+    if f_accepts_quantity and x_dims:
+        def f_stripped(v):
+            return strip_quantity(f(Quantity(v, x_dims)))
+        return f_stripped
+    return f
+
+
+def _derivative_quantity_call(f, x):
+    """Handle Quantity x for Derivative: probe f, strip, call scipy, wrap result."""
+    if not isinstance(x, Quantity):
+        return _diff().derivative(f, x)
+    x_dims = dict(x.dims)
+    f_dims, f_accepts_q = _safe_probe(f, x)
+    f_for_scipy = _make_f_stripped(f, x_dims, f_accepts_q)
+    raw = _diff().derivative(f_for_scipy, x.value)
+    result = _rich_result_to_dict(raw, 'df')
+    if x_dims:
+        result['x'] = wrap_result(result['x'], x_dims)
+    if f_dims is not None:
+        df_dims = merge_dims(f_dims, x_dims, -1)
+        result['df']    = wrap_result(result['df'],    df_dims)
+        result['error'] = wrap_result(result['error'], df_dims)
+    return result
+
+
+def _derivative_quantity_call_args(f, x, args):
+    """Handle Quantity x for Derivative with extra args."""
+    if not isinstance(x, Quantity):
+        return _diff().derivative(f, x, args=tuple(args))
+    x_dims = dict(x.dims)
+    f_with_args = lambda v: f(v, *args)
+    f_dims, f_accepts_q = _safe_probe(f_with_args, x)
+    if f_accepts_q and x_dims:
+        def f_stripped(v, *a):
+            return strip_quantity(f(Quantity(v, x_dims), *a))
+    else:
+        f_stripped = f
+    raw = _diff().derivative(f_stripped, x.value, args=tuple(args))
+    result = _rich_result_to_dict(raw, 'df')
+    if x_dims:
+        result['x'] = wrap_result(result['x'], x_dims)
+    if f_dims is not None:
+        df_dims = merge_dims(f_dims, x_dims, -1)
+        result['df']    = wrap_result(result['df'],    df_dims)
+        result['error'] = wrap_result(result['error'], df_dims)
+    return result
+
+
+def _jacobian_quantity_call(f, x):
+    """Handle Quantity x for Jacobian: probe f, strip, call scipy, wrap result."""
+    if not isinstance(x, Quantity):
+        return _diff().jacobian(f, x)
+    x_dims = dict(x.dims)
+    f_dims, f_accepts_q = _safe_probe(f, x)
+    f_for_scipy = _make_f_stripped(f, x_dims, f_accepts_q)
+    raw = _diff().jacobian(f_for_scipy, x.value)
+    result = _rich_result_to_dict(raw, 'df')
+    if x_dims and 'x' in result:
+        result['x'] = wrap_result(result['x'], x_dims)
+    if f_dims is not None:
+        df_dims = merge_dims(f_dims, x_dims, -1)
+        result['df']    = wrap_result(result['df'],    df_dims)
+        if 'error' in result:
+            result['error'] = wrap_result(result['error'], df_dims)
+    return result
+
+
+def _hessian_quantity_call(f, x):
+    """Handle Quantity x for Hessian: probe f, strip, call scipy, wrap result."""
+    if not isinstance(x, Quantity):
+        return _diff().hessian(f, x)
+    x_dims = dict(x.dims)
+    f_dims, f_accepts_q = _safe_probe(f, x)
+    f_for_scipy = _make_f_stripped(f, x_dims, f_accepts_q)
+    raw = _diff().hessian(f_for_scipy, x.value)
+    result = _rich_result_to_dict(raw, 'ddf')
+    if x_dims and 'x' in result:
+        result['x'] = wrap_result(result['x'], x_dims)
+    if f_dims is not None:
+        # Hessian: second derivative → f_dims − 2·x_dims
+        ddf_dims = merge_dims(f_dims, x_dims, -2)
+        result['ddf']   = wrap_result(result['ddf'],   ddf_dims)
+        if 'error' in result:
+            result['error'] = wrap_result(result['error'], ddf_dims)
+    return result
+
+
+# ── Dispatch wrapper for quantity-aware calls ─────────────────────────────
+
+def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
+    """Like _dispatch_fn but for calls that return a dict directly (quantity path)."""
+    def dispatch(this_generator, parent, *args):
+        trail = args[-1]
+        result_var = args[-2]
+        inputs = [deref(x) for x in args[:-2]]
+        try:
+            out = call(*inputs)
+            if isinstance(out, dict):
+                # Quantity-aware call returned a dict directly
+                pass
+            else:
+                # Plain scipy result object — convert to dict
+                out = _rich_result_to_dict(out, output_key)
+        except UnitsMismatch:
+            raise
+        except Exception:
+            yield (parent, DONE)
+            return
+        ok = bool(unify(result_var, out, trail))
+        if ok:
+            yield (parent, None)
+        yield (parent, DONE)
+    return dispatch
+
+
 # ── Derivative ─────────────────────────────────────────────────────────────
 
 Derivative = _pred("Derivative",
-    (3, _dispatch_fn(
-        lambda f, x: _diff().derivative(f, x),
-        "df",
-    )),
-    (4, _dispatch_fn(
-        lambda f, x, args: _diff().derivative(f, x, args=tuple(args)),
-        "df",
-    )),
+    (3, _dispatch_fn_quantity(_derivative_quantity_call, "df")),
+    (4, _dispatch_fn_quantity(_derivative_quantity_call_args, "df")),
 )
 
 
 # ── Jacobian ───────────────────────────────────────────────────────────────
 
 Jacobian = _pred("Jacobian",
-    (3, _dispatch_fn(
-        lambda f, x: _diff().jacobian(f, x),
-        "df",
-    )),
+    (3, _dispatch_fn_quantity(_jacobian_quantity_call, "df")),
 )
 
 
 # ── Hessian ────────────────────────────────────────────────────────────────
 
 Hessian = _pred("Hessian",
-    (3, _dispatch_fn(
-        lambda f, x: _diff().hessian(f, x),
-        "ddf",
-    )),
+    (3, _dispatch_fn_quantity(_hessian_quantity_call, "ddf")),
 )
 
 

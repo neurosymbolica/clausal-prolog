@@ -475,3 +475,118 @@ class TestClausalFixture:
     ])
     def test_fixture(self, name):
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+class TestClausalUnitsFixture:
+    """Run Test predicates from tests/fixtures/scipy_integrate_units_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("scipy_integrate_units_tests")
+
+    @pytest.mark.parametrize("name", [
+        "trapezoid plain arrays returns plain",
+        "quad no units fast path",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ── Quantity / dimensional analysis ──────────────────────────────────────
+
+from clausal.terms import Quantity, UnitsMismatch
+from clausal.modules.py.units import Metre, Second, Newton, Kilogram
+
+
+class TestTrapezoidUnits:
+    """Phase 4 — Trapezoid/Simpson/CumulativeTrapezoid with Quantity inputs."""
+
+    def test_trapezoid_velocity_times_time(self):
+        """velocity (m/s) over time (s) → displacement (m)."""
+        y = Quantity(np.array([0.0, 10.0, 20.0]), {Metre: 1, Second: -1})
+        x = Quantity(np.array([0.0, 1.0, 2.0]), {Second: 1})
+        result = _drive(Trapezoid, y, x)
+        assert result is not None
+        assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
+        assert result.value == pytest.approx(20.0)
+        assert dict(result.dims) == {Metre: 1}
+
+    def test_trapezoid_plain_fast_path(self):
+        """Plain arrays → plain result, unchanged."""
+        result = _drive(Trapezoid, np.array([1.0, 2.0, 3.0]))
+        assert result is not None
+        assert not isinstance(result, Quantity)
+        assert float(result) == pytest.approx(4.0)
+
+    def test_simpson_with_units(self):
+        """Simpson with Quantity y and x."""
+        y = Quantity(np.array([1.0, 4.0, 1.0]), {Newton: 1})
+        x = Quantity(np.array([0.0, 1.0, 2.0]), {Metre: 1})
+        result = _drive(Simpson, y, x)
+        assert result is not None
+        assert isinstance(result, Quantity)
+        assert dict(result.dims) == {Newton: 1, Metre: 1}
+
+    def test_cumulative_trapezoid_with_units(self):
+        """CumulativeTrapezoid with Quantity y and x."""
+        y = Quantity(np.array([0.0, 10.0, 20.0]), {Metre: 1, Second: -1})
+        x = Quantity(np.array([0.0, 1.0, 2.0]), {Second: 1})
+        result = _drive(CumulativeTrapezoid, y, x)
+        assert result is not None
+        assert isinstance(result, Quantity)
+        assert dict(result.dims) == {Metre: 1}
+        np.testing.assert_allclose(result.value, [5.0, 20.0])
+
+    def test_trapezoid_y_only_with_units(self):
+        """Trapezoid(y) with Quantity y and no x → dims = y_dims."""
+        y = Quantity(np.array([1.0, 2.0, 3.0]), {Newton: 1})
+        result = _drive(Trapezoid, y)
+        assert result is not None
+        assert isinstance(result, Quantity)
+        assert dict(result.dims) == {Newton: 1}
+
+
+class TestQuadUnits:
+    """Phase 4 — Quad with Quantity inputs."""
+
+    def test_quad_units_propagated(self):
+        """f: Metre→Newton, bounds in Metre → integral in Newton·Metre."""
+        k = Quantity(9.8, {Newton: 1, Metre: -1})
+        f = lambda x: x * k  # returns Newton
+        result = _drive(Quad, f, Quantity(0.0, {Metre: 1}), Quantity(1.0, {Metre: 1}))
+        assert result is not None
+        v = result['value']
+        assert isinstance(v, Quantity), f"Expected Quantity, got {type(v)}"
+        # integral of (9.8 N/m * x) from 0 to 1 m = 4.9 N·m
+        # but f returns N, so f_dims = {N:1}, x_dims = {M:1}, out = N·M... wait
+        # Actually f(x) = x * k. x is Quantity(val, {M:1}), k is Quantity(9.8, {N:1,M:-1})
+        # f(x) = Quantity(val*9.8, {N:1}). So f_dims = {N:1}.
+        # out_dims = f_dims + x_dims = {N:1, M:1}
+        assert dict(v.dims) == {Newton: 1, Metre: 1}
+
+    def test_quad_plain_function(self):
+        """f returns plain float → result value is plain."""
+        f = lambda x: x.value if isinstance(x, Quantity) else x
+        result = _drive(Quad, f, Quantity(0.0, {Metre: 1}), Quantity(1.0, {Metre: 1}))
+        assert result is not None
+        v = result['value']
+        assert not isinstance(v, Quantity)
+        assert float(v) == pytest.approx(0.5, abs=1e-6)
+
+    def test_quad_no_units_fast_path(self):
+        """Plain bounds → plain result, unchanged."""
+        result = _drive(Quad, lambda x: x, 0.0, 1.0)
+        assert result is not None
+        v = result['value']
+        assert not isinstance(v, Quantity)
+        assert float(v) == pytest.approx(0.5, abs=1e-9)
+
+    def test_quad_error_has_same_units(self):
+        """Error estimate has same dims as value."""
+        k = Quantity(1.0, {Newton: 1, Metre: -1})
+        f = lambda x: x * k
+        result = _drive(Quad, f, Quantity(0.0, {Metre: 1}), Quantity(1.0, {Metre: 1}))
+        assert result is not None
+        err = result['error']
+        assert isinstance(err, Quantity)
+        assert dict(err.dims) == {Newton: 1, Metre: 1}
