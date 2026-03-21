@@ -311,19 +311,20 @@ The constraint is undone if the trail is rewound past the mark where it was post
 
 `UnitsMismatch` is a plain Python exception raised when incompatible units are
 combined inside `++()` escapes. It is catchable via `catch/3` using the
-`python_error(ClassName, Message)` pattern:
+`ClassName(Message)` compound pattern — Python exceptions and logic `throw/1`
+terms use the same representation:
 
 ```python
 catch(
-    ++(Metre(3) + Second(2)),           # raises UnitsMismatch
-    python_error("UnitsMismatch", MSG), # MSG bound to the error string
-    1 == 1                              # recovery goal
+    ++(Metre(3) + Second(2)),   # raises UnitsMismatch
+    UnitsMismatch(MSG),         # MSG bound to the error string
+    1 == 1                      # recovery goal
 )
 ```
 
-The `python_error/2` term is the general form for any Python exception that
-escapes through a `++()` escape — see [Exception Handling](exceptions.md) for
-the full treatment.
+The `ClassName(Message)` form is the general pattern for any Python exception
+that escapes through a `++()` escape — see [Exception Handling](exceptions.md)
+for the full treatment.
 
 ---
 

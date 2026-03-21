@@ -1193,7 +1193,7 @@ class TestDimensionlessSugar:
 
 
 class TestPythonExceptionCatch:
-    """catch/3 catches UnitsMismatch as python_error("UnitsMismatch", Msg)."""
+    """catch/3 catches UnitsMismatch as UnitsMismatch(Msg) — ClassName(Message) compound."""
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
@@ -1206,7 +1206,7 @@ class TestPythonExceptionCatch:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_add",
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+            "Test <- catch(++(Metre(1) + Second(1)), UnitsMismatch(_), 1 == 1)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_sub_mismatch(self, tmp_path):
@@ -1214,7 +1214,7 @@ class TestPythonExceptionCatch:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_sub",
             "-import_from(py.units, [Metre, Kilogram])\n"
-            "Test <- catch(++(Metre(5) - Kilogram(3)), python_error(\"UnitsMismatch\", _), 1 == 1)\n")
+            "Test <- catch(++(Metre(5) - Kilogram(3)), UnitsMismatch(_), 1 == 1)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_catch_message_bound(self, tmp_path):
@@ -1223,7 +1223,7 @@ class TestPythonExceptionCatch:
         from clausal.logic.variables import deref, Var
         mod = self._load(tmp_path, "catch_msg",
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"UnitsMismatch\", _MSG), _MSG == _MSG)\n")
+            "Test <- catch(++(Metre(1) + Second(1)), UnitsMismatch(_MSG), _MSG == _MSG)\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_no_exception_recovery_skipped(self, tmp_path):
@@ -1231,7 +1231,7 @@ class TestPythonExceptionCatch:
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "catch_noexc",
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- catch(++(Metre(3) * Second(2)), python_error(\"UnitsMismatch\", _), 1 == 2)\n")
+            "Test <- catch(++(Metre(3) * Second(2)), UnitsMismatch(_), 1 == 2)\n")
         # Mul doesn't raise; goal succeeds; recovery is skipped entirely.
         assert any(True for _ in call("Test", module=mod))
 
@@ -1241,6 +1241,6 @@ class TestPythonExceptionCatch:
         from clausal.terms import UnitsMismatch
         mod = self._load(tmp_path, "catch_reraise",
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- catch(++(Metre(1) + Second(1)), python_error(\"SomeOtherError\", _), 1 == 1)\n")
+            "Test <- catch(++(Metre(1) + Second(1)), SomeOtherError(_), 1 == 1)\n")
         with pytest.raises(UnitsMismatch):
             list(call("Test", module=mod))

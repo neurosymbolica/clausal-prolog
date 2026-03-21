@@ -342,12 +342,12 @@ Test("constraint accepts correct unit after arithmetic") <- (
 )
 
 # catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
-# catchable as python_error("UnitsMismatch", Msg) in the catcher pattern.
+# catchable as UnitsMismatch(Msg) — ClassName(Message) compound form.
 
 Test("catch add mismatch") <- (
     catch(
         ++(Metre(1) + Second(1)),
-        python_error("UnitsMismatch", _),
+        UnitsMismatch(_),
         1 == 1
     )
 )
@@ -355,7 +355,7 @@ Test("catch add mismatch") <- (
 Test("catch mul no error") <- (
     catch(
         ++(Metre(3) * Second(2)),
-        python_error("UnitsMismatch", _),
+        UnitsMismatch(_),
         1 == 2
     )
 )
@@ -363,7 +363,7 @@ Test("catch mul no error") <- (
 Test("catch extracts message") <- (
     catch(
         ++(Metre(5) + Kilogram(2)),
-        python_error("UnitsMismatch", MSG),
+        UnitsMismatch(MSG),
         MSG == MSG
     )
 )
