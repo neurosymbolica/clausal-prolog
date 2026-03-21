@@ -1,47 +1,29 @@
-"""clausal.modules.py.scipy_constants — scipy.constants predicates for Clausal.
+"""clausal.modules.py.scipy_constants — physical constants from scipy.constants.
 
-Provides physical constants and unit conversions from ``scipy.constants``
-as importable predicate objects for use in .clausal files via::
+Named constants are plain ``Quantity`` values importable directly::
 
-    -import_from(scipy_constants, [Value, Unit, Precision, Lookup,
-                                    Find, AllNames,
-                                    SpeedOfLight, PlanckConstant,
+    -import_from(scipy_constants, [SpeedOfLight, PlanckConstant,
                                     ReducedPlanckConstant, GravitationalConstant,
                                     AvogadroConstant, BoltzmannConstant,
                                     ElementaryCharge, ElectronMass, ProtonMass,
                                     ElectronVolt, StandardAtmosphere,
                                     Kilo, Mega, Giga])
 
-All predicates are **Tier 1 — pure**: no computation; direct attribute
-lookups or CODATA-database queries.
+Use them in expressions exactly like the constants from ``py.units``::
 
-Predicate catalogue
--------------------
-CODATA lookup by name string (445 constants from physical_constants dict):
-    Value(NAME, RESULT)                          — value (float)
-    Unit(NAME, RESULT)                           — unit string
-    Precision(NAME, RESULT)                      — relative uncertainty
-    Lookup(NAME, VALUE, UNIT, UNCERTAINTY)       — all three in one call
-    Find(SUBSTRING, NAMES)                       — names matching a substring
-    AllNames(NAMES)                              — all 445 CODATA constant names
+    C := SpeedOfLight
+    E := ++(ElectronMass * SpeedOfLight ** 2)
+    HasUnits(BoltzmannConstant, Joule / Kelvin)
 
-Physical constants (no input arguments):
-    SpeedOfLight(RESULT)          — c = 299 792 458 m s⁻¹
-    PlanckConstant(RESULT)        — h = 6.626 070 15 × 10⁻³⁴ J s
-    ReducedPlanckConstant(RESULT) — ℏ = h / (2π)
-    GravitationalConstant(RESULT) — G = 6.674 3 × 10⁻¹¹ N m² kg⁻²
-    AvogadroConstant(RESULT)      — Nₐ = 6.022 140 76 × 10²³ mol⁻¹
-    BoltzmannConstant(RESULT)     — k = 1.380 649 × 10⁻²³ J K⁻¹
-    ElementaryCharge(RESULT)      — e = 1.602 176 634 × 10⁻¹⁹ C
-    ElectronMass(RESULT)          — mₑ = 9.109 383 7139 × 10⁻³¹ kg
-    ProtonMass(RESULT)            — mₚ = 1.672 621 925 95 × 10⁻²⁷ kg
+Numeric values come from the installed scipy CODATA release.
 
-Unit conversion / SI prefix factors:
-    ElectronVolt(RESULT)       — 1 eV in joules
-    StandardAtmosphere(RESULT) — 1 atm in pascals
-    Kilo(RESULT)               — 1 × 10³
-    Mega(RESULT)               — 1 × 10⁶
-    Giga(RESULT)               — 1 × 10⁹
+CODATA database access (plain floats / strings):
+    Value(NAME, RESULT)                     — value (float) by CODATA name
+    Unit(NAME, RESULT)                      — SI unit string
+    Precision(NAME, RESULT)                 — relative uncertainty
+    Lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
+    Find(SUBSTRING, NAMES)                  — search names by substring
+    AllNames(NAMES)                         — all CODATA constant names
 """
 
 from __future__ import annotations
@@ -75,14 +57,10 @@ def _sc():
     return _scipy_constants
 
 
-# ── Predicate adapter ──────────────────────────────────────────────────────
+# ── CODATA predicate adapter ───────────────────────────────────────────────
 
 class _ConstantsPredicate:
-    """Dispatch adapter for a scipy.constants predicate.
-
-    Supports multiple arities via ``_register(arity, fn)``.
-    Arity counts include RESULT but not trail.
-    """
+    """Dispatch adapter for a CODATA lookup predicate."""
 
     __slots__ = ("_name", "_dispatch_fns")
 
@@ -108,14 +86,10 @@ class _ConstantsPredicate:
         yield from fn(this_generator, parent, *args)
 
     def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.constants.{self._name}/{arities}"
+        return f"scipy.constants.{self._name}/{sorted(self._dispatch_fns)}"
 
-
-# ── Dispatch helpers ───────────────────────────────────────────────────────
 
 def _lookup_fn(call: Callable) -> Callable:
-    """Return a trampoline dispatch function that calls call(*inputs) → RESULT."""
     def dispatch(this_generator, parent, *args):
         trail = args[-1]
         result_var = args[-2]
@@ -125,23 +99,7 @@ def _lookup_fn(call: Callable) -> Callable:
         except Exception:
             yield (parent, DONE)
             return
-        ok = bool(unify(result_var, out, trail))
-        if ok:
-            yield (parent, None)
-        yield (parent, DONE)
-    return dispatch
-
-
-def _constant_fn(attr_name: str) -> Callable:
-    """Return a trampoline dispatch for a zero-input constant attribute."""
-    def dispatch(this_generator, parent, result_var, trail):
-        try:
-            out = getattr(_sc(), attr_name)
-        except Exception:
-            yield (parent, DONE)
-            return
-        ok = bool(unify(result_var, out, trail))
-        if ok:
+        if bool(unify(result_var, out, trail)):
             yield (parent, None)
         yield (parent, DONE)
     return dispatch
@@ -176,41 +134,28 @@ def _lookup_dispatch(this_generator, parent, name, value_var, unit_var, uncertai
     except KeyError:
         yield (parent, DONE)
         return
-    if not bool(unify(value_var, val, trail)):
-        yield (parent, DONE)
-        return
-    if not bool(unify(unit_var, unit_str, trail)):
-        yield (parent, DONE)
-        return
-    if not bool(unify(uncertainty_var, uncertainty, trail)):
-        yield (parent, DONE)
-        return
-    yield (parent, None)
+    if (bool(unify(value_var, val, trail))
+            and bool(unify(unit_var, unit_str, trail))
+            and bool(unify(uncertainty_var, uncertainty, trail))):
+        yield (parent, None)
     yield (parent, DONE)
 
 
 class _LookupPredicate:
-    """Lookup(NAME, VALUE, UNIT, UNCERTAINTY) — access all three CODATA fields at once."""
-    def _get_dispatch(self):
-        return _lookup_dispatch
-    def __repr__(self):
-        return "scipy.constants.Lookup/4"
-
+    def _get_dispatch(self): return _lookup_dispatch
+    def __repr__(self): return "scipy.constants.Lookup/4"
 
 Lookup = _LookupPredicate()
 
 
 def _find_dispatch(this_generator, parent, substring, names_var, trail):
-    substring = deref(substring)
     try:
-        names = _sc().find(substring, disp=False)
+        names = _sc().find(deref(substring), disp=False)
     except Exception:
         yield (parent, DONE)
         return
-    if not bool(unify(names_var, list(names), trail)):
-        yield (parent, DONE)
-        return
-    yield (parent, None)
+    if bool(unify(names_var, list(names), trail)):
+        yield (parent, None)
     yield (parent, DONE)
 
 
@@ -220,90 +165,57 @@ def _find_all_dispatch(this_generator, parent, names_var, trail):
     except Exception:
         yield (parent, DONE)
         return
-    if not bool(unify(names_var, names, trail)):
-        yield (parent, DONE)
-        return
-    yield (parent, None)
+    if bool(unify(names_var, names, trail)):
+        yield (parent, None)
     yield (parent, DONE)
 
 
 class _FindPredicate:
-    """Find(SUBSTRING, NAMES) — list of CODATA constant names containing SUBSTRING."""
-    def _get_dispatch(self):
-        return _find_dispatch
-    def __repr__(self):
-        return "scipy.constants.Find/2"
-
+    def _get_dispatch(self): return _find_dispatch
+    def __repr__(self): return "scipy.constants.Find/2"
 
 class _AllNamesPredicate:
-    """AllNames(NAMES) — list of all 445 CODATA constant names."""
-    def _get_dispatch(self):
-        return _find_all_dispatch
-    def __repr__(self):
-        return "scipy.constants.AllNames/1"
-
+    def _get_dispatch(self): return _find_all_dispatch
+    def __repr__(self): return "scipy.constants.AllNames/1"
 
 Find = _FindPredicate()
 AllNames = _AllNamesPredicate()
 
 
-# ── Physical constants (no input arguments) ────────────────────────────────
+# ── Physical constants as Quantity values ──────────────────────────────────
+#
+# Initialized eagerly at first import of this module.  scipy.constants is a
+# pure-Python file (just a dict lookup) so loading it is negligible.
+# Unit predicate objects from py.units are used as dimension keys, matching
+# the convention in py.units itself.
 
-SpeedOfLight = _pred("SpeedOfLight",
-    (1, _constant_fn("c")),
-)
+def _init_quantities():
+    """Build and register all Quantity constants into this module's globals."""
+    import sys
+    from clausal.terms import Quantity
+    from clausal.modules.py import units as u
 
-PlanckConstant = _pred("PlanckConstant",
-    (1, _constant_fn("h")),
-)
+    sc = _sc()
+    mod = sys.modules[__name__]
 
-ReducedPlanckConstant = _pred("ReducedPlanckConstant",
-    (1, _constant_fn("hbar")),
-)
+    def q(attr, unit):
+        return Quantity(float(getattr(sc, attr)), unit)
 
-GravitationalConstant = _pred("GravitationalConstant",
-    (1, _constant_fn("G")),
-)
+    mod.SpeedOfLight          = q("c",    u.Metre / u.Second)
+    mod.PlanckConstant        = q("h",    u.Joule * u.Second)
+    mod.ReducedPlanckConstant = q("hbar", u.Joule * u.Second)
+    mod.GravitationalConstant = q("G",    u.Metre**3 / u.Kilogram / u.Second**2)
+    mod.AvogadroConstant      = q("N_A",  u.Mole**-1)
+    mod.BoltzmannConstant     = q("k",    u.Joule / u.Kelvin)
+    mod.ElementaryCharge      = q("e",    u.Coulomb)
+    mod.ElectronMass          = q("m_e",  u.Kilogram)
+    mod.ProtonMass            = q("m_p",  u.Kilogram)
+    mod.ElectronVolt          = q("eV",   u.Joule)
+    mod.StandardAtmosphere    = q("atm",  u.Pascal)
 
-AvogadroConstant = _pred("AvogadroConstant",
-    (1, _constant_fn("N_A")),
-)
-
-BoltzmannConstant = _pred("BoltzmannConstant",
-    (1, _constant_fn("k")),
-)
-
-ElementaryCharge = _pred("ElementaryCharge",
-    (1, _constant_fn("e")),
-)
-
-ElectronMass = _pred("ElectronMass",
-    (1, _constant_fn("m_e")),
-)
-
-ProtonMass = _pred("ProtonMass",
-    (1, _constant_fn("m_p")),
-)
+    mod.Kilo = float(sc.kilo)
+    mod.Mega = float(sc.mega)
+    mod.Giga = float(sc.giga)
 
 
-# ── Unit conversion / SI prefix factors ───────────────────────────────────
-
-ElectronVolt = _pred("ElectronVolt",
-    (1, _constant_fn("eV")),
-)
-
-StandardAtmosphere = _pred("StandardAtmosphere",
-    (1, _constant_fn("atm")),
-)
-
-Kilo = _pred("Kilo",
-    (1, _constant_fn("kilo")),
-)
-
-Mega = _pred("Mega",
-    (1, _constant_fn("mega")),
-)
-
-Giga = _pred("Giga",
-    (1, _constant_fn("giga")),
-)
+_init_quantities()

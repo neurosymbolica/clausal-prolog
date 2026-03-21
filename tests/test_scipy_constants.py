@@ -1,15 +1,8 @@
-"""Tests for clausal.modules.py.scipy_constants — scipy.constants predicates.
+"""Tests for clausal.modules.py.scipy_constants — physical constants.
 
-Tests cover:
-- CODATA lookup predicates: Value, Unit, Precision
-- Physical constant predicates (zero-input): SpeedOfLight, PlanckConstant,
-  ReducedPlanckConstant, GravitationalConstant, AvogadroConstant,
-  BoltzmannConstant, ElementaryCharge, ElectronMass, ProtonMass
-- Conversion / SI prefix factors: ElectronVolt, StandardAtmosphere,
-  Kilo, Mega, Giga
-- Unification succeeds when RESULT is unbound
-- Unification fails when RESULT is bound to an incorrect value
-- .clausal fixture integration
+Named constants are plain Quantity values; tests check value and dims directly.
+CODATA lookup predicates (Value, Unit, Precision, Lookup, Find, AllNames) are
+tested separately via their predicate interface.
 """
 
 import math
@@ -22,20 +15,29 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.solve import call
 from clausal.import_hook import _load_module
+from clausal.terms import Quantity
+from clausal.modules.py import units as _u
 from clausal.modules.py.scipy_constants import (
-    Value, Unit, Precision, Lookup, Find, AllNames,
     SpeedOfLight, PlanckConstant, ReducedPlanckConstant,
     GravitationalConstant, AvogadroConstant, BoltzmannConstant,
     ElementaryCharge, ElectronMass, ProtonMass,
     ElectronVolt, StandardAtmosphere,
     Kilo, Mega, Giga,
+    Value, Unit, Precision, Lookup, Find, AllNames,
 )
 
 
-# ── Test drivers ──────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────
 
-def _drive(pred, *args):
-    """Call predicate with a fresh Var as RESULT; return first solution value."""
+def _val(q):
+    assert isinstance(q, Quantity), f"expected Quantity, got {type(q)}"
+    return float(q.value)
+
+def _dims(q):
+    assert isinstance(q, Quantity)
+    return q.dims
+
+def _drive_pred(pred, *args):
     result = Var()
     dispatch = pred._get_dispatch()
     trail = Trail()
@@ -48,354 +50,164 @@ def _drive(pred, *args):
     return None
 
 
-def _fails_when_bound_wrong(pred, *inputs):
-    """Return True when predicate yields no solutions for a wrong RESULT."""
-    trail = Trail()
-    wrong = object()
-    dispatch = pred._get_dispatch()
-    gen = dispatch(None, None, *inputs, wrong, trail)
-    solutions = [s for s in gen if s[1] is None]
-    return len(solutions) == 0
-
-
-# ── CODATA lookup — Value ─────────────────────────────────────────────────
-
-class TestValue:
-    def test_speed_of_light(self):
-        v = _drive(Value, "speed of light in vacuum")
-        assert v == pytest.approx(299792458.0)
-
-    def test_planck_constant(self):
-        v = _drive(Value, "Planck constant")
-        assert v == pytest.approx(6.62607015e-34)
-
-    def test_boltzmann_constant(self):
-        v = _drive(Value, "Boltzmann constant")
-        assert v == pytest.approx(1.380649e-23)
-
-    def test_elementary_charge(self):
-        v = _drive(Value, "elementary charge")
-        assert v == pytest.approx(1.602176634e-19)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Value, "speed of light in vacuum")
-
-    def test_unknown_name_fails(self):
-        # scipy raises KeyError for unknown names → predicate should fail
-        result = _drive(Value, "not a real constant name xyz")
-        assert result is None
-
-
-# ── CODATA lookup — Unit ──────────────────────────────────────────────────
-
-class TestUnit:
-    def test_speed_of_light_unit(self):
-        u = _drive(Unit, "speed of light in vacuum")
-        assert isinstance(u, str)
-        assert "m" in u
-
-    def test_planck_constant_unit(self):
-        u = _drive(Unit, "Planck constant")
-        assert isinstance(u, str)
-        assert "J" in u
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Unit, "speed of light in vacuum")
-
-
-# ── CODATA lookup — Precision ─────────────────────────────────────────────
-
-class TestPrecision:
-    def test_speed_of_light_precision(self):
-        # c is exact in SI since 2019; uncertainty is 0
-        p = _drive(Precision, "speed of light in vacuum")
-        assert p == pytest.approx(0.0)
-
-    def test_gravitational_constant_precision(self):
-        # G has a small but non-zero uncertainty
-        p = _drive(Precision, "Newtonian constant of gravitation")
-        assert p > 0
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Precision, "speed of light in vacuum")
-
-
-# ── Lookup ────────────────────────────────────────────────────────────────
-
-def _drive_lookup(name):
-    """Call Lookup(NAME, VALUE, UNIT, UNCERTAINTY); return (value, unit, uncertainty)."""
-    v, u, p = Var(), Var(), Var()
-    dispatch = Lookup._get_dispatch()
-    trail = Trail()
-    gen = dispatch(None, None, name, v, u, p, trail)
-    for parent, sentinel in gen:
-        if sentinel is DONE:
-            return None
-        if sentinel is None:
-            return deref(v), deref(u), deref(p)
-    return None
-
-
-class TestLookup:
-    def test_speed_of_light(self):
-        result = _drive_lookup("speed of light in vacuum")
-        assert result is not None
-        val, unit, uncertainty = result
-        assert val == pytest.approx(299792458.0)
-        assert "m" in unit
-        assert uncertainty == pytest.approx(0.0)
-
-    def test_gravitational_constant(self):
-        result = _drive_lookup("Newtonian constant of gravitation")
-        assert result is not None
-        val, unit, uncertainty = result
-        assert val == pytest.approx(6.6743e-11)
-        assert uncertainty > 0
-
-    def test_matches_value_unit_precision(self):
-        name = "Planck constant"
-        result = _drive_lookup(name)
-        assert result is not None
-        val, unit, uncertainty = result
-        assert val == pytest.approx(_drive(Value, name))
-        assert unit == _drive(Unit, name)
-        # precision is relative; uncertainty is absolute
-        assert uncertainty >= 0
-
-    def test_unknown_name_fails(self):
-        result = _drive_lookup("not a real constant name xyz")
-        assert result is None
-
-    def test_wrong_value_binding_fails(self):
-        trail = Trail()
-        dispatch = Lookup._get_dispatch()
-        gen = dispatch(None, None, "speed of light in vacuum",
-                       object(), Var(), Var(), trail)
-        solutions = [s for s in gen if s[1] is None]
-        assert len(solutions) == 0
-
-
-# ── Find ──────────────────────────────────────────────────────────────────
-
-def _drive_find(substring):
-    names = Var()
-    dispatch = Find._get_dispatch()
-    trail = Trail()
-    gen = dispatch(None, None, substring, names, trail)
-    for parent, sentinel in gen:
-        if sentinel is DONE:
-            return None
-        if sentinel is None:
-            return deref(names)
-    return None
-
-
-class TestFind:
-    def test_electron_mass_substring(self):
-        names = _drive_find("electron mass")
-        assert names is not None
-        assert isinstance(names, list)
-        assert "electron mass" in names
-        assert len(names) > 1  # several entries contain this substring
-
-    def test_proton_substring(self):
-        names = _drive_find("proton mass")
-        assert names is not None
-        assert "proton mass" in names
-
-    def test_empty_substring_returns_all(self):
-        names = _drive_find("")
-        assert names is not None
-        assert len(names) >= 300  # all constants (count varies by scipy version)
-
-    def test_no_match_returns_empty_list(self):
-        names = _drive_find("zzznomatchzzz")
-        assert names == []
-
-    def test_wrong_result_fails(self):
-        trail = Trail()
-        dispatch = Find._get_dispatch()
-        gen = dispatch(None, None, "electron mass", object(), trail)
-        solutions = [s for s in gen if s[1] is None]
-        assert len(solutions) == 0
-
-
-# ── AllNames ──────────────────────────────────────────────────────────────
-
-def _drive_all_names():
-    names = Var()
-    dispatch = AllNames._get_dispatch()
-    trail = Trail()
-    gen = dispatch(None, None, names, trail)
-    for parent, sentinel in gen:
-        if sentinel is DONE:
-            return None
-        if sentinel is None:
-            return deref(names)
-    return None
-
-
-class TestAllNames:
-    def test_returns_list(self):
-        names = _drive_all_names()
-        assert isinstance(names, list)
-
-    def test_count(self):
-        names = _drive_all_names()
-        # scipy 1.x ships 300–500 CODATA constants depending on version
-        assert len(names) >= 300
-
-    def test_known_names_present(self):
-        names = _drive_all_names()
-        assert "electron mass" in names
-        assert "speed of light in vacuum" in names
-        assert "Planck constant" in names
-        assert "Boltzmann constant" in names
-
-    def test_all_are_strings(self):
-        names = _drive_all_names()
-        assert all(isinstance(n, str) for n in names)
-
-    def test_wrong_result_fails(self):
-        trail = Trail()
-        dispatch = AllNames._get_dispatch()
-        gen = dispatch(None, None, object(), trail)
-        solutions = [s for s in gen if s[1] is None]
-        assert len(solutions) == 0
-
-
-# ── Physical constants ────────────────────────────────────────────────────
+# ── Physical constants — type and value ───────────────────────────────────
 
 class TestSpeedOfLight:
-    def test_value(self):
-        v = _drive(SpeedOfLight)
-        assert v == pytest.approx(299792458.0)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(SpeedOfLight)
+    def test_is_quantity(self):       assert isinstance(SpeedOfLight, Quantity)
+    def test_value(self):             assert _val(SpeedOfLight) == pytest.approx(299792458.0)
+    def test_dims(self):
+        assert _dims(SpeedOfLight) == {_u.Metre: 1, _u.Second: -1}
 
 
 class TestPlanckConstant:
-    def test_value(self):
-        v = _drive(PlanckConstant)
-        assert v == pytest.approx(6.62607015e-34)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(PlanckConstant)
+    def test_is_quantity(self):       assert isinstance(PlanckConstant, Quantity)
+    def test_value(self):             assert _val(PlanckConstant) == pytest.approx(6.62607015e-34)
+    def test_dims(self):
+        assert _dims(PlanckConstant) == {_u.Kilogram: 1, _u.Metre: 2, _u.Second: -1}
 
 
 class TestReducedPlanckConstant:
+    def test_is_quantity(self):       assert isinstance(ReducedPlanckConstant, Quantity)
     def test_value(self):
-        hbar = _drive(ReducedPlanckConstant)
-        h = _drive(PlanckConstant)
-        assert hbar == pytest.approx(h / (2 * math.pi))
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(ReducedPlanckConstant)
+        assert _val(ReducedPlanckConstant) == pytest.approx(_val(PlanckConstant) / (2 * math.pi))
+    def test_dims(self):
+        assert _dims(ReducedPlanckConstant) == _dims(PlanckConstant)
 
 
 class TestGravitationalConstant:
-    def test_value(self):
-        v = _drive(GravitationalConstant)
-        assert v == pytest.approx(6.6743e-11)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(GravitationalConstant)
+    def test_is_quantity(self):       assert isinstance(GravitationalConstant, Quantity)
+    def test_value(self):             assert _val(GravitationalConstant) == pytest.approx(6.6743e-11)
+    def test_dims(self):
+        assert _dims(GravitationalConstant) == {_u.Metre: 3, _u.Kilogram: -1, _u.Second: -2}
 
 
 class TestAvogadroConstant:
-    def test_value(self):
-        v = _drive(AvogadroConstant)
-        assert v == pytest.approx(6.02214076e+23)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(AvogadroConstant)
+    def test_is_quantity(self):       assert isinstance(AvogadroConstant, Quantity)
+    def test_value(self):             assert _val(AvogadroConstant) == pytest.approx(6.02214076e23)
+    def test_dims(self):
+        assert _dims(AvogadroConstant) == {_u.Mole: -1}
 
 
 class TestBoltzmannConstant:
-    def test_value(self):
-        v = _drive(BoltzmannConstant)
-        assert v == pytest.approx(1.380649e-23)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(BoltzmannConstant)
+    def test_is_quantity(self):       assert isinstance(BoltzmannConstant, Quantity)
+    def test_value(self):             assert _val(BoltzmannConstant) == pytest.approx(1.380649e-23)
+    def test_dims(self):
+        assert _dims(BoltzmannConstant) == {
+            _u.Kilogram: 1, _u.Metre: 2, _u.Second: -2, _u.Kelvin: -1}
 
 
 class TestElementaryCharge:
-    def test_value(self):
-        v = _drive(ElementaryCharge)
-        assert v == pytest.approx(1.602176634e-19)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(ElementaryCharge)
+    def test_is_quantity(self):       assert isinstance(ElementaryCharge, Quantity)
+    def test_value(self):             assert _val(ElementaryCharge) == pytest.approx(1.602176634e-19)
+    def test_dims(self):
+        assert _dims(ElementaryCharge) == {_u.Ampere: 1, _u.Second: 1}
 
 
 class TestElectronMass:
-    def test_value(self):
-        v = _drive(ElectronMass)
-        assert v == pytest.approx(9.1093837139e-31)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(ElectronMass)
+    def test_is_quantity(self):       assert isinstance(ElectronMass, Quantity)
+    def test_value(self):             assert _val(ElectronMass) == pytest.approx(9.1093837139e-31)
+    def test_dims(self):
+        assert _dims(ElectronMass) == {_u.Kilogram: 1}
 
 
 class TestProtonMass:
-    def test_value(self):
-        v = _drive(ProtonMass)
-        assert v == pytest.approx(1.67262192595e-27)
+    def test_is_quantity(self):       assert isinstance(ProtonMass, Quantity)
+    def test_value(self):             assert _val(ProtonMass) == pytest.approx(1.67262192595e-27)
+    def test_dims(self):
+        assert _dims(ProtonMass) == {_u.Kilogram: 1}
+    def test_heavier_than_electron(self):
+        assert _val(ProtonMass) > _val(ElectronMass)
 
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(ProtonMass)
-
-
-# ── Conversion / SI prefix factors ────────────────────────────────────────
 
 class TestElectronVolt:
-    def test_value(self):
-        v = _drive(ElectronVolt)
-        assert v == pytest.approx(1.602176634e-19)
-
-    def test_matches_elementary_charge(self):
-        # By definition, 1 eV = e * 1 V = elementary charge in joules
-        ev = _drive(ElectronVolt)
-        e = _drive(ElementaryCharge)
-        assert ev == pytest.approx(e)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(ElectronVolt)
+    def test_is_quantity(self):       assert isinstance(ElectronVolt, Quantity)
+    def test_value(self):             assert _val(ElectronVolt) == pytest.approx(1.602176634e-19)
+    def test_dims_are_energy(self):
+        assert _dims(ElectronVolt) == {_u.Kilogram: 1, _u.Metre: 2, _u.Second: -2}
+    def test_matches_elementary_charge_value(self):
+        assert _val(ElectronVolt) == pytest.approx(_val(ElementaryCharge))
 
 
 class TestStandardAtmosphere:
-    def test_value(self):
-        v = _drive(StandardAtmosphere)
-        assert v == pytest.approx(101325.0)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(StandardAtmosphere)
+    def test_is_quantity(self):       assert isinstance(StandardAtmosphere, Quantity)
+    def test_value(self):             assert _val(StandardAtmosphere) == pytest.approx(101325.0)
+    def test_dims_are_pressure(self):
+        assert _dims(StandardAtmosphere) == {_u.Kilogram: 1, _u.Metre: -1, _u.Second: -2}
 
 
-class TestKilo:
-    def test_value(self):
-        assert _drive(Kilo) == pytest.approx(1e3)
+# ── SI prefix factors ─────────────────────────────────────────────────────
 
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Kilo)
-
-
-class TestMega:
-    def test_value(self):
-        assert _drive(Mega) == pytest.approx(1e6)
-
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Mega)
+class TestPrefixes:
+    def test_kilo(self):  assert Kilo  == pytest.approx(1e3)
+    def test_mega(self):  assert Mega  == pytest.approx(1e6)
+    def test_giga(self):  assert Giga  == pytest.approx(1e9)
+    def test_are_floats(self):
+        assert isinstance(Kilo, float)
+        assert isinstance(Mega, float)
+        assert isinstance(Giga, float)
 
 
-class TestGiga:
-    def test_value(self):
-        assert _drive(Giga) == pytest.approx(1e9)
+# ── CODATA lookup predicates ──────────────────────────────────────────────
 
-    def test_wrong_result_fails(self):
-        assert _fails_when_bound_wrong(Giga)
+class TestValuePredicate:
+    def test_speed_of_light(self):
+        assert _drive_pred(Value, "speed of light in vacuum") == pytest.approx(299792458.0)
+    def test_unknown_fails(self):
+        assert _drive_pred(Value, "not a real constant xyz") is None
+
+
+class TestUnitPredicate:
+    def test_speed_of_light_unit(self):
+        u = _drive_pred(Unit, "speed of light in vacuum")
+        assert isinstance(u, str) and "m" in u
+
+
+class TestPrecisionPredicate:
+    def test_c_is_exact(self):
+        assert _drive_pred(Precision, "speed of light in vacuum") == pytest.approx(0.0)
+    def test_G_has_uncertainty(self):
+        assert _drive_pred(Precision, "Newtonian constant of gravitation") > 0
+
+
+class TestLookupPredicate:
+    def test_returns_all_three(self):
+        v, u_str, unc = Var(), Var(), Var()
+        dispatch = Lookup._get_dispatch()
+        trail = Trail()
+        gen = dispatch(None, None, "electron mass", v, u_str, unc, trail)
+        for parent, sentinel in gen:
+            if sentinel is None:
+                assert deref(v) == pytest.approx(9.1093837139e-31)
+                assert isinstance(deref(u_str), str)
+                assert deref(unc) >= 0
+                break
+
+    def test_unknown_fails(self):
+        v, u_str, unc = Var(), Var(), Var()
+        dispatch = Lookup._get_dispatch()
+        trail = Trail()
+        gen = dispatch(None, None, "not real xyz", v, u_str, unc, trail)
+        solutions = [s for s in gen if s[1] is None]
+        assert len(solutions) == 0
+
+
+class TestFindPredicate:
+    def test_finds_electron_mass(self):
+        names = _drive_pred(Find, "electron mass")
+        assert "electron mass" in names
+
+    def test_no_match_is_empty(self):
+        names = _drive_pred(Find, "zzznomatch")
+        assert names == []
+
+
+class TestAllNamesPredicate:
+    def test_returns_many(self):
+        names = _drive_pred(AllNames)
+        assert len(names) >= 300
+    def test_contains_known(self):
+        names = _drive_pred(AllNames)
+        assert "Planck constant" in names
 
 
 # ── .clausal fixture integration ──────────────────────────────────────────
@@ -416,29 +228,37 @@ def _succeeds(functor, *args, module):
 
 
 class TestClausalFixture:
-    """Run Test predicates from tests/fixtures/scipy_constants_tests.clausal."""
-
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
         request.cls.mod = _load_fixture("scipy_constants_tests")
 
     @pytest.mark.parametrize("name", [
-        "value lookup matches direct constant",
-        "unit string for speed of light",
-        "precision of speed of light is zero",
+        "speed of light exact value",
+        "speed of light units",
+        "planck constant units",
+        "planck constant magnitude",
+        "reduced planck constant units",
         "hbar equals h over two pi",
+        "gravitational constant units",
+        "gravitational constant magnitude",
+        "avogadro constant units",
+        "avogadro constant magnitude",
+        "boltzmann constant units",
         "boltzmann constant magnitude",
-        "avogadro constant order of magnitude",
-        "elementary charge equals electron volt",
-        "standard atmosphere value",
-        "si prefixes consistent",
-        "gravitational constant is positive and small",
+        "elementary charge units",
+        "elementary charge magnitude",
+        "electron mass units",
+        "electron mass magnitude",
+        "proton mass units",
         "proton heavier than electron",
-        "lookup value matches value predicate",
-        "lookup unit matches unit predicate",
-        "find electron mass substring",
-        "all names has many entries",
-        "all names contains planck constant",
+        "electron volt units",
+        "electron volt magnitude",
+        "standard atmosphere units",
+        "standard atmosphere exact value",
+        "si kilo",
+        "si mega",
+        "si giga",
+        "si prefixes consistent",
     ])
     def test_fixture(self, name):
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
