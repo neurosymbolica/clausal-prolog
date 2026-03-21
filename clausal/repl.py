@@ -60,16 +60,20 @@ def _read_char() -> str:
 
 
 def _format_bindings(bindings: dict) -> str:
-    """Format a binding dict as ``X = val, Y = val``, pretty-printed."""
+    """Format a binding dict as ``X is val, Y is val``, pretty-printed."""
     if not bindings:
         return "true."
     import shutil
-    from clausal.terms import term_pformat
+    from clausal.terms import term_pformat, get_style
     width = shutil.get_terminal_size(fallback=(80, 24)).columns
+    style = get_style()
+    colors = style.colors or {}
+    var_color = colors.get('var', '')
+    reset = colors.get('reset', '') if var_color else ''
     parts = [(k, term_pformat(v, width=width)) for k, v in bindings.items()]
     if any("\n" in vstr for _, vstr in parts):
-        return "\n".join(f"{k} = {vstr}" for k, vstr in parts)
-    return ",  ".join(f"{k} = {vstr}" for k, vstr in parts)
+        return "\n".join(f"{var_color}{k}{reset} is {vstr}" for k, vstr in parts)
+    return ",  ".join(f"{var_color}{k}{reset} is {vstr}" for k, vstr in parts)
 
 
 def _conj(*goals, _varnames=None):
