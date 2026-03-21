@@ -27,7 +27,8 @@ for solution in clausal.query(fib(10, N)):
 
 A `.clausal` file defines predicates using Python syntax with a trailing comma:
 
-```python
+```clausal
+# skip
 # fibonacci.clausal
 
 -table(fib/2),
@@ -35,13 +36,13 @@ A `.clausal` file defines predicates using Python syntax with a trailing comma:
 fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
-    N > 1
-    and N1 is N - 1
-    and N2 is N - 2
-    and fib(N1, F1)
-    and fib(N2, F2)
-    and F is F1 + F2
-),
+    N > 1,
+    N1 := N - 1,
+    N2 := N - 2,
+    fib(N1, F1),
+    fib(N2, F2),
+    F := F1 + F2
+)
 ```
 
 Call it from Python:
@@ -50,7 +51,7 @@ Call it from Python:
 import clausal
 from fibonacci import fib
 
-results = list(clausal.solve(fib(10, F)))
+results = list(clausal.query(fib(10, F)))
 # F binds to 55
 ```
 

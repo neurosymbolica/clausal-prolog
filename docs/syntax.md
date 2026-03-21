@@ -32,7 +32,8 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 - it is visually prominent and quick to type
 
 Example:
-```python
+```clausal
+# skip
 # Logic term containing a Python value:
 point(--x_coord, --y_coord),
 
@@ -41,11 +42,6 @@ my_term = ++foo(X, bar(Y))
 
 # Capture Python code as AST without running it:
 ast_node = ~~(x + y * z)
-
-# Capture a block of statements as AST:
-with ... as block:
-    result = f(x)
-    return result
 ```
 
 ---
@@ -270,7 +266,7 @@ Grammar rules (Definite Clause Grammars):
 
 ```clausal
 # skip
-Rule > ListDescription,
+Rule >> ListDescription,
 ```
 
 ---
@@ -900,17 +896,17 @@ FoldLeft(((E, A, R) <- (R := A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 
 ## Constraint logic programming
 
-Arithmetic operators inside a constraint domain imply constraints, not evaluation. The domain is applied using the `--` escape:
+Clausal supports CLP(FD) (finite-domain integer constraints) and CLP(B) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
 ```clausal
 # skip
-(--clpz)(
-    X < 43,
-    42 <= X,
-)
+X in 1..9,
+AllDifferent([X, Y, Z]),
+X + Y #< Z,
+Label([X, Y, Z])
 ```
 
-Note: `<=` always means less-than-or-equal in constraint context. Implication uses `implies` or the `<-` arrow.
+See [Constraints](constraints.md) for the full API.
 
 ---
 
