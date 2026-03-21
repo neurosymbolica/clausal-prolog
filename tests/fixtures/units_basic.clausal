@@ -1,0 +1,369 @@
+-import_from(py.units, [
+    Metre, Kilogram, Second, Ampere, Kelvin,
+    Kilometer, Centimeter, Gram, Minute, Hour,
+    Newton, Joule, Watt, Hertz, Pascal,
+    Volt, Ampere, Ohm, Coulomb,
+    Bar, Quantity, Dimensionless,
+    StripUnits, DimensionOf, MakeQuantity,
+    SpeedOfLight, StandardGravity])
+
+# SI base unit constructors: build with n(Unit) sugar, extract with StripUnits
+
+Test("meter roundtrip") <- StripUnits(5(Metre), 5)
+Test("kilogram roundtrip") <- StripUnits(70(Kilogram), 70)
+Test("second roundtrip") <- StripUnits(60(Second), 60)
+Test("kelvin roundtrip") <- StripUnits(300(Kelvin), 300)
+Test("newton roundtrip") <- StripUnits(9.8(Newton), 9.8)
+Test("joule roundtrip") <- StripUnits(100(Joule), 100)
+Test("hertz roundtrip") <- StripUnits(440(Hertz), 440)
+Test("ohm roundtrip") <- StripUnits(10(Ohm), 10)
+Test("volt roundtrip") <- StripUnits(230(Volt), 230)
+Test("coulomb roundtrip") <- StripUnits(3(Coulomb), 3)
+
+Test("centimeter roundtrip") <- (
+    D := 200(Centimeter),
+    StripUnits(D, RAW),
+    ERR := ++(abs(RAW - 2.0)),
+    ERR < 1.0e-9
+)
+
+# Scaled unit constructors: check stored value via equality with SI unit
+
+Test("kilometer stores as meters") <- (
+    D := 1(Kilometer),
+    D == 1000.0(Metre)
+)
+
+Test("gram stores as kilograms") <- (
+    D := 1000(Gram),
+    D == 1.0(Kilogram)
+)
+
+Test("minute stores as seconds") <- (
+    D := 5(Minute),
+    D == 300.0(Second)
+)
+
+Test("hour stores as seconds") <- (
+    D := 2(Hour),
+    D == 7200.0(Second)
+)
+
+# Arithmetic: check results by unification with n(Unit)
+
+Test("velocity from distance over time") <- (
+    D := 100(Metre),
+    T := 10(Second),
+    V := D / T,
+    StripUnits(V, 10.0),
+    HasUnits(V, Metre/Second)
+)
+
+Test("acceleration from velocity over time") <- (
+    D := 20(Metre),
+    T := 2(Second),
+    V := D / T,
+    A := V / T,
+    StripUnits(A, 5.0),
+    HasUnits(A, Metre/Second**2)
+)
+
+Test("force from mass times acceleration") <- (
+    D := 20(Metre),
+    T := 2(Second),
+    V := D / T,
+    A := V / T,
+    M := 3(Kilogram),
+    F := M * A,
+    F == 15.0(Newton)
+)
+
+Test("area from side squared") <- (
+    SIDE := 4(Metre),
+    AREA := SIDE ** 2,
+    StripUnits(AREA, 16),
+    HasUnits(AREA, Metre**2)
+)
+
+Test("volume from side cubed") <- (
+    SIDE := 2(Metre),
+    VOL := SIDE ** 3,
+    StripUnits(VOL, 8),
+    HasUnits(VOL, Metre**3)
+)
+
+Test("add two forces") <- (
+    TOTAL := 3(Newton) + 7(Newton),
+    TOTAL == 10(Newton)
+)
+
+Test("subtract forces") <- (
+    DIFF := 10(Newton) - 4(Newton),
+    DIFF == 6(Newton)
+)
+
+Test("scale force by scalar") <- (
+    F2 := 5(Newton) * 3,
+    F2 == 15(Newton)
+)
+
+Test("dims cancel in division") <- (
+    RATIO := 50(Metre) / 10(Metre),
+    RATIO == 5.0()
+)
+
+Test("ohms law") <- (
+    R := 12(Volt) / 3(Ampere),
+    R == 4.0(Ohm)
+)
+
+Test("power from current squared times resistance") <- (
+    I := 2(Ampere),
+    RES := 5(Ohm),
+    P := I * I * RES,
+    P == 20(Watt)
+)
+
+Test("watt joule per second") <- (
+    P := 3600(Joule) / 60(Second),
+    P == 60.0(Watt)
+)
+
+Test("kinetic energy") <- (
+    M := 4(Kilogram),
+    SPD := 3(Metre) / 1(Second),
+    KE := M * SPD ** 2,
+    HALF := KE / 2,
+    ERR is ++(abs(HALF.value - 18.0)),
+    ERR < 1.0e-9,
+    HasUnits(HALF, Joule)
+)
+
+Test("bar stores as pascals") <- (
+    D := 1(Bar),
+    ERR is ++(abs(D.value - 100000.0)),
+    ERR < 1.0e-6,
+    HasUnits(D, Pascal)
+)
+
+Test("make dimensioned from dict") <- (
+    DIMS := ++{Kilogram: 1, Metre: 1, Second: -2},
+    MakeQuantity(10, DIMS, D),
+    D == 10(Newton)
+)
+
+# Physical constants used in expressions via ++
+
+Test("rest energy e=mc2") <- (
+    E := ++(Kilogram(1) * SpeedOfLight ** 2),
+    HasUnits(E, Joule),
+    ERR is ++(abs(E.value - 8.987551787368176e+16)),
+    ERR < 1.0e6
+)
+
+Test("weight from standard gravity") <- (
+    W := ++(Kilogram(70) * StandardGravity),
+    HasUnits(W, Newton),
+    ERR is ++(abs(W.value - 686.4655)),
+    ERR < 1.0e-3
+)
+
+# Dimension type checks via HasUnits
+
+Test("dimensionless roundtrip") <- (
+    PARTIAL := 5.0(),
+    StripUnits(PARTIAL, VAL_),
+    VAL_ == 5.0,
+    PARTIAL == ++(Quantity(5.0, {}))
+)
+
+Test("islength") <- (Q := 1(Metre), HasUnits(Q, Metre))
+
+Test("ismass") <- (Q := 1(Kilogram), HasUnits(Q, Kilogram))
+
+Test("istime") <- (Q := 1(Second), HasUnits(Q, Second))
+
+Test("isfrequency") <- (Q := 1(Hertz), HasUnits(Q, Hertz))
+
+Test("isforce") <- (Q := 1(Newton), HasUnits(Q, Newton))
+
+Test("isenergy") <- (Q := 1(Joule), HasUnits(Q, Joule))
+
+Test("ispower") <- (Q := 1(Watt), HasUnits(Q, Watt))
+
+Test("ispressure") <- (Q := 1(Bar), HasUnits(Q, Pascal))
+
+Test("isvoltage") <- (Q := 1(Volt), HasUnits(Q, Volt))
+
+Test("isresistance") <- (Q := 1(Ohm), HasUnits(Q, Ohm))
+
+Test("ischarge") <- (Q := 1(Coulomb), HasUnits(Q, Coulomb))
+
+Test("valueof and stripdimensions") <- (
+    F := 9.8(Newton),
+    StripUnits(F, 9.8),
+    StripUnits(F, 9.8)
+)
+
+# X(Unit) in expression position: wraps a runtime value in a Quantity.
+# HasUnits(X, Unit) is the explicit goal for dimension checks and constraints.
+
+Test("var construction sugar") <- (
+    N := 9.8,
+    F := N(Newton),
+    HasUnits(F, Newton),
+    StripUnits(F, 9.8)
+)
+
+Test("constraint accepts matching unit") <- (
+    HasUnits(F, Newton),
+    F is 9.8(Newton),
+    HasUnits(F, Newton)
+)
+
+Test("constraint rejects wrong unit") <- (
+    not (HasUnits(F, Newton), F is 1(Second))
+)
+
+Test("constraint propagates through arithmetic") <- (
+    HasUnits(D, Metre),
+    HasUnits(T, Second),
+    D is 100(Metre),
+    T is 10(Second),
+    V := D / T,
+    HasUnits(V, Metre/Second)
+)
+
+# Compound unit expressions: HasUnits(X, Metre**2), HasUnits(X, Metre/Second), etc.
+# The transformer auto-wraps compound unit args in PyThunk.
+
+Test("area check via compound expr") <- (
+    A := 4(Metre) ** 2,
+    HasUnits(A, Metre**2)
+)
+
+Test("area constraint via compound expr") <- (
+    HasUnits(A, Metre**2),
+    A := 4(Metre) ** 2
+)
+
+Test("velocity check via compound expr") <- (
+    V := 10(Metre) / 1(Second),
+    HasUnits(V, Metre/Second)
+)
+
+Test("velocity constraint via compound expr") <- (
+    HasUnits(V, Metre/Second),
+    V := 10(Metre) / 1(Second)
+)
+
+Test("acceleration check via compound expr") <- (
+    A := 9.8(Metre) / 1(Second) ** 2,
+    HasUnits(A, Metre/Second**2)
+)
+
+Test("force compound dims check") <- (
+    F := 9.8(Newton),
+    HasUnits(F, Kilogram*Metre/Second**2)
+)
+
+Test("compound dims constraint rejects wrong unit") <- (
+    not (HasUnits(A, Metre**2), A is 5(Metre))
+)
+
+# Dimensionless n() sugar: 42() produces Quantity(42, {})
+
+Test("dimensionless integer sugar") <- (
+    D := 42(),
+    HasUnits(D, Dimensionless),
+    StripUnits(D, 42)
+)
+
+Test("dimensionless float sugar") <- (
+    D := 3.14(),
+    HasUnits(D, Dimensionless),
+    ERR := ++(abs(D.value - 3.14)),
+    ERR < 1.0e-12
+)
+
+Test("dimensionless sugar equals Dimensionless pred") <- (
+    D1 := 7(),
+    D2 := ++(Quantity(7, {})),
+    D1 == D2
+)
+
+Test("dimensionless sugar not a length") <- (
+    D := 5(),
+    not HasUnits(D, Metre)
+)
+
+Test("dimensionless sugar not a force") <- (
+    D := 9.8(),
+    not HasUnits(D, Newton)
+)
+
+Test("dimensionless via dimensionless check") <- (D := 0(), HasUnits(D, Dimensionless))
+
+Test("dimensionless arithmetic via escape") <- (
+    S := ++(Quantity(3, {}) + Quantity(2, {})),
+    HasUnits(S, Dimensionless),
+    StripUnits(S, 5)
+)
+
+Test("dimensionless ratio from division") <- (
+    RATIO := 50(Metre) / 10(Metre),
+    HasUnits(RATIO, Dimensionless),
+    D := 5.0(),
+    RATIO == D
+)
+
+# Unit mismatch detection via AttVar constraint system
+
+Test("constraint rejects metre for second slot") <- (
+    not (HasUnits(X, Second), X is 100(Metre))
+)
+
+Test("constraint rejects newton for kilogram slot") <- (
+    not (HasUnits(M, Kilogram), M is 9.8(Newton))
+)
+
+Test("constraint rejects joule for watt slot") <- (
+    not (HasUnits(P, Watt), P is 1(Joule))
+)
+
+Test("two constraints conflict") <- (
+    not (HasUnits(X, Metre), HasUnits(X, Second))
+)
+
+Test("constraint accepts correct unit after arithmetic") <- (
+    HasUnits(V, Metre),
+    V is 5(Metre),
+    HasUnits(V, Metre)
+)
+
+# catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
+# catchable as UnitsMismatch(Msg) — ClassName(Message) compound form.
+
+Test("catch add mismatch") <- (
+    catch(
+        ++(Metre(1) + Second(1)),
+        UnitsMismatch(_),
+        1 == 1
+    )
+)
+
+Test("catch mul no error") <- (
+    catch(
+        ++(Metre(3) * Second(2)),
+        UnitsMismatch(_),
+        1 == 2
+    )
+)
+
+Test("catch extracts message") <- (
+    catch(
+        ++(Metre(5) + Kilogram(2)),
+        UnitsMismatch(MSG),
+        MSG == MSG
+    )
+)

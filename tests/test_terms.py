@@ -3,7 +3,6 @@
 Covers:
   - Compound construction and repr
   - Python literals as terms (direct — no wrappers)
-  - ArithConstraint stub
   - list_to_cons / cons_to_list helpers
   - term_str for all term types
   - KWTerm term_str (WK-3)
@@ -17,7 +16,6 @@ import pytest
 from clausal.terms import (
     Compound,
     KWTerm,
-    ArithConstraint,
     list_to_cons,
     cons_to_list,
     term_str,
@@ -132,25 +130,6 @@ class TestPythonLiteralsAreTerms:
         assert term_str(...) == "..."
 
 
-# ── TestArithConstraint ────────────────────────────────────────────────────────
-
-
-class TestArithConstraint:
-    def test_construction(self):
-        v = Var()
-        ac = ArithConstraint(expr=v)
-        assert ac.expr is v
-
-    def test_term_str(self):
-        ac = ArithConstraint(expr=42)
-        assert term_str(ac) == "==+(42)"
-
-    def test_equality(self):
-        assert ArithConstraint(expr=1) == ArithConstraint(expr=1)
-
-    def test_inequality(self):
-        assert ArithConstraint(expr=1) != ArithConstraint(expr=2)
-
 
 # ── TestConsHelpers ────────────────────────────────────────────────────────────
 
@@ -258,8 +237,6 @@ class TestTermStr:
     def test_compound(self):
         assert term_str(Compound("foo", (1, 2))) == "foo(1, 2)"
 
-    def test_arith_constraint(self):
-        assert term_str(ArithConstraint(expr=5)) == "==+(5)"
 
     def test_kwterm(self):
         t = KWTerm("point", x=1, y=2)

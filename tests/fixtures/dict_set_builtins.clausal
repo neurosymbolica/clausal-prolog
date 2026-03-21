@@ -1,0 +1,22 @@
+# predicates
+
+# Extract the 'name' key from any dict that has it.
+get_name(PERSON, NAME) <- SubDict({"name": NAME}, PERSON)
+
+# Succeed if PERSON has role == "admin".
+is_admin(PERSON) <- SubDict({"role": "admin"}, PERSON)
+
+# Update a single field using DictPut.
+update_field(KEY, VALUE, OLD, NEW) <- DictPut(KEY, VALUE, OLD, NEW)
+
+# Enumerate all key-value pairs of a dict.
+dict_member(KEY, DICT, VALUE) <- GenDict(KEY, DICT, VALUE)
+
+# Build a new dict from OLD with an extra key, using splat sugar.
+splat_update(OLD, KEY, VALUE, NEW) <- (NEW is {**OLD, KEY: VALUE})
+
+# Compute the intersection of two sets.
+set_common(S1, S2, INTER) <- SetIntersection(S1, S2, INTER)
+
+# Enumerate elements of a set.
+set_member(ELEM, SET) <- GenSet(ELEM, SET)

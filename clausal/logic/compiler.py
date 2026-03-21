@@ -42,13 +42,13 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import threading
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, is_var, deref, unify
 from clausal.logic.trampoline import Step, DONE, StepGenerator
 from clausal.terms import (
     Compound,
-    ArithConstraint,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
@@ -64,6 +64,12 @@ from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 
+
+# Phase 7: thread-local context for locked-predicate dispatch caching.
+# Set during compile_predicate_trampoline / compile_predicate so that
+# _dispatch_call_trampoline / _dispatch_call_iter can emit a direct name
+# reference (_disp_Foo_2) instead of Foo._get_dispatch() for locked predicates.
+_compile_context_local: threading.local = threading.local()
 
 
 def _set_of_dedup(items: list) -> list:
@@ -661,6 +667,93 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     return targets
 
 
+def _collect_globals_info(
+    clauses: list[Clause],
+) -> tuple[dict[str, type], dict[str, Any], set[tuple[str, int]]]:
+    """Single-pass collector replacing three separate traversals.
+
+    Returns ``(types, thunks, targets)`` where:
+
+    * ``types``   — name→type dict for user-defined term classes (from heads and bodies)
+    * ``thunks``  — ``_pyt_<id>``→fn dict for PyThunk lambdas (from bodies)
+    * ``targets`` — set of ``(fname, arity)`` call targets (from bodies)
+
+    Replaces ``_collect_head_types``, ``_collect_py_thunks``, and
+    ``_collect_call_targets`` with a single tree walk.
+    """
+    from clausal.terms import PyThunk as _PyThunk  # noqa: PLC0415
+
+    types: dict[str, type] = {}
+    thunks: dict[str, Any] = {}
+    targets: set[tuple[str, int]] = set()
+
+    def _walk_head(term: Any) -> None:
+        term = deref(term)
+        if isinstance(term, StarUnpack):
+            _walk_head(term.value)
+        elif isinstance(term, Compound):
+            for a in term.args:
+                _walk_head(a)
+        elif isinstance(term, list):
+            for e in term:
+                _walk_head(e)
+        elif is_term_instance(term):
+            cls = type(term)
+            types[cls.__name__] = cls
+            for name in term_field_names(term):
+                _walk_head(getattr(term, name))
+
+    def _walk_body(term: Any) -> None:
+        # Call-target detection runs on the raw (pre-deref) term so that
+        # Call/LoadName nodes (which are dataclass instances, not Vars) are
+        # seen before any potential deref() short-circuits them.
+        if isinstance(term, Call) and isinstance(term.func, LoadName):
+            n_kwargs = len(term.kwargs) if term.kwargs else 0
+            targets.add((term.func.name, len(term.args) + n_kwargs))
+        elif isinstance(term, Call) and isinstance(term.func, LoadAttr):
+            dotted = _dotted_name_from_loadattr(term.func)
+            if dotted is not None:
+                n_kwargs = len(term.kwargs) if term.kwargs else 0
+                targets.add((dotted, len(term.args) + n_kwargs))
+        elif isinstance(term, LoadName) and "." in term.name:
+            targets.add((term.name, -1))
+        # Deref for type/thunk collection and recursive descent.
+        dterm = deref(term)
+        if isinstance(dterm, _PyThunk):
+            thunks[f"_pyt_{id(dterm)}"] = dterm.fn
+        elif isinstance(dterm, Compound):
+            for a in dterm.args:
+                _walk_body(a)
+        elif isinstance(dterm, list):
+            for e in dterm:
+                _walk_body(e)
+        elif is_term_instance(dterm):
+            cls = type(dterm)
+            types[cls.__name__] = cls
+            for name in term_field_names(dterm):
+                val = getattr(dterm, name)
+                if val is not None:
+                    _walk_body(val)
+
+    for clause in clauses:
+        _walk_head(clause.head)
+        for goal in clause.body:
+            _walk_body(goal)
+
+    return types, thunks, targets
+
+
+def _disp_key(fname: str, arity: int) -> str:
+    """Return the base_globals key for a pre-captured dispatch function.
+
+    Used by Phase 7: locked predicates have their dispatch function captured
+    into compiled function globals under this key, so generated code can
+    reference ``_disp_Foo_2`` directly instead of ``Foo._get_dispatch()``
+    on every invocation.
+    """
+    return f"_disp_{fname.replace('.', '_')}_{arity}"
+
+
 def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
     """Inject a builtin into base_globals, merging multi-arity builtins."""
     existing = base_globals.get(name)
@@ -728,6 +821,11 @@ def _inject_call_targets(
                 if resolved is not None and hasattr(resolved, "_get_dispatch"):
                     base_globals[target_name] = resolved
                     continue
+            # Check globals_ directly — handles non-predicate values stored
+            # under dotted keys by _process_imports (e.g. "py.sympy.inf").
+            if globals_ and target_name in globals_:
+                base_globals[target_name] = globals_[target_name]
+                continue
             # Check builtins for dotted keys (e.g. "re.FindAll").
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
@@ -743,6 +841,89 @@ def _inject_call_targets(
             base_globals[target_name] = globals_[target_name]
         elif db is not None:
             base_globals[target_name] = _DbDispatchAdapter(db, target_name, target_arity)
+
+
+def _inject_resolved_targets(
+    targets: set[tuple[str, int]],
+    base_globals: dict,
+    db: "Database | None",
+    globals_: dict | None,
+) -> None:
+    """Resolve pre-collected call targets into base_globals.
+
+    Phase 6: the resolution loop from ``_inject_call_targets`` extracted so it
+    can be called with targets already gathered by ``_collect_globals_info``,
+    avoiding a fourth clause traversal.
+
+    Phase 7: for each resolved target that is a locked ``PredicateMeta``,
+    additionally captures its dispatch function under ``_disp_{fname}_{arity}``
+    in ``base_globals``.  Generated code can then reference the dispatch
+    function directly instead of calling ``_get_dispatch()`` on every
+    predicate invocation.
+    """
+    from clausal.logic.builtins import get_builtin_predicate, BuiltinPredicate  # noqa: PLC0415
+
+    def _maybe_cache_dispatch(obj: Any, name: str, arity: int) -> None:
+        """Phase 7: if obj is a locked, compiled PredicateMeta, cache its dispatch."""
+        if (
+            arity >= 0
+            and isinstance(obj, PredicateMeta)
+            and getattr(obj, "_locked", False)
+            and obj._dispatch_fn is not None
+        ):
+            base_globals[_disp_key(name, arity)] = obj._dispatch_fn
+
+    for target_name, target_arity in targets:
+        existing = base_globals.get(target_name)
+        if existing is not None and hasattr(existing, "_get_dispatch"):
+            if isinstance(existing, BuiltinPredicate):
+                builtin = get_builtin_predicate(target_name, target_arity, db)
+                if builtin is not None and builtin._arity != existing._arity:
+                    existing._merge(builtin)
+            else:
+                # Phase 7: cache dispatch for locked predicates already in base_globals
+                # (e.g. injected from globals_ by the caller before _inject_resolved_targets).
+                _maybe_cache_dispatch(existing, target_name, target_arity)
+            continue
+        if "." in target_name:
+            parts = target_name.split(".")
+            obj = globals_.get(parts[0]) if globals_ else None
+            for part in parts[1:]:
+                if obj is None:
+                    break
+                obj = getattr(obj, part, None)
+            if obj is not None and hasattr(obj, "_get_dispatch"):
+                base_globals[target_name] = obj
+                _maybe_cache_dispatch(obj, target_name, target_arity)
+                continue
+            if obj is not None:
+                base_globals[target_name] = obj
+                continue
+            import sys as _sys  # noqa: PLC0415
+            mod_path = ".".join(parts[:-1])
+            attr_name = parts[-1]
+            mod_obj = _sys.modules.get(mod_path)
+            if mod_obj is not None:
+                resolved = getattr(mod_obj, attr_name, None)
+                if resolved is not None and hasattr(resolved, "_get_dispatch"):
+                    base_globals[target_name] = resolved
+                    _maybe_cache_dispatch(resolved, target_name, target_arity)
+                    continue
+            builtin = get_builtin_predicate(target_name, target_arity, db)
+            if builtin is not None:
+                _merge_builtin(base_globals, target_name, builtin)
+            continue
+        builtin = get_builtin_predicate(target_name, target_arity, db)
+        if builtin is not None:
+            _merge_builtin(base_globals, target_name, builtin)
+            continue
+        if globals_ and target_name in globals_:
+            obj = globals_[target_name]
+            base_globals[target_name] = obj
+            _maybe_cache_dispatch(obj, target_name, target_arity)
+        elif db is not None:
+            obj = _DbDispatchAdapter(db, target_name, target_arity)
+            base_globals[target_name] = obj
 
 
 def _preallocate_body_vars(
@@ -891,6 +1072,7 @@ def term_to_ast_expr(
         )
 
     from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
+
     if isinstance(term, DictTerm):
         return _call(
             _name("DictTerm"),
@@ -922,9 +1104,33 @@ def term_to_ast_expr(
 
     if isinstance(term, DictLiteral):
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
-        return ast.Dict(
-            keys=[_rec(k) if k is not None else None for k in term.keys],
-            values=[_rec(v) for v in term.values],
+        has_splat = any(k is None for k in term.keys)
+        if not has_splat:
+            # No splats: plain dict used as DictTerm constructor argument.
+            return ast.Dict(
+                keys=[_rec(k) for k in term.keys],
+                values=[_rec(v) for v in term.values],
+            )
+        # Splat dict sugar: {**OLD, k: v} → DictTerm({**deref(OLD).data, k: v})
+        # Splat values are DictTerms; access .data to get the underlying dict.
+        py_keys = []
+        py_vals = []
+        for k, v in zip(term.keys, term.values):
+            if k is None:
+                py_keys.append(None)
+                py_vals.append(
+                    ast.Attribute(
+                        value=_call(_name("deref"), _rec(v)),
+                        attr="data",
+                        ctx=ast.Load(),
+                    )
+                )
+            else:
+                py_keys.append(_rec(k))
+                py_vals.append(_rec(v))
+        return _call(
+            _name("DictTerm"),
+            ast.Dict(keys=py_keys, values=py_vals),
         )
 
     if isinstance(term, SetLiteral):
@@ -1162,16 +1368,25 @@ def _dispatch_call_iter(
     Bridges simple-mode callers to trampoline-mode dispatch functions.
     ``fname`` is resolved from the compiled function's globals, where it
     refers to either a PredicateMeta class or a _DbDispatchAdapter shim.
+
+    Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a pre-captured
+    dispatch function in base_globals) instead of ``fname._get_dispatch()``.
     """
-    get_dispatch = ast.Call(
-        func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-        args=[],
-        keywords=[],
-    )
+    # Phase 7: use cached dispatch name for locked predicates
+    dk = _disp_key(fname, arity)
+    locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
+    if dk in locked_keys:
+        dispatch_expr: ast.expr = _name(dk)
+    else:
+        dispatch_expr = ast.Call(
+            func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
+            args=[],
+            keywords=[],
+        )
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
     return ast.Call(
         func=_name("_tramp_call"),
-        args=[get_dispatch, args_tuple, _name(trail_name)],
+        args=[dispatch_expr, args_tuple, _name(trail_name)],
         keywords=[],
     )
 
@@ -1750,11 +1965,12 @@ def compile_goal(
             right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts)
             # Note: both branches share var_context; body-only vars in Or
             # branches that differ between branches are a known POC limitation.
+            # After trail.undo(mark) the trail is already back at mark, so the
+            # second _assign_mark would be a no-op — omit it.
             return [
                 _assign_mark(mark, trail_name),
                 *left_stmts,
                 _undo_stmt(mark, trail_name),
-                _assign_mark(mark, trail_name),
                 *right_stmts,
                 _undo_stmt(mark, trail_name),
             ]
@@ -1866,12 +2082,6 @@ def compile_goal(
                 _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
 
-        # ── CLP(FD) stub ─────────────────────────────────────────────────────
-        case ArithConstraint():
-            raise NotImplementedError(
-                "CLP(FD) arithmetic constraints (==+) are not yet implemented"
-            )
-
         # ── throw(Term) — raise LogicException ────────────────────────────
         case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
             return _compile_throw(term_arg, var_context)
@@ -1880,6 +2090,20 @@ def compile_goal(
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
             return _compile_catch(
                 goal_arg, catcher, recovery, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+            return _compile_catch(
+                goal_arg, error_var, True, db, var_context, trail_name, k_stmts,
+                always_catch=True,
+            )
+
+        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+            return _compile_catch(
+                goal_arg, error_var, recovery, db, var_context, trail_name, k_stmts,
+                always_catch=True,
             )
 
         # ── halt/0, halt/1 — exit ────────────────────────────────────────
@@ -2086,6 +2310,22 @@ def _compile_find_all_core(
 # ── throw/catch compilation (V2-14) ─────────────────────────────────────────
 
 
+def _catcher_to_structural(term: Any) -> Any:
+    """Recursively convert Call nodes to Compound in a catcher term.
+
+    ``catch/3`` catcher patterns and ``Catch/2`` error patterns appear in
+    *term* position, not goal position. ``Call(LoadName("Foo"), [arg])``
+    should construct ``Compound("Foo", (arg,))`` at runtime, not call the
+    dispatch function for ``Foo``. This avoids collisions with
+    ``_inject_call_targets`` which replaces functor names with
+    ``_DbDispatchAdapter`` objects that are not callable as constructors.
+    """
+    if isinstance(term, Call) and isinstance(term.func, LoadName) and not term.kwargs:
+        new_args = [_catcher_to_structural(a) for a in term.args]
+        return Compound(term.func.name, tuple(new_args))
+    return term
+
+
 def _compile_throw(
     term_arg: Any,
     var_context: dict[int, str],
@@ -2108,8 +2348,17 @@ def _compile_catch(
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
+    always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in simple mode.
+
+    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
+    Python exceptions are wrapped as ``ClassName(Message)`` so that Clausal
+    code can match them the same way as logic terms::
+
+        catch(Goal, UnitsMismatch(_), Recovery)
+        Catch(Goal, Error)                # always_catch=True, recovery=True
+        CatchRecover(Goal, Error, Recovery)  # always_catch=True
 
     Generates::
 
@@ -2120,24 +2369,30 @@ def _compile_catch(
         try:
             for _ in _catch_gen_N():
                 <k_stmts>
-        except _LogicException as _exc_N:
+        except Exception as _exc_N:
+            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
+                      else _python_error_term(_exc_N)
             trail.undo(_catch_mark_N)
             _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _exc_N.term, trail):
+            if unify(<catcher_expr>, _term_N, trail):
                 def _catch_rec_N():
                     <compiled recovery with k = [yield None]>
                     return; yield
                 for _ in _catch_rec_N():
                     <k_stmts>
+            else:
+                trail.undo(_catch_um_N)
+                raise
             trail.undo(_catch_um_N)
     """
     catch_mark = _fresh("_catch_m")
     gen_name = _fresh("_catch_gen")
     exc_name = _fresh("_exc")
+    term_name = _fresh("_term")
     unify_mark = _fresh("_catch_um")
     rec_gen_name = _fresh("_catch_rec")
 
-    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
 
     # Compile inner goal as sub-generator (simple mode)
     inner_stmts = compile_goal(goal_arg, db, var_context, trail_name, [_yield_none_stmt()])
@@ -2189,30 +2444,41 @@ def _compile_catch(
         orelse=[],
     )
 
-    # except block: undo trail, match catcher, run recovery; else re-raise
+    # term extraction: _LogicException carries .term; Python exceptions are wrapped
+    term_extract = _assign(
+        term_name,
+        ast.IfExp(
+            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
+            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+        ),
+    )
+
+    # except block: extract term, undo trail, match catcher, run recovery
+    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    orelse_stmts: list[ast.stmt] = (
+        [] if always_catch
+        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
+    )
     except_body: list[ast.stmt] = [
+        term_extract,
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(
                 _name("unify"),
                 catcher_expr,
-                ast.Attribute(
-                    value=_name(exc_name), attr="term", ctx=ast.Load(),
-                ),
+                _name(term_name),
                 _name(trail_name),
             ),
             body=[rec_fn, rec_loop],
-            orelse=[
-                _undo_stmt(unify_mark, trail_name),
-                ast.Raise(),  # re-raise if catcher doesn't match
-            ],
+            orelse=orelse_stmts or [ast.Pass()],
         ),
         _undo_stmt(unify_mark, trail_name),
     ]
 
     handler = ast.ExceptHandler(
-        type=_name("_LogicException"),
+        type=_name("Exception"),
         name=exc_name,
         body=except_body,
     )
@@ -2240,8 +2506,12 @@ def _compile_catch_trampoline(
     trail_name: str,
     k_stmts: list[ast.stmt],
     self_name: str,
+    always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in trampoline mode.
+
+    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
+    Python exceptions are wrapped as ``ClassName(Message)``.
 
     Generates::
 
@@ -2252,22 +2522,28 @@ def _compile_catch_trampoline(
             while _st_N is not _DONE:
                 <k_stmts>
                 _st_N = (yield (_gen_N, None))
-        except _LogicException as _exc_N:
+        except Exception as _exc_N:
+            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
+                      else _python_error_term(_exc_N)
             trail.undo(_catch_mark_N)
             _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _exc_N.term, trail):
+            if unify(<catcher_expr>, _term_N, trail):
                 _gen_rec_N = StepGenerator(rec_dispatch, this_generator, ..., trail)
                 _st_rec_N = (yield (_gen_rec_N, None))
                 while _st_rec_N is not _DONE:
                     <k_stmts>
                     _st_rec_N = (yield (_gen_rec_N, None))
+            else:
+                trail.undo(_catch_um_N)
+                raise
             trail.undo(_catch_um_N)
     """
     catch_mark = _fresh("_catch_m")
     exc_name = _fresh("_exc")
+    term_name = _fresh("_term")
     unify_mark = _fresh("_catch_um")
 
-    catcher_expr = term_to_ast_expr(catcher, var_context, eval_arith=False)
+    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
 
     # Compile goal as trampoline call
     goal_stmts = compile_goal_trampoline(
@@ -2279,30 +2555,41 @@ def _compile_catch_trampoline(
         recovery, db, var_context, trail_name, k_stmts, self_name,
     )
 
-    # except block: undo trail, match catcher, run recovery; else re-raise
+    # term extraction: _LogicException carries .term; Python exceptions are wrapped
+    term_extract = _assign(
+        term_name,
+        ast.IfExp(
+            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
+            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+        ),
+    )
+
+    # except block: extract term, undo trail, match catcher, run recovery
+    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    orelse_stmts_t: list[ast.stmt] = (
+        [] if always_catch
+        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
+    )
     except_body: list[ast.stmt] = [
+        term_extract,
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(
                 _name("unify"),
                 catcher_expr,
-                ast.Attribute(
-                    value=_name(exc_name), attr="term", ctx=ast.Load(),
-                ),
+                _name(term_name),
                 _name(trail_name),
             ),
             body=recovery_stmts or [ast.Pass()],
-            orelse=[
-                _undo_stmt(unify_mark, trail_name),
-                ast.Raise(),  # re-raise if catcher doesn't match
-            ],
+            orelse=orelse_stmts_t or [ast.Pass()],
         ),
         _undo_stmt(unify_mark, trail_name),
     ]
 
     handler = ast.ExceptHandler(
-        type=_name("_LogicException"),
+        type=_name("Exception"),
         name=exc_name,
         body=except_body,
     )
@@ -2549,6 +2836,85 @@ def _assign_yield_step(
     return _assign(target, ast.Yield(value=_step_expr(gen_expr, value_expr)))
 
 
+def _inject_bucket_refs_trampoline(
+    clauses: list,
+    base_globals: dict,
+) -> None:
+    """Phase 10d: pre-scan clause bodies for statically-known call-site args.
+
+    For each Call in a clause body where the callee is a locked predicate with
+    ``_index_plans`` and one (or two) arguments are statically known literals
+    or compound constructors, injects the matching bucket function into
+    ``base_globals`` and records the mapping in
+    ``_compile_context_local.bucket_ref_map`` /
+    ``_compile_context_local.joint_bucket_ref_map`` so that
+    :func:`_dispatch_call_trampoline` can emit a direct bucket reference.
+    """
+    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+
+    brmap: dict = {}
+    jbrmap: dict = {}
+
+    for clause in clauses:
+        for goal in clause.body:
+            # Identify Call(LoadName | LoadAttr) nodes
+            if not (isinstance(goal, Call) and isinstance(goal.func, (LoadName, LoadAttr))):
+                continue
+            if isinstance(goal.func, LoadName):
+                fname = goal.func.name
+            else:
+                fname = _dotted_name_from_loadattr(goal.func)
+                if fname is None:
+                    continue
+
+            n_kwargs = len(goal.kwargs) if goal.kwargs else 0
+            arity = len(goal.args) + n_kwargs
+
+            pred_obj = base_globals.get(fname)
+            if not isinstance(pred_obj, PredicateMeta):
+                continue
+            if not getattr(pred_obj, "_locked", False):
+                continue
+            if not hasattr(pred_obj, "_index_plans"):
+                continue
+
+            # Convert term args to AST exprs (fresh var_context — we only care
+            # about constants, not variable names)
+            arg_exprs = [term_to_ast_expr(a, {}) for a in goal.args]
+
+            # Single-position bucket specialisation
+            for pos, idx_dict in pred_obj._index_plans.items():
+                if pos >= len(arg_exprs):
+                    continue
+                key = _static_call_key(arg_exprs[pos])
+                if key is None or key not in idx_dict:
+                    continue
+                gkey = _bucket_key(fname, pos, key)
+                if gkey not in base_globals:
+                    base_globals[gkey] = idx_dict[key]
+                brmap[(fname, arity, pos, key)] = gkey
+
+            # Joint bucket specialisation (Phase 9b)
+            if hasattr(pred_obj, "_index_plans_joint"):
+                for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+                    if pi >= len(arg_exprs) or pj >= len(arg_exprs):
+                        continue
+                    ki = _static_call_key(arg_exprs[pi])
+                    kj = _static_call_key(arg_exprs[pj])
+                    if ki is None or kj is None:
+                        continue
+                    jkey = (ki, kj)
+                    if jkey not in jdict:
+                        continue
+                    gkey = _joint_bucket_key(fname, pi, pj, ki, kj)
+                    if gkey not in base_globals:
+                        base_globals[gkey] = jdict[jkey]
+                    jbrmap[(fname, arity, pi, pj, ki, kj)] = gkey
+
+    _compile_context_local.bucket_ref_map = brmap
+    _compile_context_local.joint_bucket_ref_map = jbrmap
+
+
 def _dispatch_call_trampoline(
     fname: str,
     arity: int,
@@ -2561,15 +2927,64 @@ def _dispatch_call_trampoline(
     ``fname`` is resolved from the compiled function's globals.
     ``this_generator`` is passed as ``parent`` so the child generator knows who to
     yield back to when it finds a solution.
+
+    Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a pre-captured
+    dispatch function in base_globals) instead of ``fname._get_dispatch()``.
+
+    Phase 10: if a statically-known argument matches an indexed position of the
+    callee, emits a direct bucket-function reference (bypassing the dispatch
+    closure entirely).
     """
-    get_dispatch = ast.Call(
-        func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
-        args=[],
-        keywords=[],
-    )
+    # Phase 10: direct bucket ref for statically-known indexed argument
+    brmap = getattr(_compile_context_local, "bucket_ref_map", {})
+    jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
+
+    # Try joint first (more selective — two args constrain the bucket further)
+    for pos_i in range(arity):
+        for pos_j in range(arity):
+            if pos_i == pos_j or pos_i >= len(arg_exprs) or pos_j >= len(arg_exprs):
+                continue
+            ki = _static_call_key(arg_exprs[pos_i])
+            kj = _static_call_key(arg_exprs[pos_j])
+            if ki is None or kj is None:
+                continue
+            gkey = jbrmap.get((fname, arity, pos_i, pos_j, ki, kj))
+            if gkey is not None:
+                return ast.Call(
+                    func=_name("StepGenerator"),
+                    args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
+                        + arg_exprs + [_name(trail_name)],
+                    keywords=[],
+                )
+
+    # Try single-position bucket
+    for pos, arg_expr in enumerate(arg_exprs):
+        key = _static_call_key(arg_expr)
+        if key is None:
+            continue
+        gkey = brmap.get((fname, arity, pos, key))
+        if gkey is not None:
+            return ast.Call(
+                func=_name("StepGenerator"),
+                args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
+                    + arg_exprs + [_name(trail_name)],
+                keywords=[],
+            )
+
+    # Phase 7: use cached dispatch name for locked predicates
+    dk = _disp_key(fname, arity)
+    locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
+    if dk in locked_keys:
+        dispatch_expr: ast.expr = _name(dk)
+    else:
+        dispatch_expr = ast.Call(
+            func=ast.Attribute(value=_name(fname), attr="_get_dispatch"),
+            args=[],
+            keywords=[],
+        )
     return ast.Call(
         func=_name("StepGenerator"),
-        args=[get_dispatch, _name(self_name)] + arg_exprs + [_name(trail_name)],
+        args=[dispatch_expr, _name(self_name)] + arg_exprs + [_name(trail_name)],
         keywords=[],
     )
 
@@ -2728,11 +3143,12 @@ def compile_goal_trampoline(
             right_stmts = compile_goal_trampoline(
                 r, db, var_context, trail_name, k_stmts, self_name, parent_name
             )
+            # After trail.undo(mark) the trail is already back at mark, so the
+            # second _assign_mark would be a no-op — omit it.
             return [
                 _assign_mark(mark, trail_name),
                 *left_stmts,
                 _undo_stmt(mark, trail_name),
-                _assign_mark(mark, trail_name),
                 *right_stmts,
                 _undo_stmt(mark, trail_name),
             ]
@@ -2908,11 +3324,6 @@ def compile_goal_trampoline(
                 _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
 
-        case ArithConstraint():
-            raise NotImplementedError(
-                "CLP(FD) arithmetic constraints (==+) are not yet implemented"
-            )
-
         # ── throw(Term) — raise LogicException ────────────────────────────
         case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
             return _compile_throw(term_arg, var_context)
@@ -2922,6 +3333,20 @@ def compile_goal_trampoline(
             return _compile_catch_trampoline(
                 goal_arg, catcher, recovery, db, var_context,
                 trail_name, k_stmts, self_name,
+            )
+
+        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+            return _compile_catch_trampoline(
+                goal_arg, error_var, True, db, var_context,
+                trail_name, k_stmts, self_name, always_catch=True,
+            )
+
+        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+            return _compile_catch_trampoline(
+                goal_arg, error_var, recovery, db, var_context,
+                trail_name, k_stmts, self_name, always_catch=True,
             )
 
         # ── halt/0, halt/1 — exit ────────────────────────────────────────
@@ -3108,12 +3533,12 @@ def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail
 
     if swap:
         true_stmts, false_stmts = else_stmts, then_stmts
+        unify_branch, dif_branch = else_stmts, then_stmts
     else:
         true_stmts, false_stmts = then_stmts, else_stmts
+        unify_branch, dif_branch = then_stmts, else_stmts
 
     mark = _fresh("_m")
-    unify_branch = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    dif_branch = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name) if not swap else _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -3155,15 +3580,13 @@ def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail
     else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     mark = _fresh("_m")
-    fd_then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    fd_else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
     undetermined = [
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), fd_then_stmts),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
         _undo_stmt(mark, trail_name),
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), fd_else_stmts),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
         _undo_stmt(mark, trail_name),
     ]
 
@@ -3382,6 +3805,217 @@ def _make_body_compiler_trampoline(
     return _body_compiler
 
 
+# ── Phase 5: deep structural indexing helpers ──────────────────────────────────
+
+
+def _get_head_arg(clause: Clause, pos: int) -> Any:
+    """Return the argument at position *pos* from the clause head (or None)."""
+    head = clause.head
+    if isinstance(head, Compound):
+        return head.args[pos] if pos < len(head.args) else None
+    if is_term_instance(head):
+        fields = list(term_field_names(head))
+        return getattr(head, fields[pos]) if pos < len(fields) else None
+    return None
+
+
+def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
+    """Phase 8: lift the body Unify for head position *pos* into the head.
+
+    In bucket compilation contexts the indexed argument is already guaranteed
+    ground by the dispatch layer.  Any leading body ``Unify(Var_at_pos, val)``
+    is therefore redundant and can be absorbed into the head, letting
+    ``head_to_match_pattern`` emit a ``MatchValue``/``MatchClass`` pattern
+    rather than a wildcard capture.  This eliminates one ``trail.mark()`` +
+    ``unify(...)`` + ``trail.undo()`` triple per clause per invocation.
+
+    The transformation is a no-op when:
+    - the head arg at *pos* is already a concrete term (not a Var), or
+    - no matching ``Unify`` is found in the body's clean prefix (the
+      contiguous run of ``Unify`` goals before the first non-``Unify`` goal).
+
+    Only called from the indexed bucket path — the fallback function always
+    uses the original unlifted clauses.
+    """
+    head = clause.head
+    # Extract the head arg at pos
+    if isinstance(head, Compound):
+        if pos >= len(head.args):
+            return clause
+        head_arg = deref(head.args[pos])
+    elif is_term_instance(head):
+        fields = list(term_field_names(head))
+        if pos >= len(fields):
+            return clause
+        head_arg = deref(getattr(head, fields[pos]))
+    else:
+        return clause
+
+    # Only lift when the head arg is an unbound Var
+    if not is_var(head_arg):
+        return clause
+    vid = head_arg._id
+
+    # Scan the body clean prefix for Unify(Var_vid, term) or Unify(term, Var_vid)
+    # Stop at the first non-Unify goal (that is the clean-prefix boundary).
+    unify_idx = None
+    lift_term = None
+    for i, goal in enumerate(clause.body):
+        if not isinstance(goal, Unify):
+            break  # end of clean prefix
+        left_d = deref(goal.left)
+        right_d = deref(goal.right)
+        if is_var(left_d) and left_d._id == vid and not is_var(right_d):
+            unify_idx = i
+            lift_term = goal.right   # use original (not deref'd) for nested Vars
+            break
+        if is_var(right_d) and right_d._id == vid and not is_var(left_d):
+            unify_idx = i
+            lift_term = goal.left
+            break
+        # Other Unify for a different var — keep scanning
+
+    if unify_idx is None:
+        return clause  # no liftable unification found
+
+    # Rebuild head with lift_term at pos
+    if isinstance(head, Compound):
+        new_args = list(head.args)
+        new_args[pos] = lift_term
+        new_head = Compound(head.functor, tuple(new_args))
+    else:  # is_term_instance
+        fields = list(term_field_names(head))
+        new_kwargs = {f: getattr(head, f) for f in fields}
+        new_kwargs[fields[pos]] = lift_term
+        new_head = type(head)(**new_kwargs)
+
+    # Remove the matched Unify from the body
+    new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]
+    return Clause(head=new_head, body=new_body)
+
+
+def _classify_list_key(arg: Any) -> str:
+    """Classify a head argument as ``"nil"``, ``"cons"``, ``"var"``, or ``"other"``.
+
+    - ``"nil"``  — argument is the empty list ``[]``
+    - ``"cons"`` — argument is a non-empty Python list (may contain Vars)
+    - ``"var"``  — argument is an unbound Var (wildcard, matches anything)
+    - ``"other"``— anything else (integer, string, Compound, …)
+    """
+    arg = deref(arg)
+    if is_var(arg):
+        return "var"
+    if isinstance(arg, list):
+        return "nil" if not arg else "cons"
+    return "other"
+
+
+def _find_list_dispatch_pos(clauses: list[Clause], arity: int) -> int | None:
+    """Find the best argument position for list structural dispatch.
+
+    Returns the position index when ALL clauses have nil/cons/var heads at that
+    position (no scalars or compound terms) AND both ``"nil"`` and ``"cons"``
+    appear in the clause set — guaranteeing the dispatch saves work.
+
+    Returns ``None`` if no suitable position is found.
+    """
+    if arity == 0 or len(clauses) < 2:
+        return None
+    best_pos = None
+    best_score = 0
+    for pos in range(arity):
+        keys = [_classify_list_key(_get_head_arg(c, pos)) for c in clauses]
+        if "other" in keys:
+            continue  # mixed list + non-list types at this position
+        list_keys = {k for k in keys if k != "var"}
+        score = len(list_keys)  # 0 (all var), 1 (only nil or only cons), or 2
+        if score >= 2 and score > best_score:
+            best_pos = pos
+            best_score = score
+    return best_pos
+
+
+def _build_list_dispatch_guard(
+    clauses: list[Clause],
+    dispatch_pos: int,
+    arity: int,
+    subject: ast.expr,
+    body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+) -> list[ast.stmt]:
+    """Build the isinstance/is_var structural dispatch guard for list predicates.
+
+    Generates:
+
+        if isinstance(_d_pos, list):
+            if not _d_pos:          # nil branch
+                <nil_clauses + var_clauses>
+            else:                   # cons branch
+                <cons_clauses + var_clauses>
+        elif is_var(_d_pos):        # unbound — try all clauses
+            <all clauses>
+        # non-list, non-var → falls through to yield _DONE
+
+    ``var_clauses`` (wildcard heads) appear in both the nil and cons branches
+    because a wildcard matches any list.  They also appear in the is_var
+    fallback because the variable might be bound to any list at call time.
+    """
+    nil_clauses: list[Clause] = []
+    cons_clauses: list[Clause] = []
+    var_clauses: list[Clause] = []
+    for c in clauses:
+        key = _classify_list_key(_get_head_arg(c, dispatch_pos))
+        if key == "nil":
+            nil_clauses.append(c)
+        elif key == "cons":
+            cons_clauses.append(c)
+        else:  # "var"
+            var_clauses.append(c)
+
+    def _match_stmts(subset: list[Clause]) -> list[ast.stmt]:
+        stmts: list[ast.stmt] = []
+        for clause in subset:
+            vc: dict[int, str] = {}
+            _head_arg_patterns(clause.head, vc, arity)
+            body_stmts = body_compiler(clause, vc)
+            case_arm = compile_head_to_match_case(
+                head=clause.head,
+                body_stmts=body_stmts,
+                var_context=vc,
+                arity=arity,
+            )
+            stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+        return stmts or [ast.Pass()]
+
+    nil_body = _match_stmts(nil_clauses + var_clauses)
+    cons_body = _match_stmts(cons_clauses + var_clauses)
+    var_body = _match_stmts(nil_clauses + cons_clauses + var_clauses)
+
+    deref_name = f"_d{dispatch_pos}"
+
+    # if not _d_pos: <nil> else: <cons>
+    nil_vs_cons = ast.If(
+        test=ast.UnaryOp(op=ast.Not(), operand=_name(deref_name)),
+        body=nil_body,
+        orelse=cons_body,
+    )
+
+    # elif is_var(_d_pos): <all>
+    is_var_branch = ast.If(
+        test=_call(_name("is_var"), _name(deref_name)),
+        body=var_body,
+        orelse=[],
+    )
+
+    # if isinstance(_d_pos, list): <nil_vs_cons> elif is_var(_d_pos): <all>
+    return [
+        ast.If(
+            test=_call(_name("isinstance"), _name(deref_name), _name("list")),
+            body=[nil_vs_cons],
+            orelse=[is_var_branch],
+        )
+    ]
+
+
 # ── compile_predicate_trampoline ───────────────────────────────────────────────
 
 
@@ -3407,21 +4041,44 @@ def _build_predicate_trampoline_funcdef(
 
     all_stmts: list[ast.stmt] = []
 
-    for clause in clauses:
-        var_context: dict[int, str] = {}
-        _head_arg_patterns(clause.head, var_context, arity)
-        body_stmts = body_compiler(clause, var_context)
-        case_arm = compile_head_to_match_case(
-            head=clause.head,
-            body_stmts=body_stmts,
-            var_context=var_context,
-            arity=arity,
-        )
+    if clauses and arity > 0:
+        # Deref each argument once into a local before the clause match arms.
+        # All N clauses share the same deref'd locals — no need to re-deref per clause.
+        deref_names = [f"_d{i}" for i in range(arity)]
+        for i, arg in enumerate(arg_names):
+            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+        subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
+    else:
+        # arity==0 or no clauses: subject is still needed for the match shape
         subject = ast.Tuple(
             elts=[_call(_name("deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
-        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    # Phase 5: structural dispatch for list-discriminating predicates.
+    # When all clauses differ only in nil/cons/var at one argument position,
+    # wrap them in isinstance/is_var guards instead of a flat clause sequence.
+    dispatch_pos = (
+        _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
+    )
+    if dispatch_pos is not None:
+        all_stmts.extend(
+            _build_list_dispatch_guard(
+                clauses, dispatch_pos, arity, subject, body_compiler
+            )
+        )
+    else:
+        for clause in clauses:
+            var_context: dict[int, str] = {}
+            _head_arg_patterns(clause.head, var_context, arity)
+            body_stmts = body_compiler(clause, var_context)
+            case_arm = compile_head_to_match_case(
+                head=clause.head,
+                body_stmts=body_stmts,
+                var_context=var_context,
+                arity=arity,
+            )
+            all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
     if emit_done:
         all_stmts.append(_yield_step_stmt(_name("_tramp_parent"), _name("_DONE")))
@@ -3522,7 +4179,10 @@ def compile_predicate_trampoline(
         fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
         reify_fd as _reify_fd_fn,
     )
-    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException as _LogicException_cls,
+        python_error_term as _python_error_term_fn,
+    )
     from clausal.terms import DictTerm as _DictTerm_t, SetTerm as _SetTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -3554,6 +4214,7 @@ def compile_predicate_trampoline(
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
+        "_python_error_term": _python_error_term_fn,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -3562,53 +4223,251 @@ def compile_predicate_trampoline(
         base_globals["_naf_tabled"] = _naf_tabled_fn
         base_globals["_table_store"] = db.table_store
         base_globals["_TABLING_SUSPEND"] = _TABLING_SUSPEND
-    base_globals.update(_collect_head_types(clauses))
-    base_globals.update(_collect_py_thunks(clauses))
+    # Phase 6: single combined traversal replacing three separate walks.
+    _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
+    base_globals.update(_head_types)
+    base_globals.update(_py_thunks)
     if globals_:
         base_globals.update(globals_)
-    _inject_call_targets(clauses, base_globals, db, globals_)
-
-
+    # Phase 6+7: resolve targets and capture locked dispatch functions.
+    _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────────
-    index_positions = _analyze_index_positions(clauses, arity)
-    if index_positions:
-        # Compile fallback (all clauses, for when no arg is ground)
-        fallback_def = _build_predicate_trampoline_funcdef(
-            f"{functor}__all", arity, clauses,
-            _effective_db, body_compiler, emit_done=False,
-        )
-
-        fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
-
-        plans: list[tuple[int, dict, Callable]] = []
-        for pos, index in index_positions:
-            idx_dict: dict = {}
-            for key, bucket_clauses in index["buckets"].items():
-                bname = f"{functor}__p{pos}_b{len(idx_dict)}"
-                bdef = _build_predicate_trampoline_funcdef(
-                    bname, arity, bucket_clauses,
-                    _effective_db, body_compiler, emit_done=False,
-                )
-                idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
-            ddef = _build_predicate_trampoline_funcdef(
-                f"{functor}__p{pos}_dflt", arity, index["defaults"],
+    # Phase 7: set compile context so _dispatch_call_trampoline can emit
+    # cached dispatch names instead of fname._get_dispatch() for locked predicates.
+    _locked_keys = frozenset(k for k in base_globals if k.startswith("_disp_"))
+    _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
+    _compile_context_local.locked_dispatch_keys = _locked_keys
+    # Phase 10f: initialise bucket-ref maps for call-site specialisation.
+    _prev_brmap = getattr(_compile_context_local, "bucket_ref_map", {})
+    _prev_jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
+    _compile_context_local.bucket_ref_map = {}
+    _compile_context_local.joint_bucket_ref_map = {}
+    try:
+        # Phase 10d: inject bucket refs for statically-known call-site args.
+        # Must run after _inject_resolved_targets (which populates base_globals
+        # with callee predicate classes) but before building funcdef ASTs.
+        _inject_bucket_refs_trampoline(clauses, base_globals)
+        # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
+        index_positions = _analyze_index_positions(clauses, arity)
+        if index_positions:
+            # Compile fallback (all clauses, for when no arg is ground)
+            fallback_def = _build_predicate_trampoline_funcdef(
+                f"{functor}__all", arity, clauses,
                 _effective_db, body_compiler, emit_done=False,
             )
-            pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
-            plans.append((pos, idx_dict, pos_default_fn))
 
-        fn = _make_groundness_dispatch_trampoline(plans, fallback_fn, DONE)
-    else:
-        func_def = _build_predicate_trampoline_funcdef(
-            functor, arity, clauses, _effective_db, body_compiler,
-        )
+            fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
-        fn = functiondef_to_function(func_def, globals_=base_globals)
+            plans: list[tuple[int, dict, Callable]] = []
+            for pos, index in index_positions:
+                idx_dict: dict = {}
+                for key, bucket_clauses in index["buckets"].items():
+                    # Phase 8: lift the indexed-position body Unify into the
+                    # head so that head_to_match_pattern emits a MatchValue/
+                    # MatchClass pattern instead of a wildcard capture.
+                    # The bucket function is only called when arg_pos is
+                    # ground (guaranteed by dispatch), so the removed Unify
+                    # would always succeed — lifting is semantically safe.
+                    lifted_bucket = [
+                        _lift_clause_at_pos(cl, pos) for cl in bucket_clauses
+                    ]
+                    # No extra globals update needed: any compound type that
+                    # appears in the lifted head was already in the original
+                    # clause body and collected by _collect_globals_info(clauses)
+                    # above.  Calling it again on lifted_bucket would
+                    # re-collect term-node classes (Unify, In, …) and
+                    # clobber predicate entries set by _inject_resolved_targets.
+                    bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                    bdef = _build_predicate_trampoline_funcdef(
+                        bname, arity, lifted_bucket,
+                        _effective_db, body_compiler, emit_done=False,
+                    )
+                    idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+                ddef = _build_predicate_trampoline_funcdef(
+                    f"{functor}__p{pos}_dflt", arity, index["defaults"],
+                    _effective_db, body_compiler, emit_done=False,
+                )
+                pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+                plans.append((pos, idx_dict, pos_default_fn))
+
+            # Phase 10a: expose single-position bucket dicts on the predicate
+            # class so that call-site specialisation can look up bucket functions
+            # for statically-known argument values without invoking the dispatch
+            # closure at runtime.
+            if pred_cls is not None:
+                pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
+
+            # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
+            # Try secondary (hierarchical) dispatch first; fall back to joint
+            # if secondary yields no improvement over the best single-arg plan.
+            fn = None
+            if arity >= 2:
+                joint_result = _analyze_joint_index_positions(
+                    clauses, arity, index_positions)
+                if joint_result is not None:
+                    pos_i, pos_j, joint_info = joint_result
+                    coverage = joint_info["coverage"]
+                    if coverage < _JOINT_COVERAGE_THRESHOLD:
+                        # Phase 9c — secondary (hierarchical) dispatch.
+                        sec = _build_secondary_index(
+                            clauses, arity, pos_i, pos_j)
+                        if sec is not None:
+                            level0_compiled: dict = {}
+                            for ki, (l1_buckets, l1_defaults) in \
+                                    sec["level0"].items():
+                                if l1_buckets is not None:
+                                    l1_fns: dict = {}
+                                    for kj, bkt in l1_buckets.items():
+                                        lifted = [
+                                            _lift_clause_at_pos(
+                                                _lift_clause_at_pos(cl, pos_i),
+                                                pos_j)
+                                            for cl in bkt
+                                        ]
+                                        bname = (
+                                            f"{functor}__s{pos_i}"
+                                            f"_{pos_j}_l0b{len(level0_compiled)}"
+                                            f"_l1b{len(l1_fns)}"
+                                        )
+                                        bdef = _build_predicate_trampoline_funcdef(
+                                            bname, arity, lifted,
+                                            _effective_db, body_compiler,
+                                            emit_done=False,
+                                        )
+                                        l1_fns[kj] = functiondef_to_function(
+                                            bdef, globals_=base_globals)
+                                    # level-1 default: clauses with var at pos_j
+                                    l1d_lifted = [
+                                        _lift_clause_at_pos(cl, pos_i)
+                                        for cl in l1_defaults
+                                    ]
+                                    l1dname = (
+                                        f"{functor}__s{pos_i}_{pos_j}"
+                                        f"_l0b{len(level0_compiled)}_l1dflt"
+                                    )
+                                    l1ddef = _build_predicate_trampoline_funcdef(
+                                        l1dname, arity, l1d_lifted,
+                                        _effective_db, body_compiler,
+                                        emit_done=False,
+                                    )
+                                    level0_compiled[ki] = (
+                                        l1_fns,
+                                        functiondef_to_function(
+                                            l1ddef, globals_=base_globals),
+                                    )
+                                else:
+                                    # sub-bucket too small for level-1 index
+                                    lifted = [
+                                        _lift_clause_at_pos(cl, pos_i)
+                                        for cl in l1_defaults
+                                    ]
+                                    bname = (
+                                        f"{functor}__s{pos_i}_{pos_j}"
+                                        f"_l0b{len(level0_compiled)}_flat"
+                                    )
+                                    bdef = _build_predicate_trampoline_funcdef(
+                                        bname, arity, lifted,
+                                        _effective_db, body_compiler,
+                                        emit_done=False,
+                                    )
+                                    level0_compiled[ki] = (
+                                        None,
+                                        functiondef_to_function(
+                                            bdef, globals_=base_globals),
+                                    )
+                            # level-0 default (var at pos_i)
+                            if sec["level0_defaults"]:
+                                l0ddef = _build_predicate_trampoline_funcdef(
+                                    f"{functor}__s{pos_i}_{pos_j}_l0dflt",
+                                    arity, sec["level0_defaults"],
+                                    _effective_db, body_compiler,
+                                    emit_done=False,
+                                )
+                                level0_default_fn = functiondef_to_function(
+                                    l0ddef, globals_=base_globals)
+                            else:
+                                level0_default_fn = _compile_always_fail_trampoline(
+                                    functor, arity)
+                            fn = _make_secondary_dispatch_trampoline(
+                                sec, level0_compiled, level0_default_fn,
+                                fallback_fn, DONE)
+                            # Phase 10a: expose hierarchical bucket dicts.
+                            if pred_cls is not None:
+                                pred_cls._index_plans_hierarchical = {
+                                    (pos_i, pos_j): level0_compiled
+                                }
+                    else:
+                        # Phase 9b — flat joint key dispatch (high coverage).
+                        joint_dict: dict = {}
+                        for jk, bkt in joint_info["buckets"].items():
+                            lifted = [
+                                _lift_clause_at_pos(
+                                    _lift_clause_at_pos(cl, pos_i), pos_j)
+                                for cl in bkt
+                            ]
+                            jbname = (
+                                f"{functor}__j{pos_i}_{pos_j}"
+                                f"_b{len(joint_dict)}"
+                            )
+                            jbdef = _build_predicate_trampoline_funcdef(
+                                jbname, arity, lifted,
+                                _effective_db, body_compiler, emit_done=False,
+                            )
+                            joint_dict[jk] = functiondef_to_function(
+                                jbdef, globals_=base_globals)
+                        # joint default (either arg var)
+                        if joint_info["defaults"]:
+                            jddef = _build_predicate_trampoline_funcdef(
+                                f"{functor}__j{pos_i}_{pos_j}_dflt",
+                                arity, joint_info["defaults"],
+                                _effective_db, body_compiler, emit_done=False,
+                            )
+                            joint_default_fn = functiondef_to_function(
+                                jddef, globals_=base_globals)
+                        else:
+                            joint_default_fn = _compile_always_fail_trampoline(
+                                functor, arity)
+                        # single-arg fallbacks for partial groundness
+                        single_i = _make_groundness_dispatch_trampoline(
+                            [p for p in plans if p[0] == pos_i],
+                            fallback_fn, DONE)
+                        single_j_plans = [p for p in plans if p[0] == pos_j]
+                        if single_j_plans:
+                            single_j = _make_groundness_dispatch_trampoline(
+                                single_j_plans, fallback_fn, DONE)
+                        else:
+                            single_j = fallback_fn
+                        fn = _make_joint_dispatch_trampoline(
+                            pos_i, pos_j,
+                            joint_dict, joint_default_fn,
+                            single_i, single_j,
+                            fallback_fn, DONE)
+                        # Phase 10a: expose joint bucket dict.
+                        if pred_cls is not None:
+                            pred_cls._index_plans_joint = {(pos_i, pos_j): joint_dict}
+            if fn is None:
+                fn = _make_groundness_dispatch_trampoline(
+                    plans, fallback_fn, DONE)
+        else:
+            # Phase 10a: no indexing — clear any stale _index_plans from a
+            # previous compilation (e.g. after retract reduced clause count
+            # below the indexing threshold).
+            if pred_cls is not None:
+                pred_cls._index_plans = {}
+            func_def = _build_predicate_trampoline_funcdef(
+                functor, arity, clauses, _effective_db, body_compiler,
+            )
+
+            fn = functiondef_to_function(func_def, globals_=base_globals)
+    finally:
+        _compile_context_local.locked_dispatch_keys = _prev_locked_keys
+        # Phase 10f: restore bucket-ref maps.
+        _compile_context_local.bucket_ref_map = _prev_brmap
+        _compile_context_local.joint_bucket_ref_map = _prev_jbrmap
 
     def _recompile_trampoline() -> Callable:
         if db is not None:
@@ -4538,13 +5397,92 @@ _EXTRA_FUNCDEF: dict = (
 _INDEX_VAR = object()  # sentinel: clause has variable/non-indexable first arg
 _INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))
 _INDEX_THRESHOLD = 4  # minimum clauses before indexing kicks in
+_JOINT_COVERAGE_THRESHOLD = 0.8  # min fraction of clauses needing joint key for 9b
+
+
+# ── Phase 9a: key helpers ────────────────────────────────────────────────────
+
+
+def _arg_to_index_key(arg: Any) -> Any:
+    """Compile-time: convert a head argument to its index key.
+
+    Returns a hashable key for indexable terms:
+    - Scalars (int, float, str, bytes, bool, None) → the value itself
+    - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
+    - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
+    - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
+    """
+    if isinstance(arg, _INDEXABLE_TYPES):
+        return arg
+    if isinstance(arg, Compound):
+        return (arg.functor, len(arg.args))
+    if is_term_instance(arg):
+        cls = type(arg)
+        return (cls.__name__, len(cls._fields))
+    return _INDEX_VAR
+
+
+def _runtime_arg_key(a: Any) -> Any:
+    """Runtime: extract the index key from a deref'd argument value.
+
+    Mirrors :func:`_arg_to_index_key` for the runtime dispatch path.
+    All four dispatch closure factories use this so that compound-term
+    buckets (Phase 9a) are reachable without special-casing.
+    """
+    if isinstance(a, _INDEXABLE_TYPES):
+        return a
+    if isinstance(a, Compound):
+        return (a.functor, len(a.args))
+    if is_term_instance(a):
+        cls = type(a)
+        return (cls.__name__, len(cls._fields))
+    return _INDEX_VAR
+
+
+def _static_call_key(arg_expr: ast.expr) -> Any | None:
+    """Return the index key if *arg_expr* is statically known at compile time.
+
+    Mirrors :func:`_runtime_arg_key` for the compile-time call-site analysis
+    path.  Returns ``None`` if the argument is a variable or otherwise unknown.
+    """
+    if isinstance(arg_expr, ast.Constant):
+        # scalar: int, str, float, bool, None — key is the value itself
+        return arg_expr.value
+    if isinstance(arg_expr, ast.Call):
+        # compound term constructor: Dog(_v_name, _v_age) or mod.Dog(...)
+        func = arg_expr.func
+        if isinstance(func, ast.Name):
+            n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            return (func.id, n_args)
+        if isinstance(func, ast.Attribute):
+            n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            return (func.attr, n_args)
+    return None
+
+
+def _bucket_key(fname: str, pos: int, key: Any) -> str:
+    """Readable globals key for a single-position bucket function.
+
+    The returned string is used as an ``ast.Name`` id and as a
+    ``base_globals`` key.  It is not a valid Python identifier (it contains
+    dots, brackets, and quotes) so generated code won't re-parse, but
+    ``ast.unparse()`` renders it readably and ``compile(ast_tree, ...)``
+    resolves it via a plain dict lookup.
+    """
+    return f"{fname}.bucket(pos={pos}, {key!r})"
+
+
+def _joint_bucket_key(fname: str, pos_i: int, pos_j: int,
+                      ki: Any, kj: Any) -> str:
+    """Readable globals key for a joint (two-position) bucket function."""
+    return f"{fname}.bucket(pos=({pos_i},{pos_j}), ({ki!r},{kj!r}))"
 
 
 def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
     """Extract the indexing key for a clause's argument at position *pos*.
 
-    Returns a hashable key (scalar value) for indexable clauses,
-    or ``_INDEX_VAR`` for clauses with a variable/non-indexable arg at *pos*.
+    Returns a hashable key (scalar or ``(functor, arity)`` tuple) for
+    indexable clauses, or ``_INDEX_VAR`` for variable/non-indexable args.
     """
     if arity == 0 or pos >= arity:
         return _INDEX_VAR
@@ -4565,17 +5503,23 @@ def _extract_arg_key(clause: Clause, pos: int, arity: int) -> Any:
         arg = getattr(head, fields[pos])
     else:
         return _INDEX_VAR
-    # Direct ground scalar (note: None is a valid key, checked via isinstance)
-    if isinstance(arg, _INDEXABLE_TYPES):
-        return arg
-    # Var + Unify pattern (from _normalize_dataclass_fact)
+    # Direct ground term (scalar or compound) — Phase 9a extends to compounds.
+    key = _arg_to_index_key(arg)
+    if key is not _INDEX_VAR:
+        return key
+    # Var + Unify pattern (from _normalize_dataclass_fact).
+    # Phase 9a: also extract compound/predicate keys from Unify targets.
     if is_var(arg):
         for goal in clause.body:
             if isinstance(goal, Unify):
-                if goal.left is arg and isinstance(goal.right, _INDEXABLE_TYPES):
-                    return goal.right
-                if goal.right is arg and isinstance(goal.left, _INDEXABLE_TYPES):
-                    return goal.left
+                if goal.left is arg:
+                    k = _arg_to_index_key(goal.right)
+                    if k is not _INDEX_VAR:
+                        return k
+                elif goal.right is arg:
+                    k = _arg_to_index_key(goal.left)
+                    if k is not _INDEX_VAR:
+                        return k
         return _INDEX_VAR
     return _INDEX_VAR
 
@@ -4661,6 +5605,317 @@ def _analyze_index_positions(
     return results
 
 
+# ── Phase 9b: joint (argI, argJ) indexing ───────────────────────────────────
+
+
+def _build_joint_arg_index(
+    clauses: list[Clause], arity: int, pos_i: int, pos_j: int,
+    threshold: int = _INDEX_THRESHOLD,
+) -> dict | None:
+    """Build a flat joint index keyed on ``(key_i, key_j)`` tuples.
+
+    Returns ``None`` when fewer than *threshold* clauses have both args
+    indexable.  Otherwise returns the same shape as :func:`_build_arg_index`
+    but with tuple keys::
+
+        {"buckets": {(ki, kj): [Clause, ...]},
+         "defaults": [Clause, ...],
+         "all": [Clause, ...],
+         "n_distinct": int,
+         "coverage": float}   # fraction of clauses with both args indexable
+    """
+    if arity < 2 or pos_i == pos_j or pos_i >= arity or pos_j >= arity:
+        return None
+    keys = []
+    for c in clauses:
+        ki = _extract_arg_key(c, pos_i, arity)
+        kj = _extract_arg_key(c, pos_j, arity)
+        if ki is not _INDEX_VAR and kj is not _INDEX_VAR:
+            keys.append((ki, kj))
+        else:
+            keys.append(_INDEX_VAR)
+    specific_indices = [i for i, k in enumerate(keys) if k is not _INDEX_VAR]
+    if len(specific_indices) < threshold:
+        return None
+    default_indices = [i for i, k in enumerate(keys) if k is _INDEX_VAR]
+    from collections import defaultdict
+    bucket_map: dict[Any, list[int]] = defaultdict(list)
+    for i in specific_indices:
+        bucket_map[keys[i]].append(i)
+    merged_buckets: dict[Any, list[Clause]] = {}
+    for key, b_indices in bucket_map.items():
+        merged = sorted(b_indices + default_indices)
+        merged_buckets[key] = [clauses[i] for i in merged]
+    return {
+        "buckets": merged_buckets,
+        "defaults": [clauses[i] for i in default_indices],
+        "all": clauses,
+        "n_distinct": len(bucket_map),
+        "coverage": len(specific_indices) / len(clauses),
+    }
+
+
+def _analyze_joint_index_positions(
+    clauses: list[Clause], arity: int,
+    single_indexes: list[tuple[int, dict]],
+    min_gain: float = 1.5,
+) -> tuple[int, int, dict] | None:
+    """Find the best ``(pos_i, pos_j)`` pair for joint indexing.
+
+    Considers pairs ``(best_single_pos, k)`` for all remaining positions *k*.
+    Returns ``(pos_i, pos_j, joint_index_info)`` if the joint index offers at
+    least *min_gain* × more distinct keys than the best single-arg index, else
+    ``None``.
+    """
+    if not single_indexes or arity < 2:
+        return None
+    best_single_pos, best_single_idx = single_indexes[0]
+    best_single_distinct = best_single_idx["n_distinct"]
+    best_joint: tuple[int, int, dict] | None = None
+    best_joint_distinct = 0
+    for pos in range(arity):
+        if pos == best_single_pos:
+            continue
+        joint = _build_joint_arg_index(clauses, arity, best_single_pos, pos)
+        if joint is None:
+            continue
+        if joint["n_distinct"] > best_joint_distinct:
+            best_joint_distinct = joint["n_distinct"]
+            best_joint = (best_single_pos, pos, joint)
+    if best_joint is None:
+        return None
+    pos_i, pos_j, joint = best_joint
+    if joint["n_distinct"] > best_single_distinct * min_gain:
+        return pos_i, pos_j, joint
+    return None
+
+
+def _make_joint_dispatch_simple(
+    pos_i: int, pos_j: int,
+    joint_dict: dict, joint_default_fn,
+    single_i_dispatch, single_j_dispatch,
+    fallback_fn,
+) -> Callable:
+    """Build a flat joint-key dispatch for simple/short-stack mode.
+
+    Decision tree (Phase 9b):
+    1. Both *pos_i* and *pos_j* ground → joint dict lookup (O(1))
+    2. Only *pos_i* ground → single-arg dispatch on *pos_i*
+    3. Only *pos_j* ground → single-arg dispatch on *pos_j*
+    4. Neither ground → *fallback_fn* (linear scan)
+    """
+    def dispatch(*args):
+        _ai = deref(args[pos_i])
+        _aj = deref(args[pos_j])
+        if not is_var(_ai) and not is_var(_aj):
+            _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
+            try:
+                _bfn = joint_dict.get(_jk)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from joint_default_fn(*args)
+        elif not is_var(_ai):
+            yield from single_i_dispatch(*args)
+        elif not is_var(_aj):
+            yield from single_j_dispatch(*args)
+        else:
+            yield from fallback_fn(*args)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
+    return dispatch
+
+
+def _make_joint_dispatch_trampoline(
+    pos_i: int, pos_j: int,
+    joint_dict: dict, joint_default_fn,
+    single_i_dispatch, single_j_dispatch,
+    fallback_fn, done,
+) -> Callable:
+    """Build a flat joint-key dispatch for trampoline mode.  (Phase 9b)"""
+    offset_i = pos_i + 2
+    offset_j = pos_j + 2
+
+    def dispatch(*args):
+        parent = args[1]
+        _ai = deref(args[offset_i])
+        _aj = deref(args[offset_j])
+        if not is_var(_ai) and not is_var(_aj):
+            _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
+            try:
+                _bfn = joint_dict.get(_jk)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from joint_default_fn(*args)
+        elif not is_var(_ai):
+            yield from single_i_dispatch(*args)
+        elif not is_var(_aj):
+            yield from single_j_dispatch(*args)
+        else:
+            yield from fallback_fn(*args)
+        yield (parent, done)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
+    return dispatch
+
+
+# ── Phase 9c: secondary (hierarchical) dispatch ──────────────────────────────
+
+
+def _build_secondary_index(
+    clauses: list[Clause], arity: int, pos_i: int, pos_j: int,
+    threshold: int = _INDEX_THRESHOLD,
+    secondary_threshold: int = 2,
+) -> dict | None:
+    """Build a two-level hierarchical index: level-0 on *pos_i*, level-1 on *pos_j*.
+
+    Level-0 partitions clauses by key at *pos_i* exactly as
+    :func:`_build_arg_index` does.  Within each level-0 bucket a second
+    :func:`_build_arg_index` on *pos_j* is attempted (using a lower threshold
+    since the sub-buckets are smaller).
+
+    Returns::
+
+        {"level0": {ki: (level1_buckets or None, level1_default_clause_list)},
+         "level0_defaults": [Clause, ...],
+         "pos_i": pos_i,
+         "pos_j": pos_j,
+         "n_level0": int}
+
+    or ``None`` if the primary index is not viable.
+    """
+    primary = _build_arg_index(clauses, arity, pos_i, threshold)
+    if primary is None:
+        return None
+    level0: dict[Any, tuple] = {}
+    for ki, bucket in primary["buckets"].items():
+        secondary = _build_arg_index(bucket, arity, pos_j,
+                                     threshold=secondary_threshold)
+        if secondary is not None:
+            # level-1 default: all clauses in this level-0 bucket.
+            # Using bucket (= secondary["all"]) rather than secondary["defaults"]
+            # ensures that unbound arg_j queries still scan every matching clause.
+            level0[ki] = (secondary["buckets"], bucket)
+        else:
+            level0[ki] = (None, bucket)
+    return {
+        "level0": level0,
+        "level0_defaults": primary["defaults"],
+        "pos_i": pos_i,
+        "pos_j": pos_j,
+        "n_level0": primary["n_distinct"],
+    }
+
+
+def _make_secondary_dispatch_simple(
+    sec_idx: dict,
+    level0_compiled: dict,     # {ki: (level1_fn_dict or None, level1_default_fn)}
+    level0_default_fn: Callable,
+    fallback_fn: Callable,
+) -> Callable:
+    """Build a two-level hierarchical dispatch for simple mode.  (Phase 9c)
+
+    Decision tree:
+    - *pos_i* var → *fallback_fn*
+    - *pos_i* ground, key unknown → *level0_default_fn*
+    - *pos_i* ground, key found:
+      - *pos_j* var or no level-1 index → level-1 default fn
+      - *pos_j* ground, key found → level-1 bucket fn
+      - *pos_j* ground, key unknown → level-1 default fn
+    """
+    pos_i = sec_idx["pos_i"]
+    pos_j = sec_idx["pos_j"]
+
+    def dispatch(*args):
+        _ai = deref(args[pos_i])
+        if is_var(_ai):
+            yield from fallback_fn(*args)
+            return
+        _ki = _runtime_arg_key(_ai)
+        try:
+            _entry = level0_compiled.get(_ki)
+        except TypeError:
+            _entry = None
+        if _entry is None:
+            yield from level0_default_fn(*args)
+            return
+        level1_fns, level1_default_fn = _entry
+        if level1_fns is None:
+            yield from level1_default_fn(*args)
+            return
+        _aj = deref(args[pos_j])
+        if is_var(_aj):
+            yield from level1_default_fn(*args)
+            return
+        _kj = _runtime_arg_key(_aj)
+        try:
+            _bfn = level1_fns.get(_kj)
+        except TypeError:
+            _bfn = None
+        if _bfn is not None:
+            yield from _bfn(*args)
+        else:
+            yield from level1_default_fn(*args)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
+    return dispatch
+
+
+def _make_secondary_dispatch_trampoline(
+    sec_idx: dict,
+    level0_compiled: dict,
+    level0_default_fn: Callable,
+    fallback_fn: Callable,
+    done: Any,
+) -> Callable:
+    """Build a two-level hierarchical dispatch for trampoline mode.  (Phase 9c)"""
+    pos_i = sec_idx["pos_i"]
+    pos_j = sec_idx["pos_j"]
+    offset_i = pos_i + 2
+    offset_j = pos_j + 2
+
+    def dispatch(*args):
+        parent = args[1]
+        _ai = deref(args[offset_i])
+        if is_var(_ai):
+            yield from fallback_fn(*args)
+        else:
+            _ki = _runtime_arg_key(_ai)
+            try:
+                _entry = level0_compiled.get(_ki)
+            except TypeError:
+                _entry = None
+            if _entry is None:
+                yield from level0_default_fn(*args)
+            else:
+                level1_fns, level1_default_fn = _entry
+                if level1_fns is None:
+                    yield from level1_default_fn(*args)
+                else:
+                    _aj = deref(args[offset_j])
+                    if is_var(_aj):
+                        yield from level1_default_fn(*args)
+                    else:
+                        _kj = _runtime_arg_key(_aj)
+                        try:
+                            _bfn = level1_fns.get(_kj)
+                        except TypeError:
+                            _bfn = None
+                        if _bfn is not None:
+                            yield from _bfn(*args)
+                        else:
+                            yield from level1_default_fn(*args)
+        yield (parent, done)
+    dispatch.__name__ = fallback_fn.__name__
+    dispatch.__qualname__ = fallback_fn.__qualname__
+    return dispatch
+
+
 def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
     """Build an indexed dispatch wrapper for simple/short-stack mode.
 
@@ -4672,8 +5927,9 @@ def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
         if is_var(_a0):
             yield from all_fn(*args)
             return
+        _k = _runtime_arg_key(_a0)
         try:
-            _bfn = idx_dict.get(_a0)
+            _bfn = idx_dict.get(_k)
         except TypeError:
             _bfn = None
         if _bfn is not None:
@@ -4697,8 +5953,9 @@ def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
         if is_var(_a0):
             yield from all_fn(*args)
         else:
+            _k = _runtime_arg_key(_a0)
             try:
-                _bfn = idx_dict.get(_a0)
+                _bfn = idx_dict.get(_k)
             except TypeError:
                 _bfn = None
             if _bfn is not None:
@@ -4731,8 +5988,9 @@ def _make_groundness_dispatch_simple(plans, fallback_fn):
             if is_var(_a):
                 yield from fallback_fn(*args)
                 return
+            _k = _runtime_arg_key(_a)
             try:
-                _bfn = idx_dict.get(_a)
+                _bfn = idx_dict.get(_k)
             except TypeError:
                 _bfn = None
             if _bfn is not None:
@@ -4748,8 +6006,9 @@ def _make_groundness_dispatch_simple(plans, fallback_fn):
         for _pos, _idx_dict, _dflt_fn in plans:
             _a = deref(args[_pos])
             if not is_var(_a):
+                _k = _runtime_arg_key(_a)
                 try:
-                    _bfn = _idx_dict.get(_a)
+                    _bfn = _idx_dict.get(_k)
                 except TypeError:
                     _bfn = None
                 if _bfn is not None:
@@ -4779,8 +6038,9 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done):
             if is_var(_a):
                 yield from fallback_fn(*args)
             else:
+                _k = _runtime_arg_key(_a)
                 try:
-                    _bfn = idx_dict.get(_a)
+                    _bfn = idx_dict.get(_k)
                 except TypeError:
                     _bfn = None
                 if _bfn is not None:
@@ -4797,8 +6057,9 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done):
         for _pos, _idx_dict, _dflt_fn in plans:
             _a = deref(args[_pos + 2])
             if not is_var(_a):
+                _k = _runtime_arg_key(_a)
                 try:
-                    _bfn = _idx_dict.get(_a)
+                    _bfn = _idx_dict.get(_k)
                 except TypeError:
                     _bfn = None
                 if _bfn is not None:
@@ -4832,6 +6093,18 @@ def _build_predicate_funcdef(
 
     all_stmts: list[ast.stmt] = []
 
+    if clauses and arity > 0:
+        # Deref each argument once into a local before the clause match arms.
+        deref_names = [f"_d{i}" for i in range(arity)]
+        for i, arg in enumerate(arg_names):
+            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+        subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
+    else:
+        subject = ast.Tuple(
+            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
+            ctx=ast.Load(),
+        )
+
     for clause in clauses:
         var_context: dict[int, str] = {}
         _head_arg_patterns(clause.head, var_context, arity)
@@ -4841,10 +6114,6 @@ def _build_predicate_funcdef(
             body_stmts=body_stmts,
             var_context=var_context,
             arity=arity,
-        )
-        subject = ast.Tuple(
-            elts=[_call(_name("deref"), _name(n)) for n in arg_names],
-            ctx=ast.Load(),
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
@@ -4951,7 +6220,10 @@ def compile_predicate_shallow(
         fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
         reify_fd as _reify_fd_fn_s,
     )
-    from clausal.logic.exceptions import LogicException as _LogicException_cls  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException as _LogicException_cls,
+        python_error_term as _python_error_term_fn_s,
+    )
     from clausal.terms import DictTerm as _DictTerm_s, SetTerm as _SetTerm_s  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
@@ -4981,61 +6253,180 @@ def compile_predicate_shallow(
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
+        "_python_error_term": _python_error_term_fn_s,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
         from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn_s  # noqa: PLC0415
         base_globals["_naf_tabled"] = _naf_tabled_fn_s
         base_globals["_table_store"] = db.table_store
-    base_globals.update(_collect_head_types(clauses))
-    base_globals.update(_collect_py_thunks(clauses))
+    # Phase 6: single combined traversal replacing three separate walks.
+    _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
+    base_globals.update(_head_types)
+    base_globals.update(_py_thunks)
     if globals_:
         base_globals.update(globals_)
-    _inject_call_targets(clauses, base_globals, db, globals_)
-
-
+    # Phase 6+7: resolve targets and capture locked dispatch functions.
+    _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
 
-    # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────────
-    index_positions = _analyze_index_positions(clauses, arity)
-    if index_positions:
-        # Compile fallback (all clauses, for when no arg is ground)
-        fallback_def = _build_predicate_funcdef(
-            f"{functor}__all", arity, clauses, _effective_db, body_compiler,
-        )
+    # Phase 7: set compile context so _dispatch_call_iter can emit cached
+    # dispatch names instead of fname._get_dispatch() for locked predicates.
+    _locked_keys = frozenset(k for k in base_globals if k.startswith("_disp_"))
+    _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
+    _compile_context_local.locked_dispatch_keys = _locked_keys
+    try:
+        # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
+        index_positions = _analyze_index_positions(clauses, arity)
+        if index_positions:
+            # Compile fallback (all clauses, for when no arg is ground)
+            fallback_def = _build_predicate_funcdef(
+                f"{functor}__all", arity, clauses, _effective_db, body_compiler,
+            )
 
-        fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
+            fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
 
-        plans: list[tuple[int, dict, Callable]] = []
-        for pos, index in index_positions:
-            idx_dict: dict = {}
-            for key, bucket_clauses in index["buckets"].items():
-                bname = f"{functor}__p{pos}_b{len(idx_dict)}"
-                bdef = _build_predicate_funcdef(
-                    bname, arity, bucket_clauses, _effective_db, body_compiler,
-                )
-                idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
-            if index["defaults"]:
-                ddef = _build_predicate_funcdef(
-                    f"{functor}__p{pos}_dflt", arity, index["defaults"],
-                    _effective_db, body_compiler,
-                )
-                pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
-            else:
-                pos_default_fn = _compile_always_fail(functor, arity)
-            plans.append((pos, idx_dict, pos_default_fn))
+            plans: list[tuple[int, dict, Callable]] = []
+            for pos, index in index_positions:
+                idx_dict: dict = {}
+                for key, bucket_clauses in index["buckets"].items():
+                    bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                    bdef = _build_predicate_funcdef(
+                        bname, arity, bucket_clauses, _effective_db, body_compiler,
+                    )
+                    idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+                if index["defaults"]:
+                    ddef = _build_predicate_funcdef(
+                        f"{functor}__p{pos}_dflt", arity, index["defaults"],
+                        _effective_db, body_compiler,
+                    )
+                    pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
+                else:
+                    pos_default_fn = _compile_always_fail(functor, arity)
+                plans.append((pos, idx_dict, pos_default_fn))
 
-        fn = _make_groundness_dispatch_simple(plans, fallback_fn)
-    else:
-        func_def = _build_predicate_funcdef(
-            functor, arity, clauses, _effective_db, body_compiler,
-        )
+            # Phase 9b/9c: attempt multi-argument indexing when arity ≥ 2.
+            fn = None
+            if arity >= 2:
+                joint_result = _analyze_joint_index_positions(
+                    clauses, arity, index_positions)
+                if joint_result is not None:
+                    pos_i, pos_j, joint_info = joint_result
+                    coverage = joint_info["coverage"]
+                    if coverage < _JOINT_COVERAGE_THRESHOLD:
+                        # Phase 9c — secondary (hierarchical) dispatch.
+                        sec = _build_secondary_index(
+                            clauses, arity, pos_i, pos_j)
+                        if sec is not None:
+                            level0_compiled: dict = {}
+                            for ki, (l1_buckets, l1_defaults) in \
+                                    sec["level0"].items():
+                                if l1_buckets is not None:
+                                    l1_fns: dict = {}
+                                    for kj, bkt in l1_buckets.items():
+                                        bname = (
+                                            f"{functor}__s{pos_i}"
+                                            f"_{pos_j}_l0b{len(level0_compiled)}"
+                                            f"_l1b{len(l1_fns)}"
+                                        )
+                                        bdef = _build_predicate_funcdef(
+                                            bname, arity, bkt,
+                                            _effective_db, body_compiler,
+                                        )
+                                        l1_fns[kj] = functiondef_to_function(
+                                            bdef, globals_=base_globals)
+                                    l1dname = (
+                                        f"{functor}__s{pos_i}_{pos_j}"
+                                        f"_l0b{len(level0_compiled)}_l1dflt"
+                                    )
+                                    l1ddef = _build_predicate_funcdef(
+                                        l1dname, arity, l1_defaults,
+                                        _effective_db, body_compiler,
+                                    )
+                                    level0_compiled[ki] = (
+                                        l1_fns,
+                                        functiondef_to_function(
+                                            l1ddef, globals_=base_globals),
+                                    )
+                                else:
+                                    bname = (
+                                        f"{functor}__s{pos_i}_{pos_j}"
+                                        f"_l0b{len(level0_compiled)}_flat"
+                                    )
+                                    bdef = _build_predicate_funcdef(
+                                        bname, arity, l1_defaults,
+                                        _effective_db, body_compiler,
+                                    )
+                                    level0_compiled[ki] = (
+                                        None,
+                                        functiondef_to_function(
+                                            bdef, globals_=base_globals),
+                                    )
+                            if sec["level0_defaults"]:
+                                l0ddef = _build_predicate_funcdef(
+                                    f"{functor}__s{pos_i}_{pos_j}_l0dflt",
+                                    arity, sec["level0_defaults"],
+                                    _effective_db, body_compiler,
+                                )
+                                level0_default_fn = functiondef_to_function(
+                                    l0ddef, globals_=base_globals)
+                            else:
+                                level0_default_fn = _compile_always_fail(
+                                    functor, arity)
+                            fn = _make_secondary_dispatch_simple(
+                                sec, level0_compiled, level0_default_fn,
+                                fallback_fn)
+                    else:
+                        # Phase 9b — flat joint key dispatch (high coverage).
+                        joint_dict: dict = {}
+                        for jk, bkt in joint_info["buckets"].items():
+                            jbname = (
+                                f"{functor}__j{pos_i}_{pos_j}"
+                                f"_b{len(joint_dict)}"
+                            )
+                            jbdef = _build_predicate_funcdef(
+                                jbname, arity, bkt,
+                                _effective_db, body_compiler,
+                            )
+                            joint_dict[jk] = functiondef_to_function(
+                                jbdef, globals_=base_globals)
+                        if joint_info["defaults"]:
+                            jddef = _build_predicate_funcdef(
+                                f"{functor}__j{pos_i}_{pos_j}_dflt",
+                                arity, joint_info["defaults"],
+                                _effective_db, body_compiler,
+                            )
+                            joint_default_fn = functiondef_to_function(
+                                jddef, globals_=base_globals)
+                        else:
+                            joint_default_fn = _compile_always_fail(
+                                functor, arity)
+                        single_i = _make_groundness_dispatch_simple(
+                            [p for p in plans if p[0] == pos_i], fallback_fn)
+                        single_j_plans = [p for p in plans if p[0] == pos_j]
+                        if single_j_plans:
+                            single_j = _make_groundness_dispatch_simple(
+                                single_j_plans, fallback_fn)
+                        else:
+                            single_j = fallback_fn
+                        fn = _make_joint_dispatch_simple(
+                            pos_i, pos_j,
+                            joint_dict, joint_default_fn,
+                            single_i, single_j, fallback_fn)
+            if fn is None:
+                fn = _make_groundness_dispatch_simple(plans, fallback_fn)
+        else:
+            func_def = _build_predicate_funcdef(
+                functor, arity, clauses, _effective_db, body_compiler,
+            )
 
-        fn = functiondef_to_function(func_def, globals_=base_globals)
+            fn = functiondef_to_function(func_def, globals_=base_globals)
+    finally:
+        _compile_context_local.locked_dispatch_keys = _prev_locked_keys
 
     # Wrap the shallow function in a trampoline-protocol adapter so it can be
     # driven by the standard solver and called from compiled trampoline code.

@@ -56,6 +56,10 @@ from clausal.logic.builtins import pairs           # noqa: F401
 from clausal.logic.builtins import higher_order    # noqa: F401
 from clausal.logic.builtins import io              # noqa: F401
 from clausal.logic.builtins import dcg             # noqa: F401
+from clausal.logic.builtins import dict_set        # noqa: F401
+
+# Import units_constraint to register HasUnits/2 before _build_all_builtin_classes runs.
+import clausal.logic.units_constraint               # noqa: F401
 
 # Re-export private names used by tests and other modules.
 from clausal.logic.builtins.database_ops import _normalize_fact_clause  # noqa: F401

@@ -392,6 +392,27 @@ process(X_, R_) <- (
 
 Under the hood, `++expr` wraps the Python expression in a lambda whose parameters shadow the module-scope Var names. The compiler emits `thunk_fn(deref(v0), deref(v1), ...)`. Any Python expression works — method calls, builtins, arithmetic, subscripts, etc.
 
+### Unit-literal sugar — `n(Unit)`
+
+A special case of the `++()` pattern: when a numeric literal is used as the
+callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
+
+```python
+5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
+9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
+-3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
+```
+
+When a **logic variable** is used as the callable instead, `X(Unit)` becomes a
+goal that posts a dimension constraint on `X`:
+
+```python
+F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton value
+F is 9.8(Newton)  # binds F; hook checks dims match
+```
+
+See [Physical Units](units.md) for the full reference.
+
 ---
 
 ## Compound terms and goals
@@ -866,13 +887,6 @@ Arithmetic operators inside a constraint domain imply constraints, not evaluatio
     42 <= X,
 )
 ```
-
-Shorthand constraint operators (usable in single goals):
-
-| Operator | Meaning |
-|---|---|
-| `==+`, `!=+`, `>+`, `<+`, `>=+`, `<=+` | numeric comparison |
-| `==~`, `!=~`, `>~`, `<~`, `>=~`, `<=~` | standard order of terms |
 
 Note: `<=` always means less-than-or-equal in constraint context. Implication uses `implies` or the `<-` arrow.
 

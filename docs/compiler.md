@@ -98,15 +98,78 @@ The Call case is the core cross-predicate dispatch. `f` is the predicate name; i
 
 Before the continuation chain is assembled, `_preallocate_body_vars` scans all goals left-to-right and emits `_vN = Var()` allocations for any logic variable that first appears in a goal (not in a head pattern). This prevents `UnboundLocalError` that would occur if right-to-left compilation produced code that referenced a name before it was assigned.
 
-### Call target injection
+### Globals collection and call target injection
 
-`_inject_call_targets(functor, arity, clauses, db, globals_)` scans clause bodies for `Call(LoadName(f), ...)` nodes and ensures that each `f` resolves to something with `_get_dispatch()` in the compiled function's globals:
+Before generating the compiled function body, the compiler does a single pass over all clause heads and bodies to collect three categories of objects that need to be in the compiled function's `__globals__`:
 
-1. If `f` is already in `globals_` and is a `PredicateMeta` class → nothing to do.
-2. If `f` is a known builtin → inject a `BuiltinPredicate` adapter.
-3. If `db` is not `None` and `f` is in the database → inject a `_DbDispatchAdapter` wrapping `db.get_dispatch`.
+```python
+head_types, py_thunks, call_targets = _collect_globals_info(clauses)
+base_globals.update(head_types)
+base_globals.update(py_thunks)
+_inject_resolved_targets(call_targets, base_globals, db, globals_)
+```
 
-`_collect_head_types` also scans clause heads for user-defined PredicateMeta instances and injects the class itself into globals (needed for `case fib(n=_v):` patterns in compiled match arms).
+**`_collect_globals_info(clauses)`** — single tree walk returning:
+
+- `head_types`: `{name: cls}` for any `PredicateMeta` class found in clause heads (needed for `case fib(n=_v):` structural match patterns).
+- `py_thunks`: `{key: fn}` for any `PyThunk` lambda found in clause bodies (the `++expr` Python-escape syntax).
+- `call_targets`: `set[(fname, arity)]` for every `Call(LoadName(f), ...)` node found in clause bodies.
+
+**`_inject_resolved_targets(targets, base_globals, db, globals_)`** — resolution loop that ensures each called `(fname, arity)` pair has a `_get_dispatch()`-compatible object in `base_globals`:
+
+1. If `fname` is already in `base_globals` and is a `PredicateMeta` class → already present; apply locked dispatch caching (see below) and continue.
+2. If `fname` is a known builtin → inject a `BuiltinPredicate` adapter.
+3. If `db` is not `None` and `fname` is in the database → inject a `_DbDispatchAdapter` wrapping `db.get_dispatch`.
+4. Dotted names (`mod.Pred`) are resolved via attribute traversal through the module dict.
+
+### Locked dispatch caching
+
+For predicates that are **locked** (non-dynamic, `_locked = True`) at compilation time, `_inject_resolved_targets` also captures the dispatch function directly into `base_globals` under a stable key:
+
+```python
+_disp_key("Edge", 2)  →  "_disp_Edge_2"
+base_globals["_disp_Edge_2"] = Edge._dispatch_fn
+```
+
+The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. When a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of calling `._get_dispatch()` at every invocation:
+
+```python
+# Unlocked / dynamic predicate (default):
+_gen = StepGenerator(Foo._get_dispatch(), this_generator, arg0, arg1, trail)
+
+# Locked predicate — cached dispatch closure:
+_gen = StepGenerator(_disp_Foo_2, this_generator, arg0, arg1, trail)
+```
+
+`_disp_Foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — one attribute lookup is eliminated on every call site.
+
+**When dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
+
+**Safety:** On lazy recompile (triggered by `assertz`/`retract`), the whole compilation reruns with the updated clause list, so any cached dispatch functions are refreshed. Dynamic predicates (`_locked = False`) never get cached; they always use `._get_dispatch()`.
+
+### Call-site bucket specialisation
+
+Locked dispatch caching captures the dispatch *closure* for locked callees. Call-site specialisation goes one step further: when the argument in an indexed position is a statically-known literal at the call site, the dispatch closure is bypassed entirely and the specific *bucket function* is referenced directly.
+
+`_inject_bucket_refs_trampoline` runs after `_inject_resolved_targets`. It scans each clause body for `Call` nodes whose callee is locked and has `_index_plans`. For each such call site it converts the term-level argument to an AST expression, extracts a static key via `_static_call_key`, and — if the key appears in the callee's bucket dict — injects the bucket function into `base_globals` under a readable string key:
+
+```python
+base_globals["Color.bucket(pos=0, 'red')"] = Color._index_plans[0]["red"]
+```
+
+`_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `_disp_Color_1` or `Color._get_dispatch()`:
+
+```python
+# static literal 'red' in indexed position 0 — direct bucket ref:
+_gen = StepGenerator(Color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+
+# arg is a variable — falls back to cached dispatch closure:
+_gen = StepGenerator(_disp_Color_1, this_generator, X_, trail)
+```
+
+Joint bucket pairs (when both indexed positions hold static literals) are also specialisable.
+
+See [Call-Site Bucket Specialisation](indexing.md#call-site-bucket-specialisation) in the indexing docs for the full design and invariants.
 
 ---
 
@@ -175,6 +238,12 @@ while _st is not DONE:
 ```
 
 `StepGenerator` wraps the child dispatch function. `this_generator` is passed as the child's `parent`, so the child yields `(this_generator, None)` on solution and `(this_generator, DONE)` on exhaustion. The trampoline routes these back to us.
+
+When `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `_disp_fib_2`, and the generated code uses `_disp_fib_2` directly instead of `fib._get_dispatch()`:
+
+```python
+_gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
+```
 
 ### Trampoline driver
 

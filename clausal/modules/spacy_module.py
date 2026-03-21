@@ -154,11 +154,9 @@ def _load_model_1(name, trail, k):
     name = deref(name)
     name_str = str(name)
     with _LOCK:
-        if name_str in _MODELS:
-            yield None
-            return
-        nlp = _get_spacy().load(name_str)
-        _MODELS[name_str] = nlp
+        if name_str not in _MODELS:
+            nlp = _get_spacy().load(name_str)
+            _MODELS[name_str] = nlp
     yield None
 
 
@@ -169,11 +167,9 @@ def _load_model_2(name, alias, trail, k):
     name_str = str(name)
     alias_str = str(alias)
     with _LOCK:
-        if alias_str in _MODELS:
-            yield None
-            return
-        nlp = _get_spacy().load(name_str)
-        _MODELS[alias_str] = nlp
+        if alias_str not in _MODELS:
+            nlp = _get_spacy().load(name_str)
+            _MODELS[alias_str] = nlp
     yield None
 
 

@@ -15,6 +15,7 @@ statement.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 from .logic.variables import Var
@@ -57,20 +58,20 @@ class Compound:
         f = self.functor if isinstance(self.functor, str) else term_str(self.functor)
         return f"{f}({args_str})"
 
+    def __unify__(self, other, trail) -> bool:
+        """Structural unification: same functor and arity, args unified pairwise."""
+        if not isinstance(other, Compound):
+            return NotImplemented
+        if self.functor != other.functor or len(self.args) != len(other.args):
+            return False
+        from .logic.variables import unify
+        mark = trail.mark()
+        for a, b in zip(self.args, other.args):
+            if not unify(a, b, trail):
+                trail.undo(mark)
+                return False
+        return True
 
-@dataclass
-class ArithConstraint:
-    """Stub node for the future CLP(FD) arithmetic constraint operator (==+).
-
-    Constructed by the transformer when it sees ``X ==+ expr`` or ``X == +expr``.
-    The compiler raises NotImplementedError when it encounters this node, marking
-    the CLP(FD) integration point.
-    """
-    expr: Any
-    position: tuple | None = field(default=None, repr=False, compare=False)
-
-    def __str__(self) -> str:
-        return f"==+({term_str(self.expr)})"
 
 
 # ── Open-world keyword term ────────────────────────────────────────────────────
@@ -255,6 +256,237 @@ class SetTerm:
         return self._elements == other._elements
 
 
+# ── Quantity — number with physical dimensions ────────────────────────────────
+
+
+class UnitsMismatch(Exception):
+    """Raised when dimensioned quantities with incompatible units are combined."""
+
+
+def _dim_name(k) -> str:
+    """Return a short display name for a dimension key (predicate or string)."""
+    return k._name if hasattr(k, "_name") else str(k)
+
+
+def _dims_str(dims: dict) -> str:
+    """Human-readable dimension string, e.g. 'm·s^-2'."""
+    if not dims:
+        return "1"
+    parts = []
+    for k in sorted(dims, key=_dim_name):
+        v = dims[k]
+        name = _dim_name(k)
+        parts.append(name if v == 1 else f"{name}^{v}")
+    return "·".join(parts)
+
+
+class Quantity:
+    """A number with physical dimensions for dimensional analysis.
+
+    ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
+    Zero-valued exponents are removed automatically.  The empty dict means
+    dimensionless.  Internally all values are stored in SI base units; named-unit
+    predicates (``Metre``, ``Newton``, ``Watt``, …) in ``clausal.modules.units``
+    handle scaling on the way in/out.
+
+    Arithmetic:
+        - ``+`` / ``-`` require identical dimension dicts; raises ``UnitsMismatch``
+          otherwise.
+        - ``*`` / ``/`` merge dimension dicts by addition / subtraction.
+        - ``**`` scales every exponent by an integer constant; raises
+          ``UnitsMismatch`` if the exponent is non-integer or has dimensions.
+        - Plain numeric scalars (int/float) can be multiplied/divided freely.
+
+    Clausal protocol:
+        - ``__unify__`` — checks dims equality then unifies values.
+
+    Uninstantiated dimensioned slots are plain ``AttVar`` objects carrying a
+    ``"units"`` attribute (see ``clausal.logic.units_constraint``).  A
+    ``Quantity`` always holds a ground numeric value — never a logic var.
+    """
+
+    __slots__ = ("_value", "_dims")
+
+    def __init__(self, value, dims) -> None:
+        if hasattr(dims, '_dims') and hasattr(dims, '_scale'):
+            # dims is a _UnitsPredicate — extract dims dict and apply scale
+            actual_value = value * dims._scale if dims._scale != 1.0 else value
+            actual_dims = dims._dims
+        else:
+            actual_value = value
+            actual_dims = dims
+        self._value = actual_value
+        self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+
+    # ── Properties ──────────────────────────────────────────────────────────
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def dims(self) -> MappingProxyType:
+        return self._dims
+
+    # ── Internal helpers ────────────────────────────────────────────────────
+
+    def _require_same_dims(self, other: "Quantity", op: str) -> None:
+        if not isinstance(other, Quantity):
+            raise UnitsMismatch(
+                f"Cannot {op} dimensioned ({_dims_str(self._dims)}) "
+                f"with plain value {other!r}"
+            )
+        if self._dims != other._dims:
+            raise UnitsMismatch(
+                f"Unit mismatch for {op}: "
+                f"{_dims_str(self._dims)} vs {_dims_str(other._dims)}"
+            )
+
+    @staticmethod
+    def _merge_dims(a: dict, b: dict, sign: int) -> dict:
+        """Return a merged dims dict: a + sign*b, zeros removed."""
+        result = dict(a)
+        for k, v in b.items():
+            new_v = result.get(k, 0) + sign * v
+            if new_v:
+                result[k] = new_v
+            else:
+                result.pop(k, None)
+        return result
+
+    # ── Arithmetic ──────────────────────────────────────────────────────────
+
+    def __add__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Quantity(self._value + other, {})
+        self._require_same_dims(other, "add")
+        return Quantity(self._value + other._value, self._dims)
+
+    def __radd__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Quantity(other + self._value, {})
+        return NotImplemented
+
+    def __sub__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Quantity(self._value - other, {})
+        self._require_same_dims(other, "subtract")
+        return Quantity(self._value - other._value, self._dims)
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)) and not self._dims:
+            return Quantity(other - self._value, {})
+        return NotImplemented
+
+    def __mul__(self, other):
+        if isinstance(other, Quantity):
+            new_dims = self._merge_dims(self._dims, other._dims, +1)
+            return Quantity(self._value * other._value, new_dims)
+        return Quantity(self._value * other, self._dims)
+
+    def __rmul__(self, other):
+        return Quantity(other * self._value, self._dims)
+
+    def __truediv__(self, other):
+        if isinstance(other, Quantity):
+            new_dims = self._merge_dims(self._dims, other._dims, -1)
+            return Quantity(self._value / other._value, new_dims)
+        return Quantity(self._value / other, self._dims)
+
+    def __rtruediv__(self, other):
+        new_dims = {k: -v for k, v in self._dims.items()}
+        return Quantity(other / self._value, new_dims)
+
+    def __pow__(self, exp):
+        if isinstance(exp, Quantity):
+            if exp._dims:
+                raise UnitsMismatch("Exponent cannot have dimensions")
+            exp = exp._value
+        if not isinstance(exp, int):
+            if self._dims:
+                raise UnitsMismatch(
+                    f"Exponent must be an integer constant for dimensional "
+                    f"quantities, got {exp!r}"
+                )
+            # Dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
+            return Quantity(self._value ** exp, {})
+        new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
+        return Quantity(self._value ** exp, new_dims)
+
+    def __neg__(self):
+        return Quantity(-self._value, self._dims)
+
+    def __abs__(self):
+        return Quantity(abs(self._value), self._dims)
+
+    def __pos__(self):
+        return self
+
+    # ── Comparisons (same dims required) ────────────────────────────────────
+
+    def _cmp_value(self, other):
+        """Return (self_val, other_val) after verifying same dims, or raise."""
+        if isinstance(other, Quantity):
+            if self._dims != other._dims:
+                raise UnitsMismatch(
+                    f"Cannot compare {_dims_str(self._dims)} "
+                    f"with {_dims_str(other._dims)}"
+                )
+            return self._value, other._value
+        if not self._dims:
+            return self._value, other
+        raise UnitsMismatch(
+            f"Cannot compare dimensioned ({_dims_str(self._dims)}) "
+            f"with plain value {other!r}"
+        )
+
+    def __lt__(self, other):
+        a, b = self._cmp_value(other)
+        return a < b
+
+    def __le__(self, other):
+        a, b = self._cmp_value(other)
+        return a <= b
+
+    def __gt__(self, other):
+        a, b = self._cmp_value(other)
+        return a > b
+
+    def __ge__(self, other):
+        a, b = self._cmp_value(other)
+        return a >= b
+
+    def __eq__(self, other):
+        if isinstance(other, Quantity):
+            return self._dims == other._dims and self._value == other._value
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self._value, frozenset(self._dims.items())))
+
+    # ── Representation ───────────────────────────────────────────────────────
+
+    def __repr__(self) -> str:
+        return f"Quantity({self._value!r}, {self._dims!r})"
+
+    def __str__(self) -> str:
+        return f"{self._value} {_dims_str(self._dims)}"
+
+    def __format__(self, spec: str) -> str:
+        return format(str(self), spec)
+
+    # ── Clausal unification protocol ─────────────────────────────────────────
+
+    def __unify__(self, other, trail) -> bool:
+        """Called by C do_unify: dims must match exactly; values are unified."""
+        if not isinstance(other, Quantity):
+            return NotImplemented
+        if self._dims != other._dims:
+            return False
+        from .logic.variables import unify
+        return unify(self._value, other._value, trail)
+
+
 # ── Cons / list helpers ────────────────────────────────────────────────────────
 
 def list_to_cons(lst: list) -> object:
@@ -335,7 +567,7 @@ def term_str(t: Any) -> str:
         return "[" + ", ".join(term_str(e) for e in t) + "]"
     if isinstance(t, Var):
         return repr(t)
-    if isinstance(t, (Compound, ArithConstraint)):
+    if isinstance(t, Compound):
         return str(t)
     if isinstance(t, KWTerm):
         args = ", ".join(f"{k}={term_str(v)}" for k, v in t.items())
@@ -346,7 +578,6 @@ def term_str(t: Any) -> str:
     if isinstance(t, SetTerm):
         inner = ", ".join(term_str(e) for e in sorted(t.elements, key=repr))
         return "{" + inner + "}"
-
     cls = type(t)
     op = getattr(cls, "op", None)
 
@@ -381,8 +612,8 @@ __all__ = [
     "Compound",
     "DictTerm",
     "SetTerm",
+
     "KWTerm",
-    "ArithConstraint",
     "PyThunk",
     "FStringThunk",
     # Helpers

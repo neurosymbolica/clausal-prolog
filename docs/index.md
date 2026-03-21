@@ -92,6 +92,7 @@ for s in m.query(grandparent("tom", G)):
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
 | **Standard Library Modules** | |
+| [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
 | [Regex](regex.md) | Pattern matching, group extraction, auto-binding |
 | [Symbolic Math](sympy.md) | SymPy integration — calculus, algebra, number theory |
 | [YAML](yaml.md) | YAML parsing and generation |
