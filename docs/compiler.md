@@ -65,6 +65,13 @@ def fib__2(arg0, arg1, trail, k):
 
 Multi-star patterns (`[*A, *B]`, `[X, *A, *B, Y]`) generate nested range loops over split points.
 
+**Nested star-list patterns**: when a fixed element inside a list pattern is itself a star-list (e.g. `[[HEAD, *TAIL], *ROWS]`), the compiler flattens it by replacing the inner pattern with a fresh proxy Var and emitting a separate sub-guard. `[[HEAD, *TAIL], *ROWS]` becomes:
+
+1. Outer guard: `_head_list_unify_input(cap, [proxy], ROWS, [], trail)` — binds `proxy` to the first element
+2. Inner guard: `_head_list_unify_input(proxy, [HEAD], TAIL, [], trail)` — destructures the bound proxy
+
+A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces three guards).
+
 ### Body goal compilation
 
 `compile_goal(goal, db, var_context, trail_name, k_stmts)` recursively compiles body goals into Python AST statement lists. The continuation `k_stmts` is a list of statements to execute when a solution is found.

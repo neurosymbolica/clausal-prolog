@@ -193,6 +193,20 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
     new_state = FDVar(new_domain, old_constraints)
     put_attr(var, FD_KEY, new_state, trail)
 
+    # Keep real interval in sync if present
+    from clausal.logic.clpr import REAL_KEY, RealVar
+    real_state = get_attr(var, REAL_KEY)
+    if real_state is not None:
+        fd_lo = float(domain_min(new_domain))
+        fd_hi = float(domain_max(new_domain))
+        new_lo = max(real_state.lo, fd_lo)
+        new_hi = min(real_state.hi, fd_hi)
+        if new_lo > new_hi:
+            return False
+        if new_lo != real_state.lo or new_hi != real_state.hi:
+            updated = RealVar(new_lo, new_hi, real_state.constraints)
+            put_attr(var, REAL_KEY, updated, trail)
+
     # Singleton → bind variable
     val = domain_singleton(new_domain)
     if val is not None:
@@ -565,6 +579,12 @@ def _collect_vars_from(expr, result: list) -> None:
     if isinstance(expr, (_Add, _Sub, _Mult)):
         _collect_vars_from(expr.left, result)
         _collect_vars_from(expr.right, result)
+    elif _Div is not None and isinstance(expr, (_Div, _FloorDiv, _Mod)):
+        _collect_vars_from(expr.left, result)
+        _collect_vars_from(expr.right, result)
+    elif _Pow is not None and isinstance(expr, _Pow):
+        _collect_vars_from(expr.left, result)
+        _collect_vars_from(expr.right, result)
     elif _Negate is not None and isinstance(expr, _Negate):
         _collect_vars_from(expr.operand, result)
 
@@ -621,6 +641,22 @@ def _is_fd_candidate(x) -> bool:
     return is_var(x) or (isinstance(x, int) and not isinstance(x, bool))
 
 
+def _is_real_arg(x) -> bool:
+    """True if x is a float literal or a Var with a real-domain attribute."""
+    x = deref(x)
+    if isinstance(x, float):
+        return True
+    if is_var(x):
+        from clausal.logic.clpr import REAL_KEY
+        return get_attr(x, REAL_KEY) is not None
+    return False
+
+
+def _any_real(l, r) -> bool:
+    """True if either argument should use CLP(R) dispatch."""
+    return _is_real_arg(l) or _is_real_arg(r)
+
+
 def _resolve(x):
     """Resolve x: if it's an arithmetic expression tree, try to evaluate it.
 
@@ -644,15 +680,19 @@ def _both_ground(l, r) -> bool:
 
 
 def fd_eq(l, r, trail: Trail) -> bool:
-    """Post X == Y (CLP(FD) arithmetic equality).
+    """Post X == Y.
 
-    For ground non-Var values, falls back to Python ``==``.
-    For Vars and integers, posts an FD constraint.
+    Dispatches to CLP(R) if either argument is a float or real variable;
+    otherwise posts a CLP(FD) constraint.  For ground non-Var values,
+    falls back to Python ``==``.
     """
     l = deref(l)
     r = deref(r)
     l = _resolve(l)
     r = _resolve(r)
+    if _any_real(l, r):
+        from clausal.logic.clpr import real_eq
+        return real_eq(l, r, trail)
     if _both_ground(l, r):
         return l == r
     # At least one Var — use CLP(FD)
@@ -665,11 +705,14 @@ def fd_eq(l, r, trail: Trail) -> bool:
 
 
 def fd_ne(l, r, trail: Trail) -> bool:
-    """Post X != Y (CLP(FD) arithmetic disequality)."""
+    """Post X != Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
     l = _resolve(l)
     r = _resolve(r)
+    if _any_real(l, r):
+        from clausal.logic.clpr import real_ne
+        return real_ne(l, r, trail)
     if _both_ground(l, r):
         return l != r
     if is_var(l):
@@ -681,11 +724,14 @@ def fd_ne(l, r, trail: Trail) -> bool:
 
 
 def fd_lt(l, r, trail: Trail) -> bool:
-    """Post X < Y (CLP(FD))."""
+    """Post X < Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
     l = _resolve(l)
     r = _resolve(r)
+    if _any_real(l, r):
+        from clausal.logic.clpr import real_lt
+        return real_lt(l, r, trail)
     if _both_ground(l, r):
         return l < r
     if is_var(l):
@@ -697,11 +743,14 @@ def fd_lt(l, r, trail: Trail) -> bool:
 
 
 def fd_le(l, r, trail: Trail) -> bool:
-    """Post X <= Y (CLP(FD))."""
+    """Post X <= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
     l = _resolve(l)
     r = _resolve(r)
+    if _any_real(l, r):
+        from clausal.logic.clpr import real_le
+        return real_le(l, r, trail)
     if _both_ground(l, r):
         return l <= r
     if is_var(l):
@@ -713,12 +762,12 @@ def fd_le(l, r, trail: Trail) -> bool:
 
 
 def fd_gt(l, r, trail: Trail) -> bool:
-    """Post X > Y (CLP(FD))."""
+    """Post X > Y.  Dispatches to CLP(R) when appropriate."""
     return fd_lt(r, l, trail)
 
 
 def fd_ge(l, r, trail: Trail) -> bool:
-    """Post X >= Y (CLP(FD))."""
+    """Post X >= Y.  Dispatches to CLP(R) when appropriate."""
     return fd_le(r, l, trail)
 
 
@@ -749,8 +798,30 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         # Unified with another var — merge FD state
         other_state = get_attr(bound_to, FD_KEY)
         if other_state is None:
-            # Other var has no FD — transfer our state
+            # Narrow FD domain against real interval if bound_to has one
+            from clausal.logic.clpr import REAL_KEY
+            real_state = get_attr(bound_to, REAL_KEY)
+            if real_state is not None:
+                import math
+                r_lo = math.ceil(real_state.lo) if real_state.lo != -math.inf else DEFAULT_MIN
+                r_hi = math.floor(real_state.hi) if real_state.hi != math.inf else DEFAULT_MAX
+                narrowed = domain_intersection(
+                    state.domain, domain_from_range(r_lo, r_hi)
+                )
+                if not narrowed:
+                    return False
+                state = FDVar(narrowed, state.constraints)
             put_attr(bound_to, FD_KEY, state, trail)
+            # Propagate constraints from transferred state
+            val = domain_singleton(state.domain)
+            if val is not None:
+                if not unify(bound_to, val, trail):
+                    return False
+            queue = deque()
+            for constraint in state.constraints:
+                if not constraint.propagate(trail, queue):
+                    return False
+            return propagate(queue, trail)
         else:
             # Both have FD — intersect domains, merge constraints
             new_domain = domain_intersection(state.domain, other_state.domain)
@@ -817,14 +888,23 @@ def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
     state = get_attr(target, FD_KEY)
     if state is None:
         final_domain = new_domain
-        new_state = FDVar(final_domain)
-        put_attr(target, FD_KEY, new_state, trail)
     else:
         final_domain = domain_intersection(state.domain, new_domain)
         if not final_domain:
             return False
-        new_state = FDVar(final_domain, state.constraints)
-        put_attr(target, FD_KEY, new_state, trail)
+    # Narrow against real interval if present
+    from clausal.logic.clpr import REAL_KEY
+    real_state = get_attr(target, REAL_KEY)
+    if real_state is not None:
+        import math
+        r_lo = math.ceil(real_state.lo) if real_state.lo != -math.inf else DEFAULT_MIN
+        r_hi = math.floor(real_state.hi) if real_state.hi != math.inf else DEFAULT_MAX
+        final_domain = domain_intersection(final_domain, domain_from_range(r_lo, r_hi))
+        if not final_domain:
+            return False
+    old_constraints = state.constraints if state is not None else ()
+    new_state = FDVar(final_domain, old_constraints)
+    put_attr(target, FD_KEY, new_state, trail)
     val = domain_singleton(final_domain)
     if val is not None:
         if not unify(target, val, trail):

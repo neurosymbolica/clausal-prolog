@@ -1,51 +1,54 @@
 # Physical Units
 
 Dimensional analysis via `Quantity(value, dims)` terms, with full arithmetic,
-named-unit predicates, and syntactic sugar for writing measurements inline.
+named-unit predicates, SI prefix constants, imperial unit vectors, and
+syntactic sugar for writing measurements inline.
 
 ---
 
 ## Quick start
 
 ```python
--import_from(py.units, [m, kg, s, Newton, HasUnits, StripUnits])
+-import_from(py.units,    [m, kg, s, Newton, kilo, HasUnits, StripUnits])
+-import_from(py.imperial, [foot, inch, pound_mass, mph])
 
-# Build a dimensioned value with n(Unit) sugar
+# SI sugar: n(Unit) — Unit must be an SI predicate
 distance := 100(m)              # Quantity(100, {Metre: 1})
 time_    := 9.58(s)             # Quantity(9.58, {Second: 1})
 speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
+
+# SI prefix: plain number, multiply in ++ escape
+big_force := ++(5 * kilo * Newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:-2})
+
+# Imperial: unit-vector Quantity, multiply in ++ escape
+height := ++(6 * foot + 2 * inch)       # Quantity(1.879…, {Metre: 1})
 
 # Check dimension type
 HasUnits(speed, m/s)            # succeeds: dims match
 
 # Extract numeric component
 StripUnits(9.8(Newton), V)      # V = 9.8
-
-# Constrain an unbound variable to a dimension
-HasUnits(F, Newton),            # F must eventually be a Newton quantity
-F is 9.8(Newton)                # binds F; hook checks dims match
 ```
 
 ---
 
-## Syntactic sugar
+## Two syntactic styles
 
-### `n(Unit)` — literal measurement
+### `n(Unit)` sugar — SI predicates only
 
 ```python
 5(m)          # → Quantity(5,   {Metre: 1})
 9.8(Newton)   # → Quantity(9.8, {Kilogram: 1, Metre: 1, Second: -2})
 -3(s)         # → Quantity(-3,  {Second: 1})
-```
-
-Python parses `5(m)` as a call — the transformer intercepts it and rewrites it
-to `++(Quantity(5, m))`. Any numeric literal combined with a unit predicate
-works. Compound unit expressions also work:
-
-```python
 5(m/s)        # → Quantity(5,   {Metre: 1, Second: -1})
 10(m**2)      # → Quantity(10,  {Metre: 2})
 ```
+
+**The argument inside the parentheses must be an SI unit predicate** (or a
+compound expression built from SI unit predicates using `*`, `/`, `**`).  SI
+prefix names (`kilo`, `milli`, …) and imperial unit names (`inch`, `foot`, …)
+are plain numbers / Quantity values — they are **not** predicates and cannot
+appear inside `n(Unit)` parentheses.
 
 For unusual constructions, use `++()` directly:
 
@@ -53,7 +56,22 @@ For unusual constructions, use `++()` directly:
 custom := ++(Kilogram(1) * Metre(1) / Second(1)**2 * 9.8)   # same as 9.8(Newton)
 ```
 
-### `n()` — dimensionless literal
+### `* unit` style — SI prefixes and imperial
+
+SI prefixes are plain numbers; imperial/non-SI units are `Quantity` unit
+vectors.  Both are used via multiplication inside a `++()` escape:
+
+```python
+F   := ++(5 * kilo * Newton(1))        # 5 kN
+t   := ++(100 * nano * Second(1))      # 100 ns
+f   := ++(2.4 * mega * Hertz(1))       # 2.4 GHz
+len := ++(20 * inch)                   # 20 inches → 0.508 m
+spd := ++(60 * mph)                    # 60 mph → 26.82 m/s
+```
+
+---
+
+## `n()` — dimensionless literal
 
 An empty-argument call on any numeric literal produces a dimensionless
 `Quantity(n, {})`:
@@ -61,71 +79,34 @@ An empty-argument call on any numeric literal produces a dimensionless
 ```python
 42()      # → Quantity(42,   {})
 3.14()    # → Quantity(3.14, {})
-0()       # → Quantity(0,    {})
 ```
 
-This is equivalent to `++(Quantity(n, {}))`. The value participates in unit
-arithmetic — dividing two quantities of the same unit to get a ratio is a
-common result:
+---
 
-```python
-RATIO := 50(m) / 10(m)          # → Quantity(5.0, {})
-HasUnits(RATIO, Dimensionless)   # succeeds
-RATIO == 5.0()                   # succeeds
-```
-
-### `X(Unit)` — construction from a runtime value
+## `X(Unit)` — construction from a runtime value
 
 When the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
 ```python
 N := 9.8
-F := N(Newton)          # → ++(Quantity(N, Newton)) = Quantity(9.8, Newton dims)
+F := N(Newton)          # → Quantity(9.8, Newton dims)
 ```
 
-This is the runtime-value counterpart of `9.8(Newton)` — same construction,
-variable value. Compound unit expressions work too:
+---
 
-```python
-SPEED := 10
-V := SPEED(m/s)         # Quantity(10, {Metre: 1, Second: -1})
-```
-
-### `HasUnits(X, Unit)` — dimension constraint / check
-
-For dimension checks and constraints (goal position), use `HasUnits` explicitly:
+## `HasUnits(X, Unit)` — dimension constraint / check
 
 ```python
 HasUnits(F, Newton)              # check or constrain: F must have Newton dims
+HasUnits(V, m/s)                 # velocity check/constraint
+HasUnits(A, m/s**2)              # acceleration
 ```
 
-`HasUnits/2` posts an AttVar constraint on `F` if it is unbound: any subsequent
-unification of `F` fires a hook that checks the bound value has matching
-dimensions. The constraint backtracks correctly with the trail.
+`HasUnits/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
+expressions work directly — the transformer auto-wraps them.
 
-```python
-# Constraint posted, then satisfied
-HasUnits(F, Newton),
-F is 9.8(Newton),       # hook checks dims match → OK
-HasUnits(F, Newton)     # ground check: still succeeds
-
-# Constraint posted, then violated → entire conjunction fails
-HasUnits(F, Newton),
-F is 1(s)               # hook rejects: Newton dims ≠ Second dims
-```
-
-Compound unit expressions work directly in `HasUnits` — the transformer
-auto-wraps them:
-
-```python
-HasUnits(V, m/s)                      # velocity check/constraint
-HasUnits(A, m/s**2)                   # acceleration
-HasUnits(F, kg*m/s**2)               # force (same dims as Newton)
-```
-
-`HasUnits` cannot appear on the RHS of `:=` — that position expects an
-expression.
+`HasUnits` cannot appear on the RHS of `:=`.
 
 ---
 
@@ -139,22 +120,6 @@ d.value   # 10.0
 d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ```
 
-`dims` returns an immutable `MappingProxyType` mapping unit-predicate objects
-(not strings) to integer exponents. Zero exponents are removed on construction.
-The empty proxy `{}` is dimensionless.
-
-`Quantity` also accepts a unit predicate as its second argument — scale is
-applied automatically:
-
-```python
-Quantity(5, Kilometre)   # → Quantity(5000.0, {Metre: 1})
-Quantity(9.8, Newton)    # → Quantity(9.8, {Kilogram:1, Metre:1, Second:-2})
-```
-
-`Quantity` holds a ground numeric value — never a logic variable. An
-uninstantiated dimensioned slot is a plain Var with a `"units"` AttVar
-constraint (see below).
-
 ### Arithmetic
 
 | Operation  | Behaviour |
@@ -163,33 +128,42 @@ constraint (see below).
 | `a - b`    | Same as addition |
 | `a * b`    | Merges dims by addition (exponents add) |
 | `a / b`    | Merges dims by subtraction (exponents subtract) |
-| `a ** n`   | Multiplies all exponents by integer `n`; raises `UnitsMismatch` for non-integer |
+| `a ** n`   | Multiplies all exponents by integer `n` |
 | `-a`       | Negates value; preserves dims |
 | `abs(a)`   | Absolute value; preserves dims |
 | `a * k`    | Scales value by plain number; preserves dims |
 | `k / a`    | Inverts dims and scales |
 
-Dimensionless values (`dims == {}`) interoperate freely with plain numbers.
+---
 
-### Comparisons
+## Modules
 
-`<`, `<=`, `>`, `>=` require identical dims; raise `UnitsMismatch` otherwise.
+### `py.units` — SI units and prefixes
+
+```python
+-import_from(py.units, [m, kg, s, Newton, kilo, HasUnits, StripUnits])
+```
+
+Contains: SI base unit predicates, scaled SI unit predicates, named derived SI
+unit predicates, SI prefix constants, IEC binary prefix constants, SI
+abbreviations, SI unit vectors, digital information units, physical constants,
+and utility predicates (`HasUnits`, `StripUnits`, `DimensionOf`, `MakeQuantity`).
+
+### `py.imperial` — imperial and non-SI unit vectors
+
+```python
+-import_from(py.imperial, [inch, foot, yard, mile, pound_mass, mph, lbf])
+```
+
+Contains: imperial and non-SI `Quantity` unit vectors for length, mass, force,
+volume, pressure, energy, power, speed, and temperature differences.  All
+values are stored in SI base units; `HasUnits` checks work without changes.
 
 ---
 
-## Module: `clausal.modules.py.units`
+### SI base unit predicates
 
-Import in `.clausal` files:
-
-```python
--import_from(py.units, [m, kg, s, Newton, HasUnits, StripUnits])
-```
-
-### SI base unit abbreviations
-
-The standard SI abbreviations are provided as importable aliases. Note that
-`A` (Ampere) and `K` (Kelvin) are omitted because single uppercase letters are
-parsed as logic variables in Clausal — use the full names instead.
+Used with `n(Unit)` sugar.
 
 | Alias | Full name  | Dims             | SI symbol |
 |-------|------------|------------------|-----------|
@@ -201,23 +175,84 @@ parsed as logic variables in Clausal — use the full names instead.
 | —     | `Ampere`   | `{Ampere: 1}`    | A *(clash)* |
 | —     | `Kelvin`   | `{Kelvin: 1}`    | K *(clash)* |
 
-### Named-unit predicates
+`A` and `K` are omitted as aliases — single uppercase letters are logic
+variables in Clausal.
 
-`Unit(value)` called from Python (via `++` escape or `n(Unit)` sugar) returns
-`Quantity(value * scale, dims)` directly.
+**Digital information base unit** (IEC 80000-13):
 
-#### Scaled length (store as metres)
+| Alias | Full name | Dims        | IEC symbol |
+|-------|-----------|-------------|------------|
+| —     | `Bit`     | `{Bit: 1}`  | bit        |
 
-`Kilometer`, `Centimeter`, `Millimeter`, `Micrometer`, `Nanometer`,
-`Inch`, `Foot`, `Yard`, `Mile`, `NauticalMile`, `LightYear`, `AstronomicalUnit`
+`Bit` uses itself as the dimension key, exactly like the SI base units.
 
-#### Scaled mass (store as kilograms)
+---
 
-`Gram`, `Milligram`, `Microgram`, `Tonne`, `Pound`, `Ounce`
+### Scaled SI unit predicates
 
-#### Scaled time (store as seconds)
+These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
-`Millisecond`, `Microsecond`, `Nanosecond`, `Minute`, `Hour`, `Day`, `Week`, `JulianYear`
+#### Length (stored as metres)
+
+`Kilometer` (`km`), `Centimeter` (`cm`), `Millimeter` (`mm`),
+`Micrometer` (`um`), `Nanometer` (`nm`)
+
+#### Mass (stored as kilograms)
+
+`Gram` (`mg` for milli, `ug` for micro), `Milligram`, `Microgram`, `Tonne`
+
+#### Time (stored as seconds)
+
+`Millisecond` (`ms`), `Microsecond` (`us`), `Nanosecond` (`ns`),
+`Minute` (`min`), `Hour` (`hr`), `Day`, `Week`, `JulianYear`
+
+#### Digital information (stored as bits)
+
+`Bit` is the base unit (IEC 80000-13).  All values are normalised to bits.
+
+```python
+-import_from(py.units, [Bit, Byte, Kilobyte, Gigabyte, Kibibyte, Gibibyte,
+                        Kilobit, Megabit, kibi, mebi, gibi, tebi])
+
+size   := 4(Gibibyte)                    # Quantity(34_359_738_368, {Bit: 1})
+rate   := 100(Megabit)                   # Quantity(100_000_000,    {Bit: 1})
+custom := ++(512 * mebi * Byte(1))       # 512 MiB via binary prefix
+```
+
+Decimal (SI-prefixed) byte multiples:
+
+| Predicate   | Stored as bits | Alias |
+|-------------|----------------|-------|
+| `Byte`      | 8              | —     |
+| `Kilobyte`  | 8 × 10³        | —     |
+| `Megabyte`  | 8 × 10⁶        | —     |
+| `Gigabyte`  | 8 × 10⁹        | —     |
+| `Terabyte`  | 8 × 10¹²       | —     |
+
+Decimal bit multiples:
+
+| Predicate   | Stored as bits |
+|-------------|----------------|
+| `Kilobit`   | 10³            |
+| `Megabit`   | 10⁶            |
+| `Gigabit`   | 10⁹            |
+
+Binary (IEC-prefixed) byte multiples:
+
+| Predicate   | Stored as bits  |
+|-------------|-----------------|
+| `Kibibyte`  | 8 × 2¹⁰         |
+| `Mebibyte`  | 8 × 2²⁰         |
+| `Gibibyte`  | 8 × 2³⁰         |
+| `Tebibyte`  | 8 × 2⁴⁰         |
+
+Binary bit multiples:
+
+| Predicate   | Stored as bits |
+|-------------|----------------|
+| `Kibibit`   | 2¹⁰            |
+| `Mebibit`   | 2²⁰            |
+| `Gibibit`   | 2³⁰            |
 
 #### Named derived SI units
 
@@ -242,9 +277,180 @@ parsed as logic variables in Clausal — use the full names instead.
 | `Gray`    | absorbed dose         | `{m:2, s:-2}`                     |
 | `Sievert` | dose equivalent       | `{m:2, s:-2}`                     |
 
-Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `PoundsPerSquareInch`,
-`Electronvolt`, `Calorie`, `Kilocalorie`, `KilowattHour`, `Kilowatt`,
-`Horsepower`, `KilometerPerHour`, `MilePerHour`, `Knot`
+Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `Electronvolt`, `Kilowatt`
+
+---
+
+### SI prefix constants
+
+Plain Python numbers — **not** predicates.  Use inside `++()` by multiplying
+against a unit vector:
+
+```python
+++(5 * kilo * Newton(1))      # 5 kN
+++(100 * nano * Second(1))    # 100 ns
+++(2.4 * giga * Hertz(1))     # 2.4 GHz
+++(1 * mega * Joule(1))       # 1 MJ
+```
+
+| Name    | Value  | SI symbol | Note |
+|---------|--------|-----------|------|
+| `yotta` | 1e24   | Y *(clash)* | uppercase = logic var |
+| `zetta` | 1e21   | Z *(clash)* | |
+| `exa`   | 1e18   | E *(clash)* | |
+| `peta`  | 1e15   | P *(clash)* | |
+| `tera`  | 1e12   | T *(clash)* | |
+| `giga`  | 1e9    | G *(clash)* | |
+| `mega`  | 1e6    | M *(clash)* | |
+| `kilo`  | 1e3    | k → `k`   | |
+| `hecto` | 1e2    | h → `h`   | |
+| `deca`  | 1e1    | da → `da` | |
+| `deci`  | 1e-1   | d → `d`   | |
+| `centi` | 1e-2   | c → `c`   | |
+| `milli` | 1e-3   | m *(clash with Metre alias)* | use `milli` |
+| `micro` | 1e-6   | μ *(not a valid identifier)* | use `micro` |
+| `nano`  | 1e-9   | n → `n`   | |
+| `pico`  | 1e-12  | p → `p`   | |
+| `femto` | 1e-15  | f → `f`   | |
+| `atto`  | 1e-18  | a → `a`   | |
+| `zepto` | 1e-21  | z → `z`   | *(rarely needed)* |
+| `yocto` | 1e-24  | y → `y`   | *(rarely needed)* |
+
+Single-letter abbreviations (`k`, `h`, `da`, `d`, `c`, `n`, `p`, `f`, `a`)
+are available but must be imported explicitly.
+
+`milli` has no safe single-letter alias: `m` is already the Metre predicate.
+`micro` has no safe alias: `μ` is not a valid Python identifier.  The
+per-unit abbreviations `ms`, `mg`, `mm`, `us`, `um` encode both prefix and
+unit together.
+
+#### IEC binary prefix constants
+
+Plain Python numbers — use inside `++()` by multiplying against a unit vector:
+
+```python
+++(4   * gibi * Byte(1))    # 4 GiB  →  Quantity(4 × 2³⁰ × 8, {Bit: 1})
+++(512 * mebi * Byte(1))    # 512 MiB
+++(100 * kibi * Bit(1))     # 100 Kib
+```
+
+| Name   | Value  | IEC symbol |
+|--------|--------|------------|
+| `kibi` | 2¹⁰    | Ki         |
+| `mebi` | 2²⁰    | Mi         |
+| `gibi` | 2³⁰    | Gi         |
+| `tebi` | 2⁴⁰    | Ti         |
+| `pebi` | 2⁵⁰    | Pi         |
+| `exbi` | 2⁶⁰    | Ei         |
+
+The IEC symbol abbreviations (`Ki`, `Mi`, `Gi`, …) start with an uppercase
+letter and are not provided as aliases — in Clausal an identifier starting with
+an uppercase letter is a logic variable.
+
+---
+
+### Imperial and non-SI unit vectors  (`py.imperial`)
+
+Plain `Quantity` values — **not** predicates.  Import from `py.imperial` and
+use by multiplying a scalar inside a `++()` escape:
+
+```python
+-import_from(py.imperial, [inch, foot, pound_mass, mph, kilowatt_hour])
+
+LEN  := ++(20 * inch)           # Quantity(0.508,   {Metre: 1})
+MASS := ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
+SPD  := ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
+E    := ++(1 * kilowatt_hour)   # Quantity(3.6e6,   {kg:1, m:2, s:-2})
+```
+
+All values are stored in SI base units; dimensions are the same as their SI
+equivalents so `HasUnits` checks work without any changes:
+
+```python
+HasUnits(++(20 * inch), Metre)     # succeeds — both have {Metre: 1}
+```
+
+#### Length (stored as metres)
+
+| Name               | Value (m)       | Abbrev |
+|--------------------|-----------------|--------|
+| `inch`             | 0.0254          | —      |
+| `foot`             | 0.3048          | `ft`   |
+| `yard`             | 0.9144          | `yd`   |
+| `mile`             | 1 609.344       | `mi`   |
+| `nautical_mile`    | 1 852.0         | `nmi`  |
+| `light_year`       | 9.461 × 10¹⁵   | `ly`   |
+| `astronomical_unit`| 1.496 × 10¹¹   | `au`   |
+
+#### Mass (stored as kilograms)
+
+| Name          | Value (kg)      | Abbrev |
+|---------------|-----------------|--------|
+| `pound_mass`  | 0.453 592 37    | `lb`, `lbm` |
+| `ounce_mass`  | 0.028 349 52    | `oz`   |
+| `stone`       | 6.350 293 18    | —      |
+| `short_ton`   | 907.184 74      | —      |
+| `long_ton`    | 1 016.046 909   | —      |
+
+#### Force (stored as Newtons = kg·m/s²)
+
+| Name          | Value (N)       | Abbrev |
+|---------------|-----------------|--------|
+| `pound_force` | 4.448 221 615   | `lbf`  |
+
+#### Volume (stored as cubic metres)
+
+| Name             | Value (m³)      | Abbrev |
+|------------------|-----------------|--------|
+| `litre`          | 1 × 10⁻³        | `l`    |
+| `millilitre`     | 1 × 10⁻⁶        | `ml`   |
+| `gallon_us`      | 3.785 × 10⁻³    | —      |
+| `quart_us`       | 9.464 × 10⁻⁴    | —      |
+| `pint_us`        | 4.732 × 10⁻⁴    | —      |
+| `fluid_ounce_us` | 2.957 × 10⁻⁵    | —      |
+| `gallon_uk`      | 4.546 × 10⁻³    | —      |
+| `pint_uk`        | 5.683 × 10⁻⁴    | —      |
+| `fluid_ounce_uk` | 2.841 × 10⁻⁵    | —      |
+
+#### Pressure (stored as Pascals = kg/(m·s²))
+
+| Name  | Value (Pa)  | Abbrev |
+|-------|-------------|--------|
+| `psi` | 6 894.757   | —      |
+
+#### Energy (stored as Joules = kg·m²/s²)
+
+| Name           | Value (J)       | Abbrev |
+|----------------|-----------------|--------|
+| `calorie`      | 4.184           | —      |
+| `kilocalorie`  | 4 184.0         | —      |
+| `btu`          | 1 055.056       | —      |
+| `kilowatt_hour`| 3 600 000.0     | —      |
+
+#### Power (stored as Watts = kg·m²/s³)
+
+| Name         | Value (W)  | Abbrev |
+|--------------|------------|--------|
+| `horsepower` | 745.699 87 | —      |
+
+#### Speed (stored as m/s)
+
+| Name    | Value (m/s)          | Abbrev |
+|---------|----------------------|--------|
+| `mph`   | 0.447 04             | —      |
+| `kph`   | 0.277 7̄              | —      |
+| `knot`  | 0.514 4̄              | —      |
+
+#### Temperature differences (stored as Kelvin — ratio scale only)
+
+| Name      | Value (K)  |
+|-----------|------------|
+| `rankine` | 5/9        |
+
+Absolute offset scales (Celsius, Fahrenheit) are unsupported — they are not
+ratio scales.
+
+---
 
 ### Utility predicates
 
@@ -254,22 +460,15 @@ Scaled variants: `Bar`, `Millibar`, `Atmosphere`, `PoundsPerSquareInch`,
 | `StripUnits(D, V)`         | Unify `V` with the numeric component |
 | `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
-`DimensionOf` also works on uninstantiated Vars with a dimension constraint —
-it unifies `Dims` with the dims from the AttVar's `"units"` attribute.
-
 ### `HasUnits/2`
 
 ```python
 HasUnits(D, UnitPred)
 ```
 
-Explicit dimension check/constraint predicate. Succeeds if:
-
-- `D` is a ground `Quantity` whose dims match `UnitPred._dims`, or
-- `D` is an unbound Var — posts the `"units"` AttVar constraint and succeeds.
-
-Fails if `D` is bound to something else (wrong dims, plain number with
-non-empty dims, non-Quantity term).
+Explicit dimension check/constraint predicate. Succeeds if `D` is a ground
+`Quantity` whose dims match `UnitPred._dims`, or if `D` is an unbound Var
+(posts an AttVar constraint).
 
 ### Physical constants
 
@@ -278,7 +477,7 @@ non-empty dims, non-Quantity term).
 | `SpeedOfLight`          | 2.998 × 10⁸ m/s               | `{m:1, s:-1}` |
 | `PlanckConstant`        | 6.626 × 10⁻³⁴ J·s             | `{kg:1, m:2, s:-1}` |
 | `BoltzmannConstant`     | 1.381 × 10⁻²³ J/K             | `{kg:1, m:2, s:-2, K:-1}` |
-| `StandardGravity`       | 9.80665 m/s²                   | `{m:1, s:-2}` |
+| `StandardGravity`       | 9.806 65 m/s²                  | `{m:1, s:-2}` |
 | `ElementaryCharge`      | 1.602 × 10⁻¹⁹ C               | `{A:1, s:1}` |
 | `GravitationalConstant` | 6.674 × 10⁻¹¹ m³/(kg·s²)     | `{m:3, kg:-1, s:-2}` |
 
@@ -291,110 +490,63 @@ Var with a `"units"` AttVar constraint — **not** `Quantity(Var, dims)`.
 
 ```python
 from clausal.logic.variables import Var, Trail
-from clausal.logic.units_constraint import constrain_var_dims, UNITS_KEY
+from clausal.logic.units_constraint import constrain_var_dims
 from clausal.modules.py.units import Newton
 
 trail = Trail()
 v = Var()
 constrain_var_dims(v, Newton._dims, trail)  # post constraint
-
 from clausal.logic.variables import unify
 unify(v, Newton(9.8), trail)   # fires hook → checks dims → binds v
 ```
-
-The hook fires on unification, checks dims match, and rejects if they don't.
-The constraint is undone if the trail is rewound past the mark where it was posted.
 
 ---
 
 ## Catching unit errors
 
-`UnitsMismatch` is a plain Python exception raised when incompatible units are
-combined inside `++()` escapes. It is catchable via `catch/3` using the
-`ClassName(Message)` compound pattern — Python exceptions and logic `throw/1`
-terms use the same representation:
+`UnitsMismatch` is catchable via `catch/3` using the `ClassName(Message)` form:
 
 ```python
 catch(
-    ++(Metre(3) + Second(2)),   # raises UnitsMismatch
-    UnitsMismatch(MSG),         # MSG bound to the error string
-    1 == 1                      # recovery goal
+    ++(Metre(3) + Second(2)),
+    UnitsMismatch(MSG),
+    1 == 1
 )
 ```
-
-The `ClassName(Message)` form is the general pattern for any Python exception
-that escapes through a `++()` escape — see [Exception Handling](exceptions.md)
-for the full treatment.
 
 ---
 
 ## Program verification with `HasUnits`
 
-### Runtime assertions as type checking
-
-`HasUnits` goals are runtime assertions about dimensional types. They can be
-thought of exactly like Python's `assert` statement: present during development
-and testing, removable for production once correctness is established.
+`HasUnits` goals are runtime assertions about dimensional types.  They compose
+freely with all Clausal constructs: negation-as-failure, `catch/3`,
+backtracking, constraint solving.
 
 The intended workflow:
 
-1. **Development**: annotate inputs, outputs, and intermediate values with
-   `HasUnits` calls. Run tests. Any dimensional error is caught immediately with
-   a precise failure point.
-2. **Verification**: once the test suite passes with all assertions active, the
-   program is known to satisfy its dimensional invariants on those execution
-   paths.
-3. **Production**: strip `HasUnits` goals from compiled code for zero overhead.
-
-This is more expressive than adding `HasUnits` calls into running code manually;
-the key insight is that the test suite *is* the type checker.
-
-### Why this is more powerful than static type systems
-
-Rice's theorem states that no static analysis can decide all semantic properties
-of programs. Dimensional correctness is a semantic property — it depends on the
-runtime values that flow through a program, not just on the syntactic structure.
-A static type system can only approximate this, ruling out some errors but
-necessarily rejecting some valid programs or missing some invalid ones.
-
-Runtime assertions with toggleable checking sidestep this limitation:
-
-- The assertions express the *exact* invariants the program must satisfy, with
-  no approximation.
-- They are checked on real execution paths with real values, including ones
-  that arise only from CLP(FD) search, external input, or runtime arithmetic.
-- They compose freely with all other Clausal constructs: negation-as-failure,
-  `catch/3`, backtracking, constraint solving.
-
-This is the same trade-off as design-by-contract (Eiffel, Python's `assert`,
-Racket contracts): richer expressiveness in exchange for runtime rather than
-compile-time guarantees.
-
-### Compile-time checking
-
-Runtime verification and static analysis are complementary, not mutually
-exclusive. The information encoded in `HasUnits` calls is available at compile
-time — the transformer sees the unit expressions as syntax. A future static
-pass could:
-
-- Infer `Quantity` types for variables bound by `:=`
-- Propagate dimension information through arithmetic expressions
-- Report `HasUnits` calls that are provably unreachable or provably always-failing
-  before the program runs
-
-Such a pass would catch a class of errors earlier without replacing the runtime
-system, which remains the ground truth for correctness.
+1. **Development**: annotate inputs and outputs with `HasUnits` calls.
+2. **Verification**: once tests pass with assertions active, dimensional
+   invariants are confirmed on those paths.
+3. **Production**: strip `HasUnits` goals for zero overhead.
 
 ---
 
 ## Design notes
 
-- **No offset scales**: `Celsius`/`Fahrenheit` are unsupported — they are
-  offset (non-ratio) scales. Only ratio-scale units work correctly.
+- **No offset scales**: `Celsius`/`Fahrenheit` are unsupported.
 - **Integer-only exponents in `Pow`**: `area ** 0.5` raises `UnitsMismatch`.
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
-  (`Metre`, `Kilogram`, etc.) are the keys in `dims`. Custom dimension keys
-  are supported — any hashable Python value works.
-- **`A` and `K` aliases omitted**: the standard SI symbols for Ampere and
-  Kelvin are single uppercase letters, which Clausal parses as logic variables.
-  Use `Ampere` and `Kelvin` (or import the full names).
+  are the keys in `dims`.
+- **`A` and `K` aliases omitted**: single uppercase letters are logic
+  variables in Clausal.
+- **SI prefixes are plain numbers**: `kilo = 1e3`, `milli = 1e-3`, etc.
+  They cannot appear inside `n(Unit)` parentheses; use multiplication in
+  a `++()` escape instead.
+- **IEC binary prefixes are plain numbers**: `kibi = 2¹⁰`, `mebi = 2²⁰`, etc.
+  Same rules as SI prefixes — multiply against a unit vector in `++()`.
+- **`Bit` is the information base unit** (IEC 80000-13): all byte and
+  prefixed-bit predicates store internally in bits, so arithmetic between them
+  works without conversion.
+- **Imperial units are Quantity unit vectors**: `inch`, `foot`, `pound_mass`,
+  etc.  Multiply by a scalar in a `++()` escape.  `HasUnits` checks work
+  normally since the dimensions are identical to their SI equivalents.

@@ -240,7 +240,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Expression domain arithmetic"
 
-    CLP(FD) constraint functions walk arithmetic expression trees (`Add`, `Sub`, `Mult`, `Negate`) to compute domain bounds:
+    CLP(FD) constraint functions walk arithmetic expression trees (`Add`, `Sub`, `Mult`, `Div`, `FloorDiv`, `Mod`, `Pow`, `Negate`) to compute domain bounds:
 
     ```
     [a,b] + [c,d] = [a+c, b+d]
@@ -249,7 +249,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
     -[a,b]        = [-b, -a]
     ```
 
-    Ground arithmetic expressions are evaluated before comparison.
+    Ground arithmetic expressions (including `//` and `%`) are evaluated before comparison.
 
 ### Builtins
 
@@ -323,9 +323,11 @@ sendmoney(S_, E_, N_, D_, M_, O_, R_, Y_) <- (
         print(deref(x), deref(y))
     ```
 
-??? abstract "Interaction with dif/2"
+??? abstract "Interaction with dif/2 and CLP(R)"
 
-    CLP(FD) and dif/2 use independent attribute keys (`"fd"` and `"dif"`). Both hooks fire when a variable is bound. They do not interfere with each other. A variable can have both FD constraints and dif constraints simultaneously.
+    CLP(FD), CLP(R), and dif/2 use independent attribute keys (`"fd"`, `"real"`, and `"dif"`). All hooks fire independently when a variable is bound. A variable can have FD, real, and dif constraints simultaneously.
+
+    **FD + Real coexistence:** a variable can carry both an FD domain and a real interval at the same time. The FD domain enforces integrality and domain holes; the real interval handles continuous narrowing. When FD propagation narrows the domain, the real interval is tightened to match. When computing bounds for real constraints, the tightest bounds from both attributes are used. See [CLP(R)](clpr.md) for details on mixed-domain usage.
 
 ??? abstract "Compiler integration"
 
@@ -519,7 +521,9 @@ PigeonHole() <- (
 
 ??? abstract "Interaction with other constraints"
 
-    CLP(B) uses the attribute key `"clpb"`, independent of CLP(FD) (`"fd"`) and dif/2 (`"dif"`). All three hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(FD), and dif constraints simultaneously (though combining CLP(B) with CLP(FD) on the same variable is unusual).
+    CLP(B) uses the attribute key `"clpb"`, independent of CLP(FD) (`"fd"`), CLP(R) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(FD), CLP(R), and dif constraints simultaneously (though combining CLP(B) with numeric domains on the same variable is unusual).
+
+    **Important:** CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(R) and CLP(FD) — they are distinct types in Clausal's constraint system.
 
 ??? info "Test coverage"
 
@@ -542,3 +546,41 @@ PigeonHole() <- (
     - **Pigeon-hole**: 3 pigeons 2 holes → unsatisfiable
     - **Circuit equivalence**: De Morgan's law via Taut, non-equivalence
     - **Fixture integration**: HalfAdder, FullAdder, PigeonHole via `.clausal` file
+
+---
+
+## CLP(R) — Real-domain Constraints
+
+CLP(R) provides constraint logic programming over the reals using interval arithmetic over IEEE doubles with outward rounding. See the dedicated [CLP(R)](clpr.md) page for full documentation including builtins, HC4 propagation internals, and examples.
+
+Quick reference:
+
+### Builtins
+
+| Builtin | Description |
+|---|---|
+| `InReal(Var)` | Declare real variable with domain `[−∞, +∞]` |
+| `InReal(Var, Lo, Hi)` | Declare real variable with domain `[Lo, Hi]` |
+| `LabelReal(Vars)` | Bisect intervals to IEEE float precision |
+| `LabelReal(Vars, Eps)` | Bisect until interval width ≤ Eps |
+
+### Unified dispatch
+
+The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
+
+```
+% Float literal triggers CLP(R)
+sqrt2(X_) <- (
+    InReal(X_, 0.0, 2.0)
+    and X_ * X_ == 2.0
+    and LabelReal([X_], 1.0e-12)
+)
+% → X ≈ 1.4142135623730951
+```
+
+### Cross-domain notes
+
+- **FD + Real coexistence:** a variable can carry both an FD domain and a real interval. The FD domain enforces integrality; the real interval handles continuous narrowing. Both stay in sync.
+- **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(R) or CLP(FD) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
+- **Labeling order:** for mixed-domain variables, use `Label` (FD) first to fix integer values, then `LabelReal` for remaining real variables. `LabelReal` does not enforce integrality.
+- **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.

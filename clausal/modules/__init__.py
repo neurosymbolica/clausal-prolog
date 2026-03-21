@@ -15,6 +15,8 @@ Canonical modules (``py.*`` subpackage):
 - ``py.uuid``     — UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUIDHex, ...
 - ``py.sqlite``   — SQLiteConnect, SQLiteQuery, SQLiteExec, SQLiteTable, ...
 - ``py.spacy``    — LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText, TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity, EntityList, Sentence, SentenceList, Similarity, NounChunk
+- ``py.units``    — SI base/derived unit predicates, SI prefix constants, HasUnits, StripUnits
+- ``py.imperial`` — imperial and non-SI unit vectors (inch, foot, pound_mass, mph, …)
 
 Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 

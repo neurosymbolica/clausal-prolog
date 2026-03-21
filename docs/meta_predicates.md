@@ -72,14 +72,18 @@ test(R_) <- Call((X_ <- (R_ := X_ + 1)), 5)
 
 ## Higher-Order List Predicates
 
-These builtins take goal closures (lambdas) as arguments. All use **committed choice** — they take the first solution from the goal for each element.
+These builtins take a goal as their first argument — either a **lambda** (goal closure) or a **predicate reference** (builtin or user-defined). All use **committed choice** — they take the first solution from the goal for each element.
 
 ### MapList/2
 
 `MapList(Goal, List)` — succeeds if Goal succeeds for every element of List.
 
 ```
+# With a lambda
 all_positive(Xs_) <- MapList((X_ <- (X_ > 0)), Xs_)
+
+# With a builtin predicate
+all_numbers(Xs_) <- MapList(IsNumber, Xs_)
 ```
 
 ### MapList/3
@@ -95,7 +99,11 @@ doubles(Xs_, Ys_) <- MapList(((X_, Y_) <- (Y_ := X_ * 2)), Xs_, Ys_)
 `Filter(Goal, List, Filtered)` — keep elements for which Goal succeeds.
 
 ```
+# With a lambda
 positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+
+# With a builtin predicate
+keep_numbers(Xs_, Ns_) <- Filter(IsNumber, Xs_, Ns_)
 ```
 
 ### Exclude/3
@@ -194,11 +202,14 @@ double_positives(Xs_, Rs_) <- FilterMap(
     all_positive(Ns_) <- ForAll(In(X_, Ns_), X_ > 0)
     ```
 
-    Higher-order list predicates take closures, so lambdas are the natural fit:
+    Higher-order list predicates take either lambdas or predicate references:
 
     ```
     # Filter with lambda
     positives(Xs_, Ps_) <- Filter((X_ <- (X_ > 0)), Xs_, Ps_)
+
+    # Filter with a builtin predicate directly
+    keep_ints(Xs_, Is_) <- Filter(IsInt, Xs_, Is_)
     ```
 
     See [Lambdas](lambdas.md) for full lambda syntax and semantics.
@@ -206,4 +217,5 @@ double_positives(Xs_, Rs_) <- FilterMap(
 ??? info "Test coverage"
 
     - `tests/test_meta.py` (23 tests): FindAll, BagOf, SetOf, ForAll, Call/N, `.clausal` integration
-    - `tests/test_higher_order.py` (28 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4
+    - `tests/test_higher_order.py` (34 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, builtin predicates as arguments
+    - `tests/fixtures/builtin_as_arg.clausal` (5 tests): Filter/MapList with builtin predicates (IsNumber, IsInt, Succ)

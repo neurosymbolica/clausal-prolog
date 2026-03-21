@@ -4231,6 +4231,15 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Inject builtin predicate classes so bare builtin names (e.g. Member
+    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # _inject_resolved_targets so that BuiltinPredicate adapters for call
+    # targets (which handle DB-dependent builtins correctly) are not
+    # overwritten.  Only fills in names not already in base_globals.
+    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
+        if _bc_name not in base_globals:
+            base_globals[_bc_name] = _bc_val
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
@@ -4686,6 +4695,24 @@ def head_to_match_pattern(
         if current_fixed:
             segments.append(("fixed", current_fixed))
 
+        # ── Flatten nested star-lists ──────────────────────────────────────
+        # If a fixed element is itself a star-list (e.g. [HEAD, *TAIL]),
+        # replace it with a fresh proxy Var and record the inner pattern
+        # as a separate list guard (processed after the outer guard).
+        _nested_star_guards: list[tuple[Any, list]] = []  # (proxy_var, star_list)
+        for seg_idx, (seg_type, seg_val) in enumerate(segments):
+            if seg_type != "fixed":
+                continue
+            new_val = []
+            for elem in seg_val:
+                if _is_star_list(elem):
+                    proxy = Var()
+                    new_val.append(proxy)
+                    _nested_star_guards.append((proxy, elem))
+                else:
+                    new_val.append(elem)
+            segments[seg_idx] = ("fixed", new_val)
+
         # Collect all vars from segments for registration (recursing into nested lists)
         def _collect_vars(items):
             result = []
@@ -4702,6 +4729,15 @@ def head_to_match_pattern(
                 all_vars.extend(_collect_vars(seg_val))
             else:
                 all_vars.append(seg_val)
+        # Also collect vars from nested star-lists (they need registration too)
+        for _proxy, _nested_list in _nested_star_guards:
+            for _ne in _nested_list:
+                if isinstance(_ne, StarUnpack):
+                    all_vars.append(deref(_ne.value))
+                elif isinstance(_ne, list):
+                    all_vars.extend(_collect_vars(_ne))
+                else:
+                    all_vars.append(deref(_ne))
 
         # Register vars from list elements into var_context.
         # Three cases for a Var v inside this list:
@@ -4766,6 +4802,72 @@ def head_to_match_pattern(
                     else:
                         before.extend(seg_val)
                 list_guards.append((cap_name, before, star, after, guard_vc))
+
+            # Record sub-guards for nested star-lists.
+            # Each nested pattern becomes its own list guard whose target is
+            # the proxy Var's python name (bound by the outer guard).
+            # Uses a worklist to handle arbitrary nesting depth.
+            _pending = list(_nested_star_guards)
+            while _pending:
+                _proxy, _nested_list = _pending.pop(0)
+                inner_segs: list[tuple[str, Any]] = []
+                inner_fixed: list[Any] = []
+                inner_star_count = 0
+                for _ne in _nested_list:
+                    if isinstance(_ne, StarUnpack):
+                        inner_star_count += 1
+                        if inner_fixed:
+                            inner_segs.append(("fixed", inner_fixed))
+                            inner_fixed = []
+                        inner_segs.append(("star", deref(_ne.value)))
+                    else:
+                        inner_fixed.append(deref(_ne))
+                if inner_fixed:
+                    inner_segs.append(("fixed", inner_fixed))
+                # Recursively flatten nested star-lists in inner segments
+                for _iseg_idx, (_ist, _isv) in enumerate(inner_segs):
+                    if _ist != "fixed":
+                        continue
+                    _inew = []
+                    for _ie in _isv:
+                        if _is_star_list(_ie):
+                            _iproxy = Var()
+                            _inew.append(_iproxy)
+                            _pending.append((_iproxy, _ie))
+                            pname = _var_python_name(_iproxy)
+                            var_context[_iproxy._id] = pname
+                            if _list_reg_ids is not None:
+                                _list_reg_ids.add(_iproxy._id)
+                            guard_vc[_iproxy._id] = pname
+                            for _ine in _ie:
+                                _iv = deref(_ine.value) if isinstance(_ine, StarUnpack) else deref(_ine)
+                                if is_var(_iv) and _iv._id not in var_context:
+                                    ivname = _var_python_name(_iv)
+                                    var_context[_iv._id] = ivname
+                                    if _list_reg_ids is not None:
+                                        _list_reg_ids.add(_iv._id)
+                                    guard_vc[_iv._id] = ivname
+                        else:
+                            _inew.append(_ie)
+                    inner_segs[_iseg_idx] = ("fixed", _inew)
+                proxy_name = guard_vc[_proxy._id]
+                if inner_star_count > 1:
+                    list_guards.append((proxy_name, inner_segs, guard_vc, "multi"))
+                else:
+                    ibefore: list[Any] = []
+                    istar: Any = None
+                    iafter: list[Any] = []
+                    iin_after = False
+                    for ist, isv in inner_segs:
+                        if ist == "star":
+                            istar = isv
+                            iin_after = True
+                        elif iin_after:
+                            iafter.extend(isv)
+                        else:
+                            ibefore.extend(isv)
+                    list_guards.append((proxy_name, ibefore, istar, iafter, guard_vc))
+
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # DictTerm → wildcard capture + unify guard (pairwise value unification)
@@ -4864,6 +4966,10 @@ def _compile_multi_star_guard(
     def _var_or_const_expr(elem):
         if is_var(elem) and elem._id in vc:
             return _name(vc[elem._id])
+        if isinstance(elem, StarUnpack):
+            return ast.Starred(
+                value=_var_or_const_expr(elem.value), ctx=ast.Load(),
+            )
         if isinstance(elem, list):
             return ast.List(
                 elts=[_var_or_const_expr(e) for e in elem],
@@ -5278,6 +5384,10 @@ def compile_head_to_match_case(
                 def _var_or_const(elem):
                     if is_var(elem) and elem._id in vc:
                         return _name(vc[elem._id])
+                    if isinstance(elem, StarUnpack):
+                        return ast.Starred(
+                            value=_var_or_const(elem.value), ctx=ast.Load(),
+                        )
                     if isinstance(elem, list):
                         return ast.List(
                             elts=[_var_or_const(e) for e in elem],
@@ -6268,6 +6378,15 @@ def compile_predicate_shallow(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Inject builtin predicate classes so bare builtin names (e.g. Member
+    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # _inject_resolved_targets so that BuiltinPredicate adapters for call
+    # targets (which handle DB-dependent builtins correctly) are not
+    # overwritten.  Only fills in names not already in base_globals.
+    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
+        if _bc_name not in base_globals:
+            base_globals[_bc_name] = _bc_val
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
         pred_cls = base_globals.get(functor)

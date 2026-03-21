@@ -207,7 +207,16 @@ Since `FindAll` and friends are compiler special forms, the goal argument is com
 
 ## Lambdas with higher-order list predicates
 
-The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — are the primary consumers of lambdas. Unlike meta-predicates, these take a **callable goal closure** as a runtime argument, so lambdas are essential:
+The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
+
+```
+# Builtin predicates can be passed directly — no lambda needed
+all_numbers(Xs_) <- MapList(IsNumber, Xs_)
+keep_ints(Xs_, Is_) <- Filter(IsInt, Xs_, Is_)
+incremented(Xs_, Ys_) <- MapList(Succ, Xs_, Ys_)
+```
+
+When the goal logic is more complex than a single predicate call, lambdas are the natural choice:
 
 ```
 # MapList/3 — double every element
