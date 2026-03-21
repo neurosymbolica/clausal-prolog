@@ -269,15 +269,15 @@ If `married("alice")` is not in the database, `not married("alice")` succeeds.
 Avoid `not goal` when the variables inside `goal` are unbound. This query:
 
 ```clausal
-not In(5, LIST)
+5 not in LIST
 ```
 
 will almost always fail, because Clausal can instantiate `LIST` to something that
 contains 5. Instead, make sure any variables in the negated goal are already bound
-before the `not`:
+before the check:
 
 ```clausal
-no_fives(LIST) <- (not In(5, LIST))
+no_fives(LIST) <- (5 not in LIST)
 ```
 
 is fine when `LIST` is passed in fully instantiated; it is not a generator of lists
