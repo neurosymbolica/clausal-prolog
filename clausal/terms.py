@@ -310,7 +310,16 @@ class Quantity:
     def __init__(self, value, dims) -> None:
         if hasattr(dims, '_dims') and hasattr(dims, '_scale'):
             # dims is a _UnitsPredicate — extract dims dict and apply scale
-            actual_value = value * dims._scale if dims._scale != 1.0 else value
+            if dims._scale != 1.0:
+                try:
+                    actual_value = value * dims._scale
+                except TypeError:
+                    # value is a type that doesn't support * (e.g. list) —
+                    # apply scale element-wise
+                    s = dims._scale
+                    actual_value = type(value)(v * s for v in value)
+            else:
+                actual_value = value
             actual_dims = dims._dims
         else:
             actual_value = value

@@ -503,38 +503,25 @@ class TermTransformer(NodeTransformer):
             )
             return _build_py_thunk_ast(transformer, call, inner, [])
         elif (
-            isinstance(call.func, Constant)
-            and isinstance(call.func.value, (int, float))
+            not (isinstance(call.func, Name) and not _is_logic_var_name(call.func.id))
+            and not isinstance(call.func, Attribute)
             and len(call.args) == 1
             and _is_unit_expr(call.args[0])
             and not call.keywords
         ):
-            # n(Unit) — unit application sugar: 5(Metre) → ++(Quantity(5, Metre))
-            # Also handles compound units: 5(Metre/Second) → ++(Quantity(5, Metre/Second))
-            inner = Call(
-                func=replace(Name(id="Quantity", ctx=load), call),
-                args=[call.func, call.args[0]],
-                keywords=[],
-            )
-            return _build_py_thunk_ast(transformer, call, inner, [])
-        elif (
-            isinstance(call.func, Name)
-            and _is_logic_var_name(call.func.id)
-            and len(call.args) == 1
-            and _is_unit_expr(call.args[0])
-            and not call.keywords
-        ):
-            # X(Unit) — construction sugar: MY_VAL(Newton) → ++(Quantity(MY_VAL, Newton))
-            # In expression position: wraps a runtime value in a Quantity.
-            # For dimension checks/constraints in goal position, use HasUnits(X, Unit) explicitly.
-            var_name = call.func.id
+            # <expr>(Unit) — unit annotation sugar.
+            # Any expression that is not a predicate/functor name or attribute
+            # access can be annotated with a unit: 5(Metre), X(Newton),
+            # [1,2,3](Metre), (A + B)(Metre/Second), etc.
+            # Transforms to: ++(Quantity(<expr>, Unit))
             raw_unit = call.args[0]
+            var_names = _collect_logic_var_names(call.func)
             inner = Call(
                 func=replace(Name(id="Quantity", ctx=load), call),
-                args=[replace(Name(id=var_name, ctx=load), call), raw_unit],
+                args=[call.func, raw_unit],
                 keywords=[],
             )
-            return _build_py_thunk_ast(transformer, call, inner, [var_name])
+            return _build_py_thunk_ast(transformer, call, inner, var_names)
         else:
             func_node = visit(call.func)
         positional_args = [visit(argument) for argument in call.args]
