@@ -1,0 +1,4 @@
+include clausal/logic/variables/_variables.c
+include clausal/logic/_trampoline.c
+include LICENSE
+include README.md

@@ -1,20 +1,25 @@
 # clausal
 
-A Prolog-style logic programming DSL embedded in Python, built on a simplified AST and a generator-based trampoline.
+A Prolog-style logic programming DSL embedded in Python. Write relational logic
+programs in `.clausal` source files that load via Python's standard import
+system, with full constraint solving, tabling, DCGs, and a rich standard library.
 
-## Modules
+## Features
 
-- **`clausal.simple_ast`** — Simplified Python AST with context-split nodes (no `Load`/`Store` context fields; separate `LoadName`/`StoreName` etc. types).
-- **`clausal.conversion`** — Converts CPython `ast` trees into `simple_ast` nodes.
-- **`clausal.term_rewriting`** — `TermTransformer` and `EmbedTransformer`: DSL syntax (`--expr`, `head<-body`, trailing-comma facts, `with the_following`) rewritten to `simple_ast` constructors.
-- **`clausal.template_compiler`** — `@{}`-decorated function templates that expand to AST-building functions.
-- **`clausal.trampoline`** — Generator-based trampoline with `Step`/`trampoline()` for stack-safe recursive computations.
-- **`clausal.continuation_search`** — `Search`: greenlet-based iterator for continuation-passing search functions.
-- **`clausal.import_hook`** — Import hook for `.clausal` predicate modules; `enable_ipython()` for interactive use.
-- **`clausal.simple_ast_node`** — `@node_class` decorator that generates `visit_children`, `transform_children`, and `__call__` via AST.
-- **`clausal.logic.variables`** — Prolog-style logic variables, attributed variables, and trail-based backtracking (C extension, WAM-less).
-- **`clausal.logic.constraints`** — Constraint solvers: `dif/2` disequality constraint via attributed variables.
-- **`clausal.logic.tabling`** — SLG tabling: memoised subgoal calls with suspension/resumption for termination.
+- **`.clausal` source files** — import logic modules with Python's standard import system
+- **Prolog-style predicates** — Horn clauses, unification, backtracking search
+- **Constraint solving** — CLP(FD) for integers, CLP(B) for booleans, `Dif/2` disequality
+- **SLG tabling** — memoised subgoal calls for termination on cyclic structures
+- **DCGs** — Definite Clause Grammars with `>>` syntax and `Phrase/2,3`
+- **Well-Founded Semantics** — negation-as-failure for tabled predicates
+- **Module system** — `-import_from/2`, `-import_module/1`, qualified calls
+- **Meta-predicates** — `FindAll/3`, `BagOf/3`, `SetOf/3`, `ForAll/2`, `Call/N`
+- **Higher-order** — `MapList/2,3`, `FoldLeft/4`, `Filter/3`, `Exclude/3`
+- **Python interop** — `++expr` escape, lambda goal closures, f-string support in terms
+- **SciPy integration** — wrappers for `scipy.special`, `scipy.linalg`, `scipy.optimize`, `scipy.interpolate`, `scipy.signal`
+- **Regex** — `Match/2,3`, `Search/2,3`, `Replace/4`, `Split/3` with auto-binding goal expansion
+- **Term expansion** — macro system for source-level term rewriting
+- **C extensions** — fast logic variables, trail-based backtracking, trampoline (no WAM)
 
 ## Installation
 
@@ -22,45 +27,118 @@ A Prolog-style logic programming DSL embedded in Python, built on a simplified A
 pip install clausal
 ```
 
+Requires Python ≥ 3.13 and a C compiler (used automatically by pip when building from source).
+
 ## Quick start
 
-```python
-import ast
-from clausal import simple_ast
+### `.clausal` source files
 
-tree = ast.parse("x = 1 + 2")
-simple = simple_ast.simplify(tree)
-print(simple_ast.dump(simple))
+Facts use a trailing comma. Rules use `<-` with a parenthesised, comma-separated body.
+Predicate names are CamelCase; variables are ALLCAPS.
+
+```prolog
+# family.clausal
+Parent(tom, bob),
+Parent(tom, liz),
+Parent(bob, ann),
+Parent(bob, pat),
+
+Grandparent(X, Z) <- (Parent(X, Y), Parent(Y, Z))
 ```
 
-### Embedding DSL terms
-
 ```python
-from clausal.import_hook import enable_ipython
-enable_ipython(globals())   # in IPython / Jupyter
+import family   # .clausal files load via the import hook
 
-result = --(x + y)   # produces simple_ast.Add node
+from clausal import call, deref, Var
+
+GRANDCHILD = Var()
+results = [deref(GRANDCHILD) for _ in call("Grandparent", "tom", GRANDCHILD, module=family)]
+# → ['ann', 'pat']
 ```
 
-### Prolog-style predicates
+### Arithmetic
+
+```prolog
+# fib.clausal
+Fib(0, 0),
+Fib(1, 1),
+Fib(N, RESULT) <- (
+    N > 1,
+    N1 := N - 1,
+    N2 := N - 2,
+    Fib(N1, A),
+    Fib(N2, B),
+    RESULT := A + B
+)
+```
+
+### Tabling (memoisation for cyclic graphs)
+
+```prolog
+-table(Path/2)
+
+Edge(1, 2),
+Edge(2, 3),
+Edge(3, 1),
+
+Path(X, Y) <- Edge(X, Y)
+Path(X, Y) <- (Edge(X, Z), Path(Z, Y))
+```
+
+### DCGs
+
+```prolog
+Sentence >> (NounPhrase, VerbPhrase)
+NounPhrase >> (["the", "dog"] or ["the", "cat"])
+VerbPhrase >> (["runs"] or ["barks"])
+```
 
 ```python
-# family.clausal      ← .clausal extension activates the import hook
-parent(tom, bob)<-True,
-parent(bob, ann)<-True,
+from clausal import once
+result = once(call("Phrase", "Sentence", ["the", "cat", "runs"], module=grammar))
+```
+
+### CLP(FD) — constraint logic programming over integers
+
+```prolog
+Sendmoney(S, E, N, D, M, O, R, Y) <- (
+    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
+    AllDifferent([S, E, N, D, M, O, R, Y]),
+    S != 0,
+    M != 0,
+    Label([S, E, N, D, M, O, R, Y]),
+    SEND  := S * 1000 + E * 100 + N * 10 + D,
+    MORE  := M * 1000 + O * 100 + R * 10 + E,
+    MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    SEND + MORE == MONEY
+)
+```
+
+### Meta-predicates
+
+```prolog
+Squares(Ns, Squares) <- (
+    FindAll(
+        Sq,
+        (In(X, Ns), Sq := X * X),
+        Squares
+    )
+)
 ```
 
 ## Testing
 
-`.clausal` files can include inline tests as `test/1` clauses:
+`.clausal` files can include inline tests as `Test/1` clauses:
 
+```prolog
+Test("fib(5) = 5") <- Fib(5, 5)
+Test("tom's grandchildren") <- (
+    Grandparent(tom, ann),
+    Grandparent(tom, pat)
+)
 ```
-test("fib(5) = 5") <- fib(5, 5)
-```
 
-A test passes if its body produces at least one solution.
-
-**Standalone runner** (no pytest needed):
+**Standalone runner:**
 
 ```bash
 python -m clausal.testing clausal/examples/           # all .clausal files
@@ -68,190 +146,54 @@ python -m clausal.testing clausal/examples/hanoi.clausal  # single file
 python -m clausal.testing -v clausal/examples/        # verbose
 ```
 
-**Via pytest** (`.clausal` tests are collected automatically alongside Python tests):
+**Via pytest** (`.clausal` tests collected automatically):
 
 ```bash
-python -m pytest clausal/examples/ -v        # just .clausal tests
-python -m pytest tests/ clausal/examples/ -q  # everything together
+python -m pytest tests/ clausal/examples/ -q
 ```
 
-See [docs/testing.md](docs/testing.md) for details.
+## Logic variables and backtracking
 
-## Requirements
-
-- Python ≥ 3.14
-- [greenlet](https://pypi.org/project/greenlet/) (for `clausal.continuation_search`)
-
-## License
-
-MIT
-
----
-
-## `clausal.logic.variables` — Logic variables and backtracking
-
-A C extension implementing Prolog-style **logic variables** and **trail-based backtracking** without a Warren Abstract Machine. Derived by studying GNU Prolog (`wam_inst.h`, `unify.c`) and Scryer Prolog (`machine_state_impl.rs`, `unify.rs`).
-
-### Quick start
+The C extension `clausal.logic.variables` provides Prolog-style logic variables
+and trail-based backtracking without a Warren Abstract Machine.
 
 ```python
-from clausal.logic.variables import Var, Trail, unify, walk, is_var
+from clausal.logic.variables import Var, Trail, unify, is_var
 
 trail = Trail()
-
 X = Var()
 Y = Var()
 
-# Unify X with 42
-assert unify(X, 42, trail)
+unify(X, 42, trail)
 assert X.value == 42
 
-# Unify a compound term
-A = Var()
-assert unify(("point", A, 0), ("point", 3, 0), trail)
-assert A.value == 3
-
-# Backtrack
 mark = trail.mark()
 unify(Y, "temporary", trail)
-assert Y.value == "temporary"
 trail.undo(mark)
-assert is_var(Y)           # Y is unbound again
+assert is_var(Y)   # Y is unbound again
 ```
-
-### API Reference
-
-#### `Var()`
-
-Create an unbound logic variable.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `is_bound` | `bool` | `True` if this variable has been assigned any value, including another `Var`. Use `is_var()` to test for a ground binding. |
-| `value` | any | The fully dereferenced value (follows the binding chain). Returns `self` if unbound. |
-| `_id` | `int` | Monotonic creation counter. Newer vars (larger `_id`) are bound to older ones in var-var unification. |
-
-Variables are hashable and use identity-based equality — suitable as dict keys.
-
----
-
-#### `Trail()`
-
-Records variable bindings so they can be undone during backtracking.
-
-- **`trail.mark() -> int`** — Return the current trail length as a backtrack mark. Save before a speculative computation; pass to `undo()` to roll back.
-- **`trail.undo(mark: int)`** — Restore all bindings recorded after `mark`. Processes entries in reverse chronological order. `unify()` calls this automatically on failure.
-- **`trail.reset()`** — Undo every binding. Equivalent to `trail.undo(0)`.
-- **`len(trail)`** — Number of recorded bindings.
-
----
-
-#### `unify(t1, t2, trail) -> bool`
-
-Try to unify two terms under `trail`. Returns `True` on success (bindings recorded on `trail`). Returns `False` on failure — **partial bindings are automatically rolled back**.
-
-**Term representation:**
-
-| Python type | Prolog analogue |
-|-------------|----------------|
-| `Var` | unbound variable |
-| `tuple` | compound term — elements unified pairwise |
-| `list` | sequence — elements unified pairwise |
-| any other | atomic — compared with `==` |
-
-In a `Var`–`Var` unification, the newer variable (larger `_id`) is bound to the older one, keeping the oldest as the canonical representative. Without `unify_with_occurs_check()`, binding `X` to `f(X)` succeeds and creates a cyclic term.
-
----
-
-#### `unify_with_occurs_check(t1, t2, trail) -> bool`
-
-Like `unify()` but fails if the variable being bound appears free anywhere in the term, preventing circular terms.
-
-```python
-x = Var()
-unify_with_occurs_check(x, ("f", x), trail)   # False — would be circular
-```
-
----
-
-#### `deref(term) -> term`
-
-Follow the variable binding chain to its root. Returns `self` if unbound. Does not recurse into compound subterms — use `walk()` for deep substitution.
-
----
-
-#### `walk(term) -> term`
-
-Deeply substitute all bound variables throughout a term. Rebuilds tuples and lists with bound vars replaced by their values; unbound vars are left in place. Returns a new object.
-
-```python
-x = Var()
-unify(x, 5, trail)
-walk(("f", x, [x, 2]))   # → ("f", 5, [5, 2])
-```
-
----
-
-#### `is_var(term) -> bool`
-
-Return `True` if `term` dereferences to an unbound `Var`.
-
----
-
-#### `occurs_check(var, term) -> bool`
-
-Return `True` if `var` appears free anywhere inside `term`. Used to detect would-be circular bindings before calling `unify()`.
-
----
-
-### Backtracking pattern
-
-```python
-from clausal.logic.variables import Var, Trail, unify
-
-def solve(goal, trail):
-    for clause_head, clause_body in database:
-        mark = trail.mark()
-        head = rename(clause_head)   # fresh vars per invocation
-        if unify(goal, head, trail):
-            yield from solve_body(clause_body, trail)
-        trail.undo(mark)   # backtrack before trying next clause
-```
-
-`unify()` already rolls back on failure, so `trail.undo(mark)` is only needed to undo successful bindings when moving to the next alternative.
 
 ### Constraints
-
-Logic variables support constraints via the attributed variable infrastructure. The `dif/2` constraint ensures two terms remain different:
 
 ```python
 from clausal.logic.variables import Var, Trail, unify
 from clausal.logic.constraints import dif
 
 trail = Trail()
-x, y = Var(), Var()
+X, Y = Var(), Var()
 
-dif(x, y, trail)       # post constraint: x ≠ y
-unify(x, 1, trail)     # ok — constraint re-checked, still satisfiable
-unify(y, 2, trail)     # ok — constraint satisfied (1 ≠ 2)
-
-# But:
-trail2 = Trail()
-a, b = Var(), Var()
-dif(a, b, trail2)
-unify(a, 1, trail2)
-unify(b, 1, trail2)    # False — constraint violated (1 = 1)
+dif(X, Y, trail)      # post: X ≠ Y
+unify(X, 1, trail)    # ok — still satisfiable
+unify(Y, 2, trail)    # ok — satisfied (1 ≠ 2)
 ```
 
-In `.clausal` files, `is not` has dif semantics:
-```
-safe(X_, Y_) <- (X_ is not Y_ and X_ is 1 and Y_ is 2)  # succeeds
-```
+## Requirements
 
-See [docs/constraints.md](docs/constraints.md) for details.
+- Python ≥ 3.13
+- [greenlet](https://pypi.org/project/greenlet/)
+- [pyyaml](https://pypi.org/project/PyYAML/) ≥ 6.0
+- C compiler (for building from source)
 
-### Notes
+## License
 
-- **Partial lists** (`[H|T]` where `T` is a variable) are not directly supported. Use a tuple `(".", H, T)` or a dedicated cons type built on top of `Var`.
-- **Dicts** are treated as atomic (compared by `==`). Wrap in tuples to unify dict-structured terms.
-- **Thread safety:** not thread-safe. Use a separate `Trail` per thread and avoid sharing `Var` objects between threads without external locking.
+MIT

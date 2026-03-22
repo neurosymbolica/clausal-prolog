@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clausal"
-version = "0.1.0"
+version = "0.3.0"
 description = "A Prolog-style logic programming DSL embedded in Python"
 readme = "README.md"
 license = {text = "MIT"}
@@ -16,6 +16,9 @@ dependencies = [
     "greenlet",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Repository = "https://gitlab.com/MikeAmy/clausal"
 
 [project.optional-dependencies]
 spacy = ["spacy>=3.0"]
