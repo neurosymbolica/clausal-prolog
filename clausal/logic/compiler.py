@@ -4235,10 +4235,16 @@ def compile_predicate_trampoline(
     # passed as an argument to MapList) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
-    # overwritten.  Only fills in names not already in base_globals.
-    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    # overwritten.  For stateless builtins (factory is None), prefer the
+    # PredicateMeta/MultiArityBuiltin class: it is callable as a term
+    # constructor (needed when a goal appears as an argument to a meta-predicate
+    # such as TimeGoal) and also provides _get_dispatch().
+    from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
-        if _bc_name not in base_globals:
+        existing = base_globals.get(_bc_name)
+        if existing is None or (
+            isinstance(existing, BuiltinPredicate) and existing._factory is None
+        ):
             base_globals[_bc_name] = _bc_val
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
@@ -6382,10 +6388,16 @@ def compile_predicate_shallow(
     # passed as an argument to MapList) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
-    # overwritten.  Only fills in names not already in base_globals.
-    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    # overwritten.  For stateless builtins (factory is None), prefer the
+    # PredicateMeta/MultiArityBuiltin class: it is callable as a term
+    # constructor (needed when a goal appears as an argument to a meta-predicate
+    # such as TimeGoal) and also provides _get_dispatch().
+    from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
-        if _bc_name not in base_globals:
+        existing = base_globals.get(_bc_name)
+        if existing is None or (
+            isinstance(existing, BuiltinPredicate) and existing._factory is None
+        ):
             base_globals[_bc_name] = _bc_val
     # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
     if pred_cls is None:
