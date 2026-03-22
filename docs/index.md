@@ -1,5 +1,8 @@
 # Clausal
 
+!!! warning "Beta"
+    Clausal is in early **beta**. The API, syntax, and module interfaces are all subject to change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
+
 **Logic programming embedded in Python.**
 
 Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM.
