@@ -4111,6 +4111,11 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     if not all(_is_deterministic_goal(g) for g in clause.body[:-1]):
         return False
 
+    # Reject tail call args that contain StarUnpack — TRO code generation
+    # cannot construct list-with-splat at runtime.
+    if any(_contains_star_unpack(a) for a in call_args):
+        return False
+
     # Safety check: every variable in the tail call must be "grounded" by
     # the prefix goals, be a passthrough from the head, or come from head
     # list decomposition with at least one deterministic prefix goal
@@ -4217,6 +4222,14 @@ def _tro_args_safe(
             return (False, frozenset())
     return (True, frozenset(_check_positions))
 
+
+def _contains_star_unpack(term: Any) -> bool:
+    """Return True if *term* contains a StarUnpack node anywhere."""
+    if isinstance(term, StarUnpack):
+        return True
+    if isinstance(term, (list, tuple)):
+        return any(_contains_star_unpack(item) for item in term)
+    return False
 
 
 def _collect_var_ids(term: Any, ids: set[int]) -> None:
