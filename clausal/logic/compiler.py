@@ -4111,6 +4111,11 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     if not all(_is_deterministic_goal(g) for g in clause.body[:-1]):
         return False
 
+    # Reject tail call args that contain StarUnpack — TRO code generation
+    # uses deref() which doesn't expand splat into a proper [*rest] splice.
+    if any(_contains_star_unpack(a) for a in call_args):
+        return False
+
     # Safety check: every variable in the tail call must be "grounded" by
     # the prefix goals, be a passthrough from the head, or come from head
     # list decomposition with at least one deterministic prefix goal
@@ -4189,37 +4194,58 @@ def _tro_args_safe(
                 if is_var(tail_arg) and tail_arg._id == head_arg._id:
                     head_passthrough_ids.add(head_arg._id)
 
-    # Check each tail call argument.
+    # Check each tail call argument.  Collect ALL Var IDs within each arg
+    # (not just top-level), since lists/compounds may embed unbound Vars.
     for arg in tail_args:
-        arg = deref(arg)
-        if not is_var(arg):
-            continue  # constant — always safe
-        vid = arg._id
-        if vid in bound_var_ids:
-            continue  # bound by prefix goal — safe
-        if vid in head_passthrough_ids:
-            continue  # passthrough from head — safe
-        if allow_head_vars and vid in all_head_var_ids:
-            continue  # head variable allowed (prefix goals imply ground input)
-        return False
+        arg_var_ids: set[int] = set()
+        _collect_var_ids(arg, arg_var_ids)
+        for vid in arg_var_ids:
+            if vid in bound_var_ids:
+                continue  # bound by prefix goal — safe
+            if vid in head_passthrough_ids:
+                continue  # passthrough from head — safe
+            if allow_head_vars and vid in all_head_var_ids:
+                continue  # head variable allowed (prefix goals imply ground input)
+            return False
     return True
+
+
+def _contains_star_unpack(term: Any) -> bool:
+    """Return True if *term* contains a ``StarUnpack`` node anywhere."""
+    if isinstance(term, StarUnpack):
+        return True
+    if isinstance(term, (list, tuple)):
+        return any(_contains_star_unpack(item) for item in term)
+    if isinstance(term, Compound):
+        return any(_contains_star_unpack(a) for a in term.args)
+    if is_term_instance(term):
+        return any(
+            _contains_star_unpack(getattr(term, f))
+            for f in term_field_names(term)
+        )
+    return False
 
 
 def _collect_var_ids(term: Any, ids: set[int]) -> None:
     """Recursively collect all Var IDs from a term."""
+    from clausal.terms import DictTerm as _DictTerm  # noqa: PLC0415
+
     term = deref(term)
     if is_var(term):
         ids.add(term._id)
     elif isinstance(term, (list, tuple)):
         for item in term:
             _collect_var_ids(item, ids)
+    elif isinstance(term, _DictTerm):
+        for v in term._data.values():
+            _collect_var_ids(v, ids)
     elif is_term_instance(term):
         for fname in term_field_names(term):
             _collect_var_ids(getattr(term, fname), ids)
     elif isinstance(term, Compound):
         for a in term.args:
             _collect_var_ids(a, ids)
-    # Check for StarUnpack-like structures
+    # StarUnpack and other single-child wrappers
     elif hasattr(term, 'value'):
         _collect_var_ids(term.value, ids)
 

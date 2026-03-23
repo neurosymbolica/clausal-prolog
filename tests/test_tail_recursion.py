@@ -25,8 +25,9 @@ from clausal.terms import (
     In, NotIn,
     StructuralEq, StructuralNeq,
     Call, LoadName,
+    Compound,
 )
-from clausal.pythonic_ast.nodes import IfExpr
+from clausal.pythonic_ast.nodes import IfExpr, StarUnpack
 
 
 # ── Detection tests ──────────────────────────────────────────────────────────
@@ -176,6 +177,92 @@ class TestDetectTroClause(unittest.TestCase):
             body=[Call(func=LoadName(name='Other'), args=[x], kwargs=[])],
         )
         self.assertFalse(_detect_tro_clause('S', 1, cl))
+
+    def test_star_unpack_in_tail_call_rejected(self):
+        """Tail call arg with StarUnpack is rejected (TRO can't expand splats)."""
+        from clausal.pythonic_ast.nodes import StarUnpack
+
+        h = Var()
+        t = Var()
+        acc = Var()
+        result = Var()
+
+        class Rev(metaclass=PredicateMeta):
+            _fields = ('list', 'acc', 'result')
+
+        # AccReverse([H, *T], ACC, RESULT) <- AccReverse(T, [H, *ACC], RESULT)
+        # The tail call arg [H, *ACC] contains StarUnpack — must be rejected.
+        cl = Clause(
+            head=Rev(Var(), acc, result),
+            body=[
+                Call(func=LoadName(name='Rev'),
+                     args=[t, [h, StarUnpack(value=acc)], result], kwargs=[]),
+            ],
+        )
+        self.assertFalse(_detect_tro_clause('Rev', 3, cl))
+
+    def test_nested_var_in_list_arg_no_prefix_rejected(self):
+        """List arg containing head-decomposition Var, no prefix goals, is rejected."""
+        x = Var()
+        goals_var = Var()
+        rest = Var()
+
+        class Meta(metaclass=PredicateMeta):
+            _fields = ('goals', 'result')
+
+        # Meta([X|Rest], R) <- Meta(Rest, R)  — but passing [X] as a nested list
+        # With no prefix goals, X from head decomposition is unsafe.
+        cl = Clause(
+            head=Meta(Var(), Var()),
+            body=[
+                Call(func=LoadName(name='Meta'),
+                     args=[[x, rest], Var()], kwargs=[]),
+            ],
+        )
+        # x and rest are not passthrough, not bound by prefix — rejected
+        self.assertFalse(_detect_tro_clause('Meta', 2, cl))
+
+    def test_compound_arg_with_head_var_allowed_with_prefix(self):
+        """Compound tail arg embedding head vars is allowed when prefix goals exist."""
+        n = Var()
+        n1 = Var()
+        acc = Var()
+
+        class Acc(metaclass=PredicateMeta):
+            _fields = ('n', 'state')
+
+        # Acc(N, State) <- (N > 0, N1 := N-1, Acc(N1, Compound("s", (N, State))))
+        # N and State are head vars; with prefix goals, allow_head_vars=True.
+        cl = Clause(
+            head=Acc(n, acc),
+            body=[
+                Gt(left=n, right=0),
+                Evaluate(left=n1, right=Sub(left=n, right=1)),
+                Call(func=LoadName(name='Acc'),
+                     args=[n1, Compound("s", (n, acc))], kwargs=[]),
+            ],
+        )
+        # n and acc are head vars, n1 is Evaluate-bound; with prefix, allowed.
+        self.assertTrue(_detect_tro_clause('Acc', 2, cl))
+
+    def test_compound_arg_with_head_var_rejected_no_prefix(self):
+        """Compound tail arg embedding head vars is rejected without prefix goals."""
+        x = Var()
+        y = Var()
+
+        class P(metaclass=PredicateMeta):
+            _fields = ('a', 'b')
+
+        cl = Clause(
+            head=P(x, y),
+            body=[
+                Call(func=LoadName(name='P'),
+                     args=[Compound("f", (x,)), y], kwargs=[]),
+            ],
+        )
+        # No prefix goals. x is in Compound, not passthrough (different structure).
+        # x is a head var but allow_head_vars=False without prefix.
+        self.assertFalse(_detect_tro_clause('P', 2, cl))
 
 
 # ── Correctness tests (programmatic) ────────────────────────────────────────
