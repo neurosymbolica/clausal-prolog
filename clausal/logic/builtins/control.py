@@ -1,11 +1,11 @@
-"""Control builtins: TimeGoal/1."""
+"""Control builtins: TimeGoal/1, TimeGoal/2."""
 
 from __future__ import annotations
 
 import time as _time
 import sys as _sys
 
-from clausal.logic.variables import deref
+from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.predicate import is_term_instance, term_field_names
 
@@ -71,4 +71,34 @@ def _time_goal__1(this_generator, parent, goal, trail):
         f"{wall_elapsed:.6f}s wall, {cpu_elapsed:.6f}s CPU",
         file=_sys.stderr,
     )
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("TimeGoal", 2)
+def _time_goal__2(this_generator, parent, goal, elapsed, trail):
+    """TimeGoal(Goal, Elapsed) — run Goal; unify Elapsed with wall-clock seconds.
+
+    Elapsed is unified after each solution of Goal.  If Goal fails, TimeGoal/2
+    fails.  Backtracking into Goal is supported.
+
+    Goal accepts the same forms as TimeGoal/1.
+    """
+    goal_val = deref(goal)
+    dispatch, goal_args = _goal_dispatch_and_args(goal_val)
+    if dispatch is None:
+        yield (parent, DONE)
+        return
+
+    wall_start = _time.perf_counter()
+
+    sg = StepGenerator(dispatch, this_generator, *goal_args, trail)
+    _st = yield (sg, None)
+    while _st is not DONE:
+        elapsed_val = _time.perf_counter() - wall_start
+        save = trail.mark()
+        if unify(elapsed, elapsed_val, trail):
+            yield (parent, None)
+        trail.undo(save)
+        _st = yield (sg, None)
+
     yield (parent, DONE)

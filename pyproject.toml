@@ -22,6 +22,11 @@ Repository = "https://gitlab.com/MikeAmy/clausal"
 
 [project.optional-dependencies]
 spacy = ["spacy>=3.0"]
+ptpython = ["ptpython>=3.0"]
+repl = ["ptpython>=3.0"]
+
+[project.scripts]
+clausal-repl = "clausal.python_repl:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
