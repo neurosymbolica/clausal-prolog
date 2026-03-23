@@ -88,7 +88,8 @@ Notation in signature lines:
 | [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3 |
 | [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
-| [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2 |
+| [Character/String](#characterstring) | CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5 |
+| [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2, Listing/1, PortrayClause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
@@ -1850,6 +1851,107 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 
 ---
 
+## Character/String
+
+Logic-aware character and string predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `AtomConcat(A, B, "hello")` with A and B unbound enumerates all splits, `CharType(C, digit)` enumerates digits.
+
+### `CharType/2`
+```clausal
+# skip
+CharType(?Char, ?Type)
+```
+Character classification as a relation. At least one argument must be bound. Types: `alpha`, `digit`, `alnum`, `space`, `upper`, `lower`, `ascii`, `punct`, `print`, `control`. With Char bound, enumerates matching types. With Type bound, enumerates matching ASCII characters. With both bound, tests membership.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
+### `CharCode/2`
+```clausal
+# skip
+CharCode(?Char, ?Code)
+```
+Bidirectional char ↔ integer code point conversion. `CharCode('A', N)` unifies N with 65. `CharCode(C, 65)` unifies C with `'A'`. Both bound tests equality. Both unbound raises `instantiation_error`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
+### `UpcaseAtom/2`
+```clausal
+# skip
+UpcaseAtom(+Atom, -Upper)
+```
+Unify `Upper` with the uppercase version of `Atom`. First argument must be bound to a string.
+
+---
+
+### `DowncaseAtom/2`
+```clausal
+# skip
+DowncaseAtom(+Atom, -Lower)
+```
+Unify `Lower` with the lowercase version of `Atom`. First argument must be bound to a string.
+
+---
+
+### `AtomLength/2`
+```clausal
+# skip
+AtomLength(+Atom, ?Length)
+```
+Unify `Length` with the length of `Atom`. First argument must be bound.
+
+---
+
+### `AtomChars/2`
+```clausal
+# skip
+AtomChars(?Atom, ?Chars)
+```
+Bidirectional conversion between a string and a list of single-character strings. `AtomChars("hi", L)` unifies L with `['h', 'i']`. `AtomChars(A, ['h', 'i'])` unifies A with `"hi"`.
+
+---
+
+### `AtomCodes/2`
+```clausal
+# skip
+AtomCodes(?Atom, ?Codes)
+```
+Bidirectional conversion between a string and a list of integer code points. `AtomCodes("hi", L)` unifies L with `[104, 105]`.
+
+---
+
+### `AtomConcat/3`
+```clausal
+# skip
+AtomConcat(?A, ?B, ?C)
+```
+String concatenation as a relation. Forward: A and B bound → unify C with `A + B`. Reverse: C bound, A and/or B unbound → enumerate all splits. `AtomConcat(A, B, "abc")` yields 4 solutions: `("","abc")`, `("a","bc")`, `("ab","c")`, `("abc","")`. Optimized paths for prefix/suffix-bound cases.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
+### `SubAtom/5`
+```clausal
+# skip
+SubAtom(+Atom, ?Before, ?Length, ?After, ?Sub)
+```
+Substring relation. Relates `Atom` to its substrings with position information: `Before + Length + After = len(Atom)`, `Sub = Atom[Before:Before+Length]`. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, Length)` pairs.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
 ## I/O
 
 ### `Write/1`
@@ -1940,6 +2042,32 @@ Unify `String` with the `term_str` representation of `Term` (structured, with qu
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`TermToString/2`)
     **Python tests:** `tests/test_io.py`
+
+---
+
+### `Listing/1`
+```clausal
+# skip
+Listing(+Predicate)
+```
+Print all clauses of a predicate to stdout in readable Clausal syntax. Accepts a `PredicateMeta` class or instance. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). Reports "no clauses" for empty predicates and "builtin" for builtin predicates.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`Listing/1`)
+    **Python tests:** `tests/test_listing.py`
+
+---
+
+### `PortrayClause/1`
+```clausal
+# skip
+PortrayClause(+Term)
+```
+Pretty-print a term with indentation for multi-line display using `term_pformat`. Short terms appear on one line; deeply nested terms are expanded with depth indentation.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`PortrayClause/1`)
+    **Python tests:** `tests/test_listing.py`
 
 ---
 

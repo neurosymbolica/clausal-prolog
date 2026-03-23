@@ -100,18 +100,32 @@ All implemented as compiler special forms. 71 tests. Docs at `docs/coroutining.m
 
 ---
 
-### Phase 2 — Formatted Output & Char Utilities
+### Phase 2 — Character/String Utilities & Clause Inspection ✓
 
-**Priority: Medium** — Standard Prolog formatted I/O for `.clausal` files.
+**Status: COMPLETE** — Logic-aware string predicates + runtime introspection.
+
+Format/2,3 intentionally omitted — Python f-strings and `str.format()` cover
+formatted output. These predicates exist because they participate in
+unification and backtracking (e.g., `AtomConcat(A, B, "hello")` enumerates
+splits, `CharType(C, digit)` enumerates digits) — things Python string
+methods can't do.
 
 | Item | Description |
 |---|---|
-| `Format/2,3` | `~a`, `~w`, `~d`, `~f`, `~n`, `~*c`, `~t\|~N` column fill. |
-| `PortrayClause/1` | Pretty-print a clause. Leverage `tools/visualize.py`. |
+| `CharType/2` | Character classification: alpha, digit, space, etc. Multi-modal. |
+| `CharCode/2` | Bidirectional char ↔ code point. |
+| `UpcaseAtom/2`, `DowncaseAtom/2` | Case conversion. |
+| `AtomLength/2` | String length. |
+| `AtomChars/2`, `AtomCodes/2` | Bidirectional atom ↔ char/code list conversion. |
+| `AtomConcat/3` | String concatenation as a relation (reverse enumerates splits). |
+| `SubAtom/5` | Substring extraction — 5-arg multi-modal relation. |
 | `Listing/1` | List all clauses for a predicate from `pred_cls._clauses`. |
-| `CharType/2` | Character classification: alpha, digit, space, etc. |
+| `PortrayClause/1` | Pretty-print a term with indentation via `term_pformat`. |
 
-**Detailed plan:** TBD
+All implemented as `@_builtin` predicates in `chars.py` and `io.py`. 73 tests
+across `tests/test_chars.py` and `tests/test_listing.py`.
+
+**Detailed plan:** [`STD_MODULES_PHASE2.md`](STD_MODULES_PHASE2.md)
 
 ---
 
