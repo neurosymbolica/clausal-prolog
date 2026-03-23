@@ -4016,6 +4016,286 @@ def _build_list_dispatch_guard(
     ]
 
 
+# ── Tail Recursion Optimization (TRO) ─────────────────────────────────────────
+#
+# When the last goal in a clause body is a self-recursive Call preceded only by
+# deterministic goals (at most one solution, no StepGenerator), the recursive
+# call can be replaced by argument reassignment + loop restart.  This avoids
+# allocating a new StepGenerator + generator object per recursion depth.
+#
+# The generated pattern wraps the clause match arms in ``while True:`` and uses
+# a ``_tro`` flag + ``continue`` to restart when a TRO-eligible clause fires.
+
+
+def _is_deterministic_goal(goal: Any) -> bool:
+    """Return True if *goal* compiles to at most one solution (no StepGenerator).
+
+    Deterministic goals produce zero or one continuations and never create a
+    ``StepGenerator`` child.  They are safe to precede a TRO tail call.
+    """
+    goal = deref(goal)
+
+    if goal is True or goal is False:
+        return True
+
+    # PyThunk as goal (side effect) is deterministic.
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    if isinstance(goal, PyThunk):
+        return True
+
+    match goal:
+        # Unification / arithmetic / comparison — always deterministic
+        case Unify() | Evaluate() | DoesNotUnify():
+            return True
+        case StructuralEq() | StructuralNeq():
+            return True
+        case Lt() | LtE() | Gt() | GtE():
+            return True
+        case In() | NotIn():
+            return True
+        # NAF — deterministic (succeeds or fails once)
+        case Not():
+            return True
+        # Conjunction — deterministic if both sides are
+        case And(left=l, right=r):
+            return _is_deterministic_goal(l) and _is_deterministic_goal(r)
+        # IfExpr — committed choice, one branch
+        case IfExpr():
+            return True
+        # Once/FindAll/BagOf/SetOf — always produce exactly one result
+        case Call(func=LoadName(name=name)) if name in (
+            "Once", "FindAll", "BagOf", "SetOf",
+            "throw", "halt",
+        ):
+            return True
+        case _:
+            return False
+
+
+def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
+    """Return True if *clause* has a deterministic-prefix tail-recursive call.
+
+    The last goal must be a ``Call`` to the same ``functor`` with ``arity``
+    positional arguments, all preceding goals must be deterministic, and
+    the tail call arguments must be TRO-safe.
+
+    A tail call argument is TRO-safe when it will be a concrete value (not an
+    unbound Var referencing a head-pattern variable) at the point of capture.
+    This is true for:
+
+    - Constants (int, str, list literals, etc.)
+    - Variables that were bound by an ``Evaluate`` in a prefix goal
+    - Variables that appear at the **same position** in both the head and the
+      tail call (passthrough — the caller's original arg flows through
+      unchanged).
+
+    Variables introduced by head pattern decomposition (e.g. TAIL from
+    ``[HEAD, *TAIL]``) are NOT safe because the corresponding head argument
+    might be an unbound output Var from the caller.  After ``trail.undo``,
+    the captured value would be an internal Var disconnected from the caller.
+    """
+    if not clause.body:
+        return False
+
+    last_goal = deref(clause.body[-1])
+    match last_goal:
+        case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
+            if fname != functor:
+                return False
+            if len(call_args) + len(call_kwargs) != arity:
+                return False
+        case _:
+            return False
+
+    # All preceding goals must be deterministic.
+    if not all(_is_deterministic_goal(g) for g in clause.body[:-1]):
+        return False
+
+    # Safety check: every variable in the tail call must be "grounded" by
+    # the prefix goals, be a passthrough from the head, or come from head
+    # list decomposition with at least one deterministic prefix goal
+    # (implying the input is likely ground).
+    if not clause.body[:-1]:
+        # No prefix goals: tail call args that are head-decomposition vars
+        # may be unbound.  Only allow if ALL tail call args are passthrough.
+        return _tro_args_safe(clause.head, [], call_args, arity)
+    return _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
+                          allow_head_vars=True)
+
+
+def _tro_args_safe(
+    head: Any,
+    prefix_goals: list,
+    tail_args: list,
+    arity: int,
+    allow_head_vars: bool = False,
+) -> bool:
+    """Return True if all tail call arguments are TRO-safe.
+
+    Safe means the deref'd value at capture time will be concrete (not a Var
+    that gets disconnected by ``trail.undo``).
+
+    Safe categories:
+    1. Constants (not a Var)
+    2. Variables bound by ``Evaluate`` or ``Unify`` in prefix goals
+    3. Variables that are passthrough — same Var appears at the same position
+       in the head (the raw ``arg_i`` value, not a decomposed component)
+    4. (When *allow_head_vars* is True) Any head variable — including those
+       from list/compound decomposition.  This is safe when the clause has
+       deterministic prefix goals, implying the head arg was ground.
+
+    When *allow_head_vars* is False (no prefix goals), only categories 1-3
+    are accepted.  This prevents TRO on clauses like
+    ``MyPrefix([H, *T], [H, *R]) <- MyPrefix(T, R)`` where the first arg
+    might be an unbound output Var.
+    """
+    # Collect Var IDs that are bound by Evaluate/Unify LHS in prefix goals.
+    bound_var_ids: set[int] = set()
+    for g in prefix_goals:
+        g = deref(g)
+        match g:
+            case Evaluate(left=lhs):
+                if is_var(lhs):
+                    bound_var_ids.add(lhs._id)
+            case Unify(left=lhs, right=rhs):
+                if is_var(lhs):
+                    bound_var_ids.add(lhs._id)
+                if is_var(rhs):
+                    bound_var_ids.add(rhs._id)
+            case And(left=l, right=r):
+                _collect_bound_vars(l, bound_var_ids)
+                _collect_bound_vars(r, bound_var_ids)
+
+    # Collect head arg Var IDs at each position (direct, not decomposed).
+    head_passthrough_ids: set[int] = set()
+    # Also collect ALL Var IDs that appear anywhere in the head.
+    all_head_var_ids: set[int] = set()
+    if is_term_instance(head):
+        fields = list(term_field_names(head))
+        for i, fname in enumerate(fields):
+            head_arg = getattr(head, fname)
+            _collect_var_ids(head_arg, all_head_var_ids)
+            head_arg = deref(head_arg)
+            if is_var(head_arg) and i < len(tail_args):
+                tail_arg = deref(tail_args[i])
+                if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                    head_passthrough_ids.add(head_arg._id)
+    elif isinstance(head, Compound):
+        for i, head_arg in enumerate(head.args):
+            _collect_var_ids(head_arg, all_head_var_ids)
+            head_arg = deref(head_arg)
+            if is_var(head_arg) and i < len(tail_args):
+                tail_arg = deref(tail_args[i])
+                if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                    head_passthrough_ids.add(head_arg._id)
+
+    # Check each tail call argument.
+    for arg in tail_args:
+        arg = deref(arg)
+        if not is_var(arg):
+            continue  # constant — always safe
+        vid = arg._id
+        if vid in bound_var_ids:
+            continue  # bound by prefix goal — safe
+        if vid in head_passthrough_ids:
+            continue  # passthrough from head — safe
+        if allow_head_vars and vid in all_head_var_ids:
+            continue  # head variable allowed (prefix goals imply ground input)
+        return False
+    return True
+
+
+def _collect_var_ids(term: Any, ids: set[int]) -> None:
+    """Recursively collect all Var IDs from a term."""
+    term = deref(term)
+    if is_var(term):
+        ids.add(term._id)
+    elif isinstance(term, (list, tuple)):
+        for item in term:
+            _collect_var_ids(item, ids)
+    elif is_term_instance(term):
+        for fname in term_field_names(term):
+            _collect_var_ids(getattr(term, fname), ids)
+    elif isinstance(term, Compound):
+        for a in term.args:
+            _collect_var_ids(a, ids)
+    # Check for StarUnpack-like structures
+    elif hasattr(term, 'value'):
+        _collect_var_ids(term.value, ids)
+
+
+def _collect_bound_vars(goal: Any, bound_ids: set[int]) -> None:
+    """Collect Var IDs bound by Evaluate/Unify in *goal* (recursive for And)."""
+    goal = deref(goal)
+    match goal:
+        case Evaluate(left=lhs):
+            if is_var(lhs):
+                bound_ids.add(lhs._id)
+        case Unify(left=lhs, right=rhs):
+            if is_var(lhs):
+                bound_ids.add(lhs._id)
+            if is_var(rhs):
+                bound_ids.add(rhs._id)
+        case And(left=l, right=r):
+            _collect_bound_vars(l, bound_ids)
+            _collect_bound_vars(r, bound_ids)
+
+
+def _compile_tro_tail(
+    tail_call: Call,
+    arity: int,
+    var_context: dict[int, str],
+    db: Database,
+    trail_name: str,
+) -> list[ast.stmt]:
+    """Compile TRO tail-call: snapshot new args, set ``_tro = True``.
+
+    The caller (``compile_head_to_match_case``) wraps this in
+    ``try/finally: trail.undo(_mark)`` so trail cleanup is automatic.
+
+    Emits::
+
+        _tro_arg0 = deref(new_a0_expr)
+        _tro_arg1 = deref(new_a1_expr)
+        ...
+        _tro = True
+    """
+    from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: PLC0415
+
+    call_args = list(tail_call.args)
+    call_kwargs = tail_call.kwargs or []
+    n_pos = len(call_args)
+
+    ordered_args: list = list(call_args)
+    if call_kwargs:
+        fname = tail_call.func.name
+        sig = db.signature_for(fname, arity)
+        if sig is None:
+            raise RuntimeError(
+                f"TRO: no signature for {fname}/{arity}"
+            )
+        kw_dict = {kw.name: kw.value for kw in call_kwargs if isinstance(kw, KWNode)}
+        for param_name in sig[n_pos:]:
+            ordered_args.append(kw_dict[param_name])
+
+    # Hoist any lambda arguments (reuse existing helper).
+    ordered_args, lambda_defs = _hoist_lambda_args(
+        ordered_args, var_context, db, trail_name,
+    )
+
+    stmts: list[ast.stmt] = list(lambda_defs)
+
+    # Snapshot each new arg value via deref before trail.undo runs.
+    for i, arg in enumerate(ordered_args):
+        arg_expr = term_to_ast_expr(arg, var_context, eval_arith=False)
+        tro_name = f"_tro_arg{i}"
+        stmts.append(_assign(tro_name, _call(_name("deref"), arg_expr)))
+
+    # Set _tro flag.
+    stmts.append(_assign("_tro", ast.Constant(True)))
+    return stmts
+
+
 # ── compile_predicate_trampoline ───────────────────────────────────────────────
 
 
@@ -4026,6 +4306,7 @@ def _build_predicate_trampoline_funcdef(
     db: Database,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
     emit_done: bool = True,
+    tro_indices: frozenset[int] | None = None,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
@@ -4035,56 +4316,104 @@ def _build_predicate_trampoline_funcdef(
     When *emit_done* is False the trailing ``yield (parent, _DONE)`` is
     omitted — used for indexed-dispatch sub-functions that are consumed via
     ``yield from`` by an outer wrapper which emits its own DONE.
+
+    When *tro_indices* is non-empty, tail-recursion optimization is applied:
+    the clause match arms are wrapped in ``while True:`` and TRO-eligible
+    clauses emit argument reassignment + ``continue`` instead of creating a
+    child ``StepGenerator``.
     """
+    use_tro = bool(tro_indices)
     arg_names = [f"arg{i}" for i in range(arity)]
     params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
 
-    all_stmts: list[ast.stmt] = []
+    # Statements that go inside the TRO while-loop (or directly in the func body).
+    loop_stmts: list[ast.stmt] = []
 
     if clauses and arity > 0:
         # Deref each argument once into a local before the clause match arms.
-        # All N clauses share the same deref'd locals — no need to re-deref per clause.
         deref_names = [f"_d{i}" for i in range(arity)]
         for i, arg in enumerate(arg_names):
-            all_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
+            loop_stmts.append(_assign(deref_names[i], _call(_name("deref"), _name(arg))))
         subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
     else:
-        # arity==0 or no clauses: subject is still needed for the match shape
         subject = ast.Tuple(
             elts=[_call(_name("deref"), _name(n)) for n in arg_names],
             ctx=ast.Load(),
         )
 
+    if use_tro:
+        # Initialise _tro flag at the top of each iteration.
+        loop_stmts.append(_assign("_tro", ast.Constant(False)))
+
     # Phase 5: structural dispatch for list-discriminating predicates.
-    # When all clauses differ only in nil/cons/var at one argument position,
-    # wrap them in isinstance/is_var guards instead of a flat clause sequence.
     dispatch_pos = (
         _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
     )
     if dispatch_pos is not None:
-        all_stmts.extend(
+        loop_stmts.extend(
             _build_list_dispatch_guard(
                 clauses, dispatch_pos, arity, subject, body_compiler
             )
         )
     else:
-        for clause in clauses:
+        for ci, clause in enumerate(clauses):
             var_context: dict[int, str] = {}
             _head_arg_patterns(clause.head, var_context, arity)
-            body_stmts = body_compiler(clause, var_context)
+
+            if use_tro and ci in tro_indices:
+                # TRO clause: compile prefix goals normally, replace tail call.
+                tro_body_stmts = _compile_tro_body(
+                    clause, functor, arity, db, var_context, "trail",
+                )
+                body_stmts = tro_body_stmts
+            else:
+                body_stmts = body_compiler(clause, var_context)
+
             case_arm = compile_head_to_match_case(
                 head=clause.head,
                 body_stmts=body_stmts,
                 var_context=var_context,
                 arity=arity,
             )
-            all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+            loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    if use_tro:
+        # After all match arms: if _tro was set, reassign args and continue.
+        # Build: if _tro: arg0 = _tro_arg0; ...; continue
+        reassign_stmts: list[ast.stmt] = []
+        for i in range(arity):
+            reassign_stmts.append(
+                _assign(f"arg{i}", _name(f"_tro_arg{i}"))
+            )
+        reassign_stmts.append(ast.Continue())
+        loop_stmts.append(
+            ast.If(
+                test=_name("_tro"),
+                body=reassign_stmts,
+                orelse=[],
+            )
+        )
+        # No TRO fired — break out of the while True loop.
+        loop_stmts.append(ast.Break())
+
+    # Build the function body.
+    all_stmts: list[ast.stmt]
+    if use_tro:
+        # Wrap loop_stmts in while True: ...
+        all_stmts = [
+            ast.While(
+                test=ast.Constant(value=True),
+                body=loop_stmts,
+                orelse=[],
+            )
+        ]
+    else:
+        all_stmts = loop_stmts
 
     if emit_done:
         all_stmts.append(_yield_step_stmt(_name("_tramp_parent"), _name("_DONE")))
 
     # A generator function needs at least one yield or a return+yield pair.
-    # When emit_done is False and clauses is empty, add return+yield.
     if not all_stmts:
         all_stmts = [
             ast.Return(value=ast.Constant(value=None)),
@@ -4111,6 +4440,45 @@ def _build_predicate_trampoline_funcdef(
     )
     ast.fix_missing_locations(func_def)
     return func_def
+
+
+def _compile_tro_body(
+    clause: Clause,
+    functor: str,
+    arity: int,
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+) -> list[ast.stmt]:
+    """Compile a TRO-eligible clause body.
+
+    All goals except the last are compiled normally (right-to-left continuation
+    building).  The last goal (the tail-recursive call) is replaced by
+    ``_compile_tro_tail`` which snapshots new arg values and sets ``_tro = True``.
+
+    The continuation (k_stmts) for the prefix goals is the TRO tail code.
+    """
+    goals = clause.body
+    if not goals:
+        return []
+
+    prefix_goals = goals[:-1]
+    tail_call = deref(goals[-1])
+
+    # Pre-allocate body-only Vars FIRST so _compile_tro_tail and
+    # compile_goal_trampoline find all Var names in var_context.
+    alloc_stmts = _preallocate_body_vars(goals, var_context)
+
+    # The innermost continuation is the TRO tail code (instead of yield solution).
+    k = _compile_tro_tail(tail_call, arity, var_context, db, trail_name)
+
+    # Build prefix goals right-to-left, wrapping around the TRO tail.
+    for goal in reversed(prefix_goals):
+        k = compile_goal_trampoline(
+            goal, db, var_context, trail_name, k,
+            "this_generator", "_tramp_parent",
+        )
+    return alloc_stmts + k
 
 
 def compile_predicate_trampoline(
@@ -4473,8 +4841,24 @@ def compile_predicate_trampoline(
             # below the indexing threshold).
             if pred_cls is not None:
                 pred_cls._index_plans = {}
+
+            # TRO: detect tail-recursive clauses with deterministic prefixes.
+            # Disabled for tabled predicates (SLG has its own suspension protocol).
+            _is_tabled = (
+                db is not None and db.is_tabled(functor, arity)
+            )
+            tro_indices: frozenset[int] | None = None
+            if not _is_tabled:
+                _tro_set = frozenset(
+                    i for i, cl in enumerate(clauses)
+                    if _detect_tro_clause(functor, arity, cl)
+                )
+                if _tro_set:
+                    tro_indices = _tro_set
+
             func_def = _build_predicate_trampoline_funcdef(
                 functor, arity, clauses, _effective_db, body_compiler,
+                tro_indices=tro_indices,
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)

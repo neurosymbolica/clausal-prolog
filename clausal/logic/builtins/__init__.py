@@ -57,7 +57,7 @@ from clausal.logic.builtins import higher_order    # noqa: F401
 from clausal.logic.builtins import io              # noqa: F401
 from clausal.logic.builtins import dcg             # noqa: F401
 from clausal.logic.builtins import dict_set        # noqa: F401
-from clausal.logic.builtins import control         # noqa: F401
+# from clausal.logic.builtins import control         # noqa: F401  # file not yet created
 
 # Import units_constraint to register HasUnits/2 before _build_all_builtin_classes runs.
 import clausal.logic.units_constraint               # noqa: F401
