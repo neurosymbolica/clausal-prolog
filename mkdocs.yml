@@ -60,6 +60,9 @@ nav:
     - I/O: io.md
     - Logging: logging.md
   - Standard Library:
+    - Random: random.md
+    - JSON: json.md
+    - CSV: csv.md
     - Regex: regex.md
     - Date & Time: date_time.md
     - YAML: yaml.md

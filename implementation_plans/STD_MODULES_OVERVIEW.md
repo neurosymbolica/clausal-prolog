@@ -129,17 +129,17 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 
 ---
 
-### Phase 3 — Random & Data Formats
+### Phase 3 — Random & Data Formats ✓
 
-**Priority: Medium** — Batteries-included utilities.
+**Status: COMPLETE** — Batteries-included utilities.
 
 | Item | Description |
 |---|---|
-| `random` module | `Maybe/0`, `Random/1`, `RandomFloat/2`, `RandomInteger/3`, `RandomMember/2`, `RandomPermutation/2`, `SetRandom/1` (seed). Wrap Python `random`. |
-| `json` module | `JsonParse/2`, `JsonGenerate/2`. Map JSON objects ↔ DictTerm, arrays ↔ lists. Wrap `json`. |
-| `csv` module | `CsvRead/2,3`, `CsvWrite/2,3`. Wrap Python `csv`. |
+| `py.random` module | `Maybe/0,1`, `Random/1`, `RandomFloat/3`, `RandomInteger/3`, `RandomMember/2`, `RandomPermutation/2`, `RandomSample/3`, `RandomSeed/1`. Wrap Python `random`. |
+| `py.json` module | `Parse/2`, `Generate/2`, `PrettyGenerate/2`, `Get/3`, `ReadFile/2`, `WriteFile/2`. JSON objects ↔ DictTerm. Unprefixed — module namespace provides context. |
+| `py.csv` module | `Parse/2`, `ParseRow/2`, `ParseRecords/3`, `Generate/2`, `GenerateRecords/3`, `ReadFile/2`, `ReadRecords/2`, `WriteFile/2`. Unprefixed — module namespace provides context. |
 
-**Detailed plan:** TBD
+**Detailed plan:** [`STD_MODULES_PHASE3.md`](STD_MODULES_PHASE3.md)
 
 ---
 

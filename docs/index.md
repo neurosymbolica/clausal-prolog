@@ -130,6 +130,9 @@ for the full feature set.
 | [Logging](logging.md) | Structured logging predicates |
 | [UUID](uuid.md) | UUID generation and inspection |
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
+| [Random](random.md) | Random number generation, selection, seeding |
+| [JSON](json.md) | JSON parsing, generation, DictTerm integration |
+| [CSV](csv.md) | CSV parsing, generation, DictTerm records |
 | [SQLite](sqlite.md) | SQLite database predicates |
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
 | [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
