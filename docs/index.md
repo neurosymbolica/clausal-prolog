@@ -9,9 +9,9 @@ Clausal brings Prolog-style logic programming to Python — not as a front-end t
 
 ```python
 import clausal
-from fibonacci import fib
+from fibonacci import Fib
 
-for solution in clausal.query(fib(10, N)):
+for solution in clausal.query(Fib(10, N)):
     print(solution[N])  # 55
 ```
 
@@ -34,16 +34,16 @@ A `.clausal` file defines predicates using Python syntax with a trailing comma:
 # skip
 # fibonacci.clausal
 
--table(fib/2),
+-table(Fib/2),
 
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
+Fib(0, 0),
+Fib(1, 1),
+Fib(N, F) <- (
     N > 1,
     N1 := N - 1,
     N2 := N - 2,
-    fib(N1, F1),
-    fib(N2, F2),
+    Fib(N1, F1),
+    Fib(N2, F2),
     F := F1 + F2
 )
 ```
@@ -52,9 +52,9 @@ Call it from Python:
 
 ```python
 import clausal
-from fibonacci import fib
+from fibonacci import Fib
 
-results = list(clausal.query(fib(10, F)))
+results = list(clausal.query(Fib(10, F)))
 # F binds to 55
 ```
 

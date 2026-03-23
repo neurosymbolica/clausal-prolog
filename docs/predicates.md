@@ -51,7 +51,7 @@ In clausal, every predicate **is** a Python class. The class serves simultaneous
 - a **clause store** — `fib._clauses` holds the list of `Clause` objects
 - a **dispatch point** — `fib._get_dispatch()` returns the compiled search function
 
-This unification eliminates the split between "functor singleton in module globals" and "predicate table in a central database" that existed in earlier versions. `from fibonacci import fib` brings both the term constructor and the dispatch machinery into the importing module.
+This unification eliminates the split between "functor singleton in module globals" and "predicate table in a central database" that existed in earlier versions. `from fibonacci import Fib` brings both the term constructor and the dispatch machinery into the importing module.
 
 ---
 
@@ -169,7 +169,14 @@ RuntimeError: Predicate fib/2 is locked. Use dynamic() to allow runtime assertio
 
 Locking prevents one module from silently modifying another module's predicates through an import — a source of hard-to-trace bugs in logic programming where predicate semantics change mid-search.
 
-The `dynamic()` directive (planned) will unlock a predicate, signalling that it is intended to be modified at runtime. Until then, unlock programmatically with `pred_cls._unlock()`.
+The `-dynamic` directive unlocks a predicate, signalling that it is intended to be modified at runtime:
+
+```clausal
+# skip
+-dynamic(Color/2),
+```
+
+See [Directives](directives.md) for details. To unlock programmatically, use `pred_cls._unlock()`.
 
 ---
 

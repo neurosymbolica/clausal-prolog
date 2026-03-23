@@ -7,14 +7,14 @@ Clausal predicate files use the `.clausal` extension. Importing one with a norma
 ```python
 import clausal  # installs the import hook as a side effect
 
-from fibonacci import fib         # loads fibonacci.clausal
+from fibonacci import Fib         # loads fibonacci.clausal
 from edge_graph import edge, reach
 ```
 
 After the import:
-- `fib` is a `PredicateMeta` class with all clauses compiled and dispatch installed
-- `fib(7)` creates a term; `fib._get_dispatch()` returns the compiled search function
-- `from fibonacci import fib` in another module brings both the term constructor and dispatch together — no separate wiring step needed
+- `Fib` is a `PredicateMeta` class with all clauses compiled and dispatch installed
+- `Fib(7)` creates a term; `Fib._get_dispatch()` returns the compiled search function
+- `from fibonacci import Fib` in another module brings both the term constructor and dispatch together — no separate wiring step needed
 
 On the first import, the source is parsed, AST-transformed, and compiled to Python bytecode. The bytecode is cached in `__pycache__/` as a `.pyc` file. Subsequent imports of the same file load the cached bytecode directly, skipping parsing and transformation entirely. See [caching.md](caching.md) for details.
 
@@ -181,9 +181,9 @@ Only simple dotted name chains are supported. Computed attribute access or metho
 
 The original Python-side import mechanism still works unchanged:
 
-1. `from fibonacci import fib` brings the `fib` PredicateMeta class into the importing module's globals.
-2. When the compiler processes that module, it finds `fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
-3. The compiled call resolves `fib._get_dispatch()` by name at call time.
+1. `from fibonacci import Fib` brings the `Fib` PredicateMeta class into the importing module's globals.
+2. When the compiler processes that module, it finds `Fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
+3. The compiled call resolves `Fib._get_dispatch()` by name at call time.
 
 ### Why not Prolog-style modules
 

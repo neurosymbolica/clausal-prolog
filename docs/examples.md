@@ -42,9 +42,9 @@ Two sorting algorithms:
 
 ### nqueens.clausal
 
-N-Queens puzzle using CLP(FD) constraints: `InDomain`, `AllDifferent`, and diagonal constraint checking.
+N-Queens puzzle using permutation-based search: `Numlist`, `Permutation`, `Safe/1`, and `NoAttack/3` diagonal constraint checking.
 
-*See: [CLP(FD) constraints](constraints.md)*
+*See: [List builtins](builtins.md#lists)*
 
 ### hanoi.clausal
 
@@ -84,9 +84,9 @@ Features: nested star-list patterns (`[[HEAD, *TAIL], *ROWS]`), builtin predicat
 
 ### map_coloring.clausal
 
-Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `Dif/2` (disequality constraints).
+Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `ForAll/2` and `is not` (structural disequality).
 
-*See: [Dif/2](constraints.md#dif2)*
+*See: [Meta-predicates](meta_predicates.md)*
 
 ---
 
@@ -201,8 +201,9 @@ DCG state threading patterns: counter (`inc`, `count3`), tree leaf counting (`co
 Add test predicates to any example file, then run with pytest:
 
 ```clausal
+# skip
 # In your .clausal file
-test("fib 10") <- fib(10, 55)
+Test("fib 10") <- Fib(10, 55)
 ```
 
 Or query from Python:
@@ -211,6 +212,6 @@ Or query from Python:
 import clausal
 from clausal.examples import fibonacci
 
-for s in clausal.query(fibonacci.fib(10, F)):
+for s in clausal.query(fibonacci.Fib(10, F)):
     print(s[F])  # 55
 ```
