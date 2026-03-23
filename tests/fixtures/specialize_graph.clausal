@@ -1,0 +1,44 @@
+# Test fixture: specialize Solve with graph program.
+#
+# Uses -specialize directive to produce SolveGraph — a specialized vanilla
+# MI with MI overhead removed.
+
+-import_from(clausal.examples.metainterpreters, [Solve])
+
+# ── Object Program ────────────────────────────────────────────────────────────
+
+GraphProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["edge", "a", "b"], []],
+        [["edge", "b", "c"], []],
+        [["edge", "b", "d"], []],
+        [["path", X, Y], [["edge", X, Y]]],
+        [["path", X, Y], [["edge", X, Z], ["path", Z, Y]]]
+    ]
+)
+
+# ── Specialization ────────────────────────────────────────────────────────────
+
+-specialize(Solve, GraphProgram, alias=SolveGraph)
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+Test("specialized edge(a,b)") <- (
+    SolveGraph([["edge", "a", "b"]])
+)
+
+Test("specialized path(a,b) direct") <- (
+    SolveGraph([["path", "a", "b"]])
+)
+
+Test("specialized path(a,c) transitive") <- (
+    SolveGraph([["path", "a", "c"]])
+)
+
+Test("specialized path(a,d) transitive") <- (
+    SolveGraph([["path", "a", "d"]])
+)
+
+Test("specialized no path(c,a)") <- (
+    not SolveGraph([["path", "c", "a"]])
+)

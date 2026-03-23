@@ -14,6 +14,7 @@ from clausal.pythonic_ast.nodes import (
     ModuleDeclaration as ModuleDeclItem,
     PrivateDeclaration as PrivateDeclItem,
     Predicate as PredicateItem,
+    SpecializeDirective as SpecializeItem,
 )
 
 load = Load()
@@ -2366,6 +2367,8 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_import_from_directive(args, expr_stmt)
         if name == "import_module":
             return transformer._handle_import_module_directive(args, expr_stmt)
+        if name == "specialize":
+            return transformer._handle_specialize_directive(args, expr_stmt)
         if name == "edcg_acc":
             return transformer._handle_edcg_acc_directive(args, expr_stmt)
         if name == "edcg_pass":
@@ -2376,7 +2379,7 @@ class EmbedTransformer(NodeTransformer):
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
-            f"-edcg_acc, -edcg_pass, -edcg_pred)"
+            f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -2624,6 +2627,69 @@ class EmbedTransformer(NodeTransformer):
                 expr_stmt,
             )
         fix_missing_locations(stmt)
+        return stmt
+
+    # ── Meta-interpreter specialization directive handler ─────────────────
+
+    def _handle_specialize_directive(transformer, args, expr_stmt):
+        """Process ``-specialize(MI, Source, alias=Name)`` directive.
+
+        Requests specialization of meta-interpreter MI with respect to
+        Source (a predicate name providing the object program), producing
+        a new predicate called Name.  The MI pattern is auto-detected by
+        ``analyze_mi()``.
+        """
+        if len(args) < 2:
+            raise SyntaxError(
+                "-specialize requires at least 2 arguments: "
+                "-specialize(MI, Source, alias=NewName)"
+            )
+        # First arg: MI predicate name.
+        mi_arg = args[0]
+        if not isinstance(mi_arg, Name):
+            raise SyntaxError(
+                f"-specialize: first argument must be a predicate name, "
+                f"got {dump(mi_arg)}"
+            )
+        mi_name = mi_arg.id
+
+        # Second arg: source program predicate name.
+        source_arg = args[1]
+        if not isinstance(source_arg, Name):
+            raise SyntaxError(
+                f"-specialize: second argument must be a predicate name, "
+                f"got {dump(source_arg)}"
+            )
+        source_program = source_arg.id
+
+        # Keyword arg: alias=NewName.
+        new_name = None
+        call_node = expr_stmt.value.operand
+        for kw in getattr(call_node, 'keywords', []):
+            if kw.arg == 'alias' and isinstance(kw.value, Name):
+                new_name = kw.value.id
+            elif kw.arg == 'alias' and isinstance(kw.value, Constant):
+                new_name = kw.value.value
+
+        # Also check positional args for a third Name argument.
+        if new_name is None and len(args) >= 3 and isinstance(args[2], Name):
+            new_name = args[2].id
+
+        if new_name is None:
+            raise SyntaxError(
+                "-specialize requires alias=NewName keyword argument: "
+                "-specialize(MI, Source, alias=NewName)"
+            )
+
+        transformer._module_items.append(
+            SpecializeItem(
+                mi_name=mi_name,
+                source_program=source_program,
+                new_name=new_name,
+            )
+        )
+        # No runtime code needed — handled in compile_module pipeline.
+        stmt = copy_location(Pass(), expr_stmt)
         return stmt
 
     # ── EDCG directive handlers ─────────────────────────────────────────────

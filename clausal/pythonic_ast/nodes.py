@@ -1002,6 +1002,13 @@ class PrivateDeclaration(Node):
     items: list = field(default_factory=list)  # same format as ModuleDeclaration.exports
 
 @node_class
+class SpecializeDirective(Node):
+    """Module-level -specialize(MI, Source, as=Name) directive."""
+    mi_name: str = ""           # meta-interpreter predicate name
+    source_program: str = ""    # name of predicate/variable providing the object program
+    new_name: str = ""          # name for the specialized predicate
+
+@node_class
 class EdcgAccDecl(Node):
     """EDCG accumulator declaration: -edcg_acc(name, Val, In, Out, Joiner)."""
     acc_name: str = ""

@@ -1,0 +1,33 @@
+# Test fixture: specialize SolveCount with natnum program.
+#
+# Uses -specialize directive to produce SolveCountNatnum — a specialized
+# counting MI with MI overhead removed.  The MI pattern is auto-detected.
+
+-import_from(clausal.examples.metainterpreters, [SolveCount])
+
+# ── Object Program ────────────────────────────────────────────────────────────
+
+NatnumProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", X]], [["natnum", X]]]
+    ]
+)
+
+# ── Specialization ────────────────────────────────────────────────────────────
+
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+Test("specialized count natnum(0) = 1") <- (
+    SolveCountNatnum([["natnum", 0]], 1)
+)
+
+Test("specialized count natnum(s(0)) = 2") <- (
+    SolveCountNatnum([["natnum", ["s", 0]]], 2)
+)
+
+Test("specialized count natnum(s(s(0))) = 3") <- (
+    SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
+)

@@ -227,6 +227,7 @@ def specialize_mi(
     object_program: list,
     new_name: str,
     module_dict: dict | None = None,
+    pred_cls: PredicateMeta | None = None,
 ) -> PredicateMeta:
     """Specialize an MI with respect to an object program.
 
@@ -243,6 +244,9 @@ def specialize_mi(
     module_dict : dict, optional
         Module dictionary for predicate resolution.  If provided, the new
         predicate class is installed here.
+    pred_cls : PredicateMeta, optional
+        Pre-existing predicate class to use instead of creating a new one.
+        Used by the pipeline to reuse a class pre-registered at Step 1c.
 
     Returns
     -------
@@ -250,7 +254,8 @@ def specialize_mi(
         The specialized predicate class with clauses installed and compiled.
     """
     fields = _specialized_fields(pattern)
-    pred_cls = make_predicate(new_name, fields)
+    if pred_cls is None:
+        pred_cls = make_predicate(new_name, fields)
 
     clauses = _unfold(pattern, object_program, pred_cls)
 

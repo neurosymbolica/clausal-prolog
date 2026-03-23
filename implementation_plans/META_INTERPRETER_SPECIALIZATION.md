@@ -83,51 +83,24 @@ full speed.
 
 ### The user-facing API
 
-Two directives, used together:
+A single directive:
 
 ```clausal
-# 1. Declare that SolveCount is a meta-interpreter.
-#    Arg 2 (0-indexed: 1) carries the object program (static).
-#    Arg 1 (0-indexed: 0) carries the goal list (dynamic).
--metainterpreter(SolveCount/3, program=1)
-
-# 2. Request specialization for a specific object program.
--specialize(SolveCount, NatnumProgram, as=SolveCountNatnum)
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
 ```
 
-The `-metainterpreter` directive declares which argument is the "program"
-(static data to specialize on) and which is the "goal" (dynamic query).
-Extra arguments (count, depth, tree) are implicitly dynamic.
-
 The `-specialize` directive triggers the transformation.  It names:
-- the MI predicate
-- a nullary predicate that returns the object program (or a ground list literal)
-- the name for the specialized predicate
+- the MI predicate (auto-detected by `analyze_mi()` — no separate
+  `-metainterpreter` declaration needed)
+- a nullary predicate that returns the object program
+- the `alias` for the specialized predicate
+
+The MI pattern (goal-list arg, program arg, extra args, recursive style)
+is recognized automatically from the clause structure: `MatchClause`,
+`Append`, `[GOAL, *GOALS]` pattern, and recursive self-calls.
 
 After specialization, user code calls `SolveCountNatnum` directly — no
 program argument, no interpretation overhead.
-
-### Why a two-directive design
-
-Separating declaration from use allows:
-
-1. **One MI, many specializations** — `SolveCount` can be specialized
-   for natnum, graph, or any other program independently.
-2. **MI defined in a library module** — the `-metainterpreter` directive
-   lives with the MI definition; `-specialize` lives in the user module.
-3. **Explicit naming** — the user controls what the specialized predicate
-   is called, avoiding magic names.
-
-### Alternative: single-directive design
-
-A simpler alternative collapses both into one:
-
-```clausal
--specialize(SolveCount/3, program=1, source=NatnumProgram, as=SolveCountNatnum)
-```
-
-This is self-contained but verbose.  Either design works; the two-step
-version is more composable.
 
 ---
 
@@ -377,35 +350,39 @@ programs.  Assert the residual clause count matches expectations.  Run
 the specialized predicates and verify identical results to the
 unspecialized versions.
 
-### Phase 2: Pipeline integration
+### Phase 2: Pipeline integration  ✓ DONE
 
 **Location:** `clausal/logic/compiler_v2.py`, `clausal/logic/specialization.py`
 
-1. **Parse the `-metainterpreter` directive** in `_process_directives()`:
-   - Store `(predicate_name, arity, program_arg_index)` on the
-     module's metadata.
+Single directive — no `-metainterpreter` needed (auto-detected by
+`analyze_mi()`):
 
-2. **Parse the `-specialize` directive**:
-   - Store `(mi_name, source_program, new_name)` on the module's
-     metadata.
+```clausal
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+```
 
-3. **Implement `run_specialization()`** called from `compile_module()`:
-   - For each `-specialize` directive:
-     a. Look up the MI's clauses (from the current module or an import)
-     b. Look up the MI's `-metainterpreter` annotation
-     c. Evaluate the source program
-     d. Call `specialize_mi()` from Phase 1
-     e. Inject the resulting `PredicateItem` nodes into `predicate_nodes`
-   - The injected predicates then flow through normal Step 4–7
-     compilation.
+1. **`SpecializeDirective` AST node** in `nodes.py` — parsed by
+   `_handle_specialize_directive` in `term_rewriting.py`.
 
-4. **Handle imports**: If the MI is defined in a different module (e.g.
-   `metainterpreters.clausal`), the `-metainterpreter` annotation must
-   be discoverable from the importing module.  Store it on the
-   `PredicateMeta` class as `_mi_annotation` so it travels with imports.
+2. **Two-phase pipeline in `compile_module()`**:
+   - **Step 1c** (`_preregister_specializations`): analyzes the MI,
+     creates an empty PredicateMeta class with the right fields, and
+     registers it in `module_dict` so later clauses (e.g. Test) can
+     reference the specialized predicate during compilation.
+   - **Step 6b** (`_run_specialization`): evaluates the source program
+     predicate, calls `specialize_mi()` which unfolds and compiles the
+     specialized clauses onto the pre-registered class.
 
-**Tests:** End-to-end `.clausal` files that import the MI library,
-declare `-specialize`, and test the specialized predicates.
+3. **`specialize_mi()` accepts `pred_cls=`** — reuses the pre-registered
+   class instead of creating a new one, so compiled call sites resolve
+   correctly.
+
+**Tests:**
+- `tests/fixtures/specialize_natnum.clausal` — SolveCount + natnum (3 inline tests)
+- `tests/fixtures/specialize_graph.clausal` — Solve + graph (5 inline tests)
+- `tests/fixtures/specialize_limit.clausal` — SolveLimit + natnum (5 inline tests)
+- `tests/test_specialization_pipeline.py` — 25 Python tests (directive parsing,
+  predicate properties, query results, equivalence, error handling)
 
 ### Phase 3: Object programs with builtins and external calls
 

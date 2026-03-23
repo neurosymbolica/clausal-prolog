@@ -29,6 +29,7 @@ from clausal.pythonic_ast.nodes import (
     ImportModuleDirective as ImportModuleItem,
     ModuleDeclaration as ModuleDeclItem,
     PrivateDeclaration as PrivateDeclItem,
+    SpecializeDirective as SpecializeItem,
 )
 
 
@@ -75,6 +76,11 @@ def compile_module(
     # ── Step 1b: Goal expansion (regex pre-compile + auto-binding) ─────
     from clausal.logic.goal_expansion import run_goal_expansion
     predicate_nodes = run_goal_expansion(predicate_nodes, module_dict)
+
+    # ── Step 1c: Pre-register specialized predicates ─────────────────────
+    #    Create empty PredicateMeta classes for -specialize targets so that
+    #    later clauses (e.g. Test) can reference them during compilation.
+    _preregister_specializations(module_items, module_dict)
 
     # ── Step 2: Process directives ───────────────────────────────────────
     _process_directives(module_items, db)
@@ -128,6 +134,11 @@ def compile_module(
             if pred_cls is not None:
                 pred_cls._dispatch_fn = wrapped
             db.set_dispatch(functor, arity, wrapped)
+
+    # ── Step 6b: Meta-interpreter specialization ────────────────────────
+    #    Runs after all predicates are compiled so source programs can be
+    #    called.  Specialized predicates compile themselves internally.
+    _run_specialization(module_items, predicate_nodes, module_dict, db)
 
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
     for obj in module_dict.values():
@@ -198,6 +209,114 @@ def _process_directives(module_items: list, db: Any) -> None:
                 method = getattr(db, method_name)
                 for functor, arity in item.specs:
                     method(functor, arity)
+
+
+def _preregister_specializations(
+    module_items: list,
+    module_dict: dict,
+) -> None:
+    """Pre-register specialized predicate classes for -specialize directives.
+
+    Creates empty PredicateMeta classes (no clauses, no dispatch) so that
+    later clauses can reference the specialized predicate by name during
+    compilation at Step 5.
+    """
+    from clausal.logic.specialization import analyze_mi, _specialized_fields
+
+    for item in module_items:
+        if not isinstance(item, SpecializeItem):
+            continue
+
+        mi_cls = module_dict.get(item.mi_name)
+        if not isinstance(mi_cls, PredicateMeta):
+            continue  # Will error in _run_specialization
+
+        # Analyze MI to get field names for the specialized predicate.
+        # program_arg is auto-detected by analyze_mi from field names.
+        try:
+            pattern = analyze_mi(mi_cls)
+            fields = _specialized_fields(pattern)
+        except Exception:
+            continue  # Will error properly in _run_specialization
+
+        # Create and register the empty predicate class.
+        if item.new_name not in module_dict:
+            cls = make_predicate(item.new_name, fields)
+            module_dict[item.new_name] = cls
+
+
+def _run_specialization(
+    module_items: list,
+    predicate_nodes: list,
+    module_dict: dict,
+    db: Any,
+) -> None:
+    """Process -specialize directives: evaluate source programs and run
+    the specializer.  The MI pattern is auto-detected by ``analyze_mi()``.
+    """
+    from clausal.logic.specialization import analyze_mi, specialize_mi
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref, walk
+
+    for item in module_items:
+        if not isinstance(item, SpecializeItem):
+            continue
+
+        mi_cls = module_dict.get(item.mi_name)
+        if not isinstance(mi_cls, PredicateMeta):
+            raise RuntimeError(
+                f"-specialize: meta-interpreter '{item.mi_name}' not found "
+                f"in module dict (available: "
+                f"{[k for k, v in module_dict.items() if isinstance(v, PredicateMeta)]})"
+            )
+
+        # Analyze the MI (auto-detects program_arg from field names).
+        pattern = analyze_mi(mi_cls)
+
+        # Evaluate the source program.
+        source_cls = module_dict.get(item.source_program)
+        if source_cls is None:
+            raise RuntimeError(
+                f"-specialize: source program '{item.source_program}' "
+                f"not found in module dict"
+            )
+
+        if isinstance(source_cls, PredicateMeta):
+            # It's a predicate — call it to get the program list.
+            program_var = Var()
+            program_data = None
+            for _ in call(source_cls, program_var):
+                program_data = walk(deref(program_var))
+                break
+            if program_data is None:
+                raise RuntimeError(
+                    f"-specialize: source predicate '{item.source_program}' "
+                    f"returned no solutions"
+                )
+        elif isinstance(source_cls, list):
+            program_data = source_cls
+        else:
+            raise RuntimeError(
+                f"-specialize: source program '{item.source_program}' "
+                f"must be a predicate or list, got {type(source_cls)}"
+            )
+
+        # Reuse pre-registered class if available.
+        existing_cls = module_dict.get(item.new_name)
+        if isinstance(existing_cls, PredicateMeta):
+            target_cls = existing_cls
+        else:
+            target_cls = None
+
+        # Run the specializer.
+        specialized_cls = specialize_mi(
+            pattern, program_data, item.new_name, module_dict,
+            pred_cls=target_cls,
+        )
+
+        # The specialized predicate is already compiled and installed
+        # in module_dict by specialize_mi.  No need to inject into
+        # predicate_nodes — it's already fully compiled.
 
 
 def _process_declarations(module_items: list, module_dict: dict) -> None:
