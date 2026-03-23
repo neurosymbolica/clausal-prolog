@@ -1,0 +1,349 @@
+"""Tests for Phase 3.3 — Prolog → Clausal translation."""
+
+from __future__ import annotations
+
+import pytest
+from pathlib import Path
+
+from clausal.tools.prolog_to_clausal import (
+    prolog_to_clausal, prolog_ast_to_clausal,
+    emit_clausal_term, emit_clausal_item,
+)
+from clausal.tools.prolog_parser import parse
+from clausal.tools.prolog_ast import (
+    PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
+    PClause, PDCGRule, PDirective, PModule,
+)
+from clausal.tools.prolog_dialect import Dialect
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Term emission tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestEmitTerm:
+    def test_atom(self):
+        assert emit_clausal_term(PAtom("foo")) == "foo"
+
+    def test_variable_single_letter(self):
+        assert emit_clausal_term(PVar("X")) == "X"
+
+    def test_variable_titlecase(self):
+        assert emit_clausal_term(PVar("Head")) == "head_"
+
+    def test_variable_anonymous(self):
+        assert emit_clausal_term(PVar("_")) == "_"
+
+    def test_variable_named_underscore(self):
+        assert emit_clausal_term(PVar("_Ignored")) == "ignored_"
+
+    def test_integer(self):
+        assert emit_clausal_term(PNumber(42)) == "42"
+
+    def test_float(self):
+        assert emit_clausal_term(PNumber(3.14)) == "3.14"
+
+    def test_string(self):
+        assert emit_clausal_term(PString("hello")) == "'hello'"
+
+    def test_empty_list(self):
+        assert emit_clausal_term(PList((), None)) == "[]"
+
+    def test_proper_list(self):
+        result = emit_clausal_term(PList((PNumber(1), PNumber(2)), None))
+        assert result == "[1, 2]"
+
+    def test_partial_list(self):
+        result = emit_clausal_term(PList((PVar("H"),), PVar("T")))
+        assert result == "[H, *T]"
+
+    def test_compound(self):
+        result = emit_clausal_term(PCompound("foo_bar", (PVar("X"),)))
+        assert result == "FooBar(X)"
+
+    def test_negation(self):
+        result = emit_clausal_term(PCompound("\\+", (PAtom("foo"),)))
+        assert result == "not foo"
+
+    def test_unification(self):
+        result = emit_clausal_term(PCompound("=", (PVar("X"), PNumber(1))))
+        assert result == "X is 1"
+
+    def test_arithmetic_is(self):
+        result = emit_clausal_term(PCompound("is", (PVar("Y"), PCompound("+", (PVar("X"), PNumber(1))))))
+        assert result == "Y := X + 1"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Item emission tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestEmitItem:
+    def test_fact(self):
+        result = emit_clausal_item(PClause(PCompound("edge", (PNumber(1), PNumber(2)))))
+        assert result == "Edge(1, 2),"
+
+    def test_rule(self):
+        result = emit_clausal_item(PClause(
+            PCompound("reach", (PVar("X"), PVar("Y"))),
+            PCompound("edge", (PVar("X"), PVar("Y"))),
+        ))
+        assert result == "Reach(X, Y) <- (Edge(X, Y))"
+
+    def test_rule_with_conjunction(self):
+        body = PCompound(",", (
+            PCompound("edge", (PVar("X"), PVar("Z"))),
+            PCompound("reach", (PVar("Z"), PVar("Y"))),
+        ))
+        result = emit_clausal_item(PClause(
+            PCompound("reach", (PVar("X"), PVar("Y"))),
+            body,
+        ))
+        assert result == "Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))"
+
+    def test_dcg_rule(self):
+        result = emit_clausal_item(PDCGRule(
+            PAtom("greeting"),
+            PList((PString("hello"), PString("world")), None),
+        ))
+        assert result == "Greeting() >> (['hello', 'world'])"
+
+    def test_directive_module(self):
+        result = emit_clausal_item(PDirective(
+            PCompound("module", (PAtom("test"), PList((), None))),
+        ))
+        assert result == "-module(test, []),"
+
+    def test_directive_dynamic(self):
+        result = emit_clausal_item(PDirective(
+            PCompound("dynamic", (PCompound("/", (PAtom("color"), PNumber(2))),)),
+        ))
+        assert result == "-dynamic(Color/2),"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Full translation tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestFullTranslation:
+    def test_edge_graph(self):
+        src = """\
+edge(1, 2).
+edge(2, 3).
+reach(X, Y) :- edge(X, Y).
+reach(X, Y) :- edge(X, Z), reach(Z, Y).
+"""
+        result = prolog_to_clausal(src)
+        assert "Edge(1, 2)," in result
+        assert "Edge(2, 3)," in result
+        assert "Reach(X, Y) <- (Edge(X, Y))" in result
+        assert "Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))" in result
+
+    def test_arithmetic(self):
+        src = "double(X, Y) :- Y is X * 2."
+        result = prolog_to_clausal(src)
+        assert "Y := X * 2" in result
+
+    def test_negation(self):
+        src = "test :- \\+ member(X, [1, 2])."
+        result = prolog_to_clausal(src)
+        assert "not" in result
+
+    def test_list_cons(self):
+        src = "head([H|T], H)."
+        result = prolog_to_clausal(src)
+        assert "[head_, *tail_]" in result or "[H, *T]" in result.replace("head_", "H").replace("tail_", "T")
+
+    def test_unification(self):
+        src = "test :- X = foo."
+        result = prolog_to_clausal(src)
+        assert "X is foo" in result
+
+    def test_disunification(self):
+        src = "test :- X \\= foo."
+        result = prolog_to_clausal(src)
+        assert "X is not foo" in result
+
+    def test_comparison_leq(self):
+        src = "test :- 1 =< 2."
+        result = prolog_to_clausal(src)
+        assert "<=" in result
+
+    def test_structural_equality(self):
+        src = "test :- X == 1."
+        result = prolog_to_clausal(src)
+        assert "X == 1" in result
+
+    def test_structural_inequality(self):
+        src = "test :- X \\== 1."
+        result = prolog_to_clausal(src)
+        assert "X != 1" in result
+
+    def test_disjunction(self):
+        src = "test :- (a = b ; c = d)."
+        result = prolog_to_clausal(src)
+        assert "or" in result
+
+    def test_if_then_else(self):
+        src = "max(X, Y, Z) :- (X >= Y -> Z = X ; Z = Y)."
+        result = prolog_to_clausal(src)
+        assert "->" in result
+        assert "or" in result
+
+    def test_member_to_in(self):
+        src = "test :- member(X, [1, 2, 3])."
+        result = prolog_to_clausal(src)
+        assert "X in [1, 2, 3]" in result
+
+    def test_builtin_name_mapping(self):
+        src = "test :- findall(X, member(X, L), Xs)."
+        result = prolog_to_clausal(src)
+        assert "FindAll" in result
+
+    def test_module_directive(self):
+        src = ":- module(test, [foo/2, bar/1])."
+        result = prolog_to_clausal(src)
+        assert "-module(test, [Foo/2, Bar/1])," in result
+
+    def test_dynamic_directive(self):
+        src = ":- dynamic(color/2)."
+        result = prolog_to_clausal(src)
+        assert "-dynamic(Color/2)," in result
+
+    def test_use_module(self):
+        src = ":- use_module(library(clpfd), [all_different/1])."
+        result = prolog_to_clausal(src, dialect=Dialect.swi())
+        assert "import_from" in result
+
+    def test_dcg_rule(self):
+        src = """\
+greeting --> ["hello", "world"].
+"""
+        result = prolog_to_clausal(src)
+        assert ">>" in result
+
+    def test_cut(self):
+        src = "foo(X) :- bar(X), !."
+        result = prolog_to_clausal(src)
+        assert "cut" in result
+
+    def test_op_directive_as_comment(self):
+        src = ":- op(700, xfx, <>)."
+        result = prolog_to_clausal(src)
+        assert "# operator:" in result
+
+
+class TestNamingConventions:
+    def test_snake_to_pascal(self):
+        src = "all_different([1, 2, 3])."
+        result = prolog_to_clausal(src)
+        assert "AllDifferent" in result
+
+    def test_variable_conversion(self):
+        src = "foo(Head, Tail)."
+        result = prolog_to_clausal(src)
+        assert "head_" in result
+        assert "tail_" in result
+
+    def test_single_letter_var(self):
+        src = "foo(X, Y)."
+        result = prolog_to_clausal(src)
+        assert "X" in result
+        assert "Y" in result
+
+    def test_anonymous_var(self):
+        src = "foo(_, X)."
+        result = prolog_to_clausal(src)
+        assert "_" in result
+
+
+class TestDialects:
+    def test_swi_default(self):
+        src = "edge(1, 2)."
+        result = prolog_to_clausal(src, dialect=Dialect.swi())
+        assert "Edge(1, 2)," in result
+
+    def test_iso_default(self):
+        src = "edge(1, 2)."
+        result = prolog_to_clausal(src, dialect=Dialect.iso())
+        assert "Edge(1, 2)," in result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Golden file roundtrip tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+GOLDEN_DIR = Path(__file__).parent / "fixtures" / "prolog_golden"
+
+GOLDEN_CASES = [
+    "edge_graph",
+    "fibonacci",
+]
+
+
+@pytest.mark.parametrize("case", GOLDEN_CASES)
+class TestGoldenRoundtrip:
+    """Parse golden .pl files and verify they produce valid clausal output."""
+
+    def test_parses_without_error(self, case: str):
+        pl_path = GOLDEN_DIR / f"{case}.pl"
+        if not pl_path.exists():
+            pytest.skip(f"Golden file {pl_path} not found")
+        source = pl_path.read_text()
+        # Should parse without error
+        pmodule = parse(source)
+        assert len(pmodule.items) > 0
+
+    def test_emits_clausal_output(self, case: str):
+        pl_path = GOLDEN_DIR / f"{case}.pl"
+        if not pl_path.exists():
+            pytest.skip(f"Golden file {pl_path} not found")
+        source = pl_path.read_text()
+        result = prolog_to_clausal(source)
+        # Should produce non-empty output
+        assert len(result.strip()) > 0
+        # Should not contain Prolog-specific syntax
+        assert ":-" not in result
+        assert "\\+" not in result
+
+    def test_no_prolog_syntax_leaks(self, case: str):
+        pl_path = GOLDEN_DIR / f"{case}.pl"
+        if not pl_path.exists():
+            pytest.skip(f"Golden file {pl_path} not found")
+        source = pl_path.read_text()
+        result = prolog_to_clausal(source)
+        # Check no Prolog-specific tokens leaked
+        lines = result.split("\n")
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue  # comments are OK
+            assert "\\+" not in stripped, f"Prolog negation leaked: {stripped}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# All golden .pl files should parse
+# ═══════════════════════════════════════════════════════════════════════
+
+
+ALL_GOLDEN = list(GOLDEN_DIR.glob("*.pl")) if GOLDEN_DIR.exists() else []
+
+
+@pytest.mark.parametrize("pl_path", ALL_GOLDEN, ids=[p.stem for p in ALL_GOLDEN])
+def test_golden_pl_parses(pl_path: Path):
+    """Every golden .pl file should parse without error."""
+    source = pl_path.read_text()
+    pmodule = parse(source)
+    assert len(pmodule.items) > 0
+
+
+@pytest.mark.parametrize("pl_path", ALL_GOLDEN, ids=[p.stem for p in ALL_GOLDEN])
+def test_golden_pl_translates(pl_path: Path):
+    """Every golden .pl file should translate to non-empty clausal output."""
+    source = pl_path.read_text()
+    result = prolog_to_clausal(source)
+    assert len(result.strip()) > 0

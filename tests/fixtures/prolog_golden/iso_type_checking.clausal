@@ -1,0 +1,87 @@
+-module(iso_type_checking, [Test/1]),
+
+IsBoundNumber(X) <- (IsBound(X), IsNumber(X))
+
+Test('var: unbound var succeeds') <- (IsVar(X))
+
+Test('var: integer fails') <- (not IsVar(42))
+
+Test('var: atom fails') <- (not IsVar(hello))
+
+Test('var: bound var fails') <- (X is 1, not IsVar(X))
+
+Test('nonvar: integer succeeds') <- (IsBound(42))
+
+Test('nonvar: atom succeeds') <- (IsBound(hello))
+
+Test('nonvar: unbound var fails') <- (not IsBound(X))
+
+Test('nonvar: bound var succeeds') <- (X is 1, IsBound(X))
+
+Test('nonvar: list succeeds') <- (IsBound([1, 2]))
+
+Test('atom: string succeeds') <- (IsStr(hello))
+
+Test('atom: empty string succeeds') <- (IsStr(''))
+
+Test('atom: integer fails') <- (not IsStr(1))
+
+Test('atom: unbound var fails') <- (not IsStr(X))
+
+Test('atom: list fails') <- (not IsStr([]))
+
+Test('integer: positive') <- (IsInt(1))
+
+Test('integer: zero') <- (IsInt(0))
+
+Test('integer: large') <- (IsInt(100000000000000000000))
+
+Test('integer: string fails') <- (not IsInt('1'))
+
+Test('integer: var fails') <- (not IsInt(X))
+
+Test('number: integer') <- (IsNumber(42))
+
+Test('number: float') <- (IsNumber(3.14))
+
+Test('number: string fails') <- (not IsNumber('42'))
+
+Test('number: var fails') <- (not IsNumber(X))
+
+Test('string: str succeeds') <- (IsStr(hello))
+
+Test('string: empty str') <- (IsStr(''))
+
+Test('string: int fails') <- (not IsStr(42))
+
+Test('string: var fails') <- (not IsStr(X))
+
+Test('is_list: list') <- (IsList([1, 2, 3]))
+
+Test('is_list: empty') <- (IsList([]))
+
+Test('is_list: nested') <- (IsList([[1], [2]]))
+
+Test('is_list: string fails') <- (not IsList(hello))
+
+Test('is_list: int fails') <- (not IsList(42))
+
+Test('is_list: var fails') <- (not IsList(X))
+
+Test('ground: integer') <- (IsGround(42))
+
+Test('ground: string') <- (IsGround(abc))
+
+Test('ground: ground list') <- (IsGround([1, 2, 3]))
+
+Test('ground: empty list') <- (IsGround([]))
+
+Test('ground: var fails') <- (not IsGround(X))
+
+Test('is_bound_number: integer') <- (IsBoundNumber(42))
+
+Test('is_bound_number: float') <- (IsBoundNumber(3.14))
+
+Test('is_bound_number: string fails') <- (not IsBoundNumber('42'))
+
+Test('is_bound_number: unbound fails') <- (not IsBoundNumber(X))

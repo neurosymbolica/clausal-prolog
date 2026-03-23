@@ -92,6 +92,7 @@ nav:
     - Well-Founded Semantics: wfs.md
     - Term & Goal Expansion: term_expansion.md
     - Caching: caching.md
+  - Prolog Translation: prolog_translation.md
   - Python Integration: python_integration.md
   - IPython / Jupyter: ipython.md
   - Examples: examples.md

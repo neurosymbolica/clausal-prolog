@@ -1,0 +1,5 @@
+Fib(0, 0),
+
+Fib(1, 1),
+
+Fib(N, result_) <- (N > 1, n1_ := N - 1, n2_ := N - 2, Fib(n1_, A), Fib(n2_, B), result_ := A + B)

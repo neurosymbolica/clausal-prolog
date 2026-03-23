@@ -1,0 +1,9 @@
+SafeQueens(N, qs_) <- (InDomain(qs_, 1, N), AllDifferent(qs_), Label(qs_), CheckDiagonals(qs_))
+
+CheckDiagonals([]),
+
+CheckDiagonals([Q, *rest_]) <- (SafeFrom(Q, rest_, 1), CheckDiagonals(rest_))
+
+SafeFrom(Q, [], D),
+
+SafeFrom(Q, [H, *T], D) <- (Q != H, diff1_ := Q - H, diff2_ := H - Q, diff1_ != D, diff2_ != D, d1_ := D + 1, SafeFrom(Q, T, d1_))

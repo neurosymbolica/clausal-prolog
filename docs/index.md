@@ -146,3 +146,4 @@ for the full feature set.
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
+| [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
