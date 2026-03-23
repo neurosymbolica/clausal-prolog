@@ -4111,21 +4111,29 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     if not all(_is_deterministic_goal(g) for g in clause.body[:-1]):
         return False
 
-    # Reject tail call args that contain StarUnpack — TRO code generation
-    # uses deref() which doesn't expand splat into a proper [*rest] splice.
-    if any(_contains_star_unpack(a) for a in call_args):
-        return False
-
     # Safety check: every variable in the tail call must be "grounded" by
     # the prefix goals, be a passthrough from the head, or come from head
     # list decomposition with at least one deterministic prefix goal
     # (implying the input is likely ground).
     if not clause.body[:-1]:
-        # No prefix goals: tail call args that are head-decomposition vars
-        # may be unbound.  Only allow if ALL tail call args are passthrough.
-        return _tro_args_safe(clause.head, [], call_args, arity)
+        return _tro_args_safe(clause.head, [], call_args, arity)[0]
     return _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
-                          allow_head_vars=True)
+                          allow_head_vars=True)[0]
+
+
+def _get_tro_check_indices(functor: str, arity: int, clause: Clause) -> frozenset[int]:
+    """Return the set of tail-call arg positions needing runtime ground-check.
+
+    Only meaningful for TRO-eligible clauses (call after ``_detect_tro_clause``
+    returns True).
+    """
+    last_goal = deref(clause.body[-1])
+    call_args = last_goal.args
+    if not clause.body[:-1]:
+        return frozenset()  # no prefix → no allow_head_vars → no checks needed
+    _, check = _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
+                              allow_head_vars=True)
+    return check
 
 
 def _tro_args_safe(
@@ -4134,11 +4142,12 @@ def _tro_args_safe(
     tail_args: list,
     arity: int,
     allow_head_vars: bool = False,
-) -> bool:
-    """Return True if all tail call arguments are TRO-safe.
+) -> tuple[bool, frozenset[int]]:
+    """Return ``(safe, check_indices)`` for TRO arg safety.
 
-    Safe means the deref'd value at capture time will be concrete (not a Var
-    that gets disconnected by ``trail.undo``).
+    *safe*: True if all tail call arguments are TRO-safe.
+    *check_indices*: arg positions accepted via ``allow_head_vars`` that
+    should be runtime-checked with ``is_var()`` for provable correctness.
 
     Safe categories:
     1. Constants (not a Var)
@@ -4146,13 +4155,9 @@ def _tro_args_safe(
     3. Variables that are passthrough — same Var appears at the same position
        in the head (the raw ``arg_i`` value, not a decomposed component)
     4. (When *allow_head_vars* is True) Any head variable — including those
-       from list/compound decomposition.  This is safe when the clause has
-       deterministic prefix goals, implying the head arg was ground.
-
-    When *allow_head_vars* is False (no prefix goals), only categories 1-3
-    are accepted.  This prevents TRO on clauses like
-    ``MyPrefix([H, *T], [H, *R]) <- MyPrefix(T, R)`` where the first arg
-    might be an unbound output Var.
+       from list/compound decomposition.  These are safe when the head arg
+       was ground, which is checked at runtime via ``is_var()`` on the
+       captured value.  The positions are returned in *check_indices*.
     """
     # Collect Var IDs that are bound by Evaluate/Unify LHS in prefix goals.
     bound_var_ids: set[int] = set()
@@ -4196,7 +4201,9 @@ def _tro_args_safe(
 
     # Check each tail call argument.  Collect ALL Var IDs within each arg
     # (not just top-level), since lists/compounds may embed unbound Vars.
-    for arg in tail_args:
+    # Track which arg positions are accepted via allow_head_vars (need runtime check).
+    _check_positions: set[int] = set()
+    for arg_idx, arg in enumerate(tail_args):
         arg_var_ids: set[int] = set()
         _collect_var_ids(arg, arg_var_ids)
         for vid in arg_var_ids:
@@ -4205,25 +4212,11 @@ def _tro_args_safe(
             if vid in head_passthrough_ids:
                 continue  # passthrough from head — safe
             if allow_head_vars and vid in all_head_var_ids:
-                continue  # head variable allowed (prefix goals imply ground input)
-            return False
-    return True
+                _check_positions.add(arg_idx)  # needs runtime ground-check
+                continue
+            return (False, frozenset())
+    return (True, frozenset(_check_positions))
 
-
-def _contains_star_unpack(term: Any) -> bool:
-    """Return True if *term* contains a ``StarUnpack`` node anywhere."""
-    if isinstance(term, StarUnpack):
-        return True
-    if isinstance(term, (list, tuple)):
-        return any(_contains_star_unpack(item) for item in term)
-    if isinstance(term, Compound):
-        return any(_contains_star_unpack(a) for a in term.args)
-    if is_term_instance(term):
-        return any(
-            _contains_star_unpack(getattr(term, f))
-            for f in term_field_names(term)
-        )
-    return False
 
 
 def _collect_var_ids(term: Any, ids: set[int]) -> None:
@@ -4273,18 +4266,28 @@ def _compile_tro_tail(
     var_context: dict[int, str],
     db: Database,
     trail_name: str,
+    tro_mode: str = "loop",
+    check_indices: frozenset[int] | None = None,
+    self_name: str = "this_generator",
+    parent_name: str = "_tramp_parent",
 ) -> list[ast.stmt]:
-    """Compile TRO tail-call: snapshot new args, set ``_tro = True``.
+    """Compile TRO tail-call: snapshot new args, set TRO flag/state.
 
     The caller (``compile_head_to_match_case``) wraps this in
     ``try/finally: trail.undo(_mark)`` so trail cleanup is automatic.
 
-    Emits::
+    *tro_mode*:
 
-        _tro_arg0 = deref(new_a0_expr)
-        _tro_arg1 = deref(new_a1_expr)
-        ...
-        _tro = True
+    - ``"loop"`` (default): set local ``_tro = True``.  The enclosing
+      ``while True`` loop in the funcdef will reassign args and ``continue``.
+    - ``"signal"``: set shared ``_tro_state[0] = True`` and store new arg
+      values in ``_tro_state[1..N]``.  The dispatch closure will check
+      ``_tro_state`` after the bucket generator finishes and re-dispatch.
+
+    *check_indices*: if not None, a set of arg positions that need a runtime
+    ``is_var()`` check.  When any checked arg is an unbound Var, the TRO
+    flag is NOT set and execution falls back to a normal ``StepGenerator``
+    call (emitted inline).
     """
     from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: PLC0415
 
@@ -4317,8 +4320,79 @@ def _compile_tro_tail(
         tro_name = f"_tro_arg{i}"
         stmts.append(_assign(tro_name, _call(_name("deref"), arg_expr)))
 
-    # Set _tro flag.
-    stmts.append(_assign("_tro", ast.Constant(True)))
+    # Build the TRO-set statements.
+    if tro_mode == "signal":
+        # Signal mode: set _tro_state[0] = True, _tro_state[i+1] = _tro_arg_i
+        tro_set_stmts: list[ast.stmt] = [
+            ast.Assign(
+                targets=[ast.Subscript(
+                    value=_name("_tro_state"), slice=ast.Constant(0), ctx=ast.Store(),
+                )],
+                value=ast.Constant(True),
+                lineno=0, col_offset=0,
+            ),
+        ]
+        for i in range(arity):
+            tro_set_stmts.append(ast.Assign(
+                targets=[ast.Subscript(
+                    value=_name("_tro_state"), slice=ast.Constant(i + 1), ctx=ast.Store(),
+                )],
+                value=_name(f"_tro_arg{i}"),
+                lineno=0, col_offset=0,
+            ))
+    else:
+        # Loop mode: set _tro = True
+        tro_set_stmts = [_assign("_tro", ast.Constant(True))]
+
+    # Runtime ground-check: if any checked arg is a Var, fall back to StepGenerator.
+    if check_indices:
+        checks = [
+            ast.UnaryOp(op=ast.Not(), operand=_call(_name("is_var"), _name(f"_tro_arg{i}")))
+            for i in sorted(check_indices)
+        ]
+        if len(checks) == 1:
+            ground_cond = checks[0]
+        else:
+            ground_cond = ast.BoolOp(op=ast.And(), values=checks)
+
+        # Fallback: normal StepGenerator call with captured _tro_arg values.
+        arg_exprs = [_name(f"_tro_arg{i}") for i in range(arity)]
+        fname = tail_call.func.name
+        fallback_stmts = _compile_predicate_call_trampoline(
+            fname, [None] * arity, [], db, var_context, trail_name,
+            [_yield_step_stmt(_name(parent_name), ast.Constant(None))],
+            self_name,
+        )
+        # Patch the arg expressions in the StepGenerator call to use _tro_arg values.
+        # The simplest approach: build the call directly.
+        call_expr = _dispatch_call_trampoline(fname, arity, arg_exprs, trail_name, self_name)
+        gen_name = _fresh("_gen")
+        status_name = _fresh("_st")
+        gen_assign = _assign(gen_name, call_expr)
+        first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
+        loop_body = [
+            _yield_step_stmt(_name(parent_name), ast.Constant(None)),
+            _assign_yield_step(status_name, _name(gen_name), ast.Constant(None)),
+        ]
+        fallback_loop = ast.While(
+            test=ast.Compare(
+                left=_name(status_name),
+                ops=[ast.IsNot()],
+                comparators=[_name("_DONE")],
+            ),
+            body=loop_body,
+            orelse=[],
+        )
+        fallback_stmts = [gen_assign, first_step, fallback_loop]
+
+        stmts.append(ast.If(
+            test=ground_cond,
+            body=tro_set_stmts,
+            orelse=fallback_stmts,
+        ))
+    else:
+        stmts.extend(tro_set_stmts)
+
     return stmts
 
 
@@ -4343,12 +4417,17 @@ def _build_predicate_trampoline_funcdef(
     omitted — used for indexed-dispatch sub-functions that are consumed via
     ``yield from`` by an outer wrapper which emits its own DONE.
 
-    When *tro_indices* is non-empty, tail-recursion optimization is applied:
-    the clause match arms are wrapped in ``while True:`` and TRO-eligible
-    clauses emit argument reassignment + ``continue`` instead of creating a
-    child ``StepGenerator``.
+    When *tro_indices* is non-empty, tail-recursion optimization is applied.
+    Two modes:
+
+    - ``emit_done=True`` (or non-bucket): ``while True`` loop with ``continue``.
+    - ``emit_done=False`` (bucket): signal mode — set ``_tro_state`` and return.
+      The dispatch closure checks ``_tro_state`` after ``yield from`` completes.
     """
     use_tro = bool(tro_indices)
+    # Bucket functions use "signal" mode (set _tro_state, return).
+    # Full functions use "loop" mode (while True + continue).
+    tro_mode = "signal" if (use_tro and not emit_done) else "loop"
     arg_names = [f"arg{i}" for i in range(arity)]
     params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
 
@@ -4367,7 +4446,7 @@ def _build_predicate_trampoline_funcdef(
             ctx=ast.Load(),
         )
 
-    if use_tro:
+    if use_tro and tro_mode == "loop":
         # Initialise _tro flag at the top of each iteration.
         loop_stmts.append(_assign("_tro", ast.Constant(False)))
 
@@ -4376,11 +4455,29 @@ def _build_predicate_trampoline_funcdef(
         _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
     )
     if dispatch_pos is not None:
-        loop_stmts.extend(
-            _build_list_dispatch_guard(
-                clauses, dispatch_pos, arity, subject, body_compiler
+        if use_tro:
+            # TRO-aware body compiler: uses _compile_tro_body for eligible clauses.
+            _tro_clause_set = {id(clauses[i]) for i in tro_indices}
+            _orig_bc = body_compiler
+            _tro_m = tro_mode
+            def _tro_list_body_compiler(clause, var_context,
+                                        _tset=_tro_clause_set, _fn=functor,
+                                        _ar=arity, _db=db, _tm=_tro_m):
+                if id(clause) in _tset:
+                    return _compile_tro_body(clause, _fn, _ar, _db, var_context, "trail",
+                                             tro_mode=_tm)
+                return _orig_bc(clause, var_context)
+            loop_stmts.extend(
+                _build_list_dispatch_guard(
+                    clauses, dispatch_pos, arity, subject, _tro_list_body_compiler
+                )
             )
-        )
+        else:
+            loop_stmts.extend(
+                _build_list_dispatch_guard(
+                    clauses, dispatch_pos, arity, subject, body_compiler
+                )
+            )
     else:
         for ci, clause in enumerate(clauses):
             var_context: dict[int, str] = {}
@@ -4390,6 +4487,7 @@ def _build_predicate_trampoline_funcdef(
                 # TRO clause: compile prefix goals normally, replace tail call.
                 tro_body_stmts = _compile_tro_body(
                     clause, functor, arity, db, var_context, "trail",
+                    tro_mode=tro_mode,
                 )
                 body_stmts = tro_body_stmts
             else:
@@ -4403,9 +4501,8 @@ def _build_predicate_trampoline_funcdef(
             )
             loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
-    if use_tro:
+    if use_tro and tro_mode == "loop":
         # After all match arms: if _tro was set, reassign args and continue.
-        # Build: if _tro: arg0 = _tro_arg0; ...; continue
         reassign_stmts: list[ast.stmt] = []
         for i in range(arity):
             reassign_stmts.append(
@@ -4419,12 +4516,25 @@ def _build_predicate_trampoline_funcdef(
                 orelse=[],
             )
         )
-        # No TRO fired — break out of the while True loop.
         loop_stmts.append(ast.Break())
+    elif use_tro and tro_mode == "signal":
+        # Signal mode (bucket): _tro_state was set by _compile_tro_tail.
+        # Early exit via _tro_state[0] checks are emitted within the match
+        # arms by _compile_tro_tail.  After all match arms, just fall through.
+        # Add an early-exit check after the last TRO-eligible match arm:
+        loop_stmts.append(
+            ast.If(
+                test=ast.Subscript(
+                    value=_name("_tro_state"), slice=ast.Constant(0), ctx=ast.Load(),
+                ),
+                body=[ast.Return(value=ast.Constant(None))],
+                orelse=[],
+            )
+        )
 
     # Build the function body.
     all_stmts: list[ast.stmt]
-    if use_tro:
+    if use_tro and tro_mode == "loop":
         # Wrap loop_stmts in while True: ...
         all_stmts = [
             ast.While(
@@ -4475,14 +4585,18 @@ def _compile_tro_body(
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
+    tro_mode: str = "loop",
 ) -> list[ast.stmt]:
     """Compile a TRO-eligible clause body.
 
     All goals except the last are compiled normally (right-to-left continuation
     building).  The last goal (the tail-recursive call) is replaced by
-    ``_compile_tro_tail`` which snapshots new arg values and sets ``_tro = True``.
+    ``_compile_tro_tail`` which snapshots new arg values and sets the TRO flag.
 
-    The continuation (k_stmts) for the prefix goals is the TRO tail code.
+    *tro_mode*: ``"loop"`` for while-True internal restart, ``"signal"``
+    for shared ``_tro_state`` bucket signalling.
+
+    *check_indices*: arg positions needing runtime ``is_var()`` ground-check.
     """
     goals = clause.body
     if not goals:
@@ -4495,8 +4609,14 @@ def _compile_tro_body(
     # compile_goal_trampoline find all Var names in var_context.
     alloc_stmts = _preallocate_body_vars(goals, var_context)
 
+    # Compute runtime ground-check indices for head-decomposition vars.
+    check_indices = _get_tro_check_indices(functor, arity, clause)
+
     # The innermost continuation is the TRO tail code (instead of yield solution).
-    k = _compile_tro_tail(tail_call, arity, var_context, db, trail_name)
+    k = _compile_tro_tail(
+        tail_call, arity, var_context, db, trail_name,
+        tro_mode=tro_mode, check_indices=check_indices or None,
+    )
 
     # Build prefix goals right-to-left, wrapping around the TRO tail.
     for goal in reversed(prefix_goals):
@@ -4663,10 +4783,29 @@ def compile_predicate_trampoline(
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
-            # Compile fallback (all clauses, for when no arg is ground)
+            # TRO: detect tail-recursive clauses (same check as non-indexed path).
+            _is_tabled = (
+                db is not None and db.is_tabled(functor, arity)
+            )
+            _idx_tro_indices: frozenset[int] | None = None
+            _tro_state_obj = None
+            if not _is_tabled:
+                _tro_set = frozenset(
+                    i for i, cl in enumerate(clauses)
+                    if _detect_tro_clause(functor, arity, cl)
+                )
+                if _tro_set:
+                    _idx_tro_indices = _tro_set
+                    # Shared mutable TRO state: [flag, arg0, arg1, ..., argN-1]
+                    _tro_state_obj = [False] + [None] * arity
+                    base_globals["_tro_state"] = _tro_state_obj
+
+            # Compile fallback (all clauses, for when no arg is ground).
+            # Fallback uses "loop" mode TRO (has all clauses, can restart internally).
             fallback_def = _build_predicate_trampoline_funcdef(
                 f"{functor}__all", arity, clauses,
                 _effective_db, body_compiler, emit_done=False,
+                tro_indices=_idx_tro_indices,
             )
 
             fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
@@ -4691,14 +4830,34 @@ def compile_predicate_trampoline(
                     # re-collect term-node classes (Unify, In, …) and
                     # clobber predicate entries set by _inject_resolved_targets.
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                    # Map TRO indices from original clauses to this bucket's clauses.
+                    _b_tro = None
+                    if _idx_tro_indices is not None:
+                        _orig_ids = {id(cl) for i, cl in enumerate(clauses) if i in _idx_tro_indices}
+                        _b_tro_set = frozenset(
+                            i for i, cl in enumerate(bucket_clauses) if id(cl) in _orig_ids
+                        )
+                        if _b_tro_set:
+                            _b_tro = _b_tro_set
                     bdef = _build_predicate_trampoline_funcdef(
                         bname, arity, lifted_bucket,
                         _effective_db, body_compiler, emit_done=False,
+                        tro_indices=_b_tro,
                     )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
+                # Default bucket (clauses with Var at indexed position).
+                _d_tro = None
+                if _idx_tro_indices is not None:
+                    _orig_ids = {id(cl) for i, cl in enumerate(clauses) if i in _idx_tro_indices}
+                    _d_tro_set = frozenset(
+                        i for i, cl in enumerate(index["defaults"]) if id(cl) in _orig_ids
+                    )
+                    if _d_tro_set:
+                        _d_tro = _d_tro_set
                 ddef = _build_predicate_trampoline_funcdef(
                     f"{functor}__p{pos}_dflt", arity, index["defaults"],
                     _effective_db, body_compiler, emit_done=False,
+                    tro_indices=_d_tro,
                 )
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 plans.append((pos, idx_dict, pos_default_fn))
@@ -4843,24 +5002,28 @@ def compile_predicate_trampoline(
                         # single-arg fallbacks for partial groundness
                         single_i = _make_groundness_dispatch_trampoline(
                             [p for p in plans if p[0] == pos_i],
-                            fallback_fn, DONE)
+                            fallback_fn, DONE,
+                            tro_state=_tro_state_obj, arity=arity)
                         single_j_plans = [p for p in plans if p[0] == pos_j]
                         if single_j_plans:
                             single_j = _make_groundness_dispatch_trampoline(
-                                single_j_plans, fallback_fn, DONE)
+                                single_j_plans, fallback_fn, DONE,
+                                tro_state=_tro_state_obj, arity=arity)
                         else:
                             single_j = fallback_fn
                         fn = _make_joint_dispatch_trampoline(
                             pos_i, pos_j,
                             joint_dict, joint_default_fn,
                             single_i, single_j,
-                            fallback_fn, DONE)
+                            fallback_fn, DONE,
+                            tro_state=_tro_state_obj, arity=arity)
                         # Phase 10a: expose joint bucket dict.
                         if pred_cls is not None:
                             pred_cls._index_plans_joint = {(pos_i, pos_j): joint_dict}
             if fn is None:
                 fn = _make_groundness_dispatch_trampoline(
-                    plans, fallback_fn, DONE)
+                    plans, fallback_fn, DONE,
+                    tro_state=_tro_state_obj, arity=arity)
         else:
             # Phase 10a: no indexing — clear any stale _index_plans from a
             # previous compilation (e.g. after retract reduced clause count
@@ -6259,32 +6422,65 @@ def _make_joint_dispatch_trampoline(
     joint_dict: dict, joint_default_fn,
     single_i_dispatch, single_j_dispatch,
     fallback_fn, done,
+    tro_state=None, arity=0,
 ) -> Callable:
     """Build a flat joint-key dispatch for trampoline mode.  (Phase 9b)"""
     offset_i = pos_i + 2
     offset_j = pos_j + 2
 
-    def dispatch(*args):
-        parent = args[1]
-        _ai = deref(args[offset_i])
-        _aj = deref(args[offset_j])
-        if not is_var(_ai) and not is_var(_aj):
-            _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
-            try:
-                _bfn = joint_dict.get(_jk)
-            except TypeError:
-                _bfn = None
-            if _bfn is not None:
-                yield from _bfn(*args)
+    if tro_state is not None:
+        def dispatch(*args):
+            parent = args[1]
+            args_list = list(args)
+            while True:
+                tro_state[0] = False
+                _ai = deref(args_list[offset_i])
+                _aj = deref(args_list[offset_j])
+                if not is_var(_ai) and not is_var(_aj):
+                    _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
+                    try:
+                        _bfn = joint_dict.get(_jk)
+                    except TypeError:
+                        _bfn = None
+                    if _bfn is not None:
+                        yield from _bfn(*args_list)
+                    else:
+                        yield from joint_default_fn(*args_list)
+                elif not is_var(_ai):
+                    yield from single_i_dispatch(*args_list)
+                elif not is_var(_aj):
+                    yield from single_j_dispatch(*args_list)
+                else:
+                    yield from fallback_fn(*args_list)
+                    break  # fallback has internal TRO loop
+                if tro_state[0]:
+                    for _i in range(arity):
+                        args_list[_i + 2] = tro_state[_i + 1]
+                    continue
+                break
+            yield (parent, done)
+    else:
+        def dispatch(*args):
+            parent = args[1]
+            _ai = deref(args[offset_i])
+            _aj = deref(args[offset_j])
+            if not is_var(_ai) and not is_var(_aj):
+                _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
+                try:
+                    _bfn = joint_dict.get(_jk)
+                except TypeError:
+                    _bfn = None
+                if _bfn is not None:
+                    yield from _bfn(*args)
+                else:
+                    yield from joint_default_fn(*args)
+            elif not is_var(_ai):
+                yield from single_i_dispatch(*args)
+            elif not is_var(_aj):
+                yield from single_j_dispatch(*args)
             else:
-                yield from joint_default_fn(*args)
-        elif not is_var(_ai):
-            yield from single_i_dispatch(*args)
-        elif not is_var(_aj):
-            yield from single_j_dispatch(*args)
-        else:
-            yield from fallback_fn(*args)
-        yield (parent, done)
+                yield from fallback_fn(*args)
+            yield (parent, done)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
@@ -6548,54 +6744,117 @@ def _make_groundness_dispatch_simple(plans, fallback_fn):
     return dispatch
 
 
-def _make_groundness_dispatch_trampoline(plans, fallback_fn, done):
+def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
+                                         tro_state=None, arity=0):
     """Build a groundness-keyed dispatch selector for trampoline mode.
 
     Same logic as :func:`_make_groundness_dispatch_simple` but accounts for
     the trampoline arg layout ``(this_generator, parent, arg0, ..., trail)``
     and emits a trailing ``yield (parent, done)`` after search exhaustion.
+
+    When *tro_state* is not None, the dispatch loops: after each bucket
+    ``yield from`` completes, it checks ``tro_state[0]``.  If True, updates
+    args from ``tro_state[1..N]`` and re-dispatches (potentially to a
+    different bucket).
     """
     if len(plans) == 1:
         pos, idx_dict, dflt_fn = plans[0]
         offset = pos + 2  # skip this_generator, parent
-        def dispatch(*args):
-            parent = args[1]
-            _a = deref(args[offset])
-            if is_var(_a):
-                yield from fallback_fn(*args)
-            else:
-                _k = _runtime_arg_key(_a)
-                try:
-                    _bfn = idx_dict.get(_k)
-                except TypeError:
-                    _bfn = None
-                if _bfn is not None:
-                    yield from _bfn(*args)
+        if tro_state is not None:
+            def dispatch(*args):
+                parent = args[1]
+                args_list = list(args)
+                while True:
+                    tro_state[0] = False
+                    _a = deref(args_list[offset])
+                    if is_var(_a):
+                        yield from fallback_fn(*args_list)
+                        break  # fallback has its own internal TRO loop
+                    _k = _runtime_arg_key(_a)
+                    try:
+                        _bfn = idx_dict.get(_k)
+                    except TypeError:
+                        _bfn = None
+                    if _bfn is not None:
+                        yield from _bfn(*args_list)
+                    else:
+                        yield from dflt_fn(*args_list)
+                    if tro_state[0]:
+                        for _i in range(arity):
+                            args_list[_i + 2] = tro_state[_i + 1]
+                        continue
+                    break
+                yield (parent, done)
+        else:
+            def dispatch(*args):
+                parent = args[1]
+                _a = deref(args[offset])
+                if is_var(_a):
+                    yield from fallback_fn(*args)
                 else:
-                    yield from dflt_fn(*args)
-            yield (parent, done)
+                    _k = _runtime_arg_key(_a)
+                    try:
+                        _bfn = idx_dict.get(_k)
+                    except TypeError:
+                        _bfn = None
+                    if _bfn is not None:
+                        yield from _bfn(*args)
+                    else:
+                        yield from dflt_fn(*args)
+                yield (parent, done)
         dispatch.__name__ = fallback_fn.__name__
         dispatch.__qualname__ = fallback_fn.__qualname__
         return dispatch
 
-    def dispatch(*args):
-        parent = args[1]
-        for _pos, _idx_dict, _dflt_fn in plans:
-            _a = deref(args[_pos + 2])
-            if not is_var(_a):
-                _k = _runtime_arg_key(_a)
-                try:
-                    _bfn = _idx_dict.get(_k)
-                except TypeError:
-                    _bfn = None
-                if _bfn is not None:
-                    yield from _bfn(*args)
-                else:
-                    yield from _dflt_fn(*args)
-                yield (parent, done)
-                return
-        yield from fallback_fn(*args)
-        yield (parent, done)
+    if tro_state is not None:
+        def dispatch(*args):
+            parent = args[1]
+            args_list = list(args)
+            while True:
+                tro_state[0] = False
+                _dispatched = False
+                for _pos, _idx_dict, _dflt_fn in plans:
+                    _a = deref(args_list[_pos + 2])
+                    if not is_var(_a):
+                        _k = _runtime_arg_key(_a)
+                        try:
+                            _bfn = _idx_dict.get(_k)
+                        except TypeError:
+                            _bfn = None
+                        if _bfn is not None:
+                            yield from _bfn(*args_list)
+                        else:
+                            yield from _dflt_fn(*args_list)
+                        _dispatched = True
+                        break
+                if not _dispatched:
+                    yield from fallback_fn(*args_list)
+                    break  # fallback has its own internal TRO loop
+                if tro_state[0]:
+                    for _i in range(arity):
+                        args_list[_i + 2] = tro_state[_i + 1]
+                    continue
+                break
+            yield (parent, done)
+    else:
+        def dispatch(*args):
+            parent = args[1]
+            for _pos, _idx_dict, _dflt_fn in plans:
+                _a = deref(args[_pos + 2])
+                if not is_var(_a):
+                    _k = _runtime_arg_key(_a)
+                    try:
+                        _bfn = _idx_dict.get(_k)
+                    except TypeError:
+                        _bfn = None
+                    if _bfn is not None:
+                        yield from _bfn(*args)
+                    else:
+                        yield from _dflt_fn(*args)
+                    yield (parent, done)
+                    return
+            yield from fallback_fn(*args)
+            yield (parent, done)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch

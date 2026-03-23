@@ -301,13 +301,19 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
 
 **Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
 
-**Safety check**: tail call arguments that are variables from head pattern decomposition (e.g., `T` from `[H, *T]`) are only allowed when there is at least one deterministic prefix goal, which implies the decomposed argument was ground. Passthrough variables (same `Var` at the same position in head and tail call) are always safe. This prevents incorrect TRO on predicates like `MyPrefix([H, *T], [H, *R]) <- MyPrefix(T, R)` where the first argument might be an unbound output variable.
+**Safety check**: tail call arguments that are variables from head pattern decomposition (e.g., `T` from `[H, *T]`) are only allowed when there is at least one deterministic prefix goal, which implies the decomposed argument was ground. A **runtime ground-check** (`is_var()`) on these specific captured args provides provable correctness: if any checked arg is an unbound Var, execution falls back to a normal `StepGenerator` call. Passthrough variables (same `Var` at the same position in head and tail call) are always safe and skip the runtime check.
 
-**Limitations** (Phase 1):
+**Indexed predicates**: TRO works across both groundness-keyed dispatch and list structural dispatch:
+
+- **Groundness dispatch**: bucket functions use "signal mode" — setting a shared `_tro_state` list instead of looping internally. The dispatch closure checks `_tro_state[0]` after each `yield from` and re-dispatches with new args, potentially selecting a different bucket (e.g., the base-case bucket for key=0 after counting down from N).
+- **List structural dispatch**: a TRO-aware body compiler is passed to `_build_list_dispatch_guard`. The `while True` loop wraps the entire dispatch guard, so TRO restarts re-evaluate the nil/cons/var branching with the new args.
+- **Fallback functions** (all clauses, called when no arg is ground) use "loop mode" TRO — the same internal `while True` + `continue` as non-indexed predicates.
+
+**Limitations**:
 
 - Disabled for tabled predicates (SLG tabling has its own suspension protocol).
-- Disabled for indexed predicates — TRO within a bucket function would only retry clauses in that bucket, missing base cases in other buckets.
 - Self-recursion only — mutual recursion (A→B→A) is not detected.
+- Nondeterministic prefix goals (predicate calls before the tail call) prevent TRO.
 
 Detection: `_detect_tro_clause`, `_is_deterministic_goal`, `_tro_args_safe`.
 Code generation: `_compile_tro_body`, `_compile_tro_tail`.
