@@ -1152,19 +1152,19 @@ tests/
 
 ## Revised Phase Map
 
-Phase | Tier | New files | Key deliverable
----|---|---|---
-**1.1** Prolog AST + operators | — | 3 | Shared infrastructure: nodes, visitor, transformer, builders, OperatorTable
-**1.2** clausal → Prolog text | 1 | 2 | pythonic_ast → Prolog AST → `.pl` source; naming; CLI
-**1b** AST ↔ runtime bridge | 2 | 1 | `clausal_term_to_pterm`, `pterm_to_clausal_term`, `db_to_prolog_ast`, `prolog_ast_to_db`
-**2** Dialect layer | 1,2 | 1 (extend) | SWI/Scryer-specific emission, library maps, untranslatable handling
-**3.1** Prolog tokenizer | 1 | 1 | Lexer for Prolog source
-**3.2** Pratt parser | 1 | 1 | Prolog source → Prolog AST with dynamic `op/3`
-**3.3** Prolog → clausal text | 1 | 1 | Prolog AST → `.clausal` source
-**3b** Runtime bridge | 3 | 1 | `PrologBridge` ABC, `SWIPrologBridge`, `ScryerPrologBridge`
-**4** Roundtrip validation | 1,2 | 2 | Golden files, property tests, unified CLI
-**5** (stretch) Self-hosted DCG | — | 1–2 .clausal | Pratt parser as clausal DCG grammar
-**6** (stretch) More dialects | 1,2,3 | 1 per dialect | GNU Prolog, ECLiPSe, XSB, Tau Prolog
+Phase | Tier | New files | Key deliverable | Status
+---|---|---|---|---
+**1.1** Prolog AST + operators | — | 3 | Shared infrastructure: nodes, visitor, transformer, builders, OperatorTable | **done**
+**1.2** clausal → Prolog text | 1 | 2 | pythonic_ast → Prolog AST → `.pl` source; naming; CLI | **done**
+**1b** AST ↔ runtime bridge | 2 | 1 | `clausal_term_to_pterm`, `pterm_to_clausal_term`, `db_to_prolog_ast`, `prolog_ast_to_db` | not started
+**2** Dialect layer | 1,2 | 1 (extend) | SWI/Scryer-specific emission, library maps, untranslatable handling | **done**
+**3.1** Prolog tokenizer | 1 | 1 | Lexer for Prolog source | **done**
+**3.2** Pratt parser | 1 | 1 | Prolog source → Prolog AST with dynamic `op/3` | **done**
+**3.3** Prolog → clausal text | 1 | 1 | Prolog AST → `.clausal` source | **done**
+**3b** Runtime bridge | 3 | 1 | `PrologBridge` ABC, `SWIPrologBridge`, `ScryerPrologBridge` | not started
+**4** Roundtrip validation | 1,2 | 2 | Golden files, property tests, unified CLI | **done**
+**5** (stretch) Self-hosted DCG | — | 1–2 .clausal | Pratt parser as clausal DCG grammar | not started
+**6** (stretch) More dialects | 1,2,3 | 1 per dialect | GNU Prolog, ECLiPSe, XSB, Tau Prolog | not started
 
 **Phase 1b can be done in parallel with Phase 1.2** — they share the Prolog AST nodes
 from 1.1 but are otherwise independent. The bridge is especially valuable early because

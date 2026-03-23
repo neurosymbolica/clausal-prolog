@@ -287,19 +287,104 @@ python -m clausal.tools.prolog_to_clausal input.pl --operator-map ops.json
 
 ## CLI tools
 
-### Clausal → Prolog
+### Unified translator
+
+The recommended entry point for all translation tasks:
+
+```bash
+# Clausal → Prolog (auto-detected from .clausal extension)
+python -m clausal.tools.translate input.clausal -o output.pl
+
+# Prolog → Clausal (auto-detected from .pl extension)
+python -m clausal.tools.translate input.pl -o output.clausal
+
+# Explicit target format
+python -m clausal.tools.translate input.clausal --to swi -o output.pl
+python -m clausal.tools.translate input.clausal --to scryer -o output.pl
+python -m clausal.tools.translate input.pl --to clausal -o output.clausal
+
+# Pipe mode (stdin/stdout)
+echo 'Foo(1, 2),' | python -m clausal.tools.translate --to swi
+echo 'foo(1, 2).' | python -m clausal.tools.translate --to clausal
+
+# Roundtrip check (exit 0 if roundtrip reproduces the original)
+python -m clausal.tools.translate --roundtrip input.clausal --dialect swi
+python -m clausal.tools.translate --roundtrip input.pl --dialect swi
+```
+
+Options:
+
+| Flag | Description |
+|---|---|
+| `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted |
+| `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for clausal→prolog, swi for prolog→clausal) |
+| `-o FILE` | Output file (stdout if omitted) |
+| `--roundtrip` | Translate there and back; exit 0 if output matches input |
+
+### Single-direction tools
+
+The individual tools are still available:
 
 ```bash
 python -m clausal.tools.clausal_to_prolog input.clausal -o output.pl --dialect swi
-```
-
-### Prolog → Clausal
-
-```bash
 python -m clausal.tools.prolog_to_clausal input.pl -o output.clausal --dialect swi
 ```
 
-Both tools support pipe mode (stdin/stdout) when file arguments are omitted.
+### Python API
+
+```python
+from clausal.tools.translate import translate, roundtrip
+from clausal.tools.prolog_dialect import Dialect
+
+# One-step translation
+prolog = translate(clausal_src, direction="clausal_to_prolog", dialect=Dialect.swi())
+clausal = translate(prolog_src, direction="prolog_to_clausal", dialect=Dialect.swi())
+
+# Roundtrip check
+ok, first_leg, second_leg = roundtrip(source, direction="clausal_to_prolog", dialect=Dialect.swi())
+```
+
+---
+
+## Roundtrip properties
+
+The roundtrip validation (Phase 4) verifies these properties when translating there and back:
+
+| Property | Status |
+|---|---|
+| Clause count preserved | Verified for all non-DCG fixtures |
+| Head functor/arity preserved | Verified |
+| Variable identity preserved | Variables that co-occur in source still co-occur |
+| Clause order preserved | Predicate clause order is semantic in Prolog |
+| Operator precedence preserved | `a + b * c` stays `a + b * c` |
+| Directive preservation | One-leg verified (dynamic, module, use_module) |
+
+### Known roundtrip limitations
+
+- **DCG rules**: Prolog `-->` ↔ clausal `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
+- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(Foo/2),` → the `/2` arity indicator doesn't re-parse as clausal in the return leg. Single-leg translation works correctly in both directions.
+- **Whitespace/formatting**: Exact text match is not guaranteed; structural equivalence is.
+
+---
+
+## Golden test files
+
+Golden snapshot files live in `tests/fixtures/prolog_golden/`:
+
+| Direction | Files | Purpose |
+|---|---|---|
+| Clausal → Prolog | `*.pl` (11 files) | Checked-in expected Prolog output |
+| Prolog → Clausal | `*.clausal` (11 files) | Checked-in expected clausal output |
+
+To regenerate golden files after changing translation logic:
+
+```bash
+# Clausal → Prolog
+python -m clausal.tools.clausal_to_prolog SOURCE.clausal -o tests/fixtures/prolog_golden/NAME.pl
+
+# Prolog → Clausal
+python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_golden/NAME.clausal
+```
 
 ---
 
@@ -309,4 +394,6 @@ Both tools support pipe mode (stdin/stdout) when file arguments are omitted.
 - **Phase 1.2** (done): Clausal → Prolog text emission
 - **Phase 2** (done): Dialect-specific emission, golden tests, CLI
 - **Phase 3** (done): Prolog → Clausal (tokenizer, Pratt parser, Prolog AST → `.clausal` text)
-- **Phase 4**: Roundtrip validation & unified CLI
+- **Phase 4** (done): Roundtrip validation, golden Prolog→Clausal files, unified CLI
+- **Phase 5** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a clausal DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
+- **Phase 6** (stretch, not started): Additional dialects — GNU Prolog (`fd_*` constraints), ECLiPSe (`lib(ic)`, `do/2`), XSB Prolog (HiLog, tabling differences), Tau Prolog (JavaScript-hosted); each as a `Dialect` subclass

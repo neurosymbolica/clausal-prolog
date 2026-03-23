@@ -1,9 +1,16 @@
-"""Golden-file snapshot tests for clausal → Prolog translation (Step 1.6).
+"""Golden-file snapshot tests for bidirectional clausal ↔ Prolog translation.
 
-Each test reads a .clausal source file, translates it to Prolog, and compares
-against a checked-in golden .pl file.  If the golden file needs updating,
-run:
-    python -m clausal.tools.clausal_to_prolog SOURCE.clausal -o GOLDEN.pl
+Clausal → Prolog (Step 1.6):
+    Each test reads a .clausal source file, translates it to Prolog, and compares
+    against a checked-in golden .pl file.  If the golden file needs updating,
+    run:
+        python -m clausal.tools.clausal_to_prolog SOURCE.clausal -o GOLDEN.pl
+
+Prolog → Clausal (Phase 4.3):
+    Each test reads a .pl golden file, translates to clausal, and compares
+    against a checked-in golden .clausal file.  If the golden file needs updating,
+    run:
+        python -m clausal.tools.prolog_to_clausal SOURCE.pl -o GOLDEN.clausal
 """
 
 from pathlib import Path
@@ -11,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+from clausal.tools.prolog_to_clausal import prolog_to_clausal
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CONFORMITY = Path(__file__).parent / "conformity"
@@ -241,3 +249,123 @@ class TestCLI:
         content = out.read_text()
         assert "bar(X) :-" in content
         assert "baz(X)." in content
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 4.3: Golden snapshot tests — Prolog → Clausal direction
+# ═══════════════════════════════════════════════════════════════════════
+
+
+# (source .pl path, golden .clausal path) pairs
+_REVERSE_CASES = [
+    (GOLDEN / "edge_graph.pl", GOLDEN / "edge_graph.clausal"),
+    (GOLDEN / "fibonacci.pl", GOLDEN / "fibonacci.clausal"),
+    (GOLDEN / "dcg_grammar.pl", GOLDEN / "dcg_grammar.clausal"),
+    (GOLDEN / "meta_test.pl", GOLDEN / "meta_test.clausal"),
+    (GOLDEN / "clpfd_queens.pl", GOLDEN / "clpfd_queens.clausal"),
+]
+
+_REVERSE_CONFORMITY = [
+    (GOLDEN / "iso_arithmetic.pl", GOLDEN / "iso_arithmetic.clausal"),
+    (GOLDEN / "iso_control.pl", GOLDEN / "iso_control.clausal"),
+    (GOLDEN / "iso_list_operations.pl", GOLDEN / "iso_list_operations.clausal"),
+    (GOLDEN / "iso_term_manipulation.pl", GOLDEN / "iso_term_manipulation.clausal"),
+    (GOLDEN / "iso_type_checking.pl", GOLDEN / "iso_type_checking.clausal"),
+    (GOLDEN / "iso_unification.pl", GOLDEN / "iso_unification.clausal"),
+]
+
+ALL_REVERSE = _REVERSE_CASES + _REVERSE_CONFORMITY
+
+
+@pytest.mark.parametrize(
+    "pl_path,golden_clausal_path",
+    ALL_REVERSE,
+    ids=[p[0].stem for p in ALL_REVERSE],
+)
+def test_reverse_golden_snapshot(pl_path, golden_clausal_path):
+    """Prolog → clausal output matches the golden .clausal snapshot."""
+    source = pl_path.read_text(encoding="utf-8")
+    golden = golden_clausal_path.read_text(encoding="utf-8")
+    result = prolog_to_clausal(source)
+    assert result == golden, (
+        f"Translation of {pl_path.name} does not match golden file "
+        f"{golden_clausal_path.name}.\n"
+        f"To update: python -m clausal.tools.prolog_to_clausal "
+        f"{pl_path} -o {golden_clausal_path}"
+    )
+
+
+class TestReverseSyntax:
+    """Verify structural properties of Prolog → clausal golden output."""
+
+    @pytest.mark.parametrize(
+        "pl_path,golden_clausal_path",
+        ALL_REVERSE,
+        ids=[p[0].stem for p in ALL_REVERSE],
+    )
+    def test_no_trailing_whitespace(self, pl_path, golden_clausal_path):
+        golden = golden_clausal_path.read_text(encoding="utf-8")
+        for i, line in enumerate(golden.split("\n"), 1):
+            if line != line.rstrip():
+                pytest.fail(f"{golden_clausal_path.name}:{i}: trailing whitespace")
+
+    @pytest.mark.parametrize(
+        "pl_path,golden_clausal_path",
+        ALL_REVERSE,
+        ids=[p[0].stem for p in ALL_REVERSE],
+    )
+    def test_no_prolog_syntax_leaks(self, pl_path, golden_clausal_path):
+        """Translated clausal output should not contain Prolog-specific syntax."""
+        import re
+        golden = golden_clausal_path.read_text(encoding="utf-8")
+        stripped = re.sub(r'"[^"]*"', '""', golden)
+        stripped = re.sub(r"'[^']*'", "''", stripped)
+        for line in stripped.split("\n"):
+            s = line.strip()
+            if s.startswith("#"):
+                continue
+            assert "\\+" not in s, f"Prolog negation leaked: {s}"
+
+    @pytest.mark.parametrize(
+        "pl_path,golden_clausal_path",
+        ALL_REVERSE,
+        ids=[p[0].stem for p in ALL_REVERSE],
+    )
+    def test_uses_clausal_conventions(self, pl_path, golden_clausal_path):
+        """Output uses PascalCase predicates and clausal arrow syntax."""
+        golden = golden_clausal_path.read_text(encoding="utf-8")
+        lines = [l.strip() for l in golden.split("\n") if l.strip() and not l.strip().startswith("#")]
+        if not lines:
+            pytest.skip("Empty output")
+        # At least one line should have a PascalCase predicate or a fact comma
+        has_pascal = any(
+            l[0].isupper() for l in lines
+            if l and l[0].isalpha()
+        )
+        has_arrow = any("<-" in l for l in lines)
+        has_comma = any(l.rstrip().endswith(",") for l in lines)
+        assert has_pascal or has_arrow or has_comma, (
+            "Output doesn't look like clausal syntax"
+        )
+
+
+class TestUnifiedCLI:
+    """Test the unified translate CLI."""
+
+    def test_help(self):
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "clausal.tools.translate", "--help"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "clausal-translate" in result.stdout or "translate" in result.stdout
+
+    def test_roundtrip_flag(self):
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "clausal.tools.translate", "--roundtrip",
+             str(GOLDEN / "edge_graph.pl")],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0

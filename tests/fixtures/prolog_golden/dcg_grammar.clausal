@@ -1,0 +1,25 @@
+-module(dcg_grammar, [Sentence/2, NounPhrase/2, VerbPhrase/2, Greeting/2, Digit/3, Ab/2, LookAhead/3, NotA/2, ExprDcg/3, ValidSentence/1]),
+
+Greeting() >> (['hello', 'world'])
+
+NounPhrase() >> ((['the', 'dog'] or (['the', 'cat'] or ['a', 'bird'])))
+
+VerbPhrase() >> ((['chases'] or (['sees'] or ['likes'])))
+
+Sentence() >> (noun_phrase, verb_phrase, noun_phrase)
+
+Digit(D) >> ([D], D >= 0, D <= 9)
+
+Ab() >> (['a'], ab)
+
+Ab() >> (['b'], ab)
+
+Ab() >> ([])
+
+,(LookAhead(T), [T]) >> ([T])
+
+NotA() >> (not ['a'], [X])
+
+ValidSentence(S) <- (Phrase(sentence, S))
+
+ExprDcg(E) >> ([E], E is E + 0)

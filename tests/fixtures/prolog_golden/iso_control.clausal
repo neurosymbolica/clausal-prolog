@@ -1,0 +1,51 @@
+-module(iso_control, [Test/1]),
+
+Choose(X, _, X),
+
+Choose(_, Y, Y),
+
+SafeMax(X, Y, X) <- (X >= Y)
+
+SafeMax(X, Y, Y) <- (Y > X)
+
+Test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
+
+Test('conjunction fails if first fails') <- (not a is b , X is 1)
+
+Test('conjunction fails if second fails') <- (not X is 1 , a is b)
+
+Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, R := X + Y + Z, R == 6)
+
+Test('disjunction first succeeds') <- ((X is 1 or X is 2))
+
+Test('disjunction first fails, second succeeds') <- ((a is b or X is 1))
+
+Test('disjunction both fail') <- (not (a is b or c is d))
+
+Test('not: failed unification succeeds') <- (not 1 is 2)
+
+Test('not: successful unification fails') <- (not not 1 is 1)
+
+Test('not: member absent') <- (not In(d, [a, b, c]))
+
+Test('not: member present fails') <- (not not In(b, [a, b, c]))
+
+Test('double negation: not not (1=1)') <- (not not 1 is 1)
+
+Test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- ((X is 1 , Y is a or X is 2 , Y is b))
+
+Test('not + member: d not in list') <- (not In(d, [a, b, c]))
+
+Test('conjunction + negation') <- (X is 5, not X is 3, X == 5)
+
+Test('choose picks first') <- (Choose(1, 2, 1))
+
+Test('choose picks second') <- (Choose(1, 2, 2))
+
+Test('choose with atoms') <- (Choose(a, b, a))
+
+Test('safe_max: first is larger') <- (SafeMax(5, 3, M), M == 5)
+
+Test('safe_max: second is larger') <- (SafeMax(2, 7, M), M == 7)
+
+Test('safe_max: equal') <- (SafeMax(4, 4, M), M == 4)

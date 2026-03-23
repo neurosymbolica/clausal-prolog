@@ -1,0 +1,147 @@
+-module(iso_list_operations, [Test/1]),
+
+Palindrome(xs_) <- (Reverse(xs_, xs_))
+
+SortedAsc([]),
+
+SortedAsc([_]),
+
+SortedAsc([A, B, *rest_]) <- (A <= B, SortedAsc([B, *rest_]))
+
+IsPermutation(xs_, ys_) <- (Length(xs_, N), Length(ys_, N), Sort(xs_, S), Sort(ys_, S))
+
+Test('in: found') <- (b in [a, b, c])
+
+Test('in: not found') <- (not d in [a, b, c])
+
+Test('in: empty list fails') <- (not x in [])
+
+Test('in: integer') <- (2 in [1, 2, 3])
+
+Test('not in: absent') <- (not d in [a, b, c])
+
+Test('not in: present fails') <- (not not b in [a, b, c])
+
+Test('not in: empty list') <- (not x in [])
+
+Test('member: found') <- (In(b, [a, b, c]))
+
+Test('member: not found') <- (not In(d, [a, b, c]))
+
+Test('member: empty fails') <- (not In(x, []))
+
+Test('memberchk: found') <- (InCheck(b, [a, b, c]))
+
+Test('memberchk: not found') <- (not InCheck(d, [a, b, c]))
+
+Test('append two lists') <- (Append([1, 2], [3, 4], [1, 2, 3, 4]))
+
+Test('append empty left') <- (Append([], [1, 2], [1, 2]))
+
+Test('append empty right') <- (Append([1, 2], [], [1, 2]))
+
+Test('append both empty') <- (Append([], [], []))
+
+Test('append binds result') <- (Append([1], [2], R), R == [1, 2])
+
+Test('length of 3') <- (Length([a, b, c], 3))
+
+Test('length empty') <- (Length([], 0))
+
+Test('length one') <- (Length([42], 1))
+
+Test('length binds') <- (Length([1, 2, 3], N), N == 3)
+
+Test('last element') <- (Last([1, 2, 3], 3))
+
+Test('last singleton') <- (Last([42], 42))
+
+Test('last empty fails') <- (not Last([], _))
+
+Test('reverse list') <- (Reverse([1, 2, 3], [3, 2, 1]))
+
+Test('reverse empty') <- (Reverse([], []))
+
+Test('reverse singleton') <- (Reverse([42], [42]))
+
+Test('reverse involution') <- (Reverse([1, 2, 3], R), Reverse(R, rr_), rr_ == [1, 2, 3])
+
+Test('nth0 first') <- (GetItem(0, [a, b, c], a))
+
+Test('nth0 last') <- (GetItem(2, [a, b, c], c))
+
+Test('nth1 first') <- (GetItem(0, [a, b, c], a))
+
+Test('nth1 last') <- (GetItem(2, [a, b, c], c))
+
+Test('nth0 out of range') <- (not GetItem(5, [a, b], _))
+
+Test('nth1 zero fails') <- (not GetItem(-1, [a, b], _))
+
+Test('sort removes dups') <- (Sort([3, 1, 2, 1], [1, 2, 3]))
+
+Test('sort already sorted') <- (Sort([1, 2, 3], [1, 2, 3]))
+
+Test('sort empty') <- (Sort([], []))
+
+Test('msort preserves dups') <- (MergeSort([3, 1, 2, 1], [1, 1, 2, 3]))
+
+Test('sort strings') <- (Sort([c, a, b], [a, b, c]))
+
+Test('flatten nested') <- (Flatten([1, [2, [3]], 4], [1, 2, 3, 4]))
+
+Test('flatten already flat') <- (Flatten([1, 2, 3], [1, 2, 3]))
+
+Test('flatten empty') <- (Flatten([], []))
+
+Test('select element') <- (Select(2, [1, 2, 3], [1, 3]))
+
+Test('select first') <- (Select(1, [1, 2, 3], [2, 3]))
+
+Test('select not found') <- (not Select(9, [1, 2, 3], _))
+
+Test('subtract') <- (Subtract([1, 2, 3, 4], [2, 4], [1, 3]))
+
+Test('intersection') <- (Intersection([1, 2, 3], [2, 3, 4], [2, 3]))
+
+Test('union') <- (Union([1, 2], [2, 3], [1, 2, 3]))
+
+Test('list_to_set') <- (ToSet([1, 2, 1, 3, 2], [1, 2, 3]))
+
+Test('sum_list') <- (SumList([1, 2, 3, 4], 10))
+
+Test('sum_list empty') <- (SumList([], 0))
+
+Test('max_list') <- (MaxList([3, 1, 4, 1, 5], 5))
+
+Test('min_list') <- (MinList([3, 1, 4, 1, 5], 1))
+
+Test('max_list singleton') <- (MaxList([42], 42))
+
+Test('palindrome: empty') <- (Palindrome([]))
+
+Test('palindrome: single') <- (Palindrome([1]))
+
+Test('palindrome: aba') <- (Palindrome([1, 2, 1]))
+
+Test('palindrome: abba') <- (Palindrome([1, 2, 2, 1]))
+
+Test('not palindrome: ab') <- (not Palindrome([1, 2]))
+
+Test('sorted_asc: empty') <- (SortedAsc([]))
+
+Test('sorted_asc: single') <- (SortedAsc([1]))
+
+Test('sorted_asc: ascending') <- (SortedAsc([1, 2, 3]))
+
+Test('sorted_asc: not descending') <- (not SortedAsc([3, 2, 1]))
+
+Test('sorted_asc: equal elements') <- (SortedAsc([2, 2, 2]))
+
+Test('is_permutation: same list') <- (IsPermutation([1, 2, 3], [1, 2, 3]))
+
+Test('is_permutation: reordered') <- (IsPermutation([3, 1, 2], [1, 2, 3]))
+
+Test('not permutation: different lengths') <- (not IsPermutation([1, 2], [1, 2, 3]))
+
+Test('is_permutation: empty') <- (IsPermutation([], []))

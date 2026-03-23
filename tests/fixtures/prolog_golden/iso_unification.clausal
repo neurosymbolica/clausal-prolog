@@ -1,0 +1,39 @@
+-module(iso_unification, [Test/1]),
+
+SameValue(X, Y) <- (X is Y, X == Y)
+
+Test('atom unifies with itself') <- (X is a, X == a)
+
+Test('var unifies with atom') <- (X is a, X == a)
+
+Test('var unifies with integer') <- (X is 42, X == 42)
+
+Test('var unifies with list') <- (X is [1, 2, 3], X == [1, 2, 3])
+
+Test('different atoms fail') <- (not X is a , X is b , X == b)
+
+Test('list unification') <- (X is [a], X == [a])
+
+Test('empty lists unify') <- (X is [], X == [])
+
+Test('different atoms: is not succeeds') <- (X is a, Dif(X, b))
+
+Test('same atom: is not fails') <- (X is a, not Dif(X, a))
+
+Test('same atom ==') <- (a == a)
+
+Test('different atoms == fails') <- (a != b)
+
+Test('same integer ==') <- (42 == 42)
+
+Test('bound var == value') <- (X is hello, X == hello)
+
+Test('different atoms !=') <- (a != b)
+
+Test('same atom != fails') <- (not a != a)
+
+Test('same_value: integers') <- (SameValue(42, 42))
+
+Test('same_value: strings') <- (SameValue(hello, hello))
+
+Test('same_value: lists') <- (SameValue([1, 2], [1, 2]))
