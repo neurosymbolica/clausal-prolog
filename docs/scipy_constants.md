@@ -95,7 +95,7 @@ Access all three CODATA fields for a constant in a single call.
 ```clausal
 # skip
 Lookup('electron mass', V, U, ERR)
-% V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
+# V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
 ```
 
 Fails if `NAME` is not recognised, or if any output argument fails to unify.
@@ -112,11 +112,11 @@ Search the CODATA database by substring; returns all matching constant names.
 ```clausal
 # skip
 Find('electron mass', NAMES)
-% NAMES = ['alpha particle-electron mass ratio',
-%           'deuteron-electron mass ratio', 'electron mass', ...]
+# NAMES = ['alpha particle-electron mass ratio',
+# 'deuteron-electron mass ratio', 'electron mass', ...]
 
 Find('zzznomatch', NAMES)
-% NAMES = []
+# NAMES = []
 ```
 
 ---
@@ -235,18 +235,18 @@ SI giga prefix: 1 × 10⁹.
 -import_from(scipy_constants, [SpeedOfLight, BoltzmannConstant,
                                 AvogadroConstant, Value, Unit])
 
-% Thermal energy at room temperature (kT at 300 K)
+# Thermal energy at room temperature (kT at 300 K)
 ThermalEnergy(KT) <-
     BoltzmannConstant(K),
     KT is K * 300.
 
-% Check that c agrees with CODATA lookup
+# Check that c agrees with CODATA lookup
 CheckC <-
     SpeedOfLight(C_DIRECT),
     Value('speed of light in vacuum', C_LOOKUP),
     C_DIRECT == C_LOOKUP.
 
-% Print the unit of Planck's constant
+# Print the unit of Planck's constant
 PlanckUnit <-
     Unit('Planck constant', U),
     Writeln(U).
@@ -259,3 +259,7 @@ PlanckUnit <-
 - All values reflect the 2018 CODATA recommended values as shipped with the installed version of SciPy.
 - Several fundamental constants (c, h, e, k, Nₐ) became exact definitions under the 2019 SI redefinition; their `Precision` is 0.0.
 - `Value`, `Unit`, and `Precision` accept the same name strings as `scipy.constants.value()`, `scipy.constants.unit()`, and `scipy.constants.precision()`. Unknown names cause the predicate to fail.
+
+---
+
+*See also: [Python Interop](python_integration.md) — `++()` escape for direct `scipy.constants` access · [Arithmetic](arithmetic.md) — numeric operations in Clausal.*

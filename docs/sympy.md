@@ -518,3 +518,7 @@ Function and constant names follow SymPy's conventions where possible:
     - `tests/fixtures/sympy_special.clausal` — 8 tests (summation, product, binomial)
 
     Total: **132 tests**.
+
+---
+
+*See also: [Arithmetic](arithmetic.md) — Clausal's built-in arithmetic · [Python Interop](python_integration.md) — `++()` escape for additional SymPy operations.*

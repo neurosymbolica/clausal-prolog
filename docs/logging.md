@@ -325,3 +325,7 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
     5. **f-string messages** — no special formatting needed; Clausal's f-string support handles interpolation with auto-deref of logic variables.
     6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.
+
+---
+
+*See also: [I/O](io.md) — `Write`, `Writeln`, and f-string output · [Python Interop](python_integration.md) — `++()` escape for custom logging handlers.*

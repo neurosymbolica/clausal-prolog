@@ -1064,3 +1064,7 @@ GetItem(INDEX, LIST, ELEM),                 # 0-based index access
 InCheck(ELEM, LIST),                        # deterministic membership check
 Unpack(TERM, LIST),                         # decompose/construct term
 ```
+
+---
+
+*See also: [Tutorial](tutorial.md) — hands-on introduction to Clausal · [Predicates & Rules](predicates.md) — clause forms, dispatch, and guards · [Builtins](builtins.md) — full predicate reference.*

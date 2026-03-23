@@ -63,10 +63,10 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 ```clausal
 # skip
-% Destructure a dataset
+# Destructure a dataset
 LoadDataset("iris", D), D is ("Dataset", X, Y)
 
-% Destructure a fitted model
+# Destructure a fitted model
 Fit(Est("svc", {}), D, F), F is ("Fitted", E, H)
 ```
 
@@ -96,10 +96,10 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
 
 ```clausal
 # skip
-% Check that random_forest is a classifier
+# Check that random_forest is a classifier
 Algorithm("random_forest", "classifier")
 
-% Enumerate all regressors
+# Enumerate all regressors
 Algorithm(ALGO, "regressor")
 ```
 
@@ -118,12 +118,12 @@ Algorithm(ALGO, "regressor")
 
 ```clausal
 # skip
-% Load and split iris
+# Load and split iris
 LoadDataset("iris", D),
 SplitData(D, 0.2, 42, S),
 S is ("Split", TRAIN, TEST)
 
-% Synthetic classification data
+# Synthetic classification data
 MakeDataset("classification",
             {"n_samples": 200, "n_features": 5, "random_state": 42},
             D)
@@ -145,13 +145,13 @@ MakeDataset("classification",
 
 ```clausal
 # skip
-% Classification workflow
+# Classification workflow
 LoadDataset("iris", D),
 Fit(Est("random_forest", {"n_estimators": 100}), D, F),
 D is ("Dataset", X, Y),
 Predict(F, X, PREDS)
 
-% PCA transform
+# PCA transform
 LoadDataset("iris", D),
 D is ("Dataset", X, Y),
 Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F),
@@ -177,14 +177,14 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 ```clausal
 # skip
-% Score a classifier
+# Score a classifier
 Score(F, D, S), S > 0.9
 
-% 3-fold cross-validation
+# 3-fold cross-validation
 CrossValScore(Est("logistic_regression", {"max_iter": 200}),
               D, 3, SCORES)
 
-% Multi-metric CV
+# Multi-metric CV
 CrossValidate(Est("logistic_regression", {"max_iter": 200}),
               D, 3, ["accuracy", "f1_weighted"], R)
 ```
@@ -311,3 +311,7 @@ Learned(F, "feature_importances", FI)
         BestScore(BEST, SCORE)
     )
     ```
+
+---
+
+*See also: [Python Interop](python_integration.md) — `++()` escape for direct scikit-learn access · [Higher-Order](higher_order.md) — `MapList` and `Filter` for data preprocessing.*

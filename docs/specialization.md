@@ -254,3 +254,7 @@ Pre-registration at Step 1c creates an empty `PredicateMeta` class so that later
     Fixtures: `specialize_natnum.clausal`, `specialize_graph.clausal`,
     `specialize_limit.clausal`, `specialize_builtins.clausal`,
     `specialize_deep.clausal`, `specialize_cpd.clausal`.
+
+---
+
+*See also: [Indexing](indexing.md) — first-argument indexing and groundness-keyed dispatch · [Compiler](compiler.md) — the underlying compilation pipeline.*

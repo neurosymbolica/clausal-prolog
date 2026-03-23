@@ -327,3 +327,7 @@ sparsity(DATA, IDX, PTR, SPARSITY) <- (
     Free(A)
 )
 ```
+
+---
+
+*See also: [scipy.linalg](scipy_linalg.md) — dense linear algebra · [scipy.spatial](scipy_spatial.md) — sparse distance matrices.*

@@ -315,14 +315,14 @@ Example:
 # skip
 -import_from(scipy_stats, [StatsNormalPdf, StatsNormalCdf, StatsDist])
 
-% Probability that X ~ N(0,1) falls in [-1, 1]
+# Probability that X ~ N(0,1) falls in [-1, 1]
 NormalInterval(P) <- (
     StatsNormalCdf(1.0, HIGH),
     StatsNormalCdf(-1.0, LOW),
     P is ++(float(HIGH) - float(LOW))
 )
 
-% Generic: exponential distribution entropy
+# Generic: exponential distribution entropy
 ExponEntropy(H) <- (
     StatsDist('expon', 'entropy', H)
 )

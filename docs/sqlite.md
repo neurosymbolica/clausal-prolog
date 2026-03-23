@@ -295,3 +295,7 @@ ShowSchema(COL, TYPE) <- (
     4. **Single-column unwrap** — `SQLiteQuery` unwraps single-column rows to bare values (not 1-tuples), making common patterns like `SELECT name FROM ...` cleaner.
     5. **Nondeterministic iteration** — `SQLiteQuery`, `SQLiteTable`, `SQLiteColumn`, and `SQLiteCurrentConnection` yield one solution per row/item on backtracking, following the standard Prolog database query pattern.
     6. **No C FFI** — unlike prosqlite (SWI-Prolog) which wraps libsqlite3 via C, this module delegates entirely to Python's `sqlite3` stdlib. Zero external dependencies.
+
+---
+
+*See also: [Database Ops](database_ops.md) — Clausal's assert/retract for in-memory facts · [Python Interop](python_integration.md) — direct SQL via `++()` escape.*

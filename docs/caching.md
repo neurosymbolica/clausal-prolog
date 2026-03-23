@@ -127,3 +127,7 @@ The old `_predicate_loader` global is set to `None` for backward compatibility d
     - Dynamic predicates remain unlocked after cached load
     - `sys.dont_write_bytecode` suppression
     - Deferred compilation: `compile_predicate` called once per predicate, not once per clause
+
+---
+
+*See also: [Module System](import.md) — the import hook that drives caching · [Architecture](architecture.md) — where caching fits in the compilation pipeline.*

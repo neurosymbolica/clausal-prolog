@@ -456,3 +456,7 @@ NounLemmas(TEXT, LEMMAS) <- (
     4. **Model aliases** — models are referenced by string aliases throughout, making predicates composable without carrying model references. The same pattern is used in the SQLite module.
     5. **`Pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `Pos` (title-case) avoids the collision.
     6. **Lazy spaCy import** — `import spacy` is deferred to first use so that `.clausal` files importing this module compile correctly even when spaCy is not installed. Errors are reported at predicate call time with a clear message.
+
+---
+
+*See also: [Regex](regex.md) — pattern matching in strings · [Python Interop](python_integration.md) — `++()` escape for additional spaCy features.*

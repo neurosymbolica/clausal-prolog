@@ -93,7 +93,7 @@ Degree([["a", "b"], ["b", "c"]], "b", D)     % D = 2
 ```clausal
 # skip
 BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
-% N = ["a", "b", "c", "d"]
+# N = ["a", "b", "c", "d"]
 ```
 
 ---
@@ -108,17 +108,17 @@ BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 
 ```clausal
 # skip
-% Enumerate all paths
+# Enumerate all paths
 FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", P)
-% P = ["a", "b", "c"]  then  P = ["a", "c"]
+# P = ["a", "b", "c"]  then  P = ["a", "c"]
 
-% Shortest path in a weighted graph
+# Shortest path in a weighted graph
 ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P)
-% P = ["a", "b", "c"]
+# P = ["a", "b", "c"]
 
-% Cost of a path
+# Cost of a path
 PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
-% C = 8
+# C = 8
 ```
 
 ---
@@ -134,10 +134,10 @@ PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], C)
 ```clausal
 # skip
 ConnectedComponents([["a", "b"], ["c", "d"]], C)
-% C = [["a", "b"], ["c", "d"]]
+# C = [["a", "b"], ["c", "d"]]
 
 TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O)
-% O = ["a", "b", "c"]
+# O = ["a", "b", "c"]
 ```
 
 ---
@@ -152,7 +152,7 @@ TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], O)
 ```clausal
 # skip
 MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
-% T = [["a", "b", 1], ["b", "c", 2]]   C = 3
+# T = [["a", "b", 1], ["b", "c", 2]]   C = 3
 ```
 
 ---
@@ -167,5 +167,9 @@ MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
 ```clausal
 # skip
 ReverseEdges([["a", "b"], ["c", "d"]], R)
-% R = [["b", "a"], ["d", "c"]]
+# R = [["b", "a"], ["d", "c"]]
 ```
+
+---
+
+*See also: [Tabling](tabling.md) — memoised search for cycle-free results on cyclic graphs · [Lists](lists.md) — list predicates used by graph algorithms.*

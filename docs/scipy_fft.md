@@ -41,7 +41,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 ```clausal
 # skip
 FFTransform(++(np.array([1,0,0,0])), RESULT),
-% RESULT is unified with the complex spectrum array
+# RESULT is unified with the complex spectrum array
 ```
 
 ---
@@ -281,7 +281,7 @@ TestRoundTrip(SIGNAL) <- (
 # skip
 -import_from(scipy_fft, [FFTransform])
 
-% Linear convolution of two equal-length signals (circular; pad as needed)
+# Linear convolution of two equal-length signals (circular; pad as needed)
 FFTConvolve(A, B, RESULT) <- (
     FFTransform(A, FA),
     FFTransform(B, FB),
@@ -318,3 +318,7 @@ ImageSpectrum(IMAGE, CENTRED_SPECTRUM) <- (
   exposed; use the `++()` escape directly for that case.
 - Predicates fail (no solution) when scipy raises an exception, or when a
   bound `RESULT` does not unify with the computed value.
+
+---
+
+*See also: [scipy.signal](scipy_signal.md) — signal processing using FFT · [scipy.interpolate](scipy_interpolate.md) — frequency-domain interpolation.*

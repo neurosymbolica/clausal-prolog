@@ -1,59 +1,218 @@
 # I/O Builtins
 
-Clausal provides built-in predicates for formatted output and term-to-string conversion. The `.clausal` file format also supports f-string interpolation for string construction.
+Clausal provides built-in predicates for formatted output, term-to-string conversion, and f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered.
 
+---
+
+## Quick Example
+
+```clausal
+greet(NAME) <- (
+    Write("Hello, "),
+    Writeln(NAME)
+)
+
+Test("greet") <- greet("Alice")
+```
 
 ---
 
 ## Output Predicates
 
-| Builtin | Arity | Description |
-|---|---|---|
-| `Write` | 1 | Write a term to stdout (no newline) |
-| `Writeln` | 1 | Write a term to stdout followed by a newline |
-| `PrintTerm` | 1 | Write a term using its string representation |
-| `Nl` | 0 | Write a newline |
-| `Tab` | 1 | Write N spaces |
+### Write/1 vs Writeln/1 vs PrintTerm/1
 
-### Examples
+All three write a term to stdout, but differ in formatting:
+
+| Builtin | Newline? | Strings | Terms |
+|---|---|---|---|
+| `Write/1` | No | Quoted (`"hello"`) | Functor notation |
+| `Writeln/1` | Yes | Quoted (`"hello"`) | Functor notation |
+| `PrintTerm/1` | No | Unquoted (`hello`) | `str()` representation |
 
 ```clausal
-greet(NAME) <- (Write("Hello, "), Write(NAME), Nl())
+# Write: no newline, quoted strings
+Test("write") <- (Write("hello"), Write(" "), Write("world"), Nl())
 
-show_all(XS) <- (
-    In(X, XS),
-    Writeln(X)
-)
+# Writeln: like Write + Nl
+Test("writeln") <- Writeln("hello")
 
+# PrintTerm: unquoted, str()-style
+Test("print term") <- PrintTerm("hello")
+```
+
+**When to use which:**
+
+- `Write` / `Writeln` — standard output, preserves Clausal term syntax
+- `PrintTerm` — human-readable output (no quotes around strings)
+- `Write` + `Nl` — when you need precise control over newlines
+
+### Nl/0
+
+Write a newline character:
+
+```clausal
+Test("newline") <- (Nl(), Nl())
+```
+
+### Tab/1
+
+Write N spaces:
+
+```clausal
 indented(X) <- (Tab(4), Writeln(X))
+
+Test("indented") <- indented("hello")
 ```
 
 ---
 
 ## String Conversion
 
-| Builtin | Arity | Description |
-|---|---|---|
-| `WriteToString` | 2 | `WriteToString(Term, String)` — unify String with the Write representation |
-| `TermToString` | 2 | `TermToString(Term, String)` — unify String with the str() representation |
+### WriteToString/2
+
+`WriteToString(Term, String)` — unify String with the Write representation of Term (quoted strings, functor notation):
 
 ```clausal
 format_pair(K, V, S) <- WriteToString(K - V, S)
+
+Test("write to string") <- (
+    format_pair("name", "alice", S),
+    IsBound(S)
+)
 ```
+
+### TermToString/2
+
+`TermToString(Term, String)` — unify String with the `str()` representation of Term (unquoted strings):
+
+```clausal
+label(X, S) <- TermToString(X, S)
+
+Test("term to string int") <- (label(42, S), S == "42")
+Test("term to string str") <- (label("hello", S), IsBound(S))
+```
+
+**WriteToString vs TermToString:**
+
+| Input | WriteToString | TermToString |
+|---|---|---|
+| `42` | `"42"` | `"42"` |
+| `"hello"` | quoted | unquoted |
+| `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` |
+
+Use `TermToString` when building human-readable strings. Use `WriteToString` when you need a representation that could be read back.
 
 ---
 
 ## F-String Support
 
-In `.clausal` files, f-strings are supported for string construction. Logic variables are automatically dereferenced before interpolation:
+In `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
 
 ```clausal
 describe(NAME, AGE, S) <- (
     S is f"Name: {NAME}, Age: {AGE}"
 )
+
+Test("describe") <- (
+    describe("Alice", 30, S),
+    S == "Name: Alice, Age: 30"
+)
 ```
 
-This uses `FStringThunk` / `FStringPart` for deferred evaluation — the f-string is evaluated at search time after variables are bound.
+### Expressions in F-Strings
+
+F-strings support arbitrary Python expressions inside `{}`:
+
+```clausal
+summarize(XS, S) <- (
+    Length(XS, N),
+    S is f"List has {N} element(s)"
+)
+
+Test("summarize") <- (
+    summarize([1, 2, 3], S),
+    S == "List has 3 element(s)"
+)
+```
+
+### Multi-Variable F-Strings
+
+All logic variables referenced in the f-string are dereferenced:
+
+```clausal
+full_name(FIRST, LAST, S) <- (
+    S is f"{FIRST} {LAST}"
+)
+
+Test("full name") <- (
+    full_name("Alice", "Smith", S),
+    S == "Alice Smith"
+)
+```
+
+### Deferred Evaluation
+
+F-strings use deferred evaluation — the f-string is evaluated at search time, after variables are bound. This means f-strings work correctly with backtracking:
+
+```clausal
+color("red"),
+color("green"),
+color("blue"),
+
+describe_color(S) <- (
+    color(C),
+    S is f"The color is {C}"
+)
+
+Test("deferred f-string") <- (
+    describe_color(S),
+    S == "The color is red"
+)
+```
+
+---
+
+## Formatting Patterns
+
+### Printing a List
+
+```clausal
+show_all(XS) <- (
+    In(X, XS),
+    Writeln(X)
+)
+
+Test("show all") <- show_all([1, 2, 3])
+```
+
+### String Building with TermToString
+
+```clausal
+format_item(X, S) <- TermToString(X, S)
+
+Test("format item") <- (
+    format_item(42, S),
+    S == "42"
+)
+```
+
+### Building Strings with FoldLeft
+
+Use `:=` with `+` to concatenate strings inside a FoldLeft closure:
+
+```clausal
+concat_all(XS, RESULT) <- (
+    FoldLeft(
+        ((E, A, R) <- (R := A + E)),
+        XS, "", RESULT
+    )
+)
+
+Test("concat all") <- (
+    concat_all(["a", "b", "c"], R),
+    R == "abc"
+)
+```
 
 ---
 
@@ -61,10 +220,29 @@ This uses `FStringThunk` / `FStringPart` for deferred evaluation — the f-strin
 
 Logic variables have `__str__` and `__format__` methods (in the C extension) that auto-deref for display:
 
-- Bound var: displays the bound value
-- Unbound var: displays `_VarN` (unique ID)
+- **Bound var**: displays the bound value
+- **Unbound var**: displays `_N` (unique numeric ID)
 
-This means `f"{X}"` and `Write(X)` show the value if bound, or a placeholder if unbound.
+This means `f"{X}"` and `Write(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
+
+```python
+from clausal.logic.variables import Var, Trail, unify
+
+v = Var()
+print(f"Unbound: {v}")   # _42  (placeholder)
+
+trail = Trail()
+unify(v, "hello", trail)
+print(f"Bound: {v}")     # hello
+```
+
+---
+
+## Gotchas
+
+- **Write quotes strings**, PrintTerm does not. If your output has unwanted quotes, switch to `PrintTerm` or use f-strings.
+- **F-strings evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
+- **Nl/0 takes no arguments** — `Nl()` not `Nl(1)`. Use `Tab(N)` for spacing.
 
 ---
 
@@ -81,3 +259,4 @@ This means `f"{X}"` and `Write(X)` show the value if bound, or a placeholder if 
 ---
 
 *See also: [Python Integration](python_integration.md) — using `++()` escape for Python calls inside logic goals.*
+*See also: [Lambdas](lambdas.md) — goal closures used with FoldLeft and other higher-order predicates.*

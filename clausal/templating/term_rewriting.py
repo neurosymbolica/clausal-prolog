@@ -168,8 +168,19 @@ def _leftmost_usub(node):
         depth += 1
 
 
-def _is_arrow_adjacent(left, usub_node):
-    """True if ``<`` and ``-`` are adjacent (gap ≤ 2 columns, same line).
+def _is_arrow_adjacent(left, usub_node, source_lines=None):
+    """True if ``<`` and ``-`` form a contiguous ``<-`` arrow in source.
+
+    Python parses ``head <- body`` as ``head < (-body)``.  To distinguish
+    a genuine arrow from ``a < -b`` (less-than with negation) we check
+    that the ``<`` character immediately precedes the ``-`` in the source
+    text — i.e. no whitespace between them.
+
+    When *source_lines* is provided, the check is exact: the character at
+    column ``usub_col - 1`` on the USub's line must be ``<``.
+
+    When *source_lines* is ``None`` (programmatically constructed AST),
+    we fall back to a column-gap heuristic (gap ≤ 2).
 
     Raises ``ValueError`` when position attributes are missing, which
     happens with programmatically constructed AST nodes that were never
@@ -192,10 +203,19 @@ def _is_arrow_adjacent(left, usub_node):
             "positions; use ast.fix_missing_locations() on programmatically "
             "constructed AST trees"
         )
-    return end_line == usub_line and 1 <= usub_col - end_col <= 2
+    if end_line != usub_line:
+        return False
+
+    if source_lines is not None and usub_col >= 1:
+        # Exact check: the character before '-' must be '<'.
+        line = source_lines[usub_line - 1]  # 1-based lineno
+        return usub_col - 1 < len(line) and line[usub_col - 1] == "<"
+
+    # Fallback heuristic for programmatic AST (no source available).
+    return 1 <= usub_col - end_col <= 2
 
 
-def _detect_arrow(left, operators, comparators):
+def _detect_arrow(left, operators, comparators, source_lines=None):
     """Detect ``<-`` in a Compare node.
 
     Returns ``(head_ast, body_ast)`` if the Compare represents
@@ -220,7 +240,7 @@ def _detect_arrow(left, operators, comparators):
     if usub_node is None:
         return None
 
-    if not _is_arrow_adjacent(left, usub_node):
+    if not _is_arrow_adjacent(left, usub_node, source_lines):
         return None
 
     # The <- was found.  Now enforce the parenthesization rule.
@@ -262,7 +282,7 @@ def _extract_arrow_lambda_params(head_ast):
     return None
 
 
-def _check_hidden_arrow(node):
+def _check_hidden_arrow(node, source_lines=None):
     """Raise if a top-level BoolOp hides a ``<-`` clause arrow.
 
     When the user writes ``head <- a or b`` without parenthesizing the
@@ -279,7 +299,7 @@ def _check_hidden_arrow(node):
         return
     first_comp = inner.comparators[0]
     usub_node, _ = _leftmost_usub(first_comp)
-    if usub_node is not None and _is_arrow_adjacent(inner.left, usub_node):
+    if usub_node is not None and _is_arrow_adjacent(inner.left, usub_node, source_lines):
         raise SyntaxError(_ARROW_BODY_ERROR)
 
 
@@ -410,10 +430,11 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
 class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
-    def __init__(transformer, atoms=frozenset(), import_remap=None):
+    def __init__(transformer, atoms=frozenset(), import_remap=None, source_lines=None):
         transformer.seen_vars = set()
         transformer.atoms = atoms
         transformer._import_remap = import_remap or {}
+        transformer._source_lines = source_lines
 
     def visit_Await(transformer, await_expr):
         return node_ast("Await", await_expr, value=transformer.visit(await_expr.value))
@@ -428,7 +449,7 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_BoolOp(transformer, bool_operation):
-        _check_hidden_arrow(bool_operation)
+        _check_hidden_arrow(bool_operation, transformer._source_lines)
         # Python's BoolOp has N values; simple_ast uses nested binary And/Or
         class_name = BOOLOP_CLS[type(bool_operation.op)]
         value_nodes = [
@@ -557,7 +578,7 @@ class TermTransformer(NodeTransformer):
         # expression.  When the body itself contains comparisons (e.g.
         # `a <- 1 < 2`), Python produces a chained comparison with multiple
         # operators.  _detect_arrow handles all of these cases.
-        arrow = _detect_arrow(left, operators, comparators)
+        arrow = _detect_arrow(left, operators, comparators, transformer._source_lines)
         if arrow is not None:
             head_ast, body_ast = arrow
             # If the head consists solely of logic-variable names (or is an
@@ -2015,12 +2036,13 @@ class EmbedTransformer(NodeTransformer):
       _name       In outer Python code, rewrites to _name.value (unbox logic var).
     """
 
-    def __init__(transformer):
+    def __init__(transformer, source_lines=None):
         transformer._scope_depth = 0
         transformer._seen_functors: dict[str, list[str]] = {}
         transformer._atoms: set[str] = set()
         transformer._import_remap: dict[str, str] = {}
         transformer._module_items: list = []
+        transformer._source_lines = source_lines
         # EDCG declarations: populated by -edcg_acc, -edcg_pass, -edcg_pred directives.
         transformer._edcg_accs: dict[str, dict] = {}   # name → {val, in_, out, joiner_ast}
         transformer._edcg_passes: set[str] = set()      # set of pass names
@@ -2077,7 +2099,7 @@ class EmbedTransformer(NodeTransformer):
     def visit_Expr(transformer, expr_stmt):
         """Detect trailing-comma tuple (Prolog fact) and module-level predicate definitions."""
         if transformer._scope_depth == 0:
-            _check_hidden_arrow(expr_stmt.value)
+            _check_hidden_arrow(expr_stmt.value, transformer._source_lines)
         match expr_stmt.value:
             # -directive(...) at module level: unary minus applied to a call.
             # Currently only -module(name, [exports]) is recognised.
@@ -2246,7 +2268,7 @@ class EmbedTransformer(NodeTransformer):
                 left=left, ops=ops, comparators=comparators,
             ) if (
                 transformer._scope_depth == 0
-                and (arrow := _detect_arrow(left, ops, comparators)) is not None
+                and (arrow := _detect_arrow(left, ops, comparators, transformer._source_lines)) is not None
             ):
                 # Module-level predicate definition: functor_call<-body
                 _, body_expr = arrow

@@ -65,7 +65,7 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 ```clausal
 # skip
 Linkage(DATA, 'ward', Z),
-% Z is the linkage matrix for ward hierarchical clustering
+# Z is the linkage matrix for ward hierarchical clustering
 ```
 
 ---
@@ -85,7 +85,7 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 # skip
 Linkage(DATA, 'ward', Z),
 FlatCluster(Z, 3, 'maxclust', LABELS),
-% LABELS[i] is the cluster number for observation i
+# LABELS[i] is the cluster number for observation i
 ```
 
 ---
@@ -103,7 +103,7 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 Linkage(DATA, 'ward', Z),
 Dendrogram(Z, D),
 ResultGet(D, 'leaves', LEAVES),
-% LEAVES is the list of leaf node indices
+# LEAVES is the list of leaf node indices
 ```
 
 ---
@@ -122,7 +122,7 @@ Linkage(DATA, 'ward', Z),
 Y is ++(pdist(DATA)),
 Cophenet(Z, Y, RESULT),
 ResultGet(RESULT, 'c', C),
-% C is the cophenetic correlation coefficient (1.0 = perfect)
+# C is the cophenetic correlation coefficient (1.0 = perfect)
 ```
 
 ---
@@ -139,7 +139,7 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 # skip
 Linkage(DATA, 'ward', Z),
 Inconsistent(Z, STATS),
-% STATS[i, 3] is the inconsistency coefficient for merge i
+# STATS[i, 3] is the inconsistency coefficient for merge i
 ```
 
 ---
@@ -179,7 +179,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 KMeans(DATA, 2, RESULT),
 ResultGet(RESULT, 'codebook', CODEBOOK),
 ResultGet(RESULT, 'distortion', D),
-% D is the mean Euclidean distance to the nearest centroid
+# D is the mean Euclidean distance to the nearest centroid
 ```
 
 ---
@@ -239,14 +239,14 @@ ResultGet(R, 'distortion', D),
 
 ```clausal
 # skip
-% 1. Load and whiten data
+# 1. Load and whiten data
 Whiten(RAW_DATA, DATA),
 
-% 2. Hierarchical clustering to explore structure
+# 2. Hierarchical clustering to explore structure
 Linkage(DATA, 'ward', Z),
 FlatCluster(Z, 3, 'maxclust', LABELS),
 
-% 3. k-means for production assignment
+# 3. k-means for production assignment
 KMeans(DATA, 3, KR),
 ResultGet(KR, 'codebook', CODEBOOK),
 VectorQuantize(DATA, CODEBOOK, VQR),
@@ -261,3 +261,7 @@ ResultGet(VQR, 'code', ASSIGNMENTS).
 - `KMeans` and `KMeans2` may warn about empty clusters on small or degenerate data.
 - `Dendrogram` always passes `no_plot=True` internally — it returns the layout dict but never calls matplotlib. If you need a plot, access the raw data via `ResultGet` and draw it yourself.
 - All predicates fail silently (yield no solutions) on exceptions such as singular matrices or incompatible array shapes.
+
+---
+
+*See also: [scipy.spatial](scipy_spatial.md) — distance metrics and spatial structures · [scipy.stats](scipy_stats.md) — statistical distributions and tests.*

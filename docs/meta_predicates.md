@@ -27,7 +27,7 @@ If Goal has no solutions, Bag is unified with `[]`.
 
 ### BagOf/3
 
-`BagOf(Template, Goal, Bag)` — like FindAll, but **fails** if Goal has no solutions. Also respects `^` (existential quantification) for free variables.
+`BagOf(Template, Goal, Bag)` — like FindAll, but **fails** if Goal has no solutions (FindAll returns `[]` instead).
 
 ```clausal
 adults(PEOPLE, ADULTS) <- (
@@ -35,20 +35,90 @@ adults(PEOPLE, ADULTS) <- (
 )
 ```
 
+#### BagOf vs FindAll
+
+The only difference between BagOf and FindAll is how they handle the empty case:
+
+```clausal
+age("alice", 30),
+age("bob", 25),
+age("carol", 30),
+
+all_people(PEOPLE) <- BagOf(NAME, age(NAME, _), PEOPLE)
+
+Test("bag of people") <- (
+    all_people(PEOPLE),
+    Length(PEOPLE, 3)
+)
+```
+
+Use BagOf when you want failure on empty results, FindAll when you always want a list.
+
 ### SetOf/3
 
-`SetOf(Template, Goal, Set)` — like BagOf, but returns a **sorted list with duplicates removed**.
+`SetOf(Template, Goal, Set)` — like BagOf, but returns a **sorted list with duplicates removed**. Also fails on no solutions.
 
 ```clausal
 unique_members(XS, US) <- SetOf(X, In(X, XS), US)
 ```
 
+#### SetOf vs Sort(FindAll(...))
+
+Both produce sorted, deduplicated results. The differences:
+
+| | `SetOf(T, G, S)` | `FindAll(T, G, S0)` + `Sort(S0, S)` |
+|---|---|---|
+| Empty result | **Fails** | Succeeds with `S = []` |
+| Deduplication | Yes (sorted set) | Only if you call `Sort` |
+| Use when | You want failure on empty | You always want a list |
+
+```clausal
+Test("setof unique") <- (
+    SetOf(X, In(X, [3, 1, 2, 1, 3]), XS),
+    Length(XS, 3)
+)
+
+# SetOf fails if no solutions; FindAll always succeeds (returns []):
+Test("findall empty ok") <- (
+    FindAll(X, (In(X, []), X > 0), BAG),
+    BAG == []
+)
+```
+
 ### ForAll/2
 
-`ForAll(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds.
+`ForAll(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. Equivalent to `not (Condition, not Action)`.
 
 ```clausal
 all_positive(XS) <- ForAll(In(X, XS), X > 0)
+```
+
+#### ForAll Patterns
+
+**Validate all elements**:
+
+```clausal
+all_in_range(XS, LO, HI) <- ForAll(In(X, XS), (X >= LO, X <= HI))
+```
+
+**Check a property across a collection**:
+
+```clausal
+all_connected(NODES, GRAPH) <- (
+    ForAll(
+        (In(A, NODES), In(B, NODES), Dif(A, B)),
+        reachable(A, B, GRAPH)
+    )
+)
+```
+
+**Guard before processing**:
+
+```clausal
+safe_sum(XS, TOTAL) <- (
+    ForAll(In(X, XS), IsNumber(X)),
+    SumList(XS, TOTAL)
+)
 ```
 
 ---
@@ -222,3 +292,9 @@ double_positives(XS, RS) <- FilterMap(
     - `tests/test_meta.py` (23 tests): FindAll, BagOf, SetOf, ForAll, Call/N, `.clausal` integration
     - `tests/test_higher_order.py` (34 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, builtin predicates as arguments
     - `tests/fixtures/builtin_as_arg.clausal` (5 tests): Filter/MapList with builtin predicates (IsNumber, IsInt, Succ)
+
+---
+
+*See also: [Lambdas](lambdas.md) — goal closures used with higher-order predicates.*
+*See also: [Lists](lists.md) — list predicates that pair well with meta-predicates.*
+*See also: [Higher-Order](higher_order.md) — dedicated page for MapList, Filter, FoldLeft, etc.*

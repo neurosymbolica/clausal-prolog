@@ -331,6 +331,34 @@ def test_arrow_detection_no_positions():
     assert result is None
 
 
+def test_arrow_detection_extra_whitespace():
+    """Arrow ``<-`` must be detected regardless of whitespace before ``<``."""
+    import ast as pyast
+    from clausal.templating.term_rewriting import _detect_arrow
+
+    for spaces in [1, 2, 4, 8]:
+        code = f'head(X){" " * spaces}<- body(X)\n'
+        source_lines = code.splitlines(keepends=True)
+        tree = pyast.parse(code)
+        compare = tree.body[0].value
+        result = _detect_arrow(
+            compare.left, compare.ops, compare.comparators, source_lines
+        )
+        assert result is not None, (
+            f"Arrow not detected with {spaces} space(s) before <-"
+        )
+
+    # ``a < -b`` (space between ``<`` and ``-``) must NOT be detected as arrow
+    code = "a < -b\n"
+    source_lines = code.splitlines(keepends=True)
+    tree = pyast.parse(code)
+    compare = tree.body[0].value
+    result = _detect_arrow(
+        compare.left, compare.ops, compare.comparators, source_lines
+    )
+    assert result is None, "a < -b should not be detected as arrow"
+
+
 def test_negative_literal_folding():
     # -3 in a term should be Constant(-3), not Negate(3).
     node = term_eval("-3", int)

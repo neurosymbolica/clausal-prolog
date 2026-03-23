@@ -219,3 +219,7 @@ CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`Tr
     - **Full adder**: 5 input combinations
     - **Pigeon-hole**: unsatisfiable
     - **Circuit equivalence**: De Morgan's law
+
+---
+
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) for integer constraints · [CLP(R)](clpr.md) — real-domain constraint solving.*

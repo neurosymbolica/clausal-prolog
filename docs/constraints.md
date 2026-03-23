@@ -577,13 +577,13 @@ The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R)
 
 ```clausal
 # skip
-% Float literal triggers CLP(R)
+# Float literal triggers CLP(R)
 sqrt2(X) <- (
     InReal(X, 0.0, 2.0),
     X * X == 2.0,
     LabelReal([X], 1.0e-12)
 )
-% → X ≈ 1.4142135623730951
+# → X ≈ 1.4142135623730951
 ```
 
 ### Cross-domain notes
@@ -592,3 +592,7 @@ sqrt2(X) <- (
 - **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(R) or CLP(FD) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
 - **Labeling order:** for mixed-domain variables, use `Label` (FD) first to fix integer values, then `LabelReal` for remaining real variables. `LabelReal` does not enforce integrality.
 - **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.
+
+---
+
+*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(R)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics.*

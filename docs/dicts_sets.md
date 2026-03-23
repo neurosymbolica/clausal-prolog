@@ -470,3 +470,7 @@ deref(x)  # 42
 - **No variable set elements**: Set elements must be ground/hashable.
 - **Splat requires bound DictTerm**: `{**OLD, "k": v}` requires `OLD` to be a bound `DictTerm` at runtime. Unbound `OLD` raises `AttributeError` on `.data` access.
 - **No mutable variants**: Mutable dict/set types were considered and rejected — the `++()` Python escape covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.
+
+---
+
+*See also: [Python Interop](python_integration.md) — `++()` escape for dict/set mutation patterns · [Builtins](builtins.md) — full predicate index including dict and set predicates.*

@@ -151,7 +151,9 @@ phrase(digit(D), [5])    # D = 5
 
 ## State Threading
 
-DCGs are a general state-passing mechanism — not just for parsing lists of tokens. The hidden difference-list pair can thread any state.
+DCGs are a general state-passing mechanism — not just for parsing lists of tokens. The hidden difference-list pair can thread any state through `phrase/3`.
+
+A complete working example of all patterns below is in `clausal/examples/dcg_state.clausal`.
 
 ### Core Pattern
 
@@ -236,3 +238,9 @@ valid_sentence(S) <- phrase(sentence, S)
     - **phrase/2,3**: full parse, partial parse, remainder
     - **State threading**: counter, tree counting, accumulator
     - **Fixture integration**: `dcg_grammar.clausal` with mixed rules and regular predicates
+
+---
+
+*See also: [Lambdas](lambdas.md) — goal closures, an alternative to DCGs for some patterns.*
+*See also: [Directives](directives.md) — the `-table` directive for memoizing recursive DCG rules.*
+*See also: [Tabling](tabling.md) — SLG tabling, useful for left-recursive grammars.*

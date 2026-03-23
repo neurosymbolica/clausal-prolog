@@ -165,3 +165,7 @@ This is nondeterministic — it succeeds once for each date in the range.
     - **FormatDate/ParseDate**: strftime/strptime
     - **DayOfWeek**: weekday computation
     - **DateBetween**: date range enumeration
+
+---
+
+*See also: [I/O](io.md) — writing and formatting output · [Python Interop](python_integration.md) — `++()` escape for additional datetime operations.*

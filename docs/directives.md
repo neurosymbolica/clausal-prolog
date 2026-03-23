@@ -61,46 +61,103 @@ See [Import System](import.md) for full details.
 
 ### -dynamic
 
+**Problem**: By default, predicates are locked after loading — you can't change
+them at runtime. But some programs need to add or remove facts during execution
+(counters, caches, learned knowledge).
+
 ```clausal
--dynamic(color/2)
+-dynamic(color/1)
+
+color("red"),
+
+Test("add at runtime") <- (
+    Assert(color("blue")),
+    color("blue")
+)
 ```
 
-Marks a predicate as dynamic — its clauses can be modified at runtime via `Assert/1`, `AssertFirst/1`, and `Retract/1`. Without this directive, predicates are locked after module loading and assertion attempts raise an error.
+Without `-dynamic`, the `Assert` call above would raise a `RuntimeError`.
+See [Database Operations](database_ops.md) for full details.
 
 ### -table
 
+**Problem**: Recursive predicates can loop infinitely or recompute the same
+subproblems. Tabling automatically caches answers and handles left-recursive
+definitions.
+
 ```clausal
 -table(path/2)
+
+edge(1, 2),
+edge(2, 3),
+edge(3, 1),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (edge(X, Z), path(Z, Y))
+
+Test("path 1 3") <- path(1, 3)
+Test("path 2 1") <- path(2, 1)
 ```
 
-Enables SLG tabling (memoization) for a predicate. Tabled predicates automatically cache answers and handle left-recursive definitions that would otherwise loop. Required for well-founded semantics with negation.
+Without `-table`, `path/2` would loop forever on the cycle `1→2→3→1`. With
+tabling, it terminates and returns all reachable pairs. Also required for
+[Well-Founded Semantics](wfs.md).
 
 See [Tabling](tabling.md) for details.
 
 ### -discontiguous
 
+**Problem**: By default, all clauses for a predicate must be grouped together
+in the source file. Sometimes it's clearer to interleave related predicates.
+
 ```clausal
--discontiguous(helper/1)
+-discontiguous(Test/1)
+
+helper(X, Y) <- (Y := X + 1)
+Test("first") <- helper(1, 2)
+
+other_helper(X, Y) <- (Y := X * 2)
+Test("second") <- other_helper(3, 6)
 ```
 
-Allows clauses for a predicate to be scattered throughout the file rather than grouped together. Without this, the compiler assumes all clauses for a predicate are contiguous and may warn or error.
+Without `-discontiguous`, the `Test` clauses being separated by `other_helper`
+would trigger a warning or error.
 
 ### -meta_predicate
 
+**Problem**: When higher-order predicates are imported across modules, the
+module system needs to know which arguments are goals (to resolve them in the
+correct module context).
+
 ```clausal
 # skip
--meta_predicate(map(2, +, -))
+-meta_predicate(my_map(2, +, -))
 ```
 
-Declares the meta-predicate calling convention. Used by the module system for correct import handling of higher-order predicates.
+The `2` means the first argument is a goal that takes 2 extra arguments.
+`+` means input, `-` means output. This ensures correct cross-module
+resolution when `my_map` is imported.
 
 ### -shallow
 
+**Problem**: The default trampoline compilation mode has slight overhead for
+stack safety. For predicates known to have bounded recursion depth (lookups,
+simple dispatches), this overhead is unnecessary.
+
 ```clausal
 -shallow(lookup/2)
+
+lookup("a", 1),
+lookup("b", 2),
+lookup("c", 3),
+
+Test("lookup a") <- (lookup("a", V), V == 1)
+Test("lookup c") <- (lookup("c", V), V == 3)
 ```
 
-Compiles a predicate in simple (non-trampoline) mode. This avoids the overhead of the trampoline protocol for predicates known to have bounded recursion depth. The default is trampoline mode for stack safety.
+`-shallow` compiles in simple mode (direct generator calls) instead of
+trampoline mode. Use it for flat, non-recursive predicates where performance
+matters.
 
 ---
 
@@ -183,3 +240,10 @@ Directives apply to the entire module — they cannot be scoped to individual cl
     - **Table**: tabling metadata, SLG resolution
     - **Parsing**: directive syntax recognition, arity extraction
     - **Import-level locking**: predicates locked after load, dynamic predicates remain mutable
+
+---
+
+*See also: [Predicates](predicates.md) — how predicates and clauses work.*
+*See also: [Import System](import.md) — full details on `-import_from` and `-import_module`.*
+*See also: [Tabling](tabling.md) — SLG tabling enabled by `-table`.*
+*See also: [Database Operations](database_ops.md) — `Assert`/`Retract` builtins that require `-dynamic`.*

@@ -689,3 +689,7 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
     - Multiple literal calls in different clauses each get their own bucket ref
     - Dynamic predicates not specialised
     - Self-recursive unlocked predicates not specialised
+
+---
+
+*See also: [Architecture](architecture.md) — overall pipeline overview · [Compiler](compiler.md) — how predicates are compiled to Python generators · [Specialization](specialization.md) — call-site specialization via partial deduction.*

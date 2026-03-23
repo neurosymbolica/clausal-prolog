@@ -260,3 +260,7 @@ Test("nested access") <- (
     4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `Write(...)`, `Get(...)`.
     5. **All predicates are deterministic** — YAML parsing produces exactly one result (or fails). No backtracking.
     6. **Block-style output** — `Write/2` uses `default_flow_style=False` for human-readable YAML output by default.
+
+---
+
+*See also: [Dicts & Sets](dicts_sets.md) — working with dict terms · [Python Interop](python_integration.md) — direct YAML via `++()` escape.*

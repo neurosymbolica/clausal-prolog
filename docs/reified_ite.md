@@ -274,3 +274,7 @@ Key properties:
     - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
     - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-If, `.clausal` file integration — simple + trampoline modes
     - **`once()` .clausal integration** (1): `once_member.clausal` fixture
+
+---
+
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) constraints used by reified ITE · [Tabling](tabling.md) — WFS negation for tabled predicates · [Lambdas](lambdas.md) — closures that can appear as ITE conditions.*

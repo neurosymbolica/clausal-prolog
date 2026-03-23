@@ -150,12 +150,12 @@ ResultGet(R, 'error', ERR) % ERR is the estimated error
 -import_from(scipy_differentiate, [Derivative, Jacobian, ResultGet])
 -import_from(numpy, [Array])
 
-% Numerical derivative of x³ at x = 2 (exact answer: 12)
+# Numerical derivative of x³ at x = 2 (exact answer: 12)
 CubeDerivative(DF) <-
     Derivative(++(lambda x: x**3), 2.0, R),
     ResultGet(R, 'df', DF).
 
-% Jacobian of f(x) = [x₀², x₁³] at [1, 2]
+# Jacobian of f(x) = [x₀², x₁³] at [1, 2]
 QuadraticJacobian(J) <-
     F is ++(lambda x: __import__('numpy').array([x[0]**2, x[1]**3])),
     X is ++(__import__('numpy').array([1.0, 2.0])),
@@ -240,3 +240,7 @@ Test("derivative units") <- (
   but `'x'` in the result is still wrapped with input dims.
 - The probe consumes one extra function evaluation.  For any non-trivial `f`
   this is negligible relative to scipy's own evaluation count.
+
+---
+
+*See also: [scipy.integrate](scipy_integrate.md) — numerical integration · [scipy.optimize](scipy_optimize.md) — derivative-based optimization.*

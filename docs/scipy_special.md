@@ -363,3 +363,7 @@ FirstAntinode(ZERO) <- (
 - Multi-value outputs (e.g. `BesselJZeros`) return NumPy arrays that can be further processed via `++` escapes.
 - `LambertW` returns a complex value; use `++(float(W.real))` to extract the real part.
 - Predicates fail (no solution) when `unify` with a bound `RESULT` fails; they propagate scipy exceptions otherwise.
+
+---
+
+*See also: [scipy.stats](scipy_stats.md) — statistical distributions using special functions · [Arithmetic](arithmetic.md) — Clausal built-in arithmetic.*

@@ -581,3 +581,7 @@ See each module's documentation for details.
 - **Imperial units are Quantity unit vectors**: `inch`, `foot`, `pound_mass`,
   etc.  Multiply by a scalar in a `++()` escape.  `HasUnits` checks work
   normally since the dimensions are identical to their SI equivalents.
+
+---
+
+*See also: [Arithmetic](arithmetic.md) — numeric operations in Clausal · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*

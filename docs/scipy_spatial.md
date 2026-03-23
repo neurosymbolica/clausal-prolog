@@ -346,16 +346,20 @@ handle is unknown or already freed.
 -import_from(scipy_spatial, [CrossDistance, MakeKdTree, KdTreeQuery,
                               MakeRotation, RotationApply, RotationAs, Free])
 
-% Find the two nearest neighbours of each point
+# Find the two nearest neighbours of each point
 nearest_two(POINTS, INDICES) <- (
     MakeKdTree(POINTS, KD),
     KdTreeQuery(KD, POINTS, 2, R),
     INDICES is ++(R['indices'][:, 1]),
     Free(KD))
 
-% Rotate a batch of vectors by 90 degrees around Z
+# Rotate a batch of vectors by 90 degrees around Z
 rotate_z90(VECTORS, ROTATED) <- (
     MakeRotation('rotvec', ++([0.0, 0.0, 1.5707963267948966]), ROT),
     RotationApply(ROT, VECTORS, ROTATED),
     Free(ROT))
 ```
+
+---
+
+*See also: [scipy.cluster](scipy_cluster.md) — clustering algorithms that use spatial distances · [scipy.sparse](scipy_sparse.md) — sparse distance matrices.*

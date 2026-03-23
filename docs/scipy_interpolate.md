@@ -285,7 +285,7 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 # skip
 -import_from(scipy_interpolate, [MakeCubic, EvalSpline, Free])
 
-% Fit a cubic spline to sample data and evaluate at new points.
+# Fit a cubic spline to sample data and evaluate at new points.
 FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
     MakeCubic(XS, YS, HANDLE),
     EvalSpline(HANDLE, QUERY_XS, VALUES),
@@ -391,3 +391,7 @@ Test("spline with units") <- (
 - **Thread safety**: the handle registry is protected by a lock; predicates are safe to call concurrently.
 - **interp1d deprecation**: `MakeLinear1D` wraps `scipy.interpolate.interp1d`, which is deprecated since SciPy 1.14. It fails gracefully if not available. Use `MakeSpline` with `K=1` for linear interpolation in new code.
 - Predicates fail (yield no solution) when scipy raises an exception, or when a bound `RESULT` does not unify with the computed value.
+
+---
+
+*See also: [scipy.signal](scipy_signal.md) — signal processing · [scipy.special](scipy_special.md) — special functions for interpolation kernels.*

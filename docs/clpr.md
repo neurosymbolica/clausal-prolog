@@ -67,7 +67,7 @@ Each branch of the bisection is a separate solution. Use `LabelReal` after posti
 
 ```clausal
 # skip
-% Two-variable linear system: 2x + 3y = 12, x - y = 1
+# Two-variable linear system: 2x + 3y = 12, x - y = 1
 linear_system(X, Y) <- (
     InReal(X, -100.0, 100.0),
     InReal(Y, -100.0, 100.0),
@@ -75,32 +75,32 @@ linear_system(X, Y) <- (
     X - Y == 1.0,
     LabelReal([X, Y], 1.0e-9)
 )
-% → X ≈ 3.0, Y ≈ 2.0
+# → X ≈ 3.0, Y ≈ 2.0
 ```
 
 ### Non-linear constraints
 
 ```clausal
 # skip
-% Unit circle (first quadrant)
+# Unit circle (first quadrant)
 unit_circle(X, Y) <- (
     InReal(X, 0.0, 1.0),
     InReal(Y, 0.0, 1.0),
     X * X + Y * Y == 1.0,
     LabelReal([X, Y], 1.0e-9)
 )
-% → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
+# → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
 ```
 
 ```clausal
 # skip
-% Square root: find x where x^2 = 2
+# Square root: find x where x^2 = 2
 sqrt2(X) <- (
     InReal(X, 0.0, 2.0),
     X * X == 2.0,
     LabelReal([X], 1.0e-12)
 )
-% → X ≈ 1.4142135623730951
+# → X ≈ 1.4142135623730951
 ```
 
 ### Mixed FD and real
@@ -109,7 +109,7 @@ Integer and real variables can appear together. When an FD variable is involved 
 
 ```clausal
 # skip
-% Worker schedule: integer hours, real cost
+# Worker schedule: integer hours, real cost
 task(HOURS, COST) <- (
     InDomain(HOURS, 1, 8),         % integer hours (CLP(FD))
     InReal(COST, 10.0, 100.0),     % real cost (CLP(R))
@@ -126,7 +126,7 @@ You can also add an FD domain to a variable that already has a real interval:
 
 ```clausal
 # skip
-% Start with a real constraint, then restrict to integers
+# Start with a real constraint, then restrict to integers
 mixed(X) <- (
     InReal(X, 0.0, 100.0),
     X * X <= 50.0,
@@ -141,7 +141,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ```clausal
 # skip
-% No InReal needed — the float literal 9.0 triggers CLP(R)
+# No InReal needed — the float literal 9.0 triggers CLP(R)
 pythagorean_real(X, Y) <- (
     InReal(X, 0.0, 10.0),
     InReal(Y, 0.0, 10.0),
@@ -354,3 +354,7 @@ pythagorean_real(X, Y) <- (
     - **Labeling**: IEEE termination (first solution); eps stopping; already-ground; empty list; constrained (x^2=4); unit circle (1e-9 precision); backtrack restores state
     - **FD/real dispatch**: float literal triggers CLP(R), `real_le` dispatched from `fd_le`, real var triggers dispatch, pure FD unaffected
     - **Auto-promotion**: undeclared var + float eq; Mult expr + float rhs; ground float comparison
+
+---
+
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) for integer constraints · [CLP(B)](clpb.md) — Boolean constraint solving.*

@@ -49,15 +49,24 @@ nav:
     - Dicts and Sets: dicts_sets.md
     - Exceptions: exceptions.md
     - Directives: directives.md
+  - Builtins:
+    - Predicate Index: builtins.md
+    - Type Checking: type_checking.md
+    - Arithmetic: arithmetic.md
+    - Lists: lists.md
+    - Pairs: pairs.md
+    - Higher-Order: higher_order.md
+    - Meta-Predicates: meta_predicates.md
+    - Term Inspection: term_inspection.md
+    - Database Operations: database_ops.md
+    - Keyword Predicates: keyword_preds.md
+    - Control: control.md
+    - I/O: io.md
+    - Logging: logging.md
   - Constraints:
     - Dif & CLP(FD): constraints.md
     - CLP(B): clpb.md
     - CLP(R): clpr.md
-  - Builtins:
-    - Predicate Index: builtins.md
-    - Meta & Higher-Order: meta_predicates.md
-    - I/O: io.md
-    - Logging: logging.md
   - Standard Library:
     - Regex: regex.md
     - Date & Time: date_time.md
@@ -67,6 +76,8 @@ nav:
     - UUIDs: uuid.md
     - Graphs: graphs.md
     - scikit-learn: sklearn.md
+    - SymPy: sympy.md
+    - Units: units.md
     - scipy.special: scipy_special.md
     - scipy.linalg: scipy_linalg.md
     - scipy.optimize: scipy_optimize.md
@@ -81,20 +92,20 @@ nav:
     - scipy.signal: scipy_signal.md
     - scipy.sparse: scipy_sparse.md
     - scipy.cluster: scipy_cluster.md
-    - SymPy: sympy.md
-    - Units: units.md
+  - Advanced:
+    - Module System: import.md
+    - Regex: regex.md
+    - Term & Goal Expansion: term_expansion.md
+    - Python Interop: python_integration.md
+    - Tabling: tabling.md
+    - Well-Founded Semantics: wfs.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
-    - Import System: import.md
     - Indexing: indexing.md
-    - Tabling: tabling.md
-    - Well-Founded Semantics: wfs.md
-    - Term & Goal Expansion: term_expansion.md
     - Caching: caching.md
     - Specialization: specialization.md
   - Prolog Translation: prolog_translation.md
-  - Python Integration: python_integration.md
   - IPython / Jupyter: ipython.md
   - Examples: examples.md
 

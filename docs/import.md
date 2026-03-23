@@ -255,3 +255,7 @@ logic_module = mod.__dict__["$module"]
 ```
 
 Each call creates a fresh `PredicateLoader` and module instance. Any previously cached `sys.modules` entry for the name is evicted first. This is the standard pattern used by all test helpers in the test suite.
+
+---
+
+*See also: [Architecture](architecture.md) — how the import hook fits into the overall pipeline · [Caching](caching.md) — `.pyc` bytecode caching details · [Term & Goal Expansion](term_expansion.md) — module-level compile passes that run during import.*

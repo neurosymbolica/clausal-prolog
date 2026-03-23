@@ -368,3 +368,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
     - `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
     - `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win("a") true)
+
+---
+
+*See also: [Well-Founded Semantics](wfs.md) — three-valued semantics for programs with negation cycles · [Constraints](constraints.md) — attributed variables, the mechanism underlying tabling suspension.*

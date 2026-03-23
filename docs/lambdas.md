@@ -280,3 +280,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
     - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `:=` arithmetic
     - **Higher-order builtins**: MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)
+
+---
+
+*See also: [Higher-Order](higher_order.md) — `MapList`, `Filter`, `FoldLeft` and friends · [Meta-Predicates](meta_predicates.md) — `FindAll`, `BagOf`, `SetOf`, `ForAll`, `Call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*

@@ -29,7 +29,7 @@ Or via the canonical `py.*` path:
 ```clausal
 # skip
 Trapezoid(++([1.0, 2.0, 3.0]), RESULT),
-% RESULT is unified with 4.0
+# RESULT is unified with 4.0
 ```
 
 ### Tier 2 — result dict
@@ -266,7 +266,7 @@ SinIntegral(VALUE) <- (
 # skip
 -import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
 
-% dy/dt = r*y*(1 - y/K), y(0) = y0
+# dy/dt = r*y*(1 - y/K), y(0) = y0
 LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
     SolveInitialValueProblem(
         ++(lambda t, y: [R * y[0] * (1.0 - y[0] / K)]),
@@ -286,7 +286,7 @@ LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
 # skip
 -import_from(scipy_integrate, [Trapezoid, Simpson, CumulativeTrapezoid])
 
-% Integrate a sampled signal using multiple methods
+# Integrate a sampled signal using multiple methods
 CompareIntegrals(Y, TRAP, SIMP) <- (
     Trapezoid(Y, TRAP),
     Simpson(Y, SIMP)
@@ -362,3 +362,7 @@ Test("quad with units") <- (
 - **solve_ivp result shape**: `result['y']` has shape `(n_vars, n_timepoints)` — rows are variables, columns are time points. Access the last value of variable 0 as `y[0, -1]`.
 - **odeint result shape**: `result['y']` has shape `(n_timepoints, n_vars)` — rows are time points, columns are variables. Access the last value of variable 0 as `y[-1, 0]`.
 - Predicates fail (no solution) when scipy raises an exception, or when a bound `RESULT` does not unify with the computed value.
+
+---
+
+*See also: [scipy.differentiate](scipy_differentiate.md) — numerical differentiation · [scipy.optimize](scipy_optimize.md) — optimization using integrals.*

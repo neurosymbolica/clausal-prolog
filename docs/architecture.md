@@ -204,3 +204,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
 | Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation |
 | `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module, `log` module (structured logging wrapping Python's `logging`), `date_time` module (relational date/time using Python `datetime` objects) |
+
+---
+
+*See also: [Compiler](compiler.md) — clause compilation details · [Indexing](indexing.md) — first-argument indexing and groundness dispatch · [Module System](import.md) — import hook and `.pyc` caching.*

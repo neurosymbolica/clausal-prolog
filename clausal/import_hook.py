@@ -235,7 +235,8 @@ class PredicateLoader(SourceLoader):
                 category=SyntaxWarning,
             )
             tree = ast.parse(source, filename=path)
-            transformer = EmbedTransformer()
+            source_lines = source.splitlines(keepends=True)
+            transformer = EmbedTransformer(source_lines=source_lines)
             tree = transformer.visit(tree)
             ast.fix_missing_locations(tree)
             # Store the transformer so _exec_module_v2 can access _module_items.
@@ -312,7 +313,8 @@ class PredicateLoader(SourceLoader):
                     category=SyntaxWarning,
                 )
                 tree = ast.parse(source, filename=filename)
-                transformer = EmbedTransformer()
+                source_lines = source.splitlines(keepends=True)
+                transformer = EmbedTransformer(source_lines=source_lines)
                 transformer.visit(tree)
                 module_items = transformer._module_items
 

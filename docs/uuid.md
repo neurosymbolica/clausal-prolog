@@ -88,13 +88,13 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
 ```clausal
 # skip
-% Generate a UUID and get its string form
+# Generate a UUID and get its string form
 UUIDv4(U), UUIDStr(U, S)
 
-% Parse a UUID from a string
+# Parse a UUID from a string
 UUIDStr(U, "550e8400-e29b-41d4-a716-446655440000")
 
-% Convert to hex
+# Convert to hex
 UUIDHex(U, "550e8400e29b41d4a716446655440000")
 ```
 
@@ -110,10 +110,10 @@ UUIDHex(U, "550e8400e29b41d4a716446655440000")
 
 ```clausal
 # skip
-% Check that a UUID is version 4
+# Check that a UUID is version 4
 UUIDv4(U), UUIDVersion(U, 4)
 
-% Type-check
+# Type-check
 IsUUID(U)
 ```
 
@@ -144,3 +144,7 @@ IsUUID(U)
         UUIDStr(U, ID)
     )
     ```
+
+---
+
+*See also: [Python Interop](python_integration.md) — `++()` escape for additional UUID operations · [Database Ops](database_ops.md) — using UUIDs as fact keys.*
