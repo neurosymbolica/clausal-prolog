@@ -1,0 +1,84 @@
+# Tail Recursion Optimization test predicates.
+
+# ── Accumulator sum ──────────────────────────────────────────────────────────
+# Sum(List, Accumulator, Result): sum elements of List starting from Accumulator.
+# TRO-eligible: prefix is deterministic (Evaluate), tail call is self-recursive.
+
+AccSum([], ACC, ACC),
+AccSum([H, *T], ACC, RESULT) <- (
+    NEWACC := ACC + H,
+    AccSum(T, NEWACC, RESULT)
+)
+
+Test("accsum empty") <- (AccSum([], 0, R) and R == 0)
+Test("accsum one") <- (AccSum([5], 0, R) and R == 5)
+Test("accsum three") <- (AccSum([1, 2, 3], 0, R) and R == 6)
+Test("accsum ten") <- (AccSum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)
+
+# ── Accumulator reverse (uses Append for list construction) ──────────────────
+# AccReverse builds a reversed list via accumulator pattern.
+# Note: [H, *ACC] in a tail call arg hits a pre-existing deref issue with star
+# patterns, so we use a helper that builds the list via Unify instead.
+
+AccReverse([], ACC, ACC),
+AccReverse([H, *T], ACC, RESULT) <- (
+    ACC2 is [H, *ACC],
+    AccReverse(T, ACC2, RESULT)
+)
+
+Test("accrev empty") <- (AccReverse([], [], R) and R == [])
+Test("accrev one") <- (AccReverse([1], [], R) and R == [1])
+Test("accrev three") <- (AccReverse([1, 2, 3], [], R) and R == [3, 2, 1])
+
+# ── Counter-based recursion ─────────────────────────────────────────────────
+# CountDown(N, Accumulator, Result): count down from N, collecting values.
+
+CountDown(0, ACC, [0, *ACC]),
+CountDown(N, ACC, RESULT) <- (
+    N > 0,
+    N1 := N - 1,
+    CountDown(N1, [N, *ACC], RESULT)
+)
+
+Test("countdown zero") <- (CountDown(0, [], R) and R == [0])
+Test("countdown three") <- (CountDown(3, [], R) and R == [0, 1, 2, 3])
+
+# ── Length with accumulator ─────────────────────────────────────────────────
+
+AccLength([], N, N),
+AccLength([_, *T], ACC, N) <- (
+    ACC1 := ACC + 1,
+    AccLength(T, ACC1, N)
+)
+
+Test("acclen empty") <- (AccLength([], 0, N) and N == 0)
+Test("acclen three") <- (AccLength([1, 2, 3], 0, N) and N == 3)
+
+# ── Factorial with accumulator ──────────────────────────────────────────────
+
+AccFactorial(0, ACC, ACC),
+AccFactorial(N, ACC, RESULT) <- (
+    N > 0,
+    NEWACC := ACC * N,
+    N1 := N - 1,
+    AccFactorial(N1, NEWACC, RESULT)
+)
+
+Test("fact zero") <- (AccFactorial(0, 1, R) and R == 1)
+Test("fact five") <- (AccFactorial(5, 1, R) and R == 120)
+Test("fact ten") <- (AccFactorial(10, 1, R) and R == 3628800)
+
+# ── Non-TRO predicate (nondeterministic prefix) for comparison ──────────────
+# This predicate has a predicate call before the tail call, so TRO must NOT apply.
+
+Helper(1),
+Helper(2),
+Helper(3),
+
+CollectHelpers(0, ACC, ACC),
+CollectHelpers(N, ACC, RESULT) <- (
+    N > 0,
+    Helper(V),
+    N1 := N - 1,
+    CollectHelpers(N1, [V, *ACC], RESULT)
+)

@@ -252,6 +252,66 @@ When `fib` is locked at compilation time, the dispatch function is pre-captured 
 _gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
 ```
 
+### Tail recursion optimization (TRO)
+
+When the last goal in a clause body is a self-recursive `Call` and all preceding goals are deterministic (at most one solution, no `StepGenerator` allocation), the compiler replaces the recursive `StepGenerator` allocation with argument reassignment and a loop restart. This reduces the per-recursion memory cost from O(n) generator objects to O(1).
+
+**Eligible pattern** — accumulator-style recursion:
+
+```clausal
+AccSum([], ACC, ACC),
+AccSum([H, *T], ACC, RESULT) <- (
+    NEWACC := ACC + H,
+    AccSum(T, NEWACC, RESULT)
+)
+```
+
+Clause 2 qualifies: the prefix goals (`Evaluate`) are deterministic, and the tail call is to `AccSum` itself. The compiled code uses a `while True` loop:
+
+```python
+def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
+    while True:
+        _d0, _d1, _d2 = deref(arg0), deref(arg1), deref(arg2)
+        _tro = False
+        # clause 1 (base case) — unchanged
+        match (_d0, _d1, _d2):
+            case ...:
+                ...
+                yield (parent, None)
+        # clause 2 (TRO)
+        match (_d0, _d1, _d2):
+            case ...:
+                mark = trail.mark()
+                try:
+                    ...  # deterministic prefix
+                    _tro_arg0 = deref(T)
+                    _tro_arg1 = deref(NEWACC)
+                    _tro_arg2 = deref(RESULT)
+                    _tro = True
+                finally:
+                    trail.undo(mark)
+        if _tro:
+            arg0, arg1, arg2 = _tro_arg0, _tro_arg1, _tro_arg2
+            continue
+        break
+    yield (parent, DONE)
+```
+
+**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `StructuralEq`, `StructuralNeq`, comparisons (`>`, `<`, `>=`, `<=`), `In`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `Once`, `FindAll`, `BagOf`, `SetOf`.
+
+**Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
+
+**Safety check**: tail call arguments that are variables from head pattern decomposition (e.g., `T` from `[H, *T]`) are only allowed when there is at least one deterministic prefix goal, which implies the decomposed argument was ground. Passthrough variables (same `Var` at the same position in head and tail call) are always safe. This prevents incorrect TRO on predicates like `MyPrefix([H, *T], [H, *R]) <- MyPrefix(T, R)` where the first argument might be an unbound output variable.
+
+**Limitations** (Phase 1):
+
+- Disabled for tabled predicates (SLG tabling has its own suspension protocol).
+- Disabled for indexed predicates — TRO within a bucket function would only retry clauses in that bucket, missing base cases in other buckets.
+- Self-recursion only — mutual recursion (A→B→A) is not detected.
+
+Detection: `_detect_tro_clause`, `_is_deterministic_goal`, `_tro_args_safe`.
+Code generation: `_compile_tro_body`, `_compile_tro_tail`.
+
 ### Trampoline driver
 
 The trampoline loop is simple:
