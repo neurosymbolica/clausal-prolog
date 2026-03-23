@@ -15,10 +15,10 @@ Test("accsum one") <- (AccSum([5], 0, R) and R == 5)
 Test("accsum three") <- (AccSum([1, 2, 3], 0, R) and R == 6)
 Test("accsum ten") <- (AccSum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)
 
-# ── Accumulator reverse (uses Append for list construction) ──────────────────
+# ── Accumulator reverse ─────────────────────────────────────────────────────
 # AccReverse builds a reversed list via accumulator pattern.
-# Note: [H, *ACC] in a tail call arg hits a pre-existing deref issue with star
-# patterns, so we use a helper that builds the list via Unify instead.
+# Tail call arg [H, *ACC] contains StarUnpack — TRO handles this via
+# term_to_ast_expr which generates _build_star_list() at snapshot time.
 
 AccReverse([], ACC, ACC),
 AccReverse([H, *T], ACC, RESULT) <- (
