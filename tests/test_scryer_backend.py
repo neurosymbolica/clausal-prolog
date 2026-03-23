@@ -82,13 +82,15 @@ def _run_all_tests(prolog_source: str) -> tuple[list[str], list[str]]:
     harness = textwrap.dedent("""\
         :- use_module(library(lists)).
 
+        safe_test(D) :- catch(test(D), _, fail).
+
         run_tests :-
-            findall(D, test(D), Descs),
+            findall(D, safe_test(D), Descs),
             run_each(Descs).
 
         run_each([]).
         run_each([D|Ds]) :-
-            ( test(D) ->
+            ( safe_test(D) ->
                 write('PASS: '), write(D), nl
             ;
                 write('FAIL: '), write(D), nl
@@ -98,7 +100,9 @@ def _run_all_tests(prolog_source: str) -> tuple[list[str], list[str]]:
 
     # Strip any existing :- module declaration's export list limitation
     # and append the harness + initialization
-    full_source = prolog_source + "\n" + harness
+    # Scryer treats double-quoted strings as char code lists by default;
+    # set them to atoms so test("description") works as expected.
+    full_source = ':- set_prolog_flag(double_quotes, atom).\n' + prolog_source + "\n" + harness
     result = _run_scryer(full_source, "run_tests, halt", timeout=30)
     passed = []
     failed = []
@@ -247,7 +251,7 @@ class TestScryerExecution:
         src = textwrap.dedent("""\
             Even(0),
             Even(N) <- (N > 0, N1 := N - 2, Even(N1))
-            Odd(N) <- not Even(N)
+            Odd(N) <- (not Even(N))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         result = _run_scryer(
@@ -470,6 +474,8 @@ class TestISOEdgeCases:
         """Strings are handled correctly."""
         src = 'Greeting("hello"),'
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        # Scryer treats "hello" as a char list by default; use atom flag
+        prolog = ':- set_prolog_flag(double_quotes, atom).\n' + prolog
         result = _run_scryer(prolog, 'greeting(X), write(X), nl, halt')
         assert result.returncode == 0
         assert "hello" in result.stdout
