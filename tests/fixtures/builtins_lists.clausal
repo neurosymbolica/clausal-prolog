@@ -1,55 +1,56 @@
 # Tests for list predicates
+# Each wrapper exercises a single builtin so Python tests can call it by name.
 
 # In/2, InCheck/2
-HasMember(X_, Xs_) <- In(X_, Xs_)
-HasMemberCheck(X_, Xs_) <- InCheck(X_, Xs_)
+HasMember(X, XS) <- X in XS
+HasMemberCheck(X, XS) <- InCheck(X, XS)
 
 # Append/3
-Concat(A_, B_, C_) <- Append(A_, B_, C_)
+Concat(A, B, C) <- Append(A, B, C)
 
 # Split(Prefix, Suffix, Whole): Whole = Prefix ++ Suffix
-Split(A_, B_, C_) <- Append(A_, B_, C_)
+Split(A, B, C) <- Append(A, B, C)
 
 # Length/2
-ListLength(Xs_, N_) <- Length(Xs_, N_)
+ListLength(XS, N) <- Length(XS, N)
 
 # Last/2
-ListLast(Xs_, X_) <- Last(Xs_, X_)
+ListLast(XS, X) <- Last(XS, X)
 
 # Reverse/2
-ListReverse(Xs_, Ys_) <- Reverse(Xs_, Ys_)
+ListReverse(XS, YS) <- Reverse(XS, YS)
 
 # GetItem/3 (0-based)
-Get0(Xs_, I_, X_) <- GetItem(I_, Xs_, X_)
+Get0(XS, I, X) <- GetItem(I, XS, X)
 
 # Flatten/2
-Flat(Xs_, Ys_) <- Flatten(Xs_, Ys_)
+Flat(XS, YS) <- Flatten(XS, YS)
 
 # MergeSort/2 (stable sort, keeps duplicates), Sort/2 (removes duplicates)
-SortedWithDups(Xs_, Ys_) <- MergeSort(Xs_, Ys_)
-SortedUnique(Xs_, Ys_) <- Sort(Xs_, Ys_)
+SortedWithDups(XS, YS) <- MergeSort(XS, YS)
+SortedUnique(XS, YS) <- Sort(XS, YS)
 
 # Permutation/2
-Perms(Xs_, Ys_) <- Permutation(Xs_, Ys_)
+Perms(XS, YS) <- Permutation(XS, YS)
 
 # Select/3: select element from list leaving rest
-Pick(X_, Xs_, Rest_) <- Select(X_, Xs_, Rest_)
+Pick(X, XS, REST) <- Select(X, XS, REST)
 
 # Subtract/3, Intersection/3, Union/3
-ListDiff(A_, B_, C_) <- Subtract(A_, B_, C_)
-ListInter(A_, B_, C_) <- Intersection(A_, B_, C_)
-ListUnion(A_, B_, C_) <- Union(A_, B_, C_)
+ListDiff(A, B, C) <- Subtract(A, B, C)
+ListInter(A, B, C) <- Intersection(A, B, C)
+ListUnion(A, B, C) <- Union(A, B, C)
 
 # ToSet/2: remove duplicates preserving order
-Dedup(Xs_, Ys_) <- ToSet(Xs_, Ys_)
+Dedup(XS, YS) <- ToSet(XS, YS)
 
 # SumList/2, MaxList/2, MinList/2
-Total(Xs_, S_) <- SumList(Xs_, S_)
-Maximum(Xs_, M_) <- MaxList(Xs_, M_)
-Minimum(Xs_, M_) <- MinList(Xs_, M_)
+Total(XS, S) <- SumList(XS, S)
+Maximum(XS, M) <- MaxList(XS, M)
+Minimum(XS, M) <- MinList(XS, M)
 
 # Unzip/3, PairKeys/2, PairValues/2
-MakePairs(Ks_, Vs_, Ps_) <- Unzip(Ps_, Ks_, Vs_)
-KeysOf(Ps_, Ks_) <- PairKeys(Ps_, Ks_)
-ValuesOf(Ps_, Vs_) <- PairValues(Ps_, Vs_)
+MakePairs(KS, VS, PS) <- Unzip(PS, KS, VS)
+KeysOf(PS, KS) <- PairKeys(PS, KS)
+ValuesOf(PS, VS) <- PairValues(PS, VS)
 

@@ -16,7 +16,7 @@
 Squares(NS, SQUARES) <- (
     FindAll(
         SQ,
-        (In(X, NS) and (SQ := X * X)),
+        (X in NS, (SQ := X * X)),
         SQUARES,
     )
 )
@@ -25,16 +25,17 @@ Squares(NS, SQUARES) <- (
 Positives(NS, POS) <- (
     FindAll(
         X,
-        (In(X, NS) and X > 0),
+        (X in NS, X > 0),
         POS,
     )
 )
 
 # Filter even elements via modulo.
+# TODO: should be X % 2 == 0
 Evens(NS, ES) <- (
     FindAll(
         X,
-        (In(X, NS) and (M := X % 2) and M is 0),
+        (X in NS, (M := X % 2), M is 0),
         ES,
     )
 )
@@ -43,7 +44,7 @@ Evens(NS, ES) <- (
 Pairs(XS1, XS2, RESULT) <- (
     FindAll(
         [A, B],
-        (In(A, XS1) and In(B, XS2)),
+        (A in XS1, B in XS2),
         RESULT,
     )
 )
@@ -52,26 +53,26 @@ Pairs(XS1, XS2, RESULT) <- (
 
 # Deduplicate a list preserving first-occurrence order.
 UniqueMembers(NS, UNIQUE) <- (
-    SetOf(X, In(X, NS), UNIQUE)
+    SetOf(X, X in NS, UNIQUE)
 )
 
 # ── BagOf/3 ───────────────────────────────────────────────────────────────────
 
 # Collect positive elements, fail if none.
 BagPositives(NS, POS) <- (
-    BagOf(X, (In(X, NS) and X > 0), POS)
+    BagOf(X, (X in NS, X > 0), POS)
 )
 
 # ── ForAll/2 ──────────────────────────────────────────────────────────────────
 
 # Check every element is positive.
 AllPositive(NS) <- (
-    ForAll(In(X, NS), X > 0)
+    ForAll(X in NS, X > 0)
 )
 
 # Check every element of SUB1 is in SUPER1.
 AllMembers(SUB1, SUPER1) <- (
-    ForAll(In(X, SUB1), In(X, SUPER1))
+    ForAll(X in SUB1, X in SUPER1)
 )
 
 # ── Composed ──────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ AllMembers(SUB1, SUPER1) <- (
 # Sum of squares via Squares + builtin SumList.
 SumSquares(NS, TOTAL) <- (
     Squares(NS, SQS),
-    SumList(SQS, TOTAL)
+    SumList(SQS, TOTAL),
 )
 
 # ── Tests ─────────────────────────────────────────────────────────────────────

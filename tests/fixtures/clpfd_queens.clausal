@@ -1,26 +1,26 @@
-SafeQueens(N_, Qs_) <- (
-    InDomain(Qs_, 1, N_)
-    and AllDifferent(Qs_)
-    and Label(Qs_)
-    and CheckDiagonals(Qs_)
+SafeQueens(N, QS) <- (
+    InDomain(QS, 1, N),
+    AllDifferent(QS),
+    Label(QS),
+    CheckDiagonals(QS),
 )
 
 CheckDiagonals([]),
 
-CheckDiagonals([Q_, *Rest_]) <- (
-    SafeFrom(Q_, Rest_, 1)
-    and CheckDiagonals(Rest_)
+CheckDiagonals([Q, *REST]) <- (
+    SafeFrom(Q, REST, 1),
+    CheckDiagonals(REST),
 )
 
-SafeFrom(Q_, [], D_),
+SafeFrom(Q, [], D),
 
-SafeFrom(Q_, [H_, *T_], D_) <- (
-    Q_ != H_
-    and (Diff1_ := Q_ - H_)
-    and (Diff2_ := H_ - Q_)
-    and Diff1_ != D_
-    and Diff2_ != D_
-    and (D1_ := D_ + 1)
-    and SafeFrom(Q_, T_, D1_)
+SafeFrom(Q, [H, *T], D) <- (
+    Q != H,
+    (DIFF1 := Q - H),
+    (DIFF2 := H - Q),
+    DIFF1 != D,
+    DIFF2 != D,
+    (D1 := D + 1),
+    SafeFrom(Q, T, D1),
 )
 

@@ -9,8 +9,8 @@ point_type({"x": 1, "y": 0}, "x_axis"),
 point_type({"x": 0, "y": 1}, "y_axis"),
 
 # Dict pattern with variables in values
-get_x({"x": X, "y": Y_}, X),
-get_y({"x": X_, "y": Y}, Y),
+get_x({"x": X, "y": _}, X),
+get_y({"x": _, "y": Y}, Y),
 
 # Nested dict pattern
 get_city({"address": {"city": CITY}}, CITY),
@@ -26,30 +26,31 @@ primary({"red", "green", "blue"}),
 # ── Tests ──
 
 # --- Test: ground dict matching ---
-Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE) and TYPE is "origin")
-Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE) and TYPE is "x_axis")
+Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE), TYPE is "origin")
+Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE), TYPE is "x_axis")
 
 # --- Test: dict value extraction ---
-Test("get_x") <- (get_x({"x": 42, "y": 99}, X) and X is 42)
-Test("get_y") <- (get_y({"x": 10, "y": 20}, Y) and Y is 20)
+Test("get_x") <- (get_x({"x": 42, "y": 99}, X), X is 42)
+Test("get_y") <- (get_y({"x": 10, "y": 20}, Y), Y is 20)
 
 # --- Test: nested dict ---
 Test("nested city") <- (
-    get_city({"address": {"city": "London"}}, C) and C is "London"
+    get_city({"address": {"city": "London"}}, C),
+    C is "London",
 )
 
 # --- Test: dict construction in body ---
 Test("make_point") <- (
-    make_point(3, 4, P) and
-    get_x(P, X) and X is 3 and
-    get_y(P, Y) and Y is 4
+    make_point(3, 4, P),
+    get_x(P, X), X is 3,
+    get_y(P, Y), Y is 4,
 )
 
 # --- Test: dict unification in body ---
 Test("dict unify") <- (
-    D is {"a": 1, "b": 2} and
-    D is {"a": X, "b": Y} and
-    X is 1 and Y is 2
+    D is {"a": 1, "b": 2},
+    D is {"a": X, "b": Y},
+    X is 1, Y is 2,
 )
 
 # --- Test: dict fails on key mismatch ---
@@ -58,19 +59,19 @@ Test("dict key mismatch fails") <- (
 )
 
 # --- Test: set ground matching ---
-Test("set match") <- (colors(S) and S is {1, 2, 3})
+Test("set match") <- (colors(S), S is {1, 2, 3})
 
 # --- Test: set primary ---
-Test("set primary") <- (primary(S) and S is {"red", "green", "blue"})
+Test("set primary") <- (primary(S), S is {"red", "green", "blue"})
 
 # --- Test: set mismatch fails ---
 Test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))
 
 # --- Test: dict var unifies ---
 Test("var binds dict") <- (
-    X is {"key": "val"} and
-    X is {"key": Y} and
-    Y is "val"
+    X is {"key": "val"},
+    X is {"key": Y},
+    Y is "val",
 )
 
 # --- Test: empty dict ---

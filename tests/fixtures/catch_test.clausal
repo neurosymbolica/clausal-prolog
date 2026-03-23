@@ -11,12 +11,15 @@ SafeDiv(X, Y, RESULT) <- (
 
 # ThrowIfNeg: throws if argument is negative
 ThrowIfNeg(X) <- (X >= 0)
-ThrowIfNeg(X) <- (X < 0 and throw("negative"))
+ThrowIfNeg(X) <- (
+    X < 0,
+    throw("negative"),
+)
 
 # CatchNeg: wraps ThrowIfNeg, catches "negative" error
 CatchNeg(X, RESULT) <- (
     catch(
-        (ThrowIfNeg(X) and RESULT is "ok"),
+        (ThrowIfNeg(X), RESULT is "ok"),
         "negative",
         RESULT is "caught_negative",
     )

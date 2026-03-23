@@ -4,31 +4,31 @@
 # FullAdder: built from two half adders
 # PigeonHole: 3 pigeons, 2 holes — unsatisfiable
 
-HalfAdder(X_, Y_, Sum_, Carry_) <- (
-    Sat(BoolEq(Sum_, X_ ^ Y_))
-    and Sat(BoolEq(Carry_, X_ & Y_))
+HalfAdder(X, Y, SUM, CARRY) <- (
+    Sat(BoolEq(SUM, X ^ Y)),
+    Sat(BoolEq(CARRY, X & Y)),
 )
 
-FullAdder(X_, Y_, Cin_, Sum_, Cout_) <- (
-    Sat(BoolEq(S1_, X_ ^ Y_))
-    and Sat(BoolEq(C1_, X_ & Y_))
-    and Sat(BoolEq(Sum_, S1_ ^ Cin_))
-    and Sat(BoolEq(C2_, S1_ & Cin_))
-    and Sat(BoolEq(Cout_, C1_ | C2_))
+FullAdder(X, Y, CIN, SUM, COUT) <- (
+    Sat(BoolEq(S1, X ^ Y)),
+    Sat(BoolEq(C1, X & Y)),
+    Sat(BoolEq(SUM, S1 ^ CIN)),
+    Sat(BoolEq(C2, S1 & CIN)),
+    Sat(BoolEq(COUT, C1 | C2)),
 )
 
 # 3 pigeons into 2 holes: each pigeon in exactly one hole,
 # each hole has at most one pigeon.
 # P_ij = pigeon i in hole j
 PigeonHole() <- (
-    Sat(P11_ | P12_)          # pigeon 1 in some hole
-    and Sat(P21_ | P22_)      # pigeon 2 in some hole
-    and Sat(P31_ | P32_)      # pigeon 3 in some hole
-    and Sat(~(P11_ & P21_))   # hole 1: not both pigeon 1 and 2
-    and Sat(~(P11_ & P31_))   # hole 1: not both pigeon 1 and 3
-    and Sat(~(P21_ & P31_))   # hole 1: not both pigeon 2 and 3
-    and Sat(~(P12_ & P22_))   # hole 2: not both pigeon 1 and 2
-    and Sat(~(P12_ & P32_))   # hole 2: not both pigeon 1 and 3
-    and Sat(~(P22_ & P32_))   # hole 2: not both pigeon 2 and 3
-    and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
+    Sat(P11 | P12),          # pigeon 1 in some hole
+    Sat(P21 | P22),          # pigeon 2 in some hole
+    Sat(P31 | P32),          # pigeon 3 in some hole
+    Sat(~(P11 & P21)),       # hole 1: not both pigeon 1 and 2
+    Sat(~(P11 & P31)),       # hole 1: not both pigeon 1 and 3
+    Sat(~(P21 & P31)),       # hole 1: not both pigeon 2 and 3
+    Sat(~(P12 & P22)),       # hole 2: not both pigeon 1 and 2
+    Sat(~(P12 & P32)),       # hole 2: not both pigeon 1 and 3
+    Sat(~(P22 & P32)),       # hole 2: not both pigeon 2 and 3
+    BoolLabeling([P11, P12, P21, P22, P31, P32]),
 )

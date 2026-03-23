@@ -3,26 +3,26 @@
 
 # Helper predicates used as goals
 
-IsPositive(X_) <- (X_ > 0)
+IsPositive(X) <- (X > 0)
 
-IsNegative(X_) <- (X_ < 0)
+IsNegative(X) <- (X < 0)
 
-Double(X_, Y_) <- (Y_ := X_ * 2)
+Double(X, Y) <- (Y := X * 2)
 
-AddStep(N_, Acc_, Next_) <- (Next_ := Acc_ + N_)
+AddStep(N, ACC, NEXT) <- (NEXT := ACC + N)
 
 # MapList/2 — Goal(Elem) holds for all elements
-AllPositive(Xs_) <- MapList(IsPositive, Xs_)
+AllPositive(XS) <- MapList(IsPositive, XS)
 
 # MapList/3 — maps each X to doubled Y
-Doubled(Xs_, Ys_) <- MapList(Double, Xs_, Ys_)
+Doubled(XS, YS) <- MapList(Double, XS, YS)
 
 # Filter/3 — filter keeping positives
-KeepPositives(Xs_, Ys_) <- Filter(IsPositive, Xs_, Ys_)
+KeepPositives(XS, YS) <- Filter(IsPositive, XS, YS)
 
 # Exclude/3 — remove negatives
-DropNegatives(Xs_, Ys_) <- Exclude(IsNegative, Xs_, Ys_)
+DropNegatives(XS, YS) <- Exclude(IsNegative, XS, YS)
 
 # FoldLeft/4 — sum a list via fold
-SumFold(Xs_, S_) <- FoldLeft(AddStep, Xs_, 0, S_)
+SumFold(XS, S) <- FoldLeft(AddStep, XS, 0, S)
 

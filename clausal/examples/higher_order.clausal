@@ -35,7 +35,8 @@ AllPositive(XS) <- MapList((X <- (X > 0)), XS)
 KeepPositive(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # Keep even elements.
-KeepEven(XS, ES) <- Filter((X <- ((M := X % 2) and M is 0)), XS, ES)
+# TODO: can't we use X <- (X % 2 == 0) ?  Also see again below
+KeepEven(XS, ES) <- Filter((X <- ((M := X % 2), M is 0)), XS, ES)
 
 # ── Exclude/3 — remove matching elements ─────────────────────────────────────
 
@@ -43,7 +44,7 @@ KeepEven(XS, ES) <- Filter((X <- ((M := X % 2) and M is 0)), XS, ES)
 RemoveNegative(XS, RS) <- Exclude((X <- (X < 0)), XS, RS)
 
 # Remove even elements (keep odd).
-RemoveEven(XS, OS) <- Exclude((X <- ((M := X % 2) and M is 0)), XS, OS)
+RemoveEven(XS, OS) <- Exclude((X <- ((M := X % 2), M is 0)), XS, OS)
 
 # ── FoldLeft/4 — left fold ────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ CountFold(XS, N) <- FoldLeft(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
 
 # Max via fold with initial value.
 MaxFold(XS, INIT, M) <- FoldLeft(((E, A, R) <- (
-    (E >= A and R is E) or (A > E and R is A)
+    (E >= A, R is E) or (A > E, R is A)
 )), XS, INIT, M)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────

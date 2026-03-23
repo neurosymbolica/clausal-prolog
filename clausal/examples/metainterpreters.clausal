@@ -7,6 +7,8 @@
 #   atom        → a Python value (string, int, etc.)
 #   f(A, B)     → ["f", A, B]
 #   s(X)        → ["s", X]
+# TODO: object level terms should be represented by terms as in the metalevel page.
+# Not lists.
 #
 # A clause is [Head, BodyGoals] where BodyGoals is a list of goals.
 # A program is a list of clauses.
@@ -63,9 +65,9 @@ CyclicProgram(PROGRAM) <- (
 # Find a clause in Program whose head unifies with Goal.
 # Returns the body with fresh variables (via CopyTerm).
 MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
-    In(CLAUSE, PROGRAM),
+    CLAUSE in PROGRAM,
     CopyTerm(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
-    GOAL is FRESH_HEAD
+    GOAL is FRESH_HEAD,
 )
 
 # ── 1. Vanilla Meta-Interpreter ──────────────────────────────────────────────
@@ -78,7 +80,7 @@ Solve([], _PROGRAM),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     Append(BODY, GOALS, ALL_GOALS),
-    Solve(ALL_GOALS, PROGRAM)
+    Solve(ALL_GOALS, PROGRAM),
 )
 
 # ── 2. Inference-Counting Meta-Interpreter ───────────────────────────────────
@@ -91,7 +93,7 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     Append(BODY, GOALS, ALL_GOALS),
     SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
-    COUNT := SUB_COUNT + 1
+    COUNT := SUB_COUNT + 1,
 )
 
 # ── 3. Depth-Limited Meta-Interpreter ────────────────────────────────────────
@@ -105,7 +107,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX1 := MAX - 1,
     MatchClause(GOAL, BODY, PROGRAM),
     Append(BODY, GOALS, ALL_GOALS),
-    SolveLimit(ALL_GOALS, PROGRAM, MAX1)
+    SolveLimit(ALL_GOALS, PROGRAM, MAX1),
 )
 
 # ── 4. Iterative Deepening Meta-Interpreter ──────────────────────────────────
@@ -116,7 +118,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
 
 SolveIterativeDeepening(GOALS, PROGRAM) <- (
     Between(0, 1000, DEPTH),
-    SolveLimit(GOALS, PROGRAM, DEPTH)
+    SolveLimit(GOALS, PROGRAM, DEPTH),
 )
 
 # ── 5. Proof Tree Meta-Interpreter ──────────────────────────────────────────
@@ -129,7 +131,7 @@ SolveTree([], _PROGRAM, []),
 SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     SolveTree(BODY, PROGRAM, BODY_TREE),
-    SolveTree(GOALS, PROGRAM, GOALS_TREE)
+    SolveTree(GOALS, PROGRAM, GOALS_TREE),
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────
@@ -138,120 +140,120 @@ SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 Test("solve natnum(0)") <- (
     NatnumProgram(P),
-    Solve([["natnum", 0]], P)
+    Solve([["natnum", 0]], P),
 )
 
 Test("solve natnum(s(0))") <- (
     NatnumProgram(P),
-    Solve([["natnum", ["s", 0]]], P)
+    Solve([["natnum", ["s", 0]]], P),
 )
 
 Test("solve natnum(s(s(0)))") <- (
     NatnumProgram(P),
-    Solve([["natnum", ["s", ["s", 0]]]], P)
+    Solve([["natnum", ["s", ["s", 0]]]], P),
 )
 
 # -- Vanilla MI: graph reachability --
 
 Test("solve edge(a,b)") <- (
     GraphProgram(P),
-    Solve([["edge", "a", "b"]], P)
+    Solve([["edge", "a", "b"]], P),
 )
 
 Test("solve path(a,b) direct") <- (
     GraphProgram(P),
-    Solve([["path", "a", "b"]], P)
+    Solve([["path", "a", "b"]], P),
 )
 
 Test("solve path(a,c) transitive") <- (
     GraphProgram(P),
-    Solve([["path", "a", "c"]], P)
+    Solve([["path", "a", "c"]], P),
 )
 
 Test("solve path(a,d) transitive") <- (
     GraphProgram(P),
-    Solve([["path", "a", "d"]], P)
+    Solve([["path", "a", "d"]], P),
 )
 
 Test("solve no path(c,a)") <- (
     GraphProgram(P),
-    not Solve([["path", "c", "a"]], P)
+    not Solve([["path", "c", "a"]], P),
 )
 
 # -- Inference counting --
 
 Test("count natnum(0) = 1 step") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", 0]], P, 1)
+    SolveCount([["natnum", 0]], P, 1),
 )
 
 Test("count natnum(s(0)) = 2 steps") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", ["s", 0]]], P, 2)
+    SolveCount([["natnum", ["s", 0]]], P, 2),
 )
 
 Test("count natnum(s(s(0))) = 3 steps") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", ["s", ["s", 0]]]], P, 3)
+    SolveCount([["natnum", ["s", ["s", 0]]]], P, 3),
 )
 
 Test("count edge(a,b) = 1 step") <- (
     GraphProgram(P),
-    SolveCount([["edge", "a", "b"]], P, 1)
+    SolveCount([["edge", "a", "b"]], P, 1),
 )
 
 Test("count path(a,b) direct = 2 steps") <- (
     GraphProgram(P),
-    SolveCount([["path", "a", "b"]], P, 2)
+    SolveCount([["path", "a", "b"]], P, 2),
 )
 
 Test("count path(a,c) = 4 steps") <- (
     GraphProgram(P),
-    SolveCount([["path", "a", "c"]], P, 4)
+    SolveCount([["path", "a", "c"]], P, 4),
 )
 
 # -- Depth-limited MI --
 
 Test("limit natnum(s(0)) depth 1 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([["natnum", ["s", 0]]], P, 1)
+    not SolveLimit([["natnum", ["s", 0]]], P, 1),
 )
 
 Test("limit natnum(s(0)) depth 2 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([["natnum", ["s", 0]]], P, 2)
+    SolveLimit([["natnum", ["s", 0]]], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 2 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([["natnum", ["s", ["s", 0]]]], P, 2)
+    not SolveLimit([["natnum", ["s", ["s", 0]]]], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 3 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([["natnum", ["s", ["s", 0]]]], P, 3)
+    SolveLimit([["natnum", ["s", ["s", 0]]]], P, 3),
 )
 
 Test("limit path(a,c) depth 3 fails") <- (
     GraphProgram(P),
-    not SolveLimit([["path", "a", "c"]], P, 3)
+    not SolveLimit([["path", "a", "c"]], P, 3),
 )
 
 Test("limit path(a,c) depth 4 succeeds") <- (
     GraphProgram(P),
-    SolveLimit([["path", "a", "c"]], P, 4)
+    SolveLimit([["path", "a", "c"]], P, 4),
 )
 
 # -- Iterative deepening: completes where naive DFS would loop --
 
 Test("iterative deepening on cyclic graph") <- (
     CyclicProgram(P),
-    SolveIterativeDeepening([["path", "a", "b"]], P)
+    SolveIterativeDeepening([["path", "a", "b"]], P),
 )
 
 Test("iterative deepening path(a,c) acyclic") <- (
     GraphProgram(P),
-    SolveIterativeDeepening([["path", "a", "c"]], P)
+    SolveIterativeDeepening([["path", "a", "c"]], P),
 )
 
 # -- Proof tree MI --
@@ -259,25 +261,25 @@ Test("iterative deepening path(a,c) acyclic") <- (
 Test("tree natnum(0)") <- (
     NatnumProgram(P),
     SolveTree([["natnum", 0]], P, TREE),
-    TREE is [[["natnum", 0], []]]
+    TREE is [[["natnum", 0], []]],
 )
 
 Test("tree natnum(s(0)) has nested proof") <- (
     NatnumProgram(P),
     SolveTree([["natnum", ["s", 0]]], P, TREE),
-    TREE is [[["natnum", ["s", 0]], [[["natnum", 0], []]]]]
+    TREE is [[["natnum", ["s", 0]], [[["natnum", 0], []]]]],
 )
 
 Test("tree edge(a,b) is leaf") <- (
     GraphProgram(P),
     SolveTree([["edge", "a", "b"]], P, TREE),
-    TREE is [[["edge", "a", "b"], []]]
+    TREE is [[["edge", "a", "b"], []]],
 )
 
 Test("tree path(a,b) direct") <- (
     GraphProgram(P),
     SolveTree([["path", "a", "b"]], P, TREE),
-    TREE is [[["path", "a", "b"], [[["edge", "a", "b"], []]]]]
+    TREE is [[["path", "a", "b"], [[["edge", "a", "b"], []]]]],
 )
 
 Test("tree path(a,c) transitive") <- (
@@ -290,7 +292,7 @@ Test("tree path(a,c) transitive") <- (
                 [["edge", "b", "c"], []]
             ]]
         ]]
-    ]
+    ],
 )
 
 Test("tree natnum(s(s(0))) depth 2") <- (
@@ -302,5 +304,5 @@ Test("tree natnum(s(s(0))) depth 2") <- (
                 [["natnum", 0], []]
             ]]
         ]]
-    ]
+    ],
 )

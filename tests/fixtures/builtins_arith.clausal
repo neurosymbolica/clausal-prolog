@@ -1,21 +1,21 @@
 # Tests for arithmetic predicates: Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3
 
 # Between/3: enumerate integers in a range
-InRange(Lo_, Hi_, X_) <- Between(Lo_, Hi_, X_)
+InRange(LO, HI, X) <- Between(LO, HI, X)
 
 # Between/3: check mode
-CheckBetween(Lo_, Hi_, X_) <- Between(Lo_, Hi_, X_)
+CheckBetween(LO, HI, X) <- Between(LO, HI, X)
 
 # Succ/2: Y = X + 1
-Successor(X_, Y_) <- Succ(X_, Y_)
-Predecessor(Y_, X_) <- Succ(X_, Y_)
+Successor(X, Y) <- Succ(X, Y)
+Predecessor(Y, X) <- Succ(X, Y)
 
 # Plus/3: Z = X + Y; any two determine the third
-AddNums(X_, Y_, Z_) <- Plus(X_, Y_, Z_)
-Diff(Z_, X_, Y_) <- Plus(X_, Y_, Z_)
+AddNums(X, Y, Z) <- Plus(X, Y, Z)
+Diff(Z, X, Y) <- Plus(X, Y, Z)
 
 # CountTo/1: collects integers from 1 to N using FindAll + Between
-CountTo(N_, Ns_) <- (
-    FindAll(X_, Between(1, N_, X_), Ns_)
+CountTo(N, NS) <- (
+    FindAll(X, Between(1, N, X), NS)
 )
 
