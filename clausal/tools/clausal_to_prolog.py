@@ -17,7 +17,7 @@ import re
 
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
-    PClause, PDCGRule, PDirective, PModule,
+    PClause, PDCGRule, PDirective, PComment, PModule,
     PTerm, PItem,
 )
 from clausal.tools.prolog_operators import OperatorTable
@@ -247,6 +247,8 @@ def emit_item(item: PItem, op_table: OperatorTable) -> str:
     if isinstance(item, PDirective):
         body_str = emit_term(item.body, op_table)
         return ":- " + body_str + ".\n"
+    if isinstance(item, PComment):
+        return "/* " + item.text + " */\n"
     # PQuery
     body_str = emit_term(item.body, op_table)
     return "?- " + body_str + ".\n"
@@ -330,11 +332,23 @@ class _ClausalToProlog:
     def __init__(self, dialect: Dialect):
         self.dialect = dialect
         self._items: list[PItem] = []
+        self._warnings: list[str] = []
+
+    def _add_warning(self, construct: str) -> None:
+        """Record an untranslatable construct warning."""
+        self._warnings.append(construct)
 
     def convert_module(self, tree: python_ast.Module) -> PModule:
         """Convert a full Python AST Module to a PModule."""
         for stmt in tree.body:
+            self._warnings.clear()
             item = self._convert_stmt(stmt)
+            # Emit any warnings accumulated during conversion
+            for w in self._warnings:
+                self._items.append(PComment(
+                    f"WARNING: untranslatable clausal construct: {w}\n"
+                    f"   Replace with Prolog equivalent manually."
+                ))
             if item is not None:
                 if isinstance(item, list):
                     self._items.extend(item)
@@ -428,11 +442,34 @@ class _ClausalToProlog:
         export_list = PList(tuple(exports))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
-    def _convert_import_from(self, call: python_ast.Call) -> PDirective:
-        """Convert -import_from(module, [names])."""
+    def _convert_import_from(self, call: python_ast.Call) -> PDirective | PComment:
+        """Convert -import_from(module, [names]).
+
+        Uses the dialect's library_map to resolve known clausal modules to
+        Prolog library(...) form. Python-only modules emit a warning.
+        """
         mod_path = self._get_string_or_name(call.args[0])
-        # Convert dotted module path to file path for Prolog
-        prolog_path = mod_path.replace(".", "/")
+
+        # Check if this is a Python-only module (no Prolog equivalent)
+        if mod_path.startswith("py.") or mod_path.startswith("clausal.modules.py."):
+            self._add_warning(f"-import_from({mod_path}, ...)")
+            return PComment(
+                f"WARNING: Python-only module import: -import_from({mod_path}, ...)\n"
+                f"   No Prolog equivalent available."
+            )
+
+        # Resolve via dialect library_map, or fallback to path
+        library_name = self.dialect.library_map.get(mod_path)
+        if library_name is not None:
+            # Known library: use_module(library(name))
+            prolog_mod = PCompound(library_name.split("(")[0] + "(", ())
+            # Parse "library(clpfd)" → PCompound("library", (PAtom("clpfd"),))
+            lib_inner = library_name[len("library("):-1]  # "clpfd"
+            prolog_mod = PCompound("library", (PAtom(lib_inner),))
+        else:
+            # Unknown: use plain path
+            prolog_path = mod_path.replace(".", "/")
+            prolog_mod = PAtom(prolog_path, quoted=True)
 
         imports = []
         if len(call.args) > 1 and isinstance(call.args[1], python_ast.List):
@@ -446,23 +483,30 @@ class _ClausalToProlog:
                     imports.append(PAtom(functor))
 
         import_list = PList(tuple(imports))
-        return PDirective(PCompound("use_module",
-                                    (PAtom(prolog_path, quoted=True), import_list)))
+        return PDirective(PCompound("use_module", (prolog_mod, import_list)))
 
-    def _convert_import_module(self, call: python_ast.Call) -> PDirective:
+    def _convert_import_module(self, call: python_ast.Call) -> PDirective | PComment:
         """Convert -import_module(module)."""
         mod_path = self._get_string_or_name(call.args[0])
-        prolog_path = mod_path.replace(".", "/")
-        return PDirective(PCompound("use_module", (PAtom(prolog_path, quoted=True),)))
 
-    def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list[PDirective]:
+        if mod_path.startswith("py.") or mod_path.startswith("clausal.modules.py."):
+            self._add_warning(f"-import_module({mod_path})")
+            return PComment(
+                f"WARNING: Python-only module import: -import_module({mod_path})\n"
+                f"   No Prolog equivalent available."
+            )
+
+        library_name = self.dialect.library_map.get(mod_path)
+        if library_name is not None:
+            lib_inner = library_name[len("library("):-1]
+            prolog_mod = PCompound("library", (PAtom(lib_inner),))
+        else:
+            prolog_path = mod_path.replace(".", "/")
+            prolog_mod = PAtom(prolog_path, quoted=True)
+        return PDirective(PCompound("use_module", (prolog_mod,)))
+
+    def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list:
         """Convert -dynamic(pred/arity), -table(...), -discontiguous(...)."""
-        # Handle tabling specially for Scryer
-        if name == "table" and self.dialect.name == "scryer":
-            # Scryer needs :- use_module(library(tabling)) first, but
-            # we just emit the :- table directive for now
-            pass
-
         specs = []
         for arg in call.args:
             spec = self._convert_pred_spec(arg)
@@ -470,8 +514,17 @@ class _ClausalToProlog:
                 specs.append(spec)
 
         if len(specs) == 1:
-            return PDirective(PCompound(name, (specs[0],)))
-        return PDirective(PCompound(name, (PList(tuple(specs)),)))
+            directive = PDirective(PCompound(name, (specs[0],)))
+        else:
+            directive = PDirective(PCompound(name, (PList(tuple(specs)),)))
+
+        # Scryer needs :- use_module(library(tabling)) before :- table
+        if name == "table" and self.dialect.name == "scryer":
+            use_tabling = PDirective(PCompound("use_module", (
+                PCompound("library", (PAtom("tabling"),)),
+            )))
+            return [use_tabling, directive]
+        return directive
 
     def _convert_pred_spec(self, node) -> PTerm | None:
         """Convert a predicate specification like Foo(X, Y) to foo/2."""
@@ -488,7 +541,10 @@ class _ClausalToProlog:
         """Convert a clause head (a Call node) to a PCompound."""
         if isinstance(call, python_ast.Call) and isinstance(call.func, python_ast.Name):
             functor = resolve_name(call.func.id, self.dialect)
-            args = tuple(self._convert_expr(a) for a in call.args)
+            args = [self._convert_expr(a) for a in call.args]
+            for kw in call.keywords:
+                args.append(self._convert_expr(kw.value))
+            args = tuple(args)
             if not args:
                 return PAtom(functor)
             return PCompound(functor, args)
@@ -549,6 +605,24 @@ class _ClausalToProlog:
                 return PAtom(base.name + ":" + node.attr)
             return PCompound(":", (base, PAtom(node.attr)))
 
+        # f-string: f"Hello {Name}" → format/2 (SWI) or warning
+        if isinstance(node, python_ast.JoinedStr):
+            return self._convert_fstring(node)
+
+        # Dict literal → SWI dict or warning
+        if isinstance(node, python_ast.Dict):
+            return self._convert_dict(node)
+
+        # Set literal: single-element sets are DCG inline goals {Goal}
+        if isinstance(node, python_ast.Set):
+            if len(node.elts) == 1:
+                # {Goal} — DCG inline goal
+                return PCurly(self._convert_expr(node.elts[0]))
+            self._add_warning("set literal {" + ", ".join(
+                python_ast.unparse(e) for e in node.elts
+            ) + "}")
+            return PAtom("???")
+
         # Fallback
         return PAtom("???")
 
@@ -585,9 +659,11 @@ class _ClausalToProlog:
         else:
             functor = "???"
 
-        args = tuple(self._convert_expr(a) for a in node.args)
-        if not args:
-            return PCompound(functor, ())
+        args = [self._convert_expr(a) for a in node.args]
+        # Keyword args become positional (kwarg names are field labels in clausal)
+        for kw in node.keywords:
+            args.append(self._convert_expr(kw.value))
+        args = tuple(args)
         return PCompound(functor, args)
 
     def _qualified_name(self, attr: python_ast.Attribute) -> str:
@@ -640,6 +716,11 @@ class _ClausalToProlog:
                 return PNumber(-inner.value)
             return PCompound("-", (inner,))
         if isinstance(node.op, python_ast.UAdd):
+            # ++expr is Python interop escape — untranslatable
+            if (isinstance(node.operand, python_ast.UnaryOp)
+                    and isinstance(node.operand.op, python_ast.UAdd)):
+                self._add_warning("++(" + python_ast.unparse(node.operand.operand) + ")")
+                return PAtom("???")
             return self._convert_expr(node.operand)
         if isinstance(node.op, python_ast.Invert):
             return PCompound("\\", (self._convert_expr(node.operand),))
@@ -739,6 +820,12 @@ class _ClausalToProlog:
                 parts.append(PCompound(">", (prev, right)))
             elif isinstance(op, python_ast.GtE):
                 parts.append(PCompound(">=", (prev, right)))
+            elif isinstance(op, python_ast.In):
+                parts.append(PCompound("member", (prev, right)))
+            elif isinstance(op, python_ast.NotIn):
+                parts.append(PCompound("\\+", (
+                    PCompound("member", (prev, right)),
+                )))
             prev = right
 
         if len(parts) == 1:
@@ -787,6 +874,58 @@ class _ClausalToProlog:
         value = self._convert_expr(node.value)
         return PCompound("is", (target, value))
 
+    def _convert_fstring(self, node: python_ast.JoinedStr) -> PTerm:
+        """Convert f-string to format/2 (SWI) or warning.
+
+        f"Hello {Name}, you have {Count} items"
+        → format("Hello ~w, you have ~w items", [Name, Count])  (SWI)
+        → warning comment + ??? (ISO/Scryer)
+        """
+        fmt_parts = []
+        args = []
+        for value in node.values:
+            if isinstance(value, python_ast.Constant) and isinstance(value.value, str):
+                # Literal text — escape ~ for Prolog format
+                fmt_parts.append(value.value.replace("~", "~~"))
+            elif isinstance(value, python_ast.FormattedValue):
+                fmt_parts.append("~w")
+                args.append(self._convert_expr(value.value))
+            else:
+                fmt_parts.append("~w")
+                args.append(self._convert_expr(value))
+        fmt_string = "".join(fmt_parts)
+
+        if self.dialect.name == "swi":
+            return PCompound("format", (
+                PString(fmt_string),
+                PList(tuple(args)),
+            ))
+        # ISO / Scryer: untranslatable
+        self._add_warning(f'f-string: f"{fmt_string}"')
+        return PAtom("???")
+
+    def _convert_dict(self, node: python_ast.Dict) -> PTerm:
+        """Convert dict literal to SWI dict or warning."""
+        if self.dialect.has_dicts:
+            # SWI dict: tag{key: val, ...}
+            # Emit as: dict_create(D, _, [key=val, ...]) or use Tag.put_dict
+            # For now, emit as a compound with key=value pairs
+            pairs = []
+            for k, v in zip(node.keys, node.values):
+                key = self._convert_expr(k) if k is not None else PAtom("_")
+                val = self._convert_expr(v)
+                pairs.append(PCompound("=", (key, val)))
+            if not pairs:
+                return PAtom("_{}")
+            return PCompound("dict_create", (
+                PVar("_"),
+                PAtom("_"),
+                PList(tuple(pairs)),
+            ))
+        # ISO / Scryer: untranslatable
+        self._add_warning("dict literal " + python_ast.unparse(node))
+        return PAtom("???")
+
 
 # ── Public API ───────────────────────────────────────────────────────
 
@@ -815,3 +954,55 @@ def clausal_source_to_prolog(source: str, *,
         dialect = Dialect.iso()
     pmodule = clausal_source_to_prolog_ast(source, dialect=dialect)
     return emit_module(pmodule, dialect.operator_table)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────
+
+def _main() -> None:
+    """Command-line interface for clausal → Prolog translation.
+
+    Usage:
+        python -m clausal.tools.clausal_to_prolog input.clausal [-o output.pl] [--dialect swi|scryer|iso]
+        cat input.clausal | python -m clausal.tools.clausal_to_prolog [--dialect swi]
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="clausal_to_prolog",
+        description="Translate .clausal source files to Prolog (.pl).",
+    )
+    parser.add_argument(
+        "input", nargs="?", default=None,
+        help="Input .clausal file (reads stdin if omitted)",
+    )
+    parser.add_argument(
+        "-o", "--output", default=None,
+        help="Output .pl file (writes stdout if omitted)",
+    )
+    parser.add_argument(
+        "--dialect", choices=["iso", "swi", "scryer"], default="iso",
+        help="Target Prolog dialect (default: iso)",
+    )
+    args = parser.parse_args()
+
+    dialect_map = {"iso": Dialect.iso, "swi": Dialect.swi, "scryer": Dialect.scryer}
+    dialect = dialect_map[args.dialect]()
+
+    if args.input is None:
+        source = sys.stdin.read()
+    else:
+        with open(args.input, encoding="utf-8") as f:
+            source = f.read()
+
+    result = clausal_source_to_prolog(source, dialect=dialect)
+
+    if args.output is None:
+        sys.stdout.write(result)
+    else:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(result)
+
+
+if __name__ == "__main__":
+    _main()

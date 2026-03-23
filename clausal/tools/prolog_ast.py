@@ -82,7 +82,12 @@ class PQuery:
     body: PTerm
 
 
-PItem = Union[PClause, PDCGRule, PDirective, PQuery]
+@dataclass(frozen=True, slots=True)
+class PComment:
+    """Block comment — used for untranslatable construct warnings."""
+    text: str
+
+PItem = Union[PClause, PDCGRule, PDirective, PQuery, PComment]
 
 
 @dataclass(frozen=True, slots=True)
