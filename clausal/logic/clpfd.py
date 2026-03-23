@@ -1008,3 +1008,227 @@ def equivalent(t1, t2, trail: Trail) -> bool:
     t1 = deref(t1)
     t2 = deref(t2)
     return t1 == t2
+
+
+# ── Global constraints (Phase 5) ──────────────────────────────────────────
+
+
+_FD_OPS = {
+    "#=": _operator_module.eq,
+    "#<": _operator_module.lt,
+    "#>": _operator_module.gt,
+    "#=<": _operator_module.le,
+    "#>=": _operator_module.ge,
+    "#\\=": _operator_module.ne,
+    # Also accept without # prefix for convenience
+    "=": _operator_module.eq,
+    "<": _operator_module.lt,
+    ">": _operator_module.gt,
+    "=<": _operator_module.le,
+    ">=": _operator_module.ge,
+    "\\=": _operator_module.ne,
+}
+
+
+def fd_sum(vars_list, op_str, value, trail: Trail):
+    """Sum(Vars, Op, Value) — constrain sum of Vars under comparison Op to Value.
+
+    Yields for each solution (via labeling). Ground-checks when possible.
+    """
+    vars_list = deref(vars_list)
+    op_str = deref(op_str)
+    value = deref(value)
+
+    if not isinstance(vars_list, list) or not isinstance(op_str, str):
+        return
+    op_fn = _FD_OPS.get(op_str)
+    if op_fn is None:
+        return
+
+    vars_deref = [deref(v) for v in vars_list]
+
+    # If all ground, just check
+    if all(isinstance(v, int) for v in vars_deref):
+        s = sum(vars_deref)
+        val = deref(value)
+        if isinstance(val, int):
+            if op_fn(s, val):
+                yield None
+        elif is_var(val):
+            if op_str in ("#=", "="):
+                if unify(value, s, trail):
+                    yield None
+        return
+
+    # Has FD vars — set up domains and label
+    for v in vars_deref:
+        if is_var(v):
+            _ensure_fd(v, trail)
+
+    if is_var(deref(value)):
+        _ensure_fd(deref(value), trail)
+
+    # Label all vars and check the sum constraint
+    all_vars = [v for v in vars_deref if is_var(v)]
+    val_d = deref(value)
+    if is_var(val_d):
+        all_vars.append(val_d)
+
+    for _ in label(all_vars, trail):
+        s = sum(deref(v) for v in vars_deref)
+        val = deref(value)
+        if isinstance(val, int) and op_fn(s, val):
+            yield None
+
+
+def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
+    """ScalarProduct(Coeffs, Vars, Op, Value) — weighted sum constraint."""
+    coeffs = deref(coeffs)
+    vars_list = deref(vars_list)
+    op_str = deref(op_str)
+    value = deref(value)
+
+    if not isinstance(coeffs, list) or not isinstance(vars_list, list):
+        return
+    if len(coeffs) != len(vars_list):
+        return
+    if not isinstance(op_str, str):
+        return
+    op_fn = _FD_OPS.get(op_str)
+    if op_fn is None:
+        return
+
+    coeffs_deref = [deref(c) for c in coeffs]
+    if not all(isinstance(c, int) for c in coeffs_deref):
+        return
+
+    vars_deref = [deref(v) for v in vars_list]
+
+    # If all ground, just check
+    if all(isinstance(v, int) for v in vars_deref):
+        s = sum(c * v for c, v in zip(coeffs_deref, vars_deref))
+        val = deref(value)
+        if isinstance(val, int):
+            if op_fn(s, val):
+                yield None
+        elif is_var(val):
+            if op_str in ("#=", "="):
+                if unify(value, s, trail):
+                    yield None
+        return
+
+    # Has FD vars — label and check
+    for v in vars_deref:
+        if is_var(v):
+            _ensure_fd(v, trail)
+
+    all_vars = [v for v in vars_deref if is_var(v)]
+    val_d = deref(value)
+    if is_var(val_d):
+        _ensure_fd(val_d, trail)
+        all_vars.append(val_d)
+
+    for _ in label(all_vars, trail):
+        s = sum(c * deref(v) for c, v in zip(coeffs_deref, vars_deref))
+        val = deref(value)
+        if isinstance(val, int) and op_fn(s, val):
+            yield None
+
+
+def fd_element(index, lst, value, trail: Trail):
+    """Element(Index, List, Value) — Value is the Index-th element of List (1-based).
+
+    Yields for each valid index assignment.
+    """
+    lst = deref(lst)
+    if not isinstance(lst, list):
+        return
+
+    index = deref(index)
+    value = deref(value)
+    n = len(lst)
+
+    if isinstance(index, int):
+        # Index is ground
+        if 1 <= index <= n:
+            elem = deref(lst[index - 1])
+            mark = trail.mark()
+            if unify(value, elem, trail):
+                yield None
+            trail.undo(mark)
+        return
+
+    if not is_var(index):
+        return
+
+    # Index is an FD var — ensure domain is 1..n
+    _ensure_fd(index, trail)
+    state = get_attr(index, FD_KEY)
+    if state is not None:
+        valid = domain_intersection(state.domain, domain_from_range(1, n))
+        if not valid:
+            return
+        queue = deque()
+        _narrow(index, valid, trail, queue)
+
+    # Enumerate valid indices
+    for i in range(1, n + 1):
+        mark = trail.mark()
+        if unify(index, i, trail):
+            elem = deref(lst[i - 1])
+            if unify(value, elem, trail):
+                yield None
+        trail.undo(mark)
+
+
+def fd_circuit(vars_list, trail: Trail):
+    """Circuit(Vars) — Vars form a single Hamiltonian circuit.
+
+    Vars[i] = j means the successor of node i+1 is node j (1-based indexing).
+    Yields for each valid circuit assignment.
+    """
+    vars_list = deref(vars_list)
+    if not isinstance(vars_list, list):
+        return
+
+    n = len(vars_list)
+    if n == 0:
+        return
+
+    vars_deref = [deref(v) for v in vars_list]
+
+    # Ensure all are FD vars with domain 1..n
+    for v in vars_deref:
+        if is_var(v):
+            _ensure_fd(v, trail)
+            state = get_attr(v, FD_KEY)
+            if state is not None:
+                valid = domain_intersection(state.domain, domain_from_range(1, n))
+                if not valid:
+                    return
+                queue = deque()
+                _narrow(v, valid, trail, queue)
+
+    # Post AllDifferent
+    if not all_different(vars_list, trail):
+        return
+
+    # Label and verify single circuit (no sub-tours)
+    for _ in label(vars_deref, trail):
+        # Check for single cycle covering all nodes
+        assignment = [deref(v) for v in vars_deref]
+        if not all(isinstance(a, int) and 1 <= a <= n for a in assignment):
+            continue
+        # No self-loops
+        if any(assignment[i] == i + 1 for i in range(n)):
+            continue
+        # Follow the chain from node 1
+        visited = set()
+        current = 1
+        for _ in range(n):
+            if current in visited:
+                break
+            visited.add(current)
+            current = assignment[current - 1]
+        if len(visited) == n and current == 1:
+            yield None

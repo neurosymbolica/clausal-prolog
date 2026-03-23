@@ -1,5 +1,5 @@
 """Higher-order builtins: CallGoal/1..8, Call/1..8, MapList/2,3,
-Filter/3, Exclude/3, FoldLeft/4,
+Filter/3, Exclude/3, Partition/4, TFilter/3, TPartition/4, FoldLeft/4,
 TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3,
 MaxBy/3, MinBy/3, FilterMap/3."""
 
@@ -432,3 +432,123 @@ def _filter_map__3(this_generator, parent, goal, lst, result, trail):
         yield (parent, None)
     trail.undo(outer_mark)
     yield (parent, DONE)
+
+
+@_trampoline_builtin("Partition", 4)
+def _partition__4(this_generator, parent, goal, lst, included, excluded, trail):
+    """Partition(Goal, List, Included, Excluded) — split list by Goal.
+
+    Included contains elements where Goal(Elem) succeeds.
+    Excluded contains elements where Goal(Elem) fails.
+    """
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    yes = []
+    no = []
+    for elem in lst_val:
+        mark = trail.mark()
+        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        _st = yield (sg, None)
+        found = _st is not DONE
+        trail.undo(mark)
+        if found:
+            yes.append(deref(elem))
+        else:
+            no.append(deref(elem))
+    if unify(included, yes, trail) and unify(excluded, no, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("TFilter", 3)
+def _tfilter__3(this_generator, parent, goal, lst, filtered, trail):
+    """TFilter(Goal, List, Filtered) — reified filter.
+
+    Goal is called as Goal(Elem, T) where T is a fresh variable.
+    Keep elements where the first solution binds T to True.
+
+    This is the reified counterpart of Filter/3: instead of testing whether
+    Goal(Elem) succeeds or fails, it inspects the truth value that Goal
+    binds its last argument to.  Useful with reified predicates like Eq/3
+    and DifT/3 that always succeed but bind T to True or False.
+    """
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    kept = []
+    for elem in lst_val:
+        t_var = Var()
+        mark = trail.mark()
+        # Run the goal inline (simple-mode) to get the truth value
+        # without going through the trampoline yield protocol.
+        t_val = None
+        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
+            t_val = deref(t_var)
+            break  # committed choice: take first solution only
+        trail.undo(mark)
+        if t_val is True:
+            kept.append(deref(elem))
+    if unify(filtered, kept, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("TPartition", 4)
+def _tpartition__4(this_generator, parent, goal, lst, included, excluded, trail):
+    """TPartition(Goal, List, Included, Excluded) — reified partition.
+
+    Goal is called as Goal(Elem, T) where T is a fresh variable.
+    Elements where first solution gives T=True go into Included,
+    T=False into Excluded.
+
+    This is the reified counterpart of Partition/4.
+    """
+    lst_val = deref(lst)
+    goal_val = deref(goal)
+    if not isinstance(lst_val, list) or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+        yield (parent, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val)
+    outer_mark = trail.mark()
+    yes = []
+    no = []
+    for elem in lst_val:
+        t_var = Var()
+        mark = trail.mark()
+        t_val = None
+        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
+            t_val = deref(t_var)
+            break
+        trail.undo(mark)
+        if t_val is True:
+            yes.append(deref(elem))
+        elif t_val is False:
+            no.append(deref(elem))
+    if unify(included, yes, trail) and unify(excluded, no, trail):
+        yield (parent, None)
+    trail.undo(outer_mark)
+    yield (parent, DONE)
+
+
+def _run_goal_once(dispatch, *args_and_trail):
+    """Run a trampoline dispatch function and yield for each solution.
+
+    Drives the trampoline mini-loop internally so callers can iterate
+    solutions with a plain ``for _ in _run_goal_once(...):`` loop.
+    """
+    gen = dispatch(None, None, *args_and_trail)
+    for _parent, value in gen:
+        if value is DONE:
+            return
+        yield value

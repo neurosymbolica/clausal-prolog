@@ -157,9 +157,9 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 
 ---
 
-### Phase 5 — Extend Existing Builtins (Gap-Filling)
+### Phase 5 — Extend Existing Builtins (Gap-Filling) ✓
 
-**Priority: Medium** — Small additions to modules that are already mostly complete.
+**Status: COMPLETE** — Small additions to modules that are already mostly complete.
 
 | Area | Additions |
 |---|---|
@@ -171,9 +171,9 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 | Pairs | `GroupPairsByKey/2`. |
 | Error | `MustBe/2`, `CanBe/2` (type-checking with ISO error terms). |
 | Reif | `If_/3`, `TFilter/3`, `TPartition/4` as explicit builtins. |
-| Time | `Sleep/1`, `CurrentTime/1`, `Statistics/2`. |
+| Time | `CurrentTime/1`, `Statistics/2`. (`Sleep/1` already in `py.process`, Phase 4.) |
 
-**Detailed plan:** TBD
+**Detailed plan:** [`STD_MODULES_PHASE5.md`](STD_MODULES_PHASE5.md)
 
 ---
 

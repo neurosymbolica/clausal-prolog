@@ -1,8 +1,8 @@
-"""DCG builtins: phrase/2 and phrase/3."""
+"""DCG builtins: phrase/2, phrase/3, Sequence//1."""
 
 from __future__ import annotations
 
-from clausal.logic.variables import deref
+from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.trampoline import DONE, StepGenerator
 
@@ -61,4 +61,35 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
     while _st is not DONE:
         yield (parent, None)
         _st = yield (sg, None)
+    yield (parent, DONE)
+
+
+@_trampoline_builtin("Sequence", 3, fields=("list", "s0", "s"))
+def _sequence__3(this_generator, parent, lst, s0, s, trail):
+    """Sequence//1 — DCG non-terminal that matches a list of terminals.
+
+    Sequence(List, S0, S) succeeds when S0 = List ++ S.
+    Used as a DCG rule: ``phrase(Sequence([a, b, c]), Input)``.
+    """
+    lst_val = deref(lst)
+    if is_var(lst_val) or not isinstance(lst_val, list):
+        yield (parent, DONE)
+        return
+    s_val = deref(s)
+    s0_val = deref(s0)
+    if isinstance(s0_val, list):
+        # S0 is bound — check prefix and bind S to remainder
+        n = len(lst_val)
+        if len(s0_val) >= n and s0_val[:n] == lst_val:
+            mark = trail.mark()
+            if unify(s, s0_val[n:], trail):
+                yield (parent, None)
+            trail.undo(mark)
+    elif isinstance(s_val, list):
+        # S is bound — compute S0 = List ++ S and unify
+        expected = lst_val + s_val
+        mark = trail.mark()
+        if unify(s0, expected, trail):
+            yield (parent, None)
+        trail.undo(mark)
     yield (parent, DONE)

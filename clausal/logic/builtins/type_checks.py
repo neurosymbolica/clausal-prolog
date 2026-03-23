@@ -1,5 +1,6 @@
 """Type-checking builtins: IsVar/1, IsBound/1, IsStr/1, IsNumber/1,
-IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1."""
+IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1,
+MustBe/2, CanBe/2."""
 
 from __future__ import annotations
 
@@ -99,3 +100,84 @@ def _ground__1(x, trail, k):
     """ground(X) — succeeds if X contains no unbound Vars."""
     if _is_ground(deref(x)):
         yield None
+
+
+# ── Type checking map for MustBe/CanBe ─────────────────────────────────
+
+def _check_type(type_name: str, term) -> bool:
+    """Return True if *term* satisfies *type_name*."""
+    if type_name in ("integer", "int"):
+        return isinstance(term, int) and not isinstance(term, bool)
+    elif type_name == "float":
+        return isinstance(term, float)
+    elif type_name == "number":
+        return isinstance(term, (int, float)) and not isinstance(term, bool)
+    elif type_name in ("atom", "string", "str"):
+        return isinstance(term, str)
+    elif type_name == "list":
+        return isinstance(term, list)
+    elif type_name in ("boolean", "bool"):
+        return isinstance(term, bool)
+    elif type_name == "callable":
+        return (
+            isinstance(term, (str, Compound, KWTerm))
+            or is_term_instance(term)
+            or (isinstance(term, type) and hasattr(term, '_get_dispatch'))
+            or hasattr(term, '_get_dispatch')
+        )
+    elif type_name == "dict":
+        from clausal.terms import DictTerm
+        return isinstance(term, DictTerm)
+    elif type_name == "compound":
+        if isinstance(term, Compound) and len(term.args) > 0:
+            return True
+        if isinstance(term, KWTerm) and len(term) > 0:
+            return True
+        if is_term_instance(term) and len(term_field_names(term)) > 0:
+            return True
+        return False
+    return False
+
+
+@_builtin("MustBe", 2)
+def _must_be__2(type_name, term, trail, k):
+    """MustBe(Type, Term) — assert that Term is of the given type.
+
+    Succeeds silently if Term matches Type.
+    Throws instantiation_error if Term is unbound.
+    Throws type_error if Term is ground but wrong type.
+    """
+    from clausal.logic.exceptions import LogicException, type_error, instantiation_error
+
+    type_val = deref(type_name)
+    if is_var(type_val) or not isinstance(type_val, str):
+        return
+    term_val = deref(term)
+    if is_var(term_val):
+        raise LogicException(instantiation_error("must_be/2"))
+    if _check_type(type_val, term_val):
+        yield None
+    else:
+        raise LogicException(type_error(type_val, term_val, "must_be/2"))
+
+
+@_builtin("CanBe", 2)
+def _can_be__2(type_name, term, trail, k):
+    """CanBe(Type, Term) — assert that Term could possibly be of the given type.
+
+    Succeeds if Term is unbound (could become anything) or already matches.
+    Throws type_error if Term is ground and definitely not the type.
+    """
+    from clausal.logic.exceptions import LogicException, type_error
+
+    type_val = deref(type_name)
+    if is_var(type_val) or not isinstance(type_val, str):
+        return
+    term_val = deref(term)
+    if is_var(term_val):
+        # Unbound — could become anything
+        yield None
+    elif _check_type(type_val, term_val):
+        yield None
+    else:
+        raise LogicException(type_error(type_val, term_val, "can_be/2"))

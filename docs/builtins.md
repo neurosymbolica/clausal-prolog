@@ -81,18 +81,19 @@ Notation in signature lines:
 | [Runtime Database](#runtime-database) | Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
 | [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
-| [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2 |
+| [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
-| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1 |
+| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1, MustBe/2, CanBe/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | IsDict/1, DictGet/3, DictPut/4, DictMerge/3, GenDict/3, SubDict/2, IsSet/1, SetUnion/3, SetSubset/2, GenSet/2 |
-| [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3 |
-| [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3 |
-| [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
+| [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3, Sign/2, Gcd/3, DivMod/4, Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2 |
+| [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3, Numlist/2,3, SameLength/2, Transpose/2 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, Partition/4, TFilter/3, TPartition/4, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
 | [Character/String](#characterstring) | CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5 |
 | [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2, Listing/1, PortrayClause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
+| [Time & Statistics](#time--statistics) | CurrentTime/1, Statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `:=`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
 
 ---
@@ -368,6 +369,32 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 
 ---
 
+## Time & Statistics
+
+### `CurrentTime/1`
+```clausal
+# skip
+CurrentTime(-T)
+```
+Unify T with the current Unix timestamp as a float (seconds since epoch).
+
+---
+
+### `Statistics/2`
+```clausal
+# skip
+Statistics(?Key, -Value)
+```
+Query runtime statistics. With Key bound, looks up a specific stat. With Key unbound, enumerates all available stats via backtracking.
+
+| Key | Value |
+|---|---|
+| `"wall_time"` | Wall-clock seconds since process start (float) |
+| `"cpu_time"` | CPU seconds used by this process (float) |
+| `"memory"` | Peak RSS memory in bytes (int, Linux/macOS only) |
+
+---
+
 ## Higher-Order Call
 
 ### `Call/1..8`
@@ -431,6 +458,21 @@ Also used for **state-passing DCGs**: encode state as a single-element list `[St
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`_phrase__3`)
     **Python tests:** `tests/test_dcg.py`
+
+---
+
+### `Sequence//1`
+```clausal
+# skip
+Sequence(+List)   % as DCG non-terminal: Sequence(List, S0, S)
+```
+DCG non-terminal that matches a list of terminals in sequence. `Sequence([a, b, c])` consumes `a`, `b`, `c` from the input. Equivalent to inlining the terminals as a grammar rule body.
+
+```clausal
+# skip
+phrase(Sequence(["hello", "world"]), ["hello", "world"])       % succeeds
+phrase(Sequence(["a", "b"]), ["a", "b", "c"], REST)            % REST = ["c"]
+```
 
 ---
 
@@ -760,6 +802,67 @@ Structural equality test (old `==` behavior before CLP(FD) remapping). Succeeds 
 
 ---
 
+### `Sum/3`
+```clausal
+# skip
+Sum(+Vars, +Op, +Value)
+```
+Constrain the sum of `Vars` (a list of FD variables or integers) under comparison operator `Op` to `Value`. Supported operators: `#=`, `#<`, `#>`, `#=<`, `#>=`, `#\=`.
+
+```clausal
+# skip
+Sum([X, Y, Z], "#=", 10)   % X + Y + Z = 10
+```
+
+For ground lists, checks the constraint immediately. For lists with FD variables, labels and filters.
+
+---
+
+### `ScalarProduct/4`
+```clausal
+# skip
+ScalarProduct(+Coeffs, +Vars, +Op, +Value)
+```
+Weighted sum constraint: `Σ(Coeffs[i] * Vars[i]) Op Value`. Coefficients must be ground integers. Lists must be the same length.
+
+```clausal
+# skip
+ScalarProduct([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
+```
+
+---
+
+### `Element/3`
+```clausal
+# skip
+Element(?Index, +List, ?Value)
+```
+`Value` is the `Index`-th element of `List` (1-based indexing). When Index is ground, performs direct lookup. When Index is an FD variable, enumerates valid indices.
+
+```clausal
+# skip
+Element(2, [10, 20, 30], V)   % V = 20
+Element(I, [10, 20, 30], 20)  % I = 2
+```
+
+---
+
+### `Circuit/1`
+```clausal
+# skip
+Circuit(+Vars)
+```
+Constrain `Vars` to form a single Hamiltonian circuit. `Vars[i] = j` means the successor of node `i` is node `j` (1-based). Posts AllDifferent internally, then verifies single-cycle coverage during labeling.
+
+```clausal
+# skip
+Circuit([2, 3, 1])         % valid: 1→2→3→1
+% Circuit([1, 2, 3]) fails — self-loop at node 1
+% Circuit([2, 1, 4, 3]) fails — two sub-tours
+```
+
+---
+
 ## CLP(B) — Boolean Constraints
 
 CLP(B) uses reduced ordered BDDs (Binary Decision Diagrams) for Boolean constraint solving. Expressions use Python's bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), plus `BoolEq` (equivalence) and `BoolImpl` (implication) term constructors.
@@ -959,6 +1062,26 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
     **Implementation:** `clausal/logic/builtins.py:954`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
+
+---
+
+### `MustBe/2`
+```clausal
+# skip
+MustBe(+Type, +Term)
+```
+Assert that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound. Throws `type_error(Type, Term, "must_be/2")` if Term is ground but wrong type.
+
+Supported type strings: `"integer"`, `"float"`, `"number"`, `"atom"` / `"string"`, `"list"`, `"boolean"`, `"callable"`, `"dict"`, `"compound"`.
+
+---
+
+### `CanBe/2`
+```clausal
+# skip
+CanBe(+Type, ?Term)
+```
+Assert that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. Same type strings as `MustBe/2`.
 
 ---
 
@@ -1268,6 +1391,87 @@ Min(+X, +Y, -Z)   % Z = min(X, Y)
     **Implementation:** `clausal/logic/builtins.py:1062`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
+
+---
+
+### `Sign/2`
+```clausal
+# skip
+Sign(+X, -S)   % S is -1, 0, or 1
+```
+Sign of X. Returns -1 for negative, 0 for zero, 1 for positive. Supports Quantity values (result is always a dimensionless integer).
+
+---
+
+### `Gcd/3`
+```clausal
+# skip
+Gcd(+X, +Y, -G)   % G = gcd(X, Y)
+```
+Greatest common divisor of two integers. Supports Quantity values — dimensions must agree; result preserves dimensions.
+
+---
+
+### `DivMod/4`
+```clausal
+# skip
+DivMod(+X, +Y, -Q, -R)   % Q = X // Y, R = X mod Y
+```
+Integer division and modulus. Fails if Y is 0. Supports Quantity values — dimensions must agree; quotient Q is dimensionless, remainder R preserves dimensions.
+
+---
+
+### `Lcm/3`
+```clausal
+# skip
+Lcm(+X, +Y, -L)   % L = lcm(X, Y)
+```
+Least common multiple of two integers. Supports Quantity values — dimensions must agree; result preserves dimensions.
+
+---
+
+### `ExpMod/4`
+```clausal
+# skip
+ExpMod(+Base, +Exp, +Mod, -Result)   % Result = Base^Exp mod Mod
+```
+Modular exponentiation using Python's efficient `pow(base, exp, mod)`. Integer-only (no Quantity support). Fails if Mod is 0.
+
+---
+
+### `Popcount/2`
+```clausal
+# skip
+Popcount(+X, -Count)   % Count = number of set bits in X
+```
+Population count (number of 1 bits). X must be a non-negative integer.
+
+---
+
+### `Msb/2`
+```clausal
+# skip
+Msb(+X, -Bit)   % Bit = position of most significant set bit (0-indexed)
+```
+Most significant bit position. X must be a positive integer. `Msb(8, B)` gives B=3.
+
+---
+
+### `Lsb/2`
+```clausal
+# skip
+Lsb(+X, -Bit)   % Bit = position of least significant set bit (0-indexed)
+```
+Least significant bit position. X must be a positive integer. `Lsb(12, B)` gives B=2.
+
+---
+
+!!! note "Quantity support in arithmetic"
+    `Plus`, `Abs`, `Max`, `Min`, `Sign`, `Gcd`, `DivMod`, and `Lcm` all accept
+    `Quantity` values (numbers with physical dimensions). Dimension mismatches
+    raise `UnitsMismatch` — they are not silenced. `ExpMod`, `Popcount`, `Msb`,
+    and `Lsb` are integer-only (bitwise operations have no dimensional
+    interpretation).
 
 ---
 
@@ -1665,6 +1869,67 @@ Extract the value (second element) from each pair.
 
 ---
 
+### `GroupPairsByKey/2`
+```clausal
+# skip
+GroupPairsByKey(+Pairs, -Groups)
+```
+Group a list of `[Key, Value]` pairs by key. Groups is a list of `[Key, Values]` where Values collects all values for that key. Order is preserved (first occurrence of key determines group order).
+
+```clausal
+# skip
+GroupPairsByKey([["a", 1], ["b", 2], ["a", 3]], GROUPS)
+% GROUPS = [["a", [1, 3]], ["b", [2]]]
+```
+
+---
+
+### `Numlist/3`
+```clausal
+# skip
+Numlist(+Low, +High, -List)
+```
+List is the list of integers from Low to High inclusive. Fails if Low > High.
+
+```clausal
+# skip
+Numlist(1, 5, L)   % L = [1, 2, 3, 4, 5]
+```
+
+---
+
+### `Numlist/2`
+```clausal
+# skip
+Numlist(+High, -List)
+```
+Shorthand for `Numlist(1, High, List)`.
+
+---
+
+### `SameLength/2`
+```clausal
+# skip
+SameLength(?L1, ?L2)
+```
+Succeeds if L1 and L2 have the same length. If one is ground and the other is unbound, generates a list of fresh variables with matching length.
+
+---
+
+### `Transpose/2`
+```clausal
+# skip
+Transpose(+Matrix, -Transposed)
+```
+Column-wise transposition of a list of lists. All rows must be the same length (fails on non-rectangular input). Empty matrix transposes to empty list.
+
+```clausal
+# skip
+Transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
+```
+
+---
+
 ## Higher-Order List Predicates
 
 These predicates accept a **goal argument** (a lambda or named predicate). The goal is called for each list element; failures propagate as in standard higher-order patterns.
@@ -1722,6 +1987,53 @@ Filter `List` keeping only elements for which `Goal(Elem)` **fails**.
     **Implementation:** `clausal/logic/builtins.py:1614`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
+
+---
+
+### `Partition/4`
+```clausal
+# skip
+Partition(+Goal, +List, -Included, -Excluded)
+```
+Split `List` into two: `Included` contains elements where `Goal(Elem)` succeeds, `Excluded` contains elements where it fails.
+
+```clausal
+# skip
+Partition(IsInt, [1, "a", 2, "b"], YES, NO)
+% YES = [1, 2], NO = ["a", "b"]
+```
+
+---
+
+### `TFilter/3`
+```clausal
+# skip
+TFilter(+Goal, +List, -Filtered)
+```
+Reified filter. Calls `Goal(Elem, T)` where T is a fresh variable bound to `True` or `False` by the goal. Keeps elements where T=True. Committed choice: only the first solution of Goal is used.
+
+Useful with reified predicates like `Eq/3` and `DifT/3` that always succeed but bind their truth-value argument.
+
+```clausal
+# skip
+TFilter(Eq(_, 1), [1, 2, 1, 3], FILTERED)
+% FILTERED = [1, 1]
+```
+
+---
+
+### `TPartition/4`
+```clausal
+# skip
+TPartition(+Goal, +List, -Included, -Excluded)
+```
+Reified partition. Calls `Goal(Elem, T)` for each element. Elements where T=True go into `Included`, T=False into `Excluded`.
+
+```clausal
+# skip
+TPartition(Eq(_, 1), [1, 2, 1, 3], YES, NO)
+% YES = [1, 1], NO = [2, 3]
+```
 
 ---
 
