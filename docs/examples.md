@@ -112,6 +112,80 @@ Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMe
 
 ---
 
+## Meta-interpreters
+
+### metainterpreters.clausal
+
+Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. `CopyTerm/2` provides fresh variable copies at each resolution step.
+
+**Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
+
+```clausal
+Solve([], _PROGRAM),
+Solve([GOAL, *GOALS], PROGRAM) <- (
+    MatchClause(GOAL, BODY, PROGRAM),
+    Append(BODY, GOALS, ALL_GOALS),
+    Solve(ALL_GOALS, PROGRAM)
+)
+
+MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+    In(CLAUSE, PROGRAM),
+    CopyTerm(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
+    GOAL is FRESH_HEAD
+)
+```
+
+**SolveCount/3** — counts inference steps:
+
+```clausal
+SolveCount([], _PROGRAM, 0),
+SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
+    MatchClause(GOAL, BODY, PROGRAM),
+    Append(BODY, GOALS, ALL_GOALS),
+    SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
+    COUNT := SUB_COUNT + 1
+)
+```
+
+**SolveLimit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
+
+```clausal
+SolveLimit([], _PROGRAM, _MAX),
+SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
+    MAX > 0,
+    MAX1 := MAX - 1,
+    MatchClause(GOAL, BODY, PROGRAM),
+    Append(BODY, GOALS, ALL_GOALS),
+    SolveLimit(ALL_GOALS, PROGRAM, MAX1)
+)
+```
+
+**SolveIterativeDeepening/2** — complete search via increasing depth limits. Finds solutions even in cyclic programs where naive DFS diverges:
+
+```clausal
+SolveIterativeDeepening(GOALS, PROGRAM) <- (
+    Between(0, 1000, DEPTH),
+    SolveLimit(GOALS, PROGRAM, DEPTH)
+)
+```
+
+**SolveTree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
+
+```clausal
+SolveTree([], _PROGRAM, []),
+SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
+    MatchClause(GOAL, BODY, PROGRAM),
+    SolveTree(BODY, PROGRAM, BODY_TREE),
+    SolveTree(GOALS, PROGRAM, GOALS_TREE)
+)
+```
+
+Three sample programs are included: natural numbers (`NatnumProgram`), an acyclic graph (`GraphProgram`), and a cyclic graph (`CyclicProgram`) that demonstrates iterative deepening's advantage over plain DFS.
+
+*See: [Builtins](builtins.md) (CopyTerm, In, Append, Between)*
+
+---
+
 ## DCGs
 
 ### dcg_state.clausal
