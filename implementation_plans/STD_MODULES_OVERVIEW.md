@@ -143,17 +143,17 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 
 ---
 
-### Phase 4 — OS & File System
+### Phase 4 — OS & File System ✓
 
-**Priority: Medium** — System interaction for scripting use cases.
+**Status: COMPLETE** — System interaction for scripting use cases.
 
 | Item | Description |
 |---|---|
-| `os` module | `Getenv/2`, `Setenv/2`, `Shell/2`, `Pid/1`, `Argv/1`. |
-| `files` module | `FileExists/1`, `DirectoryExists/1`, `DirectoryFiles/2`, `FileSize/2`, `DeleteFile/1`, `RenameFile/2`, `MakeDirectory/1`, `WorkingDirectory/2`. |
-| `process` module | `ProcessCreate/3`, `ProcessWait/2`. Wrap `subprocess`. |
+| `py.os` module | `EnvironmentVariable/2`, `SetEnvironmentVariable/2`, `UnsetEnvironmentVariable/1`, `WorkingDirectory/1`, `ChangeDirectory/1`, `Pid/1`, `Argv/1`, `Platform/1`, `CPUCount/1`. |
+| `py.files` module | `FileExists/1`, `DirectoryExists/1`, `PathExists/1`, `DirectoryFiles/2`, `DirectoryEntries/2`, `FileSize/2`, `FileModificationTime/2`, `DeleteFile/1`, `DeleteDirectory/1`, `RenameFile/2`, `CopyFile/2`, `MakeDirectory/1`, `MakeDirectoryPath/1`, `ReadFileToString/2`, `WriteStringToFile/2`, `AppendStringToFile/2`, `AbsolutePath/2`, `JoinPath/3`, `SplitPath/3`, `FileExtension/2`, `TempFile/1`, `TempDirectory/1`. |
+| `py.process` module | `Shell/1,2`, `ShellOutput/2,3`, `ProcessCreate/3,4`, `Sleep/1`. |
 
-**Detailed plan:** TBD
+**Detailed plan:** [`STD_MODULES_PHASE4.md`](STD_MODULES_PHASE4.md)
 
 ---
 

@@ -20,6 +20,9 @@ Canonical modules (``py.*`` subpackage):
 - ``py.random``   — Random, RandomFloat, RandomInteger, RandomMember, RandomPermutation, RandomSample, RandomSeed, Maybe
 - ``py.json``     — Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile
 - ``py.csv``      — Parse, ParseRow, ParseRecords, Generate, GenerateRecords, ReadFile, ReadRecords, WriteFile
+- ``py.os``       — EnvironmentVariable, SetEnvironmentVariable, UnsetEnvironmentVariable, WorkingDirectory, ChangeDirectory, Pid, Argv, Platform, CPUCount
+- ``py.files``    — FileExists, DirectoryExists, PathExists, DirectoryFiles, DirectoryEntries, FileSize, FileModificationTime, DeleteFile, DeleteDirectory, RenameFile, CopyFile, MakeDirectory, MakeDirectoryPath, ReadFileToString, WriteStringToFile, AppendStringToFile, AbsolutePath, JoinPath, SplitPath, FileExtension, TempFile, TempDirectory
+- ``py.process``  — Shell, ShellOutput, ProcessCreate, Sleep
 
 Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 
@@ -34,4 +37,7 @@ Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 - ``random_mod``  → ``py.random``
 - ``json_mod``    → ``py.json``
 - ``csv_mod``     → ``py.csv``
+- ``os_mod``      → ``py.os``
+- ``files_mod``   → ``py.files``
+- ``process_mod`` → ``py.process``
 """

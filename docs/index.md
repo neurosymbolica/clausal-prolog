@@ -133,6 +133,9 @@ for the full feature set.
 | [Random](random.md) | Random number generation, selection, seeding |
 | [JSON](json.md) | JSON parsing, generation, DictTerm integration |
 | [CSV](csv.md) | CSV parsing, generation, DictTerm records |
+| [OS](os.md) | Environment variables, working directory, process info, platform |
+| [Files](files.md) | File/directory existence, listing, metadata, CRUD, path manipulation |
+| [Process](process.md) | Shell commands, subprocess execution, sleep |
 | [SQLite](sqlite.md) | SQLite database predicates |
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
 | [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |

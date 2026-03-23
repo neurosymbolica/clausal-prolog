@@ -14,6 +14,9 @@ wrap::
     -import_from(py.random, [Random, RandomInteger, RandomMember, Maybe])
     -import_from(py.json, [Parse, Generate, Get, ReadFile])
     -import_from(py.csv, [Parse, ParseRow, ReadFile, ReadRecords])
+    -import_from(py.os, [EnvironmentVariable, WorkingDirectory, Pid, Platform])
+    -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString, JoinPath])
+    -import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
 
 The legacy names (``sympy_module``, ``uuid_mod``, ``yaml_module``,
 ``regex``, ``log``, ``date_time``, ``sqlite``) are compatibility shims

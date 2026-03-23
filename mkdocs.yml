@@ -63,6 +63,9 @@ nav:
     - Random: random.md
     - JSON: json.md
     - CSV: csv.md
+    - OS: os.md
+    - Files: files.md
+    - Process: process.md
     - Regex: regex.md
     - Date & Time: date_time.md
     - YAML: yaml.md
