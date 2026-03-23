@@ -145,3 +145,4 @@ for the full feature set.
 | [DCGs](dcg.md) | Definite Clause Grammars for parsing |
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
+| [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
