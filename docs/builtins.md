@@ -72,8 +72,9 @@ Notation in signature lines:
 
 | Category | Predicates |
 |---|---|
-| [Control Flow](#control-flow) | Once, Not, If/3, throw/1, Catch/2, CatchRecover/3, catch/3, halt/0,1 |
-| [Meta-Predicates](#meta-predicates) | FindAll/3, BagOf/3, SetOf/3, ForAll/2 |
+| [Control Flow](#control-flow) | Once, Not, If/3, throw/1, Catch/2, CatchRecover/3, catch/3, halt/0,1, SetupCallCleanup/3, CallCleanup/2 |
+| [Coroutining](#coroutining) | Freeze/2, When/2 |
+| [Meta-Predicates](#meta-predicates) | FindAll/3, BagOf/3, SetOf/3, ForAll/2, CallNth/2, CountAll/2 |
 | [Higher-Order Call](#higher-order-call) | Call/1..8, CallGoal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3 |
@@ -216,6 +217,68 @@ Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1
 
 ---
 
+### `SetupCallCleanup/3`
+```clausal
+# skip
+SetupCallCleanup(+Setup, +Call, +Cleanup)
+```
+Deterministic resource management (`try/finally` for logic). Setup runs once (first solution only). Call runs normally. Cleanup runs **exactly once** regardless of how Call terminates — success, failure, or exception. If Setup fails, Cleanup does not run.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_setup_call_cleanup`)
+    **Python tests:** `tests/test_coroutining.py::TestSetupCallCleanup`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
+
+---
+
+### `CallCleanup/2`
+```clausal
+# skip
+CallCleanup(+Call, +Cleanup)
+```
+Sugar for `SetupCallCleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_setup_call_cleanup`)
+    **Python tests:** `tests/test_coroutining.py::TestCallCleanup`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
+
+---
+
+## Coroutining
+
+Coroutining predicates delay goal execution until variables are bound. They use the attributed variable hook infrastructure.
+
+*Full documentation: [Coroutining](coroutining.md)*
+
+### `Freeze/2`
+```clausal
+# skip
+Freeze(?X, +Goal)
+```
+Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediately. If `X` is unbound, attaches Goal as an attribute; when `X` is later unified, the frozen goal fires synchronously — failure rejects the unification.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`)
+    **Python tests:** `tests/test_coroutining.py::TestFreeze`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
+
+---
+
+### `When/2`
+```clausal
+# skip
+When(+Condition, +Goal)
+```
+Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported conditions: `IsBound(X)`, `IsGround(X)`, conjunction `(C1, C2)`, disjunction `(C1 ; C2)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_when`), `clausal/logic/coroutining.py` (`_install_when_ground`, `_install_when_disjunction`)
+    **Python tests:** `tests/test_coroutining.py::TestWhen`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
+
+---
+
 ## Meta-Predicates
 
 These are **compiler special forms** recognized by name in `compile_goal`/`compile_goal_trampoline`. Inner goals compile in simple mode as sub-generators.
@@ -273,6 +336,34 @@ Universal quantification: succeeds if `Action` succeeds for every solution of `C
     **Implementation:** `clausal/logic/compiler.py:1644`
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
+
+---
+
+### `CallNth/2`
+```clausal
+# skip
+CallNth(+Goal, +N)
+```
+Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the first N-1 solutions. Fails if Goal has fewer than N solutions. Raises `type_error` if N is not a positive integer.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_call_nth`)
+    **Python tests:** `tests/test_coroutining.py::TestCallNth`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
+
+---
+
+### `CountAll/2`
+```clausal
+# skip
+CountAll(+Goal, -Count)
+```
+Count the number of solutions of `Goal` without collecting them. Unifies `Count` with the integer result. Bindings from the inner goal are not visible after counting (the trail is unwound).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/compiler.py` (`_compile_count_all`)
+    **Python tests:** `tests/test_coroutining.py::TestCountAll`
+    **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
 ---
 
@@ -2380,6 +2471,7 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/builtins_keywords.clausal` | `Vary/3`, `Extend/3`, `UnboundKeys/2`, `Signature/3` |
     | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
     | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
+    | `tests/fixtures/coroutining.clausal` | `CallNth/2`, `CountAll/2`, `SetupCallCleanup/3`, `CallCleanup/2`, `Freeze/2`, `When/2` |
     | `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
     | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |

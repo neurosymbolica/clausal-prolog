@@ -1,0 +1,151 @@
+# Phase 1: Coroutining & Resource Control integration tests
+
+# CallNth: get the 3rd member of a list
+Test("call_nth basic") <- (
+    CallNth(In(X_, [10, 20, 30, 40, 50]), 3),
+    X_ is 30
+)
+
+# CallNth: N exceeds available solutions - fail
+Test("call_nth too few") <- (
+    not CallNth(In(X_, [1, 2]), 5)
+)
+
+# CountAll: count members
+Test("count_all basic") <- (
+    CountAll(In(X_, ["a", "b", "c", "d"]), COUNT_),
+    COUNT_ is 4
+)
+
+# CountAll: no solutions - 0
+Test("count_all empty") <- (
+    CountAll(In(X_, []), COUNT_),
+    COUNT_ is 0
+)
+
+# SetupCallCleanup: basic success
+Test("scc success") <- (
+    SetupCallCleanup(
+        S_ is 1,
+        R_ is 2,
+        C_ is 3,
+    )
+)
+
+# SetupCallCleanup: call fails - cleanup still runs, overall fails
+Test("scc call fails") <- (
+    not SetupCallCleanup(
+        S_ is 1,
+        In(X_, []),
+        C_ is 3,
+    )
+)
+
+# CallCleanup: sugar for SCC
+Test("call_cleanup basic") <- (
+    CallCleanup(
+        R_ is 42,
+        C_ is 99,
+    )
+)
+
+# Freeze: already bound - immediate
+Test("freeze already bound") <- (
+    X_ is 5,
+    Freeze(X_, X_ > 0)
+)
+
+# Freeze: deferred until bound
+Test("freeze deferred") <- (
+    Freeze(X_, Y_ is X_),
+    X_ is "hello",
+    Y_ is "hello"
+)
+
+# Freeze: goal failure rejects unification
+Test("freeze rejects") <- (
+    Freeze(X_, X_ > 100),
+    not (X_ is 5)
+)
+
+# When: IsBound condition
+Test("when is_bound") <- (
+    When(IsBound(X_), Y_ is X_),
+    X_ is 42,
+    Y_ is 42
+)
+
+# When: conjunction
+Test("when conjunction") <- (
+    When((IsBound(X_), IsBound(Y_)), R_ is "done"),
+    X_ is 1,
+    Y_ is 2,
+    R_ is "done"
+)
+
+# ── Nesting inside other meta-predicates ──
+
+# FindAll wrapping CallNth
+Test("findall+callnth") <- (
+    FindAll(X_, CallNth(In(X_, [10, 20, 30]), 2), BAG_),
+    BAG_ is [20]
+)
+
+# Once wrapping CountAll
+Test("once+countall") <- (
+    Once(CountAll(In(X_, [1, 2, 3, 4, 5]), N_)),
+    N_ is 5
+)
+
+# catch wrapping CallNth with bad N
+Test("catch+callnth error") <- (
+    catch(
+        CallNth(In(X_, [1, 2, 3]), 0),
+        _,
+        R_ is "caught",
+    ),
+    R_ is "caught"
+)
+
+# Freeze inside FindAll
+Test("findall+freeze") <- (
+    FindAll(
+        Y_,
+        (Freeze(X_, Y_ is X_), X_ is 99),
+        BAG_,
+    ),
+    BAG_ is [99]
+)
+
+# SetupCallCleanup inside Once
+Test("once+scc") <- (
+    Once(SetupCallCleanup(
+        S_ is 1,
+        In(X_, ["a", "b", "c"]),
+        C_ is 3,
+    )),
+    X_ is "a"
+)
+
+# CallNth inside Freeze
+Test("freeze+callnth") <- (
+    Freeze(X_, CallNth(In(Y_, [X_]), 1)),
+    X_ is 42,
+    Y_ is 42
+)
+
+# CountAll inside FindAll
+Test("findall+countall") <- (
+    FindAll(
+        N_,
+        CountAll(In(X_, ["a", "b", "c"]), N_),
+        BAG_,
+    ),
+    BAG_ is [3]
+)
+
+# CallCleanup inside Once
+Test("once+callcleanup") <- (
+    Once(CallCleanup(In(X_, [10, 20, 30]), R_ is "cleaned")),
+    X_ is 10
+)

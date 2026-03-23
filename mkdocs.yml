@@ -48,6 +48,7 @@ nav:
     - DCGs: dcg.md
     - Dicts and Sets: dicts_sets.md
     - Exceptions: exceptions.md
+    - Coroutining: coroutining.md
     - Directives: directives.md
   - Constraints:
     - Dif & CLP(FD): constraints.md

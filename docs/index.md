@@ -144,4 +144,5 @@ for the full feature set.
 | [Testing](testing.md) | Writing test predicates, running the test suite |
 | [DCGs](dcg.md) | Definite Clause Grammars for parsing |
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
+| [Coroutining](coroutining.md) | Freeze/2, When/2, SetupCallCleanup/3, CallNth/2, CountAll/2 |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
