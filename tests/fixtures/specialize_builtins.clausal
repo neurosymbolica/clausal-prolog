@@ -1,0 +1,107 @@
+# Test fixture: specialize MIs with object programs containing builtins.
+#
+# Phase 3: object programs whose body goals include builtins (gt, sub, mul,
+# add) that are not part of the object program.  The specializer adds a
+# catch-all clause that dispatches unknown goals through _SolveGoal.
+
+-import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit])
+
+# ── Object Program: factorial ────────────────────────────────────────────────
+#
+# factorial(0, 1).
+# factorial(N, R) :- gt(N, 0), sub(N, 1, N1), factorial(N1, R1), mul(N, R1, R).
+
+FactorialProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["factorial", 0, 1], []],
+        [["factorial", N, R], [
+            ["gt", N, 0],
+            ["sub", N, 1, N1],
+            ["factorial", N1, R1],
+            ["mul", N, R1, R]
+        ]]
+    ]
+)
+
+# ── Object Program: even ─────────────────────────────────────────────────────
+#
+# even(0).
+# even(N) :- gte(N, 2), sub(N, 2, N1), even(N1).
+
+EvenProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["even", 0], []],
+        [["even", N], [
+            ["gte", N, 2],
+            ["sub", N, 2, N1],
+            ["even", N1]
+        ]]
+    ]
+)
+
+# ── Specializations ──────────────────────────────────────────────────────────
+
+-specialize(Solve, FactorialProgram, alias=SolveFactorial)
+-specialize(SolveCount, FactorialProgram, alias=SolveCountFactorial)
+-specialize(SolveLimit, FactorialProgram, alias=SolveLimitFactorial)
+-specialize(Solve, EvenProgram, alias=SolveEven)
+
+# ── Tests: SolveFactorial ────────────────────────────────────────────────────
+
+Test("solve factorial(0, 1)") <- (
+    SolveFactorial([["factorial", 0, 1]])
+)
+
+Test("solve factorial(1, 1)") <- (
+    SolveFactorial([["factorial", 1, 1]])
+)
+
+Test("solve factorial(3, 6)") <- (
+    SolveFactorial([["factorial", 3, 6]])
+)
+
+Test("solve factorial(5, 120)") <- (
+    SolveFactorial([["factorial", 5, 120]])
+)
+
+# ── Tests: SolveCountFactorial ───────────────────────────────────────────────
+
+Test("count factorial(0, 1) = 1 step") <- (
+    SolveCountFactorial([["factorial", 0, 1]], 1)
+)
+
+# ── Tests: SolveLimitFactorial ───────────────────────────────────────────────
+
+Test("limit factorial(0, 1) depth 1") <- (
+    SolveLimitFactorial([["factorial", 0, 1]], 1)
+)
+
+Test("limit factorial(1, 1) depth 20") <- (
+    SolveLimitFactorial([["factorial", 1, 1]], 20)
+)
+
+Test("limit factorial(3, 6) depth 30") <- (
+    SolveLimitFactorial([["factorial", 3, 6]], 30)
+)
+
+# ── Tests: SolveEven ─────────────────────────────────────────────────────────
+
+Test("solve even(0)") <- (
+    SolveEven([["even", 0]])
+)
+
+Test("solve even(2)") <- (
+    SolveEven([["even", 2]])
+)
+
+Test("solve even(4)") <- (
+    SolveEven([["even", 4]])
+)
+
+Test("solve not even(1)") <- (
+    not SolveEven([["even", 1]])
+)
+
+Test("solve not even(3)") <- (
+    not SolveEven([["even", 3]])
+)

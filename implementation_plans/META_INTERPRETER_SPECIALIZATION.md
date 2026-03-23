@@ -384,43 +384,57 @@ Single directive — no `-metainterpreter` needed (auto-detected by
 - `tests/test_specialization_pipeline.py` — 25 Python tests (directive parsing,
   predicate properties, query results, equivalence, error handling)
 
-### Phase 3: Object programs with builtins and external calls
+### Phase 3: Object programs with builtins and external calls  ✓ DONE
+
+**Location:** `clausal/logic/specialization.py`, `clausal/logic/compiler.py`
 
 The Phase 1 unfolder assumes all goals in an object clause body match
 heads in the same object program.  Real programs call builtins
-(`In`, `Append`, arithmetic) or predicates from other modules.
+(`gt`, `sub`, `mul`, arithmetic) or predicates from other modules.
 
 **Approach:** Goals that don't match any head in the object program are
-classified as **residual** — they pass through to the specialized code
-unchanged.  The unfolder wraps them in a call that the normal compiler
-handles.
+classified as **residual** — they are dispatched at runtime through a
+catch-all clause and `_SolveGoal` predicate.
 
-For example, an object program:
-```
-[["factorial", N, R], [["gt", N, 0], ["sub", N, 1, N1],
-                        ["factorial", N1, R1], ["mul", N, R1, R]]]
-```
+1. **`_known_functors(object_program)`** extracts the set of functor
+   names that appear as heads.
 
-Here `gt`, `sub`, `mul` are not in the object program.  They must
-remain as runtime goals.  The specialized clause would be:
+2. **`_has_residual_goals(object_program, known)`** checks if any body
+   goal has a functor not in the known set.
 
-```
-SolveCountFactorial([["factorial", N, R], *GOALS], COUNT) <- (
-    [["gt", N, 0]]  -- needs runtime dispatch
-    ...
-)
-```
+3. **`_make_residual_clause(pattern, pred_cls, solve_goal_name)`**
+   creates a catch-all clause:
+   ```
+   SpecPred([GOAL, *GOALS], ...extra) <- (
+       ...pre_match,
+       _SolveGoal(GOAL),
+       SpecPred(GOALS, ...extra'),
+       ...post_match
+   )
+   ```
 
-This requires either:
-- A runtime `SolveGoal` predicate for unknown goals (falls back to the
-  MI for these)
-- A mapping from object-level functor names to clausal builtins
+4. **`_make_solve_goal_predicate(name, goal_map, module_dict)`** creates
+   a `BuiltinPredicate` adapter that dispatches list-form goals:
+   - Default handlers for arithmetic (`add`, `sub`, `mul`, `div`, `mod`)
+     and comparison (`gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `true`)
+   - All handlers include ground-checks (fail gracefully on unbound Vars)
+   - Custom handlers via the `goal_map` parameter
+   - Module dict fallback for user-defined predicates
 
-Phase 3 implements the first option: unknown goals are dispatched through
-a small residual interpreter that handles only leaf goals.  This is a
-standard technique in partial deduction ("residualization").
+5. **TRO fix in `compiler.py`**: `_detect_tro_clause` now rejects
+   clauses whose head contains list patterns with non-variable constants
+   (`_head_has_unifying_list_pattern`).  TRO's `trail.undo` would undo
+   caller-visible bindings from `_head_list_unify_input`, breaking the
+   solution.
 
-**Tests:** Object program with arithmetic/comparison goals.
+**Tests:**
+- `tests/test_specialization.py` — 34 new Phase 3 tests: factorial,
+  even/odd, mixed, custom goal_map, SolveLimit with builtins, no-residual
+  check, equivalence
+- `tests/test_specialization_pipeline.py` — 15 new tests: end-to-end
+  via `.clausal` fixture for Solve/SolveCount/SolveLimit + factorial
+  and even programs
+- `tests/fixtures/specialize_builtins.clausal` — 13 inline tests
 
 ### Phase 4: Termination control
 

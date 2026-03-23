@@ -228,6 +228,7 @@ def specialize_mi(
     new_name: str,
     module_dict: dict | None = None,
     pred_cls: PredicateMeta | None = None,
+    goal_map: dict | None = None,
 ) -> PredicateMeta:
     """Specialize an MI with respect to an object program.
 
@@ -257,7 +258,18 @@ def specialize_mi(
     if pred_cls is None:
         pred_cls = make_predicate(new_name, fields)
 
+    # Detect whether the object program has residual goals (builtins/external).
+    known_functors = _known_functors(object_program)
+    has_residual = _has_residual_goals(object_program, known_functors)
+
     clauses = _unfold(pattern, object_program, pred_cls)
+
+    # If residual goals exist, add a catch-all clause that dispatches
+    # unknown goals through _SolveGoal.
+    solve_goal_name = f"_SolveGoal_{new_name}"
+    if has_residual:
+        catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
+        clauses.append(catchall)
 
     # Install clauses and compile.
     from clausal.logic.database import Database
@@ -270,6 +282,13 @@ def specialize_mi(
 
     globals_ = module_dict or {}
     globals_[new_name] = pred_cls
+
+    # Inject residual goal dispatcher if needed.
+    if has_residual:
+        solve_goal_pred = _make_solve_goal_predicate(
+            solve_goal_name, goal_map, module_dict,
+        )
+        globals_[solve_goal_name] = solve_goal_pred
 
     compile_predicate_trampoline(
         new_name, len(fields), clauses, db,
@@ -789,3 +808,313 @@ def _subst_recursive_call_extra_args(
         new_field_idx += 1
 
     return Call(func=LoadName(name=pred_cls.__name__), args=new_args, kwargs=[])
+
+
+# ── Phase 3: Residual goal support ────────────────────────────────────────────
+
+
+def _known_functors(object_program: list) -> set[str]:
+    """Extract the set of functor names that appear as heads in the object program."""
+    functors = set()
+    for clause in object_program:
+        head = clause[0]
+        if isinstance(head, list) and head:
+            functors.add(head[0])
+    return functors
+
+
+def _has_residual_goals(object_program: list, known_functors: set[str]) -> bool:
+    """Check if any body goal in the object program has a functor not in known_functors."""
+    for clause in object_program:
+        body = clause[1]
+        for goal in body:
+            if isinstance(goal, list) and goal:
+                if goal[0] not in known_functors:
+                    return True
+    return False
+
+
+def _make_residual_clause(
+    pattern: MIPattern,
+    pred_cls: PredicateMeta,
+    solve_goal_name: str,
+) -> Clause:
+    """Create a catch-all clause that dispatches unrecognized goals via _SolveGoal.
+
+    For the tail-recursive MI pattern, this produces:
+        SpecPred([GOAL, *GOALS], ...extra) <- (
+            ...pre_match,
+            _SolveGoal(GOAL),
+            SpecPred(GOALS, ...extra'),
+            ...post_match
+        )
+
+    This clause is appended AFTER the per-object-clause specialized clauses,
+    so known-head goals are matched first (by first-argument indexing).
+    Unknown goals fall through to this catch-all.
+    """
+    rc = pattern.recursive_clause
+    rc_head = rc.head
+    orig_fields = rc_head.__class__._fields
+
+    # Fresh variables for the catch-all.
+    mi_var_map = {}
+    fresh_goal = Var()
+    fresh_goals = Var()
+    mi_var_map[id(pattern.goal_var)] = fresh_goal
+    mi_var_map[id(pattern.goals_var)] = fresh_goals
+
+    # Fresh extra arg variables.
+    extra_field_vars = {}
+    for i in pattern.extra_args:
+        fname = orig_fields[i]
+        orig_var = getattr(rc_head, fname)
+        fresh = Var()
+        mi_var_map[id(orig_var)] = fresh
+        extra_field_vars[fname] = fresh
+
+    # Map remaining MI body vars.
+    _map_mi_vars(pattern, rc, mi_var_map)
+
+    # Build head: [GOAL, *GOALS] for goal-list, fresh vars for extras.
+    head_fields = {}
+    goal_field = orig_fields[pattern.goal_arg]
+    head_fields[goal_field] = [fresh_goal, StarUnpack(value=fresh_goals)]
+    for fname, var in extra_field_vars.items():
+        head_fields[fname] = var
+    new_head = pred_cls(**head_fields)
+
+    # Build body.
+    new_body = []
+
+    # Pre-match goals (e.g. MAX > 0, MAX1 := MAX - 1 for SolveLimit).
+    for goal in pattern.pre_match_goals:
+        new_body.append(_subst(goal, mi_var_map))
+
+    # _SolveGoal(GOAL) — dispatch the unknown goal.
+    new_body.append(Call(
+        func=LoadName(name=solve_goal_name),
+        args=[fresh_goal],
+        kwargs=[],
+    ))
+
+    # For ALL_GOALS, it's just GOALS (the goal was handled by _SolveGoal,
+    # no body goals to prepend).
+    if pattern.all_goals_var is not None:
+        mi_var_map[id(pattern.all_goals_var)] = fresh_goals
+
+    # Recursive call to specialized predicate with GOALS (not ALL_GOALS).
+    rc_body = rc.body
+    rec_call = rc_body[pattern.recursive_call_indices[0]]
+    rec_extra_call = _subst_recursive_call_extra_args(
+        rec_call, pattern, mi_var_map, pred_cls, fresh_goals,
+    )
+    new_body.append(rec_extra_call)
+
+    # Post-match goals (e.g. COUNT := SUB_COUNT + 1 for SolveCount).
+    for goal in pattern.post_match_goals:
+        new_body.append(_subst(goal, mi_var_map))
+
+    return Clause(head=new_head, body=new_body)
+
+
+# ── Default goal handlers ─────────────────────────────────────────────────────
+#
+# Each handler is a simple-mode generator: takes (args, trail) and yields
+# None for each solution.  The args list contains already-deref'd values
+# from the goal's argument positions.
+
+
+def _is_ground(x):
+    """Check if a term is ground (not an unbound logic variable)."""
+    return not is_var(x)
+
+
+def _handle_gt(args, trail):
+    """["gt", A, B] → A > B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if _is_ground(a) and _is_ground(b) and a > b:
+        yield None
+
+
+def _handle_gte(args, trail):
+    """["gte", A, B] → A >= B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if _is_ground(a) and _is_ground(b) and a >= b:
+        yield None
+
+
+def _handle_lt(args, trail):
+    """["lt", A, B] → A < B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if _is_ground(a) and _is_ground(b) and a < b:
+        yield None
+
+
+def _handle_lte(args, trail):
+    """["lte", A, B] → A <= B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if _is_ground(a) and _is_ground(b) and a <= b:
+        yield None
+
+
+def _handle_eq(args, trail):
+    """["eq", A, B] → unify A with B."""
+    from clausal.logic.variables import deref
+    a, b = deref(args[0]), deref(args[1])
+    mark = trail.mark()
+    if unify(a, b, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_neq(args, trail):
+    """["neq", A, B] → A \\= B (disequality check)."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if _is_ground(a) and _is_ground(b) and a != b:
+        yield None
+
+
+def _handle_add(args, trail):
+    """["add", A, B, C] → C is A + B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if not (_is_ground(a) and _is_ground(b)):
+        return
+    result = a + b
+    mark = trail.mark()
+    if unify(args[2], result, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_sub(args, trail):
+    """["sub", A, B, C] → C is A - B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if not (_is_ground(a) and _is_ground(b)):
+        return
+    result = a - b
+    mark = trail.mark()
+    if unify(args[2], result, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_mul(args, trail):
+    """["mul", A, B, C] → C is A * B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if not (_is_ground(a) and _is_ground(b)):
+        return
+    result = a * b
+    mark = trail.mark()
+    if unify(args[2], result, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_div(args, trail):
+    """["div", A, B, C] → C is A // B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if not (_is_ground(a) and _is_ground(b)):
+        return
+    result = a // b
+    mark = trail.mark()
+    if unify(args[2], result, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_mod(args, trail):
+    """["mod", A, B, C] → C is A % B."""
+    from clausal.logic.variables import deref, walk
+    a, b = walk(deref(args[0])), walk(deref(args[1]))
+    if not (_is_ground(a) and _is_ground(b)):
+        return
+    result = a % b
+    mark = trail.mark()
+    if unify(args[2], result, trail):
+        yield None
+    trail.undo(mark)
+
+
+def _handle_true(args, trail):
+    """["true"] → always succeeds."""
+    yield None
+
+
+_DEFAULT_GOAL_MAP = {
+    "gt": _handle_gt,
+    "gte": _handle_gte,
+    "lt": _handle_lt,
+    "lte": _handle_lte,
+    "eq": _handle_eq,
+    "neq": _handle_neq,
+    "add": _handle_add,
+    "sub": _handle_sub,
+    "mul": _handle_mul,
+    "div": _handle_div,
+    "mod": _handle_mod,
+    "true": _handle_true,
+}
+
+
+def _make_solve_goal_predicate(
+    name: str,
+    goal_map: dict | None,
+    module_dict: dict | None,
+):
+    """Create a BuiltinPredicate adapter for the _SolveGoal dispatcher.
+
+    The dispatcher takes a single argument (a list-form goal) and routes it
+    through the goal_map handlers or module_dict predicates.
+    """
+    from clausal.logic.builtins._registry import BuiltinPredicate
+    from clausal.logic.trampoline import DONE
+    from clausal.logic.variables import deref, walk
+
+    handlers = dict(_DEFAULT_GOAL_MAP)
+    if goal_map:
+        handlers.update(goal_map)
+
+    def _solve_goal_dispatch(this_generator, parent, goal, trail):
+        goal = walk(deref(goal))
+        if not isinstance(goal, list) or not goal:
+            yield (parent, DONE)
+            return
+
+        functor = goal[0]
+        args = goal[1:]
+
+        handler = handlers.get(functor)
+        if handler is not None:
+            for _ in handler(args, trail):
+                yield (parent, None)
+            yield (parent, DONE)
+            return
+
+        # Fallback: try module_dict for user-defined predicates.
+        if module_dict:
+            pred = module_dict.get(functor)
+            if pred is not None and hasattr(pred, '_get_dispatch'):
+                from clausal.logic.trampoline import StepGenerator
+                dispatch_fn = pred._get_dispatch()
+                sg = StepGenerator(dispatch_fn, this_generator, *args, trail)
+                st = yield (sg, None)
+                while st is not DONE:
+                    yield (parent, None)
+                    st = yield (sg, None)
+                yield (parent, DONE)
+                return
+
+        # Unknown goal — fail silently.
+        yield (parent, DONE)
+
+    return BuiltinPredicate(name, 1, dispatch_fn=_solve_goal_dispatch)

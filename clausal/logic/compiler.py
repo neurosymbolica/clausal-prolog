@@ -4116,6 +4116,15 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     if any(_contains_star_unpack(a) for a in call_args):
         return False
 
+    # Reject clauses whose head list patterns contain non-variable constants.
+    # The _head_list_unify_input call for such patterns creates caller-visible
+    # bindings (e.g., unifying a query Var with a constant in the pattern).
+    # TRO's trail.undo would undo these bindings prematurely.
+    # This is common in specialized MI predicates whose heads embed
+    # object-program clause heads like [["sum", 0, 0], *GOALS].
+    if _head_has_unifying_list_pattern(clause.head):
+        return False
+
     # Safety check: every variable in the tail call must be "grounded" by
     # the prefix goals, be a passthrough from the head, or come from head
     # list decomposition with at least one deterministic prefix goal
@@ -4221,6 +4230,39 @@ def _tro_args_safe(
                 continue
             return (False, frozenset())
     return (True, frozenset(_check_positions))
+
+
+def _head_has_unifying_list_pattern(head: Any) -> bool:
+    """Return True if any head field is a list containing non-variable constants.
+
+    Such patterns cause ``_head_list_unify_input`` to create bindings on the
+    caller's variables (by unifying the constant-bearing pattern with the input).
+    TRO's ``trail.undo`` would undo these bindings prematurely, breaking the
+    caller's view of the solution.
+
+    Example: head field ``[["sum", 0, 0], StarUnpack(GOALS)]`` has the
+    constant list ``["sum", 0, 0]`` — TRO is unsafe.
+    """
+    if is_term_instance(head):
+        for fname in term_field_names(head):
+            val = getattr(head, fname)
+            if isinstance(val, list) and _list_has_nonvar_constant(val):
+                return True
+    return False
+
+
+def _list_has_nonvar_constant(lst: list) -> bool:
+    """Check if a list contains non-variable constants (not just Vars and StarUnpack)."""
+    for elem in lst:
+        if isinstance(elem, StarUnpack):
+            continue
+        elem = deref(elem)
+        if is_var(elem):
+            continue
+        # This element is a constant or a list — it would require
+        # unification that could bind caller variables.
+        return True
+    return False
 
 
 def _contains_star_unpack(term: Any) -> bool:

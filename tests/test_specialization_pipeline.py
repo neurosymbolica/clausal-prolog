@@ -241,6 +241,112 @@ class TestEquivalence:
             assert len(results) == 0, f"Expected failure for {goal}"
 
 
+# ── Phase 3: Object programs with builtins ──────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def specialize_builtins():
+    """Import the specialize_builtins fixture."""
+    import tests.fixtures.specialize_builtins as mod
+    return mod
+
+
+class TestSpecializeFactorial:
+    """Specialized Solve + factorial (has gt, sub, mul builtins)."""
+
+    def test_specialized_exists(self, specialize_builtins):
+        assert hasattr(specialize_builtins, "SolveFactorial")
+
+    def test_has_catch_all(self, specialize_builtins):
+        """Factorial has builtins → specialized predicate should have catch-all."""
+        # 1 base + 2 object clauses + 1 catch-all = 4
+        assert len(specialize_builtins.SolveFactorial._clauses) == 4
+
+    def test_factorial_0(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 0, 1]]))
+        assert len(results) >= 1
+
+    def test_factorial_3(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 3, 6]]))
+        assert len(results) >= 1
+
+    def test_factorial_5(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 5, 120]]))
+        assert len(results) >= 1
+
+    def test_factorial_query_var(self, specialize_builtins):
+        """Query with result as Var — binding should propagate."""
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+
+        r = Var()
+        results = []
+        for _ in call(specialize_builtins.SolveFactorial, [["factorial", 4, r]]):
+            results.append(walk(deref(r)))
+        assert 24 in results
+
+    def test_factorial_wrong_fails(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 3, 7]]))
+        assert len(results) == 0
+
+
+class TestSpecializeCountFactorial:
+    """Specialized SolveCount + factorial."""
+
+    def test_specialized_exists(self, specialize_builtins):
+        assert hasattr(specialize_builtins, "SolveCountFactorial")
+
+    def test_count_factorial_0(self, specialize_builtins):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+
+        count = Var()
+        results = []
+        for _ in call(specialize_builtins.SolveCountFactorial, [["factorial", 0, 1]], count):
+            results.append(walk(deref(count)))
+        assert 1 in results
+
+
+class TestSpecializeLimitFactorial:
+    """Specialized SolveLimit + factorial."""
+
+    def test_specialized_exists(self, specialize_builtins):
+        assert hasattr(specialize_builtins, "SolveLimitFactorial")
+
+    def test_limit_factorial_0_depth_1(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveLimitFactorial, [["factorial", 0, 1]], 1))
+        assert len(results) >= 1
+
+    def test_limit_factorial_3_depth_30(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveLimitFactorial, [["factorial", 3, 6]], 30))
+        assert len(results) >= 1
+
+
+class TestSpecializeEven:
+    """Specialized Solve + even program."""
+
+    def test_even_0(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveEven, [["even", 0]]))
+        assert len(results) >= 1
+
+    def test_even_4(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveEven, [["even", 4]]))
+        assert len(results) >= 1
+
+    def test_odd_1_fails(self, specialize_builtins):
+        from clausal.logic.solve import call
+        results = list(call(specialize_builtins.SolveEven, [["even", 1]]))
+        assert len(results) == 0
+
+
 # ── Error handling tests ────────────────────────────────────────────────────
 
 
