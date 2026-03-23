@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# new-worktree: create a git worktree and share Claude memory with the source repo
+#
+# Usage:
+#   new-worktree <path> [<branch>]
+#
+#   <path>    destination directory (e.g. /workspace/clausal-repl or ../clausal-repl)
+#   <branch>  branch to check out; created from HEAD if it doesn't exist yet
+#             defaults to a name derived from the destination directory
+#
+# Examples:
+#   new-worktree /workspace/clausal-repl repl
+#   new-worktree ../clausal-repl              # branch name inferred as "repl"
+
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 <path> [<branch>]" >&2
+    exit 1
+fi
+
+DEST=$(realpath -m "$1")
+BRANCH="${2:-$(basename "$DEST")}"
+
+# Resolve the source repo root (works whether we're in a worktree or the main tree)
+REPO_ROOT=$(git rev-parse --path-format=absolute --git-common-dir)
+# --git-common-dir points to the .git dir of the main worktree; strip trailing /.git
+REPO_ROOT="${REPO_ROOT%/.git}"
+# If git-common-dir returned just ".git" (relative, no slash), resolve from cwd
+if [[ "$REPO_ROOT" == ".git" ]]; then
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+fi
+
+echo "Source repo : $REPO_ROOT"
+echo "Destination : $DEST"
+echo "Branch      : $BRANCH"
+
+# Create the worktree (create branch if it doesn't exist)
+if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git -C "$REPO_ROOT" worktree add "$DEST" "$BRANCH"
+else
+    echo "Branch '$BRANCH' not found — creating from HEAD."
+    git -C "$REPO_ROOT" worktree add "$DEST" -b "$BRANCH"
+fi
+
+# --- Claude memory symlink ---
+# Memory dirs are keyed by absolute path with slashes replaced by hyphens
+to_memory_key() {
+    echo "$1" | sed 's|/|-|g'
+}
+
+CLAUDE_PROJECTS="${HOME}/.claude/projects"
+SRC_KEY=$(to_memory_key "$REPO_ROOT")
+DST_KEY=$(to_memory_key "$DEST")
+
+SRC_MEMORY="${CLAUDE_PROJECTS}/${SRC_KEY}/memory"
+DST_MEMORY_DIR="${CLAUDE_PROJECTS}/${DST_KEY}"
+DST_MEMORY="${DST_MEMORY_DIR}/memory"
+
+if [[ -d "$SRC_MEMORY" ]]; then
+    mkdir -p "$DST_MEMORY_DIR"
+    if [[ -e "$DST_MEMORY" || -L "$DST_MEMORY" ]]; then
+        echo "Memory path $DST_MEMORY already exists — skipping symlink."
+    else
+        ln -s "$SRC_MEMORY" "$DST_MEMORY"
+        echo "Memory symlink : $DST_MEMORY -> $SRC_MEMORY"
+    fi
+else
+    echo "No source memory found at $SRC_MEMORY — skipping symlink."
+fi
+
+echo "Done. Start Claude in $DEST with: claude --cwd $DEST"
