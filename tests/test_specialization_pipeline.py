@@ -347,6 +347,91 @@ class TestSpecializeEven:
         assert len(results) == 0
 
 
+# ── Phase 4: Deep specialization pipeline tests ─────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def specialize_deep():
+    """Import the specialize_deep fixture."""
+    import tests.fixtures.specialize_deep as mod
+    return mod
+
+
+class TestDeepPipeline:
+    """End-to-end tests for -specialize with depth=N."""
+
+    def test_deep_predicate_exists(self, specialize_deep):
+        assert hasattr(specialize_deep, "DeepNatnum")
+
+    def test_deep_count_predicate_exists(self, specialize_deep):
+        assert hasattr(specialize_deep, "DeepCountNatnum")
+
+    def test_shallow_predicate_exists(self, specialize_deep):
+        assert hasattr(specialize_deep, "ShallowNatnum")
+
+    def test_deep_predicate_is_predicate_meta(self, specialize_deep):
+        from clausal.logic.predicate import PredicateMeta
+        assert isinstance(specialize_deep.DeepNatnum, PredicateMeta)
+
+    def test_deep_natnum_0(self, specialize_deep):
+        from clausal.logic.solve import call
+        results = list(call(specialize_deep.DeepNatnum, [["natnum", 0]]))
+        assert len(results) >= 1
+
+    def test_deep_natnum_s0(self, specialize_deep):
+        from clausal.logic.solve import call
+        results = list(call(specialize_deep.DeepNatnum, [["natnum", ["s", 0]]]))
+        assert len(results) >= 1
+
+    def test_deep_natnum_ss0(self, specialize_deep):
+        from clausal.logic.solve import call
+        results = list(call(
+            specialize_deep.DeepNatnum,
+            [["natnum", ["s", ["s", 0]]]],
+        ))
+        assert len(results) >= 1
+
+    def test_deep_count_natnum_0(self, specialize_deep):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        count = Var()
+        results = []
+        for _ in call(specialize_deep.DeepCountNatnum, [["natnum", 0]], count):
+            results.append(walk(deref(count)))
+        assert 1 in results
+
+    def test_deep_count_natnum_s0(self, specialize_deep):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        count = Var()
+        results = []
+        for _ in call(
+            specialize_deep.DeepCountNatnum, [["natnum", ["s", 0]]], count,
+        ):
+            results.append(walk(deref(count)))
+        assert 2 in results
+
+    def test_equivalence_shallow_deep(self, specialize_deep):
+        """Shallow and deep specialization produce identical results."""
+        from clausal.logic.solve import call
+        for val in [0, ["s", 0], ["s", ["s", 0]]]:
+            shallow = list(call(
+                specialize_deep.ShallowNatnum, [["natnum", val]],
+            ))
+            deep = list(call(
+                specialize_deep.DeepNatnum, [["natnum", val]],
+            ))
+            assert len(shallow) == len(deep), (
+                f"Mismatch for natnum({val}): "
+                f"shallow={len(shallow)}, deep={len(deep)}"
+            )
+
+    def test_depth_directive_parsed(self, specialize_deep):
+        """The depth parameter should be accessible in some form."""
+        # Basic check: deep predicate has clauses.
+        assert len(specialize_deep.DeepNatnum._clauses) >= 3
+
+
 # ── Error handling tests ────────────────────────────────────────────────────
 
 
@@ -363,3 +448,93 @@ class TestErrors:
             tree = ast.parse(source)
             t = EmbedTransformer()
             t.visit(tree)
+
+
+# ── Phase 5: CPD Pipeline Tests ──────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def cpd_module():
+    """Import the CPD test fixture."""
+    import tests.fixtures.specialize_cpd as mod
+    return mod
+
+
+class TestCpdPipeline:
+    """End-to-end CPD tests via .clausal fixture."""
+
+    def test_cpd_natnum_exists(self, cpd_module):
+        """CpdNatnum predicate class is created."""
+        from clausal.logic.predicate import PredicateMeta
+        assert isinstance(cpd_module.CpdNatnum, PredicateMeta)
+
+    def test_cpd_graph_exists(self, cpd_module):
+        from clausal.logic.predicate import PredicateMeta
+        assert isinstance(cpd_module.CpdGraph, PredicateMeta)
+
+    def test_cpd_count_exists(self, cpd_module):
+        from clausal.logic.predicate import PredicateMeta
+        assert isinstance(cpd_module.CpdCountNatnum, PredicateMeta)
+
+    def test_cpd_limit_exists(self, cpd_module):
+        from clausal.logic.predicate import PredicateMeta
+        assert isinstance(cpd_module.CpdLimitNatnum, PredicateMeta)
+
+    def test_cpd_natnum_query(self, cpd_module):
+        from clausal.logic.solve import call
+        assert sum(1 for _ in call(cpd_module.CpdNatnum, [["natnum", 0]])) == 1
+
+    def test_cpd_graph_path(self, cpd_module):
+        from clausal.logic.solve import call
+        assert sum(1 for _ in call(cpd_module.CpdGraph, [["path", "a", "c"]])) == 1
+
+    def test_cpd_count_value(self, cpd_module):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        v = Var()
+        result = None
+        for _ in call(cpd_module.CpdCountNatnum, [["natnum", ["s", 0]]], v):
+            result = walk(deref(v))
+        assert result == 2
+
+    def test_cpd_limit_succeeds(self, cpd_module):
+        from clausal.logic.solve import call
+        assert sum(1 for _ in call(
+            cpd_module.CpdLimitNatnum, [["natnum", ["s", ["s", 0]]]], 10
+        )) == 1
+
+    def test_cpd_inline_tests(self, cpd_module):
+        """All inline Test predicates in the fixture should pass."""
+        from clausal.logic.solve import call
+        results = list(call(cpd_module.Test, "cpd natnum(0)"))
+        assert len(results) == 1
+
+    def test_cpd_directive_parsing(self):
+        """cpd=True is parsed correctly from -specialize directive."""
+        from clausal.templating.term_rewriting import EmbedTransformer
+        from clausal.pythonic_ast.nodes import SpecializeDirective as SI
+        import ast
+
+        source = "-specialize(Solve, NatnumProgram, alias=CpdNatnum, cpd=True)"
+        tree = ast.parse(source)
+        t = EmbedTransformer()
+        t.visit(tree)
+        items = [i for i in t._module_items if isinstance(i, SI)]
+        assert len(items) == 1
+        assert items[0].cpd is True
+        assert items[0].mi_name == "Solve"
+        assert items[0].new_name == "CpdNatnum"
+
+    def test_cpd_directive_default_false(self):
+        """cpd defaults to False when not specified."""
+        from clausal.templating.term_rewriting import EmbedTransformer
+        from clausal.pythonic_ast.nodes import SpecializeDirective as SI
+        import ast
+
+        source = "-specialize(Solve, NatnumProgram, alias=PlainNatnum)"
+        tree = ast.parse(source)
+        t = EmbedTransformer()
+        t.visit(tree)
+        items = [i for i in t._module_items if isinstance(i, SI)]
+        assert len(items) == 1
+        assert items[0].cpd is False

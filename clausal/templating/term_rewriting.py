@@ -2662,14 +2662,20 @@ class EmbedTransformer(NodeTransformer):
             )
         source_program = source_arg.id
 
-        # Keyword arg: alias=NewName.
+        # Keyword args: alias=NewName, depth=N, cpd=True.
         new_name = None
+        depth = 0
+        cpd = False
         call_node = expr_stmt.value.operand
         for kw in getattr(call_node, 'keywords', []):
             if kw.arg == 'alias' and isinstance(kw.value, Name):
                 new_name = kw.value.id
             elif kw.arg == 'alias' and isinstance(kw.value, Constant):
                 new_name = kw.value.value
+            elif kw.arg == 'depth' and isinstance(kw.value, Constant):
+                depth = int(kw.value.value)
+            elif kw.arg == 'cpd' and isinstance(kw.value, Constant):
+                cpd = bool(kw.value.value)
 
         # Also check positional args for a third Name argument.
         if new_name is None and len(args) >= 3 and isinstance(args[2], Name):
@@ -2686,6 +2692,8 @@ class EmbedTransformer(NodeTransformer):
                 mi_name=mi_name,
                 source_program=source_program,
                 new_name=new_name,
+                depth=depth,
+                cpd=cpd,
             )
         )
         # No runtime code needed — handled in compile_module pipeline.

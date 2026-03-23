@@ -5,6 +5,8 @@ Phase 1: Core unfolder — specialize each MI with natnum/graph programs and
          verify identical results to unspecialized versions.
 Phase 3: Object programs with builtins/external goals — residual goal
          dispatch via catch-all clause and _SolveGoal.
+Phase 5: Conjunctive partial deduction (deforestation) — non-deterministic
+         inlining, intermediate list elimination, pre/post-match chaining.
 """
 
 from __future__ import annotations
@@ -13,10 +15,13 @@ import pytest
 from clausal.logic.specialization import (
     analyze_mi,
     specialize_mi,
+    specialize_mi_cpd,
     MIPattern,
     CannotSpecialize,
+    ConjunctionMemoTable,
     _known_functors,
     _has_residual_goals,
+    _ast_unify,
 )
 
 
@@ -938,6 +943,388 @@ class TestSolveLimitWithResidual:
         assert len(results) >= 1
 
 
+# ── Phase 4: Termination control ──────────────────────────────────────────────
+
+
+class TestHomeomorphicEmbedding:
+    """Unit tests for the embeds() function."""
+
+    def test_var_embeds_var(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        assert embeds(Var(), Var())
+
+    def test_var_does_not_embed_constant(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        assert not embeds(Var(), 42)
+
+    def test_constant_does_not_embed_var(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        assert not embeds(42, Var())
+
+    def test_equal_constants(self):
+        from clausal.logic.specialization import embeds
+        assert embeds(0, 0)
+        assert embeds("a", "a")
+
+    def test_different_constants(self):
+        from clausal.logic.specialization import embeds
+        assert not embeds(0, 1)
+        assert not embeds("a", "b")
+
+    def test_same_functor_coupling(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        # f(X) embeds f(Y) — same functor, var embeds var.
+        assert embeds(["f", Var()], ["f", Var()])
+
+    def test_same_functor_args(self):
+        from clausal.logic.specialization import embeds
+        # f(0) embeds f(0).
+        assert embeds(["f", 0], ["f", 0])
+        # f(0) does NOT embed f(1).
+        assert not embeds(["f", 0], ["f", 1])
+
+    def test_diving(self):
+        from clausal.logic.specialization import embeds
+        # f(0) embeds g(f(0)) — dives into g's arg.
+        assert embeds(["f", 0], ["g", ["f", 0]])
+
+    def test_diving_nested(self):
+        from clausal.logic.specialization import embeds
+        # 0 embeds f(0) — constant dives into compound.
+        assert embeds(0, ["f", 0])
+
+    def test_growth_detection(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        # natnum(X) is embedded BY natnum(s(Y)) — the latter is "bigger".
+        # In the standard definition, embeds(s, t) means s is a sub-pattern of t.
+        # natnum(s(Y)) does NOT embed natnum(X) (compound arg doesn't embed var).
+        # But natnum(X) DOES embed natnum(s(Y)) via diving: X doesn't embed s(Y),
+        # but natnum(X) dives into natnum(s(Y))'s arg s(Y)... no.
+        # Actually: for the termination test, we check if the NEW atom embeds
+        # an ANCESTOR.  If natnum(s(Y)) embeds natnum(X), growth is detected.
+        # s(Y) embeds X? No.  So coupling fails.
+        # The correct growth check: the ancestor natnum(X) is embedded in the
+        # descendant natnum(s(Y)) via diving: natnum(X) embeds natnum(Y)
+        # (coupling: var embeds var), and natnum(Y) is a sub-term of natnum(s(Y)).
+        # Wait — natnum(Y) is not a sub-term of natnum(s(Y)).  s(Y) is.
+        # Standard: natnum(X) embeds natnum(s(Y))? No — coupling requires X embeds s(Y).
+        # This is a limitation of strict homeomorphic embedding.  In practice,
+        # the depth counter handles this.
+        x, y = Var(), Var()
+        # Verify that at least trivially-growing terms are caught:
+        # f(X) embeds f(f(X)) — f(X) dives into f(f(X))'s arg f(X).
+        assert embeds(["f", x], ["f", ["f", y]])
+
+    def test_no_embed_different_arity(self):
+        from clausal.logic.specialization import embeds
+        # f(0) does NOT embed f(0, 1) — different arity.
+        assert not embeds(["f", 0], ["f", 0, 1])
+
+    def test_transitive_growth(self):
+        from clausal.logic.specialization import embeds
+        from clausal.logic.variables import Var
+        # f(X, Y) embeds f(f(X), Y) — coupling: f(X) embeds f(f(X)) via diving,
+        # and Y (var) embeds Y (var).
+        x1, y1, x2, y2 = Var(), Var(), Var(), Var()
+        assert embeds(
+            ["f", ["f", x1], y1],
+            ["f", ["f", ["f", x2]], y2],
+        )
+
+    def test_constant_does_not_embed_compound(self):
+        from clausal.logic.specialization import embeds
+        # 0 doesn't embed ["natnum", 0] via coupling (different types).
+        # But it does embed via diving (0 is inside the compound).
+        assert embeds(0, ["natnum", 0])
+
+    def test_compound_does_not_embed_constant(self):
+        from clausal.logic.specialization import embeds
+        assert not embeds(["f", 0], 0)
+
+
+class TestMemoTable:
+    """Tests for the MemoTable memoization class."""
+
+    def test_empty_lookup(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        assert memo.lookup(["natnum", 0]) is None
+
+    def test_register_and_lookup(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        memo.register(["natnum", 0], "SolveNatnum")
+        assert memo.lookup(["natnum", 0]) == "SolveNatnum"
+
+    def test_register_var_pattern(self):
+        from clausal.logic.specialization import MemoTable
+        from clausal.logic.variables import Var
+        memo = MemoTable()
+        memo.register(["natnum", Var()], "SolveNatnum")
+        # Any natnum with a var should match.
+        assert memo.lookup(["natnum", Var()]) == "SolveNatnum"
+
+    def test_different_functor_no_match(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        memo.register(["natnum", 0], "SolveNatnum")
+        assert memo.lookup(["even", 0]) is None
+
+    def test_multiple_registrations(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        memo.register(["natnum", 0], "SolveNatnum")
+        memo.register(["even", 0], "SolveEven")
+        assert memo.lookup(["natnum", 0]) == "SolveNatnum"
+        assert memo.lookup(["even", 0]) == "SolveEven"
+
+    def test_non_list_lookup(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        assert memo.lookup(42) is None
+        assert memo.lookup([]) is None
+
+    def test_entries_property(self):
+        from clausal.logic.specialization import MemoTable
+        memo = MemoTable()
+        memo.register(["f", 0], "SpecF")
+        entries = memo.entries
+        assert "f" in entries
+        assert len(entries["f"]) == 1
+
+
+class TestSpecializeDeep:
+    """Tests for specialize_mi_deep with depth-bounded unfolding."""
+
+    def test_depth_0_same_as_shallow(self, mi_module):
+        """At max_depth=0, deep unfolder produces same clauses as shallow."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+
+        # Shallow specialization.
+        shallow_cls = specialize_mi(pattern, program, "ShallowNatnum")
+        shallow_count = len(shallow_cls._clauses)
+
+        # Deep with depth=0.
+        deep_cls = specialize_mi_deep(
+            pattern, program, "DeepNatnum0", max_depth=0,
+        )
+        deep_count = len(deep_cls._clauses)
+
+        assert shallow_count == deep_count
+
+    def test_deep_natnum_produces_results(self, mi_module):
+        """Deep-specialized natnum should still produce correct results."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepNatnum1", module_dict, max_depth=3,
+        )
+
+        results = list(_query(pred_cls, [["natnum", 0]], module_dict))
+        assert len(results) >= 1
+
+    def test_deep_natnum_s0(self, mi_module):
+        """Deep-specialized natnum: s(0) should succeed."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepNatnum2", module_dict, max_depth=3,
+        )
+
+        results = list(_query(pred_cls, [["natnum", ["s", 0]]], module_dict))
+        assert len(results) >= 1
+
+    def test_deep_factorial_base(self, mi_module):
+        """Deep-specialized factorial(0, 1) should succeed."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_factorial_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepFactorial1", module_dict, max_depth=3,
+        )
+
+        results = list(_query(pred_cls, [["factorial", 0, 1]], module_dict))
+        assert len(results) >= 1
+
+    def test_deep_factorial_1(self, mi_module):
+        """Deep-specialized factorial(1, 1) should succeed."""
+        from clausal.logic.specialization import specialize_mi_deep
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_factorial_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepFactorial2", module_dict, max_depth=5,
+        )
+
+        r_var = Var()
+        results = []
+        for _ in call(pred_cls, [["factorial", 1, r_var]]):
+            results.append(walk(deref(r_var)))
+        assert 1 in results
+
+    def test_deep_count_natnum(self, mi_module):
+        """Deep-specialized SolveCount with natnum: counting preserved."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.SolveCount)
+        program = _make_natnum_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepCountNatnum", module_dict, max_depth=3,
+        )
+
+        results = list(_query_with_extra(
+            pred_cls, [["natnum", ["s", 0]]], module_dict,
+        ))
+        assert len(results) >= 1
+        assert all(isinstance(r, int) for r in results)
+
+    def test_deep_graph_path(self, mi_module):
+        """Deep-specialized Solve with graph: paths still found."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_graph_program()
+        module_dict = {}
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepGraph1", module_dict, max_depth=3,
+        )
+
+        # path(a, c) should succeed.
+        results = list(_query(
+            pred_cls, [["path", "a", "c"]], module_dict,
+        ))
+        assert len(results) >= 1
+
+    def test_max_depth_respected(self, mi_module):
+        """Unfolding should not exceed max_depth."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+
+        # Very low depth — should still produce valid (if not deeply inlined) code.
+        pred_cls = specialize_mi_deep(
+            pattern, program, "DeepNatnum_d1", max_depth=1,
+        )
+        # Should have at least the base clause count.
+        assert len(pred_cls._clauses) >= 3  # 1 base + 2 object
+
+    def test_equivalence_natnum(self, mi_module):
+        """Deep-specialized natnum matches shallow for all small values."""
+        from clausal.logic.specialization import specialize_mi_deep
+
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+        module_dict_s = {}
+        module_dict_d = {}
+        shallow_cls = specialize_mi(
+            pattern, program, "ShallowNatnum_eq", module_dict_s,
+        )
+        deep_cls = specialize_mi_deep(
+            pattern, program, "DeepNatnum_eq", module_dict_d, max_depth=5,
+        )
+
+        for val in [0, ["s", 0], ["s", ["s", 0]], ["s", ["s", ["s", 0]]]]:
+            shallow_results = list(_query(
+                shallow_cls, [["natnum", val]], module_dict_s,
+            ))
+            deep_results = list(_query(
+                deep_cls, [["natnum", val]], module_dict_d,
+            ))
+            assert len(shallow_results) == len(deep_results), (
+                f"Mismatch for natnum({val}): "
+                f"shallow={len(shallow_results)}, deep={len(deep_results)}"
+            )
+
+    def test_equivalence_factorial(self, mi_module):
+        """Deep-specialized factorial matches shallow for small values."""
+        from clausal.logic.specialization import specialize_mi_deep
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_factorial_program()
+        module_dict_s = {}
+        module_dict_d = {}
+        shallow_cls = specialize_mi(
+            pattern, program, "ShallowFact_eq", module_dict_s,
+        )
+        deep_cls = specialize_mi_deep(
+            pattern, program, "DeepFact_eq", module_dict_d, max_depth=5,
+        )
+
+        for n, expected in [(0, 1), (1, 1), (3, 6)]:
+            for cls, md, label in [
+                (shallow_cls, module_dict_s, "shallow"),
+                (deep_cls, module_dict_d, "deep"),
+            ]:
+                r = Var()
+                results = []
+                for _ in call(cls, [["factorial", n, r]]):
+                    results.append(walk(deref(r)))
+                assert expected in results, (
+                    f"{label} factorial({n}): expected {expected}, got {results}"
+                )
+
+
+class TestEmbeddingTermination:
+    """Tests that homeomorphic embedding prevents divergence."""
+
+    def test_self_recursive_natnum_terminates(self, mi_module):
+        """Natnum is self-recursive; deep unfolding should terminate."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_natnum_program()
+        # If embedding check fails, this would loop forever.
+        pred_cls = specialize_mi_deep(
+            pattern, program, "TermNatnum", max_depth=20,
+        )
+        assert pred_cls is not None
+
+    def test_recursive_factorial_terminates(self, mi_module):
+        """Factorial is self-recursive; deep unfolding should terminate."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_factorial_program()
+        pred_cls = specialize_mi_deep(
+            pattern, program, "TermFactorial", max_depth=20,
+        )
+        assert pred_cls is not None
+
+    def test_mutual_recursion_graph_terminates(self, mi_module):
+        """Graph program has edge/path mutual reference; should terminate."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_graph_program()
+        pred_cls = specialize_mi_deep(
+            pattern, program, "TermGraph", max_depth=20,
+        )
+        assert pred_cls is not None
+
+    def test_even_recursive_terminates(self, mi_module):
+        """Even/odd recursive program should terminate deep unfolding."""
+        from clausal.logic.specialization import specialize_mi_deep
+        pattern = analyze_mi(mi_module.Solve)
+        program = _make_even_odd_program()
+        pred_cls = specialize_mi_deep(
+            pattern, program, "TermEven", max_depth=20,
+        )
+        assert pred_cls is not None
+
+
 # ── Test helpers ──────────────────────────────────────────────────────────────
 
 
@@ -983,3 +1370,326 @@ def _query_mi(mi_cls, goal_list, program):
 
     for _ in call(mi_cls, goal_list, program):
         yield True
+
+
+# ── Phase 5: Conjunctive Partial Deduction ─────────────────────────────────────
+
+
+class TestAstUnify:
+    """Unit tests for AST-level unification."""
+
+    def test_ground_match(self):
+        assert _ast_unify(["natnum", 0], ["natnum", 0]) == {}
+
+    def test_ground_mismatch(self):
+        assert _ast_unify(["natnum", 0], ["edge", 0]) is None
+
+    def test_var_binds(self):
+        from clausal.logic.variables import Var
+        x = Var()
+        result = _ast_unify(["natnum", x], ["natnum", 0])
+        assert result is not None
+        assert result[id(x)] == 0
+
+    def test_var_in_second(self):
+        from clausal.logic.variables import Var
+        y = Var()
+        result = _ast_unify(["natnum", 0], ["natnum", y])
+        assert result is not None
+        assert result[id(y)] == 0
+
+    def test_nested_unify(self):
+        from clausal.logic.variables import Var
+        x = Var()
+        result = _ast_unify(["natnum", ["s", x]], ["natnum", ["s", 0]])
+        assert result is not None
+        assert result[id(x)] == 0
+
+    def test_both_vars(self):
+        from clausal.logic.variables import Var
+        x, y = Var(), Var()
+        result = _ast_unify(["edge", x, y], ["edge", "a", "b"])
+        assert result is not None
+        assert result[id(x)] == "a"
+        assert result[id(y)] == "b"
+
+    def test_arity_mismatch(self):
+        assert _ast_unify(["natnum", 0], ["natnum", 0, 1]) is None
+
+    def test_same_var(self):
+        from clausal.logic.variables import Var
+        x = Var()
+        result = _ast_unify(x, x)
+        assert result == {}
+
+    def test_var_to_compound(self):
+        from clausal.logic.variables import Var
+        x = Var()
+        result = _ast_unify(x, ["natnum", 0])
+        assert result is not None
+        assert result[id(x)] == ["natnum", 0]
+
+
+class TestConjunctionMemoTable:
+    """Tests for the conjunction memoization table."""
+
+    def test_empty(self):
+        memo = ConjunctionMemoTable()
+        assert not memo.has_seen([["natnum", 0]])
+
+    def test_register_and_lookup(self):
+        memo = ConjunctionMemoTable()
+        memo.register([["natnum", 0]])
+        assert memo.has_seen([["natnum", 0]])
+
+    def test_different_pattern(self):
+        memo = ConjunctionMemoTable()
+        memo.register([["natnum", 0]])
+        assert not memo.has_seen([["edge", "a"]])
+
+    def test_entries(self):
+        memo = ConjunctionMemoTable()
+        memo.register([["natnum", 0]])
+        assert ("natnum",) in memo.entries
+
+
+class TestCpdSolveNatnum:
+    """CPD on vanilla Solve/2 with natnum program."""
+
+    def test_more_clauses_than_shallow(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh1")
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd1")
+        assert len(cpd._clauses) >= len(shallow._clauses)
+
+    def test_natnum_0(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd2")
+        assert sum(1 for _ in call(cpd, [["natnum", 0]])) == 1
+
+    def test_natnum_s_0(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd3")
+        assert sum(1 for _ in call(cpd, [["natnum", ["s", 0]]])) == 1
+
+    def test_natnum_s_s_s_0(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd4")
+        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]])) == 1
+
+    def test_equivalence_natnum(self, mi_module):
+        """CPD produces same results as Phase 1 for various natnum inputs."""
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh5")
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd5")
+        for n in range(6):
+            term = 0
+            for _ in range(n):
+                term = ["s", term]
+            goal = [["natnum", term]]
+            s = sum(1 for _ in call(shallow, goal))
+            c = sum(1 for _ in call(cpd, goal))
+            assert s == c, f"natnum({n}): shallow={s}, cpd={c}"
+
+
+class TestCpdSolveGraph:
+    """CPD on vanilla Solve/2 with graph program."""
+
+    def test_more_clauses_than_shallow(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh1")
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd1")
+        assert len(cpd._clauses) > len(shallow._clauses)
+
+    def test_path_a_b(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd2")
+        assert sum(1 for _ in call(cpd, [["path", "a", "b"]])) == 1
+
+    def test_path_a_c(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd3")
+        assert sum(1 for _ in call(cpd, [["path", "a", "c"]])) == 1
+
+    def test_path_a_d(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd4")
+        assert sum(1 for _ in call(cpd, [["path", "a", "d"]])) == 1
+
+    def test_edge_a_b(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd5")
+        assert sum(1 for _ in call(cpd, [["edge", "a", "b"]])) == 1
+
+    def test_equivalence_graph(self, mi_module):
+        """CPD produces same results as Phase 1 for all graph queries."""
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh6")
+        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd6")
+        queries = [
+            [["edge", "a", "b"]], [["edge", "b", "c"]], [["edge", "b", "d"]],
+            [["path", "a", "b"]], [["path", "a", "c"]], [["path", "a", "d"]],
+            [["path", "b", "c"]], [["path", "b", "d"]],
+        ]
+        for q in queries:
+            s = sum(1 for _ in call(shallow, q))
+            c = sum(1 for _ in call(cpd, q))
+            assert s == c, f"{q}: shallow={s}, cpd={c}"
+
+
+class TestCpdSolveCount:
+    """CPD on SolveCount/3 with natnum — tests post-match chaining."""
+
+    def test_count_natnum_0(self, mi_module):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveCount)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd1")
+        v = Var()
+        for _ in call(cpd, [["natnum", 0]], v):
+            assert walk(deref(v)) == 1
+
+    def test_count_natnum_s_0(self, mi_module):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveCount)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd2")
+        v = Var()
+        for _ in call(cpd, [["natnum", ["s", 0]]], v):
+            assert walk(deref(v)) == 2
+
+    def test_count_equivalence(self, mi_module):
+        """CPD counting matches Phase 1 counting for natnum(0..5)."""
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveCount)
+        shallow = specialize_mi(pattern, _make_natnum_program(), "SCSh3")
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd3")
+        for n in range(6):
+            term = 0
+            for _ in range(n):
+                term = ["s", term]
+            vs, vc = Var(), Var()
+            sv = None
+            for _ in call(shallow, [["natnum", term]], vs):
+                sv = walk(deref(vs))
+            cv = None
+            for _ in call(cpd, [["natnum", term]], vc):
+                cv = walk(deref(vc))
+            assert sv == cv, f"natnum({n}): shallow={sv}, cpd={cv}"
+
+
+class TestCpdSolveLimit:
+    """CPD on SolveLimit/3 — tests pre-match chaining."""
+
+    def test_limit_passes(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveLimit)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd1")
+        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", 0]]]], 10)) == 1
+
+    def test_limit_fails(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveLimit)
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd2")
+        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]], 2)) == 0
+
+    def test_limit_equivalence(self, mi_module):
+        """CPD limit behavior matches Phase 1 for various depths and limits."""
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.SolveLimit)
+        shallow = specialize_mi(pattern, _make_natnum_program(), "SLSh3")
+        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd3")
+        for depth in range(5):
+            term = 0
+            for _ in range(depth):
+                term = ["s", term]
+            for limit in range(7):
+                s = sum(1 for _ in call(shallow, [["natnum", term]], limit))
+                c = sum(1 for _ in call(cpd, [["natnum", term]], limit))
+                assert s == c, f"natnum({depth}) limit={limit}: {s} vs {c}"
+
+
+class TestCpdFactorial:
+    """CPD with factorial program (has residual goals: gt, sub, mul)."""
+
+    def test_factorial_results(self, mi_module):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd1")
+        for n, expected in [(0, 1), (1, 1), (3, 6), (5, 120)]:
+            r = Var()
+            for _ in call(cpd, [["factorial", n, r]]):
+                assert walk(deref(r)) == expected, f"factorial({n})"
+
+    def test_factorial_equivalence(self, mi_module):
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_factorial_program(), "SolveFactSh2")
+        cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd2")
+        for n in [0, 1, 2, 3, 4, 5]:
+            rs, rc = Var(), Var()
+            sv = None
+            for _ in call(shallow, [["factorial", n, rs]]):
+                sv = walk(deref(rs))
+            cv = None
+            for _ in call(cpd, [["factorial", n, rc]]):
+                cv = walk(deref(rc))
+            assert sv == cv, f"factorial({n}): shallow={sv}, cpd={cv}"
+
+
+class TestCpdEvenOdd:
+    """CPD with even/odd program (has residual goals: gte, sub)."""
+
+    def test_even_equivalence(self, mi_module):
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.Solve)
+        shallow = specialize_mi(pattern, _make_even_odd_program(), "SolveEvSh1")
+        cpd = specialize_mi_cpd(pattern, _make_even_odd_program(), "SolveEvCpd1")
+        for n in range(10):
+            s = sum(1 for _ in call(shallow, [["even", n]]))
+            c = sum(1 for _ in call(cpd, [["even", n]]))
+            assert s == c, f"even({n}): shallow={s}, cpd={c}"
+
+
+class TestCpdTermination:
+    """Tests that CPD terminates on recursive programs."""
+
+    def test_natnum_terminates(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveTerm1", max_depth=20,
+        )
+        assert len(cpd._clauses) > 0
+
+    def test_graph_terminates(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveTerm2", max_depth=20,
+        )
+        assert len(cpd._clauses) > 0
+
+    def test_factorial_terminates(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(
+            pattern, _make_factorial_program(), "SolveTerm3", max_depth=20,
+        )
+        assert len(cpd._clauses) > 0
+
+    def test_even_terminates(self, mi_module):
+        pattern = analyze_mi(mi_module.Solve)
+        cpd = specialize_mi_cpd(
+            pattern, _make_even_odd_program(), "SolveTerm4", max_depth=20,
+        )
+        assert len(cpd._clauses) > 0

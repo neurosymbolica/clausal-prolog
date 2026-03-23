@@ -1007,6 +1007,8 @@ class SpecializeDirective(Node):
     mi_name: str = ""           # meta-interpreter predicate name
     source_program: str = ""    # name of predicate/variable providing the object program
     new_name: str = ""          # name for the specialized predicate
+    depth: int = 0              # max unfolding depth (0 = shallow, >0 = deep)
+    cpd: bool = False           # conjunctive partial deduction (deforestation)
 
 @node_class
 class EdcgAccDecl(Node):

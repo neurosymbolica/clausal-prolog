@@ -104,6 +104,29 @@ Compiles a predicate in simple (non-trampoline) mode. This avoids the overhead o
 
 ---
 
+## Specialization Directive
+
+### -specialize
+
+```clausal
+# skip
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+```
+
+Specializes a meta-interpreter with respect to an object program, producing a new predicate with interpretation overhead removed. The MI pattern is auto-detected from the clause structure.
+
+Options:
+
+```clausal
+# skip
+-specialize(MI, Source, alias=Name, depth=5)     # deep unfolding
+-specialize(MI, Source, alias=Name, cpd=True)     # conjunctive partial deduction
+```
+
+See [Meta-Interpreter Specialization](specialization.md) for full details.
+
+---
+
 ## EDCG Directives
 
 !!! warning "Experimental"

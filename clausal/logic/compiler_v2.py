@@ -254,7 +254,7 @@ def _run_specialization(
     """Process -specialize directives: evaluate source programs and run
     the specializer.  The MI pattern is auto-detected by ``analyze_mi()``.
     """
-    from clausal.logic.specialization import analyze_mi, specialize_mi
+    from clausal.logic.specialization import analyze_mi, specialize_mi, specialize_mi_deep, specialize_mi_cpd
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref, walk
 
@@ -308,11 +308,22 @@ def _run_specialization(
         else:
             target_cls = None
 
-        # Run the specializer.
-        specialized_cls = specialize_mi(
-            pattern, program_data, item.new_name, module_dict,
-            pred_cls=target_cls,
-        )
+        # Run the specializer (deep unfolding if depth > 0, CPD if cpd=True).
+        if item.cpd:
+            specialized_cls = specialize_mi_cpd(
+                pattern, program_data, item.new_name, module_dict,
+                pred_cls=target_cls, max_depth=item.depth or 10,
+            )
+        elif item.depth > 0:
+            specialized_cls = specialize_mi_deep(
+                pattern, program_data, item.new_name, module_dict,
+                pred_cls=target_cls, max_depth=item.depth,
+            )
+        else:
+            specialized_cls = specialize_mi(
+                pattern, program_data, item.new_name, module_dict,
+                pred_cls=target_cls,
+            )
 
         # The specialized predicate is already compiled and installed
         # in module_dict by specialize_mi.  No need to inject into

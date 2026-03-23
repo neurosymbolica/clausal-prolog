@@ -1,0 +1,45 @@
+# Test fixture: deep specialization with depth-bounded unfolding.
+#
+# Uses -specialize with depth=5 to enable deeper partial deduction.
+# Verifies that deep unfolding produces correct results identical
+# to shallow specialization.
+
+-import_from(clausal.examples.metainterpreters, [Solve, SolveCount])
+
+# ── Object Program ────────────────────────────────────────────────────────────
+
+NatnumProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", X]], [["natnum", X]]]
+    ]
+)
+
+# ── Shallow specialization (baseline) ────────────────────────────────────────
+
+-specialize(Solve, NatnumProgram, alias=ShallowNatnum)
+
+# ── Deep specialization ──────────────────────────────────────────────────────
+
+-specialize(Solve, NatnumProgram, alias=DeepNatnum, depth=5)
+
+# ── Deep specialization with counting MI ─────────────────────────────────────
+
+-specialize(SolveCount, NatnumProgram, alias=DeepCountNatnum, depth=3)
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+# Shallow baseline tests.
+Test("shallow natnum(0)") <- ShallowNatnum([["natnum", 0]])
+Test("shallow natnum(s(0))") <- ShallowNatnum([["natnum", ["s", 0]]])
+Test("shallow natnum(s(s(0)))") <- ShallowNatnum([["natnum", ["s", ["s", 0]]]])
+
+# Deep unfolding tests — should produce identical results.
+Test("deep natnum(0)") <- DeepNatnum([["natnum", 0]])
+Test("deep natnum(s(0))") <- DeepNatnum([["natnum", ["s", 0]]])
+Test("deep natnum(s(s(0)))") <- DeepNatnum([["natnum", ["s", ["s", 0]]]])
+
+# Deep counting — verify counts are preserved.
+Test("deep count natnum(0) = 1") <- DeepCountNatnum([["natnum", 0]], 1)
+Test("deep count natnum(s(0)) = 2") <- DeepCountNatnum([["natnum", ["s", 0]]], 2)
+Test("deep count natnum(s(s(0))) = 3") <- DeepCountNatnum([["natnum", ["s", ["s", 0]]]], 3)

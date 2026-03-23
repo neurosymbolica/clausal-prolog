@@ -436,7 +436,7 @@ catch-all clause and `_SolveGoal` predicate.
   and even programs
 - `tests/fixtures/specialize_builtins.clausal` — 13 inline tests
 
-### Phase 4: Termination control
+### Phase 4: Termination control  ✓ DONE
 
 For Phase 1–3, termination is guaranteed because:
 - The object program is finite (finite number of clauses)
@@ -467,7 +467,7 @@ recursive object program where inlining would be beneficial).
 
 **Tests:** Recursive object programs, programs with mutual recursion.
 
-### Phase 5: Conjunctive partial deduction (optional, future)
+### Phase 5: Conjunctive partial deduction (deforestation)  ✓ DONE
 
 Standard partial deduction specializes individual atoms.  Conjunctive
 partial deduction (Leuschel & De Schreye 1999) specializes *conjunctions*
@@ -475,11 +475,13 @@ as a unit, enabling:
 
 - **Deforestation**: Eliminating intermediate list structures (e.g., the
   `ALL_GOALS` list in the tail-recursive MI)
-- **Tupling**: Combining multiple traversals into one pass
+- **Tupling**: Combining multiple traversals into one pass (deferred)
 
-This is a significant leap in complexity and is not needed for the core
-MI specialization use case.  Phase 1–3 already eliminate the MI overhead.
-Conjunctive PD would further optimize the residual code itself.
+Phase 5 implements deforestation: when a specialized clause's body
+contains a recursive call with a constructed goal-list `[g1, g2, ...,
+*GOALS]`, the first goal `g1` is unfolded against ALL matching object
+clauses (not just deterministic ones as in Phase 4), producing one
+output clause per match.  This eliminates intermediate list allocations.
 
 ---
 
@@ -678,6 +680,204 @@ edge cases when applied to specialized clauses:
 
 See `/workspace/clausal-tailrecursion/TRO_EDGE_CASES.md` for full details
 and diff.
+
+---
+
+## Implementation Notes (Phase 4)
+
+### New functions in `clausal/logic/specialization.py`
+
+- **`embeds(s, t)`** — Homeomorphic embedding test (Leuschel 1998).
+  Returns True if term `s` embeds into term `t` (i.e., `t` is "at least
+  as complex" as `s`).  Implements the coupling + diving rules on
+  list-form terms.  Variables embed only other variables.
+
+- **`MemoTable`** — Tracks `(functor, generalized_pattern)` pairs that
+  have been specialized.  `lookup(goal)` returns the existing specialized
+  predicate name or None.  `register(goal, pred_name)` adds an entry.
+  Patterns are generalized by replacing all Vars with a `"_VAR_"`
+  sentinel for structural comparison.
+
+- **`specialize_mi_deep()`** — Extended entry point with `max_depth`
+  parameter (default 10).  Uses `_unfold_deep()` which first produces
+  standard Phase 1 clauses, then attempts to deepen each clause via
+  `_deepen_clause()`.
+
+- **`_deepen_clause()`** — Walks a specialized clause's body looking for
+  recursive calls to the specialized predicate.  For each such call
+  whose goal-list starts with a known-functor goal, attempts to inline
+  the matching object clause's body via `_try_inline_goal()`.
+
+- **`_try_inline_goal()`** — Core inlining logic.  Checks:
+  1. Is this a Call to the specialized predicate?
+  2. Does the goal-list start with a known functor?
+  3. Homeomorphic embedding: does the goal embed any ancestor? (stop)
+  4. Depth limit: depth + 1 >= max_depth? (stop)
+  5. Memo table: already specialized this pattern? (stop)
+  6. Currently only inlines deterministic goals (single matching clause).
+  Recurses to allow multi-level inlining up to the depth limit.
+
+### Pipeline integration
+
+- **`SpecializeDirective`** in `nodes.py` — new `depth: int = 0` field.
+- **`_handle_specialize_directive`** in `term_rewriting.py` — parses
+  `depth=N` keyword argument.
+- **`_run_specialization`** in `compiler_v2.py` — dispatches to
+  `specialize_mi_deep()` when `item.depth > 0`.
+
+### Directive syntax
+
+```clausal
+-specialize(MI, Source, alias=NewName, depth=5)
+```
+
+When `depth=0` (default), uses the standard Phase 1 shallow unfolder.
+When `depth > 0`, uses the deep unfolder with homeomorphic embedding
+and memoization for termination control.
+
+### Tests
+
+- `tests/test_specialization.py` — 35 new tests:
+  - `TestHomeomorphicEmbedding` (15): var/const/coupling/diving cases
+  - `TestMemoTable` (7): register/lookup/multi-functor/entries
+  - `TestSpecializeDeep` (11): depth-0/shallow equivalence, natnum,
+    factorial, graph, counting MI, correctness, equivalence
+  - `TestEmbeddingTermination` (4): recursive natnum, factorial, graph,
+    even — all terminate with high max_depth
+- `tests/test_specialization_pipeline.py` — 11 new tests:
+  - `TestDeepPipeline`: fixture import, predicate existence, queries,
+    shallow/deep equivalence
+- `tests/fixtures/specialize_deep.clausal` — end-to-end fixture with
+  `depth=5` and `depth=3` directives (9 inline tests)
+
+### Current limitation (Phase 4)
+
+The deep unfolder only inlines deterministic goals (where exactly one
+object clause matches the goal's functor).  Non-deterministic inlining
+is handled by Phase 5 (CPD).
+
+---
+
+## Implementation Notes (Phase 5)
+
+### New functions in `clausal/logic/specialization.py`
+
+- **`specialize_mi_cpd()`** — Top-level CPD entry point.  Runs Phase 1
+  (shallow unfold) then applies `_deforest_pass()` as a post-processing
+  step.  Handles residual goals via the same catch-all mechanism as
+  Phase 3.
+
+- **`_deforest_pass(clauses, ...)`** — Iterates over Phase 1 clauses
+  and attempts deforestation on each, returning the expanded clause list.
+
+- **`_deforest_clause(clause, ...)`** — Scans a clause's body for
+  recursive calls with constructed goal-list arguments.  For the first
+  such call found, unfolds the first element against ALL matching object
+  clauses, producing multiple output clauses (one per match).  Uses
+  homeomorphic embedding and conjunction memo table for termination.
+
+- **`_unfold_body_goal(clause, goal_idx, ...)`** — Core deforestation
+  step.  Given a body goal (recursive call) and a matching object clause:
+  1. AST-unifies the goal's first element with the object clause head
+  2. Applies bindings back to the clause head (making it more specific)
+  3. Computes the new goal-list (object clause body + remaining goals)
+  4. Chains pre-match goals (for limit-style MIs) and post-match goals
+     (for counting-style MIs) to account for the inlined step
+  5. Recursively attempts further deforestation on the result
+
+- **`_ast_unify(t1, t2)`** — Pure AST-level unification.  Takes two
+  list-form terms and returns a substitution dict (id(Var) → value) or
+  None.  No side effects (no trail, no mutation).
+
+- **`_ast_unify_impl(t1, t2, subst)`** — Recursive implementation with
+  occurs-check-free variable binding.
+
+- **`_ast_apply(t, subst)`** — Apply a substitution with chain following.
+
+- **`ConjunctionMemoTable`** — Tracks conjunction patterns (tuples of
+  functor names) that have been deforested, preventing infinite expansion.
+
+- **`_get_goal_list_arg()`** — Extracts the goal-list argument from a
+  recursive call to the specialized predicate.
+
+- **`_get_goal_field_idx()`** — Returns the index of the goal-list field
+  in the specialized predicate's field tuple.
+
+### Pre/post-match goal chaining
+
+The key challenge in CPD is preserving the MI's extension semantics
+(counting, depth limiting) when inlining resolution steps.  Each
+deforested level inlines one MI resolution step, so:
+
+- **Post-match chaining** (SolveCount): Each inlined step needs an extra
+  `COUNT := SUB_COUNT + 1`.  Fresh intermediate variables are created for
+  the recursive call's extra args, and a copy of the post-match goals is
+  inserted between the new call and the original post-match goals.
+
+- **Pre-match chaining** (SolveLimit): Each inlined step needs an extra
+  `MAX > 0, MAX1 := MAX - 1`.  A copy of the pre-match goals is inserted
+  before the new recursive call, using the chained variable mapping.
+
+Both use the same `chain_subst` mapping:
+`{id(head_extra): rec_extra, id(rec_extra): fresh_intermediate}`.
+
+### Directive syntax
+
+```clausal
+-specialize(MI, Source, alias=NewName, cpd=True)
+```
+
+The `cpd=True` keyword enables conjunctive partial deduction.  Can be
+combined with `depth=N` (CPD uses `max_depth` for deforestation depth).
+
+### Pipeline integration
+
+- **`SpecializeDirective`** in `nodes.py` — new `cpd: bool = False` field.
+- **`_handle_specialize_directive`** in `term_rewriting.py` — parses
+  `cpd=True` keyword argument.
+- **`_run_specialization`** in `compiler_v2.py` — dispatches to
+  `specialize_mi_cpd()` when `item.cpd` is True.
+
+### Tests
+
+- `tests/test_specialization.py` — 48 new tests:
+  - `TestAstUnify` (9): ground match/mismatch, var binding, nested,
+    arity mismatch, same var, var-to-compound
+  - `TestConjunctionMemoTable` (4): empty, register/lookup, different
+    pattern, entries
+  - `TestCpdSolveNatnum` (5): clause count, natnum(0/1/3), equivalence
+  - `TestCpdSolveGraph` (6): clause count, paths, edges, equivalence
+  - `TestCpdSolveCount` (3): count values, equivalence (post-match chain)
+  - `TestCpdSolveLimit` (3): passes/fails, equivalence (pre-match chain)
+  - `TestCpdFactorial` (2): results, equivalence (residual goals)
+  - `TestCpdEvenOdd` (1): equivalence (residual goals)
+  - `TestCpdTermination` (4): natnum/graph/factorial/even terminate
+- `tests/test_specialization_pipeline.py` — 12 new tests:
+  - `TestCpdPipeline`: predicate existence, queries, counting, limits,
+    inline tests, directive parsing
+- `tests/fixtures/specialize_cpd.clausal` — end-to-end fixture with
+  `cpd=True` for Solve/SolveCount/SolveLimit (14 inline tests)
+
+### Deforestation example
+
+Phase 1 output for Solve + graph (path indirect):
+```
+SolveGraph([["path", X, Y], *GOALS]) <-
+    SolveGraph([["edge", X, Z], ["path", Z, Y], *GOALS])
+```
+
+After CPD deforestation (unfolding `["edge", X, Z]` against 3 edge facts):
+```
+SolveGraph([["path", "a", Y], *GOALS]) <-
+    SolveGraph([["path", "b", Y], *GOALS])    # edge(a,b): Z=b
+SolveGraph([["path", "b", Y], *GOALS]) <-
+    SolveGraph([["path", "c", Y], *GOALS])    # edge(b,c): Z=c
+SolveGraph([["path", "b", Y], *GOALS]) <-
+    SolveGraph([["path", "d", Y], *GOALS])    # edge(b,d): Z=d
+```
+
+The intermediate list `[["edge", X, Z], ["path", Z, Y], *GOALS]` is
+eliminated — edge matching is inlined directly into the clause head.
 
 ---
 
