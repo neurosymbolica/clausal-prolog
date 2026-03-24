@@ -127,25 +127,21 @@ but rather 25 additions across 9 existing areas.
 
 ### Implementation notes
 
-- **Sum/3**: Implemented as constraint propagation. Create an FDVar for the
-  sum, post an `fd_eq`/`fd_lt`/etc. between sum and Value. The sum is
-  maintained incrementally. For simplicity, initially implement as: compute
-  bounds from domains, narrow Value's domain, and use `label` to enumerate.
-  A first working version can compute the sum of all labelled values and
-  check the comparison — full arc-consistency is a later optimization.
+- **Sum/3**: Implemented with bounds-consistency propagation (`SumConstraint`).
+  Computes `min_sum`/`max_sum` from variable domains, narrows Value's domain
+  and each variable's domain based on slack. Queue-based fixpoint loop.
 
 - **ScalarProduct/4**: Same as Sum but each variable's contribution is
   multiplied by its coefficient. `Σ coeff[i] * var[i] Op value`.
 
-- **Element/3**: Index is an FDVar whose domain is 1..len(List). Value is
-  constrained to the union of List[i] for i in domain(Index). When Value's
-  domain is narrowed, remove indices whose list element is outside Value's
-  domain, and vice versa. Classic AC3-style propagation.
+- **Element/3**: Implemented with AC3-style arc-consistency (`ElementConstraint`).
+  Domain of Index narrowed to indices whose List element is in Value's domain;
+  domain of Value narrowed to `{List[i] : i ∈ domain(Index)}`. Propagates
+  bidirectionally on each narrowing event.
 
-- **Circuit/1**: The constraint is that Vars[1..N] form a single cycle
-  visiting every node exactly once. Implementation: AllDifferent on Vars,
-  plus sub-tour elimination (no short cycles). The simplest correct approach
-  is AllDifferent + DFS-based sub-tour check during labeling.
+- **Circuit/1**: Implemented with `CircuitConstraint` combining AllDifferent +
+  sub-tour elimination. When a variable's domain is a singleton, follows the
+  partial chain and prunes values that would close a premature cycle.
 
 ### Semantics
 
