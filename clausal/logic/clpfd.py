@@ -23,6 +23,7 @@ is restored on backtrack.  Never mutate in place.
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from typing import Any
 
@@ -409,6 +410,292 @@ class AllDiffConstraint(Constraint):
         return True
 
 
+class SumConstraint(Constraint):
+    """Σ vars == total. Bounds-consistency propagation."""
+    __slots__ = ('sum_vars', 'total')
+
+    def __init__(self, sum_vars: tuple, total):
+        self.sum_vars = sum_vars
+        self.total = total
+        result: list = []
+        for v in sum_vars:
+            _collect_vars_from(v, result)
+        _collect_vars_from(total, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        vars_ = [deref(v) for v in self.sum_vars]
+        total = deref(self.total)
+
+        min_sum = max_sum = 0
+        for v in vars_:
+            d = _expr_domain(v, trail)
+            if not d:
+                return False
+            min_sum += domain_min(d)
+            max_sum += domain_max(d)
+
+        total_d = _expr_domain(total, trail)
+        new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
+        if not new_total_d:
+            return False
+        if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
+            return False
+        total_lo = domain_min(new_total_d)
+        total_hi = domain_max(new_total_d)
+
+        for v in vars_:
+            if not is_var(v):
+                continue
+            d = _expr_domain(v, trail)
+            v_max = domain_max(d)
+            v_min = domain_min(d)
+            new_lo = total_lo - (max_sum - v_max)
+            new_hi = total_hi - (min_sum - v_min)
+            new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
+            if not new_d:
+                return False
+            if not _narrow_if_changed(v, new_d, trail, queue):
+                return False
+
+        return True
+
+
+class ScalarProductConstraint(Constraint):
+    """Σ coeffs[i] * vars[i] == total. Bounds-consistency propagation."""
+    __slots__ = ('coeffs', 'sum_vars', 'total')
+
+    def __init__(self, coeffs: tuple, sum_vars: tuple, total):
+        self.coeffs = coeffs
+        self.sum_vars = sum_vars
+        self.total = total
+        result: list = []
+        for v in sum_vars:
+            _collect_vars_from(v, result)
+        _collect_vars_from(total, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        vars_ = [deref(v) for v in self.sum_vars]
+        total = deref(self.total)
+
+        min_sum = max_sum = 0
+        for c, v in zip(self.coeffs, vars_):
+            d = _expr_domain(v, trail)
+            if not d:
+                return False
+            v_lo, v_hi = domain_min(d), domain_max(d)
+            if c >= 0:
+                min_sum += c * v_lo
+                max_sum += c * v_hi
+            else:
+                min_sum += c * v_hi
+                max_sum += c * v_lo
+
+        total_d = _expr_domain(total, trail)
+        new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
+        if not new_total_d:
+            return False
+        if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
+            return False
+        total_lo = domain_min(new_total_d)
+        total_hi = domain_max(new_total_d)
+
+        for c, v in zip(self.coeffs, vars_):
+            if not is_var(v) or c == 0:
+                continue
+            d = _expr_domain(v, trail)
+            v_lo, v_hi = domain_min(d), domain_max(d)
+            contrib_max = c * v_hi if c > 0 else c * v_lo
+            contrib_min = c * v_lo if c > 0 else c * v_hi
+            other_min = min_sum - contrib_min
+            other_max = max_sum - contrib_max
+            if c > 0:
+                new_v_lo = math.ceil((total_lo - other_max) / c)
+                new_v_hi = math.floor((total_hi - other_min) / c)
+            else:
+                new_v_lo = math.ceil((total_hi - other_min) / c)
+                new_v_hi = math.floor((total_lo - other_max) / c)
+            new_d = domain_intersection(d, domain_from_range(int(new_v_lo), int(new_v_hi)))
+            if not new_d:
+                return False
+            if not _narrow_if_changed(v, new_d, trail, queue):
+                return False
+
+        return True
+
+
+# ── Domain union helper ───────────────────────────────────────────────────────
+
+
+def _domain_union(domains: list) -> Domain:
+    """Union of multiple domains. Returns sorted merged intervals."""
+    if not domains:
+        return ()
+    intervals = sorted(lo_hi for d in domains for lo_hi in d)
+    if not intervals:
+        return ()
+    result: list[tuple[int, int]] = [intervals[0]]
+    for lo, hi in intervals[1:]:
+        prev_lo, prev_hi = result[-1]
+        if lo <= prev_hi + 1:
+            result[-1] = (prev_lo, max(prev_hi, hi))
+        else:
+            result.append((lo, hi))
+    return tuple(result)
+
+
+def _indices_to_domain(indices: list) -> Domain:
+    """Convert a sorted list of integers to interval representation."""
+    if not indices:
+        return ()
+    result = []
+    start = prev = indices[0]
+    for v in indices[1:]:
+        if v == prev + 1:
+            prev = v
+        else:
+            result.append((start, prev))
+            start = prev = v
+    result.append((start, prev))
+    return tuple(result)
+
+
+class ElementConstraint(Constraint):
+    """Element(Index, List, Value): Value = List[Index-1], 1-based."""
+    __slots__ = ('index', 'lst', 'value')
+
+    def __init__(self, index, lst: tuple, value):
+        self.index = index
+        self.lst = lst
+        self.value = value
+        result: list = []
+        _collect_vars_from(index, result)
+        for item in lst:
+            _collect_vars_from(item, result)
+        _collect_vars_from(value, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        index = deref(self.index)
+        value = deref(self.value)
+        n = len(self.lst)
+
+        if is_var(index):
+            idx_state = get_attr(index, FD_KEY)
+            if idx_state is None:
+                if not _narrow(index, domain_from_range(1, n), trail, queue):
+                    return False
+                idx_state = get_attr(index, FD_KEY)
+            idx_domain = idx_state.domain if idx_state else domain_from_range(1, n)
+        elif isinstance(index, int):
+            if index < 1 or index > n:
+                return False
+            idx_domain = ((index, index),)
+        else:
+            return False
+
+        val_domain = _expr_domain(value, trail)
+
+        # Step 1: narrow index — keep only positions where List[i] intersects value domain
+        valid_indices = []
+        for i in domain_values(idx_domain):
+            item = deref(self.lst[i - 1])
+            item_d = _expr_domain(item, trail)
+            if domain_intersection(item_d, val_domain):
+                valid_indices.append(i)
+
+        if not valid_indices:
+            return False
+
+        new_idx_d = _indices_to_domain(valid_indices)
+        if is_var(index) and not _narrow_if_changed(index, new_idx_d, trail, queue):
+            return False
+
+        # Step 2: narrow value — union of domains at valid index positions
+        item_domains = [_expr_domain(deref(self.lst[i - 1]), trail) for i in valid_indices]
+        new_val_d = domain_intersection(val_domain, _domain_union(item_domains))
+        if not new_val_d:
+            return False
+        if is_var(value) and not _narrow_if_changed(value, new_val_d, trail, queue):
+            return False
+
+        # Step 3: if index singleton, unify value with List[k-1]
+        idx_singleton = domain_singleton(new_idx_d)
+        if idx_singleton is not None:
+            item = deref(self.lst[idx_singleton - 1])
+            if is_var(deref(self.value)):
+                return unify(deref(self.value), item, trail)
+            item_d = _expr_domain(item, trail)
+            return bool(item_d and domain_intersection(item_d, new_val_d))
+
+        return True
+
+
+class CircuitConstraint(Constraint):
+    """Circuit(Vars): Vars[i] = j means node i+1's successor is j (1-based)."""
+    __slots__ = ('circuit_vars', 'n', 'alldiff')
+
+    def __init__(self, vars_: tuple):
+        self.circuit_vars = vars_
+        self.n = len(vars_)
+        self.alldiff = AllDiffConstraint(vars_)
+        super().__init__(vars_)
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        n = self.n
+        vars_ = [deref(v) for v in self.circuit_vars]
+
+        # Step 1: restrict all domains to [1, n], exclude self-loops
+        for i, v in enumerate(vars_):
+            if is_var(v):
+                state = get_attr(v, FD_KEY)
+                if state is None:
+                    d = domain_remove(domain_from_range(1, n), i + 1)
+                    if not _narrow(v, d, trail, queue):
+                        return False
+                else:
+                    d = domain_intersection(state.domain, domain_from_range(1, n))
+                    d = domain_remove(d, i + 1)
+                    if not _narrow_if_changed(v, d, trail, queue):
+                        return False
+            elif isinstance(v, int):
+                if v < 1 or v > n or v == i + 1:
+                    return False
+
+        # Step 2: AllDifferent propagation
+        if not self.alldiff.propagate(trail, queue):
+            return False
+
+        # Step 3: Sub-tour elimination
+        vars_ = [deref(v) for v in self.circuit_vars]
+        ground = {}
+        for i, v in enumerate(vars_):
+            if isinstance(v, int):
+                ground[i + 1] = v
+
+        for start in ground:
+            chain = []
+            current = start
+            seen_chain: set[int] = set()
+            while current in ground and current not in seen_chain:
+                seen_chain.add(current)
+                chain.append(current)
+                current = ground[current]
+
+            if len(chain) < n and current == start:
+                return False  # premature cycle
+
+            if len(chain) == n - 1 and current not in seen_chain:
+                v = deref(self.circuit_vars[current - 1])
+                if is_var(v):
+                    new_d = domain_from_range(start, start)
+                    if not _narrow_if_changed(v, new_d, trail, queue):
+                        return False
+
+        return True
+
+
 # ── Expression domain computation ────────────────────────────────────────────
 
 # Import term node types lazily to avoid circular imports
@@ -593,24 +880,22 @@ def _collect_vars_from(expr, result: list) -> None:
 
 
 def propagate(queue: deque, trail: Trail) -> bool:
-    """AC-3 fixpoint loop: propagate constraints until stable or wipeout."""
-    seen: set[int] = set()
+    """AC-3 fixpoint loop: propagate constraints until stable or wipeout.
+
+    No seen-set: _narrow_if_changed only enqueues when a domain actually
+    shrinks, so termination is guaranteed by the finite total domain size.
+    """
     while queue:
         var = queue.popleft()
         var = deref(var)
         if not is_var(var):
             continue
-        vid = id(var)
-        if vid in seen:
-            continue
-        seen.add(vid)
         state = get_attr(var, FD_KEY)
         if state is None:
             continue
         for constraint in state.constraints:
             if not constraint.propagate(trail, queue):
                 return False
-        # Reset seen for next round since propagation may have changed things
     return True
 
 
@@ -1030,10 +1315,26 @@ _FD_OPS = {
 }
 
 
+def _op_to_binary_constraint(op_str, lhs, rhs):
+    """Return the appropriate binary Constraint for lhs OP rhs, or None."""
+    op_str = op_str.removeprefix("#")
+    if op_str == "<":
+        return LtConstraint(lhs, rhs)
+    if op_str == ">":
+        return LtConstraint(rhs, lhs)
+    if op_str == "=<":
+        return LeConstraint(lhs, rhs)
+    if op_str == ">=":
+        return LeConstraint(rhs, lhs)
+    if op_str == "\\=":
+        return NeConstraint(lhs, rhs)
+    return None
+
+
 def fd_sum(vars_list, op_str, value, trail: Trail):
     """Sum(Vars, Op, Value) — constrain sum of Vars under comparison Op to Value.
 
-    Yields for each solution (via labeling). Ground-checks when possible.
+    Uses bounds-consistency propagation via SumConstraint.
     """
     vars_list = deref(vars_list)
     op_str = deref(op_str)
@@ -1047,42 +1348,46 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
-    # If all ground, just check
-    if all(isinstance(v, int) for v in vars_deref):
-        s = sum(vars_deref)
-        val = deref(value)
-        if isinstance(val, int):
-            if op_fn(s, val):
-                yield None
-        elif is_var(val):
-            if op_str in ("#=", "="):
-                if unify(value, s, trail):
-                    yield None
+    # If all ground and value is also ground, just check
+    val = deref(value)
+    if all(isinstance(v, int) for v in vars_deref) and isinstance(val, int):
+        if op_fn(sum(vars_deref), val):
+            yield None
         return
 
-    # Has FD vars — set up domains and label
+    # Has FD vars — ensure domains, then post SumConstraint
     for v in vars_deref:
         if is_var(v):
             _ensure_fd(v, trail)
 
-    if is_var(deref(value)):
-        _ensure_fd(deref(value), trail)
+    value_d = deref(value)
 
-    # Label all vars and check the sum constraint
-    all_vars = [v for v in vars_deref if is_var(v)]
-    val_d = deref(value)
-    if is_var(val_d):
-        all_vars.append(val_d)
-
-    for _ in label(all_vars, trail):
-        s = sum(deref(v) for v in vars_deref)
-        val = deref(value)
-        if isinstance(val, int) and op_fn(s, val):
+    if op_str in ("#=", "="):
+        # Post SumConstraint directly: Σ vars = value
+        if is_var(value_d):
+            _ensure_fd(value_d, trail)
+        vars_tuple = tuple(deref(v) for v in vars_deref)
+        if _post_constraint(SumConstraint(vars_tuple, value_d), trail):
+            yield None
+    else:
+        # Introduce intermediate total variable, post SumConstraint + relational constraint
+        total_var = Var()
+        _ensure_fd(total_var, trail)
+        vars_tuple = tuple(deref(v) for v in vars_deref)
+        if not _post_constraint(SumConstraint(vars_tuple, total_var), trail):
+            return
+        bin_c = _op_to_binary_constraint(op_str, total_var, value_d)
+        if bin_c is None:
+            return
+        if _post_constraint(bin_c, trail):
             yield None
 
 
 def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
-    """ScalarProduct(Coeffs, Vars, Op, Value) — weighted sum constraint."""
+    """ScalarProduct(Coeffs, Vars, Op, Value) — weighted sum constraint.
+
+    Uses bounds-consistency propagation via ScalarProductConstraint.
+    """
     coeffs = deref(coeffs)
     vars_list = deref(vars_list)
     op_str = deref(op_str)
@@ -1104,41 +1409,43 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
-    # If all ground, just check
-    if all(isinstance(v, int) for v in vars_deref):
-        s = sum(c * v for c, v in zip(coeffs_deref, vars_deref))
-        val = deref(value)
-        if isinstance(val, int):
-            if op_fn(s, val):
-                yield None
-        elif is_var(val):
-            if op_str in ("#=", "="):
-                if unify(value, s, trail):
-                    yield None
+    # If all ground and value is also ground, just check
+    val = deref(value)
+    if all(isinstance(v, int) for v in vars_deref) and isinstance(val, int):
+        if op_fn(sum(c * v for c, v in zip(coeffs_deref, vars_deref)), val):
+            yield None
         return
 
-    # Has FD vars — label and check
+    # Has FD vars — ensure domains, then post ScalarProductConstraint
     for v in vars_deref:
         if is_var(v):
             _ensure_fd(v, trail)
 
-    all_vars = [v for v in vars_deref if is_var(v)]
-    val_d = deref(value)
-    if is_var(val_d):
-        _ensure_fd(val_d, trail)
-        all_vars.append(val_d)
+    value_d = deref(value)
+    coeffs_tuple = tuple(coeffs_deref)
+    vars_tuple = tuple(deref(v) for v in vars_deref)
 
-    for _ in label(all_vars, trail):
-        s = sum(c * deref(v) for c, v in zip(coeffs_deref, vars_deref))
-        val = deref(value)
-        if isinstance(val, int) and op_fn(s, val):
+    if op_str in ("#=", "="):
+        if is_var(value_d):
+            _ensure_fd(value_d, trail)
+        if _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value_d), trail):
+            yield None
+    else:
+        total_var = Var()
+        _ensure_fd(total_var, trail)
+        if not _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, total_var), trail):
+            return
+        bin_c = _op_to_binary_constraint(op_str, total_var, value_d)
+        if bin_c is None:
+            return
+        if _post_constraint(bin_c, trail):
             yield None
 
 
 def fd_element(index, lst, value, trail: Trail):
     """Element(Index, List, Value) — Value is the Index-th element of List (1-based).
 
-    Yields for each valid index assignment.
+    Uses arc-consistency propagation via ElementConstraint when index is a Var.
     """
     lst = deref(lst)
     if not isinstance(lst, list):
@@ -1149,34 +1456,42 @@ def fd_element(index, lst, value, trail: Trail):
     n = len(lst)
 
     if isinstance(index, int):
-        # Index is ground
+        # Ground index: direct lookup
         if 1 <= index <= n:
             elem = deref(lst[index - 1])
-            mark = trail.mark()
             if unify(value, elem, trail):
                 yield None
-            trail.undo(mark)
         return
 
     if not is_var(index):
         return
 
-    # Index is an FD var — ensure domain is 1..n
+    # Index is a variable: post ElementConstraint
     _ensure_fd(index, trail)
-    state = get_attr(index, FD_KEY)
-    if state is not None:
-        valid = domain_intersection(state.domain, domain_from_range(1, n))
-        if not valid:
-            return
-        queue = deque()
-        _narrow(index, valid, trail, queue)
+    if is_var(value):
+        _ensure_fd(value, trail)
 
-    # Enumerate valid indices
-    for i in range(1, n + 1):
+    constraint = ElementConstraint(index, tuple(lst), value)
+    if not _post_constraint(constraint, trail):
+        return
+
+    # After propagation, enumerate remaining valid indices
+    index = deref(index)
+    if not is_var(index):
+        # Fully grounded by propagation
+        item = deref(lst[index - 1])
+        if unify(value, item, trail):
+            yield None
+        return
+
+    idx_state = get_attr(index, FD_KEY)
+    if idx_state is None:
+        return
+    for i in domain_values(idx_state.domain):
         mark = trail.mark()
         if unify(index, i, trail):
-            elem = deref(lst[i - 1])
-            if unify(value, elem, trail):
+            item = deref(lst[i - 1])
+            if unify(value, item, trail):
                 yield None
         trail.undo(mark)
 
@@ -1185,7 +1500,7 @@ def fd_circuit(vars_list, trail: Trail):
     """Circuit(Vars) — Vars form a single Hamiltonian circuit.
 
     Vars[i] = j means the successor of node i+1 is node j (1-based indexing).
-    Yields for each valid circuit assignment.
+    Uses CircuitConstraint for sub-tour elimination during labeling.
     """
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
@@ -1197,38 +1512,14 @@ def fd_circuit(vars_list, trail: Trail):
 
     vars_deref = [deref(v) for v in vars_list]
 
-    # Ensure all are FD vars with domain 1..n
+    # Ensure all have FD domains
     for v in vars_deref:
         if is_var(v):
             _ensure_fd(v, trail)
-            state = get_attr(v, FD_KEY)
-            if state is not None:
-                valid = domain_intersection(state.domain, domain_from_range(1, n))
-                if not valid:
-                    return
-                queue = deque()
-                _narrow(v, valid, trail, queue)
 
-    # Post AllDifferent
-    if not all_different(vars_list, trail):
+    vars_tuple = tuple(vars_deref)
+    constraint = CircuitConstraint(vars_tuple)
+    if not _post_constraint(constraint, trail):
         return
 
-    # Label and verify single circuit (no sub-tours)
-    for _ in label(vars_deref, trail):
-        # Check for single cycle covering all nodes
-        assignment = [deref(v) for v in vars_deref]
-        if not all(isinstance(a, int) and 1 <= a <= n for a in assignment):
-            continue
-        # No self-loops
-        if any(assignment[i] == i + 1 for i in range(n)):
-            continue
-        # Follow the chain from node 1
-        visited = set()
-        current = 1
-        for _ in range(n):
-            if current in visited:
-                break
-            visited.add(current)
-            current = assignment[current - 1]
-        if len(visited) == n and current == 1:
-            yield None
+    yield from label(vars_list, trail)

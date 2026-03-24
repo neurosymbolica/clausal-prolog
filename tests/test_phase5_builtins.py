@@ -871,3 +871,247 @@ class TestSequence:
                 break
             results.append(value)
         assert len(results) == 0
+
+
+# ── Propagation constraint tests ─────────────────────────────────────────────
+
+from clausal.logic.clpfd import (
+    FD_KEY, domain_min, domain_max, domain_contains, _post_constraint,
+    in_domain, label, fd_sum, fd_scalar_product, fd_element, fd_circuit,
+    SumConstraint, ScalarProductConstraint, ElementConstraint, CircuitConstraint,
+)
+from clausal.logic.variables import get_attr
+
+
+def fresh_trail():
+    return Trail()
+
+
+class TestSumConstraint:
+    def test_sum_narrows_total(self):
+        """X in [1,5], Y in [1,5]: Sum([X,Y], #=, T) → T in [2,10]."""
+        trail = fresh_trail()
+        x, y, t = Var(), Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_sum([x, y], "#=", t, trail))
+        st = get_attr(t, FD_KEY)
+        assert domain_min(st.domain) == 2
+        assert domain_max(st.domain) == 10
+
+    def test_sum_narrows_vars_from_total(self):
+        """X in [1,5], Y in [1,5], T=10: Sum propagates both to 5."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_sum([x, y], "#=", 10, trail))
+        # Propagation fully determines both variables to the unique solution
+        assert deref(x) == 5
+        assert deref(y) == 5
+
+    def test_sum_wipeout(self):
+        """X in [1,3], Y in [1,3], T=10: impossible → no solutions."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        assert not list(fd_sum([x, y], "#=", 10, trail))
+
+    def test_sum_lt_narrows(self):
+        """X in [1,5], Y in [1,5]: Sum([X,Y], #<, 5) → each max ≤ 3."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_sum([x, y], "#<", 5, trail))
+        sx = get_attr(x, FD_KEY)
+        sy = get_attr(y, FD_KEY)
+        assert domain_max(sx.domain) <= 3
+        assert domain_max(sy.domain) <= 3
+
+    def test_sum_propagates_on_label(self):
+        """Sum([X,Y], #=, 7), label → only pairs summing to 7."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_sum([x, y], "#=", 7, trail))
+        results = []
+        for _ in label([x, y], trail):
+            results.append((deref(x), deref(y)))
+        assert all(a + b == 7 for a, b in results)
+        assert len(results) == 4   # (2,5),(3,4),(4,3),(5,2)
+
+    def test_sum_ground_vars_unbound_value_eq(self):
+        """Sum([1,2,3], #=, V) with unbound V → V = 6."""
+        trail = fresh_trail()
+        v = Var()
+        assert list(fd_sum([1, 2, 3], "#=", v, trail))
+        assert deref(v) == 6
+
+    def test_sum_ground_vars_unbound_value_lt(self):
+        """Sum([1,2,3], #<, V) with unbound V → V domain starts at 7."""
+        trail = fresh_trail()
+        v = Var()
+        in_domain(v, 1, 20, trail)
+        assert list(fd_sum([1, 2, 3], "#<", v, trail))
+        sv = get_attr(v, FD_KEY)
+        assert domain_min(sv.domain) == 7
+
+
+class TestScalarProductConstraint:
+    def test_sp_narrows_total(self):
+        """2*X + 3*Y, X in [1,5], Y in [1,5] → total in [5,25]."""
+        trail = fresh_trail()
+        x, y, t = Var(), Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_scalar_product([2, 3], [x, y], "#=", t, trail))
+        st = get_attr(t, FD_KEY)
+        assert domain_min(st.domain) == 5
+        assert domain_max(st.domain) == 25
+
+    def test_sp_backward_narrows_vars(self):
+        """2*X + 3*Y = 12, X in [1,5], Y in [1,5] → Y ≤ 3 (propagation finds unique solution X=3,Y=2)."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_scalar_product([2, 3], [x, y], "#=", 12, trail))
+        # Propagation fully determines the unique integer solution in [1,5]
+        xv, yv = deref(x), deref(y)
+        assert 2 * xv + 3 * yv == 12
+        assert yv <= 3
+
+    def test_sp_negative_coeff(self):
+        """2*X - Y = 5, X in [1,5], Y in [1,5] → X ≥ 3."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 5, trail)
+        in_domain(y, 1, 5, trail)
+        assert list(fd_scalar_product([2, -1], [x, y], "#=", 5, trail))
+        sx = get_attr(x, FD_KEY)
+        assert domain_min(sx.domain) >= 3
+
+    def test_sp_wipeout(self):
+        """[1,1] coeffs (like Sum): [1,3] + [1,3] = 10 impossible."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        assert not list(fd_scalar_product([1, 1], [x, y], "#=", 10, trail))
+
+
+class TestElementConstraint:
+    def test_element_narrows_value_from_index_domain(self):
+        """Index in [1,2], List=[10,20,30] → Value in {10,20}."""
+        trail = fresh_trail()
+        idx, val = Var(), Var()
+        in_domain(idx, 1, 2, trail)
+        assert list(fd_element(idx, [10, 20, 30], val, trail))
+        sv = get_attr(val, FD_KEY)
+        assert domain_contains(sv.domain, 10)
+        assert domain_contains(sv.domain, 20)
+        assert not domain_contains(sv.domain, 30)
+
+    def test_element_narrows_index_from_value(self):
+        """Value = 20, List=[10,20,30] → Index must be 2."""
+        trail = fresh_trail()
+        idx = Var()
+        in_domain(idx, 1, 3, trail)
+        results = list(fd_element(idx, [10, 20, 30], 20, trail))
+        assert results
+        assert deref(idx) == 2
+
+    def test_element_wipeout(self):
+        """Value = 99 not in list → fail."""
+        trail = fresh_trail()
+        idx = Var()
+        in_domain(idx, 1, 3, trail)
+        assert not list(fd_element(idx, [10, 20, 30], 99, trail))
+
+    def test_element_var_value_var_index(self):
+        """Both unbound: Index in [2,3], List=[10,20,30] → Value in {20,30}."""
+        trail = fresh_trail()
+        idx, val = Var(), Var()
+        in_domain(idx, 2, 3, trail)
+        in_domain(val, 1, 100, trail)
+        assert list(fd_element(idx, [10, 20, 30], val, trail))
+        sv = get_attr(val, FD_KEY)
+        assert not domain_contains(sv.domain, 10)
+        assert domain_contains(sv.domain, 20)
+        assert domain_contains(sv.domain, 30)
+
+    def test_element_narrows_bidirectionally(self):
+        """Index in [1,3], Value in {10,30}: only indices 1,3 valid → index ≠ 2."""
+        trail = fresh_trail()
+        idx, val = Var(), Var()
+        in_domain(idx, 1, 3, trail)
+        in_domain(val, 1, 100, trail)
+        # Narrow value to {10,30} by hand
+        from clausal.logic.variables import put_attr
+        from clausal.logic.clpfd import FDVar
+        put_attr(val, FD_KEY, FDVar(((10, 10), (30, 30))), trail)
+        assert list(fd_element(idx, [10, 20, 30], val, trail))
+        si = get_attr(idx, FD_KEY)
+        assert not domain_contains(si.domain, 2)   # 20 not in value domain
+
+
+class TestCircuitConstraint:
+    def test_circuit_prunes_self_loops(self):
+        """Domains initially include self-loops; CircuitConstraint removes them."""
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        in_domain(z, 1, 3, trail)
+        constraint = CircuitConstraint((x, y, z))
+        assert _post_constraint(constraint, trail)
+        sx = get_attr(x, FD_KEY)
+        sy = get_attr(y, FD_KEY)
+        sz = get_attr(z, FD_KEY)
+        assert not domain_contains(sx.domain, 1)
+        assert not domain_contains(sy.domain, 2)
+        assert not domain_contains(sz.domain, 3)
+
+    def test_circuit_detects_forced_subtour(self):
+        """x=2, y=1: forms a 2-cycle → must fail."""
+        from clausal.logic.variables import unify as _unify
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        in_domain(z, 1, 3, trail)
+        _unify(x, 2, trail)   # node 1 → 2
+        _unify(y, 1, trail)   # node 2 → 1 (closes 2-cycle)
+        constraint = CircuitConstraint((x, y, z))
+        assert not _post_constraint(constraint, trail)
+
+    def test_circuit_forces_completion(self):
+        """Chain 1→2→3→? with n=3: last node must close to 1."""
+        from clausal.logic.variables import unify as _unify
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        in_domain(z, 1, 3, trail)
+        _unify(x, 2, trail)   # node 1 → 2
+        _unify(y, 3, trail)   # node 2 → 3
+        constraint = CircuitConstraint((x, y, z))
+        assert _post_constraint(constraint, trail)
+        assert deref(z) == 1
+
+    def test_circuit_all_solutions(self):
+        """3-node circuit: exactly 2 Hamiltonian circuits."""
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain(x, 1, 3, trail)
+        in_domain(y, 1, 3, trail)
+        in_domain(z, 1, 3, trail)
+        results = []
+        for _ in fd_circuit([x, y, z], trail):
+            results.append((deref(x), deref(y), deref(z)))
+        assert len(results) == 2
+        assert (2, 3, 1) in results
+        assert (3, 1, 2) in results
