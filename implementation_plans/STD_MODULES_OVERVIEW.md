@@ -177,9 +177,9 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 
 ---
 
-### Phase 6 — User-Facing Attributed Variables
+### Phase 6 — User-Facing Attributed Variables ✓
 
-**Priority: Medium** — Enable users to build custom constraint solvers in `.clausal`.
+**Status: COMPLETE** — Enable users to build custom constraint solvers in `.clausal`.
 
 | Item | Description |
 |---|---|
@@ -190,7 +190,7 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 The internal infrastructure already exists (CLP(FD), CLP(B), dif all use it).
 This phase exposes it as a public API.
 
-**Detailed plan:** TBD
+**Detailed plan:** [`STD_MODULES_PHASE6.md`](STD_MODULES_PHASE6.md)
 
 ---
 

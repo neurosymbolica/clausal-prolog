@@ -45,11 +45,18 @@ def _int_value(val):
 
 
 def _require_same_dims(a, b):
-    """If both are Quantity, verify same dims (raises UnitsMismatch if not).
+    """Verify both operands have compatible dimensions.
 
-    Returns (a_is_quantity, dims) where dims is the shared dimension dict
+    Returns (has_quantity, dims) where dims is the shared dimension dict
     or None if neither is Quantity.
+
+    Raises UnitsMismatch if:
+    - Both are Quantity with different dims.
+    - One is Quantity with non-empty dims and the other is a plain number
+      (mixing dimensioned and dimensionless is an error for Gcd/Lcm/DivMod).
     """
+    from clausal.terms import UnitsMismatch
+
     a_q = isinstance(a, Quantity)
     b_q = isinstance(b, Quantity)
     if a_q and b_q:
@@ -57,9 +64,15 @@ def _require_same_dims(a, b):
             a._require_same_dims(b, "operate on")
         return True, a.dims
     if a_q or b_q:
-        # One is Quantity, other is plain — Quantity arithmetic handles this
-        # (dimensionless Quantity + plain is OK, dimensioned + plain raises)
-        return a_q or b_q, (a if a_q else b).dims
+        q = a if a_q else b
+        if q.dims:
+            # Dimensioned Quantity mixed with plain number — error
+            plain = b if a_q else a
+            raise UnitsMismatch(
+                f"Cannot operate on dimensioned quantity and plain value {plain!r}"
+            )
+        # Dimensionless Quantity + plain number — treat as plain
+        return False, None
     return False, None
 
 

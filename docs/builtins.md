@@ -80,6 +80,7 @@ Notation in signature lines:
 | [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3 |
 | [Runtime Database](#runtime-database) | Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
+| [Attributed Variables](#attributed-variables) | PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2 |
 | [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
 | [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
@@ -695,6 +696,75 @@ Reflect the registered parameter name list for the predicate `FunctorName/Arity`
     **Implementation:** `clausal/logic/builtins.py:778`
     **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
     **Python tests:** `tests/test_builtins.py`
+
+---
+
+## Attributed Variables
+
+Attributed variables carry key-value metadata that survives through unification. This is the mechanism that powers CLP(FD), CLP(B), CLP(R), dif/2, and units constraints internally. These predicates expose the API so users can build custom constraint solvers.
+
+Attribute keys are strings. Attribute values can be any term. All mutations are trailed (undone on backtracking).
+
+### `PutAttr/3`
+```clausal
+# skip
+PutAttr(+Var, +Key, +Value)
+```
+Attach attribute `Value` under string `Key` to an unbound variable. Overwrites any existing value for that key. Trailed.
+
+---
+
+### `GetAttr/3`
+```clausal
+# skip
+GetAttr(+Var, +Key, -Value)
+```
+Retrieve the attribute stored under `Key`. Fails if `Var` has no attribute for `Key`, or if `Var` is not an unbound variable.
+
+---
+
+### `DelAttr/2`
+```clausal
+# skip
+DelAttr(+Var, +Key)
+```
+Remove the attribute under `Key`. Succeeds even if no attribute existed (no-op). Trailed.
+
+---
+
+### `GetAttrs/2`
+```clausal
+# skip
+GetAttrs(+Var, -Attrs)
+```
+Unify `Attrs` with a `DictTerm` containing all attributes on `Var`. Empty `DictTerm` if no attributes.
+
+---
+
+### `PutAttrs/2`
+```clausal
+# skip
+PutAttrs(+Var, +Attrs)
+```
+Set multiple attributes from a `DictTerm`. Each key-value pair is applied via `put_attr`.
+
+---
+
+### `IsAttVar/1`
+```clausal
+# skip
+IsAttVar(?Var)
+```
+Succeeds if `Var` is an unbound variable with at least one attribute. Fails for bound terms and for bare (non-attributed) variables.
+
+---
+
+### `TermAttributedVariables/2`
+```clausal
+# skip
+TermAttributedVariables(+Term, -Vars)
+```
+Collect all attributed variables occurring in `Term` into a list. Traverses compound terms, lists, DictTerms, and PredicateMeta instances recursively. Each variable appears at most once.
 
 ---
 

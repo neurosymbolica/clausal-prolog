@@ -276,6 +276,23 @@ class TestArithmeticQuantity:
         with pytest.raises(UnitsMismatch):
             self._simple(_gcd__3, q1, q2, Var())
 
+    # ── Mixed Quantity + plain raises ──
+
+    def test_gcd_mixed_quantity_plain_raises(self):
+        """Gcd(plain_int, Quantity(dims)) raises UnitsMismatch."""
+        from clausal.logic.builtins.arithmetic import _gcd__3
+        from clausal.terms import UnitsMismatch
+        q = self._q(6, m=1)
+        with pytest.raises(UnitsMismatch):
+            self._simple(_gcd__3, 4, q, Var())
+
+    def test_lcm_mixed_quantity_plain_raises(self):
+        from clausal.logic.builtins.arithmetic import _lcm__3
+        from clausal.terms import UnitsMismatch
+        q = self._q(6, m=1)
+        with pytest.raises(UnitsMismatch):
+            self._simple(_lcm__3, 4, q, Var())
+
     # ── Lcm (same dims, result preserves dims) ──
 
     def test_lcm_quantity(self):

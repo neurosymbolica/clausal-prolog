@@ -52,7 +52,10 @@ def _statistics__2(key, value, trail, k):
     # Try to add memory stat (not available on all platforms)
     try:
         import resource as _resource
-        stats.append(("memory", lambda: _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss * 1024))
+        import sys as _sys
+        # ru_maxrss is in KB on Linux, bytes on macOS
+        _rss_scale = 1024 if _sys.platform != "darwin" else 1
+        stats.append(("memory", lambda: _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss * _rss_scale))
     except ImportError:
         pass
 
