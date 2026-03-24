@@ -179,6 +179,7 @@ class DictTerm:
     def __len__(self): return len(self._data)
     def __getitem__(self, key): return self._data[key]
     def __contains__(self, key): return key in self._data
+    def __iter__(self):          return iter(self._data)  # yields keys, like Python dict
 
     def __eq__(self, other):
         return isinstance(other, DictTerm) and self._data == other._data

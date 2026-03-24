@@ -11,8 +11,10 @@ is_admin(PERSON) <- SubDict({"role": "admin"}, PERSON)
 update_field(KEY, VALUE, OLD, NEW) <- DictPut(KEY, VALUE, OLD, NEW)
 
 # Enumerate all key-value pairs of a dict.
-# TODO: rename GenDict as EnumeratePairs? How does it work? Discuss.
-dict_member(KEY, DICT, VALUE) <- GenDict(KEY, DICT, VALUE)
+dict_member(KEY, DICT, VALUE) <- ((KEY, VALUE) in DICT)
+
+# Enumerate keys of a dict.
+dict_key(KEY, DICT) <- (KEY in DICT)
 
 # Build a new dict from OLD with an extra key, using splat sugar.
 splat_update(OLD, KEY, VALUE, NEW) <- (NEW is {**OLD, KEY: VALUE})

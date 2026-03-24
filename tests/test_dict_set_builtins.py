@@ -5,6 +5,7 @@ Covers:
   - DictPairs/2 (both directions)
   - DictGet/3, DictPut/4, DictPutPairs/3, DictRemove/3, DictMerge/3
   - GenDict/3 (nondeterministic enumeration)
+  - ``KEY in DICT`` and ``(KEY, VALUE) in DICT`` syntax
   - SubDict/2 (partial dict matching)
   - IsSet/1, SetSize/2, SetList/2 (both directions)
   - SetUnion/3, SetIntersection/3, SetSubtract/3, SetSymDiff/3
@@ -599,9 +600,120 @@ class TestClausalIntegration:
         elems = {s[0] for s in sols}
         assert elems == {"a", "b", "c"}
 
+    def test_dict_key(self):
+        """dict_key/2 uses ``KEY in DICT`` to enumerate keys."""
+        d = DictTerm({"a": 1, "b": 2, "c": 3})
+        k_var = Var()
+        sols = self._capture("dict_key", k_var, d)
+        keys = {s[0] for s in sols}
+        assert keys == {"a", "b", "c"}
+
     def test_splat_update(self):
         """splat_update/4 uses {**OLD, KEY: VALUE} sugar."""
         old = DictTerm({"x": 1, "y": 2})
         new_var = Var()
         sols = self._capture("splat_update", old, "z", 3, new_var)
         assert sols[0][3] == DictTerm({"x": 1, "y": 2, "z": 3})
+
+
+# ── ``in`` operator with dicts and sets ──────────────────────────────────────
+
+
+class TestInOperatorDictSet:
+    """Test ``KEY in DICT`` and ``(KEY, VALUE) in DICT`` syntax."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path):
+        src = tmp_path / "in_dict.clausal"
+        src.write_text(
+            "# predicates\n"
+            "\n"
+            "# Enumerate keys\n"
+            "enum_keys(KEY, DICT) <- (KEY in DICT)\n"
+            "\n"
+            "# Enumerate key-value pairs\n"
+            "enum_pairs(KEY, VALUE, DICT) <- ((KEY, VALUE) in DICT)\n"
+            "\n"
+            "# Filter by key\n"
+            'find_value(VALUE, DICT) <- (("x", VALUE) in DICT)\n'
+            "\n"
+            "# Key not in dict\n"
+            "key_absent(KEY, DICT) <- (KEY not in DICT)\n"
+            "\n"
+            "# Pair not in dict\n"
+            "pair_absent(KEY, VALUE, DICT) <- ((KEY, VALUE) not in DICT)\n"
+        )
+        mod = _load_module("in_dict", str(src))
+        self.logic_mod = mod.__dict__["$module"]
+
+    def _capture(self, pred_name, *args):
+        from clausal.logic.solve import call as lc_call
+        var_positions = {i: a for i, a in enumerate(args) if isinstance(a, Var)}
+        results = []
+        for _ in lc_call(pred_name, *args, module=self.logic_mod):
+            results.append({i: deref(v) for i, v in var_positions.items()})
+        return results
+
+    def test_key_in_dict_enumerates_keys(self):
+        d = DictTerm({"a": 1, "b": 2, "c": 3})
+        k = Var()
+        sols = self._capture("enum_keys", k, d)
+        keys = {s[0] for s in sols}
+        assert keys == {"a", "b", "c"}
+
+    def test_key_in_dict_filters(self):
+        d = DictTerm({"a": 1, "b": 2})
+        sols = self._capture("enum_keys", "a", d)
+        assert len(sols) == 1
+
+    def test_key_in_dict_empty(self):
+        d = DictTerm({})
+        sols = self._capture("enum_keys", Var(), d)
+        assert len(sols) == 0
+
+    def test_pair_in_dict_enumerates_pairs(self):
+        d = DictTerm({"x": 10, "y": 20})
+        k, v = Var(), Var()
+        sols = self._capture("enum_pairs", k, v, d)
+        pairs = {s[0]: s[1] for s in sols}
+        assert pairs == {"x": 10, "y": 20}
+
+    def test_pair_in_dict_filter_by_key(self):
+        d = DictTerm({"x": 42, "y": 99})
+        v = Var()
+        sols = self._capture("find_value", v, d)
+        assert len(sols) == 1
+        assert sols[0][0] == 42
+
+    def test_pair_in_dict_unifies_value(self):
+        d = DictTerm({"a": 1, "b": 2})
+        k, v = Var(), Var()
+        sols = self._capture("enum_pairs", k, v, d)
+        assert len(sols) == 2
+        for s in sols:
+            assert s[0] in ("a", "b")
+
+    def test_pair_in_dict_empty(self):
+        d = DictTerm({})
+        sols = self._capture("enum_pairs", Var(), Var(), d)
+        assert len(sols) == 0
+
+    def test_key_not_in_dict(self):
+        d = DictTerm({"a": 1, "b": 2})
+        sols = self._capture("key_absent", "c", d)
+        assert len(sols) == 1  # "c" not in dict, so succeeds
+
+    def test_key_not_in_dict_fails(self):
+        d = DictTerm({"a": 1, "b": 2})
+        sols = self._capture("key_absent", "a", d)
+        assert len(sols) == 0  # "a" in dict, so fails
+
+    def test_pair_not_in_dict(self):
+        d = DictTerm({"a": 1, "b": 2})
+        sols = self._capture("pair_absent", "c", 99, d)
+        assert len(sols) == 1  # ("c", 99) not in dict
+
+    def test_pair_not_in_dict_wrong_value(self):
+        d = DictTerm({"a": 1, "b": 2})
+        sols = self._capture("pair_absent", "a", 99, d)
+        assert len(sols) == 1  # ("a", 99) not in dict (value doesn't match)

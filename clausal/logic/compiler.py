@@ -314,6 +314,19 @@ def _build_star_list(before, star, after):
     )
 
 
+def _in_iter(collection, pair_mode):
+    """Runtime iterator for ``in`` expressions.
+
+    *pair_mode* is True when the left side of ``in`` is a tuple pattern
+    (e.g. ``(KEY, VALUE) in DICT``).  For DictTerms, pair_mode switches
+    from key iteration to (key, value) pair iteration.
+    """
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if pair_mode and isinstance(collection, DictTerm):
+        return collection.items()
+    return iter(collection)
+
+
 def _body_multi_star_unify(target, segments, trail):
     """Body-position multi-star unification.
 
@@ -1330,6 +1343,21 @@ def _if(test: ast.expr, body: list[ast.stmt]) -> ast.If:
     return ast.If(test=test, body=body or [ast.Pass()], orelse=[])
 
 
+def _in_iter_expr(elem, coll_expr):
+    """Build the iterator expression for an ``in`` goal.
+
+    If *elem* is a TupleLiteral, emits ``_in_iter(deref(coll), True)`` so that
+    DictTerms yield (key, value) pairs.  Otherwise emits ``deref(coll)``.
+    """
+    if isinstance(elem, TupleLiteral):
+        return _call(
+            _name("_in_iter"),
+            _call(_name("deref"), coll_expr),
+            ast.Constant(value=True),
+        )
+    return _call(_name("deref"), coll_expr)
+
+
 def _compile_arith_cmp(
     l: Any,
     r: Any,
@@ -2040,7 +2068,7 @@ def compile_goal(
             return [
                 ast.For(
                     target=_name(loop_var, ast.Store()),
-                    iter=_call(_name("deref"), coll_expr),
+                    iter=_in_iter_expr(elem, coll_expr),
                     body=[
                         _assign_mark(mark, trail_name),
                         _if(
@@ -2064,7 +2092,7 @@ def compile_goal(
                 _assign(found_flag, ast.Constant(value=False)),
                 ast.For(
                     target=_name(loop_var, ast.Store()),
-                    iter=_call(_name("deref"), coll_expr),
+                    iter=_in_iter_expr(elem, coll_expr),
                     body=[
                         _assign_mark(mark, trail_name),
                         ast.If(
@@ -3282,7 +3310,7 @@ def compile_goal_trampoline(
             return [
                 ast.For(
                     target=_name(loop_var, ast.Store()),
-                    iter=_call(_name("deref"), coll_expr),
+                    iter=_in_iter_expr(elem, coll_expr),
                     body=[
                         _assign_mark(mark, trail_name),
                         _if(
@@ -3306,7 +3334,7 @@ def compile_goal_trampoline(
                 _assign(found_flag, ast.Constant(value=False)),
                 ast.For(
                     target=_name(loop_var, ast.Store()),
-                    iter=_call(_name("deref"), coll_expr),
+                    iter=_in_iter_expr(elem, coll_expr),
                     body=[
                         _assign_mark(mark, trail_name),
                         ast.If(
@@ -4784,6 +4812,7 @@ def compile_predicate_trampoline(
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
         "_python_error_term": _python_error_term_fn,
+        "_in_iter": _in_iter,
     }
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
@@ -7094,6 +7123,7 @@ def compile_predicate_shallow(
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
         "_python_error_term": _python_error_term_fn_s,
+        "_in_iter": _in_iter,
     }
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
