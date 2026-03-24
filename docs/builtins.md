@@ -884,7 +884,7 @@ Constrain the sum of `Vars` (a list of FD variables or integers) under compariso
 Sum([X, Y, Z], "#=", 10)   % X + Y + Z = 10
 ```
 
-For ground lists, checks the constraint immediately. For lists with FD variables, labels and filters.
+For `#=`, posts a `SumConstraint` that propagates bounds in both directions: narrows `Value` to `[min_sum, max_sum]` and narrows each variable using the remaining slack. For inequality operators, an intermediate variable is introduced and chained with the appropriate binary relational constraint. Ground lists with a ground `Value` are checked immediately without posting a constraint.
 
 ---
 
@@ -893,12 +893,14 @@ For ground lists, checks the constraint immediately. For lists with FD variables
 # skip
 ScalarProduct(+Coeffs, +Vars, +Op, +Value)
 ```
-Weighted sum constraint: `Σ(Coeffs[i] * Vars[i]) Op Value`. Coefficients must be ground integers. Lists must be the same length.
+Weighted sum constraint: `Σ(Coeffs[i] * Vars[i]) Op Value`. Coefficients must be ground integers. Lists must be the same length. Supports negative coefficients — division direction is flipped accordingly when narrowing individual variables.
 
 ```clausal
 # skip
 ScalarProduct([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
 ```
+
+Uses the same bounds-consistency approach as `Sum/3` (`ScalarProductConstraint`). For inequality operators, an intermediate variable is introduced and chained with a binary relational constraint.
 
 ---
 
@@ -907,12 +909,12 @@ ScalarProduct([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
 # skip
 Element(?Index, +List, ?Value)
 ```
-`Value` is the `Index`-th element of `List` (1-based indexing). When Index is ground, performs direct lookup. When Index is an FD variable, enumerates valid indices.
+`Value` is the `Index`-th element of `List` (1-based indexing). When Index is ground, performs direct lookup. When Index is an FD variable, posts an `ElementConstraint` that propagates bidirectionally: narrows `Index` to positions whose list element overlaps `Value`'s domain, and narrows `Value` to the union of the domains at valid positions. Then enumerates the surviving valid indices.
 
 ```clausal
 # skip
 Element(2, [10, 20, 30], V)   % V = 20
-Element(I, [10, 20, 30], 20)  % I = 2
+Element(I, [10, 20, 30], 20)  % I = 2 (propagated without labeling)
 ```
 
 ---
@@ -922,13 +924,13 @@ Element(I, [10, 20, 30], 20)  % I = 2
 # skip
 Circuit(+Vars)
 ```
-Constrain `Vars` to form a single Hamiltonian circuit. `Vars[i] = j` means the successor of node `i` is node `j` (1-based). Posts AllDifferent internally, then verifies single-cycle coverage during labeling.
+Constrain `Vars` to form a single Hamiltonian circuit. `Vars[i] = j` means the successor of node `i+1` is node `j` (1-based). Posts a `CircuitConstraint` that: restricts all domains to `[1, n]`, removes self-loop values, enforces AllDifferent, and detects premature sub-tours via forced-chain analysis — pruning values that would close a cycle shorter than `n`. Labeling then enumerates remaining candidates.
 
 ```clausal
 # skip
 Circuit([2, 3, 1])         % valid: 1→2→3→1
 % Circuit([1, 2, 3]) fails — self-loop at node 1
-% Circuit([2, 1, 4, 3]) fails — two sub-tours
+% Circuit([2, 1, 4, 3]) fails — two sub-tours (detected during propagation)
 ```
 
 ---

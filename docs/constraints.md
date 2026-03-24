@@ -216,6 +216,8 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Constraint types"
 
+    **Binary / unary constraints** (posted by `==`, `!=`, `<`, `<=`, `>`, `>=`):
+
     | Constraint | Description |
     |---|---|
     | `EqConstraint(lhs, rhs)` | X == Y — narrow both domains to intersection |
@@ -223,6 +225,17 @@ The old structural-equality behaviour of `==` is available as the named builtin 
     | `LtConstraint(lhs, rhs)` | X < Y — upper-bound X by max(Y)-1, lower-bound Y by min(X)+1 |
     | `LeConstraint(lhs, rhs)` | X <= Y — upper-bound X by max(Y), lower-bound Y by min(X) |
     | `AllDiffConstraint(vars)` | all_different — when one var is ground, remove from all others |
+
+    **Global constraints** (posted by `Sum/3`, `ScalarProduct/4`, `Element/3`, `Circuit/1`):
+
+    | Constraint | Description |
+    |---|---|
+    | `SumConstraint(vars, total)` | Σ vars = total — bounds-consistency: narrows total to [min_sum, max_sum] and each var using slack |
+    | `ScalarProductConstraint(coeffs, vars, total)` | Σ cᵢ·vᵢ = total — same as Sum but with signed coefficients; division direction flips for negative coefficients |
+    | `ElementConstraint(index, lst, value)` | value = lst[index−1] — AC-3: narrows index to positions whose list element overlaps value's domain, narrows value to union of those elements' domains |
+    | `CircuitConstraint(vars)` | Hamiltonian circuit — restricts domains to [1,n], removes self-loops, delegates to AllDiffConstraint, prunes premature sub-tours via forced-chain detection |
+
+    Inequality operators (`#<`, `#>`, `#=<`, `#>=`, `#\=`) for `Sum` and `ScalarProduct` introduce an intermediate total variable, post the equality constraint on it, then chain the appropriate binary relational constraint.
 
 ??? abstract "Propagation (AC-3)"
 
@@ -233,6 +246,8 @@ The old structural-equality behaviour of `==` is available as the named builtin 
     3. If singleton `{v}`: `unify(var, v, trail)` → fires FD hook + dif hooks.
     4. If empty: return False (wipeout → backtrack).
     5. Add var to propagation queue.
+
+    The queue is drained to fixpoint — a variable is re-processed every time its domain shrinks, so cascading narrowing (e.g. X < Y < Z, fix Z → Y narrows → X narrows) converges without explicit re-scheduling.
 
 ??? abstract "FD attribute hook"
 
@@ -263,6 +278,10 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 | `Label` | 1 | `Label(Vars)` — enumerate values, first-fail strategy |
 | `AllDifferent` | 1 | `AllDifferent(Vars)` — pairwise disequality constraint |
 | `Equivalent` | 2 | `Equivalent(X, Y)` — structural equality (old `==` behavior) |
+| `Sum` | 3 | `Sum(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
+| `ScalarProduct` | 4 | `ScalarProduct(+Coeffs, +Vars, +Op, +Value)` — bounds-consistency for Σ Cᵢ·Vᵢ Op Value |
+| `Element` | 3 | `Element(?Index, +List, ?Value)` — arc-consistency: Value = List[Index] (1-based) |
+| `Circuit` | 1 | `Circuit(+Vars)` — Hamiltonian circuit with sub-tour elimination during propagation |
 
 ### Syntax examples
 
@@ -350,7 +369,7 @@ sendmoney(S, E, N, D, M, O, R, Y) <- (
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpfd.py` (74 tests).
+    Tests are in `tests/test_clpfd.py` (76 tests) and `tests/test_phase5_builtins.py` (global constraint tests).
 
     - **Domain operations**: from_range, contains, min/max, size, singleton, intersection, remove, remove_above/below, values
     - **in_domain**: post domain, unify succeeds/fails, list, narrows existing, singleton binds, empty fails, ground int
@@ -358,11 +377,16 @@ sendmoney(S, E, N, D, M, O, R, Y) <- (
     - **Equivalent**: same/different atoms, compounds, vars, bound vars
     - **fd_eq/ne/lt/le/gt/ge**: ground values, var-int, var-var, auto-domain, wipeout
     - **Propagation**: lt chain, eq propagation, wipeout, backtracking restores domains
+    - **AC-3 fixpoint**: cascaded `<` chain (X<Y<Z, fix Z → X,Y ground without labeling), Ne narrows after domain change
     - **Compiler integration**: ground eq/ne/lt/le/gt/ge, var eq via solve, chained le, ne with label, evaluate unchanged, is unchanged, is-not unchanged
     - **AllDifferent**: basic permutations, ground ok/fail, via solve
     - **N-Queens**: 4-queens (2 solutions), 8-queens (92 solutions)
     - **SEND+MORE=MONEY**: unique solution (9567 + 1085 = 10652)
     - **FD + dif interaction**: both constraints on same var, independent operation
+    - **SumConstraint**: narrows total, narrows vars from total, wipeout, inequality narrows, label produces only valid pairs, ground vars with unbound value
+    - **ScalarProductConstraint**: narrows total, backward narrowing, negative coefficients, wipeout
+    - **ElementConstraint**: narrows value from index domain, narrows index from value, wipeout, bidirectional narrowing
+    - **CircuitConstraint**: self-loop pruning, sub-tour detection, forced chain completion, all solutions
 
     ---
 
