@@ -315,7 +315,7 @@ SegList it receives) is complete before SegList *creation* (changing code to pro
 instead of failing). This means the highest-regression-risk change (`_head_list_unify_output`)
 lands into a codebase that can already handle the values it will start producing.
 
-### Phase 1 — Core `SegList` type (pure Python, no compiler changes)
+### Phase 1 — Core `SegList` type (pure Python, no compiler changes) ✅ DONE
 
 **File**: `clausal/terms.py` (alongside `DictTerm`, `SetTerm`)
 
@@ -339,17 +339,18 @@ lands into a codebase that can already handle the values it will start producing
    SegList inlining), ground detection, sequence protocol delegation, `__add__` concat,
    `__repr__`.
 
-### Phase 2 — Unification protocol
+### Phase 2 — Unification protocol ✅ DONE (implemented alongside Phase 1)
 
 **File**: `clausal/terms.py`
 
-Add two things:
+Both items were implemented as part of Phase 1:
 
 **`_seglist_unify_gen(seglist, target_list, trail)` — the non-deterministic generator.**
 This is the core algorithm, a direct runtime port of `_multi_star_splits` + the innermost body
-of `_compile_multi_star_guard`. Move `_multi_star_splits` from `compiler.py` to a shared
-location (e.g. `clausal/logic/list_utils.py`) so both the compile-time guard generator and
-this runtime generator can import it.
+of `_compile_multi_star_guard`. `_multi_star_splits` was added directly to `clausal/terms.py`
+(not a separate `list_utils.py`) so both the compile-time guard generator and this runtime
+generator can import it without circular imports. The compiler's own copy in `compiler.py` still
+exists; Phase 3 step 3 should import from `terms.py` instead and remove the duplicate.
 
 ```python
 def _seglist_unify_gen(seglist, target_list, trail):
@@ -395,11 +396,11 @@ see §Gotchas). It handles only the cases where there is at most one valid split
 - `other` is a `SegList` → defer to Phase 6; return `NotImplemented` for now.
 - anything else → return `NotImplemented`
 
-**Tests**: `tests/test_seglist_unify.py` — deterministic unification (single-VarSeg tail,
-ConcreteSeg prefix match, empty cases, too-short fail), `_seglist_unify_gen` standalone tests
-covering all use cases from §Use Cases as Tests.
+**Tests**: These tests were included in `tests/test_seglist_core.py` rather than a separate
+`test_seglist_unify.py` — all `_seglist_unify_gen` and `__unify__` cases from §Use Cases as
+Tests are covered there (63 tests total).
 
-### Phase 3 — Compiler: SegList *consumption* (zero regression risk)
+### Phase 3 — Compiler: SegList *consumption* (zero regression risk) ✅ DONE
 
 Teach every place that receives a list argument to also accept a SegList. This phase makes no
 change to how SegLists are created — it only adds new code paths that fire when a SegList
@@ -407,33 +408,35 @@ arrives. The full test suite should pass unchanged after this phase.
 
 **File**: `clausal/logic/compiler.py`
 
-1. **`_head_list_unify_input`** — add an `elif isinstance(d, SegList)` branch after the
-   `isinstance(d, list)` branch. For a SegList input against a single-star head pattern, call
-   `_seglist_unify_gen(walk(d), pattern_seglist, trail)` and return True on first solution.
-   Since this function returns `True/None/False` (not a generator), it handles only the
-   deterministic case. Multi-solution SegList inputs need Phase 3b below.
+1. **`_head_list_unify_input`** — normalise SegList at entry: call `d.__walk__()`; if the
+   result is a plain list, proceed as normal; if it's still a SegList (non-ground),
+   return `False`. Non-ground SegList-vs-single-star unification is deferred to Phase 6
+   (returning `None` to trigger output mode would be wrong — the target is not an unbound Var).
 
-2. **`_compile_multi_star_guard`** — emit a third branch alongside the existing `isinstance(d,
-   list)` loop:
+2. **`_body_star_unify`** — add an `isinstance(d, SegList)` branch that delegates directly
+   to `_head_list_unify_input`, covering both ground (deconstruction) and non-ground (fail)
+   cases uniformly.
+
+3. **`_compile_multi_star_guard`** — emit a normalisation node immediately after the
+   `deref` assignment:
    ```python
-   elif isinstance(_d, SegList):
-       for _ in _seglist_unify_gen(_pattern_seglist, _d, trail):
-           <body_stmts>
+   if isinstance(_d, SegList):
+       _d = _d.__walk__()
    ```
-   where `_pattern_seglist` is constructed at the start of the guard from the compile-time
-   segments (emit the SegList constructor call as AST). The compile-time segments are already
-   available at codegen time.
+   A ground SegList becomes a plain list and the existing `isinstance(list)` loop fires.
+   A non-ground SegList stays a SegList, falls past the `isinstance(list)` check →
+   no solutions (graceful fail, no error). This avoids duplicating the loop AST.
 
-3. **`_multi_star_splits`** — move from `compiler.py` to `clausal/logic/list_utils.py` and
-   import it back. Required so Phase 2's `_seglist_unify_gen` can reuse it without a circular
-   import.
+4. **`_multi_star_splits`** — duplicate removed from `compiler.py`; imported from
+   `clausal.terms`. `SegList`, `ConcreteSeg`, `VarSeg`, `_seglist_unify_gen` added to
+   both simple-mode and trampoline-mode compiled-predicate globals dicts.
 
-4. **Tests**: add `test_seglist_passthrough.py` — verify that a SegList constructed directly
-   (not yet via compiler) can be passed to compiled predicates (`Append`, `Around`, etc.) and
-   produce correct results. These tests should all pass after Phase 3 and continue passing
-   through all subsequent phases.
+5. **Tests**: `tests/test_seglist_passthrough.py` (11 tests) — ground SegList inputs to
+   single-star head patterns (`Append`, `Last`), multi-star head patterns (`Split`, `Split3`,
+   `Around`), body-position Is patterns (`HeadTail`, `InitLast`), SegList concat as arg,
+   and non-ground SegList to multi-star (confirmed: no solutions, no error).
 
-### Phase 4 — Compiler: SegList *creation* (highest regression risk)
+### Phase 4 — Compiler: SegList *creation* (highest regression risk) ✅ DONE
 
 Change the compiler to produce SegLists instead of failing when a star var is unbound. Run the
 full test suite after each sub-step.

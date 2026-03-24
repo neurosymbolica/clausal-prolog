@@ -56,6 +56,7 @@ from clausal.terms import (
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Call, LoadName, LoadAttr,
+    SegList, ConcreteSeg, VarSeg, _seglist_unify_gen, _multi_star_splits,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral, DictLiteral, SetLiteral
@@ -214,6 +215,14 @@ def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
     """
     d = deref(target)
 
+    # Normalise SegList: walk it; if ground it becomes a plain list.
+    # Non-ground SegLists can't be matched against a single-star pattern yet
+    # (SegList-vs-SegList unification is Phase 6) — return False to fail.
+    if isinstance(d, SegList):
+        d = d.__walk__()
+        if not isinstance(d, list):
+            return False
+
     if isinstance(d, list):
         n_before = len(var_vals)
         n_after = len(after_vals)
@@ -265,8 +274,33 @@ def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
         s = deref(star_val)
         if isinstance(s, list):
             result.extend(s)
+        elif isinstance(s, SegList):
+            # Star derefs to a SegList — walk it first
+            walked = s.__walk__()
+            if isinstance(walked, list):
+                result.extend(walked)
+                result.extend(deref(v) for v in after_vals)
+                return unify(d, result, trail)
+            else:
+                # Still partially unbound: build a new SegList
+                after_result = [deref(v) for v in after_vals]
+                segs = []
+                if result:
+                    segs.append(ConcreteSeg(result))
+                segs.extend(walked.segments)
+                if after_result:
+                    segs.append(ConcreteSeg(after_result))
+                return unify(d, SegList(segs), trail)
         elif is_var(s):
-            return False
+            # Build a SegList: [*before, *s, *after] with s unbound
+            after_result = [deref(v) for v in after_vals]
+            segs = []
+            if result:
+                segs.append(ConcreteSeg(result))
+            segs.append(VarSeg(s))
+            if after_result:
+                segs.append(ConcreteSeg(after_result))
+            return unify(d, SegList(segs), trail)
         else:
             result.append(s)
     result.extend(deref(v) for v in after_vals)
@@ -283,6 +317,11 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     (target is an unbound Var, pattern vars are bound).
     """
     d = deref(target)
+
+    # Normalise ground SegList → plain list so the list branch fires.
+    # Non-ground SegLists delegate to _head_list_unify_input which returns False.
+    if isinstance(d, SegList):
+        return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     if isinstance(d, list):
         # Deconstruction: split list according to the pattern
@@ -305,13 +344,69 @@ def _build_star_list(before, star, after):
     d = deref(star)
     if isinstance(d, list):
         return list(before) + d + list(after)
-    # star is an unbound Var — can't construct a concrete list
-    # Fall back: if no before/after, just return the Var (identity)
-    if not before and not after:
-        return d
-    raise TypeError(
-        f"Cannot build list: star element is unbound Var"
-    )
+    if isinstance(d, SegList):
+        walked = d.__walk__()
+        if isinstance(walked, list):
+            return list(before) + walked + list(after)
+        # non-ground SegList — wrap into a new SegList
+        segs = []
+        if before:
+            segs.append(ConcreteSeg(list(before)))
+        segs.extend(walked.segments)
+        if after:
+            segs.append(ConcreteSeg(list(after)))
+        return SegList(segs)
+    # star is an unbound Var — build a SegList
+    segs = []
+    if before:
+        segs.append(ConcreteSeg(list(before)))
+    segs.append(VarSeg(d))
+    if after:
+        segs.append(ConcreteSeg(list(after)))
+    return SegList(segs)
+
+
+def _build_multi_star_list(segments):
+    """Build a SegList from a sequence of (kind, value) segments.
+
+    Each segment is ("fixed", [elem, ...]) for concrete elements or
+    ("star", var) for a splat variable.  Returns a plain list when all
+    star vars are bound, otherwise a SegList.
+    """
+    segs = []
+    for kind, val in segments:
+        if kind == "star":
+            d = deref(val)
+            if isinstance(d, list):
+                if segs and isinstance(segs[-1], ConcreteSeg):
+                    segs[-1] = ConcreteSeg(segs[-1].elements + d)
+                else:
+                    if d:
+                        segs.append(ConcreteSeg(d))
+            elif isinstance(d, SegList):
+                walked = d.__walk__()
+                if isinstance(walked, list):
+                    if segs and isinstance(segs[-1], ConcreteSeg):
+                        segs[-1] = ConcreteSeg(segs[-1].elements + walked)
+                    elif walked:
+                        segs.append(ConcreteSeg(walked))
+                else:
+                    segs.extend(walked.segments)
+            else:
+                segs.append(VarSeg(d))
+        else:  # "fixed"
+            elems = [deref(e) for e in val]
+            if segs and isinstance(segs[-1], ConcreteSeg):
+                segs[-1] = ConcreteSeg(segs[-1].elements + elems)
+            else:
+                if elems:
+                    segs.append(ConcreteSeg(elems))
+    if not any(isinstance(s, VarSeg) for s in segs):
+        result = []
+        for seg in segs:
+            result.extend(seg.elements)
+        return result
+    return SegList(segs)
 
 
 def _body_multi_star_unify(target, segments, trail):
@@ -327,11 +422,34 @@ def _body_multi_star_unify(target, segments, trail):
     """
     d = deref(target)
     if not isinstance(d, list):
-        if is_var(d):
-            raise TypeError(
-                "Cannot match multi-star pattern against unbound variable"
-            )
-        return  # not a list → no solutions
+        if isinstance(d, SegList):
+            d = d.__walk__()
+            if not isinstance(d, list):
+                # non-ground SegList — construct SegList and bind, then stop
+                segs = [
+                    VarSeg(deref(val)) if kind == "star"
+                    else ConcreteSeg([deref(e) for e in val])
+                    for kind, val in segments
+                ]
+                mark = trail.mark()
+                if unify(target, SegList(segs), trail):
+                    yield True
+                trail.undo(mark)
+                return
+        elif is_var(d):
+            # Unbound target: construct a SegList from the pattern and bind it
+            segs = [
+                VarSeg(deref(val)) if kind == "star"
+                else ConcreteSeg([deref(e) for e in val])
+                for kind, val in segments
+            ]
+            mark = trail.mark()
+            if unify(d, SegList(segs), trail):
+                yield True
+            trail.undo(mark)
+            return
+        else:
+            return  # not a list → no solutions
 
     # Parse segments into fixed counts and star positions
     stars = []
@@ -372,19 +490,6 @@ def _body_multi_star_unify(target, segments, trail):
         if ok:
             yield True
         trail.undo(mark)
-
-
-def _multi_star_splits(n_stars, total):
-    """Generate all ways to split *total* items among *n_stars* stars.
-
-    Each split is a tuple of n_stars non-negative integers summing to total.
-    """
-    if n_stars == 1:
-        yield (total,)
-        return
-    for i in range(total + 1):
-        for rest in _multi_star_splits(n_stars - 1, total - i):
-            yield (i, *rest)
 
 
 # ── _tramp_call: bridge simple-mode → trampoline-mode ─────────────────────────
@@ -1035,12 +1140,12 @@ def term_to_ast_expr(
         )
 
     if isinstance(term, list):
-        # If the list contains a StarUnpack, use _build_star_list helper
-        # to safely handle unbound Vars at runtime.
+        # If the list contains a StarUnpack, use _build_star_list/_build_multi_star_list
+        # helper to safely handle unbound Vars at runtime.
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
-        has_star = any(isinstance(e, StarUnpack) for e in term)
-        if has_star:
-            # Split into before, star, after segments
+        star_count = sum(1 for e in term if isinstance(e, StarUnpack))
+        if star_count == 1:
+            # Single-star: use _build_star_list(before, star, after)
             star_idx = next(i for i, e in enumerate(term) if isinstance(e, StarUnpack))
             before = term[:star_idx]
             star_val = term[star_idx].value
@@ -1058,6 +1163,29 @@ def term_to_ast_expr(
                         ctx=ast.Load(),
                     ),
                 ],
+                keywords=[],
+            )
+        elif star_count > 1:
+            # Multi-star: build segments list and call _build_multi_star_list
+            segments = _parse_star_segments(term)
+            seg_elts = []
+            for kind, val in segments:
+                if kind == "star":
+                    seg_elts.append(ast.Tuple(
+                        elts=[ast.Constant(value="star"), _rec(val)],
+                        ctx=ast.Load(),
+                    ))
+                else:
+                    seg_elts.append(ast.Tuple(
+                        elts=[
+                            ast.Constant(value="fixed"),
+                            ast.List(elts=[_rec(e) for e in val], ctx=ast.Load()),
+                        ],
+                        ctx=ast.Load(),
+                    ))
+            return ast.Call(
+                func=_name("_build_multi_star_list"),
+                args=[ast.List(elts=seg_elts, ctx=ast.Load())],
                 keywords=[],
             )
         return ast.List(
@@ -5274,6 +5402,7 @@ def compile_predicate_trampoline(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_build_multi_star_list": _build_multi_star_list,
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
@@ -5282,6 +5411,10 @@ def compile_predicate_trampoline(
         "_type_error": _type_error_fn,
         "_get_attr": _get_attr_fn,
         "_put_attr": _put_attr_fn,
+        "SegList": SegList,
+        "ConcreteSeg": ConcreteSeg,
+        "VarSeg": VarSeg,
+        "_seglist_unify_gen": _seglist_unify_gen,
     }
     # Ensure freeze/when hooks are registered.
     from clausal.logic.coroutining import (  # noqa: PLC0415
@@ -6092,8 +6225,15 @@ def _compile_multi_star_guard(
     Generates code like::
 
         _d0 = deref(_lcap0)
+        if isinstance(_d0, SegList):
+            _d0 = _d0.__walk__()
         if is_var(_d0):
-            _head_multi_star_error()
+            # Unbound: build a SegList and bind target once
+            _mark = trail.mark()
+            _sl = _build_multi_star_list([...])
+            if unify(_cap0, _sl, trail):
+                <body_stmts>
+            trail.undo(_mark)
         if isinstance(_d0, list):
             _n0 = len(_d0)
             if _n0 >= <min_len>:
@@ -6331,10 +6471,40 @@ def _compile_multi_star_guard(
         _name("list"),
     )
 
-    # if is_var(_d): _head_multi_star_error()
+    # Build segments list AST for _build_multi_star_list (used in unbound Var case)
+    seg_elts = []
+    for s_kind, s_val in segments:
+        if s_kind == "star":
+            seg_elts.append(ast.Tuple(
+                elts=[ast.Constant(value="star"), _var_or_const_expr(s_val)],
+                ctx=ast.Load(),
+            ))
+        else:  # "fixed"
+            seg_elts.append(ast.Tuple(
+                elts=[
+                    ast.Constant(value="fixed"),
+                    ast.List(elts=[_var_or_const_expr(e) for e in s_val], ctx=ast.Load()),
+                ],
+                ctx=ast.Load(),
+            ))
+    segments_ast = ast.List(elts=seg_elts, ctx=ast.Load())
+
+    var_build_mark = f"_msvm{cap_name}"
+    var_sl_name = f"_msvsl{cap_name}"
+
+    # if is_var(_d): build SegList and bind target once
     var_check = ast.If(
         test=_call(_name("is_var"), _name(d_name)),
-        body=[ast.Expr(value=_call(_name("_head_multi_star_error")))],
+        body=[
+            _assign_mark(var_build_mark, trail_name),
+            _assign(var_sl_name, _call(_name("_build_multi_star_list"), segments_ast)),
+            ast.If(
+                test=_call(_name("unify"), _name(cap_name), _name(var_sl_name), _name(trail_name)),
+                body=body_stmts,
+                orelse=[],
+            ),
+            _undo_stmt(var_build_mark, trail_name),
+        ],
         orelse=[],
     )
 
@@ -6347,7 +6517,28 @@ def _compile_multi_star_guard(
     # _d = deref(_lcap)
     deref_assign = _assign(d_name, _call(_name("deref"), _name(cap_name)))
 
-    return [deref_assign, var_check, list_branch]
+    # If _d is a SegList, walk it: a fully-ground SegList becomes a plain list
+    # so the existing isinstance(list) branch fires; a non-ground SegList stays
+    # a SegList and the list branch simply doesn't fire (no solutions for now —
+    # SegList-vs-SegList unification is Phase 6).
+    seglist_normalise = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegList")),
+        body=[
+            _assign(
+                d_name,
+                ast.Call(
+                    func=ast.Attribute(
+                        value=_name(d_name), attr="__walk__", ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[],
+                ),
+            )
+        ],
+        orelse=[],
+    )
+
+    return [deref_assign, seglist_normalise, var_check, list_branch]
 
 
 # ── compile_head_to_match_case ─────────────────────────────────────────────────
@@ -7601,6 +7792,7 @@ def compile_predicate_shallow(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_build_multi_star_list": _build_multi_star_list,
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
@@ -7609,6 +7801,10 @@ def compile_predicate_shallow(
         "_type_error": _type_error_fn_s,
         "_get_attr": _get_attr_fn_s,
         "_put_attr": _put_attr_fn_s,
+        "SegList": SegList,
+        "ConcreteSeg": ConcreteSeg,
+        "VarSeg": VarSeg,
+        "_seglist_unify_gen": _seglist_unify_gen,
     }
     # Ensure freeze/when hooks are registered.
     from clausal.logic.coroutining import (  # noqa: PLC0415

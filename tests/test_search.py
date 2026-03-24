@@ -883,9 +883,11 @@ class TestMultiStarPatterns:
         ]
         assert results == [([], [], [])]
 
-    def test_unbound_raises(self):
-        """Multi-star against unbound Var raises TypeError."""
+    def test_unbound_builds_seglist(self):
+        """Multi-star against unbound Var now builds a SegList (Phase 4)."""
+        from clausal.terms import SegList
         mod = self._ms_mod()
         lst, a, b = Var(), Var(), Var()
-        with pytest.raises(TypeError, match="multi-star"):
-            list(call("Split", lst, a, b, module=mod))
+        # Yields one solution: lst bound to SegList([VarSeg(a), VarSeg(b)])
+        solutions = [type(deref(lst)) for _ in call("Split", lst, a, b, module=mod)]
+        assert solutions == [SegList]
