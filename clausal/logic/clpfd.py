@@ -23,6 +23,7 @@ is restored on backtrack.  Never mutate in place.
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from typing import Any
 
@@ -267,6 +268,70 @@ class EqConstraint(Constraint):
         if is_var(rhs):
             if not _narrow_if_changed(rhs, inter, trail, queue):
                 return False
+        return True
+
+
+class ScalarProductConstraint(Constraint):
+    """Σ coeffs[i] * vars[i] == total. Bounds-consistency propagation."""
+    __slots__ = ('coeffs', 'sum_vars', 'total')
+
+    def __init__(self, coeffs: tuple, sum_vars: tuple, total):
+        self.coeffs = coeffs
+        self.sum_vars = sum_vars
+        self.total = total
+        result: list = []
+        for v in sum_vars:
+            _collect_vars_from(v, result)
+        _collect_vars_from(total, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        vars_ = [deref(v) for v in self.sum_vars]
+        total = deref(self.total)
+
+        min_sum = max_sum = 0
+        for c, v in zip(self.coeffs, vars_):
+            d = _expr_domain(v, trail)
+            if not d:
+                return False
+            v_lo, v_hi = domain_min(d), domain_max(d)
+            if c >= 0:
+                min_sum += c * v_lo
+                max_sum += c * v_hi
+            else:
+                min_sum += c * v_hi
+                max_sum += c * v_lo
+
+        total_d = _expr_domain(total, trail)
+        new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
+        if not new_total_d:
+            return False
+        if is_var(total) and not _narrow_if_changed(total, new_total_d, trail, queue):
+            return False
+        total_lo = domain_min(new_total_d)
+        total_hi = domain_max(new_total_d)
+
+        for c, v in zip(self.coeffs, vars_):
+            if not is_var(v) or c == 0:
+                continue
+            d = _expr_domain(v, trail)
+            v_lo, v_hi = domain_min(d), domain_max(d)
+            contrib_max = c * v_hi if c > 0 else c * v_lo
+            contrib_min = c * v_lo if c > 0 else c * v_hi
+            other_min = min_sum - contrib_min
+            other_max = max_sum - contrib_max
+            if c > 0:
+                new_v_lo = math.ceil((total_lo - other_max) / c)
+                new_v_hi = math.floor((total_hi - other_min) / c)
+            else:
+                new_v_lo = math.ceil((total_hi - other_min) / c)
+                new_v_hi = math.floor((total_lo - other_max) / c)
+            new_d = domain_intersection(d, domain_from_range(int(new_v_lo), int(new_v_hi)))
+            if not new_d:
+                return False
+            if not _narrow_if_changed(v, new_d, trail, queue):
+                return False
+
         return True
 
 
