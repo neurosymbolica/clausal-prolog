@@ -693,32 +693,32 @@ class TestNQueens:
 
 class TestSENDMOREMONEY:
     def test_sendmoremoney(self):
+        from clausal.pythonic_ast.nodes import Add, Mult
+
+        def mul(v, k):
+            return Mult(left=v, right=k)
+
+        def add(a, b):
+            return Add(left=a, right=b)
+
         trail = fresh_trail()
         S, E, N, D = Var(), Var(), Var(), Var()
         M, O, R, Y = Var(), Var(), Var(), Var()
         letters = [S, E, N, D, M, O, R, Y]
 
-        from clausal.logic.clpfd import fd_scalar_product
-
         assert in_domain(letters, 0, 9, trail)
         assert all_different(letters, trail)
-        # S and M can't be 0
         assert fd_ne(S, 0, trail)
         assert fd_ne(M, 0, trail)
-        # SEND + MORE = MONEY as scalar product:
-        # 1000S + 100E + 10N + D + 1000M + 100O + 10R + E
-        #   = 10000M + 1000O + 100N + 10E + Y
-        # => coeffs [1000, 91, -90, 1, -9000, -900, 10, -1] . [S,E,N,D,M,O,R,Y] = 0
-        coeffs = [1000, 91, -90, 1, -9000, -900, 10, -1]
-        _FAILED = object()
-        results_gen = fd_scalar_product(coeffs, letters, "=", 0, trail)
-        assert next(results_gen, _FAILED) is not _FAILED
+
+        send  = add(add(add(mul(S, 1000), mul(E, 100)), mul(N, 10)), D)
+        more  = add(add(add(mul(M, 1000), mul(O, 100)), mul(R, 10)), E)
+        money = add(add(add(add(mul(M, 10000), mul(O, 1000)), mul(N, 100)), mul(E, 10)), Y)
+        assert fd_eq(add(send, more), money, trail)
 
         results = []
         for _ in label(letters, trail):
-            s, e, n, d = deref(S), deref(E), deref(N), deref(D)
-            m, o, r, y = deref(M), deref(O), deref(R), deref(Y)
-            results.append((s, e, n, d, m, o, r, y))
+            results.append(tuple(deref(v) for v in letters))
 
         assert len(results) == 1
         s, e, n, d, m, o, r, y = results[0]
