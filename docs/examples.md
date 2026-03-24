@@ -182,7 +182,7 @@ SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 Three sample programs are included: natural numbers (`NatnumProgram`), an acyclic graph (`GraphProgram`), and a cyclic graph (`CyclicProgram`) that demonstrates iterative deepening's advantage over plain DFS.
 
-*See: [Builtins](builtins.md) (CopyTerm, In, Append, Between)*
+*See: [Meta-Interpreters tutorial](metainterpreters.md), [Builtins](builtins.md) (CopyTerm, In, Append, Between)*
 
 ---
 

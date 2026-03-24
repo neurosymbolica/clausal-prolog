@@ -99,6 +99,7 @@ nav:
     - Python Interop: python_integration.md
     - Tabling: tabling.md
     - Well-Founded Semantics: wfs.md
+    - Meta-Interpreters: metainterpreters.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
