@@ -30,6 +30,12 @@ def _module(mod):
     return mod.__dict__["$module"]
 
 
+def _terms(mod):
+    """Return object-level functor classes from the loaded module."""
+    d = mod.__dict__
+    return d["Natnum"], d["Succ"], d["Edge"], d["Path"]
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -51,11 +57,12 @@ def _solve_bindings(mod, goals_val, program_pred="NatnumProgram"):
 class TestSolveBindings:
 
     def test_natnum_binds_variable(self, mod):
-        """Solve [natnum(X)] should enumerate X = 0, s(0), s(s(0)), ..."""
+        """Solve [natnum(X)] should enumerate X = 0, succ(0), succ(succ(0)), ..."""
+        Natnum, Succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         x = Var()
-        goal = [["natnum", x]]
+        goal = [Natnum(x)]
         results = []
         for _ in call("NatnumProgram", p, module=m):
             prog = deref(p)
@@ -66,16 +73,17 @@ class TestSolveBindings:
                 if count >= 4:
                     break
         assert results[0] == 0
-        assert results[1] == ["s", 0]
-        assert results[2] == ["s", ["s", 0]]
-        assert results[3] == ["s", ["s", ["s", 0]]]
+        assert results[1] == Succ(0)
+        assert results[2] == Succ(Succ(0))
+        assert results[3] == Succ(Succ(Succ(0)))
 
     def test_edge_binds_destination(self, mod):
         """Solve [edge(a, Y)] should enumerate Y = b."""
+        _, _, Edge, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         y = Var()
-        goal = [["edge", "a", y]]
+        goal = [Edge("a", y)]
         results = []
         for _ in call("GraphProgram", p, module=m):
             prog = deref(p)
@@ -85,10 +93,11 @@ class TestSolveBindings:
 
     def test_path_binds_destination(self, mod):
         """Solve [path(a, Y)] should find Y = b, c, d."""
+        _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
         y = Var()
-        goal = [["path", "a", y]]
+        goal = [Path("a", y)]
         results = []
         for _ in call("GraphProgram", p, module=m):
             prog = deref(p)
@@ -108,22 +117,24 @@ class TestSolveCount:
 
     def test_count_single_fact(self, mod):
         """Resolving a single fact takes 1 inference step."""
+        Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         count = Var()
         for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveCount", [["natnum", 0]], deref(p), count, module=m):
+            for _ in call("SolveCount", [Natnum(0)], deref(p), count, module=m):
                 assert deref(count) == 1
                 return
         pytest.fail("no solution")
 
     def test_count_path_transitive(self, mod):
         """path(a,c) via edge(a,b) + path(b,c) via edge(b,c) = 4 steps."""
+        _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
         count = Var()
         for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveCount", [["path", "a", "c"]], deref(p), count, module=m):
+            for _ in call("SolveCount", [Path("a", "c")], deref(p), count, module=m):
                 assert deref(count) == 4
                 return
         pytest.fail("no solution")
@@ -136,19 +147,21 @@ class TestSolveLimit:
 
     def test_depth_0_fails_on_any_goal(self, mod):
         """Depth 0 means no resolution steps allowed — any non-empty goal list fails."""
+        Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         for _ in call("NatnumProgram", p, module=m):
-            results = list(call("SolveLimit", [["natnum", 0]], deref(p), 0, module=m))
+            results = list(call("SolveLimit", [Natnum(0)], deref(p), 0, module=m))
             assert results == []
             return
         pytest.fail("no program")
 
     def test_exact_depth_succeeds(self, mod):
-        """natnum(s(s(s(0)))) needs exactly 4 steps."""
+        """natnum(succ(succ(succ(0)))) needs exactly 4 steps."""
+        Natnum, Succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
-        goal = [["natnum", ["s", ["s", ["s", 0]]]]]
+        goal = [Natnum(Succ(Succ(Succ(0))))]
         for _ in call("NatnumProgram", p, module=m):
             prog = deref(p)
             # depth 3 should fail
@@ -166,12 +179,13 @@ class TestSolveIterativeDeepening:
 
     def test_finds_path_in_cyclic_graph(self, mod):
         """Iterative deepening finds path(a,b) in graph with a→b→a cycle."""
+        _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
         for _ in call("CyclicProgram", p, module=m):
             results = []
             for _ in call("SolveIterativeDeepening",
-                          [["path", "a", "b"]], deref(p), module=m):
+                          [Path("a", "b")], deref(p), module=m):
                 results.append(True)
                 break  # just need one solution
             assert results == [True]
@@ -186,49 +200,52 @@ class TestSolveTree:
 
     def test_fact_tree(self, mod):
         """Proof tree for a fact is [goal, []]."""
+        Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         tree = Var()
         for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveTree", [["natnum", 0]], deref(p), tree, module=m):
+            for _ in call("SolveTree", [Natnum(0)], deref(p), tree, module=m):
                 t = _deref_walk(tree)
-                assert t == [[["natnum", 0], []]]
+                assert t == [[Natnum(0), []]]
                 return
         pytest.fail("no solution")
 
     def test_recursive_tree_structure(self, mod):
-        """Proof tree for natnum(s(0)) has correct nesting."""
+        """Proof tree for natnum(succ(0)) has correct nesting."""
+        Natnum, Succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         tree = Var()
         for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveTree", [["natnum", ["s", 0]]], deref(p), tree, module=m):
+            for _ in call("SolveTree", [Natnum(Succ(0))], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 assert len(t) == 1  # one goal in the list
                 node = t[0]
-                assert node[0] == ["natnum", ["s", 0]]  # the resolved goal
+                assert node[0] == Natnum(Succ(0))  # the resolved goal
                 assert len(node[1]) == 1  # one body goal proved
                 sub = node[1][0]
-                assert sub == [["natnum", 0], []]  # the body fact
+                assert sub == [Natnum(0), []]  # the body fact
                 return
         pytest.fail("no solution")
 
     def test_transitive_path_tree(self, mod):
         """Proof tree for path(a,c) shows edge(a,b) + path(b,c) subtree."""
+        _, _, Edge, Path = _terms(mod)
         m = _module(mod)
         p = Var()
         tree = Var()
         for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveTree", [["path", "a", "c"]], deref(p), tree, module=m):
+            for _ in call("SolveTree", [Path("a", "c")], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 # Top-level: one node for path(a,c)
                 assert len(t) == 1
                 goal, subtree = t[0]
-                assert goal == ["path", "a", "c"]
+                assert goal == Path("a", "c")
                 # Subtree: edge(a,b) and path(b,c)
                 assert len(subtree) == 2
-                assert subtree[0] == [["edge", "a", "b"], []]
+                assert subtree[0] == [Edge("a", "b"), []]
                 path_bc = subtree[1]
-                assert path_bc[0] == ["path", "b", "c"]
+                assert path_bc[0] == Path("b", "c")
                 return
         pytest.fail("no solution")

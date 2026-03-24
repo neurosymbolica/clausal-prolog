@@ -3,12 +3,8 @@
 # Ported from Markus Triska's "A Couple of Meta-interpreters in Prolog"
 # (https://www.metalevel.at/acomip/).
 #
-# Object-level terms are represented as lists:
-#   atom        → a Python value (string, int, etc.)
-#   f(A, B)     → ["f", A, B]
-#   s(X)        → ["s", X]
-# TODO: object level terms should be represented by terms as in the metalevel page.
-# Not lists.
+# Object-level terms are represented as actual terms (PredicateMeta instances),
+# matching the approach on Triska's metalevel page.
 #
 # A clause is [Head, BodyGoals] where BodyGoals is a list of goals.
 # A program is a list of clauses.
@@ -22,14 +18,17 @@
     MatchClause(GOAL, BODY, PROGRAM)
 ])
 
+# Object-level functor classes (data terms, not meta-level predicates).
+-private([Natnum(VALUE), Succ(INNER), Edge(FROM, TO), Path(FROM, TO)])
+
 # ── Object Programs ──────────────────────────────────────────────────────────
 
 # natnum(0).
 # natnum(s(X)) :- natnum(X).
 NatnumProgram(PROGRAM) <- (
     PROGRAM is [
-        [["natnum", 0], []],
-        [["natnum", ["s", X]], [["natnum", X]]]
+        [Natnum(0), []],
+        [Natnum(Succ(X)), [Natnum(X)]]
     ]
 )
 
@@ -38,11 +37,11 @@ NatnumProgram(PROGRAM) <- (
 # path(X,Y) :- edge(X,Z), path(Z,Y).
 GraphProgram(PROGRAM) <- (
     PROGRAM is [
-        [["edge", "a", "b"], []],
-        [["edge", "b", "c"], []],
-        [["edge", "b", "d"], []],
-        [["path", X, Y], [["edge", X, Y]]],
-        [["path", X, Y], [["edge", X, Z], ["path", Z, Y]]]
+        [Edge("a", "b"), []],
+        [Edge("b", "c"), []],
+        [Edge("b", "d"), []],
+        [Path(X, Y), [Edge(X, Y)]],
+        [Path(X, Y), [Edge(X, Z), Path(Z, Y)]]
     ]
 )
 
@@ -52,10 +51,10 @@ GraphProgram(PROGRAM) <- (
 # path(X,Y) :- edge(X,Y).
 CyclicProgram(PROGRAM) <- (
     PROGRAM is [
-        [["edge", "a", "b"], []],
-        [["edge", "b", "a"], []],
-        [["path", X, Y], [["edge", X, Z], ["path", Z, Y]]],
-        [["path", X, Y], [["edge", X, Y]]]
+        [Edge("a", "b"), []],
+        [Edge("b", "a"), []],
+        [Path(X, Y), [Edge(X, Z), Path(Z, Y)]],
+        [Path(X, Y), [Edge(X, Y)]]
     ]
 )
 
@@ -140,156 +139,156 @@ SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 Test("solve natnum(0)") <- (
     NatnumProgram(P),
-    Solve([["natnum", 0]], P),
+    Solve([Natnum(0)], P),
 )
 
 Test("solve natnum(s(0))") <- (
     NatnumProgram(P),
-    Solve([["natnum", ["s", 0]]], P),
+    Solve([Natnum(Succ(0))], P),
 )
 
 Test("solve natnum(s(s(0)))") <- (
     NatnumProgram(P),
-    Solve([["natnum", ["s", ["s", 0]]]], P),
+    Solve([Natnum(Succ(Succ(0)))], P),
 )
 
 # -- Vanilla MI: graph reachability --
 
 Test("solve edge(a,b)") <- (
     GraphProgram(P),
-    Solve([["edge", "a", "b"]], P),
+    Solve([Edge("a", "b")], P),
 )
 
 Test("solve path(a,b) direct") <- (
     GraphProgram(P),
-    Solve([["path", "a", "b"]], P),
+    Solve([Path("a", "b")], P),
 )
 
 Test("solve path(a,c) transitive") <- (
     GraphProgram(P),
-    Solve([["path", "a", "c"]], P),
+    Solve([Path("a", "c")], P),
 )
 
 Test("solve path(a,d) transitive") <- (
     GraphProgram(P),
-    Solve([["path", "a", "d"]], P),
+    Solve([Path("a", "d")], P),
 )
 
 Test("solve no path(c,a)") <- (
     GraphProgram(P),
-    not Solve([["path", "c", "a"]], P),
+    not Solve([Path("c", "a")], P),
 )
 
 # -- Inference counting --
 
 Test("count natnum(0) = 1 step") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", 0]], P, 1),
+    SolveCount([Natnum(0)], P, 1),
 )
 
 Test("count natnum(s(0)) = 2 steps") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", ["s", 0]]], P, 2),
+    SolveCount([Natnum(Succ(0))], P, 2),
 )
 
 Test("count natnum(s(s(0))) = 3 steps") <- (
     NatnumProgram(P),
-    SolveCount([["natnum", ["s", ["s", 0]]]], P, 3),
+    SolveCount([Natnum(Succ(Succ(0)))], P, 3),
 )
 
 Test("count edge(a,b) = 1 step") <- (
     GraphProgram(P),
-    SolveCount([["edge", "a", "b"]], P, 1),
+    SolveCount([Edge("a", "b")], P, 1),
 )
 
 Test("count path(a,b) direct = 2 steps") <- (
     GraphProgram(P),
-    SolveCount([["path", "a", "b"]], P, 2),
+    SolveCount([Path("a", "b")], P, 2),
 )
 
 Test("count path(a,c) = 4 steps") <- (
     GraphProgram(P),
-    SolveCount([["path", "a", "c"]], P, 4),
+    SolveCount([Path("a", "c")], P, 4),
 )
 
 # -- Depth-limited MI --
 
 Test("limit natnum(s(0)) depth 1 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([["natnum", ["s", 0]]], P, 1),
+    not SolveLimit([Natnum(Succ(0))], P, 1),
 )
 
 Test("limit natnum(s(0)) depth 2 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([["natnum", ["s", 0]]], P, 2),
+    SolveLimit([Natnum(Succ(0))], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 2 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([["natnum", ["s", ["s", 0]]]], P, 2),
+    not SolveLimit([Natnum(Succ(Succ(0)))], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 3 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([["natnum", ["s", ["s", 0]]]], P, 3),
+    SolveLimit([Natnum(Succ(Succ(0)))], P, 3),
 )
 
 Test("limit path(a,c) depth 3 fails") <- (
     GraphProgram(P),
-    not SolveLimit([["path", "a", "c"]], P, 3),
+    not SolveLimit([Path("a", "c")], P, 3),
 )
 
 Test("limit path(a,c) depth 4 succeeds") <- (
     GraphProgram(P),
-    SolveLimit([["path", "a", "c"]], P, 4),
+    SolveLimit([Path("a", "c")], P, 4),
 )
 
 # -- Iterative deepening: completes where naive DFS would loop --
 
 Test("iterative deepening on cyclic graph") <- (
     CyclicProgram(P),
-    SolveIterativeDeepening([["path", "a", "b"]], P),
+    SolveIterativeDeepening([Path("a", "b")], P),
 )
 
 Test("iterative deepening path(a,c) acyclic") <- (
     GraphProgram(P),
-    SolveIterativeDeepening([["path", "a", "c"]], P),
+    SolveIterativeDeepening([Path("a", "c")], P),
 )
 
 # -- Proof tree MI --
 
 Test("tree natnum(0)") <- (
     NatnumProgram(P),
-    SolveTree([["natnum", 0]], P, TREE),
-    TREE is [[["natnum", 0], []]],
+    SolveTree([Natnum(0)], P, TREE),
+    TREE is [[Natnum(0), []]],
 )
 
 Test("tree natnum(s(0)) has nested proof") <- (
     NatnumProgram(P),
-    SolveTree([["natnum", ["s", 0]]], P, TREE),
-    TREE is [[["natnum", ["s", 0]], [[["natnum", 0], []]]]],
+    SolveTree([Natnum(Succ(0))], P, TREE),
+    TREE is [[Natnum(Succ(0)), [[Natnum(0), []]]]],
 )
 
 Test("tree edge(a,b) is leaf") <- (
     GraphProgram(P),
-    SolveTree([["edge", "a", "b"]], P, TREE),
-    TREE is [[["edge", "a", "b"], []]],
+    SolveTree([Edge("a", "b")], P, TREE),
+    TREE is [[Edge("a", "b"), []]],
 )
 
 Test("tree path(a,b) direct") <- (
     GraphProgram(P),
-    SolveTree([["path", "a", "b"]], P, TREE),
-    TREE is [[["path", "a", "b"], [[["edge", "a", "b"], []]]]],
+    SolveTree([Path("a", "b")], P, TREE),
+    TREE is [[Path("a", "b"), [[Edge("a", "b"), []]]]],
 )
 
 Test("tree path(a,c) transitive") <- (
     GraphProgram(P),
-    SolveTree([["path", "a", "c"]], P, TREE),
+    SolveTree([Path("a", "c")], P, TREE),
     TREE is [
-        [["path", "a", "c"], [
-            [["edge", "a", "b"], []],
-            [["path", "b", "c"], [
-                [["edge", "b", "c"], []]
+        [Path("a", "c"), [
+            [Edge("a", "b"), []],
+            [Path("b", "c"), [
+                [Edge("b", "c"), []]
             ]]
         ]]
     ],
@@ -297,11 +296,11 @@ Test("tree path(a,c) transitive") <- (
 
 Test("tree natnum(s(s(0))) depth 2") <- (
     NatnumProgram(P),
-    SolveTree([["natnum", ["s", ["s", 0]]]], P, TREE),
+    SolveTree([Natnum(Succ(Succ(0)))], P, TREE),
     TREE is [
-        [["natnum", ["s", ["s", 0]]], [
-            [["natnum", ["s", 0]], [
-                [["natnum", 0], []]
+        [Natnum(Succ(Succ(0))), [
+            [Natnum(Succ(0)), [
+                [Natnum(0), []]
             ]]
         ]]
     ],

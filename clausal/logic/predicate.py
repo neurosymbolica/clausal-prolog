@@ -48,6 +48,23 @@ def _make_eq(fields: tuple[str, ...]):
     return __eq__
 
 
+def _make_unify(fields: tuple[str, ...]):
+    """Generate a ``__unify__`` that recursively unifies corresponding fields.
+
+    Called by the C ``do_unify`` when two PredicateMeta instances of the
+    same type appear on both sides of a unification.
+    """
+    def __unify__(self, other, trail):
+        if type(self) is not type(other):
+            return NotImplemented
+        from clausal.logic.variables import unify  # noqa: PLC0415
+        for f in fields:
+            if not unify(getattr(self, f), getattr(other, f), trail):
+                return False
+        return True
+    return __unify__
+
+
 def _make_repr(fields: tuple[str, ...]):
     """Generate an instance __repr__: ``fib(n=1, f=2)``."""
     def __repr__(self):
@@ -89,6 +106,7 @@ class PredicateMeta(type):
         cls.__eq__ = _make_eq(fields)
         cls.__repr__ = _make_repr(fields)
         cls.__hash__ = None  # mutable terms shouldn't be hashable
+        cls.__unify__ = _make_unify(fields)
 
         return cls
 
