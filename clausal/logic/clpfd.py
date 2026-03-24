@@ -876,6 +876,63 @@ def _collect_vars_from(expr, result: list) -> None:
         _collect_vars_from(expr.operand, result)
 
 
+def _linearise(expr) -> tuple[dict, int] | None:
+    """Try to express *expr* as a linear combination of Vars plus a constant.
+
+    Returns ``(coeffs, constant)`` where *coeffs* maps each Var to its integer
+    coefficient, or ``None`` if the expression is non-linear (e.g. var * var).
+    """
+    expr = deref(expr)
+    if isinstance(expr, int):
+        return {}, expr
+    if is_var(expr):
+        return {expr: 1}, 0
+    _ensure_term_imports()
+    if isinstance(expr, _Add):
+        lc = _linearise(expr.left)
+        rc = _linearise(expr.right)
+        if lc is None or rc is None:
+            return None
+        l_coeffs, l_const = lc
+        r_coeffs, r_const = rc
+        merged = dict(l_coeffs)
+        for v, c in r_coeffs.items():
+            merged[v] = merged.get(v, 0) + c
+        return {v: c for v, c in merged.items() if c != 0}, l_const + r_const
+    if isinstance(expr, _Sub):
+        lc = _linearise(expr.left)
+        rc = _linearise(expr.right)
+        if lc is None or rc is None:
+            return None
+        l_coeffs, l_const = lc
+        r_coeffs, r_const = rc
+        merged = dict(l_coeffs)
+        for v, c in r_coeffs.items():
+            merged[v] = merged.get(v, 0) - c
+        return {v: c for v, c in merged.items() if c != 0}, l_const - r_const
+    if isinstance(expr, _Mult):
+        lc = _linearise(expr.left)
+        rc = _linearise(expr.right)
+        if lc is None or rc is None:
+            return None
+        l_coeffs, l_const = lc
+        r_coeffs, r_const = rc
+        if not l_coeffs:  # left is a pure constant k
+            k = l_const
+            return {v: c * k for v, c in r_coeffs.items()}, r_const * k
+        if not r_coeffs:  # right is a pure constant k
+            k = r_const
+            return {v: c * k for v, c in l_coeffs.items()}, l_const * k
+        return None  # var * var — non-linear
+    if isinstance(expr, _Negate):
+        inner = _linearise(expr.operand)
+        if inner is None:
+            return None
+        coeffs, const = inner
+        return {v: -c for v, c in coeffs.items()}, -const
+    return None
+
+
 # ── Propagation engine (AC-3) ───────────────────────────────────────────────
 
 
@@ -970,6 +1027,11 @@ def fd_eq(l, r, trail: Trail) -> bool:
     Dispatches to CLP(R) if either argument is a float or real variable;
     otherwise posts a CLP(FD) constraint.  For ground non-Var values,
     falls back to Python ``==``.
+
+    When either side is a linear arithmetic expression tree (Add/Sub/Mult/
+    Negate), linearises both sides and posts a ScalarProductConstraint for
+    full bounds-consistency propagation back to the leaf variables.  Non-
+    linear expressions (var * var) fall back to EqConstraint.
     """
     l = deref(l)
     r = deref(r)
@@ -978,6 +1040,28 @@ def fd_eq(l, r, trail: Trail) -> bool:
     if _any_real(l, r):
         from clausal.logic.clpr import real_eq
         return real_eq(l, r, trail)
+    # If either side is an expression tree, try to linearise
+    _ensure_term_imports()
+    if isinstance(l, (_Add, _Sub, _Mult, _Negate)) or isinstance(r, (_Add, _Sub, _Mult, _Negate)):
+        lc = _linearise(l)
+        rc = _linearise(r)
+        if lc is not None and rc is not None:
+            l_coeffs, l_const = lc
+            r_coeffs, r_const = rc
+            # l == r  →  (l_coeffs - r_coeffs)·vars = r_const - l_const
+            merged = dict(l_coeffs)
+            for v, c in r_coeffs.items():
+                merged[v] = merged.get(v, 0) - c
+            coeffs_dict = {v: c for v, c in merged.items() if c != 0}
+            value = r_const - l_const
+            if not coeffs_dict:
+                return l_const == r_const  # purely constant: no vars
+            vars_tuple = tuple(coeffs_dict.keys())
+            coeffs_tuple = tuple(coeffs_dict[v] for v in vars_tuple)
+            for v in vars_tuple:
+                _ensure_fd(v, trail)
+            return _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value), trail)
+        # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
         return l == r
     # At least one Var — use CLP(FD)
