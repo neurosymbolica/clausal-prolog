@@ -698,21 +698,27 @@ class TestSENDMOREMONEY:
         M, O, R, Y = Var(), Var(), Var(), Var()
         letters = [S, E, N, D, M, O, R, Y]
 
+        from clausal.logic.clpfd import fd_scalar_product
+
         assert in_domain(letters, 0, 9, trail)
         assert all_different(letters, trail)
         # S and M can't be 0
         assert fd_ne(S, 0, trail)
         assert fd_ne(M, 0, trail)
+        # SEND + MORE = MONEY as scalar product:
+        # 1000S + 100E + 10N + D + 1000M + 100O + 10R + E
+        #   = 10000M + 1000O + 100N + 10E + Y
+        # => coeffs [1000, 91, -90, 1, -9000, -900, 10, -1] . [S,E,N,D,M,O,R,Y] = 0
+        coeffs = [1000, 91, -90, 1, -9000, -900, 10, -1]
+        _FAILED = object()
+        results_gen = fd_scalar_product(coeffs, letters, "=", 0, trail)
+        assert next(results_gen, _FAILED) is not _FAILED
 
         results = []
         for _ in label(letters, trail):
             s, e, n, d = deref(S), deref(E), deref(N), deref(D)
             m, o, r, y = deref(M), deref(O), deref(R), deref(Y)
-            send = s * 1000 + e * 100 + n * 10 + d
-            more = m * 1000 + o * 100 + r * 10 + e
-            money = m * 10000 + o * 1000 + n * 100 + e * 10 + y
-            if send + more == money:
-                results.append((s, e, n, d, m, o, r, y))
+            results.append((s, e, n, d, m, o, r, y))
 
         assert len(results) == 1
         s, e, n, d, m, o, r, y = results[0]
