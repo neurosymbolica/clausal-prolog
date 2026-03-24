@@ -1017,8 +1017,15 @@ def _resolve(x):
 
 
 def _both_ground(l, r) -> bool:
-    """True if neither side is a Var (both fully resolved)."""
-    return not is_var(l) and not is_var(r)
+    """True if both sides are concrete values with no unbound Vars or expression trees."""
+    if is_var(l) or is_var(r):
+        return False
+    _ensure_term_imports()
+    if _Add is not None:
+        expr_types = (_Add, _Sub, _Mult, _Negate, _Div, _FloorDiv, _Mod, _Pow)
+        if isinstance(l, expr_types) or isinstance(r, expr_types):
+            return False
+    return True
 
 
 def fd_eq(l, r, trail: Trail) -> bool:
