@@ -92,4 +92,12 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
         if unify(s0, expected, trail):
             yield (parent, None)
         trail.undo(mark)
+    else:
+        # Both S0 and S are unbound — build a partial list: S0 = List ++ S
+        from clausal.terms import SegList, ConcreteSeg, VarSeg
+        sl = SegList([ConcreteSeg(lst_val), VarSeg(s_val)])
+        mark = trail.mark()
+        if unify(s0, sl, trail):
+            yield (parent, None)
+        trail.undo(mark)
     yield (parent, DONE)
