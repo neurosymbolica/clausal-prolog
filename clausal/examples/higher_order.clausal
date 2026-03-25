@@ -35,8 +35,7 @@ AllPositive(XS) <- MapList((X <- (X > 0)), XS)
 KeepPositive(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # Keep even elements.
-# TODO: can't we use X <- (X % 2 == 0) ?  Also see again below
-KeepEven(XS, ES) <- Filter((X <- ((M := X % 2), M is 0)), XS, ES)
+KeepEven(XS, ES) <- Filter((X <- (X % 2 == 0)), XS, ES)
 
 # ── Exclude/3 — remove matching elements ─────────────────────────────────────
 
@@ -44,7 +43,7 @@ KeepEven(XS, ES) <- Filter((X <- ((M := X % 2), M is 0)), XS, ES)
 RemoveNegative(XS, RS) <- Exclude((X <- (X < 0)), XS, RS)
 
 # Remove even elements (keep odd).
-RemoveEven(XS, OS) <- Exclude((X <- ((M := X % 2), M is 0)), XS, OS)
+RemoveEven(XS, OS) <- Exclude((X <- (X % 2 == 0)), XS, OS)
 
 # ── FoldLeft/4 — left fold ────────────────────────────────────────────────────
 

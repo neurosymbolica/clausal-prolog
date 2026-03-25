@@ -31,11 +31,10 @@ Positives(NS, POS) <- (
 )
 
 # Filter even elements via modulo.
-# TODO: should be X % 2 == 0
 Evens(NS, ES) <- (
     FindAll(
         X,
-        (X in NS, (M := X % 2), M is 0),
+        (X in NS, X % 2 == 0),
         ES,
     )
 )

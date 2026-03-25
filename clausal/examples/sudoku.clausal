@@ -16,7 +16,11 @@ Transpose(MATRIX, [HEADS, *REST_COLS]) <- (
 # Extract the first element of each row.
 ExtractColumn([], [], []),
 
-ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (
+ExtractColumn([
+    [HEAD, *TAIL], *ROWS],
+    [HEAD, *REST_HEADS],
+    [TAIL, *REST_TAILS]
+) <- (
     ExtractColumn(ROWS, REST_HEADS, REST_TAILS)
 )
 
@@ -24,7 +28,11 @@ ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) 
 
 Blocks([], [], []),
 
-Blocks([N1, N2, N3, *NS1], [N4, N5, N6, *NS2], [N7, N8, N9, *NS3]) <- (
+Blocks(
+    [N1, N2, N3, *NS1],
+    [N4, N5, N6, *NS2],
+    [N7, N8, N9, *NS3]
+) <- (
     AllDifferent([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
     Blocks(NS1, NS2, NS3)
 )
@@ -145,7 +153,7 @@ Test("problem 4 has exactly three solutions") <- (
 Test("problem 4 solution 1") <- (
     Problem(4, ROWS),
     Solve(ROWS),
-    ROWS := [[5,3,4,6,7,8,1,9,2],
+    ROWS is [[5,3,4,6,7,8,1,9,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,5,6,7],
              [8,5,9,7,6,1,4,2,3],
@@ -159,7 +167,7 @@ Test("problem 4 solution 1") <- (
 Test("problem 4 solution 2") <- (
     Problem(4, ROWS),
     Solve(ROWS),
-    ROWS := [[5,3,4,6,7,8,1,9,2],
+    ROWS is [[5,3,4,6,7,8,1,9,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,7,6,5],
              [8,5,9,7,6,1,4,2,3],
@@ -173,7 +181,7 @@ Test("problem 4 solution 2") <- (
 Test("problem 4 solution 3") <- (
     Problem(4, ROWS),
     Solve(ROWS),
-    ROWS := [[5,3,4,6,7,8,9,1,2],
+    ROWS is [[5,3,4,6,7,8,9,1,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,5,6,7],
              [8,5,9,7,6,1,4,2,3],
