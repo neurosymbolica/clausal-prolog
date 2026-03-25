@@ -143,6 +143,22 @@ Test("number vars") <- (
 
 This is useful for displaying terms with readable variable names.
 
+### GenSym/2
+
+`GenSym(Prefix, Atom)` — generate a unique atom by appending a monotonically
+increasing counter to `Prefix`.
+
+```clausal
+# skip
+GenSym("x", A1),  # A1 = "x_1"
+GenSym("x", A2),  # A2 = "x_2"
+GenSym("y", A3)   # A3 = "y_1" (independent counter)
+```
+
+The counter is **impure** — it does not reset on backtracking. This matches
+Prolog's `gensym/2` semantics and is useful for generating fresh names in
+meta-programming or code generation.
+
 ---
 
 ## Patterns & Recipes

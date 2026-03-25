@@ -359,3 +359,100 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
                     and unify(after, a, trail) and unify(sub, s, trail)):
                 yield None
             trail.undo(mark)
+
+
+# ── NumberChars/2 ──────────────────────────────────────────────────────────────
+
+@_builtin("NumberChars", 2)
+def _number_chars__2(number, chars, trail, k):
+    """NumberChars(Number, Chars) — bidirectional number ↔ char-list conversion.
+
+    Number bound → unify Chars with list(str(Number)).
+    Chars bound (list of single-char strings) → parse as int or float.
+    Both bound → test equality.
+    """
+    vn = deref(number)
+    vc = deref(chars)
+    n_bound = not is_var(vn)
+    c_bound = not is_var(vc)
+
+    if n_bound:
+        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
+            raise LogicException(type_error("number", vn, "number_chars/2"))
+        mark = trail.mark()
+        if unify(chars, list(str(vn)), trail):
+            yield None
+        trail.undo(mark)
+    elif c_bound:
+        if not isinstance(vc, list):
+            raise LogicException(type_error("list", vc, "number_chars/2"))
+        elems = []
+        for elem in vc:
+            e = deref(elem)
+            if is_var(e):
+                raise LogicException(instantiation_error("number_chars/2"))
+            if not isinstance(e, str) or len(e) != 1:
+                raise LogicException(type_error("character", e, "number_chars/2"))
+            elems.append(e)
+        s = "".join(elems)
+        try:
+            parsed = int(s)
+        except ValueError:
+            try:
+                parsed = float(s)
+            except ValueError:
+                return  # fail — not a valid number
+        mark = trail.mark()
+        if unify(number, parsed, trail):
+            yield None
+        trail.undo(mark)
+    else:
+        raise LogicException(instantiation_error("number_chars/2"))
+
+
+# ── NumberCodes/2 ──────────────────────────────────────────────────────────────
+
+@_builtin("NumberCodes", 2)
+def _number_codes__2(number, codes, trail, k):
+    """NumberCodes(Number, Codes) — bidirectional number ↔ code-point-list.
+
+    Number bound → unify Codes with [ord(c) for c in str(Number)].
+    Codes bound (list of ints) → join as chars, parse as int or float.
+    """
+    vn = deref(number)
+    vc = deref(codes)
+    n_bound = not is_var(vn)
+    c_bound = not is_var(vc)
+
+    if n_bound:
+        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
+            raise LogicException(type_error("number", vn, "number_codes/2"))
+        mark = trail.mark()
+        if unify(codes, [ord(c) for c in str(vn)], trail):
+            yield None
+        trail.undo(mark)
+    elif c_bound:
+        if not isinstance(vc, list):
+            raise LogicException(type_error("list", vc, "number_codes/2"))
+        elems = []
+        for elem in vc:
+            e = deref(elem)
+            if is_var(e):
+                raise LogicException(instantiation_error("number_codes/2"))
+            if not isinstance(e, int):
+                raise LogicException(type_error("integer", e, "number_codes/2"))
+            elems.append(chr(e))
+        s = "".join(elems)
+        try:
+            parsed = int(s)
+        except ValueError:
+            try:
+                parsed = float(s)
+            except ValueError:
+                return
+        mark = trail.mark()
+        if unify(number, parsed, trail):
+            yield None
+        trail.undo(mark)
+    else:
+        raise LogicException(instantiation_error("number_codes/2"))

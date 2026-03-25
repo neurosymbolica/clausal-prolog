@@ -81,6 +81,9 @@ nav:
     - SQLite: sqlite.md
     - spaCy NLP: spacy.md
     - UUIDs: uuid.md
+    - Crypto: crypto.md
+    - HTTP & URL: http.md
+    - TCP: tcp.md
     - Graphs: graphs.md
     - scikit-learn: sklearn.md
     - SymPy: sympy.md

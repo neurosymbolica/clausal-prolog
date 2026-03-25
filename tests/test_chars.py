@@ -356,3 +356,124 @@ class TestSubAtom:
         results = _run_collect("SubAtom", 5, "abc", 0, L, A, S,
                                snap=lambda: (deref(L), deref(A), deref(S)))
         assert results == [(0, 3, ""), (1, 2, "a"), (2, 1, "ab"), (3, 0, "abc")]
+
+
+# ── NumberChars/2 ──────────────────────────────────────────────────────────────
+
+
+class TestNumberChars:
+
+    def test_int_forward(self):
+        """NumberChars(42, C) → ["4", "2"]."""
+        v = Var()
+        results = _run_collect("NumberChars", 2, 42, v,
+                               snap=lambda: deref(v))
+        assert results == [["4", "2"]]
+
+    def test_int_reverse(self):
+        """NumberChars(N, ["4", "2"]) → N = 42."""
+        v = Var()
+        results = _run_collect("NumberChars", 2, v, ["4", "2"],
+                               snap=lambda: deref(v))
+        assert results == [42]
+
+    def test_float_forward(self):
+        """NumberChars(3.14, C) → ["3", ".", "1", "4"]."""
+        v = Var()
+        results = _run_collect("NumberChars", 2, 3.14, v,
+                               snap=lambda: deref(v))
+        assert results == [["3", ".", "1", "4"]]
+
+    def test_float_reverse(self):
+        """NumberChars(N, ["3", ".", "1", "4"]) → N = 3.14."""
+        v = Var()
+        results = _run_collect("NumberChars", 2, v, ["3", ".", "1", "4"],
+                               snap=lambda: deref(v))
+        assert results == [3.14]
+
+    def test_negative(self):
+        """NumberChars(-5, C) → ["-", "5"]."""
+        v = Var()
+        results = _run_collect("NumberChars", 2, -5, v,
+                               snap=lambda: deref(v))
+        assert results == [["-", "5"]]
+
+    def test_invalid_chars_fails(self):
+        """NumberChars(N, ["a", "b"]) → no solutions."""
+        v = Var()
+        assert _run("NumberChars", 2, v, ["a", "b"]) == 0
+
+    def test_both_bound_consistent(self):
+        """NumberChars(42, ["4", "2"]) → succeeds."""
+        assert _run("NumberChars", 2, 42, ["4", "2"]) == 1
+
+    def test_both_bound_inconsistent(self):
+        """NumberChars(42, ["4", "3"]) → fails."""
+        assert _run("NumberChars", 2, 42, ["4", "3"]) == 0
+
+    def test_both_unbound_raises(self):
+        """NumberChars(N, C) with both unbound → instantiation error."""
+        with pytest.raises(LogicException):
+            _run("NumberChars", 2, Var(), Var())
+
+    def test_bool_raises(self):
+        """NumberChars(True, C) → type error (bool is not a number)."""
+        with pytest.raises(LogicException):
+            _run("NumberChars", 2, True, Var())
+
+
+# ── NumberCodes/2 ──────────────────────────────────────────────────────────────
+
+
+class TestNumberCodes:
+
+    def test_int_forward(self):
+        """NumberCodes(42, C) → [52, 50]."""
+        v = Var()
+        results = _run_collect("NumberCodes", 2, 42, v,
+                               snap=lambda: deref(v))
+        assert results == [[52, 50]]
+
+    def test_int_reverse(self):
+        """NumberCodes(N, [52, 50]) → N = 42."""
+        v = Var()
+        results = _run_collect("NumberCodes", 2, v, [52, 50],
+                               snap=lambda: deref(v))
+        assert results == [42]
+
+    def test_float_forward(self):
+        """NumberCodes(3.14, C) → code points of "3.14"."""
+        v = Var()
+        results = _run_collect("NumberCodes", 2, 3.14, v,
+                               snap=lambda: deref(v))
+        assert results == [[ord(c) for c in "3.14"]]
+
+    def test_float_reverse(self):
+        """NumberCodes(N, [ord(c) for c in "3.14"]) → N = 3.14."""
+        v = Var()
+        codes = [ord(c) for c in "3.14"]
+        results = _run_collect("NumberCodes", 2, v, codes,
+                               snap=lambda: deref(v))
+        assert results == [3.14]
+
+    def test_negative(self):
+        """NumberCodes(-5, C) → code points of "-5"."""
+        v = Var()
+        results = _run_collect("NumberCodes", 2, -5, v,
+                               snap=lambda: deref(v))
+        assert results == [[ord("-"), ord("5")]]
+
+    def test_invalid_codes_fails(self):
+        """NumberCodes(N, [ord('a'), ord('b')]) → no solutions."""
+        v = Var()
+        assert _run("NumberCodes", 2, v, [ord("a"), ord("b")]) == 0
+
+    def test_both_unbound_raises(self):
+        """NumberCodes(N, C) with both unbound → instantiation error."""
+        with pytest.raises(LogicException):
+            _run("NumberCodes", 2, Var(), Var())
+
+    def test_non_int_code_raises(self):
+        """NumberCodes(N, ["4", "2"]) with string elements → type error."""
+        with pytest.raises(LogicException):
+            _run("NumberCodes", 2, Var(), ["4", "2"])

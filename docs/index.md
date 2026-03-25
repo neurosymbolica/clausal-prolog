@@ -147,6 +147,9 @@ for the full feature set.
 | [scipy.fft](scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
 | [scipy.ndimage](scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
 | [scipy.spatial](scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
+| [Crypto](crypto.md) | Cryptographic hashing, HMAC signing, PBKDF2 key derivation |
+| [HTTP & URL](http.md) | HTTP requests (GET, POST, JSON), URL encoding and parsing |
+| [TCP](tcp.md) | TCP client/server sockets — connect, listen, send, receive |
 | [Testing](testing.md) | Writing test predicates, running the test suite |
 | [DCGs](dcg.md) | Definite Clause Grammars for parsing |
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |

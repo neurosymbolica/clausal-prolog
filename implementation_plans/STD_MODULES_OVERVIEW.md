@@ -194,17 +194,17 @@ This phase exposes it as a public API.
 
 ---
 
-### Phase 7 — Optional / Low Priority
+### Phase 7 — Optional / Low Priority ✅ DONE
 
-These are nice-to-have. They can be thin wrappers or deferred indefinitely since
-`++()` interop covers the functionality.
+| Item | Status | Description |
+|---|---|---|
+| `GenSym/2` builtin | ✅ | Unique atom generation. Thread-safe monotonic counter. |
+| `NumberChars/2`, `NumberCodes/2` builtins | ✅ | Bidirectional number ↔ char-list / code-point-list. |
+| `py.hash` module | ✅ | `Hash/3`, `HashBytes/3`. Wraps `hashlib`. |
+| `py.hmac` module | ✅ | `Sign/3,4`, `Verify/3,4`. Wraps `hmac`. Constant-time verify. |
+| `py.pbkdf2` module | ✅ | `Derive/4,5`. Wraps `hashlib.pbkdf2_hmac`. |
+| `py.http` module | ✅ | `Get/2,3`, `Post/3,4`, `Request/3`, `JSONGet/2`, `JSONPost/3`. Wraps `urllib`. |
+| `py.url` module | ✅ | `Encode/2`, `Decode/2`, `Parse/2`, `Join/2`. Wraps `urllib.parse`. |
+| `py.tcp` module | ✅ | `Connect/3`, `Listen/3`, `Accept/2`, `Send/2`, `Receive/2,3`, `Close/1`, `SetTimeout/2`. Wraps `socket`. |
 
-| Item | Description |
-|---|---|
-| `crypto` module | Hash, HMAC, encrypt/decrypt. Wrap `hashlib`/`cryptography`. |
-| `sockets` module | TCP client/server. Wrap Python `socket`. |
-| `http` module | `HttpGet/3`, `HttpPost/4`. Wrap `requests` or `urllib`. |
-| `Gensym/2` | Unique atom generation. Trivial counter wrapper. |
-| `charsio` extras | `ReadFromChars/2`, `WriteTermToChars/3` if f-strings prove insufficient. |
-
-**Detailed plan:** TBD (may not be needed)
+**Detailed plan:** [`STD_MODULES_PHASE7.md`](STD_MODULES_PHASE7.md)

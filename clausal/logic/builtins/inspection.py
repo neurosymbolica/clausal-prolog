@@ -222,3 +222,29 @@ def _number_vars__3(term, start, end, trail, k):
     trail.undo(mark)
     for mk in reversed(marks):
         trail.undo(mk)
+
+
+# ── GenSym/2 ──────────────────────────────────────────────────────────────────
+
+import threading
+
+_gensym_counters: dict[str, int] = {}
+_gensym_lock = threading.Lock()
+
+
+@_builtin("GenSym", 2)
+def _gensym__2(prefix, atom, trail, k):
+    """GenSym(Prefix, Atom) — generate a unique atom by appending a counter.
+
+    Counter is global and monotonically increasing. NOT trailed — survives
+    backtracking. This is intentional and matches Prolog's gensym/2 semantics.
+    """
+    prefix_d = deref(prefix)
+    if is_var(prefix_d) or not isinstance(prefix_d, str):
+        return
+    with _gensym_lock:
+        count = _gensym_counters.get(prefix_d, 0) + 1
+        _gensym_counters[prefix_d] = count
+    result = f"{prefix_d}_{count}"
+    if unify(atom, result, trail):
+        yield None

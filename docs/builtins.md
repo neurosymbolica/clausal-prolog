@@ -77,7 +77,7 @@ Notation in signature lines:
 | [Meta-Predicates](#meta-predicates) | FindAll/3, BagOf/3, SetOf/3, ForAll/2, CallNth/2, CountAll/2 |
 | [Higher-Order Call](#higher-order-call) | Call/1..8, CallGoal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
-| [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3 |
+| [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3, GenSym/2 |
 | [Runtime Database](#runtime-database) | Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
 | [Attributed Variables](#attributed-variables) | PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2 |
@@ -89,7 +89,7 @@ Notation in signature lines:
 | [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3, Sign/2, Gcd/3, DivMod/4, Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2 |
 | [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3, Numlist/2,3, SameLength/2, Transpose/2 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, Partition/4, TFilter/3, TPartition/4, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
-| [Character/String](#characterstring) | CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5 |
+| [Character/String](#characterstring) | CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5, NumberChars/2, NumberCodes/2 |
 | [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2, Listing/1, PortrayClause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
@@ -561,6 +561,19 @@ Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$V
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`NumberVars/3`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
+    **Python tests:** `tests/test_term_inspection.py`
+
+---
+
+### `GenSym/2`
+```clausal
+# skip
+GenSym(+Prefix, -Atom)
+```
+Generate a unique atom by appending a monotonically increasing counter to `Prefix`. `GenSym("x", A)` produces `"x_1"`, `"x_2"`, etc. on successive calls. The counter is **not trailed** — it survives backtracking (impure, matches Prolog's `gensym/2`). Thread-safe via lock. Different prefixes maintain independent counters. `Prefix` must be a bound string; unbound or non-string prefix → fail.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/inspection.py` (`GenSym/2`)
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
@@ -2329,6 +2342,45 @@ String concatenation as a relation. Forward: A and B bound → unify C with `A +
 SubAtom(+Atom, ?Before, ?Length, ?After, ?Sub)
 ```
 Substring relation. Relates `Atom` to its substrings with position information: `Before + Length + After = len(Atom)`, `Sub = Atom[Before:Before+Length]`. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, Length)` pairs.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
+### `NumberChars/2`
+```clausal
+# skip
+NumberChars(?Number, ?Chars)
+```
+Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with `list(str(Number))`. Chars bound (list of single-char strings) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
+
+```clausal
+# skip
+NumberChars(42, ["4", "2"])        # succeeds
+NumberChars(-3.14, CHARS)          # CHARS = ["-", "3", ".", "1", "4"]
+NumberChars(N, ["1", "0"])         # N = 10
+```
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py`
+    **Python tests:** `tests/test_chars.py`
+
+---
+
+### `NumberCodes/2`
+```clausal
+# skip
+NumberCodes(?Number, ?Codes)
+```
+Bidirectional number ↔ code-point-list conversion. Like `NumberChars/2` but uses integer code points (`ord`/`chr`) instead of single-character strings.
+
+```clausal
+# skip
+NumberCodes(42, [52, 50])          # succeeds (ord("4")=52, ord("2")=50)
+NumberCodes(N, [52, 50])           # N = 42
+```
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`

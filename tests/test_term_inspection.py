@@ -362,3 +362,88 @@ class TestNumberVars:
         # x should be unbound again since solve unwinds
         # Note: solve() doesn't undo the trail; the bindings persist at top level.
         # Just check that there was exactly 1 solution.
+
+
+# ── GenSym/2 ──────────────────────────────────────────────────────────────────
+
+
+class TestGenSym:
+
+    def setup_method(self):
+        """Reset gensym counters between tests."""
+        from clausal.logic.builtins.inspection import _gensym_counters
+        _gensym_counters.clear()
+
+    def test_basic(self):
+        """GenSym("x", A) → "x_1"."""
+        a = Var()
+        vals = sol_var(goal("GenSym", "x", a), a)
+        assert vals == ["x_1"]
+
+    def test_sequential(self):
+        """Two calls increment: "x_1", "x_2"."""
+        a1, a2 = Var(), Var()
+        vals1 = sol_var(goal("GenSym", "x", a1), a1)
+        vals2 = sol_var(goal("GenSym", "x", a2), a2)
+        assert vals1 == ["x_1"]
+        assert vals2 == ["x_2"]
+
+    def test_different_prefixes(self):
+        """Different prefixes have independent counters."""
+        a = Var()
+        b = Var()
+        sol_var(goal("GenSym", "x", a), a)
+        vals = sol_var(goal("GenSym", "y", b), b)
+        assert vals == ["y_1"]
+
+    def test_unbound_prefix_fails(self):
+        """GenSym(X, A) with unbound X → no solutions."""
+        a = Var()
+        sols = solutions(goal("GenSym", Var(), a))
+        assert len(sols) == 0
+
+    def test_non_string_prefix_fails(self):
+        """GenSym(42, A) → no solutions."""
+        a = Var()
+        sols = solutions(goal("GenSym", 42, a))
+        assert len(sols) == 0
+
+    def test_counter_survives_backtracking(self):
+        """Counter does NOT reset on backtracking — impure."""
+        a1 = Var()
+        sol_var(goal("GenSym", "z", a1), a1)
+        # Counter is now at 1; next call should give z_2
+        a2 = Var()
+        vals = sol_var(goal("GenSym", "z", a2), a2)
+        assert vals == ["z_2"]
+
+    def test_atom_already_bound_unification(self):
+        """GenSym("x", "x_1") succeeds if counter is at 1."""
+        sols = solutions(goal("GenSym", "x", "x_1"))
+        assert len(sols) == 1
+
+    def test_atom_already_bound_mismatch(self):
+        """GenSym("x", "x_99") fails when counter is at 1."""
+        sols = solutions(goal("GenSym", "x", "x_99"))
+        assert len(sols) == 0
+
+    def test_thread_safety(self):
+        """Concurrent gensym calls produce unique atoms."""
+        import threading
+        results = []
+        lock = threading.Lock()
+
+        def gen():
+            a = Var()
+            mod = fresh_module()
+            trail = Trail()
+            for _ in solve(goal("GenSym", "t", a), mod, trail):
+                with lock:
+                    results.append(deref(a))
+
+        threads = [threading.Thread(target=gen) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(set(results)) == 10  # all unique
