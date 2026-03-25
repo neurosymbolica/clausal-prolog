@@ -10,6 +10,7 @@ for CurrentTime/1, Statistics/2, and TimeGoal/1,2.
 from __future__ import annotations
 
 import sys as _sys
+import time as _time
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
