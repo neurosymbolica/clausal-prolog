@@ -61,7 +61,7 @@ __all__ = [
     # Unary operators
     "UnaryPlus", "Negate", "Not", "Invert",
     # Comparison operators
-    "StructuralEq", "StructuralNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "In", "NotIn",
+    "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "In", "NotIn",
     "CompareChain",
     # Augmented assignment
     "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
@@ -185,7 +185,7 @@ class BoolOp(BinOp):
 
 
 class CmpOp(BinOp):
-    """Base for comparison operators (StructuralEq, Lt, Unify, In, …)."""
+    """Base for comparison operators (ArithEq, Lt, Unify, In, …)."""
     pass
 
 
@@ -591,13 +591,13 @@ class Invert(UnaryOp):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
-class StructuralEq(CmpOp):
-    """Structural equality: ``X == Y``. Succeeds iff deref'd values are equal."""
+class ArithEq(CmpOp):
+    """Arithmetic equality: ``X == Y``. Posts a CLP(FD) constraint (Prolog ``=:=/2``)."""
     op: ClassVar = '=='
 
 @dataclass
-class StructuralNeq(CmpOp):
-    """Structural inequality: ``X != Y``. Succeeds iff deref'd values differ."""
+class ArithNeq(CmpOp):
+    """Arithmetic inequality: ``X != Y``. Posts a CLP(FD) disequality constraint (Prolog ``=\\=/2``)."""
     op: ClassVar = '!='
 
 @dataclass
@@ -645,7 +645,7 @@ class CompareChain(Node):
     """1 < x < 10 → CompareChain([Lt(1, x), Lt(x, 10)])
 
     Semantics: each intermediate operand is evaluated only once.
-    For single comparisons, the individual StructuralEq/Lt/etc. nodes are used directly.
+    For single comparisons, the individual ArithEq/Lt/etc. nodes are used directly.
     """
     comparisons: list[Node] = field(default_factory=list)
 

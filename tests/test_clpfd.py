@@ -25,7 +25,7 @@ from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.terms import (
     Compound, And, Add, Sub,
     Unify as Is, DoesNotUnify as IsNot, Evaluate,
-    StructuralEq, StructuralNeq, Lt as LtNode, LtE as LtENode,
+    ArithEq, ArithNeq, Lt as LtNode, LtE as LtENode,
     Gt as GtNode, GtE as GtENode,
     Call, LoadName,
 )
@@ -483,18 +483,18 @@ class TestCompilerCLPFD:
     def test_ground_eq(self):
         """3 == 3 succeeds, 3 == 4 fails."""
         mod = Module("test_mod")
-        goal = StructuralEq(left=3, right=3)
+        goal = ArithEq(left=3, right=3)
         assert list(solve(goal, module=mod))
 
     def test_ground_eq_fails(self):
         mod = Module("test_mod")
-        goal = StructuralEq(left=3, right=4)
+        goal = ArithEq(left=3, right=4)
         assert not list(solve(goal, module=mod))
 
     def test_ground_ne(self):
         mod = Module("test_mod")
-        assert list(solve(StructuralNeq(left=3, right=4), module=mod))
-        assert not list(solve(StructuralNeq(left=3, right=3), module=mod))
+        assert list(solve(ArithNeq(left=3, right=4), module=mod))
+        assert not list(solve(ArithNeq(left=3, right=3), module=mod))
 
     def test_ground_lt(self):
         mod = Module("test_mod")
@@ -520,7 +520,7 @@ class TestCompilerCLPFD:
         """X_ == 5 binds X_ to 5."""
         mod = Module("test_mod")
         x = Var()
-        goal = StructuralEq(left=x, right=5)
+        goal = ArithEq(left=x, right=5)
         results = []
         for _ in solve(goal, module=mod):
             results.append(deref(x))
@@ -552,7 +552,7 @@ class TestCompilerCLPFD:
         goal = And(
             left=And(
                 left=Call(func=LoadName(name="InDomain"), args=[x, 1, 3]),
-                right=StructuralNeq(left=x, right=2),
+                right=ArithNeq(left=x, right=2),
             ),
             right=Call(func=LoadName(name="Label"), args=[[x]]),
         )

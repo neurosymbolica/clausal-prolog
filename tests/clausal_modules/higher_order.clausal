@@ -24,10 +24,10 @@ ProductList(XS, P) <- FoldLeft(((E, A, R) <- (R := A * E)), XS, 1, P)
 Squares(XS, YS) <- MapList(((X, Y) <- (Y := X * X)), XS, YS)
 
 # KeepEven/2 — filter even numbers via Filter
-KeepEven(XS, ES) <- Filter((X <- ((M := X % 2) and M is 0)), XS, ES)
+KeepEven(XS, ES) <- Filter((X <- (X % 2 == 0)), XS, ES)
 
 # RemoveEven/2 — filter out even numbers via Exclude
-RemoveEven(XS, OS) <- Exclude((X <- ((M := X % 2) and M is 0)), XS, OS)
+RemoveEven(XS, OS) <- Exclude((X <- (X % 2 == 0)), XS, OS)
 
 # NegateList/2 — negate each element
 NegateList(XS, YS) <- MapList(((X, Y) <- (Y := 0 - X)), XS, YS)

@@ -1257,8 +1257,8 @@ All defined in `clausal/pythonic_ast/nodes.py`. Key ones for translation:
 - `And` — `A and B` or `A, B` in body (line 559)
 - `Or` — `A or B` (line 563)
 - `Not(operand)` — `not G` (line 580)
-- `StructuralEq` — `X == Y` (line 593)
-- `StructuralNeq` — `X != Y` (line 598)
+- `ArithEq` — `X == Y` (line 593)
+- `ArithNeq` — `X != Y` (line 598)
 - `Lt`, `LtE`, `Gt`, `GtE` — comparisons (lines 603-616)
 - `Add`, `Sub`, `Mult`, `Div`, `FloorDiv`, `Mod`, `Pow` — arithmetic (lines 502-527)
 - `RShift` — `>>` used for DCG at clause level (line 539)
@@ -1384,7 +1384,7 @@ safe_max(X, Y, Y) :-
 
 **Key mappings demonstrated:**
 - `X_ is 1` → `X = 1` (Unify → `=`)
-- `X_ == 1` → `X =:= 1` (StructuralEq → `=:=` for arithmetic context)
+- `X_ == 1` → `X =:= 1` (ArithEq → `=:=` for arithmetic context)
   - **Note:** `==` in clausal is structural equality. In Prolog, `==` is also
     structural equality, but `=:=` is arithmetic equality. The translator must
     determine from context which to use. Default: `==` → `==` (structural),

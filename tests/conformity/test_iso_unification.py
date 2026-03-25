@@ -2,14 +2,14 @@
 
 ISO §8.2.1 =/2 (unification)
 ISO §8.2.2 \\=/2 (not unifiable)
-ISO §8.2.3 ==/2 (structural equality)
-ISO §8.2.4 \\==/2 (structural inequality)
+ISO §8.2.3 ==/2 (arithmetic equality (CLP(FD)))
+ISO §8.2.4 \\==/2 (arithmetic inequality (CLP(FD)))
 
 Clausal equivalents:
   is    → unification (=/2)
   is not → does-not-unify (\\=/2)
-  ==    → structural equality (==/2)
-  !=    → structural inequality (\\==/2)
+  ==    → arithmetic equality (CLP(FD)) (==/2)
+  !=    → arithmetic inequality (CLP(FD)) (\\==/2)
 
 Differences from ISO:
   - Prolog atoms map to Python strings in clausal.
@@ -18,7 +18,7 @@ Differences from ISO:
   - Arithmetic terms are structural in unification context (not evaluated).
   - C-level unify() does NOT recurse into Compound args — use
     structural_unify() for deep Compound unification.
-  - Python's 1 == 1.0 is True, so structural equality (==) treats
+  - Python's 1 == 1.0 is True, so arithmetic equality (==) treats
     int and float as equal, unlike ISO Prolog.
 """
 
@@ -30,7 +30,7 @@ from clausal.logic.solve import solve, once
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.builtins import structural_unify
 from clausal.terms import (
-    Compound, Unify as Is, DoesNotUnify, StructuralEq, StructuralNeq,
+    Compound, Unify as Is, DoesNotUnify, ArithEq, ArithNeq,
     And, Call, LoadName, Add,
 )
 
@@ -249,66 +249,66 @@ class TestDoesNotUnify:
         ))
 
 
-# ── ==/2 (structural equality) ───────────────────────────────────────────────
+# ── ==/2 (arithmetic equality (CLP(FD))) ─────────────────────────────────────
 
 
-class TestStructuralEquality:
-    """ISO §8.2.3 — ==/2.
-    No binding occurs; variables are compared by identity."""
+class TestArithEquality:
+    """ISO §8.2.3 — ==/2 (arithmetic equality (CLP(FD))).
+    Posts CLP(FD) equality constraint; for ground terms behaves like ==."""
 
     def test_same_atom(self):
-        assert _goal_succeeds(StructuralEq(left="a", right="a"))
+        assert _goal_succeeds(ArithEq(left="a", right="a"))
 
     def test_different_atoms(self):
-        assert _goal_fails(StructuralEq(left="a", right="b"))
+        assert _goal_fails(ArithEq(left="a", right="b"))
 
     def test_same_integer(self):
-        assert _goal_succeeds(StructuralEq(left=42, right=42))
+        assert _goal_succeeds(ArithEq(left=42, right=42))
 
     def test_int_vs_float(self):
         """ISO: 1 \\== 1.0 (structurally different).
         DIFFERS: Python 1 == 1.0 is True, so clausal treats them as
-        structurally equal."""
-        assert _goal_succeeds(StructuralEq(left=1, right=1.0))
+        arithmetically equal."""
+        assert _goal_succeeds(ArithEq(left=1, right=1.0))
 
     def test_var_vs_var_clpfd(self):
         """V2-6: == is CLP(FD). Two unbound Vars constrained to be equal → succeeds."""
-        assert _goal_succeeds(StructuralEq(left=Var(), right=Var()))
+        assert _goal_succeeds(ArithEq(left=Var(), right=Var()))
 
     def test_var_vs_var_same(self):
-        """Same Var is structurally equal to itself."""
+        """Same Var is arithmetically equal to itself."""
         x = Var()
-        assert _goal_succeeds(StructuralEq(left=x, right=x))
+        assert _goal_succeeds(ArithEq(left=x, right=x))
 
     def test_same_compound(self):
-        assert _goal_succeeds(StructuralEq(
+        assert _goal_succeeds(ArithEq(
             left=Compound("f", (1, 2)),
             right=Compound("f", (1, 2)),
         ))
 
     def test_different_compound_args(self):
-        assert _goal_fails(StructuralEq(
+        assert _goal_fails(ArithEq(
             left=Compound("f", (1,)),
             right=Compound("f", (2,)),
         ))
 
 
-# ── \==/2 (structural inequality) ────────────────────────────────────────────
+# ── \==/2 (arithmetic inequality (CLP(FD))) ──────────────────────────────────
 
 
-class TestStructuralInequality:
-    """ISO §8.2.4 — \\==/2."""
+class TestArithInequality:
+    """ISO §8.2.4 — \\==/2 (arithmetic inequality (CLP(FD)))."""
 
     def test_different_atoms(self):
-        assert _goal_succeeds(StructuralNeq(left="a", right="b"))
+        assert _goal_succeeds(ArithNeq(left="a", right="b"))
 
     def test_same_atom(self):
-        assert _goal_fails(StructuralNeq(left="a", right="a"))
+        assert _goal_fails(ArithNeq(left="a", right="a"))
 
     def test_var_vs_atom(self):
-        """An unbound Var is structurally different from an atom."""
-        assert _goal_succeeds(StructuralNeq(left=Var(), right="a"))
+        """An unbound Var is arithmetically different from an atom."""
+        assert _goal_succeeds(ArithNeq(left=Var(), right="a"))
 
     def test_two_vars(self):
-        """Two different Vars are structurally different."""
-        assert _goal_succeeds(StructuralNeq(left=Var(), right=Var()))
+        """Two different Vars are arithmetically different."""
+        assert _goal_succeeds(ArithNeq(left=Var(), right=Var()))

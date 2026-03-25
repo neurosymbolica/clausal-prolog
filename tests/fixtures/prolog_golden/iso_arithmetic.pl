@@ -10,56 +10,43 @@ triangle_number(N, T) :-
     T is N * (N + 1) // 2.
 
 test("addition: 1+2=3") :-
-    X is 1 + 2,
-    X == 3.
+    1 + 2 == 3.
 
 test("subtraction: 5-3=2") :-
-    X is 5 - 3,
-    X == 2.
+    5 - 3 == 2.
 
 test("multiplication: 3*4=12") :-
-    X is 3 * 4,
-    X == 12.
+    3 * 4 == 12.
 
 test("integer division: 7//2=3") :-
-    X is 7 // 2,
-    X == 3.
+    7 // 2 == 3.
 
 test("modulo: 7%2=1") :-
-    X is 7 mod 2,
-    X == 1.
+    7 mod 2 == 1.
 
 test("power: 2**3=8") :-
-    X is 2 ** 3,
-    X == 8.
+    2 ** 3 == 8.
 
 test("negation: -3") :-
-    X is -3,
-    X == -3.
+    -3 == -3.
 
 test("nested: (2+3)*4=20") :-
-    X is (2 + 3) * 4,
-    X == 20.
+    (2 + 3) * 4 == 20.
 
 test("float addition: 1.5+2.5=4.0") :-
-    X is 1.5 + 2.5,
-    X == 4.0.
+    1.5 + 2.5 == 4.0.
 
 test("double negation: --5=5") :-
-    X is 5,
-    X == 5.
+    5 == 5.
 
 test("subtraction negative: 3-5=-2") :-
-    X is 3 - 5,
-    X == -2.
+    3 - 5 == -2.
 
 test("negative floor div: -7//2=-4") :-
-    X is -7 // 2,
-    X == -4.
+    -7 // 2 == -4.
 
 test("negative mod: -7%2=1") :-
-    X is -7 mod 2,
-    X == 1.
+    -7 mod 2 == 1.
 
 test("1 < 2") :-
     1 < 2.

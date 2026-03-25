@@ -23,60 +23,19 @@ TriangleNumber(N, T) <- (T := N * (N + 1) // 2)
 
 # ── := (arithmetic evaluation) ───────────────────────────────────────────────
 
-Test("addition: 1+2=3") <- (
-    X_ := 1 + 2,
-    X_ == 3
-)
-Test("subtraction: 5-3=2") <- (
-    X_ := 5 - 3,
-    X_ == 2
-)
-Test("multiplication: 3*4=12") <- (
-    X_ := 3 * 4,
-    X_ == 12
-)
-Test("integer division: 7//2=3") <- (
-    X_ := 7 // 2,
-    X_ == 3
-)
-Test("modulo: 7%2=1") <- (
-    X_ := 7 % 2,
-    X_ == 1
-)
-Test("power: 2**3=8") <- (
-    X_ := 2 ** 3,
-    X_ == 8
-)
-Test("negation: -3") <- (
-    X_ := -3,
-    X_ == -3
-)
-Test("nested: (2+3)*4=20") <- (
-    X_ := (2 + 3) * 4,
-    X_ == 20
-)
-Test("float addition: 1.5+2.5=4.0") <- (
-    X_ := 1.5 + 2.5,
-    X_ == 4.0
-)
-# Note: '3 := 1+2' cannot be expressed in .clausal — Python's parser rejects
-# := with a non-name LHS.  This is tested in the Python test file instead.
-Test("double negation: --5=5") <- (
-    X_ := -(-5),
-    X_ == 5
-)
-Test("subtraction negative: 3-5=-2") <- (
-    X_ := 3 - 5,
-    X_ == -2
-)
-Test("negative floor div: -7//2=-4") <- (
-    X_ := -7 // 2,
-    X_ == -4
-)
-Test("negative mod: -7%2=1") <- (
-    X_ := -7 % 2,
-    X_ == 1
-)
+Test("addition: 1+2=3") <- (1 + 2 == 3)
+Test("subtraction: 5-3=2") <- (5 - 3 == 2)
+Test("multiplication: 3*4=12") <- (3 * 4 == 12)
+Test("integer division: 7//2=3") <- (7 // 2 == 3)
+Test("modulo: 7%2=1") <- (7 % 2 == 1)
+Test("power: 2**3=8") <- (2 ** 3 == 8)
+Test("negation: -3") <- (-3 == -3)
+Test("nested: (2+3)*4=20") <- ((2 + 3) * 4 == 20)
+Test("float addition: 1.5+2.5=4.0") <- (1.5 + 2.5 == 4.0)
+Test("double negation: --5=5") <- (-(-5) == 5)
+Test("subtraction negative: 3-5=-2") <- (3 - 5 == -2)
+Test("negative floor div: -7//2=-4") <- (-7 // 2 == -4)
+Test("negative mod: -7%2=1") <- (-7 % 2 == 1)
 
 # ── Arithmetic comparison ────────────────────────────────────────────────────
 

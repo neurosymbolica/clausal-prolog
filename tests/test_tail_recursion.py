@@ -23,7 +23,7 @@ from clausal.terms import (
     Unify, DoesNotUnify, Evaluate,
     Lt, LtE, Gt, GtE,
     In, NotIn,
-    StructuralEq, StructuralNeq,
+    ArithEq, ArithNeq,
     Call, LoadName,
     Compound,
 )
@@ -46,10 +46,10 @@ class TestIsDeterministicGoal(unittest.TestCase):
         self.assertTrue(_is_deterministic_goal(DoesNotUnify(left=Var(), right=42)))
 
     def test_structural_eq(self):
-        self.assertTrue(_is_deterministic_goal(StructuralEq(left=1, right=1)))
+        self.assertTrue(_is_deterministic_goal(ArithEq(left=1, right=1)))
 
     def test_structural_neq(self):
-        self.assertTrue(_is_deterministic_goal(StructuralNeq(left=1, right=2)))
+        self.assertTrue(_is_deterministic_goal(ArithNeq(left=1, right=2)))
 
     def test_comparisons(self):
         self.assertTrue(_is_deterministic_goal(Gt(left=Var(), right=0)))

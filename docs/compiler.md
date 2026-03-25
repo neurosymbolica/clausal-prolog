@@ -83,8 +83,8 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
 | `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — dif/2 constraint (see [constraints.md](constraints.md)) |
 | `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
-| `StructuralEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality |
-| `StructuralNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality |
+| `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality |
+| `ArithNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality |
 | `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
@@ -297,7 +297,7 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
     yield (parent, DONE)
 ```
 
-**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `StructuralEq`, `StructuralNeq`, comparisons (`>`, `<`, `>=`, `<=`), `In`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `Once`, `FindAll`, `BagOf`, `SetOf`.
+**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `ArithEq`, `ArithNeq`, comparisons (`>`, `<`, `>=`, `<=`), `In`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `Once`, `FindAll`, `BagOf`, `SetOf`.
 
 **Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
 

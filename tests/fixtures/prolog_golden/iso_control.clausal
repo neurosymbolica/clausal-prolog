@@ -14,7 +14,7 @@ Test('conjunction fails if first fails') <- (not a is b , X is 1)
 
 Test('conjunction fails if second fails') <- (not X is 1 , a is b)
 
-Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, R := X + Y + Z, R == 6)
+Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
 
 Test('disjunction first succeeds') <- ((X is 1 or X is 2))
 

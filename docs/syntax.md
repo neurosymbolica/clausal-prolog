@@ -179,7 +179,7 @@ When at least one side is an unbound Var, a CLP(FD) constraint is posted:
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-The old structural-equality behaviour of `==` is available as the builtin `Equivalent(X, Y)`. Use `Equivalent` when comparing non-integer terms where CLP(FD) semantics are not appropriate.
+`==` and `!=` post CLP(FD) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `Equivalent(X, Y)`, or `not Equivalent(X, Y)` for inequality.
 
 See [constraints.md](constraints.md) for the full CLP(FD) design, including domain representation, propagation, and labeling.
 

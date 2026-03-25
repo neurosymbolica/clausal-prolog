@@ -41,7 +41,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, DoesNotUnify as IsNot, Evaluate, StructuralEq, StructuralNeq,
+    Unify as Is, DoesNotUnify as IsNot, Evaluate, ArithEq, ArithNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Add, Sub, Mult, Negate,
@@ -398,9 +398,9 @@ class TestNQueens4:
             body=[
                 IsNot(left=ci, right=cj),
                 Evaluate(left=diff1, right=Sub(left=ci, right=cj)),
-                StructuralNeq(left=diff1, right=dist),
+                ArithNeq(left=diff1, right=dist),
                 Evaluate(left=diff2, right=Sub(left=cj, right=ci)),
-                StructuralNeq(left=diff2, right=dist),
+                ArithNeq(left=diff2, right=dist),
             ],
         ))
         compile_predicate("no_attack", 3, db.clauses_for("no_attack", 3), db)

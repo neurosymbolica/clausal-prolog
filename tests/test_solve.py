@@ -13,7 +13,7 @@ from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, StructuralEq, Lt,
+    Unify as Is, ArithEq, Lt,
     In,
     Call, LoadName,
     Compound,

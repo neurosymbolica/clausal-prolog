@@ -60,8 +60,8 @@ into Clausal goals:
 | Inside `*(...)` | Goal constructed |
 |----------------|-----------------|
 | `X is Y` | `Unify(left=X, right=Y)` |
-| `X == Y` | `StructuralEq(left=X, right=Y)` |
-| `X != Y` | `StructuralNeq(left=X, right=Y)` |
+| `X == Y` | `ArithEq(left=X, right=Y)` |
+| `X != Y` | `ArithNeq(left=X, right=Y)` |
 | `X < Y` | `Lt(left=X, right=Y)` |
 | `A and B` | `And(left=A, right=B)` |
 | `A or B` | `Or(left=A, right=B)` |

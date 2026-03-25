@@ -22,7 +22,7 @@ from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
 from clausal.pythonic_ast.nodes import (
-    IfExpr, Unify, DoesNotUnify, StructuralEq, StructuralNeq, Lt, LtE, Gt, GtE,
+    IfExpr, Unify, DoesNotUnify, ArithEq, ArithNeq, Lt, LtE, Gt, GtE,
     And, Or, Not, Call, LoadName, In,
 )
 
@@ -537,7 +537,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=StructuralEq(left=3, right=3),
+                test=ArithEq(left=3, right=3),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -551,7 +551,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=StructuralEq(left=3, right=4),
+                test=ArithEq(left=3, right=4),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -565,7 +565,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=StructuralNeq(left=3, right=4),
+                test=ArithNeq(left=3, right=4),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -579,7 +579,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=StructuralNeq(left=3, right=3),
+                test=ArithNeq(left=3, right=3),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -717,7 +717,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=StructuralNeq(left=1, right=2),
+                test=ArithNeq(left=1, right=2),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -763,7 +763,7 @@ class TestReifiedIteFd:
         clause = Clause(
             head=Compound("ite_test", (x, r)),
             body=[IfExpr(
-                test=StructuralEq(left=x, right=3),
+                test=ArithEq(left=x, right=3),
                 body=Unify(left=r, right="hit"),
                 orelse=Unify(left=r, right="miss"),
             )],

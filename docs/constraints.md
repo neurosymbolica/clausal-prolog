@@ -391,7 +391,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 ??? abstract "Compiler integration"
 
-    `StructuralEq`/`StructuralNeq` and `Lt`/`LtE`/`Gt`/`GtE` goal nodes compile to:
+    `ArithEq`/`ArithNeq` and `Lt`/`LtE`/`Gt`/`GtE` goal nodes compile to:
 
     ```python
     if _fd_eq(l, r, trail):    # ==

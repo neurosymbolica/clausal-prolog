@@ -118,7 +118,7 @@ def test_logic_variable_first_use():
 def test_logic_variable_reuse():
     # X used twice in the same expression: second use must be the same object
     # The walrus pattern ensures they share the same Python variable.
-    node = term_eval("X == X", sa.StructuralEq)
+    node = term_eval("X == X", sa.ArithEq)
     assert node.left is node.right   # same Var object
 
 
@@ -185,8 +185,8 @@ def test_bool_and_folded():
 # ── TermTransformer: comparison operators ─────────────────────────────────────
 
 @pytest.mark.parametrize("src,cls", [
-    ("a == b",        sa.StructuralEq),
-    ("a != b",        sa.StructuralNeq),
+    ("a == b",        sa.ArithEq),
+    ("a != b",        sa.ArithNeq),
     ("a < b",         sa.Lt),
     ("a <= b",        sa.LtE),
     ("a > b",         sa.Gt),
@@ -225,8 +225,8 @@ def test_walrus_is_arithmetic():
 
 
 def test_plain_eq_not_arith_constraint():
-    # a == b → StructuralEq
-    node = term_eval("a == b", sa.StructuralEq)
+    # a == b → ArithEq
+    node = term_eval("a == b", sa.ArithEq)
     assert node.left.name == 'a'
     assert node.right.name == 'b'
 
@@ -664,7 +664,7 @@ def test_anon_var_fresh_each_occurrence():
     expr = ast.fix_missing_locations(ast.Expression(body=transformed))
     from clausal.pythonic_ast import nodes as sa
     result = eval(compile(expr, "<test>", "eval"), {**{n: getattr(sa, n) for n in sa.__all__}, "Var": RealVar})
-    assert isinstance(result, sa.StructuralEq)
+    assert isinstance(result, sa.ArithEq)
     assert isinstance(result.left, RealVar)
     assert isinstance(result.right, RealVar)
     assert result.left is not result.right  # distinct Var objects

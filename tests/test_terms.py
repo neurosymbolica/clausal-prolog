@@ -23,7 +23,7 @@ from clausal.terms import (
     # goal/operator nodes used in term_str tests
     Unify as Is, And, Or, Not,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
-    Lt, LtE, Gt, GtE, StructuralEq, StructuralNeq, In, NotIn,
+    Lt, LtE, Gt, GtE, ArithEq, ArithNeq, In, NotIn,
     Call, LoadName, LoadAttr,
     Predicate,
     Negate, Invert,
@@ -271,7 +271,7 @@ class TestTermStr:
         assert "<" in s
 
     def test_eq_node(self):
-        s = term_str(StructuralEq(left=1, right=1))
+        s = term_str(ArithEq(left=1, right=1))
         assert "==" in s
 
     def test_call_node(self):
@@ -320,7 +320,7 @@ class TestTermStr:
     def test_comparison_ops(self):
         for NodeClass, expected in [
             (LtE, "<="), (Gt, ">"), (GtE, ">="),
-            (StructuralNeq, "!="), (In, "in"), (NotIn, "not in"),
+            (ArithNeq, "!="), (In, "in"), (NotIn, "not in"),
         ]:
             s = term_str(NodeClass(left=1, right=2))
             assert expected in s, f"{NodeClass.__name__}: expected {expected!r} in {s!r}"

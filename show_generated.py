@@ -67,7 +67,7 @@ from clausal.terms import (
     Or, Not, And,
     Call, LoadName,
     Compound,
-    StructuralEq,
+    ArithEq,
 )
 
 SEP = "=" * 72
@@ -265,10 +265,10 @@ clauses_primary = [
     Clause(
         head=Compound("primary", (V_,)),
         body=[Or(
-            left=StructuralEq(left=V_, right="red"),
+            left=ArithEq(left=V_, right="red"),
             right=Or(
-                left=StructuralEq(left=V_, right="blue"),
-                right=StructuralEq(left=V_, right="yellow"),
+                left=ArithEq(left=V_, right="blue"),
+                right=ArithEq(left=V_, right="yellow"),
             ),
         )],
     ),
@@ -306,7 +306,7 @@ clauses_not_blue = [
         head=Compound("not_blue", (Q_,)),
         body=[
             Call(func=LoadName(name="color"), args=[Q_]),
-            Not(operand=StructuralEq(left=Q_, right="blue")),
+            Not(operand=ArithEq(left=Q_, right="blue")),
         ],
     ),
 ]

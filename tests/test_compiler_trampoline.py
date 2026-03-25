@@ -34,7 +34,7 @@ from clausal.logic.trampoline import StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
-    Unify as Is, Evaluate, StructuralEq, StructuralNeq, Lt, Gt,
+    Unify as Is, Evaluate, ArithEq, ArithNeq, Lt, Gt,
     In, NotIn,
     Call, LoadName,
     Compound,
@@ -534,7 +534,7 @@ class TestTrampolineIntegrationComparisons:
         db = Database()
         db.assertz(Clause(
             head=Compound("same", (x1, x2)),
-            body=[StructuralEq(left=x1, right=x2)],
+            body=[ArithEq(left=x1, right=x2)],
         ))
         fn = compile_predicate_trampoline("same", 2, db.clauses_for("same", 2), db)
         trail = fresh_trail()

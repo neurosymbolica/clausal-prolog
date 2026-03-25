@@ -44,7 +44,7 @@ SumSquares(NS, TOTAL) <- (
 Evens(NS, ES) <- (
     FindAll(
         X,
-        (In(X, NS) and (M := X % 2) and M is 0),
+        (In(X, NS) and X % 2 == 0),
         ES,
     )
 )

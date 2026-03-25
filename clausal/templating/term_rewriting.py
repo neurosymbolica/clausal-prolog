@@ -113,8 +113,8 @@ BOOLOP_CLS = {
 }
 
 CMPOP_CLS = {
-    Eq: "StructuralEq",       # ==  structural equality (deref'd)
-    NotEq: "StructuralNeq",   # !=  structural inequality (deref'd)
+    Eq: "ArithEq",             # ==  arithmetic equality (CLP(FD), Prolog =:=)
+    NotEq: "ArithNeq",        # !=  arithmetic inequality (CLP(FD), Prolog =\=)
     Lt: "Lt",                 # <   arithmetic comparison (evaluates)
     LtE: "LtE",               # <=  arithmetic comparison (evaluates)
     Gt: "Gt",                 # >   arithmetic comparison (evaluates)

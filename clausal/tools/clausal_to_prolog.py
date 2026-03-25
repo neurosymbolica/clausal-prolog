@@ -755,8 +755,8 @@ class _ClausalToProlog:
         - X is Y → X = Y (Unify)
         - X is not Y → dif(X, Y) (DoesNotUnify)
         - X := Expr → X is Expr (Evaluate)
-        - X == Y → X == Y (StructuralEq)
-        - X != Y → X \\== Y (StructuralNeq)
+        - X == Y → X == Y (ArithEq)
+        - X != Y → X \\== Y (ArithNeq)
         """
         # First check for <- arrow (should already be handled at statement level)
         # Handle single comparison

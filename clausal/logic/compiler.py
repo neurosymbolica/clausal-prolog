@@ -52,7 +52,7 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
-    Unify, DoesNotUnify, Evaluate, StructuralEq, StructuralNeq,
+    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq,
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Call, LoadName, LoadAttr,
@@ -1751,7 +1751,7 @@ def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts)
 
 # ── Reified if-then-else helpers ───────────────────────────────────────────────
 
-_REIFIABLE_TYPES = (Unify, DoesNotUnify, StructuralEq, StructuralNeq, Lt, LtE, Gt, GtE)
+_REIFIABLE_TYPES = (Unify, DoesNotUnify, ArithEq, ArithNeq, Lt, LtE, Gt, GtE)
 
 
 def _is_reifiable(test) -> bool:
@@ -1762,8 +1762,8 @@ def _is_reifiable(test) -> bool:
 # ── Mapping from CmpOp node types to their FD reify ops and negated fd_ names ──
 
 _FD_REIFY_INFO: dict[type, tuple[str, str, str]] = {
-    StructuralEq:  ("eq", "_fd_eq", "_fd_ne"),
-    StructuralNeq: ("ne", "_fd_ne", "_fd_eq"),
+    ArithEq:  ("eq", "_fd_eq", "_fd_ne"),
+    ArithNeq: ("ne", "_fd_ne", "_fd_eq"),
     Lt:            ("lt", "_fd_lt", "_fd_ge"),
     LtE:           ("le", "_fd_le", "_fd_gt"),
     Gt:            ("gt", "_fd_gt", "_fd_le"),
@@ -2057,14 +2057,14 @@ def compile_goal(
             ]
 
         # ── CLP(FD) arithmetic equality ─────────────────────────────────────
-        case StructuralEq(left=l, right=r):
+        case ArithEq(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _if(_call(_name("_fd_eq"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
-        case StructuralNeq(left=l, right=r):
+        case ArithNeq(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
@@ -3676,7 +3676,7 @@ def compile_goal_trampoline(
 ) -> list[ast.stmt]:
     """Compile a goal using the trampoline tuple protocol.
 
-    Identical to ``compile_goal`` for deterministic goals (Unify, StructuralEq, comparisons,
+    Identical to ``compile_goal`` for deterministic goals (Unify, ArithEq, comparisons,
     And, Or, Not, In, NotIn).  Differs for predicate ``Call`` nodes: instead of
 
         for _ in dispatch(args, trail, k): k_stmts
@@ -3747,14 +3747,14 @@ def compile_goal_trampoline(
                 _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
-        case StructuralEq(left=l, right=r):
+        case ArithEq(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _if(_call(_name("_fd_eq"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
-        case StructuralNeq(left=l, right=r):
+        case ArithNeq(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
@@ -4748,7 +4748,7 @@ def _is_deterministic_goal(goal: Any) -> bool:
         # Unification / arithmetic / comparison — always deterministic
         case Unify() | Evaluate() | DoesNotUnify():
             return True
-        case StructuralEq() | StructuralNeq():
+        case ArithEq() | ArithNeq():
             return True
         case Lt() | LtE() | Gt() | GtE():
             return True
