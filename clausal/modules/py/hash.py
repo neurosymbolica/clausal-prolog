@@ -16,10 +16,70 @@ Wraps Python's ``hashlib`` module. Supported algorithms include
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_bytes
+from clausal.modules.py import _import_stdlib
 _hashlib = _import_stdlib("hashlib")
 
+from typing import Callable
+
 from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.trampoline import DONE
+
+
+# ── Dispatch adapter ──────────────────────────────────────────────────────
+
+
+class _HashPredicate:
+    """Adapter with ``_get_dispatch()`` for a hash predicate."""
+
+    __slots__ = ("_name", "_dispatch_fns")
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._dispatch_fns: dict[int, Callable] = {}
+
+    def _register(self, arity: int, fn: Callable) -> None:
+        self._dispatch_fns[arity] = fn
+
+    def _get_dispatch(self) -> Callable:
+        if len(self._dispatch_fns) == 1:
+            return next(iter(self._dispatch_fns.values()))
+        return self._multi_dispatch
+
+    def _multi_dispatch(self, this_generator, parent, *args):
+        arity = len(args) - 1  # exclude trail
+        fn = self._dispatch_fns.get(arity)
+        if fn is None:
+            yield (parent, DONE)
+            return
+        yield from fn(this_generator, parent, *args)
+
+    def __repr__(self) -> str:
+        arities = sorted(self._dispatch_fns)
+        return f"hash.{self._name}/{arities}"
+
+
+# ── Simple-to-trampoline wrapper ─────────────────────────────────────────
+
+
+def _simple_to_trampoline(simple_fn):
+    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
+    def trampoline_fn(this_generator, parent, *args):
+        for _ in simple_fn(*args, None):
+            yield (parent, None)
+        yield (parent, DONE)
+    return trampoline_fn
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+
+def _to_bytes(val):
+    """Convert string or bytes to bytes, or return None."""
+    if isinstance(val, str):
+        return val.encode("utf-8")
+    if isinstance(val, bytes):
+        return val
+    return None
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -33,7 +93,7 @@ def _hash_3(algorithm, data, hex_out, trail, k):
         return
     if is_var(data_d):
         return
-    data_bytes = to_bytes(data_d)
+    data_bytes = _to_bytes(data_d)
     if data_bytes is None:
         return
     try:
@@ -53,7 +113,7 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
         return
     if is_var(data_d):
         return
-    data_bytes = to_bytes(data_d)
+    data_bytes = _to_bytes(data_d)
     if data_bytes is None:
         return
     try:
@@ -67,8 +127,8 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Hash = ModulePredicate("Hash")
-Hash._register(3, simple_to_trampoline(_hash_3))
+Hash = _HashPredicate("Hash")
+Hash._register(3, _simple_to_trampoline(_hash_3))
 
-HashBytes = ModulePredicate("HashBytes")
-HashBytes._register(3, simple_to_trampoline(_hash_bytes_3))
+HashBytes = _HashPredicate("HashBytes")
+HashBytes._register(3, _simple_to_trampoline(_hash_bytes_3))
