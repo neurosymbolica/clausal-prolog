@@ -499,6 +499,7 @@ class ListPattern(PatternList):
 # Binary Operators
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@dataclass
 class Add(BinOp):
     op: ClassVar = '+'
 

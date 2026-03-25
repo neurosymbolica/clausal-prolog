@@ -6944,7 +6944,7 @@ def _arg_to_index_key(arg: Any) -> Any:
         return (arg.functor, len(arg.args))
     if is_term_instance(arg):
         cls = type(arg)
-        return (cls.__name__, len(cls._fields))
+        return (cls.__name__, len(term_field_names(arg)))
     return _INDEX_VAR
 
 
@@ -6961,7 +6961,7 @@ def _runtime_arg_key(a: Any) -> Any:
         return (a.functor, len(a.args))
     if is_term_instance(a):
         cls = type(a)
-        return (cls.__name__, len(cls._fields))
+        return (cls.__name__, len(term_field_names(a)))
     return _INDEX_VAR
 
 

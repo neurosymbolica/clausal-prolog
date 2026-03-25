@@ -1,60 +1,60 @@
 -module(iso_type_checking, [Test/1]),
 
-IsBoundNumber(X) <- (IsBound(X), IsNumber(X))
+IsBoundNumber(X) <- (NonVar(X), Number(X))
 
-Test('var: unbound var succeeds') <- (IsVar(X))
+Test('var: unbound var succeeds') <- (Var(X))
 
-Test('var: integer fails') <- (not IsVar(42))
+Test('var: integer fails') <- (not Var(42))
 
-Test('var: atom fails') <- (not IsVar(hello))
+Test('var: atom fails') <- (not Var(hello))
 
-Test('var: bound var fails') <- (X is 1, not IsVar(X))
+Test('var: bound var fails') <- (X is 1, not Var(X))
 
-Test('nonvar: integer succeeds') <- (IsBound(42))
+Test('nonvar: integer succeeds') <- (NonVar(42))
 
-Test('nonvar: atom succeeds') <- (IsBound(hello))
+Test('nonvar: atom succeeds') <- (NonVar(hello))
 
-Test('nonvar: unbound var fails') <- (not IsBound(X))
+Test('nonvar: unbound var fails') <- (not NonVar(X))
 
-Test('nonvar: bound var succeeds') <- (X is 1, IsBound(X))
+Test('nonvar: bound var succeeds') <- (X is 1, NonVar(X))
 
-Test('nonvar: list succeeds') <- (IsBound([1, 2]))
+Test('nonvar: list succeeds') <- (NonVar([1, 2]))
 
-Test('atom: string succeeds') <- (IsStr(hello))
+Test('atom: string succeeds') <- (Atom(hello))
 
-Test('atom: empty string succeeds') <- (IsStr(''))
+Test('atom: empty string succeeds') <- (Atom(''))
 
-Test('atom: integer fails') <- (not IsStr(1))
+Test('atom: integer fails') <- (not Atom(1))
 
-Test('atom: unbound var fails') <- (not IsStr(X))
+Test('atom: unbound var fails') <- (not Atom(X))
 
-Test('atom: list fails') <- (not IsStr([]))
+Test('atom: list fails') <- (not Atom([]))
 
-Test('integer: positive') <- (IsInt(1))
+Test('integer: positive') <- (Integer(1))
 
-Test('integer: zero') <- (IsInt(0))
+Test('integer: zero') <- (Integer(0))
 
-Test('integer: large') <- (IsInt(100000000000000000000))
+Test('integer: large') <- (Integer(100000000000000000000))
 
-Test('integer: string fails') <- (not IsInt('1'))
+Test('integer: string fails') <- (not Integer('1'))
 
-Test('integer: var fails') <- (not IsInt(X))
+Test('integer: var fails') <- (not Integer(X))
 
-Test('number: integer') <- (IsNumber(42))
+Test('number: integer') <- (Number(42))
 
-Test('number: float') <- (IsNumber(3.14))
+Test('number: float') <- (Number(3.14))
 
-Test('number: string fails') <- (not IsNumber('42'))
+Test('number: string fails') <- (not Number('42'))
 
-Test('number: var fails') <- (not IsNumber(X))
+Test('number: var fails') <- (not Number(X))
 
-Test('string: str succeeds') <- (IsStr(hello))
+Test('string: str succeeds') <- (Atom(hello))
 
-Test('string: empty str') <- (IsStr(''))
+Test('string: empty str') <- (Atom(''))
 
-Test('string: int fails') <- (not IsStr(42))
+Test('string: int fails') <- (not Atom(42))
 
-Test('string: var fails') <- (not IsStr(X))
+Test('string: var fails') <- (not Atom(X))
 
 Test('is_list: list') <- (IsList([1, 2, 3]))
 

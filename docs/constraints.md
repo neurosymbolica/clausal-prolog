@@ -329,17 +329,17 @@ The `==` constraint is posted *before* `Label` so the solver propagates the equa
 A common mistake is to call `Label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
 
 ```clausal
-% SLOW — generate-and-test: Label runs before the equation is known
+# SLOW -- generate-and-test: Label runs before the equation is known
 sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
     InDomain([S, E, N, D, M, O, R, Y], 0, 9),
     AllDifferent([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
-    Label([S, E, N, D, M, O, R, Y]),        % ← labels all 8 vars with no arithmetic constraint
+    Label([S, E, N, D, M, O, R, Y]),        # labels all 8 vars with no arithmetic constraint
     SEND := S * 1000 + E * 100 + N * 10 + D,
     MORE := M * 1000 + O * 100 + R * 10 + E,
     MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    SEND + MORE == MONEY                     % ← checked after the fact
+    SEND + MORE == MONEY                     # checked after the fact
 )
 ```
 
@@ -348,14 +348,14 @@ sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
 The fix is to post the equation as a `==` constraint *before* `Label`:
 
 ```clausal
-% FAST — constraint-and-label: equation is propagated before any labeling
+# FAST -- constraint-and-label: equation is propagated before any labeling
 sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
     InDomain([S, E, N, D, M, O, R, Y], 0, 9),
     AllDifferent([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
     S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    Label([S, E, N, D, M, O, R, Y])         % ← labels with equation already constraining domains
+    Label([S, E, N, D, M, O, R, Y])         # labels with equation already constraining domains
 )
 ```
 

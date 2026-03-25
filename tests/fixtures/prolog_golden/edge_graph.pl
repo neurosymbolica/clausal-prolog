@@ -10,3 +10,18 @@ reach(X, Y) :-
 reach(X, Y) :-
     edge(X, Z),
     reach(Z, Y).
+
+test("edge 1 2") :-
+    edge(1, 2).
+
+test("edge 2 3") :-
+    edge(2, 3).
+
+test("reach 1 2") :-
+    reach(1, 2).
+
+test("reach 1 3") :-
+    reach(1, 3).
+
+test("reach 2 3") :-
+    reach(2, 3).

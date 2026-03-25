@@ -1,7 +1,15 @@
-Squares(N, squares_) <- (FindAll(sq_, In(X, N), sq_ := X * X, squares_))
+Squares(numbers_, squares_) <- (FindAll(square_, In(X, numbers_), square_ := X * X, squares_))
 
-Positives(ns_, pos_) <- (FindAll(X, In(X, ns_), X > 0, pos_))
+Positives(numbers_, positives_) <- (FindAll(X, In(X, numbers_), X > 0, positives_))
 
-UniqueMembers(ns_, unique_) <- (SetOf(X, In(X, ns_), unique_))
+UniqueMembers(numbers_, unique_) <- (SetOf(X, In(X, numbers_), unique_))
 
-AllPositive(ns_) <- (ForAll(In(X, ns_), X > 0))
+AllPositive(numbers_) <- (ForAll(In(X, numbers_), X > 0))
+
+Test('squares') <- (Squares([1, 2, 3], squares_), squares_ == [1, 4, 9])
+
+Test('positives') <- (Positives([-1, 2, -3, 4], positives_), positives_ == [2, 4])
+
+Test('unique members') <- (UniqueMembers([1, 2, 1, 3, 2], unique_), unique_ == [1, 2, 3])
+
+Test('all positive') <- (AllPositive([1, 2, 3]))

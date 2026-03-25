@@ -1,22 +1,32 @@
-safe_queens(N, Qs) :-
-    in_domain(Qs, 1, N),
-    all_different(Qs),
-    label(Qs),
-    check_diagonals(Qs).
+safe_queens(N, Queens) :-
+    in_domain(Queens, 1, N),
+    all_different(Queens),
+    label(Queens),
+    check_diagonals(Queens).
 
 check_diagonals([]).
 
-check_diagonals([Q|Rest]) :-
-    safe_from(Q, Rest, 1),
+check_diagonals([Queen|Rest]) :-
+    safe_from(Queen, Rest, 1),
     check_diagonals(Rest).
 
-safe_from(Q, [], D).
+safe_from(Queen, [], Distance).
 
-safe_from(Q, [H|T], D) :-
-    Q \== H,
-    Diff1 is Q - H,
-    Diff2 is H - Q,
-    Diff1 \== D,
-    Diff2 \== D,
-    D1 is D + 1,
-    safe_from(Q, T, D1).
+safe_from(Queen, [Head|Tail], Distance) :-
+    Queen \== Head,
+    Difference1 is Queen - Head,
+    Difference2 is Head - Queen,
+    Difference1 \== Distance,
+    Difference2 \== Distance,
+    Next_distance is Distance + 1,
+    safe_from(Queen, Tail, Next_distance).
+
+test("queens 1") :-
+    length(Queens, 1),
+    safe_queens(1, Queens),
+    length(Queens, 1).
+
+test("queens 4 valid") :-
+    length(Queens, 4),
+    safe_queens(4, Queens),
+    length(Queens, 4).

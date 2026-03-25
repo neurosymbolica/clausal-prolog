@@ -216,6 +216,7 @@ Path("a", "c")
 In Clausal list notation:
 
 ```clausal
+# skip
 Test("tree path(a,c) transitive") <- (
     GraphProgram(P),
     SolveTree([Path("a", "c")], P, TREE),
@@ -239,6 +240,7 @@ Natnum(Succ(Succ(0)))
 ```
 
 ```clausal
+# skip
 TREE is [
     [Natnum(Succ(Succ(0))), [
         [Natnum(Succ(0)), [

@@ -243,7 +243,7 @@ class TestModelRegistry:
         sentinel = object()
         from clausal.modules.spacy_module import _current_model_1
         from clausal.logic.trampoline import DONE
-        for parent, val in _current_model_1(sentinel, result_var, trail):
+        for parent, val in _current_model_1(sentinel, sentinel, result_var, trail):
             if val is DONE:
                 break
             results.append(deref(result_var))
@@ -254,7 +254,7 @@ class TestModelRegistry:
         from clausal.modules.spacy_module import _current_model_1
         from clausal.logic.trampoline import DONE
         found = False
-        for parent, val in _current_model_1(sentinel, _ALIAS, trail):
+        for parent, val in _current_model_1(sentinel, sentinel, _ALIAS, trail):
             if val is DONE:
                 break
             found = True
@@ -265,7 +265,7 @@ class TestModelRegistry:
         from clausal.modules.spacy_module import _current_model_1
         from clausal.logic.trampoline import DONE
         found = False
-        for parent, val in _current_model_1(sentinel, "__no__", trail):
+        for parent, val in _current_model_1(sentinel, sentinel, "__no__", trail):
             if val is DONE:
                 break
             found = True
@@ -311,7 +311,7 @@ class TestTokenPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         count = 0
-        for parent, val in _token_2(sentinel, doc, tok_var, trail):
+        for parent, val in _token_2(sentinel, sentinel, doc, tok_var, trail):
             if val is DONE:
                 break
             count += 1
@@ -323,7 +323,7 @@ class TestTokenPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         first = None
-        for parent, val in _token_2(sentinel, doc, tok_var, trail):
+        for parent, val in _token_2(sentinel, sentinel, doc, tok_var, trail):
             if val is DONE:
                 break
             first = deref(tok_var)
@@ -337,7 +337,7 @@ class TestTokenPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         result = None
-        for parent, val in _token_3(sentinel, doc, 0, tok_var, trail):
+        for parent, val in _token_3(sentinel, sentinel, doc, 0, tok_var, trail):
             if val is DONE:
                 break
             result = deref(tok_var)
@@ -351,7 +351,7 @@ class TestTokenPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         found = False
-        for parent, val in _token_3(sentinel, doc, 9999, tok_var, trail):
+        for parent, val in _token_3(sentinel, sentinel, doc, 9999, tok_var, trail):
             if val is DONE:
                 break
             found = True
@@ -364,7 +364,7 @@ class TestTokenPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         pairs = []
-        for parent, val in _token_3(sentinel, doc, idx_var, tok_var, trail):
+        for parent, val in _token_3(sentinel, sentinel, doc, idx_var, tok_var, trail):
             if val is DONE:
                 break
             pairs.append((deref(idx_var), deref(tok_var)["text"]))
@@ -481,7 +481,7 @@ class TestNERPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         entities = []
-        for parent, val in _entity_2(sentinel, doc, ent_var, trail):
+        for parent, val in _entity_2(sentinel, sentinel, doc, ent_var, trail):
             if val is DONE:
                 break
             entities.append(deref(ent_var))
@@ -494,7 +494,7 @@ class TestNERPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         org_ents = []
-        for parent, val in _entity_3(sentinel, doc, "ORG", ent_var, trail):
+        for parent, val in _entity_3(sentinel, sentinel, doc, "ORG", ent_var, trail):
             if val is DONE:
                 break
             org_ents.append(deref(ent_var))
@@ -507,7 +507,7 @@ class TestNERPredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         found = False
-        for parent, val in _entity_3(sentinel, doc, "NONEXISTENT_LABEL", ent_var, trail):
+        for parent, val in _entity_3(sentinel, sentinel, doc, "NONEXISTENT_LABEL", ent_var, trail):
             if val is DONE:
                 break
             found = True
@@ -535,7 +535,7 @@ class TestSentencePredicates:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         sents = []
-        for parent, val in _sentence_2(sentinel, doc, sent_var, trail):
+        for parent, val in _sentence_2(sentinel, sentinel, doc, sent_var, trail):
             if val is DONE:
                 break
             sents.append(deref(sent_var))
@@ -589,7 +589,7 @@ class TestNounChunks:
         sentinel = object()
         from clausal.logic.trampoline import DONE
         chunks = []
-        for parent, val in _noun_chunk_2(sentinel, doc, chunk_var, trail):
+        for parent, val in _noun_chunk_2(sentinel, sentinel, doc, chunk_var, trail):
             if val is DONE:
                 break
             chunks.append(deref(chunk_var))
@@ -601,7 +601,7 @@ class TestNounChunks:
         chunk_var = Var()
         sentinel = object()
         from clausal.logic.trampoline import DONE
-        for parent, val in _noun_chunk_2(sentinel, doc, chunk_var, trail):
+        for parent, val in _noun_chunk_2(sentinel, sentinel, doc, chunk_var, trail):
             if val is DONE:
                 break
             c = deref(chunk_var)

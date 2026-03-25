@@ -8,7 +8,7 @@ VerbPhrase() >> ((['chases'] or (['sees'] or ['likes'])))
 
 Sentence() >> (noun_phrase, verb_phrase, noun_phrase)
 
-Digit(D) >> ([D], D >= 0, D <= 9)
+Digit(digit_) >> ([digit_], digit_ >= 0, digit_ <= 9)
 
 Ab() >> (['a'], ab)
 
@@ -16,10 +16,20 @@ Ab() >> (['b'], ab)
 
 Ab() >> ([])
 
-,(LookAhead(T), [T]) >> ([T])
+,(LookAhead(token_), [token_]) >> ([token_])
 
 NotA() >> (not ['a'], [X])
 
-ValidSentence(S) <- (Phrase(sentence, S))
+ValidSentence(sentence_) <- (Phrase(sentence, sentence_))
 
-ExprDcg(E) >> ([E], E is E + 0)
+ExprDcg(expression_) >> ([expression_], expression_ is expression_ + 0)
+
+Test('valid sentence') <- (ValidSentence(['the', 'dog', 'chases', 'the', 'cat']))
+
+Test('greeting') <- (Phrase(greeting, ['hello', 'world']))
+
+Test('noun phrase dog') <- (Phrase(noun_phrase, ['the', 'dog']))
+
+Test('verb phrase chases') <- (Phrase(verb_phrase, ['chases']))
+
+Test('digit 3') <- (Phrase(Digit(3), [3]))

@@ -226,10 +226,10 @@ Test("concat all") <- (
 ### Examples
 
 ```clausal
-% List all clauses for a predicate:
+# List all clauses for a predicate:
 debug_fib <- Listing(fib)
 
-% Pretty-print a complex term:
+# Pretty-print a complex term:
 show_deep(TERM) <- PortrayClause(TERM)
 ```
 

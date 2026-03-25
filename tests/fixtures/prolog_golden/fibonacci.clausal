@@ -2,4 +2,12 @@ Fib(0, 0),
 
 Fib(1, 1),
 
-Fib(N, result_) <- (N > 1, n1_ := N - 1, n2_ := N - 2, Fib(n1_, A), Fib(n2_, B), result_ := A + B)
+Fib(N, result_) <- (N > 1, n1_ := N - 1, n2_ := N - 2, Fib(n1_, first_), Fib(n2_, second_), result_ := first_ + second_)
+
+Test('fib 0') <- (Fib(0, 0))
+
+Test('fib 1') <- (Fib(1, 1))
+
+Test('fib 5') <- (Fib(5, result_), result_ == 5)
+
+Test('fib 10') <- (Fib(10, result_), result_ == 55)

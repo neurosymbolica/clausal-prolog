@@ -208,8 +208,10 @@ def _is_arrow_adjacent(left, usub_node, source_lines=None):
 
     if source_lines is not None and usub_col >= 1:
         # Exact check: the character before '-' must be '<'.
-        line = source_lines[usub_line - 1]  # 1-based lineno
-        return usub_col - 1 < len(line) and line[usub_col - 1] == "<"
+        # Python 3.14+ col_offset values are UTF-8 byte offsets, so we
+        # must index into the byte representation of the source line.
+        line_bytes = source_lines[usub_line - 1].encode("utf-8")  # 1-based lineno
+        return usub_col - 1 < len(line_bytes) and line_bytes[usub_col - 1:usub_col] == b"<"
 
     # Fallback heuristic for programmatic AST (no source available).
     return 1 <= usub_col - end_col <= 2

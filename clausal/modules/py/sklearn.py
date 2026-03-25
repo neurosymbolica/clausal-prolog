@@ -35,7 +35,7 @@ from typing import Any
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
-from clausal.terms import Compound
+from clausal.terms import Compound, DictTerm
 
 
 # ── Lazy sklearn import ───────────────────────────────────────────────────
@@ -1066,7 +1066,7 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
         elif tag == "Est":
             _algo, params = str(deref(term[1])), deref(term[2])
             key_str = str(deref(key))
-            if isinstance(params, dict) and key_str in params:
+            if isinstance(params, (dict, DictTerm)) and key_str in params:
                 if unify(value_var, params[key_str], trail):
                     yield None
             return
