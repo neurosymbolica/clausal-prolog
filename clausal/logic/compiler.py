@@ -1300,7 +1300,7 @@ def term_to_ast_expr(
         ]
         kw_exprs = [
             ast.keyword(
-                arg=kw.arg,
+                arg=kw.name,
                 value=term_to_ast_expr(kw.value, var_context, eval_arith=eval_arith),
             )
             for kw in (term.kwargs or [])

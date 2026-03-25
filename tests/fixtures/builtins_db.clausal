@@ -24,3 +24,8 @@ RetractRed <- (
     not Color("red")
 )
 
+
+Test("color red") <- Color("red")
+Test("color green") <- Color("green")
+Test("color blue") <- Color("blue")
+Test("three colors") <- (FindAll(C_, Color(C_), Cs_), Length(Cs_, 3))

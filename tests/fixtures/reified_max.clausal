@@ -2,3 +2,7 @@
 # Ground ITE: X >= 0 → 'positive', else 'negative'
 Classify(X_, L_) <- If(X_ >= 0, L_ is "positive", L_ is "negative")
 
+
+Test("classify positive") <- (Classify(5, L_), L_ == "positive")
+Test("classify negative") <- (Classify(-3, L_), L_ == "negative")
+Test("classify zero") <- (Classify(0, L_), L_ == "positive")

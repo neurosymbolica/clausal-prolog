@@ -10,3 +10,6 @@ Path(X, Y) <- (
     Edge(Z, Y)
 )
 
+
+Test("left recursive path all from 1") <- (FindAll(Y_, Path(1, Y_), Ys_), Sort(Ys_, [2, 3, 4]))
+Test("left recursive path 3 to 4") <- Path(3, 4)

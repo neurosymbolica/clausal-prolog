@@ -3,3 +3,7 @@
 
 CheckEq(X_, Y_, T_) <- Eq(X_, Y_, T_)
 
+
+Test("eq true") <- (CheckEq(1, 1, T_), T_ == True)
+Test("eq false") <- (CheckEq(1, 2, T_), T_ == False)
+Test("eq string same") <- (CheckEq("a", "a", T_), T_ == True)

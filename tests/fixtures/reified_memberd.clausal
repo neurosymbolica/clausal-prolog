@@ -7,3 +7,7 @@ Memberd(X_, [E_, *Es_]) <- (
     If(X_ is not E_, Memberd(X_, Es_), True)
 )
 
+
+Test("memberd first") <- Memberd(1, [1, 2, 3])
+Test("memberd middle") <- Memberd(2, [1, 2, 3])
+Test("memberd last") <- Memberd(3, [1, 2, 3])

@@ -5,3 +5,7 @@ TermExpansion(Term_, Term_, M0_, M0_) <- True
 foo("a"),
 foo("b"),
 foo("c"),
+
+Test("foo a") <- foo("a")
+Test("foo b") <- foo("b")
+Test("foo c") <- foo("c")

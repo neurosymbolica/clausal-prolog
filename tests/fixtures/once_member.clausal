@@ -2,3 +2,6 @@
 
 FirstMember(X, XS) <- Once(X in XS)
 
+
+Test("first member") <- (FirstMember(X_, [1, 2, 3]), X_ == 1)
+Test("first member string") <- (FirstMember(X_, ["a", "b"]), X_ == "a")

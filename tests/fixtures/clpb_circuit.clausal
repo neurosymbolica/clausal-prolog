@@ -32,3 +32,9 @@ PigeonHole() <- (
     and Sat(~(P22_ & P32_))   # hole 2: not both pigeon 2 and 3
     and BoolLabeling([P11_, P12_, P21_, P22_, P31_, P32_])
 )
+
+Test("half adder 0 0") <- (HalfAdder(0, 0, S_, C_), S_ == 0, C_ == 0)
+Test("half adder 1 0") <- (HalfAdder(1, 0, S_, C_), S_ == 1, C_ == 0)
+Test("half adder 1 1") <- (HalfAdder(1, 1, S_, C_), S_ == 0, C_ == 1)
+Test("full adder 1 1 1") <- (FullAdder(1, 1, 1, S_, C_), S_ == 1, C_ == 1)
+Test("full adder 0 0 0") <- (FullAdder(0, 0, 0, S_, C_), S_ == 0, C_ == 0)

@@ -1,6 +1,9 @@
 -module(dynamic_pred, [Color(X, Y)])
-
+-private([blue, sky, green, grass])
 -dynamic(Color/2)
 
 Color(sky, blue),
 Color(grass, green),
+
+Test("color sky blue") <- Color(sky, blue)
+Test("color grass green") <- Color(grass, green)

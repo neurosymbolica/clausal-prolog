@@ -45,3 +45,10 @@ CatchAll(RESULT) <- (
         RESULT is ERROR,
     )
 )
+
+Test("safe div") <- (SafeDiv(10, 2, R_), R_ == 5)
+Test("safe div by zero") <- (SafeDiv(10, 0, R_), R_ == "infinity")
+Test("catch negative") <- (CatchNeg(-5, R_), R_ == "caught_negative")
+Test("catch ok") <- (CatchNeg(5, R_), R_ == "ok")
+Test("catch all") <- (CatchAll(R_), R_ == 42)
+Test("nested catch") <- (NestedCatch(R_), R_ == "outer_error")

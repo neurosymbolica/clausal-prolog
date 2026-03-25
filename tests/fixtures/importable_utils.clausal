@@ -6,3 +6,7 @@ Double(2, 4),
 Double(3, 6),
 
 Helper(X_, Y_) <- Double(X_, Y_)
+
+Test("double 0") <- Double(0, 0)
+Test("double 2 is 4") <- Double(2, 4)
+Test("helper delegates") <- (Helper(2, Y_), Y_ == 4)

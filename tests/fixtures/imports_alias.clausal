@@ -1,3 +1,7 @@
 -import_from(tests.fixtures.importable_utils, [alias(Helper, Hlp)])
 
 UseAlias(X_, Y_) <- Hlp(X_, Y_)
+
+Test("use alias 0") <- (UseAlias(0, Y_), Y_ == 0)
+Test("use alias 1") <- (UseAlias(1, Y_), Y_ == 2)
+Test("use alias 2") <- (UseAlias(2, Y_), Y_ == 4)

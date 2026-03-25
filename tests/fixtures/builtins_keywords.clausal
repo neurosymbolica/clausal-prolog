@@ -11,3 +11,15 @@ FreeFields(T_, Ks_) <- UnboundKeys(T_, Ks_)
 # Signature/3 — reflect the registered parameter names for a predicate
 PredParams(Name_, Arity_, Params_) <- Signature(Name_, Arity_, Params_)
 
+
+# A keyword predicate for testing Vary/UnboundKeys/Signature
+Vec(x=0, y=0),
+Vec(x=1, y=2),
+Vec(x=3, y=4),
+
+Test("signature vec fields") <- (PredParams("Vec", 2, Ps_), Length(Ps_, 2))
+Test("free fields unbound y") <- (FreeFields(Vec(x=1), Ks_), In("y", Ks_))
+Test("vary vec x") <- (
+    UpdateX(Vec(x=1, y=2), 99, V2_),
+    V2_ == Vec(x=99, y=2)
+)

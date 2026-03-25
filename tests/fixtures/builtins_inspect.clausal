@@ -16,3 +16,10 @@ TermToList(T_, L_) <- Unpack(T_, L_)
 # Unpack/2 — construct term from list
 ListToTerm(L_, T_) <- Unpack(T_, L_)
 
+
+Test("functor atom") <- (GetFunctor("hello", F_, A_), F_ == "hello", A_ == 0)
+Test("functor number") <- (GetFunctor(42, F_, A_), F_ == "42", A_ == 0)
+Test("arg list first") <- (FirstArg([10, 20, 30], A_), A_ == 10)
+Test("arg list second") <- (SecondArg([10, 20, 30], A_), A_ == 20)
+Test("term to list atom") <- (TermToList("foo", L_), L_ == ["foo"])
+Test("list to term atom") <- (ListToTerm(["bar"], T_), T_ == "bar")

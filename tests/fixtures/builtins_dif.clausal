@@ -19,3 +19,11 @@ ReifiedDif(X_, Y_, T_) <- DifT(X_, Y_, T_)
 SameOrDiff(X_, Y_, "same") <- Eq(X_, Y_, True)
 SameOrDiff(X_, Y_, "different") <- Eq(X_, Y_, False)
 
+
+Test("not equal") <- NotEqual(1, 2)
+Test("pick different") <- (PickDifferent(1, [1, 2, 3], Y_), Y_ == 2)
+Test("reified eq true") <- (ReifiedEq(1, 1, T_), T_ == True)
+Test("reified eq false") <- (ReifiedEq(1, 2, T_), T_ == False)
+Test("reified dif true") <- (ReifiedDif(1, 2, T_), T_ == True)
+Test("same or diff same") <- SameOrDiff(1, 1, "same")
+Test("same or diff different") <- SameOrDiff(1, 2, "different")

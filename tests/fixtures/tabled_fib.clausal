@@ -11,3 +11,8 @@ Fib(N, RESULT) <- (
     RESULT := A + B
 )
 
+
+Test("fib 0") <- Fib(0, 0)
+Test("fib 1") <- Fib(1, 1)
+Test("fib 5") <- (Fib(5, R_), R_ == 5)
+Test("fib 10") <- (Fib(10, R_), R_ == 55)

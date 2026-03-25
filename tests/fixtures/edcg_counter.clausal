@@ -28,3 +28,14 @@ run_scaled(List_, Scale_, Count_, Items_) <- (
                  _edcg_items_in_=[], _edcg_items_out_=Items_,
                  _edcg_scale_=Scale_)
 )
+
+Test("scaled count 3 items") <- (
+    run_scaled(["a", "b", "c"], 10, Count_, Items_),
+    Count_ == 30,
+    Items_ == ["c", "b", "a"]
+)
+Test("scaled count empty") <- (
+    run_scaled([], 5, Count_, Items_),
+    Count_ == 0,
+    Items_ == []
+)

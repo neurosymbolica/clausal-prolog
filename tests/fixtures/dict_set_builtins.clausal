@@ -20,3 +20,10 @@ set_common(S1, S2, INTER) <- SetIntersection(S1, S2, INTER)
 
 # Enumerate elements of a set.
 set_member(ELEM, SET) <- GenSet(ELEM, SET)
+
+Test("get name") <- (get_name({"name": "Alice"}, N_), N_ == "Alice")
+Test("is admin") <- is_admin({"role": "admin"})
+Test("dict member") <- (dict_member("x", {"x": 1, "y": 2}, V_), V_ == 1)
+Test("set member") <- set_member(2, {1, 2, 3})
+Test("set common has 2") <- (set_common({1, 2, 3}, {2, 3, 4}, I_), set_member(2, I_))
+Test("set common has 3") <- (set_common({1, 2, 3}, {2, 3, 4}, I_), set_member(3, I_))

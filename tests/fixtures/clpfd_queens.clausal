@@ -24,3 +24,6 @@ SafeFrom(Q_, [H_, *T_], D_) <- (
     and SafeFrom(Q_, T_, D1_)
 )
 
+
+Test("queens 1") <- (Length(Qs_, 1), SafeQueens(1, Qs_), Length(Qs_, 1))
+Test("queens 4 valid") <- (Length(Qs_, 4), SafeQueens(4, Qs_), Length(Qs_, 4))

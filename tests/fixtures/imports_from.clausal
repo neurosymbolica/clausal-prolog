@@ -2,3 +2,7 @@
 
 UseHelper(X_, Y_) <- Helper(X_, Y_)
 UseDouble(X_, R_) <- Double(X_, R_)
+
+Test("use helper 2") <- (UseHelper(2, Y_), Y_ == 4)
+Test("use double 3") <- (UseDouble(3, R_), R_ == 6)
+Test("use helper 0") <- (UseHelper(0, Y_), Y_ == 0)

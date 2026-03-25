@@ -24,3 +24,8 @@ MappedDoubles(Xs_, Ys_) <- MapList(
     Ys_,
 )
 
+
+Test("double via call") <- (DoubleViaCall(3, Y_), Y_ == 6)
+Test("mapped doubles") <- (MappedDoubles([1, 2, 3], Ys_), Ys_ == [2, 4, 6])
+Test("apply binary double") <- (ApplyBinary(DoubleViaCall, 5, R_), R_ == 10)
+Test("run goal lambda") <- RunGoal((() <- True))
