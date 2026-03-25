@@ -35,58 +35,22 @@ constants (``inf``, ``pi``, ``E``) are importable as term constructors.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 import sympy as _sp
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate, Compound, term_str, DictTerm,
 )
 
 
-# -- Dispatch adapter --------------------------------------------------------
 
 
-class _SympyPredicate:
-    """Adapter with ``_get_dispatch()`` for a sympy predicate."""
 
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"sympy.{self._name}/{arities}"
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap simple-mode fn(*args, trail, k) -> trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # -- Var naming --------------------------------------------------------------
@@ -1208,126 +1172,126 @@ e = _sp.E
 
 # -- Build and export predicate objects --------------------------------------
 
-Sym = _SympyPredicate("Sym")
-Sym._register(2, _simple_to_trampoline(_sym_2))
+Sym = ModulePredicate("Sym")
+Sym._register(2, simple_to_trampoline(_sym_2))
 
-ToSympy = _SympyPredicate("ToSympy")
-ToSympy._register(2, _simple_to_trampoline(_to_sympy_2))
+ToSympy = ModulePredicate("ToSympy")
+ToSympy._register(2, simple_to_trampoline(_to_sympy_2))
 
-FromSympy = _SympyPredicate("FromSympy")
-FromSympy._register(2, _simple_to_trampoline(_from_sympy_2))
+FromSympy = ModulePredicate("FromSympy")
+FromSympy._register(2, simple_to_trampoline(_from_sympy_2))
 
-Simplify = _SympyPredicate("Simplify")
-Simplify._register(2, _simple_to_trampoline(_simplify_2))
+Simplify = ModulePredicate("Simplify")
+Simplify._register(2, simple_to_trampoline(_simplify_2))
 
-Expand = _SympyPredicate("Expand")
-Expand._register(2, _simple_to_trampoline(_expand_2))
+Expand = ModulePredicate("Expand")
+Expand._register(2, simple_to_trampoline(_expand_2))
 
-Factor = _SympyPredicate("Factor")
-Factor._register(2, _simple_to_trampoline(_factor_2))
+Factor = ModulePredicate("Factor")
+Factor._register(2, simple_to_trampoline(_factor_2))
 
-Solve = _SympyPredicate("Solve")
+Solve = ModulePredicate("Solve")
 Solve._register(3, _solve_3)
 
-SolveAll = _SympyPredicate("SolveAll")
-SolveAll._register(3, _simple_to_trampoline(_solve_all_3))
+SolveAll = ModulePredicate("SolveAll")
+SolveAll._register(3, simple_to_trampoline(_solve_all_3))
 
-Diff = _SympyPredicate("Diff")
-Diff._register(2, _simple_to_trampoline(_diff_2))
-Diff._register(3, _simple_to_trampoline(_diff_3))
+Diff = ModulePredicate("Diff")
+Diff._register(2, simple_to_trampoline(_diff_2))
+Diff._register(3, simple_to_trampoline(_diff_3))
 
-Integrate = _SympyPredicate("Integrate")
-Integrate._register(2, _simple_to_trampoline(_integrate_2))
-Integrate._register(3, _simple_to_trampoline(_integrate_3))
+Integrate = ModulePredicate("Integrate")
+Integrate._register(2, simple_to_trampoline(_integrate_2))
+Integrate._register(3, simple_to_trampoline(_integrate_3))
 
-Limit = _SympyPredicate("Limit")
-Limit._register(4, _simple_to_trampoline(_limit_4))
+Limit = ModulePredicate("Limit")
+Limit._register(4, simple_to_trampoline(_limit_4))
 
-Series = _SympyPredicate("Series")
-Series._register(4, _simple_to_trampoline(_series_4))
-Series._register(5, _simple_to_trampoline(_series_5))
+Series = ModulePredicate("Series")
+Series._register(4, simple_to_trampoline(_series_4))
+Series._register(5, simple_to_trampoline(_series_5))
 
-Subs = _SympyPredicate("Subs")
-Subs._register(3, _simple_to_trampoline(_subs_3))
+Subs = ModulePredicate("Subs")
+Subs._register(3, simple_to_trampoline(_subs_3))
 
-FreeVars = _SympyPredicate("FreeVars")
-FreeVars._register(2, _simple_to_trampoline(_free_vars_2))
+FreeVars = ModulePredicate("FreeVars")
+FreeVars._register(2, simple_to_trampoline(_free_vars_2))
 
-SymEqual = _SympyPredicate("SymEqual")
-SymEqual._register(2, _simple_to_trampoline(_sym_equal_2))
+SymEqual = ModulePredicate("SymEqual")
+SymEqual._register(2, simple_to_trampoline(_sym_equal_2))
 
-SymStr = _SympyPredicate("SymStr")
-SymStr._register(2, _simple_to_trampoline(_sym_str_2))
+SymStr = ModulePredicate("SymStr")
+SymStr._register(2, simple_to_trampoline(_sym_str_2))
 
-Inf = _SympyPredicate("Inf")
-Inf._register(1, _simple_to_trampoline(_inf_1))
+Inf = ModulePredicate("Inf")
+Inf._register(1, simple_to_trampoline(_inf_1))
 
 # Algebra extras
-Collect = _SympyPredicate("Collect")
-Collect._register(3, _simple_to_trampoline(_collect_3))
+Collect = ModulePredicate("Collect")
+Collect._register(3, simple_to_trampoline(_collect_3))
 
-Cancel = _SympyPredicate("Cancel")
-Cancel._register(2, _simple_to_trampoline(_cancel_2))
+Cancel = ModulePredicate("Cancel")
+Cancel._register(2, simple_to_trampoline(_cancel_2))
 
-Apart = _SympyPredicate("Apart")
-Apart._register(2, _simple_to_trampoline(_apart_2))
-Apart._register(3, _simple_to_trampoline(_apart_3))
+Apart = ModulePredicate("Apart")
+Apart._register(2, simple_to_trampoline(_apart_2))
+Apart._register(3, simple_to_trampoline(_apart_3))
 
-Together = _SympyPredicate("Together")
-Together._register(2, _simple_to_trampoline(_together_2))
+Together = ModulePredicate("Together")
+Together._register(2, simple_to_trampoline(_together_2))
 
-Degree = _SympyPredicate("Degree")
-Degree._register(2, _simple_to_trampoline(_degree_2))
-Degree._register(3, _simple_to_trampoline(_degree_3))
+Degree = ModulePredicate("Degree")
+Degree._register(2, simple_to_trampoline(_degree_2))
+Degree._register(3, simple_to_trampoline(_degree_3))
 
-Coeffs = _SympyPredicate("Coeffs")
-Coeffs._register(3, _simple_to_trampoline(_coeffs_3))
+Coeffs = ModulePredicate("Coeffs")
+Coeffs._register(3, simple_to_trampoline(_coeffs_3))
 
-Roots = _SympyPredicate("Roots")
+Roots = ModulePredicate("Roots")
 Roots._register(3, _roots_3)
 
 # Trig
-TrigSimp = _SympyPredicate("TrigSimp")
-TrigSimp._register(2, _simple_to_trampoline(_trig_simp_2))
+TrigSimp = ModulePredicate("TrigSimp")
+TrigSimp._register(2, simple_to_trampoline(_trig_simp_2))
 
-ExpandTrig = _SympyPredicate("ExpandTrig")
-ExpandTrig._register(2, _simple_to_trampoline(_expand_trig_2))
+ExpandTrig = ModulePredicate("ExpandTrig")
+ExpandTrig._register(2, simple_to_trampoline(_expand_trig_2))
 
 # Printing
-Latex = _SympyPredicate("Latex")
-Latex._register(2, _simple_to_trampoline(_latex_2))
+Latex = ModulePredicate("Latex")
+Latex._register(2, simple_to_trampoline(_latex_2))
 
-Pretty = _SympyPredicate("Pretty")
-Pretty._register(2, _simple_to_trampoline(_pretty_2))
+Pretty = ModulePredicate("Pretty")
+Pretty._register(2, simple_to_trampoline(_pretty_2))
 
-MathML = _SympyPredicate("MathML")
-MathML._register(2, _simple_to_trampoline(_mathml_2))
+MathML = ModulePredicate("MathML")
+MathML._register(2, simple_to_trampoline(_mathml_2))
 
 # Number theory
-IsPrime = _SympyPredicate("IsPrime")
-IsPrime._register(1, _simple_to_trampoline(_is_prime_1))
+IsPrime = ModulePredicate("IsPrime")
+IsPrime._register(1, simple_to_trampoline(_is_prime_1))
 
-NextPrime = _SympyPredicate("NextPrime")
-NextPrime._register(2, _simple_to_trampoline(_next_prime_2))
+NextPrime = ModulePredicate("NextPrime")
+NextPrime._register(2, simple_to_trampoline(_next_prime_2))
 
-FactorInt = _SympyPredicate("FactorInt")
-FactorInt._register(2, _simple_to_trampoline(_factor_int_2))
+FactorInt = ModulePredicate("FactorInt")
+FactorInt._register(2, simple_to_trampoline(_factor_int_2))
 
-Divisors = _SympyPredicate("Divisors")
-Divisors._register(2, _simple_to_trampoline(_divisors_2))
+Divisors = ModulePredicate("Divisors")
+Divisors._register(2, simple_to_trampoline(_divisors_2))
 
-Gcd = _SympyPredicate("Gcd")
-Gcd._register(3, _simple_to_trampoline(_gcd_sym_3))
+Gcd = ModulePredicate("Gcd")
+Gcd._register(3, simple_to_trampoline(_gcd_sym_3))
 
-Lcm = _SympyPredicate("Lcm")
-Lcm._register(3, _simple_to_trampoline(_lcm_sym_3))
+Lcm = ModulePredicate("Lcm")
+Lcm._register(3, simple_to_trampoline(_lcm_sym_3))
 
 # Special functions
-Sum = _SympyPredicate("Sum")
-Sum._register(5, _simple_to_trampoline(_summation_4))
+Sum = ModulePredicate("Sum")
+Sum._register(5, simple_to_trampoline(_summation_4))
 
-Product = _SympyPredicate("Product")
-Product._register(5, _simple_to_trampoline(_product_sym_4))
+Product = ModulePredicate("Product")
+Product._register(5, simple_to_trampoline(_product_sym_4))
 
-Binomial = _SympyPredicate("Binomial")
-Binomial._register(3, _simple_to_trampoline(_binomial_3))
+Binomial = ModulePredicate("Binomial")
+Binomial._register(3, simple_to_trampoline(_binomial_3))

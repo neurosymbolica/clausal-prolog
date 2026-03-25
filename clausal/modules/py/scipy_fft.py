@@ -49,6 +49,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 from clausal.modules.py._scipy_relations import _bidir_dispatch, _fft_bidir_n
 from clausal.modules.py._scipy_units import make_quantity_aware, PASS_THROUGH_FIRST
 
@@ -73,44 +74,6 @@ def _ensure_fft():
 def _fft():
     _ensure_fft()
     return _scipy_fft
-
-
-# ── Predicate adapter ─────────────────────────────────────────────────────
-
-class _SciPyFFTPredicate:
-    """Dispatch adapter for a scipy.fft predicate.
-
-    Supports multiple arities via ``_register(arity, fn)``.
-    Arity counts include RESULT but not trail.
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_SciPyFFTPredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        # args layout: (input_0, ..., input_{n-1}, result, trail)
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.fft.{self._name}/{arities}"
 
 
 # ── Dispatch function factory ─────────────────────────────────────────────
@@ -154,17 +117,17 @@ def _fft_fn(attr: str):
     return make_quantity_aware(call, PASS_THROUGH_FIRST)
 
 
-def _pred(name: str, *arity_fns) -> _SciPyFFTPredicate:
-    """Create a ``_SciPyFFTPredicate`` from (arity, dispatch_fn) pairs."""
-    p = _SciPyFFTPredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, dispatch_fn) pairs."""
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p
 
 
-def _pred_bidir(name: str, *arity_dispatches) -> _SciPyFFTPredicate:
-    """Create a ``_SciPyFFTPredicate`` from (arity, already-wrapped dispatch_fn) pairs."""
-    p = _SciPyFFTPredicate(name)
+def _pred_bidir(name: str, *arity_dispatches) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, already-wrapped dispatch_fn) pairs."""
+    p = ModulePredicate(name)
     for arity, dispatch_fn in arity_dispatches:
         p._dispatch_fns[arity] = dispatch_fn
     return p

@@ -15,61 +15,14 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _os = _import_stdlib("os")
 _shutil = _import_stdlib("shutil")
 _tempfile = _import_stdlib("tempfile")
 
 import pathlib
-from typing import Callable
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────
-
-
-class _FilesPredicate:
-    """Adapter with ``_get_dispatch()`` for a files predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"files.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Helper ──────────────────────────────────────────────────────────────
@@ -379,68 +332,68 @@ def _temp_directory_1(path, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-FileExists = _FilesPredicate("FileExists")
-FileExists._register(1, _simple_to_trampoline(_file_exists_1))
+FileExists = ModulePredicate("FileExists")
+FileExists._register(1, simple_to_trampoline(_file_exists_1))
 
-DirectoryExists = _FilesPredicate("DirectoryExists")
-DirectoryExists._register(1, _simple_to_trampoline(_directory_exists_1))
+DirectoryExists = ModulePredicate("DirectoryExists")
+DirectoryExists._register(1, simple_to_trampoline(_directory_exists_1))
 
-PathExists = _FilesPredicate("PathExists")
-PathExists._register(1, _simple_to_trampoline(_path_exists_1))
+PathExists = ModulePredicate("PathExists")
+PathExists._register(1, simple_to_trampoline(_path_exists_1))
 
-DirectoryFiles = _FilesPredicate("DirectoryFiles")
-DirectoryFiles._register(2, _simple_to_trampoline(_directory_files_2))
+DirectoryFiles = ModulePredicate("DirectoryFiles")
+DirectoryFiles._register(2, simple_to_trampoline(_directory_files_2))
 
-DirectoryEntries = _FilesPredicate("DirectoryEntries")
-DirectoryEntries._register(2, _simple_to_trampoline(_directory_entries_2))
+DirectoryEntries = ModulePredicate("DirectoryEntries")
+DirectoryEntries._register(2, simple_to_trampoline(_directory_entries_2))
 
-FileSize = _FilesPredicate("FileSize")
-FileSize._register(2, _simple_to_trampoline(_file_size_2))
+FileSize = ModulePredicate("FileSize")
+FileSize._register(2, simple_to_trampoline(_file_size_2))
 
-FileModificationTime = _FilesPredicate("FileModificationTime")
-FileModificationTime._register(2, _simple_to_trampoline(_file_modification_time_2))
+FileModificationTime = ModulePredicate("FileModificationTime")
+FileModificationTime._register(2, simple_to_trampoline(_file_modification_time_2))
 
-DeleteFile = _FilesPredicate("DeleteFile")
-DeleteFile._register(1, _simple_to_trampoline(_delete_file_1))
+DeleteFile = ModulePredicate("DeleteFile")
+DeleteFile._register(1, simple_to_trampoline(_delete_file_1))
 
-DeleteDirectory = _FilesPredicate("DeleteDirectory")
-DeleteDirectory._register(1, _simple_to_trampoline(_delete_directory_1))
+DeleteDirectory = ModulePredicate("DeleteDirectory")
+DeleteDirectory._register(1, simple_to_trampoline(_delete_directory_1))
 
-RenameFile = _FilesPredicate("RenameFile")
-RenameFile._register(2, _simple_to_trampoline(_rename_file_2))
+RenameFile = ModulePredicate("RenameFile")
+RenameFile._register(2, simple_to_trampoline(_rename_file_2))
 
-CopyFile = _FilesPredicate("CopyFile")
-CopyFile._register(2, _simple_to_trampoline(_copy_file_2))
+CopyFile = ModulePredicate("CopyFile")
+CopyFile._register(2, simple_to_trampoline(_copy_file_2))
 
-MakeDirectory = _FilesPredicate("MakeDirectory")
-MakeDirectory._register(1, _simple_to_trampoline(_make_directory_1))
+MakeDirectory = ModulePredicate("MakeDirectory")
+MakeDirectory._register(1, simple_to_trampoline(_make_directory_1))
 
-MakeDirectoryPath = _FilesPredicate("MakeDirectoryPath")
-MakeDirectoryPath._register(1, _simple_to_trampoline(_make_directory_path_1))
+MakeDirectoryPath = ModulePredicate("MakeDirectoryPath")
+MakeDirectoryPath._register(1, simple_to_trampoline(_make_directory_path_1))
 
-ReadFileToString = _FilesPredicate("ReadFileToString")
-ReadFileToString._register(2, _simple_to_trampoline(_read_file_to_string_2))
+ReadFileToString = ModulePredicate("ReadFileToString")
+ReadFileToString._register(2, simple_to_trampoline(_read_file_to_string_2))
 
-WriteStringToFile = _FilesPredicate("WriteStringToFile")
-WriteStringToFile._register(2, _simple_to_trampoline(_write_string_to_file_2))
+WriteStringToFile = ModulePredicate("WriteStringToFile")
+WriteStringToFile._register(2, simple_to_trampoline(_write_string_to_file_2))
 
-AppendStringToFile = _FilesPredicate("AppendStringToFile")
-AppendStringToFile._register(2, _simple_to_trampoline(_append_string_to_file_2))
+AppendStringToFile = ModulePredicate("AppendStringToFile")
+AppendStringToFile._register(2, simple_to_trampoline(_append_string_to_file_2))
 
-AbsolutePath = _FilesPredicate("AbsolutePath")
-AbsolutePath._register(2, _simple_to_trampoline(_absolute_path_2))
+AbsolutePath = ModulePredicate("AbsolutePath")
+AbsolutePath._register(2, simple_to_trampoline(_absolute_path_2))
 
-JoinPath = _FilesPredicate("JoinPath")
-JoinPath._register(3, _simple_to_trampoline(_join_path_3))
+JoinPath = ModulePredicate("JoinPath")
+JoinPath._register(3, simple_to_trampoline(_join_path_3))
 
-SplitPath = _FilesPredicate("SplitPath")
-SplitPath._register(3, _simple_to_trampoline(_split_path_3))
+SplitPath = ModulePredicate("SplitPath")
+SplitPath._register(3, simple_to_trampoline(_split_path_3))
 
-FileExtension = _FilesPredicate("FileExtension")
-FileExtension._register(2, _simple_to_trampoline(_file_extension_2))
+FileExtension = ModulePredicate("FileExtension")
+FileExtension._register(2, simple_to_trampoline(_file_extension_2))
 
-TempFile = _FilesPredicate("TempFile")
-TempFile._register(1, _simple_to_trampoline(_temp_file_1))
+TempFile = ModulePredicate("TempFile")
+TempFile._register(1, simple_to_trampoline(_temp_file_1))
 
-TempDirectory = _FilesPredicate("TempDirectory")
-TempDirectory._register(1, _simple_to_trampoline(_temp_directory_1))
+TempDirectory = ModulePredicate("TempDirectory")
+TempDirectory._register(1, simple_to_trampoline(_temp_directory_1))

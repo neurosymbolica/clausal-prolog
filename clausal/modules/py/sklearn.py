@@ -30,10 +30,11 @@ Layers
 from __future__ import annotations
 
 import threading as _threading
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.terms import Compound
 
 
@@ -183,49 +184,6 @@ stratified_kfold = _CVFunc("stratified_kfold")
 shuffle_split = _CVFunc("shuffle_split")
 group_kfold = _CVFunc("group_kfold")
 loo = Compound("loo", ())
-
-
-# ── Dispatch adapter ─────────────────────────────────────────────────────
-
-class _SklearnPredicate:
-    """Adapter with ``_get_dispatch()`` for a sklearn predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"sklearn.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ──────────────────────────────────────────────────
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) -> trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Algorithm registry ────────────────────────────────────────────────────
@@ -1209,118 +1167,118 @@ def _load_fitted_2(path, fitted_var, trail, k):
 # Build and export predicate objects
 # ═══════════════════════════════════════════════════════════════════════════
 
-Algorithm = _SklearnPredicate("Algorithm")
+Algorithm = ModulePredicate("Algorithm")
 Algorithm._register(2, _algorithm_2)
 
-DefaultParams = _SklearnPredicate("DefaultParams")
-DefaultParams._register(2, _simple_to_trampoline(_default_params_2))
+DefaultParams = ModulePredicate("DefaultParams")
+DefaultParams._register(2, simple_to_trampoline(_default_params_2))
 
-ParamKey = _SklearnPredicate("ParamKey")
+ParamKey = ModulePredicate("ParamKey")
 ParamKey._register(3, _param_key_3)
 
-LoadDataset = _SklearnPredicate("LoadDataset")
-LoadDataset._register(2, _simple_to_trampoline(_load_dataset_2))
+LoadDataset = ModulePredicate("LoadDataset")
+LoadDataset._register(2, simple_to_trampoline(_load_dataset_2))
 
-MakeDataset = _SklearnPredicate("MakeDataset")
-MakeDataset._register(3, _simple_to_trampoline(_make_dataset_3))
+MakeDataset = ModulePredicate("MakeDataset")
+MakeDataset._register(3, simple_to_trampoline(_make_dataset_3))
 
-LoadCsv = _SklearnPredicate("LoadCsv")
-LoadCsv._register(3, _simple_to_trampoline(_load_csv_3))
+LoadCsv = ModulePredicate("LoadCsv")
+LoadCsv._register(3, simple_to_trampoline(_load_csv_3))
 
-SplitData = _SklearnPredicate("SplitData")
-SplitData._register(3, _simple_to_trampoline(_split_data_3))
-SplitData._register(4, _simple_to_trampoline(_split_data_4))
+SplitData = ModulePredicate("SplitData")
+SplitData._register(3, simple_to_trampoline(_split_data_3))
+SplitData._register(4, simple_to_trampoline(_split_data_4))
 
-KFoldSplit = _SklearnPredicate("KFoldSplit")
+KFoldSplit = ModulePredicate("KFoldSplit")
 KFoldSplit._register(3, _kfold_split_3)
 
-StratifiedSplit = _SklearnPredicate("StratifiedSplit")
+StratifiedSplit = ModulePredicate("StratifiedSplit")
 StratifiedSplit._register(3, _stratified_split_3)
 
-Fit = _SklearnPredicate("Fit")
-Fit._register(3, _simple_to_trampoline(_fit_3))
-Fit._register(4, _simple_to_trampoline(_fit_4))
+Fit = ModulePredicate("Fit")
+Fit._register(3, simple_to_trampoline(_fit_3))
+Fit._register(4, simple_to_trampoline(_fit_4))
 
-Predict = _SklearnPredicate("Predict")
-Predict._register(3, _simple_to_trampoline(_predict_3))
+Predict = ModulePredicate("Predict")
+Predict._register(3, simple_to_trampoline(_predict_3))
 
-Transform = _SklearnPredicate("Transform")
-Transform._register(3, _simple_to_trampoline(_transform_3))
+Transform = ModulePredicate("Transform")
+Transform._register(3, simple_to_trampoline(_transform_3))
 
-FitTransform = _SklearnPredicate("FitTransform")
-FitTransform._register(4, _simple_to_trampoline(_fit_transform_4))
+FitTransform = ModulePredicate("FitTransform")
+FitTransform._register(4, simple_to_trampoline(_fit_transform_4))
 
-PredictProba = _SklearnPredicate("PredictProba")
-PredictProba._register(3, _simple_to_trampoline(_predict_proba_3))
+PredictProba = ModulePredicate("PredictProba")
+PredictProba._register(3, simple_to_trampoline(_predict_proba_3))
 
-DecisionFunction = _SklearnPredicate("DecisionFunction")
-DecisionFunction._register(3, _simple_to_trampoline(_decision_function_3))
+DecisionFunction = ModulePredicate("DecisionFunction")
+DecisionFunction._register(3, simple_to_trampoline(_decision_function_3))
 
-Score = _SklearnPredicate("Score")
-Score._register(3, _simple_to_trampoline(_score_3))
-Score._register(4, _simple_to_trampoline(_score_4))
+Score = ModulePredicate("Score")
+Score._register(3, simple_to_trampoline(_score_3))
+Score._register(4, simple_to_trampoline(_score_4))
 
-Metric = _SklearnPredicate("Metric")
-Metric._register(4, _simple_to_trampoline(_metric_4))
+Metric = ModulePredicate("Metric")
+Metric._register(4, simple_to_trampoline(_metric_4))
 
-CrossValScore = _SklearnPredicate("CrossValScore")
-CrossValScore._register(4, _simple_to_trampoline(_cross_val_score_4))
-CrossValScore._register(5, _simple_to_trampoline(_cross_val_score_5))
+CrossValScore = ModulePredicate("CrossValScore")
+CrossValScore._register(4, simple_to_trampoline(_cross_val_score_4))
+CrossValScore._register(5, simple_to_trampoline(_cross_val_score_5))
 
-CrossValidate = _SklearnPredicate("CrossValidate")
-CrossValidate._register(5, _simple_to_trampoline(_cross_validate_5))
+CrossValidate = ModulePredicate("CrossValidate")
+CrossValidate._register(5, simple_to_trampoline(_cross_validate_5))
 
-ConfusionMatrix = _SklearnPredicate("ConfusionMatrix")
-ConfusionMatrix._register(3, _simple_to_trampoline(_confusion_matrix_3))
+ConfusionMatrix = ModulePredicate("ConfusionMatrix")
+ConfusionMatrix._register(3, simple_to_trampoline(_confusion_matrix_3))
 
-ClassificationReport = _SklearnPredicate("ClassificationReport")
-ClassificationReport._register(4, _simple_to_trampoline(_classification_report_4))
+ClassificationReport = ModulePredicate("ClassificationReport")
+ClassificationReport._register(4, simple_to_trampoline(_classification_report_4))
 
-Pipeline = _SklearnPredicate("Pipeline")
-Pipeline._register(2, _simple_to_trampoline(_pipeline_2))
+Pipeline = ModulePredicate("Pipeline")
+Pipeline._register(2, simple_to_trampoline(_pipeline_2))
 
-PipelineStep = _SklearnPredicate("PipelineStep")
-PipelineStep._register(3, _simple_to_trampoline(_pipeline_step_3))
+PipelineStep = ModulePredicate("PipelineStep")
+PipelineStep._register(3, simple_to_trampoline(_pipeline_step_3))
 
-GridSearch = _SklearnPredicate("GridSearch")
-GridSearch._register(5, _simple_to_trampoline(_grid_search_5))
-GridSearch._register(6, _simple_to_trampoline(_grid_search_6))
+GridSearch = ModulePredicate("GridSearch")
+GridSearch._register(5, simple_to_trampoline(_grid_search_5))
+GridSearch._register(6, simple_to_trampoline(_grid_search_6))
 
-RandomSearch = _SklearnPredicate("RandomSearch")
-RandomSearch._register(6, _simple_to_trampoline(_random_search_6))
+RandomSearch = ModulePredicate("RandomSearch")
+RandomSearch._register(6, simple_to_trampoline(_random_search_6))
 
-SearchResults = _SklearnPredicate("SearchResults")
-SearchResults._register(2, _simple_to_trampoline(_search_results_2))
+SearchResults = ModulePredicate("SearchResults")
+SearchResults._register(2, simple_to_trampoline(_search_results_2))
 
-BestParams = _SklearnPredicate("BestParams")
-BestParams._register(2, _simple_to_trampoline(_best_params_2))
+BestParams = ModulePredicate("BestParams")
+BestParams._register(2, simple_to_trampoline(_best_params_2))
 
-BestScore = _SklearnPredicate("BestScore")
-BestScore._register(2, _simple_to_trampoline(_best_score_2))
+BestScore = ModulePredicate("BestScore")
+BestScore._register(2, simple_to_trampoline(_best_score_2))
 
-Learned = _SklearnPredicate("Learned")
-Learned._register(3, _simple_to_trampoline(_learned_3))
+Learned = ModulePredicate("Learned")
+Learned._register(3, simple_to_trampoline(_learned_3))
 
-Param = _SklearnPredicate("Param")
-Param._register(3, _simple_to_trampoline(_param_3))
+Param = ModulePredicate("Param")
+Param._register(3, simple_to_trampoline(_param_3))
 
-MakeEst = _SklearnPredicate("MakeEst")
-MakeEst._register(3, _simple_to_trampoline(_make_est_3))
+MakeEst = ModulePredicate("MakeEst")
+MakeEst._register(3, simple_to_trampoline(_make_est_3))
 
-EncodeLabels = _SklearnPredicate("EncodeLabels")
-EncodeLabels._register(3, _simple_to_trampoline(_encode_labels_3))
+EncodeLabels = ModulePredicate("EncodeLabels")
+EncodeLabels._register(3, simple_to_trampoline(_encode_labels_3))
 
-Binarize = _SklearnPredicate("Binarize")
-Binarize._register(3, _simple_to_trampoline(_binarize_3))
+Binarize = ModulePredicate("Binarize")
+Binarize._register(3, simple_to_trampoline(_binarize_3))
 
-Normalize = _SklearnPredicate("Normalize")
-Normalize._register(3, _simple_to_trampoline(_normalize_3))
+Normalize = ModulePredicate("Normalize")
+Normalize._register(3, simple_to_trampoline(_normalize_3))
 
-PolynomialFeatures = _SklearnPredicate("PolynomialFeatures")
-PolynomialFeatures._register(3, _simple_to_trampoline(_polynomial_features_3))
+PolynomialFeatures = ModulePredicate("PolynomialFeatures")
+PolynomialFeatures._register(3, simple_to_trampoline(_polynomial_features_3))
 
-SaveFitted = _SklearnPredicate("SaveFitted")
-SaveFitted._register(2, _simple_to_trampoline(_save_fitted_2))
+SaveFitted = ModulePredicate("SaveFitted")
+SaveFitted._register(2, simple_to_trampoline(_save_fitted_2))
 
-LoadFitted = _SklearnPredicate("LoadFitted")
-LoadFitted._register(2, _simple_to_trampoline(_load_fitted_2))
+LoadFitted = ModulePredicate("LoadFitted")
+LoadFitted._register(2, simple_to_trampoline(_load_fitted_2))

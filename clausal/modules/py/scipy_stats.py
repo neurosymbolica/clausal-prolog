@@ -43,6 +43,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
 # ── Lazy scipy.stats import ───────────────────────────────────────────────
@@ -65,44 +66,6 @@ def _ensure_stats():
 def _st():
     _ensure_stats()
     return _scipy_stats
-
-
-# ── Predicate adapter ─────────────────────────────────────────────────────
-
-class _SciPyStatsPredicate:
-    """Dispatch adapter for a scipy.stats predicate.
-
-    Supports multiple arities via ``_register(arity, fn)``.
-    Arity counts include RESULT but not trail.
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_SciPyStatsPredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        # args layout: (input_0, ..., input_{n-1}, result, trail)
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.stats.{self._name}/{arities}"
 
 
 # ── Dispatch function factory ─────────────────────────────────────────────
@@ -129,9 +92,9 @@ def _dispatch_fn(call: Callable) -> Callable:
     return dispatch
 
 
-def _pred(name: str, *arity_fns) -> _SciPyStatsPredicate:
-    """Create a ``_SciPyStatsPredicate`` from (arity, dispatch_fn) pairs."""
-    p = _SciPyStatsPredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, dispatch_fn) pairs."""
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p
@@ -366,7 +329,7 @@ def _dist_method_no_x(dist_name, method_name):
         return result
 
 
-class _StatsDistPredicate(_SciPyStatsPredicate):
+class _StatsDistPredicate(ModulePredicate):
     """StatsDist(DIST, METHOD, X, RESULT) and StatsDist(DIST, METHOD, RESULT)."""
 
     def __init__(self):
@@ -459,7 +422,7 @@ def _freeze_dist(dist_name, params_dict):
     return _alloc_handle(frozen)
 
 
-class _StatsFreezePredicate(_SciPyStatsPredicate):
+class _StatsFreezePredicate(ModulePredicate):
     """StatsFreezeDist(DIST, PARAMS_DICT, RESULT)."""
 
     def __init__(self):
@@ -490,7 +453,7 @@ class _StatsFreezePredicate(_SciPyStatsPredicate):
 StatsFreezeDist = _StatsFreezePredicate()
 
 
-class _StatsFrozenMethodPredicate(_SciPyStatsPredicate):
+class _StatsFrozenMethodPredicate(ModulePredicate):
     """Base for StatsFrozenPdf."""
 
     def __init__(self, name: str, method_name: str):
@@ -524,7 +487,7 @@ class _StatsFrozenMethodPredicate(_SciPyStatsPredicate):
 StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
 
 
-class _StatsFrozenCdfPredicate(_SciPyStatsPredicate):
+class _StatsFrozenCdfPredicate(ModulePredicate):
     """StatsFrozenCdf(HANDLE, X, P) — bidirectional CDF / quantile.
 
     HANDLE ground always.
@@ -579,7 +542,7 @@ class _StatsFrozenCdfPredicate(_SciPyStatsPredicate):
 StatsFrozenCdf = _StatsFrozenCdfPredicate()
 
 
-class _StatsFrozenRvsPredicate(_SciPyStatsPredicate):
+class _StatsFrozenRvsPredicate(ModulePredicate):
     """StatsFrozenRvs(HANDLE, RESULT) and StatsFrozenRvs(HANDLE, SIZE, RESULT)."""
 
     def __init__(self):
@@ -620,7 +583,7 @@ class _StatsFrozenRvsPredicate(_SciPyStatsPredicate):
 StatsFrozenRvs = _StatsFrozenRvsPredicate()
 
 
-class _StatsFrozenStatsPredicate(_SciPyStatsPredicate):
+class _StatsFrozenStatsPredicate(ModulePredicate):
     """StatsFrozenStats(HANDLE, RESULT) — returns dict with 'mean' and 'var'."""
 
     def __init__(self):
@@ -652,7 +615,7 @@ class _StatsFrozenStatsPredicate(_SciPyStatsPredicate):
 StatsFrozenStats = _StatsFrozenStatsPredicate()
 
 
-class _StatsFrozenFreePredicate(_SciPyStatsPredicate):
+class _StatsFrozenFreePredicate(ModulePredicate):
     """StatsFrozenFree(HANDLE) — release frozen distribution from registry."""
 
     def __init__(self):

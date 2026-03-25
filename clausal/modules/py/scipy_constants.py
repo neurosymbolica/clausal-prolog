@@ -33,6 +33,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
 # ── Lazy scipy.constants import ────────────────────────────────────────────
@@ -57,38 +58,6 @@ def _sc():
     return _scipy_constants
 
 
-# ── CODATA predicate adapter ───────────────────────────────────────────────
-
-class _ConstantsPredicate:
-    """Dispatch adapter for a CODATA lookup predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_ConstantsPredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        return f"scipy.constants.{self._name}/{sorted(self._dispatch_fns)}"
-
-
 def _lookup_fn(call: Callable) -> Callable:
     def dispatch(this_generator, parent, *args):
         trail = args[-1]
@@ -105,8 +74,8 @@ def _lookup_fn(call: Callable) -> Callable:
     return dispatch
 
 
-def _pred(name: str, *arity_fns) -> _ConstantsPredicate:
-    p = _ConstantsPredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p

@@ -24,59 +24,13 @@ The conversion is recursive: nested objects produce nested DictTerms.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _json = _import_stdlib("json")
 
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────
-
-
-class _JsonPredicate:
-    """Adapter with ``_get_dispatch()`` for a json predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"json.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Converters ──────────────────────────────────────────────────────────
@@ -214,20 +168,20 @@ def _write_file_2(path, term, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Parse = _JsonPredicate("Parse")
-Parse._register(2, _simple_to_trampoline(_parse_2))
+Parse = ModulePredicate("Parse")
+Parse._register(2, simple_to_trampoline(_parse_2))
 
-Generate = _JsonPredicate("Generate")
-Generate._register(2, _simple_to_trampoline(_generate_2))
+Generate = ModulePredicate("Generate")
+Generate._register(2, simple_to_trampoline(_generate_2))
 
-PrettyGenerate = _JsonPredicate("PrettyGenerate")
-PrettyGenerate._register(2, _simple_to_trampoline(_pretty_generate_2))
+PrettyGenerate = ModulePredicate("PrettyGenerate")
+PrettyGenerate._register(2, simple_to_trampoline(_pretty_generate_2))
 
-Get = _JsonPredicate("Get")
-Get._register(3, _simple_to_trampoline(_get_3))
+Get = ModulePredicate("Get")
+Get._register(3, simple_to_trampoline(_get_3))
 
-ReadFile = _JsonPredicate("ReadFile")
-ReadFile._register(2, _simple_to_trampoline(_read_file_2))
+ReadFile = ModulePredicate("ReadFile")
+ReadFile._register(2, simple_to_trampoline(_read_file_2))
 
-WriteFile = _JsonPredicate("WriteFile")
-WriteFile._register(2, _simple_to_trampoline(_write_file_2))
+WriteFile = ModulePredicate("WriteFile")
+WriteFile._register(2, simple_to_trampoline(_write_file_2))

@@ -24,49 +24,13 @@ time; the predicates here just do the runtime work.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _re = _import_stdlib("re")
 
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────────
-
-
-class _RegexPredicate:
-    """Adapter with ``_get_dispatch()`` for a regex predicate.
-
-    Supports multi-arity dispatch (e.g. Match/2 + Match/3).
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"re.{self._name}/{arities}"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,18 +56,6 @@ def _groups_dict(m: "_re.Match") -> dict | tuple:
     if groups:
         return groups
     return {}
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Match ────────────────────────────────────────────────────────────────────
@@ -211,19 +163,19 @@ def _findall_3(this_generator, parent, pat, string, match_var, trail):
 
 # ── Build and export predicate objects ───────────────────────────────────────
 
-Match = _RegexPredicate("Match")
-Match._register(2, _simple_to_trampoline(_match_2))
-Match._register(3, _simple_to_trampoline(_match_3))
+Match = ModulePredicate("Match")
+Match._register(2, simple_to_trampoline(_match_2))
+Match._register(3, simple_to_trampoline(_match_3))
 
-Search = _RegexPredicate("Search")
-Search._register(2, _simple_to_trampoline(_search_2))
-Search._register(3, _simple_to_trampoline(_search_3))
+Search = ModulePredicate("Search")
+Search._register(2, simple_to_trampoline(_search_2))
+Search._register(3, simple_to_trampoline(_search_3))
 
-Replace = _RegexPredicate("Replace")
-Replace._register(4, _simple_to_trampoline(_replace_4))
+Replace = ModulePredicate("Replace")
+Replace._register(4, simple_to_trampoline(_replace_4))
 
-Split = _RegexPredicate("Split")
-Split._register(3, _simple_to_trampoline(_split_3))
+Split = ModulePredicate("Split")
+Split._register(3, simple_to_trampoline(_split_3))
 
-FindAll = _RegexPredicate("FindAll")
+FindAll = ModulePredicate("FindAll")
 FindAll._register(3, _findall_3)

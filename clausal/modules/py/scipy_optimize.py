@@ -31,6 +31,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
 # ── Lazy scipy.optimize import ────────────────────────────────────────────
@@ -53,44 +54,6 @@ def _ensure_opt():
 def _opt():
     _ensure_opt()
     return _scipy_optimize
-
-
-# ── Predicate adapter ─────────────────────────────────────────────────────
-
-class _SciPyOptimizePredicate:
-    """Dispatch adapter for a scipy.optimize predicate.
-
-    Supports multiple arities via ``_register(arity, fn)``.
-    Arity counts include RESULT but not trail.
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_SciPyOptimizePredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        # args layout: (input_0, ..., input_{n-1}, result, trail)
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.optimize.{self._name}/{arities}"
 
 
 # ── Dispatch function factory ─────────────────────────────────────────────
@@ -117,9 +80,9 @@ def _dispatch_fn(call: Callable) -> Callable:
     return dispatch
 
 
-def _pred(name: str, *arity_fns) -> _SciPyOptimizePredicate:
-    """Create a ``_SciPyOptimizePredicate`` from (arity, dispatch_fn) pairs."""
-    p = _SciPyOptimizePredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, dispatch_fn) pairs."""
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p

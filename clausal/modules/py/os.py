@@ -13,59 +13,11 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _os = _import_stdlib("os")
 _sys = _import_stdlib("sys")
 
-from typing import Callable
-
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────
-
-
-class _OsPredicate:
-    """Adapter with ``_get_dispatch()`` for an os predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"os.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -162,29 +114,29 @@ def _cpu_count_1(n, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-EnvironmentVariable = _OsPredicate("EnvironmentVariable")
-EnvironmentVariable._register(2, _simple_to_trampoline(_environment_variable_2))
+EnvironmentVariable = ModulePredicate("EnvironmentVariable")
+EnvironmentVariable._register(2, simple_to_trampoline(_environment_variable_2))
 
-SetEnvironmentVariable = _OsPredicate("SetEnvironmentVariable")
-SetEnvironmentVariable._register(2, _simple_to_trampoline(_set_environment_variable_2))
+SetEnvironmentVariable = ModulePredicate("SetEnvironmentVariable")
+SetEnvironmentVariable._register(2, simple_to_trampoline(_set_environment_variable_2))
 
-UnsetEnvironmentVariable = _OsPredicate("UnsetEnvironmentVariable")
-UnsetEnvironmentVariable._register(1, _simple_to_trampoline(_unset_environment_variable_1))
+UnsetEnvironmentVariable = ModulePredicate("UnsetEnvironmentVariable")
+UnsetEnvironmentVariable._register(1, simple_to_trampoline(_unset_environment_variable_1))
 
-WorkingDirectory = _OsPredicate("WorkingDirectory")
-WorkingDirectory._register(1, _simple_to_trampoline(_working_directory_1))
+WorkingDirectory = ModulePredicate("WorkingDirectory")
+WorkingDirectory._register(1, simple_to_trampoline(_working_directory_1))
 
-ChangeDirectory = _OsPredicate("ChangeDirectory")
-ChangeDirectory._register(1, _simple_to_trampoline(_change_directory_1))
+ChangeDirectory = ModulePredicate("ChangeDirectory")
+ChangeDirectory._register(1, simple_to_trampoline(_change_directory_1))
 
-Pid = _OsPredicate("Pid")
-Pid._register(1, _simple_to_trampoline(_pid_1))
+Pid = ModulePredicate("Pid")
+Pid._register(1, simple_to_trampoline(_pid_1))
 
-Argv = _OsPredicate("Argv")
-Argv._register(1, _simple_to_trampoline(_argv_1))
+Argv = ModulePredicate("Argv")
+Argv._register(1, simple_to_trampoline(_argv_1))
 
-Platform = _OsPredicate("Platform")
-Platform._register(1, _simple_to_trampoline(_platform_1))
+Platform = ModulePredicate("Platform")
+Platform._register(1, simple_to_trampoline(_platform_1))
 
-CPUCount = _OsPredicate("CPUCount")
-CPUCount._register(1, _simple_to_trampoline(_cpu_count_1))
+CPUCount = ModulePredicate("CPUCount")
+CPUCount._register(1, simple_to_trampoline(_cpu_count_1))

@@ -13,60 +13,12 @@ Or via module import::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _subprocess = _import_stdlib("subprocess")
 _time = _import_stdlib("time")
 
-from typing import Callable
-
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────
-
-
-class _ProcessPredicate:
-    """Adapter with ``_get_dispatch()`` for a process predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"process.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -235,17 +187,17 @@ def _sleep_1(seconds, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Shell = _ProcessPredicate("Shell")
-Shell._register(1, _simple_to_trampoline(_shell_1))
-Shell._register(2, _simple_to_trampoline(_shell_2))
+Shell = ModulePredicate("Shell")
+Shell._register(1, simple_to_trampoline(_shell_1))
+Shell._register(2, simple_to_trampoline(_shell_2))
 
-ShellOutput = _ProcessPredicate("ShellOutput")
-ShellOutput._register(2, _simple_to_trampoline(_shell_output_2))
-ShellOutput._register(3, _simple_to_trampoline(_shell_output_3))
+ShellOutput = ModulePredicate("ShellOutput")
+ShellOutput._register(2, simple_to_trampoline(_shell_output_2))
+ShellOutput._register(3, simple_to_trampoline(_shell_output_3))
 
-ProcessCreate = _ProcessPredicate("ProcessCreate")
-ProcessCreate._register(3, _simple_to_trampoline(_process_create_3))
-ProcessCreate._register(4, _simple_to_trampoline(_process_create_4))
+ProcessCreate = ModulePredicate("ProcessCreate")
+ProcessCreate._register(3, simple_to_trampoline(_process_create_3))
+ProcessCreate._register(4, simple_to_trampoline(_process_create_4))
 
-Sleep = _ProcessPredicate("Sleep")
-Sleep._register(1, _simple_to_trampoline(_sleep_1))
+Sleep = ModulePredicate("Sleep")
+Sleep._register(1, simple_to_trampoline(_sleep_1))

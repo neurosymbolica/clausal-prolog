@@ -10,54 +10,10 @@ Wraps Python's ``socket`` module. Socket handles are opaque Python objects.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _socket = _import_stdlib("socket")
 
-from typing import Callable
-
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter ──────────────────────────────────────────────────────
-
-
-class _TcpPredicate:
-    """Adapter with ``_get_dispatch()`` for a TCP predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"tcp.{self._name}/{arities}"
-
-
-def _simple_to_trampoline(simple_fn):
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -189,24 +145,24 @@ def _set_timeout_2(sock, seconds, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Connect = _TcpPredicate("Connect")
-Connect._register(3, _simple_to_trampoline(_connect_3))
+Connect = ModulePredicate("Connect")
+Connect._register(3, simple_to_trampoline(_connect_3))
 
-Listen = _TcpPredicate("Listen")
-Listen._register(3, _simple_to_trampoline(_listen_3))
+Listen = ModulePredicate("Listen")
+Listen._register(3, simple_to_trampoline(_listen_3))
 
-Accept = _TcpPredicate("Accept")
-Accept._register(2, _simple_to_trampoline(_accept_2))
+Accept = ModulePredicate("Accept")
+Accept._register(2, simple_to_trampoline(_accept_2))
 
-Send = _TcpPredicate("Send")
-Send._register(2, _simple_to_trampoline(_send_2))
+Send = ModulePredicate("Send")
+Send._register(2, simple_to_trampoline(_send_2))
 
-Receive = _TcpPredicate("Receive")
-Receive._register(2, _simple_to_trampoline(_receive_2))
-Receive._register(3, _simple_to_trampoline(_receive_3))
+Receive = ModulePredicate("Receive")
+Receive._register(2, simple_to_trampoline(_receive_2))
+Receive._register(3, simple_to_trampoline(_receive_3))
 
-Close = _TcpPredicate("Close")
-Close._register(1, _simple_to_trampoline(_close_1))
+Close = ModulePredicate("Close")
+Close._register(1, simple_to_trampoline(_close_1))
 
-SetTimeout = _TcpPredicate("SetTimeout")
-SetTimeout._register(2, _simple_to_trampoline(_set_timeout_2))
+SetTimeout = ModulePredicate("SetTimeout")
+SetTimeout._register(2, simple_to_trampoline(_set_timeout_2))

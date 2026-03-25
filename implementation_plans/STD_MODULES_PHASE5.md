@@ -334,11 +334,14 @@ GroupPairsByKey([[a, 1], [b, 2], [a, 3]], Groups)
 
 ---
 
-## 5h — ~~Reified Predicates~~ DROPPED
+## 5h — Reified Predicates ✓
 
-If/3 (reified if-then-else) already exists as the `IfExpr` compiler special
-form. TFilter/TPartition are niche (the existing `Filter/Exclude` + reified
-`Eq/3`/`DifT/3` cover the same use cases). Dropped from this phase.
+Initially dropped, but later reinstated and implemented:
+
+- **`TFilter/3`** — reified filter using Goal(Elem, T); keeps elements
+  where T=True. Implemented in `builtins/higher_order.py`.
+- **`TPartition/4`** — reified partition; splits list into Included (T=True)
+  and Excluded (T=False). Implemented in `builtins/higher_order.py`.
 
 ---
 

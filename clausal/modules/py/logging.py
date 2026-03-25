@@ -25,50 +25,14 @@ Messages use Clausal's f-string support for interpolation::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+
 _pylogging = _import_stdlib("logging")
 
 import sys as _sys
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Adapter ──────────────────────────────────────────────────────────────────
-
-
-class _LoggingPredicate:
-    """Adapter with ``_get_dispatch()`` for a logging predicate.
-
-    Supports multi-arity dispatch (e.g. Info/1 + Info/2).
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"logging.{self._name}/{arities}"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,15 +66,6 @@ def _resolve_logger(logger_val: Any) -> _pylogging.Logger:
         return logger_val
     # Treat as a logger name string.
     return _pylogging.getLogger(str(logger_val))
-
-
-def _trampoline(fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── GetLogger ────────────────────────────────────────────────────────────────
@@ -319,56 +274,56 @@ def _basic_config_1(opts, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────────
 
-GetLogger = _LoggingPredicate("GetLogger")
-GetLogger._register(1, _trampoline(_get_logger_1))
-GetLogger._register(2, _trampoline(_get_logger_2))
+GetLogger = ModulePredicate("GetLogger")
+GetLogger._register(1, simple_to_trampoline(_get_logger_1))
+GetLogger._register(2, simple_to_trampoline(_get_logger_2))
 
-SetLevel = _LoggingPredicate("SetLevel")
-SetLevel._register(2, _trampoline(_set_level_2))
+SetLevel = ModulePredicate("SetLevel")
+SetLevel._register(2, simple_to_trampoline(_set_level_2))
 
-GetLevel = _LoggingPredicate("GetLevel")
-GetLevel._register(2, _trampoline(_get_level_2))
+GetLevel = ModulePredicate("GetLevel")
+GetLevel._register(2, simple_to_trampoline(_get_level_2))
 
-IsEnabledFor = _LoggingPredicate("IsEnabledFor")
-IsEnabledFor._register(2, _trampoline(_is_enabled_for_2))
+IsEnabledFor = ModulePredicate("IsEnabledFor")
+IsEnabledFor._register(2, simple_to_trampoline(_is_enabled_for_2))
 
-Log = _LoggingPredicate("Log")
-Log._register(3, _trampoline(_log_3))
+Log = ModulePredicate("Log")
+Log._register(3, simple_to_trampoline(_log_3))
 
-Debug = _LoggingPredicate("Debug")
-Debug._register(1, _trampoline(_debug_1))
-Debug._register(2, _trampoline(_debug_2))
+Debug = ModulePredicate("Debug")
+Debug._register(1, simple_to_trampoline(_debug_1))
+Debug._register(2, simple_to_trampoline(_debug_2))
 
-Info = _LoggingPredicate("Info")
-Info._register(1, _trampoline(_info_1))
-Info._register(2, _trampoline(_info_2))
+Info = ModulePredicate("Info")
+Info._register(1, simple_to_trampoline(_info_1))
+Info._register(2, simple_to_trampoline(_info_2))
 
-Warning = _LoggingPredicate("Warning")
-Warning._register(1, _trampoline(_warning_1))
-Warning._register(2, _trampoline(_warning_2))
+Warning = ModulePredicate("Warning")
+Warning._register(1, simple_to_trampoline(_warning_1))
+Warning._register(2, simple_to_trampoline(_warning_2))
 
-Error = _LoggingPredicate("Error")
-Error._register(1, _trampoline(_error_1))
-Error._register(2, _trampoline(_error_2))
+Error = ModulePredicate("Error")
+Error._register(1, simple_to_trampoline(_error_1))
+Error._register(2, simple_to_trampoline(_error_2))
 
-Critical = _LoggingPredicate("Critical")
-Critical._register(1, _trampoline(_critical_1))
-Critical._register(2, _trampoline(_critical_2))
+Critical = ModulePredicate("Critical")
+Critical._register(1, simple_to_trampoline(_critical_1))
+Critical._register(2, simple_to_trampoline(_critical_2))
 
-StreamHandler = _LoggingPredicate("StreamHandler")
-StreamHandler._register(2, _trampoline(_stream_handler_2))
+StreamHandler = ModulePredicate("StreamHandler")
+StreamHandler._register(2, simple_to_trampoline(_stream_handler_2))
 
-FileHandler = _LoggingPredicate("FileHandler")
-FileHandler._register(2, _trampoline(_file_handler_2))
+FileHandler = ModulePredicate("FileHandler")
+FileHandler._register(2, simple_to_trampoline(_file_handler_2))
 
-SetFormatter = _LoggingPredicate("SetFormatter")
-SetFormatter._register(2, _trampoline(_set_formatter_2))
+SetFormatter = ModulePredicate("SetFormatter")
+SetFormatter._register(2, simple_to_trampoline(_set_formatter_2))
 
-AddHandler = _LoggingPredicate("AddHandler")
-AddHandler._register(2, _trampoline(_add_handler_2))
+AddHandler = ModulePredicate("AddHandler")
+AddHandler._register(2, simple_to_trampoline(_add_handler_2))
 
-RemoveHandler = _LoggingPredicate("RemoveHandler")
-RemoveHandler._register(2, _trampoline(_remove_handler_2))
+RemoveHandler = ModulePredicate("RemoveHandler")
+RemoveHandler._register(2, simple_to_trampoline(_remove_handler_2))
 
-BasicConfig = _LoggingPredicate("BasicConfig")
-BasicConfig._register(1, _trampoline(_basic_config_1))
+BasicConfig = ModulePredicate("BasicConfig")
+BasicConfig._register(1, simple_to_trampoline(_basic_config_1))

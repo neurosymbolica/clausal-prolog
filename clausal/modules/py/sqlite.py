@@ -28,8 +28,9 @@ from __future__ import annotations
 
 import sqlite3 as _sqlite3
 import threading as _threading
-from typing import Any, Callable
+from typing import Any
 
+from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -47,52 +48,6 @@ def _get_connection(alias: str) -> _sqlite3.Connection:
     if conn is None:
         raise ValueError(f"No SQLite connection with alias {alias!r}")
     return conn
-
-
-# ── Dispatch adapter ──────────────────────────────────────────────────────
-
-class _SQLitePredicate:
-    """Adapter with ``_get_dispatch()`` for an SQLite predicate.
-
-    Supports multi-arity dispatch (e.g. SQLiteQuery/3 + SQLiteQuery/4).
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"sqlite.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ──────────────────────────────────────────────────
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Layer 1: Connection management ───────────────────────────────────────
@@ -269,28 +224,28 @@ def _sqlite_column_4(this_generator, parent, alias, table, col_name, col_type, t
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-SQLiteConnect = _SQLitePredicate("SQLiteConnect")
-SQLiteConnect._register(2, _simple_to_trampoline(_sqlite_connect_2))
+SQLiteConnect = ModulePredicate("SQLiteConnect")
+SQLiteConnect._register(2, simple_to_trampoline(_sqlite_connect_2))
 
-SQLiteDisconnect = _SQLitePredicate("SQLiteDisconnect")
-SQLiteDisconnect._register(1, _simple_to_trampoline(_sqlite_disconnect_1))
+SQLiteDisconnect = ModulePredicate("SQLiteDisconnect")
+SQLiteDisconnect._register(1, simple_to_trampoline(_sqlite_disconnect_1))
 
-SQLiteCurrentConnection = _SQLitePredicate("SQLiteCurrentConnection")
+SQLiteCurrentConnection = ModulePredicate("SQLiteCurrentConnection")
 SQLiteCurrentConnection._register(1, _sqlite_current_connection_1)
 
-SQLiteQuery = _SQLitePredicate("SQLiteQuery")
+SQLiteQuery = ModulePredicate("SQLiteQuery")
 SQLiteQuery._register(3, _sqlite_query_3)
 SQLiteQuery._register(4, _sqlite_query_4)
 
-SQLiteExec = _SQLitePredicate("SQLiteExec")
-SQLiteExec._register(2, _simple_to_trampoline(_sqlite_exec_2))
-SQLiteExec._register(3, _simple_to_trampoline(_sqlite_exec_3))
+SQLiteExec = ModulePredicate("SQLiteExec")
+SQLiteExec._register(2, simple_to_trampoline(_sqlite_exec_2))
+SQLiteExec._register(3, simple_to_trampoline(_sqlite_exec_3))
 
-SQLiteRowCount = _SQLitePredicate("SQLiteRowCount")
-SQLiteRowCount._register(3, _simple_to_trampoline(_sqlite_row_count_3))
+SQLiteRowCount = ModulePredicate("SQLiteRowCount")
+SQLiteRowCount._register(3, simple_to_trampoline(_sqlite_row_count_3))
 
-SQLiteTable = _SQLitePredicate("SQLiteTable")
+SQLiteTable = ModulePredicate("SQLiteTable")
 SQLiteTable._register(2, _sqlite_table_2)
 
-SQLiteColumn = _SQLitePredicate("SQLiteColumn")
+SQLiteColumn = ModulePredicate("SQLiteColumn")
 SQLiteColumn._register(4, _sqlite_column_4)

@@ -36,58 +36,13 @@ datetime object to decompose into components.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _dt = _import_stdlib("datetime")
 
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter (same pattern as re.py) ──────────────────────────────
-
-
-class _DateTimePredicate:
-    """Adapter with ``_get_dispatch()`` for a date_time predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"datetime.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ──────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Now / Today ──────────────────────────────────────────────────────────
@@ -374,44 +329,44 @@ def _date_between_3(this_generator, parent, start, end, d, trail):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Now = _DateTimePredicate("Now")
-Now._register(1, _simple_to_trampoline(_now_1))
+Now = ModulePredicate("Now", module="datetime")
+Now._register(1, simple_to_trampoline(_now_1))
 
-NowUTC = _DateTimePredicate("NowUTC")
-NowUTC._register(1, _simple_to_trampoline(_now_utc_1))
+NowUTC = ModulePredicate("NowUTC", module="datetime")
+NowUTC._register(1, simple_to_trampoline(_now_utc_1))
 
-Today = _DateTimePredicate("Today")
-Today._register(1, _simple_to_trampoline(_today_1))
+Today = ModulePredicate("Today", module="datetime")
+Today._register(1, simple_to_trampoline(_today_1))
 
-Date = _DateTimePredicate("Date")
-Date._register(4, _simple_to_trampoline(_date_4))
+Date = ModulePredicate("Date", module="datetime")
+Date._register(4, simple_to_trampoline(_date_4))
 
-Time = _DateTimePredicate("Time")
-Time._register(4, _simple_to_trampoline(_time_4))
+Time = ModulePredicate("Time", module="datetime")
+Time._register(4, simple_to_trampoline(_time_4))
 
-DateTime = _DateTimePredicate("DateTime")
-DateTime._register(7, _simple_to_trampoline(_datetime_7))
+DateTime = ModulePredicate("DateTime", module="datetime")
+DateTime._register(7, simple_to_trampoline(_datetime_7))
 
-TimeDelta = _DateTimePredicate("TimeDelta")
-TimeDelta._register(3, _simple_to_trampoline(_timedelta_3))
+TimeDelta = ModulePredicate("TimeDelta", module="datetime")
+TimeDelta._register(3, simple_to_trampoline(_timedelta_3))
 
-DateAdd = _DateTimePredicate("DateAdd")
-DateAdd._register(3, _simple_to_trampoline(_date_add_3))
+DateAdd = ModulePredicate("DateAdd", module="datetime")
+DateAdd._register(3, simple_to_trampoline(_date_add_3))
 
-DateSub = _DateTimePredicate("DateSub")
-DateSub._register(3, _simple_to_trampoline(_date_sub_3))
+DateSub = ModulePredicate("DateSub", module="datetime")
+DateSub._register(3, simple_to_trampoline(_date_sub_3))
 
-DateDiff = _DateTimePredicate("DateDiff")
-DateDiff._register(3, _simple_to_trampoline(_date_diff_3))
+DateDiff = ModulePredicate("DateDiff", module="datetime")
+DateDiff._register(3, simple_to_trampoline(_date_diff_3))
 
-FormatDate = _DateTimePredicate("FormatDate")
-FormatDate._register(3, _simple_to_trampoline(_format_date_3))
+FormatDate = ModulePredicate("FormatDate", module="datetime")
+FormatDate._register(3, simple_to_trampoline(_format_date_3))
 
-ParseDate = _DateTimePredicate("ParseDate")
-ParseDate._register(3, _simple_to_trampoline(_parse_date_3))
+ParseDate = ModulePredicate("ParseDate", module="datetime")
+ParseDate._register(3, simple_to_trampoline(_parse_date_3))
 
-DayOfWeek = _DateTimePredicate("DayOfWeek")
-DayOfWeek._register(2, _simple_to_trampoline(_day_of_week_2))
+DayOfWeek = ModulePredicate("DayOfWeek", module="datetime")
+DayOfWeek._register(2, simple_to_trampoline(_day_of_week_2))
 
-DateBetween = _DateTimePredicate("DateBetween")
+DateBetween = ModulePredicate("DateBetween", module="datetime")
 DateBetween._register(3, _date_between_3)

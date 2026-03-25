@@ -13,7 +13,7 @@ import pytest
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
-from clausal.modules.sqlite import (
+from clausal.modules.py.sqlite import (
     _CONNECTIONS,
     _LOCK,
     _sqlite_connect_2,

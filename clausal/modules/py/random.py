@@ -18,63 +18,15 @@ global PRNG state.  ``RandomSeed/1`` seeds this local instance.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _random = _import_stdlib("random")
 
-from typing import Callable
-
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
 
 
 # ── Module-local PRNG ───────────────────────────────────────────────────
 
 _rng = _random.Random()
-
-
-# ── Dispatch adapter (same pattern as uuid.py) ─────────────────────────
-
-
-class _RandomPredicate:
-    """Adapter with ``_get_dispatch()`` for a random predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"random.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -185,27 +137,27 @@ def _maybe_1(p, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-Random = _RandomPredicate("Random")
-Random._register(1, _simple_to_trampoline(_random_1))
+Random = ModulePredicate("Random")
+Random._register(1, simple_to_trampoline(_random_1))
 
-RandomFloat = _RandomPredicate("RandomFloat")
-RandomFloat._register(3, _simple_to_trampoline(_random_float_3))
+RandomFloat = ModulePredicate("RandomFloat")
+RandomFloat._register(3, simple_to_trampoline(_random_float_3))
 
-RandomInteger = _RandomPredicate("RandomInteger")
-RandomInteger._register(3, _simple_to_trampoline(_random_integer_3))
+RandomInteger = ModulePredicate("RandomInteger")
+RandomInteger._register(3, simple_to_trampoline(_random_integer_3))
 
-RandomMember = _RandomPredicate("RandomMember")
-RandomMember._register(2, _simple_to_trampoline(_random_member_2))
+RandomMember = ModulePredicate("RandomMember")
+RandomMember._register(2, simple_to_trampoline(_random_member_2))
 
-RandomPermutation = _RandomPredicate("RandomPermutation")
-RandomPermutation._register(2, _simple_to_trampoline(_random_permutation_2))
+RandomPermutation = ModulePredicate("RandomPermutation")
+RandomPermutation._register(2, simple_to_trampoline(_random_permutation_2))
 
-RandomSample = _RandomPredicate("RandomSample")
-RandomSample._register(3, _simple_to_trampoline(_random_sample_3))
+RandomSample = ModulePredicate("RandomSample")
+RandomSample._register(3, simple_to_trampoline(_random_sample_3))
 
-RandomSeed = _RandomPredicate("RandomSeed")
-RandomSeed._register(1, _simple_to_trampoline(_random_seed_1))
+RandomSeed = ModulePredicate("RandomSeed")
+RandomSeed._register(1, simple_to_trampoline(_random_seed_1))
 
-Maybe = _RandomPredicate("Maybe")
-Maybe._register(0, _simple_to_trampoline(_maybe_0))
-Maybe._register(1, _simple_to_trampoline(_maybe_1))
+Maybe = ModulePredicate("Maybe")
+Maybe._register(0, simple_to_trampoline(_maybe_0))
+Maybe._register(1, simple_to_trampoline(_maybe_1))

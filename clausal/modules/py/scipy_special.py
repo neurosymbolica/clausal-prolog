@@ -78,6 +78,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 from clausal.modules.py._scipy_relations import _bidir_dispatch
 from clausal.modules.py._scipy_units import make_quantity_aware, REQUIRE_DIMENSIONLESS
 
@@ -102,42 +103,6 @@ def _ensure_sp():
 def _sp():
     _ensure_sp()
     return _scipy_special
-
-
-# ── Predicate adapter ────────────────────────────────────────────────────
-
-class _ScipySpecialPredicate:
-    """Dispatch adapter for a scipy.special predicate.
-
-    Supports multiple arities via ``_register(arity, fn)``.
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "self":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # args includes trail as last element
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.special.{self._name}/{arities}"
 
 
 # ── Dispatch function factory ────────────────────────────────────────────
@@ -174,20 +139,20 @@ def _sp_kw(attr: str, **fixed_kwargs) -> Callable:
     return call
 
 
-def _pred_bidir(name: str, *arity_dispatches) -> _ScipySpecialPredicate:
-    """Create a ``_ScipySpecialPredicate`` from (arity, dispatch_fn) pairs.
+def _pred_bidir(name: str, *arity_dispatches) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, dispatch_fn) pairs.
 
     ``dispatch_fn`` is an already-constructed trampoline function (the output
     of ``_bidir_dispatch(...)``), not a raw callable.
     """
-    p = _ScipySpecialPredicate(name)
+    p = ModulePredicate(name)
     for arity, dispatch_fn in arity_dispatches:
         p._dispatch_fns[arity] = dispatch_fn
     return p
 
 
-def _pred(name: str, *arity_calls) -> _ScipySpecialPredicate:
-    """Create a ``_ScipySpecialPredicate`` from (arity, callable) pairs.
+def _pred(name: str, *arity_calls) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, callable) pairs.
 
     ``arity`` is the total number of predicate arguments including RESULT
     but NOT trail.  ``callable`` receives just the *input* arguments
@@ -197,7 +162,7 @@ def _pred(name: str, *arity_calls) -> _ScipySpecialPredicate:
     :data:`~clausal.modules.py._scipy_units.REQUIRE_DIMENSIONLESS` propagator:
     special functions require dimensionless arguments.
     """
-    p = _ScipySpecialPredicate(name)
+    p = ModulePredicate(name)
     for arity, call in arity_calls:
         p._register(arity, _dispatch_fn(make_quantity_aware(call, REQUIRE_DIMENSIONLESS)))
     return p

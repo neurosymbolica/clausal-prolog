@@ -94,6 +94,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 from clausal.terms import Quantity, UnitsMismatch
 from clausal.modules.py._scipy_units import (
     strip_quantity, quantity_dims, merge_dims, wrap_result,
@@ -144,44 +145,6 @@ def _lookup_handle(handle: int) -> tuple:
     if entry is None:
         raise KeyError(f"Unknown interpolator handle: {handle!r}")
     return entry
-
-
-# ── Predicate adapter ─────────────────────────────────────────────────────
-
-class _SciPyInterpPredicate:
-    """Base dispatch adapter for scipy.interpolate predicates.
-
-    Subclasses override ``_get_dispatch`` / provide ``_dispatch``.
-    Multi-arity predicates can register per-arity callables via ``_register``.
-    """
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_SciPyInterpPredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        # args: (input_0, ..., input_{n-1}, result, trail)
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"scipy.interpolate.{self._name}/{arities}"
 
 
 # ── Shared dispatch helpers ────────────────────────────────────────────────
@@ -265,9 +228,9 @@ def _eval_dispatch(evaluator: Callable) -> Callable:
     return dispatch
 
 
-def _pred(name: str, *arity_fns) -> _SciPyInterpPredicate:
-    """Create a ``_SciPyInterpPredicate`` from (arity, dispatch_fn) pairs."""
-    p = _SciPyInterpPredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    """Create a ``ModulePredicate`` from (arity, dispatch_fn) pairs."""
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p
@@ -636,7 +599,7 @@ SplineRoots = _pred("SplineRoots",
 
 # ── Free ─────────────────────────────────────────────────────────────
 
-class _FreePredicate(_SciPyInterpPredicate):
+class _FreePredicate(ModulePredicate):
     """Free(HANDLE) — release interpolator handle from registry."""
 
     def __init__(self):

@@ -33,58 +33,12 @@ construction from YAML tags.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _yaml = _import_stdlib("yaml")
 
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter (same pattern as re.py) ──────────────────────────────
-
-
-class _YamlPredicate:
-    """Adapter with ``_get_dispatch()`` for a yaml predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"yaml.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ──────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Read ─────────────────────────────────────────────────────────────────
@@ -203,23 +157,23 @@ def _get_3(data, path, result, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Read = _YamlPredicate("Read")
-Read._register(2, _simple_to_trampoline(_read_2))
+Read = ModulePredicate("Read")
+Read._register(2, simple_to_trampoline(_read_2))
 
-Write = _YamlPredicate("Write")
-Write._register(2, _simple_to_trampoline(_write_2))
+Write = ModulePredicate("Write")
+Write._register(2, simple_to_trampoline(_write_2))
 
-ReadAll = _YamlPredicate("ReadAll")
-ReadAll._register(2, _simple_to_trampoline(_read_all_2))
+ReadAll = ModulePredicate("ReadAll")
+ReadAll._register(2, simple_to_trampoline(_read_all_2))
 
-WriteAll = _YamlPredicate("WriteAll")
-WriteAll._register(2, _simple_to_trampoline(_write_all_2))
+WriteAll = ModulePredicate("WriteAll")
+WriteAll._register(2, simple_to_trampoline(_write_all_2))
 
-ReadFile = _YamlPredicate("ReadFile")
-ReadFile._register(2, _simple_to_trampoline(_read_file_2))
+ReadFile = ModulePredicate("ReadFile")
+ReadFile._register(2, simple_to_trampoline(_read_file_2))
 
-WriteFile = _YamlPredicate("WriteFile")
-WriteFile._register(2, _simple_to_trampoline(_write_file_2))
+WriteFile = ModulePredicate("WriteFile")
+WriteFile._register(2, simple_to_trampoline(_write_file_2))
 
-Get = _YamlPredicate("Get")
-Get._register(3, _simple_to_trampoline(_get_3))
+Get = ModulePredicate("Get")
+Get._register(3, simple_to_trampoline(_get_3))

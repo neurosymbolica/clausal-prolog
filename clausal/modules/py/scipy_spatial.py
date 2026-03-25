@@ -152,6 +152,7 @@ import numpy as _np
 
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import ModulePredicate
 
 
 # ── Lazy scipy imports ────────────────────────────────────────────────────
@@ -212,38 +213,8 @@ def _lookup_handle(handle: int) -> object:
     return obj
 
 
-# ── Predicate adapter ─────────────────────────────────────────────────────
-
-class _SciPySpatialPredicate:
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> "_SciPySpatialPredicate":
-        self._dispatch_fns[arity] = fn
-        return self
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        return f"scipy.spatial.{self._name}/{sorted(self._dispatch_fns)}"
-
-
-def _pred(name: str, *arity_fns) -> _SciPySpatialPredicate:
-    p = _SciPySpatialPredicate(name)
+def _pred(name: str, *arity_fns) -> ModulePredicate:
+    p = ModulePredicate(name)
     for arity, fn in arity_fns:
         p._register(arity, fn)
     return p

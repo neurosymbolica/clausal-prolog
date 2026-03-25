@@ -21,60 +21,13 @@ Use ``++int(X)`` or ``NumberChars`` for conversion if needed.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _csv = _import_stdlib("csv")
 
 import io
-from typing import Callable
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
-
-
-# ── Dispatch adapter ────────────────────────────────────────────────────
-
-
-class _CsvPredicate:
-    """Adapter with ``_get_dispatch()`` for a csv predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"csv.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ─────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -233,26 +186,26 @@ def _write_file_2(path, rows, trail, k):
 
 # ── Build and export predicate objects ──────────────────────────────────
 
-ParseRow = _CsvPredicate("ParseRow")
-ParseRow._register(2, _simple_to_trampoline(_parse_row_2))
+ParseRow = ModulePredicate("ParseRow")
+ParseRow._register(2, simple_to_trampoline(_parse_row_2))
 
-Parse = _CsvPredicate("Parse")
-Parse._register(2, _simple_to_trampoline(_parse_2))
+Parse = ModulePredicate("Parse")
+Parse._register(2, simple_to_trampoline(_parse_2))
 
-ParseRecords = _CsvPredicate("ParseRecords")
-ParseRecords._register(3, _simple_to_trampoline(_parse_records_3))
+ParseRecords = ModulePredicate("ParseRecords")
+ParseRecords._register(3, simple_to_trampoline(_parse_records_3))
 
-Generate = _CsvPredicate("Generate")
-Generate._register(2, _simple_to_trampoline(_generate_2))
+Generate = ModulePredicate("Generate")
+Generate._register(2, simple_to_trampoline(_generate_2))
 
-GenerateRecords = _CsvPredicate("GenerateRecords")
-GenerateRecords._register(3, _simple_to_trampoline(_generate_records_3))
+GenerateRecords = ModulePredicate("GenerateRecords")
+GenerateRecords._register(3, simple_to_trampoline(_generate_records_3))
 
-ReadFile = _CsvPredicate("ReadFile")
-ReadFile._register(2, _simple_to_trampoline(_read_file_2))
+ReadFile = ModulePredicate("ReadFile")
+ReadFile._register(2, simple_to_trampoline(_read_file_2))
 
-ReadRecords = _CsvPredicate("ReadRecords")
-ReadRecords._register(2, _simple_to_trampoline(_read_records_2))
+ReadRecords = ModulePredicate("ReadRecords")
+ReadRecords._register(2, simple_to_trampoline(_read_records_2))
 
-WriteFile = _CsvPredicate("WriteFile")
-WriteFile._register(2, _simple_to_trampoline(_write_file_2))
+WriteFile = ModulePredicate("WriteFile")
+WriteFile._register(2, simple_to_trampoline(_write_file_2))

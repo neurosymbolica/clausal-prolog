@@ -19,58 +19,12 @@ resulting values.
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 _uuid = _import_stdlib("uuid")
 
-from typing import Any, Callable
+from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.trampoline import DONE
-
-
-# ── Dispatch adapter (same pattern as datetime.py) ────────────────────────
-
-
-class _UuidPredicate:
-    """Adapter with ``_get_dispatch()`` for a uuid predicate."""
-
-    __slots__ = ("_name", "_dispatch_fns")
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-        self._dispatch_fns: dict[int, Callable] = {}
-
-    def _register(self, arity: int, fn: Callable) -> None:
-        self._dispatch_fns[arity] = fn
-
-    def _get_dispatch(self) -> Callable:
-        if len(self._dispatch_fns) == 1:
-            return next(iter(self._dispatch_fns.values()))
-        return self._multi_dispatch
-
-    def _multi_dispatch(self, this_generator, parent, *args):
-        arity = len(args) - 1  # exclude trail
-        fn = self._dispatch_fns.get(arity)
-        if fn is None:
-            yield (parent, DONE)
-            return
-        yield from fn(this_generator, parent, *args)
-
-    def __repr__(self) -> str:
-        arities = sorted(self._dispatch_fns)
-        return f"uuid.{self._name}/{arities}"
-
-
-# ── Simple-mode wrapper ──────────────────────────────────────────────────
-
-
-def _simple_to_trampoline(simple_fn):
-    """Wrap a simple-mode fn(*args, trail, k) → trampoline protocol."""
-    def trampoline_fn(this_generator, parent, *args):
-        for _ in simple_fn(*args, None):
-            yield (parent, None)
-        yield (parent, DONE)
-    return trampoline_fn
 
 
 # ── Namespace resolver ───────────────────────────────────────────────────
@@ -283,38 +237,38 @@ def _is_uuid_1(u, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-UUIDv4 = _UuidPredicate("UUIDv4")
-UUIDv4._register(1, _simple_to_trampoline(_uuid4_1))
+UUIDv4 = ModulePredicate("UUIDv4")
+UUIDv4._register(1, simple_to_trampoline(_uuid4_1))
 
-UUIDv1 = _UuidPredicate("UUIDv1")
-UUIDv1._register(1, _simple_to_trampoline(_uuid1_1))
+UUIDv1 = ModulePredicate("UUIDv1")
+UUIDv1._register(1, simple_to_trampoline(_uuid1_1))
 
-UUIDv3 = _UuidPredicate("UUIDv3")
-UUIDv3._register(3, _simple_to_trampoline(_uuid3_3))
+UUIDv3 = ModulePredicate("UUIDv3")
+UUIDv3._register(3, simple_to_trampoline(_uuid3_3))
 
-UUIDv5 = _UuidPredicate("UUIDv5")
-UUIDv5._register(3, _simple_to_trampoline(_uuid5_3))
+UUIDv5 = ModulePredicate("UUIDv5")
+UUIDv5._register(3, simple_to_trampoline(_uuid5_3))
 
-UUIDStr = _UuidPredicate("UUIDStr")
-UUIDStr._register(2, _simple_to_trampoline(_uuid_str_2))
+UUIDStr = ModulePredicate("UUIDStr")
+UUIDStr._register(2, simple_to_trampoline(_uuid_str_2))
 
-UUIDHex = _UuidPredicate("UUIDHex")
-UUIDHex._register(2, _simple_to_trampoline(_uuid_hex_2))
+UUIDHex = ModulePredicate("UUIDHex")
+UUIDHex._register(2, simple_to_trampoline(_uuid_hex_2))
 
-UUIDUrn = _UuidPredicate("UUIDUrn")
-UUIDUrn._register(2, _simple_to_trampoline(_uuid_urn_2))
+UUIDUrn = ModulePredicate("UUIDUrn")
+UUIDUrn._register(2, simple_to_trampoline(_uuid_urn_2))
 
-UUIDBytes = _UuidPredicate("UUIDBytes")
-UUIDBytes._register(2, _simple_to_trampoline(_uuid_bytes_2))
+UUIDBytes = ModulePredicate("UUIDBytes")
+UUIDBytes._register(2, simple_to_trampoline(_uuid_bytes_2))
 
-UUIDInt = _UuidPredicate("UUIDInt")
-UUIDInt._register(2, _simple_to_trampoline(_uuid_int_2))
+UUIDInt = ModulePredicate("UUIDInt")
+UUIDInt._register(2, simple_to_trampoline(_uuid_int_2))
 
-UUIDVersion = _UuidPredicate("UUIDVersion")
-UUIDVersion._register(2, _simple_to_trampoline(_uuid_version_2))
+UUIDVersion = ModulePredicate("UUIDVersion")
+UUIDVersion._register(2, simple_to_trampoline(_uuid_version_2))
 
-UUIDFields = _UuidPredicate("UUIDFields")
-UUIDFields._register(7, _simple_to_trampoline(_uuid_fields_7))
+UUIDFields = ModulePredicate("UUIDFields")
+UUIDFields._register(7, simple_to_trampoline(_uuid_fields_7))
 
-IsUUID = _UuidPredicate("IsUUID")
-IsUUID._register(1, _simple_to_trampoline(_is_uuid_1))
+IsUUID = ModulePredicate("IsUUID")
+IsUUID._register(1, simple_to_trampoline(_is_uuid_1))
