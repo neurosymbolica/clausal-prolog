@@ -2,88 +2,88 @@
 
 # ── Take/3 ───────────────────────────────────────────────────────────────────
 
-Test("take basic") <- (Take(2, [1, 2, 3, 4], R_) and R_ == [1, 2])
-Test("take zero") <- (Take(0, [1, 2, 3], R_) and R_ == [])
-Test("take more than length") <- (Take(10, [1, 2], R_) and R_ == [1, 2])
-Test("take from empty") <- (Take(3, [], R_) and R_ == [])
+Test("take basic") <- (Take(2, [1, 2, 3, 4], RESULT), RESULT == [1, 2])
+Test("take zero") <- (Take(0, [1, 2, 3], RESULT), RESULT == [])
+Test("take more than length") <- (Take(10, [1, 2], RESULT), RESULT == [1, 2])
+Test("take from empty") <- (Take(3, [], RESULT), RESULT == [])
 
 # ── Drop/3 ───────────────────────────────────────────────────────────────────
 
-Test("drop basic") <- (Drop(2, [1, 2, 3, 4], R_) and R_ == [3, 4])
-Test("drop zero") <- (Drop(0, [1, 2, 3], R_) and R_ == [1, 2, 3])
-Test("drop all") <- (Drop(3, [1, 2, 3], R_) and R_ == [])
-Test("drop more than length") <- (Drop(10, [1, 2], R_) and R_ == [])
+Test("drop basic") <- (Drop(2, [1, 2, 3, 4], RESULT), RESULT == [3, 4])
+Test("drop zero") <- (Drop(0, [1, 2, 3], RESULT), RESULT == [1, 2, 3])
+Test("drop all") <- (Drop(3, [1, 2, 3], RESULT), RESULT == [])
+Test("drop more than length") <- (Drop(10, [1, 2], RESULT), RESULT == [])
 
 # ── SplitAt/4 ────────────────────────────────────────────────────────────────
 
-Test("split_at middle") <- (SplitAt(2, [1, 2, 3, 4], L_, R_) and L_ == [1, 2] and R_ == [3, 4])
-Test("split_at zero") <- (SplitAt(0, [1, 2, 3], L_, R_) and L_ == [] and R_ == [1, 2, 3])
-Test("split_at end") <- (SplitAt(3, [1, 2, 3], L_, R_) and L_ == [1, 2, 3] and R_ == [])
-Test("split_at beyond") <- (SplitAt(10, [1, 2], L_, R_) and L_ == [1, 2] and R_ == [])
+Test("split_at middle") <- (SplitAt(2, [1, 2, 3, 4], LEFT, RIGHT), LEFT == [1, 2], RIGHT == [3, 4])
+Test("split_at zero") <- (SplitAt(0, [1, 2, 3], LEFT, RIGHT), LEFT == [], RIGHT == [1, 2, 3])
+Test("split_at end") <- (SplitAt(3, [1, 2, 3], LEFT, RIGHT), LEFT == [1, 2, 3], RIGHT == [])
+Test("split_at beyond") <- (SplitAt(10, [1, 2], LEFT, RIGHT), LEFT == [1, 2], RIGHT == [])
 
 # ── Zip/3 ────────────────────────────────────────────────────────────────────
 
-Test("zip equal") <- (Zip([1, 2, 3], ["a", "b", "c"], R_) and R_ == [[1, "a"], [2, "b"], [3, "c"]])
-Test("zip unequal") <- (Zip([1, 2], ["a", "b", "c"], R_) and R_ == [[1, "a"], [2, "b"]])
-Test("zip empty") <- (Zip([], [1, 2], R_) and R_ == [])
+Test("zip equal") <- (Zip([1, 2, 3], ["a", "b", "c"], RESULT), RESULT == [[1, "a"], [2, "b"], [3, "c"]])
+Test("zip unequal") <- (Zip([1, 2], ["a", "b", "c"], RESULT), RESULT == [[1, "a"], [2, "b"]])
+Test("zip empty") <- (Zip([], [1, 2], RESULT), RESULT == [])
 
 # ── Replicate/3 ──────────────────────────────────────────────────────────────
 
-Test("replicate basic") <- (Replicate(3, "x", R_) and R_ == ["x", "x", "x"])
-Test("replicate zero") <- (Replicate(0, "x", R_) and R_ == [])
-Test("replicate one") <- (Replicate(1, 42, R_) and R_ == [42])
+Test("replicate basic") <- (Replicate(3, "x", RESULT), RESULT == ["x", "x", "x"])
+Test("replicate zero") <- (Replicate(0, "x", RESULT), RESULT == [])
+Test("replicate one") <- (Replicate(1, 42, RESULT), RESULT == [42])
 
 # ── SplitWith/3 ──────────────────────────────────────────────────────────────
 
-Test("split_with basic") <- (SplitWith(0, [1, 2, 0, 3, 4], R_) and R_ == [[1, 2], [3, 4]])
-Test("split_with no sep") <- (SplitWith(0, [1, 2, 3], R_) and R_ == [[1, 2, 3]])
-Test("split_with consecutive") <- (SplitWith(0, [1, 0, 0, 2], R_) and R_ == [[1], [], [2]])
+Test("split_with basic") <- (SplitWith(0, [1, 2, 0, 3, 4], RESULT), RESULT == [[1, 2], [3, 4]])
+Test("split_with no sep") <- (SplitWith(0, [1, 2, 3], RESULT), RESULT == [[1, 2, 3]])
+Test("split_with consecutive") <- (SplitWith(0, [1, 0, 0, 2], RESULT), RESULT == [[1], [], [2]])
 
 # ── TakeWhile/3 ──────────────────────────────────────────────────────────────
 
-IsPositive(X_) <- (X_ > 0)
+IsPositive(X) <- (X > 0)
 
-Test("take_while basic") <- (TakeWhile(IsPositive, [1, 2, -3, 4], R_) and R_ == [1, 2])
-Test("take_while none match") <- (TakeWhile(IsPositive, [-1, 2, 3], R_) and R_ == [])
-Test("take_while all match") <- (TakeWhile(IsPositive, [1, 2, 3], R_) and R_ == [1, 2, 3])
+Test("take_while basic") <- (TakeWhile(IsPositive, [1, 2, -3, 4], RESULT), RESULT == [1, 2])
+Test("take_while none match") <- (TakeWhile(IsPositive, [-1, 2, 3], RESULT), RESULT == [])
+Test("take_while all match") <- (TakeWhile(IsPositive, [1, 2, 3], RESULT), RESULT == [1, 2, 3])
 
 # ── DropWhile/3 ──────────────────────────────────────────────────────────────
 
-Test("drop_while basic") <- (DropWhile(IsPositive, [1, 2, -3, 4], R_) and R_ == [-3, 4])
-Test("drop_while none match") <- (DropWhile(IsPositive, [-1, 2, 3], R_) and R_ == [-1, 2, 3])
-Test("drop_while all match") <- (DropWhile(IsPositive, [1, 2, 3], R_) and R_ == [])
+Test("drop_while basic") <- (DropWhile(IsPositive, [1, 2, -3, 4], RESULT), RESULT == [-3, 4])
+Test("drop_while none match") <- (DropWhile(IsPositive, [-1, 2, 3], RESULT), RESULT == [-1, 2, 3])
+Test("drop_while all match") <- (DropWhile(IsPositive, [1, 2, 3], RESULT), RESULT == [])
 
 # ── Span/4 ───────────────────────────────────────────────────────────────────
 
-Test("span basic") <- (Span(IsPositive, [1, 2, -3, 4], Y_, N_) and Y_ == [1, 2] and N_ == [-3, 4])
+Test("span basic") <- (Span(IsPositive, [1, 2, -3, 4], MATCHING, REST), MATCHING == [1, 2], REST == [-3, 4])
 
 # ── GroupBy/3 ─────────────────────────────────────────────────────────────────
 
-Identity(X_, X_) <- True
+Identity(X, X) <- True
 
-Test("group_by identity") <- (GroupBy(Identity, [1, 1, 2, 2, 2, 3], R_) and R_ == [[1, 1], [2, 2, 2], [3]])
+Test("group_by identity") <- (GroupBy(Identity, [1, 1, 2, 2, 2, 3], RESULT), RESULT == [[1, 1], [2, 2, 2], [3]])
 
 # ── SortBy/3 ─────────────────────────────────────────────────────────────────
 
-MyNeg(X_, Y_) <- (Y_ is ++(-X_))
+MyNeg(X, Y) <- (Y is ++(-X))
 
-Test("sort_by negate") <- (SortBy(MyNeg, [1, 3, 2], R_) and R_ == [3, 2, 1])
-Test("sort_by empty") <- (SortBy(MyNeg, [], R_) and R_ == [])
+Test("sort_by negate") <- (SortBy(MyNeg, [1, 3, 2], RESULT), RESULT == [3, 2, 1])
+Test("sort_by empty") <- (SortBy(MyNeg, [], RESULT), RESULT == [])
 
 # ── MaxBy/3 ──────────────────────────────────────────────────────────────────
 
-Test("max_by negate") <- (MaxBy(MyNeg, [3, 1, 2], R_) and R_ == 1)
-Test("max_by single") <- (MaxBy(Identity, [42], R_) and R_ == 42)
+Test("max_by negate") <- (MaxBy(MyNeg, [3, 1, 2], RESULT), RESULT == 1)
+Test("max_by single") <- (MaxBy(Identity, [42], RESULT), RESULT == 42)
 
 # ── MinBy/3 ──────────────────────────────────────────────────────────────────
 
-Test("min_by negate") <- (MinBy(MyNeg, [3, 1, 2], R_) and R_ == 3)
-Test("min_by single") <- (MinBy(Identity, [42], R_) and R_ == 42)
+Test("min_by negate") <- (MinBy(MyNeg, [3, 1, 2], RESULT), RESULT == 3)
+Test("min_by single") <- (MinBy(Identity, [42], RESULT), RESULT == 42)
 
 # ── FilterMap/3 ──────────────────────────────────────────────────────────────
 
-DoublePositive(X_, Y_) <- (X_ > 0 and Y_ is ++(X_ * 2))
+DoublePositive(X, Y) <- (X > 0, Y is ++(X * 2))
 
-Test("filter_map basic") <- (FilterMap(DoublePositive, [1, -2, 3, -4], R_) and R_ == [2, 6])
-Test("filter_map all pass") <- (FilterMap(DoublePositive, [1, 2, 3], R_) and R_ == [2, 4, 6])
-Test("filter_map none pass") <- (FilterMap(DoublePositive, [-1, -2], R_) and R_ == [])
+Test("filter_map basic") <- (FilterMap(DoublePositive, [1, -2, 3, -4], RESULT), RESULT == [2, 6])
+Test("filter_map all pass") <- (FilterMap(DoublePositive, [1, 2, 3], RESULT), RESULT == [2, 4, 6])
+Test("filter_map none pass") <- (FilterMap(DoublePositive, [-1, -2], RESULT), RESULT == [])

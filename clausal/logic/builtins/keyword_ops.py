@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.terms import KWTerm
+from clausal.terms import KWTerm, DictTerm
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 
@@ -22,6 +22,8 @@ def _vary__3(overrides, term, new_term, trail, k):
     term_val = deref(term)
     if is_var(overrides_val) or is_var(term_val):
         return
+    if isinstance(overrides_val, DictTerm):
+        overrides_val = overrides_val.data
     if not isinstance(overrides_val, dict):
         return
     if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
@@ -57,6 +59,8 @@ def _extend__3(additions, term, new_term, trail, k):
     term_val = deref(term)
     if is_var(additions_val) or is_var(term_val):
         return
+    if isinstance(additions_val, DictTerm):
+        additions_val = additions_val.data
     if not isinstance(additions_val, dict):
         return
     if isinstance(term_val, KWTerm):

@@ -4,3 +4,6 @@
 
 color("red"),
 color("green"),
+
+Test("color red") <- color("red")
+Test("color green") <- color("green")

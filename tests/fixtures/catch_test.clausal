@@ -11,10 +11,7 @@ SafeDiv(X, Y, RESULT) <- (
 
 # ThrowIfNeg: throws if argument is negative
 ThrowIfNeg(X) <- (X >= 0)
-ThrowIfNeg(X) <- (
-    X < 0,
-    throw("negative"),
-)
+ThrowIfNeg(X) <- (X < 0, throw("negative"))
 
 # CatchNeg: wraps ThrowIfNeg, catches "negative" error
 CatchNeg(X, RESULT) <- (
@@ -48,3 +45,10 @@ CatchAll(RESULT) <- (
         RESULT is ERROR,
     )
 )
+
+Test("safe div") <- (SafeDiv(10, 2, RESULT), RESULT == 5)
+Test("safe div by zero") <- (SafeDiv(10, 0, RESULT), RESULT == "infinity")
+Test("catch negative") <- (CatchNeg(-5, RESULT), RESULT == "caught_negative")
+Test("catch ok") <- (CatchNeg(5, RESULT), RESULT == "ok")
+Test("catch all") <- (CatchAll(RESULT), RESULT == 42)
+Test("nested catch") <- (NestedCatch(RESULT), RESULT == "outer_error")

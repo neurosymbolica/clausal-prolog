@@ -56,6 +56,7 @@ from clausal.terms import (
     Lt, LtE, Gt, GtE,
     In, NotIn,
     Call, LoadName, LoadAttr,
+    SegList, ConcreteSeg, VarSeg, _seglist_unify_gen, _multi_star_splits,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.pythonic_ast.nodes import StarUnpack, TupleLiteral, DictLiteral, SetLiteral
@@ -214,6 +215,14 @@ def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
     """
     d = deref(target)
 
+    # Normalise SegList: walk it; if ground it becomes a plain list.
+    # Non-ground SegLists can't be matched against a single-star pattern yet
+    # (SegList-vs-SegList unification is Phase 6) — return False to fail.
+    if isinstance(d, SegList):
+        d = d.__walk__()
+        if not isinstance(d, list):
+            return False
+
     if isinstance(d, list):
         n_before = len(var_vals)
         n_after = len(after_vals)
@@ -265,8 +274,33 @@ def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
         s = deref(star_val)
         if isinstance(s, list):
             result.extend(s)
+        elif isinstance(s, SegList):
+            # Star derefs to a SegList — walk it first
+            walked = s.__walk__()
+            if isinstance(walked, list):
+                result.extend(walked)
+                result.extend(deref(v) for v in after_vals)
+                return unify(d, result, trail)
+            else:
+                # Still partially unbound: build a new SegList
+                after_result = [deref(v) for v in after_vals]
+                segs = []
+                if result:
+                    segs.append(ConcreteSeg(result))
+                segs.extend(walked.segments)
+                if after_result:
+                    segs.append(ConcreteSeg(after_result))
+                return unify(d, SegList(segs), trail)
         elif is_var(s):
-            return False
+            # Build a SegList: [*before, *s, *after] with s unbound
+            after_result = [deref(v) for v in after_vals]
+            segs = []
+            if result:
+                segs.append(ConcreteSeg(result))
+            segs.append(VarSeg(s))
+            if after_result:
+                segs.append(ConcreteSeg(after_result))
+            return unify(d, SegList(segs), trail)
         else:
             result.append(s)
     result.extend(deref(v) for v in after_vals)
@@ -283,6 +317,11 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     (target is an unbound Var, pattern vars are bound).
     """
     d = deref(target)
+
+    # Normalise ground SegList → plain list so the list branch fires.
+    # Non-ground SegLists delegate to _head_list_unify_input which returns False.
+    if isinstance(d, SegList):
+        return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     if isinstance(d, list):
         # Deconstruction: split list according to the pattern
@@ -305,13 +344,69 @@ def _build_star_list(before, star, after):
     d = deref(star)
     if isinstance(d, list):
         return list(before) + d + list(after)
-    # star is an unbound Var — can't construct a concrete list
-    # Fall back: if no before/after, just return the Var (identity)
-    if not before and not after:
-        return d
-    raise TypeError(
-        f"Cannot build list: star element is unbound Var"
-    )
+    if isinstance(d, SegList):
+        walked = d.__walk__()
+        if isinstance(walked, list):
+            return list(before) + walked + list(after)
+        # non-ground SegList — wrap into a new SegList
+        segs = []
+        if before:
+            segs.append(ConcreteSeg(list(before)))
+        segs.extend(walked.segments)
+        if after:
+            segs.append(ConcreteSeg(list(after)))
+        return SegList(segs)
+    # star is an unbound Var — build a SegList
+    segs = []
+    if before:
+        segs.append(ConcreteSeg(list(before)))
+    segs.append(VarSeg(d))
+    if after:
+        segs.append(ConcreteSeg(list(after)))
+    return SegList(segs)
+
+
+def _build_multi_star_list(segments):
+    """Build a SegList from a sequence of (kind, value) segments.
+
+    Each segment is ("fixed", [elem, ...]) for concrete elements or
+    ("star", var) for a splat variable.  Returns a plain list when all
+    star vars are bound, otherwise a SegList.
+    """
+    segs = []
+    for kind, val in segments:
+        if kind == "star":
+            d = deref(val)
+            if isinstance(d, list):
+                if segs and isinstance(segs[-1], ConcreteSeg):
+                    segs[-1] = ConcreteSeg(segs[-1].elements + d)
+                else:
+                    if d:
+                        segs.append(ConcreteSeg(d))
+            elif isinstance(d, SegList):
+                walked = d.__walk__()
+                if isinstance(walked, list):
+                    if segs and isinstance(segs[-1], ConcreteSeg):
+                        segs[-1] = ConcreteSeg(segs[-1].elements + walked)
+                    elif walked:
+                        segs.append(ConcreteSeg(walked))
+                else:
+                    segs.extend(walked.segments)
+            else:
+                segs.append(VarSeg(d))
+        else:  # "fixed"
+            elems = [deref(e) for e in val]
+            if segs and isinstance(segs[-1], ConcreteSeg):
+                segs[-1] = ConcreteSeg(segs[-1].elements + elems)
+            else:
+                if elems:
+                    segs.append(ConcreteSeg(elems))
+    if not any(isinstance(s, VarSeg) for s in segs):
+        result = []
+        for seg in segs:
+            result.extend(seg.elements)
+        return result
+    return SegList(segs)
 
 
 def _in_iter(collection, pair_mode):
@@ -340,11 +435,34 @@ def _body_multi_star_unify(target, segments, trail):
     """
     d = deref(target)
     if not isinstance(d, list):
-        if is_var(d):
-            raise TypeError(
-                "Cannot match multi-star pattern against unbound variable"
-            )
-        return  # not a list → no solutions
+        if isinstance(d, SegList):
+            d = d.__walk__()
+            if not isinstance(d, list):
+                # non-ground SegList — construct SegList and bind, then stop
+                segs = [
+                    VarSeg(deref(val)) if kind == "star"
+                    else ConcreteSeg([deref(e) for e in val])
+                    for kind, val in segments
+                ]
+                mark = trail.mark()
+                if unify(target, SegList(segs), trail):
+                    yield True
+                trail.undo(mark)
+                return
+        elif is_var(d):
+            # Unbound target: construct a SegList from the pattern and bind it
+            segs = [
+                VarSeg(deref(val)) if kind == "star"
+                else ConcreteSeg([deref(e) for e in val])
+                for kind, val in segments
+            ]
+            mark = trail.mark()
+            if unify(d, SegList(segs), trail):
+                yield True
+            trail.undo(mark)
+            return
+        else:
+            return  # not a list → no solutions
 
     # Parse segments into fixed counts and star positions
     stars = []
@@ -385,19 +503,6 @@ def _body_multi_star_unify(target, segments, trail):
         if ok:
             yield True
         trail.undo(mark)
-
-
-def _multi_star_splits(n_stars, total):
-    """Generate all ways to split *total* items among *n_stars* stars.
-
-    Each split is a tuple of n_stars non-negative integers summing to total.
-    """
-    if n_stars == 1:
-        yield (total,)
-        return
-    for i in range(total + 1):
-        for rest in _multi_star_splits(n_stars - 1, total - i):
-            yield (i, *rest)
 
 
 # ── _tramp_call: bridge simple-mode → trampoline-mode ─────────────────────────
@@ -1048,12 +1153,12 @@ def term_to_ast_expr(
         )
 
     if isinstance(term, list):
-        # If the list contains a StarUnpack, use _build_star_list helper
-        # to safely handle unbound Vars at runtime.
+        # If the list contains a StarUnpack, use _build_star_list/_build_multi_star_list
+        # helper to safely handle unbound Vars at runtime.
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
-        has_star = any(isinstance(e, StarUnpack) for e in term)
-        if has_star:
-            # Split into before, star, after segments
+        star_count = sum(1 for e in term if isinstance(e, StarUnpack))
+        if star_count == 1:
+            # Single-star: use _build_star_list(before, star, after)
             star_idx = next(i for i, e in enumerate(term) if isinstance(e, StarUnpack))
             before = term[:star_idx]
             star_val = term[star_idx].value
@@ -1071,6 +1176,29 @@ def term_to_ast_expr(
                         ctx=ast.Load(),
                     ),
                 ],
+                keywords=[],
+            )
+        elif star_count > 1:
+            # Multi-star: build segments list and call _build_multi_star_list
+            segments = _parse_star_segments(term)
+            seg_elts = []
+            for kind, val in segments:
+                if kind == "star":
+                    seg_elts.append(ast.Tuple(
+                        elts=[ast.Constant(value="star"), _rec(val)],
+                        ctx=ast.Load(),
+                    ))
+                else:
+                    seg_elts.append(ast.Tuple(
+                        elts=[
+                            ast.Constant(value="fixed"),
+                            ast.List(elts=[_rec(e) for e in val], ctx=ast.Load()),
+                        ],
+                        ctx=ast.Load(),
+                    ))
+            return ast.Call(
+                func=_name("_build_multi_star_list"),
+                args=[ast.List(elts=seg_elts, ctx=ast.Load())],
                 keywords=[],
             )
         return ast.List(
@@ -1185,7 +1313,7 @@ def term_to_ast_expr(
         ]
         kw_exprs = [
             ast.keyword(
-                arg=kw.arg,
+                arg=kw.name,
                 value=term_to_ast_expr(kw.value, var_context, eval_arith=eval_arith),
             )
             for kw in (term.kwargs or [])
@@ -2146,6 +2274,34 @@ def compile_goal(
         case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
 
+        # ── CallNth/2 — succeed on Nth solution only ─────────────────────
+        case Call(func=LoadName(name="CallNth"), args=[inner, n_arg], kwargs=[]):
+            return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
+
+        # ── CountAll/2 — count solutions without collecting ──────────────
+        case Call(func=LoadName(name="CountAll"), args=[inner, count_arg], kwargs=[]):
+            return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
+
+        # ── SetupCallCleanup/3 — deterministic cleanup ───────────────────
+        case Call(func=LoadName(name="SetupCallCleanup"), args=[setup, call_g, cleanup], kwargs=[]):
+            return _compile_setup_call_cleanup(
+                setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── CallCleanup/2 — sugar for SetupCallCleanup(true, Call, Cleanup)
+        case Call(func=LoadName(name="CallCleanup"), args=[call_g, cleanup], kwargs=[]):
+            return _compile_setup_call_cleanup(
+                True, call_g, cleanup, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── Freeze/2 — delay goal until variable is bound ───────────────
+        case Call(func=LoadName(name="Freeze"), args=[x_arg, goal_arg], kwargs=[]):
+            return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
+
+        # ── When/2 — generalized coroutining ────────────────────────────────
+        case Call(func=LoadName(name="When"), args=[cond_arg, goal_arg], kwargs=[]):
+            return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
+
         # ── FindAll/3 — collect all solutions ───────────────────────────────
         case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
@@ -2226,6 +2382,495 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
         ),
         _undo_stmt(once_mark, trail_name),
     ]
+
+
+def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
+    """Compile CallNth(Goal, N) — succeed on the Nth solution of Goal only.
+
+    Generates::
+
+        _cn_count_N = 0
+        _cn_n_N = deref(<n_expr>)
+        if not isinstance(_cn_n_N, int) or _cn_n_N < 1:
+            raise _LogicException(_type_error("positive_integer", _cn_n_N, "call_nth/2"))
+        _cn_m_N = trail.mark()
+        def _cn_gen_N():
+            <compiled inner goal with k = [yield None]>
+            return; yield
+        for _ in _cn_gen_N():
+            _cn_count_N += 1
+            if _cn_count_N == _cn_n_N:
+                <k_stmts>
+                break
+        trail.undo(_cn_m_N)
+    """
+    count_var = _fresh("_cn_count")
+    n_var = _fresh("_cn_n")
+    mark_var = _fresh("_cn_m")
+    gen_name = _fresh("_cn_gen")
+
+    n_expr = term_to_ast_expr(n_arg, var_context, eval_arith=True)
+
+    inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    gen_body = inner_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=gen_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    # Type check: n must be a positive integer
+    type_check = ast.If(
+        test=ast.BoolOp(
+            op=ast.Or(),
+            values=[
+                ast.UnaryOp(
+                    op=ast.Not(),
+                    operand=_call(_name("isinstance"), _name(n_var), _name("int")),
+                ),
+                ast.Compare(
+                    left=_name(n_var),
+                    ops=[ast.Lt()],
+                    comparators=[ast.Constant(value=1)],
+                ),
+            ],
+        ),
+        body=[
+            ast.Raise(exc=_call(
+                _name("_LogicException"),
+                _call(_name("_type_error"), ast.Constant(value="positive_integer"),
+                      _name(n_var), ast.Constant(value="call_nth/2")),
+            )),
+        ],
+        orelse=[],
+    )
+
+    # for loop: count solutions, break at Nth
+    count_incr = ast.AugAssign(
+        target=_name(count_var, ast.Store()),
+        op=ast.Add(),
+        value=ast.Constant(value=1),
+    )
+    nth_check = ast.If(
+        test=ast.Compare(
+            left=_name(count_var),
+            ops=[ast.Eq()],
+            comparators=[_name(n_var)],
+        ),
+        body=k_stmts + [ast.Break()],
+        orelse=[],
+    )
+    goal_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=[count_incr, nth_check],
+        orelse=[],
+    )
+
+    return [
+        _assign(count_var, ast.Constant(value=0)),
+        _assign(n_var, _call(_name("deref"), n_expr)),
+        type_check,
+        _assign_mark(mark_var, trail_name),
+        gen_fn,
+        goal_loop,
+        _undo_stmt(mark_var, trail_name),
+    ]
+
+
+def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
+    """Compile CountAll(Goal, Count) — count solutions without collecting.
+
+    Generates::
+
+        _ca_n_N = 0
+        _ca_m_N = trail.mark()
+        def _ca_gen_N():
+            <compiled inner goal with k = [yield None]>
+            return; yield
+        for _ in _ca_gen_N():
+            _ca_n_N += 1
+        trail.undo(_ca_m_N)
+        _ca_um_N = trail.mark()
+        if unify(<count_expr>, _ca_n_N, trail):
+            <k_stmts>
+        trail.undo(_ca_um_N)
+    """
+    n_var = _fresh("_ca_n")
+    mark_var = _fresh("_ca_m")
+    gen_name = _fresh("_ca_gen")
+    unify_mark = _fresh("_ca_um")
+
+    count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
+
+    inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    gen_body = inner_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=gen_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    count_incr = ast.AugAssign(
+        target=_name(n_var, ast.Store()),
+        op=ast.Add(),
+        value=ast.Constant(value=1),
+    )
+    goal_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=[count_incr],
+        orelse=[],
+    )
+
+    unify_check = ast.If(
+        test=_call(_name("unify"), count_expr, _name(n_var), _name(trail_name)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+
+    return [
+        _assign(n_var, ast.Constant(value=0)),
+        _assign_mark(mark_var, trail_name),
+        gen_fn,
+        goal_loop,
+        _undo_stmt(mark_var, trail_name),
+        _assign_mark(unify_mark, trail_name),
+        unify_check,
+        _undo_stmt(unify_mark, trail_name),
+    ]
+
+
+def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_name, k_stmts):
+    """Compile SetupCallCleanup(Setup, Call, Cleanup) — deterministic cleanup.
+
+    Generates::
+
+        _scc_m_N = trail.mark()
+        def _scc_setup_N():
+            <compiled Setup with k = [yield None]>
+            return; yield
+        _scc_ok_N = False
+        for _ in _scc_setup_N():
+            _scc_ok_N = True
+            break
+        if _scc_ok_N:
+            _scc_exc_N = None
+            def _scc_call_N():
+                <compiled Call with k = [yield None]>
+                return; yield
+            try:
+                for _ in _scc_call_N():
+                    <k_stmts>
+            except Exception as _scc_e_N:
+                _scc_exc_N = _scc_e_N
+            finally:
+                def _scc_cleanup_N():
+                    <compiled Cleanup with k = [yield None]>
+                    return; yield
+                for _ in _scc_cleanup_N():
+                    break
+                if _scc_exc_N is not None:
+                    raise _scc_exc_N
+    """
+    mark_var = _fresh("_scc_m")
+    setup_gen = _fresh("_scc_setup")
+    ok_var = _fresh("_scc_ok")
+    call_gen = _fresh("_scc_call")
+    exc_var = _fresh("_scc_exc")
+    exc_e = _fresh("_scc_e")
+    cleanup_gen = _fresh("_scc_cleanup")
+
+    def _make_sub_gen(name, goal):
+        stmts = compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+        body = stmts + [
+            ast.Return(value=ast.Constant(value=None)),
+            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        ]
+        return ast.FunctionDef(
+            name=name,
+            args=ast.arguments(
+                posonlyargs=[], args=[], vararg=None,
+                kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+            ),
+            body=body,
+            decorator_list=[], returns=None, type_comment=None,
+            **_EXTRA_FUNCDEF,
+        )
+
+    setup_fn = _make_sub_gen(setup_gen, setup)
+    call_fn = _make_sub_gen(call_gen, call)
+    cleanup_fn = _make_sub_gen(cleanup_gen, cleanup)
+
+    # Setup loop — run once, set ok flag
+    setup_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(setup_gen)),
+        body=[
+            _assign(ok_var, ast.Constant(value=True)),
+            ast.Break(),
+        ],
+        orelse=[],
+    )
+
+    # Call loop
+    call_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(call_gen)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+
+    # Cleanup loop — run once
+    cleanup_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(cleanup_gen)),
+        body=[ast.Break()],
+        orelse=[],
+    )
+
+    # Exception handler
+    handler = ast.ExceptHandler(
+        type=_name("Exception"),
+        name=exc_e,
+        body=[_assign(exc_var, _name(exc_e))],
+    )
+
+    # Re-raise if exception
+    reraise = ast.If(
+        test=ast.Compare(
+            left=_name(exc_var),
+            ops=[ast.IsNot()],
+            comparators=[ast.Constant(value=None)],
+        ),
+        body=[ast.Raise(exc=_name(exc_var))],
+        orelse=[],
+    )
+
+    try_block = ast.Try(
+        body=[call_loop],
+        handlers=[handler],
+        orelse=[],
+        finalbody=[cleanup_fn, cleanup_loop, reraise],
+    )
+
+    # if ok: try/finally
+    if_ok = ast.If(
+        test=_name(ok_var),
+        body=[_assign(exc_var, ast.Constant(value=None)), call_fn, try_block],
+        orelse=[],
+    )
+
+    return [
+        _assign_mark(mark_var, trail_name),
+        setup_fn,
+        _assign(ok_var, ast.Constant(value=False)),
+        setup_loop,
+        if_ok,
+    ]
+
+
+def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
+    """Compile Freeze(X, Goal) — delay Goal until X is bound.
+
+    Generates::
+
+        _fz_x_N = deref(<x_expr>)
+        if not is_var(_fz_x_N):
+            # Already bound — run Goal immediately
+            <compiled Goal with k = k_stmts>
+        else:
+            def _fz_thunk_N():
+                <compiled Goal with k = [yield None]>
+                return; yield
+            _fz_old_N = _get_attr(_fz_x_N, "freeze")
+            _fz_goals_N = list(_fz_old_N) if _fz_old_N else []
+            _fz_goals_N.append(_fz_thunk_N)
+            _put_attr(_fz_x_N, "freeze", _fz_goals_N, trail)
+            <k_stmts>
+    """
+    x_var = _fresh("_fz_x")
+    thunk_name = _fresh("_fz_thunk")
+    old_var = _fresh("_fz_old")
+    goals_var = _fresh("_fz_goals")
+
+    x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
+
+    # Compile goal for the "already bound" branch (inline with k_stmts)
+    bound_stmts = compile_goal(goal, db, var_context, trail_name, k_stmts)
+
+    # Compile goal as a thunk (closure) for the "deferred" branch
+    deferred_stmts = compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+    thunk_body = deferred_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    thunk_fn = ast.FunctionDef(
+        name=thunk_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=thunk_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    # _fz_old_N = _get_attr(_fz_x_N, "freeze")
+    get_old = _assign(
+        old_var,
+        _call(_name("_get_attr"), _name(x_var), ast.Constant(value="freeze")),
+    )
+
+    # _fz_goals_N = list(_fz_old_N) if _fz_old_N else []
+    make_goals = _assign(
+        goals_var,
+        ast.IfExp(
+            test=_name(old_var),
+            body=_call(_name("list"), _name(old_var)),
+            orelse=ast.List(elts=[], ctx=ast.Load()),
+        ),
+    )
+
+    # _fz_goals_N.append(_fz_thunk_N)
+    append_thunk = ast.Expr(
+        value=_call(
+            _attr(goals_var, "append"),
+            _name(thunk_name),
+        ),
+    )
+
+    # _put_attr(_fz_x_N, "freeze", _fz_goals_N, trail)
+    put_attr_stmt = ast.Expr(
+        value=_call(
+            _name("_put_attr"),
+            _name(x_var),
+            ast.Constant(value="freeze"),
+            _name(goals_var),
+            _name(trail_name),
+        ),
+    )
+
+    # if not is_var(...): <bound> else: <deferred>
+    check = ast.If(
+        test=ast.UnaryOp(
+            op=ast.Not(),
+            operand=_call(_name("is_var"), _name(x_var)),
+        ),
+        body=bound_stmts or [ast.Pass()],
+        orelse=[
+            thunk_fn,
+            get_old,
+            make_goals,
+            append_thunk,
+            put_attr_stmt,
+        ] + (k_stmts or [ast.Pass()]),
+    )
+
+    return [
+        _assign(x_var, _call(_name("deref"), x_expr)),
+        check,
+    ]
+
+
+def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
+    """Compile When(Cond, Goal) — delay Goal until Cond is satisfied.
+
+    Handles common conditions at compile time:
+    - ``When(IsBound(X), Goal)`` → compiles as ``Freeze(X, Goal)``
+    - ``When(And(C1, C2), Goal)`` → ``When(C1, When(C2, Goal))``
+    - ``When(IsGround(X), Goal)`` → runtime ``_install_when_ground``
+    - ``When(Or(C1, C2), Goal)`` → runtime ``_install_when_disjunction``
+    """
+    from clausal.pythonic_ast.nodes import Call as AstCall, LoadName as AstLoadName
+
+    # When(IsBound(X), Goal) → Freeze(X, Goal)
+    if (isinstance(cond, AstCall)
+            and isinstance(cond.func, AstLoadName)
+            and cond.func.name == "IsBound"
+            and len(cond.args) == 1):
+        return _compile_freeze(cond.args[0], goal, db, var_context, trail_name, k_stmts)
+
+    # When((C1, C2), Goal) → When(C1, When(C2, Goal)) [conjunction]
+    if isinstance(cond, And):
+        inner_when = AstCall(
+            func=AstLoadName(name="When"),
+            args=[cond.right, goal],
+            kwargs=[],
+        )
+        return _compile_when(cond.left, inner_when, db, var_context, trail_name, k_stmts)
+
+    # For IsGround and Or conditions, use runtime dispatch.
+    # Compile goal as thunk, emit runtime _install_when_condition call.
+    thunk_name = _fresh("_when_thunk")
+    deferred_stmts = compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+    thunk_body = deferred_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    thunk_fn = ast.FunctionDef(
+        name=thunk_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=thunk_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+
+    cond_expr = term_to_ast_expr(cond, var_context, eval_arith=False)
+
+    # When(IsGround(X), Goal)
+    if (isinstance(cond, AstCall)
+            and isinstance(cond.func, AstLoadName)
+            and cond.func.name == "IsGround"
+            and len(cond.args) == 1):
+        install_call = ast.Expr(value=_call(
+            _name("_install_when_ground"),
+            term_to_ast_expr(cond.args[0], var_context, eval_arith=False),
+            _name(thunk_name),
+            _name(trail_name),
+        ))
+        return [thunk_fn, install_call] + (k_stmts or [])
+
+    # When((C1; C2), Goal) [disjunction]
+    if isinstance(cond, Or):
+        c1_expr = term_to_ast_expr(cond.left, var_context, eval_arith=False)
+        c2_expr = term_to_ast_expr(cond.right, var_context, eval_arith=False)
+        install_call = ast.Expr(value=_call(
+            _name("_install_when_disjunction"),
+            c1_expr,
+            c2_expr,
+            _name(thunk_name),
+            _name(trail_name),
+        ))
+        return [thunk_fn, install_call] + (k_stmts or [])
+
+    # Fallback: runtime condition dispatch
+    install_call = ast.Expr(value=_call(
+        _name("_install_when_condition"),
+        cond_expr,
+        _name(thunk_name),
+        _name(trail_name),
+    ))
+    return [thunk_fn, install_call] + (k_stmts or [])
 
 
 def _compile_find_all_core(
@@ -3389,6 +4034,34 @@ def compile_goal_trampoline(
         case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
             # Inner compiles in simple mode (sub-generator), same as NAF.
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
+
+        # ── CallNth/2 — succeed on Nth solution only ─────────────────────
+        case Call(func=LoadName(name="CallNth"), args=[inner, n_arg], kwargs=[]):
+            return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
+
+        # ── CountAll/2 — count solutions without collecting ──────────────
+        case Call(func=LoadName(name="CountAll"), args=[inner, count_arg], kwargs=[]):
+            return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
+
+        # ── SetupCallCleanup/3 — deterministic cleanup ───────────────────
+        case Call(func=LoadName(name="SetupCallCleanup"), args=[setup, call_g, cleanup], kwargs=[]):
+            return _compile_setup_call_cleanup(
+                setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── CallCleanup/2 — sugar for SetupCallCleanup(true, Call, Cleanup)
+        case Call(func=LoadName(name="CallCleanup"), args=[call_g, cleanup], kwargs=[]):
+            return _compile_setup_call_cleanup(
+                True, call_g, cleanup, db, var_context, trail_name, k_stmts,
+            )
+
+        # ── Freeze/2 — delay goal until variable is bound ───────────────
+        case Call(func=LoadName(name="Freeze"), args=[x_arg, goal_arg], kwargs=[]):
+            return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
+
+        # ── When/2 — generalized coroutining ────────────────────────────────
+        case Call(func=LoadName(name="When"), args=[cond_arg, goal_arg], kwargs=[]):
+            return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
 
         # ── FindAll/3 — collect all solutions ───────────────────────────────
         case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
@@ -4779,6 +5452,11 @@ def compile_predicate_trampoline(
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException as _LogicException_cls,
         python_error_term as _python_error_term_fn,
+        type_error as _type_error_fn,
+    )
+    from clausal.logic.variables import (  # noqa: PLC0415
+        get_attr as _get_attr_fn,
+        put_attr as _put_attr_fn,
     )
     from clausal.terms import DictTerm as _DictTerm_t, SetTerm as _SetTerm_t  # noqa: PLC0415
     base_globals: dict = {
@@ -4807,13 +5485,30 @@ def compile_predicate_trampoline(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_build_multi_star_list": _build_multi_star_list,
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
         "_python_error_term": _python_error_term_fn,
         "_in_iter": _in_iter,
+        "_type_error": _type_error_fn,
+        "_get_attr": _get_attr_fn,
+        "_put_attr": _put_attr_fn,
+        "SegList": SegList,
+        "ConcreteSeg": ConcreteSeg,
+        "VarSeg": VarSeg,
+        "_seglist_unify_gen": _seglist_unify_gen,
     }
+    # Ensure freeze/when hooks are registered.
+    from clausal.logic.coroutining import (  # noqa: PLC0415
+        _install_when_ground as _install_when_ground_fn,
+        _install_when_disjunction as _install_when_disjunction_fn,
+        _install_when_condition as _install_when_condition_fn,
+    )
+    base_globals["_install_when_ground"] = _install_when_ground_fn
+    base_globals["_install_when_disjunction"] = _install_when_disjunction_fn
+    base_globals["_install_when_condition"] = _install_when_condition_fn
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
         from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn  # noqa: PLC0415
@@ -5614,8 +6309,15 @@ def _compile_multi_star_guard(
     Generates code like::
 
         _d0 = deref(_lcap0)
+        if isinstance(_d0, SegList):
+            _d0 = _d0.__walk__()
         if is_var(_d0):
-            _head_multi_star_error()
+            # Unbound: build a SegList and bind target once
+            _mark = trail.mark()
+            _sl = _build_multi_star_list([...])
+            if unify(_cap0, _sl, trail):
+                <body_stmts>
+            trail.undo(_mark)
         if isinstance(_d0, list):
             _n0 = len(_d0)
             if _n0 >= <min_len>:
@@ -5853,10 +6555,40 @@ def _compile_multi_star_guard(
         _name("list"),
     )
 
-    # if is_var(_d): _head_multi_star_error()
+    # Build segments list AST for _build_multi_star_list (used in unbound Var case)
+    seg_elts = []
+    for s_kind, s_val in segments:
+        if s_kind == "star":
+            seg_elts.append(ast.Tuple(
+                elts=[ast.Constant(value="star"), _var_or_const_expr(s_val)],
+                ctx=ast.Load(),
+            ))
+        else:  # "fixed"
+            seg_elts.append(ast.Tuple(
+                elts=[
+                    ast.Constant(value="fixed"),
+                    ast.List(elts=[_var_or_const_expr(e) for e in s_val], ctx=ast.Load()),
+                ],
+                ctx=ast.Load(),
+            ))
+    segments_ast = ast.List(elts=seg_elts, ctx=ast.Load())
+
+    var_build_mark = f"_msvm{cap_name}"
+    var_sl_name = f"_msvsl{cap_name}"
+
+    # if is_var(_d): build SegList and bind target once
     var_check = ast.If(
         test=_call(_name("is_var"), _name(d_name)),
-        body=[ast.Expr(value=_call(_name("_head_multi_star_error")))],
+        body=[
+            _assign_mark(var_build_mark, trail_name),
+            _assign(var_sl_name, _call(_name("_build_multi_star_list"), segments_ast)),
+            ast.If(
+                test=_call(_name("unify"), _name(cap_name), _name(var_sl_name), _name(trail_name)),
+                body=body_stmts,
+                orelse=[],
+            ),
+            _undo_stmt(var_build_mark, trail_name),
+        ],
         orelse=[],
     )
 
@@ -5869,7 +6601,28 @@ def _compile_multi_star_guard(
     # _d = deref(_lcap)
     deref_assign = _assign(d_name, _call(_name("deref"), _name(cap_name)))
 
-    return [deref_assign, var_check, list_branch]
+    # If _d is a SegList, walk it: a fully-ground SegList becomes a plain list
+    # so the existing isinstance(list) branch fires; a non-ground SegList stays
+    # a SegList and the list branch simply doesn't fire (no solutions for now —
+    # SegList-vs-SegList unification is Phase 6).
+    seglist_normalise = ast.If(
+        test=_call(_name("isinstance"), _name(d_name), _name("SegList")),
+        body=[
+            _assign(
+                d_name,
+                ast.Call(
+                    func=ast.Attribute(
+                        value=_name(d_name), attr="__walk__", ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[],
+                ),
+            )
+        ],
+        orelse=[],
+    )
+
+    return [deref_assign, seglist_normalise, var_check, list_branch]
 
 
 # ── compile_head_to_match_case ─────────────────────────────────────────────────
@@ -7092,6 +7845,11 @@ def compile_predicate_shallow(
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException as _LogicException_cls,
         python_error_term as _python_error_term_fn_s,
+        type_error as _type_error_fn_s,
+    )
+    from clausal.logic.variables import (  # noqa: PLC0415
+        get_attr as _get_attr_fn_s,
+        put_attr as _put_attr_fn_s,
     )
     from clausal.terms import DictTerm as _DictTerm_s, SetTerm as _SetTerm_s  # noqa: PLC0415
     base_globals: dict = {
@@ -7118,13 +7876,30 @@ def compile_predicate_shallow(
         "_body_star_unify": _body_star_unify,
         "_body_multi_star_unify": _body_multi_star_unify,
         "_build_star_list": _build_star_list,
+        "_build_multi_star_list": _build_multi_star_list,
         "_tramp_call": _tramp_call,
         "_deref_walk": _deref_walk_fn,
         "_set_of_dedup": _set_of_dedup,
         "_LogicException": _LogicException_cls,
         "_python_error_term": _python_error_term_fn_s,
         "_in_iter": _in_iter,
+        "_type_error": _type_error_fn_s,
+        "_get_attr": _get_attr_fn_s,
+        "_put_attr": _put_attr_fn_s,
+        "SegList": SegList,
+        "ConcreteSeg": ConcreteSeg,
+        "VarSeg": VarSeg,
+        "_seglist_unify_gen": _seglist_unify_gen,
     }
+    # Ensure freeze/when hooks are registered.
+    from clausal.logic.coroutining import (  # noqa: PLC0415
+        _install_when_ground as _install_when_ground_fn_s,
+        _install_when_disjunction as _install_when_disjunction_fn_s,
+        _install_when_condition as _install_when_condition_fn_s,
+    )
+    base_globals["_install_when_ground"] = _install_when_ground_fn_s
+    base_globals["_install_when_disjunction"] = _install_when_disjunction_fn_s
+    base_globals["_install_when_condition"] = _install_when_condition_fn_s
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
         from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn_s  # noqa: PLC0415

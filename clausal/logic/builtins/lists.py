@@ -1,7 +1,8 @@
 """List builtins: In/2, InCheck/2, Append/3, Length/2, Last/2, Reverse/2,
 GetItem/3, Flatten/2, MergeSort/2, Sort/2, Permutation/2, Select/3,
 Subtract/3, Intersection/3, Union/3, ToSet/2, SumList/2, MaxList/2, MinList/2,
-Take/3, Drop/3, SplitAt/4, Zip/3, Replicate/3, SplitWith/3."""
+Take/3, Drop/3, SplitAt/4, Zip/3, Replicate/3, SplitWith/3,
+Numlist/2,3, SameLength/2, Transpose/2."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from typing import Any
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
-from clausal.logic.builtins._registry import _trampoline_builtin
+from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 
 
 @_trampoline_builtin("In", 2)
@@ -448,3 +449,81 @@ def _split_with__3(this_generator, parent, sep, lst, parts, trail):
             yield (parent, None)
         trail.undo(mark)
     yield (parent, DONE)
+
+
+@_builtin("Numlist", 3)
+def _numlist__3(low, high, lst, trail, k):
+    """Numlist(Low, High, List) — List is integers from Low to High inclusive."""
+    low_val = deref(low)
+    high_val = deref(high)
+    if is_var(low_val) or is_var(high_val):
+        return
+    if not isinstance(low_val, int) or not isinstance(high_val, int):
+        return
+    if low_val > high_val:
+        return
+    result = list(range(low_val, high_val + 1))
+    if unify(lst, result, trail):
+        yield None
+
+
+@_builtin("Numlist", 2)
+def _numlist__2(high, lst, trail, k):
+    """Numlist(High, List) — shorthand for Numlist(1, High, List)."""
+    high_val = deref(high)
+    if is_var(high_val):
+        return
+    if not isinstance(high_val, int):
+        return
+    if high_val < 1:
+        return
+    result = list(range(1, high_val + 1))
+    if unify(lst, result, trail):
+        yield None
+
+
+@_builtin("SameLength", 2)
+def _same_length__2(l1, l2, trail, k):
+    """SameLength(L1, L2) — true if L1 and L2 have the same length.
+
+    If one is ground and the other unbound, generates a list of fresh Vars.
+    """
+    l1_val = deref(l1)
+    l2_val = deref(l2)
+    l1_is_list = isinstance(l1_val, list)
+    l2_is_list = isinstance(l2_val, list)
+    if l1_is_list and l2_is_list:
+        if len(l1_val) == len(l2_val):
+            yield None
+    elif l1_is_list and is_var(l2_val):
+        generated = [Var() for _ in l1_val]
+        if unify(l2, generated, trail):
+            yield None
+    elif l2_is_list and is_var(l1_val):
+        generated = [Var() for _ in l2_val]
+        if unify(l1, generated, trail):
+            yield None
+
+
+@_builtin("Transpose", 2)
+def _transpose__2(matrix, transposed, trail, k):
+    """Transpose(Matrix, Transposed) — column-wise transposition of a list of lists."""
+    mat = deref(matrix)
+    if is_var(mat) or not isinstance(mat, list):
+        return
+    if len(mat) == 0:
+        if unify(transposed, [], trail):
+            yield None
+        return
+    # Verify all rows are lists of the same length
+    rows = []
+    for row in mat:
+        r = deref(row)
+        if not isinstance(r, list):
+            return
+        rows.append(r)
+    if len(set(len(r) for r in rows)) != 1:
+        return
+    result = [list(col) for col in zip(*rows)]
+    if unify(transposed, result, trail):
+        yield None

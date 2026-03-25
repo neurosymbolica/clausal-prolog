@@ -48,6 +48,7 @@ nav:
     - DCGs: dcg.md
     - Dicts and Sets: dicts_sets.md
     - Exceptions: exceptions.md
+    - Coroutining: coroutining.md
     - Directives: directives.md
   - Builtins:
     - Predicate Index: builtins.md
@@ -68,6 +69,12 @@ nav:
     - CLP(B): clpb.md
     - CLP(R): clpr.md
   - Standard Library:
+    - Random: random.md
+    - JSON: json.md
+    - CSV: csv.md
+    - OS: os.md
+    - Files: files.md
+    - Process: process.md
     - Regex: regex.md
     - Date & Time: date_time.md
     - YAML: yaml.md

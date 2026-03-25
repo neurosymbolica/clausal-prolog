@@ -216,6 +216,27 @@ Test("concat all") <- (
 
 ---
 
+## Clause Inspection
+
+| Builtin | Arity | Description |
+|---|---|---|
+| `Listing` | 1 | `Listing(Pred)` — print all clauses of a predicate to stdout |
+| `PortrayClause` | 1 | `PortrayClause(Term)` — pretty-print a term with indentation |
+
+### Examples
+
+```clausal
+% List all clauses for a predicate:
+debug_fib <- Listing(fib)
+
+% Pretty-print a complex term:
+show_deep(TERM) <- PortrayClause(TERM)
+```
+
+`Listing` accepts a predicate class or instance. It prints a header with clause count, then each clause in `head <- (body).` format.
+
+---
+
 ## Var Display
 
 Logic variables have `__str__` and `__format__` methods (in the C extension) that auto-deref for display:
@@ -248,13 +269,15 @@ print(f"Bound: {v}")     # hello
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_io.py` (43 tests).
+    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (13 tests).
 
     - **Var display**: `__str__`, `__format__`, bound/unbound, nested
     - **Write/Writeln/PrintTerm**: atoms, numbers, strings, compounds, lists, vars
     - **Nl/Tab**: output formatting
     - **WriteToString/TermToString**: term conversion to string
     - **F-string integration**: variable interpolation, multiple vars, expressions
+    - **Listing/1**: facts, rules, no-clauses, instance→class resolution, error handling
+    - **PortrayClause/1**: simple terms, lists, nested structures, unbound vars
 
 ---
 

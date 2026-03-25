@@ -1,4 +1,7 @@
 # FirstMember/2: like member but only returns the first match via Once()
 
-FirstMember(X, XS) <- Once(X in XS)
+FirstMember(X, LIST) <- Once(X in LIST)
 
+
+Test("first member") <- (FirstMember(X, [1, 2, 3]), X == 1)
+Test("first member string") <- (FirstMember(X, ["a", "b"]), X == "a")

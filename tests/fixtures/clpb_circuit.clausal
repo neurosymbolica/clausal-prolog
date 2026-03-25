@@ -1,34 +1,40 @@
 # CLP(B) circuit integration fixture
 #
-# HalfAdder: Sum = X XOR Y, Carry = X AND Y
+# HalfAdder: SUM = X XOR Y, CARRY = X AND Y
 # FullAdder: built from two half adders
 # PigeonHole: 3 pigeons, 2 holes — unsatisfiable
 
 HalfAdder(X, Y, SUM, CARRY) <- (
     Sat(BoolEq(SUM, X ^ Y)),
-    Sat(BoolEq(CARRY, X & Y)),
+    Sat(BoolEq(CARRY, X & Y))
 )
 
-FullAdder(X, Y, CIN, SUM, COUT) <- (
-    Sat(BoolEq(S1, X ^ Y)),
-    Sat(BoolEq(C1, X & Y)),
-    Sat(BoolEq(SUM, S1 ^ CIN)),
-    Sat(BoolEq(C2, S1 & CIN)),
-    Sat(BoolEq(COUT, C1 | C2)),
+FullAdder(X, Y, CARRY_IN, SUM, CARRY_OUT) <- (
+    Sat(BoolEq(SUM_STAGE1, X ^ Y)),
+    Sat(BoolEq(CARRY_STAGE1, X & Y)),
+    Sat(BoolEq(SUM, SUM_STAGE1 ^ CARRY_IN)),
+    Sat(BoolEq(CARRY_STAGE2, SUM_STAGE1 & CARRY_IN)),
+    Sat(BoolEq(CARRY_OUT, CARRY_STAGE1 | CARRY_STAGE2))
 )
 
 # 3 pigeons into 2 holes: each pigeon in exactly one hole,
 # each hole has at most one pigeon.
-# P_ij = pigeon i in hole j
+# PIGEON_I_HOLE_J = pigeon I in hole J
 PigeonHole() <- (
-    Sat(P11 | P12),          # pigeon 1 in some hole
-    Sat(P21 | P22),          # pigeon 2 in some hole
-    Sat(P31 | P32),          # pigeon 3 in some hole
-    Sat(~(P11 & P21)),       # hole 1: not both pigeon 1 and 2
-    Sat(~(P11 & P31)),       # hole 1: not both pigeon 1 and 3
-    Sat(~(P21 & P31)),       # hole 1: not both pigeon 2 and 3
-    Sat(~(P12 & P22)),       # hole 2: not both pigeon 1 and 2
-    Sat(~(P12 & P32)),       # hole 2: not both pigeon 1 and 3
-    Sat(~(P22 & P32)),       # hole 2: not both pigeon 2 and 3
-    BoolLabeling([P11, P12, P21, P22, P31, P32]),
+    Sat(PIGEON_1_HOLE_1 | PIGEON_1_HOLE_2),          # pigeon 1 in some hole
+    Sat(PIGEON_2_HOLE_1 | PIGEON_2_HOLE_2),           # pigeon 2 in some hole
+    Sat(PIGEON_3_HOLE_1 | PIGEON_3_HOLE_2),           # pigeon 3 in some hole
+    Sat(~(PIGEON_1_HOLE_1 & PIGEON_2_HOLE_1)),        # hole 1: not both pigeon 1 and 2
+    Sat(~(PIGEON_1_HOLE_1 & PIGEON_3_HOLE_1)),        # hole 1: not both pigeon 1 and 3
+    Sat(~(PIGEON_2_HOLE_1 & PIGEON_3_HOLE_1)),        # hole 1: not both pigeon 2 and 3
+    Sat(~(PIGEON_1_HOLE_2 & PIGEON_2_HOLE_2)),        # hole 2: not both pigeon 1 and 2
+    Sat(~(PIGEON_1_HOLE_2 & PIGEON_3_HOLE_2)),        # hole 2: not both pigeon 1 and 3
+    Sat(~(PIGEON_2_HOLE_2 & PIGEON_3_HOLE_2)),        # hole 2: not both pigeon 2 and 3
+    BoolLabeling([PIGEON_1_HOLE_1, PIGEON_1_HOLE_2, PIGEON_2_HOLE_1, PIGEON_2_HOLE_2, PIGEON_3_HOLE_1, PIGEON_3_HOLE_2])
 )
+
+Test("half adder 0 0") <- (HalfAdder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)
+Test("half adder 1 0") <- (HalfAdder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)
+Test("half adder 1 1") <- (HalfAdder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)
+Test("full adder 1 1 1") <- (FullAdder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)
+Test("full adder 0 0 0") <- (FullAdder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)

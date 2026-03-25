@@ -979,16 +979,24 @@ class TestHeadListUnify:
         assert result is True
         assert deref(target) == [42]
 
-    def test_output_unbound_star_fails(self):
-        """Can't construct when star var is still unbound."""
+    def test_output_unbound_star_builds_seglist(self):
+        """When star var is unbound, output mode builds a SegList."""
+        from clausal.terms import SegList, ConcreteSeg, VarSeg
         trail = Trail()
         target = Var()
         h = Var()
         star = Var()
         unify(h, 1, trail)
-        # star is still unbound
+        # star is still unbound — should build SegList([ConcreteSeg([1]), VarSeg(star)])
         result = _head_list_unify_output(target, [h], star, [], trail)
-        assert result is False
+        assert result is True
+        walked = deref(target)
+        assert isinstance(walked, SegList)
+        assert len(walked.segments) == 2
+        assert isinstance(walked.segments[0], ConcreteSeg)
+        assert walked.segments[0].elements == [1]
+        assert isinstance(walked.segments[1], VarSeg)
+        assert deref(walked.segments[1].var) is deref(star)
 
     def test_output_already_bound_switches_to_input(self):
         """If target was bound by the body, output falls back to input mode."""

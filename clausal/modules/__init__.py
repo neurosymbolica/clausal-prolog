@@ -17,6 +17,12 @@ Canonical modules (``py.*`` subpackage):
 - ``py.spacy``    — LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText, TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity, EntityList, Sentence, SentenceList, Similarity, NounChunk
 - ``py.units``    — SI base/derived unit predicates, SI prefix constants, HasUnits, StripUnits
 - ``py.imperial`` — imperial and non-SI unit vectors (inch, foot, pound_mass, mph, …)
+- ``py.random``   — Random, RandomFloat, RandomInteger, RandomMember, RandomPermutation, RandomSample, RandomSeed, Maybe
+- ``py.json``     — Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile
+- ``py.csv``      — Parse, ParseRow, ParseRecords, Generate, GenerateRecords, ReadFile, ReadRecords, WriteFile
+- ``py.os``       — EnvironmentVariable, SetEnvironmentVariable, UnsetEnvironmentVariable, WorkingDirectory, ChangeDirectory, Pid, Argv, Platform, CPUCount
+- ``py.files``    — FileExists, DirectoryExists, PathExists, DirectoryFiles, DirectoryEntries, FileSize, FileModificationTime, DeleteFile, DeleteDirectory, RenameFile, CopyFile, MakeDirectory, MakeDirectoryPath, ReadFileToString, WriteStringToFile, AppendStringToFile, AbsolutePath, JoinPath, SplitPath, FileExtension, TempFile, TempDirectory
+- ``py.process``  — Shell, ShellOutput, ProcessCreate, Sleep
 
 Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 
@@ -28,4 +34,10 @@ Legacy aliases (backward compatibility shims — re-export from ``py.*``):
 - ``uuid_mod``    → ``py.uuid``
 - ``sqlite``      → ``py.sqlite``
 - ``spacy_module``→ ``py.spacy``
+- ``random_mod``  → ``py.random``
+- ``json_mod``    → ``py.json``
+- ``csv_mod``     → ``py.csv``
+- ``os_mod``      → ``py.os``
+- ``files_mod``   → ``py.files``
+- ``process_mod`` → ``py.process``
 """

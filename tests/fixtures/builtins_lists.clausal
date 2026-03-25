@@ -2,55 +2,69 @@
 # Each wrapper exercises a single builtin so Python tests can call it by name.
 
 # In/2, InCheck/2
-HasMember(X, XS) <- X in XS
-HasMemberCheck(X, XS) <- InCheck(X, XS)
+HasMember(ELEMENT, LIST) <- In(ELEMENT, LIST)
+HasMemberCheck(ELEMENT, LIST) <- InCheck(ELEMENT, LIST)
 
 # Append/3
-Concat(A, B, C) <- Append(A, B, C)
+Concat(LEFT, RIGHT, RESULT) <- Append(LEFT, RIGHT, RESULT)
 
-# Split(Prefix, Suffix, Whole): Whole = Prefix ++ Suffix
-Split(A, B, C) <- Append(A, B, C)
+# Split(PREFIX, SUFFIX, WHOLE): WHOLE = PREFIX ++ SUFFIX
+Split(PREFIX, SUFFIX, WHOLE) <- Append(PREFIX, SUFFIX, WHOLE)
 
 # Length/2
-ListLength(XS, N) <- Length(XS, N)
+ListLength(LIST, N) <- Length(LIST, N)
 
 # Last/2
-ListLast(XS, X) <- Last(XS, X)
+ListLast(LIST, ELEMENT) <- Last(LIST, ELEMENT)
 
 # Reverse/2
-ListReverse(XS, YS) <- Reverse(XS, YS)
+ListReverse(LIST, REVERSED) <- Reverse(LIST, REVERSED)
 
 # GetItem/3 (0-based)
-Get0(XS, I, X) <- GetItem(I, XS, X)
+Get0(LIST, INDEX, ELEMENT) <- GetItem(INDEX, LIST, ELEMENT)
 
 # Flatten/2
-Flat(XS, YS) <- Flatten(XS, YS)
+Flat(LIST, RESULT) <- Flatten(LIST, RESULT)
 
 # MergeSort/2 (stable sort, keeps duplicates), Sort/2 (removes duplicates)
-SortedWithDups(XS, YS) <- MergeSort(XS, YS)
-SortedUnique(XS, YS) <- Sort(XS, YS)
+SortedWithDups(LIST, RESULT) <- MergeSort(LIST, RESULT)
+SortedUnique(LIST, RESULT) <- Sort(LIST, RESULT)
 
 # Permutation/2
-Perms(XS, YS) <- Permutation(XS, YS)
+Perms(LIST, RESULT) <- Permutation(LIST, RESULT)
 
 # Select/3: select element from list leaving rest
-Pick(X, XS, REST) <- Select(X, XS, REST)
+Pick(ELEMENT, LIST, REST) <- Select(ELEMENT, LIST, REST)
 
 # Subtract/3, Intersection/3, Union/3
-ListDiff(A, B, C) <- Subtract(A, B, C)
-ListInter(A, B, C) <- Intersection(A, B, C)
-ListUnion(A, B, C) <- Union(A, B, C)
+ListDiff(LEFT, RIGHT, RESULT) <- Subtract(LEFT, RIGHT, RESULT)
+ListInter(LEFT, RIGHT, RESULT) <- Intersection(LEFT, RIGHT, RESULT)
+ListUnion(LEFT, RIGHT, RESULT) <- Union(LEFT, RIGHT, RESULT)
 
 # ToSet/2: remove duplicates preserving order
-Dedup(XS, YS) <- ToSet(XS, YS)
+Dedup(LIST, RESULT) <- ToSet(LIST, RESULT)
 
 # SumList/2, MaxList/2, MinList/2
-Total(XS, S) <- SumList(XS, S)
-Maximum(XS, M) <- MaxList(XS, M)
-Minimum(XS, M) <- MinList(XS, M)
+Total(LIST, SUM) <- SumList(LIST, SUM)
+Maximum(LIST, MAX) <- MaxList(LIST, MAX)
+Minimum(LIST, MIN) <- MinList(LIST, MIN)
 
 # Unzip/3, PairKeys/2, PairValues/2
-MakePairs(KS, VS, PS) <- Unzip(PS, KS, VS)
-KeysOf(PS, KS) <- PairKeys(PS, KS)
-ValuesOf(PS, VS) <- PairValues(PS, VS)
+MakePairs(KEYS, VALUES, PAIRS) <- Unzip(PAIRS, KEYS, VALUES)
+KeysOf(PAIRS, KEYS) <- PairKeys(PAIRS, KEYS)
+ValuesOf(PAIRS, VALUES) <- PairValues(PAIRS, VALUES)
 
+
+Test("has member") <- HasMember(2, [1, 2, 3])
+Test("append") <- (Concat([1, 2], [3, 4], RESULT), RESULT == [1, 2, 3, 4])
+Test("length") <- (ListLength([1, 2, 3], N), N == 3)
+Test("last") <- (ListLast([1, 2, 3], ELEMENT), ELEMENT == 3)
+Test("reverse") <- (ListReverse([1, 2, 3], RESULT), RESULT == [3, 2, 1])
+Test("get item") <- (Get0([10, 20, 30], 1, ELEMENT), ELEMENT == 20)
+Test("flatten") <- (Flat([1, [2, 3], [4, [5]]], RESULT), RESULT == [1, 2, 3, 4, 5])
+Test("sorted with dups") <- (SortedWithDups([3, 1, 2, 1], RESULT), RESULT == [1, 1, 2, 3])
+Test("sorted unique") <- (SortedUnique([3, 1, 2, 1], RESULT), RESULT == [1, 2, 3])
+Test("sum list") <- (Total([1, 2, 3, 4], SUM), SUM == 10)
+Test("max list") <- (Maximum([3, 1, 4, 1, 5], MAX), MAX == 5)
+Test("min list") <- (Minimum([3, 1, 4, 1, 5], MIN), MIN == 1)
+Test("dedup") <- (Dedup([1, 2, 1, 3, 2], RESULT), RESULT == [1, 2, 3])

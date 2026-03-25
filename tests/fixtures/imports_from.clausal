@@ -1,4 +1,8 @@
 -import_from(tests.fixtures.importable_utils, [Helper, Double])
 
-UseHelper(X_, Y_) <- Helper(X_, Y_)
-UseDouble(X_, R_) <- Double(X_, R_)
+UseHelper(X, Y) <- Helper(X, Y)
+UseDouble(X, RESULT) <- Double(X, RESULT)
+
+Test("use helper 2") <- (UseHelper(2, Y), Y == 4)
+Test("use double 3") <- (UseDouble(3, RESULT), RESULT == 6)
+Test("use helper 0") <- (UseHelper(0, Y), Y == 0)

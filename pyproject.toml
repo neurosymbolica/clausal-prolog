@@ -34,3 +34,5 @@ include = ["clausal*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+timeout = 10
+timeout_method = "thread"

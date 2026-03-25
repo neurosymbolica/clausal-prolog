@@ -10,17 +10,22 @@ ApplyBinary(GOAL, X, Y) <- Call(GOAL, X, Y)
 RunGoal(GOAL) <- Call(GOAL)
 
 # Example: call member via a goal variable
-MemberViaCall(X, XS) <- (
-    G := (X) <- X in XS,
-    Call(G, X)
+MemberViaCall(X, LIST) <- (
+    GOAL := (X) <- In(X, LIST),
+    Call(GOAL, X)
 )
 
 # map using Call/3
 DoubleViaCall(X, Y) <- (Y := X * 2)
 
-MappedDoubles(XS, YS) <- MapList(
+MappedDoubles(LIST, RESULT) <- MapList(
     (X, Y) <- Call(DoubleViaCall, X, Y),
-    XS,
-    YS,
+    LIST,
+    RESULT,
 )
 
+
+Test("double via call") <- (DoubleViaCall(3, Y), Y == 6)
+Test("mapped doubles") <- (MappedDoubles([1, 2, 3], RESULT), RESULT == [2, 4, 6])
+Test("apply binary double") <- (ApplyBinary(DoubleViaCall, 5, RESULT), RESULT == 10)
+Test("run goal lambda") <- RunGoal((() <- True))

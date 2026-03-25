@@ -1,4 +1,8 @@
 -module(static_pred, [Fact(X, Y)])
+-private([a, b])
 
 Fact(a, 1),
 Fact(b, 2),
+
+Test("fact a") <- Fact(a, 1)
+Test("fact b") <- Fact(b, 2)

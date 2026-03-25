@@ -153,6 +153,266 @@ class KWTerm:
         return KWTerm(self._functor, **new_fields)
 
 
+# ── SegList — segmented partial list ─────────────────────────────────────────
+
+
+@dataclass
+class ConcreteSeg:
+    """A concrete (known) segment of a SegList — a fixed sequence of elements."""
+    elements: list
+
+
+@dataclass
+class VarSeg:
+    """A variable-length hole in a SegList — represents an unknown subsequence."""
+    var: Var
+
+
+class SegList:
+    """A first-class term representing a list with variable-length holes.
+
+    A SegList is a flat sequence of alternating ConcreteSeg and VarSeg objects.
+    When every VarSeg's var is bound to a concrete list, the SegList is ground
+    and ``__walk__`` returns a plain Python list.
+
+    Example::
+
+        [1, 2, *MID, 5, *TAIL]
+        → SegList([ConcreteSeg([1, 2]), VarSeg(MID), ConcreteSeg([5]), VarSeg(TAIL)])
+    """
+
+    __slots__ = ("_segments",)
+
+    def __init__(self, segments: list):
+        self._segments = list(segments)
+
+    @property
+    def segments(self) -> list:
+        return self._segments
+
+    # ── Walk / normalisation ──────────────────────────────────────────────────
+
+    def __walk__(self):
+        """Called by C do_walk. Normalise: collapse bound VarSegs, merge adjacent
+        ConcreteSegs. Returns a plain Python list when fully ground."""
+        from .logic.variables import walk
+        new_segs: list = []
+        for seg in self._segments:
+            if isinstance(seg, ConcreteSeg):
+                walked_elems = [walk(e) for e in seg.elements]
+                if new_segs and isinstance(new_segs[-1], ConcreteSeg):
+                    new_segs[-1] = ConcreteSeg(new_segs[-1].elements + walked_elems)
+                else:
+                    new_segs.append(ConcreteSeg(walked_elems))
+            else:  # VarSeg
+                v = walk(seg.var)
+                if isinstance(v, list):
+                    # Inline the concrete list into previous ConcreteSeg or new one
+                    if new_segs and isinstance(new_segs[-1], ConcreteSeg):
+                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + v)
+                    else:
+                        if v:
+                            new_segs.append(ConcreteSeg(v))
+                elif isinstance(v, SegList):
+                    # Inline nested SegList's segments
+                    walked_inner = v.__walk__()
+                    if isinstance(walked_inner, list):
+                        if new_segs and isinstance(new_segs[-1], ConcreteSeg):
+                            new_segs[-1] = ConcreteSeg(new_segs[-1].elements + walked_inner)
+                        else:
+                            if walked_inner:
+                                new_segs.append(ConcreteSeg(walked_inner))
+                    else:
+                        # Inline the inner SegList's segments one by one
+                        for inner_seg in walked_inner._segments:
+                            if isinstance(inner_seg, ConcreteSeg):
+                                if new_segs and isinstance(new_segs[-1], ConcreteSeg):
+                                    new_segs[-1] = ConcreteSeg(
+                                        new_segs[-1].elements + inner_seg.elements
+                                    )
+                                else:
+                                    new_segs.append(ConcreteSeg(inner_seg.elements[:]))
+                            else:
+                                new_segs.append(inner_seg)
+                else:
+                    # Still unbound — keep as VarSeg with walked var
+                    new_segs.append(VarSeg(v))
+
+        # If no VarSegs remain, return a plain Python list
+        if all(isinstance(s, ConcreteSeg) for s in new_segs):
+            result = []
+            for s in new_segs:
+                result.extend(s.elements)
+            return result
+
+        # Clean up empty ConcreteSegs
+        new_segs = [s for s in new_segs
+                    if not (isinstance(s, ConcreteSeg) and not s.elements)]
+        if not new_segs:
+            return []
+        return SegList(new_segs)
+
+    def is_ground(self) -> bool:
+        """True if all VarSegs are bound — i.e. ``__walk__`` returns a plain list."""
+        return isinstance(self.__walk__(), list)
+
+    def to_list(self) -> list:
+        """Walk and flatten. Raises ``TypeError`` if not fully ground."""
+        w = self.__walk__()
+        if isinstance(w, list):
+            return w
+        raise TypeError(
+            f"SegList is not ground: {w!r}"
+        )
+
+    # ── C extension protocol hooks ────────────────────────────────────────────
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check. Recurse into all elements and var slots."""
+        from .logic.variables import occurs_check
+        for seg in self._segments:
+            if isinstance(seg, ConcreteSeg):
+                if any(occurs_check(var, e) for e in seg.elements):
+                    return True
+            else:
+                if occurs_check(var, seg.var):
+                    return True
+        return False
+
+    def __unify__(self, other, trail):
+        """Called by C do_unify. Deterministic unification of self against other.
+
+        For a plain list target: attempt the first valid split and return True.
+        For a SegList target: deferred to Phase 6 — returns NotImplemented.
+        """
+        from .logic.variables import unify, walk
+        if isinstance(other, list):
+            walked = self.__walk__()
+            if isinstance(walked, list):
+                # Fully ground — simple equality
+                return walked == other
+            # Use the generator; take the first solution only
+            for _ in _seglist_unify_gen(walked, other, trail):
+                return True
+            return False
+        if isinstance(other, SegList):
+            return NotImplemented  # Phase 6
+        return NotImplemented
+
+    # ── Sequence protocol (ground delegation) ────────────────────────────────
+
+    def __len__(self) -> int:
+        return len(self.to_list())
+
+    def __iter__(self):
+        return iter(self.to_list())
+
+    def __contains__(self, item) -> bool:
+        w = self.__walk__()
+        if isinstance(w, list):
+            return item in w
+        # Check ConcreteSegs only — uncertain for VarSegs
+        for seg in w._segments:
+            if isinstance(seg, ConcreteSeg) and item in seg.elements:
+                return True
+        return False
+
+    def __getitem__(self, index):
+        return self.to_list()[index]
+
+    def __add__(self, other):
+        """Lazy concatenation — returns a new SegList."""
+        if isinstance(other, list):
+            return SegList(self._segments + [ConcreteSeg(other)])
+        if isinstance(other, SegList):
+            return SegList(self._segments + other._segments)
+        return NotImplemented
+
+    def __radd__(self, other):
+        if isinstance(other, list):
+            return SegList([ConcreteSeg(other)] + self._segments)
+        return NotImplemented
+
+    def __eq__(self, other):
+        if isinstance(other, SegList):
+            return self._segments == other._segments
+        if isinstance(other, list):
+            w = self.__walk__()
+            if isinstance(w, list):
+                return w == other
+            return False
+        return NotImplemented
+
+    def __hash__(self):
+        # SegLists are mutable (vars can bind), so not hashable by default
+        raise TypeError("unhashable type: 'SegList'")
+
+    def __repr__(self) -> str:
+        parts = []
+        for seg in self._segments:
+            if isinstance(seg, ConcreteSeg):
+                parts.extend(repr(e) for e in seg.elements)
+            else:
+                parts.append(f"*{seg.var!r}")
+        return f"[{', '.join(parts)}]"
+
+
+def _seglist_unify_gen(seglist, target_list, trail):
+    """Non-deterministic generator: yield True for each valid split of
+    *target_list* across the VarSegs of *seglist*.
+
+    *seglist* must already be walk()-normalised (i.e. a SegList, not a plain
+    list).  *target_list* must be a plain Python list.
+    """
+    from .logic.variables import unify
+    min_len = sum(len(s.elements) for s in seglist.segments
+                  if isinstance(s, ConcreteSeg))
+    n = len(target_list)
+    if n < min_len:
+        return
+    n_stars = sum(1 for s in seglist.segments if isinstance(s, VarSeg))
+    remainder = n - min_len
+    for split in _multi_star_splits(n_stars, remainder):
+        mark = trail.mark()
+        ok = True
+        pos = 0
+        si = 0
+        for seg in seglist.segments:
+            if isinstance(seg, VarSeg):
+                sz = split[si]; si += 1
+                ok = ok and unify(seg.var, target_list[pos:pos + sz], trail)
+                pos += sz
+            else:
+                for elem in seg.elements:
+                    if pos >= len(target_list):
+                        ok = False
+                        break
+                    ok = ok and unify(elem, target_list[pos], trail)
+                    pos += 1
+            if not ok:
+                break
+        if ok:
+            yield True
+        trail.undo(mark)
+
+
+def _multi_star_splits(n_stars: int, remainder: int):
+    """Yield all ways to assign *remainder* items across *n_stars* buckets
+    (each bucket ≥ 0).  Equivalent to ``_multi_star_splits`` in compiler.py
+    but lives here so runtime code can import it without circular imports.
+    """
+    if n_stars == 0:
+        if remainder == 0:
+            yield ()
+        return
+    if n_stars == 1:
+        yield (remainder,)
+        return
+    for first in range(remainder + 1):
+        for rest in _multi_star_splits(n_stars - 1, remainder - first):
+            yield (first,) + rest
+
+
 # ── DictTerm — unification-aware dictionary ───────────────────────────────────
 
 

@@ -750,3 +750,31 @@ class TestFDAndDif:
         # Binding to 2 should succeed
         assert unify(x, 2, trail)
         assert deref(x) == 2
+
+
+class TestAC3Fixpoint:
+    def test_cascaded_lt(self):
+        """X < Y < Z, Z ≤ 3, X ≥ 1 → X=1, Y=2, Z=3 without labeling."""
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain([x, y, z], 1, 100, trail)
+        fd_lt(x, y, trail)
+        fd_lt(y, z, trail)
+        fd_le(z, 3, trail)
+        fd_ge(x, 1, trail)
+        assert deref(x) == 1
+        assert deref(y) == 2
+        assert deref(z) == 3
+
+    def test_ne_narrows_after_other_change(self):
+        """Z = 1 forces propagation back through X != Z and Y != Z."""
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        in_domain([x, y, z], 1, 3, trail)
+        fd_ne(x, z, trail)
+        fd_ne(y, z, trail)
+        in_domain([z], 1, 1, trail)   # force Z=1
+        sx = get_attr(x, FD_KEY)
+        sy = get_attr(y, FD_KEY)
+        assert not domain_contains(sx.domain, 1)
+        assert not domain_contains(sy.domain, 1)

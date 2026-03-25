@@ -1,18 +1,25 @@
 # Tests for term inspection predicates: Functor/3, Arg/3, Unpack/2
 
 # Functor/3 — decompose mode: extract functor name and arity
-GetFunctor(T_, F_, A_) <- Functor(T_, F_, A_)
+GetFunctor(TERM, FUNCTOR, ARITY) <- Functor(TERM, FUNCTOR, ARITY)
 
 # Functor/3 — construct mode: build compound from name and arity
-BuildTerm(F_, A_, T_) <- Functor(T_, F_, A_)
+BuildTerm(FUNCTOR, ARITY, TERM) <- Functor(TERM, FUNCTOR, ARITY)
 
 # Arg/3 — extract nth argument (1-based)
-FirstArg(T_, A_) <- Arg(1, T_, A_)
-SecondArg(T_, A_) <- Arg(2, T_, A_)
+FirstArg(TERM, ARG) <- Arg(1, TERM, ARG)
+SecondArg(TERM, ARG) <- Arg(2, TERM, ARG)
 
 # Unpack/2 — decompose term to list
-TermToList(T_, L_) <- Unpack(T_, L_)
+TermToList(TERM, LIST) <- Unpack(TERM, LIST)
 
 # Unpack/2 — construct term from list
-ListToTerm(L_, T_) <- Unpack(T_, L_)
+ListToTerm(LIST, TERM) <- Unpack(TERM, LIST)
 
+
+Test("functor atom") <- (GetFunctor("hello", FUNCTOR, ARITY), FUNCTOR == "hello", ARITY == 0)
+Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == "42", ARITY == 0)
+Test("arg list first") <- (FirstArg([10, 20, 30], ARG), ARG == 10)
+Test("arg list second") <- (SecondArg([10, 20, 30], ARG), ARG == 20)
+Test("term to list atom") <- (TermToList("foo", LIST), LIST == ["foo"])
+Test("list to term atom") <- (ListToTerm(["bar"], TERM), TERM == "bar")

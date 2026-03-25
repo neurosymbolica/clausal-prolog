@@ -1,5 +1,6 @@
 """Constraint builtins: Dif/2, Eq/3, DifT/3, InDomain/3, Label/1,
-AllDifferent/1, Equivalent/2, Sat/1, Taut/2, SatCount/2, BoolLabeling/1,
+AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1,
+Sat/1, Taut/2, SatCount/2, BoolLabeling/1,
 InReal/1, InReal/3, LabelReal/1, LabelReal/2."""
 
 from __future__ import annotations
@@ -64,6 +65,34 @@ def _equivalent__2(t1, t2, trail, k):
     from clausal.logic.clpfd import equivalent as _equiv_fn  # noqa: PLC0415
     if _equiv_fn(t1, t2, trail):
         yield None
+
+
+@_builtin("Sum", 3)
+def _sum__3(vars_list, op, value, trail, k):
+    """Sum(Vars, Op, Value) — constrain sum of Vars under Op to Value."""
+    from clausal.logic.clpfd import fd_sum as _sum_fn  # noqa: PLC0415
+    yield from _sum_fn(vars_list, op, value, trail)
+
+
+@_builtin("ScalarProduct", 4)
+def _scalar_product__4(coeffs, vars_list, op, value, trail, k):
+    """ScalarProduct(Coeffs, Vars, Op, Value) — weighted sum constraint."""
+    from clausal.logic.clpfd import fd_scalar_product as _sp_fn  # noqa: PLC0415
+    yield from _sp_fn(coeffs, vars_list, op, value, trail)
+
+
+@_builtin("Element", 3)
+def _element__3(index, lst, value, trail, k):
+    """Element(Index, List, Value) — Value is the Index-th element (1-based)."""
+    from clausal.logic.clpfd import fd_element as _elem_fn  # noqa: PLC0415
+    yield from _elem_fn(index, lst, value, trail)
+
+
+@_builtin("Circuit", 1)
+def _circuit__1(vars_list, trail, k):
+    """Circuit(Vars) — Vars form a single Hamiltonian circuit."""
+    from clausal.logic.clpfd import fd_circuit as _circuit_fn  # noqa: PLC0415
+    yield from _circuit_fn(vars_list, trail)
 
 
 # ── CLP(B) builtins ─────────────────────────────────────────────────────────

@@ -18,3 +18,8 @@ ReachB(X, Y) <- (
     LinkB(Z, Y)
 )
 
+
+Test("reach a 1 2") <- ReachA(1, 2)
+Test("reach b 2 3") <- ReachB(2, 3)
+Test("reach a transitive 1 4") <- ReachA(1, 4)
+Test("reach b transitive 2 1") <- ReachB(2, 1)

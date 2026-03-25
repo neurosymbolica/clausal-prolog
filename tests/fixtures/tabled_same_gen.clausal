@@ -14,3 +14,11 @@ Sg(X, Y) <- (
     Parent(Q, Y)
 )
 
+
+Test("sg same") <- Sg(1, 1)
+Test("sg cousins of 4") <- (
+    FindAll(TARGET, Sg(4, TARGET), TARGETS),
+    Sort(TARGETS, SORTED),
+    In(5, SORTED),
+    In(6, SORTED)
+)

@@ -130,6 +130,12 @@ for the full feature set.
 | [Logging](logging.md) | Structured logging predicates |
 | [UUID](uuid.md) | UUID generation and inspection |
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
+| [Random](random.md) | Random number generation, selection, seeding |
+| [JSON](json.md) | JSON parsing, generation, DictTerm integration |
+| [CSV](csv.md) | CSV parsing, generation, DictTerm records |
+| [OS](os.md) | Environment variables, working directory, process info, platform |
+| [Files](files.md) | File/directory existence, listing, metadata, CRUD, path manipulation |
+| [Process](process.md) | Shell commands, subprocess execution, sleep |
 | [SQLite](sqlite.md) | SQLite database predicates |
 | [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
 | [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
@@ -144,6 +150,7 @@ for the full feature set.
 | [Testing](testing.md) | Writing test predicates, running the test suite |
 | [DCGs](dcg.md) | Definite Clause Grammars for parsing |
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
+| [Coroutining](coroutining.md) | Freeze/2, When/2, SetupCallCleanup/3, CallNth/2, CountAll/2 |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
