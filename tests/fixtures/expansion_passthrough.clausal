@@ -1,6 +1,6 @@
 # Term expansion: identity pass-through
 # TermExpansion that passes all items through unchanged.
-TermExpansion(Term_, Term_, M0_, M0_) <- True
+TermExpansion(TERM, TERM, STATE, STATE) <- True
 
 foo("a"),
 foo("b"),

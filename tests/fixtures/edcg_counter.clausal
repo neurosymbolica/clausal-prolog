@@ -2,7 +2,7 @@
 #
 # Demonstrates: counter accumulator, list accumulator, passed scale factor
 
--module(edcg_counter, [run_scaled(List_, Scale_, Count_, Items_)])
+-module(edcg_counter, [run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS)])
 
 -edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
 -edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
@@ -13,29 +13,29 @@
 -edcg_pred(process_list, 1, [counter, items, scale])
 
 # Increment counter by the scale factor
-scaled_inc >> (scale / S_, [S_] // counter)
+scaled_inc >> (scale / SCALE, [SCALE] // counter)
 
 # Collect an item and increment the counter
-collect_and_count(X_) >> (scaled_inc, [X_] // items)
+collect_and_count(X) >> (scaled_inc, [X] // items)
 
 # Process a list of items
 process_list([]) >> ([])
-process_list([X_, *Xs_]) >> (collect_and_count(X_), process_list(Xs_))
+process_list([X, *REST]) >> (collect_and_count(X), process_list(REST))
 
 # Entry point: wraps EDCG call with initial values
-run_scaled(List_, Scale_, Count_, Items_) <- (
-    process_list(List_, _edcg_counter_in_=0, _edcg_counter_out_=Count_,
-                 _edcg_items_in_=[], _edcg_items_out_=Items_,
-                 _edcg_scale_=Scale_)
+run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
+    process_list(INPUT_LIST, _edcg_counter_in_=0, _edcg_counter_out_=COUNT,
+                 _edcg_items_in_=[], _edcg_items_out_=OUTPUT_ITEMS,
+                 _edcg_scale_=SCALE_FACTOR)
 )
 
 Test("scaled count 3 items") <- (
-    run_scaled(["a", "b", "c"], 10, Count_, Items_),
-    Count_ == 30,
-    Items_ == ["c", "b", "a"]
+    run_scaled(["a", "b", "c"], 10, COUNT, ITEMS),
+    COUNT == 30,
+    ITEMS == ["c", "b", "a"]
 )
 Test("scaled count empty") <- (
-    run_scaled([], 5, Count_, Items_),
-    Count_ == 0,
-    Items_ == []
+    run_scaled([], 5, COUNT, ITEMS),
+    COUNT == 0,
+    ITEMS == []
 )

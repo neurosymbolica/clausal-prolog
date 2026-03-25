@@ -16,14 +16,14 @@ dict_member(KEY, DICT, VALUE) <- GenDict(KEY, DICT, VALUE)
 splat_update(OLD, KEY, VALUE, NEW) <- (NEW is {**OLD, KEY: VALUE})
 
 # Compute the intersection of two sets.
-set_common(S1, S2, INTER) <- SetIntersection(S1, S2, INTER)
+set_common(SET1, SET2, INTERSECTION) <- SetIntersection(SET1, SET2, INTERSECTION)
 
 # Enumerate elements of a set.
-set_member(ELEM, SET) <- GenSet(ELEM, SET)
+set_member(ELEMENT, SET) <- GenSet(ELEMENT, SET)
 
-Test("get name") <- (get_name({"name": "Alice"}, N_), N_ == "Alice")
+Test("get name") <- (get_name({"name": "Alice"}, NAME), NAME == "Alice")
 Test("is admin") <- is_admin({"role": "admin"})
-Test("dict member") <- (dict_member("x", {"x": 1, "y": 2}, V_), V_ == 1)
+Test("dict member") <- (dict_member("x", {"x": 1, "y": 2}, VALUE), VALUE == 1)
 Test("set member") <- set_member(2, {1, 2, 3})
-Test("set common has 2") <- (set_common({1, 2, 3}, {2, 3, 4}, I_), set_member(2, I_))
-Test("set common has 3") <- (set_common({1, 2, 3}, {2, 3, 4}, I_), set_member(3, I_))
+Test("set common has 2") <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(2, INTERSECTION))
+Test("set common has 3") <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(3, INTERSECTION))

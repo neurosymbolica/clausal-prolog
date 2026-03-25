@@ -1,6 +1,6 @@
 -import_module(tests.fixtures.importable_utils)
 
-UseImported(X_, Y_) <- tests.fixtures.importable_utils.Double(X_, Y_)
+UseImported(X, Y) <- tests.fixtures.importable_utils.Double(X, Y)
 
-Test("use imported 0") <- (UseImported(0, Y_), Y_ == 0)
-Test("use imported 2") <- (UseImported(2, Y_), Y_ == 4)
+Test("use imported 0") <- (UseImported(0, Y), Y == 0)
+Test("use imported 2") <- (UseImported(2, Y), Y == 4)

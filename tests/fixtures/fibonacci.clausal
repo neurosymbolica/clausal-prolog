@@ -15,13 +15,13 @@ Fib(N, RESULT) <- (
     N > 1,
     N1 := N - 1,
     N2 := N - 2,
-    Fib(N1, A),
-    Fib(N2, B),
-    RESULT := A + B
+    Fib(N1, FIRST),
+    Fib(N2, SECOND),
+    RESULT := FIRST + SECOND
 )
 
 
 Test("fib 0") <- Fib(0, 0)
 Test("fib 1") <- Fib(1, 1)
-Test("fib 5") <- (Fib(5, R_), R_ == 5)
-Test("fib 10") <- (Fib(10, R_), R_ == 55)
+Test("fib 5") <- (Fib(5, RESULT), RESULT == 5)
+Test("fib 10") <- (Fib(10, RESULT), RESULT == 55)

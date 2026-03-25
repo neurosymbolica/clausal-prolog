@@ -7,15 +7,15 @@ Color("green"),
 Color("blue"),
 
 # AssertAndQuery/1: adds yellow dynamically then checks it exists
-AssertAndQuery(X_) <- (
+AssertAndQuery(X) <- (
     Assert(Color("yellow")),
-    Color(X_)
+    Color(X)
 )
 
 # PrependColor/1: adds violet at front then queries first result
-PrependColor(X_) <- (
+PrependColor(X) <- (
     AssertFirst(Color("violet")),
-    Color(X_)
+    Color(X)
 )
 
 # RetractRed: removes red then checks it's gone
@@ -28,4 +28,4 @@ RetractRed <- (
 Test("color red") <- Color("red")
 Test("color green") <- Color("green")
 Test("color blue") <- Color("blue")
-Test("three colors") <- (FindAll(C_, Color(C_), Cs_), Length(Cs_, 3))
+Test("three colors") <- (FindAll(COLOR, Color(COLOR), COLORS), Length(COLORS, 3))

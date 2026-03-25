@@ -1,34 +1,34 @@
 # Tests for arithmetic predicates: Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3
 
 # Between/3: enumerate integers in a range
-InRange(Lo_, Hi_, X_) <- Between(Lo_, Hi_, X_)
+InRange(LOW, HIGH, X) <- Between(LOW, HIGH, X)
 
 # Between/3: check mode
-CheckBetween(Lo_, Hi_, X_) <- Between(Lo_, Hi_, X_)
+CheckBetween(LOW, HIGH, X) <- Between(LOW, HIGH, X)
 
 # Succ/2: Y = X + 1
-Successor(X_, Y_) <- Succ(X_, Y_)
-Predecessor(Y_, X_) <- Succ(X_, Y_)
+Successor(X, Y) <- Succ(X, Y)
+Predecessor(Y, X) <- Succ(X, Y)
 
 # Plus/3: Z = X + Y; any two determine the third
-AddNums(X_, Y_, Z_) <- Plus(X_, Y_, Z_)
-Diff(Z_, X_, Y_) <- Plus(X_, Y_, Z_)
+AddNums(X, Y, Z) <- Plus(X, Y, Z)
+Diff(Z, X, Y) <- Plus(X, Y, Z)
 
 # CountTo/1: collects integers from 1 to N using FindAll + Between
-CountTo(N_, Ns_) <- (
-    FindAll(X_, Between(1, N_, X_), Ns_)
+CountTo(N, NUMBERS) <- (
+    FindAll(X, Between(1, N, X), NUMBERS)
 )
 
-Test("between 1 to 3") <- (FindAll(X_, Between(1, 3, X_), Xs_), Xs_ == [1, 2, 3])
-Test("succ forward") <- (Succ(3, Y_), Y_ == 4)
-Test("succ backward") <- (Succ(X_, 5), X_ == 4)
-Test("plus forward") <- (Plus(2, 3, Z_), Z_ == 5)
-Test("plus backward") <- (Plus(X_, 3, 7), X_ == 4)
-Test("abs positive") <- (Abs(5, R_), R_ == 5)
-Test("abs negative") <- (Abs(-3, R_), R_ == 3)
-Test("max basic") <- (Max(3, 5, R_), R_ == 5)
-Test("min basic") <- (Min(3, 5, R_), R_ == 3)
-Test("count to 3") <- (CountTo(3, Ns_), Ns_ == [1, 2, 3])
+Test("between 1 to 3") <- (FindAll(X, Between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])
+Test("succ forward") <- (Succ(3, Y), Y == 4)
+Test("succ backward") <- (Succ(X, 5), X == 4)
+Test("plus forward") <- (Plus(2, 3, Z), Z == 5)
+Test("plus backward") <- (Plus(X, 3, 7), X == 4)
+Test("abs positive") <- (Abs(5, RESULT), RESULT == 5)
+Test("abs negative") <- (Abs(-3, RESULT), RESULT == 3)
+Test("max basic") <- (Max(3, 5, RESULT), RESULT == 5)
+Test("min basic") <- (Min(3, 5, RESULT), RESULT == 3)
+Test("count to 3") <- (CountTo(3, NUMBERS), NUMBERS == [1, 2, 3])
 Test("in range") <- InRange(1, 5, 3)
-Test("successor") <- (Successor(4, Y_), Y_ == 5)
-Test("predecessor") <- (Predecessor(5, X_), X_ == 4)
+Test("successor") <- (Successor(4, Y), Y == 5)
+Test("predecessor") <- (Predecessor(5, X), X == 4)

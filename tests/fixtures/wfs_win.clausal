@@ -3,7 +3,7 @@
 Move(1, 2),
 Move(2, 1),
 
-Win(X_) <- (Move(X_, Y_) and not Win(Y_))
+Win(X) <- (Move(X, Y), not Win(Y))
 
 
 Test("move 1 2") <- Move(1, 2)

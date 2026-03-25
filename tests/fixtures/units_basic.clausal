@@ -172,8 +172,8 @@ Test("weight from standard gravity") <- (
 
 Test("dimensionless roundtrip") <- (
     PARTIAL := 5.0(),
-    StripUnits(PARTIAL, VAL_),
-    VAL_ == 5.0,
+    StripUnits(PARTIAL, VALUE),
+    VALUE == 5.0,
     PARTIAL == ++(Quantity(5.0, {}))
 )
 

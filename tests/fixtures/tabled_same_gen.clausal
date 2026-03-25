@@ -17,8 +17,8 @@ Sg(X, Y) <- (
 
 Test("sg same") <- Sg(1, 1)
 Test("sg cousins of 4") <- (
-    FindAll(Y_, Sg(4, Y_), Ys_),
-    Sort(Ys_, Sorted_),
-    In(5, Sorted_),
-    In(6, Sorted_)
+    FindAll(TARGET, Sg(4, TARGET), TARGETS),
+    Sort(TARGETS, SORTED),
+    In(5, SORTED),
+    In(6, SORTED)
 )

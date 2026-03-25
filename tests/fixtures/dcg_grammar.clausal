@@ -1,7 +1,7 @@
 # DCG predicates must be declared with their full signature (including the
 # two hidden state args) in the export list, so that -module generates a
 # PredicateMeta class rather than a bare atom string assignment.
--module(dcg_grammar, [sentence(S0_, S_), noun_phrase(S0_, S_), verb_phrase(S0_, S_), greeting(S0_, S_), digit(D_, S0_, S_), ab(S0_, S_), look_ahead(T_, S0_, S_), not_a(S0_, S_), expr_dcg(E_, S0_, S_), valid_sentence(S_)])
+-module(dcg_grammar, [sentence(S0_, S_), noun_phrase(S0_, S_), verb_phrase(S0_, S_), greeting(S0_, S_), digit(DIGIT, S0_, S_), ab(S0_, S_), look_ahead(TOKEN, S0_, S_), not_a(S0_, S_), expr_dcg(EXPRESSION, S0_, S_), valid_sentence(SENTENCE)])
 
 greeting >> (["hello", "world"])
 
@@ -12,7 +12,7 @@ verb_phrase >> (["chases"] or ["sees"] or ["likes"])
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 
 # DCG with extra args + inline goals
-digit(D_) >> ([D_], {D_ >= 0}, {D_ <= 9})
+digit(DIGIT) >> ([DIGIT], {DIGIT >= 0}, {DIGIT <= 9})
 
 # Recursive DCG: zero or more a's followed by zero or more b's
 ab >> (["a"], ab)
@@ -20,16 +20,16 @@ ab >> (["b"], ab)
 ab >> ([])
 
 # Pushback / semicontext: peek at next token without consuming
-(look_ahead(T_), [T_]) >> ([T_])
+(look_ahead(TOKEN), [TOKEN]) >> ([TOKEN])
 
 # Negation in DCG
-not_a >> (not ["a"], [X_])
+not_a >> (not ["a"], [X])
 
 # Regular predicate coexisting with DCG rules
-valid_sentence(S_) <- phrase(sentence, S_)
+valid_sentence(SENTENCE) <- phrase(sentence, SENTENCE)
 
 # Expression parser with inline goal
-expr_dcg(E_) >> ([E_], {E_ is E_ + 0})
+expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is EXPRESSION + 0})
 
 Test("valid sentence") <- valid_sentence(["the", "dog", "chases", "the", "cat"])
 Test("greeting") <- phrase(greeting, ["hello", "world"])

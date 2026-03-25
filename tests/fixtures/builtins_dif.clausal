@@ -1,29 +1,29 @@
 # Tests for constraint predicates: Dif/2, Eq/3, DifT/3
 
 # Dif/2 — disequality constraint
-NotEqual(X_, Y_) <- Dif(X_, Y_)
+NotEqual(X, Y) <- Dif(X, Y)
 
 # Use Dif inside a rule: pick an element different from a given value
-PickDifferent(X_, Xs_, Y_) <- (
-    In(Y_, Xs_),
-    Dif(Y_, X_)
+PickDifferent(X, LIST, PICKED) <- (
+    In(PICKED, LIST),
+    Dif(PICKED, X)
 )
 
-# Eq/3 — reified equality: T is True if X=Y, False if Dif(X,Y)
-ReifiedEq(X_, Y_, T_) <- Eq(X_, Y_, T_)
+# Eq/3 — reified equality: TRUTH is True if X=Y, False if Dif(X,Y)
+ReifiedEq(X, Y, TRUTH) <- Eq(X, Y, TRUTH)
 
 # DifT/3 — reified disequality
-ReifiedDif(X_, Y_, T_) <- DifT(X_, Y_, T_)
+ReifiedDif(X, Y, TRUTH) <- DifT(X, Y, TRUTH)
 
 # Use reified Eq to categorize pairs
-SameOrDiff(X_, Y_, "same") <- Eq(X_, Y_, True)
-SameOrDiff(X_, Y_, "different") <- Eq(X_, Y_, False)
+SameOrDiff(X, Y, "same") <- Eq(X, Y, True)
+SameOrDiff(X, Y, "different") <- Eq(X, Y, False)
 
 
 Test("not equal") <- NotEqual(1, 2)
-Test("pick different") <- (PickDifferent(1, [1, 2, 3], Y_), Y_ == 2)
-Test("reified eq true") <- (ReifiedEq(1, 1, T_), T_ == True)
-Test("reified eq false") <- (ReifiedEq(1, 2, T_), T_ == False)
-Test("reified dif true") <- (ReifiedDif(1, 2, T_), T_ == True)
+Test("pick different") <- (PickDifferent(1, [1, 2, 3], PICKED), PICKED == 2)
+Test("reified eq true") <- (ReifiedEq(1, 1, TRUTH), TRUTH == True)
+Test("reified eq false") <- (ReifiedEq(1, 2, TRUTH), TRUTH == False)
+Test("reified dif true") <- (ReifiedDif(1, 2, TRUTH), TRUTH == True)
 Test("same or diff same") <- SameOrDiff(1, 1, "same")
 Test("same or diff different") <- SameOrDiff(1, 2, "different")
