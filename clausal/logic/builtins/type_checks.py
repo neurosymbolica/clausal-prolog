@@ -95,6 +95,13 @@ def _is_list__1(x, trail, k):
         yield None
 
 
+@_builtin("IsChars", 1)
+def _is_chars__1(x, trail, k):
+    """is_chars(X) — succeeds if X is a list or a string (a character sequence)."""
+    if isinstance(deref(x), (list, str)):
+        yield None
+
+
 @_builtin("IsGround", 1)
 def _ground__1(x, trail, k):
     """ground(X) — succeeds if X contains no unbound Vars."""
