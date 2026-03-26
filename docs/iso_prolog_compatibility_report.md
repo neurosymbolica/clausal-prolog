@@ -1,531 +1,339 @@
 # Running ISO Prolog Programs in Clausal: Compatibility Report
 
-*Prepared for discussion with Markus Triska, 2026-03-25*
+*Prepared for discussion with Markus Triska, 2026-03-25.*
+*Updated 2026-03-25 after discussion with Markus.*
 
 ## Executive Summary
 
-Clausal already has a comprehensive bidirectional Prolog translator (tokenizer, Pratt parser, AST, dialect-aware emission) and covers most ISO builtins. The main obstacles to *running* translated ISO Prolog programs are:
+Clausal has a comprehensive bidirectional Prolog translator (tokenizer, Pratt
+parser, AST, dialect-aware emission) and covers most ISO builtins. After
+discussion with Markus Triska, the approach to running ISO Prolog programs in
+Clausal is:
 
-1. **Cut (`!/0`)** — fundamentally at odds with Clausal's exhaustive search
-2. **Atoms vs. strings** — ISO atoms are a distinct type; Clausal uses Python `str`
-3. **List representation** — Python lists vs. cons-pairs (./2)
-4. **Operator syntax** — Python's fixed operator set vs. user-defined operators
-5. **Arithmetic semantics** — floor vs. truncate division; `1 == 1.0` in Python
-6. **If-then-else** — ISO `(C -> T ; E)` committed-choice vs. Clausal's reified/general ITE
-7. **Module system** — ISO `module/2` + `use_module/1` vs. Clausal's `-import_from`/`-import_module`
-8. **Minor builtin gaps** — a few ISO builtins not yet implemented
-
----
-
-## Issue 1: Cut (`!/0`)
-
-### The Problem
-
-Cut is the most fundamental incompatibility. ISO Prolog's cut prunes the search
-tree — it commits to the current clause and discards remaining clauses for the
-predicate, plus any choice points created since the clause head was entered.
-
-Clausal compiles predicates to Python generators. Each clause is a `case` arm in
-a `match` statement. There is no mechanism to "skip remaining case arms" from
-within a body goal, because Python generators don't support that kind of non-local
-control flow.
-
-### How Cut Is Used in Practice
-
-Most real-world uses of cut fall into a few patterns:
-
-1. **Green cut (determinism commit):** "I found the right clause, don't try the others"
-   ```prolog
-   max(X, Y, X) :- X >= Y, !.
-   max(_, Y, Y).
-   ```
-
-2. **Red cut (negation by failure):** "If this succeeds, don't try the alternative"
-   ```prolog
-   classify(X, positive) :- X > 0, !.
-   classify(X, zero) :- X =:= 0, !.
-   classify(_, negative).
-   ```
-
-3. **Once/commit:** "Find the first solution and stop"
-   ```prolog
-   first_member(X, L) :- member(X, L), !.
-   ```
-
-4. **If-then-else desugaring:** `(C -> T ; E)` is defined as `(C, !, T ; E)` in ISO.
-
-### Options
-
-#### Option A: Translate cut to `Once()` + guarded clauses (recommended for import)
-
-During Prolog-to-Clausal translation, recognize cut patterns and translate them
-to Clausal idioms:
-
-```
-% Prolog green cut
-max(X, Y, X) :- X >= Y, !.
-max(_, Y, Y).
-
-% Clausal translation
-Max(X, Y, Z) <- (X >= Y and Z is X) or (X < Y and Z is Y),
-```
-
-Or using if-then-else:
-
-```
-Max(X, Y, Z) <- (Z is X if X >= Y else Z is Y),
-```
-
-For the `member(X,L), !` pattern, translate to `Once(In(X, L))`.
-
-**Pros:** Clean, no new runtime mechanism needed.
-**Cons:** Pattern recognition is imperfect; some cut uses are complex.
-
-#### Option B: Committed-choice blocks (new syntax)
-
-Introduce a `.commit()` method or `commit` keyword that says "if the preceding
-goals succeeded, don't try further clauses":
-
-```python
-# Syntax option 1: .commit() method on goal tuple
-Max(X, Y, X) <- (X >= Y).commit(),
-Max(_, Y, Y),
-
-# Syntax option 2: commit as a separator
-Max(X, Y, X) <- (X >= Y, commit, <goals after>),
-Max(_, Y, Y),
-
-# Syntax option 3: >> operator (but already used for DCG)
-Max(X, Y, X) <- (X >= Y) >> True,
-Max(_, Y, Y),
-```
-
-**Implementation sketch:** When the compiler sees `commit` in a clause body at
-position `i`, it splits the body into `guard` (goals 0..i-1) and `continuation`
-(goals i+1..end). The generated code:
-
-```python
-case Max(x=_v0, y=_v1, z=_v2):
-    mark = trail.mark()
-    # guard goals
-    if deref(_v0) >= deref(_v1):
-        if unify(_v2, _v0, trail):
-            # continuation goals (here just yield)
-            yield None
-    trail.undo(mark)
-    return  # ← THIS is the cut: skip remaining case arms
-```
-
-The key is the `return` after the guard succeeds (even if the continuation fails).
-If the guard fails, fall through to the next clause as normal.
-
-**Pros:** Direct semantic equivalent of green/red cut. Simple to implement.
-**Cons:** New keyword/syntax. Still doesn't handle cut in the *middle* of a body
-with goals after it (though this is rare and arguably bad style).
-
-#### Option C: `Committed` wrapper for entire predicate
-
-```python
-# Mark predicate as "first clause that matches wins"
--committed([Max/3])
-
-Max(X, Y, X) <- X >= Y,
-Max(_, Y, Y),
-```
-
-This is like Mercury's `det`/`semidet` determinism declarations. The compiler
-generates code that returns after the first clause whose guard (all goals up to
-the first call) succeeds.
-
-**Pros:** Very clean for the common case. No per-clause annotation.
-**Cons:** Too coarse — some predicates use cut in only some clauses.
-
-#### Option D: Soft-cut / `if-then-else` only (status quo + documentation)
-
-Don't add cut at all. Document that:
-- Green cuts → use if-then-else or `Once()`
-- Red cuts → use if-then-else with explicit conditions
-- Once-style cuts → use `Once(Goal)`
-- Complex cuts → refactor to use `Once()`, `FindAll()`, or explicit guards
-
-The Prolog translator already handles `(C -> T ; E)` → `IfExpr`. Extend it to
-recognize more cut patterns.
-
-**Pros:** No new syntax. Forces cleaner code.
-**Cons:** Some valid Prolog programs can't be translated automatically.
-
-### Recommendation
-
-**Use a combination of B and D:**
-
-1. Add a `commit` goal to the language (Option B, syntax 2):
-   ```python
-   Max(X, Y, X) <- (X >= Y, commit),
-   Max(_, Y, Y),
-   ```
-   This is a reserved goal name, not an operator. It means "if we reached this
-   point, commit to this clause — don't try alternatives." The compiler emits a
-   `return` after the committed continuation.
-
-2. For the translator, recognize common cut patterns and emit `commit`, `Once()`,
-   or `IfExpr` as appropriate (Option A). Fall back to a `commit` + warning
-   comment for unrecognized patterns.
-
-3. Document that arbitrary cut placement (e.g., `a, b, !, c, d` where `c` can
-   fail and we still don't want backtracking into `a,b`) is not supported.
-   This covers ~95% of real-world cut usage.
-
-**Implementation complexity:** Low. The compiler already has `Once()` and `IfExpr`.
-Adding `commit` is essentially "after the guard block, emit `return` instead of
-`fall-through`."
+1. **Cut and if-then-else are out of scope** — programs using them must be
+   rewritten. Clausal will not add cut or any surrogate.
+2. **Strings are lists of characters** — matching ISO/Scryer semantics.
+3. **Atoms are a distinct type** — not Python `str`. A new `Atom` type is needed.
+4. **Prolog modules imported via `use_module`** — translated through the Prolog
+   translation layer. `import_from`/`import_module` remain for Python/Clausal modules.
+5. **Operators and arithmetic** — handled entirely in the translation layer.
 
 ---
 
-## Issue 2: Atoms vs. Strings
+## Issue 1: Cut (`!/0`) and If-Then-Else (`->/2`)
 
-### The Problem
+### Decision: Not Supported
 
-In ISO Prolog, atoms and strings are distinct types:
-- `foo` is an atom (interned symbol)
-- `"foo"` is a list of character codes (ISO) or a string (SWI)
-- Atoms have identity; `foo == foo` always.
+Per Markus's recommendation, cut and if-then-else are **completely excluded**
+from Clausal's scope. Programs that use cut must be rewritten to use Clausal's
+native control flow.
 
-In Clausal, atoms are Python strings:
-- `"foo"` and `'foo'` are both Python `str` objects
-- There is no separate atom type
-- `IsStr/1` (Clausal's `atom/1`) tests for `str`
+### Rationale
 
-### Where This Matters
+Markus argues (and we agree) that cut is a misfeature of Prolog. It breaks
+declarative semantics, makes programs harder to reason about, and is the source
+of many subtle bugs. Well-written Prolog programs avoid cut entirely, using
+instead:
 
-1. **`atom/1` type check:** In ISO, `atom([])` succeeds (empty list is an atom).
-   In Clausal, `IsStr([])` fails (it's a list).
+- **`dif/2`** and constraints for mutual exclusion between clauses
+- **`if_/3`** (reified conditionals) for deterministic branching
+- **`once/1`** for first-solution commit where needed
+- **Proper indexing** to achieve determinism without cut
 
-2. **Double-quoted strings:** ISO says `"abc"` = `[97,98,99]` (list of codes).
-   SWI says `"abc"` is a string object. Clausal says `"abc"` is a `str`.
+The same applies to `(C -> T ; E)`, which is defined in terms of cut in ISO
+and inherits its problems.
 
-3. **Atom arithmetic:** ISO allows `atom_length(foo, N)` where `foo` is unquoted.
-   In Clausal, `foo` would be a Python name (variable or function), not a string.
+### What Clausal Offers Instead
 
-4. **Functor names:** In ISO, `f(a,b)` has functor `f` (an atom). In Clausal,
-   functors are Python class names (PredicateMeta instances).
+Clausal already has clean alternatives for every legitimate use of cut:
 
-### Options
+| Cut pattern | Clausal equivalent |
+|-------------|-------------------|
+| Green cut (determinism) | First-argument indexing + `dif/2` guards |
+| `member(X,L), !` | `Once(In(X, L))` |
+| `(C -> T ; E)` | Reified if-then-else: `(T if C else E)` |
+| Red cut (negation) | `not Goal` (NAF) or `dif/2` |
+| Committed choice | `Once(Goal)` or if-then-else |
 
-**Option A: Status quo + documentation (recommended)**
+### Translation Layer
 
-Accept that Clausal atoms are Python strings. Document the differences:
-- Unquoted atoms in Prolog → string literals in Clausal: `foo` → `"foo"`
-- `atom([])` → not supported (and shouldn't be — `[]` isn't an atom)
-- The translator already handles this: Prolog `foo` → Clausal `"foo"` in data position
+The Prolog-to-Clausal translator should:
 
-This is the right choice because:
-- Adding a separate Atom type would break Python interop (the main selling point)
-- SWI-Prolog itself moved toward treating strings as first-class (not code lists)
-- Markus's Scryer Prolog uses proper atoms but the distinction rarely matters in practice
+- **Reject** programs containing cut with a clear error message explaining
+  that the program must be rewritten
+- **Reject** `(C -> T ; E)` with a suggestion to use reified conditionals
+  or Clausal's if-then-else syntax
+- Optionally, a `--warn` mode could translate them with warning comments,
+  but the translated code would not be semantically correct
 
-**Option B: Atom wrapper type**
+---
 
-Add `class Atom(str)` that behaves like `str` but is distinguishable:
+## Issue 2: Strings Are Lists of Characters
+
+### Decision: Strings Are Character Lists
+
+Following ISO Prolog and Scryer Prolog, double-quoted strings in Prolog
+programs are lists of characters. This is the correct, declarative
+representation.
+
+### What This Means
+
+```prolog
+% In Prolog
+X = "hello"    % X = [h, e, l, l, o]  (list of atoms, each a single char)
+```
+
+In Clausal, when running translated Prolog code, `"hello"` must behave as
+`['h', 'e', 'l', 'l', 'o']` — a list of single-character atoms.
+
+### Implementation
+
+The translation layer should:
+
+1. Convert Prolog `"string"` literals to character lists in the translated
+   Clausal code
+2. String-processing builtins (`atom_chars/2`, `atom_codes/2`, etc.) must
+   work with character lists
+3. Clausal's native `str` type remains available for Python interop — the
+   distinction is between Prolog-layer code (character lists) and Python-layer
+   code (native strings)
+
+### Interaction with Atom Type
+
+Single characters in character lists are single-character atoms (see Issue 3).
+`atom_chars("hello", Cs)` produces a list of `Atom` values, not Python strings.
+
+---
+
+## Issue 3: Atoms Are a Distinct Type
+
+### Decision: Introduce an `Atom` Type
+
+Atoms should not be Python `str`. They are a distinct logical type representing
+interned symbols. Markus doesn't like atoms much in general, but for ISO
+compatibility the type distinction matters.
+
+### Rationale
+
+- `atom/1` type checking must distinguish atoms from strings and other types
+- Functor names are atoms; they should not be conflated with string data
+- `[]` is an atom in ISO Prolog (the empty list atom) — this is a distinct
+  concept from Python's `[]` (an empty list)
+- Prolog programs test `atom(X)` to mean "X is a symbolic constant", not
+  "X is a sequence of characters"
+
+### Design
+
 ```python
 class Atom(str):
-    """ISO Prolog atom — interned string."""
-    pass
+    """
+    ISO Prolog atom — an interned symbolic constant.
+
+    Inherits from str for ease of use in Python (printing, comparison,
+    hashing) but is a distinct type for type-checking builtins.
+    """
+    __slots__ = ()
+
+    def __repr__(self):
+        return f"Atom({super().__repr__()})"
 ```
 
-**Pros:** `isinstance(x, Atom)` distinguishes atoms from strings.
-**Cons:** Adds complexity; Python code would need to wrap every atom. Not Pythonic.
+Subclassing `str` means atoms work naturally in Python code (comparison,
+hashing, f-strings, dict keys) while being distinguishable via `isinstance`.
 
-### Recommendation
+### Type Checking Builtins
 
-**Option A.** The translator should map Prolog atoms to Python string literals.
-Document that `[]` is not an atom in Clausal. This matches SWI-Prolog's modern
-direction.
+| Builtin | Tests for |
+|---------|-----------|
+| `IsAtom/1` | `isinstance(x, Atom)` |
+| `IsStr/1` | `isinstance(x, str) and not isinstance(x, Atom)` |
+| `IsAtomic/1` | `Atom`, `int`, `float`, or `[]` |
+
+### Translation Layer
+
+- Prolog atoms (`foo`, `'hello world'`) → `Atom("foo")`, `Atom("hello world")`
+- Prolog double-quoted strings (`"hello"`) → character list `[Atom('h'), ...]`
+- Functor names in compounds are `Atom` values
+
+### Migration
+
+Existing Clausal code that uses plain `str` for atom-like values continues
+to work — `Atom` is a subclass of `str`. The `Atom` type is primarily for
+the Prolog translation layer and ISO conformity.
 
 ---
 
-## Issue 3: List Representation
+## Issue 4: Module System — `use_module` for Prolog, `import_from` for Python
 
-### The Problem
+### Decision: Two Import Mechanisms
 
-ISO Prolog lists are cons-pairs: `.(H, T)` where `T` is either another cons-pair
-or `[]`. This allows partial lists (where the tail is an unbound variable):
+- **`-use_module(library(lists))`** — imports a Prolog module, passing it through
+  the Prolog-to-Clausal translation layer first
+- **`-import_from(regex, [Match, Search])`** / **`-import_module(regex)`** — imports
+  a Python/Clausal module directly (existing mechanism, unchanged)
 
-```prolog
-X = [1, 2 | Y]   % Y is unbound — X is a partial list
+### How `use_module` Works
+
+```
+  .clausal source
+       |
+       v
+  -use_module(library(clpfd))
+       |
+       v
+  1. Locate .pl file in Prolog library path
+  2. Run through prolog_to_clausal translator
+  3. Compile translated source as a Clausal module
+  4. Inject exported predicates into caller's namespace
 ```
 
-Clausal uses Python lists, which are fixed-length arrays. The `[H, *T]` pattern
-matching works for destructuring, but:
+The translation is cached (like `__pycache__` for `.clausal` files). The
+Prolog library path is configurable and includes standard library locations
+for SWI-Prolog, Scryer Prolog, etc.
 
-1. **Partial lists can't exist** — a Python list can't have an unbound tail
-2. **Difference lists** — a common Prolog idiom — don't work
-3. **`append/3` in output mode** — `Append(X, Y, [1,2,3])` needs to enumerate
-   all splits, which works for Python lists but differs semantically from cons-based append
+### Qualified Calls
 
-### Where This Matters
+- Prolog `lists:member(X, L)` → Clausal `lists.In(X, L)` (via BUILTIN_NAME_MAP)
+- For non-builtin predicates: `mymod:foo(X)` → `mymod.Foo(X)` (snake_to_pascal)
 
-- DCGs internally use difference lists
-- Many Prolog algorithms rely on partial lists for efficiency
-- `=../2` (univ) returns a list — if the term has variable arguments, the list
-  has variable elements (this works fine with Python lists)
+### Library Mapping
 
-### Current State
+The dialect configuration (`prolog_dialect.py`) already has a `library_map`
+for mapping Prolog library names to Clausal equivalents:
 
-Clausal already has `SegList` (segment list) in `clausal/terms.py` for DCG state
-threading — this is essentially a difference-list implementation. The compiler
-handles list head/tail patterns via `_head_list_unify_input`/`_head_list_unify_output`.
+| Prolog | Clausal |
+|--------|---------|
+| `library(clpfd)` / `library(clpz)` | `clausal.logic.clpfd` |
+| `library(clpb)` | `clausal.logic.clpb` |
+| `library(lists)` | `clausal.logic.builtins.lists` |
+| `library(dcgs)` | built-in (DCG support is native) |
 
-### Options
-
-**Option A: Status quo + SegList for DCGs (current approach)**
-
-Python lists for normal use. SegList for DCGs. Document that difference lists
-are not a general-purpose idiom in Clausal.
-
-**Option B: Cons-cell type**
-
-Add `Cons(head, tail)` as a term type alongside Python lists. Prolog programs
-that use partial lists get translated to Cons-based code.
-
-```python
-class Cons:
-    head: Any
-    tail: Any  # Cons | list | Var
-```
-
-**Pros:** Full ISO list semantics.
-**Cons:** Two list representations is confusing. Python interop suffers (can't
-use Python list operations on Cons cells). Performance of Cons traversal is
-worse than Python list indexing.
-
-### Recommendation
-
-**Option A.** Python lists are the right default. The translator should convert
-Prolog partial-list patterns to explicit guard goals where needed. For the rare
-case of difference lists, document that Clausal uses SegList for DCGs and
-accumulator patterns for everything else.
+Extend this mapping as more Prolog libraries are supported.
 
 ---
 
-## Issue 4: Operator Syntax
+## Issue 5: Operators and Arithmetic — Translation Layer Only
 
-### The Problem
+### Decision: Handled in Translation
 
-ISO Prolog allows user-defined operators via `op/3`:
+Operator syntax differences and arithmetic semantics are resolved entirely
+in the Prolog-to-Clausal translation layer. No changes to Clausal's runtime
+or compiler are needed.
+
+### Operator Mapping (Already Implemented)
+
+| Prolog | Clausal | Notes |
+|--------|---------|-------|
+| `X = Y` | `X is Y` | Unification |
+| `X \= Y` | `X is not Y` | Dis-unification (dif/2) |
+| `\+ G` | `not G` | Negation-as-failure |
+| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `X =:= Y` | (arithmetic comparison) | Via `:=` + `==` |
+| `X =\= Y` | (arithmetic comparison) | Via `:=` + `!=` |
+| `A ; B` | `A or B` | Disjunction |
+| `X =< Y` | `X <= Y` | Less-or-equal |
+| `X =.. L` | `Unpack(X, L)` | Univ |
+| `X mod Y` | `X % Y` | Modulo |
+| `X /\ Y` | `X & Y` | Bitwise AND |
+| `X \/ Y` | `X \| Y` | Bitwise OR |
+| `X xor Y` | `X ^ Y` | Bitwise XOR |
+
+### Arithmetic Semantics
+
+Python uses floor division and floor modulo; ISO Prolog implementations vary.
+The translation layer handles this:
+
+- Prolog `//` → Clausal `TruncateDiv` (when ISO mode is active)
+- Prolog `mod` → Clausal `TruncateMod` (when ISO mode is active)
+- Prolog `rem` → Clausal `%` (Python's floor mod, which matches some Prologs)
+
+Alternatively, since most well-written Prolog uses CLP(FD)/CLP(Z) for integer
+arithmetic (per Markus's advocacy), the floor-vs-truncate distinction is
+largely irrelevant — constraint-based arithmetic doesn't have this ambiguity.
+
+### User-Defined Operators
+
+Prolog `:- op(Prec, Type, Name)` directives are consumed by the translation
+layer's parser (the operator table is mutable during parsing). In the emitted
+Clausal code, uses of user-defined operators become predicate calls:
+
 ```prolog
 :- op(700, xfx, <>).
-X <> Y :- X \= Y.
+X <> Y :- dif(X, Y).
+% Usage: foo(X) :- X <> bar.
 ```
 
-Python has a fixed set of operators. You cannot define new infix operators.
+Translates to:
 
-Additionally, some ISO operators have no Python equivalent:
-- `=..` (univ) — two dots, not a valid Python token
-- `\+` — backslash-plus, not valid Python
-- `=:=`, `=\=` — compound operators, not valid Python
-- `@<`, `@>`, `@=<`, `@>=` — term ordering operators
+```python
+NotEqual(X, Y) <- Dif(X, Y),
+# Usage: Foo(X) <- NotEqual(X, Atom("bar")),
+```
+
+---
+
+## Issue 6: List Representation
 
 ### Current State
 
-The translator already maps ISO operators to Clausal equivalents:
-- `=` → `is` (unification)
-- `\+` → `not`
-- `is` → `:=` (arithmetic evaluation)
-- `;` → `or`
-- `=..` → `Unpack(Term, List)` (builtin call)
-- `=:=` → arithmetic comparison via `:=` + `==`
+Clausal uses Python lists. ISO Prolog uses cons-pairs (`.(H, T)`).
 
-### What's Missing
-
-- `@<`, `@=<`, `@>`, `@>=` — standard order comparison. Need `Compare/3` or
-  dedicated builtins like `TermLt/2`, `TermLe/2`, `TermGt/2`, `TermGe/2`.
-- User-defined operators — not supportable in Python syntax. Translate to
-  predicate calls.
-
-### Recommendation
-
-1. Add `Compare/3` builtin (returns `<`, `=`, or `>` per ISO term ordering)
-2. Add `TermLt/2`, `TermGt/2` etc. as convenience wrappers
-3. Translate `:- op(...)` directives to comments/warnings during import
-4. Translate uses of user-defined operators to predicate calls
-
----
-
-## Issue 5: Arithmetic Semantics
-
-### The Problem
-
-Several arithmetic differences between Python and ISO Prolog:
-
-| Operation | ISO Prolog | Python/Clausal |
-|-----------|-----------|----------------|
-| `-7 // 2` | `-3` (truncate) | `-4` (floor) |
-| `-7 mod 2` | `-1` (truncate) | `1` (floor) |
-| `1 =:= 1.0` | succeeds | succeeds (`==` in Python) |
-| `1 = 1.0` | **fails** (structural) | **fails** (unification uses `is` identity) |
-| `max_integer` | may overflow | arbitrary precision (no overflow) |
-| `float_overflow` | may raise | `inf` (Python float semantics) |
-| `0/0` | error | `ZeroDivisionError` |
-| `2 ** -1` | error (some) or `0.5` | `0.5` (Python) |
-| `1 + a` | type error | `TypeError` |
-
-### What Clausal Already Does Right
-
-- Arbitrary precision integers (Python default) — better than most Prologs
-- Clear error on division by zero
-- Arithmetic evaluation via `:=` is explicit and clean
-
-### Recommendation
-
-1. **Floor vs. truncate:** Add `truncate_div/2` and `truncate_mod/2` builtins for
-   ISO compatibility. Keep Python-native `//` and `%` as defaults. The translator
-   should map Prolog `//` to `truncate_div` and `mod`/`rem` to `truncate_mod`
-   when targeting ISO mode.
-
-2. **Float equality:** Document that `1 =:= 1.0` succeeds in both systems.
-   Structural unification (`1 is 1.0`) fails in both (Clausal uses Python `is`
-   identity for numeric unification, not `==`).
-
-3. **Type errors:** Clausal already raises `TypeError` for `1 + "a"`. Map these
-   to ISO `type_error(evaluable, a/0)` in the exception system.
-
----
-
-## Issue 6: If-Then-Else
-
-### The Problem
-
-ISO defines `(C -> T ; E)` as:
-```prolog
-(C -> T ; E) :- C, !, T.
-(C -> T ; E) :- E.
-```
-
-This is **committed choice** — if `C` succeeds, commit to `T`; backtracking into
-`C` is not allowed. If `C` fails, try `E`.
-
-Clausal has two ITE mechanisms:
-1. **Reified ITE** — for `Unify`/`Dif`/CLP(FD) conditions: both branches explored
-2. **General ITE** — sub-generator for condition, committed choice for then/else
-
-### Current State
-
-The general ITE already implements committed-choice semantics correctly:
-the condition is run as a sub-generator; if it yields at least one solution,
-the "then" branch runs (once per condition solution); if it yields none, the
-"else" branch runs. This matches ISO `(C -> T ; E)`.
-
-### What's Missing
-
-The translator needs to reliably map `(C -> T ; E)` to Clausal's `IfExpr`:
-```python
-(T if C else E)   # Python ternary — maps to IfExpr node
-```
-
-And bare `(C -> T)` (without else) to:
-```python
-(T if C else False)   # or just Once(C), T
-```
-
-### Recommendation
-
-This is mostly a translator issue, not a runtime issue. The machinery exists.
-Ensure the Prolog-to-Clausal translator handles:
-- `(C -> T ; E)` → `(T if C else E)` IfExpr
-- `(C -> T)` → `(T if C else False)` or `Once(C), T`
-- Nested `(C1 -> T1 ; C2 -> T2 ; E)` → chained IfExpr
-
----
-
-## Issue 7: Module System
-
-### The Problem
-
-ISO Prolog's module system uses:
-```prolog
-:- module(lists, [member/2, append/3]).
-:- use_module(library(lists)).
-```
-
-Clausal uses:
-```python
--import_from(lists, [In, Append]),
--import_module(lists),
-```
-
-### Differences
+### Differences That Matter
 
 | Feature | ISO Prolog | Clausal |
 |---------|-----------|---------|
-| Declaration | `module(Name, Exports)` | `-module(Name, Exports)` |
-| Import | `use_module(library(X))` | `-import_from(X, [...])` |
-| Qualified calls | `lists:member(X, L)` | `lists.In(X, L)` |
-| Re-export | `reexport(module)` | Not supported |
-| Meta-predicate decl | `:- meta_predicate maplist(2, +)` | Not needed (Python closures) |
+| `[H\|T]` pattern | Cons destructuring | `[H, *T]` spread pattern |
+| Partial lists | `[1, 2 \| X]` (X unbound) | Not directly supported |
+| Difference lists | Common idiom | Use `SegList` or accumulators |
+| `[]` type | Atom | Python `list` (empty) |
+| `.(a, b)` | Valid (dotted pair) | Not supported |
 
 ### Recommendation
 
-The translator should map:
-- `:- module(Name, Exports)` → `-module(Name, Exports)`
-- `:- use_module(library(X))` → `-import_from(X, [...])`
-- `:- use_module(X, [pred/arity])` → `-import_from(X, [Pred])`
-- Qualified calls `M:Goal` → `M.Goal`
+Python lists are adequate for the vast majority of translated Prolog programs.
+The translation layer should:
 
-Most of this is already handled in the translator. The main gap is that Clausal
-doesn't have a standard library path mapping for all common Prolog libraries.
-Add library mappings as needed.
+1. Convert `[H|T]` → `[H, *T]` (already done)
+2. Convert difference-list patterns to accumulator style where recognizable
+3. Emit a warning for partial-list constructions that can't be represented
+4. Map `[]` to `[]` (Python empty list), not `Atom("[]")`
 
----
-
-## Issue 8: Naming Conventions
-
-### The Problem
-
-ISO Prolog uses lowercase for predicates and uppercase-initial for variables:
-```prolog
-member(X, [X|_]).
-member(X, [_|T]) :- member(X, T).
-```
-
-Clausal uses PascalCase for predicates and ALLCAPS/trailing-underscore for variables:
-```python
-In(X, [X, *_]),
-In(X, [_, *T]) <- In(X, T),
-```
-
-### Current State
-
-The translator already handles this bidirectionally:
-- `member` → `In` (via BUILTIN_NAME_MAP) or `Member` (via `snake_to_pascal`)
-- `X` → `X` (single uppercase letter stays)
-- `Head` → `head_` or `HEAD`
-- `_` → `_`
-
-### Edge Cases
-
-- `x` in Prolog is an atom, but `x` in Clausal is also an atom (lowercase, no
-  trailing underscore). This is correct.
-- `X` in Prolog is a variable, `X` in Clausal is also a variable (single
-  uppercase letter). Correct.
-- `Xs` in Prolog is a variable. In Clausal it would be `xs_` or `XS`. The
-  translator uses `xs_`.
-- `foo_bar` in Prolog is an atom. In Clausal it's also an atom (no trailing `_`).
-  Correct.
-- `Foo_bar` in Prolog is a variable. In Clausal → `foo_bar_` (trailing `_`). Correct.
-
-### Recommendation
-
-The naming convention translation is solid. One improvement: when a Prolog
-variable name is a common English word (e.g., `List`, `Head`, `Tail`, `Result`),
-prefer ALLCAPS in Clausal (`LIST`, `HEAD`, `TAIL`, `RESULT`) over trailing
-underscore (`list_`, `head_`, `tail_`, `result_`). This matches the preferred
-Clausal style.
+Programs that fundamentally rely on partial lists (e.g., some DCG
+implementations) use Clausal's `SegList` type, which already handles this.
 
 ---
 
-## Issue 9: Specific Missing ISO Builtins
+## Issue 7: Naming Conventions
 
-### Already Implemented (comprehensive)
+### Already Handled
+
+The translator handles bidirectional name conversion:
+
+| Prolog | Clausal | Rule |
+|--------|---------|------|
+| `member` | `In` | BUILTIN_NAME_MAP |
+| `foo_bar` | `FooBar` | snake_to_pascal |
+| `X` | `X` | Single uppercase letter |
+| `Head` | `HEAD` | Titlecase var → ALLCAPS (preferred) |
+| `Xs` | `XS` | Titlecase var → ALLCAPS |
+| `_` | `_` | Anonymous variable |
+| `_Ignored` | `_ignored_` | Leading underscore → trailing |
+
+### Improvement: Prefer ALLCAPS for Variables
+
+When translating Prolog variables to Clausal, prefer ALLCAPS over trailing
+underscore for readability:
+
+- `List` → `LIST` (not `list_`)
+- `Head` → `HEAD` (not `head_`)
+- `Result` → `RESULT` (not `result_`)
+- `Xs` → `XS` (not `xs_`)
+
+---
+
+## Issue 8: Specific Missing ISO Builtins
+
+### Already Implemented (Comprehensive)
 
 - Arithmetic: `is/2`, `=:=`, `=\=`, `<`, `>`, `=<`, `>=`, `+`, `-`, `*`, `/`,
   `//`, `mod`, `**`, `abs`, `sign`, `min`, `max`, `between/3`, `succ/2`, `plus/3`
@@ -554,221 +362,97 @@ Clausal style.
 |-----------|-------------|----------|-------|
 | `compare/3` | §8.4.1 | **High** | Standard term ordering |
 | `@</2`, `@>/2`, `@=</2`, `@>=/2` | §8.4.1 | **High** | Term ordering operators |
-| `number_vars/3` (ISO version) | §8.5.5 | Low | Already have NumberVars, check conformance |
-| `char_type/2` | extension | Low | Already have CharType/2 |
 | `read_term/2,3` | §8.14 | Medium | Parse Prolog terms from input |
-| `write_term/2,3` | §8.14 | Medium | Write with options (quoted, numbervars, etc.) |
-| `write_canonical/1` | §8.14 | Low | Canonical form output |
+| `write_term/2,3` | §8.14 | Medium | Write with options |
 | `read/1` | §8.14 | Medium | Read term from stdin |
+| `clause/2` | §8.8 | Medium | Clause inspection |
+| `current_predicate/1` | §8.8 | Medium | Predicate inspection |
+| `retractall/1` | extension | Medium | Remove all matching |
 | `open/4`, `close/1` | §8.11 | Low | Stream I/O |
 | `get_char/1`, `put_char/1` | §8.12 | Low | Character I/O |
 | `stream_property/2` | §8.11 | Low | Stream inspection |
 | `set_prolog_flag/2` | §8.17 | Low | Flag management |
 | `current_prolog_flag/2` | §8.17 | Low | Flag inspection |
-| `clause/2` | §8.8 | Medium | Clause inspection |
-| `current_predicate/1` | §8.8 | Medium | Predicate inspection |
 | `abolish/1` | §8.9 | Low | Remove predicate |
-| `retractall/1` | extension | Medium | Remove all matching |
-| `ground/1` | extension | Done | Already `IsGround/1` |
-| `succ_or_zero/2` | extension | Low | Natural number successor |
-| `msort/2` | extension | Done | Already `MergeSort/2` |
+| `write_canonical/1` | §8.14 | Low | Canonical form output |
 
 ---
 
-## Issue 10: Negation Semantics
+## Issue 9: Negation Semantics
 
-### The Problem
+### No Incompatibility
 
-ISO `\+/1` is simple negation-as-failure: the goal is called, and if it
-succeeds, `\+` fails; if it fails, `\+` succeeds. Bindings from the inner
-goal are **not** visible outside.
+Clausal's `not Goal` matches ISO `\+/1` exactly: the inner goal is called;
+if it succeeds, negation fails; if it fails, negation succeeds. Bindings from
+the inner goal are not visible outside.
 
-Clausal has two negation mechanisms:
-1. **Simple NAF** (`not Goal`) — same as ISO `\+`
-2. **Tabled NAF with WFS** — for tabled predicates, uses Well-Founded Semantics
-   to handle cycles through negation
-
-### Compatibility
-
-Simple NAF matches ISO exactly. WFS goes beyond ISO (which doesn't define
-behavior for cyclic negation). This is a strict superset — no incompatibility.
-
-### Recommendation
-
-No action needed. Document that Clausal's `not` is ISO `\+`, and WFS provides
-additional power for stratified/cyclic programs.
+For tabled predicates, Clausal goes further with Well-Founded Semantics (WFS),
+handling cycles through negation that ISO leaves undefined. This is a strict
+superset — no incompatibility.
 
 ---
 
-## Issue 11: Exception Handling
+## Issue 10: Exception Handling
 
-### The Problem
+### Mostly Compatible
 
-ISO defines `catch/3` and `throw/1` with structured error terms:
-```prolog
-catch(Goal, error(type_error(integer, foo), _), Recovery).
-```
+Clausal has `catch/3` and `throw/1` with `LogicException`. Should verify that
+error terms match ISO structure: `error(ErrorKind, ImplDefined)` where ErrorKind
+is `type_error/2`, `instantiation_error/0`, `existence_error/2`,
+`permission_error/3`, etc.
 
-Clausal has `catch/3` and `throw/1` with `LogicException`. The error term
-structure may differ from ISO's `error(ErrorTerm, ImplDefined)` convention.
-
-### Current State
-
-Clausal's exception system uses `LogicException` with structured terms. The
-`clausal/logic/exceptions.py` module provides helpers for creating ISO-style
-error terms.
-
-### Recommendation
-
-Verify that error terms match ISO structure: `error(ErrorKind, ImplInfo)` where
-ErrorKind is one of `type_error/2`, `instantiation_error/0`,
-`existence_error/2`, `permission_error/3`, `representation_error/1`,
-`evaluation_error/1`, `syntax_error/1`, `resource_error/1`,
-`system_error/0`. Align any gaps.
-
----
-
-## Issue 12: String/Code List Handling
-
-### The Problem
-
-ISO Prolog defines `"hello"` as a list of character codes `[104,101,108,108,111]`.
-SWI-Prolog (with `set_prolog_flag(double_quotes, atom)`) treats it as an atom.
-Scryer Prolog follows ISO (code list).
-
-Clausal treats `"hello"` as a Python string.
-
-### Recommendation
-
-The translator should:
-- When importing from ISO/Scryer: convert code-list operations to string operations
-- When importing from SWI: treat double-quoted strings as Clausal strings (direct)
-- When exporting to ISO: convert Clausal strings to quoted atoms (`'hello'`)
-
-This is already mostly handled by the dialect system.
+Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 
 ---
 
 ## Summary: Priority Matrix
 
-| Issue | Severity | Effort | Recommendation |
-|-------|----------|--------|----------------|
-| Cut | **Critical** | Medium | Add `commit` goal + translator patterns |
-| Atoms vs strings | Low | None | Status quo; document |
-| List representation | Medium | None | Status quo; Python lists sufficient |
-| Operators | Medium | Low | Add `Compare/3` + term ordering builtins |
-| Arithmetic | Medium | Low | Add `truncate_div/mod`; document floor semantics |
-| If-then-else | Low | Low | Already works; improve translator |
-| Module system | Low | Low | Translator mapping; already mostly done |
-| Naming | Low | None | Already handled well |
-| Missing builtins | Medium | Medium | Prioritize `Compare/3`, `clause/2`, `read/1` |
-| Negation | None | None | Already ISO-compatible + WFS extension |
-| Exceptions | Low | Low | Verify ISO error term structure |
-| String/codes | Low | None | Handled by dialect system |
+| Issue | Decision | Effort | Notes |
+|-------|----------|--------|-------|
+| Cut | **Reject** | None | Not supported; translator rejects programs with cut |
+| If-then-else | **Reject** | None | Not supported; use reified conditionals |
+| Strings | **Char lists** | Medium | `"abc"` → `[Atom('a'), Atom('b'), Atom('c')]` |
+| Atoms | **New type** | Medium | `class Atom(str)` — distinct from `str` |
+| Module system | **`use_module`** | Medium | Prolog modules via translation; Python via `import_from` |
+| Operators | **Translation layer** | None | Already handled |
+| Arithmetic | **Translation layer** | None | Already handled |
+| List representation | **Python lists** | None | Status quo; adequate for translated code |
+| Naming | **Already done** | Low | Prefer ALLCAPS for variables |
+| Missing builtins | **Incremental** | Medium | Prioritize `Compare/3`, term ordering |
+| Negation | **Compatible** | None | NAF + WFS is a superset of ISO |
+| Exceptions | **Mostly done** | Low | Verify error term structure |
 
 ---
 
-## Appendix: The `commit` Design in Detail
+## Implementation Phases
 
-### Syntax
+### Phase 1: `Atom` Type + String-as-Char-List
 
-```python
-# In a clause body, `commit` is a goal that always succeeds
-# but tells the compiler: "if we reached here, don't try other clauses"
-Max(X, Y, X) <- (X >= Y, commit),
-Max(_, Y, Y),
+1. Add `class Atom(str)` to `clausal/terms.py`
+2. Update `IsAtom/1` type check to use `isinstance(x, Atom)`
+3. Update `IsStr/1` to exclude `Atom` instances
+4. Update `atom_chars/2`, `atom_codes/2` etc. to produce/consume `Atom` values
+5. Update translator to emit `Atom(...)` for Prolog atoms
+6. Update translator to emit character lists for Prolog `"strings"`
 
-# With goals after commit
-Classify(X, "positive") <- (X > 0, commit, Log("positive", X)),
-Classify(X, "zero") <- (X == 0, commit, Log("zero", X)),
-Classify(_, "negative"),
+### Phase 2: `use_module` Directive
 
-# Equivalent to ISO:
-# classify(X, positive) :- X > 0, !, log(positive, X).
-# classify(X, zero) :- X =:= 0, !, log(zero, X).
-# classify(_, negative).
-```
+1. Add `-use_module(library(Name))` directive parsing
+2. Implement Prolog library path resolution
+3. Wire up: locate `.pl` → translate → compile → inject exports
+4. Add translation caching (alongside `__pycache__`)
+5. Extend `library_map` in `prolog_dialect.py`
 
-### Semantics
+### Phase 3: Missing Builtins
 
-1. Goals before `commit` are the **guard**.
-2. If the guard succeeds, the predicate is **committed** to this clause.
-3. Goals after `commit` are the **continuation**.
-4. If the continuation fails, the predicate fails — it does NOT try other clauses.
-5. If the guard fails, fall through to the next clause as normal.
+1. `Compare/3` and term ordering operators
+2. `clause/2`, `current_predicate/1`
+3. `retractall/1`
+4. `read/1`, `read_term/2,3`, `write_term/2,3`
 
-### Compilation
+### Phase 4: Cut/ITE Rejection in Translator
 
-For simple mode:
-```python
-def classify__2(arg0, arg1, trail, k):
-    # Clause 1: Classify(X, "positive") <- (X > 0, commit, Log("positive", X))
-    mark = trail.mark()
-    match (arg0, arg1):
-        case (_v0, _v1):
-            if deref(_v0) > 0:
-                # COMMIT — guard succeeded
-                if unify(_v1, "positive", trail):
-                    # continuation goals
-                    for _ in Log._get_dispatch()(deref("positive"), deref(_v0), trail, k):
-                        yield None
-                trail.undo(mark)
-                return  # ← commit: skip all remaining clauses
-    trail.undo(mark)
-
-    # Clause 2: only reached if clause 1's guard failed
-    mark = trail.mark()
-    match (arg0, arg1):
-        ...
-```
-
-The key difference from non-committed code: `return` after the guard block
-instead of falling through to the next `match` case.
-
-### Alternative Syntax Candidates
-
-If `commit` feels too verbose or too Prolog-ish, alternatives:
-
-1. **`!` as a goal name** (directly borrowed from Prolog):
-   - Rejected: `!` is not a valid Python identifier.
-
-2. **`CUT` as a goal name**:
-   - `Max(X, Y, X) <- (X >= Y, CUT),`
-   - Unambiguous but ugly; suggests exactly the thing we're trying to avoid.
-
-3. **`det` (deterministic) as clause decorator**:
-   - `-det` before the clause: `-det, Max(X, Y, X) <- X >= Y,`
-   - Reads as "this clause is deterministic (commits on guard success)."
-
-4. **`|` as guard separator** (Mercury/Curry style):
-   - Can't use — `|` is already Python bitwise-or / set-union.
-
-5. **Arrow within clause body** (guard → continuation):
-   - Can't use `->` — it's Python's return type annotation.
-
-6. **`then` keyword**:
-   - `Max(X, Y, X) <- (X >= Y then True),`
-   - Reads well but `then` isn't a Python keyword, would need creative encoding.
-
-7. **Indexed block with `//`**:
-   - `Max(X, Y, X) <- X >= Y // True,`
-   - `//` is floor-division; overloading is confusing.
-
-### Recommended: `commit`
-
-`commit` reads naturally, is unambiguous, and clearly communicates intent:
-
-```python
-Classify(X, TYPE) <- (
-    X > 0, commit,
-    TYPE is "positive"
-),
-Classify(X, TYPE) <- (
-    X == 0, commit,
-    TYPE is "zero"
-),
-Classify(_, "negative"),
-```
-
-It's explicit about what's happening (unlike Prolog's `!` which is famously
-obscure to newcomers). It's also easy to search for in code.
+1. Add error reporting in `prolog_to_clausal.py` when cut is encountered
+2. Add error reporting for `(C -> T ; E)` constructs
+3. Provide clear error messages suggesting alternatives
+4. Optional `--warn` mode that translates with warning comments
