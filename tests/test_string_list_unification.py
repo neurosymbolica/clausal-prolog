@@ -235,3 +235,163 @@ class TestEdgeCases:
         trail = Trail()
         X = Var()
         assert not unify("abc", [X, "b", X], trail)
+
+
+# ── Phase 2: SegList accepts strings ────────────────────────────────────────
+
+from clausal.terms import SegList, ConcreteSeg, VarSeg
+
+
+class TestSegListStringUnification:
+    """SegList patterns match against strings."""
+
+    def test_head_tail(self):
+        """[X, *T] matches 'hello' → X='h', T=['e','l','l','o']."""
+        trail = Trail()
+        X, T = Var(), Var()
+        sl = SegList([ConcreteSeg([X]), VarSeg(T)])
+        assert unify(sl, "hello", trail)
+        assert deref(X) == "h"
+        assert deref(T) == ["e", "l", "l", "o"]
+
+    def test_prefix_suffix(self):
+        """[*P, ',', *S] matches 'a,b'."""
+        trail = Trail()
+        P, S = Var(), Var()
+        sl = SegList([VarSeg(P), ConcreteSeg([","]), VarSeg(S)])
+        assert unify(sl, "a,b", trail)
+        assert deref(P) == ["a"]
+        assert deref(S) == ["b"]
+
+    def test_multi_star_multiple_solutions(self):
+        """[*A, 'l', *B] matches 'hello' at two positions (l at idx 2 and 3)."""
+        from clausal.terms import _seglist_unify_gen
+        trail = Trail()
+        A, B = Var(), Var()
+        sl = SegList([VarSeg(A), ConcreteSeg(["l"]), VarSeg(B)])
+        walked = sl.__walk__()
+        target = list("hello")
+        solutions = []
+        for _ in _seglist_unify_gen(walked, target, trail):
+            solutions.append((list(deref(A)), list(deref(B))))
+        assert len(solutions) == 2
+        assert (["h", "e"], ["l", "o"]) in solutions
+        assert (["h", "e", "l"], ["o"]) in solutions
+
+    def test_empty_string(self):
+        """[*A] matches '' → A=[]."""
+        trail = Trail()
+        A = Var()
+        sl = SegList([VarSeg(A)])
+        assert unify(sl, "", trail)
+        assert deref(A) == []
+
+    def test_full_concrete_match(self):
+        """['h', 'i'] matches 'hi'."""
+        sl = SegList([ConcreteSeg(["h", "i"])])
+        assert unify(sl, "hi", Trail())
+
+    def test_full_concrete_mismatch(self):
+        """['h', 'i'] does NOT match 'ho'."""
+        sl = SegList([ConcreteSeg(["h", "i"])])
+        assert not unify(sl, "ho", Trail())
+
+    def test_concrete_length_mismatch(self):
+        """['a', 'b', 'c'] does NOT match 'ab'."""
+        sl = SegList([ConcreteSeg(["a", "b", "c"])])
+        assert not unify(sl, "ab", Trail())
+
+    def test_only_star(self):
+        """[*X] matches 'abc' → X=['a','b','c']."""
+        trail = Trail()
+        X = Var()
+        sl = SegList([VarSeg(X)])
+        assert unify(sl, "abc", trail)
+        assert deref(X) == ["a", "b", "c"]
+
+    def test_two_stars(self):
+        """[*A, *B] matches 'abc' — enumerates 4 splits."""
+        from clausal.terms import _seglist_unify_gen
+        trail = Trail()
+        A, B = Var(), Var()
+        sl = SegList([VarSeg(A), VarSeg(B)])
+        walked = sl.__walk__()
+        target = list("abc")
+        solutions = []
+        for _ in _seglist_unify_gen(walked, target, trail):
+            solutions.append((list(deref(A)), list(deref(B))))
+        assert len(solutions) == 4  # [], abc | [a], bc | ab, c | abc, []
+
+    def test_var_in_concrete_binds(self):
+        """[*_, X, *_] matching 'abc' with concrete var binds X to each char."""
+        from clausal.terms import _seglist_unify_gen
+        trail = Trail()
+        X = Var()
+        Dummy1, Dummy2 = Var(), Var()
+        sl = SegList([VarSeg(Dummy1), ConcreteSeg([X]), VarSeg(Dummy2)])
+        walked = sl.__walk__()
+        target = list("abc")
+        chars = []
+        for _ in _seglist_unify_gen(walked, target, trail):
+            chars.append(deref(X))
+        assert chars == ["a", "b", "c"]
+
+    def test_unicode_string(self):
+        """SegList matches unicode string."""
+        trail = Trail()
+        X, T = Var(), Var()
+        sl = SegList([ConcreteSeg([X]), VarSeg(T)])
+        assert unify(sl, "日本語", trail)
+        assert deref(X) == "日"
+        assert deref(T) == ["本", "語"]
+
+    def test_symmetric_string_seglist(self):
+        """unify('hello', SegList) works (SegList has __unify__ hook)."""
+        trail = Trail()
+        X, T = Var(), Var()
+        sl = SegList([ConcreteSeg([X]), VarSeg(T)])
+        # SegList is on the right, string on the left — C tries t2.__unify__(t1)
+        assert unify("hello", sl, trail)
+        assert deref(X) == "h"
+        assert deref(T) == ["e", "l", "l", "o"]
+
+
+class TestBodyMultiStarUnifyString:
+    """_body_multi_star_unify handles string targets."""
+
+    def test_split_at_comma(self):
+        from clausal.logic.compiler import _body_multi_star_unify
+        trail = Trail()
+        A, B = Var(), Var()
+        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        results = []
+        for _ in _body_multi_star_unify("a,b", segments, trail):
+            results.append((list(deref(A)), list(deref(B))))
+        assert len(results) == 1
+        assert results[0] == (["a"], ["b"])
+
+    def test_multiple_commas(self):
+        from clausal.logic.compiler import _body_multi_star_unify
+        trail = Trail()
+        A, B = Var(), Var()
+        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        results = []
+        for _ in _body_multi_star_unify("a,b,c", segments, trail):
+            results.append((list(deref(A)), list(deref(B))))
+        assert len(results) == 2
+
+    def test_no_match(self):
+        from clausal.logic.compiler import _body_multi_star_unify
+        trail = Trail()
+        A, B = Var(), Var()
+        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        results = list(_body_multi_star_unify("abc", segments, trail))
+        assert results == []  # No comma in string
+
+    def test_empty_string(self):
+        from clausal.logic.compiler import _body_multi_star_unify
+        trail = Trail()
+        A = Var()
+        segments = [("star", A)]
+        results = list(_body_multi_star_unify("", segments, trail))
+        assert len(results) == 1

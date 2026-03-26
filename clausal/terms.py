@@ -286,13 +286,15 @@ class SegList:
         For a SegList target: deferred to Phase 6 — returns NotImplemented.
         """
         from .logic.variables import unify, walk
-        if isinstance(other, list):
+        if isinstance(other, (list, str)):
+            # Treat strings as lists of single-character strings.
+            target = list(other) if isinstance(other, str) else other
             walked = self.__walk__()
             if isinstance(walked, list):
                 # Fully ground — simple equality
-                return walked == other
+                return walked == target
             # Use the generator; take the first solution only
-            for _ in _seglist_unify_gen(walked, other, trail):
+            for _ in _seglist_unify_gen(walked, target, trail):
                 return True
             return False
         if isinstance(other, SegList):

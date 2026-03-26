@@ -215,10 +215,16 @@ class TestUnify:
         result = sl.__unify__([1, 2], trail)
         assert result is False
 
-    def test_unify_against_non_list_returns_not_implemented(self):
+    def test_unify_against_non_sequence_returns_not_implemented(self):
         sl = SegList([ConcreteSeg([1])])
-        result = sl.__unify__("hello", Trail())
+        result = sl.__unify__(42, Trail())
         assert result is NotImplemented
+
+    def test_unify_against_string_treats_as_char_list(self):
+        """Strings are treated as char lists for SegList unification."""
+        sl = SegList([ConcreteSeg(["h", "i"])])
+        assert sl.__unify__("hi", Trail()) is True
+        assert sl.__unify__("ho", Trail()) is False
 
     def test_unify_against_seglist_returns_not_implemented(self):
         sl = SegList([ConcreteSeg([1])])

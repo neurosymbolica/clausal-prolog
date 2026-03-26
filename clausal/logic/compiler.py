@@ -434,6 +434,8 @@ def _body_multi_star_unify(target, segments, trail):
     Yields once per valid split (combinatorial backtracking).
     """
     d = deref(target)
+    if isinstance(d, str):
+        d = list(d)  # Treat string as list of characters for multi-star splitting
     if not isinstance(d, list):
         if isinstance(d, SegList):
             d = d.__walk__()
