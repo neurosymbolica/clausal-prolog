@@ -634,3 +634,108 @@ class TestDcgStateExample:
         r = Var()
         for _ in call("collect_items", [], r, module=self.mod):
             assert deref(r) == []
+
+
+# ── Phase 3: DCGs accept strings ────────────────────────────────────────────
+
+
+class TestDCGStringInput:
+    """phrase/2 and phrase/3 accept strings, converting to char lists."""
+
+    def test_phrase2_string_match(self, tmp_path):
+        """phrase(rule, "hi") works — string converted to char list."""
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("ds1", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, "hi", module=mod)
+
+    def test_phrase2_string_no_match(self, tmp_path):
+        """phrase(rule, "ho") fails when grammar expects "hi"."""
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("ds2", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert not _succeeds("phrase", cls, "ho", module=mod)
+
+    def test_phrase2_string_empty(self, tmp_path):
+        """phrase(eps, "") succeeds for empty grammar."""
+        src = 'eps >> ([])\n'
+        mod = _load("ds3", src, tmp_path)
+        cls = mod.module_dict["eps"]
+        assert _succeeds("phrase", cls, "", module=mod)
+
+    def test_phrase2_string_multi_terminal(self, tmp_path):
+        """phrase(rule, "hello") matches multi-char terminal sequence."""
+        src = 'hello >> (["h", "e", "l", "l", "o"])\n'
+        mod = _load("ds4", src, tmp_path)
+        cls = mod.module_dict["hello"]
+        assert _succeeds("phrase", cls, "hello", module=mod)
+        assert not _succeeds("phrase", cls, "hell", module=mod)
+
+    def test_phrase3_string_remainder(self, tmp_path):
+        """phrase(rule, "hiXY", Rest) — Rest is a char list."""
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("ds5", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        rest = Var()
+        results = []
+        for _ in call("phrase", cls, "hiXY", rest, module=mod):
+            results.append(deref(rest))
+        assert results == [["X", "Y"]]
+
+    def test_phrase2_chained_nonterminals_string(self, tmp_path):
+        """Chained non-terminals consume a string."""
+        src = (
+            'a_rule >> (["a"])\n'
+            'b_rule >> (["b"])\n'
+            'ab >> (a_rule, b_rule)\n'
+        )
+        mod = _load("ds6", src, tmp_path)
+        cls = mod.module_dict["ab"]
+        assert _succeeds("phrase", cls, "ab", module=mod)
+        assert not _succeeds("phrase", cls, "ac", module=mod)
+
+    def test_phrase2_recursive_string(self, tmp_path):
+        """Recursive DCG parses a string character by character."""
+        src = (
+            'chars >> (["a"], chars)\n'
+            'chars >> ([])\n'
+        )
+        mod = _load("ds7", src, tmp_path)
+        cls = mod.module_dict["chars"]
+        assert _succeeds("phrase", cls, "aaa", module=mod)
+        assert _succeeds("phrase", cls, "", module=mod)
+        assert not _succeeds("phrase", cls, "aab", module=mod)
+
+    def test_phrase2_dcg_with_args_string(self, tmp_path):
+        """DCG with args extracts characters from string input."""
+        src = 'tok(T_) >> ([T_])\n'
+        mod = _load("ds8", src, tmp_path)
+        cls = mod.module_dict["tok"]
+        v = Var()
+        results = []
+        for _ in call("phrase", cls(v), "x", module=mod):
+            results.append(deref(v))
+        assert results == ["x"]
+
+    def test_phrase2_inline_goal_string(self, tmp_path):
+        """DCG with inline goal on string input."""
+        src = 'vowel(V_) >> ([V_], {In(V_, ["a", "e", "i", "o", "u"])})\n'
+        mod = _load("ds9", src, tmp_path)
+        cls = mod.module_dict["vowel"]
+        v = Var()
+        results = []
+        for _ in call("phrase", cls(v), "e", module=mod):
+            results.append(deref(v))
+        assert results == ["e"]
+        # Consonant should fail
+        results2 = []
+        for _ in call("phrase", cls(v), "b", module=mod):
+            results2.append(deref(v))
+        assert results2 == []
+
+    def test_list_input_still_works(self, tmp_path):
+        """List input is unchanged (no regression)."""
+        src = 'hi >> (["h", "i"])\n'
+        mod = _load("ds10", src, tmp_path)
+        cls = mod.module_dict["hi"]
+        assert _succeeds("phrase", cls, ["h", "i"], module=mod)

@@ -14,6 +14,9 @@ def _phrase__2(this_generator, parent, rule_body, list_arg, trail):
     """phrase(RuleBody, List) — invoke DCG rule, must consume entire list."""
     rule_val = deref(rule_body)
     list_val = deref(list_arg)
+    # Strings are treated as lists of characters for DCG parsing.
+    if isinstance(list_val, str):
+        list_val = list(list_val)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         # Class reference (0 extra args): phrase(greeting, [hello, world])
@@ -42,6 +45,9 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
     """phrase(RuleBody, List, Rest) — invoke DCG rule, partial parse."""
     rule_val = deref(rule_body)
     list_val = deref(list_arg)
+    # Strings are treated as lists of characters for DCG parsing.
+    if isinstance(list_val, str):
+        list_val = list(list_val)
     rest_val = deref(rest_arg)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
@@ -72,12 +78,17 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
     Used as a DCG rule: ``phrase(Sequence([a, b, c]), Input)``.
     """
     lst_val = deref(lst)
-    if is_var(lst_val) or not isinstance(lst_val, list):
+    if is_var(lst_val) or not isinstance(lst_val, (list, str)):
         yield (parent, DONE)
         return
+    # Normalise to list for uniform element comparison
+    if isinstance(lst_val, str):
+        lst_val = list(lst_val)
     s_val = deref(s)
     s0_val = deref(s0)
-    if isinstance(s0_val, list):
+    if isinstance(s0_val, (list, str)):
+        if isinstance(s0_val, str):
+            s0_val = list(s0_val)
         # S0 is bound — check prefix and bind S to remainder
         n = len(lst_val)
         if len(s0_val) >= n and s0_val[:n] == lst_val:
@@ -85,7 +96,9 @@ def _sequence__3(this_generator, parent, lst, s0, s, trail):
             if unify(s, s0_val[n:], trail):
                 yield (parent, None)
             trail.undo(mark)
-    elif isinstance(s_val, list):
+    elif isinstance(s_val, (list, str)):
+        if isinstance(s_val, str):
+            s_val = list(s_val)
         # S is bound — compute S0 = List ++ S and unify
         expected = lst_val + s_val
         mark = trail.mark()
