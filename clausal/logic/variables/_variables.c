@@ -979,6 +979,69 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                         trail, depth + 1, oc);
     }
 
+    /* ---- String ↔ List unification ----
+     * Treat a Python str as a list of single-character strings.
+     * "abc" unifies element-wise with ['a', 'b', 'c'].
+     * String-vs-string still falls through to PyObject_RichCompareBool below.
+     *
+     * Fast path: when the list element is a ground single-char string, compare
+     * code points directly (no allocation).  Only allocate a PyUnicode when
+     * binding an unbound Var.
+     */
+    if (PyUnicode_Check(t1) && PyList_Check(t2)) {
+        Py_ssize_t n = PyUnicode_GET_LENGTH(t1);
+        if (n != PyList_GET_SIZE(t2)) return 0;
+        if (n == 0) return 1;
+        int kind = PyUnicode_KIND(t1);
+        void *data = PyUnicode_DATA(t1);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            Py_UCS4 c1 = PyUnicode_READ(kind, data, i);
+            PyObject *elem = var_deref(PyList_GET_ITEM(t2, i));
+            if (Var_Check(elem)) {
+                /* Unbound var — allocate char string and unify (binds the var) */
+                PyObject *ch = PyUnicode_Substring(t1, i, i + 1);
+                if (!ch) return -1;
+                int r = do_unify(ch, elem, trail, depth + 1, oc);
+                Py_DECREF(ch);
+                if (r != 1) return r;
+            } else if (PyUnicode_Check(elem)
+                       && PyUnicode_GET_LENGTH(elem) == 1
+                       && PyUnicode_READ_CHAR(elem, 0) == c1) {
+                /* Ground single-char match — no allocation */
+                continue;
+            } else {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    if (PyList_Check(t1) && PyUnicode_Check(t2)) {
+        /* Symmetric: list on left, string on right — delegate with swapped args */
+        Py_ssize_t n = PyUnicode_GET_LENGTH(t2);
+        if (PyList_GET_SIZE(t1) != n) return 0;
+        if (n == 0) return 1;
+        int kind = PyUnicode_KIND(t2);
+        void *data = PyUnicode_DATA(t2);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            Py_UCS4 c2 = PyUnicode_READ(kind, data, i);
+            PyObject *elem = var_deref(PyList_GET_ITEM(t1, i));
+            if (Var_Check(elem)) {
+                PyObject *ch = PyUnicode_Substring(t2, i, i + 1);
+                if (!ch) return -1;
+                int r = do_unify(elem, ch, trail, depth + 1, oc);
+                Py_DECREF(ch);
+                if (r != 1) return r;
+            } else if (PyUnicode_Check(elem)
+                       && PyUnicode_GET_LENGTH(elem) == 1
+                       && PyUnicode_READ_CHAR(elem, 0) == c2) {
+                continue;
+            } else {
+                return 0;
+            }
+        }
+        return 1;
+    }
+
     /* __unify__ protocol: delegate to Python method if present.
      * Allows custom term types (DictTerm, SetTerm, SegList, etc.) to define
      * their own unification behaviour without hardcoding each type in C.
