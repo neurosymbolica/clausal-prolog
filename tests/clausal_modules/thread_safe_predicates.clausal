@@ -1,0 +1,46 @@
+# Thread-safe predicate patterns
+#
+# These predicates are pure (no side effects, no assert/retract) and
+# therefore safe for concurrent queries from multiple threads.
+# The tests verify correctness; concurrency stress tests are in
+# tests/test_free_threading.py.
+
+# ── Pure list predicates ─────────────────────────────────────────────────────
+
+MyAppend([], YS, YS),
+MyAppend([H, *XS], YS, [H, *ZS]) <- MyAppend(XS, YS, ZS)
+
+MyLength([], 0),
+MyLength([_, *T], N) <- (MyLength(T, N1) and (N := N1 + 1))
+
+MyMember(X, [X, *_]),
+MyMember(X, [_, *T]) <- MyMember(X, T)
+
+# ── Pure arithmetic ──────────────────────────────────────────────────────────
+
+MyFact(0, 1),
+MyFact(N, F) <- (
+    N > 0,
+    N1 := N - 1,
+    MyFact(N1, F1),
+    F := N * F1
+)
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+
+# List operations
+Test("append nil-nil") <- (MyAppend([], [], R) and R is [])
+Test("append nil-list") <- (MyAppend([], [1, 2], R) and R is [1, 2])
+Test("append list-list") <- (MyAppend([1, 2], [3, 4], R) and R is [1, 2, 3, 4])
+Test("length empty") <- (MyLength([], N) and N is 0)
+Test("length three") <- (MyLength(["x", "y", "z"], N) and N is 3)
+Test("member first") <- MyMember(1, [1, 2, 3])
+Test("member last") <- MyMember(3, [1, 2, 3])
+Test("member all") <- (
+    FindAll(X, MyMember(X, ["x", "y", "z"]), BAG) and BAG is ["x", "y", "z"]
+)
+
+# Arithmetic
+Test("factorial 0") <- (MyFact(0, F) and F is 1)
+Test("factorial 5") <- (MyFact(5, F) and F is 120)
+Test("factorial 10") <- (MyFact(10, F) and F is 3628800)

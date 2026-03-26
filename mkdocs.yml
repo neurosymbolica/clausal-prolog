@@ -118,6 +118,10 @@ nav:
     - Tabling: tabling.md
     - Well-Founded Semantics: wfs.md
     - Meta-Interpreters: metainterpreters.md
+  - Parallelism:
+    - Free-Threaded Python: free_threading.md
+    - "Tutorial: Python Side": tutorial_parallel_python.md
+    - "Tutorial: Clausal Side": tutorial_parallel_clausal.md
   - Internals:
     - Architecture: architecture.md
     - Compiler: compiler.md
