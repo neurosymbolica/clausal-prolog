@@ -34,11 +34,16 @@ Member(X, [_, *T]) <- Member(X, T)
 Factorial(0, 1),
 Factorial(N, F) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     Factorial(N1, F1),
-    F := N * F1
+    F == N * F1
 )
 ```
+
+!!! tip "Use `==` for arithmetic"
+    Prefer `N1 == N - 1` over `N1 := N - 1`. The `==` operator uses
+    CLP(FD) constraints, making predicates bidirectional where possible.
+    `:=` forces eager evaluation in one direction only.
 
 Each thread creates its own Vars and Trail when it calls these
 predicates. The clause database is read-only during resolution —
@@ -53,17 +58,18 @@ threads contribute answers to the same table.
 
 ```clausal
 # skip
--table(path/2)
+-private([A, B, C, D])
+-table(Path/2)
 
-edge(1, 2),
-edge(2, 3),
-edge(3, 4),
+Edge(A, B),
+Edge(B, C),
+Edge(C, D)
 
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (path(X, Z), edge(Z, Y))
+Path(X, Y) <- Edge(X, Y)
+Path(X, Y) <- (Path(X, Z) and Edge(Z, Y))
 ```
 
-Multiple threads can query `path` concurrently. Each thread builds
+Multiple threads can query `Path` concurrently. Each thread builds
 its own memo table independently.
 
 ### CLP(FD) / CLP(B) / CLP(R) predicates
@@ -78,11 +84,11 @@ variables (the normal case), constraint solving is safe.
 -use(clpfd)
 
 NQueens(N, QS) <- (
-    length(QS, N),
+    Length(QS, N),
     QS ins 1..N,
-    all_different(QS),
-    safe_queens(QS),
-    label(QS)
+    AllDifferent(QS),
+    SafeQueens(QS),
+    Label(QS)
 )
 ```
 

@@ -11,7 +11,7 @@ MyAppend([], YS, YS),
 MyAppend([H, *XS], YS, [H, *ZS]) <- MyAppend(XS, YS, ZS)
 
 MyLength([], 0),
-MyLength([_, *T], N) <- (MyLength(T, N1) and (N := N1 + 1))
+MyLength([_, *T], N) <- (MyLength(T, N1) and N == N1 + 1)
 
 MyMember(X, [X, *_]),
 MyMember(X, [_, *T]) <- MyMember(X, T)
@@ -21,10 +21,20 @@ MyMember(X, [_, *T]) <- MyMember(X, T)
 MyFact(0, 1),
 MyFact(N, F) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     MyFact(N1, F1),
-    F := N * F1
+    F == N * F1
 )
+
+# ── Graph traversal (acyclic — no tabling needed) ────────────────────────────
+
+GEdge("a", "b"),
+GEdge("b", "c"),
+GEdge("c", "d"),
+GEdge("b", "d")
+
+GPath(X, Y) <- GEdge(X, Y)
+GPath(X, Y) <- (GEdge(X, Z) and GPath(Z, Y))
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -32,15 +42,21 @@ MyFact(N, F) <- (
 Test("append nil-nil") <- (MyAppend([], [], R) and R is [])
 Test("append nil-list") <- (MyAppend([], [1, 2], R) and R is [1, 2])
 Test("append list-list") <- (MyAppend([1, 2], [3, 4], R) and R is [1, 2, 3, 4])
-Test("length empty") <- (MyLength([], N) and N is 0)
-Test("length three") <- (MyLength(["x", "y", "z"], N) and N is 3)
+Test("length empty") <- (MyLength([], N) and N == 0)
+Test("length three") <- (MyLength([1, 2, 3], N) and N == 3)
 Test("member first") <- MyMember(1, [1, 2, 3])
 Test("member last") <- MyMember(3, [1, 2, 3])
 Test("member all") <- (
-    FindAll(X, MyMember(X, ["x", "y", "z"]), BAG) and BAG is ["x", "y", "z"]
+    FindAll(X, MyMember(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
 )
 
 # Arithmetic
-Test("factorial 0") <- (MyFact(0, F) and F is 1)
-Test("factorial 5") <- (MyFact(5, F) and F is 120)
-Test("factorial 10") <- (MyFact(10, F) and F is 3628800)
+Test("factorial 0") <- (MyFact(0, F) and F == 1)
+Test("factorial 5") <- (MyFact(5, F) and F == 120)
+Test("factorial 10") <- (MyFact(10, F) and F == 3628800)
+
+# Graph
+Test("direct edge") <- GPath("a", "b")
+Test("transitive path") <- GPath("a", "d")
+Test("reachable b from a") <- GPath("a", "b")
+Test("reachable c from a") <- GPath("a", "c")
