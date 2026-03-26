@@ -6,8 +6,8 @@ Prolog-style, but using ``or`` as the separator between solutions.
 Key bindings
 ------------
 SPACE, n      next solution
-ENTER, .      stop  (prints ``# (Aborted)``)
-ESC, q        abort (prints ``# (Aborted)``)
+ENTER, .      stop
+ESC, q        abort
 a             show all remaining solutions
 """
 
@@ -15,6 +15,23 @@ from __future__ import annotations
 
 import sys
 from typing import Iterator, Any
+
+
+def _in_jupyter_kernel() -> bool:
+    """Return True if running inside a Jupyter notebook kernel.
+
+    Checks for ``ZMQInteractiveShell`` which is the IPython shell subclass
+    used by Jupyter kernels.  Returns False for terminal IPython, plain
+    Python, and non-IPython environments.
+    """
+    try:
+        from IPython import get_ipython
+        shell = get_ipython()
+        if shell is None:
+            return False
+        return shell.__class__.__name__ == 'ZMQInteractiveShell'
+    except (ImportError, AttributeError):
+        return False
 
 
 def _read_char() -> str:
@@ -62,7 +79,7 @@ def _read_char() -> str:
 def _format_bindings(bindings: dict) -> str:
     """Format a binding dict as ``X is val, Y is val``, pretty-printed."""
     if not bindings:
-        return "True"
+        return "true."
     import shutil
     from clausal.terms import term_pformat, get_style
     width = shutil.get_terminal_size(fallback=(80, 24)).columns
@@ -74,6 +91,23 @@ def _format_bindings(bindings: dict) -> str:
     if any("\n" in vstr for _, vstr in parts):
         return "\n".join(f"{var_color}{k}{reset} is {vstr}" for k, vstr in parts)
     return ",  ".join(f"{var_color}{k}{reset} is {vstr}" for k, vstr in parts)
+
+
+def _format_bindings_html(bindings: dict) -> str:
+    """Format a binding dict as HTML for Jupyter display."""
+    if not bindings:
+        return '<span class="clausal-atom">true.</span>'
+    import html as _html
+    from clausal.terms import term_pformat_html
+    parts = []
+    for k, v in bindings.items():
+        vstr = term_pformat_html(v, width=120)
+        parts.append(
+            f'<span class="clausal-var">{_html.escape(k)}</span> is {vstr}'
+        )
+    if any("<pre>" in p for p in parts):
+        return "<br>".join(parts)
+    return ",&nbsp;&nbsp;".join(parts)
 
 
 def _conj(*goals, _varnames=None):
@@ -198,29 +232,85 @@ class Solutions:
     When evaluated in an IPython cell the solutions are presented one at a
     time, separated by ``or``, with a key-driven prompt between each.
 
-    Key bindings
-    ------------
+    In Jupyter notebooks, all solutions (up to *limit*) are rendered as
+    styled HTML via :meth:`_repr_html_`.
+
+    Key bindings (terminal IPython only)
+    -------------------------------------
     SPACE, n      next solution
-    ENTER, .      stop  (prints ``# (Aborted)``)
-    ESC, q        abort (prints ``# (Aborted)``)
+    ENTER, .      stop
+    ESC, q        abort
     a             show all remaining solutions
     """
 
+    DEFAULT_JUPYTER_LIMIT = 20
+
     _PROMPT = "   [SPACE/n: next  |  ENTER/.: stop  |  ESC/q: abort  |  a: all]  "
 
-    def __init__(self, goal_or_iter: Any, _varnames=None, _read=None):
+    def __init__(self, goal_or_iter: Any, _varnames=None, _read=None,
+                 limit=None):
         self._iter = _iter_from_goal(goal_or_iter, _varnames=_varnames)
         # Allow tests to inject a scripted key-reader.
         self._read = _read if _read is not None else _read_char
+        self._limit = limit
 
     # ------------------------------------------------------------------
     # IPython display protocol
     # ------------------------------------------------------------------
 
     def _ipython_display_(self, **kwargs):
-        """Called by IPython instead of repr(); drives the interactive loop."""
-        self._run()
+        """Called by IPython instead of repr(); drives the interactive loop.
+
+        In Jupyter kernels, delegates to :meth:`_repr_html_` for rich HTML
+        display.  In terminal IPython, uses the interactive keypress loop.
+        """
+        if _in_jupyter_kernel():
+            from IPython.display import display, HTML
+            display(HTML(self._repr_html_()))
+        else:
+            self._run()
         # Return None so IPython prints nothing extra.
+
+    def _repr_html_(self) -> str:
+        """Rich HTML rendering for Jupyter notebooks."""
+        from clausal.terms import JUPYTER_CSS
+
+        limit = (self._limit if self._limit is not None
+                 else self.DEFAULT_JUPYTER_LIMIT)
+
+        solutions = []
+        exhausted = False
+        for i, bindings in enumerate(self._iter):
+            if i >= limit:
+                break
+            solutions.append(bindings)
+        else:
+            exhausted = True
+
+        if not solutions:
+            return (
+                JUPYTER_CSS
+                + '<div class="clausal-output">'
+                + '<span class="clausal-atom">false.</span>'
+                + '</div>'
+            )
+
+        parts = [_format_bindings_html(b) for b in solutions]
+        body = '<br><span class="clausal-or">or</span><br>'.join(parts)
+
+        if exhausted:
+            footer = '<div class="clausal-footer">No more solutions.</div>'
+        else:
+            footer = (
+                f'<div class="clausal-footer">'
+                f'... showing first {limit} of more solutions'
+                f'</div>'
+            )
+
+        return (
+            JUPYTER_CSS
+            + f'<div class="clausal-output">{body}{footer}</div>'
+        )
 
     def __repr__(self):
         """Fallback for non-IPython contexts (plain Python, repr())."""
@@ -238,7 +328,7 @@ class Solutions:
         try:
             pending = next(self._iter)
         except StopIteration:
-            print("False")
+            print("false.")
             return
 
         while True:
@@ -254,7 +344,7 @@ class Solutions:
                 look_ahead = next(self._iter)
             except StopIteration:
                 # This was the last solution.
-                print("# (No more solutions)")
+                print("No more solutions.")
                 return
 
             # There is a next solution — show prompt and wait for a key.
@@ -268,10 +358,8 @@ class Solutions:
                 pending = look_ahead
                 continue
             elif key in ('\r', '\n', '.'):
-                print("# (Aborted)")
                 return
             elif key in ('\x1b', 'q'):
-                print("# (Aborted)")
                 return
             elif key == 'a':
                 # Show all remaining (look_ahead + rest of iterator).
@@ -280,7 +368,7 @@ class Solutions:
                 for sol in self._iter:
                     print("or")
                     print(_format_bindings(sol))
-                print("# (No more solutions)")
+                print("No more solutions.")
                 return
             else:
                 # Unknown key — treat as next.

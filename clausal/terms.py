@@ -1290,6 +1290,134 @@ def term_pformat(
     return flat
 
 
+# ── HTML term representation (Jupyter notebooks) ─────────────────────────────
+
+import html as _html_mod
+import re as _re_mod
+
+JUPYTER_CSS = """\
+<style>
+.clausal-output { font-family: monospace; white-space: pre-wrap; line-height: 1.5; }
+.clausal-output .clausal-number { color: #b58900; }
+.clausal-output .clausal-string { color: #859900; }
+.clausal-output .clausal-atom { color: #2aa198; }
+.clausal-output .clausal-var { color: #d33682; font-style: italic; }
+.clausal-output .clausal-bracket-0 { color: #dc322f; }
+.clausal-output .clausal-bracket-1 { color: #b58900; }
+.clausal-output .clausal-bracket-2 { color: #859900; }
+.clausal-output .clausal-bracket-3 { color: #2aa198; }
+.clausal-output .clausal-bracket-4 { color: #268bd2; }
+.clausal-output .clausal-bracket-5 { color: #d33682; }
+.clausal-output .clausal-or { color: #6c71c4; font-weight: bold; }
+.clausal-output .clausal-footer { color: #93a1a1; font-style: italic; margin-top: 0.3em; }
+</style>"""
+
+
+def _html_c(s: str, kind: str, bd: int = 0) -> str:
+    """Wrap *s* in an HTML span with a CSS class for *kind*.
+
+    The input *s* must already be HTML-escaped.
+    """
+    if kind == 'bracket':
+        cls = f'clausal-bracket-{bd % 6}'
+    else:
+        cls = f'clausal-{kind}'
+    return f'<span class="{cls}">{s}</span>'
+
+
+def term_html(t: Any, _bd: int = 0) -> str:
+    """Return an HTML representation of any term with CSS class spans.
+
+    Parallel to :func:`term_str` but produces HTML instead of ANSI-colored
+    text.  All text content is HTML-escaped.  Bracket depth *_bd* controls
+    rainbow-bracket CSS classes (``clausal-bracket-0`` through ``-5``).
+    """
+    esc = _html_mod.escape
+    if t is None:
+        return "None"
+    if t is ...:
+        return "..."
+    if isinstance(t, bool):
+        return esc(str(t))
+    if isinstance(t, (int, float, complex)):
+        return _html_c(esc(repr(t)), 'number')
+    if isinstance(t, str):
+        return _html_c(esc(repr(t)), 'string')
+    if isinstance(t, bytes):
+        return esc(repr(t))
+    if isinstance(t, list):
+        ob = _html_c('[', 'bracket', _bd)
+        cb = _html_c(']', 'bracket', _bd)
+        return ob + ", ".join(term_html(e, _bd + 1) for e in t) + cb
+    if isinstance(t, Var):
+        return _html_c('_', 'var')
+    if isinstance(t, Compound):
+        functor_raw = t.functor if isinstance(t.functor, str) else term_html(t.functor, _bd)
+        functor_s = _html_c(esc(functor_raw), 'atom') if isinstance(t.functor, str) else functor_raw
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
+        return functor_s + ob + args_str + cb
+    if isinstance(t, KWTerm):
+        functor_s = _html_c(esc(t.functor), 'atom')
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        args = ", ".join(f"{esc(k)}={term_html(v, _bd + 1)}" for k, v in t.items())
+        return functor_s + ob + args + cb
+    if isinstance(t, DictTerm):
+        ob = _html_c('{', 'bracket', _bd)
+        cb = _html_c('}', 'bracket', _bd)
+        inner = ", ".join(
+            f"{term_html(k, _bd + 1)}: {term_html(v, _bd + 1)}"
+            for k, v in t.items()
+        )
+        return ob + inner + cb
+    if isinstance(t, SetTerm):
+        ob = _html_c('{', 'bracket', _bd)
+        cb = _html_c('}', 'bracket', _bd)
+        inner = ", ".join(term_html(e, _bd + 1) for e in sorted(t.elements, key=repr))
+        return ob + inner + cb
+
+    cls = type(t)
+    op = getattr(cls, "op", None)
+
+    if op is not None and hasattr(t, "left") and hasattr(t, "right"):
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        return ob + term_html(t.left, _bd + 1) + f" {esc(op)} " + term_html(t.right, _bd + 1) + cb
+    if op is not None and hasattr(t, "operand"):
+        operand_s = term_html(t.operand, _bd)
+        esc_op = esc(op)
+        if op.isalpha():
+            return f"{esc_op} {operand_s}"
+        return f"{esc_op}{operand_s}"
+
+    if isinstance(t, Call):
+        ob = _html_c('(', 'bracket', _bd)
+        cb = _html_c(')', 'bracket', _bd)
+        args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
+        return term_html(t.func, _bd) + ob + args_str + cb
+    if isinstance(t, LoadName):
+        return _html_c(esc(t.name), 'atom')
+    if isinstance(t, Predicate):
+        return f"{term_html(t.head, _bd)} &lt;- {term_html(t.body, _bd)}"
+
+    return esc(repr(t))
+
+
+def term_pformat_html(t: Any, width: int = 120) -> str:
+    """Pretty-format a term as HTML.
+
+    Uses :func:`term_html` for rendering.  If the flat representation
+    exceeds *width* visible characters, wraps in a ``<pre>`` block.
+    """
+    flat = term_html(t)
+    visible = _re_mod.sub(r'<[^>]+>', '', flat)
+    if len(visible) <= width:
+        return flat
+    return f"<pre>{flat}</pre>"
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 __all__ = [
@@ -1313,6 +1441,10 @@ __all__ = [
     "cons_to_list",
     "term_str",
     "term_pformat",
+    # HTML rendering (Jupyter)
+    "JUPYTER_CSS",
+    "term_html",
+    "term_pformat_html",
     # Arithmetic binary operators
     "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod", "Pow",
     # Bitwise / shift binary operators

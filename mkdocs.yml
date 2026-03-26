@@ -130,6 +130,7 @@ nav:
     - Specialization: specialization.md
   - Prolog Translation: prolog_translation.md
   - IPython / Jupyter: ipython.md
+  - Jupyter Notebooks: jupyter.md
   - Examples: examples.md
 
 markdown_extensions:
