@@ -1,18 +1,18 @@
 # Clausal — Syntax Design
 
-Clausal does not follow ISO Prolog syntax. It uses Python syntax throughout — all clausal code is valid Python, acceptable to the Python parser without modification. No separate parser is needed. This was a fundamental design decision: Python programmers should not have to learn a foreign syntax to use logic programming.
+Clausal uses Python's parser, and so it conforms to Python's grammar. Like Prolog, it describes Horn Clauses - simple constructs that facilitate the representation of facts and rules, backed by strong mathematical formalisms, to facilitate high-level reasoning with useful guarantees.
 
-The tradeoffs this creates (mainly around the unification operator and some operators) are documented below, with the reasoning behind each choice.
+Clausal's uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. Clausal uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
 
 > **Quick navigation:** [Variables](#variables) · [Operators](#operators) · [Clauses & Rules](#clauses-and-rules) · [Lists](#lists) · [Arithmetic](#arithmetic) · [Constraints](#constraints) · [DCGs](#dcgs) · [Cheatsheet](#cheatsheet)
 
 ---
 
-## The key rule
+## Trailing comma rule:
 
 **Expression statements ending in `,` are interpreted as logical terms (facts or goals).**
 
-In standard Python, an expression statement that produces a tuple has no effect whatsoever. This means trailing commas can be used as delimiters without disturbing any existing Python code. It also means logic terms are easy to cut, copy, paste, and indent — they don't require `.` terminators that would conflict with Python's attribute access syntax.
+In standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
 
 ---
 
@@ -28,7 +28,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 
 `--` was chosen because:
 - it doesn't introduce a new keyword or clobber any identifier
-- double negation is rare in Python code (and where it occurs, spacing makes it legible)
+- double negation is rare in Python code (and if you really want it, type it as '- -x')
 - it is visually prominent and quick to type
 
 Example:
@@ -56,15 +56,15 @@ Two conventions are recognised:
 _x, _head, _rest   # logic variables (leading-underscore style)
 ```
 
-**ALL-CAPS** — any identifier where every cased character is uppercase and there is at least one cased character (underscores and digits are allowed inside):
+**ALL_CAPS** — any identifier where every cased character is uppercase and there is at least one cased character (underscores and digits are allowed inside):
 
 ```python
 X, HEAD, REST, N1, MAX_OF   # logic variables (ALL-CAPS style)
 ```
 
-Both styles may be used in the same file. ALL-CAPS is the preferred style for new code; leading-underscore is available when a lowercase variable name is desired.
+Both styles may be used in the same file. ALL_CAPS is the preferred style for new code; leading-underscore is available when a lowercase variable name is desired.
 
-A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's existing convention).
+A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
@@ -80,7 +80,6 @@ Why not titlecase (the Prolog convention)?
 
 Inside a logical term:
 - identifiers in `TitleCase` or `lowercase` that are not logic variable names are atoms
-- string literals are atoms (except those prefixed with `u"..."`)
 
 ```clausal
 # skip
@@ -118,9 +117,9 @@ X is not Y,   # disequality constraint (dif/2)
 
 Why `is` rather than `=`?
 - `=` is Python's assignment operator and cannot appear in expressions
-- `is` expresses the same concept in English — two things being the same — and Python programmers understand it
+- `is` expresses the same concept in English — two things being the same — and Python programmers understand it. Clausal generalises this concept; in 'X is Y', if we don't know X or Y, we are describing that they must be same whatever they are, and when either become known, they both become known.
 
-`X is not Y` posts a disequality constraint (`dif/2`): X and Y must end up with different values. This is lazily checked — the constraint is re-evaluated each time either variable gets bound. If they become equal, the constraint fails and the search backtracks. If they remain different, the constraint is satisfied and dropped. See [constraints.md](constraints.md) for details.
+Conversely, `X is not Y` posts a disequality constraint (`dif/2`): X and Y must end up with different values. This is lazily checked — the constraint is re-evaluated each time either variable gets bound. If they become equal, the constraint fails and the search backtracks. If they remain different, the constraint is satisfied and dropped. See [constraints.md](constraints.md) for details.
 
 `not (X is Y)` is the immediate check (Prolog `\=/2`): it fails if X and Y *can* unify right now, regardless of future bindings. Use this when you want point-in-time semantics.
 
@@ -143,7 +142,7 @@ fib(N, RESULT) <- (
 )
 ```
 
-`N1 == N - 1` posts a CLP(FD) constraint relating `N1` and `N`. Unlike Prolog's `is/2`, this works in all directions — even when `N` is unbound. No extra parentheses are needed: clause bodies are already inside `(...)`.
+`N1 == N - 1` posts an arithmetic constraint relating `N1` and `N`. Unlike Prolog's `is/2`, this works in all directions — even when `N` is unbound. No extra parentheses are needed: clause bodies are already inside `(...)`. This allows sophisticated reasoning about numbers, using the builtin constraint logic programmming (CLP) modules.
 
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
@@ -208,7 +207,7 @@ The body after `<-` must be one of:
 - **A bare name** — no parentheses needed:
   ```clausal
 # skip
-  always_true <- true,
+  always_true <- True,
   ```
 
 - **Anything else** — parenthesized:
@@ -227,7 +226,7 @@ The body after `<-` must be one of:
 
 This rule exists because Python's parser sees `<-` as `<` followed by unary `-`. When the body contains operators (`+`, `<`, `and`, `or`, `not`, etc.), the `-` gets absorbed into the body expression and the AST is silently mangled. Parentheses force Python to treat the body as a single grouped expression, keeping the `-` at the top where the term rewriter can find it. Calls and bare names are safe without parentheses because they bind tighter than unary `-`.
 
-Attempting to write an unparenthesized operator body produces a clear error:
+To keep things safe, attempting to write an unparenthesized operator body produces a clear error:
 
 ```clausal
 # skip
@@ -248,14 +247,23 @@ is_permutation(XS, YS) <- (
 )
 ```
 
-Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
+This looks a bit like a Python function def doesn't it? But it is actually much more powerful. These clauses describe a relation. This can go in multiple directions, and this generality is fundamental to the power of logic programming.
+
+As usual in programming, be careful about operator precedence: Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
 
 ```clausal
 test("fails") <- (not (X is 1 and X is 2))
 test("either") <- (X is 1 or X is 2)
 ```
 
-Facts (trivially true rules) are written without a body:
+What if we just want to state a fact that always holds? We could do so by using a body that is always true, i.e. True, or with an empty body, that has nothing to do.
+
+```clausal
+parent(tom, bob) <- True
+parent(bob, ann) <- ()
+```
+
+But there is a shorthand for this. Facts (trivially true rules) are simply written without a body, only a trailing comma:
 
 ```clausal
 parent(tom, bob),

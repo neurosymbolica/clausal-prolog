@@ -5,7 +5,7 @@
 
 **Logic programming embedded in Python.**
 
-Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM.
+Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM, and the same garbage collector. No boilerplate, no latency, no memory leaks, no friction.
 
 ```python
 import clausal
@@ -19,7 +19,7 @@ for solution in clausal.query(Fib(10, N)):
 
 ## Why Clausal?
 
-- **Pure Python syntax** — all clausal code is valid Python. No separate parser, no foreign syntax to learn.
+- **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
 - **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
 - **Full-featured** — tabling, CLP(FD), DCGs, EDCGs, modules, term expansion, goal expansion, reified if-then-else.
 - **Fast** — C extension for unification/trails, first-argument indexing, groundness-keyed dispatch, tail recursion optimization, bytecode caching.
@@ -31,7 +31,6 @@ for solution in clausal.query(Fib(10, N)):
 A `.clausal` file defines predicates using Python syntax with a trailing comma:
 
 ```clausal
-# skip
 # fibonacci.clausal
 
 -table(Fib/2),
@@ -48,7 +47,7 @@ Fib(N, F) <- (
 )
 ```
 
-Call it from Python:
+If you need, you can call it from Python:
 
 ```python
 import clausal
@@ -95,7 +94,7 @@ Out[2]: ROWS is [
   [6, 9, 7, 1, 2, 3, 5, 8, 4],
   [2, 4, 5, 6, 7, 8, 1, 3, 9]
 ]
-No more solutions.
+# (No more solutions)
 ```
 
 Uppercase names (`ROWS`) are automatically allocated as logic variables.  The
