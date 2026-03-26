@@ -39,6 +39,11 @@ nav:
   - Foundations:
     - Thinking Relationally: thinking_relationally.md
     - Purity and Monotonicity: purity.md
+  - Start Here:
+    - For Python Programmers: for_python_programmers.md
+    - For Prolog Programmers: for_prolog_programmers.md
+    - For AI Agents: for_ai_agents.md
+    - For Decision Makers: for_decision_makers.md
   - Getting Started:
     - Project Goals: goals.md
     - Tutorial: tutorial.md

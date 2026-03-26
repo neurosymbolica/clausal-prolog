@@ -111,6 +111,11 @@ for the full feature set.
 | **Foundations** | |
 | [Thinking Relationally](thinking_relationally.md) | The most important idea: predicates as relations, not functions |
 | [Purity and Monotonicity](purity.md) | Why pure code has better properties and how to write it |
+| **Start Here** | |
+| [For Python Programmers](for_python_programmers.md) | Bridge from functions and loops to relations and search |
+| [For Prolog Programmers](for_prolog_programmers.md) | Syntax mapping, what's the same, what's different |
+| [For AI Agents](for_ai_agents.md) | Why LLMs should generate logic programs |
+| [For Decision Makers](for_decision_makers.md) | The business case: explainability, reliability, rules-as-code |
 | **Getting Started** | |
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
