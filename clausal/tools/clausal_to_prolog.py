@@ -836,14 +836,22 @@ class _ClausalToProlog:
         return result
 
     def _convert_ifexp(self, node: python_ast.IfExp) -> PTerm:
-        """Convert X if Cond else Y → (Cond -> X ; Y)."""
-        cond = self._convert_expr(node.test)
-        then = self._convert_expr(node.body)
-        else_ = self._convert_expr(node.orelse)
-        return PCompound(";", (
-            PCompound("->", (cond, then)),
-            else_
-        ))
+        """Reject Clausal if-then-else → Prolog (C -> T ; E) translation.
+
+        Clausal's reified if-then-else has monotonic, three-valued semantics
+        that cannot be faithfully represented by Prolog's committed-choice
+        (C -> T ; E), which is defined in terms of cut.
+        """
+        from clausal.tools.prolog_to_clausal import PrologTranslationError
+        raise PrologTranslationError(
+            "Clausal's if-then-else (THEN if COND else ELSE) cannot be "
+            "translated to Prolog.\n"
+            "Clausal's reified ITE has monotonic, three-valued semantics "
+            "that differ from Prolog's committed-choice (C -> T ; E), "
+            "which is defined in terms of cut.\n"
+            "To translate this program, rewrite as separate clauses with "
+            "dif/2 guards or constraint-based branching."
+        )
 
     def _convert_dcg_body(self, node) -> PTerm:
         """Convert DCG rule body, wrapping inline goals in {curly}."""

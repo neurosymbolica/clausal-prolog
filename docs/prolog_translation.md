@@ -252,7 +252,8 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `\+ G` | `not G` | Negation as failure |
 | `(A , B)` | `(A, B)` | Conjunction |
 | `(A ; B)` | `(A or B)` | Disjunction |
-| `(C -> T ; E)` | `(C -> T or E)` | If-then-else |
+| `(C -> T ; E)` | **Rejected** | Not supported — use reified ITE or dif/2 guards |
+| `!` (cut) | **Rejected** | Not supported — use once/1, dif/2, indexing |
 | `[H\|T]` | `[H, *T]` | List cons |
 | `member(X, L)` | `X in L` | Membership |
 | `head :- body.` | `Head() <- (body)` | Rules |
@@ -358,6 +359,16 @@ The roundtrip validation (Phase 4) verifies these properties when translating th
 | Clause order preserved | Predicate clause order is semantic in Prolog |
 | Operator precedence preserved | `a + b * c` stays `a + b * c` |
 | Directive preservation | One-leg verified (dynamic, module, use_module) |
+
+### Unsupported constructs
+
+The translator **rejects** Prolog programs containing cut or if-then-else with a `PrologTranslationError`, rather than producing semantically incorrect output:
+
+- **Cut (`!/0`)** — breaks declarative semantics. Use `Once/1`, `dif/2`, indexing, or constraints.
+- **If-then-else (`(C -> T ; E)`)** — defined in terms of cut in ISO. Use reified if-then-else (`THEN if COND else ELSE`), separate clauses with `dif/2` guards, or constraints.
+- **Bare if-then (`(C -> T)`)** — same as above.
+
+In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`THEN if COND else ELSE`) is also rejected because its monotonic three-valued semantics cannot be faithfully represented by Prolog's committed-choice `(C -> T ; E)`.
 
 ### Known roundtrip limitations
 

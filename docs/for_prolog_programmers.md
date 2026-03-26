@@ -132,7 +132,7 @@ that make logic programming worthwhile.
 Where you would use green cuts in Prolog, Clausal offers:
 
 - **First-argument indexing** — automatic, no manual intervention needed
-- **Reified if-then-else** — `(Cond -> Then ; Else)` with monotonic semantics
+- **Reified if-then-else** — `(THEN if COND else ELSE)` with monotonic, three-valued semantics
 - **CLP(FD) and dif/2** — replace cut-based pruning with constraints
 - **Groundness-keyed dispatch** — the compiler generates specialized code
   paths based on which arguments are ground

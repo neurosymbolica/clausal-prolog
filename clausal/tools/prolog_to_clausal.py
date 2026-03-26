@@ -31,7 +31,17 @@ from clausal.tools.prolog_parser import parse
 __all__ = [
     "prolog_to_clausal", "prolog_ast_to_clausal",
     "emit_clausal_term", "emit_clausal_item",
+    "PrologTranslationError",
 ]
+
+
+class PrologTranslationError(Exception):
+    """Raised when Prolog source contains constructs that cannot be translated.
+
+    Cut (``!/0``) and if-then-else (``(C -> T ; E)``) are intentionally
+    unsupported.  Programs using them must be rewritten to use pure
+    alternatives (``dif/2``, reified conditionals, ``once/1``, indexing).
+    """
 
 
 # ── Reverse builtin name map ────────────────────────────────────────
@@ -239,7 +249,7 @@ class _PrologToClausal:
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
-        # If-then: (Cond -> Then) → (Cond -> Then)
+        # If-then: (Cond -> Then) — REJECTED
         if isinstance(goal, PCompound) and goal.functor == "->":
             return self._emit_if_then(goal)
         # Negation: \+(Goal) → not Goal
@@ -295,27 +305,40 @@ class _PrologToClausal:
         return self._emit_term(goal)
 
     def _emit_disjunction(self, term: PTerm) -> str:
-        """Emit (A ; B) as (A or B), handling if-then-else."""
+        """Emit (A ; B) as (A or B). Reject if-then-else."""
         if not isinstance(term, PCompound) or term.functor != ";" or len(term.args) != 2:
             return self._emit_goal(term)
 
         left, right = term.args
-        # If-then-else: (Cond -> Then ; Else)
+        # If-then-else: (Cond -> Then ; Else) — REJECTED
         if isinstance(left, PCompound) and left.functor == "->" and len(left.args) == 2:
-            cond = self._emit_goal(left.args[0])
-            then = self._emit_goal(left.args[1])
-            els = self._emit_goal(right)
-            return f"({cond} -> {then} or {els})"
+            raise PrologTranslationError(
+                "If-then-else (( -> ; )) cannot be translated to Clausal.\n"
+                "ISO defines (C -> T ; E) in terms of cut, so it inherits "
+                "cut's problems — non-monotonicity, broken completeness, and "
+                "unsound interaction with constraints.\n"
+                "Rewrite using pure alternatives:\n"
+                "  - Reified if-then-else: (THEN if COND else ELSE)\n"
+                "  - Separate clauses with dif/2 guards\n"
+                "  - CLP(FD) / CLP(B) constraints\n"
+                "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
+            )
 
         left_s = self._emit_goal(left)
         right_s = self._emit_goal(right)
         return f"({left_s} or {right_s})"
 
     def _emit_if_then(self, term: PCompound) -> str:
-        """Emit (Cond -> Then) without else."""
-        cond = self._emit_goal(term.args[0])
-        then = self._emit_goal(term.args[1])
-        return f"({cond} -> {then})"
+        """Bare (Cond -> Then) without else — REJECTED."""
+        raise PrologTranslationError(
+            "If-then (( -> )) cannot be translated to Clausal.\n"
+            "The -> operator is defined in terms of cut and inherits "
+            "cut's problems.\n"
+            "Rewrite using pure alternatives:\n"
+            "  - Reified if-then-else: (THEN if COND else ELSE)\n"
+            "  - Separate clauses with dif/2 guards\n"
+            "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
+        )
 
     # ── DCG rules ────────────────────────────────────────────────────
 
@@ -454,7 +477,17 @@ class _PrologToClausal:
         if name in ("true", "false", "fail"):
             return name
         if name == "!":
-            return "cut"
+            raise PrologTranslationError(
+                "Cut (!/0) cannot be translated to Clausal.\n"
+                "Clausal intentionally omits cut — it breaks declarative "
+                "semantics and monotonicity.\n"
+                "Rewrite using pure alternatives:\n"
+                "  - dif/2 and constraints for mutual exclusion between clauses\n"
+                "  - Once(Goal) for first-solution commitment\n"
+                "  - First-argument indexing (automatic) for determinism\n"
+                "  - Reified if-then-else for conditional branching\n"
+                "See: docs/for_prolog_programmers.md"
+            )
         if name == "[]":
             return "[]"
         if name == "{}":

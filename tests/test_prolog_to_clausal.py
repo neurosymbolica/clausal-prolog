@@ -8,6 +8,7 @@ from pathlib import Path
 from clausal.tools.prolog_to_clausal import (
     prolog_to_clausal, prolog_ast_to_clausal,
     emit_clausal_term, emit_clausal_item,
+    PrologTranslationError,
 )
 from clausal.tools.prolog_parser import parse
 from clausal.tools.prolog_ast import (
@@ -187,11 +188,15 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         result = prolog_to_clausal(src)
         assert "or" in result
 
-    def test_if_then_else(self):
+    def test_if_then_else_rejected(self):
         src = "max(X, Y, Z) :- (X >= Y -> Z = X ; Z = Y)."
-        result = prolog_to_clausal(src)
-        assert "->" in result
-        assert "or" in result
+        with pytest.raises(PrologTranslationError, match="If-then-else"):
+            prolog_to_clausal(src)
+
+    def test_bare_if_then_rejected(self):
+        src = "foo(X) :- (X > 0 -> bar(X))."
+        with pytest.raises(PrologTranslationError, match="If-then"):
+            prolog_to_clausal(src)
 
     def test_member_to_in(self):
         src = "test :- member(X, [1, 2, 3])."
@@ -225,10 +230,16 @@ greeting --> ["hello", "world"].
         result = prolog_to_clausal(src)
         assert ">>" in result
 
-    def test_cut(self):
+    def test_cut_rejected(self):
         src = "foo(X) :- bar(X), !."
-        result = prolog_to_clausal(src)
-        assert "cut" in result
+        with pytest.raises(PrologTranslationError, match="Cut"):
+            prolog_to_clausal(src)
+
+    def test_cut_fact_rejected(self):
+        """Even a bare cut as a goal in a clause body is rejected."""
+        src = "foo :- !."
+        with pytest.raises(PrologTranslationError, match="Cut"):
+            prolog_to_clausal(src)
 
     def test_op_directive_as_comment(self):
         src = ":- op(700, xfx, <>)."

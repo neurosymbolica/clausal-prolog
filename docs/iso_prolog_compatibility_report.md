@@ -55,16 +55,17 @@ Clausal already has clean alternatives for every legitimate use of cut:
 | Red cut (negation) | `not Goal` (NAF) or `dif/2` |
 | Committed choice | `Once(Goal)` or if-then-else |
 
-### Translation Layer
+### Translation Layer — Implemented
 
-The Prolog-to-Clausal translator should:
+The Prolog-to-Clausal translator now:
 
-- **Reject** programs containing cut with a clear error message explaining
-  that the program must be rewritten
-- **Reject** `(C -> T ; E)` with a suggestion to use reified conditionals
-  or Clausal's if-then-else syntax
-- Optionally, a `--warn` mode could translate them with warning comments,
-  but the translated code would not be semantically correct
+- **Rejects** programs containing cut with `PrologTranslationError`, including
+  a clear error message explaining that the program must be rewritten and
+  listing pure alternatives (dif/2, Once/1, indexing, reified ITE)
+- **Rejects** `(C -> T ; E)` and bare `(C -> T)` with `PrologTranslationError`,
+  suggesting reified conditionals, separate clauses with dif/2 guards, or constraints
+- In the **reverse direction**, Clausal's reified `THEN if COND else ELSE` is
+  also rejected when translating to Prolog, since the semantics differ
 
 ---
 
@@ -409,8 +410,8 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 
 | Issue | Decision | Effort | Notes |
 |-------|----------|--------|-------|
-| Cut | **Reject** | None | Not supported; translator rejects programs with cut |
-| If-then-else | **Reject** | None | Not supported; use reified conditionals |
+| Cut | **Reject** | **Done** | `PrologTranslationError` with suggested alternatives |
+| If-then-else | **Reject** | **Done** | `PrologTranslationError` with suggested alternatives |
 | Strings | **Char lists** | Medium | `"abc"` → `[Atom('a'), Atom('b'), Atom('c')]` |
 | Atoms | **New type** | Medium | `class Atom(str)` — distinct from `str` |
 | Module system | **`use_module`** | Medium | Prolog modules via translation; Python via `import_from` |
@@ -450,9 +451,12 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 3. `retractall/1`
 4. `read/1`, `read_term/2,3`, `write_term/2,3`
 
-### Phase 4: Cut/ITE Rejection in Translator
+### Phase 4: Cut/ITE Rejection in Translator — DONE
 
-1. Add error reporting in `prolog_to_clausal.py` when cut is encountered
-2. Add error reporting for `(C -> T ; E)` constructs
-3. Provide clear error messages suggesting alternatives
-4. Optional `--warn` mode that translates with warning comments
+Implemented in `prolog_to_clausal.py` and `clausal_to_prolog.py`:
+
+1. `PrologTranslationError` raised when Prolog source contains `!/0` (cut)
+2. `PrologTranslationError` raised for `(C -> T ; E)` (if-then-else) and bare `(C -> T)`
+3. Clear error messages suggest pure alternatives (dif/2, once/1, reified ITE, indexing)
+4. Reverse direction: Clausal's reified `THEN if COND else ELSE` is also rejected
+   when translating to Prolog, since it cannot be faithfully represented as `(C -> T ; E)`
