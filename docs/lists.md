@@ -3,6 +3,13 @@
 Lists are the fundamental data structure in logic programming. Clausal uses
 Python's native list syntax — no cons cells, no special notation.
 
+!!! tip "Strings work too"
+
+    All list predicates accept strings as character lists. `Append("hel", "lo", X)`
+    yields `X = "hello"`, `In('e', "hello")` succeeds, and `Reverse("hello", X)`
+    yields `X = "olleh"`. See [Strings as Lists](strings_as_lists.md) for the full
+    story.
+
 ---
 
 ## Quick Example
@@ -352,6 +359,7 @@ window(N, LIST, WINDOW) <- (
 
 ---
 
-*See also: [Pairs](pairs.md) — key-value pair operations,
+*See also: [Strings as Lists](strings_as_lists.md) — strings behave as character lists,
+[Pairs](pairs.md) — key-value pair operations,
 [Higher-Order](higher_order.md) — MapList, Filter, FoldLeft over lists,
 [Dicts & Sets](dicts_sets.md) — dictionary and set data structures.*

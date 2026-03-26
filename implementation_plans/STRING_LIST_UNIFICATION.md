@@ -1063,7 +1063,7 @@ Phase 5: Higher-order predicates ✅ (16 tests)
    ↓
 Phase 5b: Compiler head patterns ✅ (20 tests)  ← discovered post-hoc
    ↓
-Phase 6: Documentation & deprecation (TODO)
+Phase 6: Documentation & deprecation ✅
    ↓
 Phase 7: SegString optimisation (DEFERRED — see todo/SEGLIST_STRING_ASYMMETRY.md)
 ```
@@ -1172,14 +1172,13 @@ Phase 5b — DONE (commit f878fda, 20 tests):
 - [x] Recursive predicates (Length, Last) work on strings
 - [x] String type preserved through recursion (tail stays `str`)
 
-Phase 6 — TODO:
-- [ ] `docs/strings_as_lists.md` — already written, review for accuracy post-implementation
-- [ ] `docs/lists.md` — add note that list predicates accept strings
-- [ ] `docs/dcg.md` — add `phrase(grammar, "string")` examples
-- [ ] `docs/type_checking.md` — document `IsChars/1`
-- [ ] `docs/builtins.md` — note string acceptance in predicate reference
-- [ ] `chars.py` predicates — add docstring notes that `Append/3` is preferred over
-  `AtomConcat/3`, etc.
+Phase 6 — DONE:
+- [x] `docs/strings_as_lists.md` — reviewed for accuracy post-implementation, no changes needed
+- [x] `docs/lists.md` — added tip admonition and see-also link for string acceptance
+- [x] `docs/dcg.md` — added "Strings as input" section with `phrase(grammar, "string")` examples
+- [x] `docs/type_checking.md` — documented `IsChars/1` with comparison table
+- [x] `docs/builtins.md` — added string acceptance tip to List Predicates, preference note to Character/String
+- [x] `chars.py` predicates — updated module docstring and added preference notes to `AtomConcat/3` and `AtomLength/2`
 
 Phase 7 — DEFERRED (see `todo/SEGLIST_STRING_ASYMMETRY.md`):
 - [ ] `SegString` type for substring-preserving pattern matching

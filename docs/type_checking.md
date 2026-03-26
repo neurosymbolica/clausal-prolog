@@ -120,6 +120,26 @@ Test("empty") <- IsList([])
 Test("not str") <- (not IsList("hello"))
 ```
 
+### IsChars/1
+
+`IsChars(X)` — succeeds if `X` is a character sequence: either a string or a
+list. Use this when you want to accept both strings and lists uniformly.
+
+```clausal
+Test("string") <- IsChars("hello")
+Test("list") <- IsChars([1, 2, 3])
+Test("not int") <- (not IsChars(42))
+```
+
+| Predicate | Strings | Lists | Purpose |
+|-----------|---------|-------|---------|
+| `IsList/1` | Fails | Succeeds | Exact type: Python list? |
+| `IsStr/1` | Succeeds | Fails | Exact type: Python str? |
+| `IsChars/1` | Succeeds | Succeeds | Union: character sequence? |
+
+See [Strings as Lists](strings_as_lists.md) for the full story on string/list
+interchangeability.
+
 ---
 
 ## Groundness

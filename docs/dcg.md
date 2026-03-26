@@ -133,6 +133,23 @@ valid_sentence(S) <- phrase(sentence, S)
 
 Query: `valid_sentence(["the", "dog", "chases", "the", "cat"])` succeeds.
 
+### Strings as input
+
+Strings can be passed directly to `phrase` — they are treated as lists of
+single-character strings. This makes character-level DCGs natural:
+
+```clausal
+digit >> ([D], {CharType(D, digit)})
+digits >> (digit)
+digits >> (digit, digits)
+
+Test("parse string") <- phrase(digits, "123")
+Test("partial") <- (phrase(digits, "12ab", Rest), Rest == ['a', 'b'])
+```
+
+No `AtomChars` conversion is needed. See [Strings as Lists](strings_as_lists.md)
+for more details.
+
 ### phrase/3
 
 `phrase(RuleName, S0, S)` — parse with explicit remainder. S is the unconsumed suffix:

@@ -1,10 +1,18 @@
-"""Character/string builtins (Phase 2): CharType/2, CharCode/2, UpcaseAtom/2,
+"""Character/string builtins: CharType/2, CharCode/2, UpcaseAtom/2,
 DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3,
-SubAtom/5.
+SubAtom/5, NumberChars/2, NumberCodes/2.
 
 These predicates are *relations* — they participate in unification and
 backtracking (e.g. AtomConcat(A, B, "hello") enumerates splits, CharType(C,
 digit) enumerates digits).  Pure Python string methods can't do this.
+
+Since strings now behave as character lists, the list predicates (Append/3,
+Length/2, In/2, etc.) work on strings directly.  For concatenation, splitting,
+length, and membership, prefer the list predicates — they work uniformly on
+both strings and lists.  The predicates here remain useful for ISO
+compatibility, explicit type conversion (AtomChars/2), code-point operations
+(AtomCodes/2, CharCode/2), character classification (CharType/2), and case
+conversion (UpcaseAtom/2, DowncaseAtom/2).
 """
 
 from __future__ import annotations
@@ -158,7 +166,11 @@ def _downcase_atom__2(atom, lower, trail, k):
 
 @_builtin("AtomLength", 2)
 def _atom_length__2(atom, length, trail, k):
-    """AtomLength(Atom, Length) — unify Length with the length of Atom."""
+    """AtomLength(Atom, Length) — unify Length with the length of Atom.
+
+    Note: Length/2 now accepts strings directly, so prefer ``Length("hello", N)``
+    for new code.  AtomLength is kept for ISO compatibility.
+    """
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("atom_length/2"))
@@ -260,6 +272,11 @@ def _atom_concat__3(a, b, c, trail, k):
 
     A+B bound → forward concat.  C bound + A or B bound → prefix/suffix check.
     C bound + both A,B unbound → enumerate all splits.
+
+    Note: Append/3 now accepts strings directly, so prefer
+    ``Append("hel", "lo", X)`` for new code.  AtomConcat is kept for ISO
+    compatibility and for cases where string-typed results are required
+    (Append may return a list when inputs are mixed).
     """
     va, vb, vc = deref(a), deref(b), deref(c)
     a_bound = not is_var(va) and isinstance(va, str)

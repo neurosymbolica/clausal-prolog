@@ -1562,6 +1562,10 @@ Least significant bit position. X must be a positive integer. `Lsb(12, B)` gives
 
 ## List Predicates
 
+!!! tip "Strings accepted"
+
+    All list predicates accept strings as character lists. `Append("hel", "lo", X)` yields `X = "hello"`. When all inputs are strings and the result is a character sequence, the result is returned as a string. See [Strings as Lists](strings_as_lists.md).
+
 ### `In/2`
 ```clausal
 # skip
@@ -2251,6 +2255,10 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 ## Character/String
 
 Logic-aware character and string predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `AtomConcat(A, B, "hello")` with A and B unbound enumerates all splits, `CharType(C, digit)` enumerates digits.
+
+!!! note "Prefer list predicates for common operations"
+
+    Since strings behave as character lists, `Append/3` subsumes `AtomConcat/3` and `Length/2` subsumes `AtomLength/2`. The string-specific predicates below remain useful for ISO compatibility, explicit type conversion (`AtomChars/2`), code-point operations (`AtomCodes/2`, `CharCode/2`), character classification (`CharType/2`), and case conversion (`UpcaseAtom/2`, `DowncaseAtom/2`). See [Strings as Lists](strings_as_lists.md).
 
 ### `CharType/2`
 ```clausal
