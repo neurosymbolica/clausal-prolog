@@ -99,11 +99,11 @@ The `MatchClause`/`Append` machinery is gone. One clause per object clause, plus
 SolveCountNatnum([], 0)
 SolveCountNatnum([["natnum", 0], *GOALS], COUNT) <- (
     SolveCountNatnum(GOALS, SUB_COUNT),
-    COUNT := SUB_COUNT + 1
+    COUNT == SUB_COUNT + 1
 )
 SolveCountNatnum([["natnum", ["s", X]], *GOALS], COUNT) <- (
     SolveCountNatnum([["natnum", X], *GOALS], SUB_COUNT),
-    COUNT := SUB_COUNT + 1
+    COUNT == SUB_COUNT + 1
 )
 ```
 
@@ -174,8 +174,8 @@ The intermediate list is eliminated — edge matching is inlined directly into t
 
 CPD correctly preserves MI extensions:
 
-- **Counting MIs** (SolveCount): each inlined step adds its own `COUNT := SUB_COUNT + 1` via post-match goal chaining.
-- **Depth-limited MIs** (SolveLimit): each inlined step adds its own `MAX > 0, MAX1 := MAX - 1` via pre-match goal chaining.
+- **Counting MIs** (SolveCount): each inlined step adds its own `COUNT == SUB_COUNT + 1` via post-match goal chaining.
+- **Depth-limited MIs** (SolveLimit): each inlined step adds its own `MAX > 0, MAX1 == MAX - 1` via pre-match goal chaining.
 
 ---
 

@@ -172,7 +172,7 @@ Two helper non-terminals provide state access:
 Thread an integer counter through `phrase/3`:
 
 ```clausal
-inc >> (state(N0), {N := N0 + 1}, state2(_, N))
+inc >> (state(N0), {N == N0 + 1}, state2(_, N))
 
 count3 >> (inc, inc, inc)
 ```
@@ -190,7 +190,7 @@ The initial state `[0]` is passed as the input list; the final state `[N]` is th
 Thread a counter to count leaves in a binary tree:
 
 ```clausal
-count_leaves("leaf") >> (state(N0), {N := N0 + 1}, state2(_, N))
+count_leaves("leaf") >> (state(N0), {N == N0 + 1}, state2(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
 num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])

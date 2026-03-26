@@ -17,7 +17,7 @@ These are compiled inline by the compiler — they are not dispatched as builtin
 squares(NS, SQS) <- (
     FindAll(
         SQ,
-        (In(X, NS), SQ := X * X),
+        (In(X, NS), SQ == X * X),
         SQS,
     )
 )
@@ -135,7 +135,7 @@ apply2(GOAL, X, Y) <- Call(GOAL, X, Y)
 These are primarily used with [lambdas](lambdas.md):
 
 ```clausal
-test(R) <- Call((X <- (R := X + 1)), 5)
+test(R) <- Call((X <- (R == X + 1)), 5)
 ```
 
 ---
@@ -161,7 +161,7 @@ all_numbers(XS) <- MapList(IsNumber, XS)
 `MapList(Goal, List, ResultList)` — apply a binary goal to each element, collecting results.
 
 ```clausal
-doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
+doubles(XS, YS) <- MapList(((X, Y) <- (Y == X * 2)), XS, YS)
 ```
 
 ### Filter/3
@@ -189,8 +189,8 @@ remove_zeros(XS, RS) <- Exclude((X <- (X is 0)), XS, RS)
 `FoldLeft(Goal, List, Acc0, Result)` — left fold with a ternary goal closure.
 
 ```clausal
-fold_sum(XS, S) <- FoldLeft(((ELEM, ACC, R) <- (R := ACC + ELEM)), XS, 0, S)
-fold_product(XS, P) <- FoldLeft(((ELEM, ACC, R) <- (R := ACC * ELEM)), XS, 1, P)
+fold_sum(XS, S) <- FoldLeft(((ELEM, ACC, R) <- (R == ACC + ELEM)), XS, 0, S)
+fold_product(XS, P) <- FoldLeft(((ELEM, ACC, R) <- (R == ACC * ELEM)), XS, 1, P)
 ```
 
 ### TakeWhile/3
@@ -232,7 +232,7 @@ by_sign(XS, GS) <- GroupBy(((X, K) <- If(X > 0, K is "pos", K is "neg")), XS, GS
 `SortBy(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
 
 ```clausal
-sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K := abs(X))), XS, SS)
+sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K == abs(X))), XS, SS)
 ```
 
 ### MaxBy/3, MinBy/3
@@ -246,7 +246,7 @@ sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K := abs(X))), XS, SS)
 ```clausal
 # skip
 double_positives(XS, RS) <- FilterMap(
-    ((X, Y) <- (X > 0, Y := X * 2))
+    ((X, Y) <- (X > 0, Y == X * 2))
     XS, RS
 )
 ```
@@ -268,7 +268,7 @@ double_positives(XS, RS) <- FilterMap(
     ```clausal
 # skip
     # FindAll with inline goal — no lambda required
-    squares(NS, SQS) <- FindAll(SQ, (In(X, NS), SQ := X * X), SQS)
+    squares(NS, SQS) <- FindAll(SQ, (In(X, NS), SQ == X * X), SQS)
 
     # ForAll with inline condition and action
     all_positive(NS) <- ForAll(In(X, NS), X > 0)

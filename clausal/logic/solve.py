@@ -69,13 +69,19 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
     from clausal.logic.exceptions import LogicException
 
     sg = StepGenerator(dispatch_fn, None, *args, trail)
-    gen, value = sg.send(None)
+    try:
+        gen, value = sg.send(None)
+    except StopIteration:
+        return
     while True:
         if gen is None:
             if value is DONE:
                 return
             yield trail
-            gen, value = sg.send(None)
+            try:
+                gen, value = sg.send(None)
+            except StopIteration:
+                return
         else:
             try:
                 # Intercept _TABLING_SUSPEND → send DONE to parent instead
@@ -83,6 +89,8 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
                     gen, value = gen.send(DONE)
                 else:
                     gen, value = gen.send(value)
+            except StopIteration:
+                return
             except LogicException as exc:
                 target = gen.parent if hasattr(gen, 'parent') else None
                 while target is not None:

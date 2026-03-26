@@ -129,26 +129,25 @@ The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify
 
 ## Arithmetic binding
 
-To evaluate an arithmetic expression and bind the result to a variable, use the walrus operator `:=`:
+To constrain a variable to an arithmetic expression, use `==`:
 
 ```clausal
 fib(N, RESULT) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     fib(N1, A),
     fib(N2, B),
-    RESULT := A + B
+    RESULT == A + B
 )
 ```
 
-`N1 := N - 1` evaluates `N - 1` as Python arithmetic and unifies the result with `N1`. This is equivalent to Prolog's `is` operator. No extra parentheses are needed: clause bodies are already inside `(...)`, and `:=`'s RHS is a `test` expression in Python's grammar so it does not consume the comma that follows.
+`N1 == N - 1` posts a CLP(FD) constraint relating `N1` and `N`. Unlike Prolog's `is/2`, this works in all directions — even when `N` is unbound. No extra parentheses are needed: clause bodies are already inside `(...)`.
 
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
-- `(X := expr)` — `expr` is evaluated as arithmetic before unification; `X` should be unbound
-
-The corresponding AST node is `Evaluate(left, right)`. The compiler applies `arith_to_ast_expr` to the right side, producing native Python arithmetic that is evaluated before `unify` is called.
+- `(X == expr)` — posts an arithmetic constraint (CLP(FD) or CLP(R))
+- `(X := expr)` — eager evaluation; use only for Python interop (e.g., `X := ++len(S)`)
 
 ---
 
@@ -217,11 +216,11 @@ The body after `<-` must be one of:
   safe_max(X, Y, X) <- (X >= Y)
   fib(N, RESULT) <- (
       N > 1,
-      N1 := N - 1,
-      N2 := N - 2,
+      N1 == N - 1,
+      N2 == N - 2,
       fib(N1, A),
       fib(N2, B),
-      RESULT := A + B
+      RESULT == A + B
   )
   ```
 
@@ -463,19 +462,19 @@ Lambdas are anonymous clauses — goal closures passed as arguments to higher-or
 
 ```clausal
 # One-arg lambda — X is a parameter, RESULT is captured
-apply(RESULT, VAL) <- CallGoal((X <- (RESULT := X + 1)), VAL)
+apply(RESULT, VAL) <- CallGoal((X <- (RESULT == X + 1)), VAL)
 
 # Two-arg lambda
-apply_add(A, B, R) <- CallGoal(((X, Y) <- (R := X + Y)), A, B)
+apply_add(A, B, R) <- CallGoal(((X, Y) <- (R == X + Y)), A, B)
 
 # Zero-arg lambda
 run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z, R) <- CallGoal((X <- (R := X + Z)), 10)
+add_z(Z, R) <- CallGoal((X <- (R == X + Z)), 10)
 
 # Conjunction body
-transform(R) <- CallGoal(((X, Y) <- (T := X + 1, Y := T * 2)), 5, R)
+transform(R) <- CallGoal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 ```
 
 Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
@@ -614,7 +613,7 @@ Thread a counter through `phrase/3`:
 
 ```clausal
 # Increment: read counter, add 1, write new counter
-inc >> (state(N0), {N := N0 + 1}, state(_, N))
+inc >> (state(N0), {N == N0 + 1}, state(_, N))
 
 # Chain three increments
 count3 >> (inc, inc, inc)
@@ -630,7 +629,7 @@ phrase(count3, [10], [N])  # → N = 13
 
 ```clausal
 # Trees as "leaf" or [Left, Right]
-count_leaves("leaf") >> (state(N0), {N := N0 + 1}, state(_, N))
+count_leaves("leaf") >> (state(N0), {N == N0 + 1}, state(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
 # API: wrap with phrase/3
@@ -678,13 +677,13 @@ An accumulator has a name and a **joiner goal** that relates a pushed value to t
 
 ```clausal
 # Numeric counter: Out = In + Value
--edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 
 # List accumulator: prepend items
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 
 # Product accumulator: Out = In * Value
--edcg_acc(product, X, IN, OUT, {OUT := IN * X})
+-edcg_acc(product, X, IN, OUT, {OUT == IN * X})
 ```
 
 The joiner goal can be any clausal goal wrapped in `{braces}`. The variable names (`X`, `IN`, `OUT`) are placeholders — they get substituted with actual variables during rewriting.
@@ -747,7 +746,7 @@ The `//` operator pushes a value through the accumulator's joiner goal. The `/` 
 A single rule can update multiple accumulators simultaneously:
 
 ```clausal
--edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 -edcg_pred(process, 1, [counter, items])
 
@@ -789,7 +788,7 @@ my_length(L, N) <- count_elems(L, 0, N)
 ```clausal
 -module(example, [run_scaled(LIST, SCALE, COUNT, ITEMS)])
 
--edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 -edcg_pass(scale)
 
@@ -880,7 +879,7 @@ These predicates take a goal closure and apply it across a list. All use committ
 MapList((X <- (X > 0)), [1, 2, 3]),              # succeeds
 
 # MapList/3 — map Goal(X, Y) over list, collect results
-MapList(((X, Y) <- (Y := X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
+MapList(((X, Y) <- (Y == X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
 
 # Filter/3 — keep elements where Goal(Elem) succeeds
 Filter((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
@@ -889,7 +888,7 @@ Filter((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
 Exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
 
 # FoldLeft/4 — left fold with Goal(Elem, Acc0, Acc1)
-FoldLeft(((E, A, R) <- (R := A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
+FoldLeft(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 ```
 
 ---
@@ -979,10 +978,8 @@ X is Y,                # unify
 X is not Y,            # dif constraint (must stay different)
 not (X is Y),          # immediate check (don't unify right now)
 
-# Arithmetic
-(N := X + 1),          # evaluate RHS, unify with LHS
-
-# CLP(FD) constraints
+# Arithmetic / CLP(FD) constraints
+(N == X + 1),          # arithmetic constraint
 X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
@@ -1013,8 +1010,8 @@ utils.Double(X, Y),    # qualified call (after -import_module(utils))
 ~~python_expr          # capture as AST node
 
 # Lambdas (anonymous clauses)
-CallGoal((X <- (R := X + 1)), 5)                             # R = 6
-CallGoal(((X, Y) <- (R := X + Y)), A, B)                 # multi-param
+CallGoal((X <- (R == X + 1)), 5)                             # R = 6
+CallGoal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
 
 # Meta-predicates
 FindAll(X, In(X, [1,2,3]), BAG),          # BAG = [1,2,3]
@@ -1039,7 +1036,7 @@ phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
 phrase(digit(D), [3], REST),              # phrase/3 — partial parse
 
 # EDCGs — EXPERIMENTAL (directive parsing only, no end-to-end rewriting yet)
--edcg_acc(counter, X, IN, OUT, {OUT := IN + X})  # declare accumulator
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})  # declare accumulator
 -edcg_pass(config)                                # declare passed arg
 -edcg_pred(inc, 0, [counter])                     # declare pred's hidden args
 inc >> ([1] // counter)                   # [value] // acc — push to accumulator

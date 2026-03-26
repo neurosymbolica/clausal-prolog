@@ -95,7 +95,7 @@ Notation in signature lines:
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & Statistics](#time--statistics) | CurrentTime/1, Statistics/2 |
-| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `:=`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
+| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
 
 ---
 
@@ -1397,7 +1397,7 @@ Nondeterministic enumeration of set elements. Order is deterministic (sorted by 
 
 ## Arithmetic
 
-Arithmetic **evaluation** uses `:=` (e.g., `Y := X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
+Arithmetic uses `==` to post CLP(FD) constraints (e.g., `Y == X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
 
 ### `Between/3`
 ```clausal
@@ -2987,7 +2987,7 @@ The following are not builtins in the registry — they are syntax forms compile
 |--------|---------|-------------------|
 | `X is Y` | Unification (structural) | `compiler.py:1415` |
 | `X is not Y` | Disequality constraint (`Dif/2`) | `compiler.py:1436` |
-| `X := Expr` | Arithmetic evaluation then unify | `compiler.py` (`Evaluate`) |
+| `X == Expr` | Arithmetic constraint (CLP(FD)) | `compiler.py` (`Evaluate`) |
 | `X == Y` | CLP(FD) equality constraint | `compiler.py:1444` |
 | `X != Y` | CLP(FD) disequality constraint | `compiler.py:1451` |
 | `X < Y` | CLP(FD) less-than constraint | `compiler.py:1459` |

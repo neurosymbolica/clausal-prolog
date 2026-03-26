@@ -18,11 +18,11 @@ Fib(0, 0),
 Fib(1, 1),
 Fib(N, F) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     Fib(N1, F1),
     Fib(N2, F2),
-    F := F1 + F2
+    F == F1 + F2
 )
 
 Test("fib(5) = 5") <- Fib(5, 5)
@@ -78,7 +78,7 @@ Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if 
 - Test bodies can use any predicates defined in the module, plus builtins like `Append`, `Member`, etc.
 - Use `==` for CLP(FD) arithmetic equality on computed results: `Test("check") <- (SomePred(X), X == expected)`. For ground integers this behaves like equality; for Vars it posts a CLP(FD) constraint.
 - Use `Equivalent(X, Y)` for structural equality (the old `==` behavior) when comparing non-integer terms.
-- Use `:=` for arithmetic: `Test("arith") <- (N := 2 + 3, N == 5)`.
+- Use `==` for arithmetic: `Test("arith") <- (N == 2 + 3, N == 5)`.
 
 ---
 

@@ -343,7 +343,7 @@ sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
 )
 ```
 
-`:=` is eager arithmetic evaluation (`is/2`), not a constraint — it requires its arguments to already be ground. Putting `Label` before the equation forces enumeration of all ~40,000 `AllDifferent` permutations before any pruning from the equation can happen.
+`:=` is eager arithmetic evaluation (`is/2`), not a constraint — it requires its arguments to already be ground. Putting `Label` before `:=` forces enumeration of all ~40,000 `AllDifferent` permutations before any pruning from the equation can happen.
 
 The fix is to post the equation as a `==` constraint *before* `Label`:
 
@@ -361,7 +361,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 `==` with unbound variables posts a CLP(FD) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
-**Rule of thumb:** all `==`, `!=`, `<`, `>`, `<=`, `>=` constraints should appear *before* `Label`. Only `:=` (eager eval) needs ground arguments and must come after.
+**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `:=` for Python interop (e.g., string operations with `++`).
 
 ??? example "Python API"
 

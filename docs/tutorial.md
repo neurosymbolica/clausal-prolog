@@ -175,7 +175,7 @@ often cleaner than stating the structure as a separate condition in the body:
 sum_list([], 0),
 sum_list([HEAD, *TAIL], TOTAL) <- (
     sum_list(TAIL, SUBTOTAL),
-    TOTAL := SUBTOTAL + HEAD
+    TOTAL == SUBTOTAL + HEAD
 )
 ```
 
@@ -186,7 +186,7 @@ TOTAL is SUBTOTAL + HEAD.
 ```clausal
 double_list([], []),
 double_list([HEAD, *TAIL], [DOUBLED, *REST]) <- (
-    DOUBLED := HEAD * 2,
+    DOUBLED == HEAD * 2,
     double_list(TAIL, REST)
 )
 ```
@@ -199,28 +199,26 @@ goal.
 
 ## Arithmetic
 
-Use the **walrus operator** `(N := expression)` to evaluate an arithmetic expression
-and unify the result with a variable:
+Use `==` to post an arithmetic constraint between a variable and an expression:
 
 ```clausal
-square(N, SQ) <- (SQ := N * N)
+square(N, SQ) <- (SQ == N * N)
 
 factorial(0, 1),
 factorial(N, F) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     factorial(N1, F1),
-    F := N1 * F1 + F1
+    F == N1 * F1 + F1
 )
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
 `mod` (modulo), `abs(X)`, `min(X, Y)`, `max(X, Y)`.
 
-The `:=` operator evaluates the right-hand side and unifies the result with the
-left. This requires the right-hand side to be ground (all variables bound to
-values). For arithmetic with unbound variables, see
-[CLP(FD) constraints](constraints.md), which work in all directions.
+`==` posts a CLP(FD) constraint that works in all directions — even when
+variables are unbound. Use `:=` only for eager Python-side evaluation
+(e.g., `LABEL := ++"fizz"` for string operations).
 
 ### Comparisons
 
@@ -317,7 +315,7 @@ Clausal has a lightweight convention for inline tests. Define `Test/1` predicate
 sum_list([], 0),
 sum_list([HEAD, *TAIL], TOTAL) <- (
     sum_list(TAIL, SUBTOTAL),
-    TOTAL := SUBTOTAL + HEAD
+    TOTAL == SUBTOTAL + HEAD
 )
 
 Test("sum [1,2,3,4] = 10") <- (

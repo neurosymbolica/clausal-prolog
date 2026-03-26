@@ -33,7 +33,7 @@ whole list to its parts:
 list_sum([], 0),
 list_sum([X, *XS], TOTAL) <- (
     list_sum(XS, REST),
-    TOTAL := X + REST
+    TOTAL == X + REST
 )
 ```
 

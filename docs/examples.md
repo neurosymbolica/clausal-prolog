@@ -143,7 +143,7 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
     Append(BODY, GOALS, ALL_GOALS),
     SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
-    COUNT := SUB_COUNT + 1
+    COUNT == SUB_COUNT + 1
 )
 ```
 
@@ -153,7 +153,7 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
 SolveLimit([], _PROGRAM, _MAX),
 SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
-    MAX1 := MAX - 1,
+    MAX1 == MAX - 1,
     MatchClause(GOAL, BODY, PROGRAM),
     Append(BODY, GOALS, ALL_GOALS),
     SolveLimit(ALL_GOALS, PROGRAM, MAX1)

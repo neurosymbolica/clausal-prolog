@@ -11,9 +11,9 @@ relational arithmetic predicates that work in multiple directions.
 factorial(0, 1),
 factorial(N, F) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     factorial(N1, F1),
-    F := N * F1
+    F == N * F1
 )
 
 Test("fact 5") <- factorial(5, 120)
@@ -23,12 +23,12 @@ Test("fact 5") <- factorial(5, 120)
 
 ## Evaluation & Comparison
 
-### The `:=` operator
+### The `==` operator
 
-`:=` evaluates the right-hand side and unifies the result with the left:
+`==` posts an arithmetic constraint (CLP(FD) or CLP(R)) that works in all directions:
 
 ```clausal
-Test("eval") <- (X := 3 + 4 * 2, X == 11)
+Test("eval") <- (X == 3 + 4 * 2, X == 11)
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
@@ -152,8 +152,8 @@ fib(N, F) <- fib_acc(N, 0, 1, F)
 fib_acc(0, A, _, A),
 fib_acc(N, A, B, F) <- (
     N > 0,
-    N1 := N - 1,
-    C := A + B,
+    N1 == N - 1,
+    C == A + B,
     fib_acc(N1, B, C, F)
 )
 
@@ -166,19 +166,19 @@ Test("fib 10") <- fib(10, 55)
 collatz(1, 0),
 collatz(N, STEPS) <- (
     N > 1,
-    MOD := N % 2,
+    MOD == N % 2,
     MOD == 0,
-    HALF := N // 2,
+    HALF == N // 2,
     collatz(HALF, S),
-    STEPS := S + 1
+    STEPS == S + 1
 )
 collatz(N, STEPS) <- (
     N > 1,
-    MOD := N % 2,
+    MOD == N % 2,
     MOD == 1,
-    NEXT := 3 * N + 1,
+    NEXT == 3 * N + 1,
     collatz(NEXT, S),
-    STEPS := S + 1
+    STEPS == S + 1
 )
 
 Test("collatz 6") <- collatz(6, 8)
@@ -192,7 +192,7 @@ digit_sum(N, SUM) <- (
     N > 0,
     DivMod(N, 10, REST, DIGIT),
     digit_sum(REST, S),
-    SUM := S + DIGIT
+    SUM == S + DIGIT
 )
 
 Test("digit sum") <- digit_sum(123, 6)
@@ -202,8 +202,9 @@ Test("digit sum") <- digit_sum(123, 6)
 
 ## Gotchas
 
-- **`:=` is evaluation, `==` is unification** — `X := 3 + 4` evaluates to 7;
-  `X == 3 + 4` tries to unify X with the unevaluated expression.
+- **`==` posts a constraint** — `X == 3 + 4` constrains X to 7 and works even
+  when X is unbound. Use `:=` only when you need eager Python-side evaluation
+  (e.g., with `++` for string operations).
 - **Both sides of comparisons must be ground** — `X > 3` fails if `X` is
   unbound. Use [CLP(FD)](constraints.md) for constraints over unbound variables.
 - **`Plus/3` requires at least two bound arguments** — it cannot enumerate all

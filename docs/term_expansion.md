@@ -100,7 +100,7 @@ The STATE arguments thread a value through all expansions in order. Use this to 
 # skip
 # Count clauses as they are expanded
 TermExpansion(ITEM, ITEM, COUNT, NEXT) <- (
-    NEXT := COUNT + 1
+    NEXT == COUNT + 1
 )
 ```
 

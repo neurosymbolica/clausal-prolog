@@ -113,10 +113,10 @@ in the source file. Sometimes it's clearer to interleave related predicates.
 ```clausal
 -discontiguous(Test/1)
 
-helper(X, Y) <- (Y := X + 1)
+helper(X, Y) <- (Y == X + 1)
 Test("first") <- helper(1, 2)
 
-other_helper(X, Y) <- (Y := X * 2)
+other_helper(X, Y) <- (Y == X * 2)
 Test("second") <- other_helper(3, 6)
 ```
 
@@ -194,7 +194,7 @@ Extended DCGs allow multiple named accumulators and passed arguments to be threa
 ### -edcg_acc
 
 ```clausal
--edcg_acc(counter, X, IN, OUT, {OUT := IN + X})
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 ```
 
 Declares a named accumulator with its joining operation. Arguments: name, value variable, input state, output state, and joiner goal.

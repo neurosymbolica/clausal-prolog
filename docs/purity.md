@@ -116,23 +116,18 @@ bound:
 safe(X) <- (X is not 1, X is not 2)
 ```
 
-### Arithmetic evaluation requiring ground arguments
+### Arithmetic with `==`
 
-The `:=` operator evaluates the right-hand side and requires all variables
-in it to be ground. This limits the predicate to a single direction.
-
-```clausal
-# Only works when N is known:
-square(N, SQ) <- (SQ := N * N)
-```
-
-For arithmetic with unbound variables, CLP(FD) constraints work in all
-directions:
+The `==` operator posts CLP(FD) constraints that work in all directions,
+even when variables are unbound:
 
 ```clausal
 # Works in all directions:
-square_fd(N, SQ) <- (SQ #= N * N)
+square(N, SQ) <- (SQ == N * N)
 ```
+
+The `:=` operator is available for eager Python-side evaluation (e.g., with
+`++` for string operations), but `==` should be the default for arithmetic.
 
 ### I/O side effects
 
@@ -177,7 +172,7 @@ Many common impure patterns have pure counterparts in Clausal:
 |---|---|---|
 | `not (X is Y)` (immediate check) | `X is not Y` (dif constraint) | Monotonic; works with unbound variables |
 | `N > 0` (arithmetic guard) | `N #> 0` (CLP(FD) constraint) | Works in all directions |
-| `:=` (arithmetic evaluation) | `#=` (CLP(FD) equality) | Works with unbound variables |
+| `:=` (eager evaluation) | `==` (CLP(FD) constraint) | Works with unbound variables |
 | `not Goal` with unbound vars | Reified if-then-else | Monotonic; see [If-Then-Else](reified_ite.md) |
 | Type-testing (`integer(X)`) | Clean representations | Symbolic distinction via functors; see below |
 
@@ -280,8 +275,9 @@ to search. This decoupling makes the approach flexible and versatile.
 
 ## Practical guidance
 
-1. **Use CLP(FD) constraints instead of `:=` where possible.** Constraints
-   work in all directions and preserve multi-directional use.
+1. **Use `==` (CLP(FD) constraints) for arithmetic.** Constraints
+   work in all directions and preserve multi-directional use. Reserve `:=`
+   for Python interop (e.g., string operations with `++`).
 
 2. **Use `dif/2` (`is not`) instead of `not (X is Y)`.** Dif is a monotonic
    constraint; negation-of-unification is a point-in-time check.

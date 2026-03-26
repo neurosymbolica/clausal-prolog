@@ -74,9 +74,9 @@ A predicate can have multiple clauses — facts and rules mixed freely. These ar
 factorial(0, 1),
 factorial(N, F) <- (
     N > 0,
-    N1 := N - 1,
+    N1 == N - 1,
     factorial(N1, F1),
-    F := N1 * F1
+    F == N1 * F1
 )
 ```
 
@@ -141,7 +141,7 @@ ancestor(X, Y, 1) <- parent(X, Y)
 ancestor(X, Y, N) <- (
     parent(X, Z),
     ancestor(Z, Y, N1),
-    N := N1 + 1
+    N == N1 + 1
 )
 ```
 
@@ -159,7 +159,7 @@ Recursive predicates define relations over inductively structured data (like lis
 length([], 0),
 length([_, *REST], N) <- (
     length(REST, N1),
-    N := N1 + 1
+    N == N1 + 1
 )
 
 Test("length 0") <- length([], 0)
@@ -180,11 +180,11 @@ The `-private` directive marks predicates as internal to the module — they are
 # Public: can be imported by other modules
 Compute(X, R) <- (
     Helper(X, TEMP),
-    R := TEMP * 2
+    R == TEMP * 2
 )
 
 # Private: only accessible within this module
-Helper(X, Y) <- (Y := X + 1)
+Helper(X, Y) <- (Y == X + 1)
 ```
 
 Use `-private` when a predicate is an implementation detail that other modules should not depend on. This prevents accidental coupling between modules.
@@ -201,7 +201,7 @@ point(0, 0),
 point(1, 1),
 
 # distance/3 has fields (arg0, arg1, arg2)
-distance(X1, X2, D) <- (D := abs(X2 - X1))
+distance(X1, X2, D) <- (D == abs(X2 - X1))
 ```
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.

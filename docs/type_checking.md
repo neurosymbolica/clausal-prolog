@@ -150,7 +150,7 @@ safe_print(X) <- (IsGround(X), Writeln(X))
 ### Type-dispatched processing
 
 ```clausal
-process(X, R) <- (IsInt(X),    R := X * 2)
+process(X, R) <- (IsInt(X),    R == X * 2)
 process(X, R) <- (IsStr(X),    R is f"got: {X}")
 process(X, R) <- (IsList(X),   Length(X, R))
 process(X, R) <- (IsVar(X),    R == "unknown")
@@ -161,7 +161,7 @@ process(X, R) <- (IsVar(X),    R == "unknown")
 ```clausal
 safe_add(X, Y, Z) <- (
     IsNumber(X), IsNumber(Y),
-    Z := X + Y
+    Z == X + Y
 )
 ```
 

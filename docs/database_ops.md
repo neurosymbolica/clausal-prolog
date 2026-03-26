@@ -154,11 +154,11 @@ fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     fib(N1, F1),
     fib(N2, F2),
-    F := F1 + F2,
+    F == F1 + F2,
     Assert(fib_cache(N, F))
 )
 ```
@@ -175,7 +175,7 @@ counter(0),
 
 increment(NEW) <- (
     Retract(counter(OLD)),
-    NEW := OLD + 1,
+    NEW == OLD + 1,
     Assert(counter(NEW))
 ),
 

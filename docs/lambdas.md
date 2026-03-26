@@ -15,13 +15,13 @@ Arrow lambdas use `head <- body` — the same syntax as clause definitions, maki
 apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
 
 # Two-arg lambda with arithmetic
-test(R) <- CallGoal(((X, Y) <- (Y := X + 1)), 5, R)
+test(R) <- CallGoal(((X, Y) <- (Y == X + 1)), 5, R)
 
 # Zero-arg lambda
 run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z, R) <- CallGoal((X <- (R := X + Z)), 10)
+add_z(Z, R) <- CallGoal((X <- (R == X + Z)), 10)
 ```
 
 The head is a variable (single param) or tuple of variables (multiple params). The body is any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
@@ -31,7 +31,7 @@ The head is a variable (single param) or tuple of variables (multiple params). T
 Multiple goals are separated with `,` inside `(...)`:
 
 ```clausal
-transform(R) <- CallGoal(((X, Y) <- (T := X + 1, Y := T * 2)), 5, R)
+transform(R) <- CallGoal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 ```
 
 ### Why arrow syntax?
@@ -40,7 +40,7 @@ Arrow lambdas are homoiconic — they look like the clause definitions they repr
 
 ```clausal
 # Clause definition (statement level)
-double(X, Y) <- (Y := X + X)
+double(X, Y) <- (Y == X + X)
 
 # Anonymous clause (expression level) — same syntax
 apply_double(V, R) <- CallGoal((X <- (double(X, R))), V)
@@ -57,10 +57,10 @@ Lambdas capture variables from the enclosing clause implicitly, using Python's n
 ```clausal
 # Z and RESULT are captured from the enclosing clause head.
 # X is a lambda parameter.
-captured_add(Z, RESULT) <- CallGoal((X <- (RESULT := X + Z)), 10)
+captured_add(Z, RESULT) <- CallGoal((X <- (RESULT == X + Z)), 10)
 ```
 
-When queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT := 10 + 3`.
+When queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT == 10 + 3`.
 
 ### How capture works
 
@@ -105,7 +105,7 @@ The extra arguments are passed as positional parameters to the lambda:
 CallGoal((X <- (X > 0)), 5)
 
 # lambda receives X = 5, Y = RESULT
-CallGoal(((X, Y) <- (Y := X * 2)), 5, RESULT)
+CallGoal(((X, Y) <- (Y == X * 2)), 5, RESULT)
 ```
 
 ### Multi-solution lambdas
@@ -129,7 +129,7 @@ Querying `get_color(C)` yields three solutions: `C = "red"`, `C = "green"`, `C =
 Lambda bodies can call user-defined predicates. Internally, this works through the `_tramp_call` bridge, which adapts between the lambda's simple-mode execution and the predicate's trampoline-mode dispatch:
 
 ```clausal
-double(X, Y) <- (Y := X + X)
+double(X, Y) <- (Y == X + X)
 
 apply_double(VAL, RESULT) <- CallGoal((X <- (double(X, RESULT))), VAL)
 ```
@@ -144,7 +144,7 @@ Lambdas compile to **simple-mode** Python generator functions. A lambda like:
 
 ```clausal
 # skip
-(X, Y) <- (Y := X + Z)
+(X, Y) <- (Y == X + Z)
 ```
 
 compiles to approximately:
@@ -194,7 +194,7 @@ Lambdas combine naturally with `FindAll`, `BagOf`, `SetOf`, and `ForAll`. The go
 squares(NS, SQS) <- (
     FindAll(
         SQ,
-        (In(X, NS), SQ := X * X),
+        (In(X, NS), SQ == X * X),
         SQS,
     )
 )
@@ -223,7 +223,7 @@ When the goal logic is more complex than a single predicate call, lambdas are th
 
 ```clausal
 # MapList/3 — double every element
-doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
+doubles(XS, YS) <- MapList(((X, Y) <- (Y == X * 2)), XS, YS)
 
 # MapList/2 — check all positive
 all_pos(XS) <- MapList((X <- (X > 0)), XS)
@@ -232,10 +232,10 @@ all_pos(XS) <- MapList((X <- (X > 0)), XS)
 positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
 
 # Exclude/3 — remove even elements
-remove_evens(XS, RS) <- Exclude((X <- (M := X % 2, M is 0)), XS, RS)
+remove_evens(XS, RS) <- Exclude((X <- (M == X % 2, M is 0)), XS, RS)
 
 # FoldLeft/4 — sum a list
-fold_sum(XS, S) <- FoldLeft(((E, A, R) <- (R := A + E)), XS, 0, S)
+fold_sum(XS, S) <- FoldLeft(((E, A, R) <- (R == A + E)), XS, 0, S)
 ```
 
 All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element. This is consistent with the Pythonic philosophy and sufficient for lambda goals, which are typically deterministic.
@@ -278,7 +278,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     - **Compiler**: produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
     - **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
-    - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `:=` arithmetic
+    - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `==` arithmetic
     - **Higher-order builtins**: MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)
 
 ---

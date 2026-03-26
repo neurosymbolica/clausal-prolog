@@ -261,7 +261,7 @@ When the last goal in a clause body is a self-recursive `Call` and all preceding
 ```clausal
 AccSum([], ACC, ACC),
 AccSum([H, *T], ACC, RESULT) <- (
-    NEWACC := ACC + H,
+    NEWACC == ACC + H,
     AccSum(T, NEWACC, RESULT)
 )
 ```

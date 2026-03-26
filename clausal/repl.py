@@ -6,8 +6,8 @@ Prolog-style, but using ``or`` as the separator between solutions.
 Key bindings
 ------------
 SPACE, n      next solution
-ENTER, .      stop  (commit — prints ``.``)
-ESC, q        abort (clean exit — no output)
+ENTER, .      stop  (prints ``# (Aborted)``)
+ESC, q        abort (prints ``# (Aborted)``)
 a             show all remaining solutions
 """
 
@@ -62,7 +62,7 @@ def _read_char() -> str:
 def _format_bindings(bindings: dict) -> str:
     """Format a binding dict as ``X is val, Y is val``, pretty-printed."""
     if not bindings:
-        return "true."
+        return "True"
     import shutil
     from clausal.terms import term_pformat, get_style
     width = shutil.get_terminal_size(fallback=(80, 24)).columns
@@ -134,8 +134,8 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
     binding keys use the names the user wrote rather than predicate field names.
 
     ``True`` is treated as a goal that succeeds once with no bindings (displays
-    as ``true.``).  ``False`` is treated as a goal that fails immediately
-    (displays as ``false.``).
+    as ``True``).  ``False`` is treated as a goal that fails immediately
+    (displays as ``False``).
     """
     from clausal.logic.predicate import PredicateMeta
     if not isinstance(type(goal_or_iter), PredicateMeta):
@@ -201,8 +201,8 @@ class Solutions:
     Key bindings
     ------------
     SPACE, n      next solution
-    ENTER, .      stop  (commit — prints ``.``)
-    ESC, q        abort (clean exit — no output)
+    ENTER, .      stop  (prints ``# (Aborted)``)
+    ESC, q        abort (prints ``# (Aborted)``)
     a             show all remaining solutions
     """
 
@@ -238,7 +238,7 @@ class Solutions:
         try:
             pending = next(self._iter)
         except StopIteration:
-            print("false.")
+            print("False")
             return
 
         while True:
@@ -254,7 +254,7 @@ class Solutions:
                 look_ahead = next(self._iter)
             except StopIteration:
                 # This was the last solution.
-                print("No more solutions.")
+                print("# (No more solutions)")
                 return
 
             # There is a next solution — show prompt and wait for a key.
@@ -268,10 +268,10 @@ class Solutions:
                 pending = look_ahead
                 continue
             elif key in ('\r', '\n', '.'):
-                print(".")
+                print("# (Aborted)")
                 return
             elif key in ('\x1b', 'q'):
-                # Abort — no output.
+                print("# (Aborted)")
                 return
             elif key == 'a':
                 # Show all remaining (look_ahead + rest of iterator).
@@ -280,7 +280,7 @@ class Solutions:
                 for sol in self._iter:
                     print("or")
                     print(_format_bindings(sol))
-                print("No more solutions.")
+                print("# (No more solutions)")
                 return
             else:
                 # Unknown key — treat as next.

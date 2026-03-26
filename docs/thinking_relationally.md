@@ -94,7 +94,7 @@ Consider `list_sum/2`:
 list_sum([], 0),
 list_sum([HEAD, *TAIL], TOTAL) <- (
     list_sum(TAIL, SUBTOTAL),
-    TOTAL := SUBTOTAL + HEAD
+    TOTAL == SUBTOTAL + HEAD
 )
 ```
 
@@ -297,10 +297,10 @@ participate in unification. They can be bound on either side — in the goal or
 in the clause head. This bidirectionality is what makes relations work in all
 directions.
 
-**Using arithmetic evaluation when constraints would be more general.** The
-`:=` operator requires the right-hand side to be ground. CLP(FD) constraints
-(see [Constraints](constraints.md)) work with unbound variables and preserve
-multi-directional use.
+**Using eager evaluation when constraints would be more general.** The
+`:=` operator requires the right-hand side to be ground. Use `==` instead —
+it posts CLP(FD) constraints that work with unbound variables and preserve
+multi-directional use. Reserve `:=` for Python interop (e.g., `++` for strings).
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"
 "compute," "check," "remove" — all suggest a specific mode. Describe what the

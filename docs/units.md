@@ -89,7 +89,7 @@ When the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
 ```python
-N := 9.8
+N == 9.8
 F := N(Newton)          # → Quantity(9.8, Newton dims)
 ```
 
@@ -106,7 +106,7 @@ HasUnits(A, m/s**2)              # acceleration
 `HasUnits/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
 expressions work directly — the transformer auto-wraps them.
 
-`HasUnits` cannot appear on the RHS of `:=`.
+`HasUnits` cannot appear on the RHS of `:=` or `==`.
 
 ---
 

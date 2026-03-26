@@ -66,7 +66,7 @@ The standard form with selective matching and re-raise on mismatch:
 
 ```clausal
 safe_div(X, Y, R) <- catch(
-    (R := X / Y),
+    (R == X / Y),
     error(evaluation_error(zero_divisor), _),
     R is "undefined"
 )
@@ -182,7 +182,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     ```clausal
 # skip
     logged_op(X, Y, R) <- CatchRecover(
-        (R := X / Y),
+        (R == X / Y),
         ERR,
         (Write(ERR), R is "error")
     )
@@ -192,7 +192,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     ```clausal
 # skip
     logged_div(X, Y, R) <- catch(
-        (R := X / Y),
+        (R == X / Y),
         E,
         (Write(E), Throw(E))
     )

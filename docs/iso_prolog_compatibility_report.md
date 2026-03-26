@@ -227,9 +227,9 @@ or compiler are needed.
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Dis-unification (dif/2) |
 | `\+ G` | `not G` | Negation-as-failure |
-| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
-| `X =:= Y` | (arithmetic comparison) | Via `:=` + `==` |
-| `X =\= Y` | (arithmetic comparison) | Via `:=` + `!=` |
+| `Y is X * 2` | `Y == X * 2` | Arithmetic constraint |
+| `X =:= Y` | `X == Y` | Arithmetic equality constraint |
+| `X =\= Y` | `X != Y` | Arithmetic disequality constraint |
 | `A ; B` | `A or B` | Disjunction |
 | `X =< Y` | `X <= Y` | Less-or-equal |
 | `X =.. L` | `Unpack(X, L)` | Univ |

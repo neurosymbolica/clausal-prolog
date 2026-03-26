@@ -72,7 +72,7 @@ Test("measure") <- (
 compare_approaches(GOAL_A, GOAL_B) <- (
     TimeGoal(GOAL_A, TIME_A),
     TimeGoal(GOAL_B, TIME_B),
-    FASTER := (TIME_A < TIME_B),
+    FASTER == (TIME_A < TIME_B),
     Writeln(f"A: {TIME_A}s, B: {TIME_B}s")
 )
 ```

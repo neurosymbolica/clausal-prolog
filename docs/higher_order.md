@@ -9,7 +9,7 @@ Clausal a functional programming feel.
 ## Quick Example
 
 ```clausal
-double(X, Y) <- (Y := X * 2)
+double(X, Y) <- (Y == X * 2)
 
 Test("double all") <- (
     MapList(double, [1, 2, 3], [2, 4, 6])
@@ -33,7 +33,7 @@ Test("keep evens") <- (
 Test("call/1") <- Call((X <- (X == 42)), 42)
 
 Test("call/2") <- (
-    Call(((X, Y) <- (Y := X * 2)), 5, 10)
+    Call(((X, Y) <- (Y == X * 2)), 5, 10)
 )
 ```
 
@@ -59,7 +59,7 @@ Test("all positive") <- MapList(positive, [1, 2, 3])
 `MapList(Goal, Xs, Ys)` — transform each element via `Goal(X, Y)`.
 
 ```clausal
-square(X, Y) <- (Y := X ** 2)
+square(X, Y) <- (Y == X ** 2)
 
 Test("squares") <- (
     MapList(square, [1, 2, 3, 4], [1, 4, 9, 16])
@@ -70,7 +70,7 @@ With an inline lambda:
 
 ```clausal
 Test("squares inline") <- (
-    MapList(((X, Y) <- (Y := X ** 2)), [1, 2, 3, 4], [1, 4, 9, 16])
+    MapList(((X, Y) <- (Y == X ** 2)), [1, 2, 3, 4], [1, 4, 9, 16])
 )
 ```
 
@@ -101,7 +101,7 @@ Test("exclude") <- Exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 value when `Goal(Elem, Out)` succeeds; skip elements where it fails.
 
 ```clausal
-safe_sqrt(X, Y) <- (X >= 0, Y := X ** 0.5)
+safe_sqrt(X, Y) <- (X >= 0, Y == X ** 0.5)
 
 Test("filtermap") <- FilterMap(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 ```
@@ -116,7 +116,7 @@ Test("filtermap") <- FilterMap(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 across the list, threading an accumulator from `V0` to `V`.
 
 ```clausal
-add_step(X, ACC, OUT) <- (OUT := ACC + X)
+add_step(X, ACC, OUT) <- (OUT == ACC + X)
 
 Test("sum") <- (
     FoldLeft(add_step, [1, 2, 3, 4], 0, 10)
@@ -127,7 +127,7 @@ With an inline lambda:
 
 ```clausal
 Test("sum inline") <- (
-    FoldLeft(((X, ACC, OUT) <- (OUT := ACC + X)), [1, 2, 3, 4], 0, 10)
+    FoldLeft(((X, ACC, OUT) <- (OUT == ACC + X)), [1, 2, 3, 4], 0, 10)
 )
 ```
 
@@ -213,7 +213,7 @@ Test("longest") <- (
 ### Map then filter (pipeline)
 
 ```clausal
-sq(X, Y) <- (Y := X * X)
+sq(X, Y) <- (Y == X * X)
 
 Test("pipeline") <- (
     MapList(sq, [1, 2, 3, 4, 5], SQUARES),

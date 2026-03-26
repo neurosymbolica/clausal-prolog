@@ -78,12 +78,12 @@ Integrate(D, X, I),
 I == X**4
 ```
 
-The `:=` operator also preserves symbolic equality through chains:
+The `==` operator also preserves symbolic equality through chains:
 
 ```clausal
 # skip
 Diff(X**3, X, D),
-R := D + 1,
+R == D + 1,
 R == 3*X**2 + 1
 ```
 

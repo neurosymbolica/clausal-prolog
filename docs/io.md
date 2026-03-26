@@ -198,12 +198,12 @@ Test("format item") <- (
 
 ### Building Strings with FoldLeft
 
-Use `:=` with `+` to concatenate strings inside a FoldLeft closure:
+Use `==` with `+` to concatenate strings inside a FoldLeft closure:
 
 ```clausal
 concat_all(XS, RESULT) <- (
     FoldLeft(
-        ((E, A, R) <- (R := A + E)),
+        ((E, A, R) <- (R == A + E)),
         XS, "", RESULT
     )
 )

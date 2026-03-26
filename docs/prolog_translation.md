@@ -102,7 +102,7 @@ for item in pmodule.items:
 |---|---|---|
 | `X is Y` | `X = Y` | Unification |
 | `X is not Y` | `dif(X, Y)` | Disequality |
-| `Y := X * 2` | `Y is X * 2` | Arithmetic evaluation |
+| `Y == X * 2` | `Y is X * 2` | Arithmetic constraint |
 | `X == Y` | `X == Y` | Structural equality |
 | `X != Y` | `X \== Y` | Structural inequality |
 | `X <= Y` | `X =< Y` | ISO `=<` |
@@ -245,7 +245,7 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `findall(...)` | `FindAll(...)` | Reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Disequality |
-| `Y is X * 2` | `Y := X * 2` | Arithmetic evaluation |
+| `Y is X * 2` | `Y == X * 2` | Arithmetic constraint |
 | `X == Y` | `X == Y` | Structural equality |
 | `X \== Y` | `X != Y` | Structural inequality |
 | `X =< Y` | `X <= Y` | ISO `=<` → `<=` |
