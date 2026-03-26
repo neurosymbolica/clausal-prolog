@@ -1,3 +1,27 @@
+"""Logic variables, unification, and trail-based backtracking.
+
+Threading contract
+------------------
+This module is safe for use from multiple threads under free-threaded
+Python (3.13t+).  The rules:
+
+**Safe to share** between threads:
+  - ``Var`` / ``AttVar`` objects (bindings are atomic; ``unify()`` uses
+    per-object critical sections).
+  - Ground terms (int, str, tuples/lists of ground values, Compound).
+  - The attribute hook registry (``register_attr_hook`` is synchronized).
+
+**Must be per-thread** (enforced at runtime):
+  - ``Trail`` objects.  Each thread must create its own Trail.  Passing a
+    Trail created in one thread to another raises ``RuntimeError``.
+
+**Caller responsibility:**
+  - Each parallel search branch needs its own Trail and its own set of
+    unbound query variables.  Shared variables are safe to *read* (deref)
+    from any thread, but binding should happen from one thread at a time.
+  - Constraint hooks re-enter the engine and must be re-entrant.
+"""
+
 from ._variables import (
     Var as PlainVar,
     AttVar,

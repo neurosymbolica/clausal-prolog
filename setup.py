@@ -1,15 +1,24 @@
+import sysconfig
 from setuptools import setup, Extension
+
+extra_compile_args = ["-O2", "-Wall", "-Wextra"]
+
+# Free-threaded Python builds need the Py_GIL_DISABLED define
+# so our #ifdef guards activate. setuptools sets it automatically
+# for 3.13t+, but we also add it explicitly for clarity.
+if sysconfig.get_config_var("Py_GIL_DISABLED"):
+    extra_compile_args.append("-DPy_GIL_DISABLED=1")
 
 ext_variables = Extension(
     "clausal.logic.variables._variables",
     sources=["clausal/logic/variables/_variables.c"],
-    extra_compile_args=["-O2", "-Wall", "-Wextra"],
+    extra_compile_args=extra_compile_args,
 )
 
 ext_trampoline = Extension(
     "clausal.logic._trampoline",
     sources=["clausal/logic/_trampoline.c"],
-    extra_compile_args=["-O2", "-Wall", "-Wextra"],
+    extra_compile_args=extra_compile_args,
 )
 
 setup(ext_modules=[ext_variables, ext_trampoline])

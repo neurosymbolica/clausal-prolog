@@ -35,6 +35,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdint.h>
+#include "_ft_compat.h"
 
 /* ================================================================
  * Forward declarations
@@ -48,8 +49,8 @@ static PyTypeObject VarType;
 static PyTypeObject AttVarType;
 static PyTypeObject TrailType;
 
-/* Global monotonic creation counter.  Not thread-safe without the GIL. */
-static uint64_t g_next_var_id = 0;
+/* Global monotonic creation counter.  Atomic under free-threaded builds. */
+static FT_ATOMIC_UINT64_T g_next_var_id = 0;
 
 /* Module-level attribute hook registry: {key -> callable}.
  * Mirrors the Prolog model where verify_attributes/3 is a module predicate. */
@@ -87,9 +88,10 @@ var_deref(PyObject *term)
 {
     while (Var_Check(term)) {
         VarObject *v = Var_CAST(term);
-        if (v->binding == NULL)
+        PyObject *b = FT_ATOMIC_LOAD_PTR(v->binding);
+        if (b == NULL)
             return term;
-        term = v->binding;
+        term = b;
     }
     return term;
 }
@@ -103,7 +105,7 @@ Var_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     VarObject *self = (VarObject *)PyObject_GC_New(VarObject, type);
     if (self) {
         self->binding = NULL;
-        self->var_id  = g_next_var_id++;
+        self->var_id  = FT_ATOMIC_FETCH_ADD(g_next_var_id, 1);
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -186,7 +188,7 @@ static PyObject *
 Var_get_is_bound(VarObject *self, void *closure)
 {
     (void)closure;
-    return PyBool_FromLong(self->binding != NULL);
+    return PyBool_FromLong(FT_ATOMIC_LOAD_PTR(self->binding) != NULL);
 }
 
 static PyObject *
@@ -269,7 +271,7 @@ AttVar_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     AttVarObject *self = (AttVarObject *)PyObject_GC_New(AttVarObject, type);
     if (self) {
         self->base.binding = NULL;
-        self->base.var_id  = g_next_var_id++;
+        self->base.var_id  = FT_ATOMIC_FETCH_ADD(g_next_var_id, 1);
         self->attrs        = NULL;
     }
     PyObject_GC_Track(self);
@@ -420,7 +422,30 @@ struct TrailObject {
     /* Wakeup queue: NULL outside py_unify; a Python list inside it.
      * do_unify appends (attvar, bound_to) tuples when binding an AttVar. */
     PyObject   *wakeup_list;
+    /* Thread ownership: set once at creation, checked on every mutation.
+     * Trails must not be shared between threads — each thread needs its
+     * own Trail.  See the threading contract in _ft_compat.h. */
+    unsigned long owner_thread_id;
 };
+
+/*
+ * TRAIL_CHECK_OWNER — assert the current thread owns this trail.
+ *
+ * Trails are not thread-safe.  Each thread must create its own Trail.
+ * This check catches cross-thread misuse early (returns -1 with
+ * RuntimeError set) rather than silently corrupting the trail.
+ */
+static inline int
+trail_check_owner(TrailObject *trail)
+{
+    if (trail->owner_thread_id != PyThread_get_thread_ident()) {
+        PyErr_SetString(PyExc_RuntimeError,
+            "Trail accessed from a different thread than it was created in. "
+            "Each thread must use its own Trail object.");
+        return -1;
+    }
+    return 0;
+}
 
 static PyObject *
 Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -430,10 +455,11 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     TrailObject *self = (TrailObject *)PyObject_GC_New(TrailObject, type);
     if (self) {
-        self->entries     = NULL;
-        self->length      = 0;
-        self->capacity    = 0;
-        self->wakeup_list = NULL;
+        self->entries         = NULL;
+        self->length          = 0;
+        self->capacity        = 0;
+        self->wakeup_list     = NULL;
+        self->owner_thread_id = PyThread_get_thread_ident();
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -530,13 +556,15 @@ trail_grow(TrailObject *trail)
 static int
 trail_push(TrailObject *trail, VarObject *var)
 {
+    if (trail_check_owner(trail) < 0) return -1;
     if (trail_grow(trail) < 0) return -1;
     TrailEntry *e = &trail->entries[trail->length++];
     e->kind = TRAIL_BINDING;
     Py_INCREF(var);
-    Py_XINCREF(var->binding);
+    PyObject *old_binding = FT_ATOMIC_LOAD_PTR(var->binding);
+    Py_XINCREF(old_binding);
     e->u.binding.var       = var;
-    e->u.binding.old_value = var->binding;
+    e->u.binding.old_value = old_binding;
     return 0;
 }
 
@@ -550,9 +578,10 @@ trail_bind(TrailObject *trail, VarObject *var, PyObject *value)
 {
     if (trail_push(trail, var) < 0)
         return -1;
-    Py_XDECREF(var->binding);
     Py_INCREF(value);
-    var->binding = value;
+    PyObject *old = var->binding;
+    FT_ATOMIC_STORE_PTR(var->binding, value);
+    Py_XDECREF(old);
     return 0;
 }
 
@@ -566,6 +595,7 @@ static int
 trail_push_attr(TrailObject *trail, AttVarObject *attvar,
                 PyObject *key, PyObject *old_attr)
 {
+    if (trail_check_owner(trail) < 0) return -1;
     if (trail_grow(trail) < 0) return -1;
     TrailEntry *e = &trail->entries[trail->length++];
     e->kind = TRAIL_ATTR;
@@ -589,6 +619,7 @@ trail_push_attr(TrailObject *trail, AttVarObject *attvar,
 static int
 trail_push_callback(TrailObject *trail, PyObject *fn)
 {
+    if (trail_check_owner(trail) < 0) return -1;
     if (trail_grow(trail) < 0) return -1;
     TrailEntry *e = &trail->entries[trail->length++];
     e->kind = TRAIL_CALLBACK;
@@ -634,8 +665,9 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
         if (e->kind == TRAIL_BINDING) {
             VarObject *var = e->u.binding.var;
             PyObject  *old = e->u.binding.old_value;
-            Py_XDECREF(var->binding);
-            var->binding = old;    /* transfer ownership: trail → var */
+            PyObject *cur = FT_ATOMIC_LOAD_PTR(var->binding);
+            FT_ATOMIC_STORE_PTR(var->binding, old);  /* transfer ownership: trail → var */
+            Py_XDECREF(cur);
             Py_DECREF(var);
         } else if (e->kind == TRAIL_ATTR) {
             /* Restore attribute */
@@ -680,6 +712,7 @@ Trail_mark(TrailObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 Trail_undo(TrailObject *self, PyObject *arg)
 {
+    if (trail_check_owner(self) < 0) return NULL;
     Py_ssize_t mark = PyLong_AsSsize_t(arg);
     if (mark == -1 && PyErr_Occurred()) return NULL;
     if (mark < 0) {
@@ -698,6 +731,7 @@ Trail_undo(TrailObject *self, PyObject *arg)
 static PyObject *
 Trail_reset(TrailObject *self, PyObject *Py_UNUSED(args))
 {
+    if (trail_check_owner(self) < 0) return NULL;
     trail_undo_to(self, 0);
     Py_RETURN_NONE;
 }
@@ -900,8 +934,21 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         VarObject *newer = (v1->var_id > v2->var_id) ? v1 : v2;
         VarObject *older = (v1->var_id > v2->var_id) ? v2 : v1;
 
-        if (trail_bind(trail, newer, (PyObject *)older) < 0)
+        FtCriticalSection2 cs2;
+        FT_CS2_BEGIN(&cs2, newer, older);
+        /* Re-check after acquiring lock — another thread may have bound newer */
+        PyObject *nb = FT_ATOMIC_LOAD_PTR(newer->binding);
+        if (nb != NULL) {
+            FT_CS2_END(&cs2);
+            /* Variable was bound by another thread — retry unification
+             * with the now-bound value. */
+            return do_unify((PyObject *)newer, (PyObject *)older,
+                            trail, depth, oc);
+        }
+        if (trail_bind(trail, newer, (PyObject *)older) < 0) {
+            FT_CS2_END(&cs2);
             return -1;
+        }
 
         /*
          * If the variable being bound (newer) is an AttVar with attributes,
@@ -911,9 +958,12 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
          */
         if (AttVar_Check(newer) && AttVar_CAST(newer)->attrs != NULL) {
             if (trail_enqueue_wakeup(trail, (PyObject *)newer,
-                                     (PyObject *)older) < 0)
+                                     (PyObject *)older) < 0) {
+                FT_CS2_END(&cs2);
                 return -1;
+            }
         }
+        FT_CS2_END(&cs2);
         return 1;
     }
 
@@ -924,12 +974,24 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             if (found < 0) return -1;
             if (found)     return 0;
         }
-        if (trail_bind(trail, Var_CAST(t1), t2) < 0)
-            return -1;
-        if (AttVar_Check(t1) && AttVar_CAST(t1)->attrs != NULL) {
-            if (trail_enqueue_wakeup(trail, t1, t2) < 0)
-                return -1;
+        FtCriticalSection cs;
+        FT_CS_BEGIN(&cs, t1);
+        PyObject *b1 = FT_ATOMIC_LOAD_PTR(Var_CAST(t1)->binding);
+        if (b1 != NULL) {
+            FT_CS_END(&cs);
+            return do_unify(t1, t2, trail, depth, oc);  /* retry with bound value */
         }
+        if (trail_bind(trail, Var_CAST(t1), t2) < 0) {
+            FT_CS_END(&cs);
+            return -1;
+        }
+        if (AttVar_Check(t1) && AttVar_CAST(t1)->attrs != NULL) {
+            if (trail_enqueue_wakeup(trail, t1, t2) < 0) {
+                FT_CS_END(&cs);
+                return -1;
+            }
+        }
+        FT_CS_END(&cs);
         return 1;
     }
     if (t2v) {
@@ -938,12 +1000,24 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             if (found < 0) return -1;
             if (found)     return 0;
         }
-        if (trail_bind(trail, Var_CAST(t2), t1) < 0)
-            return -1;
-        if (AttVar_Check(t2) && AttVar_CAST(t2)->attrs != NULL) {
-            if (trail_enqueue_wakeup(trail, t2, t1) < 0)
-                return -1;
+        FtCriticalSection cs;
+        FT_CS_BEGIN(&cs, t2);
+        PyObject *b2 = FT_ATOMIC_LOAD_PTR(Var_CAST(t2)->binding);
+        if (b2 != NULL) {
+            FT_CS_END(&cs);
+            return do_unify(t2, t1, trail, depth, oc);  /* retry with bound value */
         }
+        if (trail_bind(trail, Var_CAST(t2), t1) < 0) {
+            FT_CS_END(&cs);
+            return -1;
+        }
+        if (AttVar_Check(t2) && AttVar_CAST(t2)->attrs != NULL) {
+            if (trail_enqueue_wakeup(trail, t2, t1) < 0) {
+                FT_CS_END(&cs);
+                return -1;
+            }
+        }
+        FT_CS_END(&cs);
         return 1;
     }
 
@@ -1145,26 +1219,49 @@ fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
             PyObject *key      = PyTuple_GET_ITEM(kv, 0);
             PyObject *attr_val = PyTuple_GET_ITEM(kv, 1);
 
-            PyObject *hook = PyDict_GetItem(g_attr_hooks, key);
-            if (!hook)
+            /* PyDict_GetItemRef returns a strong ref (3.13+).
+             * Fall back to PyDict_GetItemWithError + Py_XINCREF on older builds. */
+#if PY_VERSION_HEX >= 0x030D0000
+            PyObject *hook = NULL;
+            int has = PyDict_GetItemRef(g_attr_hooks, key, &hook);
+            if (has < 0) {
+                Py_DECREF(items);
+                return -1;
+            }
+            if (has == 0)
                 continue;   /* no hook registered for this key */
+#else
+            PyObject *hook = PyDict_GetItemWithError(g_attr_hooks, key);
+            if (!hook) {
+                if (PyErr_Occurred()) {
+                    Py_DECREF(items);
+                    return -1;
+                }
+                continue;   /* no hook registered for this key */
+            }
+            Py_INCREF(hook);
+#endif
 
             PyObject *result = PyObject_CallFunctionObjArgs(
                 hook, attr_val, bound_to, (PyObject *)trail, NULL);
             if (!result) {
+                Py_DECREF(hook);
                 Py_DECREF(items);
                 return -1;
             }
             int truthy = PyObject_IsTrue(result);
             Py_DECREF(result);
             if (truthy < 0) {
+                Py_DECREF(hook);
                 Py_DECREF(items);
                 return -1;
             }
             if (!truthy) {
+                Py_DECREF(hook);
                 Py_DECREF(items);
                 return 0;   /* hook rejected the unification */
             }
+            Py_DECREF(hook);
         }
         Py_DECREF(items);
     }
@@ -1527,22 +1624,30 @@ py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OO", &key, &callable))
         return NULL;
 
+    FtCriticalSection cs;
+    FT_CS_BEGIN(&cs, g_attr_hooks);
     if (callable == Py_None) {
         if (PyDict_DelItem(g_attr_hooks, key) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError))
                 PyErr_Clear();   /* unregistering a non-existent key is fine */
-            else
+            else {
+                FT_CS_END(&cs);
                 return NULL;
+            }
         }
     } else {
         if (!PyCallable_Check(callable)) {
+            FT_CS_END(&cs);
             PyErr_SetString(PyExc_TypeError,
                             "register_attr_hook(): callable must be callable or None");
             return NULL;
         }
-        if (PyDict_SetItem(g_attr_hooks, key, callable) < 0)
+        if (PyDict_SetItem(g_attr_hooks, key, callable) < 0) {
+            FT_CS_END(&cs);
             return NULL;
+        }
     }
+    FT_CS_END(&cs);
     Py_RETURN_NONE;
 }
 
@@ -1661,6 +1766,10 @@ PyInit__variables(void)
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) goto error;
+
+#ifdef Py_GIL_DISABLED
+    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
 
     Py_INCREF(&VarType);
     if (PyModule_AddObject(m, "Var", (PyObject *)&VarType) < 0)

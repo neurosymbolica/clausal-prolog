@@ -50,9 +50,9 @@ class Step:
 # _trampoline is a C extension providing optimised DONE, StepGenerator,
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
 
-if False:  # C extension disabled — using pure-Python implementation
+try:
     from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions  # type: ignore[import-untyped]
-else:
+except ImportError:
     # ── DONE sentinel ─────────────────────────────────────────────────────
     DONE: object = object()
 
