@@ -36,6 +36,9 @@ theme:
 
 nav:
   - Home: index.md
+  - Foundations:
+    - Thinking Relationally: thinking_relationally.md
+    - Purity and Monotonicity: purity.md
   - Getting Started:
     - Project Goals: goals.md
     - Tutorial: tutorial.md

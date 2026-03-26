@@ -1,6 +1,6 @@
 # Predicates & Rules
 
-Predicates are the core building block of Clausal programs. A predicate is a named relation — it describes when something is true. Each predicate is defined by one or more **clauses**: either facts (always true) or rules (true when conditions are met).
+Predicates are the core building block of Clausal programs. A predicate defines a **relation** between its arguments — it describes when something is true. Each predicate is defined by one or more **clauses**: either facts (unconditionally true) or rules (true when certain conditions hold). See [Thinking Relationally](thinking_relationally.md) for a deeper treatment of this idea.
 
 ---
 
@@ -36,19 +36,19 @@ color(green, cool),
 
 Facts define the base data of your program. Think of them as rows in a database table.
 
-Multiple facts for the same predicate are tried in order during search. `color(X, cool)` finds `blue` first, then `green`.
+Multiple facts for the same predicate are logical alternatives. Clausal searches for those that unify with the goal, in source order. `color(X, cool)` unifies with `color(blue, cool)` first, then `color(green, cool)`.
 
 ---
 
 ## Rules
 
-A rule has a **head** (the conclusion) and a **body** (the conditions). The head is true when all goals in the body succeed:
+A rule has a **head** (the conclusion) and a **body** (the conditions). The head holds when all conditions in the body hold:
 
 ```clausal
 warm_color(C) <- color(C, warm)
 ```
 
-Read this as: "C is a warm color if `color(C, warm)` succeeds."
+Read this as: "C is a warm color if `color(C, warm)` holds."
 
 ### Multi-Goal Bodies
 
@@ -62,13 +62,13 @@ friend_of_friend(A, C) <- (
 )
 ```
 
-Goals are tried left-to-right. If any goal fails, the rule fails and Clausal backtracks to try alternatives.
+The conditions in the body must all hold for the head to hold. If a condition does not hold, Clausal explores the remaining clause alternatives.
 
 ---
 
-## Multi-Clause Dispatch
+## Clause Alternatives
 
-A predicate can have multiple clauses — facts and rules mixed freely. Clausal tries them in source order:
+A predicate can have multiple clauses — facts and rules mixed freely. These are logical alternatives; Clausal searches for those whose heads unify with the goal, in source order:
 
 ```clausal
 factorial(0, 1),
@@ -80,11 +80,11 @@ factorial(N, F) <- (
 )
 ```
 
-The first clause matches when N is 0. The second clause handles all other cases. This is **pattern matching by example** — define the specific cases first, then the general case.
+The first clause states that the factorial of 0 is 1. The second clause states the recursive relationship: the factorial of N is F when N is positive, and F is N-1's factorial times N. These clauses are logical alternatives.
 
 ### Guards
 
-Guards are conditions in the rule body that constrain when a clause applies. They act as filters on the pattern match:
+Guards are conditions in the rule body that state when a clause holds:
 
 ```clausal
 classify(N, "positive") <- (N > 0)
@@ -92,11 +92,11 @@ classify(0, "zero"),
 classify(N, "negative") <- (N < 0)
 ```
 
-The guard `N > 0` ensures the first clause only applies to positive numbers. Without it, the clause would match any N.
+The condition `N > 0` ensures the first clause only holds for positive numbers. Without it, the clause head would unify with any N.
 
-### Overlapping Patterns
+### Clause Ordering
 
-When multiple clauses could match, Clausal tries them in order and commits to the first success:
+When multiple clause heads unify with the goal, Clausal explores them in source order:
 
 ```clausal
 maximum(X, Y, X) <- (X >= Y)
@@ -106,7 +106,7 @@ Test("max 3 5") <- (maximum(3, 5, R), R == 5)
 Test("max 7 2") <- (maximum(7, 2, R), R == 7)
 ```
 
-For `maximum(3, 5, R)`: the first clause tries `3 >= 5` which fails, so Clausal tries the second clause which succeeds with `R = 5`.
+For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so Clausal explores the second clause, which holds with `R = 5`.
 
 ---
 
@@ -132,7 +132,7 @@ ancestor(X, Y) <- (
 )
 ```
 
-Now `ancestor("alice", "dave")` succeeds, traversing the chain: alice → bob → carol → dave.
+Now `ancestor("alice", "dave")` holds — the relation connects them through the chain alice → bob → carol → dave.
 
 **Add metadata** — track the generation distance:
 
@@ -153,7 +153,7 @@ This pattern — base case as a fact, recursive case as a rule — is the fundam
 
 ## Recursive Predicates
 
-Recursion is the primary iteration mechanism. The pattern is always: base case + recursive case:
+Recursive predicates define relations over inductively structured data (like lists or natural numbers). The pattern is: a base clause and a recursive clause:
 
 ```clausal
 length([], 0),
@@ -166,7 +166,7 @@ Test("length 0") <- length([], 0)
 Test("length 3") <- (length([1, 2, 3], N), N == 3)
 ```
 
-For list processing, the base case is typically the empty list `[]`, and the recursive case destructures `[HEAD, *TAIL]` (Clausal uses `*` for the tail, like Python).
+For list relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (Clausal uses `*` for the tail, like Python).
 
 ---
 

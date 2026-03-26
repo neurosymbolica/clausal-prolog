@@ -26,7 +26,8 @@ Test("not palindrome") <- (not palindrome([1, 2, 3]))
 [A, B, *REST]          # first two elements + rest
 ```
 
-Head/tail patterns work in clause heads for recursive processing:
+Clause heads can describe list structure using `[HEAD, *TAIL]`, relating the
+whole list to its parts:
 
 ```clausal
 list_sum([], 0),
@@ -42,8 +43,8 @@ list_sum([X, *XS], TOTAL) <- (
 
 ### In/2
 
-`In(Elem, List)` — nondeterministic membership. Enumerates all elements on
-backtracking.
+`In(Elem, List)` — the membership relation. Holds for each element in `List`
+on backtracking.
 
 ```clausal
 Test("member") <- In(2, [1, 2, 3])
@@ -52,8 +53,9 @@ Test("generate") <- (In(X, ["a", "b", "c"]), X == "b")
 
 ### InCheck/2
 
-`InCheck(Elem, List)` — deterministic membership. Succeeds at most once (first
-match only). Use when you only need to test, not enumerate.
+`InCheck(Elem, List)` — deterministic membership. Holds at most once (first
+unifying element only). Use when you need to confirm membership without
+enumerating alternatives.
 
 ```clausal
 Test("check") <- InCheck("b", ["a", "b", "c"])
@@ -65,8 +67,8 @@ Test("check") <- InCheck("b", ["a", "b", "c"])
 
 ### Append/3
 
-`Append(L1, L2, L3)` — `L3` is the concatenation of `L1` and `L2`.
-Multi-mode:
+`Append(L1, L2, L3)` — relates three lists such that `L3` is `L1` followed by
+`L2`. Works in all directions:
 
 ```clausal
 # Concatenate
@@ -106,7 +108,7 @@ Test("zip") <- Zip([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
 
 ### Length/2
 
-`Length(List, N)` — compute the length of a list. Can also generate a list of
+`Length(List, N)` — relates a list to its length. Can also generate a list of
 `N` fresh variables.
 
 ```clausal
@@ -115,7 +117,7 @@ Test("length") <- Length([10, 20, 30], 3)
 
 ### GetItem/3
 
-`GetItem(N, List, Elem)` — 0-based indexing. Can enumerate index/element pairs.
+`GetItem(N, List, Elem)` — relates a 0-based index, a list, and an element.
 
 ```clausal
 Test("get") <- GetItem(1, ["a", "b", "c"], "b")
@@ -184,8 +186,8 @@ Test("msort") <- MergeSort([3, 1, 2, 1], [1, 1, 2, 3])
 
 ### Permutation/2
 
-`Permutation(List, Perm)` — nondeterministic. Generates all permutations on
-backtracking.
+`Permutation(List, Perm)` — the permutation relation. Holds for each
+permutation of `List` on backtracking.
 
 ```clausal
 Test("perm") <- Permutation([1, 2, 3], [3, 1, 2])
@@ -205,8 +207,8 @@ Test("flatten") <- Flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
 
 ### Select/3
 
-`Select(Elem, List, Rest)` — nondeterministic. Pick an element and get the
-remainder.
+`Select(Elem, List, Rest)` — relates an element, a list containing it, and
+the list without it. Holds for each element on backtracking.
 
 ```clausal
 Test("select") <- Select(2, [1, 2, 3], [1, 3])
@@ -343,8 +345,8 @@ window(N, LIST, WINDOW) <- (
 
 - **`Sort` removes duplicates** — use `MergeSort` if you need to keep them.
 - **`GetItem` is 0-based** — unlike Prolog's `nth1` which is 1-based.
-- **`In` backtracks** — if you only need a boolean check, use `InCheck` to
-  avoid unexpected multiple solutions.
+- **`In` yields multiple solutions** — if you only need to confirm membership
+  once, use `InCheck`.
 - **`Flatten` is fully recursive** — `[1, [2, [3]]]` becomes `[1, 2, 3]`, not
   `[1, 2, [3]]`.
 

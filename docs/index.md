@@ -108,6 +108,10 @@ for the full feature set.
 
 | Section | What you'll find |
 |---|---|
+| **Foundations** | |
+| [Thinking Relationally](thinking_relationally.md) | The most important idea: predicates as relations, not functions |
+| [Purity and Monotonicity](purity.md) | Why pure code has better properties and how to write it |
+| **Getting Started** | |
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
