@@ -382,7 +382,7 @@ def _build_star_list(before, star, after):
                     all(isinstance(e, str) and len(e) == 1 for e in a)):
                 return "".join(b) + walked + "".join(a)
             return b + list(walked) + a
-        # non-ground SegString — wrap into a new SegString
+        # non-ground SegString — wrap into a new SegString or SegList
         b = list(before)
         a = list(after)
         if (all(isinstance(e, str) and len(e) == 1 for e in b) and
@@ -396,7 +396,18 @@ def _build_star_list(before, star, after):
             if suffix:
                 new_segs.append(suffix)
             return SegString(new_segs)
-        # Mixed — fall through to SegList
+        # Mixed types — convert SegString segments to SegList segments
+        segs = []
+        if b:
+            segs.append(ConcreteSeg(b))
+        for seg in walked.segments:
+            if isinstance(seg, str):
+                segs.append(ConcreteSeg(list(seg)))
+            else:  # VarSeg
+                segs.append(seg)
+        if a:
+            segs.append(ConcreteSeg(a))
+        return SegList(segs)
     # star is an unbound Var — build a SegList
     segs = []
     if before:

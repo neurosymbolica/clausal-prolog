@@ -545,12 +545,13 @@ class SegString:
                 return True
             return False
         if isinstance(other, list):
-            # Convert to SegList and unify
+            # Ground SegString → str, then let C-level str↔list unification
+            # (Phase 1) handle the comparison.
             walked = self.__walk__()
             if isinstance(walked, str):
-                return walked == list(other) if all(
-                    isinstance(e, str) and len(e) == 1 for e in other
-                ) and len(other) == len(walked) else NotImplemented
+                from .logic.variables import unify as _unify
+                return _unify(walked, other, trail)
+            # Non-ground: can't unify SegString with list directly
             return NotImplemented
         if isinstance(other, (SegString, SegList)):
             return NotImplemented

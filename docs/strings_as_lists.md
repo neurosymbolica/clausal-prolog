@@ -46,7 +46,8 @@ Test("empty") <- "" == []
 
 ## Pattern Matching
 
-Multi-star list patterns work on strings:
+Multi-star list patterns work on strings. Star variables bind to
+**substrings** (not character lists), preserving the `str` type:
 
 ```clausal
 # skip
@@ -54,13 +55,14 @@ starts_with([*Prefix, *_], Prefix)
 ends_with([*_, *Suffix], Suffix)
 contains([*_, X, *_], X)
 
-Test("prefix") <- starts_with("hello", ['h', 'e', 'l'])
-Test("suffix") <- ends_with("hello", ['l', 'o'])
+Test("prefix") <- starts_with("hello", "hel")
+Test("suffix") <- ends_with("hello", "lo")
 Test("contains l") <- contains("hello", 'l')
 ```
 
 This is the same pattern syntax used for lists — no special string patterns
-needed.
+needed. When matching a string, `*Prefix` binds to a substring; when matching
+a list, it binds to a sublist.
 
 ---
 
@@ -207,19 +209,24 @@ Clausal keeps Python `str` as the internal representation of strings. This
 preserves performance (string comparison, hashing, and concatenation are fast)
 and Python interoperability (strings passed to Python functions remain `str`).
 
-The logic layer adds string-as-list behaviour in three places:
+The logic layer adds string-as-list behaviour in four places:
 
 1. **Unification:** When a string meets a list, the string is treated as a list
    of its characters. `"abc"` unifies with `['a', 'b', 'c']` element-wise.
    String-vs-string remains fast equality.
 
-2. **Pattern matching:** SegList (the data structure behind multi-star patterns)
-   accepts strings as match targets. `[*A, 'l', *B]` can match against
-   `"hello"`.
+2. **Pattern matching:** Multi-star patterns (`[*A, 'l', *B]`) accept strings
+   as match targets. Star variables bind to **substrings** (e.g. `A = "he"`,
+   `B = "lo"`), preserving the `str` type throughout — no character-list
+   conversion happens.
 
 3. **Builtins:** List predicates accept strings wherever they accept lists. When
    the result should be a string (all inputs were strings, result is a char
    sequence), a string is returned.
+
+4. **Head patterns:** Compiled clause head patterns like `[H, *T]` work on
+   strings. `H` binds to a single character, `T` binds to the remaining
+   substring (`str`, not a list).
 
 This is a Liskov-style subtyping approach: a string can be used anywhere a list
 of characters is expected, with no loss of functionality.
@@ -243,7 +250,7 @@ Python's native strings.
 | String representation | List of character atoms | Python `str` |
 | `append/3` on strings | Works (strings are lists) | Works (strings behave as lists) |
 | DCGs on strings | Works | Works |
-| Pattern matching | Works | Works (via SegList) |
+| Pattern matching | Works | Works — star vars bind to substrings |
 | Performance | O(n) cons cells | O(1) Python str operations |
 | Python interop | Requires conversion | Native `str` |
 

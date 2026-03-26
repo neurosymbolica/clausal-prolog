@@ -146,6 +146,24 @@ class TestSegStringUnification:
         assert unify("hello", ss, trail)
         assert deref(X) == "lo"
 
+    def test_segstring_vs_char_list(self):
+        """Ground SegString unifies with a character list via C str↔list."""
+        trail = Trail()
+        ss = SegString(["hello"])
+        assert unify(ss, ['h', 'e', 'l', 'l', 'o'], trail)
+
+    def test_segstring_vs_char_list_with_var(self):
+        """SegString with bound VarSeg unifies with char list."""
+        trail = Trail()
+        X = Var()
+        unify(X, "lo", trail)
+        ss = SegString(["hel", VarSeg(X)])
+        assert unify(ss, ['h', 'e', 'l', 'l', 'o'], trail)
+
+    def test_segstring_vs_wrong_list_fails(self):
+        """SegString 'hello' does NOT unify with [1, 2, 3]."""
+        assert not unify(SegString(["hello"]), [1, 2, 3], Trail())
+
 
 class TestSegStringOccursCheck:
     """SegString __occurs_check__."""
@@ -338,6 +356,35 @@ class TestBuildStarListString:
         result = _build_star_list([1], X, [4])
         assert result == [1, 2, 3, 4]
         assert isinstance(result, list)
+
+    def test_star_ground_segstring_mixed(self):
+        """Ground SegString with mixed before/after returns a list."""
+        from clausal.logic.compiler import _build_star_list
+        trail = Trail()
+        X = Var()
+        ss = SegString(["ello"])
+        unify(X, ss, trail)
+        # before has int, not single-char str → mixed types
+        result = _build_star_list([1], X, [2])
+        assert result == [1, 'e', 'l', 'l', 'o', 2]
+        assert isinstance(result, list)
+
+    def test_star_nonground_segstring_mixed(self):
+        """Non-ground SegString with mixed before/after returns a SegList."""
+        from clausal.logic.compiler import _build_star_list
+        Y = Var()
+        ss = SegString([VarSeg(Y), "orld"])
+        # before has int → mixed types, so can't return SegString
+        result = _build_star_list([1], ss, [2])
+        assert isinstance(result, SegList)
+
+    def test_star_nonground_segstring_all_str(self):
+        """Non-ground SegString with all-str before/after returns a SegString."""
+        from clausal.logic.compiler import _build_star_list
+        Y = Var()
+        ss = SegString([VarSeg(Y), "orld"])
+        result = _build_star_list(["h"], ss, ["!"])
+        assert isinstance(result, SegString)
 
 
 class TestBuildMultiStarListString:
