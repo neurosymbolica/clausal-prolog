@@ -1155,6 +1155,103 @@ Phase 5:
 - [ ] `MapList(Goal, "abc")` works
 - [ ] `Filter(Goal, "abc", Result)` works
 
+Phase 5b (compiler):
+- [x] `_head_list_unify_input` accepts `(list, str)` — runtime destructuring
+- [x] `_build_list_dispatch_guard` emits `isinstance(_, (list, str))` — AST dispatch
+- [x] `_compile_multi_star_guard` emits `isinstance(_, (list, str))` — multi-star AST
+- [x] `HeadTail("abc", H, T)` succeeds with `H='a', T='bc'`
+- [x] Recursive predicates (Length, Last) work on strings
+- [x] String type preserved through recursion (tail stays `str`)
+
 Phase 6:
 - [ ] Documentation updated
 - [ ] String predicates documented as aliases
+
+
+---
+
+## Phase 5b: Compiler Head Pattern Guards (Post-Hoc Discovery)
+
+### Problem
+
+Phases 1–5 made the runtime (builtins, DCGs, unification) accept strings as character
+sequences, but the **compiler** generates code for clause head patterns that only accepted
+`list`. A user-defined predicate like:
+
+```clausal
+HeadTail([H, *T], H, T)
+```
+
+would silently fail when called with `HeadTail("hello", H, T)` because the compiled guard
+rejected the string before `_head_list_unify_input` was ever called.
+
+### Root Cause
+
+Three sites in the compiler emit `isinstance(_, list)` checks that exclude strings:
+
+| Site | Function | What it does |
+|------|----------|-------------|
+| `compiler.py:4715` | `_build_list_dispatch_guard()` | Structural dispatch: routes list args to nil/cons branches |
+| `compiler.py:6557` | `_compile_multi_star_guard()` | Multi-star pattern guard: `[*A, x, *B]` |
+| `compiler.py:209` | `_head_list_unify_input()` | Runtime function that destructures `[H, *T]` patterns |
+
+### Why It Wasn't Caught Earlier
+
+The runtime builtins (Append, In, etc.) call their own Python functions which we already
+updated. The compiler path is separate — it generates Python AST/bytecode that calls
+`_head_list_unify_input` guarded by `isinstance` checks. Tests for Phases 1–5 exercised
+builtins but not user-defined predicates with list heads.
+
+### Fix
+
+1. **`_head_list_unify_input`** (line 209): Changed `isinstance(d, list)` to
+   `isinstance(d, (list, str))`. The function's indexing (`d[i]`) and slicing
+   (`d[n_before:star_end]`) already work identically on strings.
+
+2. **`_build_list_dispatch_guard`** (line 4715): Changed AST generation from
+   `_name("list")` to `ast.Tuple(elts=[_name("list"), _name("str")])`.
+
+3. **`_compile_multi_star_guard`** (line 6557): Same AST change.
+
+### Key Insight: String Type Preservation
+
+When `_head_list_unify_input` destructures a string, Python slicing preserves the `str` type:
+- `"hello"[0]` → `"h"` (single-char string)
+- `"hello"[1:]` → `"ello"` (string, not list)
+
+This means `[H, *T]` on `"hello"` gives `H='h'`, `T='ello'`. The tail `T` remains a string,
+so recursive predicates like:
+
+```clausal
+Length([], 0)
+Length([_, *T], N) <- (Length(T, N1), N := N1 + 1)
+```
+
+work naturally on strings. Each recursive call gets a shorter string — `"hello"` → `"ello"` →
+`"llo"` → ... → `""` — and `""` is falsy in Python (like `[]`), so the nil base case matches.
+
+This is actually **better** than Phase 2's SegList approach, which converts strings to char
+lists. The compiler path preserves string identity throughout recursion with zero conversion
+overhead.
+
+### Consistency Notes
+
+| Operation | Input | Result type |
+|-----------|-------|-------------|
+| `[H, *T]` head pattern | `"hello"` | `H='h'` (str), `T='ello'` (str) |
+| `[H, *T]` head pattern | `['h','e','l','l','o']` | `H='h'` (str), `T=['e','l','l','o']` (list) |
+| `SegList([VarSeg(A)])` unify | `"hello"` | `A=['h','e','l','l','o']` (list) |
+| `Append(X, Y, "hello")` | `"hello"` | `X='he'` (str), `Y='llo'` (str) |
+
+The SegList path (Phase 2) converts to char list; the compiler path (this phase) preserves
+strings. This is an asymmetry. The SegList path is used for body-position patterns and
+runtime unification; the compiler path is used for head patterns. Both are correct; the
+compiler path is more efficient for strings.
+
+### Existing Test Updates
+
+- `test_deep_indexing.py`: Updated `_has_isinstance_check` and `_count_isinstance_checks`
+  to recognise `isinstance(_, (list, str))` tuple form alongside `isinstance(_, list)`.
+- `test_list_edge_cases.py`: Changed `test_is_list_string_fails` to
+  `test_is_list_string_succeeds` — user-defined `IsList([*_])` now matches strings
+  (correct: strings match list patterns).
