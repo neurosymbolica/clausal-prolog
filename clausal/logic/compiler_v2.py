@@ -338,8 +338,12 @@ def _process_declarations(module_items: list, module_dict: dict) -> None:
             exports = item.exports if isinstance(item, ModuleDeclItem) else item.items
             for entry in exports:
                 if isinstance(entry, str):
-                    # Atom: assign string to module dict.
-                    module_dict.setdefault(entry, entry)
+                    # Atom: create zero-arity PredicateMeta class.
+                    if entry not in module_dict or not isinstance(
+                        module_dict.get(entry), PredicateMeta
+                    ):
+                        cls = make_predicate(entry, [])
+                        module_dict[entry] = cls
                 elif isinstance(entry, tuple):
                     functor_name, field_names = entry
                     if functor_name not in module_dict or not isinstance(

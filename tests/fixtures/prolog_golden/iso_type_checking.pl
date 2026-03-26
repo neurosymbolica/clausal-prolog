@@ -33,19 +33,37 @@ test("nonvar: bound var succeeds") :-
 test("nonvar: list succeeds") :-
     nonvar([1, 2]).
 
-test("atom: string succeeds") :-
-    atom(hello).
+test("atom: declared atom succeeds") :-
+    is_atom(hello).
 
-test("atom: empty string succeeds") :-
-    atom("").
+test("atom: declared atom Abc") :-
+    is_atom(abc).
+
+test("atom: string fails") :-
+    \+ is_atom("hello").
 
 test("atom: integer fails") :-
-    \+ atom(1).
+    \+ is_atom(1).
 
 test("atom: unbound var fails") :-
+    \+ is_atom(X).
+
+test("str: plain string succeeds") :-
+    atom("hello").
+
+test("str: empty string succeeds") :-
+    atom("").
+
+test("str: declared atom fails") :-
+    \+ atom(hello).
+
+test("str: integer fails") :-
+    \+ atom(1).
+
+test("str: unbound var fails") :-
     \+ atom(X).
 
-test("atom: list fails") :-
+test("str: list fails") :-
     \+ atom([]).
 
 test("integer: positive") :-
@@ -75,17 +93,17 @@ test("number: string fails") :-
 test("number: var fails") :-
     \+ number(X).
 
-test("string: str succeeds") :-
-    atom(hello).
+test("callable: declared atom") :-
+    callable(hello).
 
-test("string: empty str") :-
-    atom("").
+test("callable: string") :-
+    callable("hello").
 
-test("string: int fails") :-
-    \+ atom(42).
+test("callable: int fails") :-
+    \+ callable(42).
 
-test("string: var fails") :-
-    \+ atom(X).
+test("callable: var fails") :-
+    \+ callable(X).
 
 test("is_list: list") :-
     is_list([1, 2, 3]).
@@ -108,7 +126,7 @@ test("is_list: var fails") :-
 test("ground: integer") :-
     ground(42).
 
-test("ground: string") :-
+test("ground: declared atom") :-
     ground(abc).
 
 test("ground: ground list") :-

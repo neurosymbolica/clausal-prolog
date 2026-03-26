@@ -20,15 +20,27 @@ Test('nonvar: bound var succeeds') <- (X is 1, NonVar(X))
 
 Test('nonvar: list succeeds') <- (NonVar([1, 2]))
 
-Test('atom: string succeeds') <- (Atom(hello))
+Test('atom: declared atom succeeds') <- (IsAtom(hello))
 
-Test('atom: empty string succeeds') <- (Atom(''))
+Test('atom: declared atom Abc') <- (IsAtom(abc))
 
-Test('atom: integer fails') <- (not Atom(1))
+Test('atom: string fails') <- (not IsAtom('hello'))
 
-Test('atom: unbound var fails') <- (not Atom(X))
+Test('atom: integer fails') <- (not IsAtom(1))
 
-Test('atom: list fails') <- (not Atom([]))
+Test('atom: unbound var fails') <- (not IsAtom(X))
+
+Test('str: plain string succeeds') <- (Atom('hello'))
+
+Test('str: empty string succeeds') <- (Atom(''))
+
+Test('str: declared atom fails') <- (not Atom(hello))
+
+Test('str: integer fails') <- (not Atom(1))
+
+Test('str: unbound var fails') <- (not Atom(X))
+
+Test('str: list fails') <- (not Atom([]))
 
 Test('integer: positive') <- (Integer(1))
 
@@ -48,13 +60,13 @@ Test('number: string fails') <- (not Number('42'))
 
 Test('number: var fails') <- (not Number(X))
 
-Test('string: str succeeds') <- (Atom(hello))
+Test('callable: declared atom') <- (IsCallable(hello))
 
-Test('string: empty str') <- (Atom(''))
+Test('callable: string') <- (IsCallable('hello'))
 
-Test('string: int fails') <- (not Atom(42))
+Test('callable: int fails') <- (not IsCallable(42))
 
-Test('string: var fails') <- (not Atom(X))
+Test('callable: var fails') <- (not IsCallable(X))
 
 Test('is_list: list') <- (IsList([1, 2, 3]))
 
@@ -70,7 +82,7 @@ Test('is_list: var fails') <- (not IsList(X))
 
 Test('ground: integer') <- (IsGround(42))
 
-Test('ground: string') <- (IsGround(abc))
+Test('ground: declared atom') <- (IsGround(abc))
 
 Test('ground: ground list') <- (IsGround([1, 2, 3]))
 

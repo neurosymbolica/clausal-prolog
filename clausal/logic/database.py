@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 
 
 # ── Clause ─────────────────────────────────────────────────────────────────────
@@ -372,6 +372,9 @@ def head_key(head: Any) -> tuple[str, int]:
         return head.functor, len(head)
     if is_term_instance(head):
         return type(head).__name__, len(term_field_names(head))
+    # Zero-arity PredicateMeta class: the class IS the atom
+    if isinstance(head, PredicateMeta) and not head._fields:
+        return head.__name__, 0
     raise TypeError(
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
         "Expected Compound, Call(LoadName(...), ...), or a functor dataclass instance."

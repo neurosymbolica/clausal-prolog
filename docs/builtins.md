@@ -84,7 +84,7 @@ Notation in signature lines:
 | [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
 | [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
-| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1, MustBe/2, CanBe/2 |
+| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsAtom/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1, MustBe/2, CanBe/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | IsDict/1, DictGet/3, DictPut/4, DictMerge/3, GenDict/3, SubDict/2, IsSet/1, SetUnion/3, SetSubset/2, GenSet/2 |
 | [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3, Sign/2, Gcd/3, DivMod/4, Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2 |
 | [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3, Numlist/2,3, SameLength/2, Transpose/2 |
@@ -1038,12 +1038,25 @@ Succeeds if `X` is bound (not an unbound `Var`).
 
 ---
 
+### `IsAtom/1`
+```clausal
+# skip
+IsAtom(+X)
+```
+Succeeds if `X` is a declared atom (a zero-arity PredicateMeta class).
+Atoms are created by `-private([red, blue])` or `-module(m, [red])` directives,
+or dynamically via `make_atom("name")`. Does not match plain strings — use
+`IsStr/1` for those.
+
+---
+
 ### `IsStr/1`
 ```clausal
 # skip
 IsStr(+X)
 ```
-Succeeds if `X` is a Python `str` (the atom equivalent).
+Succeeds if `X` is a Python `str`. Does not match declared atoms (use
+`IsAtom/1` for those).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:877`

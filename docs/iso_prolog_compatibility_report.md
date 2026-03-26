@@ -13,7 +13,7 @@ Clausal is:
 1. **Cut and if-then-else are out of scope** — programs using them must be
    rewritten. Clausal will not add cut or any surrogate.
 2. **Strings are lists of characters** — matching ISO/Scryer semantics.
-3. **Atoms are a distinct type** — not Python `str`. A new `Atom` type is needed.
+3. **Atoms are a distinct type** — declared atoms are zero-field PredicateMeta classes (implemented).
 4. **Prolog modules imported via `use_module`** — translated through the Prolog
    translation layer. `import_from`/`import_module` remain for Python/Clausal modules.
 5. **Operators and arithmetic** — handled entirely in the translation layer.
@@ -101,66 +101,69 @@ The translation layer should:
 
 ### Interaction with Atom Type
 
-Single characters in character lists are single-character atoms (see Issue 3).
-`atom_chars("hello", Cs)` produces a list of `Atom` values, not Python strings.
+Single characters in character lists are single-character strings.
+`atom_chars("hello", Cs)` produces a list of single-character Python strings.
 
 ---
 
 ## Issue 3: Atoms Are a Distinct Type
 
-### Decision: Introduce an `Atom` Type
+### Decision: Zero-Field PredicateMeta Classes (Implemented)
 
-Atoms should not be Python `str`. They are a distinct logical type representing
-interned symbols. Markus doesn't like atoms much in general, but for ISO
-compatibility the type distinction matters.
+Declared atoms (`-private([red, blue])` or `-module(m, [red, blue])`) are
+now zero-field PredicateMeta classes. The class IS the atom value —
+`red() is red` holds. No separate `Atom` type is needed.
 
 ### Rationale
 
 - `atom/1` type checking must distinguish atoms from strings and other types
 - Functor names are atoms; they should not be conflated with string data
-- `[]` is an atom in ISO Prolog (the empty list atom) — this is a distinct
-  concept from Python's `[]` (an empty list)
-- Prolog programs test `atom(X)` to mean "X is a symbolic constant", not
-  "X is a sequence of characters"
+- Zero-arity predicates and atoms sit on the same continuum (zero fields
+  vs N fields) — no new type needed
+- Classes have identity (`is` works), are hashable, callable, and support
+  module scoping naturally
 
 ### Design
 
+Atoms declared in `-private` or `-module` directives become zero-field
+PredicateMeta classes:
+
 ```python
-class Atom(str):
-    """
-    ISO Prolog atom — an interned symbolic constant.
+class red(metaclass=PredicateMeta):
+    _fields = ()
 
-    Inherits from str for ease of use in Python (printing, comparison,
-    hashing) but is a distinct type for type-checking builtins.
-    """
-    __slots__ = ()
-
-    def __repr__(self):
-        return f"Atom({super().__repr__()})"
+red() is red        # True — __call__ returns cls for zero-arity
+hash(red)           # Works — type.__hash__
+red is not blue     # True — different classes
 ```
 
-Subclassing `str` means atoms work naturally in Python code (comparison,
-hashing, f-strings, dict keys) while being distinguishable via `isinstance`.
+Undeclared atoms (strings, enum members, any Python object) continue to
+work in unification as atomic data without any wrapping.
 
 ### Type Checking Builtins
 
 | Builtin | Tests for |
 |---------|-----------|
-| `IsAtom/1` | `isinstance(x, Atom)` |
-| `IsStr/1` | `isinstance(x, str) and not isinstance(x, Atom)` |
-| `IsAtomic/1` | `Atom`, `int`, `float`, or `[]` |
+| `IsAtom/1` | Zero-arity PredicateMeta class |
+| `IsStr/1` | `isinstance(x, str)` (excludes declared atoms) |
+| `IsCallable/1` | `str`, `Compound`, `KWTerm`, term instances, or declared atoms |
 
-### Translation Layer
+### String Builtins
 
-- Prolog atoms (`foo`, `'hello world'`) → `Atom("foo")`, `Atom("hello world")`
-- Prolog double-quoted strings (`"hello"`) → character list `[Atom('h'), ...]`
-- Functor names in compounds are `Atom` values
+`AtomChars/2`, `AtomCodes/2`, `AtomLength/2`, `UpcaseAtom/2`,
+`DowncaseAtom/2`, `AtomConcat/3`, and `SubAtom/5` all accept both
+plain strings and declared atoms (extracting `__name__` for the latter).
+Results of string operations are plain strings (undeclared atoms).
 
-### Migration
+### API
 
-Existing Clausal code that uses plain `str` for atom-like values continues
-to work — `Atom` is a subclass of `str`. The `Atom` type is primarily for
-the Prolog translation layer and ISO conformity.
+```python
+from clausal.logic.predicate import make_atom, is_atom
+
+red = make_atom("red")     # Create a declared atom dynamically
+is_atom(red)               # True
+red() is red               # True
+```
 
 ---
 
@@ -413,7 +416,7 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 | Cut | **Reject** | **Done** | `PrologTranslationError` with suggested alternatives |
 | If-then-else | **Reject** | **Done** | `PrologTranslationError` with suggested alternatives |
 | Strings | **Char lists** | Medium | `"abc"` → `[Atom('a'), Atom('b'), Atom('c')]` |
-| Atoms | **New type** | Medium | `class Atom(str)` — distinct from `str` |
+| Atoms | **Done** | — | Declared atoms are zero-field PredicateMeta classes |
 | Module system | **`use_module`** | Medium | Prolog modules via translation; Python via `import_from` |
 | Operators | **Translation layer** | None | Already handled |
 | Arithmetic | **Translation layer** | None | Already handled |
@@ -427,14 +430,14 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 
 ## Implementation Phases
 
-### Phase 1: `Atom` Type + String-as-Char-List
+### Phase 1: Declared Atoms as Zero-Field PredicateMeta (Done)
 
-1. Add `class Atom(str)` to `clausal/terms.py`
-2. Update `IsAtom/1` type check to use `isinstance(x, Atom)`
-3. Update `IsStr/1` to exclude `Atom` instances
-4. Update `atom_chars/2`, `atom_codes/2` etc. to produce/consume `Atom` values
-5. Update translator to emit `Atom(...)` for Prolog atoms
-6. Update translator to emit character lists for Prolog `"strings"`
+1. `PredicateMeta.__call__` returns `cls` for zero-arity (atoms)
+2. `-private`/`-module` bare atoms generate zero-field PredicateMeta classes
+3. `IsAtom/1` checks for zero-arity PredicateMeta
+4. `IsStr/1` unchanged (tests `isinstance(x, str)`)
+5. String builtins accept both strings and declared atoms via `_atom_to_str`
+6. `make_atom()` and `is_atom()` helpers added to `clausal.logic.predicate`
 
 ### Phase 2: `use_module` Directive
 

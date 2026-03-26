@@ -45,9 +45,22 @@ Test("unbound") <- (not IsBound(X))
 
 ## Atomic Type Tests
 
+### IsAtom/1
+
+`IsAtom(X)` — succeeds if `X` is a declared atom (a zero-arity PredicateMeta
+class). Atoms are created by `-private([red])` or `-module(m, [red])` directives.
+
+```clausal
+-private([red, blue])
+
+Test("declared atom") <- IsAtom(red)
+Test("string is not atom") <- (not IsAtom("hello"))
+Test("int is not atom") <- (not IsAtom(42))
+```
+
 ### IsStr/1
 
-`IsStr(X)` — succeeds if `X` is a string (atom in Prolog terms).
+`IsStr(X)` — succeeds if `X` is a Python string. Does not match declared atoms.
 
 ```clausal
 Test("str") <- IsStr("hello")
@@ -102,11 +115,14 @@ Test("compound") <- IsCompound(point(1, 2, 3))
 
 ### IsCallable/1
 
-`IsCallable(X)` — succeeds if `X` is an atom (string) or a compound term.
-In Prolog terms, something that could appear as a goal.
+`IsCallable(X)` — succeeds if `X` is an atom (declared or string) or a
+compound term. In Prolog terms, something that could appear as a goal.
 
 ```clausal
-Test("atom") <- IsCallable("hello")
+-private([red])
+
+Test("declared atom") <- IsCallable(red)
+Test("string") <- IsCallable("hello")
 Test("not int") <- (not IsCallable(42))
 ```
 

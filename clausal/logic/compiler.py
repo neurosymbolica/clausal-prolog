@@ -1416,6 +1416,11 @@ def term_to_ast_expr(
             keywords=kw_exprs,
         )
 
+    # Zero-arity PredicateMeta class: the class IS the atom value.
+    # Emit a bare Name reference so the compiled code loads the class directly.
+    if isinstance(term, PredicateMeta) and not term._fields:
+        return _name(term.__name__)
+
     if is_term_instance(term):
         cls_name = type(term).__name__
         return ast.Call(

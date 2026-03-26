@@ -86,9 +86,9 @@ class TestTermConstruction:
         assert t.n is None
         assert t.f == 5
 
-    def test_zero_arity(self):
-        t = atom()
-        assert isinstance(t, atom)
+    def test_zero_arity_returns_class(self):
+        """Zero-arity __call__ returns the class itself — class IS the atom."""
+        assert atom() is atom
 
 
 # ── __eq__ and __repr__ ──────────────────────────────────────────────────────
@@ -109,7 +109,8 @@ class TestEqRepr:
         assert repr(t) == "fib(n=1, f=2)"
 
     def test_repr_zero_arity(self):
-        assert repr(atom()) == "atom()"
+        # atom() is atom (the class), so repr is the class name
+        assert repr(atom()) == "atom"
 
 
 # ── __match_args__ ────────────────────────────────────────────────────────────
@@ -371,11 +372,112 @@ class TestTermHelpers:
         assert fib._fields == ("n", "f")
 
     def test_zero_arity_fields(self):
-        from clausal.logic.predicate import term_field_names
-        assert term_field_names(atom()) == ()
+        # atom() is atom (the class); use _fields directly
+        assert atom._fields == ()
+        assert atom()._fields == ()  # same object
 
     def test_not_dataclass(self):
         """PredicateMeta classes should NOT pass dataclasses.is_dataclass."""
         import dataclasses
         assert not dataclasses.is_dataclass(fib)
         assert not dataclasses.is_dataclass(fib(n=1, f=2))
+
+
+# ── Atom identity (zero-arity) ───────────────────────────────────────────────
+
+
+class red(metaclass=PredicateMeta):
+    _fields = ()
+
+
+class blue(metaclass=PredicateMeta):
+    _fields = ()
+
+
+class TestAtomIdentity:
+    def test_call_returns_class(self):
+        assert red() is red
+
+    def test_different_atoms_not_identical(self):
+        assert red is not blue
+
+    def test_atom_is_hashable(self):
+        assert hash(red) == hash(red())
+        assert {red: 1}[red()] == 1
+
+    def test_atom_in_set(self):
+        s = {red, blue}
+        assert red() in s
+        assert blue() in s
+
+    def test_unify_same_atom(self):
+        from clausal.logic.variables import Trail, unify
+        trail = Trail()
+        assert unify(red, red, trail)
+
+    def test_unify_different_atoms_fails(self):
+        from clausal.logic.variables import Trail, unify
+        trail = Trail()
+        assert not unify(red, blue, trail)
+
+    def test_unify_var_with_atom(self):
+        from clausal.logic.variables import Trail, unify, deref
+        trail = Trail()
+        x = Var()
+        assert unify(x, red, trail)
+        assert deref(x) is red
+
+    def test_is_atom_helper(self):
+        from clausal.logic.predicate import is_atom
+        assert is_atom(red)
+        assert is_atom(blue)
+        assert not is_atom(fib)   # has fields
+        assert not is_atom("str")
+        assert not is_atom(42)
+
+    def test_non_zero_arity_unchanged(self):
+        """Predicates with fields still create instances as before."""
+        t = fib(n=1, f=2)
+        assert t is not fib
+        assert isinstance(t, fib)
+        assert t.n == 1
+
+
+# ── make_atom ─────────────────────────────────────────────────────────────────
+
+
+class TestMakeAtom:
+    def test_returns_predicate_meta(self):
+        from clausal.logic.predicate import make_atom
+        a = make_atom("a")
+        assert isinstance(a, PredicateMeta)
+        assert a._fields == ()
+        assert a._arity == 0
+
+    def test_call_returns_self(self):
+        from clausal.logic.predicate import make_atom
+        a = make_atom("a")
+        assert a() is a
+
+    def test_different_calls_different_identity(self):
+        from clausal.logic.predicate import make_atom
+        a1 = make_atom("a")
+        a2 = make_atom("a")
+        assert a1 is not a2
+
+    def test_hashable(self):
+        from clausal.logic.predicate import make_atom
+        a = make_atom("a")
+        d = {a: 42}
+        assert d[a()] == 42
+
+    def test_unify(self):
+        from clausal.logic.predicate import make_atom
+        from clausal.logic.variables import Trail, unify, deref
+        a = make_atom("a")
+        b = make_atom("b")
+        trail = Trail()
+        x = Var()
+        assert unify(x, a, trail)
+        assert deref(x) is a
+        assert not unify(a, b, trail)

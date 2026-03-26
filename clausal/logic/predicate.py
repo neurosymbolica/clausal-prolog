@@ -106,7 +106,11 @@ class PredicateMeta(type):
         cls.__eq__ = _make_eq(fields)
         cls.__repr__ = _make_repr(fields)
         cls.__hash__ = None  # mutable terms shouldn't be hashable
-        cls.__unify__ = _make_unify(fields)
+        if fields:
+            cls.__unify__ = _make_unify(fields)
+        # For zero-field classes (atoms), skip __unify__: the class IS the
+        # value, so identity comparison (C line 886: t1 == t2) and the
+        # fallback PyObject_RichCompareBool handle unification correctly.
 
         return cls
 
@@ -124,10 +128,16 @@ class PredicateMeta(type):
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
         """Create a term instance, filling missing fields with fresh Var().
 
+        For zero-arity predicates (atoms), returns the class itself —
+        the class IS the atom value.  ``red() is red`` holds.
+
         - Positional args are mapped to fields in order.
         - Keyword args: any field not provided gets a fresh Var().
         - If no args at all, all fields get Var() (fully unbound term).
         """
+        if not cls._fields and not args and not kwargs:
+            return cls
+
         fields = cls._fields
 
         if args:
@@ -224,6 +234,8 @@ class PredicateMeta(type):
         cls._locked = False
 
     def __repr__(cls) -> str:
+        if not cls._fields:
+            return cls.__name__
         compiled = "compiled" if cls._dispatch_fn is not None else "uncompiled"
         n = len(cls._clauses)
         locked = ", locked" if cls._locked else ""
@@ -245,6 +257,11 @@ def is_term_instance(obj: Any) -> bool:
     if isinstance(type(obj), PredicateMeta):
         return True
     return dataclasses.is_dataclass(obj)
+
+
+def is_atom(obj: Any) -> bool:
+    """True if obj is a zero-arity PredicateMeta class (a declared atom)."""
+    return isinstance(obj, PredicateMeta) and not obj._fields
 
 
 def term_field_names(obj: Any) -> tuple[str, ...]:
@@ -274,4 +291,16 @@ def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
     return PredicateMeta(name, (), {"_fields": tuple(fields)})
 
 
-__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "term_field_names", "make_predicate"]
+def make_atom(name: str) -> "PredicateMeta":
+    """Create a zero-arity PredicateMeta atom.
+
+    The returned class IS the atom value: ``a = make_atom("a"); a() is a``.
+    Each call creates a NEW class — call once and reuse the result.
+
+    Equivalent to ``make_predicate(name, [])``.
+    """
+    return make_predicate(name, [])
+
+
+__all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
+           "term_field_names", "make_predicate", "make_atom"]

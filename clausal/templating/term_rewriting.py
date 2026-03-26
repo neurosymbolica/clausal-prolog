@@ -2423,18 +2423,14 @@ class EmbedTransformer(NodeTransformer):
         if len(args) >= 2 and isinstance(args[1], List):
             for export in args[1].elts:
                 if isinstance(export, Name):
-                    # Bare atom: generate ``name = "name"``
+                    # Bare atom: generate zero-arity PredicateMeta class
                     transformer._atoms.add(export.id)
                     exports_info.append(export.id)
-                    statements.append(
-                        replace(
-                            Assign(
-                                targets=[replace(Name(id=export.id, ctx=Store()), export)],
-                                value=replace(Constant(value=export.id), export),
-                            ),
-                            expr_stmt,
+                    if export.id not in transformer._seen_functors:
+                        transformer._seen_functors[export.id] = []
+                        statements.append(
+                            _make_functor_class_ast(export.id, [], expr_stmt)
                         )
-                    )
                 elif isinstance(export, Call) and isinstance(export.func, Name):
                     functor_name = export.func.id
                     # Use raw Name ids as field names (not lowercased) so they
@@ -2476,18 +2472,14 @@ class EmbedTransformer(NodeTransformer):
             return replace(Pass(), expr_stmt)
         for item in export_list.elts:
             if isinstance(item, Name):
-                # Bare atom: generate ``name = "name"``
+                # Bare atom: generate zero-arity PredicateMeta class
                 transformer._atoms.add(item.id)
                 private_info.append(item.id)
-                statements.append(
-                    replace(
-                        Assign(
-                            targets=[replace(Name(id=item.id, ctx=Store()), item)],
-                            value=replace(Constant(value=item.id), item),
-                        ),
-                        expr_stmt,
+                if item.id not in transformer._seen_functors:
+                    transformer._seen_functors[item.id] = []
+                    statements.append(
+                        _make_functor_class_ast(item.id, [], expr_stmt)
                     )
-                )
             elif isinstance(item, Call) and isinstance(item.func, Name):
                 functor_name = item.func.id
                 field_names = [

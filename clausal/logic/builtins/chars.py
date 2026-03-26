@@ -17,9 +17,25 @@ conversion (UpcaseAtom/2, DowncaseAtom/2).
 
 from __future__ import annotations
 
+from typing import Any
+
 from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
+
+
+def _atom_to_str(val: Any) -> str | None:
+    """Extract a string name from an atom value.
+
+    Returns the string for str atoms, __name__ for zero-arity PredicateMeta
+    classes, or None if val is not an atom.
+    """
+    if isinstance(val, str):
+        return val
+    if isinstance(val, PredicateMeta) and not val._fields:
+        return val.__name__
+    return None
 
 
 # ── CharType/2 ───────────────────────────────────────────────────────────────
@@ -140,10 +156,11 @@ def _upcase_atom__2(atom, upper, trail, k):
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("upcase_atom/2"))
-    if not isinstance(va, str):
+    atom_str = _atom_to_str(va)
+    if atom_str is None:
         raise LogicException(type_error("atom", va, "upcase_atom/2"))
     mark = trail.mark()
-    if unify(upper, va.upper(), trail):
+    if unify(upper, atom_str.upper(), trail):
         yield None
     trail.undo(mark)
 
@@ -154,10 +171,11 @@ def _downcase_atom__2(atom, lower, trail, k):
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("downcase_atom/2"))
-    if not isinstance(va, str):
+    atom_str = _atom_to_str(va)
+    if atom_str is None:
         raise LogicException(type_error("atom", va, "downcase_atom/2"))
     mark = trail.mark()
-    if unify(lower, va.lower(), trail):
+    if unify(lower, atom_str.lower(), trail):
         yield None
     trail.undo(mark)
 
@@ -174,10 +192,11 @@ def _atom_length__2(atom, length, trail, k):
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("atom_length/2"))
-    if not isinstance(va, str):
+    atom_str = _atom_to_str(va)
+    if atom_str is None:
         raise LogicException(type_error("atom", va, "atom_length/2"))
     mark = trail.mark()
-    if unify(length, len(va), trail):
+    if unify(length, len(atom_str), trail):
         yield None
     trail.undo(mark)
 
@@ -198,10 +217,11 @@ def _atom_chars__2(atom, chars, trail, k):
     c_bound = not is_var(vc)
 
     if a_bound:
-        if not isinstance(va, str):
+        atom_str = _atom_to_str(va)
+        if atom_str is None:
             raise LogicException(type_error("atom", va, "atom_chars/2"))
         mark = trail.mark()
-        if unify(chars, list(va), trail):
+        if unify(chars, list(atom_str), trail):
             yield None
         trail.undo(mark)
     elif c_bound:
@@ -239,10 +259,11 @@ def _atom_codes__2(atom, codes, trail, k):
     c_bound = not is_var(vc)
 
     if a_bound:
-        if not isinstance(va, str):
+        atom_str = _atom_to_str(va)
+        if atom_str is None:
             raise LogicException(type_error("atom", va, "atom_codes/2"))
         mark = trail.mark()
-        if unify(codes, [ord(c) for c in va], trail):
+        if unify(codes, [ord(c) for c in atom_str], trail):
             yield None
         trail.undo(mark)
     elif c_bound:
@@ -279,35 +300,38 @@ def _atom_concat__3(a, b, c, trail, k):
     (Append may return a list when inputs are mixed).
     """
     va, vb, vc = deref(a), deref(b), deref(c)
-    a_bound = not is_var(va) and isinstance(va, str)
-    b_bound = not is_var(vb) and isinstance(vb, str)
-    c_bound = not is_var(vc) and isinstance(vc, str)
+    sa = _atom_to_str(va) if not is_var(va) else None
+    sb = _atom_to_str(vb) if not is_var(vb) else None
+    sc = _atom_to_str(vc) if not is_var(vc) else None
+    a_bound = sa is not None
+    b_bound = sb is not None
+    c_bound = sc is not None
 
     if a_bound and b_bound:
         # Forward: A + B → C
         mark = trail.mark()
-        if unify(c, va + vb, trail):
+        if unify(c, sa + sb, trail):
             yield None
         trail.undo(mark)
     elif c_bound and a_bound:
         # C and A bound: check prefix, unify remainder
-        if vc.startswith(va):
+        if sc.startswith(sa):
             mark = trail.mark()
-            if unify(b, vc[len(va):], trail):
+            if unify(b, sc[len(sa):], trail):
                 yield None
             trail.undo(mark)
     elif c_bound and b_bound:
         # C and B bound: check suffix, unify prefix
-        if vc.endswith(vb):
+        if sc.endswith(sb):
             mark = trail.mark()
-            if unify(a, vc[:len(vc) - len(vb)], trail):
+            if unify(a, sc[:len(sc) - len(sb)], trail):
                 yield None
             trail.undo(mark)
     elif c_bound:
         # C bound, A and B unbound: enumerate all splits
-        for i in range(len(vc) + 1):
+        for i in range(len(sc) + 1):
             mark = trail.mark()
-            if unify(a, vc[:i], trail) and unify(b, vc[i:], trail):
+            if unify(a, sc[:i], trail) and unify(b, sc[i:], trail):
                 yield None
             trail.undo(mark)
     else:
@@ -327,9 +351,11 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("sub_atom/5"))
-    if not isinstance(va, str):
+    va_str = _atom_to_str(va)
+    if va_str is None:
         raise LogicException(type_error("atom", va, "sub_atom/5"))
 
+    va = va_str
     n = len(va)
     vs = deref(sub)
 

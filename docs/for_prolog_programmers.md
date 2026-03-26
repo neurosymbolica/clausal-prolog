@@ -32,7 +32,7 @@ out of the box, but some Prolog conventions must change.
 
 | Prolog | Clausal | Notes |
 |---|---|---|
-| `parent(alice, bob).` | `parent("alice", "bob"),` | Trailing comma, not period. Atoms are strings. |
+| `parent(alice, bob).` | `parent("alice", "bob"),` | Trailing comma, not period. Undeclared atoms are strings; declared atoms are zero-arity classes. |
 | `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or trailing underscore: `x_`) |
 | `_` | `_` | Anonymous variable — same |
 | `head :- body.` | `head <- (body)` | `<-` instead of `:-`. Multi-goal bodies parenthesized. |
@@ -137,11 +137,12 @@ Where you would use green cuts in Prolog, Clausal offers:
 - **Groundness-keyed dispatch** — the compiler generates specialized code
   paths based on which arguments are ground
 
-### Atoms are strings
+### Atoms
 
-Prolog's atoms (`foo`, `bar`, `'hello world'`) are Python strings in Clausal
-(`"foo"`, `"bar"`, `"hello world"`). There is no separate atom type. This
-simplifies interop with Python — every Python string is a valid Clausal term.
+Atoms declared in `-private` or `-module` directives are zero-arity
+PredicateMeta classes with identity semantics (`red() is red`). Undeclared
+atoms (string literals like `"foo"`, `"bar"`) remain plain Python strings.
+Both work in unification and pattern matching.
 
 ### Naming conventions
 

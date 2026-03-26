@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.terms import Compound, KWTerm
 
 from clausal.logic.builtins._registry import _builtin
@@ -33,8 +33,9 @@ def _functor__3(term, name, arity, trail, k):
         if arity_val == 0:
             constructed = name_val
         else:
+            functor_str = name_val.__name__ if isinstance(name_val, PredicateMeta) else str(name_val)
             args = tuple(Var() for _ in range(arity_val))
-            constructed = Compound(str(name_val), args)
+            constructed = Compound(functor_str, args)
         mark = trail.mark()
         if unify(term, constructed, trail):
             yield None
@@ -104,7 +105,8 @@ def _univ__2(term, lst, trail, k):
         if len(args_vals) == 0:
             constructed: Any = f_val  # atom
         else:
-            constructed = Compound(str(f_val), tuple(args_vals))
+            functor_str = f_val.__name__ if isinstance(f_val, PredicateMeta) else str(f_val)
+            constructed = Compound(functor_str, tuple(args_vals))
         mark = trail.mark()
         if unify(term, constructed, trail):
             yield None
@@ -126,6 +128,9 @@ def _copy_term(term: Any, var_map: dict) -> Any:
             var_map[vid] = Var()
         return var_map[vid]
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return term
+    # Zero-arity PredicateMeta atoms: ground, return as-is
+    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
         return term
     if isinstance(term, list):
         return [_copy_term(e, var_map) for e in term]
@@ -162,6 +167,9 @@ def _collect_vars(term: Any, seen_ids: set, result: list) -> None:
             result.append(term)
         return
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return
+    # Zero-arity PredicateMeta atoms: no variables
+    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
         return
     if isinstance(term, list):
         for e in term:

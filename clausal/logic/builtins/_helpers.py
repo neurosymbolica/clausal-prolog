@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.terms import Compound, KWTerm
 
 
@@ -21,6 +21,9 @@ def _functor_name(term: Any) -> str | None:
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return repr(term) if not isinstance(term, str) else term
+    # Zero-arity PredicateMeta class: the class IS the atom and the functor name
+    if isinstance(term, PredicateMeta) and not term._fields:
+        return term
     return None
 
 
@@ -35,6 +38,9 @@ def _arity(term: Any) -> int | None:
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return 0
+    # Zero-arity PredicateMeta class: arity is 0
+    if isinstance(term, PredicateMeta) and not term._fields:
         return 0
     return None
 
@@ -84,6 +90,9 @@ def _is_ground(term: Any) -> bool:
     if is_var(term):
         return False
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return True
+    # Zero-arity PredicateMeta atoms are ground
+    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
         return True
     if isinstance(term, list):
         return all(_is_ground(e) for e in term)

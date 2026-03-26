@@ -33,9 +33,10 @@ completions from partial information. No separate functions needed.
 new parser, no foreign notation. Your editor's syntax highlighting, linting,
 and autocompletion work out of the box.
 
-**Data types are Python.** Strings are Python strings. Numbers are Python
-numbers. Lists are Python lists. Dicts are Python dicts. There is no
-marshalling, no conversion, no foreign data model.
+**Data types are Python.** Numbers are Python numbers. Lists are Python
+lists. Dicts are Python dicts. Strings remain strings. Declared atoms
+(symbolic constants) are lightweight classes with identity semantics.
+There is no marshalling, no conversion, no foreign data model.
 
 **The runtime is Python.** Clausal runs on the Python VM. You can call any
 Python library from within a logic predicate using `++()`, and call logic
@@ -121,6 +122,54 @@ first_and_rest([HEAD, *TAIL], HEAD, TAIL),
 ```
 
 This bidirectionality is what makes relations work in all directions.
+
+### Atoms are symbolic constants
+
+In logic programming, an **atom** is a symbolic constant — like an enum value
+with identity. When you declare atoms in `-private` or `-module`, Clausal
+creates zero-arity classes:
+
+```clausal
+-private([red, green, blue, Color(C)])
+
+Color(red),
+Color(green),
+Color(blue),
+```
+
+From the Python side, `red`, `green`, and `blue` are class objects (not
+strings). They have identity: `red is red` and `red is not blue`. Calling
+them returns themselves: `red() is red`.
+
+```python
+# From Python:
+from my_module import red, green, Color
+red is red          # True — identity, not equality
+red() is red        # True — zero-arity call returns the class itself
+isinstance(red, type)  # True — it's a class
+```
+
+You can also create atoms dynamically:
+
+```python
+from clausal.logic.predicate import make_atom, is_atom
+
+ok = make_atom("ok")
+err = make_atom("err")
+is_atom(ok)   # True
+ok() is ok    # True
+```
+
+**Strings still work as data.** String literals like `"hello"` flow through
+unification as-is. The distinction is: declared atoms have identity (checked
+with `is`), while strings have value equality (checked with `==`). Use atoms
+for symbolic constants (colors, states, tags); use strings for text data.
+
+| Type check | What it tests |
+|---|---|
+| `IsAtom(X)` | Declared atom (zero-arity class) |
+| `IsStr(X)` | Python string |
+| `IsCallable(X)` | Atom, string, or compound term |
 
 ---
 

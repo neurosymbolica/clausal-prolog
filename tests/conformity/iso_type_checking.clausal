@@ -50,13 +50,22 @@ Test("nonvar: bound var succeeds") <- (
 )
 Test("nonvar: list succeeds") <- IsBound([1, 2])
 
+# ── IsAtom/1 ──────────────────────────────────────────────────────────────────
+
+Test("atom: declared atom succeeds") <- IsAtom(Hello)
+Test("atom: declared atom Abc") <- IsAtom(Abc)
+Test("atom: string fails") <- (not IsAtom("hello"))
+Test("atom: integer fails") <- (not IsAtom(1))
+Test("atom: unbound var fails") <- (not IsAtom(X_))
+
 # ── IsStr/1 ───────────────────────────────────────────────────────────────────
 
-Test("atom: string succeeds") <- IsStr(Hello)
-Test("atom: empty string succeeds") <- IsStr("")
-Test("atom: integer fails") <- (not IsStr(1))
-Test("atom: unbound var fails") <- (not IsStr(X_))
-Test("atom: list fails") <- (not IsStr([]))
+Test("str: plain string succeeds") <- IsStr("hello")
+Test("str: empty string succeeds") <- IsStr("")
+Test("str: declared atom fails") <- (not IsStr(Hello))
+Test("str: integer fails") <- (not IsStr(1))
+Test("str: unbound var fails") <- (not IsStr(X_))
+Test("str: list fails") <- (not IsStr([]))
 
 # ── IsInt/1 ────────────────────────────────────────────────────────────────────
 
@@ -77,12 +86,12 @@ Test("number: float") <- IsNumber(3.14)
 Test("number: string fails") <- (not IsNumber("42"))
 Test("number: var fails") <- (not IsNumber(X_))
 
-# ── IsStr/1 (string alias) ────────────────────────────────────────────────────
+# ── IsCallable/1 (declared atoms) ─────────────────────────────────────────────
 
-Test("string: str succeeds") <- IsStr(Hello)
-Test("string: empty str") <- IsStr("")
-Test("string: int fails") <- (not IsStr(42))
-Test("string: var fails") <- (not IsStr(X_))
+Test("callable: declared atom") <- IsCallable(Hello)
+Test("callable: string") <- IsCallable("hello")
+Test("callable: int fails") <- (not IsCallable(42))
+Test("callable: var fails") <- (not IsCallable(X_))
 
 # ── IsList/1 ────────────────────────────────────────────────────────────────────
 
@@ -96,7 +105,7 @@ Test("is_list: var fails") <- (not IsList(X_))
 # ── IsGround/1 ─────────────────────────────────────────────────────────────────
 
 Test("ground: integer") <- IsGround(42)
-Test("ground: string") <- IsGround(Abc)
+Test("ground: declared atom") <- IsGround(Abc)
 Test("ground: ground list") <- IsGround([1, 2, 3])
 Test("ground: empty list") <- IsGround([])
 Test("ground: var fails") <- (not IsGround(X_))

@@ -5,7 +5,7 @@ MustBe/2, CanBe/2."""
 from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 from clausal.terms import Compound, KWTerm
 
 from clausal.logic.builtins._registry import _builtin
@@ -31,6 +31,19 @@ def _atom__1(x, trail, k):
     """atom(X) — succeeds if X is a string (Prolog atom)."""
     x_val = deref(x)
     if not is_var(x_val) and isinstance(x_val, str):
+        yield None
+
+
+@_builtin("IsAtom", 1)
+def _is_atom__1(x, trail, k):
+    """IsAtom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
+    x_val = deref(x)
+    if (
+        not is_var(x_val)
+        and isinstance(x_val, type)
+        and isinstance(x_val, PredicateMeta)
+        and not x_val._fields
+    ):
         yield None
 
 
@@ -86,6 +99,8 @@ def _callable__1(x, trail, k):
         yield None
     elif is_term_instance(x_val):
         yield None
+    elif isinstance(x_val, PredicateMeta) and not x_val._fields:
+        yield None
 
 
 @_builtin("IsList", 1)
@@ -120,7 +135,11 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name == "number":
         return isinstance(term, (int, float)) and not isinstance(term, bool)
     elif type_name in ("atom", "string", "str"):
-        return isinstance(term, str)
+        if isinstance(term, str):
+            return True
+        if isinstance(term, PredicateMeta) and not term._fields:
+            return True
+        return False
     elif type_name == "list":
         return isinstance(term, list)
     elif type_name in ("boolean", "bool"):
