@@ -8,8 +8,8 @@ The system compiles `.clausal` files to Python generator functions via an import
 with full backtracking search, unification, builtins, and a query API.
 
 **Naming convention**: All predicates, atoms, and builtins use **TitleCase** (e.g.
-`Color`, `Adjacent`, `ForAll`, `MapList`). Logic variables use trailing underscore
-(`X_`, `Foo_`) or ALL-CAPS (`X`, `COLORING`). Bare `_` is the anonymous variable.
+`Color`, `Adjacent`, `ForAll`, `MapList`). Logic variables use leading underscore
+(`_x`, `_foo`) or ALL-CAPS (`X`, `COLORING`). Bare `_` is the anonymous variable.
 
 **Directives** (`-name(...)` syntax) are supported at module level. The `-module(name, [exports])`
 directive is implemented. The directive infrastructure in `EmbedTransformer` is extensible to

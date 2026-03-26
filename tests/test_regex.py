@@ -16,12 +16,12 @@ COMPACT (Match/2 with named groups) — requires goal expansion:
 
 Auto-binding convention:
     Only named groups whose names meet the logic variable convention
-    (ALLCAPS or trailing_underscore_) are auto-bound. This gives the user
+    (ALLCAPS or _leading_underscore) are auto-bound. This gives the user
     explicit control:
-        (?P<YEAR>\\d{4})   → auto-binds YEAR  (ALLCAPS)
-        (?P<rest_>\\w+)    → auto-binds rest_  (trailing underscore)
-        (?P<year>\\d{4})   → NOT auto-bound   (lowercase, not a logic var)
-        (?P<internal>\\w+) → NOT auto-bound   (just a regex group name)
+        (?P<YEAR>\\d{4})   → auto-binds YEAR   (ALLCAPS)
+        (?P<_rest>\\w+)    → auto-binds _rest   (leading underscore)
+        (?P<year>\\d{4})   → NOT auto-bound    (lowercase, not a logic var)
+        (?P<internal>\\w+) → NOT auto-bound    (just a regex group name)
 
     This means you can have named groups for regex purposes (backreferences,
     readability) without them leaking into the logic variable namespace.
@@ -267,10 +267,10 @@ parse_url(S, SCHEME, HOST, PORT, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>
         assert results == [{"s": "https", "h": "example.com",
                             "p": "8080", "path": "/api/v1"}]
 
-    def test_trailing_underscore_group(self, tmp_path):
-        """trailing_underscore_ group names also auto-bind."""
+    def test_leading_underscore_group(self, tmp_path):
+        """_leading_underscore group names also auto-bind."""
         mod = _load("ab7", r"""
-first_word(S, word_) <- Match(r"(?P<word_>\w+)", S)
+first_word(S, _word) <- Match(r"(?P<_word>\w+)", S)
 """, tmp_path)
         assert _first("first_word", "hello world", module=mod) == "hello"
 
@@ -719,7 +719,7 @@ class TestRegexAutoBindFixture:
         "auto-bind search",
         "auto-bind single group",
         "auto-bind many groups",
-        "trailing underscore auto-bind",
+        "leading underscore auto-bind",
         "selective binding ALLCAPS only",
         "lowercase groups for backrefs",
         "lowercase groups no repeat fails",

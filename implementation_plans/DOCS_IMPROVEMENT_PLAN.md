@@ -98,7 +98,7 @@ Target: ~300 lines. Conversational tone. All examples in `.clausal` syntax with 
 - Variables are ALLCAPS: `X`, `HEAD`, `REST`, `PARENT`, `CHILD`, `N`, `F`
 - Python appears only in "Query it from Python" boxes — keep to 2–3 lines
 - No mention of PredicateMeta, Var(), deref(), Trail, Module(), or any internal API
-- No mention of `X_` trailing-underscore style — just teach ALLCAPS
+- No mention of `_x` leading-underscore style — just teach ALLCAPS
 
 ---
 
@@ -178,10 +178,10 @@ Systematic find-and-replace across docs. The rule:
 
 ### Watch out for
 
-- Lambda parameter variables (`X_ <- ...`) — these become `(X <- ...)` which is fine
-- The cheatsheet line 933–934 should flip: show ALLCAPS first, trailing-underscore as "also valid" footnote (it already does this — just make sure the rest of the file matches)
+- Lambda parameter variables (`_x <- ...`) — these become `(X <- ...)` which is fine
+- The cheatsheet line 933–934 should flip: show ALLCAPS first, leading-underscore as "also valid" footnote (it already does this — just make sure the rest of the file matches)
 - Don't change `_fields`, `_clauses`, or other Python identifiers that happen to have underscores
-- Don't change variable names inside ` ```python ` blocks — those are Python code where `X_` may be actual Python identifiers referring to Var objects
+- Don't change variable names inside ` ```python ` blocks — those are Python code where `_x` may be actual Python identifiers referring to Var objects
 
 ---
 

@@ -50,10 +50,10 @@ ast_node = ~~(x + y * z)
 
 Two conventions are recognised:
 
-**Trailing single underscore** — any identifier whose last character is `_`, excluding dunders (`__`) and the bare anonymous variable `_`:
+**Leading single underscore** — any identifier whose first character is `_`, excluding dunders (`__`) and the bare anonymous variable `_`:
 
 ```python
-X_, HEAD_, rest_   # logic variables (trailing-underscore style)
+_x, _head, _rest   # logic variables (leading-underscore style)
 ```
 
 **ALL-CAPS** — any identifier where every cased character is uppercase and there is at least one cased character (underscores and digits are allowed inside):
@@ -62,7 +62,7 @@ X_, HEAD_, rest_   # logic variables (trailing-underscore style)
 X, HEAD, REST, N1, MAX_OF   # logic variables (ALL-CAPS style)
 ```
 
-Both styles may be used in the same file. ALL-CAPS is the preferred style for new code; trailing-underscore remains valid.
+Both styles may be used in the same file. ALL-CAPS is the preferred style for new code; leading-underscore is available when a lowercase variable name is desired.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's existing convention).
 
@@ -71,6 +71,7 @@ Logic variables are not declared; they come into existence by appearing in logic
 Why not titlecase (the Prolog convention)?
 - Python programmers associate titlecase with class names — static, global, noun-like. This is actually close to how atoms behave, not variables.
 - ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
+- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural.
 - Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
 
 ---
@@ -917,7 +918,7 @@ Three main reasons:
 
 2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them). Atoms need to be class objects for structural matching. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
 
-3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker (ALL-CAPS or trailing underscore) avoids confusion without requiring explicit `declare` statements.
+3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker (ALL-CAPS or leading underscore) avoids confusion without requiring explicit `declare` statements.
 
 The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely needed. Explicit is better than implicit.
 
@@ -947,9 +948,9 @@ This gives a symmetric and concise way to integrate Python side effects with Pro
 
 ```clausal
 # skip
-# Variables (ALL-CAPS preferred; trailing-underscore also valid)
+# Variables (ALL-CAPS preferred; leading-underscore also valid)
 X, HEAD, REST          # ALL-CAPS logic variables
-X_, head_, rest_       # trailing-underscore style (also valid)
+_x, _head, _rest       # leading-underscore style (also valid)
 _                      # anonymous variable (always unifies, stores nothing)
 
 # Atoms

@@ -537,9 +537,9 @@ class TestSQLiteClausalIntegration:
 
     def test_connect_exec_query(self, tmp_path):
         mod = _load("sq1", """
-setup(Db_) <- (SQLiteConnect(":memory:", Db_) and SQLiteExec(Db_, "CREATE TABLE items (name TEXT, qty INTEGER)") and SQLiteExec(Db_, "INSERT INTO items VALUES ('apple', 3)") and SQLiteExec(Db_, "INSERT INTO items VALUES ('banana', 5)"))
+setup(_db) <- (SQLiteConnect(":memory:", _db) and SQLiteExec(_db, "CREATE TABLE items (name TEXT, qty INTEGER)") and SQLiteExec(_db, "INSERT INTO items VALUES ('apple', 3)") and SQLiteExec(_db, "INSERT INTO items VALUES ('banana', 5)"))
 
-item_name(N_) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM items", N_))
+item_name(_n) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM items", _n))
 """, tmp_path)
         names = _all("item_name", module=mod)
         assert names == ["apple", "banana"]
@@ -548,7 +548,7 @@ item_name(N_) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM it
         mod = _load("sq2", """
 setup <- (SQLiteConnect(":memory:", "db2") and SQLiteExec("db2", "CREATE TABLE nums (v INTEGER)") and SQLiteExec("db2", "INSERT INTO nums VALUES (10)") and SQLiteExec("db2", "INSERT INTO nums VALUES (20)") and SQLiteExec("db2", "INSERT INTO nums VALUES (30)"))
 
-big_num(N_) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?", [15], N_))
+big_num(_n) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?", [15], _n))
 """, tmp_path)
         nums = _all("big_num", module=mod)
         assert nums == [20, 30]
@@ -557,7 +557,7 @@ big_num(N_) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?",
         mod = _load("sq3", """
 setup <- (SQLiteConnect(":memory:", "db3") and SQLiteExec("db3", "CREATE TABLE alpha (x TEXT)") and SQLiteExec("db3", "CREATE TABLE beta (y INTEGER)"))
 
-table_name(T_) <- (setup() and SQLiteTable("db3", T_))
+table_name(_t) <- (setup() and SQLiteTable("db3", _t))
 """, tmp_path)
         tables = _all("table_name", module=mod)
         assert set(tables) >= {"alpha", "beta"}
@@ -566,7 +566,7 @@ table_name(T_) <- (setup() and SQLiteTable("db3", T_))
         mod = _load("sq4", """
 setup <- (SQLiteConnect(":memory:", "db4") and SQLiteExec("db4", "CREATE TABLE things (id INTEGER, label TEXT, weight REAL)"))
 
-col(Name_, Type_) <- (setup() and SQLiteColumn("db4", "things", Name_, Type_))
+col(_name, _type) <- (setup() and SQLiteColumn("db4", "things", _name, _type))
 """, tmp_path)
         v1 = Var()
         v2 = Var()
@@ -588,7 +588,7 @@ open_close <- (SQLiteConnect(":memory:", "db5") and SQLiteDisconnect("db5"))
         mod = _load("sq6", """
 setup <- (SQLiteConnect(":memory:", "db6") and SQLiteExec("db6", "CREATE TABLE kv (k TEXT, v INTEGER)") and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["x", 1]) and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["y", 2]))
 
-kv_key(K_) <- (setup() and SQLiteQuery("db6", "SELECT k FROM kv", K_))
+kv_key(_k) <- (setup() and SQLiteQuery("db6", "SELECT k FROM kv", _k))
 """, tmp_path)
         keys = _all("kv_key", module=mod)
         assert set(keys) == {"x", "y"}

@@ -455,27 +455,27 @@ class TestEdgeCases:
 
 class TestClausalInline:
     def test_uuid4_in_clausal(self, tmp_path):
-        mod = _load("ui1", 'Test <- (UUIDv4(U_) and IsUUID(U_))\n', tmp_path)
+        mod = _load("ui1", 'Test <- (UUIDv4(_u) and IsUUID(_u))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_str_roundtrip_clausal(self, tmp_path):
-        mod = _load("ui2", 'Test <- (UUIDv4(U_) and UUIDStr(U_, S_) and UUIDStr(U2_, S_) and UUIDStr(U2_, S2_) and S_ == S2_)\n', tmp_path)
+        mod = _load("ui2", 'Test <- (UUIDv4(_u) and UUIDStr(_u, _s) and UUIDStr(_u2, _s) and UUIDStr(_u2, _s2) and _s == _s2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid3_clausal(self, tmp_path):
-        mod = _load("ui3", 'Test <- (UUIDv3("dns", "example.com", U_) and UUIDVersion(U_, 3))\n', tmp_path)
+        mod = _load("ui3", 'Test <- (UUIDv3("dns", "example.com", _u) and UUIDVersion(_u, 3))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid5_clausal(self, tmp_path):
-        mod = _load("ui4", 'Test <- (UUIDv5("url", "test", U_) and UUIDVersion(U_, 5))\n', tmp_path)
+        mod = _load("ui4", 'Test <- (UUIDv5("url", "test", _u) and UUIDVersion(_u, 5))\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_int_clausal(self, tmp_path):
-        mod = _load("ui5", 'Test <- (UUIDv4(U_) and UUIDInt(U_, N_) and UUIDInt(U2_, N_) and UUIDInt(U2_, N2_) and N_ == N2_)\n', tmp_path)
+        mod = _load("ui5", 'Test <- (UUIDv4(_u) and UUIDInt(_u, _n) and UUIDInt(_u2, _n) and UUIDInt(_u2, _n2) and _n == _n2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
     def test_uuid_hex_clausal(self, tmp_path):
-        mod = _load("ui6", 'Test <- (UUIDv4(U_) and UUIDHex(U_, H_) and UUIDHex(U2_, H_) and UUIDHex(U2_, H2_) and H_ == H2_)\n', tmp_path)
+        mod = _load("ui6", 'Test <- (UUIDv4(_u) and UUIDHex(_u, _h) and UUIDHex(_u2, _h) and UUIDHex(_u2, _h2) and _h == _h2)\n', tmp_path)
         assert _succeeds("Test", module=mod)
 
 

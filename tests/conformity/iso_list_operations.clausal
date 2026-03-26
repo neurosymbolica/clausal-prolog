@@ -62,8 +62,8 @@ Test("append empty left") <- Append([], [1, 2], [1, 2])
 Test("append empty right") <- Append([1, 2], [], [1, 2])
 Test("append both empty") <- Append([], [], [])
 Test("append binds result") <- (
-    Append([1], [2], R_),
-    R_ == [1, 2]
+    Append([1], [2], _r),
+    _r == [1, 2]
 )
 
 # ── Length/2 ──────────────────────────────────────────────────────────────────
@@ -72,8 +72,8 @@ Test("length of 3") <- Length([a, b, c], 3)
 Test("length empty") <- Length([], 0)
 Test("length one") <- Length([42], 1)
 Test("length binds") <- (
-    Length([1, 2, 3], N_),
-    N_ == 3
+    Length([1, 2, 3], _n),
+    _n == 3
 )
 
 # ── Last/2 ────────────────────────────────────────────────────────────────────
@@ -88,9 +88,9 @@ Test("reverse list") <- Reverse([1, 2, 3], [3, 2, 1])
 Test("reverse empty") <- Reverse([], [])
 Test("reverse singleton") <- Reverse([42], [42])
 Test("reverse involution") <- (
-    Reverse([1, 2, 3], R_),
-    Reverse(R_, RR_),
-    RR_ == [1, 2, 3]
+    Reverse([1, 2, 3], _r),
+    Reverse(_r, _rr),
+    _rr == [1, 2, 3]
 )
 
 # ── GetItem/3 (0-based) ────────────────────────────────────────────────────────

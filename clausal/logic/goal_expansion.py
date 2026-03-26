@@ -6,7 +6,7 @@ expansion but before compilation in the ``compile_module`` pipeline.
 Built-in expansions
 -------------------
 - **Regex pre-compilation + auto-binding** (Phase 3): static ``Match/2``
-  and ``Search/2`` patterns with ALLCAPS/trailing-underscore named groups
+  and ``Search/2`` patterns with ALLCAPS/leading-underscore named groups
   are rewritten to ``Match/3`` + ``Unify`` chains.  The compiled
   ``re.Pattern`` object is injected into ``module_dict`` for runtime use.
 """
@@ -64,10 +64,10 @@ class _ExpansionContext:
     def find_var_for_group(self, group_name: str) -> Any | None:
         """Find the clause Var matching a regex group name.
 
-        Group names follow logic-var convention (ALLCAPS or trailing_).
-        Field names are derived by lowering + stripping trailing underscore.
+        Group names follow logic-var convention (ALLCAPS or _leading).
+        Field names are derived by lowering + stripping leading underscore.
         """
-        field_name = group_name.rstrip("_").lower()
+        field_name = group_name.lstrip("_").lower()
         return self._clause_vars.get(field_name)
 
 
@@ -185,9 +185,9 @@ def _is_logic_var_name(name: str) -> bool:
     """Check if a name follows the logic variable convention."""
     if name == "_":
         return False
-    if name.endswith("__"):
+    if name.startswith("__"):
         return False
-    if name.endswith("_"):
+    if name.startswith("_"):
         return True
     return name.isupper()
 

@@ -92,17 +92,17 @@ def snake_to_pascal(name: str) -> str:
 def clausal_var_to_prolog(name: str) -> str:
     """Convert clausal variable names to Prolog convention.
 
-    X_       -> X          (strip trailing underscore, already uppercase)
-    foo_     -> Foo        (strip underscore, capitalize)
-    HEAD_    -> Head       (strip underscore, titlecase)
+    _x       -> X          (strip leading underscore, uppercase)
+    _foo     -> Foo        (strip underscore, capitalize)
+    _head    -> Head       (strip underscore, titlecase)
     RESULT   -> Result     (ALLCAPS -> titlecase)
     X        -> X          (single uppercase letter stays)
     _        -> _          (anonymous stays)
     """
     if name == "_":
         return "_"
-    if name.endswith("_") and not name.endswith("__"):
-        name = name[:-1]
+    if name.startswith("_") and not name.startswith("__"):
+        name = name[1:]
     # Titlecase: first letter upper, rest lower
     if name.isupper() and len(name) > 1:
         return name[0] + name[1:].lower()
@@ -115,18 +115,18 @@ def prolog_var_to_clausal(name: str) -> str:
     """Convert Prolog variable names to clausal convention.
 
     X        -> X          (single uppercase stays — it's ALLCAPS)
-    Foo      -> foo_       (titlecase -> trailing underscore lowercase)
-    Head     -> head_      (titlecase -> trailing underscore lowercase)
-    _Ignored -> _ignored_  (leading underscore -> trailing, lowercase)
+    Foo      -> _foo       (titlecase -> leading underscore lowercase)
+    Head     -> _head      (titlecase -> leading underscore lowercase)
+    _Ignored -> _ignored   (leading underscore, lowercase)
     _        -> _          (anonymous stays)
     """
     if name == "_":
         return "_"
     if name.startswith("_"):
-        return name[1:].lower() + "_"
+        return "_" + name[1:].lower()
     if len(name) == 1 and name.isupper():
         return name
-    return name.lower() + "_"
+    return "_" + name.lower()
 
 
 # ── Builtin name mapping ────────────────────────────────────────────

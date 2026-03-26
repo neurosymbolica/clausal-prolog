@@ -39,7 +39,7 @@ class TestPyThunkValue:
     def test_len(self, tmp_path):
         """++len(L_) returns the length of a bound list."""
         src = tmp_path / "interop_len.clausal"
-        src.write_text("list_len(L_, N_) <- (N_ is ++len(L_))\n")
+        src.write_text("list_len(_l, _n) <- (_n is ++len(_l))\n")
         mod = _load_module("interop_len", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("list_len", [1, 2, 3], module=logic_mod)
@@ -48,7 +48,7 @@ class TestPyThunkValue:
     def test_upper(self, tmp_path):
         """++S_.upper() calls a method on a dereferenced variable."""
         src = tmp_path / "interop_upper.clausal"
-        src.write_text("to_upper(S_, R_) <- (R_ is ++S_.upper())\n")
+        src.write_text("to_upper(_s, _r) <- (_r is ++_s.upper())\n")
         mod = _load_module("interop_upper", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("to_upper", "hello", module=logic_mod)
@@ -57,7 +57,7 @@ class TestPyThunkValue:
     def test_arithmetic(self, tmp_path):
         """++(X_ + 1) does Python arithmetic on a dereferenced variable."""
         src = tmp_path / "interop_arith.clausal"
-        src.write_text("inc(X_, R_) <- (R_ is ++(X_ + 1))\n")
+        src.write_text("inc(_x, _r) <- (_r is ++(_x + 1))\n")
         mod = _load_module("interop_arith", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("inc", 5, module=logic_mod)
@@ -66,7 +66,7 @@ class TestPyThunkValue:
     def test_multi_var(self, tmp_path):
         """++() with multiple logic variables."""
         src = tmp_path / "interop_multi.clausal"
-        src.write_text("add_len(A_, B_, R_) <- (R_ is ++(len(A_) + len(B_)))\n")
+        src.write_text("add_len(_a, _b, _r) <- (_r is ++(len(_a) + len(_b)))\n")
         mod = _load_module("interop_multi", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("add_len", [1, 2], [3, 4, 5], module=logic_mod)
@@ -75,7 +75,7 @@ class TestPyThunkValue:
     def test_no_vars(self, tmp_path):
         """++() with no logic variables — pure Python expression."""
         src = tmp_path / "interop_pure.clausal"
-        src.write_text("get_pi(R_) <- (R_ is ++(3.14159))\n")
+        src.write_text("get_pi(_r) <- (_r is ++(3.14159))\n")
         mod = _load_module("interop_pure", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("get_pi", module=logic_mod)
@@ -85,7 +85,7 @@ class TestPyThunkValue:
     def test_subscript(self, tmp_path):
         """++L_[0] indexes a list."""
         src = tmp_path / "interop_sub.clausal"
-        src.write_text("first(L_, R_) <- (R_ is ++L_[0])\n")
+        src.write_text("first(_l, _r) <- (_r is ++_l[0])\n")
         mod = _load_module("interop_sub", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("first", [10, 20, 30], module=logic_mod)
@@ -94,7 +94,7 @@ class TestPyThunkValue:
     def test_dict_access(self, tmp_path):
         """++D_['key'] accesses a dict."""
         src = tmp_path / "interop_dict.clausal"
-        src.write_text("get_key(D_, K_, R_) <- (R_ is ++D_[K_])\n")
+        src.write_text("get_key(_d, _k, _r) <- (_r is ++_d[_k])\n")
         mod = _load_module("interop_dict", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("get_key", {"a": 1, "b": 2}, "b", module=logic_mod)
@@ -103,7 +103,7 @@ class TestPyThunkValue:
     def test_string_format(self, tmp_path):
         """++str.join() works."""
         src = tmp_path / "interop_join.clausal"
-        src.write_text('join_words(W_, R_) <- (R_ is ++", ".join(W_))\n')
+        src.write_text('join_words(_w, _r) <- (_r is ++", ".join(_w))\n')
         mod = _load_module("interop_join", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("join_words", ["a", "b", "c"], module=logic_mod)
@@ -116,7 +116,7 @@ class TestPyThunkGoal:
     def test_print_side_effect(self, tmp_path):
         """++print(X_) executes Python print as a goal."""
         src = tmp_path / "interop_goal.clausal"
-        src.write_text("show(X_) <- ++print(X_)\n")
+        src.write_text("show(_x) <- ++print(_x)\n")
         mod = _load_module("interop_goal", str(src))
         logic_mod = mod.__dict__["$module"]
         buf = io.StringIO()
@@ -133,9 +133,9 @@ class TestPyThunkGoal:
         """++() goal followed by another goal in the body."""
         src = tmp_path / "interop_cont.clausal"
         src.write_text(
-            "process(X_, R_) <- (\n"
-            "    ++print(X_),\n"
-            "    R_ is ++(X_ * 2)\n"
+            "process(_x, _r) <- (\n"
+            "    ++print(_x),\n"
+            "    _r is ++(_x * 2)\n"
             ")\n"
         )
         mod = _load_module("interop_cont", str(src))
@@ -161,7 +161,7 @@ class TestPyThunkMultiSolution:
             "Item(1),\n"
             "Item(2),\n"
             "Item(3),\n"
-            "Doubled(R_) <- (Item(X_), R_ is ++(X_ * 2))\n"
+            "Doubled(_r) <- (Item(_x), _r is ++(_x * 2))\n"
         )
         mod = _load_module("interop_multi_sol", str(src))
         logic_mod = mod.__dict__["$module"]
@@ -171,7 +171,7 @@ class TestPyThunkMultiSolution:
     def test_thunk_no_vars(self, tmp_path):
         """++() with no logic variables — pure Python constant."""
         src = tmp_path / "interop_const.clausal"
-        src.write_text("the_answer(R_) <- (R_ is ++(21 * 2))\n")
+        src.write_text("the_answer(_r) <- (_r is ++(21 * 2))\n")
         mod = _load_module("interop_const", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("the_answer", module=logic_mod)
@@ -180,7 +180,7 @@ class TestPyThunkMultiSolution:
     def test_thunk_list_comprehension(self, tmp_path):
         """++[x*2 for x in X_] — list comprehension over a logic var."""
         src = tmp_path / "interop_comp.clausal"
-        src.write_text("double_all(L_, R_) <- (R_ is ++[x*2 for x in L_])\n")
+        src.write_text("double_all(_l, _r) <- (_r is ++[x*2 for x in _l])\n")
         mod = _load_module("interop_comp", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("double_all", [1, 2, 3], module=logic_mod)

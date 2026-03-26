@@ -159,7 +159,7 @@ Qualified calls are resolved at compile time: the compiler walks the dotted attr
 
 ### Restrictions on qualified names
 
-The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or trailing underscore like `X_`) are rejected with a `SyntaxError`:
+The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or leading underscore like `_x`) are rejected with a `SyntaxError`:
 
 ```clausal
 # skip

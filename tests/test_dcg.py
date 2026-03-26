@@ -72,7 +72,7 @@ class TestNonTerminals:
         assert not _succeeds("phrase", cls, ["a"], module=mod)
 
     def test_non_terminal_with_args(self, tmp_path):
-        src = 'tok(T_) >> ([T_])\n'
+        src = 'tok(_t) >> ([_t])\n'
         mod = _load("nt2", src, tmp_path)
         cls = mod.module_dict["tok"]
         v = Var()
@@ -87,7 +87,7 @@ class TestNonTerminals:
 
 class TestInlineGoals:
     def test_inline_goal_passthrough(self, tmp_path):
-        src = 'pos(D_) >> ([D_], {D_ > 0})\n'
+        src = 'pos(_d) >> ([_d], {_d > 0})\n'
         mod = _load("ig1", src, tmp_path)
         cls = mod.module_dict["pos"]
         v = Var()
@@ -103,7 +103,7 @@ class TestInlineGoals:
         assert results2 == []
 
     def test_multiple_inline_goals(self, tmp_path):
-        src = 'bounded(D_) >> ([D_], {D_ >= 0}, {D_ <= 9})\n'
+        src = 'bounded(_d) >> ([_d], {_d >= 0}, {_d <= 9})\n'
         mod = _load("ig2", src, tmp_path)
         cls = mod.module_dict["bounded"]
         v = Var()
@@ -163,7 +163,7 @@ class TestDisjunction:
 
 class TestNegation:
     def test_not_terminal(self, tmp_path):
-        src = 'not_a >> (not ["a"], [X_])\n'
+        src = 'not_a >> (not ["a"], [_x])\n'
         mod = _load("neg1", src, tmp_path)
         cls = mod.module_dict["not_a"]
         # Should succeed for non-'a' inputs.
@@ -199,7 +199,7 @@ class TestIfThenElse:
 
 class TestPushback:
     def test_look_ahead(self, tmp_path):
-        src = '(peek(T_), [T_]) >> ([T_])\n'
+        src = '(peek(_t), [_t]) >> ([_t])\n'
         mod = _load("pb1", src, tmp_path)
         cls = mod.module_dict["peek"]
         v = Var()
@@ -229,7 +229,7 @@ class TestPhrase:
         assert not _succeeds("phrase", cls, ["hello", "world", "extra"], module=mod)
 
     def test_phrase_3_partial(self, tmp_path):
-        src = 'tok(T_) >> ([T_])\n'
+        src = 'tok(_t) >> ([_t])\n'
         mod = _load("ph3", src, tmp_path)
         cls = mod.module_dict["tok"]
         v = Var()
@@ -246,7 +246,7 @@ class TestPhrase:
 class TestRecursive:
     def test_recursive_list(self, tmp_path):
         src = (
-            'items >> ([X_], items)\n'
+            'items >> ([_x], items)\n'
             'items >> ([])\n'
         )
         mod = _load("rec1", src, tmp_path)
@@ -256,7 +256,7 @@ class TestRecursive:
 
     def test_recursive_digits(self, tmp_path):
         src = (
-            'digits >> ([D_], {D_ >= 0}, {D_ <= 9}, digits)\n'
+            'digits >> ([_d], {_d >= 0}, {_d <= 9}, digits)\n'
             'digits >> ([])\n'
         )
         mod = _load("rec2", src, tmp_path)
@@ -349,8 +349,8 @@ class TestStateThreading:
     def test_state_read(self, tmp_path):
         """state/1 reads current state without modifying it."""
         src = (
-            '-module(s1, [state(S_, S0_, S_2)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
+            '-module(s1, [state(_s, _s0, S_2)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
         )
         mod = _load("s1", src, tmp_path)
         cls = mod.module_dict["state"]
@@ -363,8 +363,8 @@ class TestStateThreading:
     def test_state_read_write(self, tmp_path):
         """state/2 reads old state and writes new state."""
         src = (
-            '-module(s2, [state2(S0_, S_, S0_2, S_2)])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
+            '-module(s2, [state2(_s0, _s, S0_2, S_2)])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
         )
         mod = _load("s2", src, tmp_path)
         cls = mod.module_dict["state2"]
@@ -379,10 +379,10 @@ class TestStateThreading:
     def test_increment_counter(self, tmp_path):
         """Single increment: state goes from [0] to [1]."""
         src = (
-            '-module(inc1, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2), inc(S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
+            '-module(inc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
         )
         mod = _load("inc1", src, tmp_path)
         n = Var()
@@ -392,10 +392,10 @@ class TestStateThreading:
     def test_count_three(self, tmp_path):
         """Three increments: [0] -> [3]."""
         src = (
-            '-module(c3, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2), inc(S0_, S_), count3(S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
+            '-module(c3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
             'count3 >> (inc, inc, inc)\n'
         )
         mod = _load("c3", src, tmp_path)
@@ -406,10 +406,10 @@ class TestStateThreading:
     def test_counter_start_nonzero(self, tmp_path):
         """Counting starts from a nonzero initial state."""
         src = (
-            '-module(c4, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2), inc(S0_, S_), count3(S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
+            '-module(c4, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
             'count3 >> (inc, inc, inc)\n'
         )
         mod = _load("c4", src, tmp_path)
@@ -422,13 +422,13 @@ class TestStateThreading:
     def test_count_leaves_single(self, tmp_path):
         """Count leaves in a single-leaf tree."""
         src = (
-            '-module(tc1, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' count_leaves(T_, S0_, S_), num_leaves(T_, N_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))\n'
-            'num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])\n'
+            '-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
+            'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
         mod = _load("tc1", src, tmp_path)
         n = Var()
@@ -438,13 +438,13 @@ class TestStateThreading:
     def test_count_leaves_two(self, tmp_path):
         """Count leaves in a two-leaf tree: [leaf, leaf]."""
         src = (
-            '-module(tc2, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' count_leaves(T_, S0_, S_), num_leaves(T_, N_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))\n'
-            'num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])\n'
+            '-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
+            'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
         mod = _load("tc2", src, tmp_path)
         n = Var()
@@ -454,13 +454,13 @@ class TestStateThreading:
     def test_count_leaves_nested(self, tmp_path):
         """Count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
         src = (
-            '-module(tc3, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' count_leaves(T_, S0_, S_), num_leaves(T_, N_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))\n'
-            'num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])\n'
+            '-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
+            'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
         mod = _load("tc3", src, tmp_path)
         n = Var()
@@ -472,13 +472,13 @@ class TestStateThreading:
     def test_accumulator_push(self, tmp_path):
         """Push items onto accumulator state."""
         src = (
-            '-module(acc1, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' push(X_, S0_, S_), push_all(XS_, S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'push(X_) >> (state(Acc0_), {Acc_ is [X_, *Acc0_]}, state2(_, Acc_))\n'
+            '-module(acc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' push(_x, _s0, _s), push_all(_xs, _s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'push(_x) >> (state(_acc0), {_acc is [_x, *_acc0]}, state2(_, _acc))\n'
             'push_all([]) >> ([])\n'
-            'push_all([X_, *Xs_]) >> (push(X_), push_all(Xs_))\n'
+            'push_all([_x, *_xs]) >> (push(_x), push_all(_xs))\n'
         )
         mod = _load("acc1", src, tmp_path)
         rest = Var()
@@ -490,13 +490,13 @@ class TestStateThreading:
     def test_accumulator_empty(self, tmp_path):
         """Empty list: accumulator state unchanged."""
         src = (
-            '-module(acc2, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' push(X_, S0_, S_), push_all(XS_, S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'push(X_) >> (state(Acc0_), {Acc_ is [X_, *Acc0_]}, state2(_, Acc_))\n'
+            '-module(acc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' push(_x, _s0, _s), push_all(_xs, _s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'push(_x) >> (state(_acc0), {_acc is [_x, *_acc0]}, state2(_, _acc))\n'
             'push_all([]) >> ([])\n'
-            'push_all([X_, *Xs_]) >> (push(X_), push_all(Xs_))\n'
+            'push_all([_x, *_xs]) >> (push(_x), push_all(_xs))\n'
         )
         mod = _load("acc2", src, tmp_path)
         rest = Var()
@@ -509,11 +509,11 @@ class TestStateThreading:
     def test_state_only_dcg(self, tmp_path):
         """DCG used purely for state-passing, no token consumption."""
         src = (
-            '-module(so, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' double(S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'double >> (state(N0_), {N_ := N0_ * 2}, state2(_, N_))\n'
+            '-module(so, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' double(_s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'double >> (state(_n0), {_n := _n0 * 2}, state2(_, _n))\n'
         )
         mod = _load("so", src, tmp_path)
         n = Var()
@@ -523,12 +523,12 @@ class TestStateThreading:
     def test_state_chained_operations(self, tmp_path):
         """Chain multiple state operations: inc then double."""
         src = (
-            '-module(ch, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' inc(S0_, S_), double(S0_, S_), inc_then_double(S0_, S_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'double >> (state(N0_), {N_ := N0_ * 2}, state2(_, N_))\n'
+            '-module(ch, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' inc(_s0, _s), double(_s0, _s), inc_then_double(_s0, _s)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'double >> (state(_n0), {_n := _n0 * 2}, state2(_, _n))\n'
             'inc_then_double >> (inc, double)\n'
         )
         mod = _load("ch", src, tmp_path)
@@ -542,9 +542,9 @@ class TestStateThreading:
     def test_string_state(self, tmp_path):
         """State can be any value — here a string."""
         src = (
-            '-module(ss, [state2(S0_, S_, S0_2, S_2), set_name(N_, S0_, S_)])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'set_name(N_) >> (state2(_, N_))\n'
+            '-module(ss, [state2(_s0, _s, S0_2, S_2), set_name(_n, _s0, _s)])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'set_name(_n) >> (state2(_, _n))\n'
         )
         mod = _load("ss", src, tmp_path)
         rest = Var()
@@ -557,12 +557,12 @@ class TestStateThreading:
     def test_phrase_with_term_arg(self, tmp_path):
         """phrase/3 called from a regular clause with a term argument."""
         src = (
-            '-module(pt, [state(S_, S0_, S_2), state2(S0_, S_, S0_2, S_2),'
-            ' inc(S0_, S_), run_inc(N0_, N_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'inc >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'run_inc(N0_, N_) <- phrase(inc, [N0_], [N_])\n'
+            '-module(pt, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            ' inc(_s0, _s), run_inc(_n0, _n)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'inc >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'run_inc(_n0, _n) <- phrase(inc, [_n0], [_n])\n'
         )
         mod = _load("pt", src, tmp_path)
         n = Var()
@@ -572,13 +572,13 @@ class TestStateThreading:
     def test_phrase_with_instance_arg(self, tmp_path):
         """phrase/3 called from clause body with instance arg (Call fix)."""
         src = (
-            '-module(pi, [count_leaves(T_, S0_, S_), state(S_, S0_, S_2),'
-            ' state2(S0_, S_, S0_2, S_2), num_leaves(T_, N_)])\n'
-            '(state(S_), [S_]) >> ([S_])\n'
-            '(state2(S0_, S_), [S_]) >> ([S0_])\n'
-            'count_leaves("leaf") >> (state(N0_), {N_ := N0_ + 1}, state2(_, N_))\n'
-            'count_leaves([L_, R_]) >> (count_leaves(L_), count_leaves(R_))\n'
-            'num_leaves(T_, N_) <- phrase(count_leaves(T_), [0], [N_])\n'
+            '-module(pi, [count_leaves(_t, _s0, _s), state(_s, _s0, S_2),'
+            ' state2(_s0, _s, S0_2, S_2), num_leaves(_t, _n)])\n'
+            '(state(_s), [_s]) >> ([_s])\n'
+            '(state2(_s0, _s), [_s]) >> ([_s0])\n'
+            'count_leaves("leaf") >> (state(_n0), {_n := _n0 + 1}, state2(_, _n))\n'
+            'count_leaves([_l, _r]) >> (count_leaves(_l), count_leaves(_r))\n'
+            'num_leaves(_t, _n) <- phrase(count_leaves(_t), [0], [_n])\n'
         )
         mod = _load("pi", src, tmp_path)
         n = Var()
@@ -708,7 +708,7 @@ class TestDCGStringInput:
 
     def test_phrase2_dcg_with_args_string(self, tmp_path):
         """DCG with args extracts characters from string input."""
-        src = 'tok(T_) >> ([T_])\n'
+        src = 'tok(_t) >> ([_t])\n'
         mod = _load("ds8", src, tmp_path)
         cls = mod.module_dict["tok"]
         v = Var()
@@ -719,7 +719,7 @@ class TestDCGStringInput:
 
     def test_phrase2_inline_goal_string(self, tmp_path):
         """DCG with inline goal on string input."""
-        src = 'vowel(V_) >> ([V_], {In(V_, ["a", "e", "i", "o", "u"])})\n'
+        src = 'vowel(_v) >> ([_v], {In(_v, ["a", "e", "i", "o", "u"])})\n'
         mod = _load("ds9", src, tmp_path)
         cls = mod.module_dict["vowel"]
         v = Var()

@@ -141,7 +141,7 @@ class TestCachedCorrectness:
         """Rules (head <- body) work from cache."""
         src = tmp_path / "rules_cached.clausal"
         src.write_text(textwrap.dedent("""\
-            double(X_, Y_) <- (Y_ := X_ * 2)
+            double(_x, _y) <- (_y := _x * 2)
         """))
         mod_name = "_pycache_rules_test"
         try:

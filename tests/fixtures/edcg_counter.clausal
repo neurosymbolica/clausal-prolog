@@ -4,8 +4,8 @@
 
 -module(edcg_counter, [run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS)])
 
--edcg_acc(counter, X_, In_, Out_, {Out_ := In_ + X_})
--edcg_acc(items, Item_, In_, Out_, {Out_ is [Item_, *In_]})
+-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})
+-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})
 -edcg_pass(scale)
 
 -edcg_pred(scaled_inc, 0, [counter, scale])

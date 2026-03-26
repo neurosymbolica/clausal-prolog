@@ -17,40 +17,40 @@
 # ── functor/3 — construction mode ────────────────────────────────────────────
 
 Test("construct atom: Functor(T, a, 0)") <- (
-    Functor(T_, a, 0),
-    T_ == a
+    Functor(_t, a, 0),
+    _t == a
 )
 
 # ── functor/3 — decomposition of atoms ───────────────────────────────────────
 # Strings are atoms; functor/3 can decompose them
 
 Test("decompose atom: Functor('Hello', Name, Arity)") <- (
-    Functor(Hello, N_, A_),
-    N_ == Hello,
-    A_ == 0
+    Functor(Hello, _n, _a),
+    _n == Hello,
+    _a == 0
 )
 
 Test("decompose empty string") <- (
-    Functor("", N_, A_),
-    N_ == "",
-    A_ == 0
+    Functor("", _n, _a),
+    _n == "",
+    _a == 0
 )
 
 # ── univ/2 — construction from list ──────────────────────────────────────────
 
 Test("construct atom from list: T =.. ['a']") <- (
-    Unpack(T_, [a]),
-    T_ == a
+    Unpack(_t, [a]),
+    _t == a
 )
 
 # ── univ/2 — decomposition of atoms ──────────────────────────────────────────
 
 Test("decompose atom: 'a' =.. X") <- (
-    Unpack(a, X_),
-    X_ == [a]
+    Unpack(a, _x),
+    _x == [a]
 )
 
 Test("decompose string: 'Hello' =.. X") <- (
-    Unpack(Hello, X_),
-    X_ == [Hello]
+    Unpack(Hello, _x),
+    _x == [Hello]
 )

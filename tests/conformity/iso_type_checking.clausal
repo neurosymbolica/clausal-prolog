@@ -10,8 +10,8 @@
 #   [] is a list, not an atom
 #
 # Limitations in .clausal syntax:
-#   - float_/1 has trailing underscore so it's parsed as a logic variable.
-#     float_ tests must use Python test file.
+#   - float_ no longer has trailing underscore issue (convention changed to leading underscore).
+#     However, float_ tests still use Python test file for other reasons.
 #   - Negative literals like -1 are parsed as Negate(1), not as int.
 #     Tests needing negative int args must use Python test file.
 #   - Complex Python types (bool, complex) can't be tested directly.
@@ -31,22 +31,22 @@ IsBoundNumber(X) <- (
 
 # ── IsVar/1 ────────────────────────────────────────────────────────────────────
 
-Test("var: unbound var succeeds") <- IsVar(X_)
+Test("var: unbound var succeeds") <- IsVar(_x)
 Test("var: integer fails") <- (not IsVar(42))
 Test("var: atom fails") <- (not IsVar(Hello))
 Test("var: bound var fails") <- (
-    X_ is 1,
-    not IsVar(X_)
+    _x is 1,
+    not IsVar(_x)
 )
 
 # ── IsBound/1 ─────────────────────────────────────────────────────────────────
 
 Test("nonvar: integer succeeds") <- IsBound(42)
 Test("nonvar: atom succeeds") <- IsBound(Hello)
-Test("nonvar: unbound var fails") <- (not IsBound(X_))
+Test("nonvar: unbound var fails") <- (not IsBound(_x))
 Test("nonvar: bound var succeeds") <- (
-    X_ is 1,
-    IsBound(X_)
+    _x is 1,
+    IsBound(_x)
 )
 Test("nonvar: list succeeds") <- IsBound([1, 2])
 
@@ -56,7 +56,7 @@ Test("atom: declared atom succeeds") <- IsAtom(Hello)
 Test("atom: declared atom Abc") <- IsAtom(Abc)
 Test("atom: string fails") <- (not IsAtom("hello"))
 Test("atom: integer fails") <- (not IsAtom(1))
-Test("atom: unbound var fails") <- (not IsAtom(X_))
+Test("atom: unbound var fails") <- (not IsAtom(_x))
 
 # ── IsStr/1 ───────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ Test("str: plain string succeeds") <- IsStr("hello")
 Test("str: empty string succeeds") <- IsStr("")
 Test("str: declared atom fails") <- (not IsStr(Hello))
 Test("str: integer fails") <- (not IsStr(1))
-Test("str: unbound var fails") <- (not IsStr(X_))
+Test("str: unbound var fails") <- (not IsStr(_x))
 Test("str: list fails") <- (not IsStr([]))
 
 # ── IsInt/1 ────────────────────────────────────────────────────────────────────
@@ -73,25 +73,25 @@ Test("integer: positive") <- IsInt(1)
 Test("integer: zero") <- IsInt(0)
 Test("integer: large") <- IsInt(100000000000000000000)
 Test("integer: string fails") <- (not IsInt("1"))
-Test("integer: var fails") <- (not IsInt(X_))
+Test("integer: var fails") <- (not IsInt(_x))
 # Note: IsInt(-1), IsInt(True/False) tested in Python test file
 
 # ── IsFloat/1 ─────────────────────────────────────────────────────────────────
-# Note: IsFloat can be tested in .clausal (no longer a trailing-underscore name)
+# Note: IsFloat can be tested in .clausal (not a logic variable name)
 
 # ── IsNumber/1 ─────────────────────────────────────────────────────────────────
 
 Test("number: integer") <- IsNumber(42)
 Test("number: float") <- IsNumber(3.14)
 Test("number: string fails") <- (not IsNumber("42"))
-Test("number: var fails") <- (not IsNumber(X_))
+Test("number: var fails") <- (not IsNumber(_x))
 
 # ── IsCallable/1 (declared atoms) ─────────────────────────────────────────────
 
 Test("callable: declared atom") <- IsCallable(Hello)
 Test("callable: string") <- IsCallable("hello")
 Test("callable: int fails") <- (not IsCallable(42))
-Test("callable: var fails") <- (not IsCallable(X_))
+Test("callable: var fails") <- (not IsCallable(_x))
 
 # ── IsList/1 ────────────────────────────────────────────────────────────────────
 
@@ -100,7 +100,7 @@ Test("is_list: empty") <- IsList([])
 Test("is_list: nested") <- IsList([[1], [2]])
 Test("is_list: string fails") <- (not IsList(Hello))
 Test("is_list: int fails") <- (not IsList(42))
-Test("is_list: var fails") <- (not IsList(X_))
+Test("is_list: var fails") <- (not IsList(_x))
 
 # ── IsGround/1 ─────────────────────────────────────────────────────────────────
 
@@ -108,11 +108,11 @@ Test("ground: integer") <- IsGround(42)
 Test("ground: declared atom") <- IsGround(Abc)
 Test("ground: ground list") <- IsGround([1, 2, 3])
 Test("ground: empty list") <- IsGround([])
-Test("ground: var fails") <- (not IsGround(X_))
+Test("ground: var fails") <- (not IsGround(_x))
 
 # ── IsBoundNumber/1 (private helper) ─────────────────────────────────────────
 
 Test("is_bound_number: integer") <- IsBoundNumber(42)
 Test("is_bound_number: float") <- IsBoundNumber(3.14)
 Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))
-Test("is_bound_number: unbound fails") <- (not IsBoundNumber(X_))
+Test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x))

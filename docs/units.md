@@ -14,8 +14,8 @@ syntactic sugar for writing measurements inline.
 
 # SI sugar: n(Unit) — Unit must be an SI predicate
 distance := 100(m)              # Quantity(100, {Metre: 1})
-time_    := 9.58(s)             # Quantity(9.58, {Second: 1})
-speed    := distance / time_    # Quantity(10.4…, {Metre: 1, Second: -1})
+_time    := 9.58(s)             # Quantity(9.58, {Second: 1})
+speed    := distance / _time    # Quantity(10.4…, {Metre: 1, Second: -1})
 
 # SI prefix: plain number, multiply in ++ escape
 big_force := ++(5 * kilo * Newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:-2})

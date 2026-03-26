@@ -16,7 +16,7 @@ Binding modes
 - **Explicit groups** — ``Match(pat, S, G)`` — G is a dict of named groups
   (or tuple of positional groups if no named groups)
 - **Auto-binding** (via goal expansion) — ``Match(r"(?P<YEAR>\\d{4})", S)``
-  auto-binds ALLCAPS/trailing-underscore named groups to clause variables
+  auto-binds ALLCAPS/leading-underscore named groups to clause variables
 
 Auto-binding is handled by ``clausal.logic.goal_expansion`` at compile
 time; the predicates here just do the runtime work.

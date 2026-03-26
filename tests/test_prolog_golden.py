@@ -100,11 +100,11 @@ class TestInNotIn:
     """Tests for the in/not-in → member translation."""
 
     def test_in_translates_to_member(self):
-        result = clausal_source_to_prolog("Test() <- (X_ in [1, 2, 3])")
+        result = clausal_source_to_prolog("Test() <- (_x in [1, 2, 3])")
         assert "member(X, [1, 2, 3])" in result
 
     def test_not_in_translates_to_negated_member(self):
-        result = clausal_source_to_prolog("Test() <- (X_ not in [1, 2, 3])")
+        result = clausal_source_to_prolog("Test() <- (_x not in [1, 2, 3])")
         assert "\\+ member(X, [1, 2, 3])" in result or "\\+(member(X, [1, 2, 3]))" in result
 
 
@@ -125,7 +125,7 @@ class TestUntranslatable:
 
     def test_double_uadd_warning(self):
         """++expr emits a warning comment."""
-        result = clausal_source_to_prolog("Test() <- (R_ := ++len(L_))")
+        result = clausal_source_to_prolog("Test() <- (_r := ++len(_l))")
         assert "WARNING" in result
         assert "untranslatable" in result
         assert "len" in result
@@ -134,7 +134,7 @@ class TestUntranslatable:
         """f-strings become format/2 in SWI dialect."""
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
-            'Test() <- (X_ is f"hello {NAME}")',
+            'Test() <- (_x is f"hello {NAME}")',
             dialect=Dialect.swi(),
         )
         assert "format" in result
@@ -142,13 +142,13 @@ class TestUntranslatable:
 
     def test_fstring_iso_warning(self):
         """f-strings emit a warning in ISO dialect."""
-        result = clausal_source_to_prolog('Test() <- (X_ is f"hello {NAME}")')
+        result = clausal_source_to_prolog('Test() <- (_x is f"hello {NAME}")')
         assert "WARNING" in result
         assert "f-string" in result
 
     def test_set_single_element_is_curly(self):
         """Single-element set {Goal} becomes DCG inline goal."""
-        result = clausal_source_to_prolog("Test() <- {X_ > 0}")
+        result = clausal_source_to_prolog("Test() <- {_x > 0}")
         assert "{" in result
         assert "WARNING" not in result
 
@@ -162,14 +162,14 @@ class TestUntranslatable:
         """Dict literal uses dict_create in SWI dialect."""
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
-            'Test() <- (X_ is {"a": 1})',
+            'Test() <- (_x is {"a": 1})',
             dialect=Dialect.swi(),
         )
         assert "dict_create" in result
 
     def test_dict_iso_warning(self):
         """Dict literal emits warning in ISO dialect."""
-        result = clausal_source_to_prolog('Test() <- (X_ is {"a": 1})')
+        result = clausal_source_to_prolog('Test() <- (_x is {"a": 1})')
         assert "WARNING" in result
         assert "dict literal" in result
 
@@ -239,7 +239,7 @@ class TestCLI:
     def test_cli_file(self, tmp_path):
         import subprocess
         src = tmp_path / "test.clausal"
-        src.write_text("Bar(X_) <- Baz(X_)\n")
+        src.write_text("Bar(_x) <- Baz(_x)\n")
         out = tmp_path / "test.pl"
         result = subprocess.run(
             ["python", "-m", "clausal.tools.clausal_to_prolog", str(src), "-o", str(out)],

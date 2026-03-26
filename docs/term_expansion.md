@@ -151,7 +151,7 @@ Goal expansion rewrites individual goals within clause bodies at compile time. U
 
 The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transformations automatically:
 
-**Regex auto-binding**: Named capture groups with ALLCAPS or trailing-underscore names are automatically bound to clause variables:
+**Regex auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables:
 
 ```clausal
 # skip

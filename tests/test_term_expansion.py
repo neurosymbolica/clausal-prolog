@@ -87,9 +87,9 @@ class TestTermExpansionDetection:
     def test_detects_te_clause(self):
         """TermExpansion/4 clauses are detected."""
         source = (
-            'TermExpansion(Term_, Expansion_, M0_, M1_) <- ('
-            '    Term_ is Expansion_,'
-            '    M0_ is M1_'
+            'TermExpansion(_term, _expansion, _m0, _m1) <- ('
+            '    _term is _expansion,'
+            '    _m0 is _m1'
             ')\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -110,7 +110,7 @@ class TestIdentityExpansion:
     def test_identity_expansion(self):
         """TermExpansion(T, T, M, M) passes all items through."""
         source = (
-            'TermExpansion(Term_, Term_, M0_, M0_) <- True\n'
+            'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'foo("a"),\n'
             'foo("b"),\n'
         )
@@ -140,7 +140,7 @@ class TestSuppression:
     def test_suppress_all(self):
         """TermExpansion(T, 'none', M, M) suppresses all items."""
         source = (
-            'TermExpansion(Term_, "none", M0_, M0_) <- True\n'
+            'TermExpansion(_term, "none", _m0, _m0) <- True\n'
             'foo("a"),\n'
             'foo("b"),\n'
         )
@@ -163,7 +163,7 @@ class TestTeNotExpanded:
     def test_te_clauses_removed_from_output(self):
         """TE clauses are separated, not passed through expansion."""
         source = (
-            'TermExpansion(Term_, Term_, M0_, M0_) <- True\n'
+            'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'foo("x"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -180,7 +180,7 @@ class TestOneToMany:
     def test_duplicate_items(self):
         """TermExpansion(T, [T, T], M, M) duplicates each item."""
         source = (
-            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -192,7 +192,7 @@ class TestOneToMany:
     def test_duplicate_full_pipeline(self):
         """Full pipeline: duplicate items → double the clauses."""
         source = (
-            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'item("x"),\n'
             'item("y"),\n'
         )
@@ -213,10 +213,10 @@ class TestModuleState:
 
     def test_state_unmatched_passes_through(self):
         """When TE rule doesn't match state, items pass through unchanged."""
-        # Rule requires Count_ + 1 but initial state is "nil" → fails → pass-through
+        # Rule requires _count + 1 but initial state is "nil" → fails → pass-through
         source = (
-            'TermExpansion(Term_, Term_, ModuleExpansionState(I_, F_, Count_), '
-            'ModuleExpansionState(I_, F_, Next_)) <- (Next_ := Count_ + 1)\n'
+            'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
+            'ModuleExpansionState(_i, _f, _next)) <- (_next := _count + 1)\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -229,9 +229,9 @@ class TestQuasiQuotation:
     """Test q(...) quasi-quotation in TermTransformer."""
 
     def test_q_produces_call_node(self):
-        """q(foo(X_)) produces a Call constructor AST node."""
+        """q(foo(_x)) produces a Call constructor AST node."""
         from clausal.templating.term_rewriting import TermTransformer
-        tree = ast.parse("q(foo(X_))", mode="eval").body
+        tree = ast.parse("q(foo(_x))", mode="eval").body
         t = TermTransformer()
         result = t.visit(tree)
 
@@ -246,10 +246,10 @@ class TestQuasiQuotation:
     def test_q_shares_vars(self):
         """Variables inside q() are shared with the enclosing context."""
         from clausal.templating.term_rewriting import TermTransformer
-        tree = ast.parse("[q(foo(X_)), bar(X_)]", mode="eval").body
+        tree = ast.parse("[q(foo(_x)), bar(_x)]", mode="eval").body
         t = TermTransformer()
         t.visit(tree)
-        assert "X_" in t.seen_vars
+        assert "_x" in t.seen_vars
 
 
 class TestModuleItemsUnchanged:
@@ -284,7 +284,7 @@ class TestIntegrationWithCompileModule:
     def test_identity_expansion_full_pipeline(self):
         """Full pipeline with identity TE — all clauses survive."""
         source = (
-            'TermExpansion(Term_, Term_, M0_, M0_) <- True\n'
+            'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'bar("x"),\n'
             'bar("y"),\n'
         )
@@ -301,7 +301,7 @@ class TestIntegrationWithCompileModule:
     def test_suppression_full_pipeline(self):
         """Full pipeline with suppression TE — no clauses compiled."""
         source = (
-            'TermExpansion(Term_, "none", M0_, M0_) <- True\n'
+            'TermExpansion(_term, "none", _m0, _m0) <- True\n'
             'baz("a"),\n'
         )
         preds, items, md = _parse_and_collect(source)
@@ -360,13 +360,13 @@ class TestNewFunctorsFromExpansion:
         """TermExpansion rewrites src/1 facts into dst/1 facts."""
         # The expansion rule rewrites every item into an item with a different
         # functor name ("dst") that doesn't appear in the original source.
-        # Because the TE rule unifies Term_ with the original Predicate node
-        # and Expansion_ is constructed by Clausal's own unification, the
+        # Because the TE rule unifies _term with the original Predicate node
+        # and _expansion is constructed by Clausal's own unification, the
         # result is a new Predicate node with head dst(...).
         source = (
-            'TermExpansion(Term_, Exp_, M0_, M0_) <- (\n'
-            '    Term_ is Exp_,\n'  # identity — passes item through
-            '    M0_ is M0_\n'
+            'TermExpansion(_term, _exp, _m0, _m0) <- (\n'
+            '    _term is _exp,\n'  # identity — passes item through
+            '    _m0 is _m0\n'
             ')\n'
             'src("hello"),\n'
         )
@@ -383,7 +383,7 @@ class TestNewFunctorsFromExpansion:
         that weren't in the original source (extra clauses for same functor).
         """
         source = (
-            'TermExpansion(Term_, [Term_, Term_], M0_, M0_) <- True\n'
+            'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'color("red"),\n'
             'color("blue"),\n'
         )
@@ -407,8 +407,8 @@ class TestInitFinalInjection:
         # This TE rule passes items through but adds each item to the
         # init list (prepended items).
         source = (
-            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
-            'ModuleExpansionState([Term_ | Init_], Final_, S_)) <- True\n'
+            'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
+            'ModuleExpansionState([_term | _init], _final, _s)) <- True\n'
             'item("a"),\n'
             'item("b"),\n'
         )
@@ -421,8 +421,8 @@ class TestInitFinalInjection:
     def test_final_list_injection(self):
         """TermExpansion accumulates final items via module state."""
         source = (
-            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
-            'ModuleExpansionState(Init_, [Term_ | Final_], S_)) <- True\n'
+            'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
+            'ModuleExpansionState(_init, [_term | _final], _s)) <- True\n'
             'item("x"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -433,8 +433,8 @@ class TestInitFinalInjection:
     def test_init_final_full_pipeline(self):
         """Full pipeline with init/final injection — all items compiled."""
         source = (
-            'TermExpansion(Term_, Term_, ModuleExpansionState(Init_, Final_, S_), '
-            'ModuleExpansionState([Term_ | Init_], [Term_ | Final_], S_)) <- True\n'
+            'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
+            'ModuleExpansionState([_term | _init], [_term | _final], _s)) <- True\n'
             'val("one"),\n'
         )
         preds, items, md = _parse_and_collect(source)

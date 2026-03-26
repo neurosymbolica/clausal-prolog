@@ -36,8 +36,8 @@ class TestNaming:
     def test_snake_to_pascal_copy_term(self):
         assert snake_to_pascal("copy_term") == "CopyTerm"
 
-    def test_var_trailing_underscore(self):
-        assert clausal_var_to_prolog("X_") == "X"
+    def test_var_leading_underscore(self):
+        assert clausal_var_to_prolog("_x") == "X"
 
     def test_var_allcaps(self):
         assert clausal_var_to_prolog("RESULT") == "Result"
@@ -48,8 +48,8 @@ class TestNaming:
     def test_var_anon(self):
         assert clausal_var_to_prolog("_") == "_"
 
-    def test_var_lowercase_trailing(self):
-        assert clausal_var_to_prolog("head_") == "Head"
+    def test_var_lowercase_leading(self):
+        assert clausal_var_to_prolog("_head") == "Head"
 
 
 # ── emit_term ────────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
 
     def test_variable_naming(self):
         """Variables follow clausal → Prolog naming conventions."""
-        source = 'Foo(X_, head_, RESULT) <- Bar(X_, head_, RESULT)'
+        source = 'Foo(_x, _head, RESULT) <- Bar(_x, _head, RESULT)'
         result = clausal_source_to_prolog(source)
         assert "foo(X, Head, Result)" in result
         assert "bar(X, Head, Result)" in result
@@ -387,13 +387,13 @@ class TestPrologAstConversion:
         assert isinstance(item, PDirective)
 
     def test_variables_converted(self):
-        source = 'Foo(X_, head_),\n'
+        source = 'Foo(_x, _head),\n'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         assert isinstance(item, PClause)
         head = item.head
         assert isinstance(head, PCompound)
-        # X_ → PVar("X"), head_ → PVar("Head")
+        # _x → PVar("X"), _head → PVar("Head")
         assert head.args[0] == PVar("X")
         assert head.args[1] == PVar("Head")
 

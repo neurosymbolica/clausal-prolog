@@ -261,8 +261,8 @@ All higher-order list predicates use **committed choice** — they take the firs
     
     result = Var()
     lam = sa.Lambda(
-        params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
-        body=Evaluate(left=result, right=Add(left=LoadName(name="X_"), right=1)),
+        params=sa.Params(params=[sa.PosOrKwParam(name="_x")]),
+        body=Evaluate(left=result, right=Add(left=LoadName(name="_x"), right=1)),
     )
     ```
 

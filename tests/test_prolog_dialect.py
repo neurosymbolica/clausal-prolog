@@ -87,8 +87,8 @@ class TestSnakeToPascal:
 
 
 class TestClausalVarToProlog:
-    def test_trailing_underscore(self):
-        assert clausal_var_to_prolog("X_") == "X"
+    def test_leading_underscore(self):
+        assert clausal_var_to_prolog("_x") == "X"
 
     def test_allcaps(self):
         assert clausal_var_to_prolog("RESULT") == "Result"
@@ -99,15 +99,15 @@ class TestClausalVarToProlog:
     def test_anon(self):
         assert clausal_var_to_prolog("_") == "_"
 
-    def test_lowercase_trailing(self):
-        assert clausal_var_to_prolog("head_") == "Head"
+    def test_lowercase_leading(self):
+        assert clausal_var_to_prolog("_head") == "Head"
 
-    def test_mixed_trailing(self):
-        assert clausal_var_to_prolog("foo_") == "Foo"
+    def test_mixed_leading(self):
+        assert clausal_var_to_prolog("_foo") == "Foo"
 
-    def test_head_allcaps(self):
-        # HEAD_ -> strip underscore -> HEAD (allcaps, len>1) -> titlecase Head
-        assert clausal_var_to_prolog("HEAD_") == "Head"
+    def test_head_leading(self):
+        # _head -> strip underscore -> head -> capitalize -> Head
+        assert clausal_var_to_prolog("_head") == "Head"
 
     def test_single_upper(self):
         assert clausal_var_to_prolog("Y") == "Y"
@@ -118,19 +118,19 @@ class TestPrologVarToClausal:
         assert prolog_var_to_clausal("X") == "X"
 
     def test_titlecase(self):
-        assert prolog_var_to_clausal("Foo") == "foo_"
+        assert prolog_var_to_clausal("Foo") == "_foo"
 
     def test_head(self):
-        assert prolog_var_to_clausal("Head") == "head_"
+        assert prolog_var_to_clausal("Head") == "_head"
 
     def test_leading_underscore(self):
-        assert prolog_var_to_clausal("_Ignored") == "ignored_"
+        assert prolog_var_to_clausal("_Ignored") == "_ignored"
 
     def test_anon(self):
         assert prolog_var_to_clausal("_") == "_"
 
     def test_result(self):
-        assert prolog_var_to_clausal("Result") == "result_"
+        assert prolog_var_to_clausal("Result") == "_result"
 
 
 class TestResolveName:

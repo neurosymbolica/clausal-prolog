@@ -1,15 +1,15 @@
-Squares(numbers_, squares_) <- (FindAll(square_, In(X, numbers_), square_ := X * X, squares_))
+Squares(_numbers, _squares) <- (FindAll(_square, In(X, _numbers), _square := X * X, _squares))
 
-Positives(numbers_, positives_) <- (FindAll(X, In(X, numbers_), X > 0, positives_))
+Positives(_numbers, _positives) <- (FindAll(X, In(X, _numbers), X > 0, _positives))
 
-UniqueMembers(numbers_, unique_) <- (SetOf(X, In(X, numbers_), unique_))
+UniqueMembers(_numbers, _unique) <- (SetOf(X, In(X, _numbers), _unique))
 
-AllPositive(numbers_) <- (ForAll(In(X, numbers_), X > 0))
+AllPositive(_numbers) <- (ForAll(In(X, _numbers), X > 0))
 
-Test('squares') <- (Squares([1, 2, 3], squares_), squares_ == [1, 4, 9])
+Test('squares') <- (Squares([1, 2, 3], _squares), _squares == [1, 4, 9])
 
-Test('positives') <- (Positives([-1, 2, -3, 4], positives_), positives_ == [2, 4])
+Test('positives') <- (Positives([-1, 2, -3, 4], _positives), _positives == [2, 4])
 
-Test('unique members') <- (UniqueMembers([1, 2, 1, 3, 2], unique_), unique_ == [1, 2, 3])
+Test('unique members') <- (UniqueMembers([1, 2, 1, 3, 2], _unique), _unique == [1, 2, 3])
 
 Test('all positive') <- (AllPositive([1, 2, 3]))

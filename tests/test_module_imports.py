@@ -378,7 +378,7 @@ class TestVisitAttributeValidation:
         import tempfile
         src = (
             '-import_module(tests.fixtures.importable_utils)\n'
-            'Bad(X_) <- X_.foo(X_)\n'
+            'Bad(_x) <- _x.foo(_x)\n'
         )
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
                                          delete=False) as f:
@@ -393,7 +393,7 @@ class TestVisitAttributeValidation:
         import tempfile
         src = (
             '-import_module(tests.fixtures.importable_utils)\n'
-            'Bad(X_) <- mod.X_(X_)\n'
+            'Bad(_x) <- mod._x(_x)\n'
         )
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
                                          delete=False) as f:
@@ -433,7 +433,7 @@ class TestDottedRemap:
         import tempfile
         src = (
             '-import_from(tests.fixtures.importable_utils, [Double])\n'
-            'UseDouble(X_, Y_) <- Double(X_, Y_)\n'
+            'UseDouble(_x, _y) <- Double(_x, _y)\n'
         )
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
                                          delete=False) as f:

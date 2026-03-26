@@ -325,13 +325,13 @@ The translator handles bidirectional name conversion:
 
 ### Improvement: Prefer ALLCAPS for Variables
 
-When translating Prolog variables to Clausal, prefer ALLCAPS over trailing
+When translating Prolog variables to Clausal, prefer ALLCAPS over leading
 underscore for readability:
 
-- `List` → `LIST` (not `list_`)
-- `Head` → `HEAD` (not `head_`)
-- `Result` → `RESULT` (not `result_`)
-- `Xs` → `XS` (not `xs_`)
+- `List` → `LIST` (not `_list`)
+- `Head` → `HEAD` (not `_head`)
+- `Result` → `RESULT` (not `_result`)
+- `Xs` → `XS` (not `_xs`)
 
 ---
 

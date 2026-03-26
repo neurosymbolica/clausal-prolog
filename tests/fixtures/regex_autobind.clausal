@@ -42,11 +42,11 @@ Test("auto-bind many groups") <- (
     S == "https" and H == "example.com" and P == "8080" and PA == "/api/v1"
 )
 
-# ── Trailing-underscore groups ──────────────────────────────────────────────
+# ── Leading-underscore groups ──────────────────────────────────────────────
 
-ExtractWord(S, word_) <- Match(r"(?P<word_>\w+)", S)
+ExtractWord(S, _word) <- Match(r"(?P<_word>\w+)", S)
 
-Test("trailing underscore auto-bind") <- (ExtractWord("hello world", W) and W == "hello")
+Test("leading underscore auto-bind") <- (ExtractWord("hello world", W) and W == "hello")
 
 # ── Mixed ALLCAPS and lowercase groups ──────────────────────────────────────
 

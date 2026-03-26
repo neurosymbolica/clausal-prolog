@@ -56,51 +56,51 @@ Test("expression: 1+2 <= 3") <- (1 + 2 <= 3)
 
 Test("succ forward: succ(3,4)") <- Succ(3, 4)
 Test("succ backward: succ(X,4)=3") <- (
-    Succ(X_, 4),
-    X_ == 3
+    Succ(_x, 4),
+    _x == 3
 )
 Test("succ zero: succ(0,1)") <- Succ(0, 1)
 Test("plus forward: 2+3=5") <- Plus(2, 3, 5)
 Test("plus backward x: X+3=5") <- (
-    Plus(X_, 3, 5),
-    X_ == 2
+    Plus(_x, 3, 5),
+    _x == 2
 )
 Test("plus backward y: 2+Y=5") <- (
-    Plus(2, Y_, 5),
-    Y_ == 3
+    Plus(2, _y, 5),
+    _y == 3
 )
 Test("between check: 3 in 1..5") <- Between(1, 5, 3)
 Test("between out of range") <- (not Between(1, 5, 6))
-# Note: abs_/2, max_/3, min_/3 have trailing underscores so they are parsed
-# as logic variables in .clausal syntax.  Tested in Python test file instead.
+# Note: abs_/2, max_/3, min_/3 are tested in Python test file (naming issue
+# with builtin shadowing, not related to variable convention).
 
 # ── Private helper predicates ──────────────────────────────────────────────
 
 Test("double 3 is 6") <- (
-    Double(3, Y_),
-    Y_ == 6
+    Double(3, _y),
+    _y == 6
 )
 Test("double 0 is 0") <- (
-    Double(0, Y_),
-    Y_ == 0
+    Double(0, _y),
+    _y == 0
 )
 Test("square 4 is 16") <- (
-    Square(4, Y_),
-    Y_ == 16
+    Square(4, _y),
+    _y == 16
 )
 Test("square 1 is 1") <- (
-    Square(1, Y_),
-    Y_ == 1
+    Square(1, _y),
+    _y == 1
 )
 Test("triangle 5 is 15") <- (
-    TriangleNumber(5, T_),
-    T_ == 15
+    TriangleNumber(5, _t),
+    _t == 15
 )
 Test("triangle 1 is 1") <- (
-    TriangleNumber(1, T_),
-    T_ == 1
+    TriangleNumber(1, _t),
+    _t == 1
 )
 Test("triangle 10 is 55") <- (
-    TriangleNumber(10, T_),
-    T_ == 55
+    TriangleNumber(10, _t),
+    _t == 55
 )

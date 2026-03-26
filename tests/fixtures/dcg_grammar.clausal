@@ -1,7 +1,7 @@
 # DCG predicates must be declared with their full signature (including the
 # two hidden state args) in the export list, so that -module generates a
 # PredicateMeta class rather than a bare atom string assignment.
--module(dcg_grammar, [sentence(S0_, S_), noun_phrase(S0_, S_), verb_phrase(S0_, S_), greeting(S0_, S_), digit(DIGIT, S0_, S_), ab(S0_, S_), look_ahead(TOKEN, S0_, S_), not_a(S0_, S_), expr_dcg(EXPRESSION, S0_, S_), valid_sentence(SENTENCE)])
+-module(dcg_grammar, [sentence(_s0, _s), noun_phrase(_s0, _s), verb_phrase(_s0, _s), greeting(_s0, _s), digit(DIGIT, _s0, _s), ab(_s0, _s), look_ahead(TOKEN, _s0, _s), not_a(_s0, _s), expr_dcg(EXPRESSION, _s0, _s), valid_sentence(SENTENCE)])
 
 greeting >> (["hello", "world"])
 

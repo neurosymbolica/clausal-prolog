@@ -31,13 +31,13 @@ class TestEmitTerm:
         assert emit_clausal_term(PVar("X")) == "X"
 
     def test_variable_titlecase(self):
-        assert emit_clausal_term(PVar("Head")) == "head_"
+        assert emit_clausal_term(PVar("Head")) == "_head"
 
     def test_variable_anonymous(self):
         assert emit_clausal_term(PVar("_")) == "_"
 
     def test_variable_named_underscore(self):
-        assert emit_clausal_term(PVar("_Ignored")) == "ignored_"
+        assert emit_clausal_term(PVar("_Ignored")) == "_ignored"
 
     def test_integer(self):
         assert emit_clausal_term(PNumber(42)) == "42"
@@ -156,7 +156,7 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
     def test_list_cons(self):
         src = "head([H|T], H)."
         result = prolog_to_clausal(src)
-        assert "[head_, *tail_]" in result or "[H, *T]" in result.replace("head_", "H").replace("tail_", "T")
+        assert "[_head, *_tail]" in result or "[H, *T]" in result.replace("_head", "H").replace("_tail", "T")
 
     def test_unification(self):
         src = "test :- X = foo."
@@ -256,8 +256,8 @@ class TestNamingConventions:
     def test_variable_conversion(self):
         src = "foo(Head, Tail)."
         result = prolog_to_clausal(src)
-        assert "head_" in result
-        assert "tail_" in result
+        assert "_head" in result
+        assert "_tail" in result
 
     def test_single_letter_var(self):
         src = "foo(X, Y)."

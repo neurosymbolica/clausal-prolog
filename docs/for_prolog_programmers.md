@@ -33,7 +33,7 @@ out of the box, but some Prolog conventions must change.
 | Prolog | Clausal | Notes |
 |---|---|---|
 | `parent(alice, bob).` | `parent("alice", "bob"),` | Trailing comma, not period. Undeclared atoms are strings; declared atoms are zero-arity classes. |
-| `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or trailing underscore: `x_`) |
+| `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or leading underscore: `_x`) |
 | `_` | `_` | Anonymous variable — same |
 | `head :- body.` | `head <- (body)` | `<-` instead of `:-`. Multi-goal bodies parenthesized. |
 | `a, b, c` (conjunction) | `a, b, c` | Same — comma is conjunction |

@@ -549,7 +549,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ### Regex auto-binding
 
-When a `Match/2` or `Search/2` call has a static pattern string containing ALLCAPS or trailing-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
+When a `Match/2` or `Search/2` call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
 
 ```clausal
 # Source:
@@ -563,7 +563,7 @@ parse(S, YEAR, MONTH) <- (
 )
 ```
 
-The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. Group-to-variable mapping uses `_collect_vars_from_term()` to find clause variables by field name (lowercased, stripped of trailing underscore).
+The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. Group-to-variable mapping uses `_collect_vars_from_term()` to find clause variables by field name (lowercased, stripped of leading underscore).
 
 Lowercase named groups are NOT auto-bound — they function as regex-only groups (useful for backreferences). This gives explicit control over which groups leak into the logic variable namespace.
 

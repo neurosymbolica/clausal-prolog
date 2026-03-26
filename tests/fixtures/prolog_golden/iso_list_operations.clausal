@@ -1,14 +1,14 @@
 -module(iso_list_operations, [Test/1]),
 
-Palindrome(xs_) <- (Reverse(xs_, xs_))
+Palindrome(_xs) <- (Reverse(_xs, _xs))
 
 SortedAsc([]),
 
 SortedAsc([_]),
 
-SortedAsc([A, B, *rest_]) <- (A <= B, SortedAsc([B, *rest_]))
+SortedAsc([A, B, *_rest]) <- (A <= B, SortedAsc([B, *_rest]))
 
-IsPermutation(xs_, ys_) <- (Length(xs_, N), Length(ys_, N), Sort(xs_, S), Sort(ys_, S))
+IsPermutation(_xs, _ys) <- (Length(_xs, N), Length(_ys, N), Sort(_xs, S), Sort(_ys, S))
 
 Test('in: found') <- (b in [a, b, c])
 
@@ -64,7 +64,7 @@ Test('reverse empty') <- (Reverse([], []))
 
 Test('reverse singleton') <- (Reverse([42], [42]))
 
-Test('reverse involution') <- (Reverse([1, 2, 3], R), Reverse(R, rr_), rr_ == [1, 2, 3])
+Test('reverse involution') <- (Reverse([1, 2, 3], R), Reverse(R, _rr), _rr == [1, 2, 3])
 
 Test('nth0 first') <- (GetItem(0, [a, b, c], a))
 

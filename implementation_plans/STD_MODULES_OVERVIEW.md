@@ -34,7 +34,7 @@ has (or will have) its own detailed implementation plan.
    get first-class treatment.
 
 4. **Clausal naming conventions apply.** TitleCase predicates, ALLCAPS or
-   trailing-underscore variables, expanded names (no abbreviations).
+   leading-underscore variables, expanded names (no abbreviations).
 
 ---
 

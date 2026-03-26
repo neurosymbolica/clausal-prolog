@@ -133,7 +133,7 @@ Fails if no matches are found.
 
 ## Auto-Binding
 
-Named groups using ALLCAPS or trailing-underscore names are automatically bound to corresponding clause variables at compile time (via goal expansion). This is the key feature that makes regex feel native in Clausal.
+Named groups using ALLCAPS or leading-underscore names are automatically bound to corresponding clause variables at compile time (via goal expansion). This is the key feature that makes regex feel native in Clausal.
 
 ### ALLCAPS Groups
 
@@ -151,13 +151,13 @@ Test("parse email") <- (
 )
 ```
 
-### Trailing-Underscore Groups
+### Leading-Underscore Groups
 
 ```clausal
 -import_from(regex, [Search])
 
-ExtractPort(URL, port_) <- (
-    Search(r":(?P<port_>\d+)", URL)
+ExtractPort(URL, _port) <- (
+    Search(r":(?P<_port>\d+)", URL)
 )
 
 Test("extract port") <- (
@@ -300,7 +300,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
 ## Gotchas
 
 - **Match is anchored at start**; Search is not. Use `Search` when you want to find a pattern anywhere in the string.
-- **Auto-binding requires ALLCAPS or trailing-underscore** group names. A group named `(?P<year>...)` (lowercase, no trailing underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
+- **Auto-binding requires ALLCAPS or leading-underscore** group names. A group named `(?P<year>...)` (lowercase, no leading underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
 - **Regex FindAll vs meta-predicate FindAll**: The regex `FindAll/3` is nondeterministic (yields one match at a time). The meta-predicate `FindAll/3` collects all solutions into a list. Use qualified names (`regex.FindAll`) if both are imported.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
 
@@ -312,7 +312,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
     - **Match/2**: digits, anchoring, email, empty, unicode
     - **Match/3**: named groups, positional groups, no match
-    - **Auto-binding**: ALLCAPS groups, trailing-underscore groups
+    - **Auto-binding**: ALLCAPS groups, leading-underscore groups
     - **Search/2,3**: unanchored search, group extraction
     - **Replace/4**: whitespace, digit removal, backreferences
     - **Split/3**: comma, whitespace

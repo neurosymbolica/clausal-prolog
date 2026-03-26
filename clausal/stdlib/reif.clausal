@@ -6,9 +6,9 @@
 #   Ground queries are deterministic (no leftover choicepoints).
 #   Uses Eq/3 (reified equality) and If (reified branching).
 
-MemberdT(X_, Es_, T_) <- LMemberdT(Es_, X_, T_)
+MemberdT(_x, _es, _t) <- LMemberdT(_es, _x, _t)
 
 LMemberdT([], _, False),
-LMemberdT([E_, *Es_], X_, T_) <- (
-    If(X_ is E_, T_ is True, LMemberdT(Es_, X_, T_))
+LMemberdT([_e, *_es], _x, _t) <- (
+    If(_x is _e, _t is True, LMemberdT(_es, _x, _t))
 )

@@ -345,7 +345,7 @@ class TestInjectBucketRefs:
         ])
         assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
 
-        # Build a caller clause: caller(X_) <- color("red", X_)
+        # Build a caller clause: caller(_x) <- color("red", _x)
         # We test inject directly, so we just need the Call term in the body.
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=["red", x])
@@ -464,7 +464,7 @@ def _make_caller_via_import_hook(callee_facts, callee_name="color",
                                   caller_query_arg=None):
     """Set up callee + caller predicates using compile_predicate_trampoline.
 
-    The caller has one clause: caller(X_) <- callee(KEY, X_) for each key.
+    The caller has one clause: caller(_x) <- callee(KEY, _x) for each key.
     Returns (caller_dispatch, callee_cls).
     """
     callee_cls, _ = _make_locked_pred_cls(callee_name, callee_facts)
@@ -483,7 +483,7 @@ class TestCallsiteCorrectnessAndFallback:
         """base_globals for a caller clause contains a bucket key after compilation."""
         callee_cls, atoms = self._setup_color_pair()
 
-        # Compile a caller: find_red(X_) <- color("red", X_)
+        # Compile a caller: find_red(_x) <- color("red", _x)
         # We test that after compile_predicate_trampoline the callee's bucket
         # is accessible by checking _index_plans was used.
         assert "red" in callee_cls._index_plans.get(0, {})

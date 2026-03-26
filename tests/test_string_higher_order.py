@@ -13,12 +13,12 @@ def mod():
     """Module with character-level predicates for higher-order tests."""
     with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
         f.write(
-            '-module(ho_str, [is_vowel(C_), is_upper(C_),'
-            ' char_to_code(C_, Code_), concat_chars(C_, Acc_, Out_)])\n'
-            'is_vowel(C_) <- In(C_, ["a", "e", "i", "o", "u"])\n'
-            'is_upper(C_) <- (CharType(C_, upper))\n'
-            'char_to_code(C_, Code_) <- CharCode(C_, Code_)\n'
-            'concat_chars(C_, Acc_, Out_) <- AtomConcat(Acc_, C_, Out_)\n'
+            '-module(ho_str, [is_vowel(_c), is_upper(_c),'
+            ' char_to_code(_c, _code), concat_chars(_c, _acc, _out)])\n'
+            'is_vowel(_c) <- In(_c, ["a", "e", "i", "o", "u"])\n'
+            'is_upper(_c) <- (CharType(_c, upper))\n'
+            'char_to_code(_c, _code) <- CharCode(_c, _code)\n'
+            'concat_chars(_c, _acc, _out) <- AtomConcat(_acc, _c, _out)\n'
         )
         f.flush()
         m = _load_module("ho_str", f.name).__dict__["$module"]

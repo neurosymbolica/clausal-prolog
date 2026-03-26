@@ -422,7 +422,7 @@ class TestClausalIntegration:
         """Writeln works as a builtin call in a .clausal file."""
         src = tmp_path / "io_test.clausal"
         src.write_text(
-            "Greet(Name_) <- Writeln(f\"Hello, {Name_}!\")\n"
+            "Greet(_name) <- Writeln(f\"Hello, {_name}!\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -442,7 +442,7 @@ class TestClausalIntegration:
         """F-string with multiple vars works in .clausal."""
         src = tmp_path / "io_fstr.clausal"
         src.write_text(
-            "ShowPair(A_, B_) <- Writeln(f\"{A_} and {B_}\")\n"
+            "ShowPair(_a, _b) <- Writeln(f\"{_a} and {_b}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -459,10 +459,10 @@ class TestClausalIntegration:
         assert buf.getvalue() == "cats and dogs\n"
 
     def test_fstring_len_expression(self, tmp_path):
-        """f"{len(X_)}" works — Python function on a logic variable."""
+        """f"{len(_l)}" works — Python function on a logic variable."""
         src = tmp_path / "io_len.clausal"
         src.write_text(
-            "ShowLen(L_) <- Writeln(f\"length is {len(L_)}\")\n"
+            "ShowLen(_l) <- Writeln(f\"length is {len(_l)}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -479,10 +479,10 @@ class TestClausalIntegration:
         assert buf.getvalue() == "length is 3\n"
 
     def test_fstring_arithmetic_expression(self, tmp_path):
-        """f"{X_ + 1}" works — arithmetic on a logic variable."""
+        """f"{_n + 1}" works — arithmetic on a logic variable."""
         src = tmp_path / "io_arith.clausal"
         src.write_text(
-            "ShowNext(N_) <- Writeln(f\"next is {N_ + 1}\")\n"
+            "ShowNext(_n) <- Writeln(f\"next is {_n + 1}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -499,10 +499,10 @@ class TestClausalIntegration:
         assert buf.getvalue() == "next is 6\n"
 
     def test_fstring_str_upper(self, tmp_path):
-        """f"{X_.upper()}" works — method call on a logic variable."""
+        """f"{_s.upper()}" works — method call on a logic variable."""
         src = tmp_path / "io_upper.clausal"
         src.write_text(
-            "ShowUpper(S_) <- Writeln(f\"{S_.upper()}\")\n"
+            "ShowUpper(_s) <- Writeln(f\"{_s.upper()}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -525,7 +525,7 @@ class TestClausalIntegration:
             "Color('red'),\n"
             "Color('green'),\n"
             "Color('blue'),\n"
-            "ShowColors(X_) <- (Color(X_), Writeln(X_))\n"
+            "ShowColors(_x) <- (Color(_x), Writeln(_x))\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -542,10 +542,10 @@ class TestClausalIntegration:
         assert buf.getvalue() == "red\ngreen\nblue\n"
 
     def test_fstring_format_spec_in_clausal(self, tmp_path):
-        """f"{X_:.2f}" with format spec works in .clausal files."""
+        """f"{_x:.2f}" with format spec works in .clausal files."""
         src = tmp_path / "io_spec.clausal"
         src.write_text(
-            "ShowFloat(X_) <- Writeln(f\"{X_:.2f}\")\n"
+            "ShowFloat(_x) <- Writeln(f\"{_x:.2f}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module

@@ -108,25 +108,25 @@ class TestTermTransformerCapture:
     def test_python_lambda_syntax_rejected(self):
         """Python 'lambda' syntax raises SyntaxError in .clausal context."""
         with pytest.raises(SyntaxError, match="arrow syntax"):
-            term_eval("lambda X_: X_")
+            term_eval("lambda _x: _x")
 
     def test_lambda_param_generates_loadname(self):
         """Arrow lambda param reference in body is a LoadName (not a Var)."""
-        node = term_eval("X_ <- (X_)", sa.Lambda)
+        node = term_eval("_x <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
-        assert node.body.name == "X_"
+        assert node.body.name == "_x"
 
     def test_lambda_captures_enclosing_var(self):
         """Arrow lambda body referencing enclosing var gets the same Var."""
         node, ns = term_eval_with_scope(
-            "X_ <- (Z_)", seen_vars={"Z_"}
+            "_x <- (_z)", seen_vars={"_z"}
         )
         assert isinstance(node, sa.Lambda)
-        assert node.body is ns["Z_"]
+        assert node.body is ns["_z"]
 
     def test_lambda_body_only_var_does_not_leak(self):
         """Var introduced in arrow lambda body does not appear in enclosing scope."""
-        tree = ast.parse("X_ <- (X_)", mode="eval")
+        tree = ast.parse("_x <- (_x)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
         original_seen = tt.seen_vars.copy()
@@ -136,38 +136,38 @@ class TestTermTransformerCapture:
     def test_lambda_captures_multiple_enclosing_vars(self):
         """Arrow lambda can capture multiple enclosing scope vars."""
         node, ns = term_eval_with_scope(
-            "X_ <- (X_)", seen_vars={"A_", "B_"}
+            "_x <- (_x)", seen_vars={"_a", "_b"}
         )
         assert isinstance(node, sa.Lambda)
 
     def test_nested_lambda_captures_outer(self):
         """Nested arrow lambda captures from the outermost scope."""
-        src = "X_ <- (Y_ <- (Z_))"
-        node, ns = term_eval_with_scope(src, seen_vars={"Z_"})
+        src = "_x <- (_y <- (_z))"
+        node, ns = term_eval_with_scope(src, seen_vars={"_z"})
         assert isinstance(node, sa.Lambda)
         inner = node.body
         assert isinstance(inner, sa.Lambda)
-        assert inner.body is ns["Z_"]
+        assert inner.body is ns["_z"]
 
     def test_anonymous_underscore_in_lambda(self):
         """_ in arrow lambda body is a fresh Var (anonymous)."""
-        node = term_eval("X_ <- (_)", sa.Lambda)
+        node = term_eval("_x <- (_)", sa.Lambda)
         assert is_var(node.body)
 
     def test_param_refs_are_loadname(self):
         """Arrow lambda with logic var params produces LoadName refs in body."""
-        node = term_eval("(X_, Y_) <- (X_)", sa.Lambda)
+        node = term_eval("(_x, _y) <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
-        assert node.body.name == "X_"
+        assert node.body.name == "_x"
 
     def test_nested_lambda_outer_param_is_loadname(self):
         """Inner arrow lambda references outer param as LoadName (not Var)."""
-        src = "X_ <- (Y_ <- (X_))"
+        src = "_x <- (_y <- (_x))"
         node = term_eval(src, sa.Lambda)
         inner = node.body
         assert isinstance(inner, sa.Lambda)
         assert isinstance(inner.body, sa.LoadName)
-        assert inner.body.name == "X_"
+        assert inner.body.name == "_x"
 
 
 # ── Phase 2: Compiler ───────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(lambda_test, [apply_val/2])\n"
             "\n"
-            "apply_val(Result_, Val_) <- CallGoal((X_ <- (Result_ is X_)), Val_)\n"
+            "apply_val(_result, _val) <- CallGoal((_x <- (_result is _x)), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -496,7 +496,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(capture_test, [bind_z/2])\n"
             "\n"
-            "bind_z(Z_, Result_) <- CallGoal((X_ <- (Result_ is X_)), Z_)\n"
+            "bind_z(_z, _result) <- CallGoal((_x <- (_result is _x)), _z)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -510,7 +510,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(conj_test, [bind_pair/3])\n"
             "\n"
-            "bind_pair(A_, B_, Result_) <- CallGoal(((X_, Y_) <- (X_ is A_ and Y_ is B_ and Result_ is [X_, Y_])), A_, B_)\n"
+            "bind_pair(_a, _b, _result) <- CallGoal(((_x, _y) <- (_x is _a and _y is _b and _result is [_x, _y])), _a, _b)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -524,7 +524,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(zero_arg_test, [run_goal/1])\n"
             "\n"
-            "run_goal(Result_) <- CallGoal((() <- (Result_ is 42)))\n"
+            "run_goal(_result) <- CallGoal((() <- (_result is 42)))\n"
         )
 
         from clausal.import_hook import _load_module
@@ -542,9 +542,9 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(lambda_pred_call, [double/2, apply_double/2])\n"
             "\n"
-            "double(X_, Y_) <- (Y_ := X_ + X_)\n"
+            "double(_x, _y) <- (_y := _x + _x)\n"
             "\n"
-            "apply_double(Val_, Result_) <- CallGoal((X_ <- (double(X_, Result_))), Val_)\n"
+            "apply_double(_val, _result) <- CallGoal((_x <- (double(_x, _result))), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -562,7 +562,7 @@ class TestLambdaImport:
             'color("green"),\n'
             'color("blue"),\n'
             "\n"
-            "get_color(C_) <- CallGoal((X_ <- (color(X_) and C_ is X_)), _)\n"
+            "get_color(_c) <- CallGoal((_x <- (color(_x) and _c is _x)), _)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -580,7 +580,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(py_lambda, [test/1])\n"
             "\n"
-            "test(R_) <- CallGoal((lambda X_: R_ is X_), 1)\n"
+            "test(_r) <- CallGoal((lambda _x: _r is _x), 1)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -588,24 +588,24 @@ class TestLambdaImport:
             _load_module("py_lambda", str(clausal_file))
 
 
-# ── Phase 5: Arrow lambda syntax  (X_, Y_) <- (body) ─────────────────────────
+# ── Phase 5: Arrow lambda syntax  (_x, _y) <- (body) ─────────────────────────
 
 
 class TestArrowLambdaTermTransformer:
-    """Arrow syntax ``(X_, Y_) <- (body)`` produces Lambda nodes."""
+    """Arrow syntax ``(_x, _y) <- (body)`` produces Lambda nodes."""
 
     def test_single_param_arrow_lambda(self):
-        """X_ <- (X_ > 0) produces a Lambda with one param."""
-        node = term_eval("X_ <- (X_ > 0)", sa.Lambda)
+        """_x <- (_x > 0) produces a Lambda with one param."""
+        node = term_eval("_x <- (_x > 0)", sa.Lambda)
         assert len(node.params.params) == 1
-        assert node.params.params[0].name == "X_"
+        assert node.params.params[0].name == "_x"
 
     def test_two_param_arrow_lambda(self):
-        """(X_, Y_) <- (Y_ is X_) produces a Lambda with two params."""
-        node = term_eval("(X_, Y_) <- (Y_ is X_)", sa.Lambda)
+        """(_x, _y) <- (_y is _x) produces a Lambda with two params."""
+        node = term_eval("(_x, _y) <- (_y is _x)", sa.Lambda)
         assert len(node.params.params) == 2
-        assert node.params.params[0].name == "X_"
-        assert node.params.params[1].name == "Y_"
+        assert node.params.params[0].name == "_x"
+        assert node.params.params[1].name == "_y"
 
     def test_zero_param_arrow_lambda(self):
         """() <- (True) produces a zero-param Lambda."""
@@ -614,21 +614,21 @@ class TestArrowLambdaTermTransformer:
 
     def test_arrow_lambda_param_generates_loadname(self):
         """Arrow lambda param in body is a LoadName (not Var)."""
-        node = term_eval("X_ <- (X_)", sa.Lambda)
+        node = term_eval("_x <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
-        assert node.body.name == "X_"
+        assert node.body.name == "_x"
 
     def test_arrow_lambda_captures_enclosing_var(self):
         """Arrow lambda captures enclosing scope Var."""
         node, ns = term_eval_with_scope(
-            "X_ <- (Z_)", seen_vars={"Z_"}
+            "_x <- (_z)", seen_vars={"_z"}
         )
         assert isinstance(node, sa.Lambda)
-        assert node.body is ns["Z_"]
+        assert node.body is ns["_z"]
 
     def test_arrow_lambda_body_var_does_not_leak(self):
         """Var in arrow lambda body does not leak to enclosing scope."""
-        tree = ast.parse("X_ <- (X_)", mode="eval")
+        tree = ast.parse("_x <- (_x)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
         original_seen = tt.seen_vars.copy()
@@ -637,19 +637,19 @@ class TestArrowLambdaTermTransformer:
 
     def test_arrow_lambda_walrus_in_body(self):
         """Arrow lambda supports := (Evaluate) in body — unlike Python lambda."""
-        node = term_eval("(X_, Y_) <- (Y_ := X_ + 1)", sa.Lambda)
+        node = term_eval("(_x, _y) <- (_y := _x + 1)", sa.Lambda)
         assert isinstance(node, sa.Lambda)
         assert isinstance(node.body, Evaluate)
 
     def test_functor_head_stays_predicate(self):
-        """A functor call head like foo(X_) <- body stays as Predicate, not Lambda."""
+        """A functor call head like foo(_x) <- body stays as Predicate, not Lambda."""
         from clausal.terms import Predicate as PredNode
-        tree = ast.parse("foo(X_) <- (X_ > 0)", mode="eval")
+        tree = ast.parse("foo(_x) <- (_x > 0)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
         transformed = tt.visit(tree.body)
         ns = _ns()
-        ns["X_"] = Var()
+        ns["_x"] = Var()
         expr = ast.fix_missing_locations(ast.Expression(body=transformed))
         result = eval(compile(expr, "<test>", "eval"), ns)
         assert isinstance(result, PredNode)
@@ -663,7 +663,7 @@ class TestArrowLambdaCompiled:
         from clausal.logic.database import Clause, Database
         from clausal.logic.compiler import compile_predicate_trampoline
 
-        # Build: apply_val(Result_, Val_) <- CallGoal((X_ <- (Result_ is X_)), Val_)
+        # Build: apply_val(_result, _val) <- CallGoal((_x <- (_result is _x)), _val)
         # We test via .clausal file to get the full pipeline
         pass  # covered by integration tests below
 
@@ -673,7 +673,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_arith, [apply_inc/2])\n"
             "\n"
-            "apply_inc(Val_, Result_) <- CallGoal((X_ <- (Result_ := X_ + 1)), Val_)\n"
+            "apply_inc(_val, _result) <- CallGoal((_x <- (_result := _x + 1)), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -691,7 +691,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_two, [apply_add/3])\n"
             "\n"
-            "apply_add(A_, B_, Result_) <- CallGoal(((X_, Y_) <- (Result_ := X_ + Y_)), A_, B_)\n"
+            "apply_add(_a, _b, _result) <- CallGoal(((_x, _y) <- (_result := _x + _y)), _a, _b)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -709,7 +709,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_zero, [run_goal/1])\n"
             "\n"
-            "run_goal(Result_) <- CallGoal((() <- (Result_ is 99)))\n"
+            "run_goal(_result) <- CallGoal((() <- (_result is 99)))\n"
         )
 
         from clausal.import_hook import _load_module
@@ -727,7 +727,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_capture, [add_z/2])\n"
             "\n"
-            "add_z(Z_, Result_) <- CallGoal((X_ <- (Result_ := X_ + Z_)), 10)\n"
+            "add_z(_z, _result) <- CallGoal((_x <- (_result := _x + _z)), 10)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -745,7 +745,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_conj, [transform/2])\n"
             "\n"
-            "transform(Val_, Result_) <- CallGoal(((X_, Y_) <- ((T_ := X_ + 1) and (Y_ := T_ * 2))), Val_, Result_)\n"
+            "transform(_val, _result) <- CallGoal(((_x, _y) <- ((_t := _x + 1) and (_y := _t * 2))), _val, _result)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -763,9 +763,9 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_pred, [double/2, apply_double/2])\n"
             "\n"
-            "double(X_, Y_) <- (Y_ := X_ + X_)\n"
+            "double(_x, _y) <- (_y := _x + _x)\n"
             "\n"
-            "apply_double(Val_, Result_) <- CallGoal((X_ <- (double(X_, Result_))), Val_)\n"
+            "apply_double(_val, _result) <- CallGoal((_x <- (double(_x, _result))), _val)\n"
         )
 
         from clausal.import_hook import _load_module

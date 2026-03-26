@@ -27,24 +27,24 @@ SafeMax(X, Y, Y) <- (Y > X)
 # ── Conjunction (and) ────────────────────────────────────────────────────────
 
 Test("conjunction binds two vars") <- (
-    X_ is 1,
-    Y_ is 2,
-    X_ == 1,
-    Y_ == 2
+    _x is 1,
+    _y is 2,
+    _x == 1,
+    _y == 2
 )
-Test("conjunction fails if first fails") <- (not (a is b and X_ is 1))
-Test("conjunction fails if second fails") <- (not (X_ is 1 and a is b))
+Test("conjunction fails if first fails") <- (not (a is b and _x is 1))
+Test("conjunction fails if second fails") <- (not (_x is 1 and a is b))
 Test("triple conjunction") <- (
-    X_ is 1,
-    Y_ is 2,
-    Z_ is 3,
-    X_ + Y_ + Z_ == 6
+    _x is 1,
+    _y is 2,
+    _z is 3,
+    _x + _y + _z == 6
 )
 
 # ── Disjunction (or) ────────────────────────────────────────────────────────
 
-Test("disjunction first succeeds") <- (X_ is 1 or X_ is 2)
-Test("disjunction first fails, second succeeds") <- (a is b or X_ is 1)
+Test("disjunction first succeeds") <- (_x is 1 or _x is 2)
+Test("disjunction first fails, second succeeds") <- (a is b or _x is 1)
 Test("disjunction both fail") <- (not (a is b or c is d))
 
 # ── Negation as failure (not) ────────────────────────────────────────────────
@@ -58,15 +58,15 @@ Test("double negation: not not (1=1)") <- (not (not (1 is 1)))
 # ── Combining control constructs ─────────────────────────────────────────────
 
 Test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
-    (X_ is 1 and Y_ is a) or (X_ is 2 and Y_ is b)
+    (_x is 1 and _y is a) or (_x is 2 and _y is b)
 )
 Test("not + member: d not in list") <- (
     not In(d, [a, b, c])
 )
 Test("conjunction + negation") <- (
-    X_ is 5,
-    not (X_ is 3),
-    X_ == 5
+    _x is 5,
+    not (_x is 3),
+    _x == 5
 )
 
 # ── Multi-clause predicates (Choose/3) ─────────────────────────────────────
@@ -78,14 +78,14 @@ Test("choose with atoms") <- Choose(a, b, a)
 # ── If-then-else via SafeMax/3 ────────────────────────────────────────────
 
 Test("safe_max: first is larger") <- (
-    SafeMax(5, 3, M_),
-    M_ == 5
+    SafeMax(5, 3, _m),
+    _m == 5
 )
 Test("safe_max: second is larger") <- (
-    SafeMax(2, 7, M_),
-    M_ == 7
+    SafeMax(2, 7, _m),
+    _m == 7
 )
 Test("safe_max: equal") <- (
-    SafeMax(4, 4, M_),
-    M_ == 4
+    SafeMax(4, 4, _m),
+    _m == 4
 )

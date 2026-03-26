@@ -267,12 +267,12 @@ def _extract_arrow_lambda_params(head_ast):
     Returns a list of parameter name strings if the head is a valid lambda
     parameter list (all logic-variable names, or an empty tuple).  Returns
     ``None`` if the head is not a lambda-style parameter list (e.g. a
-    functor call like ``foo(X_)``).
+    functor call like ``foo(_x)``).
     """
-    # Single variable: X_ <- body
+    # Single variable: _x <- body
     if isinstance(head_ast, Name) and _is_logic_var_name(head_ast.id):
         return [head_ast.id]
-    # Tuple of variables: (X_, Y_) <- body  or  () <- body
+    # Tuple of variables: (_x, _y) <- body  or  () <- body
     if isinstance(head_ast, Tuple):
         params = []
         for elt in head_ast.elts:
@@ -313,8 +313,8 @@ def _is_logic_var_name(identifier: str) -> bool:
 
     Two conventions are recognised:
 
-    * **Trailing single underscore** — ``X_``, ``foo_``, ``HEAD_``.
-      The underscore must be a single trailing one; dunders (``__``) and the
+    * **Leading single underscore** — ``_x``, ``_foo``, ``_head``.
+      The underscore must be a single leading one; dunders (``__``) and the
       bare ``_`` wildcard are excluded.
     * **ALL-CAPS** — ``X``, ``FOO``, ``HEAD``, ``TAIL``.
       Every *cased* character must be uppercase and there must be at least one
@@ -323,9 +323,9 @@ def _is_logic_var_name(identifier: str) -> bool:
     """
     if identifier == "_":
         return False
-    if identifier.endswith("__"):
+    if identifier.startswith("__"):
         return False
-    if identifier.endswith("_"):
+    if identifier.startswith("_"):
         return True
     # ALL-CAPS: str.isupper() is True iff all cased chars are uppercase AND
     # there is at least one cased character — exactly what we want.
@@ -801,10 +801,10 @@ class TermTransformer(NodeTransformer):
                 ),
                 name,
             )
-        # Logic variable: trailing single underscore OR all-caps name.
-        # Examples (underscore): X_, foo_, HEAD_ — all are logic variables.
+        # Logic variable: leading single underscore OR all-caps name.
+        # Examples (underscore): _x, _foo, _head — all are logic variables.
         # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
-        # Excluded: __, x__, __init__ (dunder-style), MixedCase, lowercase.
+        # Excluded: __, __init__ (dunder-style), MixedCase, lowercase.
         if _is_logic_var_name(identifier):
             # Lambda param or outer-lambda param: generate LoadName term node
             # so the compiler maps it to a function arg (no Var allocation).
@@ -1341,7 +1341,7 @@ def _py_ast_expr(node, anchor):
 def _derive_field_names(pos_args: list) -> list[str]:
     """Derive unique field names from positional args in a clause head.
 
-    Logic-variable Name nodes (trailing-underscore or ALL-CAPS) use their
+    Logic-variable Name nodes (leading-underscore or ALL-CAPS) use their
     lowercased id as the field name.  Other args get ``arg_<i>``.  Duplicate
     names are disambiguated with a numeric suffix (e.g. ``b``, ``b_1``) so
     that repeated logic variables produce distinct dataclass fields.
@@ -1350,7 +1350,7 @@ def _derive_field_names(pos_args: list) -> list[str]:
     counts: dict[str, int] = {}
     for i, arg in enumerate(pos_args):
         if isinstance(arg, Name) and _is_logic_var_name(arg.id):
-            base = arg.id.rstrip("_").lower() or f"arg_{i}"
+            base = arg.id.lstrip("_").lower() or f"arg_{i}"
         else:
             base = f"arg_{i}"
         n = counts.get(base, 0)

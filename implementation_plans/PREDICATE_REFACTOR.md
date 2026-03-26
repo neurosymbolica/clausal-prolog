@@ -61,8 +61,8 @@ This is optional and not in the scope of this refactor.
 
 ### Naming conventions and conflicts
 
-Clausal's trailing-underscore convention (`X_`, `foo_`) separates variables from atoms.
-Any name without a trailing underscore is a potential functor/predicate name. Python
+Clausal's leading-underscore convention (`_x`, `_foo`) separates variables from atoms.
+Any name without a leading underscore (and not ALLCAPS) is a potential functor/predicate name. Python
 imports can introduce names into the same namespace (e.g., `from os.path import join`).
 This is normal Python name shadowing — predictable and familiar. A predicate named `join`
 would shadow the import; the programmer handles this the same way they would in any Python

@@ -297,9 +297,9 @@ def _is_logic_var_name(identifier: str) -> bool:
     """Return True if identifier should be treated as a logic variable."""
     if identifier == "_":
         return True
-    if identifier.endswith("__"):
+    if identifier.startswith("__"):
         return False
-    if identifier.endswith("_"):
+    if identifier.startswith("_"):
         return True
     return identifier.isupper()
 

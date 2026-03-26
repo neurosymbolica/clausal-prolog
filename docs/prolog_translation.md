@@ -90,8 +90,8 @@ for item in pmodule.items:
 
 | Clausal | Prolog | Rule |
 |---|---|---|
-| `X_` | `X` | Strip trailing underscore |
-| `head_` | `Head` | Strip underscore, capitalize |
+| `_x` | `X` | Strip leading underscore, uppercase |
+| `_head` | `Head` | Strip underscore, capitalize |
 | `RESULT` | `Result` | ALLCAPS → titlecase |
 | `X` | `X` | Single uppercase stays |
 | `_` | `_` | Anonymous stays |
@@ -263,7 +263,7 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `:- use_module(library(L), [...])` | `-import_from(L, [...])` | Import directive |
 | `:- dynamic(p/N)` | `-dynamic(P/N)` | Dynamic directive |
 | `:- op(P, T, N)` | `# operator: op(P, T, N)` | Comment (no clausal equivalent) |
-| `X` (variable) | `X` (single letter) or `x_` (multi-letter) | Variable naming |
+| `X` (variable) | `X` (single letter) or `_x` (leading underscore) | Variable naming |
 
 ### User-defined operator mappings
 
