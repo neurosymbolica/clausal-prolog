@@ -4,6 +4,12 @@ This page introduces the most important idea in logic programming: **thinking
 in terms of relations**. If you absorb one thing from this documentation, let
 it be this.
 
+!!! note "Clausal vs Prolog syntax"
+
+    Clausal and Prolog syntax may slightly differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    this in mind when comparing with Prolog resources.
+
 In Clausal, every predicate defines a relation between its arguments. A
 relation is not a function — it has no fixed inputs or outputs. A relation
 simply *holds* or *doesn't hold* for a given combination of arguments. This

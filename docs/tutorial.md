@@ -5,6 +5,13 @@ introduces the core concepts: defining relations, querying them, and
 understanding how unification connects goals to clauses. No Prolog experience
 required.
 
+!!! note "Clausal vs Prolog syntax"
+
+    This tutorial is based on material from [The Power of Prolog](https://www.metalevel.at/prolog).
+    Clausal and Prolog syntax may slightly differ — for example, Clausal uses
+    `ALLCAPS` variables, `<-` instead of `:-`, and Python-style lists. If you are
+    comparing with Prolog resources, keep these differences in mind.
+
 ---
 
 ## Your first .clausal file

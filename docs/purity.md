@@ -7,6 +7,12 @@ over others, and what concrete properties you gain by staying within the
 If [Thinking Relationally](thinking_relationally.md) is about the mindset,
 this page is about the discipline that makes the mindset pay off.
 
+!!! note "Clausal vs Prolog syntax"
+
+    Clausal and Prolog syntax may slightly differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    this in mind when comparing with Prolog resources.
+
 ---
 
 ## What is logical purity?

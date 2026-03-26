@@ -4,6 +4,12 @@ A *meta-interpreter* is an interpreter written in the same language it interpret
 
 This page follows the structure of Markus Triska's [A Couple of Meta-Interpreters in Prolog](https://www.metalevel.at/acomip/), adapting the examples to Clausal syntax.
 
+!!! note "Clausal vs Prolog syntax"
+
+    Clausal and Prolog syntax may slightly differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    this in mind when comparing with Prolog resources.
+
 The full source is in `clausal/examples/metainterpreters.clausal`.
 
 ---

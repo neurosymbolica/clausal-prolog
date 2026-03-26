@@ -2,6 +2,12 @@
 
 Clausal supports constraint logic programming through attributed variables. The C extension provides `AttVar` (attributed variable), `put_attr`/`get_attr`/`del_attr` (all trailed), `register_attr_hook`, and a wakeup queue in `do_unify_and_wake`. Constraint solvers register hooks that fire when a constrained variable is unified.
 
+!!! note "Clausal vs Prolog syntax"
+
+    Clausal and Prolog syntax may slightly differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    this in mind when comparing with Prolog resources.
+
 Two constraint solvers are built in:
 
 - **Dif/2** — disequality constraint (`clausal.logic.constraints`)

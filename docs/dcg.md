@@ -6,6 +6,12 @@ The implementation lives in `clausal/templating/term_rewriting.py` (source-level
 
 *The `-table` directive is often used with DCGs to memoize recursive grammar rules. See [Directives](directives.md).*
 
+!!! note "Clausal vs Prolog syntax"
+
+    Clausal and Prolog syntax may slightly differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    this in mind when comparing with Prolog resources.
+
 ---
 
 ## Syntax
