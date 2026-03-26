@@ -94,6 +94,22 @@ _FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 # ── AST inspection helpers ─────────────────────────────────────────────────────
 
 
+def _isinstance_check_matches(type_arg: ast.expr, type_name: str) -> bool:
+    """Check if an isinstance type argument mentions *type_name*.
+
+    Handles both ``isinstance(x, list)`` (Name node) and
+    ``isinstance(x, (list, str))`` (Tuple of Names).
+    """
+    if isinstance(type_arg, ast.Name) and type_arg.id == type_name:
+        return True
+    if isinstance(type_arg, ast.Tuple):
+        return any(
+            isinstance(elt, ast.Name) and elt.id == type_name
+            for elt in type_arg.elts
+        )
+    return False
+
+
 def _has_isinstance_check(tree: ast.AST, type_name: str) -> bool:
     """Return True if tree contains isinstance(_, type_name) anywhere."""
     for node in ast.walk(tree):
@@ -102,8 +118,7 @@ def _has_isinstance_check(tree: ast.AST, type_name: str) -> bool:
             and isinstance(node.func, ast.Name)
             and node.func.id == "isinstance"
             and len(node.args) == 2
-            and isinstance(node.args[1], ast.Name)
-            and node.args[1].id == type_name
+            and _isinstance_check_matches(node.args[1], type_name)
         ):
             return True
     return False
@@ -141,8 +156,7 @@ def _count_isinstance_checks(tree: ast.AST, type_name: str) -> int:
             and isinstance(node.func, ast.Name)
             and node.func.id == "isinstance"
             and len(node.args) == 2
-            and isinstance(node.args[1], ast.Name)
-            and node.args[1].id == type_name
+            and _isinstance_check_matches(node.args[1], type_name)
         ):
             count += 1
     return count
@@ -425,8 +439,7 @@ class TestDeepIndexStructural:
                 and isinstance(node.func, ast.Name)
                 and node.func.id == "isinstance"
                 and len(node.args) == 2
-                and isinstance(node.args[1], ast.Name)
-                and node.args[1].id == "list"
+                and _isinstance_check_matches(node.args[1], "list")
             ):
                 subject = node.args[0]
                 assert isinstance(subject, ast.Name), (

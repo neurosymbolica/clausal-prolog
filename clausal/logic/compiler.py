@@ -207,11 +207,15 @@ class _GlobalsDb:
 
 
 def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
-    """Input-mode list pattern unification: destructure a list.
+    """Input-mode list pattern unification: destructure a list or string.
 
-    Returns True if target is a list and all elements unify.
+    Returns True if target is a list (or string) and all elements unify.
     Returns None if target is an unbound Var (defer to output mode).
     Returns False if target is incompatible.
+
+    Strings are treated as lists of single-character strings: indexing and
+    slicing work identically on both types, so the same destructuring logic
+    handles ``[H, *T]`` against either ``["h", "e"]`` or ``"he"``.
     """
     d = deref(target)
 
@@ -220,10 +224,10 @@ def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
     # (SegList-vs-SegList unification is Phase 6) — return False to fail.
     if isinstance(d, SegList):
         d = d.__walk__()
-        if not isinstance(d, list):
+        if not isinstance(d, (list, str)):
             return False
 
-    if isinstance(d, list):
+    if isinstance(d, (list, str)):
         n_before = len(var_vals)
         n_after = len(after_vals)
         min_len = n_before + n_after
@@ -4709,10 +4713,14 @@ def _build_list_dispatch_guard(
         orelse=[],
     )
 
-    # if isinstance(_d_pos, list): <nil_vs_cons> elif is_var(_d_pos): <all>
+    # if isinstance(_d_pos, (list, str)): <nil_vs_cons> elif is_var(_d_pos): <all>
+    # Strings are treated as lists of characters for head pattern matching.
+    _list_or_str = ast.Tuple(
+        elts=[_name("list"), _name("str")], ctx=ast.Load(),
+    )
     return [
         ast.If(
-            test=_call(_name("isinstance"), _name(deref_name), _name("list")),
+            test=_call(_name("isinstance"), _name(deref_name), _list_or_str),
             body=[nil_vs_cons],
             orelse=[is_var_branch],
         )
@@ -6551,10 +6559,10 @@ def _compile_multi_star_guard(
     # _n = len(_d)
     len_assign = _assign(n_name, _call(_name("len"), _name(d_name)))
 
-    # isinstance check
+    # isinstance check — accept both list and str (strings as char lists)
     isinstance_check = _call(
         _name("isinstance"), _name(d_name),
-        _name("list"),
+        ast.Tuple(elts=[_name("list"), _name("str")], ctx=ast.Load()),
     )
 
     # Build segments list AST for _build_multi_star_list (used in unbound Var case)

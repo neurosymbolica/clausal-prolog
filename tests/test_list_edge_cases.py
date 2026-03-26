@@ -356,11 +356,11 @@ class TestPhase3EdgeCases:
         results = list(call("IsList", 42, module=mod))
         assert results == []
 
-    def test_is_list_string_fails(self):
-        """is_list([*_]) — string is not a list."""
+    def test_is_list_string_succeeds(self):
+        """is_list([*_]) — strings now match list patterns (strings as lists)."""
         mod = _edge_mod()
         results = list(call("IsList", "hello", module=mod))
-        assert results == []
+        assert len(results) == 1
 
     def test_has_pair_three_elements(self):
         """HasPair with 3 elements succeeds."""
