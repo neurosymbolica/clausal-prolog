@@ -246,22 +246,22 @@ class TestSegListStringUnification:
     """SegList patterns match against strings."""
 
     def test_head_tail(self):
-        """[X, *T] matches 'hello' → X='h', T=['e','l','l','o']."""
+        """[X, *T] matches 'hello' → X='h', T='ello' (substring preserved)."""
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         assert unify(sl, "hello", trail)
         assert deref(X) == "h"
-        assert deref(T) == ["e", "l", "l", "o"]
+        assert deref(T) == "ello"
 
     def test_prefix_suffix(self):
-        """[*P, ',', *S] matches 'a,b'."""
+        """[*P, ',', *S] matches 'a,b' — star vars bind to substrings."""
         trail = Trail()
         P, S = Var(), Var()
         sl = SegList([VarSeg(P), ConcreteSeg([","]), VarSeg(S)])
         assert unify(sl, "a,b", trail)
-        assert deref(P) == ["a"]
-        assert deref(S) == ["b"]
+        assert deref(P) == "a"
+        assert deref(S) == "b"
 
     def test_multi_star_multiple_solutions(self):
         """[*A, 'l', *B] matches 'hello' at two positions (l at idx 2 and 3)."""
@@ -270,21 +270,21 @@ class TestSegListStringUnification:
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg(["l"]), VarSeg(B)])
         walked = sl.__walk__()
-        target = list("hello")
+        # Pass string directly — VarSegs bind to substrings
         solutions = []
-        for _ in _seglist_unify_gen(walked, target, trail):
-            solutions.append((list(deref(A)), list(deref(B))))
+        for _ in _seglist_unify_gen(walked, "hello", trail):
+            solutions.append((deref(A), deref(B)))
         assert len(solutions) == 2
-        assert (["h", "e"], ["l", "o"]) in solutions
-        assert (["h", "e", "l"], ["o"]) in solutions
+        assert ("he", "lo") in solutions
+        assert ("hel", "o") in solutions
 
     def test_empty_string(self):
-        """[*A] matches '' → A=[]."""
+        """[*A] matches '' → A='' (empty substring)."""
         trail = Trail()
         A = Var()
         sl = SegList([VarSeg(A)])
         assert unify(sl, "", trail)
-        assert deref(A) == []
+        assert deref(A) == ""
 
     def test_full_concrete_match(self):
         """['h', 'i'] matches 'hi'."""
@@ -302,12 +302,12 @@ class TestSegListStringUnification:
         assert not unify(sl, "ab", Trail())
 
     def test_only_star(self):
-        """[*X] matches 'abc' → X=['a','b','c']."""
+        """[*X] matches 'abc' → X='abc' (substring preserved)."""
         trail = Trail()
         X = Var()
         sl = SegList([VarSeg(X)])
         assert unify(sl, "abc", trail)
-        assert deref(X) == ["a", "b", "c"]
+        assert deref(X) == "abc"
 
     def test_two_stars(self):
         """[*A, *B] matches 'abc' — enumerates 4 splits."""
@@ -343,7 +343,7 @@ class TestSegListStringUnification:
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         assert unify(sl, "日本語", trail)
         assert deref(X) == "日"
-        assert deref(T) == ["本", "語"]
+        assert deref(T) == "本語"
 
     def test_symmetric_string_seglist(self):
         """unify('hello', SegList) works (SegList has __unify__ hook)."""
@@ -353,7 +353,7 @@ class TestSegListStringUnification:
         # SegList is on the right, string on the left — C tries t2.__unify__(t1)
         assert unify("hello", sl, trail)
         assert deref(X) == "h"
-        assert deref(T) == ["e", "l", "l", "o"]
+        assert deref(T) == "ello"
 
 
 class TestBodyMultiStarUnifyString:

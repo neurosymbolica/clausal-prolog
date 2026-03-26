@@ -206,7 +206,15 @@ class SegList:
                     new_segs.append(ConcreteSeg(walked_elems))
             else:  # VarSeg
                 v = walk(seg.var)
-                if isinstance(v, list):
+                if isinstance(v, str):
+                    # VarSeg bound to a substring — expand to chars for SegList
+                    chars = list(v)
+                    if new_segs and isinstance(new_segs[-1], ConcreteSeg):
+                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + chars)
+                    else:
+                        if chars:
+                            new_segs.append(ConcreteSeg(chars))
+                elif isinstance(v, list):
                     # Inline the concrete list into previous ConcreteSeg or new one
                     if new_segs and isinstance(new_segs[-1], ConcreteSeg):
                         new_segs[-1] = ConcreteSeg(new_segs[-1].elements + v)
@@ -282,23 +290,25 @@ class SegList:
     def __unify__(self, other, trail):
         """Called by C do_unify. Deterministic unification of self against other.
 
-        For a plain list target: attempt the first valid split and return True.
-        For a SegList target: deferred to Phase 6 — returns NotImplemented.
+        For a plain list or string target: attempt the first valid split and
+        return True.  Strings are passed directly (not converted to char lists)
+        so that VarSegs bind to substrings preserving str type.
         """
         from .logic.variables import unify, walk
         if isinstance(other, (list, str)):
-            # Treat strings as lists of single-character strings.
-            target = list(other) if isinstance(other, str) else other
             walked = self.__walk__()
             if isinstance(walked, list):
-                # Fully ground — simple equality
-                return walked == target
-            # Use the generator; take the first solution only
-            for _ in _seglist_unify_gen(walked, target, trail):
+                # Fully ground SegList → compare with target
+                if isinstance(other, str):
+                    return walked == list(other)
+                return walked == other
+            # Use the generator; take the first solution only.
+            # Pass string targets directly — string slicing returns substrings.
+            for _ in _seglist_unify_gen(walked, other, trail):
                 return True
             return False
         if isinstance(other, SegList):
-            return NotImplemented  # Phase 6
+            return NotImplemented
         return NotImplemented
 
     # ── Sequence protocol (ground delegation) ────────────────────────────────
@@ -413,6 +423,189 @@ def _multi_star_splits(n_stars: int, remainder: int):
     for first in range(remainder + 1):
         for rest in _multi_star_splits(n_stars - 1, remainder - first):
             yield (first,) + rest
+
+
+# ── SegString — segmented partial string ──────────────────────────────────────
+
+
+class SegString:
+    """A SegList-like term backed by string segments instead of list segments.
+
+    Segments are plain ``str`` objects (concrete text) alternating with
+    ``VarSeg`` objects (variable-length string holes).  When every VarSeg is
+    bound to a string, ``__walk__`` returns a plain Python ``str``.
+
+    Example::
+
+        SegString(["hel", VarSeg(X), "ld"])
+
+    When ``X`` is bound to ``"lo wor"``, walking yields ``"hello world"``.
+    VarSegs always bind to ``str`` (substrings), never char lists.
+    """
+
+    __slots__ = ("_segments",)
+
+    def __init__(self, segments: list):
+        self._segments = list(segments)
+
+    @property
+    def segments(self) -> list:
+        return self._segments
+
+    # ── Walk / normalisation ──────────────────────────────────────────────────
+
+    def __walk__(self):
+        """Called by C do_walk. Normalise: collapse bound VarSegs, merge
+        adjacent strings. Returns a plain ``str`` when fully ground."""
+        from .logic.variables import walk
+        new_segs: list = []
+        for seg in self._segments:
+            if isinstance(seg, str):
+                if new_segs and isinstance(new_segs[-1], str):
+                    new_segs[-1] = new_segs[-1] + seg
+                else:
+                    new_segs.append(seg)
+            else:  # VarSeg
+                v = walk(seg.var)
+                if isinstance(v, str):
+                    if new_segs and isinstance(new_segs[-1], str):
+                        new_segs[-1] = new_segs[-1] + v
+                    else:
+                        new_segs.append(v)
+                elif isinstance(v, list):
+                    # VarSeg bound to a char list — join into string
+                    s = "".join(v)
+                    if new_segs and isinstance(new_segs[-1], str):
+                        new_segs[-1] = new_segs[-1] + s
+                    else:
+                        new_segs.append(s)
+                elif isinstance(v, SegString):
+                    walked_inner = v.__walk__()
+                    if isinstance(walked_inner, str):
+                        if new_segs and isinstance(new_segs[-1], str):
+                            new_segs[-1] = new_segs[-1] + walked_inner
+                        else:
+                            new_segs.append(walked_inner)
+                    else:
+                        for inner_seg in walked_inner._segments:
+                            if isinstance(inner_seg, str):
+                                if new_segs and isinstance(new_segs[-1], str):
+                                    new_segs[-1] = new_segs[-1] + inner_seg
+                                else:
+                                    new_segs.append(inner_seg)
+                            else:
+                                new_segs.append(inner_seg)
+                else:
+                    # Still unbound — keep as VarSeg
+                    new_segs.append(VarSeg(v))
+
+        # If no VarSegs remain, return a plain str
+        if all(isinstance(s, str) for s in new_segs):
+            return "".join(new_segs)
+
+        # Clean up empty strings
+        new_segs = [s for s in new_segs if not (isinstance(s, str) and not s)]
+        if not new_segs:
+            return ""
+        return SegString(new_segs)
+
+    def is_ground(self) -> bool:
+        """True if all VarSegs are bound — i.e. ``__walk__`` returns ``str``."""
+        return isinstance(self.__walk__(), str)
+
+    def to_str(self) -> str:
+        """Walk and join. Raises ``TypeError`` if not fully ground."""
+        w = self.__walk__()
+        if isinstance(w, str):
+            return w
+        raise TypeError(f"SegString is not ground: {w!r}")
+
+    # ── C extension protocol hooks ────────────────────────────────────────────
+
+    def __occurs_check__(self, var) -> bool:
+        """Called by C do_occurs_check."""
+        from .logic.variables import occurs_check
+        for seg in self._segments:
+            if isinstance(seg, VarSeg) and occurs_check(var, seg.var):
+                return True
+        return False
+
+    def __unify__(self, other, trail):
+        """Called by C do_unify.
+
+        Against ``str``: split by string slicing — VarSegs bind to substrings.
+        Against ``list``: convert string segments to char elements and delegate.
+        """
+        from .logic.variables import unify
+        if isinstance(other, str):
+            walked = self.__walk__()
+            if isinstance(walked, str):
+                return walked == other
+            for _ in _segstring_unify_gen(walked, other, trail):
+                return True
+            return False
+        if isinstance(other, list):
+            # Convert to SegList and unify
+            walked = self.__walk__()
+            if isinstance(walked, str):
+                return walked == list(other) if all(
+                    isinstance(e, str) and len(e) == 1 for e in other
+                ) and len(other) == len(walked) else NotImplemented
+            return NotImplemented
+        if isinstance(other, (SegString, SegList)):
+            return NotImplemented
+        return NotImplemented
+
+    def __repr__(self):
+        return f"SegString({self._segments!r})"
+
+    def __eq__(self, other):
+        if isinstance(other, SegString):
+            return self._segments == other._segments
+        if isinstance(other, str):
+            w = self.__walk__()
+            return w == other if isinstance(w, str) else NotImplemented
+        return NotImplemented
+
+    def __hash__(self):
+        w = self.__walk__()
+        return hash(w) if isinstance(w, str) else id(self)
+
+
+def _segstring_unify_gen(segstring, target_str, trail):
+    """Non-deterministic generator: yield True for each valid split of
+    *target_str* across the VarSegs of *segstring*.
+
+    *segstring* must be a walked (non-ground) SegString.
+    *target_str* must be a plain Python str.
+    """
+    from .logic.variables import unify
+    min_len = sum(len(s) for s in segstring.segments if isinstance(s, str))
+    n = len(target_str)
+    if n < min_len:
+        return
+    n_stars = sum(1 for s in segstring.segments if isinstance(s, VarSeg))
+    remainder = n - min_len
+    for split in _multi_star_splits(n_stars, remainder):
+        mark = trail.mark()
+        ok = True
+        pos = 0
+        si = 0
+        for seg in segstring.segments:
+            if isinstance(seg, VarSeg):
+                sz = split[si]; si += 1
+                ok = ok and unify(seg.var, target_str[pos:pos + sz], trail)
+                pos += sz
+            else:  # str
+                end = pos + len(seg)
+                if target_str[pos:end] != seg:
+                    ok = False
+                pos = end
+            if not ok:
+                break
+        if ok:
+            yield True
+        trail.undo(mark)
 
 
 # ── DictTerm — unification-aware dictionary ───────────────────────────────────
@@ -1106,6 +1299,7 @@ __all__ = [
     "DictTerm",
     "SetTerm",
     "KWTerm",
+    "SegString",
     "PyThunk",
     "FStringThunk",
     # Rendering style

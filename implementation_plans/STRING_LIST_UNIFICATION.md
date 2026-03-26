@@ -1065,10 +1065,10 @@ Phase 5b: Compiler head patterns ✅ (20 tests)  ← discovered post-hoc
    ↓
 Phase 6: Documentation & deprecation ✅
    ↓
-Phase 7: SegString optimisation (DEFERRED — see todo/SEGLIST_STRING_ASYMMETRY.md)
+Phase 7: SegString optimisation ✅ (41 tests)
 ```
 
-Total: 156 new tests, 7912 passing, 0 regressions.
+Total: 197 new tests, 7940 passing, 0 regressions.
 
 ---
 
@@ -1091,6 +1091,10 @@ Total: 156 new tests, 7912 passing, 0 regressions.
 | `tests/test_seglist_core.py` | 2 | Updated: string is no longer "non-list" |
 | `tests/test_deep_indexing.py` | 5b | Updated: isinstance check recognises (list, str) |
 | `tests/test_list_edge_cases.py` | 5b | Updated: user-defined IsList matches strings |
+| `clausal/terms.py` | 7 | Add `SegString` class; `SegList.__unify__` passes strings directly; `__walk__` handles str-bound VarSegs |
+| `clausal/logic/compiler.py` | 7 | `_body_multi_star_unify` preserves string type; `_build_star_list`/`_build_multi_star_list` string support |
+| `tests/test_segstring.py` | 7 | 41 tests: SegString core, string-preserving matching, body multi-star, build helpers |
+| `tests/test_string_list_unification.py` | 7 | Updated: SegList string tests expect substring bindings (not char lists) |
 
 ---
 
@@ -1180,10 +1184,13 @@ Phase 6 — DONE:
 - [x] `docs/builtins.md` — added string acceptance tip to List Predicates, preference note to Character/String
 - [x] `chars.py` predicates — updated module docstring and added preference notes to `AtomConcat/3` and `AtomLength/2`
 
-Phase 7 — DEFERRED (see `todo/SEGLIST_STRING_ASYMMETRY.md`):
-- [ ] `SegString` type for substring-preserving pattern matching
-- [ ] VarSegs bind to substrings when matching strings
-- [ ] Eliminates SegList/compiler path asymmetry
+Phase 7 — DONE (41 tests):
+- [x] `SegString` type for substring-preserving pattern matching
+- [x] VarSegs bind to substrings when matching strings (SegList passes strings directly)
+- [x] `_body_multi_star_unify` preserves string type (no char-list conversion)
+- [x] `_build_star_list` / `_build_multi_star_list` return strings when inputs are string-compatible
+- [x] `SegList.__walk__` handles VarSegs bound to strings
+- [x] SegList/compiler path asymmetry eliminated — all paths bind star vars to substrings
 
 
 ---
