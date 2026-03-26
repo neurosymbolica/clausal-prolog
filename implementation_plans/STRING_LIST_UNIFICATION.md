@@ -1048,42 +1048,49 @@ nice-to-have optimisation for a future release.
 
 ---
 
-## Implementation Order and Dependencies
+## Implementation Order (Actual)
 
 ```
-Phase 1: C-level unification (foundation — everything depends on this)
+Phase 1: C-level unification ✅ (44 tests)
    ↓
-Phase 2: SegList accepts strings (depends on Phase 1 for nested unification)
+Phase 2: SegList accepts strings ✅ (16 tests)
    ↓
-Phase 3: DCGs accept strings (independent of Phase 2, but benefits from Phase 1)
+Phase 3: DCGs accept strings ✅ (10 tests)
    ↓
-Phase 4: Polymorphic builtins (independent of Phases 2-3, depends on Phase 1)
+Phase 4: Polymorphic builtins ✅ (50 tests)
    ↓
-Phase 5: Higher-order predicates (depends on Phase 4 patterns)
+Phase 5: Higher-order predicates ✅ (16 tests)
    ↓
-Phase 6: Deprecation & documentation (depends on all above)
+Phase 5b: Compiler head patterns ✅ (20 tests)  ← discovered post-hoc
    ↓
-Phase 7: SegString optimisation (optional, independent)
+Phase 6: Documentation & deprecation (TODO)
+   ↓
+Phase 7: SegString optimisation (DEFERRED — see todo/SEGLIST_STRING_ASYMMETRY.md)
 ```
 
-Phases 2, 3, and 4 can be developed in parallel after Phase 1 lands.
+Total: 156 new tests, 7912 passing, 0 regressions.
 
 ---
 
-## Files Modified (Summary)
+## Files Modified (Actual)
 
 | File | Phase | Nature of change |
 |------|-------|-----------------|
-| `clausal/logic/variables/_variables.c` | 1 | Add str↔list unification branch in `do_unify` |
+| `clausal/logic/variables/_variables.c` | 1 | Add str↔list unification in `do_unify` |
 | `clausal/terms.py` | 2 | `SegList.__unify__` accepts `str` |
-| `clausal/logic/compiler.py` | 2 | `_body_multi_star_unify` accepts `str` |
+| `clausal/logic/compiler.py` | 2, 5b | `_body_multi_star_unify`, `_head_list_unify_input`, dispatch guards |
 | `clausal/logic/builtins/dcg.py` | 3 | `phrase/2,3` and `Sequence//1` accept `str` |
-| `clausal/logic/builtins/lists.py` | 4 | All list builtins accept `str` via `_as_sequence` |
+| `clausal/logic/builtins/lists.py` | 4 | All 27 list builtins accept `str` via `_as_items`/`_seq_result` |
 | `clausal/logic/builtins/type_checks.py` | 4 | Add `IsChars/1` |
-| `clausal/logic/builtins/higher_order.py` (TBD) | 5 | Higher-order predicates accept `str` |
-| `clausal/logic/builtins/chars.py` | 6 | Wrapper/alias annotations |
-| `docs/*.md` | 6 | Documentation updates |
-| `tests/test_string_list_unification.py` | 1-5 | New test file |
+| `clausal/logic/builtins/higher_order.py` | 5 | All 16 higher-order predicates accept `str` |
+| `tests/test_string_list_unification.py` | 1, 2 | 60 tests: C unification + SegList |
+| `tests/test_dcg.py` | 3 | 10 tests: DCG string input |
+| `tests/test_string_list_builtins.py` | 4 | 50 tests: polymorphic builtins |
+| `tests/test_string_higher_order.py` | 5 | 16 tests: higher-order on strings |
+| `tests/test_string_head_patterns.py` | 5b | 20 tests: compiled head patterns |
+| `tests/test_seglist_core.py` | 2 | Updated: string is no longer "non-list" |
+| `tests/test_deep_indexing.py` | 5b | Updated: isinstance check recognises (list, str) |
+| `tests/test_list_edge_cases.py` | 5b | Updated: user-defined IsList matches strings |
 
 ---
 
@@ -1126,36 +1133,38 @@ capabilities, not replacements for ISO predicates.
 
 ## Acceptance Criteria
 
-Phase 1:
-- [ ] `unify("abc", ['a', 'b', 'c'], trail)` succeeds
-- [ ] `unify("abc", [X, Y, Z], trail)` binds chars
-- [ ] `unify("abc", "abc", trail)` still works (fast path)
-- [ ] `unify("abc", [1, 2, 3], trail)` fails
-- [ ] All existing tests pass (no regression)
+Phase 1 — DONE (commit acea65b, 44 tests):
+- [x] `unify("abc", ['a', 'b', 'c'], trail)` succeeds
+- [x] `unify("abc", [X, Y, Z], trail)` binds chars
+- [x] `unify("abc", "abc", trail)` still works (fast path)
+- [x] `unify("abc", [1, 2, 3], trail)` fails
+- [x] All existing tests pass (no regression)
 
-Phase 2:
-- [ ] `SegList([VarSeg(A), ConcreteSeg(['l']), VarSeg(B)])` unifies with `"hello"`
-- [ ] `_body_multi_star_unify` handles string targets
-- [ ] Clause-level multi-star patterns match strings
+Phase 2 — DONE (commit cf3b0d5, 16 tests):
+- [x] `SegList([VarSeg(A), ConcreteSeg(['l']), VarSeg(B)])` unifies with `"hello"`
+- [x] `_body_multi_star_unify` handles string targets
+- [x] Clause-level multi-star patterns match strings
 
-Phase 3:
-- [ ] `phrase(Grammar, "hello")` works
-- [ ] `phrase(Grammar, "hello world", Rest)` works
-- [ ] DCGs with `Sequence//1` accept string inputs
+Phase 3 — DONE (commit 09114a0, 10 tests):
+- [x] `phrase(Grammar, "hello")` works
+- [x] `phrase(Grammar, "hello world", Rest)` works
+- [x] DCGs with `Sequence//1` accept string inputs
 
-Phase 4:
-- [ ] `In(X, "hello")` yields chars
-- [ ] `Append("hel", "lo", X)` yields `"hello"`
-- [ ] `Length("hello", X)` yields 5
-- [ ] `Reverse("hello", X)` yields `"olleh"`
-- [ ] `IsChars/1` succeeds for both lists and strings
-- [ ] `IsList("hello")` still fails
+Phase 4 — DONE (commit 5dd921a, 50 tests):
+- [x] `In(X, "hello")` yields chars
+- [x] `Append("hel", "lo", X)` yields `"hello"`
+- [x] `Length("hello", X)` yields 5
+- [x] `Reverse("hello", X)` yields `"olleh"`
+- [x] `IsChars/1` succeeds for both lists and strings
+- [x] `IsList("hello")` still fails (builtin exact type check)
+- [x] User-defined `IsList([*_])` now succeeds for strings (correct)
 
-Phase 5:
-- [ ] `MapList(Goal, "abc")` works
-- [ ] `Filter(Goal, "abc", Result)` works
+Phase 5 — DONE (commit f9a6f01, 16 tests):
+- [x] `MapList(Goal, "abc")` works
+- [x] `Filter(Goal, "abc", Result)` works
+- [x] All 16 higher-order predicates accept strings
 
-Phase 5b (compiler):
+Phase 5b — DONE (commit f878fda, 20 tests):
 - [x] `_head_list_unify_input` accepts `(list, str)` — runtime destructuring
 - [x] `_build_list_dispatch_guard` emits `isinstance(_, (list, str))` — AST dispatch
 - [x] `_compile_multi_star_guard` emits `isinstance(_, (list, str))` — multi-star AST
@@ -1163,9 +1172,19 @@ Phase 5b (compiler):
 - [x] Recursive predicates (Length, Last) work on strings
 - [x] String type preserved through recursion (tail stays `str`)
 
-Phase 6:
-- [ ] Documentation updated
-- [ ] String predicates documented as aliases
+Phase 6 — TODO:
+- [ ] `docs/strings_as_lists.md` — already written, review for accuracy post-implementation
+- [ ] `docs/lists.md` — add note that list predicates accept strings
+- [ ] `docs/dcg.md` — add `phrase(grammar, "string")` examples
+- [ ] `docs/type_checking.md` — document `IsChars/1`
+- [ ] `docs/builtins.md` — note string acceptance in predicate reference
+- [ ] `chars.py` predicates — add docstring notes that `Append/3` is preferred over
+  `AtomConcat/3`, etc.
+
+Phase 7 — DEFERRED (see `todo/SEGLIST_STRING_ASYMMETRY.md`):
+- [ ] `SegString` type for substring-preserving pattern matching
+- [ ] VarSegs bind to substrings when matching strings
+- [ ] Eliminates SegList/compiler path asymmetry
 
 
 ---
