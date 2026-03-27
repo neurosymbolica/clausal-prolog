@@ -79,7 +79,7 @@ safe_div(X, Y, R) <- catch(
 - **Recovery** — the goal to execute if the exception matches
 
 `catch/3` also intercepts **plain Python exceptions** raised inside the goal
-(including from `++()` escapes). These are wrapped as `ClassName(Message)` — a
+(including from [`++()` escapes](python_integration.md)). These are wrapped as `ClassName(Message)` — a
 `Compound` whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
 
@@ -126,7 +126,7 @@ catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
 
 ## Structured Error Terms
 
-Clausal follows the ISO Prolog convention of wrapping errors in `error(ErrorTerm, Context)` compounds. Helper functions in `clausal.logic.exceptions` build these:
+Clausal follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention of wrapping errors in `error(ErrorTerm, Context)` compounds. Helper functions in `clausal.logic.exceptions` build these:
 
 | Helper | Error term |
 |---|---|
@@ -251,4 +251,5 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
 ---
 
-*See also: [Builtins](builtins.md) — for a list of built-in predicates that can throw exceptions.*
+*See also: [Builtins](builtins.md) — for a list of built-in predicates that can throw exceptions,
+[Control](control.md) — Once and TimeGoal for execution flow.*

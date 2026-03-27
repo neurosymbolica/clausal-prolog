@@ -282,7 +282,7 @@ RemoveNoise(RAW, CLEAN) <- (
 
 ## Notes
 
-- **Array inputs**: pass Python lists or NumPy arrays via `++()`.
+- **Array inputs**: pass Python lists or NumPy arrays via [`++()`](python_integration.md).
 - **Default boundary handling**: all filter and convolution predicates use
   `mode='reflect'` by default; all geometric predicates use `mode='constant'`
   with `cval=0.0`. To use other modes, call the underlying scipy function

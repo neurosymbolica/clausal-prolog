@@ -27,7 +27,7 @@ The implementation lives in `clausal/modules/sympy_module.py`.
                              sin, cos, exp, log, sqrt, inf, pi])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(sympy_module)
@@ -40,7 +40,7 @@ Or via module import:
 
 ### Term conversion
 
-Clausal arithmetic terms (`X**2 + 3*X + 1`) are trees of `Add`, `Mult`, `Pow` nodes containing logic variables (`Var`). The module converts these to SymPy expression trees automatically:
+Clausal [arithmetic](arithmetic.md) terms (`X**2 + 3*X + 1`) are trees of `Add`, `Mult`, `Pow` nodes containing logic variables (`Var`). The module converts these to SymPy expression trees automatically:
 
 | Clausal | SymPy |
 |---|---|

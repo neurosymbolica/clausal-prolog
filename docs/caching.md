@@ -90,7 +90,7 @@ Total: O(N) compilation work per predicate.
 
 Deferred compilation is safe because:
 - No predicate is queried during module load — `.clausal` files only contain definitions.
-- Directives (`-dynamic`, `-discontiguous`, `-table`) execute before clause definitions, so metadata like `db.is_dynamic()` is set correctly before compilation runs.
+- [Directives](directives.md) (`-dynamic`, `-discontiguous`, `-table`) execute before clause definitions, so metadata like `db.is_dynamic()` is set correctly before compilation runs.
 - Cross-predicate references are resolved via `module_dict` globals, which are fully populated after `exec()`.
 
 ---

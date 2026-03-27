@@ -172,7 +172,7 @@ Test("ground list") <- IsGround([1, 2, 3])
 Test("unbound fails") <- (not IsGround([1, X, 3]))
 ```
 
-This is useful as a guard before arithmetic or I/O operations that require all
+This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) operations that require all
 values to be determined:
 
 ```clausal

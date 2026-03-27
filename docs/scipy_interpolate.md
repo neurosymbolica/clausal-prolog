@@ -339,7 +339,7 @@ RbfInterp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
 ## Dimensional analysis (Quantity support)
 
 All interpolation predicates are **quantity-aware**: when `X` and `Y` arrays
-are `Quantity` objects, units are stored in the handle and propagated through
+are [`Quantity`](units.md) objects, units are stored in the handle and propagated through
 evaluation, integration, and differentiation.
 
 ### How it works
@@ -384,11 +384,11 @@ Test("spline with units") <- (
 
 ## Notes
 
-- **Array inputs**: pass NumPy arrays or Python lists via `++()`.
+- **Array inputs**: pass NumPy arrays or Python lists via [`++()`](python_integration.md).
 - **Callables are not needed**: unlike optimize/integrate, interpolate predicates do not accept user-defined functions — all fitting is done from data arrays.
 - **Handles are integers**: store a handle in a Clausal variable; it unifies like any other term.
 - **Multiple handles**: each `Make*` call allocates a fresh handle; handles from `SplineDerivative` are also independent and must be freed separately.
-- **Thread safety**: the handle registry is protected by a lock; predicates are safe to call concurrently.
+- **Thread safety**: the handle registry is protected by a lock; predicates are safe to call concurrently. See [Free Threading](free_threading.md) for details.
 - **interp1d deprecation**: `MakeLinear1D` wraps `scipy.interpolate.interp1d`, which is deprecated since SciPy 1.14. It fails gracefully if not available. Use `MakeSpline` with `K=1` for linear interpolation in new code.
 - Predicates fail (yield no solution) when scipy raises an exception, or when a bound `RESULT` does not unify with the computed value.
 

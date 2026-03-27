@@ -1,6 +1,6 @@
 # scipy.special — Mathematical Special Functions
 
-The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal predicates. Most predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result. Several predicates are **bidirectional relations** that dispatch on argument groundness, supporting both forward evaluation and backward inversion.
+The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal predicates. Most predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result. Several predicates are **bidirectional relations** that dispatch on argument [groundness](indexing.md), supporting both forward evaluation and backward inversion.
 
 ---
 
@@ -360,7 +360,7 @@ FirstAntinode(ZERO) <- (
 ## Notes
 
 - All predicates accept Python `float`, `int`, or NumPy scalars/arrays; broadcasting is handled by scipy.
-- Multi-value outputs (e.g. `BesselJZeros`) return NumPy arrays that can be further processed via `++` escapes.
+- Multi-value outputs (e.g. `BesselJZeros`) return NumPy arrays that can be further processed via [`++` escapes](python_integration.md).
 - `LambertW` returns a complex value; use `++(float(W.real))` to extract the real part.
 - Predicates fail (no solution) when `unify` with a bound `RESULT` fails; they propagate scipy exceptions otherwise.
 

@@ -21,8 +21,8 @@ for solution in clausal.query(Fib(10, N)):
 
 - **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
 - **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
-- **Full-featured** — tabling, CLP(ℤ), DCGs, EDCGs, modules, term expansion, goal expansion, reified if-then-else.
-- **Fast** — C extension for unification/trails, first-argument indexing, groundness-keyed dispatch, tail recursion optimization, bytecode caching.
+- **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
+- **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
 
 ---
 
@@ -165,3 +165,17 @@ for the full feature set.
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
+| [Examples](examples.md) | Example programs: Fibonacci, N-Queens, Sudoku, meta-interpreters |
+| **Scientific Computing** | |
+| [scikit-learn](sklearn.md) | Machine learning: estimators, pipelines, cross-validation |
+| [scipy.cluster](scipy_cluster.md) | Hierarchical clustering, k-means, vector quantisation |
+| [scipy.constants](scipy_constants.md) | CODATA physical constants, SI prefixes |
+| [scipy.differentiate](scipy_differentiate.md) | Numerical differentiation: Derivative, Jacobian, Hessian |
+| [scipy.signal](scipy_signal.md) | Signal processing: filter design, filtering, spectral analysis |
+| [scipy.sparse](scipy_sparse.md) | Sparse matrices and sparse linear algebra |
+| **Infrastructure** | |
+| [Compiler](compiler.md) | Compilation pipeline: head patterns, body goals, trampoline, TRO |
+| [Jupyter Notebooks](jupyter.md) | Notebook integration with HTML rendering |
+| [Free Threading](free_threading.md) | Free-threaded Python (PEP 703) support, C extension safety |
+| [Parallel Predicates](tutorial_parallel_clausal.md) | Writing thread-safe Clausal predicates |
+| [Parallel Queries](tutorial_parallel_python.md) | Running parallel queries from Python |

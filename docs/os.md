@@ -1,6 +1,6 @@
 # OS Module
 
-The `py.os` standard library module provides relational predicates for environment variables, working directory management, and system metadata.
+The `py.os` standard library module provides relational predicates for environment variables, working directory management, and system metadata. For running shell commands and subprocesses, see the [Process](process.md) module.
 
 The implementation lives in `clausal/modules/py/os.py`.
 
@@ -14,7 +14,7 @@ The implementation lives in `clausal/modules/py/os.py`.
                      Pid, Argv, Platform, CPUCount])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.os)

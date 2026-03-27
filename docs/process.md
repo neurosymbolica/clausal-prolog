@@ -1,6 +1,6 @@
 # Process Module
 
-The `py.process` standard library module provides relational predicates for running shell commands, launching subprocesses, and sleeping.
+The `py.process` standard library module provides relational predicates for running shell commands, launching subprocesses, and sleeping. For environment variables and system metadata, see the [OS](os.md) module.
 
 The implementation lives in `clausal/modules/py/process.py`.
 
@@ -12,7 +12,7 @@ The implementation lives in `clausal/modules/py/process.py`.
 -import_from(py.process, [Shell, ShellOutput, ProcessCreate, Sleep])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.process)
@@ -57,7 +57,7 @@ compile_and_check(CMD, OUT, ERR) <- ShellOutput(CMD, OUT, ERR)
 
 ### ProcessCreate/3
 
-`ProcessCreate(Program, Args, Result)` — run a program with an argument list (no shell). Result is a `DictTerm` with keys `exit_code`, `stdout`, `stderr`.
+`ProcessCreate(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) with keys `exit_code`, `stdout`, `stderr`.
 
 ```clausal
 run_python(CODE, RESULT) <- ProcessCreate("python3", ["-c", CODE], RESULT)
@@ -65,7 +65,7 @@ run_python(CODE, RESULT) <- ProcessCreate("python3", ["-c", CODE], RESULT)
 
 ### ProcessCreate/4
 
-`ProcessCreate(Program, Args, Options, Result)` — like ProcessCreate/3 with an options `DictTerm`. Supported options:
+`ProcessCreate(Program, Args, Options, Result)` — like ProcessCreate/3 with an options [`DictTerm`](dicts_sets.md). Supported options:
 
 | Key | Type | Description |
 |---|---|---|

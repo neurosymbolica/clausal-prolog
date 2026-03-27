@@ -372,10 +372,10 @@ RosenbrockMin(X, Y) <- (
 
 ## Notes
 
-- **Callables**: pass Python functions via the `++()` escape — e.g. `FUN=++(lambda x: x[0]**2)`. The predicate receives and passes on a plain Python callable; no special boundary wrapping is needed.
+- **Callables**: pass Python functions via the [`++()` escape](python_integration.md) — e.g. `FUN=++(lambda x: x[0]**2)`. The predicate receives and passes on a plain Python callable; no special boundary wrapping is needed.
 - **Array inputs**: X0, BOUNDS, and coefficient arrays should be passed as Python lists or NumPy arrays via `++()`.
 - **Global methods** (`DifferentialEvolution`, `DualAnnealing`, `BasinHopping`, `ShgoMinimize`) are stochastic or slow; pass `SEED=` for reproducibility in tests.
-- **`NonlinearLeastSquares` vs `LeastSquares`**: `NonlinearLeastSquares` (from `scipy_optimize`) minimises `||fun(x)||²` for a nonlinear `fun`. `LeastSquares` (from `scipy_linalg`) solves the linear system `A @ x ≈ b` via `lstsq`. They are different operations.
+- **`NonlinearLeastSquares` vs `LeastSquares`**: `NonlinearLeastSquares` (from `scipy_optimize`) minimises `||fun(x)||²` for a nonlinear `fun`. `LeastSquares` (from [`scipy_linalg`](scipy_linalg.md)) solves the linear system `A @ x ≈ b` via `lstsq`. They are different operations.
 - Predicates fail (no solution) when `ResultGet` cannot find the requested field, or when a bound `RESULT` does not unify with the computed value. Scipy exceptions propagate as Python exceptions.
 
 ---

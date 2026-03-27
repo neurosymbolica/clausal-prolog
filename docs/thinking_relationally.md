@@ -56,7 +56,7 @@ the system to derive logical consequences of our description.
 A function maps inputs to outputs. It has a fixed direction: you provide
 arguments, it produces a result. A relation has no such restriction.
 
-Consider `Append/3`, which relates three lists:
+Consider `Append/3`, which relates three [lists](lists.md):
 
 ```clausal
 Test("concatenate") <- Append([1, 2], [3, 4], [1, 2, 3, 4])
@@ -112,7 +112,7 @@ Read this declaratively:
 
 These are **statements about when the relation holds**, not instructions for
 what to do. This way of reading the code does justice to its full generality —
-we can use it to compute a sum, to verify a sum, or (with CLP(ℤ) constraints)
+we can use it to compute a sum, to verify a sum, or (with [CLP(ℤ)](constraints.md) constraints)
 to reason about partially-known lists.
 
 ---
@@ -225,7 +225,7 @@ See [Purity and Monotonicity](purity.md) for a deeper treatment.
 ### Testability
 
 Tests for relational predicates are simply queries that should hold or not
-hold. No mock objects, no test harnesses, no elaborate setup. A test is just a
+hold. No mock objects, no test harnesses, no elaborate setup. A [test](testing.md) is just a
 fact about the relation:
 
 ```clausal
@@ -305,8 +305,8 @@ directions.
 
 **Using eager evaluation when constraints would be more general.** The
 `:=` operator requires the right-hand side to be ground. Use `==` instead —
-it posts CLP(ℤ) constraints that work with unbound variables and preserve
-multi-directional use. Reserve `:=` for Python interop (e.g., `++` for strings).
+it posts [CLP(ℤ)](constraints.md) constraints that work with unbound variables and preserve
+multi-directional use. Reserve `:=` for [Python interop](python_integration.md) (e.g., `++` for strings).
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"
 "compute," "check," "remove" — all suggest a specific mode. Describe what the

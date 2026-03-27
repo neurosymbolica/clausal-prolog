@@ -1,7 +1,7 @@
 # scipy.sparse — Sparse Matrices and Sparse Linear Algebra
 
 Provides sparse matrix construction, conversion, inspection, and linear algebra
-from `scipy.sparse` and `scipy.sparse.linalg` as importable clausal predicates.
+from `scipy.sparse` and `scipy.sparse.linalg` as [importable](import.md) clausal predicates.
 
 ## Import
 

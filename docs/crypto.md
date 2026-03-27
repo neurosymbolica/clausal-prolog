@@ -108,7 +108,7 @@ Derive("password", "salt", 100000, 64, HASH)
 
 ??? example "Examples"
 
-    ### File integrity check
+    ### File integrity check (using the [Files](files.md) module)
 
     ```clausal
 # skip

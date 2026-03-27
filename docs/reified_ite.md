@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of `Dif/2` instead of `\=`, and CLP(ℤ) instead of `is`-based arithmetic.
+Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`Dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) instead of `is`-based arithmetic.
 
 Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
@@ -83,7 +83,7 @@ The compiler distinguishes two kinds of conditions:
 1. Run the condition as a sub-generator. For each solution, set `_found = True` and run the then branch.
 2. After exhaustion, if `_found` is false, run the else branch.
 
-This evaluates the condition only once. For tabled predicates, the false path uses `_naf_tabled` instead (WFS requires separate tabled negation).
+This evaluates the condition only once. For [tabled](tabling.md) predicates, the false path uses `_naf_tabled` instead ([WFS](wfs.md) requires separate tabled negation).
 
 ---
 
@@ -116,7 +116,7 @@ Three-valued CLP(ℤ) comparison in `clausal.logic.clpfd`:
 
 ## Compiler Integration
 
-The `If(condition, then, else)` call syntax is parsed into an `IfExpr` AST node, which is handled in both `compile_goal` and `compile_goal_trampoline` in `clausal.logic.compiler`.
+The `If(condition, then, else)` call syntax is parsed into an `IfExpr` AST node, which is handled in both `compile_goal` and `compile_goal_trampoline` in the [compiler](compiler.md).
 
 ### Generated code (reifiable equality condition)
 
@@ -253,7 +253,7 @@ Key properties:
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`Once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(Once(goal), then, else)`.
+`Once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(Once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
 
 ---
 

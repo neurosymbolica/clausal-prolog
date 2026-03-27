@@ -27,7 +27,7 @@ Test("assert and query") <- (
 
 By default, predicates are **locked** after loading — you cannot add or remove
 clauses at runtime. To allow runtime modification, declare the predicate as
-dynamic:
+dynamic (see [Directives](directives.md) for other directive types):
 
 ```clausal
 # skip

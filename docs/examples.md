@@ -84,9 +84,9 @@ Sudoku(ROWS) <- (
 )
 ```
 
-Features: nested star-list patterns (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as higher-order arguments (`MapList(AllDifferent, ...)`), recursive transpose.
+Features: nested [star-list patterns](lists.md) (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as [higher-order](higher_order.md) arguments (`MapList(AllDifferent, ...)`), recursive transpose.
 
-*See: [CLP(ℤ)](constraints.md), [Higher-order predicates](meta_predicates.md)*
+*See: [CLP(ℤ)](constraints.md), [Higher-order predicates](higher_order.md), [Meta-predicates](meta_predicates.md)*
 
 ### map_coloring.clausal
 
@@ -122,7 +122,7 @@ Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMe
 
 ### metainterpreters.clausal
 
-Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. `CopyTerm/2` provides fresh variable copies at each resolution step.
+Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. [`CopyTerm/2`](term_inspection.md) provides fresh variable copies at each resolution step.
 
 **Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
@@ -212,7 +212,7 @@ Add test predicates to any example file, then run with pytest:
 Test("fib 10") <- Fib(10, 55)
 ```
 
-Or query from Python:
+Or query from [Python](python_integration.md):
 
 ```python
 import clausal

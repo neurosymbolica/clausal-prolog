@@ -298,7 +298,7 @@ CompareIntegrals(Y, TRAP, SIMP) <- (
 ## Dimensional analysis (Quantity support)
 
 All integration predicates (except ODE solvers) are **quantity-aware**: when
-inputs are `Quantity(value, dims)` objects, units are propagated through the
+inputs are [`Quantity(value, dims)`](units.md) objects, units are propagated through the
 result automatically.
 
 ### Array-based quadrature
@@ -357,7 +357,7 @@ Test("quad with units") <- (
 
 ## Notes
 
-- **Callables**: pass Python functions via `++()` — e.g. `++(lambda x: math.sin(x))`.
+- **Callables**: pass Python functions via [`++()`](python_integration.md) — e.g. `++(lambda x: math.sin(x))`.
 - **Array inputs**: Y0, T_SPAN, T_EVAL and sample arrays should be passed as Python lists or NumPy arrays via `++()`.
 - **solve_ivp result shape**: `result['y']` has shape `(n_vars, n_timepoints)` — rows are variables, columns are time points. Access the last value of variable 0 as `y[0, -1]`.
 - **odeint result shape**: `result['y']` has shape `(n_timepoints, n_vars)` — rows are time points, columns are variables. Access the last value of variable 0 as `y[-1, 0]`.

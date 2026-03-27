@@ -35,7 +35,7 @@ Other classic programs that require tabling:
 
 ## Using tabling
 
-Mark a predicate as tabled with the `-table` directive:
+Mark a predicate as tabled with the [`-table` directive](directives.md):
 
 ```clausal
 -table(path/2)
@@ -67,7 +67,7 @@ for trail in call("path", 1, Y, module=lm):
 
 ### Invalidation
 
-Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via `Assert`, `AssertFirst`, or `Retract` on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
+Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`Assert`, `AssertFirst`, or `Retract`](database_ops.md) on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
 
 To invalidate manually:
 
@@ -203,7 +203,7 @@ The builtins `ClearTable/2` and `ClearAllTables/0` are also available from withi
 
 ### Directive handling
 
-The `-table(pred/arity)` directive is parsed by the import hook alongside `-dynamic` and `-discontiguous`. It calls `db.mark_tabled(functor, arity)`, which records the predicate in `Database._tabled`.
+The `-table(pred/arity)` directive is parsed by the [import hook](import.md) alongside `-dynamic` and `-discontiguous`. It calls `db.mark_tabled(functor, arity)`, which records the predicate in `Database._tabled`.
 
 ### Compilation pipeline
 
@@ -231,7 +231,7 @@ if self.is_tabled(functor, arity):
 
 ## Why generators make tabling natural
 
-The architecture doc notes that tabling is easier on generators than on a WAM. Here is why concretely:
+The [architecture doc](architecture.md) notes that tabling is easier on generators than on a WAM. Here is why concretely:
 
 **Suspension is free.** When a consumer needs to wait for more answers, it simply yields a sentinel and its execution state is frozen in the generator frame. On a WAM, this requires explicitly saving the entire environment stack, choice points, and register file.
 
@@ -243,7 +243,7 @@ The architecture doc notes that tabling is easier on generators than on a WAM. H
 
 ## Well-founded semantics
 
-When a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). WFS provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
+When a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). [Well-Founded Semantics (WFS)](wfs.md) provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
 
 ### How it works
 
@@ -289,7 +289,7 @@ win(X) <- (move(X, Y), not win(Y))
 
 ### Truth value inspection
 
-`TableEntry.truth_value(i)` returns `True`, `False`, or `"undefined"` for the i-th answer based on its conditions. The `query_wfs()` function in `clausal.logic.solve` returns results annotated with `"_truth"` keys.
+`TableEntry.truth_value(i)` returns `True`, `False`, or `"undefined"` for the i-th answer based on its conditions. The [`query_wfs()`](wfs.md#the-query_wfs-api) function in `clausal.logic.solve` returns results annotated with `"_truth"` keys.
 
 ### Compiler integration
 

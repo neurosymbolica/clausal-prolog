@@ -1,6 +1,6 @@
 # Files Module
 
-The `py.files` standard library module provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files.
+The `py.files` standard library module provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files. For higher-level file formats, see the [JSON](json.md), [CSV](csv.md), and [YAML](yaml.md) modules.
 
 The implementation lives in `clausal/modules/py/files.py`.
 
@@ -13,7 +13,7 @@ The implementation lives in `clausal/modules/py/files.py`.
                         WriteStringToFile, JoinPath, MakeDirectoryPath])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.files)
@@ -170,6 +170,8 @@ is_python_file(PATH) <- FileExtension(PATH, ".py")
 ---
 
 ## Example
+
+This example uses [`Filter`](higher_order.md) to select files by extension.
 
 ```clausal
 -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString,

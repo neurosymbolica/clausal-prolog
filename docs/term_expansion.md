@@ -1,6 +1,6 @@
 # Term & Goal Expansion
 
-Term expansion and goal expansion are compile-time transformation passes that rewrite clauses and goals before compilation. They enable metaprogramming, syntactic sugar, and optimization — transforming what you write into what the compiler sees.
+Term expansion and goal expansion are compile-time transformation passes that rewrite [clauses](predicates.md) and goals before [compilation](compiler.md). They enable metaprogramming, syntactic sugar, and optimization — transforming what you write into what the compiler sees.
 
 ---
 
@@ -110,7 +110,7 @@ Start the count at 0 — the expansion engine initializes MODULE_STATE to `None`
 
 ## Importing Expansion Rules
 
-Expansion rules can be imported from other modules. The imported rules apply to items in the **importing** module:
+Expansion rules can be [imported](import.md) from other modules. The imported rules apply to items in the **importing** module:
 
 ```clausal
 # skip
@@ -151,7 +151,7 @@ Goal expansion rewrites individual goals within clause bodies at compile time. U
 
 The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transformations automatically:
 
-**Regex auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables:
+**[Regex](regex.md) auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables:
 
 ```clausal
 # skip
@@ -165,7 +165,7 @@ YEAR is _G["YEAR"], MONTH is _G["MONTH"]
 
 **Pattern precompilation**: String-literal regex patterns are compiled to `re.Pattern` objects at load time, avoiding runtime recompilation.
 
-**Dotted-name support**: Qualified calls like `module.Pred(X)` are resolved during goal expansion.
+**Dotted-name support**: Qualified calls like `module.Pred(X)` are resolved during goal expansion (see [Import](import.md)).
 
 ### How Goal Expansion Works
 
@@ -227,6 +227,7 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `Match/2` to
 
 ---
 
-*See also: [Regex](regex.md) — auto-binding and precompilation are implemented as goal expansions.*
-*See also: [Module System](import.md) — importing expansion rules from other modules.*
-*See also: [Predicates](predicates.md) — how clauses and facts work before expansion.*
+*See also: [Regex](regex.md) — auto-binding and precompilation are implemented as goal expansions,
+[Module System](import.md) — importing expansion rules from other modules,
+[Predicates](predicates.md) — how clauses and facts work before expansion,
+[Directives](directives.md) — module-level declarations processed alongside expansion.*

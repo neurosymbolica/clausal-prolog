@@ -1,6 +1,6 @@
 # I/O Builtins
 
-Clausal provides built-in predicates for formatted output, term-to-string conversion, and f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered.
+Clausal provides built-in predicates for formatted output, term-to-string conversion, and f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered. For calling Python functions directly, see [Python Integration](python_integration.md).
 
 ---
 
@@ -196,7 +196,7 @@ Test("format item") <- (
 )
 ```
 
-### Building Strings with FoldLeft
+### Building Strings with [FoldLeft](higher_order.md)
 
 Use `==` with `+` to concatenate strings inside a FoldLeft closure:
 

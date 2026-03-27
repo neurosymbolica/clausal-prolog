@@ -68,7 +68,7 @@ a list, it binds to a sublist.
 
 ## List Predicates on Strings
 
-All list predicates accept strings. When every input is a string and the result
+All [list predicates](lists.md) accept strings. When every input is a string and the result
 is a character sequence, the result is returned as a string:
 
 ### Append
@@ -126,7 +126,7 @@ Test("index") <- GetItem("hello", 1, 'e')
 
 ## DCGs on Strings
 
-Definite Clause Grammars parse strings directly:
+[Definite Clause Grammars](dcg.md) parse strings directly:
 
 ```clausal
 digit >> ([D], {CharType(D, digit)})
@@ -163,7 +163,7 @@ Test("parse words") <- phrase(words, "hello world")
 
 ## Type Checking
 
-Two predicates test sequence types:
+Two predicates test sequence types (see [Type Checking](type_checking.md) for the full set):
 
 | Predicate | Strings | Lists | Purpose |
 |-----------|---------|-------|---------|
@@ -198,7 +198,7 @@ The traditional string predicates (`AtomChars/2`, `AtomConcat/3`, `SubAtom/5`,
 - **Case conversion:** `UpcaseAtom/2`, `DowncaseAtom/2`
 - **ISO Prolog compatibility**
 
-For concatenation, splitting, length, and membership, prefer the list predicates
+For concatenation, splitting, length, and membership, prefer the [list predicates](lists.md)
 (`Append/3`, `Length/2`, `In/2`) — they work uniformly on both strings and lists.
 
 ---
@@ -269,6 +269,8 @@ Test("not palindrome") <- not palindrome("hello")
 ```
 
 ### Character frequency
+
+Using [FindAll](meta_predicates.md) to count matching characters:
 
 ```clausal
 char_count(Str, Char, Count) <- (

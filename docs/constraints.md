@@ -174,7 +174,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
 ## CLP(ℤ) — Integer constraints
 
-CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators.
+CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators. See also [Arithmetic](arithmetic.md) for relational arithmetic predicates like `Plus/3`, `Between/3`, and `DivMod/4`.
 
 The implementation lives in `clausal.logic.clpfd`.
 
@@ -281,7 +281,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 | Builtin | Arity | Description |
 |---|---|---|
 | `InDomain` | 3 | `InDomain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
-| `Label` | 1 | `Label(Vars)` — enumerate values, first-fail strategy |
+| `Label` | 1 | `Label(Vars)` — enumerate values, first-fail strategy (see [labeling gotcha](#gotcha-generate-and-test-vs-constraint-and-label)) |
 | `AllDifferent` | 1 | `AllDifferent(Vars)` — pairwise disequality constraint |
 | `Equivalent` | 2 | `Equivalent(X, Y)` — structural equality (old `==` behavior) |
 | `Sum` | 3 | `Sum(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
@@ -367,7 +367,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 `==` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
-**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `:=` for Python interop (e.g., string operations with `++`).
+**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `:=` for [Python interop](python_integration.md) (e.g., string operations with `++`).
 
 ??? example "Python API"
 

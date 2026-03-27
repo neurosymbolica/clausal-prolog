@@ -1,6 +1,6 @@
 # JSON Module
 
-The `py.json` standard library module provides relational predicates for parsing, generating, and querying JSON data. JSON objects map to `DictTerm` for unification-aware access.
+The `py.json` standard library module provides relational predicates for parsing, generating, and querying JSON data. JSON objects map to [`DictTerm`](dicts_sets.md) for unification-aware access.
 
 The implementation lives in `clausal/modules/py/json.py`.
 
@@ -12,7 +12,7 @@ The implementation lives in `clausal/modules/py/json.py`.
 -import_from(py.json, [Parse, Generate, PrettyGenerate, Get, ReadFile, WriteFile])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.json)
@@ -25,7 +25,7 @@ Or via module import:
 
 | JSON | Clausal |
 |---|---|
-| `{}` object | `DictTerm` |
+| `{}` object | [`DictTerm`](dicts_sets.md) |
 | `[]` array | Python `list` |
 | `"string"` | Python `str` |
 | `123` / `1.5` | Python `int` / `float` |
@@ -48,7 +48,7 @@ parse_config(S, CONFIG) <- Parse(S, CONFIG)
 
 ### Generate/2
 
-`Generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound variables.
+`Generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md).
 
 ```clausal
 to_json(DATA, JSON) <- Generate(DATA, JSON)

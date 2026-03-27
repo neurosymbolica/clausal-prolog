@@ -14,8 +14,8 @@ Clausal is built on the same foundations you know:
   relations hold. Facts are unconditionally true. Rules have bodies.
 - **Unification is bidirectional.** Variables on either side can be bound.
 - **Search is via backtracking.** Multiple clauses are logical alternatives.
-- **Purity matters.** Clausal has `dif/2`, CLP(ℤ), CLP(B), CLP(ℝ), reified
-  if-then-else, and tabling — all the tools for staying in the pure monotonic
+- **[Purity](purity.md) matters.** Clausal has [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), [CLP(B)](clpb.md), [CLP(ℝ)](clpr.md), [reified
+  if-then-else](reified_ite.md), and [tabling](tabling.md) — all the tools for staying in the pure monotonic
   core.
 - **No cut.** Clausal does not have `!/0`, by design.
 
@@ -73,7 +73,7 @@ fib(N, F) <- (
 )
 ```
 
-Same semantics as SWI's or XSB's tabling. The `-table` directive is
+Same semantics as SWI's or XSB's [tabling](tabling.md). The `-table` [directive](directives.md) is
 Clausal's equivalent of `:- table`.
 
 ### CLP(ℤ)
@@ -102,14 +102,14 @@ name >> [clausal],
 ```
 
 `>>` is Clausal's `-->`. Terminals are lists, non-terminals are bare calls,
-inline goals use `{ }` or `++()`. `phrase/2` and `phrase/3` work as expected.
+inline goals use `{ }` or `++()`. `phrase/2` and `phrase/3` work as expected. See [DCGs](dcg.md) for the full reference.
 
-### Meta-predicates
+### [Meta-predicates](meta_predicates.md)
 
-`FindAll/3`, `BagOf/3`, `SetOf/3`, `ForAll/2`, and `Call/1..8` are all
+[`FindAll/3`, `BagOf/3`, `SetOf/3`](meta_predicates.md), `ForAll/2`, and [`Call/1..8`](higher_order.md) are all
 available as builtins.
 
-### Module system
+### [Module system](import.md)
 
 ```clausal
 -import_from(utils, [Double, Helper]),
@@ -131,10 +131,10 @@ that make logic programming worthwhile.
 
 Where you would use green cuts in Prolog, Clausal offers:
 
-- **First-argument indexing** — automatic, no manual intervention needed
-- **Reified if-then-else** — `(THEN if COND else ELSE)` with monotonic, three-valued semantics
-- **CLP(ℤ) and dif/2** — replace cut-based pruning with constraints
-- **Groundness-keyed dispatch** — the compiler generates specialized code
+- **[First-argument indexing](indexing.md)** — automatic, no manual intervention needed
+- **[Reified if-then-else](reified_ite.md)** — `(THEN if COND else ELSE)` with monotonic, three-valued semantics
+- **[CLP(ℤ) and dif/2](constraints.md)** — replace cut-based pruning with constraints
+- **Groundness-keyed dispatch** — the [compiler](compiler.md) generates specialized code
   paths based on which arguments are ground
 
 ### Atoms
@@ -159,7 +159,7 @@ memorizing a shorthand lexicon.
 
 ### Python interop is native
 
-You can call any Python expression from within a clause using `++()`:
+You can call any Python expression from within a clause using [`++()`](python_integration.md):
 
 ```clausal
 word_count(TEXT, N) <- (N is ++len(TEXT.split()))
@@ -175,13 +175,13 @@ solutions = list(clausal.query(reachable("a", DEST)))
 No subprocess, no marshalling, no FFI. Logic predicates are Python classes.
 Logic variables are Python objects. Everything runs on one VM.
 
-### Compilation, not interpretation
+### [Compilation](compiler.md), not interpretation
 
 Clausal compiles predicates to Python generator functions at import time.
 There is no interpreter loop. This means:
 
-- Bytecode is cached in `__pycache__`
-- First-argument indexing is computed at compile time
+- Bytecode is [cached](caching.md) in `__pycache__`
+- [First-argument indexing](indexing.md) is computed at compile time
 - Groundness-keyed dispatch generates specialized code paths
 - The Python JIT (3.13+) can optimize hot paths
 

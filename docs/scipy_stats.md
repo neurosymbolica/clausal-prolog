@@ -436,7 +436,7 @@ Common fields by predicate:
 
 ## Notes
 
-- **Arrays**: pass Python lists or NumPy arrays via `++()` — e.g. `StatsMean(++([1.0, 2.0, 3.0]), RESULT)`.
+- **Arrays**: pass Python lists or NumPy arrays via [`++()`](python_integration.md) — e.g. `StatsMean(++([1.0, 2.0, 3.0]), RESULT)`.
 - **`StatsKruskal`**: takes a single list of arrays as input — e.g. `StatsKruskal(++([[1,2,3],[4,5,6]]), RESULT)`. Scipy's `kruskal(*samples)` is called internally.
 - **`StatsMode`**: scipy ≥ 1.11 returns scalar mode/count; older versions return arrays. The predicate normalises both cases to plain `float` / `int`.
 - **`StatsNormalRvs` 1-arity**: the RESULT argument is the sole argument before `trail` — omit LOC, SCALE, and SIZE for a single standard-normal variate.

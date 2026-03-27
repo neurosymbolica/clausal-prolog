@@ -30,7 +30,7 @@ All predicates are **Tier 2** — they return result dicts or NumPy arrays. Use 
 
 ## Naming conventions
 
-The `Cluster` prefix is dropped since these predicates live in the cluster module. Abbreviations that are not the universal name are expanded:
+The `Cluster` prefix is dropped since these predicates live in the cluster [module](import.md). Abbreviations that are not the universal name are expanded:
 
 | scipy function | Clausal predicate |
 |---|---|

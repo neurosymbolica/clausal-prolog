@@ -286,7 +286,7 @@ ExplainedVariance(X, K, RATIO) <- (
 ## Notes
 
 - All array inputs are passed to scipy without copying; avoid mutating them after the call.
-- Tier 2 result dicts are plain Python dicts — they can be passed to `++` escapes for further NumPy processing.
+- Tier 2 result dicts are plain Python dicts — they can be passed to [`++` escapes](python_integration.md) for further NumPy processing.
 - `EigenDecompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
 - `MatrixExpLog` (logm direction) and `MatrixSquareRoot` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
 - Predicates fail (no solution) when `ResultGet` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.

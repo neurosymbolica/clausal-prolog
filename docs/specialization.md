@@ -1,6 +1,6 @@
 # Meta-Interpreter Specialization
 
-Meta-interpreters (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `MatchClause`, `CopyTerm`, list manipulation, and recursive calls.
+[Meta-interpreters](metainterpreters.md) (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `MatchClause`, `CopyTerm`, list manipulation, and recursive calls.
 
 **Partial deduction** (partial evaluation for logic programs) eliminates this overhead. Specializing an MI with respect to a known object program produces a residual program structurally identical to the object program, but with the MI's extensions woven directly into the compiled code. This is the **first Futamura projection** applied to logic programming.
 
@@ -217,19 +217,19 @@ Pre-match goals (before `MatchClause`, e.g. depth check in `SolveLimit`) and pos
 
 ## Pipeline integration
 
-Specialization runs as Step 6b in the `compile_module()` pipeline — after all predicates are compiled (so source programs can be evaluated) and before non-dynamic predicates are locked:
+Specialization runs as Step 6b in the [`compile_module()` pipeline](compiler.md) — after all predicates are compiled (so source programs can be evaluated) and before non-dynamic predicates are locked:
 
 ```
 compile_module()
 ├─ Step 0: _process_imports()
-├─ Step 1: run_term_expansion()
+├─ Step 1: [run_term_expansion()](term_expansion.md)
 ├─ Step 1b: run_goal_expansion()
 ├─ Step 1c: _preregister_specializations()    ← empty class created
 ├─ Step 2: _process_directives()
 ├─ Step 3: _process_declarations()
 ├─ Step 4: assert clauses
 ├─ Step 5: compile predicates
-├─ Step 6: wrap tabled
+├─ Step 6: [wrap tabled](tabling.md)
 ├─ Step 6b: _run_specialization()             ← clauses unfolded + compiled
 └─ Step 7: lock non-dynamic
 ```

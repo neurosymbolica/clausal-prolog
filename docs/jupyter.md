@@ -2,7 +2,7 @@
 
 Clausal integrates with Jupyter notebooks — query logic programs interactively
 from notebook cells and see results rendered with syntax colouring.  The
-`*(goals)` query syntax and automatic variable declaration work the same as in
+[`*(goals)` query syntax](ipython.md) and automatic variable declaration work the same as in
 terminal IPython; the difference is that solutions are rendered as styled HTML
 instead of a terminal-interactive keypress loop.
 

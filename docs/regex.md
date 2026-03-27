@@ -31,7 +31,7 @@ The named groups `YEAR` and `MONTH` are automatically bound to the clause variab
 -import_from(regex, [Match, Search, Replace, Split, FindAll])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 # skip
@@ -133,7 +133,7 @@ Fails if no matches are found.
 
 ## Auto-Binding
 
-Named groups using ALLCAPS or leading-underscore names are automatically bound to corresponding clause variables at compile time (via goal expansion). This is the key feature that makes regex feel native in Clausal.
+Named groups using ALLCAPS or leading-underscore names are automatically bound to corresponding clause [variables](syntax.md) at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in Clausal.
 
 ### ALLCAPS Groups
 
@@ -250,7 +250,7 @@ Test("valid ipv4") <- ValidIpv4("192.168.1.1")
 
 ### Combining Regex with FindAll (Meta-Predicate)
 
-Use the `FindAll` meta-predicate to collect all regex matches into a list:
+Use the [`FindAll` meta-predicate](meta_predicates.md) to collect all regex matches into a list:
 
 ```clausal
 -import_module(regex)
@@ -301,7 +301,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
 - **Match is anchored at start**; Search is not. Use `Search` when you want to find a pattern anywhere in the string.
 - **Auto-binding requires ALLCAPS or leading-underscore** group names. A group named `(?P<year>...)` (lowercase, no leading underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
-- **Regex FindAll vs meta-predicate FindAll**: The regex `FindAll/3` is nondeterministic (yields one match at a time). The meta-predicate `FindAll/3` collects all solutions into a list. Use qualified names (`regex.FindAll`) if both are imported.
+- **Regex FindAll vs [meta-predicate FindAll](meta_predicates.md)**: The regex `FindAll/3` is nondeterministic (yields one match at a time). The meta-predicate `FindAll/3` collects all solutions into a list. Use qualified names (`regex.FindAll`) if both are imported.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
 
 ---

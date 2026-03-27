@@ -14,7 +14,7 @@ FetchPage(URL, BODY) <- Get(URL, BODY)
 FetchApi(URL, DATA) <- JSONGet(URL, DATA)
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.http)
@@ -60,7 +60,7 @@ Post("http://example.com/submit", "key=value", RESPONSE)
 |-----------|------|-------------|
 | `Request(Options, Status, Body)` | `+Options, -Status, -Body` | General HTTP request with full control. |
 
-`Options` is a DictTerm with keys:
+`Options` is a [`DictTerm`](dicts_sets.md) with keys:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -85,8 +85,8 @@ Request({"url": "http://example.com", "method": "HEAD"}, STATUS, BODY)
 | `JSONGet(Url, Term)` | `+Url, -Term` | GET + parse JSON → DictTerm/list |
 | `JSONPost(Url, Term, Response)` | `+Url, +Term, -Response` | POST JSON + parse response |
 
-JSON objects are converted to `DictTerm`, arrays to lists, using the same
-conversion as the `py.json` module.
+JSON objects are converted to [`DictTerm`](dicts_sets.md), arrays to lists, using the same
+conversion as the [`py.json`](json.md) module.
 
 ```clausal
 # skip

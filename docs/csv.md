@@ -1,6 +1,6 @@
 # CSV Module
 
-The `py.csv` standard library module provides relational predicates for parsing and generating CSV data. CSV records with headers map to `DictTerm` for unification-aware access.
+The `py.csv` standard library module provides relational predicates for parsing and generating CSV data. CSV records with headers map to [`DictTerm`](dicts_sets.md) for unification-aware access.
 
 The implementation lives in `clausal/modules/py/csv.py`.
 
@@ -13,7 +13,7 @@ The implementation lives in `clausal/modules/py/csv.py`.
                       GenerateRecords, ReadFile, ReadRecords, WriteFile])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.csv)
@@ -25,8 +25,8 @@ Or via module import:
 ## Type Mapping
 
 - CSV rows → Python `list` of `str`
-- CSV with headers → `list` of `DictTerm` (one per record)
-- All values are strings — no automatic type coercion. Use `++int(X)` or `NumberChars` for conversion.
+- CSV with headers → `list` of [`DictTerm`](dicts_sets.md) (one per record)
+- All values are strings — no automatic type coercion. Use [`++int(X)`](python_integration.md) or `NumberChars` for conversion.
 
 ---
 

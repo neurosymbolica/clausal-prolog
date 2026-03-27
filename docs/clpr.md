@@ -11,7 +11,7 @@ The implementation lives in `clausal/logic/clpr.py`.
 
 ## Unified syntax
 
-Clausal's comparison operators are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
+Clausal's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
 
 | Operator | CLP(ℤ) meaning | CLP(ℝ) meaning |
 |---|---|---|
@@ -275,7 +275,7 @@ pythagorean_real(X, Y) <- (
 
 ??? warning "Cross-domain pitfalls"
 
-    **Booleans are not numbers.** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Booleans belong to CLP(B). Passing a boolean where a number is expected will cause the constraint to fail or be ignored. Use `0`/`1` explicitly if you need numeric values.
+    **Booleans are not numbers.** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Booleans belong to [CLP(B)](clpb.md). Passing a boolean where a number is expected will cause the constraint to fail or be ignored. Use `0`/`1` explicitly if you need numeric values.
 
     **Labeling order matters.** If a variable has both FD and real attributes, use `Label` (FD) to enumerate integer values. `LabelReal` bisects the continuous interval and does not enforce integrality — it will find non-integer points within the interval. For mixed-domain variables, label with FD first to fix the integer value, then use `LabelReal` for any remaining real variables.
 

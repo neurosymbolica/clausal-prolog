@@ -14,7 +14,7 @@ The implementation lives in `clausal/modules/py/random.py`.
                          RandomSeed, Maybe])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.random)
@@ -51,7 +51,7 @@ roll_die(N) <- RandomInteger(1, 6, N)
 
 ### RandomMember/2
 
-`RandomMember(List, X)` — bind X to a randomly chosen element of List. Deterministic (one solution). Fails if List is empty or unbound.
+`RandomMember(List, X)` — bind X to a randomly chosen element of [List](lists.md). Deterministic (one solution). Fails if List is empty or unbound.
 
 ```clausal
 pick_color(COLOR) <- RandomMember(["red", "green", "blue"], COLOR)
@@ -59,7 +59,7 @@ pick_color(COLOR) <- RandomMember(["red", "green", "blue"], COLOR)
 
 ### RandomPermutation/2
 
-`RandomPermutation(List, Shuffled)` — bind Shuffled to a random permutation of List.
+`RandomPermutation(List, Shuffled)` — bind Shuffled to a random permutation of [List](lists.md).
 
 ```clausal
 shuffle_deck(DECK, SHUFFLED) <- RandomPermutation(DECK, SHUFFLED)

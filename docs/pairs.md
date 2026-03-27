@@ -1,7 +1,7 @@
 # Pairs
 
-Pair predicates work with lists of two-element lists `[Key, Value]`, providing
-key-value processing operations.
+Pair predicates work with [lists](lists.md) of two-element lists `[Key, Value]`, providing
+key-value processing operations. For proper key-value mappings with unification support, see [Dicts & Sets](dicts_sets.md).
 
 ---
 
@@ -82,7 +82,7 @@ Test("sort by key") <- (
 )
 ```
 
-### Invert a mapping
+### Invert a mapping (using [MapList](higher_order.md))
 
 ```clausal
 swap_pair([K, V], [V, K]),

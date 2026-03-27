@@ -7,7 +7,7 @@ This page follows the structure of Markus Triska's [A Couple of Meta-Interpreter
 !!! note "Clausal vs Prolog syntax"
 
     Clausal and Prolog syntax may slightly differ — for example, variables are
-    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    `ALLCAPS`, rules use `<-` instead of `:-`, and [lists](lists.md) are Python-style. Keep
     this in mind when comparing with Prolog resources.
 
 The full source is in `clausal/examples/metainterpreters.clausal`.
@@ -70,7 +70,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 )
 ```
 
-`CopyTerm` renames all variables in the clause, so the same clause can be used multiple times without its variables interfering with each other. Unifying `GOAL is FRESH_HEAD` then binds the fresh variables to match the current goal.
+[`CopyTerm`](term_inspection.md) renames all variables in the clause, so the same clause can be used multiple times without its variables interfering with each other. Unifying `GOAL is FRESH_HEAD` then binds the fresh variables to match the current goal.
 
 ---
 
@@ -264,7 +264,7 @@ TREE is [
 
 **`CopyTerm` for fresh variables** — without freshening, reusing a clause that contains `X` twice would unify all occurrences of `X` across different resolution steps. `CopyTerm` renames all variables in a clause before unification, exactly as a real Prolog interpreter would.
 
-**Composability** — each interpreter is a small, self-contained predicate. They can be combined: for example, `SolveCount` could be extended with a depth limit (producing a counted, depth-bounded interpreter) by merging the two patterns.
+**Composability** — each interpreter is a small, self-contained predicate. They can be combined: for example, `SolveCount` could be extended with a depth limit (producing a counted, depth-bounded interpreter) by merging the two patterns. These interpreters can also be [specialized](specialization.md) via partial deduction to eliminate interpretation overhead.
 
 ---
 

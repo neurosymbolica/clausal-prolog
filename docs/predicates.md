@@ -166,7 +166,7 @@ Test("length 0") <- length([], 0)
 Test("length 3") <- (length([1, 2, 3], N), N == 3)
 ```
 
-For list relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (Clausal uses `*` for the tail, like Python).
+For [list](lists.md) relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (Clausal uses `*` for the tail, like Python).
 
 ---
 
@@ -210,7 +210,7 @@ The **arity** is the number of fields. `point/2` means "point with 2 arguments."
 
 ## Defining Predicates in `.clausal` Files
 
-Clausal files use Python syntax with logic programming semantics:
+Clausal files use [Python syntax](syntax.md) with logic programming semantics:
 
 ```clausal
 # Comments start with #
@@ -229,7 +229,7 @@ nice_color(C) <- (
 )
 ```
 
-Files are loaded via Python's import system. `import my_module` loads `my_module.clausal` and compiles all predicates.
+Files are loaded via Python's [import system](import.md). `import my_module` loads `my_module.clausal` and compiles all predicates.
 
 ---
 
@@ -268,7 +268,7 @@ foo = make_predicate("foo", ["a", "b"])
 
 ### Locking
 
-Predicates are locked after module loading — `Assert`/`Retract` raise `RuntimeError`. Use `-dynamic(pred/arity)` to allow runtime modification. See [Directives](directives.md).
+Predicates are locked after module loading — `Assert`/`Retract` raise `RuntimeError`. Use `-dynamic(pred/arity)` to allow runtime modification. See [Directives](directives.md) and [Database Operations](database_ops.md).
 
 ---
 

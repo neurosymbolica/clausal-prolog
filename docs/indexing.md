@@ -371,7 +371,7 @@ The first-arg index functions (`_extract_first_arg_key`, `_build_first_arg_index
 
 ## Interaction with dynamic predicates
 
-No changes to the invalidation mechanism. When `assertz` or `retract` modifies a predicate, the lazy recompile closure calls `compile_predicate` from scratch. The fresh compilation analyses all positions and builds new indexes reflecting the updated clause list.
+No changes to the invalidation mechanism. When [`assertz` or `retract`](database_ops.md) modifies a predicate, the lazy recompile closure calls `compile_predicate` from scratch. The fresh compilation analyses all positions and builds new indexes reflecting the updated clause list.
 
 ## Limitations
 
@@ -600,7 +600,7 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
 ## Key invariants
 
-**Locked-only.** Only call sites targeting a predicate with `_locked=True` at the caller's compile time are specialised. Dynamic predicates always go through `._get_dispatch()` because their clause set may change at runtime.
+**Locked-only.** Only call sites targeting a predicate with `_locked=True` at the caller's compile time are specialised. [Dynamic predicates](directives.md) always go through `._get_dispatch()` because their clause set may change at runtime.
 
 **`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. When a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `_get_dispatch()` — which is correct.
 

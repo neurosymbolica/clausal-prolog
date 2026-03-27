@@ -1,6 +1,6 @@
 # Well-Founded Semantics (WFS)
 
-Well-Founded Semantics provides a sound three-valued treatment of negation for tabled predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined**.
+Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined**.
 
 ---
 
@@ -137,7 +137,7 @@ Undefined does NOT mean "error" — it is a legitimate third truth value. In gam
 
 ## Requirements
 
-WFS only applies to **tabled** predicates. Mark them with the `-table` directive:
+WFS only applies to **tabled** predicates. Mark them with the [`-table` directive](directives.md):
 
 ```clausal
 # skip

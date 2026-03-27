@@ -2,9 +2,9 @@
 
 Clausal has first-class IPython integration that turns an IPython session into a
 Prolog-style REPL.  Queries use a `*(goals)` syntax, uppercase names are
-automatically treated as logic variables, and solutions are presented
+automatically treated as [logic variables](syntax.md), and solutions are presented
 interactively one at a time — separated by `or`, just as Clausal's disjunction
-operator reads.
+operator reads. For notebook-specific rendering, see [Jupyter Notebooks](jupyter.md).
 
 ---
 

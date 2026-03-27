@@ -17,7 +17,7 @@ EchoClient(HOST, PORT, MESSAGE, RESPONSE) <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(py.tcp)
@@ -152,7 +152,7 @@ Receive(SOCKET, DATA)         # fails if no data within 5 seconds
 ## Gotchas
 
 - **Sockets are impure** — socket operations have side effects and do not
-  backtrack cleanly. If a `Send` succeeds but a later goal fails, the data
+  [backtrack](control.md) cleanly. If a `Send` succeeds but a later goal fails, the data
   has already been sent.
 - **`Accept` blocks** — it waits for a connection. Use `SetTimeout` on the
   server socket to limit the wait time.

@@ -32,7 +32,7 @@ p = point(x=10)        # point(10, Var(), Var())
 p = point(y=20, z=30)  # point(Var(), 20, 30)
 ```
 
-This is Python's native keyword syntax — no special Clausal syntax needed.
+This is Python's native keyword syntax — no special Clausal syntax needed. See [Syntax](syntax.md) for the full language reference.
 
 ---
 

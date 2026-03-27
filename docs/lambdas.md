@@ -1,6 +1,6 @@
 # Lambdas (Goal Closures)
 
-Lambdas are anonymous clauses that can be passed as arguments to higher-order predicates. They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
+Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
 
 The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`CallGoal` builtins).
 
@@ -187,7 +187,7 @@ Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
 
 ## Lambdas with meta-predicates
 
-Lambdas combine naturally with `FindAll`, `BagOf`, `SetOf`, and `ForAll`. The goal argument to these meta-predicates can be any goal expression, including lambda calls:
+Lambdas combine naturally with [FindAll, BagOf, SetOf, and ForAll](meta_predicates.md). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
 ```clausal
 # Collect squares of a list using a lambda
@@ -209,7 +209,7 @@ Since `FindAll` and friends are compiler special forms, the goal argument is com
 
 ## Lambdas with higher-order list predicates
 
-The higher-order list builtins — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
+The [higher-order list builtins](higher_order.md) — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
 ```clausal
 # skip

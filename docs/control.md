@@ -1,7 +1,8 @@
 # Control
 
 Control predicates manage execution flow — forcing determinism, measuring
-performance, and controlling search.
+performance, and controlling search. For delayed execution, see
+[Coroutining](coroutining.md).
 
 ---
 
@@ -94,7 +95,7 @@ Test("exactly one solution") <- Once(
 - **`Once` cuts all choice points** — it does not just skip one alternative, it
   commits fully. Side effects from the first solution will have happened.
 - **`TimeGoal/1` prints to stderr** — not stdout. It won't interfere with
-  `Write`/`Writeln` output.
+  [Write/Writeln](io.md) output.
 - **`TimeGoal/2` measures wall time** — on a loaded system, wall time may be
   higher than CPU time. Use `/1` to see both.
 

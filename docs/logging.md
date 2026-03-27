@@ -17,7 +17,7 @@ Main(NAME) <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(log)
@@ -127,7 +127,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 ### Messages and f-strings
 
-Messages are Python strings. Clausal's f-string support means interpolation works naturally:
+Messages are Python strings. Clausal's [f-string support](io.md) means interpolation works naturally:
 
 ```clausal
 # skip

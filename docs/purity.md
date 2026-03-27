@@ -92,7 +92,7 @@ Clauses and predicates can be read and reasoned about **in isolation**. You
 do not need to read the entire program to understand a single clause.
 
 This property is what makes large logic programs manageable. It is also what
-makes Clausal's import system meaningful — a predicate imported from another
+makes Clausal's [import system](import.md) meaningful — a predicate imported from another
 module can be understood from its definition alone.
 
 ---
@@ -113,7 +113,7 @@ a previously successful negation to fail.
 risky(X) <- not In(X, [1, 2, 3])
 ```
 
-For disequality with unbound variables, use `dif/2` (`is not`) instead — it
+For disequality with unbound variables, use [`dif/2`](constraints.md) (`is not`) instead — it
 is a monotonic constraint that survives and is rechecked as variables become
 bound:
 
@@ -124,7 +124,7 @@ safe(X) <- (X is not 1, X is not 2)
 
 ### Arithmetic with `==`
 
-The `==` operator posts CLP(ℤ) constraints that work in all directions,
+The `==` operator posts [CLP(ℤ)](constraints.md) constraints that work in all directions,
 even when variables are unbound:
 
 ```clausal
@@ -137,7 +137,7 @@ The `:=` operator is available for eager Python-side evaluation (e.g., with
 
 ### I/O side effects
 
-Writing output, reading files, and sending network requests are inherently
+Writing output (see [I/O](io.md)), reading files, and sending network requests are inherently
 non-monotonic — they have effects that cannot be undone on backtracking.
 
 The mitigation is to **describe output declaratively as a term, then emit it
@@ -163,7 +163,7 @@ greet(NAME) <- (
 
 ### Assert/Retract at runtime
 
-Dynamically adding or removing clauses breaks separability — the meaning of a
+Dynamically [adding or removing clauses](database_ops.md) breaks separability — the meaning of a
 predicate now depends on what has happened during execution, not just on its
 definition. Use dynamic predicates only when genuinely needed (e.g., caching,
 configuration), and be aware that they move you outside the pure core.
@@ -180,7 +180,7 @@ Many common impure patterns have pure counterparts in Clausal:
 | `N > 0` (arithmetic guard) | `N #> 0` (CLP(ℤ) constraint) | Works in all directions |
 | `:=` (eager evaluation) | `==` (CLP(ℤ) constraint) | Works with unbound variables |
 | `not Goal` with unbound vars | Reified if-then-else | Monotonic; see [If-Then-Else](reified_ite.md) |
-| Type-testing (`integer(X)`) | Clean representations | Symbolic distinction via functors; see below |
+| Type-testing (`integer(X)`) | Clean representations | Symbolic distinction via functors; see [below](#clean-vs-defaulty-representations) |
 
 ### Clean vs. defaulty representations
 
@@ -201,7 +201,7 @@ classify(negative(N), "negative"),
 ```
 
 Clean representations are not only good for semantic reasons — they also enable
-argument indexing, which avoids redundant choice points and enables tail call
+[argument indexing](indexing.md), which avoids redundant choice points and enables tail call
 optimization. Correctness and efficiency go hand in hand.
 
 ---

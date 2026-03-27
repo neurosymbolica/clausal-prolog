@@ -77,7 +77,7 @@ for r in results:
 **Why this works:** `call()` creates a fresh Trail internally if you
 don't pass one. Each thread's `StepGenerator` chain is independent.
 The clause database's dispatch tables are immutable snapshots — no
-locking needed for reads.
+locking needed for reads. See [Free-Threaded Python Support](free_threading.md) for details on the C extension locking design.
 
 ---
 
@@ -181,7 +181,7 @@ def worker_b():
 
 The fix: give each thread its own copy of the query variables.
 
-### Don't `assert`/`retract` concurrently (yet)
+### Don't [`assert`/`retract`](database_ops.md) concurrently (yet)
 
 Phase 2 will add copy-on-write semantics for the clause database. Until
 then, concurrent `assertz`/`retract` from multiple threads is not safe.

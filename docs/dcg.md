@@ -1,6 +1,6 @@
 # Definite Clause Grammars (DCGs)
 
-DCGs are a notation for defining grammars and other list-processing tasks. Clausal uses `>>` syntax for grammar rules, which are rewritten to ordinary `<-` clauses with two hidden difference-list arguments at compile time.
+DCGs are a notation for defining grammars and other [list](lists.md)-processing tasks. Clausal uses `>>` syntax for grammar rules, which are rewritten to ordinary `<-` clauses with two hidden difference-list arguments at compile time.
 
 The implementation lives in `clausal/templating/term_rewriting.py` (source-level rewriting) and `clausal/logic/builtins.py` (`phrase/2,3`).
 
@@ -62,13 +62,13 @@ digit(D) >> ([D], {D >= 0}, {D <= 9})
 
 ### Inline Goals
 
-Curly braces `{...}` embed arbitrary Clausal goals inside a grammar rule. They do not consume input:
+Curly braces `{...}` embed arbitrary [Clausal goals](syntax.md) inside a grammar rule. They do not consume input:
 
 ```clausal
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
-The goals `D >= 0` and `D <= 9` are CLP(ℤ) constraints checked without consuming tokens.
+The goals `D >= 0` and `D <= 9` are [CLP(ℤ)](constraints.md) constraints checked without consuming tokens.
 
 ### Conjunction and Disjunction
 

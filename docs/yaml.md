@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `yaml_module` module provides predicates for parsing and generating YAML, backed by Python's PyYAML library (`yaml.safe_load` / `yaml.safe_dump`). Data is represented as native Python objects — no custom term types.
+The `yaml_module` module provides predicates for parsing and generating YAML, backed by Python's PyYAML library (`yaml.safe_load` / `yaml.safe_dump`). Data is represented as native Python objects — no custom term types. For JSON data, see the [JSON](json.md) module.
 
 ```clausal
 -import_from(yaml_module, [Read, Write, Get])
@@ -14,7 +14,7 @@ ParseConfig(PATH, HOST, PORT) <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(yaml_module)
@@ -52,7 +52,7 @@ YAML data maps directly to Python types:
 | Boolean (`true`/`false`) | `bool` |
 | Null (`null`, `~`) | `None` |
 
-These are the exact objects produced by `yaml.safe_load`. Any Python method can be called on them via `++()` interop — e.g., `KEYS is ++(D.keys())` or `LEN is ++len(ITEMS)`.
+These are the exact objects produced by `yaml.safe_load`. Any Python method can be called on them via [`++()`](python_integration.md) interop — e.g., `KEYS is ++(D.keys())` or `LEN is ++len(ITEMS)`.
 
 ---
 
@@ -254,7 +254,7 @@ Test("nested access") <- (
 
 ??? abstract "Design decisions"
 
-    1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to `KWTerm` or `Compound`. Users access nested data via `Get/3` or `++()` interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
+    1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to `KWTerm` or `Compound`. Users access nested data via `Get/3` or [`++()`](python_integration.md) interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
     2. **`safe_load` only** — prevents arbitrary code execution from YAML tags. This is the standard security practice.
     3. **`Get/3` for navigation** — a convenience predicate that avoids verbose `++()` chains for deep nested access. Accepts both single keys and key-path lists.
     4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `Write(...)`, `Get(...)`.

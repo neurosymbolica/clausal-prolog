@@ -49,9 +49,9 @@ Clausal already has clean alternatives for every legitimate use of cut:
 
 | Cut pattern | Clausal equivalent |
 |-------------|-------------------|
-| Green cut (determinism) | First-argument indexing + `dif/2` guards |
-| `member(X,L), !` | `Once(In(X, L))` |
-| `(C -> T ; E)` | Reified if-then-else: `(T if C else E)` |
+| Green cut (determinism) | [First-argument indexing](indexing.md) + [`dif/2`](constraints.md) guards |
+| `member(X,L), !` | [`Once(In(X, L))`](control.md) |
+| `(C -> T ; E)` | [Reified if-then-else](reified_ite.md): `(T if C else E)` |
 | Red cut (negation) | `not Goal` (NAF) or `dif/2` |
 | Committed choice | `Once(Goal)` or if-then-else |
 
@@ -357,8 +357,8 @@ underscore for readability:
 - Meta: `findall/3`, `bagof/3`, `setof/3`, `forall/2`
 - I/O: `write/1`, `writeln/1`, `nl/0`, `tab/1`
 - Higher-order: `maplist/2,3`, `include/3` (Filter), `exclude/3`, `foldl/4`
-- Constraints: `dif/2`, CLP(FD), CLP(B)
-- DCG: `phrase/2,3`
+- Constraints: [`dif/2`, CLP(FD)](constraints.md), [CLP(B)](clpb.md)
+- DCG: [`phrase/2,3`](dcg.md)
 
 ### Still Missing
 
@@ -390,7 +390,7 @@ Clausal's `not Goal` matches ISO `\+/1` exactly: the inner goal is called;
 if it succeeds, negation fails; if it fails, negation succeeds. Bindings from
 the inner goal are not visible outside.
 
-For tabled predicates, Clausal goes further with Well-Founded Semantics (WFS),
+For [tabled](tabling.md) predicates, Clausal goes further with [Well-Founded Semantics](wfs.md) (WFS),
 handling cycles through negation that ISO leaves undefined. This is a strict
 superset — no incompatibility.
 
@@ -400,7 +400,7 @@ superset — no incompatibility.
 
 ### Mostly Compatible
 
-Clausal has `catch/3` and `throw/1` with `LogicException`. Should verify that
+Clausal has [`catch/3` and `throw/1`](exceptions.md) with `LogicException`. Should verify that
 error terms match ISO structure: `error(ErrorKind, ImplDefined)` where ErrorKind
 is `type_error/2`, `instantiation_error/0`, `existence_error/2`,
 `permission_error/3`, etc.

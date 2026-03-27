@@ -49,8 +49,8 @@ def fib__2(arg0, arg1, trail, k):
 | Integer / string literal | `MatchValue(IntLiteral(N))` — exact match |
 | PredicateMeta term `fib(n=_v, ...)` | `MatchClass(fib, patterns)` — structural match |
 | List `[HEAD, *TAIL]` | `MatchAs(name="_lcapN")` + deferred list guard (see below) |
-| `DictTerm({"k": V, ...})` | `MatchAs(name="_dcapN")` + dict unify guard |
-| `SetTerm({1, 2, 3})` | `MatchAs(name="_scapN")` + set unify guard |
+| [`DictTerm`](dicts_sets.md)`({"k": V, ...})` | `MatchAs(name="_dcapN")` + dict unify guard |
+| [`SetTerm`](dicts_sets.md)`({1, 2, 3})` | `MatchAs(name="_scapN")` + set unify guard |
 
 **Repeated head variables**: if the same logic variable appears in two different head positions, the second occurrence gets a generated alias name (`_vN__dupM`). The body is wrapped in `if unify(original, alias, trail):` before the continuation runs.
 
@@ -81,15 +81,15 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `True` | pass-through to `k_stmts` |
 | `False` | empty (no solution) |
 | `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
-| `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — dif/2 constraint (see [constraints.md](constraints.md)) |
+| `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — [dif/2](constraints.md) constraint |
 | `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
-| `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(ℤ) arithmetic equality |
+| `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — [CLP(ℤ)](constraints.md) arithmetic equality |
 | `ArithNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(ℤ) arithmetic disequality |
 | `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(ℤ) comparison |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
-| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (well-founded semantics). |
-| `IfExpr(test, body, orelse)` | Reified ITE: three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. See [reified_ite.md](reified_ite.md). |
+| `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a [tabled](tabling.md) predicate, emits `_naf_tabled` call instead ([well-founded semantics](wfs.md)). |
+| `IfExpr(test, body, orelse)` | [Reified ITE](reified_ite.md): three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. |
 | `Call(LoadName("Once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
 | `Call(LoadName("FindAll"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
 | `Call(LoadName("BagOf"), [tmpl, goal, bag])` | Same as `FindAll`, but fails if no solutions (empty result list). |
@@ -311,7 +311,7 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
 
 **Limitations**:
 
-- Disabled for tabled predicates (SLG tabling has its own suspension protocol).
+- Disabled for [tabled](tabling.md) predicates (SLG tabling has its own suspension protocol).
 - Self-recursion only — mutual recursion (A→B→A) is not detected.
 - Nondeterministic prefix goals (predicate calls before the tail call) prevent TRO.
 
@@ -519,14 +519,14 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | Step | What happens |
 |---|---|
 | 0. Imports | `_process_imports()` — execute `-import_from` and `-import_module` directives, populating `module_dict`. Bare module names (e.g. `regex`) are resolved via `clausal.modules` fallback. |
-| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [Import System](import.md) |
+| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [Term Expansion](term_expansion.md) |
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
-| 2. Directives | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
+| 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
 | 4. Assert clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. Clauses are synced to `pred_cls._clauses` |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
-| 6. Tabling | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
-| 7. Locking | Non-dynamic predicates are locked (`pred_cls._lock()`) to prevent runtime modification |
+| 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
+| 7. Locking | Non-[dynamic](directives.md) predicates are locked (`pred_cls._lock()`) to prevent runtime modification |
 
 ### How predicate nodes are collected
 
@@ -549,7 +549,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ### Regex auto-binding
 
-When a `Match/2` or `Search/2` call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
+When a [`Match/2` or `Search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
 
 ```clausal
 # Source:

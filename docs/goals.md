@@ -19,9 +19,9 @@ Neural networks and machine learning offer extraordinary power for dealing with 
 Logic programming, by contrast, struggles with noisy data but offers powerful, transparent reasoning when the rules are well-understood:
 
 - built-in search over combinatorial spaces
-- efficient expression of constraint satisfaction and optimisation problems
+- efficient expression of [constraint satisfaction](constraints.md) and optimisation problems
 - exceptional power to reason about and analyse programs
-- naturally expressible meta-interpreters
+- naturally expressible [meta-interpreters](metainterpreters.md)
 
 These two kinds of AI have complementary strengths. A self-driving car, for example, might use neural networks to interpret sensor data (video, radar, voice) and a logic system to reason about traffic laws, collision avoidance, and route planning — domains where rules are precise, latency must be low, and behaviour may need to be formally verified.
 
@@ -43,9 +43,9 @@ Marrying these in Python — the lingua franca of machine learning — is the go
 
 - **`clausal.logic.variables`** — C extension for logic variables and trail-based backtracking. Foundation for all unification.
 - **`clausal.simple_ast`** and **`clausal.conversion`** — simplified Python AST, used as the term representation for homoiconic code.
-- **`clausal.term_rewriting`** — transforms DSL syntax (`--expr`, `head<-body`, trailing-comma facts) to AST-building Python.
+- **`clausal.term_rewriting`** — transforms DSL [syntax](syntax.md) (`--expr`, `head<-body`, trailing-comma facts) to AST-building Python.
 - **`clausal.trampoline`** — stack-safe CPS execution via generator-based trampoline.
 - **`clausal.continuation_search`** — greenlet-based search iterator.
-- **`clausal.import_hook`** — transparent import of logic modules; IPython integration.
+- **`clausal.import_hook`** — transparent [import](import.md) of logic modules; [IPython](ipython.md) integration.
 
-Planned additions are described in `architecture.md`.
+Planned additions are described in the [Architecture](architecture.md) document.

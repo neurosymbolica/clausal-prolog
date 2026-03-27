@@ -101,7 +101,7 @@ for item in pmodule.items:
 | Clausal | Prolog | Notes |
 |---|---|---|
 | `X is Y` | `X = Y` | Unification |
-| `X is not Y` | `dif(X, Y)` | Disequality |
+| `X is not Y` | `dif(X, Y)` | Disequality ([dif/2](constraints.md)) |
 | `Y == X * 2` | `Y is X * 2` | Arithmetic constraint |
 | `X == Y` | `X == Y` | Structural equality |
 | `X != Y` | `X \== Y` | Structural inequality |
@@ -252,14 +252,14 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `\+ G` | `not G` | Negation as failure |
 | `(A , B)` | `(A, B)` | Conjunction |
 | `(A ; B)` | `(A or B)` | Disjunction |
-| `(C -> T ; E)` | **Rejected** | Not supported — use reified ITE or dif/2 guards |
-| `!` (cut) | **Rejected** | Not supported — use once/1, dif/2, indexing |
+| `(C -> T ; E)` | **Rejected** | Not supported — use [reified ITE](reified_ite.md) or [dif/2](constraints.md) guards |
+| `!` (cut) | **Rejected** | Not supported — use [once/1](control.md), dif/2, [indexing](indexing.md) |
 | `[H\|T]` | `[H, *T]` | List cons |
 | `member(X, L)` | `X in L` | Membership |
 | `head :- body.` | `Head() <- (body)` | Rules |
 | `head.` | `Head(),` | Facts (trailing comma) |
-| `head --> body.` | `Head() >> (body)` | DCG rules |
-| `:- module(...)` | `-module(...)` | Module directive |
+| `head --> body.` | `Head() >> (body)` | [DCG](dcg.md) rules |
+| `:- module(...)` | `-module(...)` | [Module directive](directives.md) |
 | `:- use_module(library(L), [...])` | `-import_from(L, [...])` | Import directive |
 | `:- dynamic(p/N)` | `-dynamic(P/N)` | Dynamic directive |
 | `:- op(P, T, N)` | `# operator: op(P, T, N)` | Comment (no clausal equivalent) |

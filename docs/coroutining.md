@@ -59,7 +59,7 @@ Multi(Y, Z) <- (
 ```
 
 ??? info "Implementation"
-    Freeze uses the attributed variable hook infrastructure (the same mechanism used by `dif/2`, CLP(ℤ), and CLP(B)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. The hook drives the generator synchronously — no wakeup queue is needed.
+    Freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. The hook drives the generator synchronously — no wakeup queue is needed.
 
     **Implementation:** `clausal/logic/compiler.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`)
 
@@ -219,7 +219,7 @@ CountAll(+Goal, -Count)
 
 Count the number of solutions of `Goal` without collecting them. Unifies `Count` with the integer result.
 
-Unlike `FindAll` + `Length`, `CountAll` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
+Unlike [FindAll](meta_predicates.md) + `Length`, `CountAll` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
 
 ```clausal
 # skip
@@ -246,7 +246,7 @@ Test("filtered") <- (
 
 ## Nesting inside meta-predicates
 
-All Phase 1 predicates are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — `FindAll`, `Once`, `catch`, `ForAll`, and each other:
+All Phase 1 predicates are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [FindAll](meta_predicates.md), [Once](control.md), [catch](exceptions.md), [ForAll](meta_predicates.md), and each other:
 
 ```clausal
 # skip
@@ -304,4 +304,4 @@ Test("findall+countall") <- (
 
 ---
 
-*See also: [Builtins](builtins.md) — for the complete predicate index, [Exceptions](exceptions.md) — for throw/catch.*
+*See also: [Builtins](builtins.md) — for the complete predicate index, [Exceptions](exceptions.md) — for throw/catch, [Constraints](constraints.md) — dif/2 and CLP(ℤ) use the same attributed variable mechanism.*

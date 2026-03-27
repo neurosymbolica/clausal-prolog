@@ -313,7 +313,7 @@ get_city({"address": {"city": C}}, C),
 
 Two dicts unify iff they have the same keys and values unify pairwise. A variable unifies with a dict by binding to it.
 
-See [dicts_sets.md](dicts_sets.md) for the full design.
+See [Dicts & Sets](dicts_sets.md) for the full design.
 
 ---
 
@@ -328,13 +328,13 @@ primary({"red", "green", "blue"}),
 
 Two sets unify iff they contain the same elements (order irrelevant). Variables in set elements are not supported.
 
-See [dicts_sets.md](dicts_sets.md) for details.
+See [Dicts & Sets](dicts_sets.md) for details.
 
 ---
 
 ## Strings
 
-Strings prefixed with `u""` are lists of character atoms:
+Strings prefixed with `u""` are [lists of character atoms](strings_as_lists.md):
 
 ```clausal
 # skip
@@ -364,7 +364,7 @@ Simple variable references like `f"{X}"` and `f"{NAME}"` work correctly. Format 
 
 ---
 
-## Python interop — `++()` escape
+## [Python interop](python_integration.md) — `++()` escape
 
 The `++()` operator evaluates an arbitrary Python expression at search time. Logic variables inside the expression are automatically dereferenced.
 
@@ -429,7 +429,7 @@ F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton valu
 F is 9.8(Newton)  # binds F; hook checks dims match
 ```
 
-See [Physical Units](units.md) for the full reference.
+See [Units](units.md) for the full reference.
 
 ---
 
@@ -488,7 +488,7 @@ transform(R) <- CallGoal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 
 Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
 
-See [lambdas.md](lambdas.md) for the full design, compilation details, and examples.
+See [Lambdas](lambdas.md) for the full design, compilation details, and examples.
 
 ---
 
@@ -831,7 +831,7 @@ run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
 
 Meta-predicates are higher-order predicates that take goals as arguments. They are compiled as special forms — the goal argument is compiled inline, not passed as a runtime value.
 
-### All-solutions predicates
+### [All-solutions predicates](meta_predicates.md)
 
 ```clausal
 # Collect all X where In(X, [1,2,3]) into Bag
@@ -878,7 +878,7 @@ Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 
 `Call/1` through `Call/8` are available (as are `CallGoal/1` through `CallGoal/8`).
 
-### Higher-order list predicates
+### [Higher-order list predicates](higher_order.md)
 
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
@@ -902,9 +902,9 @@ FoldLeft(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 
 ---
 
-## Constraint logic programming
+## [Constraint logic programming](constraints.md)
 
-Clausal supports CLP(ℤ) (integer constraints) and CLP(B) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
+Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](clpb.md) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
 ```clausal
 # skip

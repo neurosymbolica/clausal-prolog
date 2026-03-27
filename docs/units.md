@@ -504,7 +504,7 @@ unify(v, Newton(9.8), trail)   # fires hook → checks dims → binds v
 
 ## Catching unit errors
 
-`UnitsMismatch` is catchable via `catch/3` using the `ClassName(Message)` form:
+`UnitsMismatch` is catchable via [`catch/3`](exceptions.md) using the `ClassName(Message)` form:
 
 ```python
 catch(
@@ -519,8 +519,8 @@ catch(
 ## Program verification with `HasUnits`
 
 `HasUnits` goals are runtime assertions about dimensional types.  They compose
-freely with all Clausal constructs: negation-as-failure, `catch/3`,
-backtracking, constraint solving.
+freely with all Clausal constructs: [negation-as-failure](control.md), [`catch/3`](exceptions.md),
+backtracking, [constraint solving](constraints.md).
 
 The intended workflow:
 
@@ -538,7 +538,7 @@ passed, units are stripped before calling SciPy, and the result is re-wrapped
 with correctly propagated dimensions.  When plain inputs are passed, SciPy is
 called directly with zero overhead.
 
-Each SciPy predicate falls into one of four categories:
+Each SciPy predicate falls into one of four categories (see individual module docs for details: [scipy.linalg](scipy_linalg.md), [scipy.special](scipy_special.md), [scipy.fft](scipy_fft.md), [scipy.differentiate](scipy_differentiate.md), [scipy.integrate](scipy_integrate.md), [scipy.interpolate](scipy_interpolate.md)):
 
 | Category | Behaviour | Examples |
 |---|---|---|

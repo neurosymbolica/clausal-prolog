@@ -10,7 +10,7 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 ### Syntax
 
-In `.clausal` files, Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
+In [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
 
 ```python
 # Fact with a ground dict
@@ -113,7 +113,7 @@ partial(PERSON, NAME) <- SubDict({"name": NAME, "role": "admin"}, PERSON)
 
 ### Backtracking
 
-`DictTerm` unification is fully backtrackable. If a pairwise value unification fails partway through, all bindings made so far are undone via the trail.
+`DictTerm` unification is fully backtrackable. If a pairwise value unification fails partway through, all bindings made so far are undone via the trail. See [Lists](lists.md) for the set operations available on plain lists.
 
 ---
 
@@ -469,7 +469,7 @@ deref(x)  # 42
 - **No variable keys**: Dict keys must be ground. `{X: 1}` where `X` is an unbound variable is not supported.
 - **No variable set elements**: Set elements must be ground/hashable.
 - **Splat requires bound DictTerm**: `{**OLD, "k": v}` requires `OLD` to be a bound `DictTerm` at runtime. Unbound `OLD` raises `AttributeError` on `.data` access.
-- **No mutable variants**: Mutable dict/set types were considered and rejected — the `++()` Python escape covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.
+- **No mutable variants**: Mutable dict/set types were considered and rejected — the [`++()` Python escape](python_integration.md) covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.
 
 ---
 

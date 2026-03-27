@@ -34,7 +34,7 @@ Test("not palindrome") <- (not palindrome([1, 2, 3]))
 ```
 
 Clause heads can describe list structure using `[HEAD, *TAIL]`, relating the
-whole list to its parts:
+whole list to its parts (see [Syntax](syntax.md) for the full pattern language):
 
 ```clausal
 list_sum([], 0),
@@ -322,6 +322,8 @@ rotate([FIRST, *REST], YS) <- (
 ```
 
 ### Partition by predicate
+
+Using [Call/N](higher_order.md#calln) to apply a predicate argument:
 
 ```clausal
 # skip

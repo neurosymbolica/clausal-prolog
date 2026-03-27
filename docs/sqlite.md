@@ -18,7 +18,7 @@ Main <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(sqlite)
@@ -97,7 +97,7 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 SQLiteQuery(+Alias, +SQL, -Row)
 ```
 
-Execute a SELECT query and **nondeterministically iterate** over result rows. Each solution binds `Row` to one row. Multi-column rows are Python tuples; single-column rows are unwrapped to the bare value.
+Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Multi-column rows are Python tuples; single-column rows are unwrapped to the bare value.
 
 ```clausal
 # Multi-column: Row unifies with a tuple
@@ -291,7 +291,7 @@ ShowSchema(COL, TYPE) <- (
 
     1. **Named connection aliases** — connections are identified by string aliases, not opaque handles. This makes them easy to reference across predicates in `.clausal` files where values must be ground or logic variables.
     2. **Idempotent connect** — `SQLiteConnect` with an existing alias succeeds silently. This simplifies predicates that call a shared `setup` predicate from multiple entry points.
-    3. **Auto-commit on exec** — `SQLiteExec` commits after each statement. For multi-statement atomicity, use Python's transaction support via `++()` interop.
+    3. **Auto-commit on exec** — `SQLiteExec` commits after each statement. For multi-statement atomicity, use Python's transaction support via [`++()`](python_integration.md) interop.
     4. **Single-column unwrap** — `SQLiteQuery` unwraps single-column rows to bare values (not 1-tuples), making common patterns like `SELECT name FROM ...` cleaner.
     5. **Nondeterministic iteration** — `SQLiteQuery`, `SQLiteTable`, `SQLiteColumn`, and `SQLiteCurrentConnection` yield one solution per row/item on backtracking, following the standard Prolog database query pattern.
     6. **No C FFI** — unlike prosqlite (SWI-Prolog) which wraps libsqlite3 via C, this module delegates entirely to Python's `sqlite3` stdlib. Zero external dependencies.

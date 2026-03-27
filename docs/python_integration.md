@@ -112,7 +112,7 @@ for trail in solve(goal, module=mod):
 
 ### `query_wfs` — results with truth annotations
 
-For programs with [Well-Founded Semantics](wfs.md) (recursion through negation on tabled predicates):
+For programs with [Well-Founded Semantics](wfs.md) (recursion through negation on [tabled](tabling.md) predicates):
 
 ```python
 from clausal.logic.solve import query_wfs
@@ -128,7 +128,7 @@ Returns a **list** (not iterator) of binding dicts, each with a `"_truth"` key.
 
 ## Python Objects as Terms
 
-Any Python object works as a ground term. The C `unify` function handles non-Var objects via Python's `==`:
+Any Python object works as a ground term. The C `unify` function (see [Architecture](architecture.md)) handles non-Var objects via Python's `==`:
 
 ```python
 import datetime as dt
@@ -155,7 +155,7 @@ IsoDate(Y, M, D, S) <- (
 
 ## Using `Module` Directly
 
-For tests or programmatic use without the import hook:
+For tests or programmatic use without the [import hook](import.md):
 
 ```python
 from clausal.logic.database import Module, Clause
@@ -248,8 +248,8 @@ mod = Module("test", module_dict={"fib": fib})
 
     When called from a `.clausal` module, these builtins:
 
-    1. Check that the target predicate is not locked
-    2. Assert/retract the clause on the Database
+    1. Check that the target predicate is not locked (see [Directives](directives.md) for `-dynamic`)
+    2. Assert/retract the clause on the [Database](database_ops.md)
     3. Look up the PredicateMeta class from `db.module_dict`
     4. Sync `pred_cls._clauses` with the database
     5. Recompile with module globals

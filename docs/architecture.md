@@ -110,7 +110,7 @@ The compiler (`clausal.logic.compiler`) generates this from predicate definition
 
 ## Tabling and well-founded semantics
 
-Plain SLD resolution (what the trampoline currently implements) loops on left-recursive predicates and cannot soundly handle negation. For ontological reasoning, Datalog, and XSB-style queries, two additional layers are needed.
+Plain SLD resolution (what the trampoline currently implements) loops on left-recursive predicates and cannot soundly handle negation. For ontological reasoning, Datalog, and XSB-style queries, two additional layers are needed. See [Tabling](tabling.md) and [Well-Founded Semantics](wfs.md) for full documentation.
 
 ### Tabling (SLG resolution)
 
@@ -146,7 +146,7 @@ The import hook (`clausal.import_hook`) intercepts module imports and transforms
 
 **Logic terms as data.** Expressions marked with `--` are captured as `clausal.simple_ast` nodes rather than being evaluated. This means Prolog-style terms can appear inline in Python code, and are just Python objects.
 
-**Python code as data.** Expressions or statement blocks can be captured as AST nodes without being executed. This allows the logic system to reason about Python programs — useful for meta-interpreters, program analysis, and code generation.
+**Python code as data.** Expressions or statement blocks can be captured as AST nodes without being executed. This allows the logic system to reason about Python programs — useful for [meta-interpreters](metainterpreters.md), program analysis, and code generation.
 
 The cost of AST transformation is paid once at import time. `PredicateLoader` (a `SourceLoader` subclass) caches the transformed bytecode in `__pycache__/` as a `.pyc` file. Subsequent imports load the cached bytecode directly, skipping parsing and AST transformation entirely. See [caching.md](caching.md) for details.
 
@@ -188,22 +188,22 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling |
-| `clausal.logic.constraints` | Done — dif/2 via attributed variables |
-| `clausal.logic.clpfd` | Done — CLP(ℤ) finite-domain constraints |
-| Well-founded semantics | Done — delayed negation, conditional answers |
-| Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N |
-| Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft |
+| [`clausal.logic.constraints`](constraints.md) | Done — dif/2 via attributed variables |
+| [`clausal.logic.clpfd`](constraints.md) | Done — CLP(ℤ) finite-domain constraints |
+| [Well-founded semantics](wfs.md) | Done — delayed negation, conditional answers |
+| [Meta-predicates](meta_predicates.md) | Done — FindAll, BagOf, SetOf, ForAll, Call/N |
+| [Higher-order list builtins](higher_order.md) | Done — MapList, Filter, Exclude, FoldLeft |
 | Arithmetic builtins | Done — Sign, Gcd, DivMod |
-| Term inspection | Done — CopyTerm, TermVariables, NumberVars |
-| Control exceptions | Done — throw/1, catch/3, halt/0, halt/1 |
-| I/O builtins | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support |
-| Python interop | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper |
-| DCGs | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading |
-| Module system | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution |
+| [Term inspection](term_inspection.md) | Done — CopyTerm, TermVariables, NumberVars |
+| [Control exceptions](exceptions.md) | Done — throw/1, catch/3, halt/0, halt/1 |
+| [I/O builtins](io.md) | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support |
+| [Python interop](python_integration.md) | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper |
+| [DCGs](dcg.md) | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading |
+| [Module system](import.md) | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution |
 | Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture |
-| Term expansion | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
+| [Term expansion](term_expansion.md) | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
 | Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation |
-| `clausal.modules` | Done — standard library package with `ModulesFinder`; `regex` module, `log` module (structured logging wrapping Python's `logging`), `date_time` module (relational date/time using Python `datetime` objects) |
+| `clausal.modules` | Done — standard library package with `ModulesFinder`; [regex](regex.md) module, [log](logging.md) module (structured logging wrapping Python's `logging`), [date_time](date_time.md) module (relational date/time using Python `datetime` objects) |
 
 ---
 

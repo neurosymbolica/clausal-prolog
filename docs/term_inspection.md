@@ -165,7 +165,7 @@ meta-programming or code generation.
 
 ### Generic term transformer
 
-Transform all arguments of any term by applying a goal:
+Transform all arguments of any term by applying a goal (using [MapList](higher_order.md)):
 
 ```clausal
 # skip

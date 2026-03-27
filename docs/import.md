@@ -66,7 +66,7 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 6. **Compile all pending predicates** — `_compile_all_pending(pending, db, module_dict)` iterates the pending dict and calls `compile_predicate` once per predicate. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
 
-7. **Lock non-dynamic predicates** — iterate module globals and lock every `PredicateMeta` class that was not declared with `-dynamic(pred/arity)`.
+7. **Lock non-dynamic predicates** — iterate module globals and lock every `PredicateMeta` class that was not declared with [`-dynamic(pred/arity)`](directives.md).
 
 ---
 
@@ -100,7 +100,7 @@ With deferred compilation, assertions and compilation are separated:
 - During `exec()`, each `$define_predicate` / `$assert_fact` only asserts the clause and records the predicate in a pending dict.
 - After `exec()` completes, `_compile_all_pending()` compiles each predicate exactly once with the full clause set.
 
-This is safe because no predicate is queried during module load — `.clausal` files only contain definitions. Directives (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
+This is safe because no predicate is queried during module load — `.clausal` files only contain definitions. [Directives](directives.md) (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
 
 ---
 
@@ -229,7 +229,7 @@ The following names are injected into every predicate module's namespace by the 
 
 ## IPython integration
 
-`clausal.import_hook.enable_ipython(globals())` installs the `EmbedTransformer` as an IPython AST transformer and injects the same builtin set into the IPython namespace. This lets you write `.clausal` syntax in IPython cells interactively. Per-module LogicModules are not used in IPython; the session shares a single namespace.
+`clausal.import_hook.enable_ipython(globals())` installs the `EmbedTransformer` as an [IPython](ipython.md) AST transformer and injects the same builtin set into the IPython namespace. This lets you write `.clausal` syntax in IPython cells interactively. Per-module LogicModules are not used in IPython; the session shares a single namespace.
 
 ---
 

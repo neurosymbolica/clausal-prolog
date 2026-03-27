@@ -379,7 +379,7 @@ SmoothedSignal(SIGNAL, KERNEL, SMOOTHED) <- (
 - **SOS preferred for high-order filters**: `SOSFilter` and `SOSForwardBackwardFilter` are numerically more stable than their `b`/`a` equivalents. Use `OUTPUT='sos'` in filter design and the `SOS*` filtering predicates.
 - **ForwardBackwardFilter cannot be used causally**: it processes the entire signal and cannot be applied sample-by-sample. Use `LinearFilter` or `SOSFilter` for streaming / real-time use.
 - **ZI for stateful filtering**: pass initial conditions `ZI` to `LinearFilter` or `SOSFilter` to get `{y, zf}` back; feed `zf` into the next call to process signals in chunks without boundary artefacts.
-- **FS parameter**: when `FS` is omitted from filter design predicates, cutoff frequencies `WN` must be normalised to the range `[0, 1]` (where `1` is the Nyquist frequency). When `FS` is provided, `WN` is in Hz.
+- **FS parameter**: when `FS` is omitted from [filter design](#filter-design-tier-2) predicates, cutoff frequencies `WN` must be normalised to the range `[0, 1]` (where `1` is the Nyquist frequency). When `FS` is provided, `WN` is in Hz.
 - **Predicates fail** (no solution) when scipy raises an exception (e.g. invalid filter parameters), or when a bound `RESULT` does not unify with the computed value.
 
 ---

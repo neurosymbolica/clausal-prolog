@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain Python lists matching the `pairs.py` convention.
+The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain Python [lists](lists.md) matching the [pairs](pairs.md) convention.
 
 ```clausal
 # skip
@@ -17,7 +17,7 @@ Main <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 # skip
@@ -102,7 +102,7 @@ BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `FindPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via backtracking |
+| `FindPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
 | `ShortestPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted) |
 | `PathCost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | Sum of edge weights along a path |
 

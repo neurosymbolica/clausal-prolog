@@ -1,6 +1,6 @@
 # spaCy NLP Module
 
-The `spacy_module` standard library module exposes spaCy's NLP pipeline as Clausal predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from `.clausal` files via a relational interface.
+The `spacy_module` standard library [module](import.md) exposes spaCy's NLP pipeline as Clausal predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from `.clausal` files via a relational interface.
 
 **Requires:** `pip install spacy` and at least one downloaded spaCy model (e.g. `python -m spacy download en_core_web_sm`).
 
@@ -42,7 +42,7 @@ Or via the `py.spacy` alias:
 
 ## Layer 1 — Model management
 
-Models are loaded once and kept in a module-level registry under string aliases. All registry access is thread-safe.
+Models are loaded once and kept in a module-level registry under string aliases. All registry access is [thread-safe](free_threading.md).
 
 ### `LoadModel/1`
 

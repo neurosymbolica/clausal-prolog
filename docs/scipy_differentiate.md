@@ -183,7 +183,7 @@ Following the cross-cutting convention in `SCIPY_PORT.md`: a result with `succes
 ## Dimensional analysis (Quantity support)
 
 All differentiation predicates are **quantity-aware**: when `X` is a
-`Quantity(value, dims)`, units are propagated through the result
+[`Quantity(value, dims)`](units.md), units are propagated through the result
 automatically.
 
 ### How it works

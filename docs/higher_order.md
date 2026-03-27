@@ -1,7 +1,7 @@
 # Higher-Order Predicates
 
 Higher-order predicates take a goal (predicate or lambda) as an argument and
-apply it to list elements. Combined with [lambdas](lambdas.md), they give
+apply it to [list](lists.md) elements. Combined with [lambdas](lambdas.md), they give
 Clausal a functional programming feel.
 
 ---
@@ -199,7 +199,7 @@ Test("sort by abs") <- (
 largest/smallest projected key.
 
 ```clausal
-str_len(S, K) <- (K := ++len(S))
+str_len(S, K) <- (K := ++len(S))    # see [Python interop](python_integration.md)
 
 Test("longest") <- (
     MaxBy(str_len, ["hi", "hello", "hey"], "hello")
@@ -255,7 +255,7 @@ Test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
 - **Lambdas are committed-choice** — `Filter` tests each element once (first
   solution only). It does not backtrack into the goal.
 - **Lambda syntax** — single-arg: `(X <- (body))`. Multi-arg: `((X, Y) <- (body))`
-  with extra outer parens for the tuple.
+  with extra outer parens for the tuple. See [Lambdas](lambdas.md) for details.
 - **`Call/N` appends arguments** — `Call(foo, 1, 2)` calls `foo(1, 2)`.
 
 ---

@@ -15,7 +15,7 @@ The implementation lives in `clausal/modules/date_time.py`.
                          DateBetween])
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(date_time)
@@ -35,7 +35,7 @@ All predicates produce and consume standard Python objects:
 | `DateTime/7` | `datetime.datetime` |
 | `TimeDelta/3` | `datetime.timedelta` |
 
-Unification uses Python's native `==`. Any datetime method can be called via `++()` interop:
+Unification uses Python's native `==`. Any datetime method can be called via [`++()`](python_integration.md) interop:
 
 ```clausal
 -import_from(date_time, [Date, FormatDate])
@@ -148,7 +148,7 @@ DayOfWeek(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 WeekDates(START, END, D) <- DateBetween(START, END, D)
 ```
 
-This is nondeterministic — it succeeds once for each date in the range.
+This is nondeterministic — it succeeds once for each date in the range via [backtracking](control.md).
 
 ---
 

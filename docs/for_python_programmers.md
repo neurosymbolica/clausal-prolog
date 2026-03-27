@@ -9,7 +9,7 @@ to what, and why you'd want to use it.
 ## The thirty-second version
 
 In Python, you write **functions** that compute results from inputs. In
-Clausal, you write **relations** that describe when something is true about
+Clausal, you write **[relations](thinking_relationally.md)** that describe when something is true about
 their arguments. A relation has no fixed inputs or outputs — the same
 definition can compute, verify, generate, and enumerate.
 
@@ -33,8 +33,8 @@ completions from partial information. No separate functions needed.
 new parser, no foreign notation. Your editor's syntax highlighting, linting,
 and autocompletion work out of the box.
 
-**Data types are Python.** Numbers are Python numbers. Lists are Python
-lists. Dicts are Python dicts. Strings remain strings. Declared atoms
+**Data types are Python.** Numbers are Python numbers. [Lists](lists.md) are Python
+lists. [Dicts](dicts_sets.md) are Python dicts. Strings remain strings. Declared atoms
 (symbolic constants) are lightweight classes with identity semantics.
 There is no marshalling, no conversion, no foreign data model.
 
@@ -43,7 +43,7 @@ Python library from within a logic predicate using `++()`, and call logic
 predicates from Python using `clausal.query()`.
 
 **Import works as expected.** `from my_module import my_predicate` loads
-`my_module.clausal` through Python's import system. Bytecode is cached in
+`my_module.clausal` through Python's [import system](import.md). Bytecode is [cached](caching.md) in
 `__pycache__` like any other Python module.
 
 ---
@@ -219,7 +219,7 @@ classify(N, "negative") <- (N < 0)
 Each clause is a logical alternative — a separate condition under which the
 relation holds.
 
-### List comprehensions become search
+### List comprehensions become search with [meta-predicates](meta_predicates.md)
 
 ```python
 # Python: filter and transform
@@ -283,7 +283,7 @@ send_more_money([S, E, N, D, M, O, R, Y]) <- (
 
 ### Parsing with grammars
 
-DCGs (Definite Clause Grammars) let you describe grammars declaratively —
+[DCGs](dcg.md) (Definite Clause Grammars) let you describe grammars declaratively —
 and the same grammar can parse, generate, and validate:
 
 ```clausal

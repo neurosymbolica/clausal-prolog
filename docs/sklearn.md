@@ -15,7 +15,7 @@ TrainAndPredict(ALGO, DATASET, PREDS) <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(sklearn)
@@ -52,7 +52,7 @@ Main <- (
 
 ## Term constructors
 
-The module uses tagged tuples as its term language. These are plain Python tuples that unify with `is`:
+The module uses tagged tuples as its term language. These are plain Python tuples that [unify](predicates.md) with `is`:
 
 | Constructor | Shape | Description |
 |-------------|-------|-------------|

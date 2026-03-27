@@ -1,7 +1,7 @@
 # scipy.spatial — Spatial Algorithms
 
 Provides spatial distance functions and spatial data-structure predicates from
-`scipy.spatial` as importable clausal predicates.
+`scipy.spatial` as [importable](import.md) clausal predicates.
 
 ## Import
 

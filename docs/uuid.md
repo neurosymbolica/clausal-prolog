@@ -18,7 +18,7 @@ Main <- (
 )
 ```
 
-Or via module import:
+Or via [module import](import.md):
 
 ```clausal
 -import_module(uuid)
@@ -76,7 +76,7 @@ UUIDv5("url", "https://example.com", U)
 
 ## Conversion predicates
 
-All conversion predicates are **bidirectional**: pass a ground UUID to decompose, or a ground representation to construct.
+All conversion predicates are **bidirectional**: pass a ground UUID to decompose, or a ground representation to construct via [unification](syntax.md).
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|

@@ -142,7 +142,7 @@ search has its own consistent set of bindings.
 
 ---
 
-## Lists
+## [Lists](lists.md)
 
 Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `["a", "b"]`.
 The head/tail pattern uses a star:
@@ -204,7 +204,7 @@ goal.
 
 ---
 
-## Arithmetic
+## [Arithmetic](arithmetic.md)
 
 Use `==` to post an arithmetic constraint between a variable and an expression:
 
@@ -223,7 +223,7 @@ factorial(N, F) <- (
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
 `mod` (modulo), `abs(X)`, `min(X, Y)`, `max(X, Y)`.
 
-`==` posts a CLP(ℤ) constraint that works in all directions — even when
+`==` posts a [CLP(ℤ)](constraints.md) constraint that works in all directions — even when
 variables are unbound. Use `:=` only for eager Python-side evaluation
 (e.g., `LABEL := ++"fizz"` for string operations).
 
@@ -342,7 +342,7 @@ Run the whole test suite with:
 python -m pytest
 ```
 
-Clausal's import hook picks up `.clausal` files automatically. The test runner
+Clausal's [import hook](import.md) picks up `.clausal` files automatically. The test runner
 collects any Python test files that import and exercise your predicates.
 
 A typical Python test wrapper looks like:

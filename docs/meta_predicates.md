@@ -106,7 +106,7 @@ all_in_range(XS, LO, HI) <- ForAll(In(X, XS), (X >= LO, X <= HI))
 ```clausal
 all_connected(NODES, GRAPH) <- (
     ForAll(
-        (In(A, NODES), In(B, NODES), Dif(A, B)),
+        (In(A, NODES), In(B, NODES), Dif(A, B)),   # Dif — see [Constraints](constraints.md)
         reachable(A, B, GRAPH)
     )
 )
@@ -142,7 +142,7 @@ test(R) <- Call((X <- (R == X + 1)), 5)
 
 ## Higher-Order List Predicates
 
-These builtins take a goal as their first argument — either a **lambda** (goal closure) or a **predicate reference** (builtin or user-defined). All use **committed choice** — they take the first solution from the goal for each element.
+These builtins take a goal as their first argument — either a [lambda](lambdas.md) (goal closure) or a **predicate reference** (builtin or user-defined). All use **committed choice** — they take the first solution from the goal for each element. See [Higher-Order](higher_order.md) for the dedicated reference page.
 
 ### MapList/2
 
@@ -255,9 +255,9 @@ double_positives(XS, RS) <- FilterMap(
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `Unzip` | 3 | `Unzip(Pairs, Keys, Values)` — split list of pairs |
-| `PairKeys` | 2 | `PairKeys(Pairs, Keys)` — extract keys from pairs |
-| `PairValues` | 2 | `PairValues(Pairs, Values)` — extract values from pairs |
+| `Unzip` | 3 | `Unzip(Pairs, Keys, Values)` — split list of [pairs](pairs.md) |
+| `PairKeys` | 2 | `PairKeys(Pairs, Keys)` — extract keys from [pairs](pairs.md) |
+| `PairValues` | 2 | `PairValues(Pairs, Values)` — extract values from [pairs](pairs.md) |
 
 ---
 
@@ -295,6 +295,6 @@ double_positives(XS, RS) <- FilterMap(
 
 ---
 
-*See also: [Lambdas](lambdas.md) — goal closures used with higher-order predicates.*
-*See also: [Lists](lists.md) — list predicates that pair well with meta-predicates.*
-*See also: [Higher-Order](higher_order.md) — dedicated page for MapList, Filter, FoldLeft, etc.*
+*See also: [Lambdas](lambdas.md) — goal closures used with higher-order predicates,
+[Lists](lists.md) — list predicates that pair well with meta-predicates,
+[Higher-Order](higher_order.md) — dedicated page for MapList, Filter, FoldLeft, etc.*

@@ -25,7 +25,7 @@ Test("fact 5") <- factorial(5, 120)
 
 ### The `==` operator
 
-`==` posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ)) that works in all directions:
+`==` posts an arithmetic constraint ([CLP(ℤ)](constraints.md) or [CLP(ℝ)](clpr.md)) that works in all directions:
 
 ```clausal
 Test("eval") <- (X == 3 + 4 * 2, X == 11)
@@ -204,7 +204,7 @@ Test("digit sum") <- digit_sum(123, 6)
 
 - **`==` posts a constraint** — `X == 3 + 4` constrains X to 7 and works even
   when X is unbound. Use `:=` only when you need eager Python-side evaluation
-  (e.g., with `++` for string operations).
+  (e.g., with [`++`](python_integration.md) for string operations).
 - **Both sides of comparisons must be ground** — `X > 3` fails if `X` is
   unbound. Use [CLP(ℤ)](constraints.md) for constraints over unbound variables.
 - **`Plus/3` requires at least two bound arguments** — it cannot enumerate all

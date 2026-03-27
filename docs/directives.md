@@ -136,7 +136,7 @@ correct module context).
 
 The `2` means the first argument is a goal that takes 2 extra arguments.
 `+` means input, `-` means output. This ensures correct cross-module
-resolution when `my_map` is imported.
+resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `MapList` that use this pattern.
 
 ### -shallow
 
@@ -157,7 +157,7 @@ Test("lookup c") <- (lookup("c", V), V == 3)
 
 `-shallow` compiles in simple mode (direct generator calls) instead of
 trampoline mode. Use it for flat, non-recursive predicates where performance
-matters.
+matters. See [Compiler](compiler.md) for details on the two compilation modes.
 
 ---
 
@@ -170,7 +170,7 @@ matters.
 -specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
 ```
 
-Specializes a meta-interpreter with respect to an object program, producing a new predicate with interpretation overhead removed. The MI pattern is auto-detected from the clause structure.
+Specializes a [meta-interpreter](metainterpreters.md) with respect to an object program, producing a new predicate with interpretation overhead removed. The MI pattern is auto-detected from the clause structure.
 
 Options:
 
@@ -189,7 +189,7 @@ See [Meta-Interpreter Specialization](specialization.md) for full details.
 !!! warning "Experimental"
     EDCG directives are parsed but end-to-end rewriting is not yet implemented.
 
-Extended DCGs allow multiple named accumulators and passed arguments to be threaded through grammar rules automatically.
+Extended DCGs allow multiple named accumulators and passed arguments to be threaded through grammar rules automatically. See [DCGs](dcg.md) for the standard DCG system.
 
 ### -edcg_acc
 
@@ -224,8 +224,8 @@ Directives are processed during module loading:
 
 1. The term transformer parses `-directive(...)` syntax into directive AST nodes
 2. The compiler (v2 pipeline) processes directives before clause compilation via `_process_directives`
-3. Property directives set metadata flags on the predicate's `PredicateMeta` class
-4. Import directives trigger module loading and predicate injection
+3. Property directives set metadata flags on the predicate's `PredicateMeta` class (see [Predicates](predicates.md))
+4. Import directives trigger module loading and predicate injection (see [Import System](import.md))
 
 Directives apply to the entire module — they cannot be scoped to individual clauses.
 

@@ -72,7 +72,7 @@ Path(X, Y) <- (Path(X, Z) and Edge(Z, Y))
 Multiple threads can query `Path` concurrently. Each thread builds
 its own memo table independently.
 
-### CLP(ℤ) / CLP(B) / CLP(ℝ) predicates
+### [CLP(ℤ)](constraints.md) / [CLP(B)](clpb.md) / [CLP(ℝ)](clpr.md) predicates
 
 Constraint predicates attach attributes to variables. Under
 free-threading, the per-variable critical section in `unify()` protects
@@ -98,7 +98,7 @@ Multiple threads can solve N-Queens for different N values concurrently.
 
 ## Patterns that need care
 
-### Dynamic predicates (`assert` / `retract`)
+### [Dynamic](directives.md) predicates (`assert` / `retract`)
 
 Dynamic predicates modify the clause database at runtime. Concurrent
 `assertz` and `retract` from multiple threads is **not yet safe**
@@ -205,7 +205,7 @@ def worker():
 ## Testing thread safety
 
 You can write `.clausal` tests that exercise predicate logic, and then
-test concurrent execution from Python. The `.clausal` test format
+test concurrent execution from Python. The [`.clausal` test format](testing.md)
 (`Test("name") <- goal`) runs sequentially in the test runner, which is
 the right place to test correctness. Thread-safety stress tests belong
 in Python test files (`tests/test_free_threading.py`).
