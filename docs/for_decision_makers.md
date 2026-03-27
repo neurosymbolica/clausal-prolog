@@ -84,7 +84,7 @@ optimisation, capacity planning.
 
 In a traditional approach, these require custom algorithms — expensive to
 develop, hard to maintain, and brittle when requirements change. Clausal
-includes built-in constraint solvers (CLP(FD), CLP(B), CLP(R)) that let
+includes built-in constraint solvers (CLP(ℤ), CLP(B), CLP(ℝ)) that let
 developers describe the constraints and have the system find solutions
 automatically.
 

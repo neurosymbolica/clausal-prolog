@@ -14,7 +14,7 @@ Clausal is built on the same foundations you know:
   relations hold. Facts are unconditionally true. Rules have bodies.
 - **Unification is bidirectional.** Variables on either side can be bound.
 - **Search is via backtracking.** Multiple clauses are logical alternatives.
-- **Purity matters.** Clausal has `dif/2`, CLP(FD), CLP(B), CLP(R), reified
+- **Purity matters.** Clausal has `dif/2`, CLP(ℤ), CLP(B), CLP(ℝ), reified
   if-then-else, and tabling — all the tools for staying in the pure monotonic
   core.
 - **No cut.** Clausal does not have `!/0`, by design.
@@ -43,9 +43,9 @@ out of the box, but some Prolog conventions must change.
 | `X \= Y` | `not (X is Y)` | Immediate check |
 | `dif(X, Y)` | `X is not Y` or `Dif(X, Y)` | Constraint — survives |
 | `X is Expr` | `X := Expr` | Arithmetic evaluation |
-| `X =:= Y` | `X == Y` | Arithmetic / CLP(FD) equality |
-| `X =\= Y` | `X != Y` | Arithmetic / CLP(FD) disequality |
-| `X #= Y` | `X #= Y` | CLP(FD) — same |
+| `X =:= Y` | `X == Y` | Arithmetic / CLP(ℤ) equality |
+| `X =\= Y` | `X != Y` | Arithmetic / CLP(ℤ) disequality |
+| `X #= Y` | `X #= Y` | CLP(ℤ) — same |
 | `append/3` | `Append/3` | Builtins are PascalCase |
 | `member/2` | `In/2` | Uses Python's `in` semantics |
 | `msort/2` | `MergeSort/2` | Full names, not abbreviations |
@@ -65,18 +65,18 @@ fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
     N > 1,
-    N1 := N - 1,
-    N2 := N - 2,
+    N1 == N - 1,
+    N2 == N - 2,
     fib(N1, F1),
     fib(N2, F2),
-    F := F1 + F2
+    F == F1 + F2
 )
 ```
 
 Same semantics as SWI's or XSB's tabling. The `-table` directive is
 Clausal's equivalent of `:- table`.
 
-### CLP(FD)
+### CLP(ℤ)
 
 ```clausal
 -import_from(clpfd, [AllDifferent, Labeling]),
@@ -133,7 +133,7 @@ Where you would use green cuts in Prolog, Clausal offers:
 
 - **First-argument indexing** — automatic, no manual intervention needed
 - **Reified if-then-else** — `(THEN if COND else ELSE)` with monotonic, three-valued semantics
-- **CLP(FD) and dif/2** — replace cut-based pruning with constraints
+- **CLP(ℤ) and dif/2** — replace cut-based pruning with constraints
 - **Groundness-keyed dispatch** — the compiler generates specialized code
   paths based on which arguments are ground
 

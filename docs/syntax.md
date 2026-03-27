@@ -146,14 +146,14 @@ fib(N, RESULT) <- (
 
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
-- `(X == expr)` — posts an arithmetic constraint (CLP(FD) or CLP(R))
+- `(X == expr)` — posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ))
 - `(X := expr)` — eager evaluation; use only for Python interop (e.g., `X := ++len(S)`)
 
 ---
 
-## Comparison operators (CLP(FD))
+## Comparison operators (CLP(ℤ))
 
-The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) (Constraint Logic Programming over Finite Domains) operators. They post constraints on integer variables rather than performing immediate checks.
+The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) (Constraint Logic Programming over Integers) operators. They post constraints on integer variables rather than performing immediate checks.
 
 ```clausal
 bounded(X) <- (
@@ -166,21 +166,21 @@ bounded(X) <- (
 
 When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison — `3 == 3` is True, `3 < 2` is False — so existing ground arithmetic code works unchanged.
 
-When at least one side is an unbound Var, a CLP(FD) constraint is posted:
+When at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 - `X == 5` narrows X's domain to `{5}` (and binds it)
 - `1 <= X` and `X <= 10` constrain X's domain to `[1, 10]`
 - `X != 3` removes 3 from X's domain
 - `X < Y` narrows X's upper bound and Y's lower bound
 
-| Operator | CLP(FD) meaning |
+| Operator | CLP(ℤ) meaning |
 |---|---|
 | `==` | Arithmetic equality constraint |
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-`==` and `!=` post CLP(FD) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `Equivalent(X, Y)`, or `not Equivalent(X, Y)` for inequality.
+`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `Equivalent(X, Y)`, or `not Equivalent(X, Y)` for inequality.
 
-See [constraints.md](constraints.md) for the full CLP(FD) design, including domain representation, propagation, and labeling.
+See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
 ---
 
@@ -904,7 +904,7 @@ FoldLeft(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 
 ## Constraint logic programming
 
-Clausal supports CLP(FD) (finite-domain integer constraints) and CLP(B) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
+Clausal supports CLP(ℤ) (integer constraints) and CLP(B) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
 ```clausal
 # skip
@@ -987,7 +987,7 @@ X is Y,                # unify
 X is not Y,            # dif constraint (must stay different)
 not (X is Y),          # immediate check (don't unify right now)
 
-# Arithmetic / CLP(FD) constraints
+# Arithmetic / CLP(ℤ) constraints
 (N == X + 1),          # arithmetic constraint
 X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint

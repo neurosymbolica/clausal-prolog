@@ -39,7 +39,7 @@ thread safety.
 - **Query variables should be per-branch.** Each thread should create its own `Var()` instances for query arguments. Sharing an unbound query variable between threads means both threads race to bind it.
 - **Shared variables are safe to read** (`deref`, `walk`, `is_var`) from any thread, even concurrently.
 - **Binding races are serialized.** If two threads call `unify(X, a, trail1)` and `unify(X, b, trail2)` on the same unbound `X` simultaneously, the critical section serializes them: one thread binds `X`, the other retries with the now-bound value.
-- **Constraint hooks must be re-entrant.** CLP(FD), dif/2, and user-defined attribute hooks are called from within `unify()`. Under free-threading, hooks from different threads may interleave.
+- **Constraint hooks must be re-entrant.** CLP(ℤ), dif/2, and user-defined attribute hooks are called from within `unify()`. Under free-threading, hooks from different threads may interleave.
 
 ---
 

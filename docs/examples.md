@@ -70,7 +70,7 @@ Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an
 
 ### sudoku.clausal
 
-Classic Sudoku solver using CLP(FD) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `AllDifferent` constraints, then labels. Includes three sample puzzles.
+Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `AllDifferent` constraints, then labels. Includes three sample puzzles.
 
 ```clausal
 Sudoku(ROWS) <- (
@@ -86,7 +86,7 @@ Sudoku(ROWS) <- (
 
 Features: nested star-list patterns (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as higher-order arguments (`MapList(AllDifferent, ...)`), recursive transpose.
 
-*See: [CLP(FD)](constraints.md), [Higher-order predicates](meta_predicates.md)*
+*See: [CLP(ℤ)](constraints.md), [Higher-order predicates](meta_predicates.md)*
 
 ### map_coloring.clausal
 

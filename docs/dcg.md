@@ -68,7 +68,7 @@ Curly braces `{...}` embed arbitrary Clausal goals inside a grammar rule. They d
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
-The goals `D >= 0` and `D <= 9` are CLP(FD) constraints checked without consuming tokens.
+The goals `D >= 0` and `D <= 9` are CLP(ℤ) constraints checked without consuming tokens.
 
 ### Conjunction and Disjunction
 
@@ -253,7 +253,7 @@ valid_sentence(S) <- phrase(sentence, S)
 
     - **Terminals**: single, multiple, empty
     - **Non-terminals**: chaining, extra args
-    - **Inline goals**: CLP(FD) constraints, arithmetic
+    - **Inline goals**: CLP(ℤ) constraints, arithmetic
     - **Conjunction/disjunction**: multiple alternatives
     - **Negation**: `not [terminal]`
     - **Pushback**: peek without consuming

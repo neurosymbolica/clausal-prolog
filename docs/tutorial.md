@@ -223,7 +223,7 @@ factorial(N, F) <- (
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
 `mod` (modulo), `abs(X)`, `min(X, Y)`, `max(X, Y)`.
 
-`==` posts a CLP(FD) constraint that works in all directions — even when
+`==` posts a CLP(ℤ) constraint that works in all directions — even when
 variables are unbound. Use `:=` only for eager Python-side evaluation
 (e.g., `LABEL := ++"fizz"` for string operations).
 
@@ -310,7 +310,7 @@ For constraint-based "not equal" on partially-instantiated terms, use `dif/2`
     Negation as failure is inherently non-monotonic — binding a variable can
     cause a previously successful negation to fail. For monotonic alternatives
     that preserve [logical purity](purity.md), use `dif/2` for disequality and
-    CLP(FD) constraints for arithmetic.
+    CLP(ℤ) constraints for arithmetic.
 
 ---
 
@@ -404,7 +404,7 @@ search) — see [Tabling](tabling.md).
 - **[Purity and Monotonicity](purity.md)** — why pure code has better
   properties and how to write it
 - **[Syntax reference](syntax.md)** — full grammar, all operators, clause forms
-- **[Constraints](constraints.md)** — `dif/2` for structural inequality; CLP(FD) for
+- **[Constraints](constraints.md)** — `dif/2` for structural inequality; CLP(ℤ) for
   finite-domain constraint solving (N-queens, Sudoku, SEND+MORE=MONEY)
 - **[DCGs](dcg.md)** — Definite Clause Grammars for parsing and string generation
 - **[Examples](examples.md)** — worked examples: map colouring, Sudoku, graph

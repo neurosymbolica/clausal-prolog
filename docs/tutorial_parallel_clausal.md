@@ -42,7 +42,7 @@ Factorial(N, F) <- (
 
 !!! tip "Use `==` for arithmetic"
     Prefer `N1 == N - 1` over `N1 := N - 1`. The `==` operator uses
-    CLP(FD) constraints, making predicates bidirectional where possible.
+    CLP(ℤ) constraints, making predicates bidirectional where possible.
     `:=` forces eager evaluation in one direction only.
 
 Each thread creates its own Vars and Trail when it calls these
@@ -72,7 +72,7 @@ Path(X, Y) <- (Path(X, Z) and Edge(Z, Y))
 Multiple threads can query `Path` concurrently. Each thread builds
 its own memo table independently.
 
-### CLP(FD) / CLP(B) / CLP(R) predicates
+### CLP(ℤ) / CLP(B) / CLP(ℝ) predicates
 
 Constraint predicates attach attributes to variables. Under
 free-threading, the per-variable critical section in `unify()` protects
@@ -248,6 +248,6 @@ def test_concurrent_append():
 |----------------|:---:|-------|
 | Pure (unify + backtrack only) | Yes | Naturally safe |
 | Tabled | Yes | Each thread gets independent tables |
-| CLP(FD) / CLP(B) / CLP(R) | Yes | Per-thread constraint variables |
+| CLP(ℤ) / CLP(B) / CLP(ℝ) | Yes | Per-thread constraint variables |
 | Dynamic (`assert` / `retract`) | Read-only | Concurrent writes not yet safe |
 | Side effects (I/O, `py_call`) | Safe but nondeterministic | Use Python locks for ordering |

@@ -124,7 +124,7 @@ safe(X) <- (X is not 1, X is not 2)
 
 ### Arithmetic with `==`
 
-The `==` operator posts CLP(FD) constraints that work in all directions,
+The `==` operator posts CLP(ℤ) constraints that work in all directions,
 even when variables are unbound:
 
 ```clausal
@@ -177,8 +177,8 @@ Many common impure patterns have pure counterparts in Clausal:
 | Impure pattern | Pure alternative | Why better |
 |---|---|---|
 | `not (X is Y)` (immediate check) | `X is not Y` (dif constraint) | Monotonic; works with unbound variables |
-| `N > 0` (arithmetic guard) | `N #> 0` (CLP(FD) constraint) | Works in all directions |
-| `:=` (eager evaluation) | `==` (CLP(FD) constraint) | Works with unbound variables |
+| `N > 0` (arithmetic guard) | `N #> 0` (CLP(ℤ) constraint) | Works in all directions |
+| `:=` (eager evaluation) | `==` (CLP(ℤ) constraint) | Works with unbound variables |
 | `not Goal` with unbound vars | Reified if-then-else | Monotonic; see [If-Then-Else](reified_ite.md) |
 | Type-testing (`integer(X)`) | Clean representations | Symbolic distinction via functors; see below |
 
@@ -281,7 +281,7 @@ to search. This decoupling makes the approach flexible and versatile.
 
 ## Practical guidance
 
-1. **Use `==` (CLP(FD) constraints) for arithmetic.** Constraints
+1. **Use `==` (CLP(ℤ) constraints) for arithmetic.** Constraints
    work in all directions and preserve multi-directional use. Reserve `:=`
    for Python interop (e.g., string operations with `++`).
 
@@ -312,7 +312,7 @@ to search. This decoupling makes the approach flexible and versatile.
 *See also: [Thinking Relationally](thinking_relationally.md) — the mindset
 behind pure logic programming.*
 
-*See also: [Constraints](constraints.md) — dif/2, CLP(FD), CLP(B), CLP(R).*
+*See also: [Constraints](constraints.md) — dif/2, CLP(ℤ), CLP(B), CLP(ℝ).*
 
 *See also: [If-Then-Else](reified_ite.md) — monotonic conditional
 expressions.*

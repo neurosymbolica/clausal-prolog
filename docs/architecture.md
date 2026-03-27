@@ -9,7 +9,7 @@ clausal.logic.goal_expansion body-goal rewriting pass
 clausal.logic.compiler_v2    module-level compilation pipeline
 clausal.logic.term_expansion TermExpansion/4 rewrite engine
 clausal.logic.tabling (wfs)  well-founded semantics
-clausal.logic.clpfd          CLP(FD) finite-domain constraints
+clausal.logic.clpfd          CLP(ℤ) finite-domain constraints
 clausal.logic.constraints    dif/2 via attribute variables
 clausal.logic.tabling        SLG resolution
 clausal.logic.compiler       Prolog-style predicates → Python generator AST
@@ -189,7 +189,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling |
 | `clausal.logic.constraints` | Done — dif/2 via attributed variables |
-| `clausal.logic.clpfd` | Done — CLP(FD) finite-domain constraints |
+| `clausal.logic.clpfd` | Done — CLP(ℤ) finite-domain constraints |
 | Well-founded semantics | Done — delayed negation, conditional answers |
 | Meta-predicates | Done — FindAll, BagOf, SetOf, ForAll, Call/N |
 | Higher-order list builtins | Done — MapList, Filter, Exclude, FoldLeft |

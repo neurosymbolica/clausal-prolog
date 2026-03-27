@@ -1,27 +1,27 @@
-# CLP(R) — Real-domain Constraints
+# CLP(ℝ) — Real-domain Constraints
 
-CLP(R) provides constraint logic programming over the reals using **interval arithmetic over IEEE doubles with outward rounding**. Every variable has a closed interval `[lo, hi]`; constraints narrow these intervals toward a fixpoint. Non-linear constraints are propagated actively, not deferred.
+CLP(ℝ) provides constraint logic programming over the reals using **interval arithmetic over IEEE doubles with outward rounding**. Every variable has a closed interval `[lo, hi]`; constraints narrow these intervals toward a fixpoint. Non-linear constraints are propagated actively, not deferred.
 
 The implementation lives in `clausal/logic/clpr.py`.
 
 !!! note
-    For CLP(FD) (finite-domain integer constraints), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
+    For CLP(ℤ) (finite-domain integer constraints), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
 ---
 
 ## Unified syntax
 
-Clausal's comparison operators are shared between CLP(FD) and CLP(R). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
+Clausal's comparison operators are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
 
-| Operator | CLP(FD) meaning | CLP(R) meaning |
+| Operator | CLP(ℤ) meaning | CLP(ℝ) meaning |
 |---|---|---|
 | `==` | integer equality | real equality |
 | `!=` | integer disequality | real disequality |
 | `<` `>` `<=` `>=` | integer comparisons | real comparisons |
 
-**Dispatch rule:** if either operand is a `float` literal or a variable declared with `InReal`, the constraint goes to CLP(R). Otherwise it goes to CLP(FD).
+**Dispatch rule:** if either operand is a `float` literal or a variable declared with `InReal`, the constraint goes to CLP(ℝ). Otherwise it goes to CLP(ℤ).
 
-This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(R) because `2.0` is a float. No special operators or brace syntax needed.
+This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) because `2.0` is a float. No special operators or brace syntax needed.
 
 ---
 
@@ -47,7 +47,7 @@ InReal([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
 
 ### LabelReal/1 and LabelReal/2
 
-Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(FD)).
+Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(ℤ)).
 
 ```clausal
 # skip
@@ -111,8 +111,8 @@ Integer and real variables can appear together. When an FD variable is involved 
 # skip
 # Worker schedule: integer hours, real cost
 task(HOURS, COST) <- (
-    InDomain(HOURS, 1, 8),         % integer hours (CLP(FD))
-    InReal(COST, 10.0, 100.0),     % real cost (CLP(R))
+    InDomain(HOURS, 1, 8),         % integer hours (CLP(ℤ))
+    InReal(COST, 10.0, 100.0),     % real cost (CLP(ℝ))
     COST >= HOURS * 12.5,          % mixes FD + real
     HOURS <= 6,
     Label([HOURS]),
@@ -137,11 +137,11 @@ mixed(X) <- (
 
 The FD domain is automatically narrowed against the real interval (and vice versa), so the tightest bounds from either domain are always used.
 
-### Float literals trigger CLP(R) automatically
+### Float literals trigger CLP(ℝ) automatically
 
 ```clausal
 # skip
-# No InReal needed — the float literal 9.0 triggers CLP(R)
+# No InReal needed — the float literal 9.0 triggers CLP(ℝ)
 pythagorean_real(X, Y) <- (
     InReal(X, 0.0, 10.0),
     InReal(Y, 0.0, 10.0),
@@ -154,7 +154,7 @@ pythagorean_real(X, Y) <- (
 
 ## Comparison with other systems
 
-| Feature | SWI CLP(R) | CLP(BNR) | ECLiPSe IC | **Clausal CLP(R)** |
+| Feature | SWI CLP(ℝ) | CLP(BNR) | ECLiPSe IC | **Clausal CLP(ℝ)** |
 |---|---|---|---|---|
 | Non-linear propagation | Deferred | Active | Active | **Active** |
 | Arithmetic engine | Simplex | Intervals | Intervals | **Intervals** |
@@ -244,7 +244,7 @@ pythagorean_real(X, Y) <- (
 
 ??? abstract "FD/Real coexistence"
 
-    When a real constraint is posted on a variable that already has a CLP(FD) domain, a real interval `[float(fd_min), float(fd_max)]` is added **alongside** the existing FD attribute. Both attributes coexist:
+    When a real constraint is posted on a variable that already has a CLP(ℤ) domain, a real interval `[float(fd_min), float(fd_max)]` is added **alongside** the existing FD attribute. Both attributes coexist:
 
     - The **FD hook** enforces integrality and domain holes (e.g., `{1, 2, 5, 6}` excludes 3 and 4).
     - The **Real hook** enforces continuous interval bounds and propagates through real constraints.
@@ -265,9 +265,9 @@ pythagorean_real(X, Y) <- (
     - **Bound to another Var without real state**: transfer real state to the other var (promoting FD state first if present).
     - **Bound to non-numeric, non-Var**: fail.
 
-??? abstract "Interaction with CLP(FD) and dif/2"
+??? abstract "Interaction with CLP(ℤ) and dif/2"
 
-    CLP(R) uses the attribute key `"real"`, CLP(FD) uses `"fd"`, and dif/2 uses `"dif"`. All hooks fire independently. A variable can have both `"fd"` and `"real"` attributes simultaneously — the FD domain enforces integrality and holes while the real interval handles continuous narrowing. When both are present, bounds are kept in sync: FD narrowing tightens the real interval, and interval queries return the intersection of both.
+    CLP(ℝ) uses the attribute key `"real"`, CLP(ℤ) uses `"fd"`, and dif/2 uses `"dif"`. All hooks fire independently. A variable can have both `"fd"` and `"real"` attributes simultaneously — the FD domain enforces integrality and holes while the real interval handles continuous narrowing. When both are present, bounds are kept in sync: FD narrowing tightens the real interval, and interval queries return the intersection of both.
 
     A variable can also have dif constraints under `"dif"` alongside either or both numeric domains.
 
@@ -275,7 +275,7 @@ pythagorean_real(X, Y) <- (
 
 ??? warning "Cross-domain pitfalls"
 
-    **Booleans are not numbers.** Python's `True`/`False` are not valid in CLP(R) or CLP(FD) expressions. Booleans belong to CLP(B). Passing a boolean where a number is expected will cause the constraint to fail or be ignored. Use `0`/`1` explicitly if you need numeric values.
+    **Booleans are not numbers.** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Booleans belong to CLP(B). Passing a boolean where a number is expected will cause the constraint to fail or be ignored. Use `0`/`1` explicitly if you need numeric values.
 
     **Labeling order matters.** If a variable has both FD and real attributes, use `Label` (FD) to enumerate integer values. `LabelReal` bisects the continuous interval and does not enforce integrality — it will find non-integer points within the interval. For mixed-domain variables, label with FD first to fix the integer value, then use `LabelReal` for any remaining real variables.
 
@@ -352,9 +352,9 @@ pythagorean_real(X, Y) <- (
     - **Linear constraints**: `real_eq` pins var, narrows from both sides; `real_le`/`real_lt`/`real_ge`/`real_gt` narrowing; unsatisfiable cases; `real_ne` ground-equal fails; Add and Sub constraint propagation
     - **Non-linear constraints**: `x^2 <= 4` narrows upper bound; `x^2 == 9` pins; `x^2 == -1` fails; product constraint; Negate; Pow node
     - **Labeling**: IEEE termination (first solution); eps stopping; already-ground; empty list; constrained (x^2=4); unit circle (1e-9 precision); backtrack restores state
-    - **FD/real dispatch**: float literal triggers CLP(R), `real_le` dispatched from `fd_le`, real var triggers dispatch, pure FD unaffected
+    - **FD/real dispatch**: float literal triggers CLP(ℝ), `real_le` dispatched from `fd_le`, real var triggers dispatch, pure FD unaffected
     - **Auto-promotion**: undeclared var + float eq; Mult expr + float rhs; ground float comparison
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) for integer constraints · [CLP(B)](clpb.md) — Boolean constraint solving.*
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) for integer constraints · [CLP(B)](clpb.md) — Boolean constraint solving.*

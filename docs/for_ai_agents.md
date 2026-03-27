@@ -37,7 +37,7 @@ verify:
 list_length([], 0),
 list_length([_, *REST], N) <- (
     list_length(REST, N1),
-    N := N1 + 1
+    N == N1 + 1
 )
 
 # Tests are just queries that should hold
@@ -85,7 +85,7 @@ independently.
 - **Rule-based logic**: business rules, access control policies, validation,
   eligibility checks — anything expressible as "X holds when Y and Z hold"
 - **Constraint satisfaction**: scheduling, configuration, resource allocation,
-  puzzle solving — describe the constraints, let CLP(FD) search
+  puzzle solving — describe the constraints, let CLP(ℤ) search
 - **Search problems**: pathfinding, graph traversal, planning — describe what
   constitutes a solution, not how to find one
 - **Data validation and transformation**: describe the relation between input
@@ -149,7 +149,7 @@ If you can state it clearly in natural language, the clause will be correct.
 
 ### Use constraints for arithmetic
 
-When the arithmetic direction isn't fixed, use CLP(FD) constraints instead of
+When the arithmetic direction isn't fixed, use CLP(ℤ) constraints instead of
 `:=`:
 
 ```clausal
@@ -195,7 +195,7 @@ tree_depth(leaf, 0),
 tree_depth(node(LEFT, RIGHT), DEPTH) <- (
     tree_depth(LEFT, D1),
     tree_depth(RIGHT, D2),
-    DEPTH := max(D1, D2) + 1
+    DEPTH == max(D1, D2) + 1
 )
 ```
 

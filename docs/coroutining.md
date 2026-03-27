@@ -59,7 +59,7 @@ Multi(Y, Z) <- (
 ```
 
 ??? info "Implementation"
-    Freeze uses the attributed variable hook infrastructure (the same mechanism used by `dif/2`, CLP(FD), and CLP(B)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. The hook drives the generator synchronously — no wakeup queue is needed.
+    Freeze uses the attributed variable hook infrastructure (the same mechanism used by `dif/2`, CLP(ℤ), and CLP(B)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. The hook drives the generator synchronously — no wakeup queue is needed.
 
     **Implementation:** `clausal/logic/compiler.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`)
 

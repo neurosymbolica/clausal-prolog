@@ -5,7 +5,7 @@ CLP(B) provides constraint logic programming over Booleans, enabling SAT solving
 The implementation lives in `clausal/logic/clpb.py`.
 
 !!! note
-    For CLP(FD) (finite-domain integer constraints) and Dif/2 (disequality), see [Constraints](constraints.md).
+    For CLP(ℤ) (finite-domain integer constraints) and Dif/2 (disequality), see [Constraints](constraints.md).
 
 ---
 
@@ -198,9 +198,9 @@ When `Sat()` is called with variables that already have constraints, all connect
 
 ## Interaction with Other Constraints
 
-CLP(B) uses attribute key `"clpb"`, independent of CLP(FD) (`"fd"`), CLP(R) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound.
+CLP(B) uses attribute key `"clpb"`, independent of CLP(ℤ) (`"fd"`), CLP(ℝ) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound.
 
-CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(R) and CLP(FD) — they are distinct types in Clausal's constraint system. If you need to bridge CLP(B) with numeric constraints, bind via `0`/`1`.
+CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal's constraint system. If you need to bridge CLP(B) with numeric constraints, bind via `0`/`1`.
 
 ---
 
@@ -222,4 +222,4 @@ CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`Tr
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) for integer constraints · [CLP(R)](clpr.md) — real-domain constraint solving.*
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) for integer constraints · [CLP(ℝ)](clpr.md) — real-domain constraint solving.*

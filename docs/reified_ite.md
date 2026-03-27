@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of `Dif/2` instead of `\=`, and CLP(FD) instead of `is`-based arithmetic.
+Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of `Dif/2` instead of `\=`, and CLP(ℤ) instead of `is`-based arithmetic.
 
 Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
@@ -106,7 +106,7 @@ Handles `Var`, scalars, tuples, lists, `Compound`, and `PredicateMeta` instances
 
 ### `reify_fd(op, x, y, trail) -> bool | None`
 
-Three-valued CLP(FD) comparison in `clausal.logic.clpfd`:
+Three-valued CLP(ℤ) comparison in `clausal.logic.clpfd`:
 
 - `op` is one of `"eq"`, `"ne"`, `"lt"`, `"le"`, `"gt"`, `"ge"`.
 - If both sides are ground (no unbound Vars after resolving arithmetic): evaluate and return `True`/`False`.
@@ -199,7 +199,7 @@ Both reifiable and general ITE work in trampoline mode. The then/else branches c
     assert reify_eq(x, 42, trail) is None
     assert deref(x) is x  # x still unbound
     
-    # CLP(FD) reification
+    # CLP(ℤ) reification
     assert reify_fd("lt", 3, 5, trail) is True
     assert reify_fd("lt", 5, 3, trail) is False
     
@@ -277,4 +277,4 @@ Key properties:
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(FD) constraints used by reified ITE · [Tabling](tabling.md) — WFS negation for tabled predicates · [Lambdas](lambdas.md) — closures that can appear as ITE conditions.*
+*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) constraints used by reified ITE · [Tabling](tabling.md) — WFS negation for tabled predicates · [Lambdas](lambdas.md) — closures that can appear as ITE conditions.*

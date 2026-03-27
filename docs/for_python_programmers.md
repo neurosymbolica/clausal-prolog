@@ -85,7 +85,7 @@ def square(n):
 
 ```clausal
 # Clausal: relation holds between n and its square
-square(N, SQ) <- (SQ := N * N)
+square(N, SQ) <- (SQ == N * N)
 ```
 
 ### Multiple answers via backtracking
@@ -191,7 +191,7 @@ def sum_list(lst):
 list_sum([], 0),
 list_sum([HEAD, *TAIL], TOTAL) <- (
     list_sum(TAIL, SUBTOTAL),
-    TOTAL := SUBTOTAL + HEAD
+    TOTAL == SUBTOTAL + HEAD
 )
 ```
 
@@ -231,7 +231,7 @@ squares_of_evens = [x**2 for x in range(10) if x % 2 == 0]
 square_of_even(N, SQ) <- (
     Between(0, 9, N),
     N % 2 == 0,
-    SQ := N * N
+    SQ == N * N
 )
 
 Test("squares") <- (
@@ -265,7 +265,7 @@ and "Which country has Paris as its capital?"
 
 Need to solve a Sudoku, schedule a timetable, or find valid configurations?
 In Python, you'd reach for a solver library or write custom search. In
-Clausal, you describe the constraints and let CLP(FD) search:
+Clausal, you describe the constraints and let CLP(ℤ) search:
 
 ```clausal
 -import_from(clpfd, [AllDifferent, Labeling]),

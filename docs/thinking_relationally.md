@@ -112,7 +112,7 @@ Read this declaratively:
 
 These are **statements about when the relation holds**, not instructions for
 what to do. This way of reading the code does justice to its full generality —
-we can use it to compute a sum, to verify a sum, or (with CLP(FD) constraints)
+we can use it to compute a sum, to verify a sum, or (with CLP(ℤ) constraints)
 to reason about partially-known lists.
 
 ---
@@ -305,7 +305,7 @@ directions.
 
 **Using eager evaluation when constraints would be more general.** The
 `:=` operator requires the right-hand side to be ground. Use `==` instead —
-it posts CLP(FD) constraints that work with unbound variables and preserve
+it posts CLP(ℤ) constraints that work with unbound variables and preserve
 multi-directional use. Reserve `:=` for Python interop (e.g., `++` for strings).
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"

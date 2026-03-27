@@ -82,7 +82,7 @@ Notation in signature lines:
 | [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
 | [Attributed Variables](#attributed-variables) | PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2 |
 | [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
-| [CLP(FD) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
+| [CLP(ℤ) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
 | [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsAtom/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1, MustBe/2, CanBe/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | IsDict/1, DictGet/3, DictPut/4, DictMerge/3, GenDict/3, SubDict/2, IsSet/1, SetUnion/3, SetSubset/2, GenSet/2 |
@@ -714,7 +714,7 @@ Reflect the registered parameter name list for the predicate `FunctorName/Arity`
 
 ## Attributed Variables
 
-Attributed variables carry key-value metadata that survives through unification. This is the mechanism that powers CLP(FD), CLP(B), CLP(R), dif/2, and units constraints internally. These predicates expose the API so users can build custom constraint solvers.
+Attributed variables carry key-value metadata that survives through unification. This is the mechanism that powers CLP(ℤ), CLP(B), CLP(ℝ), dif/2, and units constraints internally. These predicates expose the API so users can build custom constraint solvers.
 
 Attribute keys are strings. Attribute values can be any term. All mutations are trailed (undone on backtracking).
 
@@ -825,9 +825,9 @@ Reified disequality. `T` is `True` if `Dif(X, Y)`, `False` if `X = Y`.
 
 ---
 
-## CLP(FD) — Finite Domain Constraints
+## CLP(ℤ) — Finite Domain Constraints
 
-CLP(FD) operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
+CLP(ℤ) operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
 
 ### `InDomain/3`
 ```clausal
@@ -876,7 +876,7 @@ Post an all-different constraint on a list of FD variables. Propagates bounds an
 # skip
 Equivalent(+T1, +T2)
 ```
-Structural equality test (old `==` behavior before CLP(FD) remapping). Succeeds if `T1` and `T2` are structurally identical after dereferencing.
+Structural equality test (old `==` behavior before CLP(ℤ) remapping). Succeeds if `T1` and `T2` are structurally identical after dereferencing.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:852` → `clausal/logic/clpfd.py`
@@ -1410,7 +1410,7 @@ Nondeterministic enumeration of set elements. Order is deterministic (sorted by 
 
 ## Arithmetic
 
-Arithmetic uses `==` to post CLP(FD) constraints (e.g., `Y == X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
+Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
 
 ### `Between/3`
 ```clausal
@@ -3008,13 +3008,13 @@ The following are not builtins in the registry — they are syntax forms compile
 |--------|---------|-------------------|
 | `X is Y` | Unification (structural) | `compiler.py:1415` |
 | `X is not Y` | Disequality constraint (`Dif/2`) | `compiler.py:1436` |
-| `X == Expr` | Arithmetic constraint (CLP(FD)) | `compiler.py` (`Evaluate`) |
-| `X == Y` | CLP(FD) equality constraint | `compiler.py:1444` |
-| `X != Y` | CLP(FD) disequality constraint | `compiler.py:1451` |
-| `X < Y` | CLP(FD) less-than constraint | `compiler.py:1459` |
-| `X <= Y` | CLP(FD) less-or-equal constraint | `compiler.py:1466` |
-| `X > Y` | CLP(FD) greater-than constraint | `compiler.py:1473` |
-| `X >= Y` | CLP(FD) greater-or-equal constraint | `compiler.py:1480` |
+| `X == Expr` | Arithmetic constraint (CLP(ℤ)) | `compiler.py` (`Evaluate`) |
+| `X == Y` | CLP(ℤ) equality constraint | `compiler.py:1444` |
+| `X != Y` | CLP(ℤ) disequality constraint | `compiler.py:1451` |
+| `X < Y` | CLP(ℤ) less-than constraint | `compiler.py:1459` |
+| `X <= Y` | CLP(ℤ) less-or-equal constraint | `compiler.py:1466` |
+| `X > Y` | CLP(ℤ) greater-than constraint | `compiler.py:1473` |
+| `X >= Y` | CLP(ℤ) greater-or-equal constraint | `compiler.py:1480` |
 | `X in Coll` | For-loop over collection | `compiler.py:1570` |
 | `X not in Coll` | Negated membership check | `compiler.py:1594` |
 | `not Goal` | Negation as failure | `compiler.py:1507` |

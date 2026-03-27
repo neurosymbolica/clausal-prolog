@@ -11,7 +11,7 @@ Clausal supports constraint logic programming through attributed variables. The 
 Two constraint solvers are built in:
 
 - **Dif/2** — disequality constraint (`clausal.logic.constraints`)
-- **CLP(FD)** — finite-domain constraints (`clausal.logic.clpfd`)
+- **CLP(ℤ)** — integer constraints (`clausal.logic.clpfd`)
 
 ---
 
@@ -172,9 +172,9 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
     ---
 
-## CLP(FD) — Finite-domain constraints
+## CLP(ℤ) — Integer constraints
 
-CLP(FD) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(FD) constraint operators.
+CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators.
 
 The implementation lives in `clausal.logic.clpfd`.
 
@@ -182,14 +182,14 @@ The implementation lives in `clausal.logic.clpfd`.
 
 | Operator | Meaning |
 |---|---|
-| `==` | CLP(FD) arithmetic equality |
-| `!=` | CLP(FD) arithmetic disequality |
-| `<` `>` `<=` `>=` | CLP(FD) comparison constraints |
+| `==` | CLP(ℤ) arithmetic equality |
+| `!=` | CLP(ℤ) arithmetic disequality |
+| `<` `>` `<=` `>=` | CLP(ℤ) comparison constraints |
 | `is` | Unification (unchanged) |
 | `is not` | `Dif/2` constraint (unchanged) |
 | `:=` | Eager arithmetic eval + unify (unchanged) |
 
-When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. When at least one side is an unbound Var, CLP(FD) constraints are posted.
+When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. When at least one side is an unbound Var, CLP(ℤ) constraints are posted.
 
 The old structural-equality behaviour of `==` is available as the named builtin `Equivalent/2`.
 
@@ -218,7 +218,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Auto-domain"
 
-    When a CLP(FD) operator encounters an unbound Var with no FD domain, it auto-creates a default domain of `(-2^63, 2^63)` — effectively unbounded for practical purposes, stored as a single interval.
+    When a CLP(ℤ) operator encounters an unbound Var with no domain, it auto-creates a default domain of `(-2^63, 2^63)` — effectively unbounded for practical purposes, stored as a single interval.
 
 ??? abstract "Constraint types"
 
@@ -265,7 +265,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Expression domain arithmetic"
 
-    CLP(FD) constraint functions walk arithmetic expression trees (`Add`, `Sub`, `Mult`, `Div`, `FloorDiv`, `Mod`, `Pow`, `Negate`) to compute domain bounds:
+    CLP(ℤ) constraint functions walk arithmetic expression trees (`Add`, `Sub`, `Mult`, `Div`, `FloorDiv`, `Mod`, `Pow`, `Negate`) to compute domain bounds:
 
     ```
     [a,b] + [c,d] = [a+c, b+d]
@@ -304,7 +304,7 @@ solve(X) <- (
 bounded(X) <- (1 <= X, X <= 10, Label([X]))
 ```
 
-Since `<=` is CLP(FD), `1 <= X` and `X <= 10` naturally constrain X's domain.
+Since `<=` is CLP(ℤ), `1 <= X` and `X <= 10` naturally constrain X's domain.
 
 **N-Queens via AllDifferent:**
 ```clausal
@@ -365,7 +365,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 )
 ```
 
-`==` with unbound variables posts a CLP(FD) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
+`==` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
 **Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `:=` for Python interop (e.g., string operations with `++`).
 
@@ -389,11 +389,11 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
         print(deref(x), deref(y))
     ```
 
-??? abstract "Interaction with dif/2 and CLP(R)"
+??? abstract "Interaction with dif/2 and CLP(ℝ)"
 
-    CLP(FD), CLP(R), and dif/2 use independent attribute keys (`"fd"`, `"real"`, and `"dif"`). All hooks fire independently when a variable is bound. A variable can have FD, real, and dif constraints simultaneously.
+    CLP(ℤ), CLP(ℝ), and dif/2 use independent attribute keys (`"fd"`, `"real"`, and `"dif"`). All hooks fire independently when a variable is bound. A variable can have integer, real, and dif constraints simultaneously.
 
-    **FD + Real coexistence:** a variable can carry both an FD domain and a real interval at the same time. The FD domain enforces integrality and domain holes; the real interval handles continuous narrowing. When FD propagation narrows the domain, the real interval is tightened to match. When computing bounds for real constraints, the tightest bounds from both attributes are used. See [CLP(R)](clpr.md) for details on mixed-domain usage.
+    **FD + Real coexistence:** a variable can carry both an FD domain and a real interval at the same time. The FD domain enforces integrality and domain holes; the real interval handles continuous narrowing. When FD propagation narrows the domain, the real interval is tightened to match. When computing bounds for real constraints, the tightest bounds from both attributes are used. See [CLP(ℝ)](clpr.md) for details on mixed-domain usage.
 
 ??? abstract "Compiler integration"
 
@@ -408,7 +408,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
         k_stmts
     ```
 
-    Both sides are compiled with `eval_arith=False` so arithmetic expression trees survive as structural terms for CLP(FD) domain arithmetic. The `_fd_*` functions are injected into `base_globals` in both `compile_predicate` and `compile_predicate_trampoline`.
+    Both sides are compiled with `eval_arith=False` so arithmetic expression trees survive as structural terms for CLP(ℤ) domain arithmetic. The `_fd_*` functions are injected into `base_globals` in both `compile_predicate` and `compile_predicate_trampoline`.
 
 ??? info "Test coverage"
 
@@ -595,9 +595,9 @@ PigeonHole() <- (
 
 ??? abstract "Interaction with other constraints"
 
-    CLP(B) uses the attribute key `"clpb"`, independent of CLP(FD) (`"fd"`), CLP(R) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(FD), CLP(R), and dif constraints simultaneously (though combining CLP(B) with numeric domains on the same variable is unusual).
+    CLP(B) uses the attribute key `"clpb"`, independent of CLP(ℤ) (`"fd"`), CLP(ℝ) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(ℤ), CLP(ℝ), and dif constraints simultaneously (though combining CLP(B) with numeric domains on the same variable is unusual).
 
-    **Important:** CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(R) and CLP(FD) — they are distinct types in Clausal's constraint system.
+    **Important:** CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal's constraint system.
 
 ??? info "Test coverage"
 
@@ -623,9 +623,9 @@ PigeonHole() <- (
 
 ---
 
-## CLP(R) — Real-domain Constraints
+## CLP(ℝ) — Real-domain Constraints
 
-CLP(R) provides constraint logic programming over the reals using interval arithmetic over IEEE doubles with outward rounding. See the dedicated [CLP(R)](clpr.md) page for full documentation including builtins, HC4 propagation internals, and examples.
+CLP(ℝ) provides constraint logic programming over the reals using interval arithmetic over IEEE doubles with outward rounding. See the dedicated [CLP(ℝ)](clpr.md) page for full documentation including builtins, HC4 propagation internals, and examples.
 
 Quick reference:
 
@@ -640,11 +640,11 @@ Quick reference:
 
 ### Unified dispatch
 
-The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(R) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
+The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
 
 ```clausal
 # skip
-# Float literal triggers CLP(R)
+# Float literal triggers CLP(ℝ)
 sqrt2(X) <- (
     InReal(X, 0.0, 2.0),
     X * X == 2.0,
@@ -656,10 +656,10 @@ sqrt2(X) <- (
 ### Cross-domain notes
 
 - **FD + Real coexistence:** a variable can carry both an FD domain and a real interval. The FD domain enforces integrality; the real interval handles continuous narrowing. Both stay in sync.
-- **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(R) or CLP(FD) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
+- **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
 - **Labeling order:** for mixed-domain variables, use `Label` (FD) first to fix integer values, then `LabelReal` for remaining real variables. `LabelReal` does not enforce integrality.
 - **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.
 
 ---
 
-*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(R)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics.*
+*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(ℝ)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics.*

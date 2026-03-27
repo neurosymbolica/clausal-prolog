@@ -21,7 +21,7 @@ for solution in clausal.query(Fib(10, N)):
 
 - **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
 - **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
-- **Full-featured** — tabling, CLP(FD), DCGs, EDCGs, modules, term expansion, goal expansion, reified if-then-else.
+- **Full-featured** — tabling, CLP(ℤ), DCGs, EDCGs, modules, term expansion, goal expansion, reified if-then-else.
 - **Fast** — C extension for unification/trails, first-argument indexing, groundness-keyed dispatch, tail recursion optimization, bytecode caching.
 
 ---
@@ -120,8 +120,8 @@ for the full feature set.
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
-| [Constraints](constraints.md) | Dif/2, CLP(FD) finite-domain constraints, and CLP(R) real-domain constraints |
-| [CLP(R)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
+| [Constraints](constraints.md) | Dif/2, CLP(ℤ) finite-domain constraints, and CLP(ℝ) real-domain constraints |
+| [CLP(ℝ)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |

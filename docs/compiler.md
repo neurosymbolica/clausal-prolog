@@ -83,9 +83,9 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
 | `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — dif/2 constraint (see [constraints.md](constraints.md)) |
 | `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
-| `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(FD) arithmetic equality |
-| `ArithNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(FD) arithmetic disequality |
-| `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(FD) comparison |
+| `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — CLP(ℤ) arithmetic equality |
+| `ArithNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(ℤ) arithmetic disequality |
+| `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(ℤ) comparison |
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a tabled predicate, emits `_naf_tabled` call instead (well-founded semantics). |
