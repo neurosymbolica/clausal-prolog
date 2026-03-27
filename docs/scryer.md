@@ -31,8 +31,9 @@ The two engines are separate worlds connected by Clausal's translation pipeline.
 
     - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine. Predicates become `PredicateMeta` classes, fully integrated with Python. Best for most programs.
     - **Scryer embedding** (this page) runs Prolog on an actual ISO Prolog engine in-process. Best when you need Scryer's native constraint solvers, its library ecosystem, or strict ISO conformance.
+    - **[Trealla embedding](trealla.md)** is a lighter-weight alternative — faster startup, smaller footprint, but no tabling.
 
-    The two approaches can coexist in the same project.
+    All three approaches can coexist in the same project.
 
 ---
 
@@ -279,6 +280,59 @@ The Scryer embedding sits on top of Clausal's existing [Prolog translation](prol
 ```
 
 All translation features work: naming conventions, operator mapping, library remapping (e.g. `clausal.logic.clpfd` → `library(clpz)`), tabling directives. The `Dialect.scryer()` configuration handles Scryer-specific differences automatically.
+
+---
+
+## Comparison with Trealla embedding
+
+Both Scryer and [Trealla](trealla.md) are ISO-conformant Prolog engines embedded in clausal. They share the same Python API, so code written against one is portable to the other.
+
+### API compatibility
+
+| Method | Scryer | Trealla | Notes |
+|---|---|---|---|
+| `consult_string(source, module="user")` | yes | yes | Trealla ignores `module` |
+| `load_string(source, module="user")` | yes | yes | Trealla ignores `module` |
+| `consult_file(path, module="user")` | yes | yes | Trealla ignores `module` |
+| `consult_clausal(source, module="user")` | yes | yes | Trealla ignores `module` |
+| `query(goal)` | lazy iterator | lazy iterator | both truly lazy |
+| `query_all(goal)` | `list[dict]` | `list[dict]` | |
+| `query_one(goal)` | `dict \| None` | `dict \| None` | |
+| `query_bool(goal)` | `bool` | `bool` | |
+| `close()` | yes | yes | |
+| context manager | yes | yes | |
+| `AVAILABLE` | yes | yes | |
+| `to_prolog()` | yes | yes | |
+| error type | `ScryerError` | `TreallaError` | |
+
+Switching between backends is a one-line change:
+
+```python
+# from clausal.trealla import Trealla as Engine
+from clausal.scryer import Scryer as Engine
+
+with Engine() as e:
+    e.load_string("parent(tom, bob).")
+    print(e.query_one("parent(tom, X)."))
+```
+
+### Implementation differences
+
+| Aspect | Scryer | Trealla |
+|---|---|---|
+| Language | Rust (PyO3) | C (ctypes) |
+| Build | `maturin develop --release` | `make` + `cc -shared` |
+| Startup | ~200ms | instant |
+| Memory | ~100MB | ~5MB |
+| Session isolation | independent per `Scryer()` | singleton (shared state) |
+| Query protocol | Rust API (`QueryState::next`) | stdout capture + `pl_query`/`pl_redo` |
+| One query at a time | enforced (machine lock) | no restriction |
+| Module parameter | fully supported | accepted, ignored |
+| Tabling | yes | not available |
+| CLP(B) | yes | no |
+| Rational numbers | yes (`fractions.Fraction`) | no |
+
+Choose **Scryer** for session isolation, tabling, rational numbers, and strict ISO conformance. Choose **Trealla** for speed and simplicity.
 
 ---
 

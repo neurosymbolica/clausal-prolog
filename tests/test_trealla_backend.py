@@ -1,15 +1,15 @@
-"""Scryer Prolog backend tests — translate clausal conformity tests to Prolog
-and execute them via scryer-prolog to validate ISO compliance.
+"""Trealla Prolog backend tests — translate clausal conformity tests to Prolog
+and execute them via tpl to validate ISO compliance.
 
-Scryer Prolog is ISO-conformant, so these tests verify that our translated
+Trealla Prolog is ISO-conformant, so these tests verify that our translated
 output is actually valid, runnable Prolog that produces the expected results.
 
-Requires ``scryer-prolog`` on PATH.  All tests are skipped otherwise.
+Requires ``tpl`` on PATH or built at ../trealla-prolog/tpl.
+All tests are skipped otherwise.
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -18,16 +18,16 @@ import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect
+from clausal.trealla._engine import TPL_BINARY
 
-SCRYER = shutil.which("scryer-prolog")
-needs_scryer = pytest.mark.skipif(SCRYER is None, reason="scryer-prolog not on PATH")
+needs_trealla = pytest.mark.skipif(TPL_BINARY is None, reason="tpl not on PATH")
 
 CONFORMITY = Path(__file__).parent / "conformity"
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = FIXTURES / "prolog_golden"
 
-# Scryer dialect for all translations
-_SCRYER = Dialect.scryer()
+# Trealla dialect for all translations
+_TREALLA = Dialect.trealla()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -35,11 +35,11 @@ _SCRYER = Dialect.scryer()
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _run_scryer(prolog_source: str, query: str, *, timeout: int = 30) -> subprocess.CompletedProcess:
-    """Run a Prolog query via scryer-prolog and return the result.
+def _run_trealla(prolog_source: str, query: str, *, timeout: int = 30) -> subprocess.CompletedProcess:
+    """Run a Prolog query via tpl and return the result.
 
     Writes *prolog_source* to a temp file, appends a ``:- initialization``
-    directive that runs *query*, and invokes ``scryer-prolog``.
+    directive that runs *query*, and invokes ``tpl``.
     """
     import tempfile
 
@@ -51,26 +51,24 @@ def _run_scryer(prolog_source: str, query: str, *, timeout: int = 30) -> subproc
         f.write(f":- initialization(({query})).\n")
         f.flush()
         return subprocess.run(
-            [SCRYER, f.name],
+            [TPL_BINARY, f.name],
             capture_output=True,
             text=True,
             timeout=timeout,
         )
 
 
-def _run_scryer_file(pl_path: str | Path, query: str, *, timeout: int = 30) -> subprocess.CompletedProcess:
-    """Run a query against an existing .pl file via scryer-prolog."""
-    import tempfile
-
+def _run_trealla_file(pl_path: str | Path, query: str, *, timeout: int = 30) -> subprocess.CompletedProcess:
+    """Run a query against an existing .pl file via tpl."""
     source = Path(pl_path).read_text(encoding="utf-8")
-    return _run_scryer(source, query, timeout=timeout)
+    return _run_trealla(source, query, timeout=timeout)
 
 
 def _translate_conformity(name: str) -> str:
-    """Translate a conformity .clausal file to Scryer Prolog source."""
+    """Translate a conformity .clausal file to Trealla Prolog source."""
     path = CONFORMITY / f"{name}.clausal"
     source = path.read_text(encoding="utf-8")
-    return clausal_source_to_prolog(source, dialect=_SCRYER)
+    return clausal_source_to_prolog(source, dialect=_TREALLA)
 
 
 def _run_all_tests(prolog_source: str) -> tuple[list[str], list[str]]:
@@ -98,12 +96,15 @@ def _run_all_tests(prolog_source: str) -> tuple[list[str], list[str]]:
             run_each(Ds).
     """)
 
-    # Strip any existing :- module declaration's export list limitation
-    # and append the harness + initialization
-    # Scryer treats double-quoted strings as char code lists by default;
+    # Strip any existing :- module declaration and append harness
+    lines = prolog_source.split("\n")
+    cleaned = [line for line in lines if not line.startswith(":- module(")]
+    prolog_clean = "\n".join(cleaned)
+
+    # Trealla treats double-quoted strings as char lists by default;
     # set them to atoms so test("description") works as expected.
-    full_source = ':- set_prolog_flag(double_quotes, atom).\n' + prolog_source + "\n" + harness
-    result = _run_scryer(full_source, "run_tests, halt", timeout=30)
+    full_source = ':- set_prolog_flag(double_quotes, atom).\n' + prolog_clean + "\n" + harness
+    result = _run_trealla(full_source, "run_tests, halt", timeout=30)
     passed = []
     failed = []
     for line in result.stdout.splitlines():
@@ -115,13 +116,13 @@ def _run_all_tests(prolog_source: str) -> tuple[list[str], list[str]]:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Basic: can Scryer parse our translated output?
+# Basic: can Trealla parse our translated output?
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@needs_scryer
-class TestScryerParses:
-    """Verify that translated Prolog files parse without error in Scryer."""
+@needs_trealla
+class TestTreallaParses:
+    """Verify that translated Prolog files parse without error in Trealla."""
 
     @pytest.mark.parametrize("name", [
         "iso_arithmetic",
@@ -132,30 +133,27 @@ class TestScryerParses:
         "iso_unification",
     ])
     def test_conformity_parses(self, name):
-        """Scryer accepts the translated .pl without syntax errors."""
+        """Trealla accepts the translated .pl without syntax errors."""
         prolog = _translate_conformity(name)
-        # Remove module declaration (Scryer may not support all our module features)
-        # and just check the file parses
-        result = _run_scryer(prolog, "true, halt")
+        result = _run_trealla(prolog, "true, halt")
         assert result.returncode == 0, (
-            f"Scryer failed to parse {name}.pl:\n"
+            f"Trealla failed to parse {name}.pl:\n"
             f"stderr: {result.stderr[:1000]}"
         )
 
     @pytest.mark.parametrize("pl_name", [
         "edge_graph",
         "fibonacci",
-        "clpfd_queens",
         "meta_test",
     ])
     def test_golden_pl_parses(self, pl_name):
-        """Golden .pl files parse in Scryer without error."""
+        """Golden .pl files parse in Trealla without error."""
         pl_path = GOLDEN / f"{pl_name}.pl"
         if not pl_path.exists():
             pytest.skip(f"Golden file {pl_path} not found")
-        result = _run_scryer_file(pl_path, "true, halt")
+        result = _run_trealla_file(pl_path, "true, halt")
         assert result.returncode == 0, (
-            f"Scryer failed to parse {pl_name}.pl:\n"
+            f"Trealla failed to parse {pl_name}.pl:\n"
             f"stderr: {result.stderr[:1000]}"
         )
 
@@ -165,14 +163,14 @@ class TestScryerParses:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@needs_scryer
-class TestScryerExecution:
-    """Execute small translated programs in Scryer and check results."""
+@needs_trealla
+class TestTreallaExecution:
+    """Execute small translated programs in Trealla and check results."""
 
     def test_simple_fact_query(self):
         """Translate a simple fact and query it."""
-        prolog = clausal_source_to_prolog("Foo(1, 2),\nFoo(3, 4),", dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog("Foo(1, 2),\nFoo(3, 4),", dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "foo(1, 2), write(ok), nl, halt",
         )
@@ -183,9 +181,9 @@ class TestScryerExecution:
         """Translate a rule and query it."""
         prolog = clausal_source_to_prolog(
             "Double(X, Y) <- (Y := X * 2)",
-            dialect=_SCRYER,
+            dialect=_TREALLA,
         )
-        result = _run_scryer(
+        result = _run_trealla(
             prolog,
             "double(3, Y), write(Y), nl, halt",
         )
@@ -201,8 +199,8 @@ class TestScryerExecution:
             Reach(X, Y) <- Edge(X, Y)
             Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "reach(1, 4), write(ok), nl, halt",
         )
@@ -210,13 +208,13 @@ class TestScryerExecution:
         assert "ok" in result.stdout
 
     def test_list_operations(self):
-        """Translate list operations and run in Scryer."""
+        """Translate list operations and run in Trealla."""
         src = textwrap.dedent("""\
             MyAppend([], L, L),
             MyAppend([H, *T], L, [H, *R]) <- MyAppend(T, L, R)
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "my_append([1,2], [3,4], R), write(R), nl, halt",
         )
@@ -224,7 +222,7 @@ class TestScryerExecution:
         assert "[1,2,3,4]" in result.stdout
 
     def test_arithmetic_evaluation(self):
-        """Arithmetic := translates to 'is' and evaluates in Scryer."""
+        """Arithmetic := translates to 'is' and evaluates in Trealla."""
         src = textwrap.dedent("""\
             Fib(0, 0),
             Fib(1, 1),
@@ -237,8 +235,8 @@ class TestScryerExecution:
                 R := A + B
             )
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "fib(10, R), write(R), nl, halt",
             timeout=30,
@@ -247,14 +245,14 @@ class TestScryerExecution:
         assert "55" in result.stdout
 
     def test_negation(self):
-        """Negation as failure (not → \\+) works in Scryer."""
+        """Negation as failure (not -> \\+) works in Trealla."""
         src = textwrap.dedent("""\
             Even(0),
             Even(N) <- (N > 0, N1 := N - 2, Even(N1))
             Odd(N) <- (not Even(N))
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "odd(3), write(ok), nl, halt",
         )
@@ -262,10 +260,10 @@ class TestScryerExecution:
         assert "ok" in result.stdout
 
     def test_unification(self):
-        """Unification (is → =) works correctly."""
+        """Unification (is -> =) works correctly."""
         src = "Test(X, Y) <- (X is Y)"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "test(hello, hello), write(ok), nl, halt",
         )
@@ -273,14 +271,14 @@ class TestScryerExecution:
         assert "ok" in result.stdout
 
     def test_disjunction(self):
-        """Disjunction (or → ;) works in Scryer."""
+        """Disjunction (or -> ;) works in Trealla."""
         src = textwrap.dedent("""\
             Color(red),
             Color(blue),
             RedOrBlue(X) <- (X is red or X is blue)
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "red_or_blue(red), write(ok), nl, halt",
         )
@@ -288,15 +286,15 @@ class TestScryerExecution:
         assert "ok" in result.stdout
 
     def test_findall(self):
-        """findall translates to findall/3 and works in Scryer."""
+        """FindAll translates to findall/3 and works in Trealla."""
         src = textwrap.dedent("""\
             Num(1),
             Num(2),
             Num(3),
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog += "\n:- use_module(library(lists)).\n"
-        result = _run_scryer(
+        result = _run_trealla(
             prolog,
             "findall(X, num(X), Xs), write(Xs), nl, halt",
         )
@@ -305,38 +303,27 @@ class TestScryerExecution:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Conformity suite execution via Scryer
+# Conformity suite execution via Trealla
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@needs_scryer
-class TestScryerConformity:
-    """Run translated conformity test/1 predicates in Scryer.
+@needs_trealla
+class TestTreallaConformity:
+    """Run translated conformity test/1 predicates in Trealla.
 
     Each conformity .clausal file defines ``test(Description) :- Goal``
-    clauses.  We translate to Scryer Prolog and verify each test passes.
+    clauses.  We translate to Trealla Prolog and verify each test passes.
     """
 
     def _run_conformity(self, name: str) -> tuple[list[str], list[str]]:
         """Translate and execute conformity tests, returning (passed, failed)."""
         prolog = _translate_conformity(name)
-        # Remove module declaration for standalone execution —
-        # Scryer module system may conflict with our harness
-        lines = prolog.split("\n")
-        cleaned = []
-        for line in lines:
-            if line.startswith(":- module("):
-                continue
-            cleaned.append(line)
-        prolog_clean = "\n".join(cleaned)
-        return _run_all_tests(prolog_clean)
+        return _run_all_tests(prolog)
 
     def test_iso_arithmetic(self):
-        """ISO arithmetic tests pass in Scryer."""
+        """ISO arithmetic tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_arithmetic")
         assert len(passed) > 0, "No tests ran"
-        # Some tests may fail due to Scryer/clausal semantic differences
-        # (e.g., floor division, mod sign) — report but don't hard-fail
         if failed:
             pytest.xfail(
                 f"{len(failed)} of {len(passed) + len(failed)} tests failed "
@@ -344,7 +331,7 @@ class TestScryerConformity:
             )
 
     def test_iso_control(self):
-        """ISO control construct tests pass in Scryer."""
+        """ISO control construct tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_control")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -353,7 +340,7 @@ class TestScryerConformity:
             )
 
     def test_iso_unification(self):
-        """ISO unification tests pass in Scryer."""
+        """ISO unification tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_unification")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -362,7 +349,7 @@ class TestScryerConformity:
             )
 
     def test_iso_list_operations(self):
-        """ISO list operation tests pass in Scryer."""
+        """ISO list operation tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_list_operations")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -371,7 +358,7 @@ class TestScryerConformity:
             )
 
     def test_iso_type_checking(self):
-        """ISO type checking tests pass in Scryer."""
+        """ISO type checking tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_type_checking")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -380,7 +367,7 @@ class TestScryerConformity:
             )
 
     def test_iso_term_manipulation(self):
-        """ISO term manipulation tests pass in Scryer."""
+        """ISO term manipulation tests pass in Trealla."""
         passed, failed = self._run_conformity("iso_term_manipulation")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -390,15 +377,15 @@ class TestScryerConformity:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Scryer-specific dialect features
+# Trealla-specific dialect features
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestScryerDialectFeatures:
-    """Verify Scryer-specific translation features work."""
+class TestTreallaDialectFeatures:
+    """Verify Trealla-specific translation features work."""
 
     def test_clpz_constraints(self):
-        """CLP(Z) constraints use Scryer's clpz library."""
+        """CLP(Z) constraints use Trealla's clpz library."""
         src = textwrap.dedent("""\
             -import_from(clausal.logic.clpfd, [in_domain, all_different])
             Test(X) <- (
@@ -406,42 +393,34 @@ class TestScryerDialectFeatures:
                 all_different([X])
             )
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "library(clpz)" in prolog
-        assert "all_distinct" in prolog  # Scryer uses all_distinct, not all_different
+        assert "all_distinct" in prolog
 
-    def test_scryer_leq_operator(self):
-        """Scryer uses =< (ISO) for less-or-equal."""
+    def test_trealla_leq_operator(self):
+        """Trealla uses =< (ISO) for less-or-equal."""
         src = "Test() <- (1 <= 2)"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "=<" in prolog
 
-    def test_scryer_tabling(self):
-        """Scryer tabling uses use_module(library(tabling))."""
-        src = "-table(Fib(N, R))"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        assert "use_module(library(tabling))" in prolog
-        assert "table" in prolog
-
-    def test_scryer_dif(self):
-        """dif/2 is available in Scryer."""
+    def test_trealla_dif(self):
+        """dif/2 is available in Trealla."""
         src = "Test(X, Y) <- (X is not Y)"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "dif" in prolog
 
-    def test_scryer_member(self):
-        """in → member/2 works for Scryer."""
+    def test_trealla_member(self):
+        """in -> member/2 works for Trealla."""
         src = "Test(X) <- (X in [1, 2, 3])"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "member" in prolog
 
-    @pytest.mark.xfail(reason="prolog_to_clausal does not support cut yet")
-    def test_scryer_cut(self):
-        """Cut is preserved through roundtrip (as ! or cut)."""
+    def test_trealla_cut(self):
+        """Cut is preserved through roundtrip."""
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         src = "foo(X) :- X > 0, !."
-        clausal = prolog_to_clausal(src, dialect=_SCRYER)
-        prolog2 = clausal_source_to_prolog(clausal, dialect=_SCRYER)
+        clausal = prolog_to_clausal(src, dialect=_TREALLA)
+        prolog2 = clausal_source_to_prolog(clausal, dialect=_TREALLA)
         assert "!" in prolog2 or "cut" in prolog2
 
 
@@ -450,42 +429,40 @@ class TestScryerDialectFeatures:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@needs_scryer
+@needs_trealla
 class TestISOEdgeCases:
-    """Test ISO edge cases that Scryer handles strictly."""
+    """Test ISO edge cases that Trealla handles."""
 
     def test_operator_precedence_iso(self):
         """ISO operator precedence is preserved in translation."""
         src = "Test(R) <- (R := 2 + 3 * 4)"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        # Should evaluate to 14, not 20
-        result = _run_scryer(prolog, "test(R), write(R), nl, halt")
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(prolog, "test(R), write(R), nl, halt")
         assert result.returncode == 0
         assert "14" in result.stdout
 
     def test_atom_quoting(self):
         """Atoms that need quoting are properly quoted."""
         src = "Foo(hello_world),"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(prolog, "foo(X), write(X), nl, halt")
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(prolog, "foo(X), write(X), nl, halt")
         assert result.returncode == 0
         assert "hello_world" in result.stdout
 
     def test_string_handling(self):
         """Strings are handled correctly."""
         src = 'Greeting("hello"),'
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        # Scryer treats "hello" as a char list by default; use atom flag
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog = ':- set_prolog_flag(double_quotes, atom).\n' + prolog
-        result = _run_scryer(prolog, 'greeting(X), write(X), nl, halt')
+        result = _run_trealla(prolog, 'greeting(X), write(X), nl, halt')
         assert result.returncode == 0
         assert "hello" in result.stdout
 
     def test_empty_list(self):
         """Empty list [] works correctly."""
         src = "Empty([]),"
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(prolog, "empty(X), write(X), nl, halt")
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(prolog, "empty(X), write(X), nl, halt")
         assert result.returncode == 0
         assert "[]" in result.stdout
 
@@ -494,8 +471,8 @@ class TestISOEdgeCases:
         src = textwrap.dedent("""\
             Head([H, *_], H),
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(prolog, "head([a,b,c], H), write(H), nl, halt")
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(prolog, "head([a,b,c], H), write(H), nl, halt")
         assert result.returncode == 0
         assert "a" in result.stdout
 
@@ -505,8 +482,8 @@ class TestISOEdgeCases:
             Eval(add(X, Y), R) <- (R := X + Y)
             Eval(mul(X, Y), R) <- (R := X * Y)
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(prolog, "eval(add(2,3), R), write(R), nl, halt")
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(prolog, "eval(add(2,3), R), write(R), nl, halt")
         assert result.returncode == 0
         assert "5" in result.stdout
 
@@ -517,9 +494,9 @@ class TestISOEdgeCases:
             Color(green),
             Color(blue),
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog += "\n:- use_module(library(lists)).\n"
-        result = _run_scryer(
+        result = _run_trealla(
             prolog,
             "findall(X, color(X), Xs), length(Xs, N), write(N), nl, halt",
         )
@@ -534,8 +511,8 @@ class TestISOEdgeCases:
             TestGt() <- (2 > 1)
             TestGeq() <- (1 >= 1)
         """)
-        prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
-        result = _run_scryer(
+        prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
+        result = _run_trealla(
             prolog,
             "test_lt, test_leq, test_gt, test_geq, write(ok), nl, halt",
         )

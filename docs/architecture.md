@@ -4,6 +4,7 @@
 
 ```clausal
 # skip
+clausal.trealla              embedded Trealla Prolog engine (ctypes/C, optional)
 clausal.scryer               embedded Scryer Prolog engine (PyO3/Rust, optional)
 clausal.modules              standard library modules (regex, log, …)
 clausal.logic.goal_expansion body-goal rewriting pass
@@ -24,7 +25,7 @@ clausal.import_hook          transparent import; module system; ModulesFinder
 
 The import hook handles both `.clausal` and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
 
-The optional `clausal.scryer` layer provides an embedded [Scryer Prolog](scryer.md) engine via PyO3. Programs are translated to Prolog by the existing translation pipeline and executed in-process with lazy iteration over solutions. See the [Scryer embedding docs](scryer.md) for details.
+The optional `clausal.trealla` and `clausal.scryer` layers provide embedded Prolog engines. [Trealla](trealla.md) is a fast C-based engine via ctypes (instant startup, ~5MB). [Scryer](scryer.md) is a Rust-based engine via PyO3 (~200ms startup, ~100MB, with tabling support). Both use the existing Prolog translation pipeline and execute programs in-process.
 
 ---
 
@@ -45,7 +46,7 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - leverages the AST infrastructure clausal already has
 - is exactly what `clausal.trampoline` and `clausal.continuation_search` are already built toward
 
-For programs that genuinely need a WAM — ISO-conformant constraint solving, Scryer's library ecosystem, or cross-validation against a standards-compliant engine — the [Scryer Prolog embedding](scryer.md) provides one in-process, without replacing clausal's native execution model.
+For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing clausal's native execution model.
 
 ---
 

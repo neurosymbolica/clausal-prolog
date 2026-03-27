@@ -221,10 +221,10 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 ## Backend Directive (planned)
 
 !!! note "Not yet implemented"
-    `-backend(scryer)` is planned for a future release. Currently, Scryer programs are loaded from Python via the `Scryer` class. See [Scryer Prolog Embedding](scryer.md).
+    `-backend(scryer)` and `-backend(trealla)` are planned for a future release. Currently, programs are loaded from Python via the `Scryer` or `Trealla` classes. See [Scryer Prolog Embedding](scryer.md) and [Trealla Prolog Embedding](trealla.md).
 
 ```clausal
--backend(scryer)
+-backend(scryer)  # or -backend(trealla)
 -module(queens, [Queens(N, QS)])
 
 Queens(N, QS) <- (

@@ -74,6 +74,22 @@ class Dialect:
             module_system="none",
         )
 
+    @classmethod
+    def trealla(cls) -> Dialect:
+        return cls(
+            name="trealla",
+            operator_table=OperatorTable.trealla_default(),
+            library_map={
+                "clausal.logic.clpfd": "library(clpz)",
+                "clausal.logic.clpb": "library(clpb)",
+            },
+            clpfd_module="clpz",
+            tabling_directive=":- use_module(library(tabling))",
+            string_type="chars",
+            has_dicts=False,
+            module_system="iso",
+        )
+
 
 # ── Naming conventions ───────────────────────────────────────────────
 
@@ -158,10 +174,10 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "term_variables": {"iso": "term_variables"},
     "numbervars":    {"iso": "numbervars"},
     "all_different": {"swi": "all_different", "scryer": "all_distinct",
-                      "gprolog": "fd_all_different"},
+                      "gprolog": "fd_all_different", "trealla": "all_distinct"},
     "in_":           {"iso": "in"},
     "in_domain":     {"swi": "ins", "scryer": "ins",
-                      "gprolog": "fd_domain"},
+                      "gprolog": "fd_domain", "trealla": "ins"},
     "label":         {"iso": "label", "gprolog": "fd_labeling"},
     "labeling":      {"iso": "labeling", "gprolog": "fd_labeling"},
     "maplist":       {"iso": "maplist"},
@@ -213,15 +229,15 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "succ":          {"iso": "succ"},
     "plus":          {"iso": "plus"},
     "phrase":        {"iso": "phrase"},
-    "time_goal":     {"swi": "time", "scryer": "time"},
+    "time_goal":     {"swi": "time", "scryer": "time", "trealla": "time"},
     "include":       {"swi": "include", "scryer": "include",
-                      "gprolog": "include"},
+                      "gprolog": "include", "trealla": "include"},
     "exclude":       {"swi": "exclude", "scryer": "exclude",
-                      "gprolog": "exclude"},
-    "foldl":         {"swi": "foldl", "scryer": "foldl"},
+                      "gprolog": "exclude", "trealla": "exclude"},
+    "foldl":         {"swi": "foldl", "scryer": "foldl", "trealla": "foldl"},
     "sign":          {"iso": "sign"},
     "gcd":           {"iso": "gcd"},
-    "divmod_":       {"swi": "divmod", "scryer": "divmod"},
+    "divmod_":       {"swi": "divmod", "scryer": "divmod", "trealla": "divmod"},
     "dif":           {"iso": "dif"},
     "unpack":        {"iso": "unpack"},
     "must_be":       {"iso": "must_be"},

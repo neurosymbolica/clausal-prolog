@@ -38,7 +38,7 @@ reach(X, Y) :-
 
 ### Dialect selection
 
-Pass a `Dialect` to control SWI-specific or Scryer-specific output:
+Pass a `Dialect` to control dialect-specific output:
 
 ```python
 from clausal.tools.prolog_dialect import Dialect
@@ -48,6 +48,9 @@ print(clausal_source_to_prolog(source, dialect=Dialect.swi()))
 
 # Scryer Prolog output (e.g. all_distinct, library(clpz))
 print(clausal_source_to_prolog(source, dialect=Dialect.scryer()))
+
+# Trealla Prolog output (same as Scryer — all_distinct, library(clpz))
+print(clausal_source_to_prolog(source, dialect=Dialect.trealla()))
 ```
 
 ### Intermediate Prolog AST
@@ -162,6 +165,7 @@ Visitor/transformer: `PrologVisitor`, `PrologTransformer` (same pattern as `ast.
 - `OperatorTable.iso_default()` — ISO 13211-1 operators
 - `OperatorTable.swi_default()` — ISO + SWI extensions (`xor`, dict operators, etc.)
 - `OperatorTable.scryer_default()` — ISO + Scryer CLP(Z) operators (`#=`, `#<`, etc.)
+- `OperatorTable.trealla_default()` — ISO + Trealla CLP(Z) operators (same as Scryer)
 
 The emitter uses the operator table to decide when to parenthesize subexpressions.
 

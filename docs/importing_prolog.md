@@ -276,7 +276,4 @@ full translation reference.*
 *See also: [Module System](import.md) — Clausal's import directives and
 cross-module calls.*
 
-*See also: [Scryer Prolog Embedding](scryer.md) — if you need to run Prolog on
-an actual ISO Prolog engine (for native CLP(Z), Scryer's library ecosystem, or
-strict conformance), the Scryer embedding runs in-process alongside the native
-engine.*
+*See also: [Trealla Prolog Embedding](trealla.md) — fast, lightweight in-process Prolog via C · [Scryer Prolog Embedding](scryer.md) — strict ISO conformance with tabling support. Both run Prolog on actual ISO engines alongside the native engine.*

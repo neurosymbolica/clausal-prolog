@@ -663,4 +663,4 @@ sqrt2(X) <- (
 
 ---
 
-*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(ℝ)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics · [Scryer Prolog Embedding](scryer.md) — for programs needing Scryer's native CLP(Z) solver or ISO-conformant constraint arithmetic.*
+*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(ℝ)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics · [Trealla Prolog Embedding](trealla.md) — fast CLP(Z) via embedded Trealla · [Scryer Prolog Embedding](scryer.md) — CLP(Z) with tabling and strict ISO conformance.*

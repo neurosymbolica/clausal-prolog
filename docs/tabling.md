@@ -371,4 +371,4 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
 
 ---
 
-*See also: [Well-Founded Semantics](wfs.md) — three-valued semantics for programs with negation cycles · [Constraints](constraints.md) — attributed variables, the mechanism underlying tabling suspension · [Meta-Interpreters](metainterpreters.md) — iterative deepening as a pure-Prolog alternative to tabling for cyclic programs · [Scryer Prolog Embedding](scryer.md) — Scryer also provides tabling via `library(tabling)`, accessible through the in-process embedding.*
+*See also: [Well-Founded Semantics](wfs.md) — three-valued semantics for programs with negation cycles · [Constraints](constraints.md) — attributed variables, the mechanism underlying tabling suspension · [Meta-Interpreters](metainterpreters.md) — iterative deepening as a pure-Prolog alternative to tabling for cyclic programs · [Scryer Prolog Embedding](scryer.md) — Scryer also provides tabling via `library(tabling)` · [Trealla Prolog Embedding](trealla.md) — fast lightweight alternative (no tabling support).*

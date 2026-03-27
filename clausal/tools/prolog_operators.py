@@ -90,6 +90,13 @@ class OperatorTable:
         _load_gprolog(t)
         return t
 
+    @classmethod
+    def trealla_default(cls) -> OperatorTable:
+        t = cls()
+        _load_iso(t)
+        _load_trealla(t)
+        return t
+
 
 def _specifier_kind(spec: str) -> str:
     if spec in ("fx", "fy"):
@@ -177,3 +184,14 @@ def _load_gprolog(t: OperatorTable) -> None:
     d(700, "xfx", "#>=")
     d(700, "xfx", "#=#")    # FD equality (reified)
     d(700, "xfx", "#\\=#")  # FD disequality (reified)
+
+
+def _load_trealla(t: OperatorTable) -> None:
+    d = t._define_default
+    # CLP(Z) operators (same as Scryer — loaded via library(clpz))
+    d(700, "xfx", "#=")
+    d(700, "xfx", "#\\=")
+    d(700, "xfx", "#<")
+    d(700, "xfx", "#>")
+    d(700, "xfx", "#=<")
+    d(700, "xfx", "#>=")

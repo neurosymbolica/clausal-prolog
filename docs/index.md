@@ -166,7 +166,8 @@ for the full feature set.
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
-| [Scryer Prolog Embedding](scryer.md) | in_-process Scryer Prolog engine via PyO3 — lazy queries, `.clausal` file loading |
+| [Trealla Prolog Embedding](trealla.md) | In-process Trealla Prolog engine via ctypes — fast, lightweight, instant startup |
+| [Scryer Prolog Embedding](scryer.md) | In-process Scryer Prolog engine via PyO3 — lazy queries, tabling support |
 | [Examples](examples.md) | Example programs: Fibonacci, N-Queens, Sudoku, meta-interpreters |
 | **Scientific Computing** | |
 | [scikit-learn](sklearn.md) | Machine learning: estimators, pipelines, cross-validation |
