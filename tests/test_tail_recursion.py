@@ -4,7 +4,6 @@ Verifies correctness and allocation efficiency of TRO-compiled predicates.
 """
 
 import unittest
-from unittest.mock import patch
 
 from clausal.logic.compiler import (
     _detect_tro_clause,
@@ -404,28 +403,63 @@ class TestTroCorrectness(unittest.TestCase):
 # ── Allocation tests ────────────────────────────────────────────────────────
 
 
+import clausal.logic.solve as _solve_mod
+
+
+def _make_counting_sg():
+    """Build a counting StepGenerator wrapper and return (wrapper_cls, counter).
+
+    ``counter`` is a one-element list ``[int]`` incremented on every
+    StepGenerator creation.  The wrapper delegates to the real C/Python
+    StepGenerator so runtime behaviour is unchanged.
+    """
+    counter = [0]
+    _real = StepGenerator
+
+    class _Counting(_real):
+        __slots__ = ()
+        def __new__(cls, func, *args):
+            counter[0] += 1
+            return _real(func, *args)
+    return _Counting, counter
+
+
+def _patch_sg(counting_cls, *pred_classes):
+    """Swap ``StepGenerator`` in ``solve.call``'s module *and* every compiled
+    dispatch function's ``__globals__`` dict for *pred_classes*.
+
+    Returns a restore callable.
+    """
+    _real = StepGenerator
+    patched: list[dict] = []
+
+    # 1) solve module — call() creates the root StepGenerator here.
+    _solve_mod.StepGenerator = counting_cls
+    patched.append(vars(_solve_mod))
+
+    # 2) Each compiled dispatch fn has its own __globals__.
+    for pcls in pred_classes:
+        dispatch = pcls._get_dispatch()
+        if dispatch is None:
+            continue
+        # dispatch may be a plain function or a wrapper; chase __wrapped__.
+        fn = getattr(dispatch, '__wrapped__', dispatch)
+        g = getattr(fn, '__globals__', None)
+        if g is not None and "StepGenerator" in g:
+            g["StepGenerator"] = counting_cls
+            patched.append(g)
+
+    def _restore():
+        for d in patched:
+            d["StepGenerator"] = _real
+    return _restore
+
+
 class TestTroAllocations(unittest.TestCase):
     """Test that TRO reduces StepGenerator allocations."""
 
     def setUp(self):
         self.db = Database()
-        self.sg_count = 0
-        self.orig_init = StepGenerator.__init__
-
-    def _start_counting(self):
-        """Start counting StepGenerator allocations."""
-        self.sg_count = 0
-        test = self
-
-        def counting_init(self, func, *args):
-            test.sg_count += 1
-            test.orig_init(self, func, *args)
-
-        StepGenerator.__init__ = counting_init
-
-    def _stop_counting(self):
-        """Stop counting and restore original init."""
-        StepGenerator.__init__ = self.orig_init
 
     def _compile(self, pred_cls, clauses):
         functor = pred_cls.__name__
@@ -458,22 +492,24 @@ class TestTroAllocations(unittest.TestCase):
         self._compile(TroCount, clauses)
 
         # Query with depth 100
-        self._start_counting()
+        counting_cls, counter = _make_counting_sg()
+        restore = _patch_sg(counting_cls, TroCount)
         trail = Trail()
         for _ in call(TroCount, 100, trail=trail):
             pass
-        self._stop_counting()
-        count_100 = self.sg_count
+        count_100 = counter[0]
+        restore()
 
         # Query with depth 1000
         self.db = Database()
         self._compile(TroCount, clauses)
-        self._start_counting()
+        counting_cls2, counter2 = _make_counting_sg()
+        restore2 = _patch_sg(counting_cls2, TroCount)
         trail2 = Trail()
         for _ in call(TroCount, 1000, trail=trail2):
             pass
-        self._stop_counting()
-        count_1000 = self.sg_count
+        count_1000 = counter2[0]
+        restore2()
 
         # With TRO, both should use the same number of StepGenerators
         # (just the top-level one from call()).
@@ -523,15 +559,16 @@ class TestTroAllocations(unittest.TestCase):
             pred_cls=NonTro,
         )
 
-        self._start_counting()
+        counting_cls, counter = _make_counting_sg()
+        restore = _patch_sg(counting_cls, NonTro, Helper)
         trail = Trail()
         for _ in call(NonTro, 10, trail=trail):
             pass
-        self._stop_counting()
+        restore()
 
         # Non-TRO: should use more than 1 StepGenerator (grows with depth).
-        self.assertGreater(self.sg_count, 10,
-                           f"Expected >10 StepGenerators for depth 10, got {self.sg_count}")
+        self.assertGreater(counter[0], 10,
+                           f"Expected >10 StepGenerators for depth 10, got {counter[0]}")
 
     def test_tro_with_passthrough_output(self):
         """TRO correctly binds output variable through passthrough."""
@@ -571,12 +608,13 @@ class TestTroAllocations(unittest.TestCase):
             self.fail("No solutions from accumulator sum")
 
         # Verify O(1) allocations
-        self._start_counting()
+        counting_cls, counter = _make_counting_sg()
+        restore = _patch_sg(counting_cls, Acc)
         trail2 = Trail()
         for _ in call(Acc, 500, 0, Var(), trail=trail2):
             pass
-        self._stop_counting()
-        self.assertEqual(self.sg_count, 1, f"Expected 1 SG, got {self.sg_count}")
+        restore()
+        self.assertEqual(counter[0], 1, f"Expected 1 SG, got {counter[0]}")
 
 
 # ── Integration with .clausal import hook ────────────────────────────────────
@@ -625,25 +663,19 @@ class TestTroImportHook(unittest.TestCase):
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         AccLength = mod.__dict__['AccLength']
 
-        sg_count = [0]
-        orig_init = StepGenerator.__init__
-
-        def counting_init(self, func, *args):
-            sg_count[0] += 1
-            orig_init(self, func, *args)
-
-        StepGenerator.__init__ = counting_init
+        counting_cls, counter = _make_counting_sg()
+        restore = _patch_sg(counting_cls, AccLength)
         try:
             trail = Trail()
             big_list = list(range(500))
             for _ in call(AccLength, big_list, 0, Var(), trail=trail):
                 pass
         finally:
-            StepGenerator.__init__ = orig_init
+            restore()
 
         # AccLength uses TRO: should be O(1) StepGenerators
-        self.assertEqual(sg_count[0], 1,
-                         f"Expected 1 SG for TRO AccLength, got {sg_count[0]}")
+        self.assertEqual(counter[0], 1,
+                         f"Expected 1 SG for TRO AccLength, got {counter[0]}")
 
 
 # ── Phase 2: Indexed TRO, StarUnpack, runtime ground-check ──────────────────
@@ -673,24 +705,18 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
         MyNthOf = mod.__dict__['MyNthOf']
 
-        sg_count = [0]
-        orig_init = StepGenerator.__init__
-
-        def counting_init(self, func, *args):
-            sg_count[0] += 1
-            orig_init(self, func, *args)
-
-        StepGenerator.__init__ = counting_init
+        counting_cls, counter = _make_counting_sg()
+        restore = _patch_sg(counting_cls, MyNthOf)
         try:
             trail = Trail()
             for _ in call(MyNthOf, 50, list(range(100)), Var(), trail=trail):
                 pass
         finally:
-            StepGenerator.__init__ = orig_init
+            restore()
 
         # Dispatch-level TRO: O(1) StepGenerators regardless of index depth.
-        self.assertEqual(sg_count[0], 1,
-                         f"Expected 1 SG for TRO MyNthOf, got {sg_count[0]}")
+        self.assertEqual(counter[0], 1,
+                         f"Expected 1 SG for TRO MyNthOf, got {counter[0]}")
 
 
 class TestTroRuntimeGroundCheck(unittest.TestCase):

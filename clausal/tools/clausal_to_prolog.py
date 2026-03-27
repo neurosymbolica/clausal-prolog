@@ -412,10 +412,18 @@ class _ClausalToProlog:
         name = call.func.id
 
         if name == "module":
+            if self.dialect.module_system == "none":
+                # GNU Prolog has no module system — skip module declarations
+                return None
             return self._convert_module_directive(call)
         if name == "import_from":
+            if self.dialect.module_system == "none":
+                # GNU Prolog: library predicates are built-in, no import needed
+                return None
             return self._convert_import_from(call)
         if name == "import_module":
+            if self.dialect.module_system == "none":
+                return None
             return self._convert_import_module(call)
         if name == "private":
             # Private is not emitted in Prolog (module exports handle visibility)
@@ -517,6 +525,13 @@ class _ClausalToProlog:
             directive = PDirective(PCompound(name, (specs[0],)))
         else:
             directive = PDirective(PCompound(name, (PList(tuple(specs)),)))
+
+        # GNU Prolog has no tabling support — emit warning comment
+        if name == "table" and not self.dialect.tabling_directive:
+            return PComment(
+                "WARNING: GNU Prolog does not support tabling.\n"
+                "   :- table directive skipped."
+            )
 
         # Scryer needs :- use_module(library(tabling)) before :- table
         if name == "table" and self.dialect.name == "scryer":
@@ -970,7 +985,7 @@ def _main() -> None:
     """Command-line interface for clausal → Prolog translation.
 
     Usage:
-        python -m clausal.tools.clausal_to_prolog input.clausal [-o output.pl] [--dialect swi|scryer|iso]
+        python -m clausal.tools.clausal_to_prolog input.clausal [-o output.pl] [--dialect swi|scryer|gprolog|iso]
         cat input.clausal | python -m clausal.tools.clausal_to_prolog [--dialect swi]
     """
     import argparse
@@ -989,12 +1004,13 @@ def _main() -> None:
         help="Output .pl file (writes stdout if omitted)",
     )
     parser.add_argument(
-        "--dialect", choices=["iso", "swi", "scryer"], default="iso",
+        "--dialect", choices=["iso", "swi", "scryer", "gprolog"], default="iso",
         help="Target Prolog dialect (default: iso)",
     )
     args = parser.parse_args()
 
-    dialect_map = {"iso": Dialect.iso, "swi": Dialect.swi, "scryer": Dialect.scryer}
+    dialect_map = {"iso": Dialect.iso, "swi": Dialect.swi, "scryer": Dialect.scryer,
+                   "gprolog": Dialect.gprolog}
     dialect = dialect_map[args.dialect]()
 
     if args.input is None:

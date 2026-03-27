@@ -50,10 +50,14 @@ class PrologTranslationError(Exception):
 def _build_reverse_builtin_map() -> dict[str, str]:
     """Build a mapping from Prolog builtin names to clausal names."""
     rev: dict[str, str] = {}
-    for clausal_name, (iso, swi, scryer) in BUILTIN_NAME_MAP.items():
-        for prolog_name in (iso, swi, scryer):
-            if prolog_name is not None and prolog_name not in rev:
+    for clausal_name, dialect_map in BUILTIN_NAME_MAP.items():
+        for prolog_name in dialect_map.values():
+            if prolog_name not in rev:
                 rev[prolog_name] = clausal_name
+        # Also map the clausal name itself (snake_case names may appear
+        # directly in Prolog sources and should not be pascal-cased).
+        if clausal_name not in rev:
+            rev[clausal_name] = clausal_name
     return rev
 
 

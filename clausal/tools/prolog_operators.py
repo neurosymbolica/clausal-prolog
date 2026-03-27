@@ -83,6 +83,13 @@ class OperatorTable:
         _load_scryer(t)
         return t
 
+    @classmethod
+    def gprolog_default(cls) -> OperatorTable:
+        t = cls()
+        _load_iso(t)
+        _load_gprolog(t)
+        return t
+
 
 def _specifier_kind(spec: str) -> str:
     if spec in ("fx", "fy"):
@@ -155,3 +162,18 @@ def _load_scryer(t: OperatorTable) -> None:
     d(700, "xfx", "#>")
     d(700, "xfx", "#=<")
     d(700, "xfx", "#>=")
+
+
+# ── GNU Prolog additions ──────────────────────────────────────────────
+
+def _load_gprolog(t: OperatorTable) -> None:
+    d = t._define_default
+    # FD constraint operators (built-in, no library import needed)
+    d(700, "xfx", "#=")
+    d(700, "xfx", "#\\=")
+    d(700, "xfx", "#<")
+    d(700, "xfx", "#>")
+    d(700, "xfx", "#=<")
+    d(700, "xfx", "#>=")
+    d(700, "xfx", "#=#")    # FD equality (reified)
+    d(700, "xfx", "#\\=#")  # FD disequality (reified)
