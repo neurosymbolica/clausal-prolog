@@ -2,13 +2,13 @@
 
 Clausal uses Python's parser, and so it conforms to Python's grammar. Like Prolog, it describes Horn Clauses - simple constructs that facilitate the representation of facts and rules, backed by strong mathematical formalisms, to facilitate high-level reasoning with useful guarantees.
 
-Clausal's uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. Clausal uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
+Clausal uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. Clausal uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
 
-> **Quick navigation:** [Variables](#variables) · [Operators](#operators) · [Clauses & Rules](#clauses-and-rules) · [Lists](#lists) · [Arithmetic](#arithmetic) · [Constraints](#constraints) · [DCGs](#dcgs) · [Cheatsheet](#cheatsheet)
+> **Quick navigation:** [Variables](#logic-variables) · [Escape operators](#escape-operators) · [Unification](#unification) · [Clauses](#horn-clauses) · [Lists](#lists) · [Arithmetic](#arithmetic-binding) · [Constraints](#comparison-operators-clpℤ) · [DCGs](#definite-clause-grammars--) · [Lambdas](#lambdas) · [Meta-predicates](#meta-predicates) · [Cheatsheet](#syntax-cheat-sheet)
 
 ---
 
-## Trailing comma rule:
+## Trailing comma rule
 
 **Expression statements ending in `,` are interpreted as logical terms (facts or goals).**
 
@@ -83,12 +83,13 @@ Inside a logical term:
 
 ```clausal
 # skip
-# These are equivalent:
-Atom is 'Atom',
-(x is not 2) is 'is not'(x, 2),
+# These are atoms:
+color(red),
+status(active),
+greeting("hello world"),
 ```
 
-Atoms that conflict with Python built-ins or that use non-identifier characters are written as strings: `'+'`, `'is not'`, `'max'`.
+Atoms that conflict with Python keywords or builtins are written as strings: `'not'`, `'is'`, `'max'`.
 
 ---
 
@@ -147,7 +148,7 @@ fib(N, RESULT) <- (
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
 - `(X == expr)` — posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ))
-- `(X := expr)` — eager evaluation; use only for Python interop (e.g., `X := ++len(S)`)
+- `(X := expr)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression and binds the result to `X` (Prolog's `is/2`)
 
 ---
 
@@ -256,11 +257,10 @@ test("fails") <- (not (X is 1 and X is 2))
 test("either") <- (X is 1 or X is 2)
 ```
 
-What if we just want to state a fact that always holds? We could do so by using a body that is always true, i.e. True, or with an empty body, that has nothing to do.
+What if we just want to state a fact that always holds? We could do so by using a body that is always true, i.e. `True`.
 
 ```clausal
 parent(tom, bob) <- True
-parent(bob, ann) <- ()
 ```
 
 But there is a shorthand for this. Facts (trivially true rules) are simply written without a body, only a trailing comma:
@@ -442,7 +442,9 @@ not goal,              # negation as failure
 
 ---
 
-## Immediate goals
+## Immediate goals *(planned)*
+
+> **Note:** This syntax is not yet implemented. Use the `Assert(goal)` and `Retract(term)` builtins directly.
 
 ```clausal
 # skip
@@ -908,9 +910,9 @@ Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](c
 
 ```clausal
 # skip
-X in 1..9,
+InDomain(X, 1, 9),
 AllDifferent([X, Y, Z]),
-X + Y #< Z,
+X + Y < Z,
 Label([X, Y, Z])
 ```
 
@@ -931,24 +933,6 @@ Three main reasons:
 The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely needed. Explicit is better than implicit.
 
 ---
-
-## Python functions as predicates
-
-Any Python function that contains logical terms is treated as a predicate. Python code within the body becomes embedded and backtrackable. An implicit `backtracking` flag allows cleanup on backtrack:
-
-```python
-def head(ARG1, ARG2):
-    goal(...),
-    if not backtracking:
-        # forward path: acquire resource, open file, etc.
-        ...
-    else:
-        # backtrack path: release resource, etc.
-        ...
-    another_goal(...)
-```
-
-This gives a symmetric and concise way to integrate Python side effects with Prolog-style backtracking. The programmer takes responsibility for correctness.
 
 ---
 
@@ -993,10 +977,11 @@ X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
+N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
 InDomain(X, 1, 10),    # post finite domain
 AllDifferent([X,Y,Z]), # pairwise disequality
 Label([X, Y, Z]),      # enumerate solutions (first-fail)
-Equivalent(X, Y),      # structural equality
+Equivalent(X, Y),      # structural equality (Prolog ==/2)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
@@ -1007,8 +992,8 @@ Rule >> ListDescription,   # DCG rule
 # Goals
 goal(A, B),            # compound goal
 not goal,              # negation as failure
-+ goal,                # immediate goal
-- term,                # retract
+Assert(goal),          # assert fact/rule at runtime
+Retract(term),         # retract first matching clause
 
 # Module qualification
 utils.Double(X, Y),    # qualified call (after -import_module(utils))
@@ -1032,7 +1017,7 @@ Call(GOAL, ARG1),                          # Call/2 (alias for CallGoal/2)
 # F-strings — logic variables auto-deref at search time
 Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
 Writeln(f"{X:.2f}"),                   # format specs work
-S := f"{X} and {Y}",                 # capture as string
+WriteToString(f"{X} and {Y}", S),    # capture as string
 
 # DCGs — >> defines grammar rules with difference lists
 greeting >> (["hello", "world"]),          # terminal sequence
@@ -1044,7 +1029,7 @@ not_a >> (not ["a"], [X]),                # negation
 phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
 phrase(digit(D), [3], REST),              # phrase/3 — partial parse
 
-# EDCGs — EXPERIMENTAL (directive parsing only, no end-to-end rewriting yet)
+# EDCGs — Extended DCGs (multiple named accumulators + passed args)
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})  # declare accumulator
 -edcg_pass(config)                                # declare passed arg
 -edcg_pred(inc, 0, [counter])                     # declare pred's hidden args
