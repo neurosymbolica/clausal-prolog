@@ -4,6 +4,7 @@
 
 ```clausal
 # skip
+clausal.scryer               embedded Scryer Prolog engine (PyO3/Rust, optional)
 clausal.modules              standard library modules (regex, log, …)
 clausal.logic.goal_expansion body-goal rewriting pass
 clausal.logic.compiler_v2    module-level compilation pipeline
@@ -22,6 +23,8 @@ clausal.import_hook          transparent import; module system; ModulesFinder
 ```
 
 The import hook handles both `.clausal` and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
+
+The optional `clausal.scryer` layer provides an embedded [Scryer Prolog](scryer.md) engine via PyO3. Programs are translated to Prolog by the existing translation pipeline and executed in-process with lazy iteration over solutions. See the [Scryer embedding docs](scryer.md) for details.
 
 ---
 

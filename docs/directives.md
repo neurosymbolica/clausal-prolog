@@ -218,6 +218,35 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ---
 
+## Backend Directive (planned)
+
+!!! note "Not yet implemented"
+    `-backend(scryer)` is planned for a future release. Currently, Scryer programs are loaded from Python via the `Scryer` class. See [Scryer Prolog Embedding](scryer.md).
+
+```clausal
+-backend(scryer)
+-module(queens, [Queens(N, QS)])
+
+Queens(N, QS) <- (
+    Length(QS, N),
+    Maplist(InDomain(1, N), QS),
+    SafeQueens(QS),
+    Labeling([], QS)
+)
+```
+
+When `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge `PredicateMeta` classes that look like native clausal predicates to callers but execute on Scryer under the hood:
+
+```python
+from queens import Queens
+from clausal import Var, Solutions
+
+QS = Var()
+*Queens(8, QS)   # drives Scryer, displays via Solutions
+```
+
+---
+
 ## Directive Processing
 
 Directives are processed during module loading:

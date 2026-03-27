@@ -1,0 +1,13 @@
+[package]
+name = "clausal-scryer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "_scryer_ext"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+scryer-prolog = { path = "../../scryer-prolog", default-features = false }
+ouroboros = "0.18"

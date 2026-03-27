@@ -399,6 +399,23 @@ python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_gol
 
 ---
 
+## Tier 3: Scryer Prolog embedding
+
+The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3. `.clausal` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
+
+```python
+from clausal.scryer import Scryer
+
+with Scryer() as s:
+    s.consult_file("clausal/examples/fibonacci.clausal")
+    s.query_one("fib(10, R).")
+    # {'R': 55}
+```
+
+See the [Scryer Prolog Embedding](scryer.md) documentation for the full API.
+
+---
+
 ## Roadmap
 
 - **Phase 1.1** (done): Prolog AST nodes, operator table, dialect config
