@@ -79,7 +79,7 @@ Clausal's equivalent of `:- table`.
 ### CLP(ℤ)
 
 ```clausal
--import_from(clpfd, [all_different, Labeling]),
+-import_from(clpfd, [all_different, labeling]),
 
 n_queens(N, QUEENS) <- (
     length(QUEENS, N),
@@ -90,7 +90,7 @@ n_queens(N, QUEENS) <- (
 ```
 
 The constraint operators (`#=`, `#<`, `#>`, `#<=`, `#>=`, `#!=`) are the same.
-`ins` works as you'd expect. `all_different`, `Labeling`, and other global
+`ins` works as you'd expect. `all_different`, `labeling`, and other global
 constraints are available as PascalCase builtins.
 
 ### DCGs

@@ -125,7 +125,7 @@ safe_sum(XS, TOTAL) <- (
 
 ## Call/N
 
-`Call/1..8` invokes a goal closure with 0–7 extra arguments. `CallGoal/1..8` are aliases.
+`call/1..8` invokes a goal closure with 0–7 extra arguments. `call_goal/1..8` are aliases.
 
 ```clausal
 apply(GOAL, X) <- Call(GOAL, X)

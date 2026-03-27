@@ -12,13 +12,13 @@ This package is organized into submodules by category:
 - arithmetic   — between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4
 - lists        — in_/2, append/3, length/2, sort/2, select/3, etc.
 - pairs        — pairs_keys_values/3, pairs_keys/2, pairs_values/2
-- higher_order — CallGoal/1..8, Call/1..8, maplist/2,3, include/3, exclude/3, foldl/4
+- higher_order — call_goal/1..8, call/1..8, maplist/2,3, include/3, exclude/3, foldl/4
 - io           — write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2
 - dcg          — phrase/2, phrase/3
 - control      — call_nth/2, count_all/2, setup_call_cleanup/3, call_cleanup/2, freeze/2, when/2
 - chars        — char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5
 - attributes   — put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2
-- translations_builtin — Translate/3
+- translations_builtin — translate/3
 """
 
 # Import registry infrastructure (must come first — provides decorators).

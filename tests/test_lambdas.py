@@ -254,7 +254,7 @@ class TestLambdaRuntime:
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
-        fn = _BUILTINS[("CallGoal", 1)]
+        fn = _BUILTINS[("call_goal", 1)]
 
         # Create a simple closure that succeeds once
         def my_goal(trail, k):
@@ -276,7 +276,7 @@ class TestLambdaRuntime:
                 yield None
             return; yield
 
-        fn = _BUILTINS[("CallGoal", 2)]
+        fn = _BUILTINS[("call_goal", 2)]
         results = list(_run_dispatch(fn, my_goal, 42, trail))
         assert len(results) == 1
         assert deref(result_var) == 42
@@ -293,7 +293,7 @@ class TestLambdaRuntime:
                 yield None
             return; yield
 
-        fn = _BUILTINS[("CallGoal", 3)]
+        fn = _BUILTINS[("call_goal", 3)]
         results = list(_run_dispatch(fn, my_goal, 3, 4, trail))
         assert len(results) == 1
         assert deref(result_var) == 7
@@ -307,7 +307,7 @@ class TestLambdaRuntime:
         def failing_goal(trail, k):
             return; yield
 
-        fn = _BUILTINS[("CallGoal", 1)]
+        fn = _BUILTINS[("call_goal", 1)]
         results = list(_run_dispatch(fn, failing_goal, trail))
         assert len(results) == 0
 
@@ -326,7 +326,7 @@ class TestLambdaRuntime:
                 trail.undo(mark)
             return; yield
 
-        fn = _BUILTINS[("CallGoal", 2)]
+        fn = _BUILTINS[("call_goal", 2)]
         results = list(_run_dispatch(fn, multi_goal, result_var, trail))
         assert len(results) == 3
 
@@ -339,7 +339,7 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_arithmetic_body(self):
         """Lambda with := arithmetic body works end-to-end."""
-        # Build: test(X_, Result_) <- CallGoal(lambda Y_: Result_ := Y_ + 1, X_)
+        # Build: test(X_, Result_) <- call_goal(lambda Y_: Result_ := Y_ + 1, X_)
         x = Var()
         result = Var()
 
@@ -348,7 +348,7 @@ class TestCompiledLambdaExecution:
             body=Evaluate(left=result, right=Add(left=LoadName(name="Y_"), right=1)),
         )
 
-        body = [Call(func=LoadName(name="CallGoal"), args=[lam, x], kwargs=[])]
+        body = [Call(func=LoadName(name="call_goal"), args=[lam, x], kwargs=[])]
         clause = Clause(
             head=Compound("test", (x, result)),
             body=body,
@@ -365,7 +365,7 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_captures_enclosing_var(self):
         """Lambda captures a variable from the enclosing clause."""
-        # Build: test(Z_, Result_) <- CallGoal(lambda X_: Result_ := X_ + Z_, 10)
+        # Build: test(Z_, Result_) <- call_goal(lambda X_: Result_ := X_ + Z_, 10)
         z = Var()
         result = Var()
 
@@ -374,7 +374,7 @@ class TestCompiledLambdaExecution:
             body=Evaluate(left=result, right=Add(left=LoadName(name="X_"), right=z)),
         )
 
-        body = [Call(func=LoadName(name="CallGoal"), args=[lam, 10], kwargs=[])]
+        body = [Call(func=LoadName(name="call_goal"), args=[lam, 10], kwargs=[])]
         clause = Clause(
             head=Compound("test", (z, result)),
             body=body,
@@ -391,14 +391,14 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_with_unification_body(self):
         """Lambda body using 'is' (unification) works."""
-        # test(R_) <- CallGoal(lambda X_: X_ is 42, R_)
+        # test(R_) <- call_goal(lambda X_: X_ is 42, R_)
         r = Var()
         lam = sa.Lambda(
             params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
             body=Unify(left=LoadName(name="X_"), right=42),
         )
 
-        body = [Call(func=LoadName(name="CallGoal"), args=[lam, r], kwargs=[])]
+        body = [Call(func=LoadName(name="call_goal"), args=[lam, r], kwargs=[])]
         clause = Clause(
             head=Compound("test_unify", (r,)),
             body=body,
@@ -413,13 +413,13 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_body_fails(self):
         """Lambda with failing body produces no solutions."""
-        # test() <- CallGoal(lambda X_: X_ is not X_, 42)
+        # test() <- call_goal(lambda X_: X_ is not X_, 42)
         lam = sa.Lambda(
             params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
             body=DoesNotUnify(left=LoadName(name="X_"), right=LoadName(name="X_")),
         )
 
-        body = [Call(func=LoadName(name="CallGoal"), args=[lam, 42], kwargs=[])]
+        body = [Call(func=LoadName(name="call_goal"), args=[lam, 42], kwargs=[])]
         clause = Clause(
             head=Compound("test_fail", ()),
             body=body,
@@ -433,7 +433,7 @@ class TestCompiledLambdaExecution:
 
     def test_lambda_body_conjunction(self):
         """Lambda body with And (conjunction) works."""
-        # test(R_) <- CallGoal(lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2), 5, R_)
+        # test(R_) <- call_goal(lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2), 5, R_)
         t = Var()
         r = Var()
         lam = sa.Lambda(
@@ -447,7 +447,7 @@ class TestCompiledLambdaExecution:
             ),
         )
 
-        body = [Call(func=LoadName(name="CallGoal"), args=[lam, 5, r], kwargs=[])]
+        body = [Call(func=LoadName(name="call_goal"), args=[lam, 5, r], kwargs=[])]
         clause = Clause(
             head=Compound("test_conj", (r,)),
             body=body,
@@ -482,7 +482,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(lambda_test, [apply_val/2])\n"
             "\n"
-            "apply_val(_result, _val) <- CallGoal((_x <- (_result is _x)), _val)\n"
+            "apply_val(_result, _val) <- call_goal((_x <- (_result is _x)), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -496,7 +496,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(capture_test, [bind_z/2])\n"
             "\n"
-            "bind_z(_z, _result) <- CallGoal((_x <- (_result is _x)), _z)\n"
+            "bind_z(_z, _result) <- call_goal((_x <- (_result is _x)), _z)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -510,7 +510,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(conj_test, [bind_pair/3])\n"
             "\n"
-            "bind_pair(_a, _b, _result) <- CallGoal(((_x, _y) <- (_x is _a and _y is _b and _result is [_x, _y])), _a, _b)\n"
+            "bind_pair(_a, _b, _result) <- call_goal(((_x, _y) <- (_x is _a and _y is _b and _result is [_x, _y])), _a, _b)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -524,7 +524,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(zero_arg_test, [run_goal/1])\n"
             "\n"
-            "run_goal(_result) <- CallGoal((() <- (_result is 42)))\n"
+            "run_goal(_result) <- call_goal((() <- (_result is 42)))\n"
         )
 
         from clausal.import_hook import _load_module
@@ -544,7 +544,7 @@ class TestLambdaImport:
             "\n"
             "double(_x, _y) <- (_y := _x + _x)\n"
             "\n"
-            "apply_double(_val, _result) <- CallGoal((_x <- (double(_x, _result))), _val)\n"
+            "apply_double(_val, _result) <- call_goal((_x <- (double(_x, _result))), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -562,7 +562,7 @@ class TestLambdaImport:
             'color("green"),\n'
             'color("blue"),\n'
             "\n"
-            "get_color(_c) <- CallGoal((_x <- (color(_x) and _c is _x)), _)\n"
+            "get_color(_c) <- call_goal((_x <- (color(_x) and _c is _x)), _)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -580,7 +580,7 @@ class TestLambdaImport:
         clausal_file.write_text(
             "-module(py_lambda, [test/1])\n"
             "\n"
-            "test(_r) <- CallGoal((lambda _x: _r is _x), 1)\n"
+            "test(_r) <- call_goal((lambda _x: _r is _x), 1)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -663,7 +663,7 @@ class TestArrowLambdaCompiled:
         from clausal.logic.database import Clause, Database
         from clausal.logic.compiler import compile_predicate_trampoline
 
-        # Build: apply_val(_result, _val) <- CallGoal((_x <- (_result is _x)), _val)
+        # Build: apply_val(_result, _val) <- call_goal((_x <- (_result is _x)), _val)
         # We test via .clausal file to get the full pipeline
         pass  # covered by integration tests below
 
@@ -673,7 +673,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_arith, [apply_inc/2])\n"
             "\n"
-            "apply_inc(_val, _result) <- CallGoal((_x <- (_result := _x + 1)), _val)\n"
+            "apply_inc(_val, _result) <- call_goal((_x <- (_result := _x + 1)), _val)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -691,7 +691,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_two, [apply_add/3])\n"
             "\n"
-            "apply_add(_a, _b, _result) <- CallGoal(((_x, _y) <- (_result := _x + _y)), _a, _b)\n"
+            "apply_add(_a, _b, _result) <- call_goal(((_x, _y) <- (_result := _x + _y)), _a, _b)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -709,7 +709,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_zero, [run_goal/1])\n"
             "\n"
-            "run_goal(_result) <- CallGoal((() <- (_result is 99)))\n"
+            "run_goal(_result) <- call_goal((() <- (_result is 99)))\n"
         )
 
         from clausal.import_hook import _load_module
@@ -727,7 +727,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_capture, [add_z/2])\n"
             "\n"
-            "add_z(_z, _result) <- CallGoal((_x <- (_result := _x + _z)), 10)\n"
+            "add_z(_z, _result) <- call_goal((_x <- (_result := _x + _z)), 10)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -745,7 +745,7 @@ class TestArrowLambdaCompiled:
         clausal_file.write_text(
             "-module(arrow_conj, [transform/2])\n"
             "\n"
-            "transform(_val, _result) <- CallGoal(((_x, _y) <- ((_t := _x + 1) and (_y := _t * 2))), _val, _result)\n"
+            "transform(_val, _result) <- call_goal(((_x, _y) <- ((_t := _x + 1) and (_y := _t * 2))), _val, _result)\n"
         )
 
         from clausal.import_hook import _load_module
@@ -765,7 +765,7 @@ class TestArrowLambdaCompiled:
             "\n"
             "double(_x, _y) <- (_y := _x + _x)\n"
             "\n"
-            "apply_double(_val, _result) <- CallGoal((_x <- (double(_x, _result))), _val)\n"
+            "apply_double(_val, _result) <- call_goal((_x <- (double(_x, _result))), _val)\n"
         )
 
         from clausal.import_hook import _load_module

@@ -1,6 +1,6 @@
-"""Translate/3 builtin — produce a locale-aware string representation of a term.
+"""translate/3 builtin — produce a locale-aware string representation of a term.
 
-Translations are a display/surface layer only.  ``Translate/3`` does NOT
+Translations are a display/surface layer only.  ``translate/3`` does NOT
 create new term structures; it renders the term as a string with functor
 and atom names replaced per the translation table.
 """
@@ -12,9 +12,9 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.terms import term_str, TermStyle
 
 
-@_builtin("Translate", 3)
+@_builtin("translate", 3)
 def _translate__3(lang, term, translated_string, trail, k):
-    """Translate(Lang, Term, String) — render *Term* as a string in *Lang*.
+    """translate(Lang, Term, String) — render *Term* as a string in *Lang*.
 
     *Lang* must be ground (an atom or string naming the target language).
     *Term* must be ground (or partially ground — variables render as ``_``).

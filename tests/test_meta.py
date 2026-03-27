@@ -232,7 +232,7 @@ class TestCallN:
         """call(Goal) where Goal is a lambda-like callable."""
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("Call", x, module=mod)]
+        results = [deref(x) for _ in call("call", x, module=mod)]
         # call/1 with unbound goal — not callable, should produce no solutions
         assert results == []
 
@@ -245,7 +245,7 @@ class TestCallN:
             called_with.append((a1, a2, a3))
             yield None
             return; yield
-        results = list(call("CallGoal", my_goal, 10, 20, 30, module=mod))
+        results = list(call("call_goal", my_goal, 10, 20, 30, module=mod))
         assert len(results) == 1
         assert called_with == [(10, 20, 30)]
 
@@ -257,7 +257,7 @@ class TestCallN:
             called_with.append(a1)
             yield None
             return; yield
-        results = list(call("Call", my_goal, 42, module=mod))
+        results = list(call("call", my_goal, 42, module=mod))
         assert len(results) == 1
         assert called_with == [42]
 
@@ -269,7 +269,7 @@ class TestCallN:
             called_with.append((a1, a2, a3, a4))
             yield None
             return; yield
-        results = list(call("Call", my_goal, 1, 2, 3, 4, module=mod))
+        results = list(call("call", my_goal, 1, 2, 3, 4, module=mod))
         assert len(results) == 1
         assert called_with == [(1, 2, 3, 4)]
 

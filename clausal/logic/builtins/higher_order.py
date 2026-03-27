@@ -1,4 +1,4 @@
-"""Higher-order builtins: CallGoal/1..8, Call/1..8, maplist/2,3,
+"""Higher-order builtins: call_goal/1..8, call/1..8, maplist/2,3,
 include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,
 take_while/3, drop_while/3, span/4, group_by/3, sort_by/3,
 max_by/3, min_by/3, filter_map/3."""
@@ -38,15 +38,15 @@ def _make_call_goal_trampoline(extra_n: int):
 
 for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
     _cg_arity = _n + 1
-    _BUILTINS[("CallGoal", _cg_arity)] = _make_call_goal_trampoline(_n)
-    _BUILTIN_FIELDS[("CallGoal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
+    _BUILTINS[("call_goal", _cg_arity)] = _make_call_goal_trampoline(_n)
+    _BUILTIN_FIELDS[("call_goal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
 
-# Call/1..8 — aliases: Call(Goal, A1, ...) = CallGoal(Goal, A1, ...)
+# call/1..8 — aliases: call(Goal, A1, ...) = call_goal(Goal, A1, ...)
 for _n in range(1, 9):
-    _key = ("CallGoal", _n)
+    _key = ("call_goal", _n)
     if _key in _BUILTINS:
-        _BUILTINS[("Call", _n)] = _BUILTINS[_key]
-        _BUILTIN_FIELDS[("Call", _n)] = _BUILTIN_FIELDS[_key]
+        _BUILTINS[("call", _n)] = _BUILTINS[_key]
+        _BUILTIN_FIELDS[("call", _n)] = _BUILTIN_FIELDS[_key]
 
 del _n, _cg_arity, _key  # clean up loop variables
 

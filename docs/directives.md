@@ -231,7 +231,7 @@ Queens(N, QS) <- (
     length(QS, N),
     Maplist(in_domain(1, N), QS),
     SafeQueens(QS),
-    Labeling([], QS)
+    labeling([], QS)
 )
 ```
 

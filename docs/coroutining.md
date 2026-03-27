@@ -174,7 +174,7 @@ Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guar
 ```clausal
 # skip
 SafeQuery(GOAL) <- call_cleanup(
-    CallGoal(GOAL),
+    call_goal(GOAL),
     writeln("query finished")
 )
 ```

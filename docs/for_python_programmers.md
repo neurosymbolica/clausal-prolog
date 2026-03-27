@@ -268,7 +268,7 @@ in_ Python, you'd reach for a solver library or write custom search. in_
 Clausal, you describe the constraints and let CLP(ℤ) search:
 
 ```clausal
--import_from(clpfd, [all_different, Labeling]),
+-import_from(clpfd, [all_different, labeling]),
 
 send_more_money([S, E, N, D, M, O, R, Y]) <- (
     [S, E, N, D, M, O, R, Y] ins 0..9,
@@ -277,7 +277,7 @@ send_more_money([S, E, N, D, M, O, R, Y]) <- (
                 1000*S + 100*E + 10*N + D
               + 1000*M + 100*O + 10*R + E
     #= 10000*M + 1000*O + 100*N + 10*E + Y,
-    Labeling([leftmost], [S, E, N, D, M, O, R, Y])
+    labeling([leftmost], [S, E, N, D, M, O, R, Y])
 )
 ```
 

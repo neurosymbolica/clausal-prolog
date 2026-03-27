@@ -202,7 +202,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     ```clausal
 # skip
     safe_run(GOAL, R) <- (
-        Catch(CallGoal(GOAL), _),
+        Catch(call_goal(GOAL), _),
         R is "ok"
     )
     ```

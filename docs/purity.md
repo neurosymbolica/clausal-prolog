@@ -255,7 +255,7 @@ This separation is a major attraction of logic programming, and it only works
 within the pure monotonic core. Consider the N-Queens problem:
 
 ```clausal
--import_from(clpfd, [all_different, Labeling]),
+-import_from(clpfd, [all_different, labeling]),
 
 # Logic: describe what must hold
 n_queens(N, QUEENS) <- (
@@ -268,7 +268,7 @@ n_queens(N, QUEENS) <- (
 # Control: choose how to search
 Test("8 queens") <- (
     n_queens(8, QUEENS),
-    Labeling([ff], QUEENS)
+    labeling([ff], QUEENS)
 )
 ```
 

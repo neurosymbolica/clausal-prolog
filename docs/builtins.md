@@ -75,7 +75,7 @@ Notation in signature lines:
 | [Control Flow](#control-flow) | once, Not, If/3, throw/1, Catch/2, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
 | [Coroutining](#coroutining) | freeze/2, when/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
-| [Higher-Order Call](#higher-order-call) | Call/1..8, CallGoal/1..8 |
+| [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0 |
@@ -398,7 +398,7 @@ Query runtime statistics. With Key bound, looks up a specific stat. With Key unb
 
 ## Higher-Order Call
 
-### `Call/1..8`
+### `call/1..8`
 ```clausal
 # skip
 Call(+Goal)
@@ -407,7 +407,7 @@ Call(+Goal, +A1, +A2)
 ...
 Call(+Goal, +A1, ..., +A7)
 ```
-Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended. Aliases for `CallGoal/1..8`.
+Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended. Aliases for `call_goal/1..8`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1532` (alias registration)
@@ -416,14 +416,14 @@ Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended.
 
 ---
 
-### `CallGoal/1`, `CallGoal/2`, `CallGoal/3`
+### `call_goal/1`, `call_goal/2`, `call_goal/3`
 ```clausal
 # skip
-CallGoal(+Goal)
-CallGoal(+Goal, +A1)
-CallGoal(+Goal, +A1, +A2)
+call_goal(+Goal)
+call_goal(+Goal, +A1)
+call_goal(+Goal, +A1, +A2)
 ```
-Core implementation of higher-order call. `Goal` must be a callable (lambda or `_get_dispatch()` object). `CallGoal/4..8` are generated via `_make_call_goal_n`.
+Core implementation of higher-order call. `Goal` must be a callable (lambda or `_get_dispatch()` object). `call_goal/4..8` are generated via `_make_call_goal_n`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1479`
@@ -3055,7 +3055,7 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/list_util.clausal` | `take/3`, `drop/3`, `split_at/4`, `zip_/3`, `replicate/3`, `split_with/3`, `take_while/3`, `drop_while/3`, `span/4`, `group_by/3`, `sort_by/3`, `max_by/3`, `min_by/3`, `filter_map/3` |
     | `tests/fixtures/builtins_keywords.clausal` | `vary/3`, `extend/3`, `unbound_keys/2`, `signature/3` |
     | `tests/fixtures/builtins_dif.clausal` | `dif/2`, `eq/3`, `dif_t/3` |
-    | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
+    | `tests/fixtures/builtins_call.clausal` | `Call/N`, `call_goal/N` |
     | `tests/fixtures/coroutining.clausal` | `call_nth/2`, `count_all/2`, `setup_call_cleanup/3`, `call_cleanup/2`, `freeze/2`, `when/2` |
     | `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
     | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |

@@ -214,7 +214,7 @@ schedule(TASKS) <- (
 # Search: how to find solutions (separate from the model)
 solve(TASKS) <- (
     schedule(TASKS),
-    Labeling([ff], TASKS)
+    labeling([ff], TASKS)
 )
 ```
 

@@ -475,22 +475,22 @@ Lambdas are anonymous clauses — goal closures passed as arguments to higher-or
 
 ```clausal
 # One-arg lambda — X is a parameter, RESULT is captured
-apply(RESULT, VAL) <- CallGoal((X <- (RESULT == X + 1)), VAL)
+apply(RESULT, VAL) <- call_goal((X <- (RESULT == X + 1)), VAL)
 
 # Two-arg lambda
-apply_add(A, B, R) <- CallGoal(((X, Y) <- (R == X + Y)), A, B)
+apply_add(A, B, R) <- call_goal(((X, Y) <- (R == X + Y)), A, B)
 
 # Zero-arg lambda
-run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
+run_goal(RESULT) <- call_goal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z, R) <- CallGoal((X <- (R == X + Z)), 10)
+add_z(Z, R) <- call_goal((X <- (R == X + Z)), 10)
 
 # Conjunction body
-transform(R) <- CallGoal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
+transform(R) <- call_goal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 ```
 
-Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `CallGoal/1..8` builtins (or `Call/1..8`).
+Parameters are lambda arguments; captured variables share the enclosing clause's `Var` objects. Body-local variables (first appearing inside the lambda) get fresh `Var()` allocations. Lambdas are called via the `call_goal/1..8` builtins (or `call/1..8`).
 
 See [Lambdas](lambdas.md) for the full design, compilation details, and examples.
 
@@ -872,15 +872,15 @@ forall(in_(X, [2, -1, 6]), X > 0),  # fails
 
 ### Call/N
 
-`Call/N` invokes a goal closure with extra arguments. It is an alias for `CallGoal/N`:
+`Call/N` invokes a goal closure with extra arguments. It is an alias for `call_goal/N`:
 
 ```clausal
 # skip
-CallGoal((X <- (X > 0)), 5),        # CallGoal/2: succeeds
+call_goal((X <- (X > 0)), 5),        # call_goal/2: succeeds
 Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 ```
 
-`Call/1` through `Call/8` are available (as are `CallGoal/1` through `CallGoal/8`).
+`call/1` through `call/8` are available (as are `call_goal/1` through `call_goal/8`).
 
 ### [Higher-order list predicates](higher_order.md)
 
@@ -1006,15 +1006,15 @@ utils.Double(X, Y),    # qualified call (after -import_module(utils))
 ~~python_expr          # capture as AST node
 
 # Lambdas (anonymous clauses)
-CallGoal((X <- (R == X + 1)), 5)                             # R = 6
-CallGoal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
+call_goal((X <- (R == X + 1)), 5)                             # R = 6
+call_goal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
 
 # Meta-predicates
 findall(X, in_(X, [1,2,3]), BAG),          # BAG = [1,2,3]
 bagof(X, in_(X, LIST), BAG),              # fails if LIST empty
 setof(X, in_(X, XS), BAG),               # deduplicates
 forall(in_(X, NS), X > 0),               # universal quantification
-Call(GOAL, ARG1),                          # Call/2 (alias for CallGoal/2)
+Call(GOAL, ARG1),                          # Call/2 (alias for call_goal/2)
 
 # F-strings — logic variables auto-deref at search time
 writeln(f"Hello, {NAME}!"),            # prints bound value of NAME

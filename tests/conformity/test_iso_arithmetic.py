@@ -30,7 +30,7 @@ from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import (
     Evaluate, Add, Sub, Mult, FloorDiv, Mod, Pow, Negate,
     Lt, LtE, Gt, GtE,
-    Call as CallGoal, LoadName,
+    Call, LoadName,
 )
 
 
@@ -259,13 +259,13 @@ class TestArithmeticBuiltins:
     def test_between_check_mode(self):
         """between(1, 5, 3) succeeds."""
         mod = Module("test")
-        goal = CallGoal(func=LoadName(name="between"), args=[1, 5, 3], kwargs=[])
+        goal = Call(func=LoadName(name="between"), args=[1, 5, 3], kwargs=[])
         assert once(goal, mod) is not None
 
     def test_between_check_out_of_range(self):
         """between(1, 5, 6) fails."""
         mod = Module("test")
-        goal = CallGoal(func=LoadName(name="between"), args=[1, 5, 6], kwargs=[])
+        goal = Call(func=LoadName(name="between"), args=[1, 5, 6], kwargs=[])
         assert once(goal, mod) is None
 
     def test_abs(self):

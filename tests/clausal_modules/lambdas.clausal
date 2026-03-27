@@ -3,31 +3,31 @@
 # Arrow syntax, variable capture, conjunction bodies, predicate calls
 
 # ApplyVal/2 — basic lambda: identity via call_goal
-ApplyVal(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
+ApplyVal(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # AddOne/2 — lambda with arithmetic
-AddOne(X, Y) <- CallGoal((V <- (Y := V + 1)), X)
+AddOne(X, Y) <- call_goal((V <- (Y := V + 1)), X)
 
 # AddZ/3 — captured variable from enclosing clause
-AddZ(Z, X, RESULT) <- CallGoal((V <- (RESULT := V + Z)), X)
+AddZ(Z, X, RESULT) <- call_goal((V <- (RESULT := V + Z)), X)
 
 # DoubleVal/2 — two-arg lambda
-DoubleVal(X, Y) <- CallGoal(((A, B) <- (B := A * 2)), X, Y)
+DoubleVal(X, Y) <- call_goal(((A, B) <- (B := A * 2)), X, Y)
 
 # ZeroArg/1 — zero-arg lambda
-ZeroArg(RESULT) <- CallGoal((() <- (RESULT is 42)))
+ZeroArg(RESULT) <- call_goal((() <- (RESULT is 42)))
 
 # Transform/2 — lambda with conjunction body
-Transform(X, Y) <- CallGoal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
+Transform(X, Y) <- call_goal(((V, R) <- ((T := V + 1) and (R := T * 2))), X, Y)
 
 # CaptureTwo/4 — captures two variables from enclosing clause
 CaptureTwo(A, B, X, RESULT) <- (
-    CallGoal((V <- (RESULT := V + A + B)), X)
+    call_goal((V <- (RESULT := V + A + B)), X)
 )
 
 # ApplyPred/2 — lambda calling a predicate defined in same module
 Helper(X, Y) <- (Y := X * 10)
-ApplyPred(X, Y) <- CallGoal((V <- (Helper(V, Y))), X)
+ApplyPred(X, Y) <- call_goal((V <- (Helper(V, Y))), X)
 
 # AllColors/1 — findall with multi-solution predicate
 Color("red"),

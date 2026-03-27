@@ -24,10 +24,10 @@ Test("keep evens") <- (
 
 ## Calling Goals
 
-### Call/1..8 and CallGoal/1..8
+### call/1..8 and call_goal/1..8
 
 `Call(Goal)` invokes a goal. `Call(Goal, A1, ..., AN)` appends extra arguments.
-`CallGoal` is an alias.
+`call_goal` is an alias.
 
 ```clausal
 Test("call/1") <- Call((X <- (X == 42)), 42)

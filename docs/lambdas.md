@@ -2,7 +2,7 @@
 
 Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
 
-The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`CallGoal` builtins).
+The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`call_goal` builtins).
 
 ---
 
@@ -12,16 +12,16 @@ Arrow lambdas use `head <- body` — the same syntax as clause definitions, maki
 
 ```clausal
 # One-arg lambda
-apply_val(RESULT, VAL) <- CallGoal((X <- (RESULT is X)), VAL)
+apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # Two-arg lambda with arithmetic
-test(R) <- CallGoal(((X, Y) <- (Y == X + 1)), 5, R)
+test(R) <- call_goal(((X, Y) <- (Y == X + 1)), 5, R)
 
 # Zero-arg lambda
-run_goal(RESULT) <- CallGoal((() <- (RESULT is 42)))
+run_goal(RESULT) <- call_goal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
-add_z(Z, R) <- CallGoal((X <- (R == X + Z)), 10)
+add_z(Z, R) <- call_goal((X <- (R == X + Z)), 10)
 ```
 
 The head is a variable (single param) or tuple of variables (multiple params). The body is any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
@@ -31,7 +31,7 @@ The head is a variable (single param) or tuple of variables (multiple params). T
 Multiple goals are separated with `,` inside `(...)`:
 
 ```clausal
-transform(R) <- CallGoal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
+transform(R) <- call_goal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 ```
 
 ### Why arrow syntax?
@@ -43,7 +43,7 @@ Arrow lambdas are homoiconic — they look like the clause definitions they repr
 double(X, Y) <- (Y == X + X)
 
 # Anonymous clause (expression level) — same syntax
-apply_double(V, R) <- CallGoal((X <- (double(X, R))), V)
+apply_double(V, R) <- call_goal((X <- (double(X, R))), V)
 ```
 
 Python's `lambda` syntax is not supported in `.clausal` files.
@@ -57,7 +57,7 @@ Lambdas capture variables from the enclosing clause implicitly, using Python's n
 ```clausal
 # Z and RESULT are captured from the enclosing clause head.
 # X is a lambda parameter.
-captured_add(Z, RESULT) <- CallGoal((X <- (RESULT == X + Z)), 10)
+captured_add(Z, RESULT) <- call_goal((X <- (RESULT == X + Z)), 10)
 ```
 
 when queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT == 10 + 3`.
@@ -80,32 +80,32 @@ If a lambda parameter has the same name as an enclosing variable, the parameter 
 
 ```clausal
 # X in the lambda body refers to the parameter, not the clause-head X
-test(X) <- CallGoal((X <- (X is 42)), _)
+test(X) <- call_goal((X <- (X is 42)), _)
 ```
 
 ---
 
 ## Calling lambdas
 
-Lambdas are invoked with the `CallGoal` builtin, which takes a goal closure and optional extra arguments:
+Lambdas are invoked with the `call_goal` builtin, which takes a goal closure and optional extra arguments:
 
 | Builtin | Usage |
 |---|---|
-| `CallGoal/1` | `CallGoal(Goal)` — call a zero-arg closure |
-| `CallGoal/2` | `CallGoal(Goal, Arg1)` — call with one extra arg |
-| `CallGoal/3` | `CallGoal(Goal, Arg1, Arg2)` — call with two extra args |
-| `CallGoal/4..8` | Higher arities, same pattern |
-| `Call/1..8` | Aliases for `CallGoal/1..8` |
+| `call_goal/1` | `call_goal(Goal)` — call a zero-arg closure |
+| `call_goal/2` | `call_goal(Goal, Arg1)` — call with one extra arg |
+| `call_goal/3` | `call_goal(Goal, Arg1, Arg2)` — call with two extra args |
+| `call_goal/4..8` | Higher arities, same pattern |
+| `call/1..8` | Aliases for `call_goal/1..8` |
 
 The extra arguments are passed as positional parameters to the lambda:
 
 ```clausal
 # skip
 # lambda receives X = 5
-CallGoal((X <- (X > 0)), 5)
+call_goal((X <- (X > 0)), 5)
 
 # lambda receives X = 5, Y = RESULT
-CallGoal(((X, Y) <- (Y == X * 2)), 5, RESULT)
+call_goal(((X, Y) <- (Y == X * 2)), 5, RESULT)
 ```
 
 ### Multi-solution lambdas
@@ -117,7 +117,7 @@ color("red"),
 color("green"),
 color("blue"),
 
-get_color(C) <- CallGoal((X <- (color(X), C is X)), _)
+get_color(C) <- call_goal((X <- (color(X), C is X)), _)
 ```
 
 Querying `get_color(C)` yields three solutions: `C = "red"`, `C = "green"`, `C = "blue"`.
@@ -131,7 +131,7 @@ Lambda bodies can call user-defined predicates. Internally, this works through t
 ```clausal
 double(X, Y) <- (Y == X + X)
 
-apply_double(VAL, RESULT) <- CallGoal((X <- (double(X, RESULT))), VAL)
+apply_double(VAL, RESULT) <- call_goal((X <- (double(X, RESULT))), VAL)
 ```
 
 This is transparent — no special syntax is needed. The bridge (`_tramp_call`) handles the protocol mismatch automatically.
@@ -178,10 +178,10 @@ when a lambda appears as an argument to a predicate call, the compiler **hoists*
 `_` in a lambda body is the anonymous variable — each occurrence is a fresh `Var()`:
 
 ```clausal
-get_color(C) <- CallGoal((X <- (color(X), C is X)), _)
+get_color(C) <- call_goal((X <- (color(X), C is X)), _)
 ```
 
-Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
+Here `_` as the second arg to `call_goal` is a fresh throwaway variable.
 
 ---
 
@@ -276,7 +276,7 @@ All higher-order list predicates use **committed choice** — they take the firs
 
     - **TermTransformer**: arrow syntax produces Lambda nodes, param generates LoadName (not Var), captures enclosing Var, body vars don't leak, nested lambda capture, anonymous `_`, Python lambda rejected
     - **Compiler**: produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
-    - **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
+    - **Runtime**: `call_goal/1..8` and `call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
     - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `==` arithmetic
     - **Higher-order builtins**: maplist/2 (all succeed, one fails, empty list, non-list, non-callable), maplist/3 (double, empty, fail mid-list), include/3 (filter positive, all/none match, empty), exclude/3 (mirror of include), foldl/4 (sum, product, empty, fail mid-fold)

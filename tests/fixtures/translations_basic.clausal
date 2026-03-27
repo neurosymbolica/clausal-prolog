@@ -15,12 +15,12 @@ Greeting(hello, "world"),
 Greeting("Mike", "hi"),
 
 Test("translate produces string") <- (
-    Translate(th, Greeting(hello, "world"), STRING),
+    translate(th, Greeting(hello, "world"), STRING),
     is_str(STRING)
 )
 
 Test("translate produces nonempty") <- (
-    Translate(th, Greeting(hello, "world"), STRING),
+    translate(th, Greeting(hello, "world"), STRING),
     atom_length(STRING, LENGTH),
     LENGTH > 0
 )

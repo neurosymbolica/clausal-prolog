@@ -2,7 +2,7 @@
 
 Stores mappings between English predicate/atom names and their translations
 in other languages.  Registered via the ``-translations(lang, {...})`` directive
-and queried by the ``Translate/3`` builtin and ``term_str(locale=...)`` display.
+and queried by the ``translate/3`` builtin and ``term_str(locale=...)`` display.
 
 The registry is a module-level singleton (like ``_BUILTINS`` in builtins._registry).
 """
