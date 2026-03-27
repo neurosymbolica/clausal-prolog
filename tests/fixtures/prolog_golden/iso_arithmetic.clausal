@@ -6,7 +6,7 @@ Double(X, Y) <- (Y := X * 2)
 
 Square(X, Y) <- (Y := X * X)
 
-TriangleNumber(N, T) <- (T := prolog.TruncDiv(N * N + 1, 2))
+TriangleNumber(N, T) <- (T := prolog.TruncDiv(N * (N + 1), 2))
 
 Test('addition: 1+2=3') <- (1 + 2 == 3)
 
@@ -22,7 +22,7 @@ Test('power: 2**3=8') <- (2 ** 3 == 8)
 
 Test('negation: -3') <- (-3 == -3)
 
-Test('nested: (2+3)*4=20') <- (2 + 3 * 4 == 20)
+Test('nested: (2+3)*4=20') <- ((2 + 3) * 4 == 20)
 
 Test('float addition: 1.5+2.5=4.0') <- (1.5 + 2.5 == 4.0)
 

@@ -101,7 +101,7 @@ _INFIX_MAP = {
 # The ``prolog`` module (clausal.modules.prolog) provides ISO-compatible
 # implementations (truncation toward zero, not floor).
 _PROLOG_QUALIFIED_OPS = {
-    "//":  "TruncDiv",   # ISO truncate-div vs Python floor-div
+    "//":  "TruncDiv",   # ISO truncate-div (toward zero) vs Python // (floor)
     "mod": "TruncMod",   # ISO mod (sign follows dividend) vs Python %
     "rem": "Rem",        # ISO remainder
 }
@@ -268,6 +268,9 @@ class _PrologToClausal:
 
     def _emit_goal(self, goal: PTerm) -> str:
         """Emit a single goal in body context."""
+        # Cut: ! → Cut()
+        if isinstance(goal, PAtom) and goal.name == "!":
+            return "Cut()"
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
@@ -579,7 +582,11 @@ class _PrologToClausal:
             right = self._emit_expr(args[1])
             return f"{left} := {right}"
 
-        # Arithmetic/comparison operators
+        # Arithmetic operators (precedence-aware)
+        if functor in self._EXPR_PREC and len(args) == 2:
+            return self._emit_expr(term)
+
+        # Comparison operators
         if functor in _INFIX_MAP and len(args) == 2:
             clausal_op = _INFIX_MAP[functor]
             left = self._emit_term(args[0])
@@ -608,8 +615,17 @@ class _PrologToClausal:
         arg_strs = ", ".join(self._emit_term(a) for a in args)
         return f"{name}({arg_strs})"
 
-    def _emit_expr(self, term: PTerm) -> str:
-        """Emit an arithmetic expression."""
+    # Python operator precedence (higher number = tighter binding).
+    _EXPR_PREC: dict[str, int] = {
+        "xor": 1, "\\/": 2, "/\\": 3,
+        "<<": 4, ">>": 4,
+        "+": 5, "-": 5,
+        "*": 6, "/": 6,
+        "**": 8,
+    }
+
+    def _emit_expr(self, term: PTerm, parent_prec: int = 0) -> str:
+        """Emit an arithmetic expression with precedence-aware parenthesization."""
         if isinstance(term, PNumber):
             return str(term.value) if isinstance(term.value, int) else repr(term.value)
         if isinstance(term, PVar):
@@ -617,21 +633,25 @@ class _PrologToClausal:
         if isinstance(term, PAtom):
             return term.name
         if isinstance(term, PCompound):
-            # ISO operators with different semantics → prolog.'//'(X, Y)
+            # ISO operators with different semantics → prolog.Op(X, Y)
             if len(term.args) == 2 and term.functor in _PROLOG_QUALIFIED_OPS:
                 left = self._emit_expr(term.args[0])
                 right = self._emit_expr(term.args[1])
                 op_name = _PROLOG_QUALIFIED_OPS[term.functor]
                 return f"prolog.{op_name}({left}, {right})"
             # Arithmetic binary operators
-            if len(term.args) == 2 and term.functor in ("+", "-", "*", "/", "**", "/\\", "\\/", "xor", "<<", ">>"):
-                left = self._emit_expr(term.args[0])
-                right = self._emit_expr(term.args[1])
+            if len(term.args) == 2 and term.functor in self._EXPR_PREC:
+                my_prec = self._EXPR_PREC[term.functor]
+                left = self._emit_expr(term.args[0], my_prec)
+                right = self._emit_expr(term.args[1], my_prec + 1)
                 op = _INFIX_MAP.get(term.functor, term.functor)
-                return f"{left} {op} {right}"
+                result = f"{left} {op} {right}"
+                if my_prec < parent_prec:
+                    result = f"({result})"
+                return result
             # Arithmetic unary operators
             if len(term.args) == 1 and term.functor in ("-", "+", "\\"):
-                operand = self._emit_expr(term.args[0])
+                operand = self._emit_expr(term.args[0], 9)
                 op = _PREFIX_MAP.get(term.functor, term.functor)
                 return f"{op}{operand}"
             # Arithmetic functions

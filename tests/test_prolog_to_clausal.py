@@ -230,16 +230,16 @@ greeting --> ["hello", "world"].
         result = prolog_to_clausal(src)
         assert ">>" in result
 
-    def test_cut_rejected(self):
+    def test_cut_translated(self):
         src = "foo(X) :- bar(X), !."
-        with pytest.raises(PrologTranslationError, match="Cut"):
-            prolog_to_clausal(src)
+        result = prolog_to_clausal(src)
+        assert "Cut()" in result
 
-    def test_cut_fact_rejected(self):
-        """Even a bare cut as a goal in a clause body is rejected."""
+    def test_cut_fact_translated(self):
+        """A bare cut as a goal in a clause body is translated."""
         src = "foo :- !."
-        with pytest.raises(PrologTranslationError, match="Cut"):
-            prolog_to_clausal(src)
+        result = prolog_to_clausal(src)
+        assert "Cut()" in result
 
     def test_op_directive_as_comment(self):
         src = ":- op(700, xfx, <>)."

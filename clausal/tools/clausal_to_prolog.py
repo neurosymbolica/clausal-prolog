@@ -664,11 +664,26 @@ class _ClausalToProlog:
         # Atoms: lowercase or PascalCase predicate name
         return PAtom(resolve_name(name, self.dialect))
 
+    # Reverse mapping from clausal qualified names (e.g. prolog.TruncDiv)
+    # back to Prolog infix operators.  These are the operators that
+    # prolog_to_clausal emits as ``prolog.<Name>(X, Y)`` because their
+    # ISO semantics differ from Python's.
+    _QUALIFIED_OP_REVERSE: dict[tuple[str, str], str] = {
+        ("prolog", "TruncDiv"): "//",
+        ("prolog", "TruncMod"): "mod",
+        ("prolog", "Rem"):      "rem",
+    }
+
     def _convert_call(self, node: python_ast.Call) -> PTerm:
         """Convert a function call to a PCompound."""
         if isinstance(node.func, python_ast.Name):
             functor = resolve_name(node.func.id, self.dialect)
         elif isinstance(node.func, python_ast.Attribute):
+            # Check for qualified operator calls (e.g. prolog.TruncDiv)
+            # that should be emitted as infix operators.
+            op = self._try_qualified_op(node.func, node.args)
+            if op is not None:
+                return op
             # Qualified call: mod.pred(...)
             functor = self._qualified_name(node.func)
         else:
@@ -680,6 +695,21 @@ class _ClausalToProlog:
             args.append(self._convert_expr(kw.value))
         args = tuple(args)
         return PCompound(functor, args)
+
+    def _try_qualified_op(
+        self, attr: python_ast.Attribute, args: list,
+    ) -> PTerm | None:
+        """If *attr* is a qualified operator (e.g. ``prolog.TruncDiv``),
+        return the corresponding Prolog infix ``PCompound``; else ``None``."""
+        if not isinstance(attr.value, python_ast.Name) or len(args) != 2:
+            return None
+        key = (attr.value.id, attr.attr)
+        op_str = self._QUALIFIED_OP_REVERSE.get(key)
+        if op_str is None:
+            return None
+        left = self._convert_expr(args[0])
+        right = self._convert_expr(args[1])
+        return PCompound(op_str, (left, right))
 
     def _qualified_name(self, attr: python_ast.Attribute) -> str:
         """Get a qualified name from an Attribute node."""

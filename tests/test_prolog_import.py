@@ -330,13 +330,13 @@ class TestPriority:
 class TestErrors:
     """Translation errors surface as SyntaxError."""
 
-    def test_cut_raises_syntax_error(self, tmp_path):
+    def test_cut_loads_successfully(self, tmp_path):
         path = _write_pl(tmp_path, "_pl_test_cut", """\
             first(X, [X|_]) :- !.
             first(X, [_|T]) :- first(X, T).
         """)
-        with pytest.raises(SyntaxError, match="(?i)cut"):
-            _load_prolog_module("_pl_test_cut", path)
+        mod = _load_prolog_module("_pl_test_cut", path)
+        assert "First" in mod.__dict__
 
     def test_if_then_else_raises_syntax_error(self, tmp_path):
         path = _write_pl(tmp_path, "_pl_test_ite", """\

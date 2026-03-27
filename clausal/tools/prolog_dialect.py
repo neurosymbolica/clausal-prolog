@@ -239,6 +239,7 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "retractall":    {"iso": "retractall"},
     "catch_error":   {"iso": "catch"},
     "once":          {"iso": "once"},
+    "Cut":           {"iso": "!"},
     "freeze":        {"iso": "freeze"},
     "when":          {"iso": "when"},
     "call_nth":      {"iso": "call_nth"},
