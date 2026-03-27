@@ -11,6 +11,7 @@ The implementation lives in `clausal/templating/term_rewriting.py` (source-level
     Clausal and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
+    Prolog DCGs (`-->`) can be [imported directly](importing_prolog.md) — they translate to Clausal's `>>` syntax automatically.
 
 ---
 

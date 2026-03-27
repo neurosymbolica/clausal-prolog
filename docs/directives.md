@@ -53,7 +53,7 @@ Import all exported predicates from a module:
 
 Imported predicates are accessed via qualified names: `utils.Double(X, Y)`.
 
-See [Import System](import.md) for full details.
+See [Import System](import.md) for full details. For importing Prolog `.pl` files directly, see [Importing Prolog](importing_prolog.md).
 
 ---
 

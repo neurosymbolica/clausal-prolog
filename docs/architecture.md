@@ -21,7 +21,7 @@ clausal.simple_ast           term representation (homoiconic)
 clausal.import_hook          transparent import; module system; ModulesFinder
 ```
 
-Each layer builds on the one below. Python code and logic code can interact at any layer.
+The import hook handles both `.clausal` and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
 
 ---
 

@@ -126,6 +126,7 @@ for the full feature set.
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |
 | [Import System](import.md) | `.clausal` file loading, module directives, qualified calls |
+| [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
 | [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |

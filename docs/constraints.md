@@ -7,6 +7,7 @@ Clausal supports constraint logic programming through attributed variables. The 
     Clausal and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
+    Prolog constraint programs using `library(clpfd)` or `library(clpz)` can be [imported directly](importing_prolog.md).
 
 Two constraint solvers are built in:
 

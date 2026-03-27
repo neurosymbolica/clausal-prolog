@@ -7,6 +7,7 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
     Clausal and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
+    You can also [import Prolog `.pl` files directly](importing_prolog.md) without rewriting them.
 
 ---
 

@@ -74,7 +74,7 @@ Why ALL-CAPS works well:
 - Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
 - ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
 - Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
-- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural.
+- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural. See [Prolog Translation](prolog_translation.md) for the full variable naming mapping.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Mission
 
-Clausal aims to provide logic programming in Python as tightly integrated as possible — not as a front-end to an external Prolog, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM.
+Clausal aims to provide logic programming in Python as tightly integrated as possible — not as a front-end to an external Prolog, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM. Existing Prolog programs can be [imported directly](importing_prolog.md) — translated, compiled, and cached on the fly.
 
 The inspiration is heavily drawn from existing Prologs, particularly the insights of Marcus Triska (Power of Prolog), Richard O'Keefe, and Ulrich Neumerkel. Clausal does not claim to be a Prolog and does not follow ISO Prolog syntax, because those conventions are sufficiently alien to Python programmers that they would add unnecessary obstacles. Instead, clausal brings the spirit of Prolog to Python — using Python semantics for operators and keywords, retaining familiar Python concepts, and leveraging Python's runtime as much as possible.
 

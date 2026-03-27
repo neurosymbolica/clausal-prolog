@@ -62,7 +62,7 @@ clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
 clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
 ```
 
-This means `.clausal` tests and Python tests can run together in one `pytest` invocation.
+This means `.clausal` tests and Python tests can run together in one `pytest` invocation. Imported Prolog `.pl` files with `Test/1` clauses can also be tested — see [Importing Prolog](importing_prolog.md).
 
 ## Running Python tests
 

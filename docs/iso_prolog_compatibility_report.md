@@ -3,6 +3,8 @@
 *Prepared for discussion with Markus Triska, 2026-03-25.*
 *Updated 2026-03-25 after discussion with Markus.*
 
+*For practical instructions on importing and running Prolog programs, see [Importing Prolog Code](importing_prolog.md).*
+
 ## Executive Summary
 
 Clausal has a comprehensive bidirectional Prolog translator (tokenizer, Pratt

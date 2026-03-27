@@ -11,6 +11,7 @@ required.
     Clausal and Prolog syntax may slightly differ — for example, Clausal uses
     `ALLCAPS` variables, `<-` instead of `:-`, and Python-style lists. If you are
     comparing with Prolog resources, keep these differences in mind.
+    If you have existing `.pl` files, you can [import them directly](importing_prolog.md).
 
 ---
 
