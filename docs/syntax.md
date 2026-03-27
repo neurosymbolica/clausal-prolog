@@ -68,11 +68,13 @@ A single `_` is the anonymous variable — it never stores a value, and unificat
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-Why not titlecase (the Prolog convention)?
-- Python programmers associate titlecase with class names — static, global, noun-like. This is actually close to how atoms behave, not variables.
+This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, titlecase names are conventionally class names — and Clausal uses them for predicates and functors (e.g. `FindAll`, `In`, `Length`). Using titlecase for both variables and predicates would create ambiguity: is `Foo(Bar)` calling predicate `Foo` with atom `Bar`, or with variable `Bar`? ALL-CAPS resolves this cleanly — `FindAll(X, In(X, LIST), BAG)` is unambiguous.
+
+Why ALL-CAPS works well:
+- Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
 - ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
-- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural.
 - Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
+- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural.
 
 ---
 
