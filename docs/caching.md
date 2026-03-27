@@ -2,7 +2,7 @@
 
 ## Overview
 
-When a `.clausal` file is imported, two expensive operations occur:
+when a `.clausal` file is imported, two expensive operations occur:
 
 1. **Parsing and AST transformation** — the source is parsed into a Python AST and rewritten by `EmbedTransformer` (converting `head <- body` syntax, trailing-comma facts, logic variables, and functor declarations into valid Python code).
 
@@ -23,7 +23,7 @@ Both are addressed:
 | `source_to_code(data, path)` | Parse source + `EmbedTransformer` + `compile()` — the cached transform |
 | `get_data(path)` | Read file bytes (source or `.pyc`) |
 | `path_stats(path)` | Return `{'mtime': ..., 'size': ...}` for cache validation |
-| `set_data(path, data)` | Write `.pyc` file, creating `__pycache__/` if needed |
+| `set_data(path, data)` | write `.pyc` file, creating `__pycache__/` if needed |
 | `get_code(fullname)` | Inherited from `SourceLoader` — handles the full cache lookup/write cycle |
 
 ### Cache lifecycle

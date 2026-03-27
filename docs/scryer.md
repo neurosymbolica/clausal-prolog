@@ -12,7 +12,7 @@ By embedding Scryer in-process, clausal gives you access to a production-quality
 
 ---
 
-## When to use Scryer vs the native engine
+## when to use Scryer vs the native engine
 
 Clausal's **native engine** is tightly integrated with Python: predicates are Python classes, variables are Python objects, unification and backtracking use Python's own runtime. This is the right choice for most programs.
 

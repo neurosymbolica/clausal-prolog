@@ -2,8 +2,8 @@
 
 ## Idea
 
-When the compiler can prove that the original list or dict is never used again
-after a construction operation (e.g. append, DictPut, DictMerge, set union),
+when the compiler can prove that the original list or dict is never used again
+after a construction operation (e.g. append, dict_put, dict_merge, set union),
 emit a Python-level **mutation** instead of creating a new object.
 
 ## Motivation
@@ -18,11 +18,11 @@ we can safely mutate it. This is the same insight behind:
 
 ## Scope
 
-- **Lists**: `Append(OLD, [X], NEW)` where OLD is dead after this goal
+- **Lists**: `append(OLD, [X], NEW)` where OLD is dead after this goal
   → compile to `old.append(x); new = old` instead of `new = old + [x]`
-- **Dicts**: `DictPut(KEY, VALUE, OLD, NEW)` where OLD is dead
+- **Dicts**: `dict_put(KEY, VALUE, OLD, NEW)` where OLD is dead
   → compile to `old[key] = value; new = old` instead of `new = {**old, key: value}`
-- **Sets**: `SetUnion(OLD, {X}, NEW)` where OLD is dead
+- **Sets**: `set_union(OLD, {X}, NEW)` where OLD is dead
   → compile to `old.add(x); new = old`
 
 ## Requirements

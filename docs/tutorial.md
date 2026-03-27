@@ -48,7 +48,7 @@ This prints every greeting in turn: `[{'X': 'hello'}, {'X': 'hi'}, {'X': 'hey th
 
 ??? tip "Thinking relationally"
 
-    In Clausal, every predicate defines a **relation** — it describes when
+    in_ Clausal, every predicate defines a **relation** — it describes when
     something is true about its arguments. This is different from functions,
     which map inputs to outputs. A single relation can often be used in
     multiple directions: to compute, to verify, to generate. See
@@ -94,7 +94,7 @@ Result: `[{'X': 'dave'}, {'X': 'eve'}]` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-When you call `clausal.query(...)` you get a **generator** that yields one solution
+when you call `clausal.query(...)` you get a **generator** that yields one solution
 dictionary per answer. Clausal finds all clauses whose heads unify with the goal —
 these represent logical alternatives. If a condition in the body does not hold,
 Clausal explores the remaining alternatives.
@@ -116,7 +116,7 @@ sibling(A, B) <- (
 )
 ```
 
-`A` and `B` are logic variables — they stand for any term at all. When Clausal
+`A` and `B` are logic variables — they stand for any term at all. when Clausal
 searches for clauses whose heads unify with a goal, variables are bound to make
 the terms identical: if `A` is unbound and unifies with `"bob"`, then `A`
 becomes `"bob"` for the rest of that branch.
@@ -136,7 +136,7 @@ Unification finds the most general way to make two terms identical. Both terms
 can contain variables, and variables on **either side** can be bound. This
 bidirectionality is what makes relations work in all directions.
 
-When you query `parent("alice", CHILD)`, Clausal searches for clauses whose
+when you query `parent("alice", CHILD)`, Clausal searches for clauses whose
 heads unify with the goal. The clause `parent("alice", "bob")` unifies when
 CHILD is bound to `"bob"`. No assignment, no mutation — each branch of the
 search has its own consistent set of bindings.
@@ -157,21 +157,21 @@ rest(TAIL, [_, *TAIL]),
 `[HEAD, *TAIL]` unifies with any non-empty list, binding `HEAD` to the first
 element and `TAIL` to the remaining elements.
 
-### In/2 and Append/3
+### in_/2 and append/3
 
-These are built-in predicates. `In(X, LIST)` describes the membership relation
+These are built-in predicates. `in_(X, LIST)` describes the membership relation
 — it holds for each element of `LIST` in turn:
 
 ```clausal
-contains_three(LIST) <- In(3, LIST)
+contains_three(LIST) <- in_(3, LIST)
 ```
 
-`Append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
+`append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
 with `SUFFIX` gives `WHOLE`. You can use it forwards (split a list) or backwards
 (build one):
 
 ```clausal
-last(ELEMENT, LIST) <- Append(_, [ELEMENT], LIST)
+last(ELEMENT, LIST) <- append(_, [ELEMENT], LIST)
 ```
 
 ### Describing list relations in clause heads
@@ -269,7 +269,7 @@ results = [clausal.once(fizzbuzz(n, X))["X"] for n in range(1, 16)]
 safe_to_delete(FILE) <- (not important(FILE))
 ```
 
-### When to use it
+### when to use it
 
 Negation as failure is appropriate when you want to express "there is no evidence
 that...". It works correctly when all the relevant facts are already known — the
@@ -284,7 +284,7 @@ bachelor(PERSON) <- (
 
 If `married("alice")` is not in the database, `not married("alice")` succeeds.
 
-### When not to use it
+### when not to use it
 
 Avoid `not goal` when the variables inside `goal` are unbound. This query:
 

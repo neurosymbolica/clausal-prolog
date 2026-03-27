@@ -144,7 +144,7 @@ _gen = fib._get_dispatch()(self, N1, F1, trail)
 
 ### Module globals as the namespace
 
-The compiler receives the module's globals dict. When compiling a predicate, all other
+The compiler receives the module's globals dict. when compiling a predicate, all other
 predicates referenced in the body must be findable in that dict. The compiler injects
 them into the compiled function's own globals.
 
@@ -232,7 +232,7 @@ Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
 
 **File: `clausal/logic/compiler.py`**
 
-`_install` now accepts optional `pred_cls` parameter. When provided (a PredicateMeta
+`_install` now accepts optional `pred_cls` parameter. when provided (a PredicateMeta
 class), sets `pred_cls._dispatch_fn` and `pred_cls._lazy_recompile` in addition to the
 existing `table.dispatch_fn` path. PredicateMeta class is auto-detected from
 `base_globals` (via `_collect_head_types` which finds it from clause head instances).
@@ -261,7 +261,7 @@ Zero regressions (1166 passed, same 16 pre-existing list edge case failures).
   first (using `_get_dispatch()`), falls back to `module.db.table_for()` for
   test modules and builtins that don't have module_dict.
 - `_compile_as_query(goal, module)`: now accepts `Module` instead of `Database`.
-  When `module.module_dict` is available, merges it into `globals_` so predicate
+  when `module.module_dict` is available, merges it into `globals_` so predicate
   names resolve from the module namespace (cross-predicate resolution without
   `_db` string lookup).
 - `solve()`: passes `module` (not `module.db`) to `_compile_as_query`.
@@ -362,7 +362,7 @@ Zero regressions (1167 passed, same 16 pre-existing failures).
 - `_retract_factory`: reads `db.module_dict`; after removing from `tbl._clauses`,
   also removes matching clause (by identity) from `pred_cls._clauses`; checks locking
 
-When `db.module_dict` is None (e.g. test modules), behavior is identical to before.
+when `db.module_dict` is None (e.g. test modules), behavior is identical to before.
 Zero regressions (1167 passed, same 16 pre-existing failures).
 
 #### Phase 8d: Import hook uses `pred_cls` as authoritative source ✅
@@ -456,7 +456,7 @@ The `signature` builtin should read `pred_cls._signature` directly.
 
 **File: `clausal/import_hook.py`**
 
-Once `_install` targets PredicateMeta only and builtins use class methods:
+once `_install` targets PredicateMeta only and builtins use class methods:
 - `_define_predicate`: assert clause directly to `pred_cls._assertz`,
   set `pred_cls._signature`, compile from `pred_cls._clauses`
 - `_assert_fact`: same pattern

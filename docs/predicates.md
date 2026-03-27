@@ -52,13 +52,13 @@ Read this as: "C is a warm color if `color(C, warm)` holds."
 
 ### Multi-Goal Bodies
 
-When a rule has multiple goals, they are comma-separated and wrapped in parentheses:
+when a rule has multiple goals, they are comma-separated and wrapped in parentheses:
 
 ```clausal
 friend_of_friend(A, C) <- (
     friend(A, B),
     friend(B, C),
-    Dif(A, C)
+    dif(A, C)
 )
 ```
 
@@ -96,7 +96,7 @@ The condition `N > 0` ensures the first clause only holds for positive numbers. 
 
 ### Clause Ordering
 
-When multiple clause heads unify with the goal, Clausal explores them in source order:
+when multiple clause heads unify with the goal, Clausal explores them in source order:
 
 ```clausal
 maximum(X, Y, X) <- (X >= Y)
@@ -239,7 +239,7 @@ Files are loaded via Python's [import system](import.md). `import my_module` loa
 
 ### PredicateMeta
 
-Every predicate is a Python class with `PredicateMeta` as its metaclass. In `.clausal` files this is generated automatically from clause heads. For programmatic use:
+Every predicate is a Python class with `PredicateMeta` as its metaclass. in_ `.clausal` files this is generated automatically from clause heads. For programmatic use:
 
 ```python
 from clausal.logic.predicate import PredicateMeta
@@ -268,7 +268,7 @@ foo = make_predicate("foo", ["a", "b"])
 
 ### Locking
 
-Predicates are locked after module loading — `Assert`/`Retract` raise `RuntimeError`. Use `-dynamic(pred/arity)` to allow runtime modification. See [Directives](directives.md) and [Database Operations](database_ops.md).
+Predicates are locked after module loading — `assertz`/`retract` raise `RuntimeError`. Use `-dynamic(pred/arity)` to allow runtime modification. See [Directives](directives.md) and [Database Operations](database_ops.md).
 
 ---
 

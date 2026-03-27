@@ -1,18 +1,18 @@
-"""Character/string builtins: CharType/2, CharCode/2, UpcaseAtom/2,
-DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3,
-SubAtom/5, NumberChars/2, NumberCodes/2.
+"""Character/string builtins: char_type/2, char_code/2, upcase_atom/2,
+downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3,
+sub_atom/5, number_chars/2, number_codes/2.
 
 These predicates are *relations* — they participate in unification and
-backtracking (e.g. AtomConcat(A, B, "hello") enumerates splits, CharType(C,
+backtracking (e.g. atom_concat(A, B, "hello") enumerates splits, char_type(C,
 digit) enumerates digits).  Pure Python string methods can't do this.
 
-Since strings now behave as character lists, the list predicates (Append/3,
-Length/2, In/2, etc.) work on strings directly.  For concatenation, splitting,
+Since strings now behave as character lists, the list predicates (append/3,
+length/2, in_/2, etc.) work on strings directly.  For concatenation, splitting,
 length, and membership, prefer the list predicates — they work uniformly on
 both strings and lists.  The predicates here remain useful for ISO
-compatibility, explicit type conversion (AtomChars/2), code-point operations
-(AtomCodes/2, CharCode/2), character classification (CharType/2), and case
-conversion (UpcaseAtom/2, DowncaseAtom/2).
+compatibility, explicit type conversion (atom_chars/2), code-point operations
+(atom_codes/2, char_code/2), character classification (char_type/2), and case
+conversion (upcase_atom/2, downcase_atom/2).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _atom_to_str(val: Any) -> str | None:
     return None
 
 
-# ── CharType/2 ───────────────────────────────────────────────────────────────
+# ── char_type/2 ───────────────────────────────────────────────────────────────
 
 _CHAR_TYPES = {
     "alpha": str.isalpha,
@@ -67,9 +67,9 @@ for _t in _CHAR_TYPES:
     _TYPE_TO_CHARS[_t] = [c for c in _ASCII_CHARS if _CHAR_TYPES[_t](c)]
 
 
-@_builtin("CharType", 2)
+@_builtin("char_type", 2)
 def _char_type__2(char, type_, trail, k):
-    """CharType(Char, Type) — character classification as a relation.
+    """char_type(Char, Type) — character classification as a relation.
 
     Both bound → test.  Char bound → enumerate types.  Type bound → enumerate
     chars.  Both unbound → instantiation_error.
@@ -114,11 +114,11 @@ def _char_type__2(char, type_, trail, k):
             trail.undo(mark)
 
 
-# ── CharCode/2 ──────────────────────────────────────────────────────────────
+# ── char_code/2 ──────────────────────────────────────────────────────────────
 
-@_builtin("CharCode", 2)
+@_builtin("char_code", 2)
 def _char_code__2(char, code, trail, k):
-    """CharCode(Char, Code) — bidirectional char ↔ integer code point.
+    """char_code(Char, Code) — bidirectional char ↔ integer code point.
 
     Char bound → unify Code with ord(Char).  Code bound → unify Char with
     chr(Code).  Both bound → test equality.  Both unbound → instantiation_error.
@@ -148,11 +148,11 @@ def _char_code__2(char, code, trail, k):
         trail.undo(mark)
 
 
-# ── UpcaseAtom/2, DowncaseAtom/2 ────────────────────────────────────────────
+# ── upcase_atom/2, downcase_atom/2 ────────────────────────────────────────────
 
-@_builtin("UpcaseAtom", 2)
+@_builtin("upcase_atom", 2)
 def _upcase_atom__2(atom, upper, trail, k):
-    """UpcaseAtom(Atom, Upper) — unify Upper with uppercase version of Atom."""
+    """upcase_atom(Atom, Upper) — unify Upper with uppercase version of Atom."""
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("upcase_atom/2"))
@@ -165,9 +165,9 @@ def _upcase_atom__2(atom, upper, trail, k):
     trail.undo(mark)
 
 
-@_builtin("DowncaseAtom", 2)
+@_builtin("downcase_atom", 2)
 def _downcase_atom__2(atom, lower, trail, k):
-    """DowncaseAtom(Atom, Lower) — unify Lower with lowercase version of Atom."""
+    """downcase_atom(Atom, Lower) — unify Lower with lowercase version of Atom."""
     va = deref(atom)
     if is_var(va):
         raise LogicException(instantiation_error("downcase_atom/2"))
@@ -180,14 +180,14 @@ def _downcase_atom__2(atom, lower, trail, k):
     trail.undo(mark)
 
 
-# ── AtomLength/2 ────────────────────────────────────────────────────────────
+# ── atom_length/2 ────────────────────────────────────────────────────────────
 
-@_builtin("AtomLength", 2)
+@_builtin("atom_length", 2)
 def _atom_length__2(atom, length, trail, k):
-    """AtomLength(Atom, Length) — unify Length with the length of Atom.
+    """atom_length(Atom, length) — unify length with the length of Atom.
 
-    Note: Length/2 now accepts strings directly, so prefer ``Length("hello", N)``
-    for new code.  AtomLength is kept for ISO compatibility.
+    Note: length/2 now accepts strings directly, so prefer ``length("hello", N)``
+    for new code.  atom_length is kept for ISO compatibility.
     """
     va = deref(atom)
     if is_var(va):
@@ -201,11 +201,11 @@ def _atom_length__2(atom, length, trail, k):
     trail.undo(mark)
 
 
-# ── AtomChars/2 ─────────────────────────────────────────────────────────────
+# ── atom_chars/2 ─────────────────────────────────────────────────────────────
 
-@_builtin("AtomChars", 2)
+@_builtin("atom_chars", 2)
 def _atom_chars__2(atom, chars, trail, k):
-    """AtomChars(Atom, Chars) — bidirectional atom ↔ char-list conversion.
+    """atom_chars(Atom, Chars) — bidirectional atom ↔ char-list conversion.
 
     Atom bound → unify Chars with list(Atom).
     Chars bound (list of length-1 strings) → unify Atom with "".join(Chars).
@@ -244,11 +244,11 @@ def _atom_chars__2(atom, chars, trail, k):
         raise LogicException(instantiation_error("atom_chars/2"))
 
 
-# ── AtomCodes/2 ─────────────────────────────────────────────────────────────
+# ── atom_codes/2 ─────────────────────────────────────────────────────────────
 
-@_builtin("AtomCodes", 2)
+@_builtin("atom_codes", 2)
 def _atom_codes__2(atom, codes, trail, k):
-    """AtomCodes(Atom, Codes) — bidirectional atom ↔ code-point-list conversion.
+    """atom_codes(Atom, Codes) — bidirectional atom ↔ code-point-list conversion.
 
     Atom bound → unify Codes with [ord(c) for c in Atom].
     Codes bound (list of ints) → unify Atom with "".join(chr(c) for c in Codes).
@@ -285,19 +285,19 @@ def _atom_codes__2(atom, codes, trail, k):
         raise LogicException(instantiation_error("atom_codes/2"))
 
 
-# ── AtomConcat/3 ─────────────────────────────────────────────────────────────
+# ── atom_concat/3 ─────────────────────────────────────────────────────────────
 
-@_builtin("AtomConcat", 3)
+@_builtin("atom_concat", 3)
 def _atom_concat__3(a, b, c, trail, k):
-    """AtomConcat(A, B, C) — string concatenation as a relation.
+    """atom_concat(A, B, C) — string concatenation as a relation.
 
     A+B bound → forward concat.  C bound + A or B bound → prefix/suffix check.
     C bound + both A,B unbound → enumerate all splits.
 
-    Note: Append/3 now accepts strings directly, so prefer
-    ``Append("hel", "lo", X)`` for new code.  AtomConcat is kept for ISO
+    Note: append/3 now accepts strings directly, so prefer
+    ``append("hel", "lo", X)`` for new code.  atom_concat is kept for ISO
     compatibility and for cases where string-typed results are required
-    (Append may return a list when inputs are mixed).
+    (append may return a list when inputs are mixed).
     """
     va, vb, vc = deref(a), deref(b), deref(c)
     sa = _atom_to_str(va) if not is_var(va) else None
@@ -339,14 +339,14 @@ def _atom_concat__3(a, b, c, trail, k):
         raise LogicException(instantiation_error("atom_concat/3"))
 
 
-# ── SubAtom/5 ────────────────────────────────────────────────────────────────
+# ── sub_atom/5 ────────────────────────────────────────────────────────────────
 
-@_builtin("SubAtom", 5)
+@_builtin("sub_atom", 5)
 def _sub_atom__5(atom, before, length, after, sub, trail, k):
-    """SubAtom(Atom, Before, Length, After, Sub) — substring relation.
+    """sub_atom(Atom, Before, length, After, Sub) — substring relation.
 
     Atom must be bound.  Relates Atom to its substrings with position info:
-    Before + Length + After = len(Atom), Sub = Atom[Before:Before+Length].
+    Before + length + After = len(Atom), Sub = Atom[Before:Before+length].
     """
     va = deref(atom)
     if is_var(va):
@@ -376,8 +376,8 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
             start = pos + 1
         return
 
-    # General case: enumerate (Before, Length) pairs.
-    # Narrow ranges when Before or Length is bound.
+    # General case: enumerate (Before, length) pairs.
+    # Narrow ranges when Before or length is bound.
     vb = deref(before)
     vl = deref(length)
 
@@ -404,11 +404,11 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
             trail.undo(mark)
 
 
-# ── NumberChars/2 ──────────────────────────────────────────────────────────────
+# ── number_chars/2 ──────────────────────────────────────────────────────────────
 
-@_builtin("NumberChars", 2)
+@_builtin("number_chars", 2)
 def _number_chars__2(number, chars, trail, k):
-    """NumberChars(Number, Chars) — bidirectional number ↔ char-list conversion.
+    """number_chars(Number, Chars) — bidirectional number ↔ char-list conversion.
 
     Number bound → unify Chars with list(str(Number)).
     Chars bound (list of single-char strings) → parse as int or float.
@@ -453,11 +453,11 @@ def _number_chars__2(number, chars, trail, k):
         raise LogicException(instantiation_error("number_chars/2"))
 
 
-# ── NumberCodes/2 ──────────────────────────────────────────────────────────────
+# ── number_codes/2 ──────────────────────────────────────────────────────────────
 
-@_builtin("NumberCodes", 2)
+@_builtin("number_codes", 2)
 def _number_codes__2(number, codes, trail, k):
-    """NumberCodes(Number, Codes) — bidirectional number ↔ code-point-list.
+    """number_codes(Number, Codes) — bidirectional number ↔ code-point-list.
 
     Number bound → unify Codes with [ord(c) for c in str(Number)].
     Codes bound (list of ints) → join as chars, parse as int or float.

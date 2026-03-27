@@ -32,7 +32,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
     Unify as Is, Lt, LtE, Gt, GtE, ArithNeq, ArithEq,
-    In, NotIn,
+    in_, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,
     Compound,
@@ -292,7 +292,7 @@ class TestHeadPatternRegression:
         """append([1,2], [3,4], R) → R=[1,2,3,4] (head-pattern star)."""
         mod = _load_clausal_module("lists.clausal")
         r = Var()
-        results = [deref(r) for _ in call("Append", [1, 2], [3, 4], r, module=mod)]
+        results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
         assert results == [[1, 2, 3, 4]]
 
     def test_append_reverse(self):
@@ -301,7 +301,7 @@ class TestHeadPatternRegression:
         x, y = Var(), Var()
         results = [
             (deref(x), deref(y))
-            for _ in call("Append", x, y, [1, 2, 3], module=mod)
+            for _ in call("append", x, y, [1, 2, 3], module=mod)
         ]
         assert results == [
             ([], [1, 2, 3]),
@@ -314,14 +314,14 @@ class TestHeadPatternRegression:
         """length([10, 20, 30], N) → N=3 (head-pattern star)."""
         mod = _load_clausal_module("lists.clausal")
         n = Var()
-        results = [deref(n) for _ in call("Length", [10, 20, 30], n, module=mod)]
+        results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
         assert results == [3]
 
     def test_length_empty(self):
         """length([], N) → N=0."""
         mod = _load_clausal_module("lists.clausal")
         n = Var()
-        results = [deref(n) for _ in call("Length", [], n, module=mod)]
+        results = [deref(n) for _ in call("length", [], n, module=mod)]
         assert results == [0]
 
 

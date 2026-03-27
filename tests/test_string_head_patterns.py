@@ -110,22 +110,22 @@ class TestIsEmptyString:
 class TestRecursiveOnString:
     def test_length(self, lists_mod):
         N = Var()
-        for _ in call("Length", "hello", N, module=lists_mod):
+        for _ in call("length", "hello", N, module=lists_mod):
             assert deref(N) == 5
 
     def test_length_empty(self, lists_mod):
         N = Var()
-        for _ in call("Length", "", N, module=lists_mod):
+        for _ in call("length", "", N, module=lists_mod):
             assert deref(N) == 0
 
     def test_last(self, lists_mod):
         L = Var()
-        for _ in call("Last", "hello", L, module=lists_mod):
+        for _ in call("last", "hello", L, module=lists_mod):
             assert deref(L) == "o"
 
     def test_last_single(self, lists_mod):
         L = Var()
-        for _ in call("Last", "x", L, module=lists_mod):
+        for _ in call("last", "x", L, module=lists_mod):
             assert deref(L) == "x"
 
 

@@ -51,7 +51,7 @@ _UUID_IMPORT = '-import_from(uuid, [UUIDv4, UUIDv1, UUIDv3, UUIDv5, UUIDStr, UUI
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it."""
+    """write a .clausal file and load it."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(_UUID_IMPORT + src_text)
     mod = _load_module(name, str(p))

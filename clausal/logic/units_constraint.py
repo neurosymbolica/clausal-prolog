@@ -4,7 +4,7 @@ An uninstantiated dimensioned slot is a plain AttVar carrying a ``"units"``
 attribute whose value is a ``UnitState(dims)`` — analogous to how CLP(FD)
 stores ``FDVar(domain, constraints)`` under ``"fd"``.
 
-When the AttVar is unified the hook:
+when the AttVar is unified the hook:
   - checks that a Quantity binding has matching dims;
   - transfers or merges the constraint when unified with another variable;
   - rejects plain numbers unless the constraint is dimensionless.
@@ -98,9 +98,9 @@ register_attr_hook(UNITS_KEY, _units_hook)
 from clausal.logic.builtins._registry import _builtin  # noqa: E402
 
 
-@_builtin("HasUnits", 2)
+@_builtin("has_units", 2)
 def _has_units(d, unit_pred, trail, k):
-    """HasUnits(D, UnitPred): D must be (or become) dimensioned in UnitPred's dims.
+    """has_units(D, UnitPred): D must be (or become) dimensioned in UnitPred's dims.
 
     - D is a ground Quantity  → check dims match
     - D is an unbound AttVar     → post the "units" constraint

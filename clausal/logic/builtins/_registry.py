@@ -78,7 +78,7 @@ def _trampoline_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | N
     Use for builtins that operate on lists or call sub-goals, so they
     participate directly in the trampoline without an extra wrapper layer.
 
-    Signature: ``fn(this_generator, parent, arg0, …, argN-1, trail)``
+    signature: ``fn(this_generator, parent, arg0, …, argN-1, trail)``
     Must yield ``(parent, None)`` per solution and ``(parent, DONE)`` at end.
     """
     def decorator(fn: Callable) -> Callable:
@@ -319,7 +319,7 @@ def get_builtin_dispatch(
 
 
 class MultiArityBuiltin:
-    """Wrapper for builtins with multiple arities (e.g. MapList/2 and MapList/3).
+    """Wrapper for builtins with multiple arities (e.g. maplist/2 and maplist/3).
 
     Routes term construction to the correct PredicateMeta class based on the
     number of positional arguments, and provides arity-based dispatch.

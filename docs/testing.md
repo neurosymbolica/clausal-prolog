@@ -75,9 +75,9 @@ Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if 
 ## Writing good `Test/1` clauses
 
 - Each test should be a single rule with a descriptive string as the argument.
-- Test bodies can use any predicates defined in the module, plus [builtins](predicates.md) like `Append`, `Member`, etc.
+- Test bodies can use any predicates defined in the module, plus [builtins](predicates.md) like `append`, `Member`, etc.
 - Use `==` for [CLP(ℤ)](constraints.md) arithmetic equality on computed results: `Test("check") <- (SomePred(X), X == expected)`. For ground integers this behaves like equality; for Vars it posts a CLP(ℤ) constraint.
-- Use `Equivalent(X, Y)` for structural equality (the old `==` behavior) when comparing non-integer terms.
+- Use `equivalent(X, Y)` for structural equality (the old `==` behavior) when comparing non-integer terms.
 - Use `==` for [arithmetic](arithmetic.md): `Test("arith") <- (N == 2 + 3, N == 5)`.
 
 ---

@@ -244,27 +244,27 @@ class TestFoldl:
 class TestAliases:
     def test_merge_sort(self):
         r = Var()
-        goal = _make_goal_call("MergeSort", [[3, 1, 2], r])
+        goal = _make_goal_call("msort", [[3, 1, 2], r])
         results = sol_var(goal, r)
         assert results == [[1, 2, 3]]
 
     def test_get_item(self):
         r = Var()
-        goal = _make_goal_call("GetItem", [1, [10, 20, 30], r])
+        goal = _make_goal_call("get_item", [1, [10, 20, 30], r])
         results = sol_var(goal, r)
         assert results == [20]
 
     def test_member_check(self):
-        goal = _make_goal_call("InCheck", [2, [1, 2, 3]])
+        goal = _make_goal_call("in_check", [2, [1, 2, 3]])
         assert len(solutions(goal)) == 1
 
     def test_member_check_fail(self):
-        goal = _make_goal_call("InCheck", [5, [1, 2, 3]])
+        goal = _make_goal_call("in_check", [5, [1, 2, 3]])
         assert solutions(goal) == []
 
     def test_unpack(self):
         r = Var()
-        goal = _make_goal_call("Unpack", [Compound("foo", (1, 2)), r])
+        goal = _make_goal_call("unpack", [Compound("foo", (1, 2)), r])
         results = sol_var(goal, r)
         assert len(results) == 1
         assert results[0] == ["foo", 1, 2]
@@ -275,38 +275,38 @@ class TestAliases:
 
 class TestBuiltinAsArgument:
     """Test that builtin predicates can be passed as arguments to higher-order
-    builtins like MapList, Filter, etc."""
+    builtins like maplist, include, etc."""
 
     def test_builtin_to_maplist2(self):
-        """IsNumber passed to MapList/2 — succeeds when all elements are numbers."""
+        """number passed to maplist/2 — succeeds when all elements are numbers."""
         from clausal.logic.builtins import get_builtin_class
-        is_number = get_builtin_class("IsNumber")
+        is_number = get_builtin_class("number")
         assert run_trampoline(_map_list__2, is_number, [1, 2, 3.0]) == 1
 
     def test_builtin_to_maplist2_fail(self):
-        """IsNumber passed to MapList/2 — fails when a non-number is present."""
+        """number passed to maplist/2 — fails when a non-number is present."""
         from clausal.logic.builtins import get_builtin_class
-        is_number = get_builtin_class("IsNumber")
+        is_number = get_builtin_class("number")
         assert run_trampoline(_map_list__2, is_number, [1, "a", 3]) == 0
 
     def test_builtin_to_maplist3(self):
-        """Succ passed to MapList/3 — maps each element to its successor."""
+        """succ passed to maplist/3 — maps each element to its successor."""
         from clausal.logic.builtins import get_builtin_class
-        succ = get_builtin_class("Succ")
+        succ = get_builtin_class("succ")
         results = run_trampoline_var(_map_list__3, succ, [0, 1, 2])
         assert results == [[1, 2, 3]]
 
     def test_builtin_to_filter(self):
-        """IsInt passed to Filter/3 — keeps only integers."""
+        """integer passed to include/3 — keeps only integers."""
         from clausal.logic.builtins import get_builtin_class
-        is_int = get_builtin_class("IsInt")
+        is_int = get_builtin_class("integer")
         results = run_trampoline_var(_include__3, is_int, [1, 2.5, 3, "x"])
         assert results == [[1, 3]]
 
     def test_builtin_to_exclude(self):
-        """IsInt passed to Exclude/3 — removes integers."""
+        """integer passed to exclude/3 — removes integers."""
         from clausal.logic.builtins import get_builtin_class
-        is_int = get_builtin_class("IsInt")
+        is_int = get_builtin_class("integer")
         results = run_trampoline_var(_exclude__3, is_int, [1, 2.5, 3, "x"])
         assert results == [[2.5, "x"]]
 

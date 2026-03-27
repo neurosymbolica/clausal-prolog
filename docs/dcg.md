@@ -26,7 +26,7 @@ greeting >> (["hello", "world"])
 This rewrites to a clause with two hidden arguments (the input list and the remainder list):
 
 ```clausal
-greeting(S0, S) <- Append(["hello", "world"], S, S0)
+greeting(S0, S) <- append(["hello", "world"], S, S0)
 ```
 
 ### Terminals
@@ -140,7 +140,7 @@ Strings can be passed directly to `phrase` — they are treated as lists of
 single-character strings. This makes character-level DCGs natural:
 
 ```clausal
-digit >> ([D], {CharType(D, digit)})
+digit >> ([D], {char_type(D, digit)})
 digits >> (digit)
 digits >> (digit, digits)
 
@@ -148,7 +148,7 @@ Test("parse string") <- phrase(digits, "123")
 Test("partial") <- (phrase(digits, "12ab", Rest), Rest == ['a', 'b'])
 ```
 
-No `AtomChars` conversion is needed. See [Strings as Lists](strings_as_lists.md)
+No `atom_chars` conversion is needed. See [Strings as Lists](strings_as_lists.md)
 for more details.
 
 ### phrase/3

@@ -19,7 +19,7 @@ Clausal's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and 
 | `!=` | integer disequality | real disequality |
 | `<` `>` `<=` `>=` | integer comparisons | real comparisons |
 
-**Dispatch rule:** if either operand is a `float` literal or a variable declared with `InReal`, the constraint goes to CLP(ℝ). Otherwise it goes to CLP(ℤ).
+**Dispatch rule:** if either operand is a `float` literal or a variable declared with `in_real`, the constraint goes to CLP(ℝ). Otherwise it goes to CLP(ℤ).
 
 This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) because `2.0` is a float. No special operators or brace syntax needed.
 
@@ -29,35 +29,35 @@ This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) be
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `InReal` | 1 | `InReal(Var_or_list)` — declare real variable(s) with domain `[-∞, +∞]` |
-| `InReal` | 3 | `InReal(Var_or_list, Lo, Hi)` — declare real variable(s) with domain `[Lo, Hi]` |
-| `LabelReal` | 1 | `LabelReal(Vars)` — bisect intervals to IEEE float precision |
-| `LabelReal` | 2 | `LabelReal(Vars, Eps)` — bisect until interval width ≤ Eps |
+| `in_real` | 1 | `in_real(Var_or_list)` — declare real variable(s) with domain `[-∞, +∞]` |
+| `in_real` | 3 | `in_real(Var_or_list, Lo, Hi)` — declare real variable(s) with domain `[Lo, Hi]` |
+| `label_real` | 1 | `label_real(Vars)` — bisect intervals to IEEE float precision |
+| `label_real` | 2 | `label_real(Vars, Eps)` — bisect until interval width ≤ Eps |
 
-### InReal/1 and InReal/3
+### in_real/1 and in_real/3
 
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
 ```clausal
 # skip
-InReal(X)                    % X ∈ [-∞, +∞]
-InReal(X, 0.0, 1.0)          % X ∈ [0, 1]
-InReal([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
+in_real(X)                    % X ∈ [-∞, +∞]
+in_real(X, 0.0, 1.0)          % X ∈ [0, 1]
+in_real([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
 ```
 
-### LabelReal/1 and LabelReal/2
+### label_real/1 and label_real/2
 
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(ℤ)).
 
 ```clausal
 # skip
-LabelReal([X, Y])            % bisect to IEEE float precision
-LabelReal([X, Y], 1.0e-9)   % bisect until width ≤ 1e-9
+label_real([X, Y])            % bisect to IEEE float precision
+label_real([X, Y], 1.0e-9)   % bisect until width ≤ 1e-9
 ```
 
 Without an `Eps`, bisection continues until the midpoint equals an endpoint in IEEE arithmetic — the interval is indistinguishable from a point. With `Eps`, it stops when `hi - lo ≤ Eps`.
 
-Each branch of the bisection is a separate solution. Use `LabelReal` after posting all constraints to enumerate solutions.
+Each branch of the bisection is a separate solution. Use `label_real` after posting all constraints to enumerate solutions.
 
 ---
 
@@ -69,11 +69,11 @@ Each branch of the bisection is a separate solution. Use `LabelReal` after posti
 # skip
 # Two-variable linear system: 2x + 3y = 12, x - y = 1
 linear_system(X, Y) <- (
-    InReal(X, -100.0, 100.0),
-    InReal(Y, -100.0, 100.0),
+    in_real(X, -100.0, 100.0),
+    in_real(Y, -100.0, 100.0),
     2.0 * X + 3.0 * Y == 12.0,
     X - Y == 1.0,
-    LabelReal([X, Y], 1.0e-9)
+    label_real([X, Y], 1.0e-9)
 )
 # → X ≈ 3.0, Y ≈ 2.0
 ```
@@ -84,10 +84,10 @@ linear_system(X, Y) <- (
 # skip
 # Unit circle (first quadrant)
 unit_circle(X, Y) <- (
-    InReal(X, 0.0, 1.0),
-    InReal(Y, 0.0, 1.0),
+    in_real(X, 0.0, 1.0),
+    in_real(Y, 0.0, 1.0),
     X * X + Y * Y == 1.0,
-    LabelReal([X, Y], 1.0e-9)
+    label_real([X, Y], 1.0e-9)
 )
 # → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
 ```
@@ -96,31 +96,31 @@ unit_circle(X, Y) <- (
 # skip
 # Square root: find x where x^2 = 2
 sqrt2(X) <- (
-    InReal(X, 0.0, 2.0),
+    in_real(X, 0.0, 2.0),
     X * X == 2.0,
-    LabelReal([X], 1.0e-12)
+    label_real([X], 1.0e-12)
 )
 # → X ≈ 1.4142135623730951
 ```
 
 ### Mixed FD and real
 
-Integer and real variables can appear together. When an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
+Integer and real variables can appear together. when an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
 ```clausal
 # skip
 # Worker schedule: integer hours, real cost
 task(HOURS, COST) <- (
-    InDomain(HOURS, 1, 8),         % integer hours (CLP(ℤ))
-    InReal(COST, 10.0, 100.0),     % real cost (CLP(ℝ))
+    in_domain(HOURS, 1, 8),         % integer hours (CLP(ℤ))
+    in_real(COST, 10.0, 100.0),     % real cost (CLP(ℝ))
     COST >= HOURS * 12.5,          % mixes FD + real
     HOURS <= 6,
-    Label([HOURS]),
-    LabelReal([COST], 1.0e-6)
+    label([HOURS]),
+    label_real([COST], 1.0e-6)
 )
 ```
 
-In this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
+in_ this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
 
 You can also add an FD domain to a variable that already has a real interval:
 
@@ -128,10 +128,10 @@ You can also add an FD domain to a variable that already has a real interval:
 # skip
 # Start with a real constraint, then restrict to integers
 mixed(X) <- (
-    InReal(X, 0.0, 100.0),
+    in_real(X, 0.0, 100.0),
     X * X <= 50.0,
-    InDomain(X, 1, 10),    % adds FD domain alongside real
-    Label([X])
+    in_domain(X, 1, 10),    % adds FD domain alongside real
+    label([X])
 )
 ```
 
@@ -141,12 +141,12 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ```clausal
 # skip
-# No InReal needed — the float literal 9.0 triggers CLP(ℝ)
+# No in_real needed — the float literal 9.0 triggers CLP(ℝ)
 pythagorean_real(X, Y) <- (
-    InReal(X, 0.0, 10.0),
-    InReal(Y, 0.0, 10.0),
+    in_real(X, 0.0, 10.0),
+    in_real(Y, 0.0, 10.0),
     X * X + Y * Y == 25.0,
-    LabelReal([X, Y], 1.0e-6)
+    label_real([X, Y], 1.0e-6)
 )
 ```
 
@@ -159,8 +159,8 @@ pythagorean_real(X, Y) <- (
 | Non-linear propagation | Deferred | Active | Active | **Active** |
 | Arithmetic engine | Simplex | Intervals | Intervals | **Intervals** |
 | FD/real unification | — | Separate | `#`/`$` operators | **Same operators** |
-| Domain declaration | Implicit | `X::real(lo,hi)` | `X :: lo..hi` | **`InReal(X, lo, hi)`** |
-| Labeling | `bb_inf/4` (opt only) | `solve/1` | `locate/2` | **`LabelReal/1,2`** |
+| Domain declaration | Implicit | `X::real(lo,hi)` | `X :: lo..hi` | **`in_real(X, lo, hi)`** |
+| Labeling | `bb_inf/4` (opt only) | `solve/1` | `locate/2` | **`label_real/1,2`** |
 
 ---
 
@@ -231,7 +231,7 @@ pythagorean_real(X, Y) <- (
 
 ??? abstract "Bisection labeling"
 
-    `LabelReal` uses an explicit stack-based bisection (not Python recursion) to avoid hitting Python's call stack limit for intervals spanning subnormal floats.
+    `label_real` uses an explicit stack-based bisection (not Python recursion) to avoid hitting Python's call stack limit for intervals spanning subnormal floats.
 
     At each step:
 
@@ -244,15 +244,15 @@ pythagorean_real(X, Y) <- (
 
 ??? abstract "FD/Real coexistence"
 
-    When a real constraint is posted on a variable that already has a CLP(ℤ) domain, a real interval `[float(fd_min), float(fd_max)]` is added **alongside** the existing FD attribute. Both attributes coexist:
+    when a real constraint is posted on a variable that already has a CLP(ℤ) domain, a real interval `[float(fd_min), float(fd_max)]` is added **alongside** the existing FD attribute. Both attributes coexist:
 
     - The **FD hook** enforces integrality and domain holes (e.g., `{1, 2, 5, 6}` excludes 3 and 4).
     - The **Real hook** enforces continuous interval bounds and propagates through real constraints.
     - Both hooks fire independently on unification — the variable is only valid if **both** agree.
 
-    This also works in reverse: posting `InDomain` on a variable that already has a real interval adds an FD attribute narrowed against the real bounds.
+    This also works in reverse: posting `in_domain` on a variable that already has a real interval adds an FD attribute narrowed against the real bounds.
 
-    When FD propagation narrows the domain, the real interval is tightened to match. When computing intervals for real constraints, the tightest bounds from both attributes are used.
+    when FD propagation narrows the domain, the real interval is tightened to match. when computing intervals for real constraints, the tightest bounds from both attributes are used.
 
     Promotion is also triggered when a real variable is unified with an FD variable.
 
@@ -267,7 +267,7 @@ pythagorean_real(X, Y) <- (
 
 ??? abstract "Interaction with CLP(ℤ) and dif/2"
 
-    CLP(ℝ) uses the attribute key `"real"`, CLP(ℤ) uses `"fd"`, and dif/2 uses `"dif"`. All hooks fire independently. A variable can have both `"fd"` and `"real"` attributes simultaneously — the FD domain enforces integrality and holes while the real interval handles continuous narrowing. When both are present, bounds are kept in sync: FD narrowing tightens the real interval, and interval queries return the intersection of both.
+    CLP(ℝ) uses the attribute key `"real"`, CLP(ℤ) uses `"fd"`, and dif/2 uses `"dif"`. All hooks fire independently. A variable can have both `"fd"` and `"real"` attributes simultaneously — the FD domain enforces integrality and holes while the real interval handles continuous narrowing. when both are present, bounds are kept in sync: FD narrowing tightens the real interval, and interval queries return the intersection of both.
 
     A variable can also have dif constraints under `"dif"` alongside either or both numeric domains.
 
@@ -277,9 +277,9 @@ pythagorean_real(X, Y) <- (
 
     **Booleans are not numbers.** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Booleans belong to [CLP(B)](clpb.md). Passing a boolean where a number is expected will cause the constraint to fail or be ignored. Use `0`/`1` explicitly if you need numeric values.
 
-    **Labeling order matters.** If a variable has both FD and real attributes, use `Label` (FD) to enumerate integer values. `LabelReal` bisects the continuous interval and does not enforce integrality — it will find non-integer points within the interval. For mixed-domain variables, label with FD first to fix the integer value, then use `LabelReal` for any remaining real variables.
+    **Labeling order matters.** If a variable has both FD and real attributes, use `label` (FD) to enumerate integer values. `label_real` bisects the continuous interval and does not enforce integrality — it will find non-integer points within the interval. For mixed-domain variables, label with FD first to fix the integer value, then use `label_real` for any remaining real variables.
 
-    **Large integers lose precision in float.** When an FD variable participates in a real constraint, its bounds are converted to IEEE doubles. Integers beyond 2^53 cannot be represented exactly as floats. For ground integer-integer comparisons (e.g., `X == Y` where both are bound to ints), the comparison is done exactly without float conversion. But during interval propagation, the float approximation is used.
+    **Large integers lose precision in float.** when an FD variable participates in a real constraint, its bounds are converted to IEEE doubles. Integers beyond 2^53 cannot be represented exactly as floats. For ground integer-integer comparisons (e.g., `X == Y` where both are bound to ints), the comparison is done exactly without float conversion. But during interval propagation, the float approximation is used.
 
 ---
 
@@ -304,7 +304,7 @@ pythagorean_real(X, Y) <- (
     real_eq(Add(left=Mult(left=x, right=x), right=Mult(left=y, right=y)),
             1.0, trail)
 
-    # Label with 1e-9 precision, collect first few solutions
+    # label with 1e-9 precision, collect first few solutions
     for _ in label_real([x, y], trail, eps=1e-9):
         sx = get_attr(deref(x), REAL_KEY)
         sy = get_attr(deref(y), REAL_KEY)
@@ -357,4 +357,4 @@ pythagorean_real(X, Y) <- (
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) for integer constraints · [CLP(B)](clpb.md) — Boolean constraint solving.*
+*See also: [Constraints](constraints.md) — `dif/2` and CLP(ℤ) for integer constraints · [CLP(B)](clpb.md) — Boolean constraint solving.*

@@ -387,14 +387,14 @@ class TestDifBuiltin:
     def test_dif_builtin_succeeds_different(self):
         """dif(1, 2) as builtin call → succeeds."""
         mod = Module("test_dif_builtin")
-        goal = Call(func=LoadName(name="Dif"), args=[1, 2], kwargs=[])
+        goal = Call(func=LoadName(name="dif"), args=[1, 2], kwargs=[])
         result = once(goal, mod)
         assert result is not None
 
     def test_dif_builtin_fails_equal(self):
         """dif(1, 1) as builtin call → fails."""
         mod = Module("test_dif_builtin2")
-        goal = Call(func=LoadName(name="Dif"), args=[1, 1], kwargs=[])
+        goal = Call(func=LoadName(name="dif"), args=[1, 1], kwargs=[])
         result = once(goal, mod)
         assert result is None
 
@@ -403,7 +403,7 @@ class TestDifBuiltin:
         mod = Module("test_dif_builtin3")
         x, y = Var(), Var()
         goal = And(
-            left=Call(func=LoadName(name="Dif"), args=[x, y], kwargs=[]),
+            left=Call(func=LoadName(name="dif"), args=[x, y], kwargs=[]),
             right=And(
                 left=Is(left=x, right=1),
                 right=Is(left=y, right=2),
@@ -417,7 +417,7 @@ class TestDifBuiltin:
         mod = Module("test_dif_builtin4")
         x, y = Var(), Var()
         goal = And(
-            left=Call(func=LoadName(name="Dif"), args=[x, y], kwargs=[]),
+            left=Call(func=LoadName(name="dif"), args=[x, y], kwargs=[]),
             right=And(
                 left=Is(left=x, right=1),
                 right=Is(left=y, right=1),

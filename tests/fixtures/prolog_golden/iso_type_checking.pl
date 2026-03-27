@@ -34,19 +34,19 @@ test("nonvar: list succeeds") :-
     nonvar([1, 2]).
 
 test("atom: declared atom succeeds") :-
-    is_atom(hello).
+    atom(hello).
 
 test("atom: declared atom Abc") :-
-    is_atom(abc).
+    atom(abc).
 
 test("atom: string fails") :-
-    \+ is_atom("hello").
+    \+ atom("hello").
 
 test("atom: integer fails") :-
-    \+ is_atom(1).
+    \+ atom(1).
 
 test("atom: unbound var fails") :-
-    \+ is_atom(X).
+    \+ atom(X).
 
 test("str: plain string succeeds") :-
     atom("hello").

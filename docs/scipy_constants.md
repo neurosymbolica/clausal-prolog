@@ -249,7 +249,7 @@ CheckC <-
 # Print the unit of Planck's constant
 PlanckUnit <-
     Unit('Planck constant', U),
-    Writeln(U).
+    writeln(U).
 ```
 
 ---

@@ -1,5 +1,5 @@
-"""Keyword-term introspection builtins (WK-5): Vary/3, Extend/3,
-UnboundKeys/2, Signature/3."""
+"""Keyword-term introspection builtins (WK-5): vary/3, extend/3,
+unbound_keys/2, signature/3."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from clausal.terms import KWTerm, DictTerm
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 
 
-@_builtin("Vary", 3)
+@_builtin("vary", 3)
 def _vary__3(overrides, term, new_term, trail, k):
     """vary(Overrides, Term, NewTerm) — copy Term with field overrides.
 
@@ -47,7 +47,7 @@ def _vary__3(overrides, term, new_term, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Extend", 3)
+@_builtin("extend", 3)
 def _extend__3(additions, term, new_term, trail, k):
     """extend(Additions, Term, NewTerm) — copy Term with additional fields.
 
@@ -76,7 +76,7 @@ def _extend__3(additions, term, new_term, trail, k):
     trail.undo(mark)
 
 
-@_builtin("UnboundKeys", 2)
+@_builtin("unbound_keys", 2)
 def _unbound_keys__2(term, keys_list, trail, k):
     """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
 
@@ -100,7 +100,7 @@ def _unbound_keys__2(term, keys_list, trail, k):
     trail.undo(mark)
 
 
-@_db_builtin("Signature", 3, fields=("functor_name", "arity", "names"))
+@_db_builtin("signature", 3, fields=("functor_name", "arity", "names"))
 def _signature_factory(db):
     """signature(FunctorName, Arity, Names) — reflect the registered signature."""
     def signature__3(functor_name, arity, names, trail, k):

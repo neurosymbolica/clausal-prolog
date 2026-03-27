@@ -126,7 +126,7 @@ def _token_to_dict(tok) -> dict:
 
 
 def _ent_to_dict(ent) -> dict:
-    """Convert a spaCy Span (entity) to a plain dict."""
+    """Convert a spaCy span (entity) to a plain dict."""
     return {
         "text": ent.text,
         "label": ent.label_,
@@ -138,7 +138,7 @@ def _ent_to_dict(ent) -> dict:
 
 
 def _chunk_to_dict(chunk) -> dict:
-    """Convert a spaCy noun chunk Span to a plain dict."""
+    """Convert a spaCy noun chunk span to a plain dict."""
     return {
         "text": chunk.text,
         "root_text": chunk.root.text,

@@ -7,7 +7,7 @@ ISO §8.5.4 — copy_term/2
 
 Clausal equivalents:
   functor/3  → functor(Term, Name, Arity)
-  arg/3      → arg(N, Term, Arg)
+  arg/3      → arg(N, Term, arg)
   univ/2     → univ(Term, List)  (=../2 in Prolog)
 
 Not available:
@@ -50,29 +50,29 @@ class TestFunctor:
     def test_decompose_compound(self):
         """ISO: functor(f(a,b), X, Y) → X = f, Y = 2."""
         name, arity = Var(), Var()
-        result = _call_binding("Functor", Compound("f", ("a", "b")), name, arity)
+        result = _call_binding("functor", Compound("f", ("a", "b")), name, arity)
         assert result is not None
         assert result == ("f", 2)
 
     def test_decompose_atom(self):
         """ISO: functor(a, X, Y) → X = a, Y = 0.
-        In clausal, strings are atoms."""
+        in_ clausal, strings are atoms."""
         name, arity = Var(), Var()
-        result = _call_binding("Functor", "a", name, arity)
+        result = _call_binding("functor", "a", name, arity)
         assert result is not None
         assert result == ("a", 0)
 
     def test_decompose_arity1(self):
         """functor(f(x), Name, Arity) → Name = f, Arity = 1."""
         name, arity = Var(), Var()
-        result = _call_binding("Functor", Compound("f", ("x",)), name, arity)
+        result = _call_binding("functor", Compound("f", ("x",)), name, arity)
         assert result is not None
         assert result == ("f", 1)
 
     def test_construct_compound(self):
         """ISO: functor(T, f, 2) → T = f(_, _) (fresh vars)."""
         t = Var()
-        result = _call_binding("Functor", t, "f", 2, var_indices=[0])
+        result = _call_binding("functor", t, "f", 2, var_indices=[0])
         assert result is not None
         term = result[0]
         assert isinstance(term, Compound)
@@ -82,7 +82,7 @@ class TestFunctor:
     def test_construct_atom(self):
         """ISO: functor(T, a, 0) → T = a."""
         t = Var()
-        result = _call_binding("Functor", t, "a", 0, var_indices=[0])
+        result = _call_binding("functor", t, "a", 0, var_indices=[0])
         assert result is not None
         assert result[0] == "a"
 
@@ -90,14 +90,14 @@ class TestFunctor:
         """ISO: functor(1, X, Y) → X = 1, Y = 0.
         Clausal may or may not support this."""
         name, arity = Var(), Var()
-        result = _call_binding("Functor", 1, name, arity)
+        result = _call_binding("functor", 1, name, arity)
         if result is not None:
             assert result[1] == 0
 
     def test_decompose_float(self):
         """ISO: functor(1.0, X, Y) → X = 1.0, Y = 0."""
         name, arity = Var(), Var()
-        result = _call_binding("Functor", 1.0, name, arity)
+        result = _call_binding("functor", 1.0, name, arity)
         if result is not None:
             assert result[1] == 0
 
@@ -105,7 +105,7 @@ class TestFunctor:
         """functor(f(a,b,c,d,e), Name, Arity) → Name=f, Arity=5."""
         name, arity = Var(), Var()
         result = _call_binding(
-            "Functor",
+            "functor",
             Compound("f", ("a", "b", "c", "d", "e")),
             name, arity,
         )
@@ -122,45 +122,45 @@ class TestArg:
     def test_first_arg(self):
         """ISO: arg(1, f(a,b,c), X) → X = a."""
         x = Var()
-        result = _call_binding("Arg", 1, Compound("f", ("a", "b", "c")), x)
+        result = _call_binding("arg", 1, Compound("f", ("a", "b", "c")), x)
         assert result is not None
         assert result[0] == "a"
 
     def test_second_arg(self):
         """ISO: arg(2, f(a,b,c), X) → X = b."""
         x = Var()
-        result = _call_binding("Arg", 2, Compound("f", ("a", "b", "c")), x)
+        result = _call_binding("arg", 2, Compound("f", ("a", "b", "c")), x)
         assert result is not None
         assert result[0] == "b"
 
     def test_third_arg(self):
         x = Var()
-        result = _call_binding("Arg", 3, Compound("f", ("a", "b", "c")), x)
+        result = _call_binding("arg", 3, Compound("f", ("a", "b", "c")), x)
         assert result is not None
         assert result[0] == "c"
 
     def test_out_of_range(self):
         """ISO: arg(4, f(a,b,c), X) fails."""
         x = Var()
-        result = _call_binding("Arg", 4, Compound("f", ("a", "b", "c")), x)
+        result = _call_binding("arg", 4, Compound("f", ("a", "b", "c")), x)
         assert result is None
 
     def test_zero_fails(self):
         """ISO: arg(0, f(a), X) fails."""
         x = Var()
-        result = _call_binding("Arg", 0, Compound("f", ("a",)), x)
+        result = _call_binding("arg", 0, Compound("f", ("a",)), x)
         assert result is None
 
     def test_negative_fails(self):
         x = Var()
-        result = _call_binding("Arg", -1, Compound("f", ("a",)), x)
+        result = _call_binding("arg", -1, Compound("f", ("a",)), x)
         assert result is None
 
     def test_nested_compound(self):
         """arg(1, f(g(x)), A) → A = g(x)."""
         a = Var()
         inner = Compound("g", ("x",))
-        result = _call_binding("Arg", 1, Compound("f", (inner,)), a)
+        result = _call_binding("arg", 1, Compound("f", (inner,)), a)
         assert result is not None
         assert result[0] == inner
 
@@ -174,28 +174,28 @@ class TestUniv:
     def test_decompose_compound(self):
         """ISO: f(a,b) =.. X → X = [f, a, b]."""
         x = Var()
-        result = _call_binding("Unpack", Compound("f", ("a", "b")), x)
+        result = _call_binding("unpack", Compound("f", ("a", "b")), x)
         assert result is not None
         assert result[0] == ["f", "a", "b"]
 
     def test_decompose_atom(self):
         """ISO: a =.. X → X = [a]."""
         x = Var()
-        result = _call_binding("Unpack", "a", x)
+        result = _call_binding("unpack", "a", x)
         assert result is not None
         assert result[0] == ["a"]
 
     def test_decompose_arity1(self):
         """f(x) =.. L → L = [f, x]."""
         lst = Var()
-        result = _call_binding("Unpack", Compound("f", ("x",)), lst)
+        result = _call_binding("unpack", Compound("f", ("x",)), lst)
         assert result is not None
         assert result[0] == ["f", "x"]
 
     def test_construct_from_list(self):
         """ISO: T =.. [f, a, b] → T = f(a, b)."""
         t = Var()
-        result = _call_binding("Unpack", t, ["f", "a", "b"], var_indices=[0])
+        result = _call_binding("unpack", t, ["f", "a", "b"], var_indices=[0])
         assert result is not None
         term = result[0]
         assert isinstance(term, Compound)
@@ -205,7 +205,7 @@ class TestUniv:
     def test_construct_atom_from_list(self):
         """ISO: T =.. [a] → T = a."""
         t = Var()
-        result = _call_binding("Unpack", t, ["a"], var_indices=[0])
+        result = _call_binding("unpack", t, ["a"], var_indices=[0])
         assert result is not None
         assert result[0] == "a"
 
@@ -214,7 +214,7 @@ class TestUniv:
         DIFFERS: clausal decomposes integers via their string representation
         as functor, so 1 =.. X gives X = ["1"] (functor is the str "1")."""
         x = Var()
-        result = _call_binding("Unpack", 1, x)
+        result = _call_binding("unpack", 1, x)
         if result is not None:
             # Clausal uses str(val) as functor for numbers
             assert result[0] == ["1"]

@@ -117,7 +117,7 @@ class TestIndexPlansExposed:
         assert pred_cls._index_plans == {}
 
     def test_index_plans_not_set_when_no_pred_cls(self):
-        """When pred_cls is None, no _index_plans attribute is injected."""
+        """when pred_cls is None, no _index_plans attribute is injected."""
         clauses = _make_fact_clauses("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -175,7 +175,7 @@ class TestIndexPlansExposed:
         assert set(pred_cls._index_plans[0].keys()) == {"a", "b", "c", "d"}
 
     def test_second_position_indexed_when_more_selective(self):
-        """When position 1 is more selective, it also appears in _index_plans."""
+        """when position 1 is more selective, it also appears in _index_plans."""
         # All first args are the same, but second args vary — pos 1 is more selective
         clauses = _make_fact_clauses("lookup", [
             ("same", 1), ("same", 2), ("same", 3), ("same", 4), ("same", 5),

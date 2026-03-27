@@ -5,10 +5,10 @@ standard library and third-party modules::
 
     -import_from(py.sympy, [Simplify, Solve, Diff, sin, cos])
     -import_from(py.uuid, [UUIDv4, UUIDStr, IsUUID])
-    -import_from(py.yaml, [Read, Write, Get])
+    -import_from(py.yaml, [Read, write, Get])
     -import_from(py.sqlite, [SQLiteConnect, SQLiteQuery])
     -import_from(py.datetime, [Now, Today, Date, TimeDelta])
-    -import_from(py.re, [Match, Search, Replace, Split, FindAll])
+    -import_from(py.re, [Match, Search, Replace, Split, findall])
     -import_from(py.logging, [GetLogger, Info, Debug, Warning, Error])
     -import_from(py.random, [Random, RandomInteger, RandomMember, Maybe])
     -import_from(py.json, [Parse, Generate, Get, ReadFile])

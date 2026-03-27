@@ -214,7 +214,7 @@ IsPositiveDefinite(A) <- (
 
 ### Two-step factorisations
 
-When solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `Solve` repeatedly.
+when solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `Solve` repeatedly.
 
 ```clausal
 # skip
@@ -239,7 +239,7 @@ Example — solve multiple right-hand sides efficiently:
 ```clausal
 SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
     LuFactor(A, LU),
-    MapList([B]>>(LuSolve(LU, B, X), X), RHS_LIST, SOLUTIONS)
+    maplist([B]>>(LuSolve(LU, B, X), X), RHS_LIST, SOLUTIONS)
 )
 ```
 

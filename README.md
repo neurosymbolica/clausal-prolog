@@ -1,6 +1,6 @@
 # clausal
 
-A Prolog-style logic programming DSL embedded in Python. Write relational logic
+A Prolog-style logic programming DSL embedded in Python. write relational logic
 programs in `.clausal` source files that load via Python's standard import
 system, with full constraint solving, tabling, DCGs, and a rich standard library.
 
@@ -8,13 +8,13 @@ system, with full constraint solving, tabling, DCGs, and a rich standard library
 
 - **`.clausal` source files** — import logic modules with Python's standard import system
 - **Prolog-style predicates** — Horn clauses, unification, backtracking search
-- **Constraint solving** — CLP(FD) for integers, CLP(B) for booleans, `Dif/2` disequality
+- **Constraint solving** — CLP(FD) for integers, CLP(B) for booleans, `dif/2` disequality
 - **SLG tabling** — memoised subgoal calls for termination on cyclic structures
 - **DCGs** — Definite Clause Grammars with `>>` syntax and `Phrase/2,3`
 - **Well-Founded Semantics** — negation-as-failure for tabled predicates
 - **Module system** — `-import_from/2`, `-import_module/1`, qualified calls
-- **Meta-predicates** — `FindAll/3`, `BagOf/3`, `SetOf/3`, `ForAll/2`, `Call/N`
-- **Higher-order** — `MapList/2,3`, `FoldLeft/4`, `Filter/3`, `Exclude/3`
+- **Meta-predicates** — `findall/3`, `bagof/3`, `setof/3`, `forall/2`, `Call/N`
+- **Higher-order** — `maplist/2,3`, `foldl/4`, `include/3`, `exclude/3`
 - **Python interop** — `++expr` escape, lambda goal closures, f-string support in terms
 - **SciPy integration** — wrappers for `scipy.special`, `scipy.linalg`, `scipy.optimize`, `scipy.interpolate`, `scipy.signal`
 - **Regex** — `Match/2,3`, `Search/2,3`, `Replace/4`, `Split/3` with auto-binding goal expansion
@@ -102,11 +102,11 @@ result = once(call("Phrase", "Sentence", ["the", "cat", "runs"], module=grammar)
 
 ```prolog
 Sendmoney(S, E, N, D, M, O, R, Y) <- (
-    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
-    AllDifferent([S, E, N, D, M, O, R, Y]),
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
+    all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
-    Label([S, E, N, D, M, O, R, Y]),
+    label([S, E, N, D, M, O, R, Y]),
     SEND  := S * 1000 + E * 100 + N * 10 + D,
     MORE  := M * 1000 + O * 100 + R * 10 + E,
     MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
@@ -118,9 +118,9 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
 
 ```prolog
 Squares(Ns, Squares) <- (
-    FindAll(
+    findall(
         Sq,
-        (In(X, Ns), Sq := X * X),
+        (in_(X, Ns), Sq := X * X),
         Squares
     )
 )

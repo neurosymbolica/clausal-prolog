@@ -1,4 +1,4 @@
-# Tests for higher-order list predicates: MapList/2, MapList/3, Filter/3, Exclude/3, FoldLeft/4
+# Tests for higher-order list predicates: maplist/2, maplist/3, include/3, exclude/3, foldl/4
 # Goals are passed as references to named predicates defined in this file.
 
 # Helper predicates used as goals
@@ -11,20 +11,20 @@ Double(X, Y) <- (Y := X * 2)
 
 AddStep(NUMBER, ACCUMULATOR, NEXT) <- (NEXT := ACCUMULATOR + NUMBER)
 
-# MapList/2 — Goal(Elem) holds for all elements
-AllPositive(LIST) <- MapList(IsPositive, LIST)
+# maplist/2 — Goal(Elem) holds for all elements
+AllPositive(LIST) <- maplist(IsPositive, LIST)
 
-# MapList/3 — maps each X to doubled Y
-Doubled(LIST, RESULT) <- MapList(Double, LIST, RESULT)
+# maplist/3 — maps each X to doubled Y
+Doubled(LIST, RESULT) <- maplist(Double, LIST, RESULT)
 
-# Filter/3 — filter keeping positives
-KeepPositives(LIST, RESULT) <- Filter(IsPositive, LIST, RESULT)
+# include/3 — filter keeping positives
+KeepPositives(LIST, RESULT) <- include(IsPositive, LIST, RESULT)
 
-# Exclude/3 — remove negatives
-DropNegatives(LIST, RESULT) <- Exclude(IsNegative, LIST, RESULT)
+# exclude/3 — remove negatives
+DropNegatives(LIST, RESULT) <- exclude(IsNegative, LIST, RESULT)
 
-# FoldLeft/4 — sum a list via fold
-SumFold(LIST, SUM) <- FoldLeft(AddStep, LIST, 0, SUM)
+# foldl/4 — sum a list via fold
+SumFold(LIST, SUM) <- foldl(AddStep, LIST, 0, SUM)
 
 
 Test("all positive") <- AllPositive([1, 2, 3])

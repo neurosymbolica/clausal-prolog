@@ -1055,7 +1055,7 @@ def _divisors_2(n, result, trail, k):
 
 
 def _gcd_sym_3(a, b, result, trail, k):
-    """Gcd/3: symbolic GCD of two expressions."""
+    """gcd/3: symbolic GCD of two expressions."""
     a = deref(a)
     b = deref(b)
     try:
@@ -1068,7 +1068,7 @@ def _gcd_sym_3(a, b, result, trail, k):
 
 
 def _lcm_sym_3(a, b, result, trail, k):
-    """Lcm/3: symbolic LCM of two expressions."""
+    """lcm/3: symbolic LCM of two expressions."""
     a = deref(a)
     b = deref(b)
     try:
@@ -1084,7 +1084,7 @@ def _lcm_sym_3(a, b, result, trail, k):
 
 
 def _summation_4(term, var, low, high, result, trail, k):
-    """Sum/5: symbolic summation of term for var from low to high."""
+    """sum_/5: symbolic summation of term for var from low to high."""
     term = deref(term)
     var = deref(var)
     low = deref(low)
@@ -1160,7 +1160,7 @@ log = _MathFunc("log")
 ln = _MathFunc("ln")
 sqrt = _MathFunc("sqrt")
 factorial = _MathFunc("factorial")
-Abs = _MathFunc("abs")
+abs_ = _MathFunc("abs")
 
 # Constants -- usable directly in term expressions:
 #     -import_from(py.sympy, [Limit, inf])
@@ -1280,15 +1280,15 @@ FactorInt._register(2, simple_to_trampoline(_factor_int_2))
 Divisors = ModulePredicate("Divisors")
 Divisors._register(2, simple_to_trampoline(_divisors_2))
 
-Gcd = ModulePredicate("Gcd")
-Gcd._register(3, simple_to_trampoline(_gcd_sym_3))
+gcd = ModulePredicate("gcd")
+gcd._register(3, simple_to_trampoline(_gcd_sym_3))
 
-Lcm = ModulePredicate("Lcm")
-Lcm._register(3, simple_to_trampoline(_lcm_sym_3))
+lcm = ModulePredicate("lcm")
+lcm._register(3, simple_to_trampoline(_lcm_sym_3))
 
 # Special functions
-Sum = ModulePredicate("Sum")
-Sum._register(5, simple_to_trampoline(_summation_4))
+sum_ = ModulePredicate("sum_")
+sum_._register(5, simple_to_trampoline(_summation_4))
 
 Product = ModulePredicate("Product")
 Product._register(5, simple_to_trampoline(_product_sym_4))

@@ -1,24 +1,24 @@
-# Tests for keyword-term introspection predicates: Vary/3, Extend/3, UnboundKeys/2, Signature/3
+# Tests for keyword-term introspection predicates: vary/3, extend/3, unbound_keys/2, signature/3
 
-# Vary/3 — copy a term with field overrides
+# vary/3 — copy a term with field overrides
 # (Uses Python dict as overrides; requires a predicate with known fields.)
 # Example: copy a point with its x replaced
-UpdateX(POINT, NEW_X, UPDATED) <- Vary({"x": NEW_X}, POINT, UPDATED)
+UpdateX(POINT, NEW_X, UPDATED) <- vary({"x": NEW_X}, POINT, UPDATED)
 
-# UnboundKeys/2 — find which fields are still unbound vars
-FreeFields(TERM, KEYS) <- UnboundKeys(TERM, KEYS)
+# unbound_keys/2 — find which fields are still unbound vars
+FreeFields(TERM, KEYS) <- unbound_keys(TERM, KEYS)
 
-# Signature/3 — reflect the registered parameter names for a predicate
-PredParams(NAME, ARITY, PARAMS) <- Signature(NAME, ARITY, PARAMS)
+# signature/3 — reflect the registered parameter names for a predicate
+PredParams(NAME, ARITY, PARAMS) <- signature(NAME, ARITY, PARAMS)
 
 
-# A keyword predicate for testing Vary/UnboundKeys/Signature
+# A keyword predicate for testing vary/unbound_keys/signature
 Vec(x=0, y=0),
 Vec(x=1, y=2),
 Vec(x=3, y=4),
 
-Test("signature vec fields") <- (PredParams("Vec", 2, PARAMS), Length(PARAMS, 2))
-Test("free fields unbound y") <- (FreeFields(Vec(x=1), KEYS), In("y", KEYS))
+Test("signature vec fields") <- (PredParams("Vec", 2, PARAMS), length(PARAMS, 2))
+Test("free fields unbound y") <- (FreeFields(Vec(x=1), KEYS), in_("y", KEYS))
 Test("vary vec x") <- (
     UpdateX(Vec(x=1, y=2), 99, UPDATED),
     UPDATED == Vec(x=99, y=2)

@@ -155,7 +155,7 @@ class TestRetract:
     """
 
     def test_retract_by_head_reference(self):
-        """Retract a clause by its stored head reference."""
+        """retract a clause by its stored head reference."""
         mod = Module("test")
         db = mod.db
         for val in [1, 2, 3]:
@@ -166,7 +166,7 @@ class TestRetract:
             ))
         compile_predicate("num", 1, db.clauses_for("num", 1), db)
 
-        # Retract the second clause (value=2) by its stored head
+        # retract the second clause (value=2) by its stored head
         clauses = db.clauses_for("num", 1)
         assert len(clauses) == 3
         head_to_remove = clauses[1].head
@@ -182,7 +182,7 @@ class TestRetract:
         assert 3 in results
 
     def test_retract_first_clause(self):
-        """Retract the first clause."""
+        """retract the first clause."""
         mod = Module("test")
         db = mod.db
         for val in ["a", "b", "c"]:
@@ -193,7 +193,7 @@ class TestRetract:
             ))
         compile_predicate("letter", 1, db.clauses_for("letter", 1), db)
 
-        # Retract first clause
+        # retract first clause
         head_to_remove = db.clauses_for("letter", 1)[0].head
         db.retract(head_to_remove)
         compile_predicate("letter", 1, db.clauses_for("letter", 1), db)
@@ -213,7 +213,7 @@ class TestRetract:
         ))
         compile_predicate("single", 1, db.clauses_for("single", 1), db)
 
-        # Retract the only clause
+        # retract the only clause
         head = db.clauses_for("single", 1)[0].head
         db.retract(head)
 

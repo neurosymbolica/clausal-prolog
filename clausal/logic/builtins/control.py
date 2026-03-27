@@ -1,10 +1,10 @@
-"""Control builtins: TimeGoal/1, TimeGoal/2, CallNth/2, CountAll/2,
-SetupCallCleanup/3, CallCleanup/2, CurrentTime/1, Statistics/2.
+"""Control builtins: time_goal/1, time_goal/2, call_nth/2, count_all/2,
+setup_call_cleanup/3, call_cleanup/2, current_time/1, statistics/2.
 
-The coroutining predicates (CallNth, CountAll, SetupCallCleanup, CallCleanup,
-Freeze, When) are compiled as **compiler special forms** in ``compiler.py``.
+The coroutining predicates (call_nth, count_all, setup_call_cleanup, call_cleanup,
+freeze, when) are compiled as **compiler special forms** in ``compiler.py``.
 This module registers their field names and also provides runtime builtins
-for CurrentTime/1, Statistics/2, and TimeGoal/1,2.
+for current_time/1, statistics/2, and time_goal/1,2.
 """
 
 from __future__ import annotations
@@ -24,12 +24,12 @@ from clausal.logic.builtins._registry import (
 
 # Register field names for class construction.
 # The actual dispatch is handled by compiler special forms in compiler.py.
-_BUILTIN_FIELDS[("CallNth", 2)] = ("goal", "n")
-_BUILTIN_FIELDS[("CountAll", 2)] = ("goal", "count")
-_BUILTIN_FIELDS[("SetupCallCleanup", 3)] = ("setup", "call", "cleanup")
-_BUILTIN_FIELDS[("CallCleanup", 2)] = ("call", "cleanup")
-_BUILTIN_FIELDS[("Freeze", 2)] = ("variable", "goal")
-_BUILTIN_FIELDS[("When", 2)] = ("condition", "goal")
+_BUILTIN_FIELDS[("call_nth", 2)] = ("goal", "n")
+_BUILTIN_FIELDS[("count_all", 2)] = ("goal", "count")
+_BUILTIN_FIELDS[("setup_call_cleanup", 3)] = ("setup", "call", "cleanup")
+_BUILTIN_FIELDS[("call_cleanup", 2)] = ("call", "cleanup")
+_BUILTIN_FIELDS[("freeze", 2)] = ("variable", "goal")
+_BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 
 def _goal_dispatch_and_args(goal_val):
@@ -45,7 +45,7 @@ def _goal_dispatch_and_args(goal_val):
     if is_term_instance(goal_val):
         cls = type(goal_val)
         # Only dispatch if the class has a compiled dispatch function.
-        # This excludes AST nodes (And, Or, In as structural nodes, etc.) which
+        # This excludes AST nodes (And, Or, in_ as structural nodes, etc.) which
         # are PredicateMeta instances but do not have a compiled predicate body.
         if getattr(cls, '_dispatch_fn', None) is not None:
             args = tuple(getattr(goal_val, f) for f in term_field_names(goal_val))
@@ -53,9 +53,9 @@ def _goal_dispatch_and_args(goal_val):
     return None, None
 
 
-@_trampoline_builtin("TimeGoal", 1)
+@_trampoline_builtin("time_goal", 1)
 def _time_goal__1(this_generator, parent, goal, trail):
-    """TimeGoal(Goal) — call Goal and print wall/CPU time after it completes.
+    """time_goal(Goal) — call Goal and print wall/CPU time after it completes.
 
     Analogous to SWI-Prolog time/1.  Each solution is forwarded to the parent;
     timing is printed (to stderr) once the goal is exhausted.
@@ -63,7 +63,7 @@ def _time_goal__1(this_generator, parent, goal, trail):
     Goal may be:
     - a Python callable / lambda (no extra args)
     - a PredicateMeta class or BuiltinPredicate (called with no args)
-    - a predicate instance, e.g. In(X_, [1,2,3]) — dispatched with its fields
+    - a predicate instance, e.g. in_(X_, [1,2,3]) — dispatched with its fields
     """
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val)
@@ -92,14 +92,14 @@ def _time_goal__1(this_generator, parent, goal, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("TimeGoal", 2)
+@_trampoline_builtin("time_goal", 2)
 def _time_goal__2(this_generator, parent, goal, elapsed, trail):
-    """TimeGoal(Goal, Elapsed) — run Goal; unify Elapsed with wall-clock seconds.
+    """time_goal(Goal, Elapsed) — run Goal; unify Elapsed with wall-clock seconds.
 
-    Elapsed is unified after each solution of Goal.  If Goal fails, TimeGoal/2
+    Elapsed is unified after each solution of Goal.  If Goal fails, time_goal/2
     fails.  Backtracking into Goal is supported.
 
-    Goal accepts the same forms as TimeGoal/1.
+    Goal accepts the same forms as time_goal/1.
     """
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val)
@@ -127,16 +127,16 @@ def _time_goal__2(this_generator, parent, goal, elapsed, trail):
 _start_wall = _time.monotonic()
 
 
-@_builtin("CurrentTime", 1)
+@_builtin("current_time", 1)
 def _current_time__1(t, trail, k):
-    """CurrentTime(T) — unify T with the current Unix timestamp (float)."""
+    """current_time(T) — unify T with the current Unix timestamp (float)."""
     if unify(t, _time.time(), trail):
         yield None
 
 
-@_builtin("Statistics", 2)
+@_builtin("statistics", 2)
 def _statistics__2(key, value, trail, k):
-    """Statistics(Key, Value) — query runtime statistics.
+    """statistics(Key, Value) — query runtime statistics.
 
     Key bound → look up that stat. Key unbound → enumerate all stats.
     """

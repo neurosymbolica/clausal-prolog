@@ -22,16 +22,16 @@ Ab() >> ([])
 
 NotA() >> (not ['a'], [X])
 
-ValidSentence(_sentence) <- (Phrase(sentence, _sentence))
+ValidSentence(_sentence) <- (phrase(sentence, _sentence))
 
 ExprDcg(_expression) >> ([_expression], _expression is _expression + 0)
 
 Test('valid sentence') <- (ValidSentence(['the', 'dog', 'chases', 'the', 'cat']))
 
-Test('greeting') <- (Phrase(greeting, ['hello', 'world']))
+Test('greeting') <- (phrase(greeting, ['hello', 'world']))
 
-Test('noun phrase dog') <- (Phrase(noun_phrase, ['the', 'dog']))
+Test('noun phrase dog') <- (phrase(noun_phrase, ['the', 'dog']))
 
-Test('verb phrase chases') <- (Phrase(verb_phrase, ['chases']))
+Test('verb phrase chases') <- (phrase(verb_phrase, ['chases']))
 
-Test('digit 3') <- (Phrase(Digit(3), [3]))
+Test('digit 3') <- (phrase(Digit(3), [3]))

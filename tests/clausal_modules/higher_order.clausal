@@ -1,41 +1,41 @@
 # Higher-order list predicates with lambdas
 #
-# MapList/2, MapList/3, Filter/3, Exclude/3, FoldLeft/4
+# maplist/2, maplist/3, include/3, exclude/3, foldl/4
 
-# Doubles/2 — double each element via MapList/3 + lambda
-Doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
+# Doubles/2 — double each element via maplist/3 + lambda
+Doubles(XS, YS) <- maplist(((X, Y) <- (Y := X * 2)), XS, YS)
 
-# AllPositive/1 — check all positive via MapList/2 + lambda
-AllPositive(XS) <- MapList((X <- (X > 0)), XS)
+# AllPositive/1 — check all positive via maplist/2 + lambda
+AllPositive(XS) <- maplist((X <- (X > 0)), XS)
 
-# KeepPositive/2 — filter positive via Filter/3
-KeepPositive(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
+# KeepPositive/2 — filter positive via include/3
+KeepPositive(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
-# RemoveNegative/2 — filter out negative via Exclude/3
-RemoveNegative(XS, RS) <- Exclude((X <- (X < 0)), XS, RS)
+# RemoveNegative/2 — filter out negative via exclude/3
+RemoveNegative(XS, RS) <- exclude((X <- (X < 0)), XS, RS)
 
-# SumListFold/2 — sum via FoldLeft/4
-SumListFold(XS, S) <- FoldLeft(((E, A, R) <- (R := A + E)), XS, 0, S)
+# SumListFold/2 — sum via foldl/4
+SumListFold(XS, S) <- foldl(((E, A, R) <- (R := A + E)), XS, 0, S)
 
-# ProductList/2 — product via FoldLeft/4
-ProductList(XS, P) <- FoldLeft(((E, A, R) <- (R := A * E)), XS, 1, P)
+# ProductList/2 — product via foldl/4
+ProductList(XS, P) <- foldl(((E, A, R) <- (R := A * E)), XS, 1, P)
 
-# Squares/2 — square each element via MapList/3
-Squares(XS, YS) <- MapList(((X, Y) <- (Y := X * X)), XS, YS)
+# Squares/2 — square each element via maplist/3
+Squares(XS, YS) <- maplist(((X, Y) <- (Y := X * X)), XS, YS)
 
-# KeepEven/2 — filter even numbers via Filter
-KeepEven(XS, ES) <- Filter((X <- (X % 2 == 0)), XS, ES)
+# KeepEven/2 — filter even numbers via include
+KeepEven(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
 
-# RemoveEven/2 — filter out even numbers via Exclude
-RemoveEven(XS, OS) <- Exclude((X <- (X % 2 == 0)), XS, OS)
+# RemoveEven/2 — filter out even numbers via exclude
+RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 
 # NegateList/2 — negate each element
-NegateList(XS, YS) <- MapList(((X, Y) <- (Y := 0 - X)), XS, YS)
+NegateList(XS, YS) <- maplist(((X, Y) <- (Y := 0 - X)), XS, YS)
 
-# CountFold/2 — count elements via FoldLeft (ignore element, just increment)
-CountFold(XS, N) <- FoldLeft(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
+# CountFold/2 — count elements via foldl (ignore element, just increment)
+CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
 
 # MaxFold/3 — find max starting from an initial value
-MaxFold(XS, INIT, M) <- FoldLeft(((E, A, R) <- (
+MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (
     (E >= A and R is E) or (A > E and R is A)
 )), XS, INIT, M)

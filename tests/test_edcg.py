@@ -17,7 +17,7 @@ from clausal.import_hook import _load_module
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it as a module."""
+    """write a .clausal file and load it as a module."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(src_text)
     mod = _load_module(name, str(p))

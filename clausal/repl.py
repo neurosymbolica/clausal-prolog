@@ -229,10 +229,10 @@ class Solutions:
         X = Var()
         Solutions(query(goal, {"X": X}, module))
 
-    When evaluated in an IPython cell the solutions are presented one at a
+    when evaluated in an IPython cell the solutions are presented one at a
     time, separated by ``or``, with a key-driven prompt between each.
 
-    In Jupyter notebooks, all solutions (up to *limit*) are rendered as
+    in_ Jupyter notebooks, all solutions (up to *limit*) are rendered as
     styled HTML via :meth:`_repr_html_`.
 
     Key bindings (terminal IPython only)
@@ -261,8 +261,8 @@ class Solutions:
     def _ipython_display_(self, **kwargs):
         """Called by IPython instead of repr(); drives the interactive loop.
 
-        In Jupyter kernels, delegates to :meth:`_repr_html_` for rich HTML
-        display.  In terminal IPython, uses the interactive keypress loop.
+        in_ Jupyter kernels, delegates to :meth:`_repr_html_` for rich HTML
+        display.  in_ terminal IPython, uses the interactive keypress loop.
         """
         if _in_jupyter_kernel():
             from IPython.display import display, HTML

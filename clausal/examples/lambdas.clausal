@@ -58,7 +58,7 @@ Color("green"),
 Color("blue"),
 
 AllColors(COLORS) <- (
-    FindAll(C, Color(C), COLORS)
+    findall(C, Color(C), COLORS)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────

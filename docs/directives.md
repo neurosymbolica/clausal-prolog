@@ -71,12 +71,12 @@ them at runtime. But some programs need to add or remove facts during execution
 color("red"),
 
 Test("add at runtime") <- (
-    Assert(color("blue")),
+    assertz(color("blue")),
     color("blue")
 )
 ```
 
-Without `-dynamic`, the `Assert` call above would raise a `RuntimeError`.
+Without `-dynamic`, the `assertz` call above would raise a `RuntimeError`.
 See [Database Operations](database_ops.md) for full details.
 
 ### -table
@@ -125,7 +125,7 @@ would trigger a warning or error.
 
 ### -meta_predicate
 
-**Problem**: When higher-order predicates are imported across modules, the
+**Problem**: when higher-order predicates are imported across modules, the
 module system needs to know which arguments are goals (to resolve them in the
 correct module context).
 
@@ -136,7 +136,7 @@ correct module context).
 
 The `2` means the first argument is a goal that takes 2 extra arguments.
 `+` means input, `-` means output. This ensures correct cross-module
-resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `MapList` that use this pattern.
+resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `maplist` that use this pattern.
 
 ### -shallow
 
@@ -228,14 +228,14 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 -module(queens, [Queens(N, QS)])
 
 Queens(N, QS) <- (
-    Length(QS, N),
-    Maplist(InDomain(1, N), QS),
+    length(QS, N),
+    Maplist(in_domain(1, N), QS),
     SafeQueens(QS),
     Labeling([], QS)
 )
 ```
 
-When `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge `PredicateMeta` classes that look like native clausal predicates to callers but execute on Scryer under the hood:
+when `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge `PredicateMeta` classes that look like native clausal predicates to callers but execute on Scryer under the hood:
 
 ```python
 from queens import Queens
@@ -275,4 +275,4 @@ Directives apply to the entire module — they cannot be scoped to individual cl
 *See also: [Predicates](predicates.md) — how predicates and clauses work.*
 *See also: [Import System](import.md) — full details on `-import_from` and `-import_module`.*
 *See also: [Tabling](tabling.md) — SLG tabling enabled by `-table`.*
-*See also: [Database Operations](database_ops.md) — `Assert`/`Retract` builtins that require `-dynamic`.*
+*See also: [Database Operations](database_ops.md) — `assertz`/`retract` builtins that require `-dynamic`.*

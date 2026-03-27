@@ -62,7 +62,7 @@ def test_no_expr_stmt():
     s = body("f(x)")
     assert len(s) == 1
     assert isinstance(s[0], sa.Call), f"Expected Call, got {type(s[0]).__name__}"
-    # In a function body too
+    # in_ a function body too
     func = stmt("def g():\n  f(x)\n  42")
     assert isinstance(func, sa.FunctionDef)
     assert isinstance(func.body[0], sa.Call)
@@ -162,7 +162,7 @@ def test_comparisons():
     assert isinstance(expr("x >= y"), sa.GtE)
     assert isinstance(expr("x is y"), sa.Unify)
     assert isinstance(expr("x is not y"), sa.DoesNotUnify)
-    assert isinstance(expr("x in y"), sa.In)
+    assert isinstance(expr("x in y"), sa.in_)
     assert isinstance(expr("x not in y"), sa.NotIn)
     node = expr("1 < x < 10")
     assert isinstance(node, sa.CompareChain)
@@ -339,7 +339,7 @@ def test_raise():
 
 def test_assert():
     s = stmt("assert x, 'msg'")
-    assert isinstance(s, sa.Assert) and s.msg is not None
+    assert isinstance(s, sa.assertz) and s.msg is not None
     print("  assert OK")
 
 def test_global_nonlocal():

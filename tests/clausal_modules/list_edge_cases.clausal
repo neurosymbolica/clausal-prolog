@@ -24,7 +24,7 @@ HeadIs(X, [X, *_]),
 IgnoreFirstTwo(_, _, X, X),
 
 # Phase 3: _ as star — [*_] matches any list
-IsList([*_]),
+is_list([*_]),
 
 # Phase 4: two fixed elements between two stars
 Bracket([*A, X, Y, *B], X, Y, A, B),

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`Dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) instead of `is`-based arithmetic.
+Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) instead of `is`-based arithmetic.
 
 Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
@@ -10,7 +10,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 ## Syntax
 
-In `.clausal` files, use the `If` function call:
+in_ `.clausal` files, use the `If` function call:
 
 ```clausal
 # skip
@@ -33,7 +33,7 @@ classify(X, L) <- If(X >= 0, L is "positive", L is "negative")
 check(X, R) <- If(X is 1, R is "equal", R is "different")
 ```
 
-When `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
+when `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
 
 **Nested ITE:**
 ```clausal
@@ -225,15 +225,15 @@ Clausal avoids this entirely:
 
 - **Reifiable conditions** get a three-way check: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints.
 - **Non-reifiable conditions** use single evaluation with a `_found` flag.
-- **Users who want first-solution commitment** use `Once()` explicitly.
+- **Users who want first-solution commitment** use `once()` explicitly.
 
 The result is a system where goal reordering is always safe and adding constraints never loses solutions.
 
 ---
 
-## `Once()` — First-Solution Commitment
+## `once()` — First-Solution Commitment
 
-`Once(goal)` is a builtin meta-predicate that commits to the first solution of `goal`. It compiles to a sub-generator with a `break` after the first yield:
+`once(goal)` is a builtin meta-predicate that commits to the first solution of `goal`. It compiles to a sub-generator with a `break` after the first yield:
 
 ```python
 def _once_gen_0():
@@ -249,11 +249,11 @@ trail.undo(_m_0)
 
 Key properties:
 - **Bindings escape**: unlike `Not`, bindings from the once'd goal are visible to the continuation.
-- **Continuation backtracks normally**: `Once(X in [1,2]) and Y in [a,b]` produces `(1,a), (1,b)` — only `X` is committed, `Y` still backtracks.
+- **Continuation backtracks normally**: `once(X in [1,2]) and Y in [a,b]` produces `(1,a), (1,b)` — only `X` is committed, `Y` still backtracks.
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`Once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(Once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
+`once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `If(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
 
 ---
 
@@ -277,4 +277,4 @@ Key properties:
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) constraints used by reified ITE · [Tabling](tabling.md) — WFS negation for tabled predicates · [Lambdas](lambdas.md) — closures that can appear as ITE conditions.*
+*See also: [Constraints](constraints.md) — `dif/2` and CLP(ℤ) constraints used by reified ITE · [Tabling](tabling.md) — WFS negation for tabled predicates · [Lambdas](lambdas.md) — closures that can appear as ITE conditions.*

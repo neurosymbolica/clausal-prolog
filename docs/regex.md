@@ -28,7 +28,7 @@ The named groups `YEAR` and `MONTH` are automatically bound to the clause variab
 
 ```clausal
 # skip
--import_from(regex, [Match, Search, Replace, Split, FindAll])
+-import_from(regex, [Match, Search, Replace, Split, findall])
 ```
 
 Or via [module import](import.md):
@@ -117,14 +117,14 @@ Test("split csv") <- (Split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
 Test("split whitespace") <- (Split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 ```
 
-### FindAll/3 (Regex)
+### findall/3 (Regex)
 
-`FindAll(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match:
+`findall(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match:
 
 ```clausal
--import_from(regex, [FindAll])
+-import_from(regex, [findall])
 
-Test("findall first") <- (FindAll(r"\d+", "a1b23c456", D), D == "1")
+Test("findall first") <- (findall(r"\d+", "a1b23c456", D), D == "1")
 ```
 
 Fails if no matches are found.
@@ -248,17 +248,17 @@ Test("invalid email") <- (not ValidEmail("not-an-email"))
 Test("valid ipv4") <- ValidIpv4("192.168.1.1")
 ```
 
-### Combining Regex with FindAll (Meta-Predicate)
+### Combining Regex with findall (Meta-Predicate)
 
-Use the [`FindAll` meta-predicate](meta_predicates.md) to collect all regex matches into a list:
+Use the [`findall` meta-predicate](meta_predicates.md) to collect all regex matches into a list:
 
 ```clausal
 -import_module(regex)
 
 AllNumbers(TEXT, NUMBERS) <- (
-    FindAll(
+    findall(
         NUM,
-        regex.FindAll(r"\d+", TEXT, NUM),
+        regex.findall(r"\d+", TEXT, NUM),
         NUMBERS
     )
 )
@@ -301,7 +301,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
 
 - **Match is anchored at start**; Search is not. Use `Search` when you want to find a pattern anywhere in the string.
 - **Auto-binding requires ALLCAPS or leading-underscore** group names. A group named `(?P<year>...)` (lowercase, no leading underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
-- **Regex FindAll vs [meta-predicate FindAll](meta_predicates.md)**: The regex `FindAll/3` is nondeterministic (yields one match at a time). The meta-predicate `FindAll/3` collects all solutions into a list. Use qualified names (`regex.FindAll`) if both are imported.
+- **Regex findall vs [meta-predicate findall](meta_predicates.md)**: The regex `findall/3` is nondeterministic (yields one match at a time). The meta-predicate `findall/3` collects all solutions into a list. Use qualified names (`regex.findall`) if both are imported.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
 
 ---
@@ -316,7 +316,7 @@ Dynamic patterns are compiled at runtime (no precompilation).
     - **Search/2,3**: unanchored search, group extraction
     - **Replace/4**: whitespace, digit removal, backreferences
     - **Split/3**: comma, whitespace
-    - **FindAll/3**: multiple matches, no matches
+    - **findall/3**: multiple matches, no matches
     - **Edge cases**: dynamic patterns, pattern variables
     - **Fixture integration**: `regex_basic.clausal` (25 tests), `regex_autobind.clausal` (17 tests)
 

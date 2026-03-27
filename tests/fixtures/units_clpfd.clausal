@@ -8,53 +8,53 @@
 # Units + CLP(FD): label integer variables, then wrap with unit predicates
 # and verify dimensional correctness.
 #
-# Pattern: InDomain -> constraints -> Label -> unit predicates -> checks
+# Pattern: in_domain -> constraints -> label -> unit predicates -> checks
 
 # Find an integer force value in 1..20 that equals 12,
 # then verify it wraps to a force dimension.
 Test("clpfd label as newton") <- (
-    InDomain([F_INT], 1, 20),
-    Label([F_INT]),
+    in_domain([F_INT], 1, 20),
+    label([F_INT]),
     F_INT == 12,
     F := ++(Newton(F_INT)),
-    HasUnits(F, Newton),
+    has_units(F, Newton),
     StripUnits(F, 12)
 )
 
 # Find two distinct integers whose product is 12,
 # treat them as side lengths in metres, verify area.
 Test("clpfd rectangle area") <- (
-    InDomain([W, H], 1, 6),
-    AllDifferent([W, H]),
-    Label([W, H]),
+    in_domain([W, H], 1, 6),
+    all_different([W, H]),
+    label([W, H]),
     PROD := W * H,
     PROD == 12,
     W_M := ++(Metre(W)),
     H_M := ++(Metre(H)),
     AREA := W_M * H_M,
-    HasUnits(AREA, Metre**2)
+    has_units(AREA, Metre**2)
 )
 
 # Find integer voltage and current (1..20) with V/I = 4,
 # wrap as Volt/Ampere, compute resistance, verify resistance.
 Test("clpfd ohms law integer") <- (
-    InDomain([V_INT, I_INT], 1, 20),
-    Label([V_INT, I_INT]),
+    in_domain([V_INT, I_INT], 1, 20),
+    label([V_INT, I_INT]),
     R_INT := V_INT // I_INT,
     R_INT == 4,
     V_INT == R_INT * I_INT,
     VOLTAGE := ++(Volt(V_INT)),
     CURRENT := ++(Ampere(I_INT)),
     R := VOLTAGE / CURRENT,
-    HasUnits(R, Ohm)
+    has_units(R, Ohm)
 )
 
 # Find integer mass (1..5 kg) and speed (1..5 m/s) where mass * speed^2 == 50,
 # compute kinetic energy, verify energy.
 # m=2, v=5: 2*KE = 2 * 5^2 = 50 -> KE = 25 J
 Test("clpfd kinetic energy") <- (
-    InDomain([M_INT, V_INT], 1, 5),
-    Label([M_INT, V_INT]),
+    in_domain([M_INT, V_INT], 1, 5),
+    label([M_INT, V_INT]),
     TWICE_KE := M_INT * V_INT ** 2,
     TWICE_KE == 50,
     MASS := ++(Kilogram(M_INT)),
@@ -63,38 +63,38 @@ Test("clpfd kinetic energy") <- (
     SPD := D / T,
     KE := MASS * SPD ** 2,
     HALF := KE / 2,
-    HasUnits(HALF, Joule),
+    has_units(HALF, Joule),
     StripUnits(HALF, 25)
 )
 
 # Generate integer power values, filter those divisible by 3,
 # wrap as Watt and verify power.
 Test("clpfd power multiple of 3") <- (
-    InDomain([P_INT], 1, 30),
-    Label([P_INT]),
+    in_domain([P_INT], 1, 30),
+    label([P_INT]),
     MOD := P_INT % 3,
     MOD == 0,
     P := ++(Watt(P_INT)),
-    HasUnits(P, Watt)
+    has_units(P, Watt)
 )
 
 # Force F = m * a: find integer mass 1..5 and acceleration 1..5 giving F = 20 N.
 # Then wrap each as a Quantity and recompute to verify.
 Test("clpfd force equals mass times accel") <- (
-    InDomain([M_INT, A_INT], 1, 5),
-    Label([M_INT, A_INT]),
+    in_domain([M_INT, A_INT], 1, 5),
+    label([M_INT, A_INT]),
     F_INT := M_INT * A_INT,
     F_INT == 20,
     F := ++(Newton(F_INT)),
-    HasUnits(F, Newton),
+    has_units(F, Newton),
     StripUnits(F, 20)
 )
 
 # Power = V^2 / R: find integers V in 1..12, R in 1..6 where V^2 / R = 12.
 # V=6, R=3: 36/3 = 12.
 Test("clpfd power from voltage squared") <- (
-    InDomain([V_INT, R_INT], 1, 12),
-    Label([V_INT, R_INT]),
+    in_domain([V_INT, R_INT], 1, 12),
+    label([V_INT, R_INT]),
     VSQUARED := V_INT ** 2,
     RATIO := VSQUARED // R_INT,
     RATIO == 12,
@@ -102,22 +102,22 @@ Test("clpfd power from voltage squared") <- (
     VOLTAGE := ++(Volt(V_INT)),
     RESIST := ++(Ohm(R_INT)),
     P := VOLTAGE * VOLTAGE / RESIST,
-    HasUnits(P, Watt)
+    has_units(P, Watt)
 )
 
 # Dimensionless ratio: find integer numerator and denominator (1..10) where
 # the ratio num/den equals 2, then verify it is dimensionless.
 # Wrap as Metre/Metre so units cancel.
 Test("clpfd dimensionless ratio") <- (
-    InDomain([NUM, DEN], 1, 10),
-    Label([NUM, DEN]),
+    in_domain([NUM, DEN], 1, 10),
+    label([NUM, DEN]),
     PROD := NUM // DEN,
     PROD == 2,
     NUM == PROD * DEN,
     D_NUM := ++(Metre(NUM)),
     D_DEN := ++(Metre(DEN)),
     RATIO := D_NUM / D_DEN,
-    HasUnits(RATIO, Dimensionless)
+    has_units(RATIO, Dimensionless)
 )
 
 # Unit-mismatch guard via constraint: label F and T from the same domain,
@@ -125,10 +125,10 @@ Test("clpfd dimensionless ratio") <- (
 # fails (no solution), confirming constraint rejection is CLP(FD)-compatible.
 Test("clpfd constraint rejects wrong unit") <- (
     not (
-        InDomain([F_INT], 1, 5),
-        Label([F_INT]),
+        in_domain([F_INT], 1, 5),
+        label([F_INT]),
         F := ++(Newton(F_INT)),
-        HasUnits(S, Second),
+        has_units(S, Second),
         S is F
     )
 )

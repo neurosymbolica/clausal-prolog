@@ -151,7 +151,7 @@ Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
 
     SearchApi(QUERY, RESULTS) <- (
         Encode(QUERY, SAFE_QUERY),
-        AtomConcat("https://api.example.com/search?q=", SAFE_QUERY, URL),
+        atom_concat("https://api.example.com/search?q=", SAFE_QUERY, URL),
         JSONGet(URL, RESULTS)
     )
     ```

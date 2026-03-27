@@ -116,7 +116,7 @@ class TestArithmeticEvaluation:
         assert results == [42]
 
     def test_eval_check_mode(self):
-        """When LHS is already bound, := checks equality.
+        """when LHS is already bound, := checks equality.
         ISO: 3 is 1+2 succeeds."""
         goal = Evaluate(left=3, right=Add(left=1, right=2))
         assert _goal_succeeds(goal)
@@ -156,8 +156,8 @@ class TestArithmeticEvaluation:
 class TestArithmeticComparison:
     """ISO §8.7 — arithmetic comparison.
 
-    In Prolog: =:=, =\\=, <, >, =<, >=.
-    In clausal: only <, <=, >, >= are direct.
+    in_ Prolog: =:=, =\\=, <, >, =<, >=.
+    in_ clausal: only <, <=, >, >= are direct.
     """
 
     def test_lt_succeeds(self):
@@ -225,57 +225,57 @@ class TestArithmeticBuiltins:
     def test_succ_forward(self):
         """succ(3, X) → X = 4."""
         x = Var()
-        assert _call_var("Succ", 3, x) == [4]
+        assert _call_var("succ", 3, x) == [4]
 
     def test_succ_backward(self):
         """succ(X, 4) → X = 3."""
         x = Var()
-        assert _call_var("Succ", x, 4, var=x) == [3]
+        assert _call_var("succ", x, 4, var=x) == [3]
 
     def test_succ_zero(self):
         x = Var()
-        assert _call_var("Succ", 0, x) == [1]
+        assert _call_var("succ", 0, x) == [1]
 
     def test_plus_forward(self):
         """plus(2, 3, X) → X = 5."""
         x = Var()
-        assert _call_var("Plus", 2, 3, x) == [5]
+        assert _call_var("plus", 2, 3, x) == [5]
 
     def test_plus_backward_x(self):
         """plus(X, 3, 5) → X = 2."""
         x = Var()
-        assert _call_var("Plus", x, 3, 5, var=x) == [2]
+        assert _call_var("plus", x, 3, 5, var=x) == [2]
 
     def test_plus_backward_y(self):
         """plus(2, Y, 5) → Y = 3."""
         y = Var()
-        assert _call_var("Plus", 2, y, 5, var=y) == [3]
+        assert _call_var("plus", 2, y, 5, var=y) == [3]
 
     def test_between_generates(self):
         """between(1, 5, X) generates 1,2,3,4,5."""
         x = Var()
-        assert _call_var("Between", 1, 5, x) == [1, 2, 3, 4, 5]
+        assert _call_var("between", 1, 5, x) == [1, 2, 3, 4, 5]
 
     def test_between_check_mode(self):
         """between(1, 5, 3) succeeds."""
         mod = Module("test")
-        goal = CallGoal(func=LoadName(name="Between"), args=[1, 5, 3], kwargs=[])
+        goal = CallGoal(func=LoadName(name="between"), args=[1, 5, 3], kwargs=[])
         assert once(goal, mod) is not None
 
     def test_between_check_out_of_range(self):
         """between(1, 5, 6) fails."""
         mod = Module("test")
-        goal = CallGoal(func=LoadName(name="Between"), args=[1, 5, 6], kwargs=[])
+        goal = CallGoal(func=LoadName(name="between"), args=[1, 5, 6], kwargs=[])
         assert once(goal, mod) is None
 
     def test_abs(self):
         x = Var()
-        assert _call_var("Abs", -5, x) == [5]
+        assert _call_var("abs_", -5, x) == [5]
 
     def test_max(self):
         x = Var()
-        assert _call_var("Max", 3, 7, x) == [7]
+        assert _call_var("max_", 3, 7, x) == [7]
 
     def test_min(self):
         x = Var()
-        assert _call_var("Min", 3, 7, x) == [3]
+        assert _call_var("min_", 3, 7, x) == [3]

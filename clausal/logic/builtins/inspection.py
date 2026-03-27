@@ -1,5 +1,5 @@
-"""Core term inspection builtins: Functor/3, Arg/3, Unpack/2, CopyTerm/2,
-TermVariables/2, NumberVars/3."""
+"""Core term inspection builtins: functor/3, arg/3, unpack/2, copy_term/2,
+term_variables/2, numbervars/3."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
 
 
-@_builtin("Functor", 3)
+@_builtin("functor", 3)
 def _functor__3(term, name, arity, trail, k):
     """functor(Term, Name, Arity) — decompose or compose a term.
 
@@ -55,9 +55,9 @@ def _functor__3(term, name, arity, trail, k):
         trail.undo(mark)
 
 
-@_builtin("Arg", 3)
+@_builtin("arg", 3)
 def _arg__3(n, term, arg_out, trail, k):
-    """arg(N, Term, Arg) — unify Arg with the N-th argument of Term (1-based)."""
+    """arg(N, Term, arg) — unify arg with the N-th argument of Term (1-based)."""
     n_val = deref(n)
     term_val = deref(term)
     if is_var(n_val) or is_var(term_val):
@@ -74,7 +74,7 @@ def _arg__3(n, term, arg_out, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Unpack", 2)
+@_builtin("unpack", 2)
 def _univ__2(term, lst, trail, k):
     """univ(Term, List) — ``=..`` in Prolog.
 
@@ -146,7 +146,7 @@ def _copy_term(term: Any, var_map: dict) -> Any:
     return term
 
 
-@_builtin("CopyTerm", 2)
+@_builtin("copy_term", 2)
 def _copy_term__2(original, copy, trail, k):
     """copy_term(Original, Copy) — unify Copy with a deep copy of Original with fresh Vars."""
     orig_val = deref(original)
@@ -188,7 +188,7 @@ def _collect_vars(term: Any, seen_ids: set, result: list) -> None:
             _collect_vars(getattr(term, name), seen_ids, result)
 
 
-@_builtin("TermVariables", 2)
+@_builtin("term_variables", 2)
 def _term_variables__2(term, vars_out, trail, k):
     """term_variables(Term, Vars) — unify Vars with list of unbound variables in Term."""
     term_val = deref(term)
@@ -200,7 +200,7 @@ def _term_variables__2(term, vars_out, trail, k):
     trail.undo(mark)
 
 
-@_builtin("NumberVars", 3)
+@_builtin("numbervars", 3)
 def _number_vars__3(term, start, end, trail, k):
     """number_vars(Term, Start, End) — bind unbound Vars in Term to '$VAR'(N) atoms.
 
@@ -232,7 +232,7 @@ def _number_vars__3(term, start, end, trail, k):
         trail.undo(mk)
 
 
-# ── GenSym/2 ──────────────────────────────────────────────────────────────────
+# ── gensym/2 ──────────────────────────────────────────────────────────────────
 
 import threading
 
@@ -240,9 +240,9 @@ _gensym_counters: dict[str, int] = {}
 _gensym_lock = threading.Lock()
 
 
-@_builtin("GenSym", 2)
+@_builtin("gensym", 2)
 def _gensym__2(prefix, atom, trail, k):
-    """GenSym(Prefix, Atom) — generate a unique atom by appending a counter.
+    """gensym(Prefix, Atom) — generate a unique atom by appending a counter.
 
     Counter is global and monotonically increasing. NOT trailed — survives
     backtracking. This is intentional and matches Prolog's gensym/2 semantics.

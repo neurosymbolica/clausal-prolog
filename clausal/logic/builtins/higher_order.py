@@ -1,7 +1,7 @@
-"""Higher-order builtins: CallGoal/1..8, Call/1..8, MapList/2,3,
-Filter/3, Exclude/3, Partition/4, TFilter/3, TPartition/4, FoldLeft/4,
-TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3,
-MaxBy/3, MinBy/3, FilterMap/3."""
+"""Higher-order builtins: CallGoal/1..8, Call/1..8, maplist/2,3,
+include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,
+take_while/3, drop_while/3, span/4, group_by/3, sort_by/3,
+max_by/3, min_by/3, filter_map/3."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ del _n, _cg_arity, _key  # clean up loop variables
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 
-@_trampoline_builtin("MapList", 2)
+@_trampoline_builtin("maplist", 2)
 def _map_list__2(this_generator, parent, goal, lst, trail):
     """map_list(Goal, List) — Goal(Elem) succeeds for each element."""
     lst_val = deref(lst)
@@ -78,7 +78,7 @@ def _map_list__2(this_generator, parent, goal, lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MapList", 3)
+@_trampoline_builtin("maplist", 3)
 def _map_list__3(this_generator, parent, goal, xs, ys, trail):
     """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y."""
     xs_val = deref(xs)
@@ -105,7 +105,7 @@ def _map_list__3(this_generator, parent, goal, xs, ys, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Filter", 3)
+@_trampoline_builtin("include", 3)
 def _include__3(this_generator, parent, goal, lst, included, trail):
     """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
     lst_val = deref(lst)
@@ -132,7 +132,7 @@ def _include__3(this_generator, parent, goal, lst, included, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Exclude", 3)
+@_trampoline_builtin("exclude", 3)
 def _exclude__3(this_generator, parent, goal, lst, excluded, trail):
     """exclude(Goal, List, Excluded) — keep elements where Goal(Elem) fails."""
     lst_val = deref(lst)
@@ -159,7 +159,7 @@ def _exclude__3(this_generator, parent, goal, lst, excluded, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("FoldLeft", 4)
+@_trampoline_builtin("foldl", 4)
 def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
     """foldl(Goal, List, V0, V) — left fold with Goal(Elem, Acc0, Acc1)."""
     lst_val = deref(lst)
@@ -194,9 +194,9 @@ def _is_goal(val):
     return callable(val) or hasattr(val, '_get_dispatch')
 
 
-@_trampoline_builtin("TakeWhile", 3)
+@_trampoline_builtin("take_while", 3)
 def _take_while__3(this_generator, parent, goal, lst, prefix, trail):
-    """TakeWhile(Goal, List, Prefix) — longest prefix where Goal(Elem) succeeds."""
+    """take_while(Goal, List, Prefix) — longest prefix where Goal(Elem) succeeds."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -222,9 +222,9 @@ def _take_while__3(this_generator, parent, goal, lst, prefix, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DropWhile", 3)
+@_trampoline_builtin("drop_while", 3)
 def _drop_while__3(this_generator, parent, goal, lst, suffix, trail):
-    """DropWhile(Goal, List, Suffix) — drop prefix where Goal(Elem) succeeds."""
+    """drop_while(Goal, List, Suffix) — drop prefix where Goal(Elem) succeeds."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -250,9 +250,9 @@ def _drop_while__3(this_generator, parent, goal, lst, suffix, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Span", 4)
+@_trampoline_builtin("span", 4)
 def _span__4(this_generator, parent, goal, lst, yes, no, trail):
-    """Span(Goal, List, Yes, No) — TakeWhile + DropWhile in one pass."""
+    """span(Goal, List, Yes, No) — take_while + drop_while in one pass."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -280,9 +280,9 @@ def _span__4(this_generator, parent, goal, lst, yes, no, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("GroupBy", 3)
+@_trampoline_builtin("group_by", 3)
 def _group_by__3(this_generator, parent, goal, lst, groups, trail):
-    """GroupBy(Goal, List, Groups) — group consecutive elements by key via Goal(Elem, Key)."""
+    """group_by(Goal, List, Groups) — group consecutive elements by key via Goal(Elem, Key)."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -316,9 +316,9 @@ def _group_by__3(this_generator, parent, goal, lst, groups, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SortBy", 3)
+@_trampoline_builtin("sort_by", 3)
 def _sort_by__3(this_generator, parent, goal, lst, sorted_lst, trail):
-    """SortBy(Goal, List, Sorted) — sort List by key projected via Goal(Elem, Key)."""
+    """sort_by(Goal, List, Sorted) — sort List by key projected via Goal(Elem, Key)."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -352,9 +352,9 @@ def _sort_by__3(this_generator, parent, goal, lst, sorted_lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MaxBy", 3)
+@_trampoline_builtin("max_by", 3)
 def _max_by__3(this_generator, parent, goal, lst, maximum, trail):
-    """MaxBy(Goal, List, Max) — element with largest projected key via Goal(Elem, Key)."""
+    """max_by(Goal, List, max_) — element with largest projected key via Goal(Elem, Key)."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -389,9 +389,9 @@ def _max_by__3(this_generator, parent, goal, lst, maximum, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MinBy", 3)
+@_trampoline_builtin("min_by", 3)
 def _min_by__3(this_generator, parent, goal, lst, minimum, trail):
-    """MinBy(Goal, List, Min) — element with smallest projected key via Goal(Elem, Key)."""
+    """min_by(Goal, List, min_) — element with smallest projected key via Goal(Elem, Key)."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -426,9 +426,9 @@ def _min_by__3(this_generator, parent, goal, lst, minimum, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("FilterMap", 3)
+@_trampoline_builtin("filter_map", 3)
 def _filter_map__3(this_generator, parent, goal, lst, result, trail):
-    """FilterMap(Goal, List, Result) — map+filter: keep mapped value when Goal(Elem, Out) succeeds."""
+    """filter_map(Goal, List, Result) — map+filter: keep mapped value when Goal(Elem, Out) succeeds."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -453,9 +453,9 @@ def _filter_map__3(this_generator, parent, goal, lst, result, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Partition", 4)
+@_trampoline_builtin("partition", 4)
 def _partition__4(this_generator, parent, goal, lst, included, excluded, trail):
-    """Partition(Goal, List, Included, Excluded) — split list by Goal.
+    """partition(Goal, List, Included, Excluded) — split list by Goal.
 
     Included contains elements where Goal(Elem) succeeds.
     Excluded contains elements where Goal(Elem) fails.
@@ -487,17 +487,17 @@ def _partition__4(this_generator, parent, goal, lst, included, excluded, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("TFilter", 3)
+@_trampoline_builtin("tfilter", 3)
 def _tfilter__3(this_generator, parent, goal, lst, filtered, trail):
-    """TFilter(Goal, List, Filtered) — reified filter.
+    """tfilter(Goal, List, Filtered) — reified filter.
 
     Goal is called as Goal(Elem, T) where T is a fresh variable.
     Keep elements where the first solution binds T to True.
 
-    This is the reified counterpart of Filter/3: instead of testing whether
+    This is the reified counterpart of include/3: instead of testing whether
     Goal(Elem) succeeds or fails, it inspects the truth value that Goal
-    binds its last argument to.  Useful with reified predicates like Eq/3
-    and DifT/3 that always succeed but bind T to True or False.
+    binds its last argument to.  Useful with reified predicates like eq/3
+    and dif_t/3 that always succeed but bind T to True or False.
     """
     lst_val = deref(lst)
     goal_val = deref(goal)
@@ -527,15 +527,15 @@ def _tfilter__3(this_generator, parent, goal, lst, filtered, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("TPartition", 4)
+@_trampoline_builtin("tpartition", 4)
 def _tpartition__4(this_generator, parent, goal, lst, included, excluded, trail):
-    """TPartition(Goal, List, Included, Excluded) — reified partition.
+    """tpartition(Goal, List, Included, Excluded) — reified partition.
 
     Goal is called as Goal(Elem, T) where T is a fresh variable.
     Elements where first solution gives T=True go into Included,
     T=False into Excluded.
 
-    This is the reified counterpart of Partition/4.
+    This is the reified counterpart of partition/4.
     """
     lst_val = deref(lst)
     goal_val = deref(goal)

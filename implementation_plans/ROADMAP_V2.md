@@ -8,7 +8,7 @@ The system compiles `.clausal` files to Python generator functions via an import
 with full backtracking search, unification, builtins, and a query API.
 
 **Naming convention**: All predicates, atoms, and builtins use **TitleCase** (e.g.
-`Color`, `Adjacent`, `ForAll`, `MapList`). Logic variables use leading underscore
+`Color`, `Adjacent`, `forall`, `maplist`). Logic variables use leading underscore
 (`_x`, `_foo`) or ALL-CAPS (`X`, `COLORING`). Bare `_` is the anonymous variable.
 
 **Directives** (`-name(...)` syntax) are supported at module level. The `-module(name, [exports])`
@@ -33,8 +33,8 @@ V2-6   CLP(FD) integration (using :=)                                 ✓
 V2-7   Well-founded semantics                                          ✓
 V2-8   If-then-else (reification of IfExpr)                              ✓
 V2-9   Pythonic lambdas (goal closures)                                  ✓
-V2-10  Meta-predicates (Call/N, FindAll, BagOf, SetOf, ForAll)           ✓
-V2-11  List processing builtins (MapList, Filter, Exclude, FoldLeft)     ✓
+V2-10  Meta-predicates (Call/N, findall, bagof, setof, forall)           ✓
+V2-11  List processing builtins (maplist, include, exclude, foldl)     ✓
 V2-12  Arithmetic builtins                                        ✓
 V2-13  Term inspection builtins                                         ✓
 V2-14  Control / exception handling (Catch/3, Throw/1)                  ✓
@@ -77,7 +77,7 @@ pattern in `EmbedTransformer.visit_Expr` and dispatches to `_handle_directive`. 
 | `-dynamic(pred/arity, ...)` | Marks predicates as dynamic — may be modified at runtime via `assertz`/`retract`. The compiler skips locking checks and enables lazy recompile. Without this directive, runtime assertion into a statically-defined predicate is an error. |
 | `-table(pred/arity, ...)` | Declares predicates as tabled (memoised). The compiler wraps dispatch in the SLG tabling machinery (V2-4). |
 | `-discontiguous(pred/arity, ...)` | Allows clauses for a predicate to appear non-contiguously in the file. Without this, the import hook may warn or error when clauses for the same predicate are separated by other definitions. |
-| `-meta_predicate(template)` | Declares argument roles for higher-order predicates (e.g., `-meta_predicate(MapList(2, +, -))` — first arg is a goal with 2 extra args). Enables the compiler to correctly handle module-qualified calls. |
+| `-meta_predicate(template)` | Declares argument roles for higher-order predicates (e.g., `-meta_predicate(maplist(2, +, -))` — first arg is a goal with 2 extra args). Enables the compiler to correctly handle module-qualified calls. |
 
 **Argument syntax notes:**
 
@@ -134,7 +134,7 @@ directly to the relevant clause subset.
 
 - At compile time, partition clauses into buckets by the first-argument head pattern:
   - Literal value (int, str, etc.) → bucket keyed on that value
-  - Functor class (e.g. `cons`, `point`) → bucket keyed on that class
+  - functor class (e.g. `cons`, `point`) → bucket keyed on that class
   - Variable → goes into the "default" bucket (tried for all calls)
 - The dispatch function becomes a two-level lookup:
   1. `deref(arg0)` to get the ground value
@@ -184,8 +184,8 @@ select the best plan.
 - `clausal/logic/database.py` — multi-plan dispatch storage
 
 **Tests:**
-- Same predicate called in different modes (e.g. `Append([], B, C)` vs
-  `Append(A, B, [1,2,3])`) hits different plans
+- Same predicate called in different modes (e.g. `append([], B, C)` vs
+  `append(A, B, [1,2,3])`) hits different plans
 - Fallback plan handles unexpected groundness patterns
 
 ---
@@ -245,7 +245,7 @@ answer subsumption.
   1. Check if the subgoal is already in the table.
   2. If complete: iterate stored answers (no recomputation).
   3. If incomplete (active): suspend the current computation, register as a consumer.
-  4. When the producing computation finds a new answer, resume all suspended consumers.
+  4. when the producing computation finds a new answer, resume all suspended consumers.
 - Completion detection: a subgoal is complete when all its consumers have been resumed
   with all its answers and no new answers were produced.
 - The trampoline architecture (`clausal.trampoline`) provides the right abstraction for
@@ -303,8 +303,8 @@ N := X + Y       % constrains N to equal X + Y over finite domains
 X := 1..10       % domain declaration: X ∈ {1, 2, ..., 10}
 ```
 
-When all variables in a `:=` expression have finite domains, it becomes a constraint that
-propagates. When some are ground, it evaluates eagerly (current behaviour). This gives
+when all variables in a `:=` expression have finite domains, it becomes a constraint that
+propagates. when some are ground, it evaluates eagerly (current behaviour). This gives
 `:=` a dual role: ground arithmetic evaluation AND constraint posting, distinguished by
 whether the arguments are ground or domain-constrained.
 
@@ -326,8 +326,8 @@ whether the arguments are ground or domain-constrained.
 | `X := Lo..Hi` | domain declaration |
 | `X := Expr` | arithmetic constraint (+ - * // mod) |
 | `X #< Y`, `X #> Y`, etc. | domain-aware comparison |
-| `AllDifferent(Xs)` | global constraint |
-| `Label(Xs)` | enumerate solutions |
+| `all_different(Xs)` | global constraint |
+| `label(Xs)` | enumerate solutions |
 
 **New files:**
 - `clausal/logic/clpfd.py` — domain store, propagators, labeling
@@ -356,7 +356,7 @@ predicates. Prevents unsound answers from programs with recursion through negati
 **Design:**
 
 - Extends SLG resolution (V2-4) with a third truth value: `undefined`.
-- When a negated subgoal is encountered that depends on an incomplete tabled call,
+- when a negated subgoal is encountered that depends on an incomplete tabled call,
   the answer is `undefined` rather than `true` or `false`.
 - After all tabling completes, the well-founded model is computed: unfounded sets
   (mutually dependent through negation with no positive support) are assigned `false`.
@@ -376,7 +376,7 @@ predicates. Prevents unsound answers from programs with recursion through negati
 ## V2-8 — If-then-else (reification of IfExpr) ✓
 
 **Status: DONE.** 99 tests in `tests/test_reified_ite.py`. Both simple and trampoline modes.
-Supports reified (Unify/Dif/CLP(FD) tests with three-way branch) and general (sub-generator
+Supports reified (Unify/dif/CLP(FD) tests with three-way branch) and general (sub-generator
 with committed choice) if-then-else, plus `once/1`.
 
 **Depends on:** V2-7 (complete system)
@@ -423,7 +423,7 @@ else:
 
 **Key details:**
 
-- **`k = None` in sub-generators:** When `compile_goal` (simple mode) is used inside a nested
+- **`k = None` in sub-generators:** when `compile_goal` (simple mode) is used inside a nested
   generator function (for NAF, find_all, if-then-else cond), any predicate call in the goal
   generates `_tramp_call(fname._get_dispatch(), args, trail)`. Since `_get_dispatch()` returns
   trampoline-mode functions, simple-mode sub-generators cannot call them directly — they need
@@ -435,7 +435,7 @@ else:
   per solution. `_dispatch_call_iter` should generate `_tramp_call(dispatch, args, trail)`
   instead of `dispatch(args, trail, k)`.
 
-- **`orelse=True` means "succeed":** When `else_` is `True` (no explicit else branch), the
+- **`orelse=True` means "succeed":** when `else_` is `True` (no explicit else branch), the
   else path should emit `k_stmts` directly (not be treated as a no-op). `True` = succeed =
   pass through to continuation.
 
@@ -443,7 +443,7 @@ else:
   `deref()` values DURING iteration, not after `list(fn(...))`.
 
 **Also support:** `Then if Cond` (no else) — equivalent to `IfExpr(test=Cond, body=Then, orelse=None)`.
-When `orelse is None`, if Cond fails the whole thing fails silently (no else branch at all).
+when `orelse is None`, if Cond fails the whole thing fails silently (no else branch at all).
 
 **Files:**
 - `clausal/logic/compiler.py` — `_compile_if_then_else` (simple), `_compile_if_then_else_trampoline`
@@ -494,7 +494,7 @@ bare `Lambda(...)`. Key: use `name_remap` dict to map original param names to un
 names (`_lp{counter}_{i}`) to avoid scope contamination between nested lambdas and enclosing
 scope variables.
 
-**Compilation:** When `GoalLambda` appears in a goal argument position (inside a Call to
+**Compilation:** when `GoalLambda` appears in a goal argument position (inside a Call to
 map_list, find_all, etc.), `_compile_goal_lambda` compiles it to a local `FunctionDef`
 following the trampoline dispatch protocol:
 
@@ -517,9 +517,9 @@ _lambda_N  # expression value = reference to this function
 
 ---
 
-## V2-10 — Meta-predicates (Call/N, FindAll, BagOf, SetOf, ForAll) ✓
+## V2-10 — Meta-predicates (Call/N, findall, bagof, setof, forall) ✓
 
-**Status: DONE.** 23 tests in `tests/test_meta.py`. FindAll/3, BagOf/3, SetOf/3, ForAll/2
+**Status: DONE.** 23 tests in `tests/test_meta.py`. findall/3, bagof/3, setof/3, forall/2
 as compiler special forms. Call/1..8 and CallGoal/4..8 builtins.
 
 **Depends on:** V2-9 (lambdas), V2-8 (if-then-else demonstrates sub-generator pattern)
@@ -590,26 +590,26 @@ NAF compilation. No new codegen.
 ## V2-11 — List processing builtins ✓
 
 **Status: DONE.** 28 tests in `tests/test_higher_order.py`. All TitleCase names:
-`MapList/2`, `MapList/3`, `Filter/3`, `Exclude/3`, `FoldLeft/4`.
+`maplist/2`, `maplist/3`, `include/3`, `exclude/3`, `foldl/4`.
 
 **Depends on:** V2-10 (meta-predicates needed for higher-order list ops)
 
 **Goal:** higher-order list predicates that use `_call_goal` internally.
 
-**Already implemented (committed):** `In/2`, `InCheck/2`, `Append/3`, `Length/2`,
-`Last/2`, `Reverse/2`, `GetItem/3`, `Flatten/2`, `MergeSort/2`, `Sort/2`,
-`Permutation/2`, `Select/3`, `Subtract/3`, `Intersection/3`, `Union/3`, `ToSet/2`,
-`Unzip/3`, `PairKeys/2`, `PairValues/2`.
+**Already implemented (committed):** `in_/2`, `in_check/2`, `append/3`, `length/2`,
+`last/2`, `reverse/2`, `get_item/3`, `flatten/2`, `msort/2`, `sort/2`,
+`permutation/2`, `select/3`, `subtract/3`, `intersection/3`, `union/3`, `list_to_set/2`,
+`pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2`.
 
 **New predicates:**
 
 | Predicate | Description |
 |-----------|-------------|
-| `MapList/2` | `MapList(Goal, List)` — Goal succeeds for each element |
-| `MapList/3` | `MapList(Goal, Xs, Ys)` — Goal maps each X to Y |
-| `Filter/3` | Keep elements where Goal succeeds |
-| `Exclude/3` | Keep elements where Goal fails |
-| `FoldLeft/4` | `FoldLeft(Goal, List, V0, V)` — left fold |
+| `maplist/2` | `maplist(Goal, List)` — Goal succeeds for each element |
+| `maplist/3` | `maplist(Goal, Xs, Ys)` — Goal maps each X to Y |
+| `include/3` | Keep elements where Goal succeeds |
+| `exclude/3` | Keep elements where Goal fails |
+| `foldl/4` | `foldl(Goal, List, V0, V)` — left fold |
 
 These are **Python builtins** that call `_call_goal` internally with proper trail mark/undo.
 
@@ -624,8 +624,8 @@ These are **Python builtins** that call `_call_goal` internally with proper trai
 **Status: DONE.** All arithmetic builtins implemented. 26 tests in `TestArithmetic` class
 in `tests/test_builtins.py`.
 
-**Builtins:** `Between/3`, `Succ/2`, `Plus/3`, `Abs/2`, `Max/3`, `Min/3`, `SumList/2`,
-`MaxList/2`, `MinList/2`, `Sign/2`, `Gcd/3`, `DivMod/4`.
+**Builtins:** `between/3`, `succ/2`, `plus/3`, `abs_/2`, `max_/3`, `min_/3`, `sum_list/2`,
+`max_list/2`, `min_list/2`, `sign/2`, `gcd/3`, `divmod_/4`.
 
 **Files:**
 - `clausal/logic/builtins.py`
@@ -639,15 +639,15 @@ in `tests/test_builtins.py`.
 
 **Goal:** predicates for examining and manipulating term structure at runtime.
 
-**Already implemented (committed):** `Functor/3`, `Arg/3`, `Unpack/2`.
+**Already implemented (committed):** `functor/3`, `arg/3`, `unpack/2`.
 
 **New predicates:**
 
 | Predicate | Description |
 |-----------|-------------|
-| `CopyTerm/2` | Deep copy with fresh Vars |
-| `TermVariables/2` | Collect all unbound Vars in term |
-| `NumberVars/3` | Bind unbound Vars to `$VAR(N)` atoms |
+| `copy_term/2` | Deep copy with fresh Vars |
+| `term_variables/2` | Collect all unbound Vars in term |
+| `numbervars/3` | Bind unbound Vars to `$VAR(N)` atoms |
 
 **Files:**
 - `clausal/logic/builtins.py`
@@ -688,7 +688,7 @@ except LogicException as _e:
     trail.undo(_m_match)
 ```
 
-**Key:** When an exception is caught, trail bindings from the failed Goal are undone before
+**Key:** when an exception is caught, trail bindings from the failed Goal are undone before
 Recovery runs. Python exceptions from builtins can also be caught by wrapping them.
 
 **Files:**
@@ -710,20 +710,20 @@ lambdas for deferred evaluation in `.clausal` files.
 containing logic variables auto-deref at search time — no manual `deref()` needed.
 
 **F-string support:** `Var.__str__` and `Var.__format__` (in C extension) auto-deref bound
-values. Unbound vars format as `_N`. Format specs work: `f"{X_:.2f}"`. In `.clausal` files,
+values. Unbound vars format as `_N`. Format specs work: `f"{X_:.2f}"`. in_ `.clausal` files,
 f-strings are deferred to search time via `FStringThunk` (alias for `PyThunk`) — the
 TermTransformer's `visit_JoinedStr` wraps the entire f-string in a lambda parameterized by
 its logic variables, and the compiler emits `thunk.fn(deref(v0), ...)` calls.
 
 | Predicate | Description |
 |-----------|-------------|
-| `Write/1` | Print dereffed term to stdout (no newline) |
-| `Writeln/1` | Print term + newline |
-| `PrintTerm/1` | Print structured term_str representation + newline |
-| `Nl/0` | Print a newline |
-| `Tab/1` | Print N spaces |
-| `WriteToString/2` | Unify result with string representation of term |
-| `TermToString/2` | Unify result with structured term_str representation |
+| `write/1` | Print dereffed term to stdout (no newline) |
+| `writeln/1` | Print term + newline |
+| `print_term/1` | Print structured term_str representation + newline |
+| `nl/0` | Print a newline |
+| `tab/1` | Print N spaces |
+| `write_to_string/2` | Unify result with string representation of term |
+| `term_to_string/2` | Unify result with structured term_str representation |
 
 **Files:**
 - `clausal/logic/variables/_variables.c` — `Var_str`, `Var_format`, `Var_methods`
@@ -920,7 +920,7 @@ pigeon-hole) as first-class logic programming.
 **Syntax:** Python bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT).
 `BoolEq(X_, Y_)` for equivalence, `BoolImpl(X_, Y_)` for implication.
 
-**Builtins:** `Sat/1`, `Taut/2`, `SatCount/2`, `BoolLabeling/1`.
+**Builtins:** `sat/1`, `taut/2`, `sat_count/2`, `bool_labeling/1`.
 
 **Files:**
 - `clausal/logic/clpb.py` — BDD engine, BoolState, sat/taut/sat_count/bool_labeling, hook

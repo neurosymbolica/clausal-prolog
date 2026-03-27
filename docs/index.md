@@ -70,9 +70,9 @@ CLAUSAL_IPYTHON=True ipython
 Then solve a Sudoku puzzle interactively:
 
 ```python
-In [1]: from clausal.examples.sudoku import *
+in_ [1]: from clausal.examples.sudoku import *
 
-In [2]: *(ROWS is [
+in_ [2]: *(ROWS is [
    ...:   [1, _, _, 8, _, 4, _, _, _],
    ...:   [_, 2, _, _, _, _, 4, 5, 6],
    ...:   [_, _, 3, 2, _, 5, _, _, _],
@@ -120,7 +120,7 @@ for the full feature set.
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
-| [Constraints](constraints.md) | Dif/2, CLP(ℤ) finite-domain constraints, and CLP(ℝ) real-domain constraints |
+| [Constraints](constraints.md) | dif/2, CLP(ℤ) finite-domain constraints, and CLP(ℝ) real-domain constraints |
 | [CLP(ℝ)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
@@ -152,7 +152,7 @@ for the full feature set.
 | [scipy.optimize](scipy_optimize.md) | Optimisation — minimisation, root finding, curve fitting, linear programming |
 | [scipy.integrate](scipy_integrate.md) | Numerical integration — quadrature, ODE solvers, sampled-data methods |
 | [scipy.interpolate](scipy_interpolate.md) | Interpolation — splines, PCHIP, Akima, regular grids, radial basis functions |
-| [scipy.stats](scipy_stats.md) | Statistics — descriptive stats, hypothesis tests, distributions |
+| [scipy.stats](scipy_stats.md) | statistics — descriptive stats, hypothesis tests, distributions |
 | [scipy.fft](scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
 | [scipy.ndimage](scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
 | [scipy.spatial](scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
@@ -162,11 +162,11 @@ for the full feature set.
 | [Testing](testing.md) | Writing test predicates, running the test suite |
 | [DCGs](dcg.md) | Definite Clause Grammars for parsing |
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
-| [Coroutining](coroutining.md) | Freeze/2, When/2, SetupCallCleanup/3, CallNth/2, CountAll/2 |
+| [Coroutining](coroutining.md) | freeze/2, when/2, setup_call_cleanup/3, call_nth/2, count_all/2 |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
-| [Scryer Prolog Embedding](scryer.md) | In-process Scryer Prolog engine via PyO3 — lazy queries, `.clausal` file loading |
+| [Scryer Prolog Embedding](scryer.md) | in_-process Scryer Prolog engine via PyO3 — lazy queries, `.clausal` file loading |
 | [Examples](examples.md) | Example programs: Fibonacci, N-Queens, Sudoku, meta-interpreters |
 | **Scientific Computing** | |
 | [scikit-learn](sklearn.md) | Machine learning: estimators, pipelines, cross-validation |

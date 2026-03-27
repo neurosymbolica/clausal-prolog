@@ -25,8 +25,8 @@ locking internally.
 # skip
 # These are all safe for concurrent queries:
 
-Append([], YS, YS),
-Append([H, *XS], YS, [H, *ZS]) <- Append(XS, YS, ZS)
+append([], YS, YS),
+append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)
 
 Member(X, [X, *_]),
 Member(X, [_, *T]) <- Member(X, T)
@@ -84,11 +84,11 @@ variables (the normal case), constraint solving is safe.
 -use(clpfd)
 
 NQueens(N, QS) <- (
-    Length(QS, N),
+    length(QS, N),
     QS ins 1..N,
-    AllDifferent(QS),
+    all_different(QS),
     SafeQueens(QS),
-    Label(QS)
+    label(QS)
 )
 ```
 
@@ -224,7 +224,7 @@ Test("append cons") <- (MyAppend([1], [2, 3], R) and R is [1, 2, 3])
 ```python
 # skip
 def test_concurrent_append():
-    """Run Append from 8 threads concurrently."""
+    """Run append from 8 threads concurrently."""
     barrier = threading.Barrier(8)
 
     def worker(idx):
@@ -233,7 +233,7 @@ def test_concurrent_append():
             trail = Trail()
             r = Var()
             unify(r, None, trail)  # placeholder
-            # ... call Append and verify result ...
+            # ... call append and verify result ...
 
     threads = [Thread(target=worker, args=(i,)) for i in range(8)]
     for t in threads: t.start()

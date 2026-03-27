@@ -9,15 +9,15 @@ Clausal provides meta-predicates for collecting solutions and higher-order list 
 
 These are compiled inline by the compiler — they are not dispatched as builtins.
 
-### FindAll/3
+### findall/3
 
-`FindAll(Template, Goal, Bag)` — collect all instances of Template for which Goal succeeds.
+`findall(Template, Goal, Bag)` — collect all instances of Template for which Goal succeeds.
 
 ```clausal
 squares(NS, SQS) <- (
-    FindAll(
+    findall(
         SQ,
-        (In(X, NS), SQ == X * X),
+        (in_(X, NS), SQ == X * X),
         SQS,
     )
 )
@@ -25,88 +25,88 @@ squares(NS, SQS) <- (
 
 If Goal has no solutions, Bag is unified with `[]`.
 
-### BagOf/3
+### bagof/3
 
-`BagOf(Template, Goal, Bag)` — like FindAll, but **fails** if Goal has no solutions (FindAll returns `[]` instead).
+`bagof(Template, Goal, Bag)` — like findall, but **fails** if Goal has no solutions (findall returns `[]` instead).
 
 ```clausal
 adults(PEOPLE, ADULTS) <- (
-    BagOf(P, (In(P, PEOPLE), age(P, A), A >= 18), ADULTS)
+    bagof(P, (in_(P, PEOPLE), age(P, A), A >= 18), ADULTS)
 )
 ```
 
-#### BagOf vs FindAll
+#### bagof vs findall
 
-The only difference between BagOf and FindAll is how they handle the empty case:
+The only difference between bagof and findall is how they handle the empty case:
 
 ```clausal
 age("alice", 30),
 age("bob", 25),
 age("carol", 30),
 
-all_people(PEOPLE) <- BagOf(NAME, age(NAME, _), PEOPLE)
+all_people(PEOPLE) <- bagof(NAME, age(NAME, _), PEOPLE)
 
 Test("bag of people") <- (
     all_people(PEOPLE),
-    Length(PEOPLE, 3)
+    length(PEOPLE, 3)
 )
 ```
 
-Use BagOf when you want failure on empty results, FindAll when you always want a list.
+Use bagof when you want failure on empty results, findall when you always want a list.
 
-### SetOf/3
+### setof/3
 
-`SetOf(Template, Goal, Set)` — like BagOf, but returns a **sorted list with duplicates removed**. Also fails on no solutions.
+`setof(Template, Goal, Set)` — like bagof, but returns a **sorted list with duplicates removed**. Also fails on no solutions.
 
 ```clausal
-unique_members(XS, US) <- SetOf(X, In(X, XS), US)
+unique_members(XS, US) <- setof(X, in_(X, XS), US)
 ```
 
-#### SetOf vs Sort(FindAll(...))
+#### setof vs sort(findall(...))
 
 Both produce sorted, deduplicated results. The differences:
 
-| | `SetOf(T, G, S)` | `FindAll(T, G, S0)` + `Sort(S0, S)` |
+| | `setof(T, G, S)` | `findall(T, G, S0)` + `sort(S0, S)` |
 |---|---|---|
 | Empty result | **Fails** | Succeeds with `S = []` |
-| Deduplication | Yes (sorted set) | Only if you call `Sort` |
+| Deduplication | Yes (sorted set) | Only if you call `sort` |
 | Use when | You want failure on empty | You always want a list |
 
 ```clausal
 Test("setof unique") <- (
-    SetOf(X, In(X, [3, 1, 2, 1, 3]), XS),
-    Length(XS, 3)
+    setof(X, in_(X, [3, 1, 2, 1, 3]), XS),
+    length(XS, 3)
 )
 
-# SetOf fails if no solutions; FindAll always succeeds (returns []):
+# setof fails if no solutions; findall always succeeds (returns []):
 Test("findall empty ok") <- (
-    FindAll(X, (In(X, []), X > 0), BAG),
+    findall(X, (in_(X, []), X > 0), BAG),
     BAG == []
 )
 ```
 
-### ForAll/2
+### forall/2
 
-`ForAll(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. Equivalent to `not (Condition, not Action)`.
+`forall(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. equivalent to `not (Condition, not Action)`.
 
 ```clausal
-all_positive(XS) <- ForAll(In(X, XS), X > 0)
+all_positive(XS) <- forall(in_(X, XS), X > 0)
 ```
 
-#### ForAll Patterns
+#### forall Patterns
 
 **Validate all elements**:
 
 ```clausal
-all_in_range(XS, LO, HI) <- ForAll(In(X, XS), (X >= LO, X <= HI))
+all_in_range(XS, LO, HI) <- forall(in_(X, XS), (X >= LO, X <= HI))
 ```
 
 **Check a property across a collection**:
 
 ```clausal
 all_connected(NODES, GRAPH) <- (
-    ForAll(
-        (In(A, NODES), In(B, NODES), Dif(A, B)),   # Dif — see [Constraints](constraints.md)
+    forall(
+        (in_(A, NODES), in_(B, NODES), dif(A, B)),   # dif — see [Constraints](constraints.md)
         reachable(A, B, GRAPH)
     )
 )
@@ -116,8 +116,8 @@ all_connected(NODES, GRAPH) <- (
 
 ```clausal
 safe_sum(XS, TOTAL) <- (
-    ForAll(In(X, XS), IsNumber(X)),
-    SumList(XS, TOTAL)
+    forall(in_(X, XS), number(X)),
+    sum_list(XS, TOTAL)
 )
 ```
 
@@ -144,108 +144,108 @@ test(R) <- Call((X <- (R == X + 1)), 5)
 
 These builtins take a goal as their first argument — either a [lambda](lambdas.md) (goal closure) or a **predicate reference** (builtin or user-defined). All use **committed choice** — they take the first solution from the goal for each element. See [Higher-Order](higher_order.md) for the dedicated reference page.
 
-### MapList/2
+### maplist/2
 
-`MapList(Goal, List)` — succeeds if Goal succeeds for every element of List.
-
-```clausal
-# With a lambda
-all_positive(XS) <- MapList((X <- (X > 0)), XS)
-
-# With a builtin predicate
-all_numbers(XS) <- MapList(IsNumber, XS)
-```
-
-### MapList/3
-
-`MapList(Goal, List, ResultList)` — apply a binary goal to each element, collecting results.
-
-```clausal
-doubles(XS, YS) <- MapList(((X, Y) <- (Y == X * 2)), XS, YS)
-```
-
-### Filter/3
-
-`Filter(Goal, List, Filtered)` — keep elements for which Goal succeeds.
+`maplist(Goal, List)` — succeeds if Goal succeeds for every element of List.
 
 ```clausal
 # With a lambda
-positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
+all_positive(XS) <- maplist((X <- (X > 0)), XS)
 
 # With a builtin predicate
-keep_numbers(XS, NS) <- Filter(IsNumber, XS, NS)
+all_numbers(XS) <- maplist(number, XS)
 ```
 
-### Exclude/3
+### maplist/3
 
-`Exclude(Goal, List, Remaining)` — keep elements for which Goal fails (complement of Filter).
+`maplist(Goal, List, ResultList)` — apply a binary goal to each element, collecting results.
 
 ```clausal
-remove_zeros(XS, RS) <- Exclude((X <- (X is 0)), XS, RS)
+doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 ```
 
-### FoldLeft/4
+### include/3
 
-`FoldLeft(Goal, List, Acc0, Result)` — left fold with a ternary goal closure.
+`include(Goal, List, Filtered)` — keep elements for which Goal succeeds.
 
 ```clausal
-fold_sum(XS, S) <- FoldLeft(((ELEM, ACC, R) <- (R == ACC + ELEM)), XS, 0, S)
-fold_product(XS, P) <- FoldLeft(((ELEM, ACC, R) <- (R == ACC * ELEM)), XS, 1, P)
+# With a lambda
+positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
+
+# With a builtin predicate
+keep_numbers(XS, NS) <- include(number, XS, NS)
 ```
 
-### TakeWhile/3
+### exclude/3
 
-`TakeWhile(Goal, List, Prefix)` — longest prefix where Goal succeeds for each consecutive element.
+`exclude(Goal, List, Remaining)` — keep elements for which Goal fails (complement of include).
 
 ```clausal
-take_pos(XS, PS) <- TakeWhile((X <- (X > 0)), XS, PS)
+remove_zeros(XS, RS) <- exclude((X <- (X is 0)), XS, RS)
+```
+
+### foldl/4
+
+`foldl(Goal, List, Acc0, Result)` — left fold with a ternary goal closure.
+
+```clausal
+fold_sum(XS, S) <- foldl(((ELEM, ACC, R) <- (R == ACC + ELEM)), XS, 0, S)
+fold_product(XS, P) <- foldl(((ELEM, ACC, R) <- (R == ACC * ELEM)), XS, 1, P)
+```
+
+### take_while/3
+
+`take_while(Goal, List, Prefix)` — longest prefix where Goal succeeds for each consecutive element.
+
+```clausal
+take_pos(XS, PS) <- take_while((X <- (X > 0)), XS, PS)
 # take_pos([3, 1, -2, 4], PS) → PS = [3, 1]
 ```
 
-### DropWhile/3
+### drop_while/3
 
-`DropWhile(Goal, List, Suffix)` — suffix after dropping the longest prefix where Goal succeeds.
+`drop_while(Goal, List, Suffix)` — suffix after dropping the longest prefix where Goal succeeds.
 
 ```clausal
-drop_pos(XS, RS) <- DropWhile((X <- (X > 0)), XS, RS)
+drop_pos(XS, RS) <- drop_while((X <- (X > 0)), XS, RS)
 # drop_pos([3, 1, -2, 4], RS) → RS = [-2, 4]
 ```
 
-### Span/4
+### span/4
 
-`Span(Goal, List, Yes, No)` — TakeWhile + DropWhile in one pass.
-
-```clausal
-split_pos(XS, YES, NO) <- Span((X <- (X > 0)), XS, YES, NO)
-```
-
-### GroupBy/3
-
-`GroupBy(Goal, List, Groups)` — group consecutive elements by key projected via `Goal(Elem, Key)`.
+`span(Goal, List, Yes, No)` — take_while + drop_while in one pass.
 
 ```clausal
-by_sign(XS, GS) <- GroupBy(((X, K) <- If(X > 0, K is "pos", K is "neg")), XS, GS)
+split_pos(XS, YES, NO) <- span((X <- (X > 0)), XS, YES, NO)
 ```
 
-### SortBy/3
+### group_by/3
 
-`SortBy(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
+`group_by(Goal, List, Groups)` — group consecutive elements by key projected via `Goal(Elem, Key)`.
 
 ```clausal
-sort_by_abs(XS, SS) <- SortBy(((X, K) <- (K == abs(X))), XS, SS)
+by_sign(XS, GS) <- group_by(((X, K) <- If(X > 0, K is "pos", K is "neg")), XS, GS)
 ```
 
-### MaxBy/3, MinBy/3
+### sort_by/3
 
-`MaxBy(Goal, List, Max)` / `MinBy(Goal, List, Min)` — element with largest/smallest key. Fails on empty list.
+`sort_by(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
 
-### FilterMap/3
+```clausal
+sort_by_abs(XS, SS) <- sort_by(((X, K) <- (K == abs(X))), XS, SS)
+```
 
-`FilterMap(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
+### max_by/3, min_by/3
+
+`max_by(Goal, List, max_)` / `min_by(Goal, List, min_)` — element with largest/smallest key. Fails on empty list.
+
+### filter_map/3
+
+`filter_map(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
 
 ```clausal
 # skip
-double_positives(XS, RS) <- FilterMap(
+double_positives(XS, RS) <- filter_map(
     ((X, Y) <- (X > 0, Y == X * 2))
     XS, RS
 )
@@ -255,9 +255,9 @@ double_positives(XS, RS) <- FilterMap(
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `Unzip` | 3 | `Unzip(Pairs, Keys, Values)` — split list of [pairs](pairs.md) |
-| `PairKeys` | 2 | `PairKeys(Pairs, Keys)` — extract keys from [pairs](pairs.md) |
-| `PairValues` | 2 | `PairValues(Pairs, Values)` — extract values from [pairs](pairs.md) |
+| `pairs_keys_values` | 3 | `pairs_keys_values(Pairs, Keys, Values)` — split list of [pairs](pairs.md) |
+| `pairs_keys` | 2 | `pairs_keys(Pairs, Keys)` — extract keys from [pairs](pairs.md) |
+| `pairs_values` | 2 | `pairs_values(Pairs, Values)` — extract values from [pairs](pairs.md) |
 
 ---
 
@@ -267,34 +267,34 @@ double_positives(XS, RS) <- FilterMap(
 
     ```clausal
 # skip
-    # FindAll with inline goal — no lambda required
-    squares(NS, SQS) <- FindAll(SQ, (In(X, NS), SQ == X * X), SQS)
+    # findall with inline goal — no lambda required
+    squares(NS, SQS) <- findall(SQ, (in_(X, NS), SQ == X * X), SQS)
 
-    # ForAll with inline condition and action
-    all_positive(NS) <- ForAll(In(X, NS), X > 0)
+    # forall with inline condition and action
+    all_positive(NS) <- forall(in_(X, NS), X > 0)
     ```
 
     Higher-order list predicates take either lambdas or predicate references:
 
     ```clausal
 # skip
-    # Filter with lambda
-    positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
+    # include with lambda
+    positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
-    # Filter with a builtin predicate directly
-    keep_ints(XS, IS) <- Filter(IsInt, XS, IS)
+    # include with a builtin predicate directly
+    keep_ints(XS, IS) <- include(integer, XS, IS)
     ```
 
     See [Lambdas](lambdas.md) for full lambda syntax and semantics.
 
 ??? info "Test coverage"
 
-    - `tests/test_meta.py` (23 tests): FindAll, BagOf, SetOf, ForAll, Call/N, `.clausal` integration
-    - `tests/test_higher_order.py` (34 tests): MapList/2,3, Filter/3, Exclude/3, FoldLeft/4, builtin predicates as arguments
-    - `tests/fixtures/builtin_as_arg.clausal` (5 tests): Filter/MapList with builtin predicates (IsNumber, IsInt, Succ)
+    - `tests/test_meta.py` (23 tests): findall, bagof, setof, forall, Call/N, `.clausal` integration
+    - `tests/test_higher_order.py` (34 tests): maplist/2,3, include/3, exclude/3, foldl/4, builtin predicates as arguments
+    - `tests/fixtures/builtin_as_arg.clausal` (5 tests): include/maplist with builtin predicates (number, integer, succ)
 
 ---
 
 *See also: [Lambdas](lambdas.md) — goal closures used with higher-order predicates,
 [Lists](lists.md) — list predicates that pair well with meta-predicates,
-[Higher-Order](higher_order.md) — dedicated page for MapList, Filter, FoldLeft, etc.*
+[Higher-Order](higher_order.md) — dedicated page for maplist, include, foldl, etc.*

@@ -44,7 +44,7 @@ Two related issues solved together:
 - `append([HEAD, *TAIL], B, [HEAD, *RESULT])` — repeated var across list patterns + output-mode construction
 - `last([X], X)` — repeated var in list + non-list positions
 - Forward mode: `append([1,2], [3,4], RESULT)` → `RESULT=[1,2,3,4]`
-- Reverse mode: `append(X, Y, [1,2,3])` → enumerates all splits
+- reverse mode: `append(X, Y, [1,2,3])` → enumerates all splits
 
 ## Completed: Phase 3 — Anonymous variable `_`
 
@@ -99,7 +99,7 @@ Two related issues solved together:
 
 ## Phase 5: Star in body unification (deconstruction)
 
-When `[HEAD, *TAIL]` appears as a goal argument that receives a ground list, it must destructure:
+when `[HEAD, *TAIL]` appears as a goal argument that receives a ground list, it must destructure:
 - Construction (HEAD and TAIL bound): already works via Python's `[val, *rest]`
 - Deconstruction (HEAD and TAIL unbound, receiving a list): needs the compiler to emit splitting code + trail-based unification
 

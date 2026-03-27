@@ -24,7 +24,7 @@ The cheatsheet (lines 929–1051) and related sections have syntax that doesn't 
 
 ### 1d. Remove `(--clpz)` constraint domain syntax
 
-- **Line 998**: Remove. No `clpz` exists in the codebase. CLP(FD) constraints are used directly (`InDomain`, `==`, `!=`, `<`, etc.).
+- **Line 998**: Remove. No `clpz` exists in the codebase. CLP(FD) constraints are used directly (`in_domain`, `==`, `!=`, `<`, etc.).
 
 ### 1e. Mark EDCG as experimental
 
@@ -35,13 +35,13 @@ The cheatsheet (lines 929–1051) and related sections have syntax that doesn't 
       EDCG directives are parsed but end-to-end rewriting is not yet implemented.
   ```
 
-### 1f. Clean up `Equivalent` comment
+### 1f. Clean up `equivalent` comment
 
-- **Line 974**: Change `Equivalent(X, Y),      # structural equality (old == behavior)` to just `Equivalent(X, Y),      # structural equality`. The "(old == behavior)" is confusing editorial.
+- **Line 974**: Change `equivalent(X, Y),      # structural equality (old == behavior)` to just `equivalent(X, Y),      # structural equality`. The "(old == behavior)" is confusing editorial.
 
 ---
 
-## Phase 2: Write tutorial.md
+## Phase 2: write tutorial.md
 
 Create `docs/tutorial.md` and add it to `mkdocs.yml` nav under "Getting Started" (after `goals.md`, before `syntax.md`).
 
@@ -78,7 +78,7 @@ Target: ~300 lines. Conversational tone. All examples in `.clausal` syntax with 
 
 ## Negation
 - `not goal` — negation as failure
-- When to use it, when not to
+- when to use it, when not to
 
 ## Testing your code
 - test/1 predicates
@@ -109,7 +109,7 @@ Target: ~300 lines. Conversational tone. All examples in `.clausal` syntax with 
 The landing page should make `.clausal` the star. Restructure:
 
 1. **Quick taste** — show a `.clausal` file (fibonacci or family tree). Use ` ```clausal ` fence.
-2. **Query it** — one Python snippet: `import clausal; from fibonacci import fib` + `clausal.query(fib(10, F))`. Max 4 lines. Use ` ```python ` fence.
+2. **Query it** — one Python snippet: `import clausal; from fibonacci import fib` + `clausal.query(fib(10, F))`. max_ 4 lines. Use ` ```python ` fence.
 3. **What's inside** — the existing feature table (keep as-is, it's good).
 
 Remove the `Module()` context-manager inline example entirely. That belongs in `python_integration.md`. The landing page should say: "write `.clausal` files, import them, query them."
@@ -119,7 +119,7 @@ Remove the `Module()` context-manager inline example entirely. That belongs in `
 Replace the low-level API examples with:
 
 ```clausal
-# In your .clausal file, add test predicates:
+# in_ your .clausal file, add test predicates:
 test("fib 10") <- fib(10, 55),
 ```
 
@@ -138,7 +138,7 @@ Remove the `call("Fib", 10, F, module=fib.__dict__["$module"])` example and the 
 Currently 82% Python metaclass internals. Restructure:
 
 1. **Lead with .clausal syntax** — how to define predicates in a `.clausal` file (facts, rules, fields inferred from head). This is what 95% of users need.
-2. **Python-side** section (collapsed/admonition) — `PredicateMeta`, `make_predicate()`, `_fields`. Label it clearly as "for embedding/advanced use".
+2. **Python-side** section (collapsed/admonition) — `PredicateMeta`, `make_predicate()`, `_fields`. label it clearly as "for embedding/advanced use".
 
 ### 3d. Add disclaimer to python_integration.md
 
@@ -157,7 +157,7 @@ Systematic find-and-replace across docs. The rule:
 - `X_` → `X`, `Y_` → `Y`, `N_` → `N`, `F_` → `F`, `R_` → `R`, `S_` → `S`, `D_` → `D`
 - `head_` → `HEAD`, `tail_` → `TAIL`, `rest_` → `REST`
 - `Result_` → `RESULT`, `Acc_` → `ACC`, `Elem_` → `ELEM`
-- Predicate names stay TitleCase: `Fib`, `Append`, `Member` (no change)
+- Predicate names stay TitleCase: `Fib`, `append`, `Member` (no change)
 - Atoms stay lowercase or quoted: `"hello"`, `red` (no change)
 - `_` (anonymous) stays as-is
 
@@ -234,7 +234,7 @@ Each example section should link to the relevant doc page. E.g.:
 - fibonacci.clausal → [Tabling](tabling.md), [Arithmetic builtins](builtins.md#arithmetic)
 - nqueens.clausal → [CLP(FD) constraints](constraints.md)
 - sudoku.clausal → [CLP(FD)](constraints.md), [Higher-order](meta_predicates.md)
-- map_coloring.clausal → [Dif/2](constraints.md#dif2)
+- map_coloring.clausal → [dif/2](constraints.md#dif2)
 - dcg_state.clausal → [DCGs](dcg.md)
 - lambdas.clausal → [Lambdas](lambdas.md)
 - sorting.clausal → [Lists](builtins.md#lists)

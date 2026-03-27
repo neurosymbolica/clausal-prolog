@@ -13,57 +13,57 @@
     MaxFold(XS, INIT, M)
 ])
 
-# ── MapList/3 — transform each element ───────────────────────────────────────
+# ── maplist/3 — transform each element ───────────────────────────────────────
 
 # Double every element.
-Doubles(XS, YS) <- MapList(((X, Y) <- (Y := X * 2)), XS, YS)
+Doubles(XS, YS) <- maplist(((X, Y) <- (Y := X * 2)), XS, YS)
 
 # Square every element.
-Squares(XS, YS) <- MapList(((X, Y) <- (Y := X * X)), XS, YS)
+Squares(XS, YS) <- maplist(((X, Y) <- (Y := X * X)), XS, YS)
 
 # Negate every element.
-NegateList(XS, YS) <- MapList(((X, Y) <- (Y := 0 - X)), XS, YS)
+NegateList(XS, YS) <- maplist(((X, Y) <- (Y := 0 - X)), XS, YS)
 
-# ── MapList/2 — check predicate on each element ──────────────────────────────
+# ── maplist/2 — check predicate on each element ──────────────────────────────
 
 # Check all elements are positive.
-AllPositive(XS) <- MapList((X <- (X > 0)), XS)
+AllPositive(XS) <- maplist((X <- (X > 0)), XS)
 
-# ── Filter/3 — keep matching elements ────────────────────────────────────────
+# ── include/3 — keep matching elements ────────────────────────────────────────
 
 # Keep positive elements.
-KeepPositive(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
+KeepPositive(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
 # Keep even elements.
-KeepEven(XS, ES) <- Filter((X <- (X % 2 == 0)), XS, ES)
+KeepEven(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
 
-# ── Exclude/3 — remove matching elements ─────────────────────────────────────
+# ── exclude/3 — remove matching elements ─────────────────────────────────────
 
 # Remove negative elements (keep zero and positive).
-RemoveNegative(XS, RS) <- Exclude((X <- (X < 0)), XS, RS)
+RemoveNegative(XS, RS) <- exclude((X <- (X < 0)), XS, RS)
 
 # Remove even elements (keep odd).
-RemoveEven(XS, OS) <- Exclude((X <- (X % 2 == 0)), XS, OS)
+RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 
-# ── FoldLeft/4 — left fold ────────────────────────────────────────────────────
+# ── foldl/4 — left fold ────────────────────────────────────────────────────
 
-# Sum via fold.
-SumListFold(XS, S) <- FoldLeft(((E, A, R) <- (R := A + E)), XS, 0, S)
+# sum_ via fold.
+SumListFold(XS, S) <- foldl(((E, A, R) <- (R := A + E)), XS, 0, S)
 
 # Product via fold.
-ProductList(XS, P) <- FoldLeft(((E, A, R) <- (R := A * E)), XS, 1, P)
+ProductList(XS, P) <- foldl(((E, A, R) <- (R := A * E)), XS, 1, P)
 
 # Count elements via fold.
-CountFold(XS, N) <- FoldLeft(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
+CountFold(XS, N) <- foldl(((ELEM, A, R) <- (R := A + 1)), XS, 0, N)
 
-# Max via fold with initial value.
-MaxFold(XS, INIT, M) <- FoldLeft(((E, A, R) <- (
+# max_ via fold with initial value.
+MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (
     (E >= A, R is E) or (A > E, R is A)
 )), XS, INIT, M)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-# MapList/3
+# maplist/3
 Test("doubles [1,2,3]") <- Doubles([1, 2, 3], [2, 4, 6])
 Test("doubles empty") <- Doubles([], [])
 Test("doubles negative") <- Doubles([-1, 0, 5], [-2, 0, 10])
@@ -71,24 +71,24 @@ Test("squares [1,2,3,4]") <- Squares([1, 2, 3, 4], [1, 4, 9, 16])
 Test("negate [1,-2,3]") <- NegateList([1, -2, 3], [-1, 2, -3])
 Test("negate empty") <- NegateList([], [])
 
-# MapList/2
+# maplist/2
 Test("all positive pass") <- AllPositive([1, 2, 3])
 Test("all positive fail") <- (not AllPositive([1, -2, 3]))
 Test("all positive empty") <- AllPositive([])
 
-# Filter/3
+# include/3
 Test("keep positive") <- KeepPositive([1, -2, 3, -4], [1, 3])
 Test("keep positive none") <- KeepPositive([-1, -2], [])
 Test("keep positive all") <- KeepPositive([5, 10], [5, 10])
 Test("keep even") <- KeepEven([1, 2, 3, 4, 5, 6], [2, 4, 6])
 Test("keep even none") <- KeepEven([1, 3, 5], [])
 
-# Exclude/3
+# exclude/3
 Test("remove negative") <- RemoveNegative([1, -2, 3, -4], [1, 3])
 Test("remove negative none present") <- RemoveNegative([1, 2, 3], [1, 2, 3])
 Test("remove even") <- RemoveEven([1, 2, 3, 4, 5], [1, 3, 5])
 
-# FoldLeft/4
+# foldl/4
 Test("sum fold") <- SumListFold([1, 2, 3], 6)
 Test("sum fold empty") <- SumListFold([], 0)
 Test("sum fold single") <- SumListFold([42], 42)

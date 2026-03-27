@@ -104,7 +104,7 @@ BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N)
 |-----------|------|-------------|
 | `FindPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
 | `ShortestPath(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted) |
-| `PathCost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | Sum of edge weights along a path |
+| `PathCost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | sum_ of edge weights along a path |
 
 ```clausal
 # skip
@@ -161,8 +161,8 @@ MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], T, C)
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `ReverseEdges(Edges, Reversed)` | `+Edges, -Reversed` | Reverse all edge directions |
-| `MergeGraphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | Union of two edge lists |
+| `ReverseEdges(Edges, Reversed)` | `+Edges, -Reversed` | reverse all edge directions |
+| `MergeGraphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | union of two edge lists |
 
 ```clausal
 # skip

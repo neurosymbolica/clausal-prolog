@@ -12,13 +12,13 @@
 
 Test("bit roundtrip") <- StripUnits(1(Bit), 1)
 
-Test("bit hasbits") <- HasUnits(1(Bit), Bit)
+Test("bit hasbits") <- has_units(1(Bit), Bit)
 
 # ── Byte = 8 bits ─────────────────────────────────────────────────────────────
 
 Test("byte is 8 bits") <- (
     B := 1(Byte),
-    HasUnits(B, Bit),
+    has_units(B, Bit),
     StripUnits(B, 8.0)
 )
 
@@ -28,28 +28,28 @@ Test("byte n(Byte) sugar") <- StripUnits(10(Byte), 80.0)
 
 Test("kilobyte stores as bits") <- (
     D := 1(Kilobyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 8000.0)),
     ERR < 1.0e-9
 )
 
 Test("megabyte stores as bits") <- (
     D := 1(Megabyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 8000000.0)),
     ERR < 1.0
 )
 
 Test("gigabyte stores as bits") <- (
     D := 1(Gigabyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 8000000000.0)),
     ERR < 1.0
 )
 
 Test("terabyte stores as bits") <- (
     D := 1(Terabyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 8.0e12)),
     ERR < 1.0
 )
@@ -58,21 +58,21 @@ Test("terabyte stores as bits") <- (
 
 Test("kilobit stores as bits") <- (
     D := 1(Kilobit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 1000.0)),
     ERR < 1.0e-9
 )
 
 Test("megabit stores as bits") <- (
     D := 100(Megabit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 100000000.0)),
     ERR < 1.0
 )
 
 Test("gigabit stores as bits") <- (
     D := 1(Gigabit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 1000000000.0)),
     ERR < 1.0
 )
@@ -81,25 +81,25 @@ Test("gigabit stores as bits") <- (
 
 Test("kibibyte is 8192 bits") <- (
     D := 1(Kibibyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, 8192)
 )
 
 Test("mebibyte stores as bits") <- (
     D := 1(Mebibyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(8 * 2**20))
 )
 
 Test("gibibyte stores as bits") <- (
     D := 1(Gibibyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(8 * 2**30))
 )
 
 Test("tebibyte stores as bits") <- (
     D := 1(Tebibyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(8 * 2**40))
 )
 
@@ -107,19 +107,19 @@ Test("tebibyte stores as bits") <- (
 
 Test("kibibit stores as bits") <- (
     D := 1(Kibibit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, 1024)
 )
 
 Test("mebibit stores as bits") <- (
     D := 1(Mebibit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(2**20))
 )
 
 Test("gibibit stores as bits") <- (
     D := 1(Gibibit),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(2**30))
 )
 
@@ -127,19 +127,19 @@ Test("gibibit stores as bits") <- (
 
 Test("4 gibibytes via prefix") <- (
     D := ++(4 * gibi * Byte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(4 * 2**30 * 8))
 )
 
 Test("512 mebibytes via prefix") <- (
     D := ++(512 * mebi * Byte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(512 * 2**20 * 8))
 )
 
 Test("2 tebibytes via prefix") <- (
     D := ++(2 * tebi * Byte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(2 * 2**40 * 8))
 )
 
@@ -147,19 +147,19 @@ Test("2 tebibytes via prefix") <- (
 
 Test("add bytes and bits") <- (
     SUM := 1(Byte) + 8(Bit),
-    HasUnits(SUM, Bit),
+    has_units(SUM, Bit),
     StripUnits(SUM, 16.0)
 )
 
 Test("kibibyte minus 1 byte") <- (
     D := 1(Kibibyte) - 1(Byte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     StripUnits(D, ++(8 * 1023))
 )
 
 Test("kilobyte plus kilobyte") <- (
     D := 1(Kilobyte) + 1(Kilobyte),
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     ERR is ++(abs(D.value - 16000.0)),
     ERR < 1.0e-9
 )
@@ -169,18 +169,18 @@ Test("dims cancel: byte over byte is dimensionless") <- (
     StripUnits(R, 8.0)
 )
 
-# ── HasUnits checks ───────────────────────────────────────────────────────────
+# ── has_units checks ───────────────────────────────────────────────────────────
 
-Test("bit is not a length") <- (not HasUnits(1(Bit), Metre))
+Test("bit is not a length") <- (not has_units(1(Bit), Metre))
 
 Test("constraint accepts bit quantity") <- (
-    HasUnits(D, Bit),
+    has_units(D, Bit),
     D is 100(Bit),
-    HasUnits(D, Bit)
+    has_units(D, Bit)
 )
 
 Test("constraint rejects length for bit slot") <- (
-    not (HasUnits(D, Bit), D is 1(Metre))
+    not (has_units(D, Bit), D is 1(Metre))
 )
 
 # ── Catch mismatch: information vs physical ───────────────────────────────────

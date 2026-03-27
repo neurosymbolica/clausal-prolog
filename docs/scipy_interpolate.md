@@ -344,9 +344,9 @@ evaluation, integration, and differentiation.
 
 ### How it works
 
-The handle registry stores `(interpolant, x_dims, y_dims)` triples.  When
+The handle registry stores `(interpolant, x_dims, y_dims)` triples.  when
 `Make*` receives `Quantity` inputs, it strips the values for scipy and records
-the dims.  When no `Quantity` inputs are present, `x_dims` and `y_dims` are
+the dims.  when no `Quantity` inputs are present, `x_dims` and `y_dims` are
 `None` and all evaluation returns plain values — **zero overhead**.
 
 ### Unit propagation rules
@@ -366,7 +366,7 @@ the dims.  When no `Quantity` inputs are present, `x_dims` and `y_dims` are
 
 ```
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline, SplineIntegral, Free])
--import_from(py.units, [Metre, Second, HasUnits])
+-import_from(py.units, [Metre, Second, has_units])
 
 % Position (m) as a function of time (s)
 Test("spline with units") <- (
@@ -374,9 +374,9 @@ Test("spline with units") <- (
                ++(numpy.array([0.0(Metre), 5.0(Metre), 20.0(Metre)])),
                H),
     EvalSpline(H, 1.0(Second), Y),
-    HasUnits(Y, Metre),
+    has_units(Y, Metre),
     SplineIntegral(H, 0.0(Second), 2.0(Second), AREA),
-    HasUnits(AREA, Metre*Second),
+    has_units(AREA, Metre*Second),
     Free(H))
 ```
 

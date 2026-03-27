@@ -11,7 +11,7 @@ can follow top-to-bottom.
 
 - `.clausal` code in ` ```clausal ` fences; Python in ` ```python `
 - Variables ALLCAPS: `X`, `NAME`, `RESULT`
-- Predicate names TitleCase: `Append`, `FindAll`
+- Predicate names TitleCase: `append`, `findall`
 - Comma-separated goals, multi-goal bodies always parenthesized
 - Python only in "query it from Python" boxes (2–4 lines max)
 - No internal API (PredicateMeta, Var, deref, Trail, Module) unless the page
@@ -49,23 +49,23 @@ tutorial narrative added, **OK** = existing page is already tutorial quality
 
 | # | Page | File | Status | Notes |
 |---|------|------|--------|-------|
-| 10 | Type Checking | — | NEW | `IsVar`, `IsBound`, `IsStr`, `IsNumber`, `IsInt`, `IsFloat`, `IsCompound`, `IsCallable`, `IsList`, `IsGround`. When to use each, common patterns. |
-| 11 | Arithmetic | — | NEW | `Between`, `Succ`, `Plus`, `Abs`, `Max`, `Min`, `Sign`, `Gcd`, `DivMod`. Also `:=` evaluation, comparison operators. |
+| 10 | Type Checking | — | NEW | `var`, `nonvar`, `is_str`, `number`, `integer`, `float_`, `compound`, `callable_`, `is_list`, `ground`. when to use each, common patterns. |
+| 11 | Arithmetic | — | NEW | `between`, `succ`, `plus`, `abs_`, `max_`, `min_`, `sign`, `gcd`, `divmod_`. Also `:=` evaluation, comparison operators. |
 | 12 | Lists | — | NEW | All 24 list predicates. Group by: construction, access, search, sorting, set ops, aggregation. Worked examples: flatten a tree, rotate a list, partition. |
-| 13 | Pairs | — | NEW | `Unzip`, `PairKeys`, `PairValues`. Short page — show key-value processing patterns. |
-| 14 | Higher-Order | — | NEW | `MapList/2,3`, `Filter`, `Exclude`, `FoldLeft`, `TakeWhile`, `DropWhile`, `Span`, `GroupBy`, `SortBy`, `MaxBy`, `MinBy`, `FilterMap`. Show with lambdas. |
-| 15 | Meta-Predicates | `meta_predicates.md` | UPGRADE | 224 lines. Add: `BagOf` existential quantification (`X^Goal`), `SetOf` vs `Sort(FindAll(...))` comparison, `ForAll` patterns. Ensure `Call/1..8` is covered. |
-| 16 | I/O | `io.md` | UPGRADE | 83 lines → expand to ~200. Add: f-string worked examples, PrintTerm vs Write vs Writeln comparison table, formatting patterns (tables, aligned output). |
-| 17 | Term Inspection | — | NEW | `Functor`, `Arg`, `Unpack`, `CopyTerm`, `TermVariables`, `NumberVars`. Meta-programming patterns: term rewriting, variable renaming. |
-| 18 | Database Ops | — | NEW | `Assert`, `AssertFirst`, `Retract`, `ClearTable`, `ClearAllTables`. Dynamic predicates, `-dynamic` directive, assert/retract patterns (memo, state). |
-| 19 | Keyword Predicates | — | NEW | `Vary`, `Extend`, `UnboundKeys`, `Signature`. KWTerm, Python keyword syntax `foo(x=1, y=2)`, partial terms. |
-| 20 | Control | — | NEW | `TimeGoal/1,2`, `once/1`. Benchmarking patterns. Short page. |
+| 13 | Pairs | — | NEW | `pairs_keys_values`, `pairs_keys`, `pairs_values`. Short page — show key-value processing patterns. |
+| 14 | Higher-Order | — | NEW | `maplist/2,3`, `include`, `exclude`, `foldl`, `take_while`, `drop_while`, `span`, `group_by`, `sort_by`, `max_by`, `min_by`, `filter_map`. Show with lambdas. |
+| 15 | Meta-Predicates | `meta_predicates.md` | UPGRADE | 224 lines. Add: `bagof` existential quantification (`X^Goal`), `setof` vs `sort(findall(...))` comparison, `forall` patterns. Ensure `Call/1..8` is covered. |
+| 16 | I/O | `io.md` | UPGRADE | 83 lines → expand to ~200. Add: f-string worked examples, print_term vs write vs writeln comparison table, formatting patterns (tables, aligned output). |
+| 17 | Term Inspection | — | NEW | `functor`, `arg`, `unpack`, `copy_term`, `term_variables`, `numbervars`. Meta-programming patterns: term rewriting, variable renaming. |
+| 18 | Database Ops | — | NEW | `assertz`, `asserta`, `retract`, `abolish_table`, `abolish_all_tables`. Dynamic predicates, `-dynamic` directive, assert/retract patterns (memo, state). |
+| 19 | Keyword Predicates | — | NEW | `vary`, `extend`, `unbound_keys`, `signature`. KWTerm, Python keyword syntax `foo(x=1, y=2)`, partial terms. |
+| 20 | Control | — | NEW | `time_goal/1,2`, `once/1`. Benchmarking patterns. Short page. |
 
 ### Constraints
 
 | # | Page | File | Status | Notes |
 |---|------|------|--------|-------|
-| 21 | Dif & CLP(FD) | `constraints.md` | OK | 594 lines, good. |
+| 21 | dif & CLP(FD) | `constraints.md` | OK | 594 lines, good. |
 | 22 | CLP(B) | `clpb.md` | OK | 221 lines, solid. |
 | 23 | CLP(R) | `clpr.md` | OK | 356 lines, good. |
 
@@ -74,7 +74,7 @@ tutorial narrative added, **OK** = existing page is already tutorial quality
 | # | Page | File | Status | Notes |
 |---|------|------|--------|-------|
 | 24 | Module System | `import.md` | OK | 257 lines, comprehensive. |
-| 25 | Regex | `regex.md` | UPGRADE | 145 lines → ~250. Add: more auto-binding examples, practical patterns (log parsing, CSV extraction, URL routing), combination with `FindAll` for iteration. |
+| 25 | Regex | `regex.md` | UPGRADE | 145 lines → ~250. Add: more auto-binding examples, practical patterns (log parsing, CSV extraction, URL routing), combination with `findall` for iteration. |
 | 26 | Term & Goal Expansion | `term_expansion.md` | UPGRADE | 123 lines → ~250. Add: real-world example (auto-logging, clause counting), one-to-many expansion walkthrough, module state example. |
 | 27 | Python Interop | `python_integration.md` | UPGRADE | 403 lines. Restructure: lead with `++()` escape and `import`/`query()`, push low-level API (Trail, Var, deref) into collapsible section. |
 | 28 | Tabling | `tabling.md` | OK | 370 lines, well-explained. |
@@ -146,7 +146,7 @@ dump). Each needs its own tutorial page.
 6. **Database Ops** (#18) — dynamic predicates, assert/retract
 7. **Pairs** (#13) — short page, quick win
 8. **Keyword Predicates** (#19) — unique Clausal feature
-9. **Control** (#20) — short page (TimeGoal, once)
+9. **Control** (#20) — short page (time_goal, once)
 
 ### Batch 2: Upgrade existing pages
 
@@ -157,7 +157,7 @@ dump). Each needs its own tutorial page.
 14. **DCGs** (#6) — add state threading section
 15. **Predicates** (#2) — add tutorial narrative
 16. **Directives** (#8) — add motivation & examples
-17. **Meta-Predicates** (#15) — expand BagOf/SetOf/ForAll
+17. **Meta-Predicates** (#15) — expand bagof/setof/forall
 18. **Python Interop** (#27) — restructure for .clausal-first audience
 
 ### Batch 3: mkdocs.yml nav update
@@ -195,7 +195,7 @@ nav:
     - I/O: io.md
     - Logging: logging.md
   - Constraints:
-    - Dif & CLP(FD): constraints.md
+    - dif & CLP(FD): constraints.md
     - CLP(B): clpb.md
     - CLP(R): clpr.md
   - Standard Library:
@@ -239,7 +239,7 @@ One short, self-contained `.clausal` example showing the feature in action.
 
 ### PredicateName/Arity
 
-**Signature**: `PredicateName(Arg1, Arg2, Result)`
+**signature**: `PredicateName(Arg1, Arg2, Result)`
 
 {1–2 sentence description}
 

@@ -1,19 +1,19 @@
 # Test passing builtin predicates as arguments to meta-predicates.
 
 KeepNumbers(XS, NS) <- (
-    Filter(IsNumber, XS, NS)
+    include(number, XS, NS)
 )
 
 Incremented(XS, YS) <- (
-    MapList(Succ, XS, YS)
+    maplist(succ, XS, YS)
 )
 
 AllNumbers(XS) <- (
-    MapList(IsNumber, XS)
+    maplist(number, XS)
 )
 
 KeepInts(XS, INTS) <- (
-    Filter(IsInt, XS, INTS)
+    include(integer, XS, INTS)
 )
 
 Test("filter keeps numbers") <- (

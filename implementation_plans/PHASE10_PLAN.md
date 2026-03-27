@@ -1,6 +1,6 @@
 # Phase 10: Call-Site Specialization
 
-**Goal:** When a clause body calls a locked predicate with a statically-known argument
+**Goal:** when a clause body calls a locked predicate with a statically-known argument
 in an indexed position, bypass the dispatch closure entirely and emit a direct reference
 to the pre-compiled bucket function for that argument value.
 
@@ -223,13 +223,13 @@ a clause body (a list of term-level goal objects) and yield `(fname, arity, args
 for `Call` nodes.  The existing `_collect_call_targets` pass already does the same
 traversal; we can factor out the shared walker.
 
-**Note on var_context:** When calling `term_to_ast_expr` during the pre-scan, variables
+**Note on var_context:** when calling `term_to_ast_expr` during the pre-scan, variables
 are mapped to distinct names via an empty `var_context={}`.  We only care about whether
 the resulting expression is a constant; we ignore the exact variable names.
 
 ---
 
-### 10e — Extend `_dispatch_call_trampoline`
+### 10e — extend `_dispatch_call_trampoline`
 
 **Location:** `_dispatch_call_trampoline` in compiler.py (around line 2739).
 
@@ -300,7 +300,7 @@ def _dispatch_call_trampoline(
 
 ### 10f — Wire into `compile_predicate_trampoline`
 
-In `compile_predicate_trampoline`, after the existing
+in_ `compile_predicate_trampoline`, after the existing
 `_inject_resolved_targets_trampoline(...)` call and before
 `_build_predicate_trampoline_funcdef(...)`, add:
 
@@ -343,7 +343,7 @@ _compile_context_local.joint_bucket_ref_map = {}
   through the dispatch closure.
 
 - **`_index_plans` is set before locking.** The import hook locks predicates after
-  loading all clauses and compiling.  When a cross-module call is compiled, the callee
+  loading all clauses and compiling.  when a cross-module call is compiled, the callee
   is already locked (and `_index_plans` is already populated).  Self-recursive calls
   within the same module are compiled while the predicate is not yet locked, so they fall
   back to Phase 7 / `_get_dispatch()` — which is correct.
@@ -364,7 +364,7 @@ _compile_context_local.joint_bucket_ref_map = {}
 |------|--------|
 | `clausal/logic/compiler.py` | Add `_static_call_key`, `_bucket_key`, `_joint_bucket_key` helpers (~25 lines) |
 | `clausal/logic/compiler.py` | Add `_inject_bucket_refs_trampoline` (~60 lines) |
-| `clausal/logic/compiler.py` | Extend `_dispatch_call_trampoline` with Phase 10 block (~25 lines) |
+| `clausal/logic/compiler.py` | extend `_dispatch_call_trampoline` with Phase 10 block (~25 lines) |
 | `clausal/logic/compiler.py` | Wire `_inject_bucket_refs_trampoline` into `compile_predicate_trampoline` (~8 lines) |
 | `clausal/logic/compiler.py` | Store `pred_cls._index_plans` after building `plans` (~3 lines) |
 | `clausal/logic/compiler.py` | Store `pred_cls._index_plans_joint/hierarchical` in joint dispatch branches (~6 lines) |
@@ -383,7 +383,7 @@ Total new code: ~150 lines in compiler.py, ~120 lines in tests.
    expected key or None.
 
 3. **`predicate_to_source` shows bucket ref in generated code** — compile a predicate
-   that calls a locked predicate with a literal first argument.  Assert the source
+   that calls a locked predicate with a literal first argument.  assertz the source
    contains `"bucket(pos=0,"` and does NOT contain `"_get_dispatch"` or `"_disp_"`.
 
 4. **Correctness: results identical to non-specialised** — run a query that exercises

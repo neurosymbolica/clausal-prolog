@@ -19,7 +19,7 @@
 ])
 
 # Object-level functor classes (data terms, not meta-level predicates).
--private([Natnum(VALUE), Succ(INNER), Edge(FROM, TO), Path(FROM, TO)])
+-private([Natnum(VALUE), succ(INNER), Edge(FROM, TO), Path(FROM, TO)])
 
 # ── Object Programs ──────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@
 NatnumProgram(PROGRAM) <- (
     PROGRAM is [
         [Natnum(0), []],
-        [Natnum(Succ(X)), [Natnum(X)]]
+        [Natnum(succ(X)), [Natnum(X)]]
     ]
 )
 
@@ -62,10 +62,10 @@ CyclicProgram(PROGRAM) <- (
 
 # MatchClause(Goal, FreshBody, Program)
 # Find a clause in Program whose head unifies with Goal.
-# Returns the body with fresh variables (via CopyTerm).
+# Returns the body with fresh variables (via copy_term).
 MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
-    CopyTerm(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
+    copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD,
 )
 
@@ -78,7 +78,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 Solve([], _PROGRAM),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     Solve(ALL_GOALS, PROGRAM),
 )
 
@@ -90,7 +90,7 @@ Solve([GOAL, *GOALS], PROGRAM) <- (
 SolveCount([], _PROGRAM, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
     COUNT := SUB_COUNT + 1,
 )
@@ -105,7 +105,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 := MAX - 1,
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     SolveLimit(ALL_GOALS, PROGRAM, MAX1),
 )
 
@@ -116,7 +116,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
 # even for programs where naive DFS would loop.
 
 SolveIterativeDeepening(GOALS, PROGRAM) <- (
-    Between(0, 1000, DEPTH),
+    between(0, 1000, DEPTH),
     SolveLimit(GOALS, PROGRAM, DEPTH),
 )
 
@@ -144,12 +144,12 @@ Test("solve natnum(0)") <- (
 
 Test("solve natnum(s(0))") <- (
     NatnumProgram(P),
-    Solve([Natnum(Succ(0))], P),
+    Solve([Natnum(succ(0))], P),
 )
 
 Test("solve natnum(s(s(0)))") <- (
     NatnumProgram(P),
-    Solve([Natnum(Succ(Succ(0)))], P),
+    Solve([Natnum(succ(succ(0)))], P),
 )
 
 # -- Vanilla MI: graph reachability --
@@ -188,12 +188,12 @@ Test("count natnum(0) = 1 step") <- (
 
 Test("count natnum(s(0)) = 2 steps") <- (
     NatnumProgram(P),
-    SolveCount([Natnum(Succ(0))], P, 2),
+    SolveCount([Natnum(succ(0))], P, 2),
 )
 
 Test("count natnum(s(s(0))) = 3 steps") <- (
     NatnumProgram(P),
-    SolveCount([Natnum(Succ(Succ(0)))], P, 3),
+    SolveCount([Natnum(succ(succ(0)))], P, 3),
 )
 
 Test("count edge(a,b) = 1 step") <- (
@@ -215,22 +215,22 @@ Test("count path(a,c) = 4 steps") <- (
 
 Test("limit natnum(s(0)) depth 1 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([Natnum(Succ(0))], P, 1),
+    not SolveLimit([Natnum(succ(0))], P, 1),
 )
 
 Test("limit natnum(s(0)) depth 2 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([Natnum(Succ(0))], P, 2),
+    SolveLimit([Natnum(succ(0))], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 2 fails") <- (
     NatnumProgram(P),
-    not SolveLimit([Natnum(Succ(Succ(0)))], P, 2),
+    not SolveLimit([Natnum(succ(succ(0)))], P, 2),
 )
 
 Test("limit natnum(s(s(0))) depth 3 succeeds") <- (
     NatnumProgram(P),
-    SolveLimit([Natnum(Succ(Succ(0)))], P, 3),
+    SolveLimit([Natnum(succ(succ(0)))], P, 3),
 )
 
 Test("limit path(a,c) depth 3 fails") <- (
@@ -265,8 +265,8 @@ Test("tree natnum(0)") <- (
 
 Test("tree natnum(s(0)) has nested proof") <- (
     NatnumProgram(P),
-    SolveTree([Natnum(Succ(0))], P, TREE),
-    TREE is [[Natnum(Succ(0)), [[Natnum(0), []]]]],
+    SolveTree([Natnum(succ(0))], P, TREE),
+    TREE is [[Natnum(succ(0)), [[Natnum(0), []]]]],
 )
 
 Test("tree edge(a,b) is leaf") <- (
@@ -296,10 +296,10 @@ Test("tree path(a,c) transitive") <- (
 
 Test("tree natnum(s(s(0))) depth 2") <- (
     NatnumProgram(P),
-    SolveTree([Natnum(Succ(Succ(0)))], P, TREE),
+    SolveTree([Natnum(succ(succ(0)))], P, TREE),
     TREE is [
-        [Natnum(Succ(Succ(0))), [
-            [Natnum(Succ(0)), [
+        [Natnum(succ(succ(0))), [
+            [Natnum(succ(0)), [
                 [Natnum(0), []]
             ]]
         ]]

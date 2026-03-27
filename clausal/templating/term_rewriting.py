@@ -122,7 +122,7 @@ CMPOP_CLS = {
     GtE: "GtE",               # >=  arithmetic comparison (evaluates)
     Is: "Unify",              # is  unification (structural, no arithmetic eval)
     IsNot: "DoesNotUnify",    # is not  dif / negation of unification
-    In: "In",                 # in  membership / enumeration
+    In: "in_",                 # in  membership / enumeration
     NotIn: "NotIn",           # not in  non-membership
 }
 
@@ -499,7 +499,7 @@ class TermTransformer(NodeTransformer):
         # so it evaluates as Python rather than being compiled as a Clausal term.
         elif (
             isinstance(call.func, Name)
-            and call.func.id == "HasUnits"
+            and call.func.id in ("has_units", "HasUnits")
             and len(call.args) == 2
             and _is_unit_expr(call.args[1])
             and not isinstance(call.args[1], Name)

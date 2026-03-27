@@ -1,5 +1,5 @@
-"""Arithmetic builtins: Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3,
-Sign/2, Gcd/3, DivMod/4, Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2.
+"""Arithmetic builtins: between/3, succ/2, plus/3, abs_/2, max_/3, min_/3,
+sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2.
 
 All predicates that accept numeric values also accept Quantity values
 (numbers with physical dimensions).  Dimension mismatches raise
@@ -53,7 +53,7 @@ def _require_same_dims(a, b):
     Raises UnitsMismatch if:
     - Both are Quantity with different dims.
     - One is Quantity with non-empty dims and the other is a plain number
-      (mixing dimensioned and dimensionless is an error for Gcd/Lcm/DivMod).
+      (mixing dimensioned and dimensionless is an error for gcd/lcm/divmod_).
     """
     from clausal.terms import UnitsMismatch
 
@@ -86,7 +86,7 @@ def _wrap_quantity(value, dims):
 # ── Predicates ─────────────────────────────────────────────────────────────
 
 
-@_builtin("Between", 3)
+@_builtin("between", 3)
 def _between__3(low, high, x, trail, k):
     """between(Low, High, X) — X ranges over integers from Low to High inclusive."""
     low_val = deref(low)
@@ -109,7 +109,7 @@ def _between__3(low, high, x, trail, k):
             trail.undo(mark)
 
 
-@_builtin("Succ", 2)
+@_builtin("succ", 2)
 def _succ__2(x, y, trail, k):
     """succ(X, Y) — Y = X + 1 (both non-negative integers)."""
     x_val = deref(x)
@@ -130,7 +130,7 @@ def _succ__2(x, y, trail, k):
         trail.undo(mark)
 
 
-@_builtin("Plus", 3)
+@_builtin("plus", 3)
 def _plus__3(x, y, z, trail, k):
     """plus(X, Y, Z) — Z = X + Y; any two determine the third.
 
@@ -161,9 +161,9 @@ def _plus__3(x, y, z, trail, k):
         trail.undo(mark)
 
 
-@_builtin("Abs", 2)
+@_builtin("abs_", 2)
 def _abs__2(x, y, trail, k):
-    """Abs(X, Y) — Y = abs(X).  Supports Quantity (preserves dimensions)."""
+    """abs_(X, Y) — Y = abs(X).  Supports Quantity (preserves dimensions)."""
     x_val = deref(x)
     if is_var(x_val):
         return
@@ -175,9 +175,9 @@ def _abs__2(x, y, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Max", 3)
+@_builtin("max_", 3)
 def _max__3(x, y, z, trail, k):
-    """Max(X, Y, Z) — Z = max(X, Y).
+    """max_(X, Y, Z) — Z = max(X, Y).
 
     Supports Quantity — dimensions must agree (UnitsMismatch propagates).
     """
@@ -192,9 +192,9 @@ def _max__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Min", 3)
+@_builtin("min_", 3)
 def _min__3(x, y, z, trail, k):
-    """Min(X, Y, Z) — Z = min(X, Y).
+    """min_(X, Y, Z) — Z = min(X, Y).
 
     Supports Quantity — dimensions must agree (UnitsMismatch propagates).
     """
@@ -208,9 +208,9 @@ def _min__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Sign", 2)
+@_builtin("sign", 2)
 def _sign__2(x, s, trail, k):
-    """Sign(X, S) — S is the sign of X: -1, 0, or 1 (always dimensionless).
+    """sign(X, S) — S is the sign of X: -1, 0, or 1 (always dimensionless).
 
     Supports Quantity — extracts the numeric value, returns plain int.
     """
@@ -227,9 +227,9 @@ def _sign__2(x, s, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Gcd", 3)
+@_builtin("gcd", 3)
 def _gcd__3(x, y, g, trail, k):
-    """Gcd(X, Y, G) — G is the greatest common divisor of X and Y.
+    """gcd(X, Y, G) — G is the greatest common divisor of X and Y.
 
     Supports Quantity — dimensions must agree; result has the same dimensions.
     """
@@ -249,9 +249,9 @@ def _gcd__3(x, y, g, trail, k):
     trail.undo(mark)
 
 
-@_builtin("DivMod", 4)
+@_builtin("divmod_", 4)
 def _divmod__4(x, y, q, r, trail, k):
-    """DivMod(X, Y, Q, R) — Q is X // Y, R is X mod Y.
+    """divmod_(X, Y, Q, R) — Q is X // Y, R is X mod Y.
 
     Supports Quantity — dimensions must agree; Q is dimensionless, R keeps dimensions.
     """
@@ -278,9 +278,9 @@ def _divmod__4(x, y, q, r, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Lcm", 3)
+@_builtin("lcm", 3)
 def _lcm__3(x, y, l, trail, k):
-    """Lcm(X, Y, L) — L is the least common multiple of X and Y.
+    """lcm(X, Y, L) — L is the least common multiple of X and Y.
 
     Supports Quantity — dimensions must agree; result has the same dimensions.
     """
@@ -304,9 +304,9 @@ def _lcm__3(x, y, l, trail, k):
     trail.undo(mark)
 
 
-@_builtin("ExpMod", 4)
+@_builtin("exp_mod", 4)
 def _expmod__4(base, exp, mod, result, trail, k):
-    """ExpMod(Base, Exp, Mod, Result) — Result is Base^Exp mod Mod.
+    """exp_mod(Base, Exp, Mod, Result) — Result is Base^Exp mod Mod.
 
     Integer-only (no Quantity support — modular exponentiation has no
     meaningful dimensional interpretation).
@@ -327,9 +327,9 @@ def _expmod__4(base, exp, mod, result, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Popcount", 2)
+@_builtin("popcount", 2)
 def _popcount__2(x, count, trail, k):
-    """Popcount(X, Count) — Count is the number of set bits in X.
+    """popcount(X, Count) — Count is the number of set bits in X.
 
     Integer-only (bitwise operation, no Quantity support).
     """
@@ -345,9 +345,9 @@ def _popcount__2(x, count, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Msb", 2)
+@_builtin("msb", 2)
 def _msb__2(x, bit, trail, k):
-    """Msb(X, Bit) — Bit is the position of the most significant set bit (0-indexed).
+    """msb(X, Bit) — Bit is the position of the most significant set bit (0-indexed).
 
     Integer-only (bitwise operation, no Quantity support).
     """
@@ -363,9 +363,9 @@ def _msb__2(x, bit, trail, k):
     trail.undo(mark)
 
 
-@_builtin("Lsb", 2)
+@_builtin("lsb", 2)
 def _lsb__2(x, bit, trail, k):
-    """Lsb(X, Bit) — Bit is the position of the least significant set bit (0-indexed).
+    """lsb(X, Bit) — Bit is the position of the least significant set bit (0-indexed).
 
     Integer-only (bitwise operation, no Quantity support).
     """

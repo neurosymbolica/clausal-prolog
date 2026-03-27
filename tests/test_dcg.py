@@ -17,7 +17,7 @@ from clausal.import_hook import _load_module
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it as a module."""
+    """write a .clausal file and load it as a module."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(src_text)
     mod = _load_module(name, str(p))
@@ -719,7 +719,7 @@ class TestDCGStringInput:
 
     def test_phrase2_inline_goal_string(self, tmp_path):
         """DCG with inline goal on string input."""
-        src = 'vowel(_v) >> ([_v], {In(_v, ["a", "e", "i", "o", "u"])})\n'
+        src = 'vowel(_v) >> ([_v], {in_(_v, ["a", "e", "i", "o", "u"])})\n'
         mod = _load("ds9", src, tmp_path)
         cls = mod.module_dict["vowel"]
         v = Var()

@@ -1,83 +1,83 @@
 # Phase 1: Coroutining & Resource Control integration tests
 
-# CallNth: get the 3rd member of a list
+# call_nth: get the 3rd member of a list
 Test("call_nth basic") <- (
-    CallNth(In(X, [10, 20, 30, 40, 50]), 3),
+    call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30
 )
 
-# CallNth: N exceeds available solutions - fail
+# call_nth: N exceeds available solutions - fail
 Test("call_nth too few") <- (
-    not CallNth(In(X, [1, 2]), 5)
+    not call_nth(in_(X, [1, 2]), 5)
 )
 
-# CountAll: count members
+# count_all: count members
 Test("count_all basic") <- (
-    CountAll(In(X, ["a", "b", "c", "d"]), COUNT),
+    count_all(in_(X, ["a", "b", "c", "d"]), COUNT),
     COUNT is 4
 )
 
-# CountAll: no solutions - 0
+# count_all: no solutions - 0
 Test("count_all empty") <- (
-    CountAll(In(X, []), COUNT),
+    count_all(in_(X, []), COUNT),
     COUNT is 0
 )
 
-# SetupCallCleanup: basic success
+# setup_call_cleanup: basic success
 Test("scc success") <- (
-    SetupCallCleanup(
+    setup_call_cleanup(
         SETUP is 1,
         RESULT is 2,
         CLEANUP is 3,
     )
 )
 
-# SetupCallCleanup: call fails - cleanup still runs, overall fails
+# setup_call_cleanup: call fails - cleanup still runs, overall fails
 Test("scc call fails") <- (
-    not SetupCallCleanup(
+    not setup_call_cleanup(
         SETUP is 1,
-        In(X, []),
+        in_(X, []),
         CLEANUP is 3,
     )
 )
 
-# CallCleanup: sugar for SCC
+# call_cleanup: sugar for SCC
 Test("call_cleanup basic") <- (
-    CallCleanup(
+    call_cleanup(
         RESULT is 42,
         CLEANUP is 99,
     )
 )
 
-# Freeze: already bound - immediate
+# freeze: already bound - immediate
 Test("freeze already bound") <- (
     X is 5,
-    Freeze(X, X > 0)
+    freeze(X, X > 0)
 )
 
-# Freeze: deferred until bound
+# freeze: deferred until bound
 Test("freeze deferred") <- (
-    Freeze(X, Y is X),
+    freeze(X, Y is X),
     X is "hello",
     Y is "hello"
 )
 
-# Freeze: goal failure rejects unification
+# freeze: goal failure rejects unification
 Test("freeze rejects") <- (
-    Freeze(X, X > 100),
+    freeze(X, X > 100),
     not (X is 5)
 )
 
-# When: IsBound condition
+# when: nonvar condition
 Test("when is_bound") <- (
-    When(IsBound(X), Y is X),
+    when(nonvar(X), Y is X),
     X is 42,
     Y is 42
 )
 
-# When: conjunction
+# when: conjunction
 Test("when conjunction") <- (
-    When((IsBound(X), IsBound(Y)), RESULT is "done"),
+    when((nonvar(X), nonvar(Y)), RESULT is "done"),
     X is 1,
     Y is 2,
     RESULT is "done"
@@ -85,67 +85,67 @@ Test("when conjunction") <- (
 
 # ── Nesting inside other meta-predicates ──
 
-# FindAll wrapping CallNth
+# findall wrapping call_nth
 Test("findall+callnth") <- (
-    FindAll(X, CallNth(In(X, [10, 20, 30]), 2), BAG),
+    findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
     BAG is [20]
 )
 
-# Once wrapping CountAll
+# once wrapping count_all
 Test("once+countall") <- (
-    Once(CountAll(In(X, [1, 2, 3, 4, 5]), COUNT)),
+    once(count_all(in_(X, [1, 2, 3, 4, 5]), COUNT)),
     COUNT is 5
 )
 
-# catch wrapping CallNth with bad N
+# catch wrapping call_nth with bad N
 Test("catch+callnth error") <- (
     catch(
-        CallNth(In(X, [1, 2, 3]), 0),
+        call_nth(in_(X, [1, 2, 3]), 0),
         _,
         RESULT is "caught",
     ),
     RESULT is "caught"
 )
 
-# Freeze inside FindAll
+# freeze inside findall
 Test("findall+freeze") <- (
-    FindAll(
+    findall(
         Y,
-        (Freeze(X, Y is X), X is 99),
+        (freeze(X, Y is X), X is 99),
         BAG,
     ),
     BAG is [99]
 )
 
-# SetupCallCleanup inside Once
+# setup_call_cleanup inside once
 Test("once+scc") <- (
-    Once(SetupCallCleanup(
+    once(setup_call_cleanup(
         SETUP is 1,
-        In(X, ["a", "b", "c"]),
+        in_(X, ["a", "b", "c"]),
         CLEANUP is 3,
     )),
     X is "a"
 )
 
-# CallNth inside Freeze
+# call_nth inside freeze
 Test("freeze+callnth") <- (
-    Freeze(X, CallNth(In(Y, [X]), 1)),
+    freeze(X, call_nth(in_(Y, [X]), 1)),
     X is 42,
     Y is 42
 )
 
-# CountAll inside FindAll
+# count_all inside findall
 Test("findall+countall") <- (
-    FindAll(
+    findall(
         COUNT,
-        CountAll(In(X, ["a", "b", "c"]), COUNT),
+        count_all(in_(X, ["a", "b", "c"]), COUNT),
         BAG,
     ),
     BAG is [3]
 )
 
-# CallCleanup inside Once
+# call_cleanup inside once
 Test("once+callcleanup") <- (
-    Once(CallCleanup(In(X, [10, 20, 30]), RESULT is "cleaned")),
+    once(call_cleanup(in_(X, [10, 20, 30]), RESULT is "cleaned")),
     X is 10
 )

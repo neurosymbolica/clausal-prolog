@@ -48,17 +48,17 @@ def clean_registry(request):
 class TestRegistry:
 
     def test_register_predicate(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3, {"LIST": "รายการ", "ELEMENT": "สมาชิก", "NEWLIST": "รายการใหม่"})
-        entry = translate_predicate("th", "Append", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3, {"LIST": "รายการ", "ELEMENT": "สมาชิก", "NEWLIST": "รายการใหม่"})
+        entry = translate_predicate("th", "append", 3)
         assert entry is not None
         assert entry.translated_functor == "ต่อท้าย"
         assert entry.arg_map == {"LIST": "รายการ", "ELEMENT": "สมาชิก", "NEWLIST": "รายการใหม่"}
 
     def test_reverse_predicate(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3, {"LIST": "รายการ"})
+        register_predicate("th", "append", "ต่อท้าย", 3, {"LIST": "รายการ"})
         entry = reverse_translate_predicate("th", "ต่อท้าย", 3)
         assert entry is not None
-        assert entry.english_functor == "Append"
+        assert entry.english_functor == "append"
         assert entry.reverse_arg_map == {"รายการ": "LIST"}
 
     def test_register_atom(self):
@@ -73,21 +73,21 @@ class TestRegistry:
         assert reverse_translate_atom("th", "missing") is None
 
     def test_multiple_languages(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
-        register_predicate("ja", "Append", "追加", 3)
-        assert translate_predicate("th", "Append", 3).translated_functor == "ต่อท้าย"
-        assert translate_predicate("ja", "Append", 3).translated_functor == "追加"
+        register_predicate("th", "append", "ต่อท้าย", 3)
+        register_predicate("ja", "append", "追加", 3)
+        assert translate_predicate("th", "append", 3).translated_functor == "ต่อท้าย"
+        assert translate_predicate("ja", "append", 3).translated_functor == "追加"
 
     def test_additive_merge(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3)
         register_predicate("th", "Member", "สมาชิกของ", 2)
-        assert translate_predicate("th", "Append", 3) is not None
+        assert translate_predicate("th", "append", 3) is not None
         assert translate_predicate("th", "Member", 2) is not None
 
     def test_get_all_predicates(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3)
         register_predicate("th", "Member", "สมาชิกของ", 2)
-        register_predicate("ja", "Append", "追加", 3)
+        register_predicate("ja", "append", "追加", 3)
         entries = get_all_predicates("th")
         assert len(entries) == 2
         names = {e.translated_functor for e in entries}
@@ -100,7 +100,7 @@ class TestRegistry:
         assert atoms == {"nil": "ว่าง", "true": "จริง"}
 
     def test_get_languages(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3)
         register_atom("ja", "nil", "空")
         assert get_languages() == {"th", "ja"}
 
@@ -118,25 +118,25 @@ class TestRegistry:
 class TestDisplayLocale:
 
     def setup_method(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3)
         register_atom("th", "nil", "ว่าง")
 
     def test_compound_with_locale(self):
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
-        assert "Append" not in s
+        assert "append" not in s
 
     def test_compound_without_locale(self):
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         s = term_str(t)
-        assert "Append" in s
+        assert "append" in s
 
     def test_nested_with_locale(self):
-        t = Compound("Append", ("x", Compound("Append", (1, 2, 3)), []))
+        t = Compound("append", ("x", Compound("append", (1, 2, 3)), []))
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
-        assert "Append" not in s
+        assert "append" not in s
 
     def test_predicate_meta_with_locale(self):
         Greeting = make_predicate("Greeting", ["NAME", "MESSAGE"])
@@ -152,7 +152,7 @@ class TestDisplayLocale:
 
     def test_atom_in_compound_arg(self):
         """Atom names inside compound args are NOT translated (strings are data)."""
-        t = Compound("Append", ("nil", "hello", []))
+        t = Compound("append", ("nil", "hello", []))
         s = term_str(t, TermStyle(locale="th"))
         # "nil" is a Python string value here, rendered with quotes — not an atom
         assert "'nil'" in s
@@ -171,14 +171,14 @@ class TestDisplayLocale:
 class TestTranslateBuiltin:
 
     def setup_method(self):
-        register_predicate("th", "Append", "ต่อท้าย", 3)
+        register_predicate("th", "append", "ต่อท้าย", 3)
         register_atom("th", "nil", "ว่าง")
 
     def test_forward_produces_string(self):
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         gen = _translate__3("th", t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
@@ -190,7 +190,7 @@ class TestTranslateBuiltin:
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         gen = _translate__3("th", t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
@@ -201,7 +201,7 @@ class TestTranslateBuiltin:
     def test_unbound_lang_fails(self):
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         solutions = list(_translate__3(Var(), t, Var(), trail, None))
         assert len(solutions) == 0
 
@@ -211,7 +211,7 @@ class TestTranslateBuiltin:
         trail = Trail()
         result_var = Var()
         th_atom = make_predicate("th", [])
-        t = Compound("Append", (1, 2, 3))
+        t = Compound("append", (1, 2, 3))
         gen = _translate__3(th_atom, t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
@@ -224,13 +224,13 @@ class TestTranslateBuiltin:
         register_predicate("th", "Member", "สมาชิกของ", 2)
         trail = Trail()
         result_var = Var()
-        t = Compound("Append", ("x", Compound("Member", ("a", "b")), []))
+        t = Compound("append", ("x", Compound("Member", ("a", "b")), []))
         gen = _translate__3("th", t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
         assert "ต่อท้าย" in result
         assert "สมาชิกของ" in result
-        assert "Append" not in result
+        assert "append" not in result
         assert "Member" not in result
 
 
@@ -254,7 +254,7 @@ class TestDirectiveIntegration:
         request.cls.mod = _load_fixture("translations_basic")
 
     def test_predicate_translations_loaded(self):
-        entry = translate_predicate("th", "Append", 3)
+        entry = translate_predicate("th", "append", 3)
         assert entry is not None
         assert entry.translated_functor == "ต่อท้าย"
         assert entry.arg_map["LIST"] == "รายการ"

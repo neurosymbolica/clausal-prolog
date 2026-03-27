@@ -41,7 +41,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     ### Bucket merging
 
-    A critical correctness requirement: **clause ordering must be preserved.** In Prolog and clausal, clause order determines solution order. Consider:
+    A critical correctness requirement: **clause ordering must be preserved.** in_ Prolog and clausal, clause order determines solution order. Consider:
 
     ```
     f(1, "a"),          # clause 0, key=1
@@ -51,7 +51,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
     f(X, "e"),          # clause 4, default
     ```
 
-    When querying `f(1, Y)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
+    when querying `f(1, Y)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
 
     To achieve this, each bucket's clause list **merges the bucket-specific clauses with all default clauses, in their original order:**
 
@@ -201,7 +201,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     ### Lazy recompile integration
 
-    No changes to the Database or PredicateMeta invalidation mechanism were needed. When `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.
+    No changes to the Database or PredicateMeta invalidation mechanism were needed. when `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.
 
     ---
 
@@ -267,7 +267,7 @@ With groundness-keyed dispatch, querying `color(NAME, "warm")` uses a second-arg
 
     `_extract_arg_key(clause, pos, arity)` generalises `_extract_first_arg_key` to work on any argument position. Classification rules:
 
-    | Arg at position `pos` | Key | Bucket |
+    | arg at position `pos` | Key | Bucket |
     |---|---|---|
     | Scalar (int, str, float, bytes, bool, None) | The value | Specific |
     | Var with `Unify(var, scalar)` in body | The scalar | Specific |
@@ -365,13 +365,13 @@ Plans sorted by selectivity: position 0 first, then position 1.
 
 ## Interaction with first-argument indexing
 
-Groundness-keyed dispatch fully subsumes first-argument indexing. The `compile_predicate` and `compile_predicate_trampoline` functions use `_analyze_index_positions` instead of `_build_first_arg_index`. When only position 0 is indexable, the result is behaviourally identical to first-argument indexing.
+Groundness-keyed dispatch fully subsumes first-argument indexing. The `compile_predicate` and `compile_predicate_trampoline` functions use `_analyze_index_positions` instead of `_build_first_arg_index`. when only position 0 is indexable, the result is behaviourally identical to first-argument indexing.
 
 The first-arg index functions (`_extract_first_arg_key`, `_build_first_arg_index`, `_make_indexed_dispatch_simple`, `_make_indexed_dispatch_trampoline`) are retained as thin wrappers or standalone utilities for backward compatibility with tests that reference them directly.
 
 ## Interaction with dynamic predicates
 
-No changes to the invalidation mechanism. When [`assertz` or `retract`](database_ops.md) modifies a predicate, the lazy recompile closure calls `compile_predicate` from scratch. The fresh compilation analyses all positions and builds new indexes reflecting the updated clause list.
+No changes to the invalidation mechanism. when [`assertz` or `retract`](database_ops.md) modifies a predicate, the lazy recompile closure calls `compile_predicate` from scratch. The fresh compilation analyses all positions and builds new indexes reflecting the updated clause list.
 
 ## Limitations
 
@@ -443,13 +443,13 @@ Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
 Combo(wind, dry, hot)   Combo(wind, wet, cold)
 ```
 
-- Arg 0 (`fire/ice/wind`): 3 distinct values
-- Arg 1 (`dry/wet`): 2 distinct values
+- arg 0 (`fire/ice/wind`): 3 distinct values
+- arg 1 (`dry/wet`): 2 distinct values
 - Joint `(arg0, arg1)`: 6 distinct values — uniquely identifies every clause
 
 `_analyze_joint_index_positions` selects the pair `(best_single_pos, k)` with the largest improvement.  The quality criterion is `joint_distinct > best_single_distinct × 1.5`.
 
-When activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
+when activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
 ```clausal
 # skip
@@ -466,7 +466,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 
 ## Secondary (hierarchical) dispatch
 
-When joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
+when joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
 ```clausal
 # skip
@@ -602,7 +602,7 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
 **Locked-only.** Only call sites targeting a predicate with `_locked=True` at the caller's compile time are specialised. [Dynamic predicates](directives.md) always go through `._get_dispatch()` because their clause set may change at runtime.
 
-**`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. When a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `_get_dispatch()` — which is correct.
+**`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. when a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `_get_dispatch()` — which is correct.
 
 **Recompilation safety.** Lazy recompile (triggered by `assertz`/`retract`) calls `compile_predicate_trampoline` from scratch, overwriting `_dispatch_fn` and `_index_plans` atomically. Call-site specialisation only ever applies to calls *to* locked predicates; locked predicates never change after locking. Callers of dynamic predicates are never specialised and are therefore unaffected by dynamic recompilation.
 

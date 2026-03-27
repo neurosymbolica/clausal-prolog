@@ -46,8 +46,8 @@ Test("mymember last element") <- MyMember(3, [1, 2, 3])
 Test("mymember middle element") <- MyMember(2, [1, 2, 3])
 Test("mymember singleton list") <- MyMember(7, [7])
 Test("mymember absent") <- (not MyMember(4, [1, 2, 3]))
-Test("mymember enumerate all") <- (FindAll(X, MyMember(X, [10, 20, 30]), XS) and XS == [10, 20, 30])
-Test("mymember duplicate values") <- (FindAll(X, MyMember(X, [1, 1, 2]), XS) and XS == [1, 1, 2])
+Test("mymember enumerate all") <- (findall(X, MyMember(X, [10, 20, 30]), XS) and XS == [10, 20, 30])
+Test("mymember duplicate values") <- (findall(X, MyMember(X, [1, 1, 2]), XS) and XS == [1, 1, 2])
 
 # ── MyLast/2: last element of a list ─────────────────────────────────────────
 # Singleton [LAST] base case; recursive on [_|TAIL]. Index target: arg0.
@@ -120,4 +120,4 @@ MyPrefix([HEAD, *TAIL], [HEAD, *REST]) <- MyPrefix(TAIL, REST)
 Test("myprefix empty of three") <- MyPrefix([], [1, 2, 3])
 Test("myprefix singleton") <- MyPrefix([1], [1, 2, 3])
 Test("myprefix full") <- MyPrefix([1, 2, 3], [1, 2, 3])
-Test("myprefix enumerate") <- (FindAll(P, MyPrefix(P, [1, 2]), PS) and PS == [[], [1], [1, 2]])
+Test("myprefix enumerate") <- (findall(P, MyPrefix(P, [1, 2]), PS) and PS == [[], [1], [1, 2]])

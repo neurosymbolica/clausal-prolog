@@ -1,9 +1,9 @@
 """tests/test_term_inspection.py — V2-13 term inspection builtins.
 
 Tests for:
-  CopyTerm/2       — deep copy with fresh Vars
-  TermVariables/2  — collect unbound Vars in term
-  NumberVars/3     — number unbound Vars with $VAR(N)
+  copy_term/2       — deep copy with fresh Vars
+  term_variables/2  — collect unbound Vars in term
+  numbervars/3     — number unbound Vars with $VAR(N)
 """
 
 import pytest
@@ -40,35 +40,35 @@ def goal(functor, *args):
     return Call(func=LoadName(name=functor), args=list(args), kwargs=[])
 
 
-# ── CopyTerm/2 ─────────────────────────────────────────────────────────────────
+# ── copy_term/2 ─────────────────────────────────────────────────────────────────
 
 
 class TestCopyTerm:
 
     def test_copy_atom(self):
         copy = Var()
-        vals = sol_var(goal("CopyTerm", "hello", copy), copy)
+        vals = sol_var(goal("copy_term", "hello", copy), copy)
         assert vals == ["hello"]
 
     def test_copy_integer(self):
         copy = Var()
-        vals = sol_var(goal("CopyTerm", 42, copy), copy)
+        vals = sol_var(goal("copy_term", 42, copy), copy)
         assert vals == [42]
 
     def test_copy_none(self):
         copy = Var()
-        vals = sol_var(goal("CopyTerm", None, copy), copy)
+        vals = sol_var(goal("copy_term", None, copy), copy)
         assert vals == [None]
 
     def test_copy_list_ground(self):
         copy = Var()
-        vals = sol_var(goal("CopyTerm", [1, 2, 3], copy), copy)
+        vals = sol_var(goal("copy_term", [1, 2, 3], copy), copy)
         assert vals == [[1, 2, 3]]
 
     def test_copy_compound_ground(self):
         term = Compound("foo", (1, 2))
         copy = Var()
-        vals = sol_var(goal("CopyTerm", term, copy), copy)
+        vals = sol_var(goal("copy_term", term, copy), copy)
         assert len(vals) == 1
         c = vals[0]
         assert isinstance(c, Compound)
@@ -80,7 +80,7 @@ class TestCopyTerm:
         copy = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("CopyTerm", x, copy), mod, trail):
+        for _ in solve(goal("copy_term", x, copy), mod, trail):
             c = deref(copy)
             assert is_var(c)
             assert c is not x
@@ -92,7 +92,7 @@ class TestCopyTerm:
         copy = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("CopyTerm", term, copy), mod, trail):
+        for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
             assert isinstance(c, Compound)
             a0, a1 = deref(c.args[0]), deref(c.args[1])
@@ -105,7 +105,7 @@ class TestCopyTerm:
         copy = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("CopyTerm", term, copy), mod, trail):
+        for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
             fresh = deref(c.args[0])
             assert fresh is not x
@@ -116,7 +116,7 @@ class TestCopyTerm:
         copy = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("CopyTerm", term, copy), mod, trail):
+        for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
             assert isinstance(c, Compound) and c.functor == "foo"
             c_inner = deref(c.args[0])
@@ -128,7 +128,7 @@ class TestCopyTerm:
         copy = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("CopyTerm", lst, copy), mod, trail):
+        for _ in solve(goal("copy_term", lst, copy), mod, trail):
             c = deref(copy)
             assert isinstance(c, list)
             assert deref(c[0]) == 1
@@ -142,36 +142,36 @@ class TestCopyTerm:
         unify(x, 42, trail)
         copy = Var()
         mod = fresh_module()
-        for _ in solve(goal("CopyTerm", x, copy), mod, trail):
+        for _ in solve(goal("copy_term", x, copy), mod, trail):
             assert deref(copy) == 42
 
     def test_copy_exactly_one_solution(self):
         copy = Var()
-        sols = solutions(goal("CopyTerm", Compound("f", (1,)), copy))
+        sols = solutions(goal("copy_term", Compound("f", (1,)), copy))
         assert len(sols) == 1
 
     def test_copy_no_side_effects_on_original(self):
-        """CopyTerm does not bind original Vars."""
+        """copy_term does not bind original Vars."""
         x = Var()
         term = Compound("f", (x,))
         copy = Var()
-        solutions(goal("CopyTerm", term, copy))
+        solutions(goal("copy_term", term, copy))
         assert is_var(deref(x))
 
 
-# ── TermVariables/2 ────────────────────────────────────────────────────────────
+# ── term_variables/2 ────────────────────────────────────────────────────────────
 
 
 class TestTermVariables:
 
     def test_ground_term_empty(self):
         out = Var()
-        vals = sol_var(goal("TermVariables", 42, out), out)
+        vals = sol_var(goal("term_variables", 42, out), out)
         assert vals == [[]]
 
     def test_ground_compound_empty(self):
         out = Var()
-        vals = sol_var(goal("TermVariables", Compound("f", (1, 2)), out), out)
+        vals = sol_var(goal("term_variables", Compound("f", (1, 2)), out), out)
         assert vals == [[]]
 
     def test_single_var(self):
@@ -179,7 +179,7 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", x, out), mod, trail):
+        for _ in solve(goal("term_variables", x, out), mod, trail):
             result = deref(out)
             assert isinstance(result, list)
             assert len(result) == 1
@@ -191,7 +191,7 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", term, out), mod, trail):
+        for _ in solve(goal("term_variables", term, out), mod, trail):
             result = deref(out)
             assert len(result) == 2
             assert result[0] is x
@@ -203,7 +203,7 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", term, out), mod, trail):
+        for _ in solve(goal("term_variables", term, out), mod, trail):
             result = deref(out)
             assert len(result) == 1
             assert result[0] is x
@@ -214,7 +214,7 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", term, out), mod, trail):
+        for _ in solve(goal("term_variables", term, out), mod, trail):
             result = deref(out)
             assert [r is v for r, v in zip(result, [x, y, z])] == [True, True, True]
 
@@ -224,7 +224,7 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", lst, out), mod, trail):
+        for _ in solve(goal("term_variables", lst, out), mod, trail):
             result = deref(out)
             assert len(result) == 2
             assert result[0] is x
@@ -239,7 +239,7 @@ class TestTermVariables:
         term = Compound("f", (x, y))
         out = Var()
         mod = fresh_module()
-        for _ in solve(goal("TermVariables", term, out), mod, trail):
+        for _ in solve(goal("term_variables", term, out), mod, trail):
             result = deref(out)
             assert len(result) == 1
             assert result[0] is y
@@ -250,18 +250,18 @@ class TestTermVariables:
         out = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("TermVariables", term, out), mod, trail):
+        for _ in solve(goal("term_variables", term, out), mod, trail):
             result = deref(out)
             assert len(result) == 1
             assert result[0] is x
 
     def test_exactly_one_solution(self):
         out = Var()
-        sols = solutions(goal("TermVariables", Var(), out))
+        sols = solutions(goal("term_variables", Var(), out))
         assert len(sols) == 1
 
 
-# ── NumberVars/3 ───────────────────────────────────────────────────────────────
+# ── numbervars/3 ───────────────────────────────────────────────────────────────
 
 
 class TestNumberVars:
@@ -269,7 +269,7 @@ class TestNumberVars:
     def test_ground_term_no_vars(self):
         end = Var()
         term = Compound("f", (1, 2))
-        vals = sol_var(goal("NumberVars", term, 0, end), end)
+        vals = sol_var(goal("numbervars", term, 0, end), end)
         assert vals == [0]
 
     def test_single_var(self):
@@ -278,7 +278,7 @@ class TestNumberVars:
         end = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("NumberVars", term, 0, end), mod, trail):
+        for _ in solve(goal("numbervars", term, 0, end), mod, trail):
             xv = deref(x)
             assert xv == Compound("$VAR", (0,))
             assert deref(end) == 1
@@ -289,7 +289,7 @@ class TestNumberVars:
         end = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("NumberVars", term, 0, end), mod, trail):
+        for _ in solve(goal("numbervars", term, 0, end), mod, trail):
             assert deref(x) == Compound("$VAR", (0,))
             assert deref(y) == Compound("$VAR", (1,))
             assert deref(end) == 2
@@ -300,7 +300,7 @@ class TestNumberVars:
         end = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("NumberVars", term, 5, end), mod, trail):
+        for _ in solve(goal("numbervars", term, 5, end), mod, trail):
             assert deref(x) == Compound("$VAR", (5,))
             assert deref(end) == 6
 
@@ -310,14 +310,14 @@ class TestNumberVars:
         end = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("NumberVars", term, 0, end), mod, trail):
+        for _ in solve(goal("numbervars", term, 0, end), mod, trail):
             assert deref(x) == Compound("$VAR", (0,))
             assert deref(end) == 1
 
     def test_unbound_start_fails(self):
         x = Var()
         end = Var()
-        sols = solutions(goal("NumberVars", x, Var(), end))
+        sols = solutions(goal("numbervars", x, Var(), end))
         assert len(sols) == 0
 
     def test_list_term(self):
@@ -326,14 +326,14 @@ class TestNumberVars:
         end = Var()
         mod = fresh_module()
         trail = Trail()
-        for _ in solve(goal("NumberVars", lst, 0, end), mod, trail):
+        for _ in solve(goal("numbervars", lst, 0, end), mod, trail):
             assert deref(x) == Compound("$VAR", (0,))
             assert deref(y) == Compound("$VAR", (1,))
             assert deref(end) == 2
 
     def test_exactly_one_solution(self):
         end = Var()
-        sols = solutions(goal("NumberVars", 42, 0, end))
+        sols = solutions(goal("numbervars", 42, 0, end))
         assert len(sols) == 1
 
     def test_end_wrong_value_fails(self):
@@ -345,18 +345,18 @@ class TestNumberVars:
         end = Var()
         unify(end, 99, trail)
         mod = fresh_module()
-        sols = list(solve(goal("NumberVars", term, 0, end), mod, trail))
+        sols = list(solve(goal("numbervars", term, 0, end), mod, trail))
         assert len(sols) == 0
 
     def test_bindings_undone_after_backtrack(self):
-        """NumberVars binds vars via trail; bindings are undone on backtrack."""
+        """numbervars binds vars via trail; bindings are undone on backtrack."""
         x = Var()
         term = Compound("f", (x,))
         end = Var()
         mod = fresh_module()
         trail = Trail()
         # Collect solutions — after iteration ends, trail should be undone
-        sols = list(solve(goal("NumberVars", term, 0, end), mod, trail))
+        sols = list(solve(goal("numbervars", term, 0, end), mod, trail))
         assert len(sols) == 1
         # After solve completes (generator exhausted), trail is rewound
         # x should be unbound again since solve unwinds
@@ -364,7 +364,7 @@ class TestNumberVars:
         # Just check that there was exactly 1 solution.
 
 
-# ── GenSym/2 ──────────────────────────────────────────────────────────────────
+# ── gensym/2 ──────────────────────────────────────────────────────────────────
 
 
 class TestGenSym:
@@ -375,16 +375,16 @@ class TestGenSym:
         _gensym_counters.clear()
 
     def test_basic(self):
-        """GenSym("x", A) → "x_1"."""
+        """gensym("x", A) → "x_1"."""
         a = Var()
-        vals = sol_var(goal("GenSym", "x", a), a)
+        vals = sol_var(goal("gensym", "x", a), a)
         assert vals == ["x_1"]
 
     def test_sequential(self):
         """Two calls increment: "x_1", "x_2"."""
         a1, a2 = Var(), Var()
-        vals1 = sol_var(goal("GenSym", "x", a1), a1)
-        vals2 = sol_var(goal("GenSym", "x", a2), a2)
+        vals1 = sol_var(goal("gensym", "x", a1), a1)
+        vals2 = sol_var(goal("gensym", "x", a2), a2)
         assert vals1 == ["x_1"]
         assert vals2 == ["x_2"]
 
@@ -392,39 +392,39 @@ class TestGenSym:
         """Different prefixes have independent counters."""
         a = Var()
         b = Var()
-        sol_var(goal("GenSym", "x", a), a)
-        vals = sol_var(goal("GenSym", "y", b), b)
+        sol_var(goal("gensym", "x", a), a)
+        vals = sol_var(goal("gensym", "y", b), b)
         assert vals == ["y_1"]
 
     def test_unbound_prefix_fails(self):
-        """GenSym(X, A) with unbound X → no solutions."""
+        """gensym(X, A) with unbound X → no solutions."""
         a = Var()
-        sols = solutions(goal("GenSym", Var(), a))
+        sols = solutions(goal("gensym", Var(), a))
         assert len(sols) == 0
 
     def test_non_string_prefix_fails(self):
-        """GenSym(42, A) → no solutions."""
+        """gensym(42, A) → no solutions."""
         a = Var()
-        sols = solutions(goal("GenSym", 42, a))
+        sols = solutions(goal("gensym", 42, a))
         assert len(sols) == 0
 
     def test_counter_survives_backtracking(self):
         """Counter does NOT reset on backtracking — impure."""
         a1 = Var()
-        sol_var(goal("GenSym", "z", a1), a1)
+        sol_var(goal("gensym", "z", a1), a1)
         # Counter is now at 1; next call should give z_2
         a2 = Var()
-        vals = sol_var(goal("GenSym", "z", a2), a2)
+        vals = sol_var(goal("gensym", "z", a2), a2)
         assert vals == ["z_2"]
 
     def test_atom_already_bound_unification(self):
-        """GenSym("x", "x_1") succeeds if counter is at 1."""
-        sols = solutions(goal("GenSym", "x", "x_1"))
+        """gensym("x", "x_1") succeeds if counter is at 1."""
+        sols = solutions(goal("gensym", "x", "x_1"))
         assert len(sols) == 1
 
     def test_atom_already_bound_mismatch(self):
-        """GenSym("x", "x_99") fails when counter is at 1."""
-        sols = solutions(goal("GenSym", "x", "x_99"))
+        """gensym("x", "x_99") fails when counter is at 1."""
+        sols = solutions(goal("gensym", "x", "x_99"))
         assert len(sols) == 0
 
     def test_thread_safety(self):
@@ -437,7 +437,7 @@ class TestGenSym:
             a = Var()
             mod = fresh_module()
             trail = Trail()
-            for _ in solve(goal("GenSym", "t", a), mod, trail):
+            for _ in solve(goal("gensym", "t", a), mod, trail):
                 with lock:
                     results.append(deref(a))
 

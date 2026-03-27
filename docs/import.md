@@ -64,7 +64,7 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` / `$assert_fact` call asserts clauses but defers compilation.
 
-6. **Compile all pending predicates** — `_compile_all_pending(pending, db, module_dict)` iterates the pending dict and calls `compile_predicate` once per predicate. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
+6. **Compile all pending predicates** — `_compile_all_pending(pending, db, module_dict)` iterates the pending dict and calls `compile_predicate` once per predicate. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. in_ a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
 
 7. **Lock non-dynamic predicates** — iterate module globals and lock every `PredicateMeta` class that was not declared with [`-dynamic(pred/arity)`](directives.md).
 
@@ -173,7 +173,7 @@ Only simple dotted name chains are supported. Computed attribute access or metho
 
 1. **`_handle_import_from_directive`** on `EmbedTransformer` parses the directive, emits a Python `from ... import` statement, and records a remap (`{local_name: "full.module.path.Name"}`) in `_import_remap`.
 2. The remap is passed to every `TermTransformer` instance created for clause heads and bodies.
-3. When `TermTransformer.visit_Name` sees a name in the remap, it emits `LoadName(name="full.module.path.Name")` instead of `LoadName(name="Name")`.
+3. when `TermTransformer.visit_Name` sees a name in the remap, it emits `LoadName(name="full.module.path.Name")` instead of `LoadName(name="Name")`.
 4. The compiler's `_collect_globals_info` collects the dotted name as a call target. `_inject_resolved_targets` resolves it — first by attribute traversal from globals (for `-import_module` qualified calls), then by `sys.modules` lookup (for `-import_from` remapped names).
 5. The resolved `PredicateMeta` class is stored under the dotted key in the compiled function's globals dict. Dict keys don't need to be valid Python identifiers — `"myapp.graphs.utils.Reachable"` works fine.
 
@@ -182,7 +182,7 @@ Only simple dotted name chains are supported. Computed attribute access or metho
 The original Python-side import mechanism still works unchanged:
 
 1. `from fibonacci import Fib` brings the `Fib` PredicateMeta class into the importing module's globals.
-2. When the compiler processes that module, it finds `Fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
+2. when the compiler processes that module, it finds `Fib` in `module_dict` and injects the class into the compiled function's `__globals__`.
 3. The compiled call resolves `Fib._get_dispatch()` by name at call time.
 
 ### Why not Prolog-style modules
@@ -200,7 +200,7 @@ Prolog's module system is widely regarded as one of the language's weakest point
 
 ### Circular imports
 
-Same strategy as Python — partial module objects. The deferred compilation model helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). When B's predicates call A's predicates at runtime, A's dispatch is already compiled by then.
+Same strategy as Python — partial module objects. The deferred compilation model helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). when B's predicates call A's predicates at runtime, A's dispatch is already compiled by then.
 
 ### Error handling
 
@@ -262,7 +262,7 @@ If both `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` f
 
 ### Recursive imports
 
-When a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [Helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
+when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [Helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
 
 Library imports are mapped to Clausal built-in modules:
 

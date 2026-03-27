@@ -187,7 +187,7 @@ class TestHeadToMatchPattern:
         assert isinstance(p, ast.MatchAs)
         assert p.name is None  # wildcard
 
-    # ── Functor dataclass ──
+    # ── functor dataclass ──
 
     def test_dataclass_gives_match_class_on_its_type(self):
         v = Var()
@@ -776,11 +776,11 @@ class TestNestedStarIntegration:
             "\n"
             "Deep([[[X, *Y], *Z], *W], X, Y, Z, W),\n"
             "\n"
-            "Transpose([], []),\n"
-            "Transpose([[], *_MORE], []),\n"
-            "Transpose(MATRIX, [HEADS, *REST_COLS]) <- (\n"
+            "transpose([], []),\n"
+            "transpose([[], *_MORE], []),\n"
+            "transpose(MATRIX, [HEADS, *REST_COLS]) <- (\n"
             "    ExtractColumn(MATRIX, HEADS, TAILS),\n"
-            "    Transpose(TAILS, REST_COLS)\n"
+            "    transpose(TAILS, REST_COLS)\n"
             ")\n"
             "ExtractColumn([], [], []),\n"
             "ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (\n"
@@ -858,23 +858,23 @@ class TestNestedStarIntegration:
 
     def test_transpose_2x3(self):
         r = Var()
-        for _ in call("Transpose", [[1, 2, 3], [4, 5, 6]], r, module=self.module):
+        for _ in call("transpose", [[1, 2, 3], [4, 5, 6]], r, module=self.module):
             assert deref(r) == [[1, 4], [2, 5], [3, 6]]
             return
-        pytest.fail("Transpose did not match")
+        pytest.fail("transpose did not match")
 
     def test_transpose_3x2(self):
         r = Var()
-        for _ in call("Transpose", [[1, 2], [3, 4], [5, 6]], r, module=self.module):
+        for _ in call("transpose", [[1, 2], [3, 4], [5, 6]], r, module=self.module):
             assert deref(r) == [[1, 3, 5], [2, 4, 6]]
             return
-        pytest.fail("Transpose did not match")
+        pytest.fail("transpose did not match")
 
     def test_transpose_empty_rows(self):
-        assert self._succeeds("Transpose", [[], []], [])
+        assert self._succeeds("transpose", [[], []], [])
 
     def test_transpose_empty_matrix(self):
-        assert self._succeeds("Transpose", [], [])
+        assert self._succeeds("transpose", [], [])
 
 
 # ── _head_list_unify_input / _head_list_unify_output ─────────────────────────
@@ -980,7 +980,7 @@ class TestHeadListUnify:
         assert deref(target) == [42]
 
     def test_output_unbound_star_builds_seglist(self):
-        """When star var is unbound, output mode builds a SegList."""
+        """when star var is unbound, output mode builds a SegList."""
         from clausal.terms import SegList, ConcreteSeg, VarSeg
         trail = Trail()
         target = Var()

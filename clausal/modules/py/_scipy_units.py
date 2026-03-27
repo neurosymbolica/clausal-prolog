@@ -13,10 +13,10 @@ Zero-overhead design
 --------------------
 ``make_quantity_aware(call, propagator)`` wraps *call* so that:
 
-- When all inputs are plain (no ``Quantity``), *call* is invoked directly —
+- when all inputs are plain (no ``Quantity``), *call* is invoked directly —
   zero overhead beyond a single ``any(isinstance(...))`` scan that
   short-circuits on the first non-Quantity value.
-- When at least one input is a ``Quantity``, values are stripped, *call* is
+- when at least one input is a ``Quantity``, values are stripped, *call* is
   invoked on the raw values, then *propagator* attaches output dimensions.
 
 Set ``_SCIPY_UNITS_ENABLED = False`` **before** importing any scipy module to
@@ -122,7 +122,7 @@ STRIP_TO_PLAIN = _strip_to_plain_propagator
 def make_quantity_aware(call, unit_propagator=None):
     """Wrap *call* to handle :class:`~clausal.terms.Quantity` inputs transparently.
 
-    When :data:`_SCIPY_UNITS_ENABLED` is ``False``, returns *call* unchanged.
+    when :data:`_SCIPY_UNITS_ENABLED` is ``False``, returns *call* unchanged.
 
     **Fast path** — when no input is a Quantity, *call* is invoked directly
     with no wrapping overhead.

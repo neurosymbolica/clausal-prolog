@@ -11,18 +11,18 @@ Clausal supports constraint logic programming through attributed variables. The 
 
 Two constraint solvers are built in:
 
-- **Dif/2** — disequality constraint (`clausal.logic.constraints`)
+- **dif/2** — disequality constraint (`clausal.logic.constraints`)
 - **CLP(ℤ)** — integer constraints (`clausal.logic.clpfd`)
 
 ---
 
-## Dif/2 — Disequality constraint
+## dif/2 — Disequality constraint
 
-`Dif(X, Y)` constrains X and Y to be different. Unlike a point-in-time check, the constraint survives and is re-evaluated whenever either variable gets bound.
+`dif(X, Y)` constrains X and Y to be different. Unlike a point-in-time check, the constraint survives and is re-evaluated whenever either variable gets bound.
 
 ### Syntax
 
-In `.clausal` files, `is not` has dif semantics:
+in_ `.clausal` files, `is not` has dif semantics:
 
 ```clausal
 safe_assign(X, Y) <- (
@@ -34,11 +34,11 @@ safe_assign(X, Y) <- (
 
 This succeeds because X and Y end up with different values (1 and 2), even though at the time of `is not` they are both unbound.
 
-The builtin `Dif/2` can also be called explicitly:
+The builtin `dif/2` can also be called explicitly:
 
 ```clausal
 constrained(X, Y) <- (
-    Dif(X, Y),
+    dif(X, Y),
     X is 1,
     Y is 2
 )
@@ -48,7 +48,7 @@ constrained(X, Y) <- (
 
 | Clausal syntax | Semantics | Prolog equivalent |
 |---|---|---|
-| `X is not Y` | Constraint: must end up different | `Dif(X, Y)` |
+| `X is not Y` | Constraint: must end up different | `dif(X, Y)` |
 | `not (X is Y)` | Immediate: don't unify right now | `\=(X, Y)` |
 
 The `is not` operator uses `dif/2` constraint semantics rather than immediate `\=`. The old immediate-check semantics are still available as `not (X is Y)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
@@ -92,7 +92,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
     ### Constraint algorithm
 
-    When `dif(x, y, trail)` is called:
+    when `dif(x, y, trail)` is called:
 
     1. Deref both arguments.
     2. Sandbox-unify with occurs check (`_structural_unify_oc`).
@@ -104,7 +104,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
     ### Attribute hook
 
-    When a constrained variable is unified, the `_dif_hook` fires:
+    when a constrained variable is unified, the `_dif_hook` fires:
 
     1. For each `(x, y)` constraint pair on the variable:
        - Deref and sandbox-unify.
@@ -168,14 +168,14 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
     - **Constraint propagation**: same/different values, multiple constraints, compound args, transitive via shared var
     - **Backtracking**: constraint undone on trail undo, binding failure doesn't corrupt trail
     - **Compiled integration**: `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints
-    - **Builtin `Dif/2`**: callable from clausal code, with vars and ground terms
+    - **Builtin `dif/2`**: callable from clausal code, with vars and ground terms
     - **Import hook**: `.clausal` file with `is not` using proper dif semantics
 
     ---
 
 ## CLP(ℤ) — Integer constraints
 
-CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators. See also [Arithmetic](arithmetic.md) for relational arithmetic predicates like `Plus/3`, `Between/3`, and `DivMod/4`.
+CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators. See also [Arithmetic](arithmetic.md) for relational arithmetic predicates like `plus/3`, `between/3`, and `divmod_/4`.
 
 The implementation lives in `clausal.logic.clpfd`.
 
@@ -187,12 +187,12 @@ The implementation lives in `clausal.logic.clpfd`.
 | `!=` | CLP(ℤ) arithmetic disequality |
 | `<` `>` `<=` `>=` | CLP(ℤ) comparison constraints |
 | `is` | Unification (unchanged) |
-| `is not` | `Dif/2` constraint (unchanged) |
+| `is not` | `dif/2` constraint (unchanged) |
 | `:=` | Eager arithmetic eval + unify (unchanged) |
 
-When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. When at least one side is an unbound Var, CLP(ℤ) constraints are posted.
+when both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. when at least one side is an unbound Var, CLP(ℤ) constraints are posted.
 
-The old structural-equality behaviour of `==` is available as the named builtin `Equivalent/2`.
+The old structural-equality behaviour of `==` is available as the named builtin `equivalent/2`.
 
 ??? abstract "Domain representation"
 
@@ -219,7 +219,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Auto-domain"
 
-    When a CLP(ℤ) operator encounters an unbound Var with no domain, it auto-creates a default domain of `(-2^63, 2^63)` — effectively unbounded for practical purposes, stored as a single interval.
+    when a CLP(ℤ) operator encounters an unbound Var with no domain, it auto-creates a default domain of `(-2^63, 2^63)` — effectively unbounded for practical purposes, stored as a single interval.
 
 ??? abstract "Constraint types"
 
@@ -233,20 +233,20 @@ The old structural-equality behaviour of `==` is available as the named builtin 
     | `LeConstraint(lhs, rhs)` | X <= Y — upper-bound X by max(Y), lower-bound Y by min(X) |
     | `AllDiffConstraint(vars)` | all_different — when one var is ground, remove from all others |
 
-    **Global constraints** (posted by `Sum/3`, `ScalarProduct/4`, `Element/3`, `Circuit/1`):
+    **Global constraints** (posted by `sum_/3`, `scalar_product/4`, `element/3`, `circuit/1`):
 
     | Constraint | Description |
     |---|---|
     | `SumConstraint(vars, total)` | Σ vars = total — bounds-consistency: narrows total to [min_sum, max_sum] and each var using slack |
-    | `ScalarProductConstraint(coeffs, vars, total)` | Σ cᵢ·vᵢ = total — same as Sum but with signed coefficients; division direction flips for negative coefficients |
+    | `ScalarProductConstraint(coeffs, vars, total)` | Σ cᵢ·vᵢ = total — same as sum_ but with signed coefficients; division direction flips for negative coefficients |
     | `ElementConstraint(index, lst, value)` | value = lst[index−1] — AC-3: narrows index to positions whose list element overlaps value's domain, narrows value to union of those elements' domains |
     | `CircuitConstraint(vars)` | Hamiltonian circuit — restricts domains to [1,n], removes self-loops, delegates to AllDiffConstraint, prunes premature sub-tours via forced-chain detection |
 
-    Inequality operators (`#<`, `#>`, `#=<`, `#>=`, `#\=`) for `Sum` and `ScalarProduct` introduce an intermediate total variable, post the equality constraint on it, then chain the appropriate binary relational constraint.
+    Inequality operators (`#<`, `#>`, `#=<`, `#>=`, `#\=`) for `sum_` and `scalar_product` introduce an intermediate total variable, post the equality constraint on it, then chain the appropriate binary relational constraint.
 
 ??? abstract "Propagation (AC-3)"
 
-    Constraints are propagated via an AC-3 fixpoint loop. When a propagator narrows a domain:
+    Constraints are propagated via an AC-3 fixpoint loop. when a propagator narrows a domain:
 
     1. Create new `FDVar` with narrowed domain + same constraints.
     2. `put_attr(var, "fd", new_state, trail)` — trailed.
@@ -281,38 +281,38 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `InDomain` | 3 | `InDomain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
-| `Label` | 1 | `Label(Vars)` — enumerate values, first-fail strategy (see [labeling gotcha](#gotcha-generate-and-test-vs-constraint-and-label)) |
-| `AllDifferent` | 1 | `AllDifferent(Vars)` — pairwise disequality constraint |
-| `Equivalent` | 2 | `Equivalent(X, Y)` — structural equality (old `==` behavior) |
-| `Sum` | 3 | `Sum(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
-| `ScalarProduct` | 4 | `ScalarProduct(+Coeffs, +Vars, +Op, +Value)` — bounds-consistency for Σ Cᵢ·Vᵢ Op Value |
-| `Element` | 3 | `Element(?Index, +List, ?Value)` — arc-consistency: Value = List[Index] (1-based) |
-| `Circuit` | 1 | `Circuit(+Vars)` — Hamiltonian circuit with sub-tour elimination during propagation |
+| `in_domain` | 3 | `in_domain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
+| `label` | 1 | `label(Vars)` — enumerate values, first-fail strategy (see [labeling gotcha](#gotcha-generate-and-test-vs-constraint-and-label)) |
+| `all_different` | 1 | `all_different(Vars)` — pairwise disequality constraint |
+| `equivalent` | 2 | `equivalent(X, Y)` — structural equality (old `==` behavior) |
+| `sum_` | 3 | `sum_(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
+| `scalar_product` | 4 | `scalar_product(+Coeffs, +Vars, +Op, +Value)` — bounds-consistency for Σ Cᵢ·Vᵢ Op Value |
+| `element` | 3 | `element(?Index, +List, ?Value)` — arc-consistency: Value = List[Index] (1-based) |
+| `circuit` | 1 | `circuit(+Vars)` — Hamiltonian circuit with sub-tour elimination during propagation |
 
 ### Syntax examples
 
 **Domain declaration and labeling:**
 ```clausal
 solve(X) <- (
-    InDomain(X, 1, 10),
-    Label([X])
+    in_domain(X, 1, 10),
+    label([X])
 )
 ```
 
 **Chained comparison (natural Python syntax):**
 ```clausal
-bounded(X) <- (1 <= X, X <= 10, Label([X]))
+bounded(X) <- (1 <= X, X <= 10, label([X]))
 ```
 
 Since `<=` is CLP(ℤ), `1 <= X` and `X <= 10` naturally constrain X's domain.
 
-**N-Queens via AllDifferent:**
+**N-Queens via all_different:**
 ```clausal
 queens(N, QS) <- (
-    InDomain(QS, 1, N),
-    AllDifferent(QS),
-    Label(QS),
+    in_domain(QS, 1, N),
+    all_different(QS),
+    label(QS),
     check_diagonals(QS)
 )
 ```
@@ -320,29 +320,29 @@ queens(N, QS) <- (
 **SEND + MORE = MONEY:**
 ```clausal
 sendmoney(S, E, N, D, M, O, R, Y) <- (
-    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
-    AllDifferent([S, E, N, D, M, O, R, Y]),
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
+    all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
     S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    Label([S, E, N, D, M, O, R, Y])
+    label([S, E, N, D, M, O, R, Y])
 )
 ```
 
-The `==` constraint is posted *before* `Label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
+The `==` constraint is posted *before* `label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
 
 ### Gotcha: generate-and-test vs constraint-and-label
 
-A common mistake is to call `Label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
+A common mistake is to call `label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
 
 ```clausal
-# SLOW -- generate-and-test: Label runs before the equation is known
+# SLOW -- generate-and-test: label runs before the equation is known
 sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
-    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
-    AllDifferent([S, E, N, D, M, O, R, Y]),
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
+    all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
-    Label([S, E, N, D, M, O, R, Y]),        # labels all 8 vars with no arithmetic constraint
+    label([S, E, N, D, M, O, R, Y]),        # labels all 8 vars with no arithmetic constraint
     SEND := S * 1000 + E * 100 + N * 10 + D,
     MORE := M * 1000 + O * 100 + R * 10 + E,
     MONEY := M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
@@ -350,19 +350,19 @@ sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
 )
 ```
 
-`:=` is eager arithmetic evaluation (`is/2`), not a constraint — it requires its arguments to already be ground. Putting `Label` before `:=` forces enumeration of all ~40,000 `AllDifferent` permutations before any pruning from the equation can happen.
+`:=` is eager arithmetic evaluation (`is/2`), not a constraint — it requires its arguments to already be ground. Putting `label` before `:=` forces enumeration of all ~40,000 `all_different` permutations before any pruning from the equation can happen.
 
-The fix is to post the equation as a `==` constraint *before* `Label`:
+The fix is to post the equation as a `==` constraint *before* `label`:
 
 ```clausal
 # FAST -- constraint-and-label: equation is propagated before any labeling
 sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
-    InDomain([S, E, N, D, M, O, R, Y], 0, 9),
-    AllDifferent([S, E, N, D, M, O, R, Y]),
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
+    all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
     M != 0,
     S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    Label([S, E, N, D, M, O, R, Y])         # labels with equation already constraining domains
+    label([S, E, N, D, M, O, R, Y])         # labels with equation already constraining domains
 )
 ```
 
@@ -385,7 +385,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
     # Post constraint: X < Y
     fd_lt(x, y, trail)
 
-    # Label (enumerate solutions)
+    # label (enumerate solutions)
     for _ in label([x, y], trail):
         print(deref(x), deref(y))
     ```
@@ -394,7 +394,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
     CLP(ℤ), CLP(ℝ), and dif/2 use independent attribute keys (`"fd"`, `"real"`, and `"dif"`). All hooks fire independently when a variable is bound. A variable can have integer, real, and dif constraints simultaneously.
 
-    **FD + Real coexistence:** a variable can carry both an FD domain and a real interval at the same time. The FD domain enforces integrality and domain holes; the real interval handles continuous narrowing. When FD propagation narrows the domain, the real interval is tightened to match. When computing bounds for real constraints, the tightest bounds from both attributes are used. See [CLP(ℝ)](clpr.md) for details on mixed-domain usage.
+    **FD + Real coexistence:** a variable can carry both an FD domain and a real interval at the same time. The FD domain enforces integrality and domain holes; the real interval handles continuous narrowing. when FD propagation narrows the domain, the real interval is tightened to match. when computing bounds for real constraints, the tightest bounds from both attributes are used. See [CLP(ℝ)](clpr.md) for details on mixed-domain usage.
 
 ??? abstract "Compiler integration"
 
@@ -418,12 +418,12 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
     - **Domain operations**: from_range, contains, min/max, size, singleton, intersection, remove, remove_above/below, values
     - **in_domain**: post domain, unify succeeds/fails, list, narrows existing, singleton binds, empty fails, ground int
     - **label**: single var, two vars (cartesian product), backtracking restores, all ground
-    - **Equivalent**: same/different atoms, compounds, vars, bound vars
+    - **equivalent**: same/different atoms, compounds, vars, bound vars
     - **fd_eq/ne/lt/le/gt/ge**: ground values, var-int, var-var, auto-domain, wipeout
     - **Propagation**: lt chain, eq propagation, wipeout, backtracking restores domains
     - **AC-3 fixpoint**: cascaded `<` chain (X<Y<Z, fix Z → X,Y ground without labeling), Ne narrows after domain change
     - **Compiler integration**: ground eq/ne/lt/le/gt/ge, var eq via solve, chained le, ne with label, evaluate unchanged, is unchanged, is-not unchanged
-    - **AllDifferent**: basic permutations, ground ok/fail, via solve
+    - **all_different**: basic permutations, ground ok/fail, via solve
     - **N-Queens**: 4-queens (2 solutions), 8-queens (92 solutions)
     - **SEND+MORE=MONEY**: unique solution (9567 + 1085 = 10652)
     - **FD + dif interaction**: both constraints on same var, independent operation
@@ -486,56 +486,56 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 
 ??? abstract "Connected-component merging"
 
-    When `sat()` is called with an expression containing variables that already have constraints, ALL connected BDDs are conjoined into a single combined BDD. This ensures that multiple `sat()` calls sharing variables form a single constraint network — binding any variable propagates through all constraints in the network.
+    when `sat()` is called with an expression containing variables that already have constraints, ALL connected BDDs are conjoined into a single combined BDD. This ensures that multiple `sat()` calls sharing variables form a single constraint network — binding any variable propagates through all constraints in the network.
 
 ### Builtins
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `Sat` | 1 | `Sat(Expr)` — post Boolean constraint, fail if unsatisfiable |
-| `Taut` | 2 | `Taut(Expr, T)` — T=1 if tautology, T=0 if contradiction, else fail |
-| `SatCount` | 2 | `SatCount(Expr, N)` — N is the number of satisfying assignments |
-| `BoolLabeling` | 1 | `BoolLabeling(Vars)` — enumerate 0/1 assignments |
+| `sat` | 1 | `sat(Expr)` — post Boolean constraint, fail if unsatisfiable |
+| `taut` | 2 | `taut(Expr, T)` — T=1 if tautology, T=0 if contradiction, else fail |
+| `sat_count` | 2 | `sat_count(Expr, N)` — N is the number of satisfying assignments |
+| `bool_labeling` | 1 | `bool_labeling(Vars)` — enumerate 0/1 assignments |
 
 ### Syntax examples
 
 **Posting constraints:**
 ```clausal
 # skip
-Sat(X & Y)                # both must be 1
-Sat(X | Y)                # at least one must be 1
-Sat(~X)                    # X must be 0
-Sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
-Sat(BoolImpl(X, Y))       # X → Y (implication)
+sat(X & Y)                # both must be 1
+sat(X | Y)                # at least one must be 1
+sat(~X)                    # X must be 0
+sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+sat(BoolImpl(X, Y))       # X → Y (implication)
 ```
 
 **Half adder:**
 ```clausal
 HalfAdder(X, Y, SUM, CARRY) <- (
-    Sat(BoolEq(SUM, X ^ Y)),
-    Sat(BoolEq(CARRY, X & Y))
+    sat(BoolEq(SUM, X ^ Y)),
+    sat(BoolEq(CARRY, X & Y))
 )
 ```
 
 **Tautology check (De Morgan's law):**
 ```clausal
 # skip
-Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 ```
 
 **Model counting:**
 ```clausal
 # skip
-SatCount(X ^ Y, N)       # N = 2
-SatCount(X & Y, N)       # N = 1
-SatCount(X | Y, N)       # N = 3
+sat_count(X ^ Y, N)       # N = 2
+sat_count(X & Y, N)       # N = 1
+sat_count(X | Y, N)       # N = 3
 ```
 
 **Labeling (enumerate all solutions):**
 ```clausal
 solve(X, Y) <- (
-    Sat(X ^ Y),
-    BoolLabeling([X, Y])
+    sat(X ^ Y),
+    bool_labeling([X, Y])
 )
 # yields (0,1) and (1,0)
 ```
@@ -543,16 +543,16 @@ solve(X, Y) <- (
 **Pigeon-hole (unsatisfiable):**
 ```clausal
 PigeonHole() <- (
-    Sat(P11 | P12),
-    Sat(P21 | P22),
-    Sat(P31 | P32),
-    Sat(~(P11 & P21)),
-    Sat(~(P11 & P31)),
-    Sat(~(P21 & P31)),
-    Sat(~(P12 & P22)),
-    Sat(~(P12 & P32)),
-    Sat(~(P22 & P32)),
-    BoolLabeling([P11, P12, P21, P22, P31, P32])
+    sat(P11 | P12),
+    sat(P21 | P22),
+    sat(P31 | P32),
+    sat(~(P11 & P21)),
+    sat(~(P11 & P31)),
+    sat(~(P21 & P31)),
+    sat(~(P12 & P22)),
+    sat(~(P12 & P32)),
+    sat(~(P22 & P32)),
+    bool_labeling([P11, P12, P21, P22, P31, P32])
 )
 # no solutions — 3 pigeons can't fit in 2 holes
 ```
@@ -570,7 +570,7 @@ PigeonHole() <- (
     # Post constraint: X XOR Y must be true
     sat(BitXor(left=x, right=y), trail)
     
-    # Label (enumerate solutions)
+    # label (enumerate solutions)
     for _ in bool_labeling([x, y], trail):
         print(deref(x), deref(y))   # prints 0 1, then 1 0
     
@@ -612,14 +612,14 @@ PigeonHole() <- (
     - **sat**: ground true/false, single var forced, and/negation/or forcing, contradiction, tautology, sequential conjunction
     - **taut**: tautology (T=1), contradiction (T=0), indeterminate (fail), ground, xor, equiv
     - **sat_count**: xor/and/or/tautology/contradiction counts, single var, three vars
-    - **BoolLabeling**: single var (2 sols), two vars (4 sols), constrained xor (2 sols), all bound (1 sol)
+    - **bool_labeling**: single var (2 sols), two vars (4 sols), constrained xor (2 sols), all bound (1 sol)
     - **Attribute hook**: bind constrained var, invalid int, var-var merge, incompatible merge
     - **Trail safety**: backtrack restores state, labeling backtracks cleanly
     - **BoolEq/BoolImpl**: construction, equivalence in sat, implication in sat
     - **Half adder**: complete truth table (4 tests)
     - **Full adder**: 5 input combinations
     - **Pigeon-hole**: 3 pigeons 2 holes → unsatisfiable
-    - **Circuit equivalence**: De Morgan's law via Taut, non-equivalence
+    - **circuit equivalence**: De Morgan's law via taut, non-equivalence
     - **Fixture integration**: HalfAdder, FullAdder, PigeonHole via `.clausal` file
 
 ---
@@ -634,22 +634,22 @@ Quick reference:
 
 | Builtin | Description |
 |---|---|
-| `InReal(Var)` | Declare real variable with domain `[−∞, +∞]` |
-| `InReal(Var, Lo, Hi)` | Declare real variable with domain `[Lo, Hi]` |
-| `LabelReal(Vars)` | Bisect intervals to IEEE float precision |
-| `LabelReal(Vars, Eps)` | Bisect until interval width ≤ Eps |
+| `in_real(Var)` | Declare real variable with domain `[−∞, +∞]` |
+| `in_real(Var, Lo, Hi)` | Declare real variable with domain `[Lo, Hi]` |
+| `label_real(Vars)` | Bisect intervals to IEEE float precision |
+| `label_real(Vars, Eps)` | Bisect until interval width ≤ Eps |
 
 ### Unified dispatch
 
-The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `InReal`. No separate operator set or brace syntax is needed.
+The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `in_real`. No separate operator set or brace syntax is needed.
 
 ```clausal
 # skip
 # Float literal triggers CLP(ℝ)
 sqrt2(X) <- (
-    InReal(X, 0.0, 2.0),
+    in_real(X, 0.0, 2.0),
     X * X == 2.0,
-    LabelReal([X], 1.0e-12)
+    label_real([X], 1.0e-12)
 )
 # → X ≈ 1.4142135623730951
 ```
@@ -658,7 +658,7 @@ sqrt2(X) <- (
 
 - **FD + Real coexistence:** a variable can carry both an FD domain and a real interval. The FD domain enforces integrality; the real interval handles continuous narrowing. Both stay in sync.
 - **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
-- **Labeling order:** for mixed-domain variables, use `Label` (FD) first to fix integer values, then `LabelReal` for remaining real variables. `LabelReal` does not enforce integrality.
+- **Labeling order:** for mixed-domain variables, use `label` (FD) first to fix integer values, then `label_real` for remaining real variables. `label_real` does not enforce integrality.
 - **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.
 
 ---

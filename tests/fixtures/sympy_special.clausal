@@ -1,19 +1,19 @@
--import_from(py.sympy, [Sum, Product, Binomial, SymEqual, Inf])
+-import_from(py.sympy, [sum_, Product, Binomial, SymEqual, Inf])
 
-# ── Sum/5 ──────────────────────────────────────────────────────────────
+# ── sum_/5 ──────────────────────────────────────────────────────────────
 
 Test("sum of i from 1 to N") <- (
-    Sum(I, I, 1, N, R),
+    sum_(I, I, 1, N, R),
     R == N*(N + 1)/2
 )
 
 Test("sum of i^2 from 1 to 5") <- (
-    Sum(I**2, I, 1, 5, R),
+    sum_(I**2, I, 1, 5, R),
     R == 55
 )
 
 Test("sum of constants") <- (
-    Sum(3, I, 1, N, R),
+    sum_(3, I, 1, N, R),
     R == 3*N
 )
 

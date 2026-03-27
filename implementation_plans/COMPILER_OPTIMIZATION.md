@@ -199,7 +199,7 @@ Phase 1 and Phase 4 below.
 
 ### 1.5 The groundness-keyed dispatch layer (V2-2)
 
-When a predicate has enough clauses and a sufficiently selective argument
+when a predicate has enough clauses and a sufficiently selective argument
 position, `_analyze_index_positions` (compiler.py:4643) partitions the
 clauses into buckets keyed by first-argument value and compiles each bucket
 into its own sub-function.  A dispatch closure then routes calls:
@@ -399,7 +399,7 @@ def Edge__2(this_generator, _tramp_parent, arg0, arg1, trail):
 
 **Implementation:**
 
-1. In `_build_predicate_trampoline_funcdef`, before the per-clause `for`
+1. in_ `_build_predicate_trampoline_funcdef`, before the per-clause `for`
    loop, build a list of assignment statements:
    ```python
    deref_assigns = [
@@ -511,7 +511,7 @@ undetermined = [
 
 **Target:** `compile_goal_trampoline`, Or case, compiler.py:2722–2738
 
-**What changes:** Drop the second `_assign_mark` — the existing `mark`
+**What changes:** drop the second `_assign_mark` — the existing `mark`
 variable already holds the correct trail position.
 
 **Before:**
@@ -704,7 +704,7 @@ vice versa — O(1) dispatch for the common case.
    partitions clauses by structural key at `pos`, similar to
    `_build_arg_index` but based on type/functor rather than ground value.
 
-3. In `_build_predicate_trampoline_funcdef`, after collecting `case_arms`,
+3. in_ `_build_predicate_trampoline_funcdef`, after collecting `case_arms`,
    call `_build_pattern_trie` on the most selective position. If the trie
    has more than one non-var bucket:
    - Generate `isinstance`/`is_var` guards wrapping subsets of `case_arms`
@@ -753,7 +753,7 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 
 **Implementation steps:**
 
-1. Write `_collect_globals_info(clauses)` that traverses each clause once,
+1. write `_collect_globals_info(clauses)` that traverses each clause once,
    accumulating all three result sets. The walk logic from the three existing
    functions is merged: at each node, collect it for whichever category it
    belongs to.
@@ -802,7 +802,7 @@ where `_disp_Foo_2 = Foo._get_dispatch()` is captured once into
 
 **Implementation steps:**
 
-1. In `_inject_call_targets` (compiler.py:673), when a resolved target is a
+1. in_ `_inject_call_targets` (compiler.py:673), when a resolved target is a
    `PredicateMeta` with `_locked == True`, also capture its dispatch function:
    ```python
    if hasattr(obj, '_locked') and obj._locked:
@@ -810,7 +810,7 @@ where `_disp_Foo_2 = Foo._get_dispatch()` is captured once into
        base_globals[disp_key] = obj._get_dispatch()
    ```
 
-2. In `_dispatch_call_iter_trampoline` (compiler.py:2559), check whether a
+2. in_ `_dispatch_call_iter_trampoline` (compiler.py:2559), check whether a
    pre-captured dispatch key exists in `base_globals` for this `(fname,
    arity)`. If so, emit `_name(disp_key)` directly instead of the
    `Attribute(fname, "_get_dispatch")` call expression.
@@ -838,7 +838,7 @@ head = Edge(arg_0=Var(_5), arg_1=Var(_6))
 body = [Unify(left=Var(_5), right=1), Unify(left=Var(_6), right=2)]
 ```
 
-When V2-2 groundness dispatch compiles the **bucket function** for arg_0 = 1,
+when V2-2 groundness dispatch compiles the **bucket function** for arg_0 = 1,
 the compiled clause still contains `unify(_v5, 1, trail)` — a call that is
 guaranteed to succeed (because the dispatch already confirmed arg_0 is 1) and
 therefore wastes a `trail.mark()` + `unify()` + `trail.undo()` triple.
@@ -922,7 +922,7 @@ def Edge__p0_b0(this_generator, _tramp_parent, arg0, arg1, trail):
    - Returns a new `Clause` with `term` at head position `pos` and the
      matching `Unify` removed from the body.
 
-2. In the indexed bucket loop (`compile_predicate_trampoline`, lines
+2. in_ the indexed bucket loop (`compile_predicate_trampoline`, lines
    3953–3959), transform each bucket's clauses before building the funcdef:
    ```python
    for key, bucket_clauses in index["buckets"].items():
@@ -1013,7 +1013,7 @@ perfectly discriminated by functor name.
 
 **What changes:**
 
-Extend `_extract_arg_key` to return a `("functor", arity)` tuple for compound
+extend `_extract_arg_key` to return a `("functor", arity)` tuple for compound
 arguments.  The existing bucketing and dispatch machinery then works
 transparently — dicts keyed on tuples are as fast as dicts keyed on scalars
 in Python.
@@ -1053,7 +1053,7 @@ Shape(triangle(A, B, C)) <- ...
 
 **Implementation steps:**
 
-1. In `_extract_arg_key` (compiler.py:4997), after the `_INDEXABLE_TYPES` check
+1. in_ `_extract_arg_key` (compiler.py:4997), after the `_INDEXABLE_TYPES` check
    and before the `is_var` check, add:
    ```python
    if isinstance(arg, Compound):
@@ -1063,7 +1063,7 @@ Shape(triangle(A, B, C)) <- ...
        return (cls.__name__, len(cls._fields))
    ```
 
-2. In the same function, extend the Var+Unify pattern scan to also return
+2. in_ the same function, extend the Var+Unify pattern scan to also return
    functor/arity keys when the matched term is a `Compound` or PredicateMeta.
 
 3. No changes needed to `_build_arg_index`, `_analyze_index_positions`, or the
@@ -1092,7 +1092,7 @@ Color(orange,secondary) <- true
 Color(purple,secondary) <- true
 ```
 
-Arg 0 has 6 distinct values (perfect), but consider a case where arg 0 has
+arg 0 has 6 distinct values (perfect), but consider a case where arg 0 has
 many repeats while arg 1 alone also does — only the combination discriminates
 well.  This arises naturally in multi-field database-style fact tables.
 
@@ -1104,7 +1104,7 @@ ground at call time.
 
 ```python
 def _build_joint_arg_index(clauses, arity, pos_i, pos_j, threshold=_INDEX_THRESHOLD):
-    """Partition clauses by the combined key (key_i, key_j).
+    """partition clauses by the combined key (key_i, key_j).
 
     Returns None if fewer than *threshold* clauses have both args indexable.
     """
@@ -1181,7 +1181,7 @@ analysis.
    `(pos_i, pos_j, joint_index_info)` triple with best discrimination, or
    `None` if no pair beats the best single-arg index.
 
-3. In `compile_predicate_trampoline` (and simple-mode twin), after computing
+3. in_ `compile_predicate_trampoline` (and simple-mode twin), after computing
    `single_indexes`, call `_analyze_joint_index_positions`.  If a joint index
    is found, compile it:
    - One **joint bucket** function per `(ki, kj)` pair
@@ -1279,7 +1279,7 @@ def dispatch(*args):
     yield (parent, _DONE)
 ```
 
-**When to use secondary vs. flat joint:**
+**when to use secondary vs. flat joint:**
 
 Use secondary indexing (9c) in preference to flat joint (9b) when the primary
 argument (`pos_i`) is the most selective single-arg position *and* the
@@ -1295,7 +1295,7 @@ ground in all clauses) is <80%, prefer secondary.
 2. Add `_make_secondary_dispatch_trampoline(pos_i, pos_j, level0_dict,
    level0_default_fn, fallback_fn, done)`.
 
-3. In `compile_predicate_trampoline`, select between phase-9b flat joint and
+3. in_ `compile_predicate_trampoline`, select between phase-9b flat joint and
    phase-9c secondary based on coverage heuristic, or always prefer secondary
    (simpler rule).
 
@@ -1366,8 +1366,8 @@ def dispatch(*args):
 
 For `Color2/2` with 6 string-keyed facts, the existing dispatch:
 - Builds `plans = [(0, {'red': fn, 'orange': fn, …}, dflt), (1, {'warm': fn, 'cool': fn}, dflt)]`
-- When `arg0='red'` (ground): routes to `plans[0]` bucket immediately — O(1)
-- When only `arg1='warm'` (ground): falls through `plans[0]` (arg0 unbound), hits `plans[1]` — still O(1) for arg1
+- when `arg0='red'` (ground): routes to `plans[0]` bucket immediately — O(1)
+- when only `arg1='warm'` (ground): falls through `plans[0]` (arg0 unbound), hits `plans[1]` — still O(1) for arg1
 
 **What is missing for compound-term heads (Phase 9a):**
 
@@ -1395,7 +1395,7 @@ plans = [(0, {('circle',1): fn_circle, ('rect',2): fn_rect,
               ('oval',2): fn_oval}, dflt_fn)]
 ```
 
-When `arg0=circle(5)` (ground):
+when `arg0=circle(5)` (ground):
 ```python
 _a = deref(args[2])    # = circle(5) instance
 # not a scalar — but is_var(_a) is False
@@ -1558,7 +1558,7 @@ there is a coupling:
    the predicate class or in `db`:
 
    ```python
-   # When building bucket dict during compilation:
+   # when building bucket dict during compilation:
    pred_cls._index_plans = {pos: idx_dict for pos, idx_dict, _ in plans}
    # or equivalently on the Database:
    db.set_index_plans(functor, arity, plans)
@@ -1579,7 +1579,7 @@ there is a coupling:
    compile time.  Dynamic predicates must continue using the runtime dispatch
    closure.
 
-4. **Recompilation:** When a predicate is dynamically asserted/retracted and
+4. **Recompilation:** when a predicate is dynamically asserted/retracted and
    recompiled (lazy recompile), both the dispatch closure and the bucket dicts
    are replaced atomically (same recompile call).  Phase 10's cached bucket
    references in caller code would become stale — the same problem Phase 7

@@ -10,7 +10,7 @@ def _strip_module_directive(prolog_source: str) -> str:
     """Remove :- module(...). directives so predicates land in user module.
 
     Translated .clausal files may contain :- module(name, [exports]).
-    When loading into the embedded Scryer session we want everything in
+    when loading into the embedded Scryer session we want everything in
     the default 'user' module so queries work without module prefixes.
     """
     # Match :- module(...). spanning potentially multiple lines

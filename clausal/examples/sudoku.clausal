@@ -2,15 +2,15 @@
 # Ported from Markus Triska's sudoku.pl (https://www.metalevel.at/sudoku/)
 # Public domain.
 
-# ── Transpose ────────────────────────────────────────────────────────────────
+# ── transpose ────────────────────────────────────────────────────────────────
 
-Transpose([], []),
+transpose([], []),
 
-Transpose([[], *_REST], []),
+transpose([[], *_REST], []),
 
-Transpose(MATRIX, [HEADS, *REST_COLS]) <- (
+transpose(MATRIX, [HEADS, *REST_COLS]) <- (
     ExtractColumn(MATRIX, HEADS, TAILS),
-    Transpose(TAILS, REST_COLS)
+    transpose(TAILS, REST_COLS)
 )
 
 # Extract the first element of each row.
@@ -33,7 +33,7 @@ Blocks(
     [N4, N5, N6, *NS2],
     [N7, N8, N9, *NS3]
 ) <- (
-    AllDifferent([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
+    all_different([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
     Blocks(NS1, NS2, NS3)
 )
 
@@ -41,11 +41,11 @@ Blocks(
 
 Sudoku(ROWS) <- (
     ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
-    Flatten(ROWS, VS),
-    InDomain(VS, 1, 9),
-    MapList(AllDifferent, ROWS),
-    Transpose(ROWS, COLUMNS),
-    MapList(AllDifferent, COLUMNS),
+    flatten(ROWS, VS),
+    in_domain(VS, 1, 9),
+    maplist(all_different, ROWS),
+    transpose(ROWS, COLUMNS),
+    maplist(all_different, COLUMNS),
     Blocks(R1, R2, R3),
     Blocks(R4, R5, R6),
     Blocks(R7, R8, R9)
@@ -55,8 +55,8 @@ Sudoku(ROWS) <- (
 
 Solve(ROWS) <- (
     Sudoku(ROWS),
-    Flatten(ROWS, VS),
-    Label(VS)
+    flatten(ROWS, VS),
+    label(VS)
 )
 
 # ── Sample problems ─────────────────────────────────────────────────────────
@@ -103,10 +103,10 @@ Problem(4, [[5,3,_,_,7,_,_,_,_],
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-Test("transpose empty rows") <- Transpose([[], []], [])
+Test("transpose empty rows") <- transpose([[], []], [])
 
 Test("transpose 2x3") <- (
-    Transpose([[1,2,3],[4,5,6]], RESULT),
+    transpose([[1,2,3],[4,5,6]], RESULT),
     RESULT := [[1,4],[2,5],[3,6]]
 )
 
@@ -146,8 +146,8 @@ Test("problem 3 has a solution") <- (
 )
 
 Test("problem 4 has exactly three solutions") <- (
-    FindAll(ROWS, (Problem(4, ROWS) and Solve(ROWS)), SOLUTIONS),
-    Length(SOLUTIONS, 3)
+    findall(ROWS, (Problem(4, ROWS) and Solve(ROWS)), SOLUTIONS),
+    length(SOLUTIONS, 3)
 )
 
 Test("problem 4 solution 1") <- (

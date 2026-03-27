@@ -28,15 +28,15 @@ Test('not: failed unification succeeds') <- (not 1 is 2)
 
 Test('not: successful unification fails') <- (not not 1 is 1)
 
-Test('not: member absent') <- (not In(d, [a, b, c]))
+Test('not: member absent') <- (not in_(d, [a, b, c]))
 
-Test('not: member present fails') <- (not not In(b, [a, b, c]))
+Test('not: member present fails') <- (not not in_(b, [a, b, c]))
 
 Test('double negation: not not (1=1)') <- (not not 1 is 1)
 
 Test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- ((X is 1 , Y is a or X is 2 , Y is b))
 
-Test('not + member: d not in list') <- (not In(d, [a, b, c]))
+Test('not + member: d not in list') <- (not in_(d, [a, b, c]))
 
 Test('conjunction + negation') <- (X is 5, not X is 3, X == 5)
 

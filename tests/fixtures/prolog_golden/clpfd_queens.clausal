@@ -1,4 +1,4 @@
-SafeQueens(N, _queens) <- (InDomain(_queens, 1, N), AllDifferent(_queens), Label(_queens), CheckDiagonals(_queens))
+SafeQueens(N, _queens) <- (in_domain(_queens, 1, N), all_different(_queens), label(_queens), CheckDiagonals(_queens))
 
 CheckDiagonals([]),
 
@@ -8,6 +8,6 @@ SafeFrom(_queen, [], _distance),
 
 SafeFrom(_queen, [_head, *_tail], _distance) <- (_queen != _head, _difference1 := _queen - _head, _difference2 := _head - _queen, _difference1 != _distance, _difference2 != _distance, _next_distance := _distance + 1, SafeFrom(_queen, _tail, _next_distance))
 
-Test('queens 1') <- (Length(_queens, 1), SafeQueens(1, _queens), Length(_queens, 1))
+Test('queens 1') <- (length(_queens, 1), SafeQueens(1, _queens), length(_queens, 1))
 
-Test('queens 4 valid') <- (Length(_queens, 4), SafeQueens(4, _queens), Length(_queens, 4))
+Test('queens 4 valid') <- (length(_queens, 4), SafeQueens(4, _queens), length(_queens, 4))

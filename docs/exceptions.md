@@ -1,6 +1,6 @@
 # Exception Handling
 
-Clausal provides structured exception handling via `throw/1`, `catch/3`, `Catch/2`, `CatchRecover/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
+Clausal provides structured exception handling via `throw/1`, `catch/3`, `Catch/2`, `catch_recover/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
 
 The implementation lives in `clausal/logic/exceptions.py`.
 
@@ -45,20 +45,20 @@ Catch(++(some_python_call()), ValueError(MSG))
 Catch(Goal, error(type_error(_, _), _))
 ```
 
-### CatchRecover/3
+### catch_recover/3
 
 Like `Catch/2` but with an explicit recovery goal:
 
 ```clausal
 # skip
-CatchRecover(Goal, ERROR, Recovery)
+catch_recover(Goal, ERROR, Recovery)
 ```
 
 - **Goal** — the goal to execute
 - **ERROR** — unified against the thrown term on exception
 - **Recovery** — goal run after ERROR is bound; has access to ERROR's bindings
 
-`CatchRecover` never re-raises on pattern mismatch. For selective catch with re-raise on mismatch, use `catch/3`.
+`catch_recover` never re-raises on pattern mismatch. For selective catch with re-raise on mismatch, use `catch/3`.
 
 ### catch/3
 
@@ -118,7 +118,7 @@ no distinction between catching a logic throw and catching a Python exception:
 # Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
 
 Catch(Goal, ERROR)          # always catches, binds ERROR
-CatchRecover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
+catch_recover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
 catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
 ```
 
@@ -178,13 +178,13 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     )
     ```
 
-    **CatchRecover with error access:**
+    **catch_recover with error access:**
     ```clausal
 # skip
-    logged_op(X, Y, R) <- CatchRecover(
+    logged_op(X, Y, R) <- catch_recover(
         (R == X / Y),
         ERR,
-        (Write(ERR), R is "error")
+        (write(ERR), R is "error")
     )
     ```
 
@@ -194,7 +194,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     logged_div(X, Y, R) <- catch(
         (R == X / Y),
         E,
-        (Write(E), Throw(E))
+        (write(E), Throw(E))
     )
     ```
 
@@ -232,7 +232,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
   wrapped as `ClassName(message)` before being unified against the catcher pattern;
   re-raises if no match
 - `Catch(goal, error)` — like `catch/3` but always catches (no re-raise); recovery = `true`
-- `CatchRecover(goal, error, recovery)` — like `catch/3` but always catches (no re-raise)
+- `catch_recover(goal, error, recovery)` — like `catch/3` but always catches (no re-raise)
 - `Halt()` / `Halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
 
 ---
@@ -252,4 +252,4 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 ---
 
 *See also: [Builtins](builtins.md) — for a list of built-in predicates that can throw exceptions,
-[Control](control.md) — Once and TimeGoal for execution flow.*
+[Control](control.md) — once and time_goal for execution flow.*

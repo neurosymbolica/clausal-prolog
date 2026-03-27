@@ -1,29 +1,29 @@
 Squares(NUMBERS, SQUARES) <- (
-    FindAll(
+    findall(
         SQUARE,
-        (In(X, NUMBERS), SQUARE := X * X),
+        (in_(X, NUMBERS), SQUARE := X * X),
         SQUARES,
     )
 )
 
 Positives(NUMBERS, POSITIVES) <- (
-    FindAll(
+    findall(
         X,
-        (In(X, NUMBERS), X > 0),
+        (in_(X, NUMBERS), X > 0),
         POSITIVES,
     )
 )
 
 UniqueMembers(NUMBERS, UNIQUE) <- (
-    SetOf(
+    setof(
         X,
-        In(X, NUMBERS),
+        in_(X, NUMBERS),
         UNIQUE,
     )
 )
 
 AllPositive(NUMBERS) <- (
-    ForAll(In(X, NUMBERS), X > 0)
+    forall(in_(X, NUMBERS), X > 0)
 )
 
 

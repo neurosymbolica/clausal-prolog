@@ -1,79 +1,79 @@
 # Meta-predicate tests
 #
-# FindAll/3, BagOf/3, SetOf/3, ForAll/2 as compiler special forms
+# findall/3, bagof/3, setof/3, forall/2 as compiler special forms
 
-# Squares/2 — square each element via FindAll
+# Squares/2 — square each element via findall
 Squares(NS, SQUARES) <- (
-    FindAll(
+    findall(
         SQ,
-        (In(X, NS) and (SQ := X * X)),
+        (in_(X, NS) and (SQ := X * X)),
         SQUARES,
     )
 )
 
-# Positives/2 — filter positive elements via FindAll
+# Positives/2 — filter positive elements via findall
 Positives(NS, POS) <- (
-    FindAll(
+    findall(
         X,
-        (In(X, NS) and X > 0),
+        (in_(X, NS) and X > 0),
         POS,
     )
 )
 
-# UniqueMembers/2 — deduplicate via SetOf
+# UniqueMembers/2 — deduplicate via setof
 UniqueMembers(NS, UNIQUE) <- (
-    SetOf(
+    setof(
         X,
-        In(X, NS),
+        in_(X, NS),
         UNIQUE,
     )
 )
 
-# AllPositive/1 — universal quantification via ForAll
+# AllPositive/1 — universal quantification via forall
 AllPositive(NS) <- (
-    ForAll(In(X, NS), X > 0)
+    forall(in_(X, NS), X > 0)
 )
 
-# SumSquares/2 — nested: FindAll squares then sum
+# SumSquares/2 — nested: findall squares then sum
 SumSquares(NS, TOTAL) <- (
     Squares(NS, SQS),
-    SumList(SQS, TOTAL)
+    sum_list(SQS, TOTAL)
 )
 
-# Evens/2 — filter even elements via FindAll with modulo
+# Evens/2 — filter even elements via findall with modulo
 Evens(NS, ES) <- (
-    FindAll(
+    findall(
         X,
-        (In(X, NS) and X % 2 == 0),
+        (in_(X, NS) and X % 2 == 0),
         ES,
     )
 )
 
-# CountSolutions/2 — count number of list elements via FindAll + Length
+# CountSolutions/2 — count number of list elements via findall + length
 CountSolutions(NS, COUNT) <- (
-    FindAll(X, In(X, NS), BAG),
-    Length(BAG, COUNT)
+    findall(X, in_(X, NS), BAG),
+    length(BAG, COUNT)
 )
 
-# Pairs/3 — cartesian product via FindAll
+# Pairs/3 — cartesian product via findall
 Pairs(XS1, XS2, RESULT) <- (
-    FindAll(
+    findall(
         [A, B],
-        (In(A, XS1) and In(B, XS2)),
+        (in_(A, XS1) and in_(B, XS2)),
         RESULT,
     )
 )
 
-# AllMembers/2 — ForAll: every element of first list is in second list
+# AllMembers/2 — forall: every element of first list is in second list
 AllMembers(SUB1, SUPER1) <- (
-    ForAll(In(X, SUB1), In(X, SUPER1))
+    forall(in_(X, SUB1), in_(X, SUPER1))
 )
 
-# BagPositives/2 — BagOf (fails on empty)
+# BagPositives/2 — bagof (fails on empty)
 BagPositives(NS, POS) <- (
-    BagOf(
+    bagof(
         X,
-        (In(X, NS) and X > 0),
+        (in_(X, NS) and X > 0),
         POS,
     )
 )

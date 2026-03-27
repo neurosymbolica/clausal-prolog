@@ -9,7 +9,7 @@ Clausal equivalents:
 
 Differences from ISO:
   - atom/1: in ISO, atoms include symbols like 'foo' and [].
-    In clausal, atom/1 tests for Python str.  [] is a list, not an atom.
+    in_ clausal, atom/1 tests for Python str.  [] is a list, not an atom.
   - float/1 is spelled float_/1 (avoids shadowing Python builtin).
   - string/1 is an alias for atom/1 (Python str = Prolog atom).
   - bool is excluded from integer/1 and number/1 (Python bool is int subclass,
@@ -57,7 +57,7 @@ def fails(functor, arg):
 
 class TestVar:
     def test_unbound_var_succeeds(self):
-        assert succeeds("IsVar", Var())
+        assert succeeds("var", Var())
 
     def test_bound_var_fails(self):
         """A Var that has been unified with a value is no longer var."""
@@ -65,80 +65,80 @@ class TestVar:
         t = Trail()
         from clausal.logic.variables import unify
         unify(v, 42, t)
-        assert fails("IsVar", v)
+        assert fails("var", v)
 
     def test_integer_fails(self):
-        assert fails("IsVar", 42)
+        assert fails("var", 42)
 
     def test_atom_fails(self):
-        assert fails("IsVar", "hello")
+        assert fails("var", "hello")
 
     def test_compound_fails(self):
-        assert fails("IsVar", Compound("f", (1, 2)))
+        assert fails("var", Compound("f", (1, 2)))
 
 
 class TestNonvar:
     def test_integer_succeeds(self):
-        assert succeeds("IsBound", 42)
+        assert succeeds("nonvar", 42)
 
     def test_atom_succeeds(self):
-        assert succeeds("IsBound", "hello")
+        assert succeeds("nonvar", "hello")
 
     def test_unbound_var_fails(self):
-        assert fails("IsBound", Var())
+        assert fails("nonvar", Var())
 
     def test_bound_var_succeeds(self):
         v = Var()
         t = Trail()
         from clausal.logic.variables import unify
         unify(v, 42, t)
-        assert succeeds("IsBound", v)
+        assert succeeds("nonvar", v)
 
     def test_compound_succeeds(self):
-        assert succeeds("IsBound", Compound("f", (1,)))
+        assert succeeds("nonvar", Compound("f", (1,)))
 
     def test_list_succeeds(self):
-        assert succeeds("IsBound", [1, 2])
+        assert succeeds("nonvar", [1, 2])
 
 
 # ── atom/1 ────────────────────────────────────────────────────────────────────
 # ISO §8.3.3
-# In ISO: atom(X) succeeds for atoms (symbol tokens).
-# In clausal: atom/1 tests for Python str.
+# in_ ISO: atom(X) succeeds for atoms (symbol tokens).
+# in_ clausal: atom/1 tests for Python str.
 
 
 class TestAtom:
     def test_string_succeeds(self):
         """ISO: atom(atom) succeeds.  Clausal: atom("atom") succeeds."""
-        assert succeeds("IsStr", "atom")
+        assert succeeds("is_str", "atom")
 
     def test_empty_string_succeeds(self):
         """ISO: atom('') succeeds."""
-        assert succeeds("IsStr", "")
+        assert succeeds("is_str", "")
 
     def test_integer_fails(self):
         """ISO: atom(1) fails."""
-        assert fails("IsStr", 1)
+        assert fails("is_str", 1)
 
     def test_float_fails(self):
-        assert fails("IsStr", 1.0)
+        assert fails("is_str", 1.0)
 
     def test_var_fails(self):
         """ISO: atom(X) fails when X unbound."""
-        assert fails("IsStr", Var())
+        assert fails("is_str", Var())
 
     def test_compound_fails(self):
         """ISO: atom(f(x)) fails."""
-        assert fails("IsStr", Compound("f", ("x",)))
+        assert fails("is_str", Compound("f", ("x",)))
 
     def test_list_fails(self):
         """ISO: atom([]) succeeds ([] is an atom).
         DIFFERS: clausal atom([]) fails — [] is a list, not a string."""
-        assert fails("IsStr", [])
+        assert fails("is_str", [])
 
     def test_bool_fails(self):
         """Python bool is not treated as atom in clausal."""
-        assert fails("IsStr", True)
+        assert fails("is_str", True)
 
 
 # ── integer/1, number/1, float_/1 ────────────────────────────────────────────
@@ -148,97 +148,97 @@ class TestAtom:
 class TestInteger:
     def test_positive_int(self):
         """ISO: integer(1) succeeds."""
-        assert succeeds("IsInt", 1)
+        assert succeeds("integer", 1)
 
     def test_zero(self):
-        assert succeeds("IsInt", 0)
+        assert succeeds("integer", 0)
 
     def test_negative_int(self):
         """ISO test 56: integer(- 1) succeeds.
-        In clausal, -1 is a Python int literal."""
-        assert succeeds("IsInt", -1)
+        in_ clausal, -1 is a Python int literal."""
+        assert succeeds("integer", -1)
 
     def test_large_int(self):
         """Python supports arbitrary-precision integers."""
-        assert succeeds("IsInt", 10**100)
+        assert succeeds("integer", 10**100)
 
     def test_float_fails(self):
         """ISO: integer(1.0) fails."""
-        assert fails("IsInt", 1.0)
+        assert fails("integer", 1.0)
 
     def test_atom_fails(self):
-        assert fails("IsInt", "1")
+        assert fails("integer", "1")
 
     def test_var_fails(self):
-        assert fails("IsInt", Var())
+        assert fails("integer", Var())
 
     def test_bool_fails(self):
         """DIFFERS from Python: True/False are int subclass but not integer/1."""
-        assert fails("IsInt", True)
-        assert fails("IsInt", False)
+        assert fails("integer", True)
+        assert fails("integer", False)
 
     def test_hex_literal(self):
         """ISO test 175 (partial): 0x1 = 1.  Python 0x1 is an int."""
-        assert succeeds("IsInt", 0x1)
+        assert succeeds("integer", 0x1)
 
     def test_octal_literal(self):
         """ISO test 175 (partial): 0o1 = 1."""
-        assert succeeds("IsInt", 0o1)
+        assert succeeds("integer", 0o1)
 
     def test_binary_literal(self):
         """ISO test 175 (partial): 0b1 = 1."""
-        assert succeeds("IsInt", 0b1)
+        assert succeeds("integer", 0b1)
 
 
 class TestFloat:
     def test_float_succeeds(self):
         """ISO: float(1.0) succeeds."""
-        assert succeeds("IsFloat", 1.0)
+        assert succeeds("float_", 1.0)
 
     def test_zero_float(self):
-        assert succeeds("IsFloat", 0.0)
+        assert succeeds("float_", 0.0)
 
     def test_negative_float(self):
-        assert succeeds("IsFloat", -1.5)
+        assert succeeds("float_", -1.5)
 
     def test_scientific(self):
         """Python 1e9 is a float."""
-        assert succeeds("IsFloat", 1e9)
+        assert succeeds("float_", 1e9)
 
     def test_int_fails(self):
         """ISO: float(1) fails."""
-        assert fails("IsFloat", 1)
+        assert fails("float_", 1)
 
     def test_atom_fails(self):
-        assert fails("IsFloat", "1.0")
+        assert fails("float_", "1.0")
 
     def test_var_fails(self):
-        assert fails("IsFloat", Var())
+        assert fails("float_", Var())
 
 
 class TestNumber:
     def test_int_succeeds(self):
-        assert succeeds("IsNumber", 42)
+        assert succeeds("number", 42)
 
     def test_float_succeeds(self):
-        assert succeeds("IsNumber", 3.14)
+        assert succeeds("number", 3.14)
 
     def test_negative_int(self):
-        assert succeeds("IsNumber", -1)
+        assert succeeds("number", -1)
 
     def test_atom_fails(self):
-        assert fails("IsNumber", "42")
+        assert fails("number", "42")
 
     def test_var_fails(self):
-        assert fails("IsNumber", Var())
+        assert fails("number", Var())
 
     def test_bool_fails(self):
         """DIFFERS: bool excluded from number/1."""
-        assert fails("IsNumber", True)
+        assert fails("number", True)
 
     def test_complex_fails(self):
         """Python complex not treated as number."""
-        assert fails("IsNumber", 1+2j)
+        assert fails("number", 1+2j)
 
 
 # ── compound/1 ────────────────────────────────────────────────────────────────
@@ -248,34 +248,34 @@ class TestNumber:
 class TestCompound:
     def test_compound_succeeds(self):
         """ISO: compound(f(a)) succeeds."""
-        assert succeeds("IsCompound", Compound("f", ("a",)))
+        assert succeeds("compound", Compound("f", ("a",)))
 
     def test_arity2_succeeds(self):
-        assert succeeds("IsCompound", Compound("g", (1, 2)))
+        assert succeeds("compound", Compound("g", (1, 2)))
 
     def test_kwterm_succeeds(self):
-        assert succeeds("IsCompound", KWTerm("point", x=1, y=2))
+        assert succeeds("compound", KWTerm("point", x=1, y=2))
 
     def test_atom_fails(self):
         """ISO: compound(a) fails (atom, not compound)."""
-        assert fails("IsCompound", "a")
+        assert fails("compound", "a")
 
     def test_int_fails(self):
-        assert fails("IsCompound", 42)
+        assert fails("compound", 42)
 
     def test_var_fails(self):
-        assert fails("IsCompound", Var())
+        assert fails("compound", Var())
 
     def test_list_fails(self):
         """ISO: compound([a]) succeeds (it's ./2).
         DIFFERS: clausal lists are Python lists, not compound."""
-        assert fails("IsCompound", [1, 2])
+        assert fails("compound", [1, 2])
 
     def test_arity0_compound_is_compound(self):
         """DIFFERS from ISO: Prolog's compound(a) fails for arity-0.
-        In clausal, Compound("f", ()) is still a compound term because the
+        in_ clausal, Compound("f", ()) is still a compound term because the
         Compound object itself has structure (functor, args fields)."""
-        assert succeeds("IsCompound", Compound("f", ()))
+        assert succeeds("compound", Compound("f", ()))
 
 
 # ── callable/1 ────────────────────────────────────────────────────────────────
@@ -285,18 +285,18 @@ class TestCompound:
 class TestCallable:
     def test_atom_succeeds(self):
         """ISO: callable(a) succeeds."""
-        assert succeeds("IsCallable", "hello")
+        assert succeeds("callable_", "hello")
 
     def test_compound_succeeds(self):
         """ISO: callable(f(x)) succeeds."""
-        assert succeeds("IsCallable", Compound("f", ("x",)))
+        assert succeeds("callable_", Compound("f", ("x",)))
 
     def test_integer_fails(self):
         """ISO: callable(1) fails."""
-        assert fails("IsCallable", 1)
+        assert fails("callable_", 1)
 
     def test_var_fails(self):
-        assert fails("IsCallable", Var())
+        assert fails("callable_", Var())
 
 
 # ── is_list/1 (non-ISO, common extension) ────────────────────────────────────
@@ -304,22 +304,22 @@ class TestCallable:
 
 class TestIsList:
     def test_list_succeeds(self):
-        assert succeeds("IsList", [1, 2, 3])
+        assert succeeds("is_list", [1, 2, 3])
 
     def test_empty_list(self):
-        assert succeeds("IsList", [])
+        assert succeeds("is_list", [])
 
     def test_nested_list(self):
-        assert succeeds("IsList", [[1], [2]])
+        assert succeeds("is_list", [[1], [2]])
 
     def test_atom_fails(self):
-        assert fails("IsList", "hello")
+        assert fails("is_list", "hello")
 
     def test_int_fails(self):
-        assert fails("IsList", 42)
+        assert fails("is_list", 42)
 
     def test_var_fails(self):
-        assert fails("IsList", Var())
+        assert fails("is_list", Var())
 
 
 # ── ground/1 (non-ISO, common extension) ─────────────────────────────────────
@@ -327,28 +327,28 @@ class TestIsList:
 
 class TestGround:
     def test_integer_ground(self):
-        assert succeeds("IsGround", 42)
+        assert succeeds("ground", 42)
 
     def test_atom_ground(self):
-        assert succeeds("IsGround", "abc")
+        assert succeeds("ground", "abc")
 
     def test_list_of_ground(self):
-        assert succeeds("IsGround", [1, 2, 3])
+        assert succeeds("ground", [1, 2, 3])
 
     def test_var_not_ground(self):
-        assert fails("IsGround", Var())
+        assert fails("ground", Var())
 
     def test_compound_with_var_not_ground(self):
-        assert fails("IsGround", Compound("f", (Var(),)))
+        assert fails("ground", Compound("f", (Var(),)))
 
     def test_list_with_var_not_ground(self):
-        assert fails("IsGround", [1, Var(), 3])
+        assert fails("ground", [1, Var(), 3])
 
     def test_empty_list_ground(self):
-        assert succeeds("IsGround", [])
+        assert succeeds("ground", [])
 
     def test_nested_ground(self):
-        assert succeeds("IsGround", [[1, 2], [3, 4]])
+        assert succeeds("ground", [[1, 2], [3, 4]])
 
 
 # ── string/1 (non-ISO, clausal-specific) ─────────────────────────────────────
@@ -356,13 +356,13 @@ class TestGround:
 
 class TestString:
     def test_string_succeeds(self):
-        assert succeeds("IsStr", "hello")
+        assert succeeds("is_str", "hello")
 
     def test_empty_string(self):
-        assert succeeds("IsStr", "")
+        assert succeeds("is_str", "")
 
     def test_int_fails(self):
-        assert fails("IsStr", 42)
+        assert fails("is_str", 42)
 
     def test_var_fails(self):
-        assert fails("IsStr", Var())
+        assert fails("is_str", Var())

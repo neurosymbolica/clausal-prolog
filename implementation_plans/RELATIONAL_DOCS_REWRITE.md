@@ -77,7 +77,7 @@ are Triska's deliberate word choices, refined over years of teaching.
 > we state the conditions that make this relation true for its arguments."
 > — *A Tour of Prolog*
 
-> "In Prolog our job is to use horn clauses to state what holds under what
+> "in_ Prolog our job is to use horn clauses to state what holds under what
 > conditions. This is declarative programming because we describe the situation
 > and we leave it to Prolog to derive logical consequences of our description."
 > — *A Tour of Prolog*
@@ -130,7 +130,7 @@ are Triska's deliberate word choices, refined over years of teaching.
 > holds."
 > — *Prolog Queries and Answers*
 
-> "When working with Prolog programs it is often a good idea to try the most
+> "when working with Prolog programs it is often a good idea to try the most
 > general query to see which solutions there are in general."
 > — *Prolog Queries and Answers*
 
@@ -182,7 +182,7 @@ Four key properties of pure code (from *Prolog Antipatterns*):
 
 > "One sentiment I sometimes see about declarative programming is 'what not
 > how' and at least in my opinion this does not adequately characterize
-> declarative programming. In fact we may rightly say the opposite: 'how not
+> declarative programming. in_ fact we may rightly say the opposite: 'how not
 > what' — because it matters *how* we express our task, not *what* is being
 > executed."
 > — *Describing a Knight's Tour with Prolog*
@@ -272,7 +272,7 @@ This table governs language choices across all phases.
 
 ### Words and phrases to PREFER
 
-| Prefer | When to use |
+| Prefer | when to use |
 |---|---|
 | "holds" / "is true" | Describing when a predicate or clause applies |
 | "the relation between X and Y" | Describing what a predicate defines |
@@ -289,13 +289,13 @@ This table governs language choices across all phases.
 Instead of:
 > "The first clause handles the empty list."
 
-Write:
+write:
 > "The first clause states that the sum of the empty list is 0."
 
 Instead of:
 > "The second peels off HEAD, recurses on TAIL, and adds HEAD to the subtotal."
 
-Write:
+write:
 > "The second clause states that the sum of a list [HEAD, *TAIL] is TOTAL when
 > the sum of TAIL is SUBTOTAL and TOTAL is SUBTOTAL + HEAD."
 
@@ -324,7 +324,7 @@ relation holds between "alice" and "bob". A predicate in Clausal defines a
 relation by describing, through its clauses, all the combinations of arguments
 for which it is true.
 
-Use Triska's framing: *"In Prolog our job is to use horn clauses to state what
+Use Triska's framing: *"in_ Prolog our job is to use horn clauses to state what
 holds under what conditions. This is declarative programming because we describe
 the situation and we leave it to Prolog to derive logical consequences of our
 description."*
@@ -332,7 +332,7 @@ description."*
 **2. Relations vs. functions**
 
 A function maps inputs to outputs. A relation holds (or doesn't) between its
-arguments — there is no privileged direction. `Append([1,2], [3,4], [1,2,3,4])`
+arguments — there is no privileged direction. `append([1,2], [3,4], [1,2,3,4])`
 is a relation between three lists. The same definition can:
 
 - Concatenate (given first two, find the third)
@@ -340,7 +340,7 @@ is a relation between three lists. The same definition can:
 - Verify (given all three, confirm they are related)
 - Generate (given partial information, enumerate completions)
 
-Show all four modes with a single `Append/3` definition. This is the crown
+Show all four modes with a single `append/3` definition. This is the crown
 jewel — the moment of insight for imperative programmers.
 
 Use Triska's framing from Meta-Predicates: calling something "find the maximum"
@@ -352,7 +352,7 @@ directions."*
 Similarly from Argument Indexing: *"'remove' is very imperative wording and it
 suggests only one direction."*
 
-**3. The key question: "When does this hold?"**
+**3. The key question: "when does this hold?"**
 
 Triska's teaching method: when writing a predicate, don't ask "what should the
 program do?". Ask "what are the conditions that make this relation true?"
@@ -377,7 +377,7 @@ Introduce the diagnostic: call the predicate with all variables. Triska: *"A
 query where all arguments are fresh variables is called the most general query
 of a predicate. It asks for any case whatsoever for which the predicate holds."*
 
-And: *"When working with Prolog programs it is often a good idea to try the
+And: *"when working with Prolog programs it is often a good idea to try the
 most general query to see which solutions there are in general."*
 
 Show examples of predicates that pass and fail this test. Demonstrate how the
@@ -436,7 +436,7 @@ limits the generality and what we can describe with it."*
 | `get_length(List, N)` | `list_length(LIST, N)` | Describes what is related |
 | `compute_sum(List, S)` | `list_sum(LIST, SUM)` | No verb implies direction |
 | `find_path(A, B, P)` | `path(A, B, P)` | The predicate IS the path relation |
-| `check_member(X, L)` | `In(X, LIST)` | Membership, not checking |
+| `check_member(X, L)` | `in_(X, LIST)` | Membership, not checking |
 
 Note: Clausal uses PascalCase for builtins, but user predicates can be
 lowercase. The principle is the same: describe the relation, not the action.
@@ -449,7 +449,7 @@ that are not part of the name."* (Meta-Predicates)
 
 A common claim about declarative programming is "what not how." Triska's
 surprising reversal: *"at least in my opinion this does not adequately
-characterize declarative programming. In fact we may rightly say the opposite:
+characterize declarative programming. in_ fact we may rightly say the opposite:
 'how not what' — because it matters how we express our task, not what is being
 executed."* (Knight's Tour)
 
@@ -537,7 +537,7 @@ What violates purity:
 - Negation as failure with unbound variables
 - Arithmetic evaluation (`is/:=`) requiring ground arguments
 - I/O side effects (but see the declarative output pattern below)
-- Assert/Retract at runtime
+- assertz/retract at runtime
 - The cut (Clausal doesn't have one — by design)
 
 **5. Constraints as the pure alternative**
@@ -671,7 +671,7 @@ already relational.
 
 **New section after "Your first .clausal file"**: Add a brief "Thinking
 relationally" callout or paragraph that links to the full
-`thinking_relationally.md` page. Something like: "In Clausal, each predicate
+`thinking_relationally.md` page. Something like: "in_ Clausal, each predicate
 defines a **relation** — it describes when something is true about its
 arguments. This is different from functions, which compute outputs from inputs.
 See [Thinking Relationally](thinking_relationally.md) for a deeper exploration
@@ -707,7 +707,7 @@ of this idea."
 - Lines 86-95: "Guards" — "They act as filters on the pattern match" →
   "They state additional conditions under which the clause holds."
 - Lines 98-109: "Overlapping Patterns" — rename to "Overlapping Clauses" or
-  "Clause Ordering." "When multiple clauses could match" → "When multiple
+  "Clause Ordering." "when multiple clauses could match" → "when multiple
   clause heads unify with the goal."
 - Line 150: "This pattern — base case as a fact, recursive case as a rule — is
   the fundamental building block" — fine, keep.
@@ -807,7 +807,7 @@ to `thinking_relationally.md` or `purity.md`. Key link points:
 
 - Tutorial: after the first example, and in "where to go next"
 - Predicates: in the introduction
-- Lists: where multi-directional use is shown (Append/3)
+- Lists: where multi-directional use is shown (append/3)
 - Constraints: link to purity.md from the introduction
 - Negation: link to purity.md for monotonicity discussion
 - Reified ITE: link to purity.md
@@ -831,8 +831,8 @@ Files to check:
 
 | Phase | Scope | Dependencies |
 |---|---|---|
-| 1a | Write `thinking_relationally.md` | None (can start immediately) |
-| 1b | Write `purity.md` | None (can run parallel with 1a) |
+| 1a | write `thinking_relationally.md` | None (can start immediately) |
+| 1b | write `purity.md` | None (can run parallel with 1a) |
 | 2 | Rewrite `tutorial.md` | Phase 1 (needs to link to new pages) |
 | 3 | Rewrite `predicates.md`, `lists.md`, `goals.md` | Phase 1 |
 | 4 | Audit all other pages | Phase 3 (terminology stabilized) |
@@ -864,7 +864,7 @@ Video lectures (subtitles in `/workspace/subtitles/`):
 | Video | Key insights for docs rewrite |
 |---|---|
 | Reading Prolog Code | Declarative vs procedural reading; "holds for"; most general query; purity definition |
-| A Tour of Prolog | "When does this hold?"; horn clauses; state relations; embedding procedural in declarative |
+| A Tour of Prolog | "when does this hold?"; horn clauses; state relations; embedding procedural in declarative |
 | Prolog Antipatterns | Reasoning properties (4 key); "flatten" naming critique; cut destroys power; working against reasoning |
 | Meta-Predicates in Prolog | "Describe the maximum" not "find the maximum"; multi-directional use; auxiliary naming |
 | Describing a Dragon Curve | "Describing" as master verb; why we don't say "generate" |

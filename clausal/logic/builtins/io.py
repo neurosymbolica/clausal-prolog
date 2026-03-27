@@ -1,5 +1,5 @@
-"""I/O builtins (V2-15 + Phase 2): Write/1, Writeln/1, PrintTerm/1, Nl/0,
-Tab/1, WriteToString/2, TermToString/2, Listing/1, PortrayClause/1."""
+"""I/O builtins (V2-15 + Phase 2): write/1, writeln/1, print_term/1, nl/0,
+tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1."""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ def _format_term_for_io(val):
     return str(val)
 
 
-@_builtin("Write", 1)
+@_builtin("write", 1)
 def _write__1(term, trail, k):
-    """Write(Term) — print dereffed term to stdout (no newline).
+    """write(Term) — print dereffed term to stdout (no newline).
 
     Strings are printed without quotes.  Vars are auto-dereffed.
-    Works naturally with f-strings: Write(f"X is {X_}").
+    Works naturally with f-strings: write(f"X is {X_}").
     """
     val = deref(term)
     _sys.stdout.write(_format_term_for_io(val))
@@ -37,21 +37,21 @@ def _write__1(term, trail, k):
     yield None
 
 
-@_builtin("Writeln", 1)
+@_builtin("writeln", 1)
 def _writeln__1(term, trail, k):
-    """Writeln(Term) — print dereffed term to stdout with newline.
+    """writeln(Term) — print dereffed term to stdout with newline.
 
     Strings are printed without quotes.  Vars are auto-dereffed.
-    Works naturally with f-strings: Writeln(f"X is {X_}").
+    Works naturally with f-strings: writeln(f"X is {X_}").
     """
     val = deref(term)
     print(_format_term_for_io(val))
     yield None
 
 
-@_builtin("PrintTerm", 1)
+@_builtin("print_term", 1)
 def _print_term__1(term, trail, k):
-    """PrintTerm(Term) — print structured term representation with newline.
+    """print_term(Term) — print structured term representation with newline.
 
     Uses term_str() for Prolog-style output showing term structure
     (e.g., functors, lists, operators).  Vars show as Var(_N).
@@ -62,16 +62,16 @@ def _print_term__1(term, trail, k):
     yield None
 
 
-@_builtin("Nl", 0)
+@_builtin("nl", 0)
 def _nl__0(trail, k):
-    """Nl — print a newline."""
+    """nl — print a newline."""
     print()
     yield None
 
 
-@_builtin("Tab", 1)
+@_builtin("tab", 1)
 def _tab__1(n, trail, k):
-    """Tab(N) — print N spaces."""
+    """tab(N) — print N spaces."""
     n_val = deref(n)
     if is_var(n_val) or not isinstance(n_val, int):
         return
@@ -80,9 +80,9 @@ def _tab__1(n, trail, k):
     yield None
 
 
-@_builtin("WriteToString", 2)
+@_builtin("write_to_string", 2)
 def _write_to_string__2(term, result, trail, k):
-    """WriteToString(Term, Result) — unify Result with the string representation of Term.
+    """write_to_string(Term, Result) — unify Result with the string representation of Term.
 
     Vars are auto-dereffed.  Strings pass through as-is.
     """
@@ -94,9 +94,9 @@ def _write_to_string__2(term, result, trail, k):
     trail.undo(mark)
 
 
-@_builtin("TermToString", 2)
+@_builtin("term_to_string", 2)
 def _term_to_string__2(term, result, trail, k):
-    """TermToString(Term, Result) — unify Result with structured term_str representation."""
+    """term_to_string(Term, Result) — unify Result with structured term_str representation."""
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
     s = _term_str(val)
@@ -135,7 +135,7 @@ def _format_clause_head(head):
 
 
 def _format_clause(clause):
-    """Format a Clause for Listing output."""
+    """Format a Clause for listing output."""
     head_str = _format_clause_head(clause.head)
     if clause.is_fact():
         return f"{head_str}."
@@ -146,11 +146,11 @@ def _format_clause(clause):
     return f"{head_str} <- {body}."
 
 
-# ── Listing/1 ────────────────────────────────────────────────────────────────
+# ── listing/1 ────────────────────────────────────────────────────────────────
 
-@_builtin("Listing", 1)
+@_builtin("listing", 1)
 def _listing__1(pred, trail, k):
-    """Listing(Pred) — print all clauses of a predicate to stdout.
+    """listing(Pred) — print all clauses of a predicate to stdout.
 
     Accepts a PredicateMeta class or instance (resolves to class).
     """
@@ -184,11 +184,11 @@ def _listing__1(pred, trail, k):
     yield None
 
 
-# ── PortrayClause/1 ─────────────────────────────────────────────────────────
+# ── portray_clause/1 ─────────────────────────────────────────────────────────
 
-@_builtin("PortrayClause", 1)
+@_builtin("portray_clause", 1)
 def _portray_clause__1(term, trail, k):
-    """PortrayClause(Term) — pretty-print a term with indentation."""
+    """portray_clause(Term) — pretty-print a term with indentation."""
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
     print(_term_pformat(val))

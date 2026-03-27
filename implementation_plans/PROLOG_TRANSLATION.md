@@ -132,7 +132,7 @@ also provides visitor/transformer base classes and builder helpers.
 ```python
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Union
+from typing import union
 
 # ── Terms ──────────────────────────────────────────────────────────────
 @dataclass(frozen=True, slots=True)
@@ -173,7 +173,7 @@ class PCurly:
     """{Goal} — DCG inline goals, set notation."""
     body: PTerm
 
-PTerm = Union[PAtom, PVar, PNumber, PString, PCompound, PList, PCurly]
+PTerm = union[PAtom, PVar, PNumber, PString, PCompound, PList, PCurly]
 
 # ── Clauses & directives ──────────────────────────────────────────────
 @dataclass(frozen=True, slots=True)
@@ -198,7 +198,7 @@ class PQuery:
     """?- query."""
     body: PTerm
 
-PItem = Union[PClause, PDCGRule, PDirective, PQuery]
+PItem = union[PClause, PDCGRule, PDirective, PQuery]
 
 @dataclass(frozen=True, slots=True)
 class PModule:
@@ -452,11 +452,11 @@ class PrologBridge(ABC):
 
     @abstractmethod
     def assert_clause(self, clause: PClause) -> None:
-        """Assert a clause into the running Prolog engine."""
+        """assertz a clause into the running Prolog engine."""
 
     @abstractmethod
     def retract_clause(self, clause: PClause) -> bool:
-        """Retract a matching clause. Returns True if found."""
+        """retract a matching clause. Returns True if found."""
 
     @abstractmethod
     def query(self, goal: PTerm) -> Iterator[dict[str, PTerm]]:
@@ -741,10 +741,10 @@ Clausal predicates use PascalCase; Prolog uses snake_case. The translator needs 
 
 ```python
 def pascal_to_snake(name: str) -> str:
-    """FooBar → foo_bar, CLP → clp, AllDifferent → all_different"""
+    """FooBar → foo_bar, CLP → clp, all_different → all_different"""
 
 def snake_to_pascal(name: str) -> str:
-    """foo_bar → FooBar, all_different → AllDifferent"""
+    """foo_bar → FooBar, all_different → all_different"""
 ```
 
 Maintain a **known-names table** for builtins where the standard Prolog name differs from the mechanical conversion:
@@ -752,13 +752,13 @@ Maintain a **known-names table** for builtins where the standard Prolog name dif
 Clausal | Prolog | Notes
 ---|---|---
 `AssertZ` | `assertz` | direct
-`FindAll` | `findall` | direct
-`AllDifferent` | `all_different` / `all_distinct` | SWI vs Scryer
-`InDomain` | `ins` (SWI) / `in` (Scryer) | CLP(FD) domain
-`Label` | `label` / `labeling` | dialect
-`MapList` | `maplist` | direct
-`Writeln` | `writeln` | direct
-`CopyTerm` | `copy_term` | direct
+`findall` | `findall` | direct
+`all_different` | `all_different` / `all_distinct` | SWI vs Scryer
+`in_domain` | `ins` (SWI) / `in` (Scryer) | CLP(FD) domain
+`label` | `label` / `labeling` | dialect
+`maplist` | `maplist` | direct
+`writeln` | `writeln` | direct
+`copy_term` | `copy_term` | direct
 
 Variable naming:
 
@@ -796,7 +796,7 @@ cat input.clausal | python -m clausal.tools.clausal_to_prolog --dialect swi
 ## Phase 2: Dialect Layer (Scryer vs SWI)
 
 **Files:**
-- Extend `clausal/tools/prolog_dialect.py`
+- extend `clausal/tools/prolog_dialect.py`
 - `clausal/tools/clausal_to_prolog.py` — dialect-specific hooks
 
 ### Step 2.1: SWI-Prolog dialect
@@ -829,7 +829,7 @@ Construct | SWI fallback | Scryer fallback
 Lambda `(X <- Body)` | `\X^Body` (SWI lambda) | Meta-call structure
 `-import_from(py_mod)` | Warning comment | Warning comment
 
-When a construct is untranslatable, emit:
+when a construct is untranslatable, emit:
 
 ```prolog
 /* WARNING: untranslatable clausal construct: ++len(List)
@@ -978,7 +978,7 @@ class PrologParser:
 ```
 
 Key points:
-- **`op/3` directive handling:** When `_classify_item` detects `:- op(Prec, Spec, Name).`, it calls `self._ops.define(Prec, Spec, Name)` *immediately*, affecting all subsequent parsing.
+- **`op/3` directive handling:** when `_classify_item` detects `:- op(Prec, Spec, Name).`, it calls `self._ops.define(Prec, Spec, Name)` *immediately*, affecting all subsequent parsing.
 - **Comma as operator:** `,` is `1000 xfy` — it's just another operator in the Pratt parser.
 - **Specifier semantics:** `x` means "strictly lower precedence than this operator"; `y` means "lower or equal". This maps to Pratt binding powers: `x` side uses `prec - 1`, `y` side uses `prec`.
 
@@ -1385,7 +1385,7 @@ safe_max(X, Y, Y) :-
 **Key mappings demonstrated:**
 - `X_ is 1` → `X = 1` (Unify → `=`)
 - `X_ == 1` → `X =:= 1` (ArithEq → `=:=` for arithmetic context)
-  - **Note:** `==` in clausal is structural equality. In Prolog, `==` is also
+  - **Note:** `==` in clausal is structural equality. in_ Prolog, `==` is also
     structural equality, but `=:=` is arithmetic equality. The translator must
     determine from context which to use. Default: `==` → `==` (structural),
     but when both sides are ground arithmetic, consider `=:=`. This is a
@@ -1398,8 +1398,8 @@ safe_max(X, Y, Y) :-
 
 **Input:**
 ```
-Append([], L, L),
-Append([H, *T], L, [H, *R]) <- Append(T, L, R)
+append([], L, L),
+append([H, *T], L, [H, *R]) <- append(T, L, R)
 ```
 
 **Expected Prolog output:**
@@ -1410,7 +1410,7 @@ append([H|T], L, [H|R]) :-
 ```
 
 **Key:** `[H, *T]` (Python star-unpack) → `[H|T]` (Prolog bar notation).
-In the pythonic_ast, this is `ListLiteral([LoadName('H'), StarUnpack(LoadName('T'))])`.
+in_ the pythonic_ast, this is `ListLiteral([LoadName('H'), StarUnpack(LoadName('T'))])`.
 
 ### Example 4: Arithmetic evaluation
 
@@ -1499,9 +1499,9 @@ digit(D) --> [D], {D >= 0}, {D =< 9}.
 **Input** (`clpfd_queens.clausal`):
 ```
 SafeQueens(N_, Qs_) <- (
-    InDomain(Qs_, 1, N_)
-    and AllDifferent(Qs_)
-    and Label(Qs_)
+    in_domain(Qs_, 1, N_)
+    and all_different(Qs_)
+    and label(Qs_)
     and CheckDiagonals(Qs_)
 )
 ```
@@ -1529,8 +1529,8 @@ safe_queens(N, Qs) :-
 ```
 
 **Key:**
-- `InDomain(Qs_, 1, N_)` → `Qs ins 1..N` (builtin-specific translation)
-- `AllDifferent` → `all_different` (SWI) / `all_distinct` (Scryer)
+- `in_domain(Qs_, 1, N_)` → `Qs ins 1..N` (builtin-specific translation)
+- `all_different` → `all_different` (SWI) / `all_distinct` (Scryer)
 - `and` → `,`
 
 ---
@@ -1546,15 +1546,15 @@ def pascal_to_snake(name: str) -> str:
     """Convert PascalCase predicate names to Prolog snake_case.
 
     FooBar      → foo_bar
-    AllDifferent → all_different
+    all_different → all_different
     CLP         → clp
-    CopyTerm    → copy_term
+    copy_term    → copy_term
     DCGRule     → dcg_rule
     FStringThunk → f_string_thunk
     IOStream    → io_stream
     """
     # Insert underscore before uppercase runs:
-    # "CopyTerm" → "Copy_Term" → "copy_term"
+    # "copy_term" → "Copy_Term" → "copy_term"
     # "DCGRule"  → "DCG_Rule"  → "dcg_rule"
     s = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
     s = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s)
@@ -1564,8 +1564,8 @@ def snake_to_pascal(name: str) -> str:
     """Convert Prolog snake_case to clausal PascalCase.
 
     foo_bar        → FooBar
-    all_different  → AllDifferent
-    copy_term      → CopyTerm
+    all_different  → all_different
+    copy_term      → copy_term
     """
     return ''.join(word.capitalize() for word in name.split('_'))
 ```
@@ -1623,23 +1623,23 @@ BUILTIN_NAME_MAP = {
     # clausal name → (ISO Prolog, SWI-specific, Scryer-specific)
     'AssertZ':       ('assertz',        None, None),
     'AssertA':       ('asserta',        None, None),
-    'Retract':       ('retract',        None, None),
-    'FindAll':       ('findall',        None, None),
-    'BagOf':         ('bagof',          None, None),
-    'SetOf':         ('setof',          None, None),
-    'ForAll':        ('forall',         None, None),
-    'CopyTerm':      ('copy_term',      None, None),
-    'TermVariables': ('term_variables', None, None),
-    'NumberVars':    ('numbervars',     None, None),
-    'AllDifferent':  (None,             'all_different', 'all_distinct'),
-    'InDomain':      (None,             'ins',           'ins'),  # special: ternary → binary infix
-    'Label':         ('label',          'label',         'label'),
+    'retract':       ('retract',        None, None),
+    'findall':       ('findall',        None, None),
+    'bagof':         ('bagof',          None, None),
+    'setof':         ('setof',          None, None),
+    'forall':        ('forall',         None, None),
+    'copy_term':      ('copy_term',      None, None),
+    'term_variables': ('term_variables', None, None),
+    'numbervars':    ('numbervars',     None, None),
+    'all_different':  (None,             'all_different', 'all_distinct'),
+    'in_domain':      (None,             'ins',           'ins'),  # special: ternary → binary infix
+    'label':         ('label',          'label',         'label'),
     'Labeling':      ('labeling',       'labeling',      'labeling'),
-    'MapList':       ('maplist',        None, None),
-    'Writeln':       ('writeln',        None, None),
-    'Write':         ('write',          None, None),
-    'Nl':            ('nl',             None, None),
-    'Tab':           ('tab',            None, None),
+    'maplist':       ('maplist',        None, None),
+    'writeln':       ('writeln',        None, None),
+    'write':         ('write',          None, None),
+    'nl':            ('nl',             None, None),
+    'tab':           ('tab',            None, None),
     'Call':          ('call',           None, None),
     'Atom':          ('atom',           None, None),
     'Number':        ('number',         None, None),
@@ -1648,19 +1648,19 @@ BUILTIN_NAME_MAP = {
     'Var':           ('var',            None, None),  # type check, not logic Var
     'NonVar':        ('nonvar',         None, None),
     'Compound':      ('compound',       None, None),  # type check
-    'Functor':       ('functor',        None, None),
-    'Arg':           ('arg',            None, None),
-    'Length':        ('length',         None, None),
+    'functor':       ('functor',        None, None),
+    'arg':           ('arg',            None, None),
+    'length':        ('length',         None, None),
     'Member':        ('member',         None, None),
-    'Append':        ('append',         None, None),
-    'Reverse':       ('reverse',        None, None),
-    'Last':          ('last',           None, None),
-    'Permutation':   ('permutation',    None, None),
-    'Between':       ('between',        None, None),
-    'Succ':          ('succ',           None, None),
-    'Plus':          ('plus',           None, None),
+    'append':        ('append',         None, None),
+    'reverse':       ('reverse',        None, None),
+    'last':          ('last',           None, None),
+    'permutation':   ('permutation',    None, None),
+    'between':       ('between',        None, None),
+    'succ':          ('succ',           None, None),
+    'plus':          ('plus',           None, None),
     'Phrase':        ('phrase',         None, None),
-    'TimeGoal':      (None,             'time', 'time'),  # different name entirely
+    'time_goal':      (None,             'time', 'time'),  # different name entirely
 }
 ```
 
@@ -1946,7 +1946,7 @@ class TestNaming:
         assert pascal_to_snake("CLP") == "clp"
 
     def test_pascal_to_snake_mixed(self):
-        assert pascal_to_snake("AllDifferent") == "all_different"
+        assert pascal_to_snake("all_different") == "all_different"
 
     def test_pascal_to_snake_dcg(self):
         assert pascal_to_snake("DCGRule") == "dcg_rule"
@@ -1955,7 +1955,7 @@ class TestNaming:
         assert snake_to_pascal("foo_bar") == "FooBar"
 
     def test_snake_to_pascal_copy_term(self):
-        assert snake_to_pascal("copy_term") == "CopyTerm"
+        assert snake_to_pascal("copy_term") == "copy_term"
 
     def test_var_trailing_underscore(self):
         assert clausal_var_to_prolog("X_") == "X"
@@ -2117,7 +2117,7 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         assert "\\+ danger(X)" in result
 
     def test_list_spread(self):
-        source = 'Append([H, *T], L, [H, *R]) <- Append(T, L, R)'
+        source = 'append([H, *T], L, [H, *R]) <- append(T, L, R)'
         result = clausal_source_to_prolog(source)
         assert "[H|T]" in result
         assert "[H|R]" in result

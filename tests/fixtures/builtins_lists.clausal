@@ -1,58 +1,58 @@
 # Tests for list predicates
 # Each wrapper exercises a single builtin so Python tests can call it by name.
 
-# In/2, InCheck/2
-HasMember(ELEMENT, LIST) <- In(ELEMENT, LIST)
-HasMemberCheck(ELEMENT, LIST) <- InCheck(ELEMENT, LIST)
+# in_/2, in_check/2
+HasMember(ELEMENT, LIST) <- in_(ELEMENT, LIST)
+HasMemberCheck(ELEMENT, LIST) <- in_check(ELEMENT, LIST)
 
-# Append/3
-Concat(LEFT, RIGHT, RESULT) <- Append(LEFT, RIGHT, RESULT)
+# append/3
+Concat(LEFT, RIGHT, RESULT) <- append(LEFT, RIGHT, RESULT)
 
 # Split(PREFIX, SUFFIX, WHOLE): WHOLE = PREFIX ++ SUFFIX
-Split(PREFIX, SUFFIX, WHOLE) <- Append(PREFIX, SUFFIX, WHOLE)
+Split(PREFIX, SUFFIX, WHOLE) <- append(PREFIX, SUFFIX, WHOLE)
 
-# Length/2
-ListLength(LIST, N) <- Length(LIST, N)
+# length/2
+ListLength(LIST, N) <- length(LIST, N)
 
-# Last/2
-ListLast(LIST, ELEMENT) <- Last(LIST, ELEMENT)
+# last/2
+ListLast(LIST, ELEMENT) <- last(LIST, ELEMENT)
 
-# Reverse/2
-ListReverse(LIST, REVERSED) <- Reverse(LIST, REVERSED)
+# reverse/2
+ListReverse(LIST, REVERSED) <- reverse(LIST, REVERSED)
 
-# GetItem/3 (0-based)
-Get0(LIST, INDEX, ELEMENT) <- GetItem(INDEX, LIST, ELEMENT)
+# get_item/3 (0-based)
+Get0(LIST, INDEX, ELEMENT) <- get_item(INDEX, LIST, ELEMENT)
 
-# Flatten/2
-Flat(LIST, RESULT) <- Flatten(LIST, RESULT)
+# flatten/2
+Flat(LIST, RESULT) <- flatten(LIST, RESULT)
 
-# MergeSort/2 (stable sort, keeps duplicates), Sort/2 (removes duplicates)
-SortedWithDups(LIST, RESULT) <- MergeSort(LIST, RESULT)
-SortedUnique(LIST, RESULT) <- Sort(LIST, RESULT)
+# msort/2 (stable sort, keeps duplicates), sort/2 (removes duplicates)
+SortedWithDups(LIST, RESULT) <- msort(LIST, RESULT)
+SortedUnique(LIST, RESULT) <- sort(LIST, RESULT)
 
-# Permutation/2
-Perms(LIST, RESULT) <- Permutation(LIST, RESULT)
+# permutation/2
+Perms(LIST, RESULT) <- permutation(LIST, RESULT)
 
-# Select/3: select element from list leaving rest
-Pick(ELEMENT, LIST, REST) <- Select(ELEMENT, LIST, REST)
+# select/3: select element from list leaving rest
+Pick(ELEMENT, LIST, REST) <- select(ELEMENT, LIST, REST)
 
-# Subtract/3, Intersection/3, Union/3
-ListDiff(LEFT, RIGHT, RESULT) <- Subtract(LEFT, RIGHT, RESULT)
-ListInter(LEFT, RIGHT, RESULT) <- Intersection(LEFT, RIGHT, RESULT)
-ListUnion(LEFT, RIGHT, RESULT) <- Union(LEFT, RIGHT, RESULT)
+# subtract/3, intersection/3, union/3
+ListDiff(LEFT, RIGHT, RESULT) <- subtract(LEFT, RIGHT, RESULT)
+ListInter(LEFT, RIGHT, RESULT) <- intersection(LEFT, RIGHT, RESULT)
+ListUnion(LEFT, RIGHT, RESULT) <- union(LEFT, RIGHT, RESULT)
 
-# ToSet/2: remove duplicates preserving order
-Dedup(LIST, RESULT) <- ToSet(LIST, RESULT)
+# list_to_set/2: remove duplicates preserving order
+Dedup(LIST, RESULT) <- list_to_set(LIST, RESULT)
 
-# SumList/2, MaxList/2, MinList/2
-Total(LIST, SUM) <- SumList(LIST, SUM)
-Maximum(LIST, MAX) <- MaxList(LIST, MAX)
-Minimum(LIST, MIN) <- MinList(LIST, MIN)
+# sum_list/2, max_list/2, min_list/2
+Total(LIST, SUM) <- sum_list(LIST, SUM)
+Maximum(LIST, MAX) <- max_list(LIST, MAX)
+Minimum(LIST, MIN) <- min_list(LIST, MIN)
 
-# Unzip/3, PairKeys/2, PairValues/2
-MakePairs(KEYS, VALUES, PAIRS) <- Unzip(PAIRS, KEYS, VALUES)
-KeysOf(PAIRS, KEYS) <- PairKeys(PAIRS, KEYS)
-ValuesOf(PAIRS, VALUES) <- PairValues(PAIRS, VALUES)
+# pairs_keys_values/3, pairs_keys/2, pairs_values/2
+MakePairs(KEYS, VALUES, PAIRS) <- pairs_keys_values(PAIRS, KEYS, VALUES)
+KeysOf(PAIRS, KEYS) <- pairs_keys(PAIRS, KEYS)
+ValuesOf(PAIRS, VALUES) <- pairs_values(PAIRS, VALUES)
 
 
 Test("has member") <- HasMember(2, [1, 2, 3])

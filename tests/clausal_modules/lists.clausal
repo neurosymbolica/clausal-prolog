@@ -1,24 +1,24 @@
 # List predicates
 #
-# Length/2
+# length/2
 
-Length(LIST=[], N=0),
-Length([HEAD, *TAIL], N) <- (
-    Length(TAIL, N1),
+length(LIST=[], N=0),
+length([HEAD, *TAIL], N) <- (
+    length(TAIL, N1),
     N := N1 + 1
 )
 
-# Append/3 — standard list concatenation: Append(Xs, Ys, Zs)
+# append/3 — standard list concatenation: append(Xs, Ys, Zs)
 # repeated Var HEAD in clause 2 (positions 1 and 3)
 
-Append(LHS=[], RHS=RHS, TOGETHER=RHS),
-Append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- (
-    Append(TAIL, RHS, REST)
+append(LHS=[], RHS=RHS, TOGETHER=RHS),
+append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- (
+    append(TAIL, RHS, REST)
 )
 
-# Last/2
+# last/2
 
-Last([LAST], LAST),
-Last([_, *TAIL], LAST) <- (
-    Last(TAIL, LAST)
+last([LAST], LAST),
+last([_, *TAIL], LAST) <- (
+    last(TAIL, LAST)
 )

@@ -1,12 +1,12 @@
-# TFilter/TPartition: Trampoline Protocol Mismatch
+# tfilter/tpartition: Trampoline Protocol Mismatch
 
 **Status:** Working but architecturally inconsistent.
 
-**Affects:** `TFilter/3`, `TPartition/4` in `clausal/logic/builtins/higher_order.py`
+**Affects:** `tfilter/3`, `tpartition/4` in `clausal/logic/builtins/higher_order.py`
 
 ## Current Implementation
 
-`Filter/3`, `Exclude/3`, and `Partition/4` yield `StepGenerator` objects to
+`include/3`, `exclude/3`, and `partition/4` yield `StepGenerator` objects to
 the trampoline, letting the trampoline drive the sub-goal execution:
 
 ```python
@@ -15,7 +15,7 @@ _st = yield (sg, None)
 found = _st is not DONE
 ```
 
-`TFilter/3` and `TPartition/4` instead use `_run_goal_once()`, a helper that
+`tfilter/3` and `tpartition/4` instead use `_run_goal_once()`, a helper that
 drives the trampoline internally:
 
 ```python
@@ -26,8 +26,8 @@ for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
 
 ## Why
 
-Reified goals like `Eq/3` produce multiple solutions — one for T=True, one
-for T=False (when the result is undetermined). TFilter needs committed-choice
+Reified goals like `eq/3` produce multiple solutions — one for T=True, one
+for T=False (when the result is undetermined). tfilter needs committed-choice
 semantics: take the first truth value and move on. The trampoline yield
 protocol doesn't have a built-in "take first solution only" mechanism — once
 you yield `(sg, None)`, the trampoline will keep sending solutions until DONE.
@@ -45,7 +45,7 @@ Add a "once" wrapper to the trampoline protocol:
    first solution (converts the second yield to DONE).
 2. Or: a flag on `StepGenerator` that limits solutions to 1.
 
-Then TFilter/TPartition could use the standard yield protocol:
+Then tfilter/tpartition could use the standard yield protocol:
 
 ```python
 sg = OnceStepGenerator(dispatch, this_generator, deref(elem), t_var, trail)
@@ -53,7 +53,7 @@ _st = yield (sg, None)
 # _st is the first solution or DONE
 ```
 
-This would make TFilter/TPartition consistent with Filter/Exclude/Partition
+This would make tfilter/tpartition consistent with include/exclude/partition
 and preserve stack-safe execution.
 
 ## Priority

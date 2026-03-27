@@ -390,7 +390,7 @@ class PrologParser:
     def _is_functor_paren(self, functor_tok: Token, lparen_tok: Token) -> bool:
         """True if the LPAREN immediately follows the functor (no space).
 
-        In Prolog, ``f(X)`` is a compound term, but ``f (X)`` is the atom
+        in_ Prolog, ``f(X)`` is a compound term, but ``f (X)`` is the atom
         ``f`` followed by ``(X)`` in an operator context.  We detect this
         by checking column adjacency.
         """

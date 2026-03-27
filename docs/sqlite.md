@@ -75,7 +75,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 SQLiteCurrentConnection(?Alias)
 ```
 
-When `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. When `Alias` is ground, succeeds if that alias is currently connected.
+when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. when `Alias` is ground, succeeds if that alias is currently connected.
 
 ```clausal
 ListDbs <- (
@@ -182,7 +182,7 @@ Cleanup(N) <- (
 SQLiteTable(+Alias, ?TableName)
 ```
 
-When `TableName` is unbound, **nondeterministically enumerates** all table names. When ground, succeeds if that table exists.
+when `TableName` is unbound, **nondeterministically enumerates** all table names. when ground, succeeds if that table exists.
 
 ```clausal
 HasUsersTable <- SQLiteTable("db", "users")

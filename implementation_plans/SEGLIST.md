@@ -22,8 +22,8 @@ Current state (all fail for unbound targets):
 | `_body_multi_star_unify` | Same explicit TypeError |
 | `_body_star_unify` (construction with unbound `*VAR`) | TypeError: cannot build partial list |
 | `_sequence__3` (DCG) with both S0, S unbound | Silent fail — yields no solutions |
-| `Append/3` with unbound result | Silent fail |
-| `In/2` with unbound list | Silent fail |
+| `append/3` with unbound result | Silent fail |
+| `in_/2` with unbound list | Silent fail |
 
 All stem from the same root: no way to represent `[concrete... *VAR concrete... *VAR ...]`
 as a first-class term.
@@ -73,7 +73,7 @@ Examples:
 
 A plain Python list is the special case with zero VarSegs.
 
-A SegList is **ground** when every VarSeg's var is bound to a concrete list (recursively). When
+A SegList is **ground** when every VarSeg's var is bound to a concrete list (recursively). when
 ground, a SegList can be **flattened** to a plain Python list.
 
 The invariant maintained by `walk()`:
@@ -179,13 +179,13 @@ test_around_unbound :-
     A_ = [1], B_ = [3].
 ```
 
-### 5. DCG Sequence with both ends unbound
+### 5. DCG sequence with both ends unbound
 
 ```python
 def test_sequence_both_unbound():
     S0, S = Var(), Var()
     trail = Trail()
-    # phrase(Sequence([a, b, c]), S0, S) with both S0, S unbound
+    # phrase(sequence([a, b, c]), S0, S) with both S0, S unbound
     # Should bind S0 to SegList([ConcreteSeg([a,b,c]), VarSeg(S)])
     list(solve(phrase(sequence([a, b, c]), S0, S), trail))
     walked = walk(S0)
@@ -195,11 +195,11 @@ def test_sequence_both_unbound():
 
 ```clausal
 test_sequence_unbound :-
-    phrase(Sequence([hello, world]), S0_, S_),
+    phrase(sequence([hello, world]), S0_, S_),
     S0_ = [hello, world | S_].   % S0_ is partial list with S_ as tail
 ```
 
-### 6. Append with unbound second argument
+### 6. append with unbound second argument
 
 ```clausal
 test_append_partial :-
@@ -219,7 +219,7 @@ def test_append_unbound_suffix():
     Y, Z = Var(), Var()
     trail = Trail()
     # append([1, 2], Y, Z) with Y unbound
-    solutions = query(Append([1, 2], Y, Z), trail)
+    solutions = query(append([1, 2], Y, Z), trail)
     assert len(solutions) == 1
     walked_z = walk(Z)
     assert is_seglist(walked_z)
@@ -228,17 +228,17 @@ def test_append_unbound_suffix():
     assert walk(Y) == [3, 4]
 ```
 
-### 7. In/2 (member) with unbound list
+### 7. in_/2 (member) with unbound list
 
 ```clausal
 test_member_unbound_list :-
-    In(5, LIST_),             % LIST_ unbound
+    in_(5, LIST_),             % LIST_ unbound
     % LIST_ = SegList([VarSeg(_), ConcreteSeg([5]), VarSeg(_)])
     LIST_ = [1, 2, 5, 3],
     true.                     % succeeds — 5 is in [1,2,5,3]
 
 test_member_enumerate_positions :-
-    findall(I_-L_, (In(5, L_), L_ = [1,2,5,3,5], nth0(I_, L_, 5)), Pairs),
+    findall(I_-L_, (in_(5, L_), L_ = [1,2,5,3,5], nth0(I_, L_, 5)), Pairs),
     Pairs = [2-[1,2,5,3,5], 4-[1,2,5,3,5]].
 ```
 
@@ -283,9 +283,9 @@ def test_seglist_concat():
 
 ---
 
-## API Design: Drop-In Replacement
+## API Design: drop-in_ Replacement
 
-When a SegList is **ground**, all Python list operations work identically:
+when a SegList is **ground**, all Python list operations work identically:
 
 | Operation | Ground | Partially unbound |
 |-----------|--------|-------------------|
@@ -303,7 +303,7 @@ Key design rule: **when ground, SegList is indistinguishable from a Python list*
 code that iterates a ground SegList works without changes.
 
 The `__walk__` hook (called by the C `deref`/`walk` machinery) normalizes the SegList after
-each variable binding. When the last VarSeg binds to a concrete list, `__walk__` returns a
+each variable binding. when the last VarSeg binds to a concrete list, `__walk__` returns a
 plain Python list — so the SegList "disappears" and downstream code sees a normal list.
 
 ---
@@ -329,7 +329,7 @@ lands into a codebase that can already handle the values it will start producing
    - `is_ground(self)` — True if `__walk__()` returns a plain list
    - `to_list(self)` — calls `__walk__()`; asserts result is a plain list; returns it
    - `__occurs_check__(self, var)` — recurse into both ConcreteSeg elements and VarSeg vars
-   - Sequence protocol (delegating to `to_list()` when ground):
+   - sequence protocol (delegating to `to_list()` when ground):
      `__len__`, `__iter__`, `__contains__`, `__getitem__`, `__add__`, `__radd__`, `__eq__`
    - `__repr__` — readable syntax like `[1, *_A3, 5, *_B7]`; implement from the start, not
      later — test failure messages are unreadable without it
@@ -432,7 +432,7 @@ arrives. The full test suite should pass unchanged after this phase.
    both simple-mode and trampoline-mode compiled-predicate globals dicts.
 
 5. **Tests**: `tests/test_seglist_passthrough.py` (11 tests) — ground SegList inputs to
-   single-star head patterns (`Append`, `Last`), multi-star head patterns (`Split`, `Split3`,
+   single-star head patterns (`append`, `last`), multi-star head patterns (`Split`, `Split3`,
    `Around`), body-position Is patterns (`HeadTail`, `InitLast`), SegList concat as arg,
    and non-ground SegList to multi-star (confirmed: no solutions, no error).
 
@@ -456,7 +456,7 @@ if is_var(s):
                   ConcreteSeg([deref(v) for v in after_vals])])
     return unify(target, sl, trail)
 ```
-Run the full test suite immediately. Expect regressions in `Append`, `Last`, `Reverse` reverse
+Run the full test suite immediately. Expect regressions in `append`, `last`, `reverse` reverse
 mode — these were previously suppressed, now they yield SegLists. Fix each regression by
 updating the relevant test expectations OR by verifying the new SegList-yielding behaviour is
 correct and updating the test to reflect it.
@@ -522,7 +522,7 @@ instead of the single-index approach.
 
 **File**: `clausal/logic/builtins/lists.py`, `clausal/logic/builtins/dcg.py`
 
-Update builtins to construct SegLists for unbound arguments. In each case, the builtin itself
+Update builtins to construct SegLists for unbound arguments. in_ each case, the builtin itself
 is a generator — so calling `_seglist_unify_gen` in a `for` loop is natural.
 
 Also add the `as_list(x)` helper (using `walk()`, not `deref()`) to a shared location and
@@ -538,20 +538,20 @@ def as_list(x):
 
 | Builtin | Change |
 |---------|--------|
-| `Append/3` | When L2 unbound: construct `SegList([ConcreteSeg(L1_val), VarSeg(Var())])`, unify with L3 and bind L2 to the fresh var |
-| `In/2` | When list arg unbound: construct `SegList([VarSeg(Var()), ConcreteSeg([deref(elem)]), VarSeg(Var())])`, unify with list arg; yields one solution |
-| `Sequence//3` | When both S0, S unbound: construct `SegList([ConcreteSeg(lst_val), VarSeg(deref(s))])`, unify with S0 |
-| `Length/2` | No change to existing modes; defer both-unbound case |
-| `Select/3` | When list unbound: `SegList([VarSeg(Var()), ConcreteSeg([deref(elem)]), VarSeg(Var())])` |
+| `append/3` | when L2 unbound: construct `SegList([ConcreteSeg(L1_val), VarSeg(Var())])`, unify with L3 and bind L2 to the fresh var |
+| `in_/2` | when list arg unbound: construct `SegList([VarSeg(Var()), ConcreteSeg([deref(elem)]), VarSeg(Var())])`, unify with list arg; yields one solution |
+| `sequence//3` | when both S0, S unbound: construct `SegList([ConcreteSeg(lst_val), VarSeg(deref(s))])`, unify with S0 |
+| `length/2` | No change to existing modes; defer both-unbound case |
+| `select/3` | when list unbound: `SegList([VarSeg(Var()), ConcreteSeg([deref(elem)]), VarSeg(Var())])` |
 
-Lower-priority (skip for now): `Flatten`, `Permutation`, `SumList`, `MaxList`, `MinList`,
-`GetItem` with unbound list.
+Lower-priority (skip for now): `flatten`, `permutation`, `sum_list`, `max_list`, `min_list`,
+`get_item` with unbound list.
 
 **Tests**: `tests/test_seglist_builtins.py` + extensions to existing builtin test files.
 
 ### Phase 6 — SegList-vs-SegList unification
 
-When two SegLists are unified against each other. Practical cases:
+when two SegLists are unified against each other. Practical cases:
 
 - **One side is ground** — `__unify__` / `_seglist_unify_gen` already handle this
 - **Anchored from both ends** — peel matching ConcreteSegs from each end; if both sides have
@@ -586,7 +586,7 @@ Move the hot path to C only after profiling shows it matters:
 | `clausal/logic/list_utils.py` (new) | `_multi_star_splits` moved here from compiler.py | 3 |
 | `clausal/logic/compiler.py` | `_head_list_unify_input`, `_compile_multi_star_guard` (consumption) | 3 |
 | `clausal/logic/compiler.py` | `_head_list_unify_output`, `_body_multi_star_unify`, `_build_star_list`, `_build_multi_star_list` (creation) | 4 |
-| `clausal/logic/builtins/lists.py` | `Append`, `In`, `Length`, `Select` + `as_list` helper | 5 |
+| `clausal/logic/builtins/lists.py` | `append`, `in_`, `length`, `select` + `as_list` helper | 5 |
 | `clausal/logic/builtins/dcg.py` | `_sequence__3` | 5 |
 | `clausal/logic/variables/` (C) | No changes required for Phases 1–6; optional optimisation in Phase 7 | 7 |
 
@@ -682,7 +682,7 @@ if isinstance(_d, list):
         for _sp0 in range(...): ...
 ```
 
-When a SegList is passed as a predicate argument (e.g. constructed by a caller and passed to
+when a SegList is passed as a predicate argument (e.g. constructed by a caller and passed to
 `foo([*A, *B])`), `_d` will be a SegList — it falls through with no solution. A third branch
 is needed:
 
@@ -852,7 +852,7 @@ Option 1 is simpler for the ground case; option 2 is more explicit. Either way, 
 
 ### EC-1: Lazy non-determinism is lost through `=` body goals
 
-The most subtle semantic issue. When a SegList with multiple VarSegs is created by one goal and
+The most subtle semantic issue. when a SegList with multiple VarSegs is created by one goal and
 later unified against a ground list via a `=` body goal (compiled as `if unify(...)`), the
 `__unify__` hook is single-shot — only the first valid split is found and all others are
 silently discarded.
@@ -871,8 +871,8 @@ test2 :- BodySplit(L, A, B), L = [1,2,3].  % L gets SegList, then unify() called
 
 **Recommended approach for Phase 1-4**: document this limitation explicitly. The non-deterministic
 case must be expressed through direct Is-goals or head patterns, not by binding a multi-VarSeg
-SegList and then unifying via `=`. Most real use cases (DCG `Sequence`, `Append` with unbound
-suffix, `In`) are deterministic or single-VarSeg and avoid this problem.
+SegList and then unifying via `=`. Most real use cases (DCG `sequence`, `append` with unbound
+suffix, `in_`) are deterministic or single-VarSeg and avoid this problem.
 
 If full lazy non-determinism via `=` is needed (Phase 5+), the options are:
 
@@ -897,7 +897,7 @@ will now yield a SegList value instead of being suppressed. This is the correct 
 it is a **behaviour change** for existing predicates.
 
 Specifically: `_wrap_yields_with_output_guards` wraps every yield with an output guard call.
-For `Append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- Append(TAIL, RHS, REST)`, in the recursive
+For `append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- append(TAIL, RHS, REST)`, in the recursive
 case, REST may still be unbound at the yield point. Currently: yield suppressed. With SegList:
 yield with `REST_arg = SegList([ConcreteSeg([HEAD_val]), VarSeg(REST)])`.
 
@@ -913,11 +913,11 @@ From `body_star.clausal` `Second` predicate:
 Second(LIST, X) <- [_, *T] is LIST, [X, *_] is T.
 ```
 
-When `LIST` is unbound:
+when `LIST` is unbound:
 1. `[_, *T] is LIST` → LIST = `SegList([ConcreteSeg([anon1]), VarSeg(T)])`
 2. `[X, *_] is T` — T is still unbound → T = `SegList([ConcreteSeg([X]), VarSeg(anon2)])`
 
-Now LIST contains a VarSeg(T) and T is itself a SegList. When LIST later unifies against
+Now LIST contains a VarSeg(T) and T is itself a SegList. when LIST later unifies against
 `[1, 2, 3]`, `__walk__` must inline the nested SegList:
 
 ```
@@ -943,7 +943,7 @@ The plan focuses on `_body_multi_star_unify` for the unbound case, but `_body_st
 (single-star) also hits the same wall. From `body_star.clausal` `SumTail`:
 
 ```clausal
-SumTail(LIST, TAIL_LENGTH) <- [_, *TAIL] is LIST, Length(TAIL, TAIL_LENGTH).
+SumTail(LIST, TAIL_LENGTH) <- [_, *TAIL] is LIST, length(TAIL, TAIL_LENGTH).
 ```
 
 With LIST unbound:
@@ -952,7 +952,7 @@ With LIST unbound:
 3. → `_head_list_unify_output(LIST, [anon], TAIL, [], trail)` → currently returns False (TAIL unbound)
 4. With SegList: → constructs `SegList([ConcreteSeg([anon]), VarSeg(TAIL)])`, binds LIST to it
 
-Then `Length(TAIL, TAIL_LENGTH)` is called with TAIL still unbound. Length/2 with both args
+Then `length(TAIL, TAIL_LENGTH)` is called with TAIL still unbound. length/2 with both args
 unbound currently fails silently. This chain of effects must be considered: constructing the
 SegList doesn't automatically constrain TAIL's length.
 
@@ -969,14 +969,14 @@ target is unbound AND the star is unbound, construct a SegList. The single-star 
 
 ### EC-5: SegList received as head argument in recursive predicates
 
-When a SegList propagates through a predicate call into the head of a recursive clause, the
+when a SegList propagates through a predicate call into the head of a recursive clause, the
 head pattern code must handle it. From `lists.clausal`:
 
 ```clausal
-Append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- Append(TAIL, RHS, REST)
+append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- append(TAIL, RHS, REST)
 ```
 
-In the case where `Append(seg_list, rhs, result)` is called with `seg_list` being a SegList:
+in_ the case where `append(seg_list, rhs, result)` is called with `seg_list` being a SegList:
 - The compiled head pattern checks `isinstance(d, list)` → False
 - Falls through to `elif is_var(d)` → False (it's a SegList, not a Var)
 - No match → predicate silently fails
@@ -1037,7 +1037,7 @@ should be importable/reusable in `terms.py` or extracted to a shared utilities l
 
 ### EC-9: `Around([*A, X, *B], X, A, B)` with LIST unbound but X bound
 
-When the pattern has fixed elements (individual element Vars) interspersed among VarSegs,
+when the pattern has fixed elements (individual element Vars) interspersed among VarSegs,
 and the individual element Var is already bound (X=5), but the list is unbound:
 
 ```clausal
@@ -1045,11 +1045,11 @@ Around(LIST, 5, A, B)  % LIST unbound, X already = 5
 ```
 
 The SegList constructed should be `SegList([VarSeg(A), ConcreteSeg([5]), VarSeg(B)])` — the
-known value 5 is embedded in the ConcreteSeg. When LIST is later unified against `[1,5,3]`,
+known value 5 is embedded in the ConcreteSeg. when LIST is later unified against `[1,5,3]`,
 the split-point search finds position 1 (only slot where value is 5) — deterministic.
 
 If X is also unbound (`Around(LIST, X, A, B)` with all unbound), the ConcreteSeg contains
-`ConcreteSeg([Var(X)])`. When LIST is unified against `[1,2,3]`, three splits are found with
+`ConcreteSeg([Var(X)])`. when LIST is unified against `[1,2,3]`, three splits are found with
 X=1, X=2, or X=3. This involves unifying the ConcreteSeg element Var (X) against the list
 element — the per-element `unify(elem, val, trail)` call in `_seglist_unify_gen` handles this
 correctly, including trail undo.

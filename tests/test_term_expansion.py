@@ -212,7 +212,7 @@ class TestModuleState:
     """Module state threading through expansion."""
 
     def test_state_unmatched_passes_through(self):
-        """When TE rule doesn't match state, items pass through unchanged."""
+        """when TE rule doesn't match state, items pass through unchanged."""
         # Rule requires _count + 1 but initial state is "nil" → fails → pass-through
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '

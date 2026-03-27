@@ -19,7 +19,7 @@ import clausal.import_hook as _import_hook  # registers .clausal finder on sys.m
 
 
 # ── Export all builtin predicate classes as top-level names ────────────────────
-# This lets users write: from clausal import Append, Between, In, Length, ...
+# This lets users write: from clausal import append, between, in_, length, ...
 
 def _export_builtin_classes():
     """Inject all builtin PredicateMeta classes into this module's namespace."""

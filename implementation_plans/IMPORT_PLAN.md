@@ -64,7 +64,7 @@ After `-import_module(graphs)`, a clause body can use `graphs.Path(A_, B_)`.
 
 ### Circular imports
 
-Same strategy as Python — partial module objects. The deferred compilation model (V2-3) helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). When B's predicates call A's predicates at runtime, A's dispatch is already compiled by then (lazy recompile covers any edge cases).
+Same strategy as Python — partial module objects. The deferred compilation model (V2-3) helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). when B's predicates call A's predicates at runtime, A's dispatch is already compiled by then (lazy recompile covers any edge cases).
 
 ### Error handling
 
@@ -111,7 +111,7 @@ if name == "import_module":
 
 ### Step 4: Compiler — qualified call target collection (compiler.py:~584)
 
-Extend `_collect_call_targets` to also handle `Call(func=LoadAttr(...))`:
+extend `_collect_call_targets` to also handle `Call(func=LoadAttr(...))`:
 ```python
 if isinstance(term, Call) and isinstance(term.func, LoadAttr):
     dotted = _dotted_name(term.func)  # "graphs.Path"
@@ -122,7 +122,7 @@ Helper: `_dotted_name(node)` — walks `LoadAttr` chain to produce `"a.b.c"`.
 
 ### Step 5: Compiler — qualified call target injection (compiler.py:~613)
 
-Extend `_inject_call_targets` to resolve dotted names. Use the dotted string directly as the globals key — no mangling:
+extend `_inject_call_targets` to resolve dotted names. Use the dotted string directly as the globals key — no mangling:
 ```python
 if "." in target_name:
     parts = target_name.split(".")
@@ -136,8 +136,8 @@ if "." in target_name:
 
 ### Step 6: Compiler — qualified call code generation (compiler.py:~808)
 
-In `term_to_ast_expr` and the goal compilation functions, handle `Call(func=LoadAttr(...))`:
-- Flatten the `LoadAttr` chain to a dotted string (e.g. `"graphs.Path"`)
+in_ `term_to_ast_expr` and the goal compilation functions, handle `Call(func=LoadAttr(...))`:
+- flatten the `LoadAttr` chain to a dotted string (e.g. `"graphs.Path"`)
 - Emit `ast.Name(id="graphs.Path")` — Python looks this up as a dict key in globals, finding the class injected in step 5
 
 Anywhere the compiler does `_name(term.func.name)` for `LoadName`, add a parallel path for `LoadAttr` that does `_name(dotted_string)`. Same simple `_name()` call, just with dots in the string.
@@ -167,7 +167,7 @@ Create test file with fixtures:
 8. Unknown module in `-import_from` raises `ImportError`
 9. Unknown predicate name in import list raises `ImportError`
 10. Imported predicate works with `assertz` (modifies the original class's clauses)
-11. Imported predicate works with meta-predicates (FindAll, etc.)
+11. Imported predicate works with meta-predicates (findall, etc.)
 12. Imported tabled predicate works correctly
 
 ---

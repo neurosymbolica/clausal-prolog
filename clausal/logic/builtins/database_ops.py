@@ -1,5 +1,5 @@
-"""Runtime database manipulation builtins: Assert/1, AssertFirst/1, Retract/1,
-ClearTable/2, ClearAllTables/0."""
+"""Runtime database manipulation builtins: assertz/1, asserta/1, retract/1,
+abolish_table/2, abolish_all_tables/0."""
 
 from __future__ import annotations
 
@@ -70,16 +70,16 @@ def _find_pred_cls(functor: str, module_dict: "dict | None") -> "Any":
     return candidate if isinstance(candidate, PredicateMeta) else None
 
 
-# ── Assert / Retract ──────────────────────────────────────────────────────────
+# ── assertz / retract ──────────────────────────────────────────────────────────
 
 
-@_db_builtin("Assert", 1, fields=("term",))
+@_db_builtin("assertz", 1, fields=("term",))
 def _assertz_factory(db):
     """assertz(Term) — add Term as a fact at end of its predicate's clause list.
 
     Ground facts are automatically normalized to Var+Is form so they are
     queryable in output mode (matching standard Prolog assert semantics).
-    When a module dict is available on the database, also syncs to the
+    when a module dict is available on the database, also syncs to the
     PredicateMeta class and recompiles with module globals for cross-predicate
     resolution.
     """
@@ -111,11 +111,11 @@ def _assertz_factory(db):
     return assertz__1
 
 
-@_db_builtin("AssertFirst", 1, fields=("term",))
+@_db_builtin("asserta", 1, fields=("term",))
 def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
-    When a module dict is available on the database, also syncs to the
+    when a module dict is available on the database, also syncs to the
     PredicateMeta class and recompiles with module globals.
     """
     from clausal.logic.database import head_key
@@ -146,7 +146,7 @@ def _asserta_factory(db):
     return asserta__1
 
 
-@_db_builtin("Retract", 1, fields=("term",))
+@_db_builtin("retract", 1, fields=("term",))
 def _retract_factory(db):
     """retract(Term) — remove the first clause whose head unifies with Term.
 
@@ -154,7 +154,7 @@ def _retract_factory(db):
     normalized facts whose heads contain Var placeholders.  Bindings
     from the head unification are undone after the clause is removed
     (retract is not backtrackable in this implementation).
-    When a module dict is available on the database, also syncs to the
+    when a module dict is available on the database, also syncs to the
     PredicateMeta class.
     """
     from clausal.logic.database import head_key
@@ -227,9 +227,9 @@ def _retract_factory(db):
 # ── Tabling ───────────────────────────────────────────────────────────────────
 
 
-@_db_builtin("ClearTable", 2, fields=("functor", "arity"))
+@_db_builtin("abolish_table", 2, fields=("functor", "arity"))
 def _abolish_table_factory(db):
-    """abolish_table(Functor, Arity) — remove cached answers for a tabled predicate."""
+    """abolish_table(functor, Arity) — remove cached answers for a tabled predicate."""
 
     def abolish_table__2(functor_arg, arity_arg, trail, k):
         f = deref(functor_arg)
@@ -244,7 +244,7 @@ def _abolish_table_factory(db):
     return abolish_table__2
 
 
-@_db_builtin("ClearAllTables", 0, fields=())
+@_db_builtin("abolish_all_tables", 0, fields=())
 def _abolish_all_tables_factory(db):
     """abolish_all_tables — remove all cached tabling answers."""
 

@@ -112,7 +112,7 @@ def domain_singleton(domain: Domain) -> int | None:
 
 
 def domain_intersection(d1: Domain, d2: Domain) -> Domain:
-    """Intersection of two domains."""
+    """intersection of two domains."""
     result: list[tuple[int, int]] = []
     i = j = 0
     while i < len(d1) and j < len(d2):
@@ -593,7 +593,7 @@ class ScalarProductConstraint(Constraint):
 
 
 def _domain_union(domains: list) -> Domain:
-    """Union of multiple domains. Returns sorted merged intervals."""
+    """union of multiple domains. Returns sorted merged intervals."""
     if not domains:
         return ()
     intervals = sorted(lo_hi for d in domains for lo_hi in d)
@@ -626,7 +626,7 @@ def _indices_to_domain(indices: list) -> Domain:
 
 
 class ElementConstraint(Constraint):
-    """Element(Index, List, Value): Value = List[Index-1], 1-based."""
+    """element(Index, List, Value): Value = List[Index-1], 1-based."""
     __slots__ = ('index', 'lst', 'value')
 
     def __init__(self, index, lst: tuple, value):
@@ -697,7 +697,7 @@ class ElementConstraint(Constraint):
 
 
 class CircuitConstraint(Constraint):
-    """Circuit(Vars): Vars[i] = j means node i+1's successor is j (1-based)."""
+    """circuit(Vars): Vars[i] = j means node i+1's successor is j (1-based)."""
     __slots__ = ('circuit_vars', 'n', 'alldiff')
 
     def __init__(self, vars_: tuple):
@@ -727,7 +727,7 @@ class CircuitConstraint(Constraint):
                 if v < 1 or v > n or v == i + 1:
                     return False
 
-        # Step 2: AllDifferent propagation
+        # Step 2: all_different propagation
         if not self.alldiff.propagate(trail, queue):
             return False
 
@@ -1099,7 +1099,7 @@ def fd_eq(l, r, trail: Trail) -> bool:
     otherwise posts a CLP(FD) constraint.  For ground non-Var values,
     falls back to Python ``==``.
 
-    When either side is a linear arithmetic expression tree (Add/Sub/Mult/
+    when either side is a linear arithmetic expression tree (Add/Sub/Mult/
     Negate), linearises both sides and posts a ScalarProductConstraint for
     full bounds-consistency propagation back to the leaf variables.  Non-
     linear expressions (var * var) fall back to EqConstraint.
@@ -1353,7 +1353,7 @@ def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
 
 
 def label(vars_list, trail: Trail):
-    """Label variables: enumerate all values in domains.
+    """label variables: enumerate all values in domains.
 
     Uses first-fail strategy: picks the variable with the smallest domain first.
     Generator: yields None for each assignment.
@@ -1487,7 +1487,7 @@ def _op_to_binary_constraint(op_str, lhs, rhs):
 
 
 def fd_sum(vars_list, op_str, value, trail: Trail):
-    """Sum(Vars, Op, Value) — constrain sum of Vars under comparison Op to Value.
+    """sum_(Vars, Op, Value) — constrain sum of Vars under comparison Op to Value.
 
     Uses bounds-consistency propagation via SumConstraint.
     """
@@ -1539,7 +1539,7 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
 
 def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
-    """ScalarProduct(Coeffs, Vars, Op, Value) — weighted sum constraint.
+    """scalar_product(Coeffs, Vars, Op, Value) — weighted sum constraint.
 
     Uses bounds-consistency propagation via ScalarProductConstraint.
     """
@@ -1598,7 +1598,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
 
 
 def fd_element(index, lst, value, trail: Trail):
-    """Element(Index, List, Value) — Value is the Index-th element of List (1-based).
+    """element(Index, List, Value) — Value is the Index-th element of List (1-based).
 
     Uses arc-consistency propagation via ElementConstraint when index is a Var.
     """
@@ -1652,7 +1652,7 @@ def fd_element(index, lst, value, trail: Trail):
 
 
 def fd_circuit(vars_list, trail: Trail):
-    """Circuit(Vars) — Vars form a single Hamiltonian circuit.
+    """circuit(Vars) — Vars form a single Hamiltonian circuit.
 
     Vars[i] = j means the successor of node i+1 is node j (1-based indexing).
     Uses CircuitConstraint for sub-tour elimination during labeling.

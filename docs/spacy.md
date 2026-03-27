@@ -89,7 +89,7 @@ Remove the model from the registry. **Fails** if the alias is not registered.
 CurrentModel(?Alias)
 ```
 
-When `Alias` is unbound, **nondeterministically enumerates** all registered aliases. When ground, succeeds if that alias is currently loaded.
+when `Alias` is unbound, **nondeterministically enumerates** all registered aliases. when ground, succeeds if that alias is currently loaded.
 
 ```clausal
 ListModels(A) <- CurrentModel(A)
@@ -155,7 +155,7 @@ AllTokens(DOC, TOK) <- Token(DOC, TOK)
 Token(+Doc, ?Index, -Tok)
 ```
 
-When `Index` is ground, retrieves the token at that position (fails if out of range). When `Index` is unbound, iterates all tokens and binds `Index` to each token's position.
+when `Index` is ground, retrieves the token at that position (fails if out of range). when `Index` is unbound, iterates all tokens and binds `Index` to each token's position.
 
 ```clausal
 FirstToken(DOC, TOK) <- Token(DOC, 0, TOK)
@@ -169,7 +169,7 @@ IndexedTokens(DOC, I, TOK) <- Token(DOC, I, TOK)
 TokenText(+Tok, ?Text)
 ```
 
-Unify `Text` with the surface form of a token dict. Equivalent to `T is ++Tok["text"]` but more readable.
+Unify `Text` with the surface form of a token dict. equivalent to `T is ++Tok["text"]` but more readable.
 
 ```clausal
 IsApple(TOK) <- TokenText(TOK, "Apple")
@@ -228,7 +228,7 @@ Lemmatised form of the token (e.g. `"run"` for `"running"`).
 
 ```clausal
 # skip
-Dep(+Tok, ?Label)
+Dep(+Tok, ?label)
 ```
 
 Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
@@ -292,10 +292,10 @@ Orgs(DOC, ENT) <- (Entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
 
 ```clausal
 # skip
-Entity(+Doc, +Label, -Ent)
+Entity(+Doc, +label, -Ent)
 ```
 
-Filtered iteration — only yields entities whose label matches `Label`.
+Filtered iteration — only yields entities whose label matches `label`.
 
 ```clausal
 People(DOC, ENT) <- Entity(DOC, "PERSON", ENT)
@@ -315,7 +315,7 @@ Unify `Ents` with a list of all entity dicts. Deterministic.
 
 ## Layer 6 — Sentences
 
-Sentences are plain strings (the `.text` of each spaCy `Span`).
+Sentences are plain strings (the `.text` of each spaCy `span`).
 
 ### `Sentence/2`
 
@@ -409,11 +409,11 @@ Orgs(TEXT, ORG_TEXT) <- (
     ORG_TEXT is ++ENT["text"]
 )
 
-# Filter tokens by POS and collect as list
+# include tokens by POS and collect as list
 NounLemmas(TEXT, LEMMAS) <- (
     LoadModel("en_core_web_sm", "nlp"),
     Process("nlp", TEXT, DOC),
-    FindAll(L, (Token(DOC, TOK), Pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
+    findall(L, (Token(DOC, TOK), Pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
 )
 ```
 

@@ -26,7 +26,7 @@ Or via [module import](import.md):
 
 - CSV rows → Python `list` of `str`
 - CSV with headers → `list` of [`DictTerm`](dicts_sets.md) (one per record)
-- All values are strings — no automatic type coercion. Use [`++int(X)`](python_integration.md) or `NumberChars` for conversion.
+- All values are strings — no automatic type coercion. Use [`++int(X)`](python_integration.md) or `number_chars` for conversion.
 
 ---
 

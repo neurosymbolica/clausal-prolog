@@ -8,16 +8,16 @@ to what, and why you'd want to use it.
 
 ## The thirty-second version
 
-In Python, you write **functions** that compute results from inputs. In
+in_ Python, you write **functions** that compute results from inputs. in_
 Clausal, you write **[relations](thinking_relationally.md)** that describe when something is true about
 their arguments. A relation has no fixed inputs or outputs — the same
 definition can compute, verify, generate, and enumerate.
 
 ```clausal
 # A relation between a list, a prefix, and a suffix
-Append([], SUFFIX, SUFFIX),
-Append([HEAD, *TAIL], SUFFIX, [HEAD, *REST]) <- (
-    Append(TAIL, SUFFIX, REST)
+append([], SUFFIX, SUFFIX),
+append([HEAD, *TAIL], SUFFIX, [HEAD, *REST]) <- (
+    append(TAIL, SUFFIX, REST)
 )
 ```
 
@@ -52,15 +52,15 @@ predicates from Python using `clausal.query()`.
 
 ### Variables are unknowns, not containers
 
-In Python, a variable holds a value:
+in_ Python, a variable holds a value:
 
 ```python
 x = 5       # x is now 5
 x = x + 1   # x is now 6
 ```
 
-In Clausal, a logic variable is an **unknown** — it starts unbound and gets
-bound through unification. Once bound, it cannot be reassigned (within that
+in_ Clausal, a logic variable is an **unknown** — it starts unbound and gets
+bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
 ```clausal
@@ -125,8 +125,8 @@ This bidirectionality is what makes relations work in all directions.
 
 ### Atoms are symbolic constants
 
-In logic programming, an **atom** is a symbolic constant — like an enum value
-with identity. When you declare atoms in `-private` or `-module`, Clausal
+in_ logic programming, an **atom** is a symbolic constant — like an enum value
+with identity. when you declare atoms in `-private` or `-module`, Clausal
 creates zero-arity classes:
 
 ```clausal
@@ -167,9 +167,9 @@ for symbolic constants (colors, states, tags); use strings for text data.
 
 | Type check | What it tests |
 |---|---|
-| `IsAtom(X)` | Declared atom (zero-arity class) |
-| `IsStr(X)` | Python string |
-| `IsCallable(X)` | Atom, string, or compound term |
+| `atom(X)` | Declared atom (zero-arity class) |
+| `is_str(X)` | Python string |
+| `callable_(X)` | Atom, string, or compound term |
 
 ---
 
@@ -227,15 +227,15 @@ squares_of_evens = [x**2 for x in range(10) if x % 2 == 0]
 ```
 
 ```clausal
-# Clausal: describe the relation, collect with FindAll
+# Clausal: describe the relation, collect with findall
 square_of_even(N, SQ) <- (
-    Between(0, 9, N),
+    between(0, 9, N),
     N % 2 == 0,
     SQ == N * N
 )
 
 Test("squares") <- (
-    FindAll(SQ, square_of_even(_, SQ), SQUARES),
+    findall(SQ, square_of_even(_, SQ), SQUARES),
     SQUARES == [0, 4, 16, 36, 64]
 )
 ```
@@ -264,15 +264,15 @@ and "Which country has Paris as its capital?"
 ### Constraint solving for free
 
 Need to solve a Sudoku, schedule a timetable, or find valid configurations?
-In Python, you'd reach for a solver library or write custom search. In
+in_ Python, you'd reach for a solver library or write custom search. in_
 Clausal, you describe the constraints and let CLP(ℤ) search:
 
 ```clausal
--import_from(clpfd, [AllDifferent, Labeling]),
+-import_from(clpfd, [all_different, Labeling]),
 
 send_more_money([S, E, N, D, M, O, R, Y]) <- (
     [S, E, N, D, M, O, R, Y] ins 0..9,
-    AllDifferent([S, E, N, D, M, O, R, Y]),
+    all_different([S, E, N, D, M, O, R, Y]),
     S != 0, M != 0,
                 1000*S + 100*E + 10*N + D
               + 1000*M + 100*O + 10*R + E

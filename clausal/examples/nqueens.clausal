@@ -3,7 +3,7 @@
 ])
 
 -private([
-    Numlist(LOW, HIGH, NS),
+    numlist(LOW, HIGH, NS),
     Safe(QS),
     NoAttack(Q, QS, D)
 ])
@@ -11,21 +11,21 @@
 # ── Queens/2 — find a safe placement of N queens ──────────────────────────────
 
 Queens(N, QS) <- (
-    Numlist(1, N, COLS),
-    Permutation(COLS, QS),
+    numlist(1, N, COLS),
+    permutation(COLS, QS),
     Safe(QS)
 )
 
-# ── Numlist/3 — generate [Low..High] ──────────────────────────────────────────
+# ── numlist/3 — generate [Low..High] ──────────────────────────────────────────
 
-Numlist(LOW=0, HIGH=0, NS=[]),
+numlist(LOW=0, HIGH=0, NS=[]),
 
-Numlist(LOW, HIGH, []) <- (LOW > HIGH)
+numlist(LOW, HIGH, []) <- (LOW > HIGH)
 
-Numlist(LOW, HIGH, [LOW, *REST]) <- (
+numlist(LOW, HIGH, [LOW, *REST]) <- (
     LOW <= HIGH,
     NEXT := LOW + 1,
-    Numlist(NEXT, HIGH, REST)
+    numlist(NEXT, HIGH, REST)
 )
 
 # ── Safe/1 — no two queens attack each other diagonally ───────────────────────
@@ -54,9 +54,9 @@ NoAttack(Q, [Q1, *QS], D) <- (
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
-Test("numlist 1 to 3") <- Numlist(1, 3, [1, 2, 3])
-Test("numlist 1 to 1") <- Numlist(1, 1, [1])
-Test("numlist empty when low > high") <- Numlist(5, 3, [])
+Test("numlist 1 to 3") <- numlist(1, 3, [1, 2, 3])
+Test("numlist 1 to 1") <- numlist(1, 1, [1])
+Test("numlist empty when low > high") <- numlist(5, 3, [])
 
 Test("empty board is safe") <- Safe([])
 Test("single queen is safe") <- Safe([1])

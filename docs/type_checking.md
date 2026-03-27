@@ -9,149 +9,149 @@ succeed or fail — they never bind variables.
 
 ```clausal
 # skip
-describe(X, "variable")  <- IsVar(X),
-describe(X, "integer")   <- (IsBound(X), IsInt(X)),
-describe(X, "string")    <- (IsBound(X), IsStr(X)),
-describe(X, "compound")  <- (IsBound(X), IsCompound(X)),
-describe(X, "other")     <- IsBound(X)
+describe(X, "variable")  <- var(X),
+describe(X, "integer")   <- (nonvar(X), integer(X)),
+describe(X, "string")    <- (nonvar(X), is_str(X)),
+describe(X, "compound")  <- (nonvar(X), compound(X)),
+describe(X, "other")     <- nonvar(X)
 ```
 
 ---
 
 ## Variable Tests
 
-### IsVar/1
+### var/1
 
-`IsVar(X)` — succeeds if `X` is an unbound logic variable.
+`var(X)` — succeeds if `X` is an unbound logic variable.
 
 ```clausal
-Test("unbound") <- IsVar(X)
-Test("bound fails") <- (not IsVar(42))
+Test("unbound") <- var(X)
+Test("bound fails") <- (not var(42))
 ```
 
-### IsBound/1
+### nonvar/1
 
-`IsBound(X)` — succeeds if `X` is *not* an unbound variable. The complement of
-`IsVar`.
+`nonvar(X)` — succeeds if `X` is *not* an unbound variable. The complement of
+`var`.
 
 ```clausal
-Test("number") <- IsBound(42)
-Test("string") <- IsBound("hello")
-Test("list") <- IsBound([1, 2])
-Test("unbound") <- (not IsBound(X))
+Test("number") <- nonvar(42)
+Test("string") <- nonvar("hello")
+Test("list") <- nonvar([1, 2])
+Test("unbound") <- (not nonvar(X))
 ```
 
 ---
 
 ## Atomic Type Tests
 
-### IsAtom/1
+### atom/1
 
-`IsAtom(X)` — succeeds if `X` is a declared atom (a zero-arity PredicateMeta
+`atom(X)` — succeeds if `X` is a declared atom (a zero-arity PredicateMeta
 class). Atoms are created by `-private([red])` or `-module(m, [red])` directives.
 
 ```clausal
 -private([red, blue])
 
-Test("declared atom") <- IsAtom(red)
-Test("string is not atom") <- (not IsAtom("hello"))
-Test("int is not atom") <- (not IsAtom(42))
+Test("declared atom") <- atom(red)
+Test("string is not atom") <- (not atom("hello"))
+Test("int is not atom") <- (not atom(42))
 ```
 
-### IsStr/1
+### is_str/1
 
-`IsStr(X)` — succeeds if `X` is a Python string. Does not match declared atoms.
+`is_str(X)` — succeeds if `X` is a Python string. Does not match declared atoms.
 
 ```clausal
-Test("str") <- IsStr("hello")
-Test("not str") <- (not IsStr(42))
+Test("str") <- is_str("hello")
+Test("not str") <- (not is_str(42))
 ```
 
-### IsInt/1
+### integer/1
 
-`IsInt(X)` — succeeds if `X` is an integer. Booleans are excluded (even though
+`integer(X)` — succeeds if `X` is an integer. Booleans are excluded (even though
 Python's `bool` is a subclass of `int`).
 
 ```clausal
-Test("int") <- IsInt(42)
-Test("not float") <- (not IsInt(3.14))
-Test("not bool") <- (not IsInt(True))
+Test("int") <- integer(42)
+Test("not float") <- (not integer(3.14))
+Test("not bool") <- (not integer(True))
 ```
 
-### IsFloat/1
+### float_/1
 
-`IsFloat(X)` — succeeds if `X` is a float.
+`float_(X)` — succeeds if `X` is a float.
 
 ```clausal
-Test("float") <- IsFloat(3.14)
-Test("not int") <- (not IsFloat(42))
+Test("float") <- float_(3.14)
+Test("not int") <- (not float_(42))
 ```
 
-### IsNumber/1
+### number/1
 
-`IsNumber(X)` — succeeds if `X` is an int or float (but not bool).
+`number(X)` — succeeds if `X` is an int or float (but not bool).
 
 ```clausal
-Test("int") <- IsNumber(42)
-Test("float") <- IsNumber(3.14)
-Test("not bool") <- (not IsNumber(True))
-Test("not str") <- (not IsNumber("42"))
+Test("int") <- number(42)
+Test("float") <- number(3.14)
+Test("not bool") <- (not number(True))
+Test("not str") <- (not number("42"))
 ```
 
 ---
 
 ## Structural Tests
 
-### IsCompound/1
+### compound/1
 
-`IsCompound(X)` — succeeds if `X` is a compound term with arity > 0. This
+`compound(X)` — succeeds if `X` is a compound term with arity > 0. This
 includes predicate instances, `Compound` terms, and `KWTerm` values.
 
 ```clausal
 point(1, 2, 3),
 
-Test("compound") <- IsCompound(point(1, 2, 3))
+Test("compound") <- compound(point(1, 2, 3))
 ```
 
-### IsCallable/1
+### callable_/1
 
-`IsCallable(X)` — succeeds if `X` is an atom (declared or string) or a
-compound term. In Prolog terms, something that could appear as a goal.
+`callable_(X)` — succeeds if `X` is an atom (declared or string) or a
+compound term. in_ Prolog terms, something that could appear as a goal.
 
 ```clausal
 -private([red])
 
-Test("declared atom") <- IsCallable(red)
-Test("string") <- IsCallable("hello")
-Test("not int") <- (not IsCallable(42))
+Test("declared atom") <- callable_(red)
+Test("string") <- callable_("hello")
+Test("not int") <- (not callable_(42))
 ```
 
-### IsList/1
+### is_list/1
 
-`IsList(X)` — succeeds if `X` is a Python list.
+`is_list(X)` — succeeds if `X` is a Python list.
 
 ```clausal
-Test("list") <- IsList([1, 2, 3])
-Test("empty") <- IsList([])
-Test("not str") <- (not IsList("hello"))
+Test("list") <- is_list([1, 2, 3])
+Test("empty") <- is_list([])
+Test("not str") <- (not is_list("hello"))
 ```
 
-### IsChars/1
+### is_chars/1
 
-`IsChars(X)` — succeeds if `X` is a character sequence: either a string or a
+`is_chars(X)` — succeeds if `X` is a character sequence: either a string or a
 list. Use this when you want to accept both strings and lists uniformly.
 
 ```clausal
-Test("string") <- IsChars("hello")
-Test("list") <- IsChars([1, 2, 3])
-Test("not int") <- (not IsChars(42))
+Test("string") <- is_chars("hello")
+Test("list") <- is_chars([1, 2, 3])
+Test("not int") <- (not is_chars(42))
 ```
 
 | Predicate | Strings | Lists | Purpose |
 |-----------|---------|-------|---------|
-| `IsList/1` | Fails | Succeeds | Exact type: Python list? |
-| `IsStr/1` | Succeeds | Fails | Exact type: Python str? |
-| `IsChars/1` | Succeeds | Succeeds | Union: character sequence? |
+| `is_list/1` | Fails | Succeeds | Exact type: Python list? |
+| `is_str/1` | Succeeds | Fails | Exact type: Python str? |
+| `is_chars/1` | Succeeds | Succeeds | union: character sequence? |
 
 See [Strings as Lists](strings_as_lists.md) for the full story on string/list
 interchangeability.
@@ -160,23 +160,23 @@ interchangeability.
 
 ## Groundness
 
-### IsGround/1
+### ground/1
 
-`IsGround(X)` — succeeds if `X` contains no unbound logic variables, anywhere
+`ground(X)` — succeeds if `X` contains no unbound logic variables, anywhere
 in its structure. Recursively checks lists, compound terms, and predicate
 fields.
 
 ```clausal
-Test("ground int") <- IsGround(42)
-Test("ground list") <- IsGround([1, 2, 3])
-Test("unbound fails") <- (not IsGround([1, X, 3]))
+Test("ground int") <- ground(42)
+Test("ground list") <- ground([1, 2, 3])
+Test("unbound fails") <- (not ground([1, X, 3]))
 ```
 
 This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) operations that require all
 values to be determined:
 
 ```clausal
-safe_print(X) <- (IsGround(X), Writeln(X))
+safe_print(X) <- (ground(X), writeln(X))
 ```
 
 ---
@@ -186,17 +186,17 @@ safe_print(X) <- (IsGround(X), Writeln(X))
 ### Type-dispatched processing
 
 ```clausal
-process(X, R) <- (IsInt(X),    R == X * 2)
-process(X, R) <- (IsStr(X),    R is f"got: {X}")
-process(X, R) <- (IsList(X),   Length(X, R))
-process(X, R) <- (IsVar(X),    R == "unknown")
+process(X, R) <- (integer(X),    R == X * 2)
+process(X, R) <- (is_str(X),    R is f"got: {X}")
+process(X, R) <- (is_list(X),   length(X, R))
+process(X, R) <- (var(X),    R == "unknown")
 ```
 
 ### Safe arithmetic guard
 
 ```clausal
 safe_add(X, Y, Z) <- (
-    IsNumber(X), IsNumber(Y),
+    number(X), number(Y),
     Z == X + Y
 )
 ```
@@ -205,16 +205,16 @@ safe_add(X, Y, Z) <- (
 
 ## Gotchas
 
-- **`IsInt` excludes booleans** — Python's `True`/`False` are `int` subclasses
-  but `IsInt(True)` fails. Use `IsBound` if you want to accept any non-variable.
-- **`IsVar` tests the current binding** — if `X` was unified earlier in the
-  clause, `IsVar(X)` will fail even though `X` started as a variable.
-- **`IsList` checks for Python lists** — it does not recognize cons-cell chains
+- **`integer` excludes booleans** — Python's `True`/`False` are `int` subclasses
+  but `integer(True)` fails. Use `nonvar` if you want to accept any non-variable.
+- **`var` tests the current binding** — if `X` was unified earlier in the
+  clause, `var(X)` will fail even though `X` started as a variable.
+- **`is_list` checks for Python lists** — it does not recognize cons-cell chains
   (Clausal uses native Python lists, so this is rarely an issue).
-- **Order matters** — put `IsVar` checks first in multi-clause predicates,
+- **Order matters** — put `var` checks first in multi-clause predicates,
   since they match the broadest case.
 
 ---
 
-*See also: [Term Inspection](term_inspection.md) — decompose terms with Functor,
-Arg, Unpack; [Arithmetic](arithmetic.md) — IsNumber guards before computation.*
+*See also: [Term Inspection](term_inspection.md) — decompose terms with functor,
+arg, unpack; [Arithmetic](arithmetic.md) — number guards before computation.*

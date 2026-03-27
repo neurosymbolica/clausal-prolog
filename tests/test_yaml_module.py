@@ -1,6 +1,6 @@
 """Tests for yaml_module — YAML parsing and generation predicates.
 
-Tests the Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, and Get
+Tests the Read, write, ReadAll, WriteAll, ReadFile, WriteFile, and Get
 predicates, both as inline .clausal tests and direct Python-level calls.
 """
 
@@ -15,11 +15,11 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_YAML_IMPORT = '-import_from(py.yaml, [Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get])\n'
+_YAML_IMPORT = '-import_from(py.yaml, [Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get])\n'
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it."""
+    """write a .clausal file and load it."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(_YAML_IMPORT + src_text)
     mod = _load_module(name, str(p))
@@ -156,7 +156,7 @@ read_val(S, R) <- Read(S, R)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Write/2 — serialize Python object to YAML string
+# write/2 — serialize Python object to YAML string
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -164,14 +164,14 @@ class TestWrite:
 
     def test_write_mapping(self, tmp_path):
         mod = _load("yw1", """
-write_val(D, S) <- Write(D, S)
+write_val(D, S) <- write(D, S)
 """, tmp_path)
         result = _first("write_val", {"x": 1}, module=mod)
         assert "x: 1" in result
 
     def test_write_list(self, tmp_path):
         mod = _load("yw2", """
-write_val(D, S) <- Write(D, S)
+write_val(D, S) <- write(D, S)
 """, tmp_path)
         result = _first("write_val", [1, 2, 3], module=mod)
         assert "- 1" in result
@@ -180,14 +180,14 @@ write_val(D, S) <- Write(D, S)
 
     def test_write_scalar(self, tmp_path):
         mod = _load("yw3", """
-write_val(D, S) <- Write(D, S)
+write_val(D, S) <- write(D, S)
 """, tmp_path)
         result = _first("write_val", 42, module=mod)
         assert result.strip() == "42"
 
     def test_write_nested(self, tmp_path):
         mod = _load("yw4", """
-write_val(D, S) <- Write(D, S)
+write_val(D, S) <- write(D, S)
 """, tmp_path)
         data = {"server": {"host": "localhost", "port": 8080}}
         result = _first("write_val", data, module=mod)
@@ -196,7 +196,7 @@ write_val(D, S) <- Write(D, S)
 
     def test_write_bool_null(self, tmp_path):
         mod = _load("yw5", """
-write_val(D, S) <- Write(D, S)
+write_val(D, S) <- write(D, S)
 """, tmp_path)
         result = _first("write_val", {"flag": True, "val": None}, module=mod)
         assert "flag: true" in result
@@ -204,7 +204,7 @@ write_val(D, S) <- Write(D, S)
 
     def test_round_trip(self, tmp_path):
         mod = _load("yw6", """
-round_trip(S, R) <- (Read(S, D) and Write(D, R))
+round_trip(S, R) <- (Read(S, D) and write(D, R))
 """, tmp_path)
         yaml_in = "a: 1\nb: 2"
         result = _first("round_trip", yaml_in, module=mod)
@@ -294,19 +294,19 @@ read_file(P, R) <- ReadFile(P, R)
         assert result is None  # fails
 
     def test_write_and_read_back(self, tmp_path):
-        """Write data to file via Python, then read back via ReadFile."""
+        """write data to file via Python, then read back via ReadFile."""
         yaml_file = tmp_path / "output.yaml"
         mod = _load("ywf1", """
 read_back(P, V) <- (ReadFile(P, D) and Get(D, "greeting", V))
 """, tmp_path)
-        # Write via Python first
+        # write via Python first
         import yaml
         with open(yaml_file, "w") as f:
             yaml.safe_dump({"greeting": "hello", "count": 3}, f)
         assert _first("read_back", str(yaml_file), module=mod) == "hello"
 
     def test_write_file(self, tmp_path):
-        """Write data to file via WriteFile, read back via Python."""
+        """write data to file via WriteFile, read back via Python."""
         yaml_file = tmp_path / "written.yaml"
         mod = _load("ywf2", """
 do_write(P, D) <- WriteFile(P, D)

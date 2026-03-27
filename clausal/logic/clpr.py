@@ -3,7 +3,7 @@
 Interval arithmetic over IEEE doubles with outward rounding.  Unified
 syntax with CLP(FD): the same ``==``, ``<``, ``<=``, ``>``, ``>=``,
 ``!=`` operators work for both domains.  The domain type is determined
-by how the variable was declared (``InReal``) or by the presence of a
+by how the variable was declared (``in_real``) or by the presence of a
 ``float`` literal in the constraint.
 
 Domain representation
@@ -229,7 +229,7 @@ def _ensure_term_imports() -> None:
 def _get_var_interval(var: Var) -> tuple[float, float]:
     """Return the current interval for a variable (real or FD).
 
-    When both attributes exist, returns the intersection of both bounds
+    when both attributes exist, returns the intersection of both bounds
     so that real constraints see the tightest possible interval.
     """
     lo, hi = -math.inf, math.inf

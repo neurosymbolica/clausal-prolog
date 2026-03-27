@@ -10,7 +10,7 @@ generating imperative Python — and how to do it well.
 
 ### You already think declaratively
 
-When you reason about a problem, you think about **what must hold** — the
+when you reason about a problem, you think about **what must hold** — the
 constraints, the relationships, the conditions. You don't naturally think about
 loop indices, mutable state, or memory allocation. Logic programming matches
 this: you state what holds, and the system derives consequences.
@@ -78,7 +78,7 @@ independently.
 
 ---
 
-## When to generate Clausal instead of Python
+## when to generate Clausal instead of Python
 
 ### Good candidates for Clausal
 
@@ -94,7 +94,7 @@ independently.
   grammar parses, generates, and validates
 - **Knowledge representation**: facts and rules that encode domain knowledge
 
-### When to stay in Python
+### when to stay in Python
 
 - **Numerical computation**: numpy, scipy, pandas — use Python for heavy
   numerics, call from Clausal with `++()`
@@ -112,7 +112,7 @@ the computation and I/O.
 
 ### Think relationally
 
-Every predicate describes a relation between its arguments. Ask: "When does
+Every predicate describes a relation between its arguments. Ask: "when does
 this relation hold?" — not "What should this function do?"
 
 ```clausal
@@ -149,7 +149,7 @@ If you can state it clearly in natural language, the clause will be correct.
 
 ### Use constraints for arithmetic
 
-When the [arithmetic](arithmetic.md) direction isn't fixed, use [CLP(ℤ)](constraints.md) constraints instead of
+when the [arithmetic](arithmetic.md) direction isn't fixed, use [CLP(ℤ)](constraints.md) constraints instead of
 `:=`:
 
 ```clausal
@@ -172,7 +172,7 @@ is truly relational.
 
 ### Pattern: fact database
 
-When the user provides structured data, encode it as facts:
+when the user provides structured data, encode it as facts:
 
 ```clausal
 employee("alice", "engineering", 95000),
@@ -207,7 +207,7 @@ For constraint satisfaction problems, separate the model from the search:
 # Model: describe what must hold
 schedule(TASKS) <- (
     TASKS ins 1..24,
-    AllDifferent(TASKS),
+    all_different(TASKS),
     # ... domain constraints ...
 )
 
@@ -226,7 +226,7 @@ For hybrid tasks, use `++()` for Python and predicates for logic:
 # Python does the computation
 word_frequency(TEXT, WORD, COUNT) <- (
     WORDS is ++TEXT.lower().split(),
-    In(WORD, WORDS),
+    in_(WORD, WORDS),
     COUNT is ++WORDS.count(WORD)
 )
 

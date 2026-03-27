@@ -1,31 +1,31 @@
 """Dict and Set builtins (Phase 3 + Phase 4).
 
 Dict builtins:
-  IsDict/1         — type check
-  DictSize/2       — number of keys
-  DictKeys/2       — extract key list (sorted for determinism)
-  DictValues/2     — extract value list (in key order)
-  DictPairs/2      — DictTerm ↔ list of (Key: Value) pairs
-  DictGet/3        — dict_get(Key, Dict, Value) — semidet lookup
-  DictPut/4        — dict_put(Key, Value, Old, New) — functional update
-  DictPutPairs/3   — dict_put(Pairs, Old, New) — bulk update from pair list
-  DictRemove/3     — dict_remove(Key, Old, New) — remove key
-  DictMerge/3      — dict_merge(D1, D2, Merged) — D2 overrides D1
-  GenDict/3        — gen_dict(Key, Dict, Value) — nondeterministic enumeration
+  is_dict/1         — type check
+  dict_size/2       — number of keys
+  dict_keys/2       — extract key list (sorted for determinism)
+  dict_values/2     — extract value list (in key order)
+  dict_pairs/2      — DictTerm ↔ list of (Key: Value) pairs
+  dict_get/3        — dict_get(Key, Dict, Value) — semidet lookup
+  dict_put/4        — dict_put(Key, Value, Old, New) — functional update
+  dict_put_pairs/3   — dict_put(Pairs, Old, New) — bulk update from pair list
+  dict_remove/3     — dict_remove(Key, Old, New) — remove key
+  dict_merge/3      — dict_merge(D1, D2, Merged) — D2 overrides D1
+  gen_dict/3        — gen_dict(Key, Dict, Value) — nondeterministic enumeration
 
 Set builtins:
-  IsSet/1          — type check
-  SetSize/2        — cardinality
-  SetList/2        — SetTerm ↔ sorted list
-  SetUnion/3       — set union
-  SetIntersection/3 — set intersection
-  SetSubtract/3    — S1 - S2
-  SetSymDiff/3     — symmetric difference
-  SetSubset/2      — subset test
-  SetDisjoint/2    — disjoint test
-  SetAdd/3         — add element → new SetTerm
-  SetRemove/3      — remove element → new SetTerm
-  GenSet/2         — enumerate elements on backtracking
+  is_set/1          — type check
+  set_size/2        — cardinality
+  set_list/2        — SetTerm ↔ sorted list
+  set_union/3       — set union
+  set_intersection/3 — set intersection
+  set_subtract/3    — S1 - S2
+  set_sym_diff/3     — symmetric difference
+  set_subset/2      — subset test
+  set_disjoint/2    — disjoint test
+  set_add/3         — add element → new SetTerm
+  set_remove/3      — remove element → new SetTerm
+  gen_set/2         — enumerate elements on backtracking
 
 The ``<<`` (partial match / DictSelect) operator is handled directly in
 compile_goal via the ``_dict_select`` function defined here.
@@ -61,14 +61,14 @@ def _pair_value(pair):
 # ── Dict builtins ─────────────────────────────────────────────────────────────
 
 
-@_builtin("IsDict", 1)
+@_builtin("is_dict", 1)
 def _is_dict__1(term, trail, k):
     """is_dict(Term) — succeeds if Term is a DictTerm."""
     if isinstance(deref(term), DictTerm):
         yield None
 
 
-@_trampoline_builtin("DictSize", 2)
+@_trampoline_builtin("dict_size", 2)
 def _dict_size__2(this_generator, parent, d, n, trail):
     """dict_size(Dict, N) — N is the number of keys in Dict."""
     d_val = deref(d)
@@ -80,7 +80,7 @@ def _dict_size__2(this_generator, parent, d, n, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictKeys", 2)
+@_trampoline_builtin("dict_keys", 2)
 def _dict_keys__2(this_generator, parent, d, keys, trail):
     """dict_keys(Dict, Keys) — Keys is the sorted list of keys in Dict."""
     d_val = deref(d)
@@ -93,7 +93,7 @@ def _dict_keys__2(this_generator, parent, d, keys, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictValues", 2)
+@_trampoline_builtin("dict_values", 2)
 def _dict_values__2(this_generator, parent, d, values, trail):
     """dict_values(Dict, Values) — Values is the list of values in key-sorted order."""
     d_val = deref(d)
@@ -107,7 +107,7 @@ def _dict_values__2(this_generator, parent, d, values, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictPairs", 2)
+@_trampoline_builtin("dict_pairs", 2)
 def _dict_pairs__2(this_generator, parent, d, pairs, trail):
     """dict_pairs(Dict, Pairs) — Dict ↔ list of [Key, Value] 2-element lists.
 
@@ -152,7 +152,7 @@ def _dict_pairs__2(this_generator, parent, d, pairs, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictGet", 3)
+@_trampoline_builtin("dict_get", 3)
 def _dict_get__3(this_generator, parent, key, d, value, trail):
     """dict_get(Key, Dict, Value) — semidet: Value is Dict[Key]."""
     key_val = deref(key)
@@ -165,7 +165,7 @@ def _dict_get__3(this_generator, parent, key, d, value, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictPut", 4)
+@_trampoline_builtin("dict_put", 4)
 def _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail):
     """dict_put(Key, Value, OldDict, NewDict) — NewDict is OldDict with Key→Value."""
     key_val = deref(key)
@@ -180,7 +180,7 @@ def _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictPutPairs", 3)
+@_trampoline_builtin("dict_put_pairs", 3)
 def _dict_put_pairs__3(this_generator, parent, pairs, old_dict, new_dict, trail):
     """dict_put(Pairs, OldDict, NewDict) — bulk update from [[Key, Value], ...] list."""
     pairs_val = deref(pairs)
@@ -208,7 +208,7 @@ def _dict_put_pairs__3(this_generator, parent, pairs, old_dict, new_dict, trail)
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictRemove", 3)
+@_trampoline_builtin("dict_remove", 3)
 def _dict_remove__3(this_generator, parent, key, old_dict, new_dict, trail):
     """dict_remove(Key, OldDict, NewDict) — NewDict is OldDict without Key."""
     key_val = deref(key)
@@ -222,7 +222,7 @@ def _dict_remove__3(this_generator, parent, key, old_dict, new_dict, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("DictMerge", 3)
+@_trampoline_builtin("dict_merge", 3)
 def _dict_merge__3(this_generator, parent, d1, d2, merged, trail):
     """dict_merge(D1, D2, Merged) — Merged is D1 updated with D2's key-value pairs."""
     d1_val = deref(d1)
@@ -237,7 +237,7 @@ def _dict_merge__3(this_generator, parent, d1, d2, merged, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("GenDict", 3)
+@_trampoline_builtin("gen_dict", 3)
 def _gen_dict__3(this_generator, parent, key, d, value, trail):
     """gen_dict(Key, Dict, Value) — enumerate all key-value pairs on backtracking."""
     d_val = deref(d)
@@ -250,18 +250,18 @@ def _gen_dict__3(this_generator, parent, key, d, value, trail):
     yield (parent, DONE)
 
 
-# ── SubDict: partial dict matching ───────────────────────────────────────────
+# ── sub_dict: partial dict matching ───────────────────────────────────────────
 
 
-@_trampoline_builtin("SubDict", 2)
+@_trampoline_builtin("sub_dict", 2)
 def _sub_dict__2(this_generator, parent, pattern, full_dict, trail):
-    """SubDict(Pattern, Dict) — Pattern's keys are a subset of Dict's keys.
+    """sub_dict(Pattern, Dict) — Pattern's keys are a subset of Dict's keys.
 
     Values for Pattern's keys unify pairwise with corresponding values in Dict.
     Dict may have extra keys (they are ignored).
 
     Example:
-        get_name(PERSON, NAME) <- SubDict({name: NAME}, PERSON),
+        get_name(PERSON, NAME) <- sub_dict({name: NAME}, PERSON),
     """
     pat_val = deref(pattern)
     full_val = deref(full_dict)
@@ -284,14 +284,14 @@ def _sub_dict__2(this_generator, parent, pattern, full_dict, trail):
 # ── Set builtins ─────────────────────────────────────────────────────────────
 
 
-@_builtin("IsSet", 1)
+@_builtin("is_set", 1)
 def _is_set__1(term, trail, k):
     """is_set(Term) — succeeds if Term is a SetTerm."""
     if isinstance(deref(term), SetTerm):
         yield None
 
 
-@_trampoline_builtin("SetSize", 2)
+@_trampoline_builtin("set_size", 2)
 def _set_size__2(this_generator, parent, s, n, trail):
     """set_size(Set, N) — N is the cardinality of Set."""
     s_val = deref(s)
@@ -303,7 +303,7 @@ def _set_size__2(this_generator, parent, s, n, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetList", 2)
+@_trampoline_builtin("set_list", 2)
 def _set_list__2(this_generator, parent, s, lst, trail):
     """set_list(Set, List) — Set ↔ sorted list of elements.
 
@@ -332,9 +332,9 @@ def _set_list__2(this_generator, parent, s, lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetUnion", 3)
+@_trampoline_builtin("set_union", 3)
 def _set_union__3(this_generator, parent, s1, s2, union, trail):
-    """set_union(S1, S2, Union) — Union is the union of S1 and S2."""
+    """set_union(S1, S2, union) — union is the union of S1 and S2."""
     s1_val = deref(s1)
     s2_val = deref(s2)
     if isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm):
@@ -345,7 +345,7 @@ def _set_union__3(this_generator, parent, s1, s2, union, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetIntersection", 3)
+@_trampoline_builtin("set_intersection", 3)
 def _set_intersection__3(this_generator, parent, s1, s2, inter, trail):
     """set_intersection(S1, S2, Inter) — Inter is the intersection of S1 and S2."""
     s1_val = deref(s1)
@@ -358,7 +358,7 @@ def _set_intersection__3(this_generator, parent, s1, s2, inter, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetSubtract", 3)
+@_trampoline_builtin("set_subtract", 3)
 def _set_subtract__3(this_generator, parent, s1, s2, diff, trail):
     """set_subtract(S1, S2, Diff) — Diff is S1 minus S2."""
     s1_val = deref(s1)
@@ -371,7 +371,7 @@ def _set_subtract__3(this_generator, parent, s1, s2, diff, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetSymDiff", 3)
+@_trampoline_builtin("set_sym_diff", 3)
 def _set_symdiff__3(this_generator, parent, s1, s2, sym, trail):
     """set_symdiff(S1, S2, Sym) — Sym is the symmetric difference of S1 and S2."""
     s1_val = deref(s1)
@@ -384,7 +384,7 @@ def _set_symdiff__3(this_generator, parent, s1, s2, sym, trail):
     yield (parent, DONE)
 
 
-@_builtin("SetSubset", 2)
+@_builtin("set_subset", 2)
 def _set_subset__2(sub, sup, trail, k):
     """set_subset(Sub, Super) — Sub is a subset of Super."""
     sub_val = deref(sub)
@@ -394,7 +394,7 @@ def _set_subset__2(sub, sup, trail, k):
             yield None
 
 
-@_builtin("SetDisjoint", 2)
+@_builtin("set_disjoint", 2)
 def _set_disjoint__2(s1, s2, trail, k):
     """set_disjoint(S1, S2) — S1 and S2 have no elements in common."""
     s1_val = deref(s1)
@@ -404,7 +404,7 @@ def _set_disjoint__2(s1, s2, trail, k):
             yield None
 
 
-@_trampoline_builtin("SetAdd", 3)
+@_trampoline_builtin("set_add", 3)
 def _set_add__3(this_generator, parent, elem, old_set, new_set, trail):
     """set_add(Elem, OldSet, NewSet) — NewSet is OldSet with Elem added."""
     elem_val = deref(elem)
@@ -417,7 +417,7 @@ def _set_add__3(this_generator, parent, elem, old_set, new_set, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SetRemove", 3)
+@_trampoline_builtin("set_remove", 3)
 def _set_remove__3(this_generator, parent, elem, old_set, new_set, trail):
     """set_remove(Elem, OldSet, NewSet) — NewSet is OldSet without Elem."""
     elem_val = deref(elem)
@@ -430,7 +430,7 @@ def _set_remove__3(this_generator, parent, elem, old_set, new_set, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("GenSet", 2)
+@_trampoline_builtin("gen_set", 2)
 def _gen_set__2(this_generator, parent, elem, s, trail):
     """gen_set(Elem, Set) — enumerate all elements of Set on backtracking."""
     s_val = deref(s)

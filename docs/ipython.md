@@ -130,7 +130,7 @@ Key bindings follow standard Prolog REPL conventions:
 
 ## Terminal colours
 
-In a terminal IPython session (`ipython` command, not Jupyter), ANSI colours
+in_ a terminal IPython session (`ipython` command, not Jupyter), ANSI colours
 are enabled automatically.  Unbound variables, atoms, numbers, strings, and
 brackets each get a distinct colour with rainbow bracket-depth cycling.
 

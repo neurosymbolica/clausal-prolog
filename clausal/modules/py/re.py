@@ -1,14 +1,14 @@
 """clausal.modules.py.re — Regex predicates for Clausal.
 
-Provides Match, Search, Replace, Split, and FindAll as importable
+Provides Match, Search, Replace, Split, and findall as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(py.re, [Match, Search, Replace, Split, FindAll])
+    -import_from(py.re, [Match, Search, Replace, Split, findall])
 
 Or via module import::
 
     -import_module(py.re)
-    # then use py.re.Match(...), py.re.FindAll(...), etc.
+    # then use py.re.Match(...), py.re.findall(...), etc.
 
 Binding modes
 -------------
@@ -135,11 +135,11 @@ def _split_3(pat, string, parts, trail, k):
         yield None
 
 
-# ── FindAll ──────────────────────────────────────────────────────────────────
+# ── findall ──────────────────────────────────────────────────────────────────
 
 
 def _findall_3(this_generator, parent, pat, string, match_var, trail):
-    """FindAll/3: nondeterministic — one solution per non-overlapping match.
+    """findall/3: nondeterministic — one solution per non-overlapping match.
 
     No groups → each match is a string.
     Groups → each match is a tuple of group strings.
@@ -177,5 +177,5 @@ Replace._register(4, simple_to_trampoline(_replace_4))
 Split = ModulePredicate("Split")
 Split._register(3, simple_to_trampoline(_split_3))
 
-FindAll = ModulePredicate("FindAll")
-FindAll._register(3, _findall_3)
+findall = ModulePredicate("findall")
+findall._register(3, _findall_3)

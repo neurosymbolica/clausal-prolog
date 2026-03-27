@@ -10,10 +10,10 @@ directive generates `red = "red"; blue = "blue"`. This has several problems:
 1. **No identity guarantee.** `"red" is "red"` depends on CPython string interning —
    an implementation detail, not a contract. Code that relies on `is` for atoms is fragile.
 
-2. **No type distinction.** `atom/1` (mapped to `IsStr/1`) cannot distinguish symbolic
+2. **No type distinction.** `atom/1` (mapped to `is_str/1`) cannot distinguish symbolic
    constants from string data. ISO Prolog requires this distinction.
 
-3. **Not callable.** In Prolog, atoms are zero-arity functors: `foo` and `foo()` are
+3. **Not callable.** in_ Prolog, atoms are zero-arity functors: `foo` and `foo()` are
    the same thing. String atoms can't participate in the predicate machinery.
 
 4. **No module scoping.** `"red"` is the same object (or not, depending on interning)
@@ -60,7 +60,7 @@ per atom, negligible for declared symbols.
 
 ### How C-level unification handles this
 
-In `clausal/logic/variables/_variables.c`, `do_unify()` (line 875) follows this path
+in_ `clausal/logic/variables/_variables.c`, `do_unify()` (line 875) follows this path
 for two non-Var values:
 
 1. **Line 886**: `if (t1 == t2) return 1;` — pointer identity (same as Python `is`).
@@ -455,7 +455,7 @@ this behavior.
 
 #### Gotcha: `private_info` format
 
-In `_handle_private_directive`, `private_info` accumulates items that become
+in_ `_handle_private_directive`, `private_info` accumulates items that become
 `PrivateDeclItem(items=private_info)`. For bare atoms, the current code appends
 the string name: `private_info.append(item.id)`. This string later reaches
 `_process_declarations` in `compiler_v2.py` where `isinstance(entry, str)` handles it.
@@ -532,7 +532,7 @@ continues to pass.
 
 **Critical: `a == a` semantics for PredicateMeta classes**
 
-When `a` is a class, `a == a` is `True` by Python identity. But `a == b` is `False`
+when `a` is a class, `a == a` is `True` by Python identity. But `a == b` is `False`
 because class `__eq__` defaults to identity comparison. The `__eq__` that PredicateMeta
 generates (`_make_eq`) is set on instances, not on the metaclass, so it doesn't
 interfere with class-level `==`.
@@ -579,14 +579,14 @@ changes.
 
 **File:** `clausal/logic/builtins/type_checks.py`
 
-#### 4a. Add `IsAtom/1`
+#### 4a. Add `atom/1`
 
-After `IsStr/1` (line 34), add:
+After `is_str/1` (line 34), add:
 
 ```python
-@_builtin("IsAtom", 1)
+@_builtin("atom", 1)
 def _is_atom__1(x, trail, k):
-    """IsAtom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
+    """atom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
     x_val = deref(x)
     if (
         not is_var(x_val)
@@ -607,17 +607,17 @@ from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
 ```
 
-#### 4b. `IsStr/1` — no change
+#### 4b. `is_str/1` — no change
 
-`IsStr/1` (line 29-34) checks `isinstance(x_val, str)`. Since PredicateMeta classes
+`is_str/1` (line 29-34) checks `isinstance(x_val, str)`. Since PredicateMeta classes
 are not strings, this correctly excludes declared atoms. No change needed.
 
-#### 4c. Update `IsCallable/1`
+#### 4c. Update `callable_/1`
 
 **Current code** (lines 79-88):
 
 ```python
-@_builtin("IsCallable", 1)
+@_builtin("callable_", 1)
 def _callable__1(x, trail, k):
     """callable(X) — succeeds if X is an atom or compound."""
     x_val = deref(x)
@@ -632,7 +632,7 @@ def _callable__1(x, trail, k):
 **Change:** Add a check for zero-arity PredicateMeta:
 
 ```python
-@_builtin("IsCallable", 1)
+@_builtin("callable_", 1)
 def _callable__1(x, trail, k):
     """callable(X) — succeeds if X is an atom or compound."""
     x_val = deref(x)
@@ -701,28 +701,28 @@ class point(metaclass=PredicateMeta):
     _fields = ("x", "y")
 
 def test_is_atom_declared_atom():
-    """IsAtom succeeds for zero-arity PredicateMeta."""
-    assert succeeds("IsAtom", red)
+    """atom succeeds for zero-arity PredicateMeta."""
+    assert succeeds("atom", red)
 
 def test_is_atom_string_fails():
-    """IsAtom fails for plain strings."""
-    assert not succeeds("IsAtom", "hello")
+    """atom fails for plain strings."""
+    assert not succeeds("atom", "hello")
 
 def test_is_atom_compound_fails():
-    """IsAtom fails for predicates with fields."""
-    assert not succeeds("IsAtom", point(x=1, y=2))
+    """atom fails for predicates with fields."""
+    assert not succeeds("atom", point(x=1, y=2))
 
 def test_is_str_string():
-    """IsStr still works for plain strings."""
-    assert succeeds("IsStr", "hello")
+    """is_str still works for plain strings."""
+    assert succeeds("is_str", "hello")
 
 def test_is_str_declared_atom_fails():
-    """IsStr fails for declared atoms."""
-    assert not succeeds("IsStr", red)
+    """is_str fails for declared atoms."""
+    assert not succeeds("is_str", red)
 
 def test_is_callable_declared_atom():
-    """IsCallable succeeds for declared atoms."""
-    assert succeeds("IsCallable", red)
+    """callable_ succeeds for declared atoms."""
+    assert succeeds("callable_", red)
 ```
 
 **Clausal-side** (update `tests/conformity/iso_type_checking.clausal`):
@@ -735,13 +735,13 @@ Currently (lines 21-24):
 After the change, these become zero-arity classes. Update type-checking tests:
 
 ```clausal
-Test("declared atom: IsAtom succeeds") <- IsAtom(Hello)
-Test("string: IsStr succeeds") <- IsStr("hello")
-Test("declared atom: IsStr fails") <- (not IsStr(Hello))
-Test("declared atom: IsCallable succeeds") <- IsCallable(Hello)
+Test("declared atom: atom succeeds") <- atom(Hello)
+Test("string: is_str succeeds") <- is_str("hello")
+Test("declared atom: is_str fails") <- (not is_str(Hello))
+Test("declared atom: callable_ succeeds") <- callable_(Hello)
 ```
 
-**Note:** The existing test `Test("atom: string succeeds") <- IsStr(Hello)` at
+**Note:** The existing test `Test("atom: string succeeds") <- is_str(Hello)` at
 `iso_type_checking.clausal` will **FAIL** after this change because `Hello` is
 now a PredicateMeta class, not a string. This test must be updated to reflect
 the new semantics.
@@ -872,7 +872,7 @@ For zero-arity atoms, `is_term_instance` returns `False` (it's a class), and
 **Current code** (lines 63-71) falls through to `return []` for unknown types.
 For zero-arity atoms, this returns `[]` — **correct**.
 
-#### 5f. `Functor/3` in `inspection.py`
+#### 5f. `functor/3` in `inspection.py`
 
 **File:** `clausal/logic/builtins/inspection.py`
 
@@ -883,10 +883,10 @@ f_val = _functor_name(term_val)  # After 5a fix: returns "red"
 a_val = _arity(term_val)          # After 5b fix: returns 0
 ```
 
-With the `_helpers.py` fixes, `Functor(red, F, A)` correctly yields `F = "red", A = 0`.
+With the `_helpers.py` fixes, `functor(red, F, A)` correctly yields `F = "red", A = 0`.
 
-**But wait:** `_functor_name` returns the string `"red"`, and `Functor/3` then
-unifies `name` with that string. So `Functor(red, Name, 0)` gives `Name = "red"`
+**But wait:** `_functor_name` returns the string `"red"`, and `functor/3` then
+unifies `name` with that string. So `functor(red, Name, 0)` gives `Name = "red"`
 (a string), not `Name = red` (the class). This is actually correct for ISO semantics
 where functor names are atoms — but in our system, should the functor name of a
 declared atom be the atom itself?
@@ -899,7 +899,7 @@ if isinstance(term, PredicateMeta) and not term._fields:
     return term  # Return the class itself, not its __name__ string
 ```
 
-This means `Functor(red, Name, 0)` gives `Name = red` (the class). More consistent
+This means `functor(red, Name, 0)` gives `Name = red` (the class). More consistent
 with the design principle that the class IS the atom.
 
 **Type annotation change:** `_functor_name` return type becomes `str | type | None`
@@ -912,7 +912,7 @@ if arity_val == 0:
     constructed = name_val  # Atom is constructed directly
 ```
 
-If `name_val` is the `red` class (from `Functor(T, red, 0)`), then `constructed = red`.
+If `name_val` is the `red` class (from `functor(T, red, 0)`), then `constructed = red`.
 `unify(term, red, trail)` binds `T` to `red`. **Correct.**
 
 If `arity_val > 0` (line 37):
@@ -930,7 +930,7 @@ else:
     constructed = Compound(functor_str, args)
 ```
 
-#### 5g. `Unpack/2` in `inspection.py`
+#### 5g. `unpack/2` in `inspection.py`
 
 **Decomposition** (lines 85-94):
 
@@ -939,7 +939,7 @@ f_val = _functor_name(term_val)  # Returns red (the class) after our fix
 decomposed = [f_val] + _args_list(term_val)  # [red] for atoms
 ```
 
-`Unpack(red, L)` → `L = [red]`. **Correct.**
+`unpack(red, L)` → `L = [red]`. **Correct.**
 
 **Construction** (lines 96-111):
 
@@ -949,14 +949,14 @@ if len(args_vals) == 0:
     constructed = f_val  # atom → red
 ```
 
-`Unpack(T, [red])` → `T = red`. **Correct.**
+`unpack(T, [red])` → `T = red`. **Correct.**
 
 For non-zero arity (line 107):
 ```python
 constructed = Compound(str(f_val), tuple(args_vals))
 ```
 
-Same `str(f_val)` bug as Functor/3. Apply same fix.
+Same `str(f_val)` bug as functor/3. Apply same fix.
 
 #### 5h. `_copy_term` in `inspection.py`
 
@@ -981,46 +981,46 @@ match, so it returns `term` unchanged. **Correct** — atoms are ground, no copy
 
 Current tests like:
 ```clausal
-Test("construct atom: Functor(T, a, 0)") <- (
-    Functor(T_, a, 0),
+Test("construct atom: functor(T, a, 0)") <- (
+    functor(T_, a, 0),
     T_ == a
 )
 ```
 
-After the change, `a` is a PredicateMeta class. `Functor(T_, a, 0)` constructs by
+After the change, `a` is a PredicateMeta class. `functor(T_, a, 0)` constructs by
 setting `T_ = a` (the class). `T_ == a` succeeds. **Still passes.**
 
 ```clausal
 Test("decompose atom: 'a' =.. X") <- (
-    Unpack(a, X_),
+    unpack(a, X_),
     X_ == [a]
 )
 ```
 
-`Unpack(a, X_)` → `X_ = [a]` (list containing the class). `X_ == [a]` succeeds
+`unpack(a, X_)` → `X_ = [a]` (list containing the class). `X_ == [a]` succeeds
 because unification of lists recurses, and `a == a` at the element level. **Still passes.**
 
 **Python-side tests:**
 
 ```python
 def test_functor_decompose_atom():
-    """Functor/3 decomposes a declared atom to (name, 0)."""
+    """functor/3 decomposes a declared atom to (name, 0)."""
     name, arity = Var(), Var()
     # Use the builtin with red as term
-    result = _call_binding("Functor", red, name, arity)
+    result = _call_binding("functor", red, name, arity)
     assert result[0] is red   # functor name is the atom class itself
     assert result[1] == 0
 
 def test_univ_decompose_atom():
-    """Unpack/2 decomposes a declared atom to [atom]."""
+    """unpack/2 decomposes a declared atom to [atom]."""
     lst = Var()
-    result = _call_binding("Unpack", red, lst)
+    result = _call_binding("unpack", red, lst)
     assert result == [red]
 
 def test_functor_construct_atom():
-    """Functor/3 constructs an atom from (name, 0)."""
+    """functor/3 constructs an atom from (name, 0)."""
     term = Var()
-    result = _call_binding("Functor", term, red, 0)
+    result = _call_binding("functor", term, red, 0)
     assert result is red
 ```
 
@@ -1051,7 +1051,7 @@ def _atom_to_str(val: Any) -> str | None:
     return None
 ```
 
-#### 6a. `AtomChars/2` (lines 175-212)
+#### 6a. `atom_chars/2` (lines 175-212)
 
 **Current check** (line 189):
 ```python
@@ -1074,16 +1074,16 @@ if unify(chars, list(atom_str), trail):
 trail.undo(mark)
 ```
 
-**Reverse direction** (Chars → Atom, lines 195-210): When constructing an atom from
+**reverse direction** (Chars → Atom, lines 195-210): when constructing an atom from
 a char list, the result should be a string (not a PredicateMeta class), since the atom
 is being dynamically constructed. `"".join(elems)` already produces a string. This is
 correct — dynamically-constructed atoms from `atom_chars` are undeclared atoms (strings).
 
-#### 6b. `AtomCodes/2` (lines 217-252)
+#### 6b. `atom_codes/2` (lines 217-252)
 
-Same pattern as `AtomChars/2`.
+Same pattern as `atom_chars/2`.
 
-#### 6c. `AtomLength/2` (lines 159-170)
+#### 6c. `atom_length/2` (lines 159-170)
 
 ```python
 if not isinstance(va, str):
@@ -1101,15 +1101,15 @@ mark = trail.mark()
 if unify(length, len(atom_str), trail):
 ```
 
-#### 6d. `UpcaseAtom/2` (lines 129-140), `DowncaseAtom/2` (lines 143-154)
+#### 6d. `upcase_atom/2` (lines 129-140), `downcase_atom/2` (lines 143-154)
 
 Same pattern — use `_atom_to_str` and operate on the extracted string.
 
-#### 6e. `AtomConcat/3` (lines 257-298), `SubAtom/5` (lines 303-361)
+#### 6e. `atom_concat/3` (lines 257-298), `sub_atom/5` (lines 303-361)
 
 These also check `isinstance(va, str)`. Apply the same `_atom_to_str` pattern.
 
-**Note:** For operations that produce a new atom value (like `UpcaseAtom`), the result
+**Note:** For operations that produce a new atom value (like `upcase_atom`), the result
 is a string, not a PredicateMeta class. This is correct — the uppercased version is
 a new undeclared atom.
 
@@ -1120,19 +1120,19 @@ class hello(metaclass=PredicateMeta):
     _fields = ()
 
 def test_atom_chars_declared_atom():
-    """AtomChars decomposes a declared atom to its characters."""
+    """atom_chars decomposes a declared atom to its characters."""
     chars = Var()
-    result = _call_binding("AtomChars", hello, chars)
+    result = _call_binding("atom_chars", hello, chars)
     assert result == ["h", "e", "l", "l", "o"]
 
 def test_atom_length_declared_atom():
     length = Var()
-    result = _call_binding("AtomLength", hello, length)
+    result = _call_binding("atom_length", hello, length)
     assert result == 5
 
 def test_upcase_declared_atom():
     upper = Var()
-    result = _call_binding("UpcaseAtom", hello, upper)
+    result = _call_binding("upcase_atom", hello, upper)
     assert result == "HELLO"  # result is a string, not a PredicateMeta
 ```
 
@@ -1201,7 +1201,7 @@ def make_atom(name: str) -> PredicateMeta:
     The returned class IS the atom value: ``a = make_atom("a"); a() is a``.
     Each call creates a NEW class — call once and reuse the result.
 
-    Equivalent to ``make_predicate(name, [])``.
+    equivalent to ``make_predicate(name, [])``.
     """
     return make_predicate(name, [])
 ```
@@ -1299,7 +1299,7 @@ if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fiel
 Update Issue 3 (lines 108-163) to reflect the PredicateMeta approach:
 
 - Replace the `Atom(str)` class proposal with the zero-field PredicateMeta design
-- Update the type-checking table to include `IsAtom/1`
+- Update the type-checking table to include `atom/1`
 - Note that undeclared atoms remain as strings (no `Atom` wrapper needed for now)
 - Update the migration section
 
@@ -1323,8 +1323,8 @@ These files have tests that assume atoms are strings and will fail after the cha
 
 ### 2. `tests/conformity/iso_type_checking.clausal`
 
-- Tests that check `IsStr(Hello)` will fail — `Hello` is now a class
-- Need to add `IsAtom` tests and update `IsStr` tests
+- Tests that check `is_str(Hello)` will fail — `Hello` is now a class
+- Need to add `atom` tests and update `is_str` tests
 
 ### 3. `tests/conformity/test_iso_type_checking.py`
 
@@ -1332,7 +1332,7 @@ These files have tests that assume atoms are strings and will fail after the cha
 
 ### 4. `tests/conformity/test_iso_term_manipulation.py`
 
-- Tests using `"a"` as atom argument to Functor/3 and Unpack/2 still work (strings
+- Tests using `"a"` as atom argument to functor/3 and unpack/2 still work (strings
   are still valid data). But new tests should verify PredicateMeta atom behavior.
 
 ### 5. `tests/conformity/test_iso_unification.py`
@@ -1343,7 +1343,7 @@ These files have tests that assume atoms are strings and will fail after the cha
 ### 6. `tests/fixtures/builtins_types.clausal`
 
 - `Test("is atom") <- CheckAtom("hello")` — still works (string)
-- But add test for declared atom: `Test("is declared atom") <- IsAtom(SomeDeclaredAtom)`
+- But add test for declared atom: `Test("is declared atom") <- atom(SomeDeclaredAtom)`
 
 ### 7. `tests/fixtures/builtins_inspect.clausal`
 
@@ -1380,7 +1380,7 @@ These files have tests that assume atoms are strings and will fail after the cha
 - **All existing predicate code with fields** — unchanged (Phase 1 change only
   affects the zero-arity path)
 - **Strings as atoms** — `"hello"` still works as an atom in unification, type
-  checks (via `IsStr`), and builtins
+  checks (via `is_str`), and builtins
 
 ### Backward compatibility
 
@@ -1421,7 +1421,7 @@ stores compiled bytecode, a cache clear is needed after this change.
        return cls
    ```
 
-3. **Prolog translation atoms.** When translating Prolog `foo(bar, baz)`, should `bar`
+3. **Prolog translation atoms.** when translating Prolog `foo(bar, baz)`, should `bar`
    and `baz` (undeclared atoms appearing as arguments) become `make_atom("bar")` calls?
    Or stay as strings? For now, recommendation is to keep them as strings (Option B)
    and defer to a later phase.
@@ -1430,7 +1430,7 @@ stores compiled bytecode, a cache clear is needed after this change.
    (line 108). This affects instances, not the class itself. Since `red() is red`
    (the class), `hash(red())` uses `type.__hash__`. Verify with a test.
 
-5. **`GenSym/2` output type.** Currently produces `f"{prefix_d}_{count}"` (a string).
+5. **`gensym/2` output type.** Currently produces `f"{prefix_d}_{count}"` (a string).
    Should it produce a PredicateMeta atom? Probably not — dynamically-generated atoms
    don't need the predicate machinery. Keep as string.
 
@@ -1443,13 +1443,13 @@ stores compiled bytecode, a cache clear is needed after this change.
 | `clausal/logic/predicate.py` | `__call__` returns `cls` for zero-arity; add `is_atom()`; add `make_atom()` | 124-147, new functions |
 | `clausal/templating/term_rewriting.py` | `-private` and `-module` bare atoms → `_make_functor_class_ast(name, [])` | ~2425-2437, ~2477-2490 |
 | `clausal/logic/compiler_v2.py` | `_process_declarations` atom branch creates PredicateMeta | 340-342 |
-| `clausal/logic/builtins/type_checks.py` | Add `IsAtom/1`; update `IsCallable/1`; update `_check_type` | 29-34 (new), 79-88, 107-139 |
+| `clausal/logic/builtins/type_checks.py` | Add `atom/1`; update `callable_/1`; update `_check_type` | 29-34 (new), 79-88, 107-139 |
 | `clausal/logic/builtins/_helpers.py` | `_functor_name` and `_arity` handle zero-arity PredicateMeta | 12-24, 27-39 |
-| `clausal/logic/builtins/inspection.py` | `Functor/3` and `Unpack/2` handle PredicateMeta atoms; `str()` fixes | 33-37, 87-90, 105-107, + explicit branches in `_copy_term`, `_collect_vars` |
+| `clausal/logic/builtins/inspection.py` | `functor/3` and `unpack/2` handle PredicateMeta atoms; `str()` fixes | 33-37, 87-90, 105-107, + explicit branches in `_copy_term`, `_collect_vars` |
 | `clausal/logic/builtins/chars.py` | Add `_atom_to_str` helper; update all `isinstance(va, str)` checks | 129-140, 143-154, 159-170, 175-212, 217-252, 257-298, 303-361 |
 | `clausal/logic/compiler.py` | Verify only — zero-arity dispatch already works | ~7078 (no change) |
 | `tests/test_predicate_meta.py` | Update zero-arity tests; add atom identity tests | 89-91, 112, 373-375, new class |
-| `tests/conformity/iso_type_checking.clausal` | Update `IsStr` tests; add `IsAtom` tests | 21-24+ |
+| `tests/conformity/iso_type_checking.clausal` | Update `is_str` tests; add `atom` tests | 21-24+ |
 | `tests/conformity/iso_term_manipulation.clausal` | Verify existing tests pass; add declared-atom tests | 19-56 |
 | `docs/iso_prolog_compatibility_report.md` | Update Issue 3 to reflect PredicateMeta approach | 108-163 |
 

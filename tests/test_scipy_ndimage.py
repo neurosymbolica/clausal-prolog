@@ -21,7 +21,7 @@ from clausal.modules.py.scipy_ndimage import (
     UniformFilter,
     MedianFilter,
     Convolve,
-    Label,
+    label,
     BinaryErosion,
     BinaryDilation,
     BinaryOpening,
@@ -205,37 +205,37 @@ class TestConvolve:
 class TestLabel:
     def test_single_region(self):
         inp = np.array([1, 1, 1, 1, 1])
-        result = _drive(Label, inp)
+        result = _drive(label, inp)
         assert result is not None
         assert result["num_features"] == 1
 
     def test_two_regions(self):
         inp = np.array([1, 1, 0, 1, 1])
-        result = _drive(Label, inp)
+        result = _drive(label, inp)
         assert result is not None
         assert result["num_features"] == 2
 
     def test_label_array_shape(self):
         inp = np.array([[1, 0], [0, 1]])
-        result = _drive(Label, inp)
+        result = _drive(label, inp)
         assert result is not None
         assert result["label_array"].shape == (2, 2)
 
     def test_label_array_background_is_zero(self):
         inp = np.array([1, 1, 0, 1, 1])
-        result = _drive(Label, inp)
+        result = _drive(label, inp)
         assert result is not None
         assert result["label_array"][2] == 0
 
     def test_no_features_when_all_zero(self):
         inp = np.zeros(5, dtype=int)
-        result = _drive(Label, inp)
+        result = _drive(label, inp)
         assert result is not None
         assert result["num_features"] == 0
 
     def test_wrong_result_fails(self):
         inp = np.array([1, 1, 0, 1, 1])
-        assert _fails_with_wrong_result(Label, inp)
+        assert _fails_with_wrong_result(label, inp)
 
 
 # ── TestBinaryErosion ───────────────────────────────────────────────

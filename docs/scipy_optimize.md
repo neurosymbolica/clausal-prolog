@@ -297,7 +297,7 @@ Example — two-variable LP:
 -import_from(scipy_optimize, [LinearProgram, ResultGet])
 
 # Maximise x1 + 2*x2 subject to x1 + x2 <= 4, x1,x2 >= 0
-# Equivalent to: minimise -x1 - 2*x2
+# equivalent to: minimise -x1 - 2*x2
 LpSolution(X) <- (
     LinearProgram(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT),
     ResultGet(RESULT, 'x', X)

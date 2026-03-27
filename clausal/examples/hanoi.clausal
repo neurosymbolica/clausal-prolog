@@ -9,8 +9,8 @@ Hanoi(N, FROM, TO, VIA, MOVES) <- (
     N1 := N - 1,
     Hanoi(N1, FROM, VIA, TO, MOVES1),
     Hanoi(N1, VIA, TO, FROM, MOVES2),
-    Append(MOVES1, [[FROM, TO]], MID),
-    Append(MID, MOVES2, MOVES)
+    append(MOVES1, [[FROM, TO]], MID),
+    append(MID, MOVES2, MOVES)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────

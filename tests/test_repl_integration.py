@@ -82,9 +82,9 @@ class ConsoleDriver:
 
     def __init__(self, monkeypatch):
         self.monkeypatch = monkeypatch
-        from clausal import In
+        from clausal import in_
         ns = _base_namespace()
-        ns["In"] = In
+        ns["in_"] = in_
         self._console = ClausalConsole(locals=ns, filename="<test>")
 
     def run(self, code: str, keys=None) -> str:
@@ -106,10 +106,10 @@ class PtpythonDriver:
         pytest.importorskip("ptpython")
         self.monkeypatch = monkeypatch
         from ptpython.repl import PythonRepl
-        from clausal import In
+        from clausal import in_
 
         self._ns = _base_namespace()
-        self._ns["In"] = In
+        self._ns["in_"] = in_
 
         self._repl = PythonRepl(
             get_globals=lambda: self._ns,
@@ -154,46 +154,46 @@ class TestQuerySyntax:
     """*(goals) query syntax — core feature parity tests."""
 
     def test_no_solutions_prints_false(self, driver):
-        out = driver.run("*(In(X, []))")
+        out = driver.run("*(in_(X, []))")
         assert "false." in out
 
     def test_single_solution_shows_binding(self, driver):
-        out = driver.run("*(In(X, [42]))")
+        out = driver.run("*(in_(X, [42]))")
         assert "42" in out
 
     def test_single_solution_exhausts_with_no_more_message(self, driver):
-        out = driver.run("*(In(X, [42]))")
+        out = driver.run("*(in_(X, [42]))")
         assert "No more solutions." in out
 
     def test_stop_after_first_with_enter(self, driver):
         # Two solutions; user presses ENTER after first → only first shown
-        out = driver.run("*(In(X, [1, 2]))", keys=['\r'])
+        out = driver.run("*(in_(X, [1, 2]))", keys=['\r'])
         assert "1" in out
         assert "2" not in out.split("1")[1]  # 2 not shown after the first binding
 
     def test_advance_with_space(self, driver):
-        out = driver.run("*(In(X, [1, 2]))", keys=[' '])
+        out = driver.run("*(in_(X, [1, 2]))", keys=[' '])
         assert "1" in out
         assert "2" in out
         assert "or" in out
 
     def test_show_all_with_a(self, driver):
-        out = driver.run("*(In(X, [1, 2, 3]))", keys=['a'])
+        out = driver.run("*(in_(X, [1, 2, 3]))", keys=['a'])
         assert "1" in out
         assert "2" in out
         assert "3" in out
         assert count_or_separators(out) == 2
 
     def test_abort_with_esc_shows_only_first(self, driver):
-        out = driver.run("*(In(X, [1, 2, 3]))", keys=['\x1b'])
+        out = driver.run("*(in_(X, [1, 2, 3]))", keys=['\x1b'])
         assert "1" in out
         # After ESC, no 'or' separator and no second/third solution
         assert count_or_separators(out) == 0
 
     def test_conjunction_two_goals(self, driver):
-        # In([1,2,3]) ∩ In([2,3,4]) = {2, 3}
+        # in_([1,2,3]) ∩ in_([2,3,4]) = {2, 3}
         out = driver.run(
-            "*(In(X, [1,2,3]), In(X, [2,3,4]))",
+            "*(in_(X, [1,2,3]), in_(X, [2,3,4]))",
             keys=[' ', '\r'],  # next, stop
         )
         assert "2" in out
@@ -201,12 +201,12 @@ class TestQuerySyntax:
 
     def test_variables_auto_declared_uppercase(self, driver):
         # X and Y should be auto-allocated as Var() inside *(...)
-        out = driver.run("*(In(X, [10, 20]))", keys=[' '])
+        out = driver.run("*(in_(X, [10, 20]))", keys=[' '])
         assert "X" in out
 
     def test_true_binding_shows_true(self, driver):
         # Zero-variable query succeeds with "true."
-        out = driver.run("*(In(1, [1, 2, 3]))")
+        out = driver.run("*(in_(1, [1, 2, 3]))")
         assert "true." in out
 
 
@@ -222,8 +222,8 @@ class TestNormalPython:
             assert driver._ns.get("my_var_99") == 42
 
     def test_import_then_query(self, driver):
-        driver.run_import("from clausal import Append")
-        out = driver.run("*(Append([1], [2], R))")
+        driver.run_import("from clausal import append")
+        out = driver.run("*(append([1], [2], R))")
         assert "1" in out
         assert "2" in out
 
@@ -246,12 +246,12 @@ class TestSolutionsDisplay:
     """Solutions display hook — interactive output format."""
 
     def test_or_separator_between_solutions(self, driver):
-        out = driver.run("*(In(X, [1, 2, 3]))", keys=[' ', ' '])
+        out = driver.run("*(in_(X, [1, 2, 3]))", keys=[' ', ' '])
         assert count_or_separators(out) == 2
 
     def test_no_blank_line_after_output(self, driver):
         """Verify displayhook doesn't emit a trailing blank line from repr('')."""
-        out = driver.run("*(In(X, [42]))")
+        out = driver.run("*(in_(X, [42]))")
         # The output should end with 'No more solutions.\n', not have an extra blank
         stripped = out.rstrip("\n")
         assert not stripped.endswith("\n")
@@ -304,13 +304,13 @@ class TestCompileHook:
         assert ns["x"] == 1 and ns["y"] == 2
 
     def test_star_query_compiles(self, fake_repl):
-        """*(In(X, [1])) transforms without error."""
-        from clausal import In
+        """*(in_(X, [1])) transforms without error."""
+        from clausal import in_
         ns = _base_namespace()
-        ns["In"] = In
+        ns["in_"] = in_
         fn = _make_clausal_compile(fake_repl)
         # exec mode parse; transformer rewrites; should compile cleanly
-        code_obj = fn("*(In(X, [1]))", "exec")
+        code_obj = fn("*(in_(X, [1]))", "exec")
         assert code_obj is not None
 
     def test_real_syntax_error_propagates(self, fake_repl):

@@ -25,11 +25,11 @@ They run together on the same runtime with no overhead.
 
 ### 1. Explainability reduces risk
 
-When a traditional program makes a decision, the "why" is buried in layers of
+when a traditional program makes a decision, the "why" is buried in layers of
 imperative code — loops, conditionals, state mutations. Extracting the
 reasoning requires a developer to trace through the execution manually.
 
-In Clausal, the rules **are** the explanation. Each rule reads as a sentence:
+in_ Clausal, the rules **are** the explanation. Each rule reads as a sentence:
 "A customer is eligible for a discount if they have been a member for more than
 two years and their annual spend exceeds $10,000." The gap between the business
 rule and the code is near zero.
@@ -38,7 +38,7 @@ This matters for:
 
 - **Regulatory compliance.** Auditors can read the rules directly and verify
   they match the policy. No reverse-engineering of source code.
-- **Dispute resolution.** When a customer asks "Why was I denied?", the system
+- **Dispute resolution.** when a customer asks "Why was I denied?", the system
   can trace its reasoning through the rules and provide a clear answer.
 - **Liability.** If a decision is challenged, the organisation can demonstrate
   exactly which rules were applied and why. The reasoning is not a black box.
@@ -63,12 +63,12 @@ it in development. Logic programming reduces the number that reach production.
 
 ### 3. Rules change faster than code
 
-Business rules evolve. Regulations change. Policies are updated. In a
+Business rules evolve. Regulations change. Policies are updated. in_ a
 traditional system, changing a rule means modifying imperative code, testing
 it, reviewing it, and deploying it. The rule is entangled with the code that
 implements it.
 
-In Clausal, rules are separate from the engine that executes them. Changing a
+in_ Clausal, rules are separate from the engine that executes them. Changing a
 rule means changing a logical statement. The impact is bounded and predictable.
 Testing is cheap — a test is just a question: "Does this hold?"
 
@@ -82,7 +82,7 @@ Many business problems are constraint satisfaction problems in disguise:
 employee scheduling, resource allocation, configuration management, route
 optimisation, capacity planning.
 
-In a traditional approach, these require custom algorithms — expensive to
+in_ a traditional approach, these require custom algorithms — expensive to
 develop, hard to maintain, and brittle when requirements change. Clausal
 includes built-in constraint solvers ([CLP(ℤ)](constraints.md), [CLP(B)](clpb.md), [CLP(ℝ)](clpr.md)) that let
 developers describe the constraints and have the system find solutions

@@ -4,20 +4,20 @@ This package is organized into submodules by category:
 
 - _registry    — decorator system, BuiltinPredicate adapter, lookup API
 - _helpers     — shared term-inspection helpers
-- inspection   — Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3
-- database_ops — Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0
-- keyword_ops  — Vary/3, Extend/3, UnboundKeys/2, Signature/3
-- constraints  — Dif/2, Eq/3, DifT/3, InDomain/3, Label/1, AllDifferent/1, Equivalent/2
-- type_checks  — IsVar/1, IsBound/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, etc.
-- arithmetic   — Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3, Sign/2, Gcd/3, DivMod/4
-- lists        — In/2, Append/3, Length/2, Sort/2, Select/3, etc.
-- pairs        — Unzip/3, PairKeys/2, PairValues/2
-- higher_order — CallGoal/1..8, Call/1..8, MapList/2,3, Filter/3, Exclude/3, FoldLeft/4
-- io           — Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2
+- inspection   — functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3
+- database_ops — assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0
+- keyword_ops  — vary/3, extend/3, unbound_keys/2, signature/3
+- constraints  — dif/2, eq/3, dif_t/3, in_domain/3, label/1, all_different/1, equivalent/2
+- type_checks  — var/1, nonvar/1, is_str/1, number/1, integer/1, float_/1, etc.
+- arithmetic   — between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4
+- lists        — in_/2, append/3, length/2, sort/2, select/3, etc.
+- pairs        — pairs_keys_values/3, pairs_keys/2, pairs_values/2
+- higher_order — CallGoal/1..8, Call/1..8, maplist/2,3, include/3, exclude/3, foldl/4
+- io           — write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2
 - dcg          — phrase/2, phrase/3
-- control      — CallNth/2, CountAll/2, SetupCallCleanup/3, CallCleanup/2, Freeze/2, When/2
-- chars        — CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5
-- attributes   — PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2
+- control      — call_nth/2, count_all/2, setup_call_cleanup/3, call_cleanup/2, freeze/2, when/2
+- chars        — char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5
+- attributes   — put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2
 - translations_builtin — Translate/3
 """
 
@@ -66,7 +66,7 @@ from clausal.logic.builtins import chars             # noqa: F401
 from clausal.logic.builtins import attributes        # noqa: F401
 from clausal.logic.builtins import translations_builtin  # noqa: F401
 
-# Import units_constraint to register HasUnits/2 before _build_all_builtin_classes runs.
+# Import units_constraint to register has_units/2 before _build_all_builtin_classes runs.
 import clausal.logic.units_constraint               # noqa: F401
 
 # Re-export private names used by tests and other modules.

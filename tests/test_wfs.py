@@ -394,7 +394,7 @@ class TestWfsSymmetricWin:
             assert entry.status == "complete"
             for i in range(len(entry.answers)):
                 tv = entry.truth_value(i)
-                # In the symmetric case, answers should be undefined or not exist
+                # in_ the symmetric case, answers should be undefined or not exist
                 assert tv in ("undefined", False), f"Expected undefined or false, got {tv}"
 
 

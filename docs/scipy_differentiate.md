@@ -210,14 +210,14 @@ automatically.
 
 ### Fast path
 
-When `X` is a plain number or array (not a `Quantity`), scipy is called
+when `X` is a plain number or array (not a `Quantity`), scipy is called
 directly with **zero additional overhead**.
 
 ### Example
 
 ```
 -import_from(scipy_differentiate, [Derivative, ResultGet])
--import_from(py.units, [Metre, Newton, HasUnits])
+-import_from(py.units, [Metre, Newton, has_units])
 
 % f: Metre -> Newton (linear), so df/dx has units Newton/Metre
 Test("derivative units") <- (
@@ -229,7 +229,7 @@ Test("derivative units") <- (
         )),
     Derivative(++(lambda x, k=K: x * k), 1.0(Metre), R),
     ResultGet(R, 'df', DF),
-    HasUnits(DF, Newton/Metre))
+    has_units(DF, Newton/Metre))
 ```
 
 ### Limitations

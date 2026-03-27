@@ -44,7 +44,7 @@ class PrologTranslationError(Exception):
     """
 
 
-# ── Reverse builtin name map ────────────────────────────────────────
+# ── reverse builtin name map ────────────────────────────────────────
 # prolog_name -> clausal_name, built from BUILTIN_NAME_MAP
 
 def _build_reverse_builtin_map() -> dict[str, str]:
@@ -506,7 +506,7 @@ class _PrologToClausal:
     def _emit_atom(self, atom: PAtom) -> str:
         """Emit an atom as a bare name, registering it for ``-private`` declaration.
 
-        Prolog atoms like ``red``, ``foo_bar`` are symbolic constants.  In
+        Prolog atoms like ``red``, ``foo_bar`` are symbolic constants.  in_
         Clausal they become module-level string variables declared via
         ``-private([red, foo_bar, ...])``, which the EmbedTransformer
         compiles to ``red = "red"`` etc.
@@ -522,7 +522,7 @@ class _PrologToClausal:
                 "semantics and monotonicity.\n"
                 "Rewrite using pure alternatives:\n"
                 "  - dif/2 and constraints for mutual exclusion between clauses\n"
-                "  - Once(Goal) for first-solution commitment\n"
+                "  - once(Goal) for first-solution commitment\n"
                 "  - First-argument indexing (automatic) for determinism\n"
                 "  - Reified if-then-else for conditional branching\n"
                 "See: docs/for_prolog_programmers.md"
@@ -697,7 +697,7 @@ class _PrologToClausal:
     # ── Conjunction/disjunction flattening ────────────────────────────
 
     def _flatten_conjunction(self, term: PTerm) -> list[PTerm]:
-        """Flatten nested ',' into a flat list of goals."""
+        """flatten nested ',' into a flat list of goals."""
         if isinstance(term, PCompound) and term.functor == "," and len(term.args) == 2:
             left = self._flatten_conjunction(term.args[0])
             right = self._flatten_conjunction(term.args[1])

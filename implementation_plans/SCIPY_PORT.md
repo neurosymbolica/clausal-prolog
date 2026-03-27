@@ -39,7 +39,7 @@ OptimizeResultGet(R, FIELD='success', VALUE=Ok).
 
 ### Functions as arguments
 Several predicates accept a callable `FUN=` argument (optimizer objective,
-ODE RHS, integrand, etc.). In the Python implementation this is a first-class
+ODE RHS, integrand, etc.). in_ the Python implementation this is a first-class
 Python callable passed through directly. Callers supply it via the `++()` Python
 escape — e.g. `FUN=++lambda x: x**2` — or via a Python function reference
 stored in a variable. No special boundary wrapping is needed; the predicate
@@ -213,7 +213,7 @@ variadic scipy functions take:
 | `scipy.optimize` | 2 — result record | Returns `OptimizeResult` |
 | `scipy.stats` (tests) | 2 — result record | Returns named result objects |
 | `scipy.stats` (distributions) | 2/3 — frozen objects | Frozen dist = lightweight handle |
-| `scipy.signal` | 1+2 mixed | Filter design = Tier 1; `lti` objects = Tier 3 |
+| `scipy.signal` | 1+2 mixed | include design = Tier 1; `lti` objects = Tier 3 |
 | `scipy.cluster` | 2 — result record | Returns linkage/label arrays |
 | `scipy.sparse.linalg` | 2 — result record | Solvers return result objects |
 | `scipy.interpolate` | 3 — handle | Spline/interpolant objects need Make/Eval |
@@ -322,7 +322,7 @@ Yv(V=, Z=, RESULT=)
 Kn(N=, X=, RESULT=)
     → scipy.special.kn(n, x)           # modified Bessel K
 
-In(N=, X=, RESULT=)
+in_(N=, X=, RESULT=)
     → scipy.special.iv(n, x)           # modified Bessel I (note: iv not in)
 
 JnZeros(N=, NT=, RESULT=)
@@ -1232,7 +1232,7 @@ NdimageCenterOfMass(INPUT=, LABELS=None, INDEX=None, RESULT=)
 **SciPy source**: `scipy.signal`
 **Predicate prefix**: `Signal`
 
-#### Filter design (pure, Tier 1)
+#### include design (pure, Tier 1)
 ```
 SignalButter(N=, WN=, BTYPE='low', ANALOG=False, OUTPUT='ba', FS=None, RESULT=)
     → scipy.signal.butter(N, Wn, ...)
@@ -1316,13 +1316,13 @@ SignalSpectrogram(X=, FS=1.0, WINDOW=('tukey',0.25), NPERSEG=None,
     RESULT: dict {f, t, Sxx}
 ```
 
-**Filter design → filter application pipeline**:
+**include design → filter application pipeline**:
 ```
-Butterworth(N=4, WN=0.1, BTYPE='low', OUTPUT='sos', RESULT=Filter),
-ResultGet(Filter, FIELD='sos', VALUE=SOS),
+Butterworth(N=4, WN=0.1, BTYPE='low', OUTPUT='sos', RESULT=include),
+ResultGet(include, FIELD='sos', VALUE=SOS),
 SOSForwardBackwardFilter(SOS=SOS, X=raw_signal, RESULT=Filtered).
 % or with ++ escape:
-% SOSForwardBackwardFilter(SOS=++Filter['sos'], X=raw_signal, RESULT=Filtered).
+% SOSForwardBackwardFilter(SOS=++include['sos'], X=raw_signal, RESULT=Filtered).
 ```
 
 ---
@@ -1586,7 +1586,7 @@ documented as examples in each module's implementation:
 | **Curve fitting** | `OptimizeCurveFit` → inspect `popt`, `pcov` |
 | **ODE integration** | `IntegrateSolveIvp` → `IntegrateResultGet(t)` + `(y)` |
 | **Spectral analysis** | `FFTRfft` → process → `FFTIrfft` |
-| **Filter-then-apply** | `SignalButter(OUTPUT='sos')` → `SignalSosfiltfilt` |
+| **include-then-apply** | `SignalButter(OUTPUT='sos')` → `SignalSosfiltfilt` |
 | **Spline interpolation** | `MakeSpline` → `EvalSpline` → `SplineIntegral` → `Free` |
 | **Hierarchical clustering** | `ClusterLinkage` → `ClusterFcluster` |
 | **k-means** | `ClusterWhiten` → `ClusterKmeans2` → `ClusterVq` |

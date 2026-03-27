@@ -8,8 +8,8 @@ Clausal provides built-in predicates for formatted output, term-to-string conver
 
 ```clausal
 greet(NAME) <- (
-    Write("Hello, "),
-    Writeln(NAME)
+    write("Hello, "),
+    writeln(NAME)
 )
 
 Test("greet") <- greet("Alice")
@@ -19,47 +19,47 @@ Test("greet") <- greet("Alice")
 
 ## Output Predicates
 
-### Write/1 vs Writeln/1 vs PrintTerm/1
+### write/1 vs writeln/1 vs print_term/1
 
 All three write a term to stdout, but differ in formatting:
 
 | Builtin | Newline? | Strings | Terms |
 |---|---|---|---|
-| `Write/1` | No | Quoted (`"hello"`) | Functor notation |
-| `Writeln/1` | Yes | Quoted (`"hello"`) | Functor notation |
-| `PrintTerm/1` | No | Unquoted (`hello`) | `str()` representation |
+| `write/1` | No | Quoted (`"hello"`) | functor notation |
+| `writeln/1` | Yes | Quoted (`"hello"`) | functor notation |
+| `print_term/1` | No | Unquoted (`hello`) | `str()` representation |
 
 ```clausal
-# Write: no newline, quoted strings
-Test("write") <- (Write("hello"), Write(" "), Write("world"), Nl())
+# write: no newline, quoted strings
+Test("write") <- (write("hello"), write(" "), write("world"), nl())
 
-# Writeln: like Write + Nl
-Test("writeln") <- Writeln("hello")
+# writeln: like write + nl
+Test("writeln") <- writeln("hello")
 
-# PrintTerm: unquoted, str()-style
-Test("print term") <- PrintTerm("hello")
+# print_term: unquoted, str()-style
+Test("print term") <- print_term("hello")
 ```
 
-**When to use which:**
+**when to use which:**
 
-- `Write` / `Writeln` — standard output, preserves Clausal term syntax
-- `PrintTerm` — human-readable output (no quotes around strings)
-- `Write` + `Nl` — when you need precise control over newlines
+- `write` / `writeln` — standard output, preserves Clausal term syntax
+- `print_term` — human-readable output (no quotes around strings)
+- `write` + `nl` — when you need precise control over newlines
 
-### Nl/0
+### nl/0
 
-Write a newline character:
+write a newline character:
 
 ```clausal
-Test("newline") <- (Nl(), Nl())
+Test("newline") <- (nl(), nl())
 ```
 
-### Tab/1
+### tab/1
 
-Write N spaces:
+write N spaces:
 
 ```clausal
-indented(X) <- (Tab(4), Writeln(X))
+indented(X) <- (tab(4), writeln(X))
 
 Test("indented") <- indented("hello")
 ```
@@ -68,45 +68,45 @@ Test("indented") <- indented("hello")
 
 ## String Conversion
 
-### WriteToString/2
+### write_to_string/2
 
-`WriteToString(Term, String)` — unify String with the Write representation of Term (quoted strings, functor notation):
+`write_to_string(Term, String)` — unify String with the write representation of Term (quoted strings, functor notation):
 
 ```clausal
-format_pair(K, V, S) <- WriteToString(K - V, S)
+format_pair(K, V, S) <- write_to_string(K - V, S)
 
 Test("write to string") <- (
     format_pair("name", "alice", S),
-    IsBound(S)
+    nonvar(S)
 )
 ```
 
-### TermToString/2
+### term_to_string/2
 
-`TermToString(Term, String)` — unify String with the `str()` representation of Term (unquoted strings):
+`term_to_string(Term, String)` — unify String with the `str()` representation of Term (unquoted strings):
 
 ```clausal
-label(X, S) <- TermToString(X, S)
+label(X, S) <- term_to_string(X, S)
 
 Test("term to string int") <- (label(42, S), S == "42")
-Test("term to string str") <- (label("hello", S), IsBound(S))
+Test("term to string str") <- (label("hello", S), nonvar(S))
 ```
 
-**WriteToString vs TermToString:**
+**write_to_string vs term_to_string:**
 
-| Input | WriteToString | TermToString |
+| Input | write_to_string | term_to_string |
 |---|---|---|
 | `42` | `"42"` | `"42"` |
 | `"hello"` | quoted | unquoted |
 | `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` |
 
-Use `TermToString` when building human-readable strings. Use `WriteToString` when you need a representation that could be read back.
+Use `term_to_string` when building human-readable strings. Use `write_to_string` when you need a representation that could be read back.
 
 ---
 
 ## F-String Support
 
-In `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
+in_ `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
 
 ```clausal
 describe(NAME, AGE, S) <- (
@@ -125,7 +125,7 @@ F-strings support arbitrary Python expressions inside `{}`:
 
 ```clausal
 summarize(XS, S) <- (
-    Length(XS, N),
+    length(XS, N),
     S is f"List has {N} element(s)"
 )
 
@@ -178,17 +178,17 @@ Test("deferred f-string") <- (
 
 ```clausal
 show_all(XS) <- (
-    In(X, XS),
-    Writeln(X)
+    in_(X, XS),
+    writeln(X)
 )
 
 Test("show all") <- show_all([1, 2, 3])
 ```
 
-### String Building with TermToString
+### String Building with term_to_string
 
 ```clausal
-format_item(X, S) <- TermToString(X, S)
+format_item(X, S) <- term_to_string(X, S)
 
 Test("format item") <- (
     format_item(42, S),
@@ -196,13 +196,13 @@ Test("format item") <- (
 )
 ```
 
-### Building Strings with [FoldLeft](higher_order.md)
+### Building Strings with [foldl](higher_order.md)
 
-Use `==` with `+` to concatenate strings inside a FoldLeft closure:
+Use `==` with `+` to concatenate strings inside a foldl closure:
 
 ```clausal
 concat_all(XS, RESULT) <- (
-    FoldLeft(
+    foldl(
         ((E, A, R) <- (R == A + E)),
         XS, "", RESULT
     )
@@ -220,20 +220,20 @@ Test("concat all") <- (
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `Listing` | 1 | `Listing(Pred)` — print all clauses of a predicate to stdout |
-| `PortrayClause` | 1 | `PortrayClause(Term)` — pretty-print a term with indentation |
+| `listing` | 1 | `listing(Pred)` — print all clauses of a predicate to stdout |
+| `portray_clause` | 1 | `portray_clause(Term)` — pretty-print a term with indentation |
 
 ### Examples
 
 ```clausal
 # List all clauses for a predicate:
-debug_fib <- Listing(fib)
+debug_fib <- listing(fib)
 
 # Pretty-print a complex term:
-show_deep(TERM) <- PortrayClause(TERM)
+show_deep(TERM) <- portray_clause(TERM)
 ```
 
-`Listing` accepts a predicate class or instance. It prints a header with clause count, then each clause in `head <- (body).` format.
+`listing` accepts a predicate class or instance. It prints a header with clause count, then each clause in `head <- (body).` format.
 
 ---
 
@@ -244,7 +244,7 @@ Logic variables have `__str__` and `__format__` methods (in the C extension) tha
 - **Bound var**: displays the bound value
 - **Unbound var**: displays `_N` (unique numeric ID)
 
-This means `f"{X}"` and `Write(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
+This means `f"{X}"` and `write(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
 
 ```python
 from clausal.logic.variables import Var, Trail, unify
@@ -261,9 +261,9 @@ print(f"Bound: {v}")     # hello
 
 ## Gotchas
 
-- **Write quotes strings**, PrintTerm does not. If your output has unwanted quotes, switch to `PrintTerm` or use f-strings.
+- **write quotes strings**, print_term does not. If your output has unwanted quotes, switch to `print_term` or use f-strings.
 - **F-strings evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
-- **Nl/0 takes no arguments** — `Nl()` not `Nl(1)`. Use `Tab(N)` for spacing.
+- **nl/0 takes no arguments** — `nl()` not `nl(1)`. Use `tab(N)` for spacing.
 
 ---
 
@@ -272,14 +272,14 @@ print(f"Bound: {v}")     # hello
     Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (13 tests).
 
     - **Var display**: `__str__`, `__format__`, bound/unbound, nested
-    - **Write/Writeln/PrintTerm**: atoms, numbers, strings, compounds, lists, vars
-    - **Nl/Tab**: output formatting
-    - **WriteToString/TermToString**: term conversion to string
+    - **write/writeln/print_term**: atoms, numbers, strings, compounds, lists, vars
+    - **nl/tab**: output formatting
+    - **write_to_string/term_to_string**: term conversion to string
     - **F-string integration**: variable interpolation, multiple vars, expressions
-    - **Listing/1**: facts, rules, no-clauses, instance→class resolution, error handling
-    - **PortrayClause/1**: simple terms, lists, nested structures, unbound vars
+    - **listing/1**: facts, rules, no-clauses, instance→class resolution, error handling
+    - **portray_clause/1**: simple terms, lists, nested structures, unbound vars
 
 ---
 
 *See also: [Python Integration](python_integration.md) — using `++()` escape for Python calls inside logic goals.*
-*See also: [Lambdas](lambdas.md) — goal closures used with FoldLeft and other higher-order predicates.*
+*See also: [Lambdas](lambdas.md) — goal closures used with foldl and other higher-order predicates.*

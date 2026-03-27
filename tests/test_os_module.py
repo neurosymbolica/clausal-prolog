@@ -74,7 +74,7 @@ class TestEnvironmentVariable:
         assert count >= 3  # PATH, HOME, etc. should exist
 
     def test_unify_value_check(self):
-        """When value is pre-bound to the correct value, succeeds."""
+        """when value is pre-bound to the correct value, succeeds."""
         home = os.environ.get("HOME", "")
         if not home:
             pytest.skip("HOME not set")
@@ -82,7 +82,7 @@ class TestEnvironmentVariable:
         assert len(sols) == 1
 
     def test_unify_value_wrong_fails(self):
-        """When value is pre-bound to wrong value, fails."""
+        """when value is pre-bound to wrong value, fails."""
         sols, _ = simple_solutions(
             _environment_variable_2, "HOME", "definitely_not_home"
         )

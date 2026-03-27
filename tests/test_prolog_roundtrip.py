@@ -144,7 +144,7 @@ class TestOperatorPrecedence:
         """a + b * c should not become (a + b) * c."""
         src = "Test(R) <- (R := 1 + 2 * 3)"
         prolog = clausal_source_to_prolog(src)
-        # In Prolog, * binds tighter than +
+        # in_ Prolog, * binds tighter than +
         assert "1 + 2 * 3" in prolog or "1 + 2*3" in prolog
         # Roundtrip
         back = prolog_to_clausal(prolog)
@@ -349,7 +349,7 @@ class TestFixtureRoundtripClausalToProlog:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-# Exclude dcg_grammar — DCG `-->` rules produce clausal `>>` syntax that
+# exclude dcg_grammar — DCG `-->` rules produce clausal `>>` syntax that
 # doesn't roundtrip back to parseable Prolog in the second leg.
 ALL_GOLDEN_PL = sorted(
     p for p in (GOLDEN.glob("*.pl") if GOLDEN.exists() else [])

@@ -5,7 +5,7 @@ The trampoline execution model:
     ``StepGenerator`` passes itself as ``this_generator`` — no bootstrap needed.
   - At each solution: ``yield (parent, None)`` — suspends until parent
     resumes for more solutions.
-  - When all clauses exhausted: ``yield (parent, DONE)`` — signals search end.
+  - when all clauses exhausted: ``yield (parent, DONE)`` — signals search end.
   - Sub-predicate calls use ``_st = (yield (_gen, None))`` in a while
     loop so Python call depth does not grow with recursion.
 
@@ -35,7 +35,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import (
     And, Or, Not,
     Unify as Is, Evaluate, ArithEq, ArithNeq, Lt, Gt,
-    In, NotIn,
+    in_, NotIn,
     Call, LoadName,
     Compound,
     Add,
@@ -475,7 +475,7 @@ class TestTrampolineIntegrationMembership:
         db = Database()
         db.assertz(Clause(
             head=Compound("member_t", (x,)),
-            body=[In(left=x, right=[1, 2, 3])],
+            body=[in_(left=x, right=[1, 2, 3])],
         ))
         fn = compile_predicate_trampoline("member_t", 1, db.clauses_for("member_t", 1), db)
         v = Var()

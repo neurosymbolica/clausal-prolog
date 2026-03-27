@@ -21,7 +21,7 @@ and risks future Claude Code instances "fixing" the behaviour to match the name.
 
 ### 1. Rename existing nodes
 
-- `StructuralEq`  → `ArithEq` (or `Eq`)
+- `StructuralEq`  → `ArithEq` (or `eq`)
 - `StructuralNeq` → `ArithNeq` (or `Neq`)
 
 Files to update:
@@ -46,6 +46,6 @@ evaluating arithmetic.
 
 ### 3. Verify `X % 2 == 0` works
 
-Once renamed, `==` still compiles to `_fd_eq` (arithmetic), so
+once renamed, `==` still compiles to `_fd_eq` (arithmetic), so
 `X % 2 == 0` in `.clausal` files should work as arithmetic equality.
 Update TODOs in `higher_order.clausal` and `meta_predicates.clausal`.

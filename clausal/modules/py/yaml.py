@@ -3,7 +3,7 @@
 Provides predicates for parsing and generating YAML, wrapping Python's
 PyYAML library (``yaml.safe_load`` / ``yaml.safe_dump``).  Import via::
 
-    -import_from(py.yaml, [Read, Write, ReadAll, WriteAll,
+    -import_from(py.yaml, [Read, write, ReadAll, WriteAll,
                             ReadFile, WriteFile, Get])
 
 Or via module import::
@@ -55,11 +55,11 @@ def _read_2(yaml_string, result, trail, k):
         yield None
 
 
-# ── Write ────────────────────────────────────────────────────────────────
+# ── write ────────────────────────────────────────────────────────────────
 
 
 def _write_2(data, result, trail, k):
-    """Write/2: serialize Python object → YAML string."""
+    """write/2: serialize Python object → YAML string."""
     data = deref(data)
     try:
         out = _yaml.safe_dump(data, default_flow_style=False)
@@ -160,8 +160,8 @@ def _get_3(data, path, result, trail, k):
 Read = ModulePredicate("Read")
 Read._register(2, simple_to_trampoline(_read_2))
 
-Write = ModulePredicate("Write")
-Write._register(2, simple_to_trampoline(_write_2))
+write = ModulePredicate("write")
+write._register(2, simple_to_trampoline(_write_2))
 
 ReadAll = ModulePredicate("ReadAll")
 ReadAll._register(2, simple_to_trampoline(_read_all_2))

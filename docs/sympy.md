@@ -51,7 +51,7 @@ Clausal [arithmetic](arithmetic.md) terms (`X**2 + 3*X + 1`) are trees of `Add`,
 
 Variables are auto-named alphabetically in discovery order: first Var → `x`, second → `y`, third → `z`, then `a`, `b`, `c`, ...
 
-When the same Var appears in multiple arguments to a predicate, it maps to the same Symbol.
+when the same Var appears in multiple arguments to a predicate, it maps to the same Symbol.
 
 ### Symbolic equality via `==`
 
@@ -322,27 +322,27 @@ FactorInt(360, F),  F is ++{2: 3, 3: 2, 5: 1}
 Divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
 ```
 
-#### Gcd/3, Lcm/3
+#### gcd/3, lcm/3
 
-`Gcd(A, B, Result)` / `Lcm(A, B, Result)` — symbolic GCD/LCM (works on both integers and polynomials):
+`gcd(A, B, Result)` / `lcm(A, B, Result)` — symbolic GCD/LCM (works on both integers and polynomials):
 
 ```clausal
 # skip
-Gcd(12, 8, R),          R == 4
-Gcd(X**2 - 1, X - 1, R), R == X - 1
-Lcm(4, 6, R),            R == 12
+gcd(12, 8, R),          R == 4
+gcd(X**2 - 1, X - 1, R), R == X - 1
+lcm(4, 6, R),            R == 12
 ```
 
 ### Special functions
 
-#### Sum/5
+#### sum_/5
 
-`Sum(Expr, Var, Low, High, Result)` — symbolic summation:
+`sum_(Expr, Var, Low, High, Result)` — symbolic summation:
 
 ```clausal
 # skip
-Sum(I, I, 1, N, R),      R == N*(N + 1)/2
-Sum(I**2, I, 1, 5, R),   R == 55
+sum_(I, I, 1, N, R),      R == N*(N + 1)/2
+sum_(I**2, I, 1, 5, R),   R == 55
 ```
 
 #### Product/5
@@ -462,7 +462,7 @@ Importable callables that produce `Compound` terms. These are converted to SymPy
 | `exp`, `log`, `ln` | `sympy.exp`, `sympy.log`, `sympy.log` |
 | `sqrt` | `sympy.sqrt` |
 | `factorial` | `sympy.factorial` |
-| `Abs` | `sympy.Abs` |
+| `abs_` | `sympy.abs_` |
 
 Usage:
 
@@ -500,7 +500,7 @@ Limit(1/X, X, inf, R),  R == 0
 Function and constant names follow SymPy's conventions where possible:
 
 - **Math functions**: lowercase (`sin`, `cos`, `exp`, `log`, `sqrt`, `factorial`) — matches SymPy exactly
-- **`Abs`**: capitalized — matches SymPy (they capitalized it because `abs` is a Python builtin)
+- **`abs_`**: capitalized — matches SymPy (they capitalized it because `abs` is a Python builtin)
 - **`inf`**: instead of SymPy's `oo` — readability
 - **`e`**: instead of SymPy's `E` — `E` is ALLCAPS so Clausal treats it as a logic variable
 - **Predicates**: capitalized (`Simplify`, `Diff`, `Solve`) — Clausal convention

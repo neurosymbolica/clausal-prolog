@@ -52,10 +52,10 @@ Clausal already has clean alternatives for every legitimate use of cut:
 | Cut pattern | Clausal equivalent |
 |-------------|-------------------|
 | Green cut (determinism) | [First-argument indexing](indexing.md) + [`dif/2`](constraints.md) guards |
-| `member(X,L), !` | [`Once(In(X, L))`](control.md) |
+| `member(X,L), !` | [`once(in_(X, L))`](control.md) |
 | `(C -> T ; E)` | [Reified if-then-else](reified_ite.md): `(T if C else E)` |
 | Red cut (negation) | `not Goal` (NAF) or `dif/2` |
-| Committed choice | `Once(Goal)` or if-then-else |
+| Committed choice | `once(Goal)` or if-then-else |
 
 ### Translation Layer — Implemented
 
@@ -63,10 +63,10 @@ The Prolog-to-Clausal translator now:
 
 - **Rejects** programs containing cut with `PrologTranslationError`, including
   a clear error message explaining that the program must be rewritten and
-  listing pure alternatives (dif/2, Once/1, indexing, reified ITE)
+  listing pure alternatives (dif/2, once/1, indexing, reified ITE)
 - **Rejects** `(C -> T ; E)` and bare `(C -> T)` with `PrologTranslationError`,
   suggesting reified conditionals, separate clauses with dif/2 guards, or constraints
-- In the **reverse direction**, Clausal's reified `THEN if COND else ELSE` is
+- in_ the **reverse direction**, Clausal's reified `THEN if COND else ELSE` is
   also rejected when translating to Prolog, since the semantics differ
 
 ---
@@ -82,11 +82,11 @@ representation.
 ### What This Means
 
 ```prolog
-% In Prolog
+% in_ Prolog
 X = "hello"    % X = [h, e, l, l, o]  (list of atoms, each a single char)
 ```
 
-In Clausal, when running translated Prolog code, `"hello"` must behave as
+in_ Clausal, when running translated Prolog code, `"hello"` must behave as
 `['h', 'e', 'l', 'l', 'o']` — a list of single-character atoms.
 
 ### Implementation
@@ -119,7 +119,7 @@ now zero-field PredicateMeta classes. The class IS the atom value —
 ### Rationale
 
 - `atom/1` type checking must distinguish atoms from strings and other types
-- Functor names are atoms; they should not be conflated with string data
+- functor names are atoms; they should not be conflated with string data
 - Zero-arity predicates and atoms sit on the same continuum (zero fields
   vs N fields) — no new type needed
 - Classes have identity (`is` works), are hashable, callable, and support
@@ -146,14 +146,14 @@ work in unification as atomic data without any wrapping.
 
 | Builtin | Tests for |
 |---------|-----------|
-| `IsAtom/1` | Zero-arity PredicateMeta class |
-| `IsStr/1` | `isinstance(x, str)` (excludes declared atoms) |
-| `IsCallable/1` | `str`, `Compound`, `KWTerm`, term instances, or declared atoms |
+| `atom/1` | Zero-arity PredicateMeta class |
+| `is_str/1` | `isinstance(x, str)` (excludes declared atoms) |
+| `callable_/1` | `str`, `Compound`, `KWTerm`, term instances, or declared atoms |
 
 ### String Builtins
 
-`AtomChars/2`, `AtomCodes/2`, `AtomLength/2`, `UpcaseAtom/2`,
-`DowncaseAtom/2`, `AtomConcat/3`, and `SubAtom/5` all accept both
+`atom_chars/2`, `atom_codes/2`, `atom_length/2`, `upcase_atom/2`,
+`downcase_atom/2`, `atom_concat/3`, and `sub_atom/5` all accept both
 plain strings and declared atoms (extracting `__name__` for the latter).
 Results of string operations are plain strings (undeclared atoms).
 
@@ -199,7 +199,7 @@ for SWI-Prolog, Scryer Prolog, etc.
 
 ### Qualified Calls
 
-- Prolog `lists:member(X, L)` → Clausal `lists.In(X, L)` (via BUILTIN_NAME_MAP)
+- Prolog `lists:member(X, L)` → Clausal `lists.in_(X, L)` (via BUILTIN_NAME_MAP)
 - For non-builtin predicates: `mymod:foo(X)` → `mymod.Foo(X)` (snake_to_pascal)
 
 ### Library Mapping
@@ -214,7 +214,7 @@ for mapping Prolog library names to Clausal equivalents:
 | `library(lists)` | `clausal.logic.builtins.lists` |
 | `library(dcgs)` | built-in (DCG support is native) |
 
-Extend this mapping as more Prolog libraries are supported.
+extend this mapping as more Prolog libraries are supported.
 
 ---
 
@@ -238,7 +238,7 @@ or compiler are needed.
 | `X =\= Y` | `X != Y` | Arithmetic disequality constraint |
 | `A ; B` | `A or B` | Disjunction |
 | `X =< Y` | `X <= Y` | Less-or-equal |
-| `X =.. L` | `Unpack(X, L)` | Univ |
+| `X =.. L` | `unpack(X, L)` | Univ |
 | `X mod Y` | `X % Y` | Modulo |
 | `X /\ Y` | `X & Y` | Bitwise AND |
 | `X \/ Y` | `X \| Y` | Bitwise OR |
@@ -260,7 +260,7 @@ largely irrelevant — constraint-based arithmetic doesn't have this ambiguity.
 ### User-Defined Operators
 
 Prolog `:- op(Prec, Type, Name)` directives are consumed by the translation
-layer's parser (the operator table is mutable during parsing). In the emitted
+layer's parser (the operator table is mutable during parsing). in_ the emitted
 Clausal code, uses of user-defined operators become predicate calls:
 
 ```prolog
@@ -272,7 +272,7 @@ X <> Y :- dif(X, Y).
 Translates to:
 
 ```python
-NotEqual(X, Y) <- Dif(X, Y),
+NotEqual(X, Y) <- dif(X, Y),
 # Usage: Foo(X) <- NotEqual(X, Atom("bar")),
 ```
 
@@ -317,7 +317,7 @@ The translator handles bidirectional name conversion:
 
 | Prolog | Clausal | Rule |
 |--------|---------|------|
-| `member` | `In` | BUILTIN_NAME_MAP |
+| `member` | `in_` | BUILTIN_NAME_MAP |
 | `foo_bar` | `FooBar` | snake_to_pascal |
 | `X` | `X` | Single uppercase letter |
 | `Head` | `HEAD` | Titlecase var → ALLCAPS (preferred) |
@@ -327,7 +327,7 @@ The translator handles bidirectional name conversion:
 
 ### Improvement: Prefer ALLCAPS for Variables
 
-When translating Prolog variables to Clausal, prefer ALLCAPS over leading
+when translating Prolog variables to Clausal, prefer ALLCAPS over leading
 underscore for readability:
 
 - `List` → `LIST` (not `_list`)
@@ -358,7 +358,7 @@ underscore for readability:
 - Database: `assert/1`, `assertz/1`, `asserta/1`, `retract/1`
 - Meta: `findall/3`, `bagof/3`, `setof/3`, `forall/2`
 - I/O: `write/1`, `writeln/1`, `nl/0`, `tab/1`
-- Higher-order: `maplist/2,3`, `include/3` (Filter), `exclude/3`, `foldl/4`
+- Higher-order: `maplist/2,3`, `include/3` (include), `exclude/3`, `foldl/4`
 - Constraints: [`dif/2`, CLP(FD)](constraints.md), [CLP(B)](clpb.md)
 - DCG: [`phrase/2,3`](dcg.md)
 
@@ -369,7 +369,7 @@ underscore for readability:
 | `compare/3` | §8.4.1 | **High** | Standard term ordering |
 | `@</2`, `@>/2`, `@=</2`, `@>=/2` | §8.4.1 | **High** | Term ordering operators |
 | `read_term/2,3` | §8.14 | Medium | Parse Prolog terms from input |
-| `write_term/2,3` | §8.14 | Medium | Write with options |
+| `write_term/2,3` | §8.14 | Medium | write with options |
 | `read/1` | §8.14 | Medium | Read term from stdin |
 | `clause/2` | §8.8 | Medium | Clause inspection |
 | `current_predicate/1` | §8.8 | Medium | Predicate inspection |
@@ -436,8 +436,8 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 
 1. `PredicateMeta.__call__` returns `cls` for zero-arity (atoms)
 2. `-private`/`-module` bare atoms generate zero-field PredicateMeta classes
-3. `IsAtom/1` checks for zero-arity PredicateMeta
-4. `IsStr/1` unchanged (tests `isinstance(x, str)`)
+3. `atom/1` checks for zero-arity PredicateMeta
+4. `is_str/1` unchanged (tests `isinstance(x, str)`)
 5. String builtins accept both strings and declared atoms via `_atom_to_str`
 6. `make_atom()` and `is_atom()` helpers added to `clausal.logic.predicate`
 
@@ -447,7 +447,7 @@ Low priority — most Prolog programs that avoid cut also handle errors cleanly.
 2. Implement Prolog library path resolution
 3. Wire up: locate `.pl` → translate → compile → inject exports
 4. Add translation caching (alongside `__pycache__`)
-5. Extend `library_map` in `prolog_dialect.py`
+5. extend `library_map` in `prolog_dialect.py`
 
 ### Phase 3: Missing Builtins
 
@@ -463,7 +463,7 @@ Implemented in `prolog_to_clausal.py` and `clausal_to_prolog.py`:
 1. `PrologTranslationError` raised when Prolog source contains `!/0` (cut)
 2. `PrologTranslationError` raised for `(C -> T ; E)` (if-then-else) and bare `(C -> T)`
 3. Clear error messages suggest pure alternatives (dif/2, once/1, reified ITE, indexing)
-4. Reverse direction: Clausal's reified `THEN if COND else ELSE` is also rejected
+4. reverse direction: Clausal's reified `THEN if COND else ELSE` is also rejected
    when translating to Prolog, since it cannot be faithfully represented as `(C -> T ; E)`
 
 ### Scryer Prolog Embedding — DONE

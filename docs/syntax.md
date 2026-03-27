@@ -12,7 +12,7 @@ Clausal uses 'grammatical holes' which are and must remain syntactically valid, 
 
 **Expression statements ending in `,` are interpreted as logical terms (facts or goals).**
 
-In standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
+in_ standard Python, an expression statement that ends in a comma produces a tuple which is then discarded. So this is never used despite being valid (a grammatical hole). It also means these logic terms are easy to cut, copy, paste, and indent — unlike Prolog, they don't require `.` terminators.
 
 ---
 
@@ -23,7 +23,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | Operator | Meaning |
 |---|---|
 | `--expr` | Python expression embedded inside a logic term |
-| `++expr` | In Python context: logic term inside a Python expression. In `.clausal` context: evaluate Python expression at search time |
+| `++expr` | in_ Python context: logic term inside a Python expression. in_ `.clausal` context: evaluate Python expression at search time |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
 
 `--` was chosen because:
@@ -68,7 +68,7 @@ A single `_` is the anonymous variable — it never stores a value, and unificat
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, titlecase names are conventionally class names — and Clausal uses them for predicates and functors (e.g. `FindAll`, `In`, `Length`). Using titlecase for both variables and predicates would create ambiguity: is `Foo(Bar)` calling predicate `Foo` with atom `Bar`, or with variable `Bar`? ALL-CAPS resolves this cleanly — `FindAll(X, In(X, LIST), BAG)` is unambiguous.
+This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). in_ Python, titlecase names are conventionally class names — and Clausal uses them for predicates and functors (e.g. `findall`, `in_`, `length`). Using titlecase for both variables and predicates would create ambiguity: is `Foo(Bar)` calling predicate `Foo` with atom `Bar`, or with variable `Bar`? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
 
 Why ALL-CAPS works well:
 - Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
@@ -97,7 +97,7 @@ Atoms that conflict with Python keywords or builtins are written as strings: `'n
 
 ## Builtin predicate naming
 
-All built-in predicates use **PascalCase** (e.g. `FindAll`, `In`, `Assert`, `IsVar`). This is a deliberate design choice — not aesthetic — with two goals:
+All built-in predicates use **PascalCase** (e.g. `findall`, `in_`, `assertz`, `var`). This is a deliberate design choice — not aesthetic — with two goals:
 
 1. **Avoid Python keyword conflicts.** Many natural predicate names are Python reserved words: `not`, `in`, `is`, `and`, `or`, `if`, `for`, `assert`, `lambda`, `global`, `return`, `yield`. A Prolog-style lowercase predicate named `in` or `not` would be a syntax error the moment it appears as a function call in a clause body.
 
@@ -160,16 +160,16 @@ The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) (Constrai
 
 ```clausal
 bounded(X) <- (
-    InDomain(X, 1, 10),
+    in_domain(X, 1, 10),
     X > 3,
     X < 8,
-    Label([X])
+    label([X])
 )
 ```
 
-When both sides are ground (no unbound Vars), the operators fall back to direct Python comparison — `3 == 3` is True, `3 < 2` is False — so existing ground arithmetic code works unchanged.
+when both sides are ground (no unbound Vars), the operators fall back to direct Python comparison — `3 == 3` is True, `3 < 2` is False — so existing ground arithmetic code works unchanged.
 
-When at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
+when at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 - `X == 5` narrows X's domain to `{5}` (and binds it)
 - `1 <= X` and `X <= 10` constrain X's domain to `[1, 10]`
 - `X != 3` removes 3 from X's domain
@@ -181,7 +181,7 @@ When at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `Equivalent(X, Y)`, or `not Equivalent(X, Y)` for inequality.
+`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `equivalent(X, Y)`, or `not equivalent(X, Y)` for inequality.
 
 See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
@@ -227,7 +227,7 @@ The body after `<-` must be one of:
   )
   ```
 
-This rule exists because Python's parser sees `<-` as `<` followed by unary `-`. When the body contains operators (`+`, `<`, `and`, `or`, `not`, etc.), the `-` gets absorbed into the body expression and the AST is silently mangled. Parentheses force Python to treat the body as a single grouped expression, keeping the `-` at the top where the term rewriter can find it. Calls and bare names are safe without parentheses because they bind tighter than unary `-`.
+This rule exists because Python's parser sees `<-` as `<` followed by unary `-`. when the body contains operators (`+`, `<`, `and`, `or`, `not`, etc.), the `-` gets absorbed into the body expression and the AST is silently mangled. Parentheses force Python to treat the body as a single grouped expression, keeping the `-` at the top where the term rewriter can find it. Calls and bare names are safe without parentheses because they bind tighter than unary `-`.
 
 To keep things safe, attempting to write an unparenthesized operator body produces a clear error:
 
@@ -243,10 +243,10 @@ Multiple goals in a body are separated by commas, with each goal on its own line
 
 ```clausal
 is_permutation(XS, YS) <- (
-    Length(XS, N),
-    Length(YS, N),
-    Sort(XS, S),
-    Sort(YS, S)
+    length(XS, N),
+    length(YS, N),
+    sort(XS, S),
+    sort(YS, S)
 )
 ```
 
@@ -352,12 +352,12 @@ All list operations apply to strings. Plain string literals (without `u`) are at
 Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
 ```clausal
-greet(NAME) <- Writeln(f"Hello, {NAME}!")
+greet(NAME) <- writeln(f"Hello, {NAME}!")
 
-show_pair(X, Y) <- Writeln(f"{X} and {Y}")
+show_pair(X, Y) <- writeln(f"{X} and {Y}")
 
 # Format specs work too
-show_price(ITEM, PRICE) <- Writeln(f"{ITEM}: ${PRICE:.2f}")
+show_price(ITEM, PRICE) <- writeln(f"{ITEM}: ${PRICE:.2f}")
 ```
 
 Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
@@ -422,12 +422,12 @@ callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 -3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
 ```
 
-When a **logic variable** is used as the callable instead, `X(Unit)` becomes a
+when a **logic variable** is used as the callable instead, `X(Unit)` becomes a
 goal that posts a dimension constraint on `X`:
 
 ```clausal
 # skip
-F(Newton)         # → HasUnits(F, Newton) — F must be bound to a Newton value
+F(Newton)         # → has_units(F, Newton) — F must be bound to a Newton value
 F is 9.8(Newton)  # binds F; hook checks dims match
 ```
 
@@ -446,7 +446,7 @@ not goal,              # negation as failure
 
 ## Immediate goals *(planned)*
 
-> **Note:** This syntax is not yet implemented. Use the `Assert(goal)` and `Retract(term)` builtins directly.
+> **Note:** This syntax is not yet implemented. Use the `assertz(goal)` and `retract(term)` builtins directly.
 
 ```clausal
 # skip
@@ -569,7 +569,7 @@ phrase(digit(D), [3, "plus", 4], REST)
 
 ### Module exports
 
-When using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
+when using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
 
 ```clausal
 # Correct: PredicateMeta classes created with proper field counts
@@ -689,13 +689,13 @@ EDCGs are based on Peter Van Roy's 1989 design and use three directives to decla
 An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
 
 ```clausal
-# Numeric counter: Out = In + Value
+# Numeric counter: Out = in_ + Value
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 
 # List accumulator: prepend items
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 
-# Product accumulator: Out = In * Value
+# Product accumulator: Out = in_ * Value
 -edcg_acc(product, X, IN, OUT, {OUT == IN * X})
 ```
 
@@ -767,7 +767,7 @@ A single rule can update multiple accumulators simultaneously:
 process(X) >> ([1] // counter, [X] // items)
 ```
 
-When a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
+when a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
 
 ```clausal
 # skip
@@ -827,7 +827,7 @@ run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
 - **Purely syntactic**: EDCG `>>` rules are rewritten to ordinary `<-` clauses before compilation. No runtime support needed.
 - **Backward compatible**: Rules without `-edcg_pred` declarations continue to use standard DCG rewriting.
 - **`//` for push, `/` for read**: These use Python's floor-division and division operators respectively.
-- **Accumulator order matters**: Hidden args are appended in the order listed in `-edcg_pred`. When calling from `<-` clauses, match this order.
+- **Accumulator order matters**: Hidden args are appended in the order listed in `-edcg_pred`. when calling from `<-` clauses, match this order.
 
 ---
 
@@ -838,37 +838,37 @@ Meta-predicates are higher-order predicates that take goals as arguments. They a
 ### [All-solutions predicates](meta_predicates.md)
 
 ```clausal
-# Collect all X where In(X, [1,2,3]) into Bag
-FindAll(X, In(X, [1, 2, 3]), BAG),
+# Collect all X where in_(X, [1,2,3]) into Bag
+findall(X, in_(X, [1, 2, 3]), BAG),
 
 # Same but with a filter — only X > 1
-FindAll(X, (In(X, [1, 2, 3]) and X > 1), BAG),
+findall(X, (in_(X, [1, 2, 3]) and X > 1), BAG),
 
 # Cartesian product — template can be any term
-FindAll([X, Y], (In(X, [a, b]) and In(Y, [1, 2])), BAG),
+findall([X, Y], (in_(X, [a, b]) and in_(Y, [1, 2])), BAG),
 
-# BagOf fails if no solutions (FindAll succeeds with [])
-BagOf(X, In(X, LIST), BAG),
+# bagof fails if no solutions (findall succeeds with [])
+bagof(X, in_(X, LIST), BAG),
 
-# SetOf deduplicates results (preserving first-occurrence order)
-SetOf(X, In(X, [1, 1, 2, 2, 3]), BAG),   # BAG = [1, 2, 3]
+# setof deduplicates results (preserving first-occurrence order)
+setof(X, in_(X, [1, 1, 2, 2, 3]), BAG),   # BAG = [1, 2, 3]
 ```
 
 | Predicate | Empty result |
 |---|---|
-| `FindAll/3` | Succeeds with `Bag = []` |
-| `BagOf/3` | Fails |
-| `SetOf/3` | Fails |
+| `findall/3` | Succeeds with `Bag = []` |
+| `bagof/3` | Fails |
+| `setof/3` | Fails |
 
 ### Universal quantification
 
 ```clausal
 # Succeeds iff Action holds for every solution of Cond
-ForAll(In(X, [2, 4, 6]), X > 0),   # succeeds
-ForAll(In(X, [2, -1, 6]), X > 0),  # fails
+forall(in_(X, [2, 4, 6]), X > 0),   # succeeds
+forall(in_(X, [2, -1, 6]), X > 0),  # fails
 ```
 
-`ForAll(Cond, Action)` is equivalent to `not (Cond and not Action)`.
+`forall(Cond, Action)` is equivalent to `not (Cond and not Action)`.
 
 ### Call/N
 
@@ -888,20 +888,20 @@ These predicates take a goal closure and apply it across a list. All use committ
 
 ```clausal
 # skip
-# MapList/2 — check Goal(Elem) succeeds for every element
-MapList((X <- (X > 0)), [1, 2, 3]),              # succeeds
+# maplist/2 — check Goal(Elem) succeeds for every element
+maplist((X <- (X > 0)), [1, 2, 3]),              # succeeds
 
-# MapList/3 — map Goal(X, Y) over list, collect results
-MapList(((X, Y) <- (Y == X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
+# maplist/3 — map Goal(X, Y) over list, collect results
+maplist(((X, Y) <- (Y == X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
 
-# Filter/3 — keep elements where Goal(Elem) succeeds
-Filter((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
+# include/3 — keep elements where Goal(Elem) succeeds
+include((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
 
-# Exclude/3 — keep elements where Goal(Elem) fails
-Exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
+# exclude/3 — keep elements where Goal(Elem) fails
+exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
 
-# FoldLeft/4 — left fold with Goal(Elem, Acc0, Acc1)
-FoldLeft(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
+# foldl/4 — left fold with Goal(Elem, Acc0, Acc1)
+foldl(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 ```
 
 ---
@@ -912,10 +912,10 @@ Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](c
 
 ```clausal
 # skip
-InDomain(X, 1, 9),
-AllDifferent([X, Y, Z]),
+in_domain(X, 1, 9),
+all_different([X, Y, Z]),
 X + Y < Z,
-Label([X, Y, Z])
+label([X, Y, Z])
 ```
 
 See [Constraints](constraints.md) for the full API.
@@ -980,10 +980,10 @@ X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
 N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
-InDomain(X, 1, 10),    # post finite domain
-AllDifferent([X,Y,Z]), # pairwise disequality
-Label([X, Y, Z]),      # enumerate solutions (first-fail)
-Equivalent(X, Y),      # structural equality (Prolog ==/2)
+in_domain(X, 1, 10),    # post finite domain
+all_different([X,Y,Z]), # pairwise disequality
+label([X, Y, Z]),      # enumerate solutions (first-fail)
+equivalent(X, Y),      # structural equality (Prolog ==/2)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)
@@ -994,8 +994,8 @@ Rule >> ListDescription,   # DCG rule
 # Goals
 goal(A, B),            # compound goal
 not goal,              # negation as failure
-Assert(goal),          # assert fact/rule at runtime
-Retract(term),         # retract first matching clause
+assertz(goal),          # assert fact/rule at runtime
+retract(term),         # retract first matching clause
 
 # Module qualification
 utils.Double(X, Y),    # qualified call (after -import_module(utils))
@@ -1010,16 +1010,16 @@ CallGoal((X <- (R == X + 1)), 5)                             # R = 6
 CallGoal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
 
 # Meta-predicates
-FindAll(X, In(X, [1,2,3]), BAG),          # BAG = [1,2,3]
-BagOf(X, In(X, LIST), BAG),              # fails if LIST empty
-SetOf(X, In(X, XS), BAG),               # deduplicates
-ForAll(In(X, NS), X > 0),               # universal quantification
+findall(X, in_(X, [1,2,3]), BAG),          # BAG = [1,2,3]
+bagof(X, in_(X, LIST), BAG),              # fails if LIST empty
+setof(X, in_(X, XS), BAG),               # deduplicates
+forall(in_(X, NS), X > 0),               # universal quantification
 Call(GOAL, ARG1),                          # Call/2 (alias for CallGoal/2)
 
 # F-strings — logic variables auto-deref at search time
-Writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
-Writeln(f"{X:.2f}"),                   # format specs work
-WriteToString(f"{X} and {Y}", S),    # capture as string
+writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
+writeln(f"{X:.2f}"),                   # format specs work
+write_to_string(f"{X} and {Y}", S),    # capture as string
 
 # DCGs — >> defines grammar rules with difference lists
 greeting >> (["hello", "world"]),          # terminal sequence
@@ -1048,14 +1048,14 @@ R is ++D[K],                         # dict access
 ++print(X),                          # side-effect goal
 
 # Higher-order list predicates
-MapList(GOAL, [1, 2, 3]),                   # check GOAL on each element
-MapList(GOAL, XS, YS),                      # map GOAL(X, Y) over list
-Filter(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
-Exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
-FoldLeft(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
-GetItem(INDEX, LIST, ELEM),                 # 0-based index access
-InCheck(ELEM, LIST),                        # deterministic membership check
-Unpack(TERM, LIST),                         # decompose/construct term
+maplist(GOAL, [1, 2, 3]),                   # check GOAL on each element
+maplist(GOAL, XS, YS),                      # map GOAL(X, Y) over list
+include(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
+exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
+foldl(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
+get_item(INDEX, LIST, ELEM),                 # 0-based index access
+in_check(ELEM, LIST),                        # deterministic membership check
+unpack(TERM, LIST),                         # decompose/construct term
 ```
 
 ---

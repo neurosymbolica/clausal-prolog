@@ -27,7 +27,7 @@ from clausal.logic.trampoline import StepGenerator, DONE
 def _run_dispatch(dispatch, *args):
     """Drive a trampoline-protocol dispatch function, return list of solution counts."""
     # args = (*pred_args, trail) — trail is last, ignore the old trailing None
-    # Filter out trailing None from old simple-mode call pattern
+    # include out trailing None from old simple-mode call pattern
     from clausal.logic.variables import Trail
     sg = StepGenerator(dispatch, None, *args)
     results = []

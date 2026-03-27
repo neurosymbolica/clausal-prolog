@@ -1001,7 +1001,7 @@ class TestHomeomorphicEmbedding:
         from clausal.logic.specialization import embeds
         from clausal.logic.variables import Var
         # natnum(X) is embedded BY natnum(s(Y)) — the latter is "bigger".
-        # In the standard definition, embeds(s, t) means s is a sub-pattern of t.
+        # in_ the standard definition, embeds(s, t) means s is a sub-pattern of t.
         # natnum(s(Y)) does NOT embed natnum(X) (compound arg doesn't embed var).
         # But natnum(X) DOES embed natnum(s(Y)) via diving: X doesn't embed s(Y),
         # but natnum(X) dives into natnum(s(Y))'s arg s(Y)... no.
@@ -1013,7 +1013,7 @@ class TestHomeomorphicEmbedding:
         # (coupling: var embeds var), and natnum(Y) is a sub-term of natnum(s(Y)).
         # Wait — natnum(Y) is not a sub-term of natnum(s(Y)).  s(Y) is.
         # Standard: natnum(X) embeds natnum(s(Y))? No — coupling requires X embeds s(Y).
-        # This is a limitation of strict homeomorphic embedding.  In practice,
+        # This is a limitation of strict homeomorphic embedding.  in_ practice,
         # the depth counter handles this.
         x, y = Var(), Var()
         # Verify that at least trivially-growing terms are caught:

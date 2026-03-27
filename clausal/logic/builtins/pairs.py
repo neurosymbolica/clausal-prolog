@@ -1,4 +1,4 @@
-"""Pair helper builtins: Unzip/3, PairKeys/2, PairValues/2, GroupPairsByKey/2."""
+"""Pair helper builtins: pairs_keys_values/3, pairs_keys/2, pairs_values/2, group_pairs_by_key/2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.builtins._registry import _trampoline_builtin
 
 
-@_trampoline_builtin("Unzip", 3)
+@_trampoline_builtin("pairs_keys_values", 3)
 def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
     """pairs_keys_values(Pairs, Keys, Values) — Pairs is a list of [K, V] lists."""
     pairs_val = deref(pairs)
@@ -31,7 +31,7 @@ def _pairs_keys_values__3(this_generator, parent, pairs, keys, values, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("PairKeys", 2)
+@_trampoline_builtin("pairs_keys", 2)
 def _pairs_keys__2(this_generator, parent, pairs, keys, trail):
     """pairs_keys(Pairs, Keys) — Keys are the first elements of each pair."""
     pairs_val = deref(pairs)
@@ -44,7 +44,7 @@ def _pairs_keys__2(this_generator, parent, pairs, keys, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("PairValues", 2)
+@_trampoline_builtin("pairs_values", 2)
 def _pairs_values__2(this_generator, parent, pairs, values, trail):
     """pairs_values(Pairs, Values) — Values are the second elements of each pair."""
     pairs_val = deref(pairs)
@@ -57,9 +57,9 @@ def _pairs_values__2(this_generator, parent, pairs, values, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("GroupPairsByKey", 2)
+@_trampoline_builtin("group_pairs_by_key", 2)
 def _group_pairs_by_key__2(this_generator, parent, pairs, groups, trail):
-    """GroupPairsByKey(Pairs, Groups) — group [Key, Value] pairs by key.
+    """group_pairs_by_key(Pairs, Groups) — group [Key, Value] pairs by key.
 
     Groups is a list of [Key, Values] where Values collects all values for that key.
     Order preserved: first occurrence of key determines group order.

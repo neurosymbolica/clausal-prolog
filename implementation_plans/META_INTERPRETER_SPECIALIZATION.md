@@ -7,7 +7,7 @@ programming: write a small interpreter, extend it with tracing, depth
 limiting, proof trees, or constraint propagation, and run any object
 program through it.  The cost is interpretation overhead — every goal
 resolution in the object program goes through the MI's own clause
-matching, `CopyTerm`, list manipulation, and recursive calls.
+matching, `copy_term`, list manipulation, and recursive calls.
 
 **Partial deduction** (partial evaluation for logic programs) eliminates
 this overhead.  Specializing an MI with respect to a known object program
@@ -25,11 +25,11 @@ systems like LOGEN, ECCE, and Mixtus, demonstrating 10–400× speedups.
 The `clausal/examples/metainterpreters.clausal` file contains five MIs
 ported from Triska's *acomip*:
 
-| MI | Signature | Extension over vanilla |
+| MI | signature | Extension over vanilla |
 |---|---|---|
 | `Solve/2` | `(Goals, Program)` | None — vanilla |
 | `SolveCount/3` | `(Goals, Program, Count)` | Counts inference steps |
-| `SolveLimit/3` | `(Goals, Program, Max)` | Depth-bounded search |
+| `SolveLimit/3` | `(Goals, Program, max_)` | Depth-bounded search |
 | `SolveIterativeDeepening/2` | `(Goals, Program)` | Complete search via ID |
 | `SolveTree/3` | `(Goals, Program, Tree)` | Builds proof trees |
 
@@ -37,15 +37,15 @@ All use the same core loop:
 
 ```
 Solve([GOAL, *GOALS], PROGRAM) <- (
-    MatchClause(GOAL, BODY, PROGRAM),    # In + CopyTerm + unify
-    Append(BODY, GOALS, ALL_GOALS),       # list append
+    MatchClause(GOAL, BODY, PROGRAM),    # in_ + copy_term + unify
+    append(BODY, GOALS, ALL_GOALS),       # list append
     Solve(ALL_GOALS, PROGRAM)             # recursive MI call
 )
 ```
 
-The overhead per resolution step: `In` iterates the program list,
-`CopyTerm` deep-copies a clause, `is` unifies the goal with the fresh
-head, `Append` concatenates lists.  For a directly compiled predicate,
+The overhead per resolution step: `in_` iterates the program list,
+`copy_term` deep-copies a clause, `is` unifies the goal with the fresh
+head, `append` concatenates lists.  For a directly compiled predicate,
 none of this exists — the compiler generates a match/dispatch function
 that jumps straight to the right clause arm.
 
@@ -72,7 +72,7 @@ SolveCountNatnum(["s", X], COUNT) <- (
 )
 ```
 
-The `In`/`CopyTerm`/`Append` machinery is gone.  The counting extension
+The `in_`/`copy_term`/`append` machinery is gone.  The counting extension
 remains, compiled directly into the object program's structure.  This
 residual program compiles through the normal clausal pipeline and runs at
 full speed.
@@ -97,7 +97,7 @@ The `-specialize` directive triggers the transformation.  It names:
 
 The MI pattern (goal-list arg, program arg, extra args, recursive style)
 is recognized automatically from the clause structure: `MatchClause`,
-`Append`, `[GOAL, *GOALS]` pattern, and recursive self-calls.
+`append`, `[GOAL, *GOALS]` pattern, and recursive self-calls.
 
 After specialization, user code calls `SolveCountNatnum` directly — no
 program argument, no interpretation overhead.
@@ -158,11 +158,11 @@ SPECIALIZE(mi_clauses, object_program, mi_name, specialized_name):
 
     3. UNFOLD
        - For each clause [Head_i, Body_i] in PROGRAM:
-         * Create fresh variables for Head_i and Body_i (via CopyTerm)
+         * Create fresh variables for Head_i and Body_i (via copy_term)
          * Substitute into the MI's recursive case:
            - MatchClause(GOAL, BODY, PROGRAM)  →  GOAL unifies with Head_i,
                                                     BODY = Body_i
-           - Append(Body_i, GOALS, ALL_GOALS)  →  compute statically when
+           - append(Body_i, GOALS, ALL_GOALS)  →  compute statically when
                                                     Body_i has known length
          * The result is one specialized clause per object clause
        - For the MI's base case (empty goal list):
@@ -187,12 +187,12 @@ Rather than parsing arbitrary code, we match against known MI idioms:
 MI([], ...)                                   # base
 MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     MI(ALL_GOALS, PROGRAM, ...)
 )
 ```
 
-Specialization produces one clause per object clause.  The `Append` is
+Specialization produces one clause per object clause.  The `append` is
 eliminated because `BODY` is statically known (its length and structure
 come from the object clause).  For a fact (empty body), `ALL_GOALS =
 GOALS` directly.  For a rule with body `[G1, G2]`, `ALL_GOALS = [G1,
@@ -257,7 +257,7 @@ class MIPattern:
 The recognizer works by:
 1. Finding the base clause (goal-list arg matches `[]`)
 2. Finding the recursive clause (goal-list arg matches `[GOAL, *GOALS]`)
-3. Walking the body to locate `MatchClause`, `Append`, and recursive
+3. Walking the body to locate `MatchClause`, `append`, and recursive
    self-calls
 4. Classifying everything else as pre- or post-match goals
 
@@ -311,7 +311,7 @@ Implement `specialize_mi(mi_pattern, object_program, new_name) → list[Predicat
       MI([GOAL, *GOALS], PROGRAM, ...extra) <- (
           ...pre_match,
           MatchClause(GOAL, BODY, PROGRAM),
-          Append(BODY, GOALS, ALL_GOALS),
+          append(BODY, GOALS, ALL_GOALS),
           ...post_match,
           MI(ALL_GOALS, PROGRAM, ...extra')
       )
@@ -319,7 +319,7 @@ Implement `specialize_mi(mi_pattern, object_program, new_name) → list[Predicat
       # For object clause [Head_i, Body_i], substitute:
       #   GOAL = Head_i   (unified)
       #   BODY = Body_i   (from MatchClause)
-      #   ALL_GOALS = [*Body_i, *GOALS]  (from Append)
+      #   ALL_GOALS = [*Body_i, *GOALS]  (from append)
       #
       # Result:
       NEW_NAME([Head_i, *GOALS], ...extra) <- (
@@ -346,7 +346,7 @@ Implement `specialize_mi(mi_pattern, object_program, new_name) → list[Predicat
 4. **Return** the list of `PredicateItem` nodes.
 
 **Tests:** Specialize each of the five MIs with the natnum and graph
-programs.  Assert the residual clause count matches expectations.  Run
+programs.  assertz the residual clause count matches expectations.  Run
 the specialized predicates and verify identical results to the
 unspecialized versions.
 
@@ -457,7 +457,7 @@ deeper specialization is desired:
    deep (configurable, default 10).
 
 3. **Memoization table**: Track which `(functor, arg_pattern)` pairs have
-   been specialized.  When a goal matches an already-specialized pattern,
+   been specialized.  when a goal matches an already-specialized pattern,
    emit a call to the existing specialized predicate instead of
    re-unfolding.
 
@@ -494,7 +494,7 @@ MI (SolveCount from metainterpreters.clausal):
 SolveCount([], _PROGRAM, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
     COUNT := SUB_COUNT + 1
 )
@@ -530,7 +530,7 @@ Object clause: `[["natnum", 0], []]`
 - Substitute into MI recursive case:
   - GOAL = `["natnum", 0]`
   - BODY = `[]`
-  - `Append([], GOALS, ALL_GOALS)` → `ALL_GOALS = GOALS`
+  - `append([], GOALS, ALL_GOALS)` → `ALL_GOALS = GOALS`
 - Residual clause:
   ```
   SolveCountNatnum([["natnum", 0], *GOALS], COUNT) <- (
@@ -542,12 +542,12 @@ Object clause: `[["natnum", 0], []]`
 ### Step 3: Unfold — object clause 2 (rule)
 
 Object clause: `[["natnum", ["s", X']], [["natnum", X']]]`
-(X' is a fresh variable from CopyTerm)
+(X' is a fresh variable from copy_term)
 - Head = `["natnum", ["s", X']]`, Body = `[["natnum", X']]`
 - Substitute into MI recursive case:
   - GOAL = `["natnum", ["s", X']]`
   - BODY = `[["natnum", X']]`
-  - `Append([["natnum", X']], GOALS, ALL_GOALS)` →
+  - `append([["natnum", X']], GOALS, ALL_GOALS)` →
     `ALL_GOALS = [["natnum", X'], *GOALS]`
 - Residual clause:
   ```
@@ -577,7 +577,7 @@ SolveCountNatnum([["natnum", ["s", X]], *GOALS], COUNT) <- (
 )
 ```
 
-No `In`, no `CopyTerm`, no `Append`, no `MatchClause`.  The counting
+No `in_`, no `copy_term`, no `append`, no `MatchClause`.  The counting
 logic is woven directly into the clause structure.  This compiles through
 the normal clausal pipeline.
 
@@ -589,7 +589,7 @@ the normal clausal pipeline.
 |---|---|---|
 | MI pattern too rigid | Medium | Start with the five known patterns; add a `CannotSpecialize` escape that falls back to unspecialized execution |
 | Object program evaluation at compile time | Low | Programs are defined as facts/rules; evaluate via `call()` at module load time (already works for term expansion) |
-| Variable freshening bugs | High | Lean on existing `CopyTerm` infrastructure; extensive test suite comparing specialized vs unspecialized results |
+| Variable freshening bugs | High | Lean on existing `copy_term` infrastructure; extensive test suite comparing specialized vs unspecialized results |
 | Scope creep into general PE | Medium | Phases are strictly ordered; Phases 4–5 are explicitly deferred and optional |
 | Interaction with tabling/CLP(FD) | Low | Specialized predicates are normal predicates — they can be tabled or use constraints via the usual directives |
 
@@ -731,8 +731,8 @@ and diff.
 -specialize(MI, Source, alias=NewName, depth=5)
 ```
 
-When `depth=0` (default), uses the standard Phase 1 shallow unfolder.
-When `depth > 0`, uses the deep unfolder with homeomorphic embedding
+when `depth=0` (default), uses the standard Phase 1 shallow unfolder.
+when `depth > 0`, uses the deep unfolder with homeomorphic embedding
 and memoization for termination control.
 
 ### Tests

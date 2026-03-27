@@ -288,7 +288,7 @@ class TestScryerExecution:
         assert "ok" in result.stdout
 
     def test_findall(self):
-        """FindAll translates to findall/3 and works in Scryer."""
+        """findall translates to findall/3 and works in Scryer."""
         src = textwrap.dedent("""\
             Num(1),
             Num(2),
@@ -400,10 +400,10 @@ class TestScryerDialectFeatures:
     def test_clpz_constraints(self):
         """CLP(Z) constraints use Scryer's clpz library."""
         src = textwrap.dedent("""\
-            -import_from(clausal.logic.clpfd, [InDomain, AllDifferent])
+            -import_from(clausal.logic.clpfd, [in_domain, all_different])
             Test(X) <- (
-                InDomain(X, 1, 3),
-                AllDifferent([X])
+                in_domain(X, 1, 3),
+                all_different([X])
             )
         """)
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)

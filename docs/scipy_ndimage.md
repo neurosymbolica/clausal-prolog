@@ -8,7 +8,7 @@ The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/sc
 
 ```clausal
 # skip
--import_from(scipy_ndimage, [GaussianFilter, Label, Zoom, ...])
+-import_from(scipy_ndimage, [GaussianFilter, label, Zoom, ...])
 ```
 
 Or via the canonical `py.*` path:
@@ -22,7 +22,7 @@ Or via the canonical `py.*` path:
 
 ## Tier
 
-All predicates are **Tier 1 — pure functions**: NumPy array in, result directly in `RESULT`. No result dicts that need a `ResultGet` accessor (except `Label`, which returns a plain Python dict with named keys you can access directly).
+All predicates are **Tier 1 — pure functions**: NumPy array in, result directly in `RESULT`. No result dicts that need a `ResultGet` accessor (except `label`, which returns a plain Python dict with named keys you can access directly).
 
 ---
 
@@ -36,7 +36,7 @@ Predicates are imported from `scipy_ndimage`, so there is no module prefix in th
 | `uniform_filter` | `UniformFilter` |
 | `median_filter` | `MedianFilter` |
 | `convolve` | `Convolve` |
-| `label` | `Label` |
+| `label` | `label` |
 | `binary_erosion` | `BinaryErosion` |
 | `binary_dilation` | `BinaryDilation` |
 | `binary_opening` | `BinaryOpening` |
@@ -116,8 +116,8 @@ EdgeDetect(SIGNAL, EDGES) <- (
 
 ```clausal
 # skip
-Label(INPUT, RESULT)
-    Label connected components of non-zero values in INPUT.
+label(INPUT, RESULT)
+    label connected components of non-zero values in INPUT.
     INPUT:  N-D integer or boolean array (non-zero = foreground)
     RESULT: dict with two keys:
         'label_array'  — integer array of the same shape, each component
@@ -128,10 +128,10 @@ Label(INPUT, RESULT)
 Example — count blobs in a binary image:
 
 ```clausal
--import_from(scipy_ndimage, [Label])
+-import_from(scipy_ndimage, [label])
 
 CountBlobs(IMAGE, COUNT) <- (
-    Label(IMAGE, LABELED),
+    label(IMAGE, LABELED),
     COUNT is ++(int(LABELED['num_features']))
 )
 ```
@@ -218,7 +218,7 @@ ZoomImage(IMAGE, FACTOR, ZOOMED) <- (
 # skip
 FindObjects(INPUT, RESULT)
     Find bounding-box slices for each labelled component in INPUT.
-    INPUT:  integer-labelled array (e.g., the 'label_array' from Label)
+    INPUT:  integer-labelled array (e.g., the 'label_array' from label)
     RESULT: list of slice-tuple bounding boxes, one per component;
             RESULT[i] is a tuple of slice objects covering component i+1;
             components whose label is absent give None entries
@@ -232,10 +232,10 @@ CenterOfMass(INPUT, RESULT)
 Example — find the centroid of a blob:
 
 ```clausal
--import_from(scipy_ndimage, [Label, CenterOfMass])
+-import_from(scipy_ndimage, [label, CenterOfMass])
 
 BlobCentroid(BINARY_IMAGE, CENTROID) <- (
-    Label(BINARY_IMAGE, LABELED),
+    label(BINARY_IMAGE, LABELED),
     CenterOfMass(BINARY_IMAGE, CENTROID)
 )
 ```
@@ -256,13 +256,13 @@ ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
 )
 ```
 
-### Label and count connected components
+### label and count connected components
 
 ```clausal
--import_from(scipy_ndimage, [Label, FindObjects])
+-import_from(scipy_ndimage, [label, FindObjects])
 
 LabelAndLocate(BINARY, COUNT, REGIONS) <- (
-    Label(BINARY, LABELED),
+    label(BINARY, LABELED),
     COUNT is ++(int(LABELED['num_features'])),
     FindObjects(LABELED['label_array'], REGIONS)
 )
@@ -287,11 +287,11 @@ RemoveNoise(RAW, CLEAN) <- (
   `mode='reflect'` by default; all geometric predicates use `mode='constant'`
   with `cval=0.0`. To use other modes, call the underlying scipy function
   directly via `++()`.
-- **`Label` result**: `RESULT['label_array']` is a NumPy integer array;
+- **`label` result**: `RESULT['label_array']` is a NumPy integer array;
   `RESULT['num_features']` is a Python int. Access dict values inside
   `++()` expressions: `++(int(RESULT['num_features']))`.
 - **`FindObjects` input**: pass the `label_array` value from
-  `Label`, not the raw binary array.
+  `label`, not the raw binary array.
 - **`CenterOfMass` output**: for a 1-D array the result is a 1-tuple
   `(centre,)`; for a 2-D array it is `(row, col)`. Index with `++(COM[0])`.
 - Predicates fail (no solution) when scipy raises an exception, or when a

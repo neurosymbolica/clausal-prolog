@@ -328,4 +328,4 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
 
 ---
 
-*See also: [I/O](io.md) — `Write`, `Writeln`, and f-string output · [Python Interop](python_integration.md) — `++()` escape for custom logging handlers.*
+*See also: [I/O](io.md) — `write`, `writeln`, and f-string output · [Python Interop](python_integration.md) — `++()` escape for custom logging handlers.*

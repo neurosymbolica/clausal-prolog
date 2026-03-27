@@ -360,7 +360,7 @@ class TestUnificationProtocol:
         assert not unify(x, y, trail)
 
     def test_attvar_constraint_transfers_to_unconstrained_var(self):
-        """When constrained var is unified with unconstrained var, constraint transfers."""
+        """when constrained var is unified with unconstrained var, constraint transfers."""
         trail = Trail()
         x = Var()
         y = Var()
@@ -776,7 +776,7 @@ class TestUnitPredicateCall:
 
 
 class TestUnitPredicateArithmetic:
-    """_UnitsPredicate arithmetic produces dimension descriptors for HasUnits."""
+    """_UnitsPredicate arithmetic produces dimension descriptors for has_units."""
 
     def test_pow_produces_correct_dims(self):
         from clausal.modules.py.units import Metre
@@ -860,13 +860,13 @@ class TestPhysicalConstants:
 class TestUnitsSugar:
     """Tests for n(Unit) and X(Unit) syntactic sugar."""
 
-    # ── HasUnits/2 builtin (direct Python via run()) ──────────────────────────
+    # ── has_units/2 builtin (direct Python via run()) ──────────────────────────
 
     def _has_units_pred(self):
-        """Return a callable suitable for run() that wraps HasUnits/2."""
+        """Return a callable suitable for run() that wraps has_units/2."""
         import clausal.modules.py.units  # ensure units_constraint is imported
         from clausal.logic.builtins._registry import get_builtin_predicate
-        return get_builtin_predicate("HasUnits", 2)
+        return get_builtin_predicate("has_units", 2)
 
     def test_has_units_ground_match(self):
         from clausal.modules.py.units import Newton
@@ -1009,7 +1009,7 @@ class TestUnitsSugar:
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (N := 10, V := N(Metre/Second), HasUnits(V, Metre/Second))\n"
+            "Test <- (N := 10, V := N(Metre/Second), has_units(V, Metre/Second))\n"
         )
         p = tmp_path / "var_sugar_compound.clausal"
         p.write_text(src)
@@ -1017,12 +1017,12 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_has_units_check_passes(self, tmp_path):
-        """HasUnits(D, Metre) succeeds when D is a Metre Quantity."""
+        """has_units(D, Metre) succeeds when D is a Metre Quantity."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := 5(Metre), HasUnits(D, Metre))\n"
+            "Test <- (D := 5(Metre), has_units(D, Metre))\n"
         )
         p = tmp_path / "has_units_match.clausal"
         p.write_text(src)
@@ -1030,12 +1030,12 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_has_units_check_fails(self, tmp_path):
-        """HasUnits(D, Metre) fails when D has Second dims."""
+        """has_units(D, Metre) fails when D has Second dims."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (D := 5(Second), HasUnits(D, Metre))\n"
+            "Test <- (D := 5(Second), has_units(D, Metre))\n"
         )
         p = tmp_path / "has_units_fail.clausal"
         p.write_text(src)
@@ -1043,12 +1043,12 @@ class TestUnitsSugar:
         assert not any(True for _ in call("Test", module=mod))
 
     def test_has_units_posts_constraint(self, tmp_path):
-        """HasUnits(X, Metre) on unbound var posts the units constraint."""
+        """has_units(X, Metre) on unbound var posts the units constraint."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre])\n"
-            "Test <- (HasUnits(X, Metre), X is 5(Metre))\n"
+            "Test <- (has_units(X, Metre), X is 5(Metre))\n"
         )
         p = tmp_path / "has_units_constrain.clausal"
         p.write_text(src)
@@ -1056,12 +1056,12 @@ class TestUnitsSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_has_units_constraint_rejects_wrong_unit(self, tmp_path):
-        """HasUnits(X, Metre) then unify with Second — fails."""
+        """has_units(X, Metre) then unify with Second — fails."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         src = (
             "-import_from(py.units, [Metre, Second])\n"
-            "Test <- (HasUnits(X, Metre), X is 5(Second))\n"
+            "Test <- (has_units(X, Metre), X is 5(Second))\n"
         )
         p = tmp_path / "has_units_reject.clausal"
         p.write_text(src)
@@ -1172,19 +1172,19 @@ class TestDimensionlessSugar:
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless(self, tmp_path):
-        """HasUnits(D, Dimensionless) succeeds for n()."""
+        """has_units(D, Dimensionless) succeeds for n()."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_is",
             "-import_from(py.units, [Dimensionless])\n"
-            "Test <- (D := 7(), HasUnits(D, Dimensionless))\n")
+            "Test <- (D := 7(), has_units(D, Dimensionless))\n")
         assert any(True for _ in call("Test", module=mod))
 
     def test_dimensionless_is_dimensionless_not_length(self, tmp_path):
-        """HasUnits(D, Metre) fails for a dimensionless n() value."""
+        """has_units(D, Metre) fails for a dimensionless n() value."""
         from clausal.logic.solve import call
         mod = self._load(tmp_path, "dimless_not_len",
             "-import_from(py.units, [Metre])\n"
-            "Test <- (D := 7(), HasUnits(D, Metre))\n")
+            "Test <- (D := 7(), has_units(D, Metre))\n")
         assert not any(True for _ in call("Test", module=mod))
 
 
@@ -1306,7 +1306,7 @@ class TestSIPrefixes:
 class TestImperialUnits:
     """Imperial / non-SI unit vectors are Quantity values; multiply by scalar."""
 
-    # ── Length ───────────────────────────────────────────────────────────────
+    # ── length ───────────────────────────────────────────────────────────────
 
     def test_inch(self):
         from clausal.modules.py.imperial import inch

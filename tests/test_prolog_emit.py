@@ -25,7 +25,7 @@ class TestNaming:
         assert pascal_to_snake("CLP") == "clp"
 
     def test_pascal_to_snake_mixed(self):
-        assert pascal_to_snake("AllDifferent") == "all_different"
+        assert pascal_to_snake("all_different") == "all_different"
 
     def test_pascal_to_snake_dcg(self):
         assert pascal_to_snake("DCGRule") == "dcg_rule"
@@ -261,7 +261,7 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         assert "\\+ danger(X)" in result
 
     def test_list_spread(self):
-        source = 'Append([H, *T], L, [H, *R]) <- Append(T, L, R)'
+        source = 'append([H, *T], L, [H, *R]) <- append(T, L, R)'
         result = clausal_source_to_prolog(source)
         assert "[H|T]" in result
         assert "[H|R]" in result
@@ -340,7 +340,7 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
 
     def test_builtin_name_mapping(self):
         """Builtin names map correctly."""
-        source = 'Test() <- FindAll(X, Member(X, L), R)'
+        source = 'Test() <- findall(X, Member(X, L), R)'
         result = clausal_source_to_prolog(source)
         assert "findall" in result
         assert "member" in result

@@ -194,7 +194,7 @@ class TestAnalyzeIndexPositions:
 
 class TestSecondArgLookup:
     def test_lookup_by_second_arg(self):
-        """When first arg is Var but second is ground, use second-arg index."""
+        """when first arg is Var but second is ground, use second-arg index."""
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -223,7 +223,7 @@ class TestSecondArgLookup:
         assert results == [("blue", "cool")]
 
     def test_all_vars_enumerate(self):
-        """When no arg is ground, fallback to full scan."""
+        """when no arg is ground, fallback to full scan."""
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -417,7 +417,7 @@ class TestDynamicReindexGroundness:
 
 class TestBackwardCompat:
     def test_single_position_matches_v2_1_behavior(self):
-        """When only position 0 is indexable, behavior matches V2-1."""
+        """when only position 0 is indexable, behavior matches V2-1."""
         # All second args are Var → only position 0 is indexable
         clauses = [
             Clause(head=Compound("f", (i, Var())), body=[True])

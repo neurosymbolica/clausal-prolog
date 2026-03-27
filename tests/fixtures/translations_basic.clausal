@@ -1,7 +1,7 @@
 -private([th, hello, nil])
 
 -translations(th, {
-    Append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),
+    append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),
     Member(ELEMENT, LIST): สมาชิกของ(สมาชิก, รายการ),
     Greeting(NAME, MESSAGE): ทักทาย(ชื่อ, ข้อความ),
 })
@@ -16,11 +16,11 @@ Greeting("Mike", "hi"),
 
 Test("translate produces string") <- (
     Translate(th, Greeting(hello, "world"), STRING),
-    IsStr(STRING)
+    is_str(STRING)
 )
 
 Test("translate produces nonempty") <- (
     Translate(th, Greeting(hello, "world"), STRING),
-    AtomLength(STRING, LENGTH),
+    atom_length(STRING, LENGTH),
     LENGTH > 0
 )

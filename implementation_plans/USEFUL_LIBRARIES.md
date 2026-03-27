@@ -96,7 +96,7 @@ Ranked by usefulness — how often a typical Prolog project would reach for this
 - **Downloads:** 180
 - **Complexity to port:** Low-Medium.
 
-### 25. union_find — Union-Find Algorithm
+### 25. union_find — union-Find Algorithm
 - **Pack:** https://www.swi-prolog.org/pack/list?p=union_find
 - **What it does:** Disjoint-set data structure with near-O(1) union and find.
 - **Why port it:** Fundamental algorithm for equivalence classes, graph connectivity, type inference, constraint solving. Used as a building block by many other libraries.
@@ -156,6 +156,6 @@ Ranked by usefulness — how often a typical Prolog project would reach for this
 | 🟡 Do next | quickcheck | Medium | Medium — testing infrastructure |
 | 🟡 Do next | prosqlite | High | High — but requires C FFI |
 | 🟡 Do next | cli_table | Low | Medium — REPL quality of life |
-| 🟢 When ready | clpBNR | High | Domain-specific but valuable |
-| 🟢 When ready | lsp_server | Very High | Critical for adoption |
-| 🟢 When ready | openapi | High | Web service enabler |
+| 🟢 when ready | clpBNR | High | Domain-specific but valuable |
+| 🟢 when ready | lsp_server | Very High | Critical for adoption |
+| 🟢 when ready | openapi | High | Web service enabler |

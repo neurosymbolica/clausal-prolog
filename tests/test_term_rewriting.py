@@ -193,7 +193,7 @@ def test_bool_and_folded():
     ("a >= b",        sa.GtE),
     ("a is b",        sa.Unify),
     ("a is not b",    sa.DoesNotUnify),
-    ("a in b",        sa.In),
+    ("a in b",        sa.in_),
     ("a not in b",    sa.NotIn),
 ])
 def test_cmpop(src, cls):

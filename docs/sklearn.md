@@ -255,7 +255,7 @@ Learned(F, "feature_importances", FI)
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `EncodeLabels(Labels, Encoded, Mapping)` | `+Labels, -Encoded, -Mapping` | Label encoding |
+| `EncodeLabels(Labels, Encoded, Mapping)` | `+Labels, -Encoded, -Mapping` | label encoding |
 | `Binarize(X, Threshold, Result)` | `+X, +Threshold, -Result` | Threshold to 0/1 |
 | `Normalize(X, Norm, Result)` | `+X, +Norm, -Result` | Row-wise normalization (`"l1"`, `"l2"`, `"max"`) |
 | `PolynomialFeatures(X, Degree, Result)` | `+X, +Degree, -Result` | Generate polynomial features |
@@ -314,4 +314,4 @@ Learned(F, "feature_importances", FI)
 
 ---
 
-*See also: [Python Interop](python_integration.md) — `++()` escape for direct scikit-learn access · [Higher-Order](higher_order.md) — `MapList` and `Filter` for data preprocessing.*
+*See also: [Python Interop](python_integration.md) — `++()` escape for direct scikit-learn access · [Higher-Order](higher_order.md) — `maplist` and `include` for data preprocessing.*

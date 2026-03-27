@@ -3,7 +3,7 @@
 Every built-in predicate should have a constructable PredicateMeta class
 so that users can build canonical term trees in Python:
 
-    Append(X_, [1, 2], Z_)   instead of   Call(func=LoadName('Append'), ...)
+    append(X_, [1, 2], Z_)   instead of   Call(func=LoadName('append'), ...)
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class TestRegistry:
         assert len(_BUILTIN_CLASSES) >= 70  # we have ~75 unique functor names
 
     def test_get_builtin_class_found(self):
-        cls = get_builtin_class("Append")
+        cls = get_builtin_class("append")
         assert cls is not None
 
     def test_get_builtin_class_not_found(self):
@@ -55,42 +55,42 @@ class TestSingleArityConstruction:
     """Test that single-arity builtin classes produce proper term instances."""
 
     def test_append_positional(self):
-        Append = get_builtin_class("Append")
-        t = Append([1, 2], [3], [1, 2, 3])
+        append = get_builtin_class("append")
+        t = append([1, 2], [3], [1, 2, 3])
         assert is_term_instance(t)
         assert t.l1 == [1, 2]
         assert t.l2 == [3]
         assert t.l3 == [1, 2, 3]
 
     def test_append_keyword(self):
-        Append = get_builtin_class("Append")
-        t = Append(l1=[1], l2=[2])
+        append = get_builtin_class("append")
+        t = append(l1=[1], l2=[2])
         assert t.l1 == [1]
         assert t.l2 == [2]
         # l3 should be auto-filled with Var()
         assert isinstance(deref(t.l3), Var)
 
     def test_between_partial(self):
-        Between = get_builtin_class("Between")
-        t = Between(low=1, high=10)
+        between = get_builtin_class("between")
+        t = between(low=1, high=10)
         assert t.low == 1
         assert t.high == 10
         assert isinstance(deref(t.x), Var)
 
     def test_length_positional(self):
-        Length = get_builtin_class("Length")
-        t = Length([1, 2, 3], 3)
+        length = get_builtin_class("length")
+        t = length([1, 2, 3], 3)
         assert t.lst == [1, 2, 3]
         assert t.n == 3
 
     def test_zero_arity(self):
-        Nl = get_builtin_class("Nl")
-        assert isinstance(Nl, PredicateMeta)
-        assert Nl._arity == 0
+        nl = get_builtin_class("nl")
+        assert isinstance(nl, PredicateMeta)
+        assert nl._arity == 0
 
     def test_no_args_all_vars(self):
-        In = get_builtin_class("In")
-        t = In()
+        in_ = get_builtin_class("in_")
+        t = in_()
         assert isinstance(deref(t.elem), Var)
         assert isinstance(deref(t.lst), Var)
 
@@ -102,28 +102,28 @@ class TestFieldNames:
     """Verify field names are meaningful (extracted from implementation params)."""
 
     def test_append_fields(self):
-        assert _BUILTIN_FIELDS[("Append", 3)] == ("l1", "l2", "l3")
+        assert _BUILTIN_FIELDS[("append", 3)] == ("l1", "l2", "l3")
 
     def test_between_fields(self):
-        assert _BUILTIN_FIELDS[("Between", 3)] == ("low", "high", "x")
+        assert _BUILTIN_FIELDS[("between", 3)] == ("low", "high", "x")
 
     def test_length_fields(self):
-        assert _BUILTIN_FIELDS[("Length", 2)] == ("lst", "n")
+        assert _BUILTIN_FIELDS[("length", 2)] == ("lst", "n")
 
     def test_functor_fields(self):
-        assert _BUILTIN_FIELDS[("Functor", 3)] == ("term", "name", "arity")
+        assert _BUILTIN_FIELDS[("functor", 3)] == ("term", "name", "arity")
 
     def test_in_fields(self):
-        assert _BUILTIN_FIELDS[("In", 2)] == ("elem", "lst")
+        assert _BUILTIN_FIELDS[("in_", 2)] == ("elem", "lst")
 
     def test_db_builtin_fields(self):
-        assert _BUILTIN_FIELDS[("Assert", 1)] == ("term",)
-        assert _BUILTIN_FIELDS[("Retract", 1)] == ("term",)
-        assert _BUILTIN_FIELDS[("ClearTable", 2)] == ("functor", "arity")
+        assert _BUILTIN_FIELDS[("assertz", 1)] == ("term",)
+        assert _BUILTIN_FIELDS[("retract", 1)] == ("term",)
+        assert _BUILTIN_FIELDS[("abolish_table", 2)] == ("functor", "arity")
 
     def test_term_field_names_on_instance(self):
-        Append = get_builtin_class("Append")
-        t = Append([1], [2], [1, 2])
+        append = get_builtin_class("append")
+        t = append([1], [2], [1, 2])
         assert term_field_names(t) == ("l1", "l2", "l3")
 
 
@@ -134,39 +134,39 @@ class TestPredicateMetaProtocol:
     """Builtin classes should satisfy the PredicateMeta protocol."""
 
     def test_is_predicate_meta(self):
-        Append = get_builtin_class("Append")
-        assert isinstance(Append, PredicateMeta)
+        append = get_builtin_class("append")
+        assert isinstance(append, PredicateMeta)
 
     def test_functor_property(self):
-        Append = get_builtin_class("Append")
-        assert Append._functor == "Append"
+        append = get_builtin_class("append")
+        assert append._functor == "append"
 
     def test_arity_property(self):
-        Append = get_builtin_class("Append")
-        assert Append._arity == 3
+        append = get_builtin_class("append")
+        assert append._arity == 3
 
     def test_locked(self):
-        Append = get_builtin_class("Append")
-        assert Append._locked is True
+        append = get_builtin_class("append")
+        assert append._locked is True
 
     def test_assertz_raises_on_locked(self):
-        Append = get_builtin_class("Append")
+        append = get_builtin_class("append")
         with pytest.raises(RuntimeError, match="locked"):
-            Append._assertz("dummy")
+            append._assertz("dummy")
 
     def test_dispatch_fn_set(self):
-        Append = get_builtin_class("Append")
-        assert Append._dispatch_fn is not None
+        append = get_builtin_class("append")
+        assert append._dispatch_fn is not None
 
     def test_get_dispatch(self):
-        Append = get_builtin_class("Append")
-        fn = Append._get_dispatch()
+        append = get_builtin_class("append")
+        fn = append._get_dispatch()
         assert callable(fn)
 
     def test_db_builtin_no_dispatch(self):
         """DB-dependent builtins should not have dispatch set (needs db)."""
-        Assert = get_builtin_class("Assert")
-        assert Assert._dispatch_fn is None
+        assertz = get_builtin_class("assertz")
+        assert assertz._dispatch_fn is None
 
 
 # ── __eq__ / __repr__ / __match_args__ ────────────────────────────────────────
@@ -174,27 +174,27 @@ class TestPredicateMetaProtocol:
 
 class TestInstanceProtocols:
     def test_eq(self):
-        In = get_builtin_class("In")
-        assert In(elem=1, lst=[1, 2]) == In(elem=1, lst=[1, 2])
+        in_ = get_builtin_class("in_")
+        assert in_(elem=1, lst=[1, 2]) == in_(elem=1, lst=[1, 2])
 
     def test_neq(self):
-        In = get_builtin_class("In")
-        assert In(elem=1, lst=[1]) != In(elem=2, lst=[1])
+        in_ = get_builtin_class("in_")
+        assert in_(elem=1, lst=[1]) != in_(elem=2, lst=[1])
 
     def test_repr(self):
-        Between = get_builtin_class("Between")
-        t = Between(low=1, high=10, x=99)
+        between = get_builtin_class("between")
+        t = between(low=1, high=10, x=99)
         r = repr(t)
-        assert "Between" in r
+        assert "between" in r
         assert "low=1" in r
         assert "high=10" in r
         assert "x=99" in r
 
     def test_match_args(self):
-        Append = get_builtin_class("Append")
-        t = Append([1], [2], [1, 2])
+        append = get_builtin_class("append")
+        t = append([1], [2], [1, 2])
         match t:
-            case Append(a, b, c):  # type: ignore[misc]
+            case append(a, b, c):  # type: ignore[misc]
                 assert a == [1]
                 assert b == [2]
                 assert c == [1, 2]
@@ -207,23 +207,23 @@ class TestInstanceProtocols:
 
 class TestMultiArity:
     def test_maplist_is_multi(self):
-        ml = get_builtin_class("MapList")
+        ml = get_builtin_class("maplist")
         assert isinstance(ml, MultiArityBuiltin)
 
     def test_maplist_2_construction(self):
-        ml = get_builtin_class("MapList")
+        ml = get_builtin_class("maplist")
         t = ml("goal", [1, 2])
         assert is_term_instance(t)
         assert type(t)._arity == 2
 
     def test_maplist_3_construction(self):
-        ml = get_builtin_class("MapList")
+        ml = get_builtin_class("maplist")
         t = ml("goal", [1, 2], [2, 4])
         assert is_term_instance(t)
         assert type(t)._arity == 3
 
     def test_maplist_dispatch(self):
-        ml = get_builtin_class("MapList")
+        ml = get_builtin_class("maplist")
         fn = ml._get_dispatch()
         assert callable(fn)
 
@@ -242,8 +242,8 @@ class TestMultiArity:
         assert type(t)._arity == 3
 
     def test_multi_repr(self):
-        ml = get_builtin_class("MapList")
-        assert "MapList" in repr(ml)
+        ml = get_builtin_class("maplist")
+        assert "maplist" in repr(ml)
         assert "[2, 3]" in repr(ml)
 
 
@@ -252,17 +252,17 @@ class TestMultiArity:
 
 class TestTermHelpers:
     def test_is_term_instance_true(self):
-        Append = get_builtin_class("Append")
-        t = Append([1], [2], [1, 2])
+        append = get_builtin_class("append")
+        t = append([1], [2], [1, 2])
         assert is_term_instance(t)
 
     def test_is_term_instance_false_on_class(self):
-        Append = get_builtin_class("Append")
-        assert not is_term_instance(Append)
+        append = get_builtin_class("append")
+        assert not is_term_instance(append)
 
     def test_term_field_names(self):
-        In = get_builtin_class("In")
-        t = In(1, [1, 2])
+        in_ = get_builtin_class("in_")
+        t = in_(1, [1, 2])
         assert term_field_names(t) == ("elem", "lst")
 
 
@@ -302,76 +302,76 @@ class TestExecution:
         return results
 
     def test_append_concat(self):
-        """Append([1,2], [3,4], Z_) → Z_ = [1,2,3,4]."""
-        Append = get_builtin_class("Append")
+        """append([1,2], [3,4], Z_) → Z_ = [1,2,3,4]."""
+        append = get_builtin_class("append")
         Z_ = Var()
-        results = self._collect(Append, [1, 2], [3, 4], Z_, capture_vars=[Z_])
+        results = self._collect(append, [1, 2], [3, 4], Z_, capture_vars=[Z_])
         assert results == [([1, 2, 3, 4],)]
 
     def test_append_split(self):
-        """Append(X_, Y_, [1, 2, 3]) → enumerate all splits."""
-        Append = get_builtin_class("Append")
+        """append(X_, Y_, [1, 2, 3]) → enumerate all splits."""
+        append = get_builtin_class("append")
         X_ = Var()
         Y_ = Var()
-        results = self._collect(Append, X_, Y_, [1, 2, 3], capture_vars=[X_, Y_])
+        results = self._collect(append, X_, Y_, [1, 2, 3], capture_vars=[X_, Y_])
         assert len(results) == 4
         assert results[0] == ([], [1, 2, 3])
         assert results[-1] == ([1, 2, 3], [])
 
     def test_between_enumerate(self):
-        """Between(1, 5, X_) → yields 1,2,3,4,5."""
-        Between = get_builtin_class("Between")
+        """between(1, 5, X_) → yields 1,2,3,4,5."""
+        between = get_builtin_class("between")
         X_ = Var()
-        results = self._collect(Between, 1, 5, X_, capture_vars=[X_])
+        results = self._collect(between, 1, 5, X_, capture_vars=[X_])
         assert [r[0] for r in results] == [1, 2, 3, 4, 5]
 
     def test_length_check(self):
-        """Length([a, b, c], N_) → N_ = 3."""
-        Length = get_builtin_class("Length")
+        """length([a, b, c], N_) → N_ = 3."""
+        length = get_builtin_class("length")
         N_ = Var()
-        results = self._collect(Length, [10, 20, 30], N_, capture_vars=[N_])
+        results = self._collect(length, [10, 20, 30], N_, capture_vars=[N_])
         assert results == [(3,)]
 
     def test_in_member(self):
-        """In(X_, [a, b, c]) → yields a, b, c."""
-        In = get_builtin_class("In")
+        """in_(X_, [a, b, c]) → yields a, b, c."""
+        in_ = get_builtin_class("in_")
         X_ = Var()
-        results = self._collect(In, X_, ["a", "b", "c"], capture_vars=[X_])
+        results = self._collect(in_, X_, ["a", "b", "c"], capture_vars=[X_])
         assert [r[0] for r in results] == ["a", "b", "c"]
 
     def test_reverse(self):
-        """Reverse([1,2,3], R_) → R_ = [3,2,1]."""
-        Reverse = get_builtin_class("Reverse")
+        """reverse([1,2,3], R_) → R_ = [3,2,1]."""
+        reverse = get_builtin_class("reverse")
         R_ = Var()
-        results = self._collect(Reverse, [1, 2, 3], R_, capture_vars=[R_])
+        results = self._collect(reverse, [1, 2, 3], R_, capture_vars=[R_])
         assert results == [([3, 2, 1],)]
 
     def test_sort(self):
-        """Sort([3,1,2,1], S_) → S_ = [1,2,3]."""
-        Sort = get_builtin_class("Sort")
+        """sort([3,1,2,1], S_) → S_ = [1,2,3]."""
+        sort = get_builtin_class("sort")
         S_ = Var()
-        results = self._collect(Sort, [3, 1, 2, 1], S_, capture_vars=[S_])
+        results = self._collect(sort, [3, 1, 2, 1], S_, capture_vars=[S_])
         assert results == [([1, 2, 3],)]
 
     def test_plus_relational(self):
-        """Plus(3, 4, Z_) → Z_ = 7."""
-        Plus = get_builtin_class("Plus")
+        """plus(3, 4, Z_) → Z_ = 7."""
+        plus = get_builtin_class("plus")
         Z_ = Var()
-        results = self._collect(Plus, 3, 4, Z_, capture_vars=[Z_])
+        results = self._collect(plus, 3, 4, Z_, capture_vars=[Z_])
         assert results == [(7,)]
 
     def test_succ_forward(self):
-        """Succ(5, Y_) → Y_ = 6."""
-        Succ = get_builtin_class("Succ")
+        """succ(5, Y_) → Y_ = 6."""
+        succ = get_builtin_class("succ")
         Y_ = Var()
-        results = self._collect(Succ, 5, Y_, capture_vars=[Y_])
+        results = self._collect(succ, 5, Y_, capture_vars=[Y_])
         assert results == [(6,)]
 
     def test_succ_backward(self):
-        """Succ(X_, 6) → X_ = 5."""
-        Succ = get_builtin_class("Succ")
+        """succ(X_, 6) → X_ = 5."""
+        succ = get_builtin_class("succ")
         X_ = Var()
-        results = self._collect(Succ, X_, 6, capture_vars=[X_])
+        results = self._collect(succ, X_, 6, capture_vars=[X_])
         assert results == [(5,)]
 
 
@@ -386,23 +386,23 @@ class TestCallAPI:
         return Module("test")
 
     def test_call_append(self):
-        """call('Append', ...) using class field info to understand the args."""
+        """call('append', ...) using class field info to understand the args."""
         from clausal.logic.solve import call
-        Append = get_builtin_class("Append")
+        append = get_builtin_class("append")
         Z_ = Var()
         mod = self._module()
         results = []
-        for _ in call(Append._functor, [1, 2], [3], Z_, module=mod):
+        for _ in call(append._functor, [1, 2], [3], Z_, module=mod):
             results.append(deref(Z_))
         assert results == [[1, 2, 3]]
 
     def test_call_between(self):
         from clausal.logic.solve import call
-        Between = get_builtin_class("Between")
+        between = get_builtin_class("between")
         X_ = Var()
         mod = self._module()
         values = []
-        for _ in call(Between._functor, 1, 3, X_, module=mod):
+        for _ in call(between._functor, 1, 3, X_, module=mod):
             values.append(deref(X_))
         assert values == [1, 2, 3]
 
@@ -411,17 +411,17 @@ class TestCallAPI:
         N_ = Var()
         mod = self._module()
         results = []
-        for _ in call("Length", [10, 20], N_, module=mod):
+        for _ in call("length", [10, 20], N_, module=mod):
             results.append(deref(N_))
         assert results == [2]
 
     def test_construct_then_unpack_for_call(self):
         """Construct a term, then unpack its fields into call() args."""
         from clausal.logic.solve import call
-        Append = get_builtin_class("Append")
+        append = get_builtin_class("append")
         Z_ = Var()
-        term = Append([1], [2], Z_)
-        # Unpack: the term's fields give us the args in the right order
+        term = append([1], [2], Z_)
+        # unpack: the term's fields give us the args in the right order
         args = [getattr(term, f) for f in type(term)._fields]
         mod = self._module()
         results = []

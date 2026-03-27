@@ -105,7 +105,7 @@ class TestTrailBasics(unittest.TestCase):
             t.undo(-1)
         # undo() past the current trail length is a no-op (the outer context
         # already rewound past this mark — common when generators with
-        # try/finally are abandoned during NAF/ForAll/find_all).
+        # try/finally are abandoned during NAF/forall/find_all).
         t.undo(999)  # should not raise
 
     def test_reset(self):

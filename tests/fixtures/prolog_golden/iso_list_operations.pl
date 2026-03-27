@@ -48,10 +48,10 @@ test("member: empty fails") :-
     \+ in(x, []).
 
 test("memberchk: found") :-
-    in_check(b, [a, b, c]).
+    memberchk(b, [a, b, c]).
 
 test("memberchk: not found") :-
-    \+ in_check(d, [a, b, c]).
+    \+ memberchk(d, [a, b, c]).
 
 test("append two lists") :-
     append([1, 2], [3, 4], [1, 2, 3, 4]).
@@ -106,22 +106,22 @@ test("reverse involution") :-
     Rr == [1, 2, 3].
 
 test("nth0 first") :-
-    get_item(0, [a, b, c], a).
+    nth0(0, [a, b, c], a).
 
 test("nth0 last") :-
-    get_item(2, [a, b, c], c).
+    nth0(2, [a, b, c], c).
 
 test("nth1 first") :-
-    get_item(0, [a, b, c], a).
+    nth0(0, [a, b, c], a).
 
 test("nth1 last") :-
-    get_item(2, [a, b, c], c).
+    nth0(2, [a, b, c], c).
 
 test("nth0 out of range") :-
-    \+ get_item(5, [a, b], _).
+    \+ nth0(5, [a, b], _).
 
 test("nth1 zero fails") :-
-    \+ get_item(-1, [a, b], _).
+    \+ nth0(-1, [a, b], _).
 
 test("sort removes dups") :-
     sort([3, 1, 2, 1], [1, 2, 3]).
@@ -133,7 +133,7 @@ test("sort empty") :-
     sort([], []).
 
 test("msort preserves dups") :-
-    merge_sort([3, 1, 2, 1], [1, 1, 2, 3]).
+    msort([3, 1, 2, 1], [1, 1, 2, 3]).
 
 test("sort strings") :-
     sort([c, a, b], [a, b, c]).
@@ -166,7 +166,7 @@ test("union") :-
     union([1, 2], [2, 3], [1, 2, 3]).
 
 test("list_to_set") :-
-    to_set([1, 2, 1, 3, 2], [1, 2, 3]).
+    list_to_set([1, 2, 1, 3, 2], [1, 2, 3]).
 
 test("sum_list") :-
     sum_list([1, 2, 3, 4], 10).

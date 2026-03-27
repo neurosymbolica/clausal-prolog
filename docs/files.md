@@ -42,7 +42,7 @@ check_config <- FileExists("config.json")
 
 `PathExists(Path)` — succeeds if Path exists (file, directory, or other).
 
-### Directory Listing
+### Directory listing
 
 #### DirectoryFiles/2
 
@@ -58,7 +58,7 @@ list_dir(DIR, FILES) <- DirectoryFiles(DIR, FILES)
 
 ```clausal
 # skip
-print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), Writeln(ENTRY), fail)
+print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln(ENTRY), fail)
 ```
 
 ### File Metadata
@@ -171,7 +171,7 @@ is_python_file(PATH) <- FileExtension(PATH, ".py")
 
 ## Example
 
-This example uses [`Filter`](higher_order.md) to select files by extension.
+This example uses [`include`](higher_order.md) to select files by extension.
 
 ```clausal
 -import_from(py.files, [FileExists, DirectoryFiles, ReadFileToString,
@@ -186,7 +186,7 @@ save_output(DIR, NAME, CONTENT) <- (
 
 python_files(DIR, FILES) <- (
     DirectoryFiles(DIR, ALL),
-    Filter(is_py, ALL, FILES)
+    include(is_py, ALL, FILES)
 )
 is_py(F) <- FileExtension(F, ".py")
 

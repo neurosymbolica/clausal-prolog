@@ -31,7 +31,7 @@ def simple_var(fn, var, *args):
     return [deref(var) for _ in fn(*args, trail, None)]
 
 
-# ── PutAttr/3 ────────────────────────────────────────────────────────────
+# ── put_attr/3 ────────────────────────────────────────────────────────────
 
 
 class TestPutAttr:
@@ -42,7 +42,7 @@ class TestPutAttr:
         assert get_attr(v, "color") == "red"
 
     def test_bound_var_fails(self):
-        """PutAttr on a bound term fails."""
+        """put_attr on a bound term fails."""
         sols, _ = simple(_put_attr__3, 42, "key", "val")
         assert len(sols) == 0
 
@@ -72,7 +72,7 @@ class TestPutAttr:
         assert get_attr(v, "k") is None
 
 
-# ── GetAttr/3 ────────────────────────────────────────────────────────────
+# ── get_attr/3 ────────────────────────────────────────────────────────────
 
 
 class TestGetAttr:
@@ -94,7 +94,7 @@ class TestGetAttr:
         assert len(sols) == 0
 
     def test_unify_check(self):
-        """GetAttr with pre-bound value checks equality."""
+        """get_attr with pre-bound value checks equality."""
         v = Var()
         trail = Trail()
         put_attr(v, "n", 42, trail)
@@ -114,7 +114,7 @@ class TestGetAttr:
         assert len(sols) == 0
 
 
-# ── DelAttr/2 ────────────────────────────────────────────────────────────
+# ── del_attr/2 ────────────────────────────────────────────────────────────
 
 
 class TestDelAttr:
@@ -143,7 +143,7 @@ class TestDelAttr:
         assert get_attr(v, "k") == 42
 
 
-# ── GetAttrs/2 ───────────────────────────────────────────────────────────
+# ── get_attrs/2 ───────────────────────────────────────────────────────────
 
 
 class TestGetAttrs:
@@ -174,7 +174,7 @@ class TestGetAttrs:
         assert len(sols) == 0
 
 
-# ── PutAttrs/2 ───────────────────────────────────────────────────────────
+# ── put_attrs/2 ───────────────────────────────────────────────────────────
 
 
 class TestPutAttrs:
@@ -200,7 +200,7 @@ class TestPutAttrs:
         assert len(sols) == 0
 
 
-# ── IsAttVar/1 ───────────────────────────────────────────────────────────
+# ── attvar/1 ───────────────────────────────────────────────────────────
 
 
 class TestIsAttVar:
@@ -220,7 +220,7 @@ class TestIsAttVar:
         assert len(sols) == 0
 
 
-# ── TermAttributedVariables/2 ────────────────────────────────────────────
+# ── term_attvars/2 ────────────────────────────────────────────
 
 
 class TestTermAttributedVariables:
@@ -338,7 +338,7 @@ class TestIntegration:
             unregister_attr_hook(hook_key)
 
     def test_round_trip_put_get_attrs(self):
-        """PutAttrs then GetAttrs round-trips through DictTerm."""
+        """put_attrs then get_attrs round-trips through DictTerm."""
         v = Var()
         trail = Trail()
         dt_in = DictTerm({"x": 10, "y": "hello"})

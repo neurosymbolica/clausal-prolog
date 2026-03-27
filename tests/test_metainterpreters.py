@@ -33,7 +33,7 @@ def _module(mod):
 def _terms(mod):
     """Return object-level functor classes from the loaded module."""
     d = mod.__dict__
-    return d["Natnum"], d["Succ"], d["Edge"], d["Path"]
+    return d["Natnum"], d["succ"], d["Edge"], d["Path"]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ class TestSolveBindings:
 
     def test_natnum_binds_variable(self, mod):
         """Solve [natnum(X)] should enumerate X = 0, succ(0), succ(succ(0)), ..."""
-        Natnum, Succ, _, _ = _terms(mod)
+        Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         x = Var()
@@ -73,9 +73,9 @@ class TestSolveBindings:
                 if count >= 4:
                     break
         assert results[0] == 0
-        assert results[1] == Succ(0)
-        assert results[2] == Succ(Succ(0))
-        assert results[3] == Succ(Succ(Succ(0)))
+        assert results[1] == succ(0)
+        assert results[2] == succ(succ(0))
+        assert results[3] == succ(succ(succ(0)))
 
     def test_edge_binds_destination(self, mod):
         """Solve [edge(a, Y)] should enumerate Y = b."""
@@ -158,10 +158,10 @@ class TestSolveLimit:
 
     def test_exact_depth_succeeds(self, mod):
         """natnum(succ(succ(succ(0)))) needs exactly 4 steps."""
-        Natnum, Succ, _, _ = _terms(mod)
+        Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
-        goal = [Natnum(Succ(Succ(Succ(0))))]
+        goal = [Natnum(succ(succ(succ(0))))]
         for _ in call("NatnumProgram", p, module=m):
             prog = deref(p)
             # depth 3 should fail
@@ -213,16 +213,16 @@ class TestSolveTree:
 
     def test_recursive_tree_structure(self, mod):
         """Proof tree for natnum(succ(0)) has correct nesting."""
-        Natnum, Succ, _, _ = _terms(mod)
+        Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
         tree = Var()
         for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveTree", [Natnum(Succ(0))], deref(p), tree, module=m):
+            for _ in call("SolveTree", [Natnum(succ(0))], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 assert len(t) == 1  # one goal in the list
                 node = t[0]
-                assert node[0] == Natnum(Succ(0))  # the resolved goal
+                assert node[0] == Natnum(succ(0))  # the resolved goal
                 assert len(node[1]) == 1  # one body goal proved
                 sub = node[1][0]
                 assert sub == [Natnum(0), []]  # the body fact

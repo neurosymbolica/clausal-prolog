@@ -2,13 +2,13 @@
 
 # Extract the 'name' key from any dict that has it.
 # TODO: Discuss syntax: PERSON["name"] is NAME
-get_name(PERSON, NAME) <- SubDict({"name": NAME}, PERSON)
+get_name(PERSON, NAME) <- sub_dict({"name": NAME}, PERSON)
 
 # Succeed if PERSON has role == "admin".
-is_admin(PERSON) <- SubDict({"role": "admin"}, PERSON)
+is_admin(PERSON) <- sub_dict({"role": "admin"}, PERSON)
 
-# Update a single field using DictPut.
-update_field(KEY, VALUE, OLD, NEW) <- DictPut(KEY, VALUE, OLD, NEW)
+# Update a single field using dict_put.
+update_field(KEY, VALUE, OLD, NEW) <- dict_put(KEY, VALUE, OLD, NEW)
 
 # Enumerate all key-value pairs of a dict.
 dict_member(KEY, DICT, VALUE) <- ((KEY, VALUE) in DICT)
@@ -20,10 +20,10 @@ dict_key(KEY, DICT) <- (KEY in DICT)
 splat_update(OLD, KEY, VALUE, NEW) <- (NEW is {**OLD, KEY: VALUE})
 
 # Compute the intersection of two sets.
-set_common(SET1, SET2, INTERSECTION) <- SetIntersection(SET1, SET2, INTERSECTION)
+set_common(SET1, SET2, INTERSECTION) <- set_intersection(SET1, SET2, INTERSECTION)
 
 # Enumerate elements of a set.
-set_member(ELEMENT, SET) <- GenSet(ELEMENT, SET)
+set_member(ELEMENT, SET) <- gen_set(ELEMENT, SET)
 
 Test("get name") <- (get_name({"name": "Alice"}, NAME), NAME == "Alice")
 Test("is admin") <- is_admin({"role": "admin"})

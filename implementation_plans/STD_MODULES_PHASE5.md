@@ -1,4 +1,4 @@
-# Std Modules Phase 5 — Extend Existing Builtins (Gap-Filling)
+# Std Modules Phase 5 — extend Existing Builtins (Gap-Filling)
 
 **Status: COMPLETE**
 
@@ -24,9 +24,9 @@ but rather 25 additions across 9 existing areas.
 2. **Leverage Python stdlib.** `math.lcm`, `pow(a, b, m)`, `int.bit_count()`,
    `int.bit_length()` — Python already has the number-theoretic primitives.
 
-3. **Relational where possible.** `Numlist/3` with unbound N generates
-   lazily. `SameLength/2` with both unbound generates pairs of lists.
-   `GroupPairsByKey/2` collects into a DictTerm.
+3. **Relational where possible.** `numlist/3` with unbound N generates
+   lazily. `same_length/2` with both unbound generates pairs of lists.
+   `group_pairs_by_key/2` collects into a DictTerm.
 
 4. **Clausal naming conventions.** TitleCase predicates, expanded names.
 
@@ -42,28 +42,28 @@ but rather 25 additions across 9 existing areas.
 
 | Predicate | Description |
 |---|---|
-| `Lcm/3` | `Lcm(X, Y, L)` — L is the least common multiple of X and Y. Both X and Y must be ground integers. |
-| `ExpMod/4` | `ExpMod(Base, Exp, Mod, Result)` — Result is Base^Exp mod Mod. Uses Python's `pow(base, exp, mod)` for efficiency. |
-| `Popcount/2` | `Popcount(X, Count)` — Count is the number of set bits in X (non-negative integer). Uses `int.bit_count()`. |
-| `Msb/2` | `Msb(X, Bit)` — Bit is the position of the most significant set bit (0-indexed). X must be a positive integer. Uses `int.bit_length() - 1`. |
-| `Lsb/2` | `Lsb(X, Bit)` — Bit is the position of the least significant set bit (0-indexed). X must be a positive integer. Uses `(X & -X).bit_length() - 1`. |
+| `lcm/3` | `lcm(X, Y, L)` — L is the least common multiple of X and Y. Both X and Y must be ground integers. |
+| `exp_mod/4` | `exp_mod(Base, Exp, Mod, Result)` — Result is Base^Exp mod Mod. Uses Python's `pow(base, exp, mod)` for efficiency. |
+| `popcount/2` | `popcount(X, Count)` — Count is the number of set bits in X (non-negative integer). Uses `int.bit_count()`. |
+| `msb/2` | `msb(X, Bit)` — Bit is the position of the most significant set bit (0-indexed). X must be a positive integer. Uses `int.bit_length() - 1`. |
+| `lsb/2` | `lsb(X, Bit)` — Bit is the position of the least significant set bit (0-indexed). X must be a positive integer. Uses `(X & -X).bit_length() - 1`. |
 
 ### Implementation notes
 
-- `Lcm/3`: `math.lcm(x, y)` (Python 3.9+). For older Python: `abs(x * y) // math.gcd(x, y)`.
-- `ExpMod/4`: `pow(base, exp, mod)` — Python's built-in modular exponentiation.
-- `Popcount/2`: `x.bit_count()` (Python 3.10+). Fallback: `bin(x).count('1')`.
-- `Msb/2`: `x.bit_length() - 1`. Fail on x <= 0.
-- `Lsb/2`: `(x & -x).bit_length() - 1`. Fail on x <= 0.
-- All are simple `@_builtin` predicates, same pattern as `Gcd/3`.
+- `lcm/3`: `math.lcm(x, y)` (Python 3.9+). For older Python: `abs(x * y) // math.gcd(x, y)`.
+- `exp_mod/4`: `pow(base, exp, mod)` — Python's built-in modular exponentiation.
+- `popcount/2`: `x.bit_count()` (Python 3.10+). Fallback: `bin(x).count('1')`.
+- `msb/2`: `x.bit_length() - 1`. Fail on x <= 0.
+- `lsb/2`: `(x & -x).bit_length() - 1`. Fail on x <= 0.
+- All are simple `@_builtin` predicates, same pattern as `gcd/3`.
 
 ### Test plan (~15 tests)
 
-- `Lcm(4, 6, L)` → L = 12. `Lcm(0, 5, L)` → L = 0. Unbound args fail.
-- `ExpMod(2, 10, 1000, R)` → R = 24. `ExpMod(3, 0, 7, R)` → R = 1. Mod = 0 fails.
-- `Popcount(0, C)` → C = 0. `Popcount(255, C)` → C = 8. Negative fails.
-- `Msb(1, B)` → B = 0. `Msb(8, B)` → B = 3. Zero/negative fails.
-- `Lsb(12, B)` → B = 2. `Lsb(1, B)` → B = 0. Zero/negative fails.
+- `lcm(4, 6, L)` → L = 12. `lcm(0, 5, L)` → L = 0. Unbound args fail.
+- `exp_mod(2, 10, 1000, R)` → R = 24. `exp_mod(3, 0, 7, R)` → R = 1. Mod = 0 fails.
+- `popcount(0, C)` → C = 0. `popcount(255, C)` → C = 8. Negative fails.
+- `msb(1, B)` → B = 0. `msb(8, B)` → B = 3. Zero/negative fails.
+- `lsb(12, B)` → B = 2. `lsb(1, B)` → B = 0. Zero/negative fails.
 
 ---
 
@@ -77,34 +77,34 @@ but rather 25 additions across 9 existing areas.
 
 | Predicate | Description |
 |---|---|
-| `Numlist/3` | `Numlist(Low, High, List)` — List is the list of integers from Low to High inclusive. Both Low and High must be ground. |
-| `Numlist/2` | `Numlist(High, List)` — shorthand for `Numlist(1, High, List)`. |
-| `SameLength/2` | `SameLength(L1, L2)` — succeeds if L1 and L2 have the same length. If one is ground and the other is unbound, generates a list of fresh variables. |
-| `Transpose/2` | `Transpose(Matrix, Transposed)` — Matrix is a list of lists (rows). Transposed is the column-wise transposition. |
+| `numlist/3` | `numlist(Low, High, List)` — List is the list of integers from Low to High inclusive. Both Low and High must be ground. |
+| `numlist/2` | `numlist(High, List)` — shorthand for `numlist(1, High, List)`. |
+| `same_length/2` | `same_length(L1, L2)` — succeeds if L1 and L2 have the same length. If one is ground and the other is unbound, generates a list of fresh variables. |
+| `transpose/2` | `transpose(Matrix, Transposed)` — Matrix is a list of lists (rows). Transposed is the column-wise transposition. |
 
 ### Implementation notes
 
-- `Numlist/3`: `list(range(low, high + 1))`, unify with List. Fail if
+- `numlist/3`: `list(range(low, high + 1))`, unify with List. Fail if
   Low > High (empty numlist is debatable — follow SWI: fail on Low > High).
-- `Numlist/2`: delegate to `Numlist/3` with Low=1.
-- `SameLength/2`: Both ground → check `len(l1) == len(l2)`. One unbound →
+- `numlist/2`: delegate to `numlist/3` with Low=1.
+- `same_length/2`: Both ground → check `len(l1) == len(l2)`. One unbound →
   generate list of `Var()` with matching length. Both unbound → generate
   pairs of increasing length (limit to reasonable bound or just fail).
-- `Transpose/2`: `list(map(list, zip(*matrix)))`. Fail if not rectangular
+- `transpose/2`: `list(map(list, zip(*matrix)))`. Fail if not rectangular
   or not a list of lists. Uses trampoline mode since it's in `lists.py`.
 
 ### Test plan (~15 tests)
 
-- `Numlist(1, 5, L)` → L = [1, 2, 3, 4, 5].
-- `Numlist(3, 3, L)` → L = [3].
-- `Numlist(5, 3, L)` → fails.
-- `Numlist(5, L)` → L = [1, 2, 3, 4, 5].
-- `SameLength([1,2,3], [a,b,c])` → succeeds.
-- `SameLength([1,2], [a,b,c])` → fails.
-- `SameLength([1,2,3], L)` where L unbound → L is list of 3 vars.
-- `Transpose([[1,2],[3,4]], T)` → T = [[1,3],[2,4]].
-- `Transpose([[1,2,3],[4,5,6]], T)` → T = [[1,4],[2,5],[3,6]].
-- `Transpose([], T)` → T = [].
+- `numlist(1, 5, L)` → L = [1, 2, 3, 4, 5].
+- `numlist(3, 3, L)` → L = [3].
+- `numlist(5, 3, L)` → fails.
+- `numlist(5, L)` → L = [1, 2, 3, 4, 5].
+- `same_length([1,2,3], [a,b,c])` → succeeds.
+- `same_length([1,2], [a,b,c])` → fails.
+- `same_length([1,2,3], L)` where L unbound → L is list of 3 vars.
+- `transpose([[1,2],[3,4]], T)` → T = [[1,3],[2,4]].
+- `transpose([[1,2,3],[4,5,6]], T)` → T = [[1,4],[2,5],[3,6]].
+- `transpose([], T)` → T = [].
 - Non-rectangular matrix → fails.
 
 ---
@@ -120,61 +120,61 @@ but rather 25 additions across 9 existing areas.
 
 | Predicate | Description |
 |---|---|
-| `Sum/3` | `Sum(Vars, Op, Value)` — constrain the sum of Vars list under comparison Op (#=, #<, #>, #=<, #>=, #\=) to Value. E.g. `Sum([X, Y, Z], #=, 10)`. |
-| `ScalarProduct/4` | `ScalarProduct(Coeffs, Vars, Op, Value)` — weighted sum: Σ(Coeffs[i]·Vars[i]) Op Value. |
-| `Element/3` | `Element(Index, List, Value)` — Value is the Index-th element of List (1-based). Index can be an FDVar constrained to valid range. Propagates domain narrowing bidirectionally. |
-| `Circuit/1` | `Circuit(Vars)` — Vars form a single Hamiltonian circuit. Vars[i] = j means successor of node i is node j. Classic assignment constraint. |
+| `sum_/3` | `sum_(Vars, Op, Value)` — constrain the sum of Vars list under comparison Op (#=, #<, #>, #=<, #>=, #\=) to Value. E.g. `sum_([X, Y, Z], #=, 10)`. |
+| `scalar_product/4` | `scalar_product(Coeffs, Vars, Op, Value)` — weighted sum: Σ(Coeffs[i]·Vars[i]) Op Value. |
+| `element/3` | `element(Index, List, Value)` — Value is the Index-th element of List (1-based). Index can be an FDVar constrained to valid range. Propagates domain narrowing bidirectionally. |
+| `circuit/1` | `circuit(Vars)` — Vars form a single Hamiltonian circuit. Vars[i] = j means successor of node i is node j. Classic assignment constraint. |
 
 ### Implementation notes
 
-- **Sum/3**: Implemented with bounds-consistency propagation (`SumConstraint`).
+- **sum_/3**: Implemented with bounds-consistency propagation (`SumConstraint`).
   Computes `min_sum`/`max_sum` from variable domains, narrows Value's domain
   and each variable's domain based on slack. Queue-based fixpoint loop.
 
-- **ScalarProduct/4**: Same as Sum but each variable's contribution is
+- **scalar_product/4**: Same as sum_ but each variable's contribution is
   multiplied by its coefficient. `Σ coeff[i] * var[i] Op value`.
 
-- **Element/3**: Implemented with AC3-style arc-consistency (`ElementConstraint`).
+- **element/3**: Implemented with AC3-style arc-consistency (`ElementConstraint`).
   Domain of Index narrowed to indices whose List element is in Value's domain;
   domain of Value narrowed to `{List[i] : i ∈ domain(Index)}`. Propagates
   bidirectionally on each narrowing event.
 
-- **Circuit/1**: Implemented with `CircuitConstraint` combining AllDifferent +
-  sub-tour elimination. When a variable's domain is a singleton, follows the
+- **circuit/1**: Implemented with `CircuitConstraint` combining all_different +
+  sub-tour elimination. when a variable's domain is a singleton, follows the
   partial chain and prunes values that would close a premature cycle.
 
 ### Semantics
 
 ```
-Sum([X, Y, Z], #=, 10)          % X + Y + Z = 10
-ScalarProduct([2, 3], [X, Y], #=, 12)   % 2X + 3Y = 12
-Element(I, [10, 20, 30], V)     % I in 1..3, V is list[I]
-Circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
+sum_([X, Y, Z], #=, 10)          % X + Y + Z = 10
+scalar_product([2, 3], [X, Y], #=, 12)   % 2X + 3Y = 12
+element(I, [10, 20, 30], V)     % I in 1..3, V is list[I]
+circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
 ```
 
 ### Test plan (~20 tests)
 
-**Sum/3:**
-- `Sum([X, Y], #=, 5)` with X in 1..3, Y in 1..3 → enumerate valid pairs.
-- `Sum([], #=, 0)` → succeeds.
-- Ground list: `Sum([1, 2, 3], #=, 6)` → succeeds.
-- `Sum([1, 2, 3], #=, 7)` → fails.
+**sum_/3:**
+- `sum_([X, Y], #=, 5)` with X in 1..3, Y in 1..3 → enumerate valid pairs.
+- `sum_([], #=, 0)` → succeeds.
+- Ground list: `sum_([1, 2, 3], #=, 6)` → succeeds.
+- `sum_([1, 2, 3], #=, 7)` → fails.
 
-**ScalarProduct/4:**
-- `ScalarProduct([1, 1], [X, Y], #=, 5)` equivalent to Sum.
-- `ScalarProduct([2, 3], [X, Y], #=, 12)` with domains → enumerate.
+**scalar_product/4:**
+- `scalar_product([1, 1], [X, Y], #=, 5)` equivalent to sum_.
+- `scalar_product([2, 3], [X, Y], #=, 12)` with domains → enumerate.
 - Mismatched lengths → fails.
 
-**Element/3:**
-- `Element(2, [10, 20, 30], V)` → V = 20.
-- `Element(I, [10, 20, 30], 20)` → I = 2.
-- `Element(I, [10, 20, 30], V)` with I in 1..3 → enumerate all.
+**element/3:**
+- `element(2, [10, 20, 30], V)` → V = 20.
+- `element(I, [10, 20, 30], 20)` → I = 2.
+- `element(I, [10, 20, 30], V)` with I in 1..3 → enumerate all.
 - Index out of range → fails.
 
-**Circuit/1:**
-- `Circuit([2, 3, 1])` → succeeds.
-- `Circuit([1, 2, 3])` → fails (self-loops / sub-tours).
-- `Circuit([X, Y, Z])` with domains 1..3, AllDifferent → enumerate valid circuits.
+**circuit/1:**
+- `circuit([2, 3, 1])` → succeeds.
+- `circuit([1, 2, 3])` → fails (self-loops / sub-tours).
+- `circuit([X, Y, Z])` with domains 1..3, all_different → enumerate valid circuits.
 
 ---
 
@@ -188,14 +188,14 @@ Circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
 
 | Predicate | Description |
 |---|---|
-| `Sequence//1` | `Sequence(List)` — match/generate a list of terminals as a DCG rule. `Sequence([a, b, c])` matches the terminals a, b, c in sequence. |
+| `sequence//1` | `sequence(List)` — match/generate a list of terminals as a DCG rule. `sequence([a, b, c])` matches the terminals a, b, c in sequence. |
 
 ### Implementation notes
 
-- `Sequence//1` is a DCG non-terminal that consumes the elements of List from
+- `sequence//1` is a DCG non-terminal that consumes the elements of List from
   the difference list. Implemented as a trampoline builtin with arity 3
   (List, S0, S): unify S0 with `List ++ S` using list append.
-  In practice: `deref(list_arg)`, compute `list_arg + deref(s)`,
+  in_ practice: `deref(list_arg)`, compute `list_arg + deref(s)`,
   `unify(s0, computed)`.
 
 - This is a DCG helper, so it takes the two extra difference-list
@@ -203,11 +203,11 @@ Circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
 
 ### Test plan (~5 tests)
 
-- `phrase(Sequence([a, b, c]), [a, b, c])` → succeeds.
-- `phrase(Sequence([a, b, c]), [a, b])` → fails (not enough input).
-- `phrase(Sequence([]), [])` → succeeds.
-- `phrase(Sequence([a, b]), [a, b, c], Rest)` → Rest = [c].
-- `phrase(Sequence([a]), [b])` → fails.
+- `phrase(sequence([a, b, c]), [a, b, c])` → succeeds.
+- `phrase(sequence([a, b, c]), [a, b])` → fails (not enough input).
+- `phrase(sequence([]), [])` → succeeds.
+- `phrase(sequence([a, b]), [a, b, c], Rest)` → Rest = [c].
+- `phrase(sequence([a]), [b])` → fails.
 
 ---
 
@@ -258,7 +258,7 @@ Circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
 
 | Predicate | Description |
 |---|---|
-| `GroupPairsByKey/2` | `GroupPairsByKey(Pairs, Groups)` — group a list of `[Key, Value]` pairs by key. Groups is a list of `[Key, Values]` pairs where Values collects all values for that key. Order preserved. |
+| `group_pairs_by_key/2` | `group_pairs_by_key(Pairs, Groups)` — group a list of `[Key, Value]` pairs by key. Groups is a list of `[Key, Values]` pairs where Values collects all values for that key. Order preserved. |
 
 ### Implementation notes
 
@@ -270,7 +270,7 @@ Circuit([2, 3, 1])              % 1→2→3→1 (valid circuit)
 ### Semantics
 
 ```
-GroupPairsByKey([[a, 1], [b, 2], [a, 3]], Groups)
+group_pairs_by_key([[a, 1], [b, 2], [a, 3]], Groups)
 % Groups = [[a, [1, 3]], [b, [2]]]
 ```
 
@@ -294,8 +294,8 @@ GroupPairsByKey([[a, 1], [b, 2], [a, 3]], Groups)
 
 | Predicate | Description |
 |---|---|
-| `MustBe/2` | `MustBe(Type, Term)` — assert that Term is of the given type. Succeeds silently if yes, throws `error(type_error(Type, Term), must_be/2)` if not. |
-| `CanBe/2` | `CanBe(Type, Term)` — assert that Term could possibly be of the given type. Succeeds if Term is unbound (could become anything) or already is of the type. Throws if Term is ground and definitely not the type. |
+| `must_be/2` | `must_be(Type, Term)` — assert that Term is of the given type. Succeeds silently if yes, throws `error(type_error(Type, Term), must_be/2)` if not. |
+| `can_be/2` | `can_be(Type, Term)` — assert that Term could possibly be of the given type. Succeeds if Term is unbound (could become anything) or already is of the type. Throws if Term is ground and definitely not the type. |
 
 ### Supported types
 
@@ -312,25 +312,25 @@ GroupPairsByKey([[a, 1], [b, 2], [a, 3]], Groups)
 
 ### Implementation notes
 
-- `MustBe/2`: simple `@_builtin`. Deref Type and Term. If Term doesn't
+- `must_be/2`: simple `@_builtin`. Deref Type and Term. If Term doesn't
   match Type, raise `LogicException(type_error(type_str, term, "must_be/2"))`.
   Otherwise yield once.
-- `CanBe/2`: same but if Term is an unbound Var, always succeed (it *could*
+- `can_be/2`: same but if Term is an unbound Var, always succeed (it *could*
   become the right type). Only throw when Term is ground and wrong type.
 - Use the existing `type_error()` helper from `clausal.logic.exceptions`.
 
 ### Test plan (~10 tests)
 
-- `MustBe("integer", 42)` → succeeds.
-- `MustBe("integer", "hello")` → throws type_error.
-- `MustBe("integer", X)` where X unbound → throws instantiation_error.
-- `CanBe("integer", 42)` → succeeds.
-- `CanBe("integer", "hello")` → throws type_error.
-- `CanBe("integer", X)` where X unbound → succeeds (could become integer).
-- `MustBe("list", [1, 2])` → succeeds.
-- `MustBe("number", 3.14)` → succeeds.
-- `MustBe("atom", 42)` → throws.
-- `CanBe("dict", DictTerm(...))` → succeeds.
+- `must_be("integer", 42)` → succeeds.
+- `must_be("integer", "hello")` → throws type_error.
+- `must_be("integer", X)` where X unbound → throws instantiation_error.
+- `can_be("integer", 42)` → succeeds.
+- `can_be("integer", "hello")` → throws type_error.
+- `can_be("integer", X)` where X unbound → succeeds (could become integer).
+- `must_be("list", [1, 2])` → succeeds.
+- `must_be("number", 3.14)` → succeeds.
+- `must_be("atom", 42)` → throws.
+- `can_be("dict", DictTerm(...))` → succeeds.
 
 ---
 
@@ -338,14 +338,14 @@ GroupPairsByKey([[a, 1], [b, 2], [a, 3]], Groups)
 
 Initially dropped, but later reinstated and implemented:
 
-- **`TFilter/3`** — reified filter using Goal(Elem, T); keeps elements
+- **`tfilter/3`** — reified filter using Goal(Elem, T); keeps elements
   where T=True. Implemented in `builtins/higher_order.py`.
-- **`TPartition/4`** — reified partition; splits list into Included (T=True)
+- **`tpartition/4`** — reified partition; splits list into Included (T=True)
   and Excluded (T=False). Implemented in `builtins/higher_order.py`.
 
 ---
 
-## 5i — Time & Statistics
+## 5i — Time & statistics
 
 **File:** `clausal/logic/builtins/control.py` (extend existing) or
 `clausal/logic/builtins/time.py` (new)
@@ -356,8 +356,8 @@ Initially dropped, but later reinstated and implemented:
 
 | Predicate | Description |
 |---|---|
-| `CurrentTime/1` | `CurrentTime(T)` — unify T with the current Unix timestamp (float, seconds since epoch). |
-| `Statistics/2` | `Statistics(Key, Value)` — query runtime statistics. Key bound → look up that stat. Key unbound → enumerate all available stats. |
+| `current_time/1` | `current_time(T)` — unify T with the current Unix timestamp (float, seconds since epoch). |
+| `statistics/2` | `statistics(Key, Value)` — query runtime statistics. Key bound → look up that stat. Key unbound → enumerate all available stats. |
 
 ### Available statistics keys
 
@@ -369,21 +369,21 @@ Initially dropped, but later reinstated and implemented:
 
 ### Implementation notes
 
-- `CurrentTime/1`: `time.time()`, unify with T. Simple `@_builtin`.
-- `Statistics/2`: Use `time.monotonic()` for wall_time (store start time
+- `current_time/1`: `time.time()`, unify with T. Simple `@_builtin`.
+- `statistics/2`: Use `time.monotonic()` for wall_time (store start time
   at module load), `time.process_time()` for cpu_time, `resource.getrusage()`
-  for memory. When Key is unbound, enumerate all stats with trail mark/undo.
+  for memory. when Key is unbound, enumerate all stats with trail mark/undo.
 - Sleep/1 is already in `py.process` — no need to duplicate.
 
 ### Test plan (~8 tests)
 
-- `CurrentTime(T)` → T is a float > 0.
-- Two calls to CurrentTime: T2 >= T1.
-- `Statistics("cpu_time", V)` → V is a non-negative float.
-- `Statistics("wall_time", V)` → V is a non-negative float.
-- `Statistics("memory", V)` → V is a positive integer.
-- `Statistics(Key, V)` with Key unbound → at least 3 solutions.
-- `Statistics("nonexistent", V)` → fails.
+- `current_time(T)` → T is a float > 0.
+- Two calls to current_time: T2 >= T1.
+- `statistics("cpu_time", V)` → V is a non-negative float.
+- `statistics("wall_time", V)` → V is a non-negative float.
+- `statistics("memory", V)` → V is a positive integer.
+- `statistics(Key, V)` with Key unbound → at least 3 solutions.
+- `statistics("nonexistent", V)` → fails.
 
 ---
 
@@ -393,27 +393,27 @@ Initially dropped, but later reinstated and implemented:
 
 | File | Purpose |
 |---|---|
-| `tests/test_lists_extended.py` | Numlist, SameLength, Transpose tests (~15) |
-| `tests/test_control_extended.py` | CurrentTime, Statistics tests (~8) |
+| `tests/test_lists_extended.py` | numlist, same_length, transpose tests (~15) |
+| `tests/test_control_extended.py` | current_time, statistics tests (~8) |
 
 ### Modified files
 
 | File | Change |
 |---|---|
-| `clausal/logic/builtins/arithmetic.py` | Add Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2 |
-| `clausal/logic/builtins/lists.py` | Add Numlist/2,3, SameLength/2, Transpose/2 |
-| `clausal/logic/builtins/dcg.py` | Add Sequence//1 (as arity-3 builtin) |
-| `clausal/logic/builtins/pairs.py` | Add GroupPairsByKey/2 |
-| `clausal/logic/builtins/constraints.py` | Add Sum/3, ScalarProduct/4, Element/3, Circuit/1 wrappers; add AbolishAllTables/0, AbolishTable/1 |
+| `clausal/logic/builtins/arithmetic.py` | Add lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
+| `clausal/logic/builtins/lists.py` | Add numlist/2,3, same_length/2, transpose/2 |
+| `clausal/logic/builtins/dcg.py` | Add sequence//1 (as arity-3 builtin) |
+| `clausal/logic/builtins/pairs.py` | Add group_pairs_by_key/2 |
+| `clausal/logic/builtins/constraints.py` | Add sum_/3, scalar_product/4, element/3, circuit/1 wrappers; add AbolishAllTables/0, AbolishTable/1 |
 | `clausal/logic/clpfd.py` | Add sum_constraint, scalar_product, element_constraint, circuit core logic |
-| `clausal/logic/builtins/control.py` | Add CurrentTime/1, Statistics/2 |
+| `clausal/logic/builtins/control.py` | Add current_time/1, statistics/2 |
 | `clausal/logic/exceptions.py` | (unchanged — helpers already exist) |
 | `clausal/logic/builtins/__init__.py` | Update docstring |
-| `tests/test_clpfd.py` | Add Sum, ScalarProduct, Element, Circuit tests |
-| `tests/test_dcg.py` | Add Sequence tests |
+| `tests/test_clpfd.py` | Add sum_, scalar_product, element, circuit tests |
+| `tests/test_dcg.py` | Add sequence tests |
 | `tests/test_tabling.py` | Add AbolishAllTables, AbolishTable tests |
-| `tests/test_arithmetic.py` | Add Lcm, ExpMod, Popcount, Msb, Lsb tests |
-| `tests/test_exceptions.py` | Add MustBe, CanBe tests |
+| `tests/test_arithmetic.py` | Add lcm, exp_mod, popcount, msb, lsb tests |
+| `tests/test_exceptions.py` | Add must_be, can_be tests |
 
 ---
 
@@ -423,7 +423,7 @@ Initially dropped, but later reinstated and implemented:
 2. **5b — Lists** (simple, self-contained)
 3. **5f — Pairs** (one predicate, trivial)
 4. **5g — Error checking** (small, uses existing infrastructure)
-5. **5i — Time & Statistics** (small, no dependencies)
+5. **5i — Time & statistics** (small, no dependencies)
 6. **5d — DCG helper** (needs understanding of DCG difference lists)
 7. **5e — Tabling management** (uses existing Database methods)
 8. **5c — CLP(FD) global constraints** (most complex — constraint propagation)

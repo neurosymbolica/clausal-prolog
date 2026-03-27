@@ -1,29 +1,29 @@
 # Tests for type-checking predicates
 #
-# Note: IsFloat ends with relevant Python name; it can be called as IsFloat in .clausal
-# float_/1 is now registered as IsFloat/1
+# Note: float_ ends with relevant Python name; it can be called as float_ in .clausal
+# float_/1 is now registered as float_/1
 
-# IsVar/1, IsBound/1
-CheckVar(X) <- IsVar(X)
-CheckNonvar(X) <- IsBound(X)
+# var/1, nonvar/1
+CheckVar(X) <- var(X)
+CheckNonvar(X) <- nonvar(X)
 
-# IsStr/1, IsNumber/1, IsInt/1
-CheckAtom(X) <- IsStr(X)
-CheckNumber(X) <- IsNumber(X)
-CheckInteger(X) <- IsInt(X)
-CheckString(X) <- IsStr(X)
+# is_str/1, number/1, integer/1
+CheckAtom(X) <- is_str(X)
+CheckNumber(X) <- number(X)
+CheckInteger(X) <- integer(X)
+CheckString(X) <- is_str(X)
 
-# IsCompound/1, IsCallable/1, IsList/1, IsGround/1
-CheckCompound(X) <- IsCompound(X)
-CheckCallable(X) <- IsCallable(X)
-CheckList(X) <- IsList(X)
-CheckGround(X) <- IsGround(X)
+# compound/1, callable_/1, is_list/1, ground/1
+CheckCompound(X) <- compound(X)
+CheckCallable(X) <- callable_(X)
+CheckList(X) <- is_list(X)
+CheckGround(X) <- ground(X)
 
 # Classify/2: produce a type tag for a bound value
-Classify(X, "integer") <- IsInt(X)
-Classify(X, "atom") <- IsStr(X)
-Classify(X, "list") <- IsList(X)
-Classify(X, "compound") <- IsCompound(X)
+Classify(X, "integer") <- integer(X)
+Classify(X, "atom") <- is_str(X)
+Classify(X, "list") <- is_list(X)
+Classify(X, "compound") <- compound(X)
 
 
 Test("is var") <- CheckVar(X)

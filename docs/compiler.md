@@ -90,12 +90,12 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a [tabled](tabling.md) predicate, emits `_naf_tabled` call instead ([well-founded semantics](wfs.md)). |
 | `IfExpr(test, body, orelse)` | [Reified ITE](reified_ite.md): three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. |
-| `Call(LoadName("Once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
-| `Call(LoadName("FindAll"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
-| `Call(LoadName("BagOf"), [tmpl, goal, bag])` | Same as `FindAll`, but fails if no solutions (empty result list). |
-| `Call(LoadName("SetOf"), [tmpl, goal, bag])` | Same as `BagOf`, plus deduplication via `_set_of_dedup` before unifying with `bag`. |
-| `Call(LoadName("ForAll"), [cond, action])` | Desugared to `not (cond and not action)` — uses existing NAF compilation. |
-| `In(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
+| `Call(LoadName("once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
+| `Call(LoadName("findall"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
+| `Call(LoadName("bagof"), [tmpl, goal, bag])` | Same as `findall`, but fails if no solutions (empty result list). |
+| `Call(LoadName("setof"), [tmpl, goal, bag])` | Same as `bagof`, plus deduplication via `_set_of_dedup` before unifying with `bag`. |
+| `Call(LoadName("forall"), [cond, action])` | Desugared to `not (cond and not action)` — uses existing NAF compilation. |
+| `in_(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
 | `NotIn(elem, coll)` | found-flag pattern |
 | `Call(LoadName(f), args)` | `for _ in f._get_dispatch()(args, trail, k): k_stmts` |
 
@@ -138,7 +138,7 @@ _disp_key("Edge", 2)  →  "_disp_Edge_2"
 base_globals["_disp_Edge_2"] = Edge._dispatch_fn
 ```
 
-The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. When a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of calling `._get_dispatch()` at every invocation:
+The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. when a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of calling `._get_dispatch()` at every invocation:
 
 ```python
 # Unlocked / dynamic predicate (default):
@@ -150,7 +150,7 @@ _gen = StepGenerator(_disp_Foo_2, this_generator, arg0, arg1, trail)
 
 `_disp_Foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — one attribute lookup is eliminated on every call site.
 
-**When dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
+**when dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
 
 **Safety:** On lazy recompile (triggered by `assertz`/`retract`), the whole compilation reruns with the updated clause list, so any cached dispatch functions are refreshed. Dynamic predicates (`_locked = False`) never get cached; they always use `._get_dispatch()`.
 
@@ -246,7 +246,7 @@ while _st is not DONE:
 
 `StepGenerator` wraps the child dispatch function. `this_generator` is passed as the child's `parent`, so the child yields `(this_generator, None)` on solution and `(this_generator, DONE)` on exhaustion. The trampoline routes these back to us.
 
-When `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `_disp_fib_2`, and the generated code uses `_disp_fib_2` directly instead of `fib._get_dispatch()`:
+when `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `_disp_fib_2`, and the generated code uses `_disp_fib_2` directly instead of `fib._get_dispatch()`:
 
 ```python
 _gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
@@ -254,7 +254,7 @@ _gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
 
 ### Tail recursion optimization (TRO)
 
-When the last goal in a clause body is a self-recursive `Call` and all preceding goals are deterministic (at most one solution, no `StepGenerator` allocation), the compiler replaces the recursive `StepGenerator` allocation with argument reassignment and a loop restart. This reduces the per-recursion memory cost from O(n) generator objects to O(1).
+when the last goal in a clause body is a self-recursive `Call` and all preceding goals are deterministic (at most one solution, no `StepGenerator` allocation), the compiler replaces the recursive `StepGenerator` allocation with argument reassignment and a loop restart. This reduces the per-recursion memory cost from O(n) generator objects to O(1).
 
 **Eligible pattern** — accumulator-style recursion:
 
@@ -297,7 +297,7 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
     yield (parent, DONE)
 ```
 
-**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `ArithEq`, `ArithNeq`, comparisons (`>`, `<`, `>=`, `<=`), `In`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `Once`, `FindAll`, `BagOf`, `SetOf`.
+**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `ArithEq`, `ArithNeq`, comparisons (`>`, `<`, `>=`, `<=`), `in_`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `once`, `findall`, `bagof`, `setof`.
 
 **Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
 
@@ -353,7 +353,7 @@ Negation-as-failure (`Not`) in trampoline mode compiles the inner goal in **simp
 
 ### WFS: tabled NAF
 
-When `Not(operand=Call(LoadName(f), ...))` targets a tabled predicate (detected via `db.is_tabled(f, arity)`), the compiler emits a call to `_naf_tabled` instead of the inline NAF generator pattern:
+when `Not(operand=Call(LoadName(f), ...))` targets a tabled predicate (detected via `db.is_tabled(f, arity)`), the compiler emits a call to `_naf_tabled` instead of the inline NAF generator pattern:
 
 ```python
 _m = trail.mark()
@@ -370,11 +370,11 @@ trail.undo(_m)
 
 ## Meta-predicates
 
-`FindAll/3`, `BagOf/3`, `SetOf/3`, and `ForAll/2` are compiled as **special forms** — not as builtin predicate calls, but as inline AST patterns emitted directly by `compile_goal`. This is necessary because the inner goal must be compiled at compile time (not dispatched at runtime).
+`findall/3`, `bagof/3`, `setof/3`, and `forall/2` are compiled as **special forms** — not as builtin predicate calls, but as inline AST patterns emitted directly by `compile_goal`. This is necessary because the inner goal must be compiled at compile time (not dispatched at runtime).
 
-### FindAll/3
+### findall/3
 
-`FindAll(Template, Goal, Bag)` collects all solutions of `Goal`, snapshots `Template` for each, and unifies the resulting list with `Bag`. It always succeeds — if `Goal` has no solutions, `Bag` unifies with `[]`.
+`findall(Template, Goal, Bag)` collects all solutions of `Goal`, snapshots `Template` for each, and unifies the resulting list with `Bag`. It always succeeds — if `Goal` has no solutions, `Bag` unifies with `[]`.
 
 Generated code pattern:
 
@@ -394,18 +394,18 @@ trail.undo(_fa_um)
 ```
 
 Key details:
-- The inner goal compiles in **simple mode** as a sub-generator (same pattern as `Once` and NAF).
+- The inner goal compiles in **simple mode** as a sub-generator (same pattern as `once` and NAF).
 - `_deref_walk` (from `clausal.logic.solve`) recursively dereferences the template, capturing a ground snapshot of each solution.
 - The trail mark/undo around the sub-generator ensures inner bindings don't leak.
 - `_deref_walk` and `_set_of_dedup` are injected into `base_globals`.
 
-### BagOf/3
+### bagof/3
 
-Same as `FindAll` but wraps the unify+continuation block in `if _fa_results:`, so it **fails** when the inner goal has no solutions.
+Same as `findall` but wraps the unify+continuation block in `if _fa_results:`, so it **fails** when the inner goal has no solutions.
 
-### SetOf/3
+### setof/3
 
-Same as `BagOf` with an additional deduplication step before unification:
+Same as `bagof` with an additional deduplication step before unification:
 
 ```python
 _fa_results = _set_of_dedup(_fa_results)
@@ -413,9 +413,9 @@ _fa_results = _set_of_dedup(_fa_results)
 
 `_set_of_dedup` tries `dict.fromkeys` for hashable items, falling back to O(n²) equality-based dedup for non-hashable terms.
 
-### ForAll/2
+### forall/2
 
-`ForAll(Cond, Action)` succeeds if for every solution of `Cond`, `Action` also succeeds. Desugared at compile time to:
+`forall(Cond, Action)` succeeds if for every solution of `Cond`, `Action` also succeeds. Desugared at compile time to:
 
 ```python
 not (Cond and not Action)
@@ -427,7 +427,7 @@ No new codegen — piggybacks on existing NAF compilation.
 
 ## First-argument indexing
 
-When a predicate has 4 or more clauses, `compile_predicate` and `compile_predicate_trampoline` automatically build a first-argument index. Clauses are partitioned by the first argument's value: ground-first-arg calls jump directly to the matching clause subset via a dict lookup, while unbound-Var-first-arg calls fall back to the full unindexed path.
+when a predicate has 4 or more clauses, `compile_predicate` and `compile_predicate_trampoline` automatically build a first-argument index. Clauses are partitioned by the first argument's value: ground-first-arg calls jump directly to the matching clause subset via a dict lookup, while unbound-Var-first-arg calls fall back to the full unindexed path.
 
 See [`docs/indexing.md`](indexing.md) for the full design, including bucket merging, trampoline `yield from` semantics, and the `emit_done` parameter.
 
@@ -459,13 +459,13 @@ compile_predicate(
 1. `pred_cls._dispatch_fn = fn` — the PredicateMeta class holds dispatch directly.
 2. `db.set_dispatch(functor, arity, fn, lazy_fn)` — the Database entry is also updated (kept for backward compatibility with code that looks up dispatch through the Database).
 
-A lazy recompile closure is also registered in both locations. When `assertz`/`retract` invalidates dispatch by setting `_dispatch_fn = None`, the next call to `_get_dispatch()` invokes the lazy closure to recompile from the current clause list.
+A lazy recompile closure is also registered in both locations. when `assertz`/`retract` invalidates dispatch by setting `_dispatch_fn = None`, the next call to `_get_dispatch()` invokes the lazy closure to recompile from the current clause list.
 
 ---
 
 ## `_GlobalsDb` — db-free compilation
 
-When `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements only `signature_for(functor, arity)`. It looks up the named predicate class from `globals_` and returns `cls._signature`. This covers keyword-argument normalisation during compilation without requiring a live Database.
+when `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements only `signature_for(functor, arity)`. It looks up the named predicate class from `globals_` and returns `cls._signature`. This covers keyword-argument normalisation during compilation without requiring a live Database.
 
 ---
 
@@ -477,7 +477,7 @@ When `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements
 
 ## `_DbDispatchAdapter` — backward compatibility shim
 
-When a called predicate is not a PredicateMeta class in module globals (e.g. in tests that use `Compound`-headed clauses, or for predicates not yet loaded), the compiler injects a `_DbDispatchAdapter`:
+when a called predicate is not a PredicateMeta class in module globals (e.g. in tests that use `Compound`-headed clauses, or for predicates not yet loaded), the compiler injects a `_DbDispatchAdapter`:
 
 ```python
 class _DbDispatchAdapter:
@@ -523,7 +523,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
-| 4. Assert clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. Clauses are synced to `pred_cls._clauses` |
+| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. Clauses are synced to `pred_cls._clauses` |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
 | 7. Locking | Non-[dynamic](directives.md) predicates are locked (`pred_cls._lock()`) to prevent runtime modification |
@@ -549,7 +549,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ### Regex auto-binding
 
-When a [`Match/2` or `Search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
+when a [`Match/2` or `Search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `Match/3` + `Unify` chains:
 
 ```clausal
 # Source:
@@ -576,10 +576,10 @@ All static patterns (string literals) in `Match` and `Search` calls are pre-comp
 `clausal/modules/` is a Python package that acts as the standard library search path for Clausal module imports. A `ModulesFinder` meta path finder (registered in `import_hook.py`) redirects bare module names to `clausal.modules.<name>`, so `-import_from(regex, [Match, ...])` resolves to `clausal.modules.regex` transparently.
 
 Currently provides:
-- **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, FindAll/3
+- **`regex`** — Match/2,3, Search/2,3, Replace/4, Split/3, findall/3
 - **`log`** — GetLogger/1,2, Debug/1,2, Info/1,2, Warning/1,2, Error/1,2, Critical/1,2, Log/3, SetLevel/2, GetLevel/2, IsEnabledFor/2, StreamHandler/2, FileHandler/2, SetFormatter/2, AddHandler/2, RemoveHandler/2, BasicConfig/1. See [logging.md](logging.md)
 - **`date_time`** — Now/1, NowUTC/1, Today/1, Date/4, Time/4, DateTime/7, TimeDelta/3, DateAdd/3, DateSub/3, DateDiff/3, FormatDate/3, ParseDate/3, DayOfWeek/2, DateBetween/3. All predicates produce and consume real Python `datetime` objects (`datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta`) — not custom term types. See [Date & Time](date_time.md)
-- **`yaml_module`** — Read/2, Write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)
+- **`yaml_module`** — Read/2, write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)
 
 ---
 

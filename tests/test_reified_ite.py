@@ -23,13 +23,13 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
 from clausal.pythonic_ast.nodes import (
     IfExpr, Unify, DoesNotUnify, ArithEq, ArithNeq, Lt, LtE, Gt, GtE,
-    And, Or, Not, Call, LoadName, In,
+    And, Or, Not, Call, LoadName, in_,
 )
 
 
 def _once(goal):
     """Helper: build a once(goal) Call node."""
-    return Call(func=LoadName(name="Once"), args=[goal], kwargs=[])
+    return Call(func=LoadName(name="once"), args=[goal], kwargs=[])
 
 
 # ── reify_eq unit tests ──────────────────────────────────────────────────────
@@ -837,7 +837,7 @@ class TestReifiedIteFd:
             dx, dr = deref(x), deref(r)
             if dr == "lo":
                 # X should be constrained to < 5 (i.e., 1..4)
-                # Label to enumerate concrete values
+                # label to enumerate concrete values
                 m = trail.mark()
                 for _ in fd_label([x], trail):
                     lo_vals.append(deref(x))
@@ -919,20 +919,20 @@ class TestGeneralIte:
     def test_succeeding_condition_simple(self):
         """If condition succeeds, run then branch."""
         # member/2: member(X, [X|_]). member(X, [_|T]) :- member(X, T).
-        # We'll use In instead for simplicity: If(1 in [1,2,3], 'yes', 'no')
+        # We'll use in_ instead for simplicity: If(1 in [1,2,3], 'yes', 'no')
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=In(left=1, right=[1, 2, 3]),
+                test=in_(left=1, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
         )
         results = self._run_simple([clause])
-        # In(1, [1,2,3]) succeeds (matches element 1), so then runs
+        # in_(1, [1,2,3]) succeeds (matches element 1), so then runs
         # But it also matches element 1 at position 0 only, then 2 and 3 don't match
-        # Actually In is a for-loop that yields for each match.
+        # Actually in_ is a for-loop that yields for each match.
         # 1 matches 1 → then runs once. 1 doesn't match 2,3.
         # So we get exactly one "yes"
         assert ("yes",) in results
@@ -943,7 +943,7 @@ class TestGeneralIte:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=In(left=99, right=[1, 2, 3]),
+                test=in_(left=99, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -956,7 +956,7 @@ class TestGeneralIte:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=In(left=1, right=[1, 2, 3]),
+                test=in_(left=1, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -969,7 +969,7 @@ class TestGeneralIte:
         clause = Clause(
             head=Compound("ite_test", (r,)),
             body=[IfExpr(
-                test=In(left=99, right=[1, 2, 3]),
+                test=in_(left=99, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
                 orelse=Unify(left=r, right="no"),
             )],
@@ -1109,7 +1109,7 @@ class TestGeneralIteMultiSolution:
         clause = Clause(
             head=Compound("ite_test", (x, r)),
             body=[IfExpr(
-                test=In(left=x, right=[1, 2, 3]),
+                test=in_(left=x, right=[1, 2, 3]),
                 body=Unify(left=r, right=x),
                 orelse=Unify(left=r, right="none"),
             )],
@@ -1128,7 +1128,7 @@ class TestGeneralIteMultiSolution:
         clause = Clause(
             head=Compound("ite_test", (x, r)),
             body=[IfExpr(
-                test=In(left=x, right=[1, 2, 3]),
+                test=in_(left=x, right=[1, 2, 3]),
                 body=Unify(left=r, right=x),
                 orelse=Unify(left=r, right="none"),
             )],
@@ -1145,7 +1145,7 @@ class TestGeneralIteMultiSolution:
         clause = Clause(
             head=Compound("ite_test", (x, r)),
             body=[IfExpr(
-                test=In(left=x, right=[10, 20]),
+                test=in_(left=x, right=[10, 20]),
                 body=Unify(left=r, right=x),
                 orelse=Unify(left=r, right=0),
             )],
@@ -1393,7 +1393,7 @@ class TestOnce:
         x = Var()
         clause = Clause(
             head=Compound("once_test", (x,)),
-            body=[_once(In(left=x, right=[1, 2, 3]))],
+            body=[_once(in_(left=x, right=[1, 2, 3]))],
         )
         results = self._run_simple([clause])
         assert results == [(1,)]
@@ -1403,7 +1403,7 @@ class TestOnce:
         x = Var()
         clause = Clause(
             head=Compound("once_test", (x,)),
-            body=[_once(In(left=x, right=[1, 2, 3]))],
+            body=[_once(in_(left=x, right=[1, 2, 3]))],
         )
         results = self._run_trampoline([clause])
         assert results == [(1,)]
@@ -1414,7 +1414,7 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (r,)),
             body=[
-                _once(In(left=99, right=[1, 2, 3])),
+                _once(in_(left=99, right=[1, 2, 3])),
                 Unify(left=r, right="reached"),
             ],
         )
@@ -1427,7 +1427,7 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (r,)),
             body=[
-                _once(In(left=99, right=[1, 2, 3])),
+                _once(in_(left=99, right=[1, 2, 3])),
                 Unify(left=r, right="reached"),
             ],
         )
@@ -1441,8 +1441,8 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (x, y)),
             body=[
-                _once(In(left=x, right=[1, 2])),
-                In(left=y, right=["a", "b"]),
+                _once(in_(left=x, right=[1, 2])),
+                in_(left=y, right=["a", "b"]),
             ],
         )
         results = self._run_simple([clause], arity=2)
@@ -1454,8 +1454,8 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (x, y)),
             body=[
-                _once(In(left=x, right=[1, 2])),
-                In(left=y, right=["a", "b"]),
+                _once(in_(left=x, right=[1, 2])),
+                in_(left=y, right=["a", "b"]),
             ],
         )
         results = self._run_trampoline([clause], arity=2)
@@ -1493,7 +1493,7 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (r,)),
             body=[IfExpr(
-                test=_once(In(left=x, right=[1, 2, 3])),
+                test=_once(in_(left=x, right=[1, 2, 3])),
                 body=Unify(left=r, right="found"),
                 orelse=Unify(left=r, right="not_found"),
             )],
@@ -1507,7 +1507,7 @@ class TestOnce:
         clause = Clause(
             head=Compound("once_test", (r,)),
             body=[IfExpr(
-                test=_once(In(left=x, right=[1, 2, 3])),
+                test=_once(in_(left=x, right=[1, 2, 3])),
                 body=Unify(left=r, right="found"),
                 orelse=Unify(left=r, right="not_found"),
             )],

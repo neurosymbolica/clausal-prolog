@@ -1,5 +1,5 @@
-"""Attributed variable builtins: PutAttr/3, GetAttr/3, DelAttr/2,
-GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2."""
+"""Attributed variable builtins: put_attr/3, get_attr/3, del_attr/2,
+get_attrs/2, put_attrs/2, attvar/1, term_attvars/2."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from clausal.logic.builtins._registry import _builtin
 # ── Per-key operations ─────────────────────────────────────────────────────
 
 
-@_builtin("PutAttr", 3)
+@_builtin("put_attr", 3)
 def _put_attr__3(var, key, value, trail, k):
-    """PutAttr(Var, Key, Value) — attach attribute under Key to Var.
+    """put_attr(Var, Key, Value) — attach attribute under Key to Var.
 
     Var must be an unbound variable. Key must be a ground string. Trailed.
     """
@@ -29,9 +29,9 @@ def _put_attr__3(var, key, value, trail, k):
     yield None
 
 
-@_builtin("GetAttr", 3)
+@_builtin("get_attr", 3)
 def _get_attr__3(var, key, value, trail, k):
-    """GetAttr(Var, Key, Value) — retrieve attribute under Key.
+    """get_attr(Var, Key, Value) — retrieve attribute under Key.
 
     Fails if Var has no attribute for Key, or if Var is not an unbound variable.
     """
@@ -48,9 +48,9 @@ def _get_attr__3(var, key, value, trail, k):
         yield None
 
 
-@_builtin("DelAttr", 2)
+@_builtin("del_attr", 2)
 def _del_attr__2(var, key, trail, k):
-    """DelAttr(Var, Key) — remove attribute under Key from Var.
+    """del_attr(Var, Key) — remove attribute under Key from Var.
 
     Succeeds even if no attribute existed (no-op). Trailed.
     """
@@ -67,9 +67,9 @@ def _del_attr__2(var, key, trail, k):
 # ── Bulk operations (DictTerm) ─────────────────────────────────────────────
 
 
-@_builtin("GetAttrs", 2)
+@_builtin("get_attrs", 2)
 def _get_attrs__2(var, attrs, trail, k):
-    """GetAttrs(Var, Attrs) — unify Attrs with a DictTerm of all attributes on Var."""
+    """get_attrs(Var, Attrs) — unify Attrs with a DictTerm of all attributes on Var."""
     var_d = deref(var)
     if not is_var(var_d):
         return
@@ -79,9 +79,9 @@ def _get_attrs__2(var, attrs, trail, k):
         yield None
 
 
-@_builtin("PutAttrs", 2)
+@_builtin("put_attrs", 2)
 def _put_attrs__2(var, attrs, trail, k):
-    """PutAttrs(Var, Attrs) — set multiple attributes from a DictTerm."""
+    """put_attrs(Var, Attrs) — set multiple attributes from a DictTerm."""
     var_d = deref(var)
     attrs_d = deref(attrs)
     if not is_var(var_d):
@@ -102,9 +102,9 @@ def _put_attrs__2(var, attrs, trail, k):
 # ── Inspection ─────────────────────────────────────────────────────────────
 
 
-@_builtin("IsAttVar", 1)
+@_builtin("attvar", 1)
 def _is_att_var__1(var, trail, k):
-    """IsAttVar(Var) — succeeds if Var is an unbound variable with attributes."""
+    """attvar(Var) — succeeds if Var is an unbound variable with attributes."""
     var_d = deref(var)
     if is_var(var_d):
         raw = var_d.attrs if hasattr(var_d, 'attrs') else None
@@ -112,9 +112,9 @@ def _is_att_var__1(var, trail, k):
             yield None
 
 
-@_builtin("TermAttributedVariables", 2)
+@_builtin("term_attvars", 2)
 def _term_attributed_variables__2(term, vars_list, trail, k):
-    """TermAttributedVariables(Term, Vars) — collect all attributed variables in Term."""
+    """term_attvars(Term, Vars) — collect all attributed variables in Term."""
     seen = set()
     result = []
     _collect_attvars(deref(term), seen, result)

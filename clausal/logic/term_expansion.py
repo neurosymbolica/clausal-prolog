@@ -187,7 +187,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     mod_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
     lm.module_dict["ModuleExpansionState"] = mod_cls
 
-    # Assert each expansion clause.
+    # assertz each expansion clause.
     for pred_node in expansion_clauses:
         lm.define_predicate(pred_node)
 

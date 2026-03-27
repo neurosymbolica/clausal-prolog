@@ -275,7 +275,7 @@ def _emit_dcg_body(body: PTerm, op_table: OperatorTable) -> str:
 
 
 def _flatten_conjunction(term: PTerm) -> list[PTerm]:
-    """Flatten nested ','(A, B) into a flat list of goals."""
+    """flatten nested ','(A, B) into a flat list of goals."""
     if isinstance(term, PCompound) and term.functor == "," and len(term.args) == 2:
         return _flatten_conjunction(term.args[0]) + _flatten_conjunction(term.args[1])
     return [term]
@@ -785,7 +785,7 @@ class _ClausalToProlog:
 
             if isinstance(op, python_ast.Lt):
                 # Check for := (walrus-like evaluation)
-                # In clausal, Y := X * 2 is parsed as Compare with LtE
+                # in_ clausal, Y := X * 2 is parsed as Compare with LtE
                 # Actually in clausal, := is a NamedExpr. Let me check...
                 # Actually <- is Lt + USub. Pure Lt is just <.
                 return PCompound("<", (left, right))

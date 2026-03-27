@@ -1,4 +1,4 @@
-"""Tests for control builtins — TimeGoal/1."""
+"""Tests for control builtins — time_goal/1."""
 
 from __future__ import annotations
 
@@ -28,14 +28,14 @@ def _call(name, *args):
     return Call(func=LoadName(name=name), args=list(args), kwargs=[])
 
 
-# ── TimeGoal/1 ─────────────────────────────────────────────────────────────────
+# ── time_goal/1 ─────────────────────────────────────────────────────────────────
 
 
 class TestTimeGoal:
     def test_success_single_solution(self, capsys):
-        """TimeGoal succeeds and reports timing for a goal with one solution."""
+        """time_goal succeeds and reports timing for a goal with one solution."""
         x = Var()
-        goal = _call("TimeGoal", _call("Append", [1, 2], [3, 4], x))
+        goal = _call("time_goal", _call("append", [1, 2], [3, 4], x))
         mod = _make_module()
         results = [deref(x) for _ in solve(goal, mod)]
         assert results == [[1, 2, 3, 4]]
@@ -43,9 +43,9 @@ class TestTimeGoal:
         assert "1 solution(s)" in err
 
     def test_success_multiple_solutions(self, capsys):
-        """TimeGoal forwards all solutions and counts them in the timing line."""
+        """time_goal forwards all solutions and counts them in the timing line."""
         x = Var()
-        goal = _call("TimeGoal", _call("In", x, [10, 20, 30]))
+        goal = _call("time_goal", _call("in_", x, [10, 20, 30]))
         results = []
         for _ in solve(goal, _make_module()):
             results.append(deref(x))
@@ -54,9 +54,9 @@ class TestTimeGoal:
         assert "3 solution(s)" in err
 
     def test_failure_zero_solutions(self, capsys):
-        """TimeGoal reports 0 solutions when inner goal fails."""
+        """time_goal reports 0 solutions when inner goal fails."""
         x = Var()
-        goal = _call("TimeGoal", _call("In", x, []))
+        goal = _call("time_goal", _call("in_", x, []))
         solutions = _solve_goal(goal)
         assert solutions == []
         err = capsys.readouterr().err
@@ -64,7 +64,7 @@ class TestTimeGoal:
 
     def test_timing_fields_present(self, capsys):
         """Timing line contains wall and CPU fields."""
-        goal = _call("TimeGoal", _call("Append", [], [], []))
+        goal = _call("time_goal", _call("append", [], [], []))
         _solve_goal(goal)
         err = capsys.readouterr().err
         assert "wall" in err
@@ -72,16 +72,16 @@ class TestTimeGoal:
 
     def test_timing_format(self, capsys):
         """Timing line matches the expected pattern."""
-        goal = _call("TimeGoal", _call("In", Var(), [1]))
+        goal = _call("time_goal", _call("in_", Var(), [1]))
         _solve_goal(goal)
         err = capsys.readouterr().err
         assert re.search(r"\d+ solution\(s\),\s+[\d.]+s wall,\s+[\d.]+s CPU", err)
 
     def test_solutions_pass_through(self, capsys):
-        """TimeGoal is transparent — bindings from inner goal are visible."""
-        # Wrap a simple multi-solution goal: In(X, [1, 2])
+        """time_goal is transparent — bindings from inner goal are visible."""
+        # Wrap a simple multi-solution goal: in_(X, [1, 2])
         x = Var()
-        goal = _call("TimeGoal", _call("In", x, [1, 2]))
+        goal = _call("time_goal", _call("in_", x, [1, 2]))
         pairs = []
         for _ in solve(goal, _make_module()):
             pairs.append(deref(x))
@@ -90,10 +90,10 @@ class TestTimeGoal:
         assert "2 solution(s)" in err
 
     def test_nested_time_goal(self, capsys):
-        """TimeGoal can wrap another TimeGoal (nested meta calls)."""
+        """time_goal can wrap another time_goal (nested meta calls)."""
         x = Var()
-        inner = _call("TimeGoal", _call("In", x, [42]))
-        outer = _call("TimeGoal", inner)
+        inner = _call("time_goal", _call("in_", x, [42]))
+        outer = _call("time_goal", inner)
         results = []
         for _ in solve(outer, _make_module()):
             results.append(deref(x))

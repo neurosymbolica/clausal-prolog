@@ -119,7 +119,7 @@ Plain SLD resolution (what the trampoline currently implements) loops on left-re
 
 ### Tabling (SLG resolution)
 
-Tabling memoises subgoal calls and their answers in a call/answer table. When a subgoal is called again before it has completed, the caller suspends and waits for new answers rather than re-entering the computation. This:
+Tabling memoises subgoal calls and their answers in a call/answer table. when a subgoal is called again before it has completed, the caller suspends and waits for new answers rather than re-entering the computation. This:
 
 - prevents infinite loops on recursive predicates
 - enables Datalog-style bottom-up evaluation
@@ -133,7 +133,7 @@ The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, v
 
 Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *undefined*. It gives a principled treatment of negation in the presence of recursion — the "undefined" value propagates through mutually recursive negations rather than looping or giving arbitrary results.
 
-WFS is implemented directly in `clausal.logic.tabling`, extending the existing SLG machinery with delayed negation and conditional answer resolution. When `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
+WFS is implemented directly in `clausal.logic.tabling`, extending the existing SLG machinery with delayed negation and conditional answer resolution. when `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
 
 - Negation of a completed table with no matching answer → **true** (delay removed)
 - Negation of a completed table with an unconditional matching answer → **false** (answer invalidated)
@@ -188,7 +188,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — Assert/Retract, In/Append, arithmetic, higher-order, term inspection, exceptions, I/O; constructable PredicateMeta classes for all 75+ builtins |
+| `clausal.logic.builtins` | Done — assertz/retract, in_/append, arithmetic, higher-order, term inspection, exceptions, I/O; constructable PredicateMeta classes for all 75+ builtins |
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |
@@ -196,12 +196,12 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | [`clausal.logic.constraints`](constraints.md) | Done — dif/2 via attributed variables |
 | [`clausal.logic.clpfd`](constraints.md) | Done — CLP(ℤ) finite-domain constraints |
 | [Well-founded semantics](wfs.md) | Done — delayed negation, conditional answers |
-| [Meta-predicates](meta_predicates.md) | Done — FindAll, BagOf, SetOf, ForAll, Call/N |
-| [Higher-order list builtins](higher_order.md) | Done — MapList, Filter, Exclude, FoldLeft |
-| Arithmetic builtins | Done — Sign, Gcd, DivMod |
-| [Term inspection](term_inspection.md) | Done — CopyTerm, TermVariables, NumberVars |
+| [Meta-predicates](meta_predicates.md) | Done — findall, bagof, setof, forall, Call/N |
+| [Higher-order list builtins](higher_order.md) | Done — maplist, include, exclude, foldl |
+| Arithmetic builtins | Done — sign, gcd, divmod_ |
+| [Term inspection](term_inspection.md) | Done — copy_term, term_variables, numbervars |
 | [Control exceptions](exceptions.md) | Done — throw/1, catch/3, halt/0, halt/1 |
-| [I/O builtins](io.md) | Done — Write, Writeln, PrintTerm, Nl, Tab, WriteToString, TermToString; f-string support |
+| [I/O builtins](io.md) | Done — write, writeln, print_term, nl, tab, write_to_string, term_to_string; f-string support |
 | [Python interop](python_integration.md) | Done — `++()` escape evaluates arbitrary Python at search time; PyThunk lambda wrapper |
 | [DCGs](dcg.md) | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading |
 | [Module system](import.md) | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution |

@@ -87,7 +87,7 @@ TryRisky(INPUT, RESULT) <- (
 # Parent/1 — tries 0 first (catch swallows error, recovery fails),
 #             then backtracks to 1 (succeeds)
 Parent(RESULT) <- (
-    In(INPUT, [0, 1]) and TryRisky(INPUT, RESULT)
+    in_(INPUT, [0, 1]) and TryRisky(INPUT, RESULT)
 )
 
 # ── Catch with successful goal (no exception) ───────────────────────────────
@@ -104,7 +104,7 @@ CatchNoThrow(RESULT) <- (
 # CatchMultiple/1 — goal with multiple solutions inside catch
 CatchMultiple(RESULT) <- (
     catch(
-        In(RESULT, [10, 20, 30]),
+        in_(RESULT, [10, 20, 30]),
         _,
         False,
     )
@@ -134,7 +134,7 @@ Test("catch is transparent when no throw") <- (
     CatchNoThrow(R) and R is "normal"
 )
 Test("catch with multiple solutions") <- (
-    FindAll(X, CatchMultiple(X), BAG) and BAG is [10, 20, 30]
+    findall(X, CatchMultiple(X), BAG) and BAG is [10, 20, 30]
 )
 Test("safe result passes through") <- (
     SafeResult(42, R) and R is 42

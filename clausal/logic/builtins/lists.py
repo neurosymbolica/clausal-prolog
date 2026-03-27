@@ -1,8 +1,8 @@
-"""List builtins: In/2, InCheck/2, Append/3, Length/2, Last/2, Reverse/2,
-GetItem/3, Flatten/2, MergeSort/2, Sort/2, Permutation/2, Select/3,
-Subtract/3, Intersection/3, Union/3, ToSet/2, SumList/2, MaxList/2, MinList/2,
-Take/3, Drop/3, SplitAt/4, Zip/3, Replicate/3, SplitWith/3,
-Numlist/2,3, SameLength/2, Transpose/2."""
+"""List builtins: in_/2, in_check/2, append/3, length/2, last/2, reverse/2,
+get_item/3, flatten/2, msort/2, sort/2, permutation/2, select/3,
+subtract/3, intersection/3, union/3, list_to_set/2, sum_list/2, max_list/2, min_list/2,
+take/3, drop/3, split_at/4, zip_/3, replicate/3, split_with/3,
+numlist/2,3, same_length/2, transpose/2."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _seq_result(items, was_string):
     return items
 
 
-@_trampoline_builtin("In", 2)
+@_trampoline_builtin("in_", 2)
 def _member__2(this_generator, parent, elem, lst, trail):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack."""
     lst_val = deref(lst)
@@ -50,7 +50,7 @@ def _member__2(this_generator, parent, elem, lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("InCheck", 2)
+@_trampoline_builtin("in_check", 2)
 def _memberchk__2(this_generator, parent, elem, lst, trail):
     """memberchk(Elem, List) — like member/2 but commits to the first match."""
     lst_val = deref(lst)
@@ -66,7 +66,7 @@ def _memberchk__2(this_generator, parent, elem, lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Append", 3)
+@_trampoline_builtin("append", 3)
 def _append__3(this_generator, parent, l1, l2, l3, trail):
     """append(L1, L2, L3) — L3 is the concatenation of L1 and L2.
 
@@ -115,7 +115,7 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Length", 2)
+@_trampoline_builtin("length", 2)
 def _length__2(this_generator, parent, lst, n, trail):
     """length(List, N) — N is the length of List."""
     lst_val = deref(lst)
@@ -134,7 +134,7 @@ def _length__2(this_generator, parent, lst, n, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Last", 2)
+@_trampoline_builtin("last", 2)
 def _last__2(this_generator, parent, lst, elem, trail):
     """last(List, Elem) — Elem is the last element of List."""
     lst_val = deref(lst)
@@ -146,7 +146,7 @@ def _last__2(this_generator, parent, lst, elem, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Reverse", 2)
+@_trampoline_builtin("reverse", 2)
 def _reverse__2(this_generator, parent, lst, rev, trail):
     """reverse(List, Rev) — Rev is the reverse of List."""
     lst_val = deref(lst)
@@ -160,7 +160,7 @@ def _reverse__2(this_generator, parent, lst, rev, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("GetItem", 3)
+@_trampoline_builtin("get_item", 3)
 def _nth0__3(this_generator, parent, n, lst, elem, trail):
     """nth0(N, List, Elem) — Elem is the N-th element of List (0-based)."""
     n_val = deref(n)
@@ -182,7 +182,7 @@ def _nth0__3(this_generator, parent, n, lst, elem, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Flatten", 2)
+@_trampoline_builtin("flatten", 2)
 def _flatten__2(this_generator, parent, lst, flat, trail):
     """flatten(List, Flat) — Flat is the flat list of all atoms in List.
 
@@ -209,7 +209,7 @@ def _flatten__2(this_generator, parent, lst, flat, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MergeSort", 2)
+@_trampoline_builtin("msort", 2)
 def _msort__2(this_generator, parent, lst, sorted_lst, trail):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
     lst_val = deref(lst)
@@ -227,7 +227,7 @@ def _msort__2(this_generator, parent, lst, sorted_lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Sort", 2)
+@_trampoline_builtin("sort", 2)
 def _sort__2(this_generator, parent, lst, sorted_lst, trail):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed."""
     lst_val = deref(lst)
@@ -249,7 +249,7 @@ def _sort__2(this_generator, parent, lst, sorted_lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Permutation", 2)
+@_trampoline_builtin("permutation", 2)
 def _permutation__2(this_generator, parent, lst, perm, trail):
     """permutation(List, Perm) — Perm is a permutation of List."""
     import itertools
@@ -265,7 +265,7 @@ def _permutation__2(this_generator, parent, lst, perm, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Select", 3)
+@_trampoline_builtin("select", 3)
 def _select__3(this_generator, parent, elem, lst, rest, trail):
     """select(Elem, List, Rest) — Elem is in List, Rest is List without one occurrence."""
     lst_val = deref(lst)
@@ -281,7 +281,7 @@ def _select__3(this_generator, parent, elem, lst, rest, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Subtract", 3)
+@_trampoline_builtin("subtract", 3)
 def _subtract__3(this_generator, parent, set1, set2, diff, trail):
     """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
     s1 = deref(set1)
@@ -298,7 +298,7 @@ def _subtract__3(this_generator, parent, set1, set2, diff, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Intersection", 3)
+@_trampoline_builtin("intersection", 3)
 def _intersection__3(this_generator, parent, set1, set2, inter, trail):
     """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
     s1 = deref(set1)
@@ -315,9 +315,9 @@ def _intersection__3(this_generator, parent, set1, set2, inter, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Union", 3)
+@_trampoline_builtin("union", 3)
 def _union__3(this_generator, parent, set1, set2, uni, trail):
-    """union(Set1, Set2, Union) — Union is Set1 ∪ Set2 (no duplicates)."""
+    """union(Set1, Set2, union) — union is Set1 ∪ Set2 (no duplicates)."""
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -336,7 +336,7 @@ def _union__3(this_generator, parent, set1, set2, uni, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("ToSet", 2)
+@_trampoline_builtin("list_to_set", 2)
 def _list_to_set__2(this_generator, parent, lst, set_out, trail):
     """list_to_set(List, Set) — Set is List with duplicates removed (order preserved)."""
     lst_val = deref(lst)
@@ -354,7 +354,7 @@ def _list_to_set__2(this_generator, parent, lst, set_out, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SumList", 2)
+@_trampoline_builtin("sum_list", 2)
 def _sum_list__2(this_generator, parent, lst, total, trail):
     """sum_list(List, Total) — Total is the sum of all numbers in List."""
     lst_val = deref(lst)
@@ -372,9 +372,9 @@ def _sum_list__2(this_generator, parent, lst, total, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MaxList", 2)
+@_trampoline_builtin("max_list", 2)
 def _max_list__2(this_generator, parent, lst, maximum, trail):
-    """max_list(List, Max) — Max is the maximum element of List."""
+    """max_list(List, max_) — max_ is the maximum element of List."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
@@ -390,9 +390,9 @@ def _max_list__2(this_generator, parent, lst, maximum, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("MinList", 2)
+@_trampoline_builtin("min_list", 2)
 def _min_list__2(this_generator, parent, lst, minimum, trail):
-    """min_list(List, Min) — Min is the minimum element of List."""
+    """min_list(List, min_) — min_ is the minimum element of List."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
@@ -411,9 +411,9 @@ def _min_list__2(this_generator, parent, lst, minimum, trail):
 # ── V3-5: Extended list predicates ────────────────────────────────────────────
 
 
-@_trampoline_builtin("Take", 3)
+@_trampoline_builtin("take", 3)
 def _take__3(this_generator, parent, n, lst, taken, trail):
-    """Take(N, List, Taken) — Taken is the first N elements of List."""
+    """take(N, List, Taken) — Taken is the first N elements of List."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
@@ -426,9 +426,9 @@ def _take__3(this_generator, parent, n, lst, taken, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Drop", 3)
+@_trampoline_builtin("drop", 3)
 def _drop__3(this_generator, parent, n, lst, rest, trail):
-    """Drop(N, List, Rest) — Rest is List after dropping the first N elements."""
+    """drop(N, List, Rest) — Rest is List after dropping the first N elements."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
@@ -441,9 +441,9 @@ def _drop__3(this_generator, parent, n, lst, rest, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SplitAt", 4)
+@_trampoline_builtin("split_at", 4)
 def _split_at__4(this_generator, parent, n, lst, left, right, trail):
-    """SplitAt(N, List, Left, Right) — split List at index N."""
+    """split_at(N, List, Left, Right) — split List at index N."""
     n_val, lst_val = deref(n), deref(lst)
     items = _as_items(lst_val)
     if isinstance(n_val, int) and items is not None:
@@ -458,9 +458,9 @@ def _split_at__4(this_generator, parent, n, lst, left, right, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Zip", 3)
+@_trampoline_builtin("zip_", 3)
 def _zip__3(this_generator, parent, l1, l2, pairs, trail):
-    """Zip(L1, L2, Pairs) — Pairs is a list of [X, Y] from L1 and L2."""
+    """zip_(L1, L2, Pairs) — Pairs is a list of [X, Y] from L1 and L2."""
     l1_val, l2_val = deref(l1), deref(l2)
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
@@ -473,9 +473,9 @@ def _zip__3(this_generator, parent, l1, l2, pairs, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Replicate", 3)
+@_trampoline_builtin("replicate", 3)
 def _replicate__3(this_generator, parent, n, elem, lst, trail):
-    """Replicate(N, Elem, List) — List is N copies of Elem."""
+    """replicate(N, Elem, List) — List is N copies of Elem."""
     n_val = deref(n)
     elem_val = deref(elem)
     if isinstance(n_val, int) and n_val >= 0:
@@ -487,13 +487,13 @@ def _replicate__3(this_generator, parent, n, elem, lst, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("SplitWith", 3)
+@_trampoline_builtin("split_with", 3)
 def _split_with__3(this_generator, parent, sep, lst, parts, trail):
-    """SplitWith(Sep, List, Parts) — split List by separator Sep into sublists.
+    """split_with(Sep, List, Parts) — split List by separator Sep into sublists.
 
     Modes:
-      SplitWith(+Sep, +List, -Parts) — split
-      SplitWith(+Sep, -List, +Parts) — join (flatten Parts interleaved with Sep)
+      split_with(+Sep, +List, -Parts) — split
+      split_with(+Sep, -List, +Parts) — join (flatten Parts interleaved with Sep)
     """
     sep_val = deref(sep)
     lst_val = deref(lst)
@@ -531,9 +531,9 @@ def _split_with__3(this_generator, parent, sep, lst, parts, trail):
     yield (parent, DONE)
 
 
-@_builtin("Numlist", 3)
+@_builtin("numlist", 3)
 def _numlist__3(low, high, lst, trail, k):
-    """Numlist(Low, High, List) — List is integers from Low to High inclusive."""
+    """numlist(Low, High, List) — List is integers from Low to High inclusive."""
     low_val = deref(low)
     high_val = deref(high)
     if is_var(low_val) or is_var(high_val):
@@ -547,9 +547,9 @@ def _numlist__3(low, high, lst, trail, k):
         yield None
 
 
-@_builtin("Numlist", 2)
+@_builtin("numlist", 2)
 def _numlist__2(high, lst, trail, k):
-    """Numlist(High, List) — shorthand for Numlist(1, High, List)."""
+    """numlist(High, List) — shorthand for numlist(1, High, List)."""
     high_val = deref(high)
     if is_var(high_val):
         return
@@ -562,9 +562,9 @@ def _numlist__2(high, lst, trail, k):
         yield None
 
 
-@_builtin("SameLength", 2)
+@_builtin("same_length", 2)
 def _same_length__2(l1, l2, trail, k):
-    """SameLength(L1, L2) — true if L1 and L2 have the same length.
+    """same_length(L1, L2) — true if L1 and L2 have the same length.
 
     If one is ground and the other unbound, generates a list of fresh Vars.
     """
@@ -585,9 +585,9 @@ def _same_length__2(l1, l2, trail, k):
             yield None
 
 
-@_builtin("Transpose", 2)
+@_builtin("transpose", 2)
 def _transpose__2(matrix, transposed, trail, k):
-    """Transpose(Matrix, Transposed) — column-wise transposition of a list of lists."""
+    """transpose(Matrix, Transposed) — column-wise transposition of a list of lists."""
     mat = deref(matrix)
     if is_var(mat) or not isinstance(mat, list):
         return

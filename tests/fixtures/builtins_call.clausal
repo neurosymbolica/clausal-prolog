@@ -11,14 +11,14 @@ RunGoal(GOAL) <- Call(GOAL)
 
 # Example: call member via a goal variable
 MemberViaCall(X, LIST) <- (
-    GOAL := (X) <- In(X, LIST),
+    GOAL := (X) <- in_(X, LIST),
     Call(GOAL, X)
 )
 
 # map using Call/3
 DoubleViaCall(X, Y) <- (Y := X * 2)
 
-MappedDoubles(LIST, RESULT) <- MapList(
+MappedDoubles(LIST, RESULT) <- maplist(
     (X, Y) <- Call(DoubleViaCall, X, Y),
     LIST,
     RESULT,

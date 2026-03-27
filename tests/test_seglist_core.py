@@ -303,7 +303,7 @@ class TestSeglistUnifyGen:
         assert solutions == [[]]
 
 
-# ── Sequence protocol ─────────────────────────────────────────────────────────
+# ── sequence protocol ─────────────────────────────────────────────────────────
 
 class TestSequenceProtocol:
     def setup_method(self):
@@ -330,7 +330,7 @@ class TestSequenceProtocol:
         assert 99 not in self.sl_ground
 
     def test_contains_in_concrete_seg_unground(self):
-        # Element is in a ConcreteSeg — can answer True even if unground
+        # element is in a ConcreteSeg — can answer True even if unground
         sl = SegList([ConcreteSeg([5]), VarSeg(Var())])
         assert 5 in sl
 

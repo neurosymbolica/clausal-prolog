@@ -324,7 +324,7 @@ class TestDatabaseSignature:
     def test_conflicting_signature_warns(self):
         db = Database()
         db.register_signature("point", 2, ("_x", "_y"))
-        with pytest.warns(UserWarning, match="Signature conflict"):
+        with pytest.warns(UserWarning, match="signature conflict"):
             db.register_signature("point", 2, ("_lat", "_lon"))
         # Original signature is preserved.
         assert db.signature_for("point", 2) == ("_x", "_y")

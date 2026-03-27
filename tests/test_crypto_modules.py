@@ -11,7 +11,7 @@ from clausal.modules.py.hash import (
     Hash, HashBytes, _hash_3, _hash_bytes_3,
 )
 from clausal.modules.py.hmac import (
-    Sign, Verify, _sign_3, _sign_4, _verify_3, _verify_4,
+    sign, Verify, _sign_3, _sign_4, _verify_3, _verify_4,
 )
 from clausal.modules.py.pbkdf2 import (
     Derive, _derive_4, _derive_5,
@@ -124,7 +124,7 @@ class TestHashBytes:
         assert len(deref(b512)) == 64
 
 
-# ── Sign/3,4 ─────────────────────────────────────────────────────────────
+# ── sign/3,4 ─────────────────────────────────────────────────────────────
 
 
 class TestHmacSign:
@@ -139,7 +139,7 @@ class TestHmacSign:
         assert deref(h) == "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
 
     def test_default_sha256(self):
-        """Sign/3 uses SHA-256 by default."""
+        """sign/3 uses SHA-256 by default."""
         h3 = Var()
         h4 = Var()
         simple_solutions(_sign_3, "secret", "data", h3)
@@ -159,7 +159,7 @@ class TestHmacSign:
         assert len(sols) == 0
 
     def test_custom_algorithm(self):
-        """Sign("sha512", KEY, DATA, HEX)."""
+        """sign("sha512", KEY, DATA, HEX)."""
         h = Var()
         sols, trail = simple_solutions(_sign_4, "sha512", "key", "data", h)
         assert len(sols) == 1
@@ -167,7 +167,7 @@ class TestHmacSign:
 
     def test_trampoline_protocol(self):
         h = Var()
-        sols, trail = trampoline_solutions(Sign, "secret", "data", h)
+        sols, trail = trampoline_solutions(sign, "secret", "data", h)
         assert len(sols) == 1
 
 

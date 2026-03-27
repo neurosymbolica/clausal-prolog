@@ -324,7 +324,7 @@ probe-strip-wrap pattern as `scipy_differentiate`:
 
 ### Fast path
 
-When no input is a `Quantity`, scipy is called directly with **zero overhead**.
+when no input is a `Quantity`, scipy is called directly with **zero overhead**.
 
 ### ODE solvers (deferred)
 
@@ -336,21 +336,21 @@ design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
 
 ```
 -import_from(scipy_integrate, [Trapezoid, Quad, ResultGet])
--import_from(py.units, [Metre, Second, Newton, HasUnits])
+-import_from(py.units, [Metre, Second, Newton, has_units])
 
 % Velocity (m/s) integrated over time (s) gives displacement (m)
 Test("trapezoid velocity times time") <- (
     Trapezoid(++(numpy.array([0.0(Metre/Second), 10.0(Metre/Second), 20.0(Metre/Second)])),
               ++(numpy.array([0.0(Second), 1.0(Second), 2.0(Second)])),
               R),
-    HasUnits(R, Metre))
+    has_units(R, Metre))
 
 % Quad with quantity-aware function
 Test("quad with units") <- (
     Quad(++(lambda x: x * 1.0(Newton/Metre)),
          0.0(Metre), 1.0(Metre), RESULT),
     ResultGet(RESULT, 'value', V),
-    HasUnits(V, Newton))
+    has_units(V, Newton))
 ```
 
 ---

@@ -41,14 +41,14 @@ out of the box, but some Prolog conventions must change.
 | `\+(Goal)` | `not Goal` | Python's `not` keyword |
 | `X = Y` | `X is Y` | Unification uses `is` |
 | `X \= Y` | `not (X is Y)` | Immediate check |
-| `dif(X, Y)` | `X is not Y` or `Dif(X, Y)` | Constraint — survives |
+| `dif(X, Y)` | `X is not Y` or `dif(X, Y)` | Constraint — survives |
 | `X is Expr` | `X := Expr` | Arithmetic evaluation |
 | `X =:= Y` | `X == Y` | Arithmetic / CLP(ℤ) equality |
 | `X =\= Y` | `X != Y` | Arithmetic / CLP(ℤ) disequality |
 | `X #= Y` | `X #= Y` | CLP(ℤ) — same |
-| `append/3` | `Append/3` | Builtins are PascalCase |
-| `member/2` | `In/2` | Uses Python's `in` semantics |
-| `msort/2` | `MergeSort/2` | Full names, not abbreviations |
+| `append/3` | `append/3` | Builtins are PascalCase |
+| `member/2` | `in_/2` | Uses Python's `in` semantics |
+| `msort/2` | `msort/2` | Full names, not abbreviations |
 | `phrase(NT, Ls)` | `phrase(nt, LS)` | DCGs use `>>` instead of `-->` |
 | `?- goal.` | `clausal.query(goal)` | From Python; or `*(goal)` in IPython |
 
@@ -79,18 +79,18 @@ Clausal's equivalent of `:- table`.
 ### CLP(ℤ)
 
 ```clausal
--import_from(clpfd, [AllDifferent, Labeling]),
+-import_from(clpfd, [all_different, Labeling]),
 
 n_queens(N, QUEENS) <- (
-    Length(QUEENS, N),
+    length(QUEENS, N),
     QUEENS ins 1..N,
-    AllDifferent(QUEENS),
+    all_different(QUEENS),
     safe_queens(QUEENS)
 )
 ```
 
 The constraint operators (`#=`, `#<`, `#>`, `#<=`, `#>=`, `#!=`) are the same.
-`ins` works as you'd expect. `AllDifferent`, `Labeling`, and other global
+`ins` works as you'd expect. `all_different`, `Labeling`, and other global
 constraints are available as PascalCase builtins.
 
 ### DCGs
@@ -106,7 +106,7 @@ inline goals use `{ }` or `++()`. `phrase/2` and `phrase/3` work as expected. Se
 
 ### [Meta-predicates](meta_predicates.md)
 
-[`FindAll/3`, `BagOf/3`, `SetOf/3`](meta_predicates.md), `ForAll/2`, and [`Call/1..8`](higher_order.md) are all
+[`findall/3`, `bagof/3`, `setof/3`](meta_predicates.md), `forall/2`, and [`Call/1..8`](higher_order.md) are all
 available as builtins.
 
 ### [Module system](import.md)
@@ -116,7 +116,7 @@ available as builtins.
 -import_module(math_utils),
 ```
 
-Equivalent to Prolog's `use_module` family. Qualified calls use dot notation:
+equivalent to Prolog's `use_module` family. Qualified calls use dot notation:
 `math_utils.Factorial(N, F)`.
 
 ---
@@ -150,8 +150,8 @@ Both work in unification and pattern matching.
 |---|---|
 | `lowercase_atoms` for predicates | `lowercase` for user predicates |
 | `TitleCase` for variables | `ALLCAPS` for variables |
-| `abbreviations` (`msort`, `succ`, `nb_getval`) | Full names (`MergeSort`, `Successor`, ...) |
-| `library(lists)` | `PascalCase` builtins (`Append`, `In`, `Sort`) |
+| `abbreviations` (`msort`, `succ`, `nb_getval`) | Full names (`msort`, `Successor`, ...) |
+| `library(lists)` | `PascalCase` builtins (`append`, `in_`, `sort`) |
 
 The philosophy: spell out names. Only keep abbreviations that are the
 universal name (e.g., `DCG`, `CLP`). This makes code readable without

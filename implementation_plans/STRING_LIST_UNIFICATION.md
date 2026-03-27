@@ -2,8 +2,8 @@
 
 ## Motivation
 
-In Prolog (especially Scryer Prolog), strings are lists of characters. This isn't a historical
-accident — it's a logical uniformity principle. When strings *are* lists:
+in_ Prolog (especially Scryer Prolog), strings are lists of characters. This isn't a historical
+accident — it's a logical uniformity principle. when strings *are* lists:
 
 1. **One sequence type, one set of predicates.** `append/3`, `member/2`, `length/2`, `reverse/2`,
    `maplist/2` all work on strings for free. No duplication.
@@ -19,8 +19,8 @@ types. This creates three concrete pain points:
 
 | Problem | Severity | Example |
 |---------|----------|---------|
-| **Predicate duplication** | Moderate | `Append/3` vs `AtomConcat/3`, `Length/2` vs `AtomLength/2` |
-| **DCGs can't parse strings** | High | Must call `AtomChars` first, then `phrase` on the char list |
+| **Predicate duplication** | Moderate | `append/3` vs `atom_concat/3`, `length/2` vs `atom_length/2` |
+| **DCGs can't parse strings** | High | Must call `atom_chars` first, then `phrase` on the char list |
 | **No structural pattern matching on strings** | High | Can't write `[*Prefix, 'a', *Suffix]` against a string |
 
 The goal of this plan is to make strings behave *logically* as lists of single-character strings
@@ -44,10 +44,10 @@ sequences of characters when they interact with list operations, while preservin
 ### D1: What is a "character" in Clausal?
 
 A character is a single-character Python string: `"a"`, `"Z"`, `" "`, etc. This matches what
-`AtomChars/2` already produces (`chars.py:192`: `unify(chars, list(va), trail)` — `list("hello")`
+`atom_chars/2` already produces (`chars.py:192`: `unify(chars, list(va), trail)` — `list("hello")`
 yields `['h', 'e', 'l', 'l', 'o']`).
 
-### D2: When does a string behave as a list?
+### D2: when does a string behave as a list?
 
 A string behaves as a list of characters in these contexts:
 - **Unification** against a list or SegList
@@ -57,29 +57,29 @@ A string behaves as a list of characters in these contexts:
 
 A string does NOT behave as a list in these contexts:
 - **String-vs-string unification** remains fast equality (`"abc" = "abc"`)
-- **`IsList/1`** does NOT succeed for strings (strings are a subtype, but `IsList` tests the
-  exact type; we add `IsChars/1` for the union type — see Phase 4)
-- **`IsStr/1`** continues to succeed for strings only
+- **`is_list/1`** does NOT succeed for strings (strings are a subtype, but `is_list` tests the
+  exact type; we add `is_chars/1` for the union type — see Phase 4)
+- **`is_str/1`** continues to succeed for strings only
 - **Python interop** — strings remain `str` when passed to Python functions
 
 ### D3: What type do results have?
 
-When a list builtin operates on string inputs and produces a sequence result:
+when a list builtin operates on string inputs and produces a sequence result:
 - If **all** sequence inputs are strings and the result is a valid string (sequence of single-char
   strings) → return `str`
 - Otherwise → return `list`
 
 Examples:
-- `Append("hel", "lo", X)` → `X = "hello"` (string)
-- `Append("hel", [1, 2], X)` → `X = ['h', 'e', 'l', 1, 2]` (list)
-- `Reverse("hello", X)` → `X = "olleh"` (string)
-- `In(X, "hello")` → `X = "h"` ; `X = "e"` ; ... (single-char strings)
+- `append("hel", "lo", X)` → `X = "hello"` (string)
+- `append("hel", [1, 2], X)` → `X = ['h', 'e', 'l', 1, 2]` (list)
+- `reverse("hello", X)` → `X = "olleh"` (string)
+- `in_(X, "hello")` → `X = "h"` ; `X = "e"` ; ... (single-char strings)
 
 ### D4: SegList unification with strings
 
-When a SegList unifies against a string, the string is treated as a sequence of single-char
+when a SegList unifies against a string, the string is treated as a sequence of single-char
 strings. The VarSegs bind to **lists** of characters (not substrings), because the VarSeg
-contract is to bind to a list. To get a substring result, use `AtomChars` or the new `IsChars`
+contract is to bind to a list. To get a substring result, use `atom_chars` or the new `is_chars`
 predicate.
 
 Wait — actually, this needs more thought. Consider:
@@ -93,7 +93,7 @@ If called with `split_at_comma("hello,world", B, A)`, the SegList machinery woul
 - `After = ['w', 'o', 'r', 'l', 'd']` (list)
 
 This is correct and consistent — VarSegs always bind to lists. If the user wants strings back,
-they can use `AtomChars` to reconstitute. However, it may be more ergonomic to have VarSegs bind
+they can use `atom_chars` to reconstitute. However, it may be more ergonomic to have VarSegs bind
 to strings when the match target was a string. We defer this decision:
 
 - **Phase 2 (initial):** VarSegs bind to lists of chars when matching a string.
@@ -102,7 +102,7 @@ to strings when the match target was a string. We defer this decision:
 
 ### D5: DCG difference lists
 
-DCGs operate on difference lists. When the input is a string, the difference-list remainder
+DCGs operate on difference lists. when the input is a string, the difference-list remainder
 should also be a string (for consistency and because string slicing is O(n) anyway). So:
 
 ```clausal
@@ -335,9 +335,9 @@ class TestStringListUnification:
 | `"abc" = "abc"` | Succeeds | Equality fast path (unchanged) |
 | `"abc" = ['a', X, 'c']` | Succeeds, `X='b'` | Var binding |
 | `"abc" = [1, 2, 3]` | Fails | Ints ≠ chars |
-| `"abc" = ['ab', 'c']` | Fails | Length 3 ≠ 2 |
-| `"abc" = ['a', 'b']` | Fails | Length mismatch |
-| `"abc" = [X, Y]` | Fails | Length mismatch |
+| `"abc" = ['ab', 'c']` | Fails | length 3 ≠ 2 |
+| `"abc" = ['a', 'b']` | Fails | length mismatch |
+| `"abc" = [X, Y]` | Fails | length mismatch |
 | `"日本" = ['日', '本']` | Succeeds | Unicode |
 
 ### Build & Rebuild
@@ -505,7 +505,7 @@ Test("contains comma") <- contains_char("a,b,c", ',')
 
 ## Phase 3: DCGs Accept Strings
 
-**Goal:** `phrase(Grammar, "hello")` works directly. No `AtomChars` conversion needed.
+**Goal:** `phrase(Grammar, "hello")` works directly. No `atom_chars` conversion needed.
 
 ### Changes
 
@@ -564,7 +564,7 @@ approach: keep string identity where possible.
 **Revised approach for `_sequence__3`:**
 
 ```python
-@_trampoline_builtin("Sequence", 3, fields=("list", "s0", "s"))
+@_trampoline_builtin("sequence", 3, fields=("list", "s0", "s"))
 def _sequence__3(this_generator, parent, lst, s0, s, trail):
     lst_val = deref(lst)
     if is_var(lst_val) or not isinstance(lst_val, (list, str)):
@@ -617,14 +617,14 @@ boundary, then everything works via existing list-based DCG infrastructure:
 
 #### Simpler: Convert at `phrase/2` and `phrase/3` boundary
 
-In `dcg.py` `_phrase__2` (line 13) and `_phrase__3` (line 41):
+in_ `dcg.py` `_phrase__2` (line 13) and `_phrase__3` (line 41):
 
 ```python
-# In _phrase__2, after line 16:
+# in_ _phrase__2, after line 16:
 if isinstance(list_val, str):
     list_val = list(list_val)
 
-# In _phrase__3, after line 44-45:
+# in_ _phrase__3, after line 44-45:
 if isinstance(list_val, str):
     list_val = list(list_val)
 ```
@@ -633,7 +633,7 @@ This is the simplest correct approach. The DCG machinery operates on lists inter
 are converted once at the entry point. The remainder (`Rest` in `phrase/3`) will be a list of
 chars, not a string — this is acceptable and consistent.
 
-For `Sequence//1` at line 75, add string acceptance:
+For `sequence//1` at line 75, add string acceptance:
 
 ```python
 if is_var(lst_val) or not isinstance(lst_val, (list, str)):
@@ -664,7 +664,7 @@ elif isinstance(s_val, (list, str)):
 
 class TestDCGStrings:
     def test_phrase_string_input(self):
-        """phrase(Grammar, 'hello') works without AtomChars."""
+        """phrase(Grammar, 'hello') works without atom_chars."""
         # Load a .clausal module with a DCG rule that matches "hello"
         # greeting >> (["h", "e", "l", "l", "o"])
         # phrase(greeting, "hello") should succeed
@@ -675,11 +675,11 @@ class TestDCGStrings:
         # phrase(greeting, "hello world", Rest) → Rest = [' ', 'w', 'o', 'r', 'l', 'd']
 
     def test_sequence_string(self):
-        """Sequence(['a', 'b']) matches string 'abc' with remainder ['c']."""
+        """sequence(['a', 'b']) matches string 'abc' with remainder ['c']."""
 
     def test_dcg_character_grammar(self):
         """A character-level DCG parses a string directly."""
-        # digit >> ([D], {CharType(D, digit)})
+        # digit >> ([D], {char_type(D, digit)})
         # digits >> (digit, digits)
         # digits >> (digit)
         # phrase(digits, "123") should succeed
@@ -692,7 +692,7 @@ class TestDCGStrings:
 
 ```clausal
 # test_dcg_strings.clausal
-digit >> ([D], {CharType(D, digit)})
+digit >> ([D], {char_type(D, digit)})
 digits >> (digit)
 digits >> (digit, digits)
 
@@ -749,47 +749,47 @@ Each builtin currently checks `isinstance(val, list)`. We change these to use `_
 
 | Builtin | Line | Change |
 |---------|------|--------|
-| `In/2` | 21 | Accept string; yield single chars |
-| `Append/3` | 58 | Accept strings; return string when all inputs are strings |
-| `Length/2` | 87 | Accept string; return `len()` |
-| `Reverse/2` | 117 | Accept string; return reversed string |
-| `GetItem/3` | 130 | Accept string; return char |
-| `Last/2` | 105 | Accept string; return last char |
+| `in_/2` | 21 | Accept string; yield single chars |
+| `append/3` | 58 | Accept strings; return string when all inputs are strings |
+| `length/2` | 87 | Accept string; return `len()` |
+| `reverse/2` | 117 | Accept string; return reversed string |
+| `get_item/3` | 130 | Accept string; return char |
+| `last/2` | 105 | Accept string; return last char |
 
 #### Priority 2: Useful for string processing
 
 | Builtin | Line | Change |
 |---------|------|--------|
-| `Take/3` | 352 | Accept string; return substring |
-| `Drop/3` | 365 | Accept string; return substring |
-| `SplitAt/4` | 378 | Accept string; return two substrings |
-| `Flatten/2` | 155 | Accept string (flatten is identity for strings) |
+| `take/3` | 352 | Accept string; return substring |
+| `drop/3` | 365 | Accept string; return substring |
+| `split_at/4` | 378 | Accept string; return two substrings |
+| `flatten/2` | 155 | Accept string (flatten is identity for strings) |
 
 #### Priority 3: Lower priority (set/sort operations)
 
 | Builtin | Line | Change |
 |---------|------|--------|
-| `MergeSort/2` | 173 | Accept string; return sorted chars |
-| `Sort/2` | 189 | Accept string; return sorted unique chars |
-| `Permutation/2` | 210 | Accept string; yield char permutations |
-| `Select/3` | 223 | Accept string; select char |
-| `Subtract/3` | 238 | Accept strings |
-| `Intersection/3` | 252 | Accept strings |
-| `Union/3` | 266 | Accept strings |
-| `ToSet/2` | 282 | Accept string; return unique chars |
-| `SumList/2` | 298 | Skip (chars aren't numbers) |
-| `MaxList/2` | 315 | Accept string (max char by codepoint) |
-| `MinList/2` | 332 | Accept string (min char by codepoint) |
-| `Zip/3` | 391 | Accept strings |
-| `SplitWith/3` | 426 | Accept string |
-| `Numlist/2,3` | 454 | Skip (generates integer lists) |
-| `SameLength/2` | 493 | Accept strings |
-| `Transpose/2` | 512 | Accept strings |
+| `msort/2` | 173 | Accept string; return sorted chars |
+| `sort/2` | 189 | Accept string; return sorted unique chars |
+| `permutation/2` | 210 | Accept string; yield char permutations |
+| `select/3` | 223 | Accept string; select char |
+| `subtract/3` | 238 | Accept strings |
+| `intersection/3` | 252 | Accept strings |
+| `union/3` | 266 | Accept strings |
+| `list_to_set/2` | 282 | Accept string; return unique chars |
+| `sum_list/2` | 298 | Skip (chars aren't numbers) |
+| `max_list/2` | 315 | Accept string (max char by codepoint) |
+| `min_list/2` | 332 | Accept string (min char by codepoint) |
+| `zip_/3` | 391 | Accept strings |
+| `split_with/3` | 426 | Accept string |
+| `numlist/2,3` | 454 | Skip (generates integer lists) |
+| `same_length/2` | 493 | Accept strings |
+| `transpose/2` | 512 | Accept strings |
 
-### Example: `Append/3` Polymorphic Implementation
+### Example: `append/3` Polymorphic Implementation
 
 ```python
-@_trampoline_builtin("Append", 3)
+@_trampoline_builtin("append", 3)
 def _append__3(this_generator, parent, l1, l2, l3, trail):
     l1_val = deref(l1)
     l2_val = deref(l2)
@@ -834,10 +834,10 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
     yield (parent, DONE)
 ```
 
-### Example: `In/2` Polymorphic Implementation
+### Example: `in_/2` Polymorphic Implementation
 
 ```python
-@_trampoline_builtin("In", 2)
+@_trampoline_builtin("in_", 2)
 def _in__2(this_generator, parent, elem, lst, trail):
     lst_val = deref(lst)
     seq = _as_sequence(lst_val)
@@ -853,12 +853,12 @@ def _in__2(this_generator, parent, elem, lst, trail):
     yield (parent, DONE)
 ```
 
-### New Predicate: `IsChars/1`
+### New Predicate: `is_chars/1`
 
 Add to `type_checks.py`:
 
 ```python
-@_builtin("IsChars", 1)
+@_builtin("is_chars", 1)
 def _is_chars__1(x, trail, k):
     """is_chars(X) — succeeds if X is a list or a string (i.e. a character sequence)."""
     val = deref(x)
@@ -866,11 +866,11 @@ def _is_chars__1(x, trail, k):
         yield None
 ```
 
-### `IsList/1` Decision
+### `is_list/1` Decision
 
-**`IsList/1` should NOT succeed for strings.** It tests the exact type — "is this a Python list?"
+**`is_list/1` should NOT succeed for strings.** It tests the exact type — "is this a Python list?"
 This preserves backward compatibility and gives users a way to distinguish types when needed.
-`IsChars/1` is the union predicate.
+`is_chars/1` is the union predicate.
 
 The existing test `test_is_list_string_fails` (`test_list_edge_cases.py:359`) stays as-is.
 
@@ -881,71 +881,71 @@ The existing test `test_is_list_string_fails` (`test_list_edge_cases.py:359`) st
 
 class TestPolymorphicAppend:
     def test_append_two_strings(self):
-        """Append('hel', 'lo', X) → X = 'hello'."""
+        """append('hel', 'lo', X) → X = 'hello'."""
 
     def test_append_string_list(self):
-        """Append('ab', [1, 2], X) → X = ['a', 'b', 1, 2]."""
+        """append('ab', [1, 2], X) → X = ['a', 'b', 1, 2]."""
 
     def test_append_split_string(self):
-        """Append(X, Y, 'hello') enumerates all splits as strings."""
+        """append(X, Y, 'hello') enumerates all splits as strings."""
 
     def test_append_prefix_match(self):
-        """Append('hel', X, 'hello') → X = 'lo'."""
+        """append('hel', X, 'hello') → X = 'lo'."""
 
     def test_append_suffix_match(self):
-        """Append(X, 'lo', 'hello') → X = 'hel'."""
+        """append(X, 'lo', 'hello') → X = 'hel'."""
 
 class TestPolymorphicIn:
     def test_member_string(self):
-        """In(X, 'hello') yields 'h', 'e', 'l', 'l', 'o'."""
+        """in_(X, 'hello') yields 'h', 'e', 'l', 'l', 'o'."""
 
     def test_member_check_string(self):
-        """In('l', 'hello') succeeds."""
+        """in_('l', 'hello') succeeds."""
 
     def test_member_nonchar_string(self):
-        """In(1, 'hello') fails."""
+        """in_(1, 'hello') fails."""
 
 class TestPolymorphicLength:
     def test_length_string(self):
-        """Length('hello', N) → N = 5."""
+        """length('hello', N) → N = 5."""
 
 class TestPolymorphicReverse:
     def test_reverse_string(self):
-        """Reverse('hello', X) → X = 'olleh'."""
+        """reverse('hello', X) → X = 'olleh'."""
 
 class TestPolymorphicGetItem:
     def test_getitem_string(self):
-        """GetItem('hello', 1, X) → X = 'e'."""
+        """get_item('hello', 1, X) → X = 'e'."""
 
 class TestPolymorphicTakeDrop:
     def test_take_string(self):
-        """Take(3, 'hello', X) → X = 'hel'."""
+        """take(3, 'hello', X) → X = 'hel'."""
 
     def test_drop_string(self):
-        """Drop(3, 'hello', X) → X = 'lo'."""
+        """drop(3, 'hello', X) → X = 'lo'."""
 
     def test_split_at_string(self):
-        """SplitAt(3, 'hello', X, Y) → X = 'hel', Y = 'lo'."""
+        """split_at(3, 'hello', X, Y) → X = 'hel', Y = 'lo'."""
 
 class TestIsChars:
     def test_is_chars_string(self):
-        """IsChars('hello') succeeds."""
+        """is_chars('hello') succeeds."""
 
     def test_is_chars_list(self):
-        """IsChars([1, 2]) succeeds."""
+        """is_chars([1, 2]) succeeds."""
 
     def test_is_chars_int(self):
-        """IsChars(42) fails."""
+        """is_chars(42) fails."""
 
     def test_is_list_string_still_fails(self):
-        """IsList('hello') still fails (exact type test)."""
+        """is_list('hello') still fails (exact type test)."""
 ```
 
 ---
 
 ## Phase 5: Higher-Order Predicates Accept Strings
 
-**Goal:** `MapList`, `FoldLeft`, `Filter`, `Exclude`, `FindAll` etc. work on strings.
+**Goal:** `maplist`, `foldl`, `include`, `exclude`, `findall` etc. work on strings.
 
 ### Changes
 
@@ -955,10 +955,10 @@ The key predicates are likely in a `higher_order.py` or `meta.py` builtins file.
 The pattern is the same as Phase 4: use `_as_sequence` for input, `_seq_result` for output.
 
 Higher-order predicates that call a goal on each element:
-- `MapList/2,3,4` — apply goal to each element
-- `Filter/3` — filter elements by goal
-- `Exclude/3` — exclude elements by goal
-- `FoldLeft/4,5` — fold over elements
+- `maplist/2,3,4` — apply goal to each element
+- `include/3` — filter elements by goal
+- `exclude/3` — exclude elements by goal
+- `foldl/4,5` — fold over elements
 
 These should accept strings and (where the output is a sequence of single chars) produce strings.
 
@@ -967,15 +967,15 @@ These should accept strings and (where the output is a sequence of single chars)
 ```python
 class TestHigherOrderStrings:
     def test_maplist_string(self):
-        """MapList(UpcaseAtom, 'abc', X) — but chars are already single, so..."""
-        # Actually MapList operates on list elements. For strings,
-        # each element is a char. So MapList(SomeCharPred, "abc") should work.
+        """maplist(upcase_atom, 'abc', X) — but chars are already single, so..."""
+        # Actually maplist operates on list elements. For strings,
+        # each element is a char. So maplist(SomeCharPred, "abc") should work.
 
     def test_filter_string(self):
-        """Filter(IsDigitChar, 'a1b2c3', X) → X = '123' or ['1','2','3']."""
+        """include(IsDigitChar, 'a1b2c3', X) → X = '123' or ['1','2','3']."""
 
     def test_foldleft_string(self):
-        """FoldLeft(Concat, '', 'abc', X) → X = 'abc' (fold chars)."""
+        """foldl(Concat, '', 'abc', X) → X = 'abc' (fold chars)."""
 ```
 
 ---
@@ -987,19 +987,19 @@ string-specific predicates for backward compatibility and ISO compliance.
 
 ### Changes
 
-- `AtomConcat/3` → thin wrapper or alias for polymorphic `Append/3`
-- `AtomLength/2` → thin wrapper or alias for `Length/2`
-- `AtomChars/2` → still useful for explicit type conversion (string ↔ list)
-- `AtomCodes/2` → keep (code point conversion is distinct from char-list conversion)
-- `SubAtom/5` → keep for ISO compatibility, but document that `[*A, Sub, *B]` patterns are preferred
-- `CharType/2`, `CharCode/2`, `UpcaseAtom/2`, `DowncaseAtom/2` → keep (character-specific operations)
+- `atom_concat/3` → thin wrapper or alias for polymorphic `append/3`
+- `atom_length/2` → thin wrapper or alias for `length/2`
+- `atom_chars/2` → still useful for explicit type conversion (string ↔ list)
+- `atom_codes/2` → keep (code point conversion is distinct from char-list conversion)
+- `sub_atom/5` → keep for ISO compatibility, but document that `[*A, Sub, *B]` patterns are preferred
+- `char_type/2`, `char_code/2`, `upcase_atom/2`, `downcase_atom/2` → keep (character-specific operations)
 
 ### Documentation Updates
 
 - `docs/lists.md` — add section on strings as character lists
 - `docs/builtins.md` — update to show list predicates accepting strings
 - `docs/dcg.md` — show `phrase(Grammar, "string")` examples
-- `docs/type_checking.md` — document `IsChars/1`
+- `docs/type_checking.md` — document `is_chars/1`
 - Create `docs/strings_as_lists.md` — dedicated explanation (see companion doc)
 
 ---
@@ -1019,7 +1019,7 @@ class SegString:
 
     SegString([ConcreteSeg("hel"), VarSeg(X), ConcreteSeg("ld")])
 
-    When ground, __walk__ returns a plain str (not a list).
+    when ground, __walk__ returns a plain str (not a list).
     VarSegs bind to substrings (str), not char lists.
     """
 ```
@@ -1079,9 +1079,9 @@ Total: 197 new tests, 7940 passing, 0 regressions.
 | `clausal/logic/variables/_variables.c` | 1 | Add str↔list unification in `do_unify` |
 | `clausal/terms.py` | 2 | `SegList.__unify__` accepts `str` |
 | `clausal/logic/compiler.py` | 2, 5b | `_body_multi_star_unify`, `_head_list_unify_input`, dispatch guards |
-| `clausal/logic/builtins/dcg.py` | 3 | `phrase/2,3` and `Sequence//1` accept `str` |
+| `clausal/logic/builtins/dcg.py` | 3 | `phrase/2,3` and `sequence//1` accept `str` |
 | `clausal/logic/builtins/lists.py` | 4 | All 27 list builtins accept `str` via `_as_items`/`_seq_result` |
-| `clausal/logic/builtins/type_checks.py` | 4 | Add `IsChars/1` |
+| `clausal/logic/builtins/type_checks.py` | 4 | Add `is_chars/1` |
 | `clausal/logic/builtins/higher_order.py` | 5 | All 16 higher-order predicates accept `str` |
 | `tests/test_string_list_unification.py` | 1, 2 | 60 tests: C unification + SegList |
 | `tests/test_dcg.py` | 3 | 10 tests: DCG string input |
@@ -1090,7 +1090,7 @@ Total: 197 new tests, 7940 passing, 0 regressions.
 | `tests/test_string_head_patterns.py` | 5b | 20 tests: compiled head patterns |
 | `tests/test_seglist_core.py` | 2 | Updated: string is no longer "non-list" |
 | `tests/test_deep_indexing.py` | 5b | Updated: isinstance check recognises (list, str) |
-| `tests/test_list_edge_cases.py` | 5b | Updated: user-defined IsList matches strings |
+| `tests/test_list_edge_cases.py` | 5b | Updated: user-defined is_list matches strings |
 | `clausal/terms.py` | 7 | Add `SegString` class; `SegList.__unify__` passes strings directly; `__walk__` handles str-bound VarSegs |
 | `clausal/logic/compiler.py` | 7 | `_body_multi_star_unify` preserves string type; `_build_star_list`/`_build_multi_star_list` string support |
 | `tests/test_segstring.py` | 7 | 41 tests: SegString core, string-preserving matching, body multi-star, build helpers |
@@ -1152,20 +1152,20 @@ Phase 2 — DONE (commit cf3b0d5, 16 tests):
 Phase 3 — DONE (commit 09114a0, 10 tests):
 - [x] `phrase(Grammar, "hello")` works
 - [x] `phrase(Grammar, "hello world", Rest)` works
-- [x] DCGs with `Sequence//1` accept string inputs
+- [x] DCGs with `sequence//1` accept string inputs
 
 Phase 4 — DONE (commit 5dd921a, 50 tests):
-- [x] `In(X, "hello")` yields chars
-- [x] `Append("hel", "lo", X)` yields `"hello"`
-- [x] `Length("hello", X)` yields 5
-- [x] `Reverse("hello", X)` yields `"olleh"`
-- [x] `IsChars/1` succeeds for both lists and strings
-- [x] `IsList("hello")` still fails (builtin exact type check)
-- [x] User-defined `IsList([*_])` now succeeds for strings (correct)
+- [x] `in_(X, "hello")` yields chars
+- [x] `append("hel", "lo", X)` yields `"hello"`
+- [x] `length("hello", X)` yields 5
+- [x] `reverse("hello", X)` yields `"olleh"`
+- [x] `is_chars/1` succeeds for both lists and strings
+- [x] `is_list("hello")` still fails (builtin exact type check)
+- [x] User-defined `is_list([*_])` now succeeds for strings (correct)
 
 Phase 5 — DONE (commit f9a6f01, 16 tests):
-- [x] `MapList(Goal, "abc")` works
-- [x] `Filter(Goal, "abc", Result)` works
+- [x] `maplist(Goal, "abc")` works
+- [x] `include(Goal, "abc", Result)` works
 - [x] All 16 higher-order predicates accept strings
 
 Phase 5b — DONE (commit f878fda, 20 tests):
@@ -1173,16 +1173,16 @@ Phase 5b — DONE (commit f878fda, 20 tests):
 - [x] `_build_list_dispatch_guard` emits `isinstance(_, (list, str))` — AST dispatch
 - [x] `_compile_multi_star_guard` emits `isinstance(_, (list, str))` — multi-star AST
 - [x] `HeadTail("abc", H, T)` succeeds with `H='a', T='bc'`
-- [x] Recursive predicates (Length, Last) work on strings
+- [x] Recursive predicates (length, last) work on strings
 - [x] String type preserved through recursion (tail stays `str`)
 
 Phase 6 — DONE:
 - [x] `docs/strings_as_lists.md` — reviewed for accuracy post-implementation, no changes needed
 - [x] `docs/lists.md` — added tip admonition and see-also link for string acceptance
 - [x] `docs/dcg.md` — added "Strings as input" section with `phrase(grammar, "string")` examples
-- [x] `docs/type_checking.md` — documented `IsChars/1` with comparison table
+- [x] `docs/type_checking.md` — documented `is_chars/1` with comparison table
 - [x] `docs/builtins.md` — added string acceptance tip to List Predicates, preference note to Character/String
-- [x] `chars.py` predicates — updated module docstring and added preference notes to `AtomConcat/3` and `AtomLength/2`
+- [x] `chars.py` predicates — updated module docstring and added preference notes to `atom_concat/3` and `atom_length/2`
 
 Phase 7 — DONE (41 tests):
 - [x] `SegString` type for substring-preserving pattern matching
@@ -1222,7 +1222,7 @@ Three sites in the compiler emit `isinstance(_, list)` checks that exclude strin
 
 ### Why It Wasn't Caught Earlier
 
-The runtime builtins (Append, In, etc.) call their own Python functions which we already
+The runtime builtins (append, in_, etc.) call their own Python functions which we already
 updated. The compiler path is separate — it generates Python AST/bytecode that calls
 `_head_list_unify_input` guarded by `isinstance` checks. Tests for Phases 1–5 exercised
 builtins but not user-defined predicates with list heads.
@@ -1240,7 +1240,7 @@ builtins but not user-defined predicates with list heads.
 
 ### Key Insight: String Type Preservation
 
-When `_head_list_unify_input` destructures a string, Python slicing preserves the `str` type:
+when `_head_list_unify_input` destructures a string, Python slicing preserves the `str` type:
 - `"hello"[0]` → `"h"` (single-char string)
 - `"hello"[1:]` → `"ello"` (string, not list)
 
@@ -1248,8 +1248,8 @@ This means `[H, *T]` on `"hello"` gives `H='h'`, `T='ello'`. The tail `T` remain
 so recursive predicates like:
 
 ```clausal
-Length([], 0)
-Length([_, *T], N) <- (Length(T, N1), N := N1 + 1)
+length([], 0)
+length([_, *T], N) <- (length(T, N1), N := N1 + 1)
 ```
 
 work naturally on strings. Each recursive call gets a shorter string — `"hello"` → `"ello"` →
@@ -1266,7 +1266,7 @@ overhead.
 | `[H, *T]` head pattern | `"hello"` | `H='h'` (str), `T='ello'` (str) |
 | `[H, *T]` head pattern | `['h','e','l','l','o']` | `H='h'` (str), `T=['e','l','l','o']` (list) |
 | `SegList([VarSeg(A)])` unify | `"hello"` | `A=['h','e','l','l','o']` (list) |
-| `Append(X, Y, "hello")` | `"hello"` | `X='he'` (str), `Y='llo'` (str) |
+| `append(X, Y, "hello")` | `"hello"` | `X='he'` (str), `Y='llo'` (str) |
 
 The SegList path (Phase 2) converts to char list; the compiler path (this phase) preserves
 strings. This is an asymmetry. The SegList path is used for body-position patterns and
@@ -1278,5 +1278,5 @@ compiler path is more efficient for strings.
 - `test_deep_indexing.py`: Updated `_has_isinstance_check` and `_count_isinstance_checks`
   to recognise `isinstance(_, (list, str))` tuple form alongside `isinstance(_, list)`.
 - `test_list_edge_cases.py`: Changed `test_is_list_string_fails` to
-  `test_is_list_string_succeeds` — user-defined `IsList([*_])` now matches strings
+  `test_is_list_string_succeeds` — user-defined `is_list([*_])` now matches strings
   (correct: strings match list patterns).

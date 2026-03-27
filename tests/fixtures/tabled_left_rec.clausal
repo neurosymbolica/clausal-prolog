@@ -11,5 +11,5 @@ Path(X, Y) <- (
 )
 
 
-Test("left recursive path all from 1") <- (FindAll(TARGET, Path(1, TARGET), TARGETS), Sort(TARGETS, [2, 3, 4]))
+Test("left recursive path all from 1") <- (findall(TARGET, Path(1, TARGET), TARGETS), sort(TARGETS, [2, 3, 4]))
 Test("left recursive path 3 to 4") <- Path(3, 4)

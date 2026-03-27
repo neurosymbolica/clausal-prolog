@@ -10,7 +10,7 @@ it be this.
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
 
-In Clausal, every predicate defines a relation between its arguments. A
+in_ Clausal, every predicate defines a relation between its arguments. A
 relation is not a function — it has no fixed inputs or outputs. A relation
 simply *holds* or *doesn't hold* for a given combination of arguments. This
 shift in perspective — from "what does the program do?" to "when does this
@@ -56,39 +56,39 @@ the system to derive logical consequences of our description.
 A function maps inputs to outputs. It has a fixed direction: you provide
 arguments, it produces a result. A relation has no such restriction.
 
-Consider `Append/3`, which relates three [lists](lists.md):
+Consider `append/3`, which relates three [lists](lists.md):
 
 ```clausal
-Test("concatenate") <- Append([1, 2], [3, 4], [1, 2, 3, 4])
+Test("concatenate") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 
 Test("split") <- (
-    Append(LEFT, RIGHT, [1, 2, 3]),
+    append(LEFT, RIGHT, [1, 2, 3]),
     LEFT == [1],
     RIGHT == [2, 3]
 )
 
-Test("suffix") <- Append([1, 2], REST, [1, 2, 3, 4, 5])
+Test("suffix") <- append([1, 2], REST, [1, 2, 3, 4, 5])
 ```
 
-The same definition of `Append/3` can:
+The same definition of `append/3` can:
 
 - **Concatenate**: given the first two lists, find the third
 - **Split**: given the third list, enumerate all ways to divide it into two
 - **Verify**: given all three lists, confirm they are related
 - **Generate**: given partial information, enumerate completions
 
-If we said `Append` "concatenates two lists," we would only capture one of
+If we said `append` "concatenates two lists," we would only capture one of
 these modes. The other three would be invisible — not because the code can't do
 them, but because our description limited our thinking.
 
-This is why we say `Append/3` **describes the relation** between a prefix, a
+This is why we say `append/3` **describes the relation** between a prefix, a
 suffix, and their concatenation. This wording captures all usage modes.
 
 ---
 
-## The key question: "When does this hold?"
+## The key question: "when does this hold?"
 
-When writing a predicate, the wrong question is: "What should the program do in
+when writing a predicate, the wrong question is: "What should the program do in
 this case?"
 
 The right question is: **"What are the conditions that make this relation true
@@ -130,7 +130,7 @@ list(clausal.query(list_sum(LIST, SUM)))
 This asks: "Are there any lists and sums for which `list_sum` holds?" A truly
 relational predicate gives meaningful answers to its most general query.
 
-When working with Clausal programs, it is often a good idea to try the most
+when working with Clausal programs, it is often a good idea to try the most
 general query to see which solutions exist in general. It reveals whether a
 predicate is genuinely relational or secretly directional.
 
@@ -276,7 +276,7 @@ A common characterization of declarative programming is "what, not how" — you
 say *what* you want, not *how* to get it. But this does not adequately capture
 what makes logic programming special.
 
-In fact, the opposite is closer to the truth: **how, not what** — because it
+in_ fact, the opposite is closer to the truth: **how, not what** — because it
 matters *how* we express our task, not *what* is being executed. A well-chosen
 representation, good naming, and relational framing are not cosmetic choices.
 They determine whether the code can be used in all directions, whether it can

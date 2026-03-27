@@ -341,21 +341,21 @@ class TestCompiledPredicateCreation:
         self.mstar = _load_clausal_module("multistar.clausal")
 
     def test_append_unbound_rhs(self):
-        """Append([1,2], Y, Z) with Y unbound → Z is a SegList inside the solution."""
+        """append([1,2], Y, Z) with Y unbound → Z is a SegList inside the solution."""
         mod = self.mod
         y = Var()
         z = Var()
         # Capture binding while generator is live (bindings are active inside the loop)
-        z_types = [type(deref(z)) for _ in call("Append", [1, 2], y, z, module=mod)]
+        z_types = [type(deref(z)) for _ in call("append", [1, 2], y, z, module=mod)]
         assert z_types == [SegList]
 
     def test_append_unbound_rhs_then_unified(self):
-        """Inside Append([1,2], Y, Z) solution, unify Z=[1,2,3] → Y=[3]."""
+        """Inside append([1,2], Y, Z) solution, unify Z=[1,2,3] → Y=[3]."""
         mod = self.mod
         y = Var()
         z = Var()
         y_vals = []
-        for trail in call("Append", [1, 2], y, z, module=mod):
+        for trail in call("append", [1, 2], y, z, module=mod):
             z_val = deref(z)
             assert isinstance(z_val, SegList)
             # Unify the SegList against [1, 2, 3]
@@ -364,12 +364,12 @@ class TestCompiledPredicateCreation:
         assert y_vals == [[3]]
 
     def test_last_forward_still_works(self):
-        """Last([1, 2, 3], X) → X = 3 (forward mode not broken by Phase 4 changes)."""
+        """last([1, 2, 3], X) → X = 3 (forward mode not broken by Phase 4 changes)."""
         mod = self.mod
         x = Var()
-        solutions = [deref(x) for _ in call("Last", [1, 2, 3], x, module=mod)]
+        solutions = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
         assert solutions == [3]
-    # Note: Last(L, X) with L unbound is inherently infinite — Clause 1 requires a
+    # Note: last(L, X) with L unbound is inherently infinite — Clause 1 requires a
     # concrete list (no star), Clause 2 recurses with a fresh unbound TAIL forever.
 
     def test_split_unbound_list(self):

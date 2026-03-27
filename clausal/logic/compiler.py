@@ -54,7 +54,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Call, LoadName, LoadAttr,
     SegList, ConcreteSeg, VarSeg, _seglist_unify_gen, _multi_star_splits,
     SegString,
@@ -344,9 +344,9 @@ def _build_star_list(before, star, after):
 
     If star is an unbound Var, returns a partial list (the Var itself when
     before and after are empty, otherwise raises — caller should use Is/unify).
-    In practice, star should be bound to a list by the time body code runs.
+    in_ practice, star should be bound to a list by the time body code runs.
 
-    When star is bound to a ``str`` and all before/after elements are
+    when star is bound to a ``str`` and all before/after elements are
     single-char strings, returns a ``str`` (or ``SegString`` when partial).
     """
     d = deref(star)
@@ -425,7 +425,7 @@ def _build_multi_star_list(segments):
     ("star", var) for a splat variable.  Returns a plain list when all
     star vars are bound, otherwise a SegList.
 
-    When all concrete elements are single-char strings and all star vars are
+    when all concrete elements are single-char strings and all star vars are
     bound to strings, returns a plain ``str`` (or ``SegString`` when partial).
     """
     segs = []
@@ -1036,7 +1036,7 @@ def _inject_call_targets(
             if globals_ and target_name in globals_:
                 base_globals[target_name] = globals_[target_name]
                 continue
-            # Check builtins for dotted keys (e.g. "re.FindAll").
+            # Check builtins for dotted keys (e.g. "re.findall").
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
                 _merge_builtin(base_globals, target_name, builtin)
@@ -1201,9 +1201,9 @@ def term_to_ast_expr(
     Vars already in var_context are referenced by name.  Vars not yet in
     var_context (body-only Vars) are introduced via walrus ``(_vN := Var())``.
 
-    When *eval_arith* is True (the default), arithmetic term nodes
+    when *eval_arith* is True (the default), arithmetic term nodes
     (Add, Sub, …) are compiled to native Python operators so they evaluate
-    at runtime.  When False, they are kept as structural term constructors
+    at runtime.  when False, they are kept as structural term constructors
     (e.g. ``Add(left=x, right=1)``).
 
     Supports: Var, Python scalars, list, Compound, functor dataclasses.
@@ -1386,7 +1386,7 @@ def term_to_ast_expr(
         )
 
     # Arithmetic term nodes: when eval_arith is set, generate native Python
-    # operators so they evaluate at runtime.  When False (e.g. predicate call
+    # operators so they evaluate at runtime.  when False (e.g. predicate call
     # arguments), keep them as structural term constructors.
     if eval_arith and isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
         return arith_to_ast_expr(term, var_context)
@@ -1895,8 +1895,8 @@ def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts
 def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
     """Compile reified ITE for equality/disequality conditions.
 
-    When swap=False (Unify):   True→then, False→else
-    When swap=True  (DoesNot): True→else, False→then  (inverted reify_eq)
+    when swap=False (Unify):   True→then, False→else
+    when swap=True  (DoesNot): True→else, False→then  (inverted reify_eq)
     """
     reif_var = _fresh("_reif")
     l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
@@ -2144,7 +2144,7 @@ def compile_goal(
                 _undo_stmt(mark, trail_name),
             ]
 
-        # ── Dif (disequality constraint) ──────────────────────────────────
+        # ── dif (disequality constraint) ──────────────────────────────────
         case DoesNotUnify(left=l, right=r):
             # dif/2 semantics: post constraint, succeed if terms can stay different.
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
@@ -2285,7 +2285,7 @@ def compile_goal(
                 return _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts)
 
         # ── Membership / enumeration ─────────────────────────────────────────
-        case In(left=elem, right=collection):
+        case in_(left=elem, right=collection):
             loop_var = _fresh("_el")
             mark = _fresh("_m")
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
@@ -2345,15 +2345,15 @@ def compile_goal(
                 goal_arg, catcher, recovery, db, var_context, trail_name, k_stmts,
             )
 
-        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
-        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+        # ── catch_error(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="catch_error"), args=[goal_arg, error_var], kwargs=[]):
             return _compile_catch(
                 goal_arg, error_var, True, db, var_context, trail_name, k_stmts,
                 always_catch=True,
             )
 
-        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
-        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+        # ── catch_recover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="catch_recover"), args=[goal_arg, error_var, recovery], kwargs=[]):
             return _compile_catch(
                 goal_arg, error_var, recovery, db, var_context, trail_name, k_stmts,
                 always_catch=True,
@@ -2367,61 +2367,61 @@ def compile_goal(
             code_expr = term_to_ast_expr(code_arg, var_context, eval_arith=True)
             return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
 
-        # ── Once(goal) — commit to first solution ──────────────────────────
-        case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
+        # ── once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
 
-        # ── CallNth/2 — succeed on Nth solution only ─────────────────────
-        case Call(func=LoadName(name="CallNth"), args=[inner, n_arg], kwargs=[]):
+        # ── call_nth/2 — succeed on Nth solution only ─────────────────────
+        case Call(func=LoadName(name="call_nth"), args=[inner, n_arg], kwargs=[]):
             return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
 
-        # ── CountAll/2 — count solutions without collecting ──────────────
-        case Call(func=LoadName(name="CountAll"), args=[inner, count_arg], kwargs=[]):
+        # ── count_all/2 — count solutions without collecting ──────────────
+        case Call(func=LoadName(name="count_all"), args=[inner, count_arg], kwargs=[]):
             return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
 
-        # ── SetupCallCleanup/3 — deterministic cleanup ───────────────────
-        case Call(func=LoadName(name="SetupCallCleanup"), args=[setup, call_g, cleanup], kwargs=[]):
+        # ── setup_call_cleanup/3 — deterministic cleanup ───────────────────
+        case Call(func=LoadName(name="setup_call_cleanup"), args=[setup, call_g, cleanup], kwargs=[]):
             return _compile_setup_call_cleanup(
                 setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
             )
 
-        # ── CallCleanup/2 — sugar for SetupCallCleanup(true, Call, Cleanup)
-        case Call(func=LoadName(name="CallCleanup"), args=[call_g, cleanup], kwargs=[]):
+        # ── call_cleanup/2 — sugar for setup_call_cleanup(true, Call, Cleanup)
+        case Call(func=LoadName(name="call_cleanup"), args=[call_g, cleanup], kwargs=[]):
             return _compile_setup_call_cleanup(
                 True, call_g, cleanup, db, var_context, trail_name, k_stmts,
             )
 
-        # ── Freeze/2 — delay goal until variable is bound ───────────────
-        case Call(func=LoadName(name="Freeze"), args=[x_arg, goal_arg], kwargs=[]):
+        # ── freeze/2 — delay goal until variable is bound ───────────────
+        case Call(func=LoadName(name="freeze"), args=[x_arg, goal_arg], kwargs=[]):
             return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
 
-        # ── When/2 — generalized coroutining ────────────────────────────────
-        case Call(func=LoadName(name="When"), args=[cond_arg, goal_arg], kwargs=[]):
+        # ── when/2 — generalized coroutining ────────────────────────────────
+        case Call(func=LoadName(name="when"), args=[cond_arg, goal_arg], kwargs=[]):
             return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
 
-        # ── FindAll/3 — collect all solutions ───────────────────────────────
-        case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── findall/3 — collect all solutions ───────────────────────────────
+        case Call(func=LoadName(name="findall"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=False, dedup=False,
             )
 
-        # ── BagOf/3 — FindAll that fails on empty ─────────────────────────
-        case Call(func=LoadName(name="BagOf"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── bagof/3 — findall that fails on empty ─────────────────────────
+        case Call(func=LoadName(name="bagof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=True, dedup=False,
             )
 
-        # ── SetOf/3 — BagOf + dedup ───────────────────────────────────────
-        case Call(func=LoadName(name="SetOf"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── setof/3 — bagof + dedup ───────────────────────────────────────
+        case Call(func=LoadName(name="setof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=True, dedup=True,
             )
 
-        # ── ForAll/2 — \+( Cond, \+ Action ) ───────────────────────────────
-        case Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[]):
+        # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
+        case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
             return compile_goal(rewritten, db, var_context, trail_name, k_stmts)
 
@@ -2482,7 +2482,7 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
 
 
 def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
-    """Compile CallNth(Goal, N) — succeed on the Nth solution of Goal only.
+    """Compile call_nth(Goal, N) — succeed on the Nth solution of Goal only.
 
     Generates::
 
@@ -2584,7 +2584,7 @@ def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
 
 
 def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
-    """Compile CountAll(Goal, Count) — count solutions without collecting.
+    """Compile count_all(Goal, Count) — count solutions without collecting.
 
     Generates::
 
@@ -2655,7 +2655,7 @@ def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
 
 
 def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_name, k_stmts):
-    """Compile SetupCallCleanup(Setup, Call, Cleanup) — deterministic cleanup.
+    """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup.
 
     Generates::
 
@@ -2784,7 +2784,7 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
 
 
 def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
-    """Compile Freeze(X, Goal) — delay Goal until X is bound.
+    """Compile freeze(X, Goal) — delay Goal until X is bound.
 
     Generates::
 
@@ -2887,33 +2887,33 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
 
 
 def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
-    """Compile When(Cond, Goal) — delay Goal until Cond is satisfied.
+    """Compile when(Cond, Goal) — delay Goal until Cond is satisfied.
 
     Handles common conditions at compile time:
-    - ``When(IsBound(X), Goal)`` → compiles as ``Freeze(X, Goal)``
-    - ``When(And(C1, C2), Goal)`` → ``When(C1, When(C2, Goal))``
-    - ``When(IsGround(X), Goal)`` → runtime ``_install_when_ground``
-    - ``When(Or(C1, C2), Goal)`` → runtime ``_install_when_disjunction``
+    - ``when(nonvar(X), Goal)`` → compiles as ``freeze(X, Goal)``
+    - ``when(And(C1, C2), Goal)`` → ``when(C1, when(C2, Goal))``
+    - ``when(ground(X), Goal)`` → runtime ``_install_when_ground``
+    - ``when(Or(C1, C2), Goal)`` → runtime ``_install_when_disjunction``
     """
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName as AstLoadName
 
-    # When(IsBound(X), Goal) → Freeze(X, Goal)
+    # when(nonvar(X), Goal) → freeze(X, Goal)
     if (isinstance(cond, AstCall)
             and isinstance(cond.func, AstLoadName)
-            and cond.func.name == "IsBound"
+            and cond.func.name == "nonvar"
             and len(cond.args) == 1):
         return _compile_freeze(cond.args[0], goal, db, var_context, trail_name, k_stmts)
 
-    # When((C1, C2), Goal) → When(C1, When(C2, Goal)) [conjunction]
+    # when((C1, C2), Goal) → when(C1, when(C2, Goal)) [conjunction]
     if isinstance(cond, And):
         inner_when = AstCall(
-            func=AstLoadName(name="When"),
+            func=AstLoadName(name="when"),
             args=[cond.right, goal],
             kwargs=[],
         )
         return _compile_when(cond.left, inner_when, db, var_context, trail_name, k_stmts)
 
-    # For IsGround and Or conditions, use runtime dispatch.
+    # For ground and Or conditions, use runtime dispatch.
     # Compile goal as thunk, emit runtime _install_when_condition call.
     thunk_name = _fresh("_when_thunk")
     deferred_stmts = compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
@@ -2934,10 +2934,10 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
 
     cond_expr = term_to_ast_expr(cond, var_context, eval_arith=False)
 
-    # When(IsGround(X), Goal)
+    # when(ground(X), Goal)
     if (isinstance(cond, AstCall)
             and isinstance(cond.func, AstLoadName)
-            and cond.func.name == "IsGround"
+            and cond.func.name == "ground"
             and len(cond.args) == 1):
         install_call = ast.Expr(value=_call(
             _name("_install_when_ground"),
@@ -2947,7 +2947,7 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
         ))
         return [thunk_fn, install_call] + (k_stmts or [])
 
-    # When((C1; C2), Goal) [disjunction]
+    # when((C1; C2), Goal) [disjunction]
     if isinstance(cond, Or):
         c1_expr = term_to_ast_expr(cond.left, var_context, eval_arith=False)
         c2_expr = term_to_ast_expr(cond.right, var_context, eval_arith=False)
@@ -3127,8 +3127,8 @@ def _compile_catch(
     code can match them the same way as logic terms::
 
         catch(Goal, UnitsMismatch(_), Recovery)
-        Catch(Goal, Error)                # always_catch=True, recovery=True
-        CatchRecover(Goal, Error, Recovery)  # always_catch=True
+        catch_error(Goal, Error)                # always_catch=True, recovery=True
+        catch_recover(Goal, Error, Recovery)  # always_catch=True
 
     Generates::
 
@@ -3225,7 +3225,7 @@ def _compile_catch(
     )
 
     # except block: extract term, undo trail, match catcher, run recovery
-    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
     orelse_stmts: list[ast.stmt] = (
         [] if always_catch
         else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
@@ -3336,7 +3336,7 @@ def _compile_catch_trampoline(
     )
 
     # except block: extract term, undo trail, match catcher, run recovery
-    # always_catch=True (Catch/2, CatchRecover/3): never re-raise on mismatch
+    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
     orelse_stmts_t: list[ast.stmt] = (
         [] if always_catch
         else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
@@ -3453,7 +3453,7 @@ def _compile_goal_lambda(
 
 
 def _flatten_conjunction(goal) -> list:
-    """Flatten nested And nodes into a list of goals."""
+    """flatten nested And nodes into a list of goals."""
     if isinstance(goal, And):
         return _flatten_conjunction(goal.left) + _flatten_conjunction(goal.right)
     return [goal]
@@ -3496,7 +3496,7 @@ def _compile_predicate_call(
 ) -> list[ast.stmt]:
     """Compile a call to a named predicate.
 
-    WK-4: When kwargs are present, look up the predicate's signature in the
+    WK-4: when kwargs are present, look up the predicate's signature in the
     database and reorder keyword args to positional order.  Raises RuntimeError
     if no signature is registered.
     """
@@ -3774,7 +3774,7 @@ def compile_goal_trampoline(
     """Compile a goal using the trampoline tuple protocol.
 
     Identical to ``compile_goal`` for deterministic goals (Unify, ArithEq, comparisons,
-    And, Or, Not, In, NotIn).  Differs for predicate ``Call`` nodes: instead of
+    And, Or, Not, in_, NotIn).  Differs for predicate ``Call`` nodes: instead of
 
         for _ in dispatch(args, trail, k): k_stmts
 
@@ -4044,7 +4044,7 @@ def compile_goal_trampoline(
                 )
 
         # ── Membership / enumeration (Python for-loop, safe) ─────────────────
-        case In(left=elem, right=collection):
+        case in_(left=elem, right=collection):
             loop_var = _fresh("_el")
             mark = _fresh("_m")
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
@@ -4105,15 +4105,15 @@ def compile_goal_trampoline(
                 trail_name, k_stmts, self_name,
             )
 
-        # ── Catch(Goal, Error) — catch any exception, bind Error ──────────
-        case Call(func=LoadName(name="Catch"), args=[goal_arg, error_var], kwargs=[]):
+        # ── catch_error(Goal, Error) — catch any exception, bind Error ──────────
+        case Call(func=LoadName(name="catch_error"), args=[goal_arg, error_var], kwargs=[]):
             return _compile_catch_trampoline(
                 goal_arg, error_var, True, db, var_context,
                 trail_name, k_stmts, self_name, always_catch=True,
             )
 
-        # ── CatchRecover(Goal, Error, Recovery) — catch, bind, recover ───
-        case Call(func=LoadName(name="CatchRecover"), args=[goal_arg, error_var, recovery], kwargs=[]):
+        # ── catch_recover(Goal, Error, Recovery) — catch, bind, recover ───
+        case Call(func=LoadName(name="catch_recover"), args=[goal_arg, error_var, recovery], kwargs=[]):
             return _compile_catch_trampoline(
                 goal_arg, error_var, recovery, db, var_context,
                 trail_name, k_stmts, self_name, always_catch=True,
@@ -4127,62 +4127,62 @@ def compile_goal_trampoline(
             code_expr = term_to_ast_expr(code_arg, var_context, eval_arith=True)
             return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
 
-        # ── Once(goal) — commit to first solution ──────────────────────────
-        case Call(func=LoadName(name="Once"), args=[inner], kwargs=[]):
+        # ── once(goal) — commit to first solution ──────────────────────────
+        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
             # Inner compiles in simple mode (sub-generator), same as NAF.
             return _compile_once(inner, db, var_context, trail_name, k_stmts)
 
-        # ── CallNth/2 — succeed on Nth solution only ─────────────────────
-        case Call(func=LoadName(name="CallNth"), args=[inner, n_arg], kwargs=[]):
+        # ── call_nth/2 — succeed on Nth solution only ─────────────────────
+        case Call(func=LoadName(name="call_nth"), args=[inner, n_arg], kwargs=[]):
             return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
 
-        # ── CountAll/2 — count solutions without collecting ──────────────
-        case Call(func=LoadName(name="CountAll"), args=[inner, count_arg], kwargs=[]):
+        # ── count_all/2 — count solutions without collecting ──────────────
+        case Call(func=LoadName(name="count_all"), args=[inner, count_arg], kwargs=[]):
             return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
 
-        # ── SetupCallCleanup/3 — deterministic cleanup ───────────────────
-        case Call(func=LoadName(name="SetupCallCleanup"), args=[setup, call_g, cleanup], kwargs=[]):
+        # ── setup_call_cleanup/3 — deterministic cleanup ───────────────────
+        case Call(func=LoadName(name="setup_call_cleanup"), args=[setup, call_g, cleanup], kwargs=[]):
             return _compile_setup_call_cleanup(
                 setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
             )
 
-        # ── CallCleanup/2 — sugar for SetupCallCleanup(true, Call, Cleanup)
-        case Call(func=LoadName(name="CallCleanup"), args=[call_g, cleanup], kwargs=[]):
+        # ── call_cleanup/2 — sugar for setup_call_cleanup(true, Call, Cleanup)
+        case Call(func=LoadName(name="call_cleanup"), args=[call_g, cleanup], kwargs=[]):
             return _compile_setup_call_cleanup(
                 True, call_g, cleanup, db, var_context, trail_name, k_stmts,
             )
 
-        # ── Freeze/2 — delay goal until variable is bound ───────────────
-        case Call(func=LoadName(name="Freeze"), args=[x_arg, goal_arg], kwargs=[]):
+        # ── freeze/2 — delay goal until variable is bound ───────────────
+        case Call(func=LoadName(name="freeze"), args=[x_arg, goal_arg], kwargs=[]):
             return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
 
-        # ── When/2 — generalized coroutining ────────────────────────────────
-        case Call(func=LoadName(name="When"), args=[cond_arg, goal_arg], kwargs=[]):
+        # ── when/2 — generalized coroutining ────────────────────────────────
+        case Call(func=LoadName(name="when"), args=[cond_arg, goal_arg], kwargs=[]):
             return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
 
-        # ── FindAll/3 — collect all solutions ───────────────────────────────
-        case Call(func=LoadName(name="FindAll"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── findall/3 — collect all solutions ───────────────────────────────
+        case Call(func=LoadName(name="findall"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=False, dedup=False,
             )
 
-        # ── BagOf/3 — FindAll that fails on empty ─────────────────────────
-        case Call(func=LoadName(name="BagOf"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── bagof/3 — findall that fails on empty ─────────────────────────
+        case Call(func=LoadName(name="bagof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=True, dedup=False,
             )
 
-        # ── SetOf/3 — BagOf + dedup ───────────────────────────────────────
-        case Call(func=LoadName(name="SetOf"), args=[template, inner_goal, bag], kwargs=[]):
+        # ── setof/3 — bagof + dedup ───────────────────────────────────────
+        case Call(func=LoadName(name="setof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
                 template, inner_goal, bag, db, var_context, trail_name, k_stmts,
                 fail_on_empty=True, dedup=True,
             )
 
-        # ── ForAll/2 — \+( Cond, \+ Action ) ───────────────────────────────
-        case Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[]):
+        # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
+        case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
             return compile_goal(rewritten, db, var_context, trail_name, k_stmts)
 
@@ -4232,9 +4232,9 @@ def _compile_predicate_call_trampoline(
             <k_stmts>
             _st_N = (yield (_gen_N, None))
 
-    When ``_gen_N`` yields ``(this_generator, None)`` (solution found), the
+    when ``_gen_N`` yields ``(this_generator, None)`` (solution found), the
     trampoline sends ``None`` to ``this_generator`` so ``_st_N`` gets ``None``
-    (not DONE) and the while body runs.  When ``_gen_N`` yields
+    (not DONE) and the while body runs.  when ``_gen_N`` yields
     ``(this_generator, DONE)`` (exhausted), ``_st_N`` gets ``DONE`` and the
     while loop exits.
 
@@ -4620,7 +4620,7 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
 def _lift_clause_at_pos(clause: Clause, pos: int) -> Clause:
     """Phase 8: lift the body Unify for head position *pos* into the head.
 
-    In bucket compilation contexts the indexed argument is already guaranteed
+    in_ bucket compilation contexts the indexed argument is already guaranteed
     ground by the dispatch layer.  Any leading body ``Unify(Var_at_pos, val)``
     is therefore redundant and can be absorbed into the head, letting
     ``head_to_match_pattern`` emit a ``MatchValue``/``MatchClass`` pattern
@@ -4820,7 +4820,7 @@ def _build_list_dispatch_guard(
 
 # ── Tail Recursion Optimization (TRO) ─────────────────────────────────────────
 #
-# When the last goal in a clause body is a self-recursive Call preceded only by
+# when the last goal in a clause body is a self-recursive Call preceded only by
 # deterministic goals (at most one solution, no StepGenerator), the recursive
 # call can be replaced by argument reassignment + loop restart.  This avoids
 # allocating a new StepGenerator + generator object per recursion depth.
@@ -4853,7 +4853,7 @@ def _is_deterministic_goal(goal: Any) -> bool:
             return True
         case Lt() | LtE() | Gt() | GtE():
             return True
-        case In() | NotIn():
+        case in_() | NotIn():
             return True
         # NAF — deterministic (succeeds or fails once)
         case Not():
@@ -4864,9 +4864,9 @@ def _is_deterministic_goal(goal: Any) -> bool:
         # IfExpr — committed choice, one branch
         case IfExpr():
             return True
-        # Once/FindAll/BagOf/SetOf — always produce exactly one result
+        # once/findall/bagof/setof — always produce exactly one result
         case Call(func=LoadName(name=name)) if name in (
-            "Once", "FindAll", "BagOf", "SetOf",
+            "once", "findall", "bagof", "setof",
             "throw", "halt",
         ):
             return True
@@ -4970,7 +4970,7 @@ def _tro_args_safe(
     2. Variables bound by ``Evaluate`` or ``Unify`` in prefix goals
     3. Variables that are passthrough — same Var appears at the same position
        in the head (the raw ``arg_i`` value, not a decomposed component)
-    4. (When *allow_head_vars* is True) Any head variable — including those
+    4. (when *allow_head_vars* is True) Any head variable — including those
        from list/compound decomposition.  These are safe when the head arg
        was ground, which is checked at runtime via ``is_var()`` on the
        captured value.  The positions are returned in *check_indices*.
@@ -5142,7 +5142,7 @@ def _compile_tro_tail(
       ``_tro_state`` after the bucket generator finishes and re-dispatch.
 
     *check_indices*: if not None, a set of arg positions that need a runtime
-    ``is_var()`` check.  When any checked arg is an unbound Var, the TRO
+    ``is_var()`` check.  when any checked arg is an unbound Var, the TRO
     flag is NOT set and execution falls back to a normal ``StepGenerator``
     call (emitted inline).
     """
@@ -5270,11 +5270,11 @@ def _build_predicate_trampoline_funcdef(
     Returns the fixed-up FunctionDef without executing it.  Used by both
     ``compile_predicate_trampoline`` and ``compile_predicate_trampoline_ast``.
 
-    When *emit_done* is False the trailing ``yield (parent, _DONE)`` is
+    when *emit_done* is False the trailing ``yield (parent, _DONE)`` is
     omitted — used for indexed-dispatch sub-functions that are consumed via
     ``yield from`` by an outer wrapper which emits its own DONE.
 
-    When *tro_indices* is non-empty, tail-recursion optimization is applied.
+    when *tro_indices* is non-empty, tail-recursion optimization is applied.
     Two modes:
 
     - ``emit_done=True`` (or non-bucket): ``while True`` loop with ``continue``.
@@ -5626,13 +5626,13 @@ def compile_predicate_trampoline(
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     # Inject builtin predicate classes so bare builtin names (e.g. Member
-    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # passed as an argument to maplist) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
     # overwritten.  For stateless builtins (factory is None), prefer the
     # PredicateMeta/MultiArityBuiltin class: it is callable as a term
     # constructor (needed when a goal appears as an argument to a meta-predicate
-    # such as TimeGoal) and also provides _get_dispatch().
+    # such as time_goal) and also provides _get_dispatch().
     from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)
@@ -5707,7 +5707,7 @@ def compile_predicate_trampoline(
                     # appears in the lifted head was already in the original
                     # clause body and collected by _collect_globals_info(clauses)
                     # above.  Calling it again on lifted_bucket would
-                    # re-collect term-node classes (Unify, In, …) and
+                    # re-collect term-node classes (Unify, in_, …) and
                     # clobber predicate entries set by _inject_resolved_targets.
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
                     # Map TRO indices from original clauses to this bucket's clauses.
@@ -6524,7 +6524,7 @@ def _compile_multi_star_guard(
             star_var = seg_val
             start_expr = _pos_expr()
             if star_idx < n_stars - 1:
-                # Length is sp_names[star_idx]
+                # length is sp_names[star_idx]
                 end_parts: list[ast.expr] = [_pos_expr()]
                 end_parts.append(_name(sp_names[star_idx]))
                 end_expr = end_parts[0]
@@ -6532,7 +6532,7 @@ def _compile_multi_star_guard(
                     end_expr = ast.BinOp(left=end_expr, op=ast.Add(), right=p)
                 pos_sp.append(sp_names[star_idx])
             else:
-                # Last star: takes everything remaining up to len - trailing fixed
+                # last star: takes everything remaining up to len - trailing fixed
                 trailing_fixed = 0
                 # Count fixed elements in segments after this star
                 found_last_star = False
@@ -7163,7 +7163,7 @@ def _build_arg_index(
     clauses: list[Clause], arity: int, pos: int,
     threshold: int = _INDEX_THRESHOLD,
 ) -> dict | None:
-    """Partition clauses into buckets keyed on argument *pos*.
+    """partition clauses into buckets keyed on argument *pos*.
 
     Returns None if indexing is not beneficial (too few clauses, all defaults,
     or arity == 0).  Otherwise returns::
@@ -7204,7 +7204,7 @@ def _build_arg_index(
 def _build_first_arg_index(
     clauses: list[Clause], arity: int, threshold: int = _INDEX_THRESHOLD,
 ) -> dict | None:
-    """Partition clauses into first-arg buckets.
+    """partition clauses into first-arg buckets.
 
     Convenience wrapper around :func:`_build_arg_index` for position 0.
     """
@@ -7690,7 +7690,7 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     the trampoline arg layout ``(this_generator, parent, arg0, ..., trail)``
     and emits a trailing ``yield (parent, done)`` after search exhaustion.
 
-    When *tro_state* is not None, the dispatch loops: after each bucket
+    when *tro_state* is not None, the dispatch loops: after each bucket
     ``yield from`` completes, it checks ``tro_state[0]``.  If True, updates
     args from ``tro_state[1..N]`` and re-dispatches (potentially to a
     different bucket).
@@ -8015,13 +8015,13 @@ def compile_predicate_shallow(
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     # Inject builtin predicate classes so bare builtin names (e.g. Member
-    # passed as an argument to MapList) resolve at runtime.  Injected after
+    # passed as an argument to maplist) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
     # overwritten.  For stateless builtins (factory is None), prefer the
     # PredicateMeta/MultiArityBuiltin class: it is callable as a term
     # constructor (needed when a goal appears as an argument to a meta-predicate
-    # such as TimeGoal) and also provides _get_dispatch().
+    # such as time_goal) and also provides _get_dispatch().
     from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)

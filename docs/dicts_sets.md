@@ -10,7 +10,7 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 ### Syntax
 
-In [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
+in_ [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
 
 ```python
 # Fact with a ground dict
@@ -62,7 +62,7 @@ get_city({"address": {"city": "London"}}, C)   # C = "London"
 
 ### Head pattern matching
 
-When a `DictTerm` appears in a clause head, the compiler generates a wildcard capture plus a unification guard. The guard:
+when a `DictTerm` appears in a clause head, the compiler generates a wildcard capture plus a unification guard. The guard:
 
 1. Pre-allocates `Var()` objects for variable positions in the dict values
 2. Constructs the expected `DictTerm` with those variables
@@ -89,16 +89,16 @@ merge_defaults(DEFAULTS, OVERRIDES, RESULT) <-
 
 This compiles to `DictTerm({**deref(OLD).data, "name": NAME})` at runtime. The splat argument must be a bound `DictTerm` at call time.
 
-### Partial dict matching — `SubDict/2`
+### Partial dict matching — `sub_dict/2`
 
-`SubDict(Pattern, Dict)` succeeds when `Pattern`'s keys are a subset of `Dict`'s keys and the values for those keys unify pairwise. Extra keys in `Dict` are ignored.
+`sub_dict(Pattern, Dict)` succeeds when `Pattern`'s keys are a subset of `Dict`'s keys and the values for those keys unify pairwise. Extra keys in `Dict` are ignored.
 
 ```python
 # Extract the name field from any dict
-get_name(PERSON, NAME) <- SubDict({"name": NAME}, PERSON)
+get_name(PERSON, NAME) <- sub_dict({"name": NAME}, PERSON)
 
 # Check role without caring about other fields
-is_admin(PERSON) <- SubDict({"role": "admin"}, PERSON)
+is_admin(PERSON) <- sub_dict({"role": "admin"}, PERSON)
 ```
 
 Compare with full unification:
@@ -108,7 +108,7 @@ Compare with full unification:
 exact(PERSON, NAME) <- (PERSON is {"name": NAME, "role": "admin"})
 
 # Partial match: PERSON may have any other keys
-partial(PERSON, NAME) <- SubDict({"name": NAME, "role": "admin"}, PERSON)
+partial(PERSON, NAME) <- sub_dict({"name": NAME, "role": "admin"}, PERSON)
 ```
 
 ### Backtracking
@@ -123,7 +123,7 @@ partial(PERSON, NAME) <- SubDict({"name": NAME, "role": "admin"}, PERSON)
 
 ### Syntax
 
-In `.clausal` files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
+in_ `.clausal` files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
 
 ```python
 colors({1, 2, 3}),
@@ -146,7 +146,7 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 ### Variables in sets
 
-**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use `GenSet/2` to enumerate elements.
+**Not supported.** Set elements must be ground because `frozenset` requires hashable elements. A set containing an unbound logic variable would break hashing. For patterns with variable elements, use `gen_set/2` to enumerate elements.
 
 ---
 
@@ -154,147 +154,147 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 All dict builtins are in `clausal/logic/builtins/dict_set.py`. They use `DictTerm` for all dict arguments — plain Python dicts are not accepted.
 
-### `IsDict/1`
+### `is_dict/1`
 ```clausal
 # skip
-IsDict(+Term)
+is_dict(+Term)
 ```
 Succeeds if `Term` is a `DictTerm`.
 
-### `DictSize/2`
+### `dict_size/2`
 ```clausal
 # skip
-DictSize(+Dict, -N)
+dict_size(+Dict, -N)
 ```
 `N` is the number of keys in `Dict`.
 
-### `DictKeys/2`
+### `dict_keys/2`
 ```clausal
 # skip
-DictKeys(+Dict, -Keys)
+dict_keys(+Dict, -Keys)
 ```
 `Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
 
-### `DictValues/2`
+### `dict_values/2`
 ```clausal
 # skip
-DictValues(+Dict, -Values)
+dict_values(+Dict, -Values)
 ```
-`Values` is the list of values in key-sorted order (same ordering as `DictKeys`).
+`Values` is the list of values in key-sorted order (same ordering as `dict_keys`).
 
-### `DictPairs/2`
+### `dict_pairs/2`
 ```clausal
 # skip
-DictPairs(?Dict, ?Pairs)
+dict_pairs(?Dict, ?Pairs)
 ```
 Bidirectional conversion between a `DictTerm` and a list of `[Key, Value]` 2-element lists.
 
 ```python
 # Dict → pairs
-DictPairs({"a": 1, "b": 2}, PAIRS)
+dict_pairs({"a": 1, "b": 2}, PAIRS)
 # PAIRS = [["a", 1], ["b", 2]]  (sorted by key)
 
 # Pairs → dict
-DictPairs(DICT, [["x", 10], ["y", 20]])
+dict_pairs(DICT, [["x", 10], ["y", 20]])
 # DICT = DictTerm({"x": 10, "y": 20})
 ```
 
-### `DictGet/3`
+### `dict_get/3`
 ```clausal
 # skip
-DictGet(+Key, +Dict, ?Value)
+dict_get(+Key, +Dict, ?Value)
 ```
 Semidet: succeeds if `Key` is in `Dict` and `Value` unifies with `Dict[Key]`. Fails if the key is absent or `Key` is unbound.
 
 ```python
-DictGet("name", {"name": "Alice", "age": 30}, NAME)
+dict_get("name", {"name": "Alice", "age": 30}, NAME)
 # NAME = "Alice"
 ```
 
-### `DictPut/4`
+### `dict_put/4`
 ```clausal
 # skip
-DictPut(+Key, +Value, +OldDict, -NewDict)
+dict_put(+Key, +Value, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` with `Key → Value` inserted or overwritten. Returns a new `DictTerm`; the original is unchanged.
 
 ```python
-DictPut("b", 99, {"a": 1, "b": 0}, NEW)
+dict_put("b", 99, {"a": 1, "b": 0}, NEW)
 # NEW = DictTerm({"a": 1, "b": 99})
 ```
 
-### `DictPutPairs/3`
+### `dict_put_pairs/3`
 ```clausal
 # skip
-DictPutPairs(+Pairs, +OldDict, -NewDict)
+dict_put_pairs(+Pairs, +OldDict, -NewDict)
 ```
-Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. Equivalent to calling `DictPut/4` for each pair in order.
+Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. equivalent to calling `dict_put/4` for each pair in order.
 
 ```python
-DictPutPairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
+dict_put_pairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
 # NEW = DictTerm({"a": 1, "b": 2, "c": 3})
 ```
 
-### `DictRemove/3`
+### `dict_remove/3`
 ```clausal
 # skip
-DictRemove(+Key, +OldDict, -NewDict)
+dict_remove(+Key, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is not present.
 
 ```python
-DictRemove("b", {"a": 1, "b": 2, "c": 3}, NEW)
+dict_remove("b", {"a": 1, "b": 2, "c": 3}, NEW)
 # NEW = DictTerm({"a": 1, "c": 3})
 ```
 
-### `DictMerge/3`
+### `dict_merge/3`
 ```clausal
 # skip
-DictMerge(+D1, +D2, -Merged)
+dict_merge(+D1, +D2, -Merged)
 ```
 `Merged` is the union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
 
 ```python
-DictMerge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
+dict_merge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
 # MERGED = DictTerm({"a": 1, "b": 99, "c": 3})
 ```
 
-### `GenDict/3`
+### `gen_dict/3`
 ```clausal
 # skip
-GenDict(?Key, +Dict, ?Value)
+gen_dict(?Key, +Dict, ?Value)
 ```
-Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. Equivalent to SWI's `gen_assoc/3`.
+Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. equivalent to SWI's `gen_assoc/3`.
 
 ```python
 # Enumerate all pairs
-GenDict(KEY, {"a": 1, "b": 2}, VALUE)
+gen_dict(KEY, {"a": 1, "b": 2}, VALUE)
 # → KEY="a", VALUE=1
 # → KEY="b", VALUE=2 (on backtrack)
 
-# Filter by key
-GenDict("a", {"a": 1, "b": 2}, VALUE)
+# include by key
+gen_dict("a", {"a": 1, "b": 2}, VALUE)
 # → VALUE=1 (only one solution)
 ```
 
-### `SubDict/2`
+### `sub_dict/2`
 ```clausal
 # skip
-SubDict(+Pattern, +Dict)
+sub_dict(+Pattern, +Dict)
 ```
 Partial dict matching: succeeds when every key in `Pattern` is also in `Dict`, and the corresponding values unify. Extra keys in `Dict` are ignored.
 
 ```python
-SubDict({"name": NAME}, {"name": "Alice", "age": 30})
+sub_dict({"name": NAME}, {"name": "Alice", "age": 30})
 # → NAME = "Alice"
 
-SubDict({"role": "admin"}, {"name": "Bob", "role": "admin", "dept": "eng"})
+sub_dict({"role": "admin"}, {"name": "Bob", "role": "admin", "dept": "eng"})
 # → succeeds
 
-SubDict({"role": "admin"}, {"name": "Alice", "role": "user"})
+sub_dict({"role": "admin"}, {"name": "Alice", "role": "user"})
 # → fails (value mismatch)
 
-SubDict({"z": 1}, {"x": 1, "y": 2})
+sub_dict({"z": 1}, {"x": 1, "y": 2})
 # → fails (key absent)
 ```
 
@@ -302,100 +302,100 @@ SubDict({"z": 1}, {"x": 1, "y": 2})
 
 ## Set builtins
 
-### `IsSet/1`
+### `is_set/1`
 ```clausal
 # skip
-IsSet(+Term)
+is_set(+Term)
 ```
 Succeeds if `Term` is a `SetTerm`.
 
-### `SetSize/2`
+### `set_size/2`
 ```clausal
 # skip
-SetSize(+Set, -N)
+set_size(+Set, -N)
 ```
 `N` is the cardinality of `Set`.
 
-### `SetList/2`
+### `set_list/2`
 ```clausal
 # skip
-SetList(?Set, ?List)
+set_list(?Set, ?List)
 ```
 Bidirectional conversion between a `SetTerm` and a sorted list.
 
 ```python
 # Set → list (sorted)
-SetList({3, 1, 2}, LIST)  # LIST = [1, 2, 3]
+set_list({3, 1, 2}, LIST)  # LIST = [1, 2, 3]
 
 # List → set (duplicates removed)
-SetList(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
+set_list(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
 ```
 
-### `SetUnion/3`
+### `set_union/3`
 ```clausal
 # skip
-SetUnion(+S1, +S2, -Union)
+set_union(+S1, +S2, -union)
 ```
-`Union` is the set union of `S1` and `S2`.
+`union` is the set union of `S1` and `S2`.
 
-### `SetIntersection/3`
+### `set_intersection/3`
 ```clausal
 # skip
-SetIntersection(+S1, +S2, -Inter)
+set_intersection(+S1, +S2, -Inter)
 ```
 `Inter` is the set intersection of `S1` and `S2`.
 
-### `SetSubtract/3`
+### `set_subtract/3`
 ```clausal
 # skip
-SetSubtract(+S1, +S2, -Diff)
+set_subtract(+S1, +S2, -Diff)
 ```
 `Diff` is `S1` minus `S2` (elements in `S1` not in `S2`).
 
-### `SetSymDiff/3`
+### `set_sym_diff/3`
 ```clausal
 # skip
-SetSymDiff(+S1, +S2, -Sym)
+set_sym_diff(+S1, +S2, -Sym)
 ```
 `Sym` is the symmetric difference of `S1` and `S2` (elements in exactly one of the two sets).
 
-### `SetSubset/2`
+### `set_subset/2`
 ```clausal
 # skip
-SetSubset(+Sub, +Super)
+set_subset(+Sub, +Super)
 ```
 Succeeds if every element of `Sub` is also in `Super`. An empty set is a subset of any set.
 
-### `SetDisjoint/2`
+### `set_disjoint/2`
 ```clausal
 # skip
-SetDisjoint(+S1, +S2)
+set_disjoint(+S1, +S2)
 ```
 Succeeds if `S1` and `S2` have no elements in common.
 
-### `SetAdd/3`
+### `set_add/3`
 ```clausal
 # skip
-SetAdd(+Elem, +OldSet, -NewSet)
+set_add(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` added. If `Elem` is already present, `NewSet = OldSet`.
 
-### `SetRemove/3`
+### `set_remove/3`
 ```clausal
 # skip
-SetRemove(+Elem, +OldSet, -NewSet)
+set_remove(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` removed. If `Elem` is absent, `NewSet = OldSet`.
 
-### `GenSet/2`
+### `gen_set/2`
 ```clausal
 # skip
-GenSet(?Elem, +Set)
+gen_set(?Elem, +Set)
 ```
 Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).
 
 ```python
-GenSet(ELEM, {"a", "b", "c"})
+gen_set(ELEM, {"a", "b", "c"})
 # → ELEM="a", ELEM="b", ELEM="c" (on backtrack)
 ```
 
@@ -457,8 +457,8 @@ deref(x)  # 42
 |---|---|
 | `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks, `structural_unify` support | Done |
 | `__unify__` protocol in C, AST transform (`visit_Dict` → `DictTerm`), compiler head/body support | Done |
-| Dict builtins: `IsDict`, `DictSize`, `DictKeys`, `DictValues`, `DictPairs`, `DictGet`, `DictPut`, `DictPutPairs`, `DictRemove`, `DictMerge`, `GenDict`, `SubDict` | Done |
-| Set builtins: `IsSet`, `SetSize`, `SetList`, `SetUnion`, `SetIntersection`, `SetSubtract`, `SetSymDiff`, `SetSubset`, `SetDisjoint`, `SetAdd`, `SetRemove`, `GenSet` | Done |
+| Dict builtins: `is_dict`, `dict_size`, `dict_keys`, `dict_values`, `dict_pairs`, `dict_get`, `dict_put`, `dict_put_pairs`, `dict_remove`, `dict_merge`, `gen_dict`, `sub_dict` | Done |
+| Set builtins: `is_set`, `set_size`, `set_list`, `set_union`, `set_intersection`, `set_subtract`, `set_sym_diff`, `set_subset`, `set_disjoint`, `set_add`, `set_remove`, `gen_set` | Done |
 | Splat sugar: `{**old, "k": v}` in clause bodies | Done |
 | `trail.record(callable)` — generic callback hook for backtrackable mutable state | Done |
 

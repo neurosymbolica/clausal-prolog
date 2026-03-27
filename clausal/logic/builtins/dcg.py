@@ -1,4 +1,4 @@
-"""DCG builtins: phrase/2, phrase/3, Sequence//1."""
+"""DCG builtins: phrase/2, phrase/3, sequence//1."""
 
 from __future__ import annotations
 
@@ -70,12 +70,12 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
     yield (parent, DONE)
 
 
-@_trampoline_builtin("Sequence", 3, fields=("list", "s0", "s"))
+@_trampoline_builtin("sequence", 3, fields=("list", "s0", "s"))
 def _sequence__3(this_generator, parent, lst, s0, s, trail):
-    """Sequence//1 — DCG non-terminal that matches a list of terminals.
+    """sequence//1 — DCG non-terminal that matches a list of terminals.
 
-    Sequence(List, S0, S) succeeds when S0 = List ++ S.
-    Used as a DCG rule: ``phrase(Sequence([a, b, c]), Input)``.
+    sequence(List, S0, S) succeeds when S0 = List ++ S.
+    Used as a DCG rule: ``phrase(sequence([a, b, c]), Input)``.
     """
     lst_val = deref(lst)
     if is_var(lst_val) or not isinstance(lst_val, (list, str)):

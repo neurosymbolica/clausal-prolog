@@ -5,13 +5,13 @@
 
 -private([
     IsSorted(XS),
-    Partition(PIVOT, LIST, LO, HI)
+    partition(PIVOT, LIST, LO, HI)
 ])
 
 # ── Naive sort (permutation sort) ─────────────────────────────────────────────
 
 NaiveSort(LIST, SORTED) <- (
-    Permutation(LIST, SORTED),
+    permutation(LIST, SORTED),
     IsSorted(SORTED)
 )
 
@@ -26,21 +26,21 @@ IsSorted([A, B, *REST]) <- (
 
 Qsort(LIST=[], SORTED=[]),
 Qsort([PIVOT, *REST], SORTED) <- (
-    Partition(PIVOT, REST, LO, HI),
+    partition(PIVOT, REST, LO, HI),
     Qsort(LO, SORTED_LO),
     Qsort(HI, SORTED_HI),
-    Append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
+    append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
 )
 
-Partition(PIVOT=0, LIST=[], LO=[], HI=[]),
-Partition(_, [], [], []),
-Partition(PIVOT, [H, *T], [H, *LO], HI) <- (
+partition(PIVOT=0, LIST=[], LO=[], HI=[]),
+partition(_, [], [], []),
+partition(PIVOT, [H, *T], [H, *LO], HI) <- (
     H <= PIVOT,
-    Partition(PIVOT, T, LO, HI)
+    partition(PIVOT, T, LO, HI)
 )
-Partition(PIVOT, [H, *T], LO, [H, *HI]) <- (
+partition(PIVOT, [H, *T], LO, [H, *HI]) <- (
     H > PIVOT,
-    Partition(PIVOT, T, LO, HI)
+    partition(PIVOT, T, LO, HI)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
@@ -51,10 +51,10 @@ Test("[1,2] is sorted") <- IsSorted([1, 2])
 Test("[1,2,3] is sorted") <- IsSorted([1, 2, 3])
 Test("[2,1] is not sorted") <- (not IsSorted([2, 1]))
 Test("[1,3,2] is not sorted") <- (not IsSorted([1, 3, 2]))
-Test("partition empty") <- Partition(5, [], [], [])
-Test("partition all low") <- Partition(5, [1, 2, 3], [1, 2, 3], [])
-Test("partition all high") <- Partition(5, [6, 7, 8], [], [6, 7, 8])
-Test("partition mixed") <- Partition(5, [3, 7, 1, 9], [3, 1], [7, 9])
+Test("partition empty") <- partition(5, [], [], [])
+Test("partition all low") <- partition(5, [1, 2, 3], [1, 2, 3], [])
+Test("partition all high") <- partition(5, [6, 7, 8], [], [6, 7, 8])
+Test("partition mixed") <- partition(5, [3, 7, 1, 9], [3, 1], [7, 9])
 Test("naive sort empty") <- NaiveSort([], [])
 Test("naive sort single") <- NaiveSort([1], [1])
 Test("naive sort pair") <- NaiveSort([2, 1], [1, 2])

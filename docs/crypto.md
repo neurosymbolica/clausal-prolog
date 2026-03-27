@@ -8,7 +8,7 @@ use only the standard library — no third-party dependencies.
 
 ```clausal
 -import_from(py.hash, [Hash])
--import_from(py.hmac, [Sign, Verify])
+-import_from(py.hmac, [sign, Verify])
 -import_from(py.pbkdf2, [Derive])
 
 CheckIntegrity(DATA, EXPECTED) <- (
@@ -16,7 +16,7 @@ CheckIntegrity(DATA, EXPECTED) <- (
     COMPUTED == EXPECTED
 )
 
-SignMessage(KEY, MSG, SIG) <- Sign(KEY, MSG, SIG)
+SignMessage(KEY, MSG, SIG) <- sign(KEY, MSG, SIG)
 
 VerifyMessage(KEY, MSG, SIG) <- Verify(KEY, MSG, SIG)
 ```
@@ -58,13 +58,13 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 ## `py.hmac` — Message Authentication
 
 ```clausal
--import_from(py.hmac, [Sign, Verify])
+-import_from(py.hmac, [sign, Verify])
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Sign(Key, Data, Hex)` | `+Key, +Data, -Hex` | HMAC-SHA256 signature |
-| `Sign(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, -Hex` | HMAC with specified algorithm |
+| `sign(Key, Data, Hex)` | `+Key, +Data, -Hex` | HMAC-SHA256 signature |
+| `sign(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, -Hex` | HMAC with specified algorithm |
 | `Verify(Key, Data, Hex)` | `+Key, +Data, +Hex` | Verify HMAC-SHA256 (constant-time) |
 | `Verify(Algorithm, Key, Data, Hex)` | `+Algo, +Key, +Data, +Hex` | Verify with specified algorithm |
 
@@ -73,10 +73,10 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
 ```clausal
 # skip
-Sign("secret-key", "message", SIG)
+sign("secret-key", "message", SIG)
 Verify("secret-key", "message", SIG)   # succeeds
 
-Sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
+sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
 ```
 
 ---
@@ -125,10 +125,10 @@ Derive("password", "salt", 100000, 64, HASH)
 
     ```clausal
 # skip
-    -import_from(py.hmac, [Sign])
+    -import_from(py.hmac, [sign])
 
     SignedRequest(KEY, BODY, SIGNATURE) <- (
-        Sign("sha256", KEY, BODY, SIGNATURE)
+        sign("sha256", KEY, BODY, SIGNATURE)
     )
     ```
 

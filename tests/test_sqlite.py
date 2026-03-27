@@ -46,7 +46,7 @@ _SQLITE_IMPORT = (
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it."""
+    """write a .clausal file and load it."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(_SQLITE_IMPORT + src_text)
     mod = _load_module(name, str(p))
@@ -511,7 +511,7 @@ class TestSQLiteColumn:
         assert cols == [("name", "TEXT"), ("age", "INTEGER")]
 
     def test_column_specific_name(self):
-        """When col_name is ground, only matching column succeeds."""
+        """when col_name is ground, only matching column succeeds."""
         _setup_people_db("c2")
         trail = Trail()
         parent = object()

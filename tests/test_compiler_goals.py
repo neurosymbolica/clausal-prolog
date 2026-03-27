@@ -29,7 +29,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify as Is, DoesNotUnify as IsNot, ArithEq, ArithNeq,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Add, Sub, Mult, FloorDiv, Mod, Negate,
     Call, LoadName,
     Compound,
@@ -281,7 +281,7 @@ class TestCompileGoalStructure:
         vc = {v._id: "_vX"}
         coll = Var()
         cvc = {v._id: "_vX", coll._id: "_vC"}
-        stmts = compile_goal(In(left=v, right=coll), self._db(), cvc, "trail", [ast.Pass()])
+        stmts = compile_goal(in_(left=v, right=coll), self._db(), cvc, "trail", [ast.Pass()])
         assert isinstance(stmts[0], ast.For)
 
     def test_not_in_generates_flag_and_for_loop(self):
@@ -399,9 +399,9 @@ class TestIntegrationUnification:
     def test_unify_both_vars(self):
         x, y = Var(), Var()
         db = Database()
-        db.assertz(Clause(head=Compound("eq", (x, y)), body=[Is(left=x, right=y)]))
-        clauses = db.clauses_for("eq", 2)
-        fn = compile_predicate("eq", 2, clauses, db)
+        db.assertz(Clause(head=Compound("unify_xy", (x, y)), body=[Is(left=x, right=y)]))
+        clauses = db.clauses_for("unify_xy", 2)
+        fn = compile_predicate("unify_xy", 2, clauses, db)
 
         a, b = Var(), Var()
         trail = fresh_trail()
@@ -492,7 +492,7 @@ class TestIntegrationComparisons:
         assert _run(fn, 10) == []
 
     def test_eq_structural(self):
-        # Use two separate Vars in head; body checks Eq between them after Is unification
+        # Use two separate Vars in head; body checks eq between them after Is unification
         x, y = Var(), Var()
         db = Database()
         # same(X, Y) <- X is Y, X == Y  (unify then check structural eq)
@@ -598,14 +598,14 @@ class TestIntegrationNegation:
 
 
 class TestIntegrationMembership:
-    """In goal: enumerate members of a list."""
+    """in_ goal: enumerate members of a list."""
 
     def test_in_finds_all_members(self):
         x = Var()
         db = Database()
         db.assertz(Clause(
             head=Compound("member", (x,)),
-            body=[In(left=x, right=[1, 2, 3])],
+            body=[in_(left=x, right=[1, 2, 3])],
         ))
         clauses = db.clauses_for("member", 1)
         fn = compile_predicate("member", 1, clauses, db)
@@ -622,7 +622,7 @@ class TestIntegrationMembership:
         db = Database()
         db.assertz(Clause(
             head=Compound("mem", (x,)),
-            body=[In(left=x, right=[10, 20, 30])],
+            body=[in_(left=x, right=[10, 20, 30])],
         ))
         clauses = db.clauses_for("mem", 1)
         fn = compile_predicate("mem", 1, clauses, db)

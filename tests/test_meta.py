@@ -15,7 +15,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify as Is, Evaluate,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Call, LoadName,
     Compound,
 )
@@ -52,9 +52,9 @@ class TestFindAll:
         """find_all(X, member(X, [1,2,3]), Bag) → [1,2,3]"""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="FindAll"), args=[
+        goal = Call(func=LoadName(name="findall"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [1, 2, 3]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [1, 2, 3]], kwargs=[]),
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
@@ -65,10 +65,10 @@ class TestFindAll:
         x = Var()
         bag = Var()
         inner = And(
-            left=Call(func=LoadName(name="In"), args=[x, [1, 2, 3]], kwargs=[]),
+            left=Call(func=LoadName(name="in_"), args=[x, [1, 2, 3]], kwargs=[]),
             right=Gt(left=x, right=1),
         )
-        goal = Call(func=LoadName(name="FindAll"), args=[x, inner, bag], kwargs=[])
+        goal = Call(func=LoadName(name="findall"), args=[x, inner, bag], kwargs=[])
         results = bindings(goal, bag)
         assert results == [[2, 3]]
 
@@ -76,7 +76,7 @@ class TestFindAll:
         """find_all(X, fail, Bag) → [] (succeeds with empty list)"""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="FindAll"), args=[x, False, bag], kwargs=[])
+        goal = Call(func=LoadName(name="findall"), args=[x, False, bag], kwargs=[])
         results = bindings(goal, bag)
         assert results == [[]]
 
@@ -86,10 +86,10 @@ class TestFindAll:
         y = Var()
         bag = Var()
         inner = And(
-            left=Call(func=LoadName(name="In"), args=[x, ["a", "b"]], kwargs=[]),
-            right=Call(func=LoadName(name="In"), args=[y, [1, 2]], kwargs=[]),
+            left=Call(func=LoadName(name="in_"), args=[x, ["a", "b"]], kwargs=[]),
+            right=Call(func=LoadName(name="in_"), args=[y, [1, 2]], kwargs=[]),
         )
-        goal = Call(func=LoadName(name="FindAll"), args=[[x, y], inner, bag], kwargs=[])
+        goal = Call(func=LoadName(name="findall"), args=[[x, y], inner, bag], kwargs=[])
         results = bindings(goal, bag)
         assert results == [[["a", 1], ["a", 2], ["b", 1], ["b", 2]]]
 
@@ -97,9 +97,9 @@ class TestFindAll:
         """find_all should undo bindings from inner goal."""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="FindAll"), args=[
+        goal = Call(func=LoadName(name="findall"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [10, 20]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [10, 20]], kwargs=[]),
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
@@ -111,16 +111,16 @@ class TestFindAll:
         y = Var()
         inner_bag = Var()
         outer_bag = Var()
-        inner_fa = Call(func=LoadName(name="FindAll"), args=[
+        inner_fa = Call(func=LoadName(name="findall"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [1, 2]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [1, 2]], kwargs=[]),
             inner_bag,
         ], kwargs=[])
         # Outer: for each Y in [10,20], find_all X in [1,2], collect inner_bag
-        outer_goal = Call(func=LoadName(name="FindAll"), args=[
+        outer_goal = Call(func=LoadName(name="findall"), args=[
             [y, inner_bag],
             And(
-                left=Call(func=LoadName(name="In"), args=[y, [10, 20]], kwargs=[]),
+                left=Call(func=LoadName(name="in_"), args=[y, [10, 20]], kwargs=[]),
                 right=inner_fa,
             ),
             outer_bag,
@@ -137,9 +137,9 @@ class TestBagOf:
         """bag_of(X, member(X, [1,2]), Bag) → [1, 2]"""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="BagOf"), args=[
+        goal = Call(func=LoadName(name="bagof"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [1, 2]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [1, 2]], kwargs=[]),
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
@@ -149,7 +149,7 @@ class TestBagOf:
         """bag_of(X, fail, _) → fails (no solutions)"""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="BagOf"), args=[x, False, bag], kwargs=[])
+        goal = Call(func=LoadName(name="bagof"), args=[x, False, bag], kwargs=[])
         results = solutions_of(goal)
         assert results == []
 
@@ -162,9 +162,9 @@ class TestSetOf:
         """set_of(X, member(X, [1,1,2,2,3]), Bag) → [1,2,3]"""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="SetOf"), args=[
+        goal = Call(func=LoadName(name="setof"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [1, 1, 2, 2, 3]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [1, 1, 2, 2, 3]], kwargs=[]),
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
@@ -174,7 +174,7 @@ class TestSetOf:
         """set_of with no solutions fails."""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="SetOf"), args=[x, False, bag], kwargs=[])
+        goal = Call(func=LoadName(name="setof"), args=[x, False, bag], kwargs=[])
         results = solutions_of(goal)
         assert results == []
 
@@ -182,9 +182,9 @@ class TestSetOf:
         """set_of preserves first occurrence order."""
         x = Var()
         bag = Var()
-        goal = Call(func=LoadName(name="SetOf"), args=[
+        goal = Call(func=LoadName(name="setof"), args=[
             x,
-            Call(func=LoadName(name="In"), args=[x, [3, 1, 2, 1, 3]], kwargs=[]),
+            Call(func=LoadName(name="in_"), args=[x, [3, 1, 2, 1, 3]], kwargs=[]),
             bag,
         ], kwargs=[])
         results = bindings(goal, bag)
@@ -198,25 +198,25 @@ class TestForAll:
     def test_for_all_succeeds(self):
         """for_all(member(X, [2,4,6]), X > 0) → succeeds"""
         x = Var()
-        cond = Call(func=LoadName(name="In"), args=[x, [2, 4, 6]], kwargs=[])
+        cond = Call(func=LoadName(name="in_"), args=[x, [2, 4, 6]], kwargs=[])
         action = Gt(left=x, right=0)
-        goal = Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[])
+        goal = Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[])
         results = solutions_of(goal)
         assert len(results) == 1
 
     def test_for_all_fails(self):
         """for_all(member(X, [2,-1,6]), X > 0) → fails"""
         x = Var()
-        cond = Call(func=LoadName(name="In"), args=[x, [2, -1, 6]], kwargs=[])
+        cond = Call(func=LoadName(name="in_"), args=[x, [2, -1, 6]], kwargs=[])
         action = Gt(left=x, right=0)
-        goal = Call(func=LoadName(name="ForAll"), args=[cond, action], kwargs=[])
+        goal = Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[])
         results = solutions_of(goal)
         assert results == []
 
     def test_for_all_vacuously_true(self):
         """for_all(fail, _) → succeeds (vacuously true)."""
         x = Var()
-        goal = Call(func=LoadName(name="ForAll"), args=[
+        goal = Call(func=LoadName(name="forall"), args=[
             False,
             Gt(left=x, right=0),
         ], kwargs=[])

@@ -225,11 +225,11 @@ conformance).
 -backend(scryer)
 -module(queens, [Queens(N, QS)])
 
--import_from(clausal.logic.clpfd, [InDomain, AllDifferent, Labeling])
+-import_from(clausal.logic.clpfd, [in_domain, all_different, Labeling])
 
 Queens(N, QS) <- (
-    Length(QS, N),
-    InDomain(QS, 1, N),
+    length(QS, N),
+    in_domain(QS, 1, N),
     SafeQueens(QS),
     Labeling([], QS)
 )
@@ -245,7 +245,7 @@ NoAttack(Q, [Q1, *QS], D) <- (
 )
 ```
 
-When the import hook sees `-backend(scryer)`, it changes strategy entirely:
+when the import hook sees `-backend(scryer)`, it changes strategy entirely:
 instead of compiling to Python bytecode, it:
 
 1. Translates the `.clausal` source to Prolog via `clausal_source_to_prolog`
@@ -274,7 +274,7 @@ on first import and reused.
 **Implementation sketch** for the import hook:
 
 ```python
-# In import_hook.py or a new clausal/scryer/_loader.py
+# in_ import_hook.py or a new clausal/scryer/_loader.py
 
 def _exec_scryer_module(module, source, module_items, module_dict):
     """Load a -backend(scryer) module."""
@@ -340,7 +340,7 @@ query; variable arguments become Prolog variables and are unified with the resul
 A file using the native Clausal engine can delegate specific predicates to Scryer:
 
 ```
--import_from(clausal.logic.clpfd, [InDomain, AllDifferent, Labeling])
+-import_from(clausal.logic.clpfd, [in_domain, all_different, Labeling])
 
 # These run on Clausal's native engine
 Edge(1, 2), Edge(2, 3), Edge(3, 4),
@@ -348,9 +348,9 @@ Edge(1, 2), Edge(2, 3), Edge(3, 4),
 # This predicate should run on Scryer (e.g. for CLP(Z))
 -scryer(ConstrainedPath/3)
 ConstrainedPath(X, Y, COST) <- (
-    InDomain(COST, 0, 100),
+    in_domain(COST, 0, 100),
     Path(X, Y, ROUTE),
-    Length(ROUTE, COST)
+    length(ROUTE, COST)
 )
 ```
 
@@ -363,7 +363,7 @@ The `*(goal)` syntax in IPython currently drives the native engine.  We could ad
 a Scryer-aware variant, perhaps:
 
 ```python
-# In IPython with clausal loaded:
+# in_ IPython with clausal loaded:
 s = Scryer()
 s.load_string("parent(tom, bob). parent(bob, ann).")
 
@@ -443,18 +443,18 @@ Scryer's own WASM binding (`src/wasm.rs`) solves this exact problem using
 Machine and borrows it for the QueryState. We use the same pattern:
 
 1. `RawScryerMachine` stores `Option<Machine>` (not `Machine` directly)
-2. When `query()` is called, the Machine is **taken** out of the Option
+2. when `query()` is called, the Machine is **taken** out of the Option
 3. The Machine is moved into a `QueryIterator` which uses `ouroboros` to
    self-referentially borrow it for the `QueryState<'this>`
 4. While a `QueryIterator` exists, the `RawScryerMachine` is "empty" — any
    attempt to use it (load, query) returns an error
-5. When the `QueryIterator` is dropped (iterator exhausted, Python GC, or
+5. when the `QueryIterator` is dropped (iterator exhausted, Python GC, or
    explicit `close()`), the Machine is **returned** to the `RawScryerMachine`
 
 This gives genuine lazy iteration: each call to `__next__` on the Python side
 calls `QueryState::next()` on the Rust side, which calls `dispatch_loop()` to
 resume backtracking for one more solution. Dropping a partially-consumed iterator
-is safe — `QueryState::Drop` calls `trust_me()` to clean up Scryer's internal
+is safe — `QueryState::drop` calls `trust_me()` to clean up Scryer's internal
 state.
 
 **Cargo.toml** needs the `ouroboros` dependency:
@@ -499,8 +499,8 @@ pyo3::create_exception!(_scryer_ext, ScryerError, pyo3::exceptions::PyException)
 //
 // The Machine lives in an Rc<RefCell<Option<Machine>>>.  Both the
 // RawScryerMachine and any active QueryIterator hold an Rc clone.
-// When a query starts, the Machine is *taken* out of the Option.
-// When the query ends, it is put back.
+// when a query starts, the Machine is *taken* out of the Option.
+// when the query ends, it is put back.
 
 type MachineSlot = Rc<RefCell<Option<Machine>>>;
 
@@ -551,7 +551,7 @@ impl RawScryerMachine {
     /// Start a lazy query.  Returns a QueryIterator (Python iterator protocol).
     /// While the iterator is alive, the machine cannot be used for anything else.
     fn query(&mut self, query: String) -> PyResult<QueryIterator> {
-        // Take the machine out of the slot.
+        // take the machine out of the slot.
         let machine = {
             let mut guard = self.slot.borrow_mut();
             guard.take().ok_or_else(|| PyErr::new::<ScryerError, _>(
@@ -599,7 +599,7 @@ impl QueryIterator {
     }
 }
 
-impl Drop for QueryIterator {
+impl drop for QueryIterator {
     fn drop(&mut self) {
         self.return_machine();
     }
@@ -797,7 +797,7 @@ def test_raw_lazy_iteration():
     it = m.query("n(X).")
     first = next(it)
     assert first["X"] == 1
-    # Drop the iterator without consuming the rest
+    # drop the iterator without consuming the rest
     del it
     # Machine should be available again
     second = list(m.query("n(X)."))
@@ -1475,8 +1475,8 @@ if name == "backend":
 
 #### 5.2 Modify the import hook
 
-In `import_hook.py`, `PredicateLoader._exec_module_v2` currently calls
-`compile_module()` to compile predicates into Python bytecode.  When
+in_ `import_hook.py`, `PredicateLoader._exec_module_v2` currently calls
+`compile_module()` to compile predicates into Python bytecode.  when
 `-backend(scryer)` is present in the `module_items`, it should branch:
 
 ```python
@@ -1610,11 +1610,11 @@ can drive, yielding `trail` per solution — study `_drive_trampoline` in
 -backend(scryer)
 -module(clpz_queens, [Queens(N, QS)])
 
--import_from(clausal.logic.clpfd, [InDomain, AllDifferent, Labeling])
+-import_from(clausal.logic.clpfd, [in_domain, all_different, Labeling])
 
 Queens(N, QS) <- (
-    Length(QS, N),
-    Maplist(InDomain(1, N), QS),
+    length(QS, N),
+    Maplist(in_domain(1, N), QS),
     SafeQueens(QS),
     Labeling([], QS)
 )
@@ -1744,7 +1744,7 @@ class TestScryerBackendDirective:
    to Python. This is done via `machine.consult_module_string("user",
    ":- set_prolog_flag(double_quotes, atom).")`.
 
-4. **`consult` replaces; `load` accumulates.** In standard Prolog, consulting a file
+4. **`consult` replaces; `load` accumulates.** in_ standard Prolog, consulting a file
    replaces all clauses for predicates defined in that file. Loading (via `file_load`
    / `load_module_string`) asserts without replacing. The Python API documents this
    distinction clearly. Tests for incremental loading should use `load_string`, not
@@ -1805,7 +1805,7 @@ class TestScryerBackendDirective:
     instead of the WASM version's `mpsc::channel` (because Machine is `!Send` and
     we don't cross threads).
 
-14. **`QueryIterator.close()` vs Python GC.** The `__del__` / `Drop` impl on
+14. **`QueryIterator.close()` vs Python GC.** The `__del__` / `drop` impl on
     `QueryIterator` returns the machine to the slot automatically. But Python's GC
     is non-deterministic — if the user stores the iterator in a variable and forgets
     about it, the machine stays locked until GC runs. The `.close()` method and the

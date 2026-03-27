@@ -1,7 +1,7 @@
-# Test fixture for Eq/3 builtin integration
-# Simple wrapper that calls Eq/3
+# Test fixture for eq/3 builtin integration
+# Simple wrapper that calls eq/3
 
-CheckEq(X, Y, TRUTH) <- Eq(X, Y, TRUTH)
+CheckEq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 
 
 Test("eq true") <- (CheckEq(1, 1, TRUTH), TRUTH == True)

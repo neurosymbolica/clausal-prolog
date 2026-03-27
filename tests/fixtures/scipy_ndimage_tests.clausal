@@ -2,7 +2,7 @@
                               UniformFilter,
                               MedianFilter,
                               Convolve,
-                              Label,
+                              label,
                               BinaryErosion,
                               BinaryDilation,
                               BinaryOpening,
@@ -40,9 +40,9 @@ Test("convolve identity kernel") <- (
     DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)
 
-# Label: two separate regions in a one-dimensional array
+# label: two separate regions in a one-dimensional array
 Test("label two regions") <- (
-    Label([1, 1, 0, 1, 1], RESULT),
+    label([1, 1, 0, 1, 1], RESULT),
     N is ++(int(RESULT['num_features'])),
     N == 2)
 

@@ -84,7 +84,7 @@ def translate_predicate(
 def reverse_translate_predicate(
     lang: str, translated_functor: str, arity: int,
 ) -> TranslatedEntry | None:
-    """Reverse lookup: translated → English.  Returns None if not registered."""
+    """reverse lookup: translated → English.  Returns None if not registered."""
     return _REVERSE_PREDICATES.get((lang, translated_functor, arity))
 
 
@@ -94,7 +94,7 @@ def translate_atom(lang: str, english_atom: str) -> str | None:
 
 
 def reverse_translate_atom(lang: str, translated_atom: str) -> str | None:
-    """Reverse atom lookup.  Returns None if not registered."""
+    """reverse atom lookup.  Returns None if not registered."""
     return _REVERSE_ATOMS.get((lang, translated_atom))
 
 

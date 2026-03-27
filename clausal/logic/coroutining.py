@@ -1,7 +1,7 @@
-"""Coroutining primitives: Freeze/2, When/2.
+"""Coroutining primitives: freeze/2, when/2.
 
-Freeze/2 delays a goal until a variable is bound. The goal is stored as an
-attributed variable attribute under the key ``"freeze"``. When the variable
+freeze/2 delays a goal until a variable is bound. The goal is stored as an
+attributed variable attribute under the key ``"freeze"``. when the variable
 is unified (bound), the hook fires and drives the frozen goal generator
 synchronously — if the goal succeeds, the unification succeeds; if the
 goal fails, the unification fails.
@@ -9,9 +9,9 @@ goal fails, the unification fails.
 Multiple freezes on the same variable accumulate in a list. All are fired
 when the variable is bound.
 
-When/2 generalizes Freeze by supporting compound conditions:
-- ``IsBound(X)`` — equivalent to Freeze(X, Goal)
-- ``IsGround(X)`` — delay until X is fully ground
+when/2 generalizes freeze by supporting compound conditions:
+- ``nonvar(X)`` — equivalent to freeze(X, Goal)
+- ``ground(X)`` — delay until X is fully ground
 - ``(C1, C2)`` — conjunction: both conditions must be satisfied
 - ``(C1 ; C2)`` — disjunction: either condition suffices
 """
@@ -46,7 +46,7 @@ def _freeze_hook(goals, bound_to, trail):
 register_attr_hook(FREEZE_KEY, _freeze_hook)
 
 
-# ── When/2 runtime helpers ───────────────────────────────────────────────────
+# ── when/2 runtime helpers ───────────────────────────────────────────────────
 
 
 def _freeze_var(var, goal_thunk, trail):
@@ -64,9 +64,9 @@ def _collect_free_vars(term):
 
 
 def _install_when_ground(term, goal_thunk, trail):
-    """Install a When(IsGround(term), Goal) condition at runtime.
+    """Install a when(ground(term), Goal) condition at runtime.
 
-    Freezes on every unbound var in term. When any is bound, re-checks
+    Freezes on every unbound var in term. when any is bound, re-checks
     groundness. Fires goal_thunk when term is fully ground.
     """
     from clausal.logic.builtins._helpers import _is_ground
@@ -102,7 +102,7 @@ def _install_when_ground(term, goal_thunk, trail):
 
 
 def _install_when_disjunction(cond_left, cond_right, goal_thunk, trail):
-    """Install a When((C1 ; C2), Goal) disjunction at runtime.
+    """Install a when((C1 ; C2), Goal) disjunction at runtime.
 
     Attaches to vars in both conditions. Whichever fires first runs Goal.
     Uses a shared flag to ensure Goal fires at most once.
@@ -121,9 +121,9 @@ def _install_when_disjunction(cond_left, cond_right, goal_thunk, trail):
 
 
 def _install_when_condition(condition, goal_thunk, trail):
-    """Dispatch a When condition at runtime.
+    """Dispatch a when condition at runtime.
 
-    Handles IsBound(X), IsGround(X), conjunction, disjunction.
+    Handles nonvar(X), ground(X), conjunction, disjunction.
 
     Parameters
     ----------
@@ -135,9 +135,9 @@ def _install_when_condition(condition, goal_thunk, trail):
 
     cond = deref(condition)
 
-    # IsBound(X) — check if X is a term with one field named 'term'
-    # and the class name is 'IsBound'
-    if is_term_instance(cond) and type(cond).__name__ == "IsBound":
+    # nonvar(X) — check if X is a term with one field named 'term'
+    # and the class name is 'nonvar'
+    if is_term_instance(cond) and type(cond).__name__ == "nonvar":
         fields = term_field_names(cond)
         if fields:
             x = deref(getattr(cond, fields[0]))
@@ -149,8 +149,8 @@ def _install_when_condition(condition, goal_thunk, trail):
                     break
         return
 
-    # IsGround(X)
-    if is_term_instance(cond) and type(cond).__name__ == "IsGround":
+    # ground(X)
+    if is_term_instance(cond) and type(cond).__name__ == "ground":
         fields = term_field_names(cond)
         if fields:
             _install_when_ground(getattr(cond, fields[0]), goal_thunk, trail)
@@ -159,11 +159,11 @@ def _install_when_condition(condition, goal_thunk, trail):
     # Conjunction: (C1, C2) represented as a tuple or list of conditions
     if isinstance(cond, (tuple, list)) and len(cond) == 2:
         c1, c2 = cond
-        # When(C1, When(C2, Goal))
+        # when(C1, when(C2, Goal))
         def _inner_thunk():
             _install_when_condition(c2, goal_thunk, trail)
             yield None
         _install_when_condition(c1, _inner_thunk, trail)
         return
 
-    raise ValueError(f"Unsupported When condition: {cond!r}")
+    raise ValueError(f"Unsupported when condition: {cond!r}")

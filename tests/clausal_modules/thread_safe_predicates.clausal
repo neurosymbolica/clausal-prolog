@@ -47,7 +47,7 @@ Test("length three") <- (MyLength([1, 2, 3], N) and N == 3)
 Test("member first") <- MyMember(1, [1, 2, 3])
 Test("member last") <- MyMember(3, [1, 2, 3])
 Test("member all") <- (
-    FindAll(X, MyMember(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
+    findall(X, MyMember(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
 )
 
 # Arithmetic

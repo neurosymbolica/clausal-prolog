@@ -16,7 +16,7 @@ Type mapping
 - CSV with headers → ``list`` of ``DictTerm`` (one per record)
 - All values are strings — no automatic type coercion.
 
-Use ``++int(X)`` or ``NumberChars`` for conversion if needed.
+Use ``++int(X)`` or ``number_chars`` for conversion if needed.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # Tabling (SLG resolution)
 
-Tabling memoises subgoal calls and their computed answers. When a recursive call encounters a subgoal that is already being evaluated, the caller *suspends* and waits for answers rather than re-entering the computation. This prevents infinite loops on left-recursive and mutually recursive predicates and is a prerequisite for well-founded semantics.
+Tabling memoises subgoal calls and their computed answers. when a recursive call encounters a subgoal that is already being evaluated, the caller *suspends* and waits for answers rather than re-entering the computation. This prevents infinite loops on left-recursive and mutually recursive predicates and is a prerequisite for well-founded semantics.
 
 The implementation lives in `clausal.logic.tabling`.
 
@@ -67,7 +67,7 @@ for trail in call("path", 1, Y, module=lm):
 
 ### Invalidation
 
-Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`Assert`, `AssertFirst`, or `Retract`](database_ops.md) on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
+Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
 
 To invalidate manually:
 
@@ -76,7 +76,7 @@ db.abolish_table("path", 2)   # clear one predicate's cache
 db.abolish_all_tables()        # clear all
 ```
 
-The builtins `ClearTable/2` and `ClearAllTables/0` are also available from within clausal code.
+The builtins `abolish_table/2` and `abolish_all_tables/0` are also available from within clausal code.
 
 ---
 
@@ -104,7 +104,7 @@ The builtins `ClearTable/2` and `ClearAllTables/0` are also available from withi
 
     ### Answer freezing
 
-    When a solution is found, the current arg bindings are *frozen* — fully dereferenced into a ground tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each frozen answer.
+    when a solution is found, the current arg bindings are *frozen* — fully dereferenced into a ground tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each frozen answer.
 
     ### TableEntry
 
@@ -144,7 +144,7 @@ The builtins `ClearTable/2` and `ClearAllTables/0` are also available from withi
     1. Create a `TableEntry` with status `"evaluating"`. Push it onto the leader context stack.
     2. Spawn a `StepGenerator` over the original dispatch.
     3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
-    4. When the inner dispatch is exhausted, enter the *completion phase*.
+    4. when the inner dispatch is exhausted, enter the *completion phase*.
     5. After completion, run `_resolve_conditions` to simplify delayed negations (WFS).
     6. Pop the leader from the context stack and mark `"complete"`.
 
@@ -153,7 +153,7 @@ The builtins `ClearTable/2` and `ClearAllTables/0` are also available from withi
     1. Yield all currently known answers from the table entry.
     2. Register a `SuspendedConsumer` on the entry.
     3. Yield `(parent, _TABLING_SUSPEND)`. The trampoline intercepts this sentinel and sends `DONE` to the consumer's parent, so the parent's while-loop exits normally.
-    4. When the leader resumes the consumer (sending `_TABLING_RESUME`), yield any answers accumulated since the last suspension.
+    4. when the leader resumes the consumer (sending `_TABLING_RESUME`), yield any answers accumulated since the last suspension.
     5. If the table is still evaluating, re-suspend for another round.
 
     **Completion phase:**
@@ -210,7 +210,7 @@ The `-table(pred/arity)` directive is parsed by the [import hook](import.md) alo
 Tabling wrapping happens in `_compile_all_pending` (the deferred compilation entry point):
 
 1. All predicates are compiled first (in trampoline mode).
-2. In a second pass, tabled predicates are wrapped with `make_tabled_wrapper_trampoline`.
+2. in_ a second pass, tabled predicates are wrapped with `make_tabled_wrapper_trampoline`.
 
 The two-pass approach ensures all cross-predicate references resolve before wrapping. This is important because the tabling wrapper captures the original dispatch function — if predicate `A` calls predicate `B`, `B`'s dispatch must be installed before `A`'s wrapper captures it.
 
@@ -220,7 +220,7 @@ The two-pass approach ensures all cross-predicate references resolve before wrap
 
 ### Auto-invalidation
 
-When `Assert`, `AssertFirst`, or `Retract` modify a tabled predicate's clauses, the database automatically clears all table entries for that predicate:
+when `assertz`, `asserta`, or `retract` modify a tabled predicate's clauses, the database automatically clears all table entries for that predicate:
 
 ```python
 if self.is_tabled(functor, arity):
@@ -233,7 +233,7 @@ if self.is_tabled(functor, arity):
 
 The [architecture doc](architecture.md) notes that tabling is easier on generators than on a WAM. Here is why concretely:
 
-**Suspension is free.** When a consumer needs to wait for more answers, it simply yields a sentinel and its execution state is frozen in the generator frame. On a WAM, this requires explicitly saving the entire environment stack, choice points, and register file.
+**Suspension is free.** when a consumer needs to wait for more answers, it simply yields a sentinel and its execution state is frozen in the generator frame. On a WAM, this requires explicitly saving the entire environment stack, choice points, and register file.
 
 **Resumption is a send.** The leader resumes a consumer by calling `generator.send(_TABLING_RESUME)`. The consumer picks up exactly where it left off. On a WAM, this requires restoring the saved state and re-entering the engine loop at the right instruction pointer.
 
@@ -243,11 +243,11 @@ The [architecture doc](architecture.md) notes that tabling is easier on generato
 
 ## Well-founded semantics
 
-When a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). [Well-Founded Semantics (WFS)](wfs.md) provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
+when a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). [Well-Founded Semantics (WFS)](wfs.md) provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
 
 ### How it works
 
-When evaluating `not P(args)` where `P` is tabled:
+when evaluating `not P(args)` where `P` is tabled:
 
 - **Complete table**: standard NAF — check if any answer matches, negate.
 - **Evaluating table** (cycle detected): **delay** the negation. The derivation continues conditionally — the answer is recorded with a `DelayedNegation` condition attached.
@@ -333,7 +333,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - Answer freezing and unification
     - Simple-mode wrapper: basic dispatch, cache hit
     - Trampoline-mode wrapper: basic, multiple answers, adapter
-    - Database integration: table store, abolish, auto-invalidation on Assert/Retract
+    - Database integration: table store, abolish, auto-invalidation on assertz/retract
 
     **Integration tests** (`test_tabling.py`):
     - Tabled fibonacci (fib/2): basic, zero, one, cache hit, ground query success/failure

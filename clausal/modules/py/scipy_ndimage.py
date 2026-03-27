@@ -3,7 +3,7 @@
 Provides N-dimensional image processing routines from scipy.ndimage as
 importable predicate objects for use in .clausal files via::
 
-    -import_from(scipy_ndimage, [GaussianFilter, Label, ...])
+    -import_from(scipy_ndimage, [GaussianFilter, label, ...])
 
 Or via the canonical ``py.*`` path::
 
@@ -30,7 +30,7 @@ Morphological operations (binary):
     BinaryClosing(INPUT, RESULT)
 
 Connected-component labelling:
-    Label(INPUT, RESULT)
+    label(INPUT, RESULT)
         RESULT: dict with keys 'label_array' and 'num_features'
 
 Geometric transforms:
@@ -156,8 +156,8 @@ def _label_fn(this_generator, parent, inp, result_var, trail):
     yield (parent, DONE)
 
 
-Label = ModulePredicate("Label")
-Label._register(2, _label_fn)
+label = ModulePredicate("label")
+label._register(2, _label_fn)
 
 
 # ── Morphological operations ───────────────────────────────────────────────

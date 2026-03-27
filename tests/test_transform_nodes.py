@@ -55,7 +55,7 @@ def test_all_unchanged_returns_list_equal_to_original():
 
 
 def test_all_unchanged_returns_same_object_as_input():
-    # When nothing changes the function must return the exact same list object,
+    # when nothing changes the function must return the exact same list object,
     # not a copy — callers use identity comparison to detect no-ops.
     nodes = [1, 2, 3]
     result = _transform_node_list(nodes, identity)
@@ -206,7 +206,7 @@ def test_always_returns_a_list():
 
 
 def test_unchanged_result_is_same_object_so_mutations_are_shared():
-    # When nothing changes the returned list IS the input list, so mutations
+    # when nothing changes the returned list IS the input list, so mutations
     # to one are visible through the other (a consequence of the identity
     # return, not a bug to defend against here).
     nodes = ["a", "b", "c"]

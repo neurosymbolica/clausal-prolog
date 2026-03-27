@@ -55,7 +55,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
   |  1. _process_imports(module_items, module_dict)
   |  2. _process_directives(module_items, db)
   |  3. _process_declarations(module_items, module_dict)
-  |  4. Assert all clauses via logic_module.define_predicate()
+  |  4. assertz all clauses via logic_module.define_predicate()
   |  5. compile_predicate_trampoline/shallow for each (functor, arity)
   |  6. Wrap tabled predicates with SLG wrapper
   |  7. Lock non-dynamic predicates
@@ -104,11 +104,11 @@ The expansion engine is tested with:
 
 ### Potential future work
 
-- **Remove v1 path** — Once confident, delete `_exec_module_v1` and the
+- **Remove v1 path** — once confident, delete `_exec_module_v1` and the
   `_USE_V2_PIPELINE` flag
 - **Cache module_items** — Currently re-parsed on .pyc cache hit. Could serialize
   `_module_items` alongside the bytecode cache for true zero-overhead cached loads
-- **Self-hosting compiler** — Write code generation rules in Clausal consuming
+- **Self-hosting compiler** — write code generation rules in Clausal consuming
   simple_ast → producing Python AST. Bootstrap with current `compiler.py`.
 
 ---

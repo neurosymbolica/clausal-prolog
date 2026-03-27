@@ -9,10 +9,10 @@ by multiplying a scalar in a ``++()`` escape::
     MASS := ++(150 * pound_mass)    # Quantity(68.04,   {Kilogram: 1})
     SPD  := ++(60 * mph)            # Quantity(26.82,   {Metre:1, Second:-1})
 
-Because dimensions are identical to their SI equivalents, ``HasUnits`` checks
+Because dimensions are identical to their SI equivalents, ``has_units`` checks
 work without any changes::
 
-    HasUnits(++(20 * inch), Metre)   # succeeds — both have {Metre: 1}
+    has_units(++(20 * inch), Metre)   # succeeds — both have {Metre: 1}
 """
 
 from clausal.terms import Quantity

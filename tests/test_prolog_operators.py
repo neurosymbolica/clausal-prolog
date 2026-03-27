@@ -125,7 +125,7 @@ class TestTranslatorAtomQuoting:
         assert "-private(" not in result  # no atoms at all
 
     def test_functor_names_not_affected(self):
-        """Functor names (PascalCase predicates) are not declared as atoms."""
+        """functor names (PascalCase predicates) are not declared as atoms."""
         src = "foo_bar(1, 2)."
         result = prolog_to_clausal(src)
         assert "FooBar(1, 2)," in result

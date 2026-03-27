@@ -16,7 +16,7 @@ A tabled predicate's dispatch function is wrapped so that:
 - **Complete** (cache hit after leader finished): yields all cached answers
   directly.
 
-In trampoline mode, suspension is cooperative: the consumer yields
+in_ trampoline mode, suspension is cooperative: the consumer yields
 ``(parent, _TABLING_SUSPEND)`` and the trampoline converts this to DONE so the
 caller's while-loop exits normally.  The leader's completion phase resumes
 consumers via a mini-trampoline that uses the consumer's ``parent`` reference
@@ -24,7 +24,7 @@ as a routing key.
 
 Well-Founded Semantics (WFS)
 ----------------------------
-When NAF targets a tabled predicate whose table is still evaluating (cycle
+when NAF targets a tabled predicate whose table is still evaluating (cycle
 through negation), the negation is *delayed* rather than checked immediately.
 After SLG completion, a simplification pass resolves delayed negations:
 
@@ -198,7 +198,7 @@ def _naf_tabled(functor, arity, args, trail, table_store):
     Returns True if negation succeeds (conditionally or unconditionally),
     False if negation fails (the positive goal has an answer).
 
-    When the target table is still evaluating (cycle through negation),
+    when the target table is still evaluating (cycle through negation),
     creates a DelayedNegation and attaches it to the current leader's
     delay set — the answer is conditional until resolution.
     """

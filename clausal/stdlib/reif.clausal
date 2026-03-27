@@ -4,7 +4,7 @@
 # From Neumerkel & Kral (arXiv:1607.01590, §7):
 #   MemberdT(X, Es, T) — T is True if X is a member of Es, False otherwise.
 #   Ground queries are deterministic (no leftover choicepoints).
-#   Uses Eq/3 (reified equality) and If (reified branching).
+#   Uses eq/3 (reified equality) and If (reified branching).
 
 MemberdT(_x, _es, _t) <- LMemberdT(_es, _x, _t)
 

@@ -1,10 +1,10 @@
-Squares(_numbers, _squares) <- (FindAll(_square, In(X, _numbers), _square := X * X, _squares))
+Squares(_numbers, _squares) <- (findall(_square, in_(X, _numbers), _square := X * X, _squares))
 
-Positives(_numbers, _positives) <- (FindAll(X, In(X, _numbers), X > 0, _positives))
+Positives(_numbers, _positives) <- (findall(X, in_(X, _numbers), X > 0, _positives))
 
-UniqueMembers(_numbers, _unique) <- (SetOf(X, In(X, _numbers), _unique))
+UniqueMembers(_numbers, _unique) <- (setof(X, in_(X, _numbers), _unique))
 
-AllPositive(_numbers) <- (ForAll(In(X, _numbers), X > 0))
+AllPositive(_numbers) <- (forall(in_(X, _numbers), X > 0))
 
 Test('squares') <- (Squares([1, 2, 3], _squares), _squares == [1, 4, 9])
 

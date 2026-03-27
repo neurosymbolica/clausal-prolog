@@ -29,11 +29,11 @@ CaptureTwo(A, B, X, RESULT) <- (
 Helper(X, Y) <- (Y := X * 10)
 ApplyPred(X, Y) <- CallGoal((V <- (Helper(V, Y))), X)
 
-# AllColors/1 — FindAll with multi-solution predicate
+# AllColors/1 — findall with multi-solution predicate
 Color("red"),
 Color("green"),
 Color("blue"),
 
 AllColors(COLORS) <- (
-    FindAll(C, (Color(C)), COLORS)
+    findall(C, (Color(C)), COLORS)
 )

@@ -26,7 +26,7 @@ Programs covered
   - Graph reachability: edge/2 facts + path/2 transitive closure
   - Classification: animal/2 with compound-head (functor dataclass) pattern matching
   - Fibonacci: recursive fib/2 with correct Var/literal head design
-  - Permutation + N-queens: In enumeration + arithmetic constraints
+  - permutation + N-queens: in_ enumeration + arithmetic constraints
   - Combination search: multiple predicate calls in conjunction
   - Visualizer smoke tests
 """
@@ -43,7 +43,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify as Is, DoesNotUnify as IsNot, Evaluate, ArithEq, ArithNeq,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,
     Compound,
@@ -168,7 +168,7 @@ class TestGraphReachability:
         db = self._build_db()
         fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
-        # When second arg is ground, the match arm body fails if unification fails.
+        # when second arg is ground, the match arm body fails if unification fails.
         # Because 'd' is a string and the Is body produces "b"/"c"/"d", we need
         # the head's Var for dest to unify with 'd'.  Since the head for path uses
         # a Var (py), calling with 'd' will match and the body Is(py, 'd') would
@@ -349,9 +349,9 @@ class TestFibonacci:
             assert len(results) == 1, f"fib({n}) should have exactly 1 solution"
 
 
-# ── Permutation + 4-queens ─────────────────────────────────────────────────────
+# ── permutation + 4-queens ─────────────────────────────────────────────────────
 #
-# perm4(C0, C1, C2, C3) — enumerate permutations of 1..4 using In enumeration
+# perm4(C0, C1, C2, C3) — enumerate permutations of 1..4 using in_ enumeration
 # and pairwise IsNot checks.
 #
 # no_attack(Ci, Cj, Dist) — Ci != Cj AND |Ci - Cj| != Dist (no diagonal attack).
@@ -373,10 +373,10 @@ class TestNQueens4:
         db.assertz(Clause(
             head=Compound("perm4", (c0, c1, c2, c3)),
             body=[
-                In(left=c0, right=[1, 2, 3, 4]),
-                In(left=c1, right=[1, 2, 3, 4]),
-                In(left=c2, right=[1, 2, 3, 4]),
-                In(left=c3, right=[1, 2, 3, 4]),
+                in_(left=c0, right=[1, 2, 3, 4]),
+                in_(left=c1, right=[1, 2, 3, 4]),
+                in_(left=c2, right=[1, 2, 3, 4]),
+                in_(left=c3, right=[1, 2, 3, 4]),
                 IsNot(left=c0, right=c1),
                 IsNot(left=c0, right=c2),
                 IsNot(left=c0, right=c3),

@@ -27,7 +27,7 @@ from .pythonic_ast.nodes import (
     Break,
     Continue,
     Raise,
-    Assert,
+    assertz,
     Global,
     Nonlocal,
     # Imports
@@ -79,7 +79,7 @@ __all__ = [
     "Break",
     "Continue",
     "Raise",
-    "Assert",
+    "assertz",
     "Global",
     "Nonlocal",
     # Imports

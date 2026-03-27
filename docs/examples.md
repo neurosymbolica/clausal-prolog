@@ -49,7 +49,7 @@ Two sorting algorithms:
 
 ### nqueens.clausal
 
-N-Queens puzzle using permutation-based search: `Numlist`, `Permutation`, `Safe/1`, and `NoAttack/3` diagonal constraint checking.
+N-Queens puzzle using permutation-based search: `numlist`, `permutation`, `Safe/1`, and `NoAttack/3` diagonal constraint checking.
 
 *See: [List builtins](builtins.md#lists)*
 
@@ -71,27 +71,27 @@ Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an
 
 ### sudoku.clausal
 
-Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `AllDifferent` constraints, then labels. Includes three sample puzzles.
+Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `all_different` constraints, then labels. Includes three sample puzzles.
 
 ```clausal
 Sudoku(ROWS) <- (
     ROWS := [R1, R2, R3, R4, R5, R6, R7, R8, R9],
-    Flatten(ROWS, VS),
-    InDomain(VS, 1, 9),
-    MapList(AllDifferent, ROWS),
-    Transpose(ROWS, COLUMNS),
-    MapList(AllDifferent, COLUMNS),
+    flatten(ROWS, VS),
+    in_domain(VS, 1, 9),
+    maplist(all_different, ROWS),
+    transpose(ROWS, COLUMNS),
+    maplist(all_different, COLUMNS),
     Blocks(R1, R2, R3), Blocks(R4, R5, R6), Blocks(R7, R8, R9)
 )
 ```
 
-Features: nested [star-list patterns](lists.md) (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as [higher-order](higher_order.md) arguments (`MapList(AllDifferent, ...)`), recursive transpose.
+Features: nested [star-list patterns](lists.md) (`[[HEAD, *TAIL], *ROWS]`), builtin predicates as [higher-order](higher_order.md) arguments (`maplist(all_different, ...)`), recursive transpose.
 
 *See: [CLP(ℤ)](constraints.md), [Higher-order predicates](higher_order.md), [Meta-predicates](meta_predicates.md)*
 
 ### map_coloring.clausal
 
-Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `ForAll/2` and `is not` (structural disequality).
+Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `forall/2` and `is not` (structural disequality).
 
 *See: [Meta-predicates](meta_predicates.md)*
 
@@ -107,13 +107,13 @@ Lambda (goal closure) examples: `ApplyVal`, `AddOne`, `AddZ`, `DoubleVal`, and m
 
 ### higher_order.clausal
 
-Higher-order list predicates: `Doubles` (MapList/3), `AllPositive` (MapList/2), `KeepPositive` (Filter/3), `RemoveNegative` (Exclude/3), and `FoldSum` (FoldLeft/4).
+Higher-order list predicates: `Doubles` (maplist/3), `AllPositive` (maplist/2), `KeepPositive` (include/3), `RemoveNegative` (exclude/3), and `FoldSum` (foldl/4).
 
 *See: [Higher-order predicates](meta_predicates.md)*
 
 ### meta_predicates.clausal
 
-Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMembers` (SetOf/3), `AllPositive` (ForAll/2).
+Meta-predicate examples: `Squares` (findall/3), `Positives` (bagof/3), `UniqueMembers` (setof/3), `AllPositive` (forall/2).
 
 *See: [Meta-predicates](meta_predicates.md)*
 
@@ -123,7 +123,7 @@ Meta-predicate examples: `Squares` (FindAll/3), `Positives` (BagOf/3), `UniqueMe
 
 ### metainterpreters.clausal
 
-Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. [`CopyTerm/2`](term_inspection.md) provides fresh variable copies at each resolution step.
+Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. [`copy_term/2`](term_inspection.md) provides fresh variable copies at each resolution step.
 
 **Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
@@ -131,13 +131,13 @@ Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreter
 Solve([], _PROGRAM),
 Solve([GOAL, *GOALS], PROGRAM) <- (
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     Solve(ALL_GOALS, PROGRAM)
 )
 
 MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
-    In(CLAUSE, PROGRAM),
-    CopyTerm(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
+    in_(CLAUSE, PROGRAM),
+    copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD
 )
 ```
@@ -148,7 +148,7 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 SolveCount([], _PROGRAM, 0),
 SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
     COUNT == SUB_COUNT + 1
 )
@@ -162,7 +162,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     SolveLimit(ALL_GOALS, PROGRAM, MAX1)
 )
 ```
@@ -171,7 +171,7 @@ SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
 
 ```clausal
 SolveIterativeDeepening(GOALS, PROGRAM) <- (
-    Between(0, 1000, DEPTH),
+    between(0, 1000, DEPTH),
     SolveLimit(GOALS, PROGRAM, DEPTH)
 )
 ```
@@ -189,7 +189,7 @@ SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 Three sample programs are included: natural numbers (`NatnumProgram`), an acyclic graph (`GraphProgram`), and a cyclic graph (`CyclicProgram`) that demonstrates iterative deepening's advantage over plain DFS.
 
-*See: [Meta-Interpreters tutorial](metainterpreters.md), [Builtins](builtins.md) (CopyTerm, In, Append, Between)*
+*See: [Meta-Interpreters tutorial](metainterpreters.md), [Builtins](builtins.md) (copy_term, in_, append, between)*
 
 ---
 
@@ -209,7 +209,7 @@ Add test predicates to any example file, then run with pytest:
 
 ```clausal
 # skip
-# In your .clausal file
+# in_ your .clausal file
 Test("fib 10") <- Fib(10, 55)
 ```
 

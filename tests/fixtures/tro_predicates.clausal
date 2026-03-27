@@ -1,7 +1,7 @@
 # Tail Recursion Optimization test predicates.
 
 # ── Accumulator sum ──────────────────────────────────────────────────────────
-# Sum(List, Accumulator, Result): sum elements of List starting from Accumulator.
+# sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
 # TRO-eligible: prefix is deterministic (Evaluate), tail call is self-recursive.
 
 AccSum([], ACC, ACC),
@@ -43,7 +43,7 @@ CountDown(N, ACC, RESULT) <- (
 Test("countdown zero") <- (CountDown(0, [], R) and R == [0])
 Test("countdown three") <- (CountDown(3, [], R) and R == [0, 1, 2, 3])
 
-# ── Length with accumulator ─────────────────────────────────────────────────
+# ── length with accumulator ─────────────────────────────────────────────────
 
 AccLength([], N, N),
 AccLength([_, *T], ACC, N) <- (

@@ -172,7 +172,7 @@ def convert_boolop(node: ast.BoolOp) -> Node:
 COMPARISON_CLASS: dict[type, type] = {
     ast.Eq: ArithEq, ast.NotEq: ArithNeq, ast.Lt: Lt, ast.LtE: LtE,
     ast.Gt: Gt, ast.GtE: GtE, ast.Is: Unify, ast.IsNot: DoesNotUnify,
-    ast.In: In, ast.NotIn: NotIn,
+    ast.In: in_, ast.NotIn: NotIn,
 }
 
 def convert_compare(node: ast.Compare) -> Node:
@@ -355,8 +355,8 @@ def convert_raise(node: ast.Raise) -> Raise:
         cause=visit(node.cause) if node.cause else None,
     ))
 
-def convert_assert(node: ast.Assert) -> Assert:
-    return locate(node, Assert(
+def convert_assert(node: ast.Assert) -> assertz:
+    return locate(node, assertz(
         test=visit(node.test), msg=visit(node.msg) if node.msg else None,
     ))
 

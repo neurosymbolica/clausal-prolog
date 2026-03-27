@@ -95,7 +95,7 @@ def test_repr_html_limit_custom():
 
 
 def test_repr_html_limit_not_hit():
-    """When all solutions fit within limit, show 'No more solutions.'."""
+    """when all solutions fit within limit, show 'No more solutions.'."""
     items = [{"X": i} for i in range(3)]
     html = Solutions(iter(items))._repr_html_()
     assert "No more solutions." in html
@@ -125,7 +125,7 @@ def test_repr_html_contains_css():
 # ── _ipython_display_ routing ───────────────────────────────────────────────
 
 def test_ipython_display_calls_run_in_terminal():
-    """In non-Jupyter environment, _ipython_display_ calls _run()."""
+    """in_ non-Jupyter environment, _ipython_display_ calls _run()."""
     s = Solutions(iter([{"X": 1}]))
     called = []
     s._run = lambda: called.append(True)
@@ -135,7 +135,7 @@ def test_ipython_display_calls_run_in_terminal():
 
 
 def test_ipython_display_uses_html_in_jupyter():
-    """In Jupyter environment, _ipython_display_ uses HTML display."""
+    """in_ Jupyter environment, _ipython_display_ uses HTML display."""
     s = Solutions(iter([{"X": 1}]))
     displayed = []
 

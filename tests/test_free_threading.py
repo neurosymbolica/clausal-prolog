@@ -191,7 +191,7 @@ class TestConcurrentDatabaseReads:
         mod = Module("test_concurrent")
         db = mod.db
 
-        # Assert 100 facts: num(0), num(1), ..., num(99)
+        # assertz 100 facts: num(0), num(1), ..., num(99)
         for i in range(100):
             v = Var()
             db.assertz(Clause(

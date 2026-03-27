@@ -1,4 +1,4 @@
-# Tests for runtime database predicates: Assert/1, AssertFirst/1, Retract/1
+# Tests for runtime database predicates: assertz/1, asserta/1, retract/1
 
 -dynamic(Color/1)
 
@@ -8,19 +8,19 @@ Color("blue"),
 
 # AssertAndQuery/1: adds yellow dynamically then checks it exists
 AssertAndQuery(X) <- (
-    Assert(Color("yellow")),
+    assertz(Color("yellow")),
     Color(X)
 )
 
 # PrependColor/1: adds violet at front then queries first result
 PrependColor(X) <- (
-    AssertFirst(Color("violet")),
+    asserta(Color("violet")),
     Color(X)
 )
 
 # RetractRed: removes red then checks it's gone
 RetractRed <- (
-    Retract(Color("red")),
+    retract(Color("red")),
     not Color("red")
 )
 
@@ -28,4 +28,4 @@ RetractRed <- (
 Test("color red") <- Color("red")
 Test("color green") <- Color("green")
 Test("color blue") <- Color("blue")
-Test("three colors") <- (FindAll(COLOR, Color(COLOR), COLORS), Length(COLORS, 3))
+Test("three colors") <- (findall(COLOR, Color(COLOR), COLORS), length(COLORS, 3))

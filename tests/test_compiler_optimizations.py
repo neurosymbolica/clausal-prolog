@@ -862,9 +862,9 @@ class TestSecondaryIndexing:
             Color(blue,   cool, light), Color(green,  cool, dark),
             Color(white, neutral, light), Color(black, neutral, dark).
 
-        Arg 0 (name): 6 distinct values.  Best single index.
-        Arg 1 (category): 3 distinct values.
-        Arg 2 (brightness): 2 distinct values.
+        arg 0 (name): 6 distinct values.  Best single index.
+        arg 1 (category): 3 distinct values.
+        arg 2 (brightness): 2 distinct values.
 
         NOTE: with 6 facts, _analyze_joint_index_positions uses min_gain=1.5,
         so a joint pair needs > 9 distinct keys to trigger 9b/9c.  Since the
@@ -972,9 +972,9 @@ class TestJointKeyIndexing:
             Combo(ice,   dry,   cold)  Combo(ice,   wet,   hot)
             Combo(wind,  dry,   hot)   Combo(wind,  wet,   cold)
 
-        Arg 0 (group):   3 distinct → n_distinct=3
-        Arg 1 (subtype): 2 distinct → n_distinct=2
-        Arg 2 (result):  2 distinct → n_distinct=2
+        arg 0 (group):   3 distinct → n_distinct=3
+        arg 1 (subtype): 2 distinct → n_distinct=2
+        arg 2 (result):  2 distinct → n_distinct=2
         Joint(0, 1):     6 distinct → 6 > 3 * 1.5 = 4.5 → triggers joint/secondary
 
         With coverage = 1.0 (all clauses have both arg0 and arg1 ground) and

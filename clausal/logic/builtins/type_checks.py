@@ -1,6 +1,6 @@
-"""Type-checking builtins: IsVar/1, IsBound/1, IsStr/1, IsNumber/1,
-IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1,
-MustBe/2, CanBe/2."""
+"""Type-checking builtins: var/1, nonvar/1, is_str/1, number/1,
+integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1,
+must_be/2, can_be/2."""
 
 from __future__ import annotations
 
@@ -12,21 +12,21 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import _is_ground
 
 
-@_builtin("IsVar", 1)
+@_builtin("var", 1)
 def _var__1(x, trail, k):
     """var(X) — succeeds if X is an unbound logic variable."""
     if is_var(deref(x)):
         yield None
 
 
-@_builtin("IsBound", 1)
+@_builtin("nonvar", 1)
 def _nonvar__1(x, trail, k):
     """nonvar(X) — succeeds if X is bound (not an unbound Var)."""
     if not is_var(deref(x)):
         yield None
 
 
-@_builtin("IsStr", 1)
+@_builtin("is_str", 1)
 def _atom__1(x, trail, k):
     """atom(X) — succeeds if X is a string (Prolog atom)."""
     x_val = deref(x)
@@ -34,9 +34,9 @@ def _atom__1(x, trail, k):
         yield None
 
 
-@_builtin("IsAtom", 1)
+@_builtin("atom", 1)
 def _is_atom__1(x, trail, k):
-    """IsAtom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
+    """atom(X) — succeeds if X is a zero-arity PredicateMeta (a declared atom)."""
     x_val = deref(x)
     if (
         not is_var(x_val)
@@ -47,7 +47,7 @@ def _is_atom__1(x, trail, k):
         yield None
 
 
-@_builtin("IsNumber", 1)
+@_builtin("number", 1)
 def _number__1(x, trail, k):
     """number(X) — succeeds if X is an int or float (not bool)."""
     x_val = deref(x)
@@ -59,7 +59,7 @@ def _number__1(x, trail, k):
         yield None
 
 
-@_builtin("IsInt", 1)
+@_builtin("integer", 1)
 def _integer__1(x, trail, k):
     """integer(X) — succeeds if X is an int (not bool)."""
     x_val = deref(x)
@@ -67,7 +67,7 @@ def _integer__1(x, trail, k):
         yield None
 
 
-@_builtin("IsFloat", 1)
+@_builtin("float_", 1)
 def _float__1(x, trail, k):
     """float_(X) — succeeds if X is a Python float."""
     x_val = deref(x)
@@ -75,7 +75,7 @@ def _float__1(x, trail, k):
         yield None
 
 
-@_builtin("IsCompound", 1)
+@_builtin("compound", 1)
 def _compound__1(x, trail, k):
     """compound(X) — succeeds if X is a compound term with arity > 0."""
     x_val = deref(x)
@@ -89,7 +89,7 @@ def _compound__1(x, trail, k):
         yield None
 
 
-@_builtin("IsCallable", 1)
+@_builtin("callable_", 1)
 def _callable__1(x, trail, k):
     """callable(X) — succeeds if X is an atom or compound."""
     x_val = deref(x)
@@ -103,28 +103,28 @@ def _callable__1(x, trail, k):
         yield None
 
 
-@_builtin("IsList", 1)
+@_builtin("is_list", 1)
 def _is_list__1(x, trail, k):
     """is_list(X) — succeeds if X is a Python list."""
     if isinstance(deref(x), list):
         yield None
 
 
-@_builtin("IsChars", 1)
+@_builtin("is_chars", 1)
 def _is_chars__1(x, trail, k):
     """is_chars(X) — succeeds if X is a list or a string (a character sequence)."""
     if isinstance(deref(x), (list, str)):
         yield None
 
 
-@_builtin("IsGround", 1)
+@_builtin("ground", 1)
 def _ground__1(x, trail, k):
     """ground(X) — succeeds if X contains no unbound Vars."""
     if _is_ground(deref(x)):
         yield None
 
 
-# ── Type checking map for MustBe/CanBe ─────────────────────────────────
+# ── Type checking map for must_be/can_be ─────────────────────────────────
 
 def _check_type(type_name: str, term) -> bool:
     """Return True if *term* satisfies *type_name*."""
@@ -165,9 +165,9 @@ def _check_type(type_name: str, term) -> bool:
     return False
 
 
-@_builtin("MustBe", 2)
+@_builtin("must_be", 2)
 def _must_be__2(type_name, term, trail, k):
-    """MustBe(Type, Term) — assert that Term is of the given type.
+    """must_be(Type, Term) — assert that Term is of the given type.
 
     Succeeds silently if Term matches Type.
     Throws instantiation_error if Term is unbound.
@@ -187,9 +187,9 @@ def _must_be__2(type_name, term, trail, k):
         raise LogicException(type_error(type_val, term_val, "must_be/2"))
 
 
-@_builtin("CanBe", 2)
+@_builtin("can_be", 2)
 def _can_be__2(type_name, term, trail, k):
-    """CanBe(Type, Term) — assert that Term could possibly be of the given type.
+    """can_be(Type, Term) — assert that Term could possibly be of the given type.
 
     Succeeds if Term is unbound (could become anything) or already matches.
     Throws type_error if Term is ground and definitely not the type.

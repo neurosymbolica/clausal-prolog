@@ -1,10 +1,10 @@
 """clausal.logic.constraints — constraint solvers for attributed variables.
 
 Implements dif/2 (disequality constraint) using the AttVar infrastructure
-from the C extension.  When ``dif(x, y, trail)`` is called on two terms that
+from the C extension.  when ``dif(x, y, trail)`` is called on two terms that
 *could* become equal (neither structurally incompatible nor already identical),
 a constraint pair ``(x, y)`` is attached to every free variable in both terms.
-When any of those variables is later bound, the ``_dif_hook`` re-evaluates the
+when any of those variables is later bound, the ``_dif_hook`` re-evaluates the
 constraint and either drops it (satisfied), re-attaches it (still pending), or
 fails (violated).
 """

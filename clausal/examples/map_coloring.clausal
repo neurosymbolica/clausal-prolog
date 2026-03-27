@@ -28,7 +28,7 @@ Adjacent(SouthAustralia,      Victoria),
 Adjacent(Queensland,          NewSouthWales),
 Adjacent(NewSouthWales,       Victoria),
 
-ColorOf(REGION, C, COLORING) <- In([REGION, C], COLORING)
+ColorOf(REGION, C, COLORING) <- in_([REGION, C], COLORING)
 
 Colorable(COLORING) <- (
     Color(WA_COLOR),
@@ -47,7 +47,7 @@ Colorable(COLORING) <- (
         [Victoria,           VIC_COLOR],
         [Tasmania,           TAS_COLOR]
     ],
-    ForAll(Adjacent(REGION_X, REGION_Y), (
+    forall(Adjacent(REGION_X, REGION_Y), (
         ColorOf(REGION_X, COLOR_OF_REGION_X, COLORING),
         ColorOf(REGION_Y, COLOR_OF_REGION_Y, COLORING),
         COLOR_OF_REGION_X is not COLOR_OF_REGION_Y
@@ -65,16 +65,16 @@ Test("wa adjacent to nt") <- Adjacent(WesternAustralia, NorthernTerritory)
 Test("wa adjacent to sa") <- Adjacent(WesternAustralia, SouthAustralia)
 Test("nsw adjacent to vic") <- Adjacent(NewSouthWales, Victoria)
 Test("a coloring exists") <- Colorable(_)
-Test("coloring has 7 regions") <- (Colorable(COLORING), Length(COLORING, 7))
+Test("coloring has 7 regions") <- (Colorable(COLORING), length(COLORING, 7))
 Test("wa and nt get different colors") <- (
     Colorable(COLORING),
-    In([WesternAustralia, WA_COLOR], COLORING),
-    In([NorthernTerritory, NT_COLOR], COLORING),
+    in_([WesternAustralia, WA_COLOR], COLORING),
+    in_([NorthernTerritory, NT_COLOR], COLORING),
     WA_COLOR is not NT_COLOR
 )
 Test("sa and qld get different colors") <- (
     Colorable(COLORING),
-    In([SouthAustralia, SA_COLOR], COLORING),
-    In([Queensland, QLD_COLOR], COLORING),
+    in_([SouthAustralia, SA_COLOR], COLORING),
+    in_([Queensland, QLD_COLOR], COLORING),
     SA_COLOR is not QLD_COLOR
 )

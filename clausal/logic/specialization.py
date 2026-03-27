@@ -1,7 +1,7 @@
 """clausal.logic.specialization — Meta-interpreter specialization via partial deduction.
 
 Specializes a meta-interpreter (MI) with respect to a known object program,
-producing residual clauses with MI overhead (MatchClause, Append, CopyTerm)
+producing residual clauses with MI overhead (MatchClause, append, copy_term)
 removed and extensions (counting, depth, proof trees) woven in.
 
 Two entry points:
@@ -61,7 +61,7 @@ class MIPattern:
     pre_match_goals: list           # goals before MatchClause
     post_match_goals: list          # goals after last MI-related call
     match_clause_index: int         # index of MatchClause call in recursive body
-    append_index: int | None        # index of Append call (None for split style)
+    append_index: int | None        # index of append call (None for split style)
     recursive_call_indices: list[int]  # indices of recursive MI calls in body
     recursive_call_style: str       # "tail" or "split"
 
@@ -69,7 +69,7 @@ class MIPattern:
     goal_var: Any = None            # GOAL variable from [GOAL, *GOALS]
     goals_var: Any = None           # GOALS variable from [GOAL, *GOALS]
     body_var: Any = None            # BODY variable from MatchClause
-    all_goals_var: Any = None       # ALL_GOALS variable from Append (tail style)
+    all_goals_var: Any = None       # ALL_GOALS variable from append (tail style)
     program_var: Any = None         # PROGRAM variable in recursive clause head
 
 
@@ -156,8 +156,8 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     # MatchClause(GOAL, BODY, PROGRAM) — extract BODY variable.
     body_var = match_call.args[1]
 
-    # Find Append call (for tail-recursive style).
-    append_idx = _find_call(body, "Append")
+    # Find append call (for tail-recursive style).
+    append_idx = _find_call(body, "append")
 
     # Find recursive self-calls.
     recursive_indices = _find_all_calls(body, name)
@@ -170,7 +170,7 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     elif len(recursive_indices) == 2 and append_idx is None:
         style = "split"
     elif len(recursive_indices) == 1 and append_idx is None:
-        # Could be tail without Append (unusual) — treat as tail.
+        # Could be tail without append (unusual) — treat as tail.
         style = "tail"
     else:
         raise CannotSpecialize(
@@ -182,10 +182,10 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     all_goals_var = None
     if style == "tail" and append_idx is not None:
         append_call = body[append_idx]
-        all_goals_var = append_call.args[2]  # Append(BODY, GOALS, ALL_GOALS)
+        all_goals_var = append_call.args[2]  # append(BODY, GOALS, ALL_GOALS)
 
     # Classify pre-match and post-match goals.
-    # Pre-match: goals before MatchClause that aren't MatchClause/Append/recursive.
+    # Pre-match: goals before MatchClause that aren't MatchClause/append/recursive.
     mi_indices = {match_idx}
     if append_idx is not None:
         mi_indices.add(append_idx)
@@ -377,7 +377,7 @@ def _unfold_tail(
         MI([GOAL, *GOALS], PROGRAM, ...extra) <- (
             ...pre_match,
             MatchClause(GOAL, BODY, PROGRAM),
-            Append(BODY, GOALS, ALL_GOALS),
+            append(BODY, GOALS, ALL_GOALS),
             ...post_match,
             MI(ALL_GOALS, PROGRAM, ...extra')
         )
@@ -798,7 +798,7 @@ def _subst_recursive_call_extra_args(
     new_field_idx = 0
     for i, fname in enumerate(orig_fields):
         if i == pattern.program_arg:
-            continue  # Drop program arg.
+            continue  # drop program arg.
         if i == pattern.goal_arg:
             new_args.append(new_goal_arg)
         else:
@@ -1189,7 +1189,7 @@ def _args_len(term: list) -> int:
 class MemoTable:
     """Tracks (functor, generalized_pattern) pairs already specialized.
 
-    When the deep unfolder encounters a goal that matches an already-
+    when the deep unfolder encounters a goal that matches an already-
     specialized pattern, it emits a call to the existing predicate instead
     of re-unfolding.  This prevents duplicate work and, together with the
     homeomorphic embedding test, ensures termination.
@@ -1582,7 +1582,7 @@ def specialize_mi_cpd(
     """Specialize an MI with conjunctive partial deduction (deforestation).
 
     Extends Phase 1 unfolding by deforesting intermediate goal-list
-    constructions.  When a specialized clause's body contains a recursive
+    constructions.  when a specialized clause's body contains a recursive
     call with a constructed goal-list ``[g1, g2, ..., *GOALS]``, the first
     goal ``g1`` is unfolded against ALL matching object clauses (not just
     deterministic ones as in Phase 4), producing one output clause per

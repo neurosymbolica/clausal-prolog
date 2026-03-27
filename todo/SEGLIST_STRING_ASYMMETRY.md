@@ -12,7 +12,7 @@ eliminated. All paths now preserve string type when matching strings:
 | Compiler head | `[H, *T]` | `"hello"` | `T = "ello"` (str) |
 | SegList runtime | `SegList([VarSeg(A)])` | `"hello"` | `A = "hello"` (str) |
 | `_body_multi_star_unify` | `[*A, ',', *B]` | `"a,b"` | `A = "a"`, `B = "b"` (str) |
-| `Append/3` builtin | `Append(X, Y, "hello")` | `"hello"` | `X = "he"`, `Y = "llo"` (str) |
+| `append/3` builtin | `append(X, Y, "hello")` | `"hello"` | `X = "he"`, `Y = "llo"` (str) |
 
 ### Key changes:
 

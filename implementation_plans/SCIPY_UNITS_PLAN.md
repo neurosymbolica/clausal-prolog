@@ -1,6 +1,6 @@
 # Dimensional Analysis Integration for SciPy Predicates
 
-Plan for enabling the Clausal dimensional analysis system (Quantity / HasUnits)
+Plan for enabling the Clausal dimensional analysis system (Quantity / has_units)
 to work transparently through all scipy wrapper predicates.
 
 ## Status
@@ -22,24 +22,24 @@ to work transparently through all scipy wrapper predicates.
 
 ## Background
 
-The dimensional analysis system (`clausal.terms.Quantity`, `HasUnits/2`,
+The dimensional analysis system (`clausal.terms.Quantity`, `has_units/2`,
 `clausal.modules.py.units`) is a runtime assertion framework.  The intended
 workflow is:
 
 1. **Development** — annotate inputs, outputs, and intermediates with
-   `HasUnits` goals and pass `Quantity` objects through the program.  Any
+   `has_units` goals and pass `Quantity` objects through the program.  Any
    dimensional error is caught immediately with a precise failure point.
 2. **Verification** — once the test suite passes, the program is known to
    satisfy its dimensional invariants on those execution paths.
-3. **Production** — strip `HasUnits` goals and stop passing `Quantity` objects.
+3. **Production** — strip `has_units` goals and stop passing `Quantity` objects.
    No overhead remains.
 
 The scipy wrappers currently pass inputs straight to scipy, which cannot
 handle `Quantity` objects.  This plan extends each wrapper so that:
 
-- When `Quantity` inputs arrive, units are stripped, scipy is called on the
+- when `Quantity` inputs arrive, units are stripped, scipy is called on the
   raw values, and a `Quantity` with correctly computed output dims is returned.
-- When plain float / array inputs arrive, scipy is called directly with
+- when plain float / array inputs arrive, scipy is called directly with
   **zero additional overhead** — the only cost is an `any(isinstance(...))`
   scan that short-circuits immediately.
 
@@ -231,14 +231,14 @@ def _eigen_units(dims_list, result):
     return out
 ```
 
-When no `Quantity` objects are present the `any(isinstance(...))` scan
+when no `Quantity` objects are present the `any(isinstance(...))` scan
 short-circuits on the first element that is not a `Quantity`; in the common
 case of a plain numpy array it evaluates `isinstance(ndarray, Quantity)` once
 and returns `False` immediately.  This is negligible compared to the cost of
 any scipy call.
 
 An optional global flag `_SCIPY_UNITS_ENABLED` (default `True`) can be set to
-`False` before any scipy module is imported.  When `False`,
+`False` before any scipy module is imported.  when `False`,
 `make_quantity_aware` returns `call` unwrapped, so predicate objects are
 identical to the current (pre-plan) objects and there is truly zero overhead
 even for the isinstance scan.  This is the deployment option for environments
@@ -503,7 +503,7 @@ propagates them automatically with no changes required.
 ```clausal
 -import_from(scipy_linalg, [Solve, Norm, Determinant, Inverse, EigenDecompose,
                              SingularValueDecompose, ResultGet])
--import_from(py.units, [Metre, Second, Newton, Kilogram, HasUnits])
+-import_from(py.units, [Metre, Second, Newton, Kilogram, has_units])
 
 # Solve: x has units b/A — Newton/Pascal = Newton/(Newton/m²) = m²
 # A is dimensionless (Pascals per Pascal = 1), b is Newtons ⇒ x is Newtons
@@ -511,31 +511,31 @@ Test("solve preserves b units when A dimensionless") <- (
     Solve(++(numpy.array([[2.0,0.0],[0.0,3.0]])),
           ++(numpy.array([4.0(Newton), 9.0(Newton)])),
           X),
-    HasUnits(X, Newton))
+    has_units(X, Newton))
 
 # Norm: norm of a length vector is a length
 Test("norm of length vector has length units") <- (
     Norm(++(numpy.array([3.0(Metre), 4.0(Metre)])), N),
-    HasUnits(N, Metre),
+    has_units(N, Metre),
     N == 5.0(Metre))
 
 # Determinant: 2×2 matrix of Metres → det has dims Metre²
 Test("determinant of 2x2 metre matrix has metre squared units") <- (
     Determinant(++(numpy.array([[1.0(Metre), 0.0(Metre)],
                                 [0.0(Metre), 2.0(Metre)]])), D),
-    HasUnits(D, Metre**2))
+    has_units(D, Metre**2))
 
 # Inverse: inverse of a Newton matrix has Newton^-1 dims
 Test("inverse dims are negated") <- (
     Inverse(++(numpy.array([[2.0(Newton), 0.0(Newton)],
                             [0.0(Newton), 4.0(Newton)]])), INV),
-    HasUnits(INV, Newton**-1))
+    has_units(INV, Newton**-1))
 
 # EigenDecompose: eigenvalues have same units as A
 Test("eigenvalues have same units as matrix") <- (
     EigenDecompose(++(numpy.diag([3.0(Newton), 5.0(Newton)])), R),
     ResultGet(R, 'eigenvalues', EV),
-    HasUnits(EV, Newton))
+    has_units(EV, Newton))
 
 # Dimensionless fast path — no Quantity wrapping, result is plain
 Test("solve plain arrays returns plain result") <- (
@@ -564,7 +564,7 @@ If x has dims `[U_x]`:
    for any non-trivial f it is negligible relative to scipy's own call count.
 2. Wrap `f` for scipy: `f_stripped(v) = strip_quantity(f(Quantity(v, x_dims)))`.
 3. Call scipy with `x.value` and `f_stripped`.
-4. In the result dict, wrap `'x'` with x_dims and `'df'` with
+4. in_ the result dict, wrap `'x'` with x_dims and `'df'` with
    `Quantity._merge_dims(f_dims, x_dims, -1)` (df/dx dims).
 
 The concrete wrapper (replaces the `_dispatch_fn` call for Derivative):
@@ -611,25 +611,25 @@ Note on `'error'` fields: error estimates are in the same units as `'df'` /
 
 ```clausal
 -import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
--import_from(py.units, [Metre, Second, Newton, HasUnits])
+-import_from(py.units, [Metre, Second, Newton, has_units])
 
 # f: Metre → Newton, so df/dx has units Newton/Metre
 Test("derivative units Newton per Metre") <- (
     Derivative(++(lambda x: x * 9.8(Newton/Metre)), 1.0(Metre), R),
     ResultGet(R, 'df', DF),
-    HasUnits(DF, Newton/Metre))
+    has_units(DF, Newton/Metre))
 
 # x-echo in result dict keeps input units
 Test("derivative result x has input units") <- (
     Derivative(++(lambda x: x * 2.0(Newton/Metre)), 3.0(Metre), R),
     ResultGet(R, 'x', X),
-    HasUnits(X, Metre))
+    has_units(X, Metre))
 
 # error estimate has same units as df
 Test("derivative error has same units as df") <- (
     Derivative(++(lambda x: x * 2.0(Newton/Metre)), 3.0(Metre), R),
     ResultGet(R, 'error', E),
-    HasUnits(E, Newton/Metre))
+    has_units(E, Newton/Metre))
 
 # plain f (returns float, not Quantity): result df is plain
 Test("derivative of plain function returns plain df") <- (
@@ -706,14 +706,14 @@ full with output dims.
 
 ```clausal
 -import_from(scipy_integrate, [Quad, Trapezoid, CumulativeTrapezoid, Simpson, ResultGet])
--import_from(py.units, [Metre, Second, Newton, HasUnits])
+-import_from(py.units, [Metre, Second, Newton, has_units])
 
 % Trapezoid: velocity (m/s) over time (s) → displacement (m)
 Test("trapezoid velocity times time gives metres") <- (
     Trapezoid(++(numpy.array([0.0(Metre/Second), 10.0(Metre/Second), 20.0(Metre/Second)])),
               ++(numpy.array([0.0(Second),       1.0(Second),        2.0(Second)])),
               RESULT),
-    HasUnits(RESULT, Metre))
+    has_units(RESULT, Metre))
 
 % Trapezoid: dimensionless fast path
 Test("trapezoid plain arrays returns plain") <- (
@@ -727,7 +727,7 @@ Test("quad with units propagates f_dims times x_dims") <- (
     Quad(++(lambda x: x * 1.0(Newton/Metre)),
          0.0(Metre), 1.0(Metre), RESULT),
     ResultGet(RESULT, 'value', V),
-    HasUnits(V, Newton))
+    has_units(V, Newton))
 
 % Quad: plain function (no Quantity returned) — result is plain
 Test("quad plain function over dimensioned bounds returns plain value") <- (
@@ -1070,7 +1070,7 @@ dims as coordinates) and indices (dimensionless).
 - Explain the zero-overhead toggle: "pass plain arrays/scalars when dimensional
   analysis is not needed; the wrappers call scipy directly with no wrapping
   overhead".
-- Show how `HasUnits` and scipy wrappers compose: assert units on inputs before
+- Show how `has_units` and scipy wrappers compose: assert units on inputs before
   the call, and on the result after.
 
 **`SCIPY_PORT.md`** — add a *Dimensional analysis* subsection to the
@@ -1163,7 +1163,7 @@ Phase 4 depends on the callable-probing utilities from Phase 3.
   `scipy_differentiate`) need no change.  Check each module's `_dispatch_fn`
   before implementing the phase.
 
-  In Clausal code, `UnitsMismatch` is caught via:
+  in_ Clausal code, `UnitsMismatch` is caught via:
   ```clausal
   catch(Goal, UnitsMismatch(MSG), Recovery)
   ```

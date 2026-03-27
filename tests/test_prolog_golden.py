@@ -181,7 +181,7 @@ class TestDialectDirectives:
         """Known clausal modules map to library(...) in SWI."""
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
-            '-import_from(clausal.logic.clpfd, [InDomain])',
+            '-import_from(clausal.logic.clpfd, [in_domain])',
             dialect=Dialect.swi(),
         )
         assert "library(clpfd)" in result
@@ -190,7 +190,7 @@ class TestDialectDirectives:
         """Known clausal modules map to library(clpz) in Scryer."""
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
-            '-import_from(clausal.logic.clpfd, [InDomain])',
+            '-import_from(clausal.logic.clpfd, [in_domain])',
             dialect=Dialect.scryer(),
         )
         assert "library(clpz)" in result

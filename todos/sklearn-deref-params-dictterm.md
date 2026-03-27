@@ -11,7 +11,7 @@ def _deref_params(params):
     return {}
 ```
 
-When params is a `DictTerm` (from a Clausal dict literal like `{"C": 2.0}`),
+when params is a `DictTerm` (from a Clausal dict literal like `{"C": 2.0}`),
 `isinstance(params, dict)` is false, so it silently returns `{}`.
 
 `_param_3` was fixed to check `isinstance(params, (dict, DictTerm))`, but

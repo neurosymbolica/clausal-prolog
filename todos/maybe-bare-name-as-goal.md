@@ -4,7 +4,7 @@ The docs originally used `Maybe` (bare name, no parens) as a zero-arity goal
 in clause bodies:
 
 ```clausal
-maybe_print(X) <- (Maybe, Writeln(X))
+maybe_print(X) <- (Maybe, writeln(X))
 ```
 
 The compiler rejects this because a bare uppercase name is treated as a logic

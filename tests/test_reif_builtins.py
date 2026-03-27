@@ -261,18 +261,18 @@ class TestReifBuiltinRegistration:
 
     def test_eq_registered(self):
         from clausal.logic.builtins import _BUILTINS
-        assert ("Eq", 3) in _BUILTINS
+        assert ("eq", 3) in _BUILTINS
 
     def test_dif_t_registered(self):
         from clausal.logic.builtins import _BUILTINS
-        assert ("DifT", 3) in _BUILTINS
+        assert ("dif_t", 3) in _BUILTINS
 
     def test_eq_via_get_builtin_dispatch(self):
         """eq/3 should be findable via get_builtin_dispatch."""
         from clausal.logic.builtins import get_builtin_dispatch
         from clausal.logic.database import Database
         db = Database()
-        dispatch = get_builtin_dispatch("Eq", 3, db)
+        dispatch = get_builtin_dispatch("eq", 3, db)
         assert dispatch is not None
 
     def test_dif_t_via_get_builtin_dispatch(self):
@@ -280,7 +280,7 @@ class TestReifBuiltinRegistration:
         from clausal.logic.builtins import get_builtin_dispatch
         from clausal.logic.database import Database
         db = Database()
-        dispatch = get_builtin_dispatch("DifT", 3, db)
+        dispatch = get_builtin_dispatch("dif_t", 3, db)
         assert dispatch is not None
 
 

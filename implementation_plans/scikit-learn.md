@@ -36,7 +36,7 @@ hyperparameter configuration, but no learned state. `ALGORITHM` is an atom
 naming the algorithm (e.g. `random_forest`, `svm`, `pca`). `PARAMS` is a list
 of `key=value` pairs.
 
-In scikit-learn terms this corresponds to constructing an estimator object:
+in_ scikit-learn terms this corresponds to constructing an estimator object:
 ```python
 # Python equivalent
 RandomForestClassifier(n_estimators=100, max_depth=5)
@@ -66,7 +66,7 @@ learned state goes through the `Learned` predicate. From Prolog's perspective,
 `Fitted` is an **immutable term**: fitting produces a new `Fitted` term rather
 than mutating anything visible at the Prolog level.
 
-In scikit-learn terms, `HANDLE` points to the Python object *after* `.fit()` has
+in_ scikit-learn terms, `HANDLE` points to the Python object *after* `.fit()` has
 been called on it.
 
 **Example:**
@@ -82,7 +82,7 @@ A supervised dataset. `X` is the feature matrix (rows = samples, columns =
 features) and `Y` is the target vector or matrix. For unsupervised problems,
 pass `Y=nil`.
 
-In scikit-learn, `X` is always a 2D array of shape `(n_samples, n_features)` and
+in_ scikit-learn, `X` is always a 2D array of shape `(n_samples, n_features)` and
 `Y` is a 1D array of shape `(n_samples,)` for single-output problems.
 
 **Examples:**
@@ -315,13 +315,13 @@ a pipeline `Est` term is just an estimator.
 ### `Fit(EST, X, Y, FITTED)`
 
 Convenience variant accepting raw `X` and `Y` directly, without wrapping in a
-`Dataset` term. Equivalent to `Fit(EST, Dataset(X,Y), FITTED)`.
+`Dataset` term. equivalent to `Fit(EST, Dataset(X,Y), FITTED)`.
 
 ---
 
 ## Section 3: Prediction and Transformation
 
-Once you have a `Fitted` term, these predicates apply the learned model to
+once you have a `Fitted` term, these predicates apply the learned model to
 new data. They all take a `Fitted` term as their first argument.
 
 ---
@@ -551,7 +551,7 @@ are computed in a single pass over the folds.
 
 These predicates partition datasets for training and evaluation. The key Prolog
 idiom here is **backtracking**: multi-fold splitters generate one split per
-solution rather than returning a list. Use `FindAll` if you need all splits at once.
+solution rather than returning a list. Use `findall` if you need all splits at once.
 
 ---
 
@@ -593,7 +593,7 @@ KFoldSplit(Dataset(X, Y), 5, SPLIT)
 % ... 5 solutions total
 
 % Get all splits at once:
-FindAll(SPLIT, KFoldSplit(Dataset(X,Y), 5, SPLIT), SPLITS)
+findall(SPLIT, KFoldSplit(Dataset(X,Y), 5, SPLIT), SPLITS)
 ```
 
 ---
@@ -1159,7 +1159,7 @@ keeps the predicate count flat regardless of how many algorithms are added.
 `KFoldSplit` and `StratifiedSplit` generate one split per solution rather
 than returning a list of splits. This is the natural Prolog idiom and composes
 cleanly: use them directly in a goal that processes one split at a time, or
-wrap in `FindAll` to materialise all splits as a list. It also means the
+wrap in `findall` to materialise all splits as a list. It also means the
 interface to a 2-fold and a 100-fold splitter is identical.
 
 ### Why pipelines are just `Est` terms

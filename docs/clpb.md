@@ -5,7 +5,7 @@ CLP(B) provides constraint logic programming over Booleans, enabling SAT solving
 The implementation lives in `clausal/logic/clpb.py`.
 
 !!! note
-    For CLP(ℤ) (finite-domain integer constraints) and Dif/2 (disequality), see [Constraints](constraints.md).
+    For CLP(ℤ) (finite-domain integer constraints) and dif/2 (disequality), see [Constraints](constraints.md).
 
 ---
 
@@ -30,66 +30,66 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `Sat` | 1 | `Sat(Expr)` — post Boolean constraint; fail if unsatisfiable |
-| `Taut` | 2 | `Taut(Expr, T)` — T=1 if tautology, T=0 if contradiction, else fail |
-| `SatCount` | 2 | `SatCount(Expr, N)` — N is the number of satisfying assignments |
-| `BoolLabeling` | 1 | `BoolLabeling(Vars)` — enumerate 0/1 assignments |
+| `sat` | 1 | `sat(Expr)` — post Boolean constraint; fail if unsatisfiable |
+| `taut` | 2 | `taut(Expr, T)` — T=1 if tautology, T=0 if contradiction, else fail |
+| `sat_count` | 2 | `sat_count(Expr, N)` — N is the number of satisfying assignments |
+| `bool_labeling` | 1 | `bool_labeling(Vars)` — enumerate 0/1 assignments |
 
-### Sat/1
+### sat/1
 
 Posts a Boolean constraint. Fails immediately if the formula is unsatisfiable:
 
 ```clausal
 # skip
-Sat(X & Y)                # both must be 1
-Sat(X | Y)                # at least one must be 1
-Sat(~X)                     # X must be 0
-Sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
-Sat(BoolImpl(X, Y))       # X → Y (implication)
+sat(X & Y)                # both must be 1
+sat(X | Y)                # at least one must be 1
+sat(~X)                     # X must be 0
+sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+sat(BoolImpl(X, Y))       # X → Y (implication)
 ```
 
-Multiple `Sat` calls on shared variables build a single constraint network:
+Multiple `sat` calls on shared variables build a single constraint network:
 
 ```clausal
 # skip
-Sat(X | Y), Sat(~X | Z), Sat(Y & Z)
+sat(X | Y), sat(~X | Z), sat(Y & Z)
 ```
 
-### Taut/2
+### taut/2
 
 Tests if a formula is a tautology, contradiction, or neither:
 
 ```clausal
 # skip
 # De Morgan's law — tautology
-Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
 
 # Contradiction
-Taut(X & ~X, T)                          # T = 0
+taut(X & ~X, T)                          # T = 0
 
-# Neither (indeterminate) — Taut fails
-Taut(X | Y, T)                            # fails
+# Neither (indeterminate) — taut fails
+taut(X | Y, T)                            # fails
 ```
 
-### SatCount/2
+### sat_count/2
 
 Counts the number of satisfying assignments:
 
 ```clausal
 # skip
-SatCount(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
-SatCount(X & Y, N)       # N = 1  (AND has 1 solution)
-SatCount(X | Y, N)       # N = 3  (OR has 3 solutions)
+sat_count(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
+sat_count(X & Y, N)       # N = 1  (AND has 1 solution)
+sat_count(X | Y, N)       # N = 3  (OR has 3 solutions)
 ```
 
-### BoolLabeling/1
+### bool_labeling/1
 
 Enumerates all 0/1 assignments for a list of variables:
 
 ```clausal
 solve(X, Y) <- (
-    Sat(X ^ Y),
-    BoolLabeling([X, Y])
+    sat(X ^ Y),
+    bool_labeling([X, Y])
 )
 # yields (0, 1) and (1, 0)
 ```
@@ -103,8 +103,8 @@ solve(X, Y) <- (
     ```clausal
 # skip
     HalfAdder(X, Y, SUM, CARRY) <- (
-        Sat(BoolEq(SUM, X ^ Y)),
-        Sat(BoolEq(CARRY, X & Y))
+        sat(BoolEq(SUM, X ^ Y)),
+        sat(BoolEq(CARRY, X & Y))
     )
     ```
 
@@ -115,27 +115,27 @@ solve(X, Y) <- (
     ```clausal
 # skip
     PigeonHole() <- (
-        Sat(P11 | P12),
-        Sat(P21 | P22),
-        Sat(P31 | P32),
-        Sat(~(P11 & P21)),
-        Sat(~(P11 & P31)),
-        Sat(~(P21 & P31)),
-        Sat(~(P12 & P22)),
-        Sat(~(P12 & P32)),
-        Sat(~(P22 & P32)),
-        BoolLabeling([P11, P12, P21, P22, P31, P32])
+        sat(P11 | P12),
+        sat(P21 | P22),
+        sat(P31 | P32),
+        sat(~(P11 & P21)),
+        sat(~(P11 & P31)),
+        sat(~(P21 & P31)),
+        sat(~(P12 & P22)),
+        sat(~(P12 & P32)),
+        sat(~(P22 & P32)),
+        bool_labeling([P11, P12, P21, P22, P31, P32])
     )
     # no solutions
     ```
 
-    ### Circuit Equivalence
+    ### circuit Equivalence
 
     Verify De Morgan's law via tautology check:
 
     ```clausal
 # skip
-    Taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+    taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
     ```
 
     ---
@@ -162,7 +162,7 @@ Trail safety: every state change creates a new `BoolState` via `put_attr`, autom
 
 ### Connected-Component Merging
 
-When `Sat()` is called with variables that already have constraints, all connected BDDs are conjoined. This ensures multiple `Sat` calls sharing variables form a single constraint network.
+when `sat()` is called with variables that already have constraints, all connected BDDs are conjoined. This ensures multiple `sat` calls sharing variables form a single constraint network.
 
 ---
 
@@ -209,17 +209,17 @@ CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`Tr
     Tests are in `tests/test_clpb.py` (87 tests).
 
     - **BDD operations**: make_node, apply, restrict, _expr_to_bdd
-    - **Sat**: forcing, contradiction, tautology, sequential conjunction
-    - **Taut**: tautology/contradiction/indeterminate
-    - **SatCount**: various formulas
-    - **BoolLabeling**: unconstrained, constrained
+    - **sat**: forcing, contradiction, tautology, sequential conjunction
+    - **taut**: tautology/contradiction/indeterminate
+    - **sat_count**: various formulas
+    - **bool_labeling**: unconstrained, constrained
     - **Attribute hook**: bind, merge, incompatible
     - **Trail safety**: backtrack, labeling
     - **Half adder**: complete truth table
     - **Full adder**: 5 input combinations
     - **Pigeon-hole**: unsatisfiable
-    - **Circuit equivalence**: De Morgan's law
+    - **circuit equivalence**: De Morgan's law
 
 ---
 
-*See also: [Constraints](constraints.md) — `Dif/2` and CLP(ℤ) for integer constraints · [CLP(ℝ)](clpr.md) — real-domain constraint solving.*
+*See also: [Constraints](constraints.md) — `dif/2` and CLP(ℤ) for integer constraints · [CLP(ℝ)](clpr.md) — real-domain constraint solving.*

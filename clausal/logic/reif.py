@@ -5,7 +5,7 @@ These implement Neumerkel & Kral's reified equality/disequality pattern
 (arXiv:1607.01590) as simple-mode generator functions.
 
 Reified predicates always succeed, binding their last argument to True/False.
-When the relationship is undetermined, they explore both branches via
+when the relationship is undetermined, they explore both branches via
 backtracking with appropriate constraints.
 
 Built-ins implemented

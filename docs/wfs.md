@@ -4,7 +4,7 @@ Well-Founded Semantics provides a sound three-valued treatment of negation for [
 
 ---
 
-## When You Need WFS
+## when You Need WFS
 
 Standard negation-as-failure (`not Goal`) works fine when negation is not recursive — e.g., `not member(X, List)`. But when a program has **recursion through negation** on tabled predicates, NAF can loop infinitely or produce wrong answers.
 
@@ -114,7 +114,7 @@ even_node(X) <- (edge(X, Y), not odd_node(Y))
 odd_node(X) <- (edge(X, Y), not even_node(Y))
 ```
 
-In a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined**.
+in_ a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined**.
 
 ---
 
@@ -125,11 +125,11 @@ An answer is **undefined** when it is neither provably true nor provably false. 
 1. **Self-supporting cycles**: A depends on not-B, B depends on not-A. Neither can be resolved without the other.
 2. **Unfounded loops**: A depends on not-A (directly or through a chain).
 
-Undefined does NOT mean "error" — it is a legitimate third truth value. In game theory, undefined positions represent draws or positions where neither player has a winning strategy.
+Undefined does NOT mean "error" — it is a legitimate third truth value. in_ game theory, undefined positions represent draws or positions where neither player has a winning strategy.
 
 ### What to Do with Undefined Answers
 
-- **Treat as false**: In many practical programs, undefined answers can be safely treated as false (this is what `query()`/`call()` do — they yield undefined answers alongside true ones).
+- **Treat as false**: in_ many practical programs, undefined answers can be safely treated as false (this is what `query()`/`call()` do — they yield undefined answers alongside true ones).
 - **Inspect explicitly**: Use `query_wfs` when you need to distinguish true from undefined — e.g., for debugging, verification, or reporting.
 - **Restructure the program**: If you don't expect undefined answers, the cyclic dependency may indicate a modeling error.
 
@@ -152,7 +152,7 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
 
     ### Delayed Negation
 
-    When `not Goal` is encountered for a tabled predicate and the answer is not yet determined:
+    when `not Goal` is encountered for a tabled predicate and the answer is not yet determined:
 
     1. The negation is **delayed** rather than immediately evaluated
     2. A conditional answer is recorded: "this answer holds if the delayed condition resolves"
@@ -192,4 +192,4 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
 
 *See also: [Tabling](tabling.md) — SLG tabling, which WFS builds on.*
 *See also: [Directives](directives.md) — the `-table` directive.*
-*See also: [Constraints](constraints.md) — `Dif/2` for disequality constraints (a different approach to negation).*
+*See also: [Constraints](constraints.md) — `dif/2` for disequality constraints (a different approach to negation).*

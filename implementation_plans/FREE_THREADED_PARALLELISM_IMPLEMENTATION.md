@@ -304,7 +304,7 @@ prevent two threads from simultaneously binding the same variable.
 
 **Var-Term binding (lines 935-947) — t2 is Var:** Mirror of the above with `t2`.
 
-**Edge case: re-check after lock.** Between `var_deref()` returning an unbound variable and
+**Edge case: re-check after lock.** between `var_deref()` returning an unbound variable and
 the critical section being acquired, another thread may have bound that variable. The
 re-check pattern (`FT_ATOMIC_LOAD_PTR` inside the CS, recurse if bound) prevents
 double-binding.
@@ -687,7 +687,7 @@ class TestConcurrentDatabaseReads:
         mod = Module("test_concurrent")
         db = mod.db
 
-        # Assert 100 facts: num(0), num(1), ..., num(99)
+        # assertz 100 facts: num(0), num(1), ..., num(99)
         for i in range(100):
             v = Var()
             db.assertz(Clause(
@@ -756,7 +756,7 @@ class TestTrailIsolation:
 ## Phase 2: Thread-Safe Python Layer
 
 **Goal:** Python-level shared mutable state (Database, PredicateMeta, TableEntry) is safe
-for concurrent access. Write operations use copy-on-write semantics.
+for concurrent access. write operations use copy-on-write semantics.
 
 ### 2.1 Copy-on-write `Database` mutations
 
@@ -1412,7 +1412,7 @@ Add a new function near the existing `_collect_var_ids()` (~line 4978):
 
 ```python
 def _find_independent_groups(body_goals: list, var_context: dict) -> list[list[int]]:
-    """Partition body goals into maximal independent groups.
+    """partition body goals into maximal independent groups.
 
     Two goals are independent if they share no unbound variables.
     Returns a list of groups, each a list of goal indices.

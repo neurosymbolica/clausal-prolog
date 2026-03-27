@@ -73,7 +73,7 @@ Return a list to expand one item into multiple items. This is the most powerful 
 TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
 ```
 
-**Walkthrough**: When this rule is active and the module contains `color("red"),`:
+**Walkthrough**: when this rule is active and the module contains `color("red"),`:
 
 1. The expansion engine matches `color("red")` against `TERM`
 2. OUTPUT becomes `[color("red"), color("red")]`
@@ -90,7 +90,7 @@ The `q()` function creates term templates in expansion rules. It quotes a term s
 TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S)
 ```
 
-Variables inside `q()` are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
+Variables inside `q()` are shared between the pattern and the replacement. in_ the example above, `X` in the input pattern is the same `X` in both output terms.
 
 ### Module State Threading
 
@@ -196,7 +196,7 @@ The compiler pipeline orchestrates both expansions in sequence:
 
 ## Integration Example
 
-The goal expansion for regex auto-binding shows both systems working together. When you write:
+The goal expansion for regex auto-binding shows both systems working together. when you write:
 
 ```clausal
 -import_from(regex, [Match])

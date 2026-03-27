@@ -1,6 +1,6 @@
 """Tests for Phase 1: Coroutining & Resource Control.
 
-CallNth/2, CountAll/2, SetupCallCleanup/3, CallCleanup/2, Freeze/2, When/2.
+call_nth/2, count_all/2, setup_call_cleanup/3, call_cleanup/2, freeze/2, when/2.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify as Is, Evaluate,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Call, LoadName,
     Compound,
 )
@@ -44,66 +44,66 @@ def bindings(goal, var: Var, mod=None) -> list:
 
 
 def _call_nth_goal(inner_goal, n):
-    return Call(func=LoadName(name="CallNth"), args=[inner_goal, n], kwargs=[])
+    return Call(func=LoadName(name="call_nth"), args=[inner_goal, n], kwargs=[])
 
 
 def _count_all_goal(inner_goal, count):
-    return Call(func=LoadName(name="CountAll"), args=[inner_goal, count], kwargs=[])
+    return Call(func=LoadName(name="count_all"), args=[inner_goal, count], kwargs=[])
 
 
 def _between_goal(lo, hi, x):
-    return Call(func=LoadName(name="Between"), args=[lo, hi, x], kwargs=[])
+    return Call(func=LoadName(name="between"), args=[lo, hi, x], kwargs=[])
 
 
 def _in_goal(x, lst):
-    return Call(func=LoadName(name="In"), args=[x, lst], kwargs=[])
+    return Call(func=LoadName(name="in_"), args=[x, lst], kwargs=[])
 
 
 def _scc_goal(setup, call_g, cleanup):
-    return Call(func=LoadName(name="SetupCallCleanup"), args=[setup, call_g, cleanup], kwargs=[])
+    return Call(func=LoadName(name="setup_call_cleanup"), args=[setup, call_g, cleanup], kwargs=[])
 
 
 def _cc_goal(call_g, cleanup):
-    return Call(func=LoadName(name="CallCleanup"), args=[call_g, cleanup], kwargs=[])
+    return Call(func=LoadName(name="call_cleanup"), args=[call_g, cleanup], kwargs=[])
 
 
-# ── CallNth/2 ────────────────────────────────────────────────────────────────
+# ── call_nth/2 ────────────────────────────────────────────────────────────────
 
 
 class TestCallNth:
     def test_call_nth_basic(self):
-        """CallNth(Between(1, 10, X), 5) → X = 5"""
+        """call_nth(between(1, 10, X), 5) → X = 5"""
         x = Var()
         goal = _call_nth_goal(_between_goal(1, 10, x), 5)
         results = bindings(goal, x)
         assert results == [5]
 
     def test_call_nth_first(self):
-        """CallNth(In(X, [a, b, c]), 1) → X = a"""
+        """call_nth(in_(X, [a, b, c]), 1) → X = a"""
         x = Var()
         goal = _call_nth_goal(_in_goal(x, ["a", "b", "c"]), 1)
         results = bindings(goal, x)
         assert results == ["a"]
 
     def test_call_nth_last(self):
-        """CallNth(In(X, [a, b, c]), 3) → X = c"""
+        """call_nth(in_(X, [a, b, c]), 3) → X = c"""
         x = Var()
         goal = _call_nth_goal(_in_goal(x, ["a", "b", "c"]), 3)
         results = bindings(goal, x)
         assert results == ["c"]
 
     def test_call_nth_too_few(self):
-        """CallNth(Between(1, 3, X), 4) → fails (only 3 solutions)"""
+        """call_nth(between(1, 3, X), 4) → fails (only 3 solutions)"""
         x = Var()
         goal = _call_nth_goal(_between_goal(1, 3, x), 4)
         results = solutions_of(goal)
         assert results == []
 
     def test_call_nth_n_is_var(self):
-        """CallNth with N as a variable bound to a value."""
+        """call_nth with N as a variable bound to a value."""
         x = Var()
         n = Var()
-        # (N is 2, CallNth(In(X, [a, b, c]), N))
+        # (N is 2, call_nth(in_(X, [a, b, c]), N))
         goal = And(
             left=Is(left=n, right=2),
             right=_call_nth_goal(_in_goal(x, ["a", "b", "c"]), n),
@@ -112,46 +112,46 @@ class TestCallNth:
         assert results == ["b"]
 
     def test_call_nth_zero_raises(self):
-        """CallNth with N=0 raises type error."""
+        """call_nth with N=0 raises type error."""
         x = Var()
         goal = _call_nth_goal(_between_goal(1, 5, x), 0)
         with pytest.raises(LogicException):
             solutions_of(goal)
 
     def test_call_nth_negative_raises(self):
-        """CallNth with N=-1 raises type error."""
+        """call_nth with N=-1 raises type error."""
         x = Var()
         goal = _call_nth_goal(_between_goal(1, 5, x), -1)
         with pytest.raises(LogicException):
             solutions_of(goal)
 
     def test_call_nth_non_integer_raises(self):
-        """CallNth with N as a string raises type error."""
+        """call_nth with N as a string raises type error."""
         x = Var()
         goal = _call_nth_goal(_between_goal(1, 5, x), "five")
         with pytest.raises(LogicException):
             solutions_of(goal)
 
     def test_call_nth_fail_goal(self):
-        """CallNth(fail, 1) → fails"""
+        """call_nth(fail, 1) → fails"""
         goal = _call_nth_goal(False, 1)
         results = solutions_of(goal)
         assert results == []
 
     def test_call_nth_single_solution(self):
-        """CallNth(X is 42, 1) → X = 42"""
+        """call_nth(X is 42, 1) → X = 42"""
         x = Var()
         goal = _call_nth_goal(Is(left=x, right=42), 1)
         results = bindings(goal, x)
         assert results == [42]
 
 
-# ── CountAll/2 ───────────────────────────────────────────────────────────────
+# ── count_all/2 ───────────────────────────────────────────────────────────────
 
 
 class TestCountAll:
     def test_count_all_basic(self):
-        """CountAll(In(_, [a, b, c]), N) → N = 3"""
+        """count_all(in_(_, [a, b, c]), N) → N = 3"""
         n = Var()
         x = Var()
         goal = _count_all_goal(_in_goal(x, ["a", "b", "c"]), n)
@@ -159,14 +159,14 @@ class TestCountAll:
         assert results == [3]
 
     def test_count_all_empty(self):
-        """CountAll(fail, N) → N = 0"""
+        """count_all(fail, N) → N = 0"""
         n = Var()
         goal = _count_all_goal(False, n)
         results = bindings(goal, n)
         assert results == [0]
 
     def test_count_all_between(self):
-        """CountAll(Between(1, 100, _), N) → N = 100"""
+        """count_all(between(1, 100, _), N) → N = 100"""
         n = Var()
         x = Var()
         goal = _count_all_goal(_between_goal(1, 100, x), n)
@@ -174,21 +174,21 @@ class TestCountAll:
         assert results == [100]
 
     def test_count_all_already_bound_correct(self):
-        """CountAll(In(_, [a, b, c]), 3) → succeeds"""
+        """count_all(in_(_, [a, b, c]), 3) → succeeds"""
         x = Var()
         goal = _count_all_goal(_in_goal(x, ["a", "b", "c"]), 3)
         results = solutions_of(goal)
         assert len(results) == 1
 
     def test_count_all_already_bound_wrong(self):
-        """CountAll(In(_, [a, b, c]), 5) → fails"""
+        """count_all(in_(_, [a, b, c]), 5) → fails"""
         x = Var()
         goal = _count_all_goal(_in_goal(x, ["a", "b", "c"]), 5)
         results = solutions_of(goal)
         assert results == []
 
     def test_count_all_with_filter(self):
-        """CountAll((In(X, [1,2,3,4,5]), X > 3), N) → N = 2"""
+        """count_all((in_(X, [1,2,3,4,5]), X > 3), N) → N = 2"""
         x = Var()
         n = Var()
         inner = And(
@@ -200,24 +200,24 @@ class TestCountAll:
         assert results == [2]
 
     def test_count_all_no_side_effects(self):
-        """CountAll does not leave bindings from the inner goal."""
+        """count_all does not leave bindings from the inner goal."""
         x = Var()
         n = Var()
         goal = _count_all_goal(_in_goal(x, [1, 2, 3]), n)
         t = Trail()
         mod = fresh_module()
         for _ in solve(goal, mod, t):
-            # x should still be unbound after CountAll
+            # x should still be unbound after count_all
             assert deref(x) is x
             assert deref(n) == 3
 
 
-# ── SetupCallCleanup/3 ──────────────────────────────────────────────────────
+# ── setup_call_cleanup/3 ──────────────────────────────────────────────────────
 
 
 class TestSetupCallCleanup:
     def test_scc_basic(self):
-        """SetupCallCleanup(S is 1, true, C is 2) — setup runs, cleanup runs."""
+        """setup_call_cleanup(S is 1, true, C is 2) — setup runs, cleanup runs."""
         s = Var()
         c = Var()
         goal = _scc_goal(
@@ -229,14 +229,14 @@ class TestSetupCallCleanup:
         assert len(results) == 1
 
     def test_scc_call_succeeds_cleanup_runs(self):
-        """When Call succeeds, Cleanup runs too."""
+        """when Call succeeds, Cleanup runs too."""
         log = []
 
         # We need to use compiled predicates to track side effects.
-        # Use a simpler approach: test with Between.
+        # Use a simpler approach: test with between.
         x = Var()
         result = Var()
-        # SetupCallCleanup(true, In(X, [1, 2]), Result is X)
+        # setup_call_cleanup(true, in_(X, [1, 2]), Result is X)
         # This should produce 2 solutions (X=1, X=2), cleanup runs each time
         goal = _scc_goal(
             True,
@@ -251,7 +251,7 @@ class TestSetupCallCleanup:
         assert 10 in vals or 20 in vals
 
     def test_scc_call_fails_cleanup_runs(self):
-        """When Call fails, Cleanup still runs, overall goal fails."""
+        """when Call fails, Cleanup still runs, overall goal fails."""
         c = Var()
         goal = _scc_goal(
             True,
@@ -262,7 +262,7 @@ class TestSetupCallCleanup:
         assert results == []  # overall fails because Call fails
 
     def test_scc_call_throws_cleanup_runs(self):
-        """When Call throws, Cleanup runs, exception re-raised."""
+        """when Call throws, Cleanup runs, exception re-raised."""
         c = Var()
         throw_goal = Call(func=LoadName(name="throw"), args=[
             Compound("my_error", ("oops",))
@@ -277,7 +277,7 @@ class TestSetupCallCleanup:
         assert exc_info.value.term.functor == "my_error"
 
     def test_scc_setup_fails_no_cleanup(self):
-        """When Setup fails, Cleanup does NOT run."""
+        """when Setup fails, Cleanup does NOT run."""
         c = Var()
         goal = _scc_goal(
             False,  # setup fails
@@ -288,24 +288,24 @@ class TestSetupCallCleanup:
         assert results == []  # whole goal fails silently
 
 
-# ── CallCleanup/2 ────────────────────────────────────────────────────────────
+# ── call_cleanup/2 ────────────────────────────────────────────────────────────
 
 
 class TestCallCleanup:
     def test_call_cleanup_basic(self):
-        """CallCleanup(true, true) — both succeed."""
+        """call_cleanup(true, true) — both succeed."""
         goal = _cc_goal(True, True)
         results = solutions_of(goal)
         assert len(results) == 1
 
     def test_call_cleanup_call_fails(self):
-        """CallCleanup(fail, true) — cleanup runs, overall fails."""
+        """call_cleanup(fail, true) — cleanup runs, overall fails."""
         goal = _cc_goal(False, True)
         results = solutions_of(goal)
         assert results == []
 
     def test_call_cleanup_call_throws(self):
-        """CallCleanup(throw(err), true) — cleanup runs, exception re-raised."""
+        """call_cleanup(throw(err), true) — cleanup runs, exception re-raised."""
         throw_goal = Call(func=LoadName(name="throw"), args=[
             Compound("err", ("test",))
         ], kwargs=[])
@@ -314,18 +314,18 @@ class TestCallCleanup:
             solutions_of(goal)
 
     def test_call_cleanup_with_solutions(self):
-        """CallCleanup(In(X, [a, b]), true) — produces solutions."""
+        """call_cleanup(in_(X, [a, b]), true) — produces solutions."""
         x = Var()
         goal = _cc_goal(_in_goal(x, ["a", "b"]), True)
         results = bindings(goal, x)
         assert results == ["a", "b"]
 
 
-# ── Freeze/2 ─────────────────────────────────────────────────────────────────
+# ── freeze/2 ─────────────────────────────────────────────────────────────────
 
 
 def _freeze_goal(x, goal):
-    return Call(func=LoadName(name="Freeze"), args=[x, goal], kwargs=[])
+    return Call(func=LoadName(name="freeze"), args=[x, goal], kwargs=[])
 
 
 def _unify_goal(x, y):
@@ -335,10 +335,10 @@ def _unify_goal(x, y):
 
 class TestFreeze:
     def test_freeze_already_bound(self):
-        """Freeze(X, Goal) where X is already bound → runs Goal immediately."""
+        """freeze(X, Goal) where X is already bound → runs Goal immediately."""
         x = Var()
         y = Var()
-        # (X is 5, Freeze(X, Y is X))
+        # (X is 5, freeze(X, Y is X))
         goal = And(
             left=_unify_goal(x, 5),
             right=_freeze_goal(x, _unify_goal(y, x)),
@@ -347,10 +347,10 @@ class TestFreeze:
         assert results == [5]
 
     def test_freeze_then_bind(self):
-        """Freeze(X, Goal), X is val → Goal fires when X is bound."""
+        """freeze(X, Goal), X is val → Goal fires when X is bound."""
         x = Var()
         y = Var()
-        # (Freeze(X, Y is X), X is hello)
+        # (freeze(X, Y is X), X is hello)
         goal = And(
             left=_freeze_goal(x, _unify_goal(y, x)),
             right=_unify_goal(x, "hello"),
@@ -361,7 +361,7 @@ class TestFreeze:
     def test_freeze_goal_success(self):
         """Frozen goal succeeds → unification succeeds."""
         x = Var()
-        # Freeze(X, X > 0), X is 5
+        # freeze(X, X > 0), X is 5
         goal = And(
             left=_freeze_goal(x, Gt(left=x, right=0)),
             right=_unify_goal(x, 5),
@@ -372,7 +372,7 @@ class TestFreeze:
     def test_freeze_goal_failure(self):
         """Frozen goal fails → unification fails."""
         x = Var()
-        # Freeze(X, X > 0), X is -1
+        # freeze(X, X > 0), X is -1
         goal = And(
             left=_freeze_goal(x, Gt(left=x, right=0)),
             right=_unify_goal(x, -1),
@@ -385,7 +385,7 @@ class TestFreeze:
         x = Var()
         y = Var()
         z = Var()
-        # Freeze(X, Y is X), Freeze(X, Z is X), X is 42
+        # freeze(X, Y is X), freeze(X, Z is X), X is 42
         goal = And(
             left=And(
                 left=_freeze_goal(x, _unify_goal(y, x)),
@@ -400,10 +400,10 @@ class TestFreeze:
             assert deref(z) == 42
 
     def test_freeze_on_bound_var_immediate(self):
-        """Freeze on already-bound variable executes goal immediately."""
+        """freeze on already-bound variable executes goal immediately."""
         x = Var()
         result = Var()
-        # X is 10, Freeze(X, Result is X)
+        # X is 10, freeze(X, Result is X)
         goal = And(
             left=_unify_goal(x, 10),
             right=_freeze_goal(x, _unify_goal(result, x)),
@@ -412,13 +412,13 @@ class TestFreeze:
         assert results == [10]
 
     def test_freeze_backtrack_removes_attr(self):
-        """Freeze + backtracking: trail undo removes the attribute."""
+        """freeze + backtracking: trail undo removes the attribute."""
         x = Var()
-        # Freeze attaches attr; if we backtrack, attr is removed
-        # (Freeze(X, X > 0) ; true), X is -1
+        # freeze attaches attr; if we backtrack, attr is removed
+        # (freeze(X, X > 0) ; true), X is -1
         # The disjunction first tries freeze branch, then true branch
-        # When X is -1 in the freeze branch, it should fail
-        # In the true branch (no freeze), it should succeed
+        # when X is -1 in the freeze branch, it should fail
+        # in_ the true branch (no freeze), it should succeed
         goal = And(
             left=Or(
                 left=_freeze_goal(x, Gt(left=x, right=0)),
@@ -432,24 +432,24 @@ class TestFreeze:
         assert len(results) == 1
 
 
-# ── When/2 ───────────────────────────────────────────────────────────────────
+# ── when/2 ───────────────────────────────────────────────────────────────────
 
 
 def _when_goal(cond, goal):
-    return Call(func=LoadName(name="When"), args=[cond, goal], kwargs=[])
+    return Call(func=LoadName(name="when"), args=[cond, goal], kwargs=[])
 
 
 def _is_bound_cond(x):
-    return Call(func=LoadName(name="IsBound"), args=[x], kwargs=[])
+    return Call(func=LoadName(name="nonvar"), args=[x], kwargs=[])
 
 
 def _is_ground_cond(x):
-    return Call(func=LoadName(name="IsGround"), args=[x], kwargs=[])
+    return Call(func=LoadName(name="ground"), args=[x], kwargs=[])
 
 
 class TestWhen:
     def test_when_is_bound_already(self):
-        """When(IsBound(X), Goal) where X is already bound → runs immediately."""
+        """when(nonvar(X), Goal) where X is already bound → runs immediately."""
         x = Var()
         y = Var()
         goal = And(
@@ -460,7 +460,7 @@ class TestWhen:
         assert results == ["hello"]
 
     def test_when_is_bound_deferred(self):
-        """When(IsBound(X), Goal), X = val → Goal fires when X is bound."""
+        """when(nonvar(X), Goal), X = val → Goal fires when X is bound."""
         x = Var()
         y = Var()
         goal = And(
@@ -471,12 +471,12 @@ class TestWhen:
         assert results == ["world"]
 
     def test_when_conjunction(self):
-        """When((IsBound(X), IsBound(Y)), Goal) — fires when both are bound."""
+        """when((nonvar(X), nonvar(Y)), Goal) — fires when both are bound."""
         x = Var()
         y = Var()
         result = Var()
         cond = And(left=_is_bound_cond(x), right=_is_bound_cond(y))
-        # When both X and Y are bound, result = X + Y (but we'll just test binding)
+        # when both X and Y are bound, result = X + Y (but we'll just test binding)
         goal = And(
             left=_when_goal(cond, _unify_goal(result, "done")),
             right=And(
@@ -488,7 +488,7 @@ class TestWhen:
         assert results == ["done"]
 
     def test_when_conjunction_partial(self):
-        """When((IsBound(X), IsBound(Y)), Goal) — Y not bound yet, Goal not fired."""
+        """when((nonvar(X), nonvar(Y)), Goal) — Y not bound yet, Goal not fired."""
         x = Var()
         y = Var()
         result = Var()
@@ -503,13 +503,13 @@ class TestWhen:
         for _ in solve(goal, mod, t):
             # result is NOT bound because Y is still unbound
             assert deref(result) is result or deref(result) == "done"
-            # Actually: when X is bound, When(IsBound(Y), Goal) is installed.
+            # Actually: when X is bound, when(nonvar(Y), Goal) is installed.
             # Since Y isn't bound, result stays unbound.
             r = deref(result)
             assert r is result  # still unbound
 
     def test_when_is_ground_already(self):
-        """When(IsGround(f(1, 2)), Goal) — already ground → immediate."""
+        """when(ground(f(1, 2)), Goal) — already ground → immediate."""
         x = Var()
         result = Var()
         goal = And(
@@ -520,7 +520,7 @@ class TestWhen:
         assert results == ["grounded"]
 
     def test_when_is_ground_deferred(self):
-        """When(IsGround(X), Goal), X = 5 → Goal fires when X is ground."""
+        """when(ground(X), Goal), X = 5 → Goal fires when X is ground."""
         x = Var()
         result = Var()
         goal = And(
@@ -531,7 +531,7 @@ class TestWhen:
         assert results == ["grounded"]
 
     def test_when_is_ground_nested(self):
-        """When(IsGround([X, Y]), Goal) — fires when both X and Y are ground."""
+        """when(ground([X, Y]), Goal) — fires when both X and Y are ground."""
         x = Var()
         y = Var()
         result = Var()
@@ -547,7 +547,7 @@ class TestWhen:
         assert results == ["all_ground"]
 
     def test_when_goal_failure(self):
-        """When(IsBound(X), Goal) where Goal fails → unification fails."""
+        """when(nonvar(X), Goal) where Goal fails → unification fails."""
         x = Var()
         goal = And(
             left=_when_goal(_is_bound_cond(x), Gt(left=x, right=100)),
@@ -561,11 +561,11 @@ class TestWhen:
 
 
 def _find_all_goal(template, inner, bag):
-    return Call(func=LoadName(name="FindAll"), args=[template, inner, bag], kwargs=[])
+    return Call(func=LoadName(name="findall"), args=[template, inner, bag], kwargs=[])
 
 
 def _once_goal(inner):
-    return Call(func=LoadName(name="Once"), args=[inner], kwargs=[])
+    return Call(func=LoadName(name="once"), args=[inner], kwargs=[])
 
 
 def _catch_goal(goal, catcher, recovery):
@@ -576,7 +576,7 @@ class TestMetaPredicateNesting:
     """Verify that new special forms nest correctly inside other meta-predicates."""
 
     def test_find_all_call_nth(self):
-        """FindAll(X, CallNth(In(X, List), 2), Bag) -> [20]"""
+        """findall(X, call_nth(in_(X, List), 2), Bag) -> [20]"""
         x = Var()
         bag = Var()
         goal = _find_all_goal(
@@ -588,7 +588,7 @@ class TestMetaPredicateNesting:
         assert results == [[20]]
 
     def test_find_all_count_all(self):
-        """FindAll(N, CountAll(In(_, List), N), Bag) -> [3]"""
+        """findall(N, count_all(in_(_, List), N), Bag) -> [3]"""
         x = Var()
         n = Var()
         bag = Var()
@@ -601,14 +601,14 @@ class TestMetaPredicateNesting:
         assert results == [[3]]
 
     def test_once_call_nth(self):
-        """Once(CallNth(In(X, List), 1)) -> X = 10"""
+        """once(call_nth(in_(X, List), 1)) -> X = 10"""
         x = Var()
         goal = _once_goal(_call_nth_goal(_in_goal(x, [10, 20, 30]), 1))
         results = bindings(goal, x)
         assert results == [10]
 
     def test_once_count_all(self):
-        """Once(CountAll(In(_, List), N)) -> N = 3"""
+        """once(count_all(in_(_, List), N)) -> N = 3"""
         x = Var()
         n = Var()
         goal = _once_goal(_count_all_goal(_in_goal(x, [1, 2, 3]), n))
@@ -616,7 +616,7 @@ class TestMetaPredicateNesting:
         assert results == [3]
 
     def test_catch_call_nth_type_error(self):
-        """catch(CallNth(Goal, 0), Error, Recovery) catches type error."""
+        """catch(call_nth(Goal, 0), Error, Recovery) catches type error."""
         x = Var()
         error = Var()
         goal = _catch_goal(
@@ -628,7 +628,7 @@ class TestMetaPredicateNesting:
         assert len(results) == 1
 
     def test_call_nth_inside_freeze(self):
-        """Freeze(X, CallNth(In(Y, [X]), 1)), X = 42 -> Y = 42"""
+        """freeze(X, call_nth(in_(Y, [X]), 1)), X = 42 -> Y = 42"""
         x = Var()
         y = Var()
         goal = And(
@@ -639,7 +639,7 @@ class TestMetaPredicateNesting:
         assert results == [42]
 
     def test_scc_inside_find_all(self):
-        """FindAll(X, SetupCallCleanup(true, In(X, [a,b]), true), Bag) -> [a, b]"""
+        """findall(X, setup_call_cleanup(true, in_(X, [a,b]), true), Bag) -> [a, b]"""
         x = Var()
         bag = Var()
         inner = _scc_goal(True, _in_goal(x, ["a", "b"]), True)
@@ -648,7 +648,7 @@ class TestMetaPredicateNesting:
         assert results == [["a", "b"]]
 
     def test_freeze_inside_find_all(self):
-        """FindAll(Y, (Freeze(X, Y is X), X is 99), Bag) -> [99]"""
+        """findall(Y, (freeze(X, Y is X), X is 99), Bag) -> [99]"""
         x = Var()
         y = Var()
         bag = Var()
@@ -661,7 +661,7 @@ class TestMetaPredicateNesting:
         assert results == [[99]]
 
     def test_count_all_inside_count_all(self):
-        """CountAll(CountAll(In(_, [1,2]), _), N) -> N = 1"""
+        """count_all(count_all(in_(_, [1,2]), _), N) -> N = 1"""
         x = Var()
         inner_n = Var()
         n = Var()
@@ -673,7 +673,7 @@ class TestMetaPredicateNesting:
         assert results == [1]
 
     def test_call_cleanup_inside_once(self):
-        """Once(CallCleanup(In(X, [a, b, c]), true)) -> X = a"""
+        """once(call_cleanup(in_(X, [a, b, c]), true)) -> X = a"""
         x = Var()
         goal = _once_goal(_cc_goal(_in_goal(x, ["a", "b", "c"]), True))
         results = bindings(goal, x)

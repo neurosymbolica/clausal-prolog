@@ -37,7 +37,7 @@ class Clause:
 
 
 class Database:
-    """In-memory store mapping (functor, arity) → clause list."""
+    """in_-memory store mapping (functor, arity) → clause list."""
 
     def __init__(self, module_dict: dict | None = None) -> None:
         self._clauses: dict[tuple[str, int], list[Clause]] = {}
@@ -122,7 +122,7 @@ class Database:
             self._signatures[key] = param_names
         elif existing != param_names:
             warnings.warn(
-                f"Signature conflict for {functor}/{arity}: "
+                f"signature conflict for {functor}/{arity}: "
                 f"registered {existing}, got {param_names}"
             )
 
@@ -242,11 +242,11 @@ class Module:
         self.module_dict: dict | None = module_dict
 
     def assert_fact(self, term: Any) -> None:
-        """Assert a fact (clause with no body goals)."""
+        """assertz a fact (clause with no body goals)."""
         self.db.assertz(Clause(head=term, body=[]))
 
     def define_predicate(self, predicate_node: Any) -> None:
-        """Assert one clause from a Predicate node produced by the transformer.
+        """assertz one clause from a Predicate node produced by the transformer.
 
         Flattens the body And-chain into a flat list of goal terms and stores
         the resulting Clause.  The dispatch_fn slot is left None until the
@@ -355,7 +355,7 @@ def head_key(head: Any) -> tuple[str, int]:
     Handles:
     - Compound(functor, args)              → (functor, len(args))
     - Call(func=LoadName(name), args)      → (name, len(args))
-    - Functor dataclass instance           → (type.__name__, len(fields))
+    - functor dataclass instance           → (type.__name__, len(fields))
     """
     if isinstance(head, Compound):
         f = head.functor
@@ -392,14 +392,14 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
         return tuple(head.keys())
     if not is_term_instance(head):
         return None
-    # Exclude built-in term types that happen to be dataclasses.
+    # exclude built-in term types that happen to be dataclasses.
     if isinstance(head, (Compound, Call)):
         return None
     return term_field_names(head)
 
 
 def _flatten_body(body: Any) -> list:
-    """Flatten a nested And-chain or TupleLiteral body into a flat goal list.
+    """flatten a nested And-chain or TupleLiteral body into a flat goal list.
 
     And(And(a, b), c)                →  [a, b, c]
     TupleLiteral([a, b, c])          →  [a, b, c]

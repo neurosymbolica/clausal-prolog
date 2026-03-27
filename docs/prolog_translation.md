@@ -81,10 +81,10 @@ for item in pmodule.items:
 | Clausal | Prolog | Rule |
 |---|---|---|
 | `FooBar` | `foo_bar` | PascalCase → snake_case |
-| `AllDifferent` | `all_different` | PascalCase → snake_case |
+| `all_different` | `all_different` | PascalCase → snake_case |
 | `DCGRule` | `dcg_rule` | Acronym runs split correctly |
-| `FindAll` | `findall` | Builtin name map overrides |
-| `TimeGoal` | `time` | Builtin name map (SWI/Scryer) |
+| `findall` | `findall` | Builtin name map overrides |
+| `time_goal` | `time` | Builtin name map (SWI/Scryer) |
 
 ### Variable names
 
@@ -237,12 +237,12 @@ from clausal.tools.prolog_to_clausal import prolog_ast_to_clausal, emit_clausal_
 clausal_text = prolog_ast_to_clausal(pmodule)
 ```
 
-### Reverse translation rules
+### reverse translation rules
 
 | Prolog | Clausal | Rule |
 |---|---|---|
 | `foo_bar(X)` | `FooBar(X)` | snake_case → PascalCase |
-| `findall(...)` | `FindAll(...)` | Reverse builtin name map |
+| `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Disequality |
 | `Y is X * 2` | `Y == X * 2` | Arithmetic constraint |
@@ -364,11 +364,11 @@ The roundtrip validation (Phase 4) verifies these properties when translating th
 
 The translator **rejects** Prolog programs containing cut or if-then-else with a `PrologTranslationError`, rather than producing semantically incorrect output:
 
-- **Cut (`!/0`)** — breaks declarative semantics. Use `Once/1`, `dif/2`, indexing, or constraints.
+- **Cut (`!/0`)** — breaks declarative semantics. Use `once/1`, `dif/2`, indexing, or constraints.
 - **If-then-else (`(C -> T ; E)`)** — defined in terms of cut in ISO. Use reified if-then-else (`THEN if COND else ELSE`), separate clauses with `dif/2` guards, or constraints.
 - **Bare if-then (`(C -> T)`)** — same as above.
 
-In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`THEN if COND else ELSE`) is also rejected because its monotonic three-valued semantics cannot be faithfully represented by Prolog's committed-choice `(C -> T ; E)`.
+in_ the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`THEN if COND else ELSE`) is also rejected because its monotonic three-valued semantics cannot be faithfully represented by Prolog's committed-choice `(C -> T ; E)`.
 
 ### Known roundtrip limitations
 

@@ -171,15 +171,15 @@ already uses **plain Python comparison operators** without any prefix:
 
 ```
 % Clausal CLP(FD) — already uses natural operators:
-InDomain(X_, 1, 10),
+in_domain(X_, 1, 10),
 X_ == Y_ + 1,
 X_ < 5,
 X_ >= 0,
-Label([X_, Y_])
+label([X_, Y_])
 ```
 
 There is no `#` prefix. The sole thing that identifies a variable as belonging to CLP(FD)
-is that it has an `"fd"` attribute (attached by `InDomain`). The comparison operators
+is that it has an `"fd"` attribute (attached by `in_domain`). The comparison operators
 inspect variables at runtime and post the right kind of constraint.
 
 This means we can achieve **fully unified syntax** between CLP(FD) and CLP(R): the same
@@ -200,8 +200,8 @@ determined by how the variable was declared, not by which operator was used.
 | SWI CLP(R) | — | `{X >= 0, X =< 10}` (implicit) |
 | CLP(BNR) | `X::integer(1, 10)` | `X::real(0.0, 1.0)` |
 | ECLiPSe IC | `X :: 1..10` | `X :: 1.0..10.0` |
-| **clausal (existing FD)** | `InDomain(X_, 1, 10)` | — |
-| **clausal (proposed R)** | `InDomain(X_, 1, 10)` | `InReal(X_, 0.0, 1.0)` |
+| **clausal (existing FD)** | `in_domain(X_, 1, 10)` | — |
+| **clausal (proposed R)** | `in_domain(X_, 1, 10)` | `in_real(X_, 0.0, 1.0)` |
 
 #### Linear constraints
 
@@ -231,8 +231,8 @@ determined by how the variable was declared, not by which operator was used.
 | SWI CLP(R) | — | `bb_inf/4` (optimization only) |
 | CLP(BNR) | `solve([X, Y])` | `solve([X, Y])` (bisection) |
 | ECLiPSe IC | `labeling([X, Y])` | `locate([X, Y], 1.0e-6)` |
-| **clausal (existing FD)** | `Label([X_, Y_])` | — |
-| **clausal (proposed R)** | `Label([X_, Y_])` | `LabelReal([X_, Y_])` |
+| **clausal (existing FD)** | `label([X_, Y_])` | — |
+| **clausal (proposed R)** | `label([X_, Y_])` | `label_real([X_, Y_])` |
 
 ### Complete worked examples
 
@@ -241,10 +241,10 @@ determined by how the variable was declared, not by which operator was used.
 ```
 % Find integer Pythagorean triples up to 20
 pythagorean(A_, B_, C_) <- (
-    InDomain([A_, B_, C_], 1, 20),
+    in_domain([A_, B_, C_], 1, 20),
     A_ * A_ + B_ * B_ == C_ * C_,
     A_ <= B_,
-    Label([A_, B_, C_])
+    label([A_, B_, C_])
 )
 % → (3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (9, 12, 15), ...
 ```
@@ -254,10 +254,10 @@ pythagorean(A_, B_, C_) <- (
 ```
 % Find a point on the unit circle in the first quadrant
 unit_circle(X_, Y_) <- (
-    InReal(X_, 0.0, 1.0),
-    InReal(Y_, 0.0, 1.0),
+    in_real(X_, 0.0, 1.0),
+    in_real(Y_, 0.0, 1.0),
     X_ * X_ + Y_ * Y_ == 1.0,
-    LabelReal([X_, Y_])
+    label_real([X_, Y_])
 )
 % → X ≈ 0.7071067811865476, Y ≈ 0.7071067811865476  (among others)
 ```
@@ -267,16 +267,16 @@ unit_circle(X_, Y_) <- (
 ```
 % Integer version (CLP(FD))
 between_int(X_) <- (
-    InDomain(X_, 3, 7),
+    in_domain(X_, 3, 7),
     X_ != 5,
-    Label([X_])
+    label([X_])
 )
 % → X = 3, 4, 6, 7
 
 % Real version (proposed CLP(R))
 between_real(X_) <- (
-    InReal(X_, 3.0, 7.0),
-    LabelReal([X_])
+    in_real(X_, 3.0, 7.0),
+    label_real([X_])
 )
 % → interval narrowed to [3.0, 7.0], bisection yields points within
 ```
@@ -286,12 +286,12 @@ between_real(X_) <- (
 ```
 % Worker takes at most 8 hours; rate is a real multiplier
 task(Hours_, Cost_) <- (
-    InDomain(Hours_, 1, 8),           % integer hours (FD)
-    InReal(Cost_, 10.0, 100.0),       % real cost per hour (R)
+    in_domain(Hours_, 1, 8),           % integer hours (FD)
+    in_real(Cost_, 10.0, 100.0),       % real cost per hour (R)
     Cost_ >= Hours_ * 12.5,           % constraint mixes FD var + real constant
     Hours_ <= 6,
-    Label([Hours_]),
-    LabelReal([Cost_])
+    label([Hours_]),
+    label_real([Cost_])
 )
 % Promotes Hours_ to real interval when mixed constraint is posted
 ```
@@ -301,9 +301,9 @@ task(Hours_, Cost_) <- (
 ```
 % Find angle X (in radians) where sin(X) = 0.5, in [0, π]
 half_sine(X_) <- (
-    InReal(X_, 0.0, 3.141592653589793),
+    in_real(X_, 0.0, 3.141592653589793),
     Sin(X_) == 0.5,
-    LabelReal([X_])
+    label_real([X_])
 )
 % → X ≈ 0.5235987755982988  (π/6)
 %   X ≈ 2.617993877991494   (5π/6)
@@ -314,11 +314,11 @@ half_sine(X_) <- (
 ```
 % Solve  2x + 3y = 12,  x - y = 1
 linear_system(X_, Y_) <- (
-    InReal(X_),
-    InReal(Y_),
+    in_real(X_),
+    in_real(Y_),
     2.0 * X_ + 3.0 * Y_ == 12.0,
     X_ - Y_ == 1.0,
-    LabelReal([X_, Y_])
+    label_real([X_, Y_])
 )
 % → X ≈ 3.0, Y ≈ 2.0
 ```
@@ -713,7 +713,7 @@ def fd_eq(l, r, trail: Trail) -> bool:
 
 Because `float` literals also trigger real dispatch, a constraint like
 `X_ * X_ == 2.0` (with `X_` undeclared) will automatically enter CLP(R) without
-requiring `InReal(X_)`. For full control, declare the variable explicitly.
+requiring `in_real(X_)`. For full control, declare the variable explicitly.
 
 **No compiler changes are needed.** The compiler already emits calls to `fd_eq`, `fd_lt`,
 etc. After this change they become smart dispatchers.
@@ -723,29 +723,29 @@ etc. After this change they become smart dispatchers.
 ### Phase 3 — New builtins in `clausal/logic/builtins/constraints.py`
 
 ```python
-@_builtin("InReal", 1)
+@_builtin("in_real", 1)
 def _in_real__1(var_or_list, trail, k):
-    """InReal(Var) — declare real variable with unbounded domain [-inf, +inf]."""
+    """in_real(Var) — declare real variable with unbounded domain [-inf, +inf]."""
     from clausal.logic.clpr import in_real
     if in_real(var_or_list, -math.inf, math.inf, trail):
         yield None
 
-@_builtin("InReal", 3)
+@_builtin("in_real", 3)
 def _in_real__3(var_or_list, lo, hi, trail, k):
-    """InReal(Var, Lo, Hi) — declare real variable with domain [Lo, Hi]."""
+    """in_real(Var, Lo, Hi) — declare real variable with domain [Lo, Hi]."""
     from clausal.logic.clpr import in_real
     if in_real(var_or_list, float(lo), float(hi), trail):
         yield None
 
-@_builtin("LabelReal", 1)
+@_builtin("label_real", 1)
 def _label_real__1(vars_list, trail, k):
-    """LabelReal(Vars) — bisect real intervals to IEEE float precision."""
+    """label_real(Vars) — bisect real intervals to IEEE float precision."""
     from clausal.logic.clpr import label_real
     yield from label_real(vars_list, trail)
 
-@_builtin("LabelReal", 2)
+@_builtin("label_real", 2)
 def _label_real__2(vars_list, eps, trail, k):
-    """LabelReal(Vars, Eps) — bisect until interval width <= Eps."""
+    """label_real(Vars, Eps) — bisect until interval width <= Eps."""
     from clausal.logic.clpr import label_real
     yield from label_real(vars_list, trail, eps=float(eps))
 ```
@@ -758,7 +758,7 @@ def _label_real__2(vars_list, eps, trail, k):
 @_builtin("Exp", 2)    # Exp(X_, Y_)  —  Y == exp(X)
 @_builtin("Log", 2)    # Log(X_, Y_)  —  Y == log(X)
 @_builtin("Sqrt", 2)   # Sqrt(X_, Y_) —  Y == sqrt(X)
-@_builtin("Abs", 2)    # Abs(X_, Y_)  —  Y == abs(X)
+@_builtin("abs_", 2)    # abs_(X_, Y_)  —  Y == abs(X)
 ```
 
 Alternatively, transcendental constraints can be expressed via expression syntax if we
@@ -989,7 +989,7 @@ class TestMixedFDReal:
 
     def test_compiler_integration_real(self):
         # Integration test via .clausal source
-        # InReal(X_, 0.0, 1.0), X_ == 0.5  → succeeds with X=0.5
+        # in_real(X_, 0.0, 1.0), X_ == 0.5  → succeeds with X=0.5
         ...
 ```
 
@@ -998,25 +998,25 @@ class TestMixedFDReal:
 ```
 % tests/fixtures/clpr_basic.clausal
 test_linear(X_, Y_) <- (
-    InReal(X_, 0.0, 10.0),
-    InReal(Y_, 0.0, 10.0),
+    in_real(X_, 0.0, 10.0),
+    in_real(Y_, 0.0, 10.0),
     X_ + Y_ == 5.0,
     X_ == 2.0,
-    LabelReal([X_, Y_])
+    label_real([X_, Y_])
 )
 
 test_unit_circle(X_, Y_) <- (
-    InReal(X_, 0.0, 1.0),
-    InReal(Y_, 0.0, 1.0),
+    in_real(X_, 0.0, 1.0),
+    in_real(Y_, 0.0, 1.0),
     X_ * X_ + Y_ * Y_ == 1.0,
-    LabelReal([X_, Y_], 1.0e-9)
+    label_real([X_, Y_], 1.0e-9)
 )
 
 test_unbounded(X_) <- (
-    InReal(X_),
+    in_real(X_),
     X_ >= 3.0,
     X_ <= 7.0,
-    LabelReal([X_], 1.0e-6)
+    label_real([X_], 1.0e-6)
 )
 ```
 
@@ -1068,7 +1068,7 @@ with the existing CLP(FD)/CLP(B) infrastructure.
 |---|---|---|
 | Create | `clausal/logic/clpr.py` | Core CLP(R) solver (~600 lines) |
 | Modify | `clausal/logic/clpfd.py` | Add `_any_real` + dispatch shim (~30 lines) |
-| Modify | `clausal/logic/builtins/constraints.py` | `InReal`, `LabelReal`, transcendental builtins |
+| Modify | `clausal/logic/builtins/constraints.py` | `in_real`, `label_real`, transcendental builtins |
 | Create | `tests/test_clpr.py` | Full test suite |
 | Create | `tests/fixtures/clpr_basic.clausal` | Compiler integration fixtures |
 | Create | `docs/clpr.md` | User documentation |

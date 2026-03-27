@@ -5,7 +5,7 @@
 # ISO §8.5.3 — =../2 (univ)
 #
 # Note: many ISO tests for these builtins involve passing compound terms
-# as data (e.g. Functor(f(a,b), Name, Arity)).  In clausal, f(a,b) in
+# as data (e.g. functor(f(a,b), Name, Arity)).  in_ clausal, f(a,b) in
 # goal position is a predicate call, not a term.  Only construction-mode
 # tests and tests with string/integer arguments can be expressed here.
 # Inspection-mode tests remain in the Python test file.
@@ -16,22 +16,22 @@
 
 # ── functor/3 — construction mode ────────────────────────────────────────────
 
-Test("construct atom: Functor(T, a, 0)") <- (
-    Functor(_t, a, 0),
+Test("construct atom: functor(T, a, 0)") <- (
+    functor(_t, a, 0),
     _t == a
 )
 
 # ── functor/3 — decomposition of atoms ───────────────────────────────────────
 # Strings are atoms; functor/3 can decompose them
 
-Test("decompose atom: Functor('Hello', Name, Arity)") <- (
-    Functor(Hello, _n, _a),
+Test("decompose atom: functor('Hello', Name, Arity)") <- (
+    functor(Hello, _n, _a),
     _n == Hello,
     _a == 0
 )
 
 Test("decompose empty string") <- (
-    Functor("", _n, _a),
+    functor("", _n, _a),
     _n == "",
     _a == 0
 )
@@ -39,18 +39,18 @@ Test("decompose empty string") <- (
 # ── univ/2 — construction from list ──────────────────────────────────────────
 
 Test("construct atom from list: T =.. ['a']") <- (
-    Unpack(_t, [a]),
+    unpack(_t, [a]),
     _t == a
 )
 
 # ── univ/2 — decomposition of atoms ──────────────────────────────────────────
 
 Test("decompose atom: 'a' =.. X") <- (
-    Unpack(a, _x),
+    unpack(a, _x),
     _x == [a]
 )
 
 Test("decompose string: 'Hello' =.. X") <- (
-    Unpack(Hello, _x),
+    unpack(Hello, _x),
     _x == [Hello]
 )

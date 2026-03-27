@@ -40,7 +40,7 @@ class TestSingleStarPassthrough:
         self.mod = _load_clausal_module("lists.clausal")
 
     def test_append_first_arg_ground_seglist(self):
-        """Append([1, *V_BOUND], [3], R) where the SegList walks to [1, 2]."""
+        """append([1, *V_BOUND], [3], R) where the SegList walks to [1, 2]."""
         v = Var()
         trail = Trail()
         unify(v, [2], trail)
@@ -48,11 +48,11 @@ class TestSingleStarPassthrough:
         assert sl.is_ground()
 
         r = Var()
-        results = [deref(r) for _ in call("Append", sl, [3], r, module=self.mod)]
+        results = [deref(r) for _ in call("append", sl, [3], r, module=self.mod)]
         assert results == [[1, 2, 3]]
 
     def test_append_third_arg_ground_seglist(self):
-        """Append(A, B, ground_seglist) deconstructing correctly."""
+        """append(A, B, ground_seglist) deconstructing correctly."""
         v = Var()
         trail = Trail()
         unify(v, [2], trail)
@@ -60,7 +60,7 @@ class TestSingleStarPassthrough:
         assert sl.is_ground()
 
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Append", a, b, sl, module=self.mod)]
+        results = [(deref(a), deref(b)) for _ in call("append", a, b, sl, module=self.mod)]
         assert results == [
             ([], [1, 2]),
             ([1], [2]),
@@ -68,7 +68,7 @@ class TestSingleStarPassthrough:
         ]
 
     def test_last_ground_seglist(self):
-        """Last(ground_seglist, X) finds the last element."""
+        """last(ground_seglist, X) finds the last element."""
         v = Var()
         trail = Trail()
         unify(v, [2, 3], trail)
@@ -76,7 +76,7 @@ class TestSingleStarPassthrough:
         assert sl.is_ground()
 
         x = Var()
-        results = [deref(x) for _ in call("Last", sl, x, module=self.mod)]
+        results = [deref(x) for _ in call("last", sl, x, module=self.mod)]
         assert results == [3]
 
 
@@ -200,7 +200,7 @@ class TestSegListConcatPassthrough:
         self.mod = _load_clausal_module("lists.clausal")
 
     def test_append_result_via_add(self):
-        """Use sl + [3] as the third argument to Append."""
+        """Use sl + [3] as the third argument to append."""
         v = Var()
         trail = Trail()
         unify(v, [2], trail)
@@ -210,7 +210,7 @@ class TestSegListConcatPassthrough:
         assert target.is_ground()
 
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Append", a, b, target, module=self.mod)]
+        results = [(deref(a), deref(b)) for _ in call("append", a, b, target, module=self.mod)]
         assert results == [
             ([], [1, 2, 3]),
             ([1], [2, 3]),

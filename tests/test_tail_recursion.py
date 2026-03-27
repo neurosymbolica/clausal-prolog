@@ -22,7 +22,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     ArithEq, ArithNeq,
     Call, LoadName,
     Compound,
@@ -58,7 +58,7 @@ class TestIsDeterministicGoal(unittest.TestCase):
         self.assertTrue(_is_deterministic_goal(LtE(left=Var(), right=0)))
 
     def test_in_notin(self):
-        self.assertTrue(_is_deterministic_goal(In(left=1, right=[1, 2])))
+        self.assertTrue(_is_deterministic_goal(in_(left=1, right=[1, 2])))
         self.assertTrue(_is_deterministic_goal(NotIn(left=3, right=[1, 2])))
 
     def test_not(self):
@@ -91,12 +91,12 @@ class TestIsDeterministicGoal(unittest.TestCase):
     def test_once_deterministic(self):
         inner = Call(func=LoadName(name='Foo'), args=[Var()], kwargs=[])
         self.assertTrue(_is_deterministic_goal(
-            Call(func=LoadName(name='Once'), args=[inner], kwargs=[])
+            Call(func=LoadName(name='once'), args=[inner], kwargs=[])
         ))
 
     def test_findall_deterministic(self):
         self.assertTrue(_is_deterministic_goal(
-            Call(func=LoadName(name='FindAll'), args=[Var(), Var(), Var()], kwargs=[])
+            Call(func=LoadName(name='findall'), args=[Var(), Var(), Var()], kwargs=[])
         ))
 
 

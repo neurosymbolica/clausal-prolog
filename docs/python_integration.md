@@ -32,7 +32,7 @@ Use `++expr` as a standalone goal for side effects:
 show(X) <- ++print(X)
 ```
 
-When used as a goal, `++()` always succeeds once.
+when used as a goal, `++()` always succeeds once.
 
 ### Multiple Variables
 
@@ -238,18 +238,18 @@ mod = Module("test", module_dict={"fib": fib})
     ```python
     from clausal.logic.builtins import get_builtin_class
 
-    Append = get_builtin_class("Append")
-    t = Append([1, 2], [3], Var())   # → Append(l1=[1, 2], l2=[3], l3=Var())
+    append = get_builtin_class("append")
+    t = append([1, 2], [3], Var())   # → append(l1=[1, 2], l2=[3], l3=Var())
     ```
 
-    Multi-arity builtins (`MapList`, `phrase`) use `MultiArityBuiltin`.
+    Multi-arity builtins (`maplist`, `phrase`) use `MultiArityBuiltin`.
 
-    ### Assert/Retract from Python
+    ### assertz/retract from Python
 
-    When called from a `.clausal` module, these builtins:
+    when called from a `.clausal` module, these builtins:
 
     1. Check that the target predicate is not locked (see [Directives](directives.md) for `-dynamic`)
-    2. Assert/retract the clause on the [Database](database_ops.md)
+    2. assertz/retract the clause on the [Database](database_ops.md)
     3. Look up the PredicateMeta class from `db.module_dict`
     4. Sync `pred_cls._clauses` with the database
     5. Recompile with module globals
@@ -260,5 +260,5 @@ mod = Module("test", module_dict={"fib": fib})
 
 ---
 
-*See also: [I/O](io.md) — Write, Writeln, f-strings for formatted output.*
+*See also: [I/O](io.md) — write, writeln, f-strings for formatted output.*
 *See also: [Predicates](predicates.md) — defining predicates in `.clausal` files.*

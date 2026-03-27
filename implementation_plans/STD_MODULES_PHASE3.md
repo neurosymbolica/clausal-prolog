@@ -146,7 +146,7 @@ use qualified: `py.json.Parse(S, T)`.
 ### Bidirectionality
 
 `Parse/2` is primarily `String → Term` and `Generate/2` is `Term → String`.
-They are NOT bidirectional (unlike AtomConcat). Parsing requires a ground string;
+They are NOT bidirectional (unlike atom_concat). Parsing requires a ground string;
 generation requires a ground term. This matches the inherently asymmetric nature
 of serialization.
 
@@ -218,7 +218,7 @@ use qualified: `py.csv.Parse(S, Rows)`.
 - **`Generate/2`**: deref all values, write via `csv.writer` to `StringIO`,
   return the string.
 - All values in CSV are strings by default. No automatic type coercion
-  (users can use `++int(X)` or `NumberChars` for conversion). This avoids
+  (users can use `++int(X)` or `number_chars` for conversion). This avoids
   surprising behavior.
 - **Delimiter option**: initially hardcode comma delimiter. If custom delimiters
   are needed, add `Parse/3` with an options DictTerm later. YAGNI for now.
@@ -309,7 +309,7 @@ roll_die(N) <- RandomInteger(1, 6, N)
 
 pick_color(COLOR) <- RandomMember(["red", "green", "blue"], COLOR)
 
-maybe_print(X) <- (Maybe, Writeln(X))
+maybe_print(X) <- (Maybe, writeln(X))
 ```
 
 ### JSON

@@ -1,6 +1,6 @@
 # Strings as Lists of Characters
 
-In Clausal, strings are treated as lists of single-character strings at the
+in_ Clausal, strings are treated as lists of single-character strings at the
 logic level. You can use list predicates, pattern matching, and DCGs on strings
 directly — no conversion needed.
 
@@ -8,7 +8,7 @@ directly — no conversion needed.
 
 ## Why?
 
-In logic programming, sequences are the universal data structure. Lists hold
+in_ logic programming, sequences are the universal data structure. Lists hold
 elements; strings hold characters. The operations you want on both are the same:
 split, join, reverse, search, filter, iterate. Maintaining two parallel sets of
 predicates — one for lists, one for strings — doubles the API surface and forces
@@ -61,65 +61,65 @@ Test("contains l") <- contains("hello", 'l')
 ```
 
 This is the same pattern syntax used for lists — no special string patterns
-needed. When matching a string, `*Prefix` binds to a substring; when matching
+needed. when matching a string, `*Prefix` binds to a substring; when matching
 a list, it binds to a sublist.
 
 ---
 
 ## List Predicates on Strings
 
-All [list predicates](lists.md) accept strings. When every input is a string and the result
+All [list predicates](lists.md) accept strings. when every input is a string and the result
 is a character sequence, the result is returned as a string:
 
-### Append
+### append
 
 ```clausal
 # skip
-Test("concat") <- Append("hel", "lo", "hello")
-Test("prefix match") <- Append("hel", X, "hello"), X == "lo"
-Test("suffix match") <- Append(X, "lo", "hello"), X == "hel"
-Test("split") <- Append(X, Y, "hello"), X == "he", Y == "llo"
+Test("concat") <- append("hel", "lo", "hello")
+Test("prefix match") <- append("hel", X, "hello"), X == "lo"
+Test("suffix match") <- append(X, "lo", "hello"), X == "hel"
+Test("split") <- append(X, Y, "hello"), X == "he", Y == "llo"
 ```
 
-### Length
+### length
 
 ```clausal
 # skip
-Test("length") <- Length("hello", 5)
+Test("length") <- length("hello", 5)
 ```
 
-### In (Member)
+### in_ (Member)
 
 ```clausal
 # skip
-Test("member") <- In('e', "hello")
+Test("member") <- in_('e', "hello")
 Test("enumerate") <- (
-    FindAll(C, In(C, "abc"), Chars),
+    findall(C, in_(C, "abc"), Chars),
     Chars == ['a', 'b', 'c']
 )
 ```
 
-### Reverse
+### reverse
 
 ```clausal
 # skip
-Test("reverse") <- Reverse("hello", "olleh")
+Test("reverse") <- reverse("hello", "olleh")
 ```
 
-### Take, Drop, SplitAt
+### take, drop, split_at
 
 ```clausal
 # skip
-Test("take") <- Take(3, "hello", "hel")
-Test("drop") <- Drop(3, "hello", "lo")
-Test("split") <- SplitAt(3, "hello", "hel", "lo")
+Test("take") <- take(3, "hello", "hel")
+Test("drop") <- drop(3, "hello", "lo")
+Test("split") <- split_at(3, "hello", "hel", "lo")
 ```
 
-### GetItem
+### get_item
 
 ```clausal
 # skip
-Test("index") <- GetItem("hello", 1, 'e')
+Test("index") <- get_item("hello", 1, 'e')
 ```
 
 ---
@@ -129,7 +129,7 @@ Test("index") <- GetItem("hello", 1, 'e')
 [Definite Clause Grammars](dcg.md) parse strings directly:
 
 ```clausal
-digit >> ([D], {CharType(D, digit)})
+digit >> ([D], {char_type(D, digit)})
 digits >> (digit)
 digits >> (digit, digits)
 
@@ -140,7 +140,7 @@ Test("partial parse") <- (
 )
 ```
 
-No `AtomChars` conversion is needed. Pass a string to `phrase/2` or `phrase/3`
+No `atom_chars` conversion is needed. Pass a string to `phrase/2` or `phrase/3`
 and the DCG consumes its characters as list elements.
 
 ### Character-Level Grammars
@@ -149,7 +149,7 @@ Because strings are character lists, you can write character-level grammars
 naturally:
 
 ```clausal
-letter >> ([C], {CharType(C, alpha)})
+letter >> ([C], {char_type(C, alpha)})
 space >> ([' '])
 word >> (letter)
 word >> (letter, word)
@@ -167,39 +167,39 @@ Two predicates test sequence types (see [Type Checking](type_checking.md) for th
 
 | Predicate | Strings | Lists | Purpose |
 |-----------|---------|-------|---------|
-| `IsList/1` | Fails | Succeeds | Exact type test: is this a Python list? |
-| `IsStr/1` | Succeeds | Fails | Exact type test: is this a Python str? |
-| `IsChars/1` | Succeeds | Succeeds | Union test: is this a character sequence? |
+| `is_list/1` | Fails | Succeeds | Exact type test: is this a Python list? |
+| `is_str/1` | Succeeds | Fails | Exact type test: is this a Python str? |
+| `is_chars/1` | Succeeds | Succeeds | union test: is this a character sequence? |
 
-Use `IsChars/1` when you want to accept both strings and lists. Use `IsList/1`
-or `IsStr/1` when you need to distinguish the two.
+Use `is_chars/1` when you want to accept both strings and lists. Use `is_list/1`
+or `is_str/1` when you need to distinguish the two.
 
 ```clausal
 # skip
-Test("is_chars string") <- IsChars("hello")
-Test("is_chars list") <- IsChars([1, 2, 3])
-Test("is_list string fails") <- not IsList("hello")
-Test("is_str list fails") <- not IsStr([1, 2, 3])
+Test("is_chars string") <- is_chars("hello")
+Test("is_chars list") <- is_chars([1, 2, 3])
+Test("is_list string fails") <- not is_list("hello")
+Test("is_str list fails") <- not is_str([1, 2, 3])
 ```
 
 ---
 
 ## String-Specific Predicates
 
-The traditional string predicates (`AtomChars/2`, `AtomConcat/3`, `SubAtom/5`,
-`AtomLength/2`, etc.) still work. They are useful for:
+The traditional string predicates (`atom_chars/2`, `atom_concat/3`, `sub_atom/5`,
+`atom_length/2`, etc.) still work. They are useful for:
 
-- **Explicit conversion:** `AtomChars("hello", Chars)` gives you a plain list
+- **Explicit conversion:** `atom_chars("hello", Chars)` gives you a plain list
   when you specifically need one
-- **Code-point operations:** `AtomCodes/2`, `CharCode/2` relate characters to
+- **Code-point operations:** `atom_codes/2`, `char_code/2` relate characters to
   integer code points
-- **Character classification:** `CharType/2` tests character types (alpha, digit,
+- **Character classification:** `char_type/2` tests character types (alpha, digit,
   etc.)
-- **Case conversion:** `UpcaseAtom/2`, `DowncaseAtom/2`
+- **Case conversion:** `upcase_atom/2`, `downcase_atom/2`
 - **ISO Prolog compatibility**
 
 For concatenation, splitting, length, and membership, prefer the [list predicates](lists.md)
-(`Append/3`, `Length/2`, `In/2`) — they work uniformly on both strings and lists.
+(`append/3`, `length/2`, `in_/2`) — they work uniformly on both strings and lists.
 
 ---
 
@@ -211,7 +211,7 @@ and Python interoperability (strings passed to Python functions remain `str`).
 
 The logic layer adds string-as-list behaviour in four places:
 
-1. **Unification:** When a string meets a list, the string is treated as a list
+1. **Unification:** when a string meets a list, the string is treated as a list
    of its characters. `"abc"` unifies with `['a', 'b', 'c']` element-wise.
    String-vs-string remains fast equality.
 
@@ -220,7 +220,7 @@ The logic layer adds string-as-list behaviour in four places:
    `B = "lo"`), preserving the `str` type throughout — no character-list
    conversion happens.
 
-3. **Builtins:** List predicates accept strings wherever they accept lists. When
+3. **Builtins:** List predicates accept strings wherever they accept lists. when
    the result should be a string (all inputs were strings, result is a char
    sequence), a string is returned.
 
@@ -235,7 +235,7 @@ of characters is expected, with no loss of functionality.
 
 ## Comparison with Prolog
 
-In Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
+in_ Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
 same data structure, with no distinction. This gives maximum uniformity at the
 cost of performance (no compact string representation) and foreign-function
 interop (every string is a linked list of character atoms).
@@ -261,7 +261,7 @@ Python's native strings.
 ### Palindrome check (works on both strings and lists)
 
 ```clausal
-palindrome(XS) <- Reverse(XS, XS)
+palindrome(XS) <- reverse(XS, XS)
 
 Test("list palindrome") <- palindrome([1, 2, 1])
 Test("string palindrome") <- palindrome("racecar")
@@ -270,12 +270,12 @@ Test("not palindrome") <- not palindrome("hello")
 
 ### Character frequency
 
-Using [FindAll](meta_predicates.md) to count matching characters:
+Using [findall](meta_predicates.md) to count matching characters:
 
 ```clausal
 char_count(Str, Char, Count) <- (
-    FindAll(C, (In(C, Str), C == Char), Matches),
-    Length(Matches, Count)
+    findall(C, (in_(C, Str), C == Char), Matches),
+    length(Matches, Count)
 )
 
 Test("count l") <- char_count("hello", 'l', 2)
@@ -285,8 +285,8 @@ Test("count z") <- char_count("hello", 'z', 0)
 ### Simple tokenizer with DCGs
 
 ```clausal
-alpha >> ([C], {CharType(C, alpha)})
-digit >> ([C], {CharType(C, digit)})
+alpha >> ([C], {char_type(C, alpha)})
+digit >> ([C], {char_type(C, digit)})
 
 alphas >> (alpha)
 alphas >> (alpha, alphas)

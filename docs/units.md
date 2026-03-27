@@ -9,7 +9,7 @@ syntactic sugar for writing measurements inline.
 ## Quick start
 
 ```python
--import_from(py.units,    [m, kg, s, Newton, kilo, HasUnits, StripUnits])
+-import_from(py.units,    [m, kg, s, Newton, kilo, has_units, StripUnits])
 -import_from(py.imperial, [foot, inch, pound_mass, mph])
 
 # SI sugar: n(Unit) — Unit must be an SI predicate
@@ -24,7 +24,7 @@ big_force := ++(5 * kilo * Newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:
 height := ++(6 * foot + 2 * inch)       # Quantity(1.879…, {Metre: 1})
 
 # Check dimension type
-HasUnits(speed, m/s)            # succeeds: dims match
+has_units(speed, m/s)            # succeeds: dims match
 
 # Extract numeric component
 StripUnits(9.8(Newton), V)      # V = 9.8
@@ -85,7 +85,7 @@ An empty-argument call on any numeric literal produces a dimensionless
 
 ## `X(Unit)` — construction from a runtime value
 
-When the callee is a logic variable, `MY_VAL(Unit)` desugars to
+when the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
 ```python
@@ -95,18 +95,18 @@ F := N(Newton)          # → Quantity(9.8, Newton dims)
 
 ---
 
-## `HasUnits(X, Unit)` — dimension constraint / check
+## `has_units(X, Unit)` — dimension constraint / check
 
 ```python
-HasUnits(F, Newton)              # check or constrain: F must have Newton dims
-HasUnits(V, m/s)                 # velocity check/constraint
-HasUnits(A, m/s**2)              # acceleration
+has_units(F, Newton)              # check or constrain: F must have Newton dims
+has_units(V, m/s)                 # velocity check/constraint
+has_units(A, m/s**2)              # acceleration
 ```
 
-`HasUnits/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
+`has_units/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
 expressions work directly — the transformer auto-wraps them.
 
-`HasUnits` cannot appear on the RHS of `:=` or `==`.
+`has_units` cannot appear on the RHS of `:=` or `==`.
 
 ---
 
@@ -141,13 +141,13 @@ d.dims    # MappingProxyType({<Metre>: 1, <Second>: -1})
 ### `py.units` — SI units and prefixes
 
 ```python
--import_from(py.units, [m, kg, s, Newton, kilo, HasUnits, StripUnits])
+-import_from(py.units, [m, kg, s, Newton, kilo, has_units, StripUnits])
 ```
 
 Contains: SI base unit predicates, scaled SI unit predicates, named derived SI
 unit predicates, SI prefix constants, IEC binary prefix constants, SI
 abbreviations, SI unit vectors, digital information units, physical constants,
-and utility predicates (`HasUnits`, `StripUnits`, `DimensionOf`, `MakeQuantity`).
+and utility predicates (`has_units`, `StripUnits`, `DimensionOf`, `MakeQuantity`).
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
@@ -157,7 +157,7 @@ and utility predicates (`HasUnits`, `StripUnits`, `DimensionOf`, `MakeQuantity`)
 
 Contains: imperial and non-SI `Quantity` unit vectors for length, mass, force,
 volume, pressure, energy, power, speed, and temperature differences.  All
-values are stored in SI base units; `HasUnits` checks work without changes.
+values are stored in SI base units; `has_units` checks work without changes.
 
 ---
 
@@ -192,7 +192,7 @@ variables in Clausal.
 
 These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
-#### Length (stored as metres)
+#### length (stored as metres)
 
 `Kilometer` (`km`), `Centimeter` (`cm`), `Millimeter` (`mm`),
 `Micrometer` (`um`), `Nanometer` (`nm`)
@@ -364,13 +364,13 @@ E    := ++(1 * kilowatt_hour)   # Quantity(3.6e6,   {kg:1, m:2, s:-2})
 ```
 
 All values are stored in SI base units; dimensions are the same as their SI
-equivalents so `HasUnits` checks work without any changes:
+equivalents so `has_units` checks work without any changes:
 
 ```python
-HasUnits(++(20 * inch), Metre)     # succeeds — both have {Metre: 1}
+has_units(++(20 * inch), Metre)     # succeeds — both have {Metre: 1}
 ```
 
-#### Length (stored as metres)
+#### length (stored as metres)
 
 | Name               | Value (m)       | Abbrev |
 |--------------------|-----------------|--------|
@@ -460,10 +460,10 @@ ratio scales.
 | `StripUnits(D, V)`         | Unify `V` with the numeric component |
 | `MakeQuantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
-### `HasUnits/2`
+### `has_units/2`
 
 ```python
-HasUnits(D, UnitPred)
+has_units(D, UnitPred)
 ```
 
 Explicit dimension check/constraint predicate. Succeeds if `D` is a ground
@@ -516,18 +516,18 @@ catch(
 
 ---
 
-## Program verification with `HasUnits`
+## Program verification with `has_units`
 
-`HasUnits` goals are runtime assertions about dimensional types.  They compose
+`has_units` goals are runtime assertions about dimensional types.  They compose
 freely with all Clausal constructs: [negation-as-failure](control.md), [`catch/3`](exceptions.md),
 backtracking, [constraint solving](constraints.md).
 
 The intended workflow:
 
-1. **Development**: annotate inputs and outputs with `HasUnits` calls.
+1. **Development**: annotate inputs and outputs with `has_units` calls.
 2. **Verification**: once tests pass with assertions active, dimensional
    invariants are confirmed on those paths.
-3. **Production**: strip `HasUnits` goals for zero overhead.
+3. **Production**: strip `has_units` goals for zero overhead.
 
 ---
 
@@ -535,7 +535,7 @@ The intended workflow:
 
 SciPy wrapper predicates are quantity-aware: when `Quantity` inputs are
 passed, units are stripped before calling SciPy, and the result is re-wrapped
-with correctly propagated dimensions.  When plain inputs are passed, SciPy is
+with correctly propagated dimensions.  when plain inputs are passed, SciPy is
 called directly with zero overhead.
 
 Each SciPy predicate falls into one of four categories (see individual module docs for details: [scipy.linalg](scipy_linalg.md), [scipy.special](scipy_special.md), [scipy.fft](scipy_fft.md), [scipy.differentiate](scipy_differentiate.md), [scipy.integrate](scipy_integrate.md), [scipy.interpolate](scipy_interpolate.md)):
@@ -579,7 +579,7 @@ See each module's documentation for details.
   prefixed-bit predicates store internally in bits, so arithmetic between them
   works without conversion.
 - **Imperial units are Quantity unit vectors**: `inch`, `foot`, `pound_mass`,
-  etc.  Multiply by a scalar in a `++()` escape.  `HasUnits` checks work
+  etc.  Multiply by a scalar in a `++()` escape.  `has_units` checks work
   normally since the dimensions are identical to their SI equivalents.
 
 ---

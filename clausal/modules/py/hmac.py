@@ -3,7 +3,7 @@
 Provides relational predicates for HMAC signing and verification.
 Import via::
 
-    -import_from(py.hmac, [Sign, Verify])
+    -import_from(py.hmac, [sign, Verify])
 
 Wraps Python's ``hmac`` and ``hashlib`` modules. Default algorithm is SHA-256.
 """
@@ -28,7 +28,7 @@ def _resolve_algo(algo_str):
 
 
 def _sign_4(algorithm, key, data, hex_out, trail, k):
-    """Sign/4: Sign(Algorithm, Key, Data, Hex) — HMAC with specified algorithm."""
+    """sign/4: sign(Algorithm, Key, Data, Hex) — HMAC with specified algorithm."""
     algo = deref(algorithm)
     key_d = deref(key)
     data_d = deref(data)
@@ -52,7 +52,7 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
 
 
 def _sign_3(key, data, hex_out, trail, k):
-    """Sign/3: HMAC-SHA256 (default algorithm)."""
+    """sign/3: HMAC-SHA256 (default algorithm)."""
     yield from _sign_4("sha256", key, data, hex_out, trail, k)
 
 
@@ -88,9 +88,9 @@ def _verify_3(key, data, hex_in, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Sign = ModulePredicate("Sign")
-Sign._register(3, simple_to_trampoline(_sign_3))
-Sign._register(4, simple_to_trampoline(_sign_4))
+sign = ModulePredicate("sign")
+sign._register(3, simple_to_trampoline(_sign_3))
+sign._register(4, simple_to_trampoline(_sign_4))
 
 Verify = ModulePredicate("Verify")
 Verify._register(3, simple_to_trampoline(_verify_3))

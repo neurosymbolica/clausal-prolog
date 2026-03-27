@@ -1,4 +1,4 @@
--import_from(py.re, [Match, Search, FindAll])
+-import_from(py.re, [Match, Search, findall])
 
 # Regex auto-binding — ALLCAPS group names auto-bind to clause variables.
 
@@ -93,8 +93,8 @@ ErrorMessage(MSG) <- (
 
 Test("backtracking with regex") <- (ErrorMessage(M) and M == "disk full")
 
-# ── Practical: tokenizer via FindAll ─────────────────────────────────────
+# ── Practical: tokenizer via findall ─────────────────────────────────────
 
-Token(S, T) <- FindAll(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
+Token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 
 Test("tokenizer first token") <- (Token("x = 42 + y", T) and T == "x")

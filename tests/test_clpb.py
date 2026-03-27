@@ -283,42 +283,42 @@ class TestSat:
         assert sat(0, trail) is False
 
     def test_single_var(self):
-        """Sat(X) means X must be true → X is forced to 1."""
+        """sat(X) means X must be true → X is forced to 1."""
         trail = fresh_trail()
         x = Var()
         assert sat(x, trail) is True
         assert deref(x) == 1
 
     def test_and_forces_both(self):
-        """Sat(X & Y) with no other info doesn't force them.
-        But Sat(X & Y) where X=1 → Y must be satisfiable."""
+        """sat(X & Y) with no other info doesn't force them.
+        But sat(X & Y) where X=1 → Y must be satisfiable."""
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitAnd(left=x, right=y)
         assert sat(expr, trail) is True
 
     def test_contradiction_fails(self):
-        """Sat(X & ~X) should fail."""
+        """sat(X & ~X) should fail."""
         trail = fresh_trail()
         x = Var()
         expr = BitAnd(left=x, right=Invert(operand=x))
         assert sat(expr, trail) is False
 
     def test_tautology_succeeds(self):
-        """Sat(X | ~X) should succeed."""
+        """sat(X | ~X) should succeed."""
         trail = fresh_trail()
         x = Var()
         expr = BitOr(left=x, right=Invert(operand=x))
         assert sat(expr, trail) is True
 
     def test_forced_value(self):
-        """Sat(X & 1) with Sat(X) — X must be 1 since only X=1 satisfies X."""
+        """sat(X & 1) with sat(X) — X must be 1 since only X=1 satisfies X."""
         trail = fresh_trail()
         x = Var()
-        # Sat(X) doesn't force X by itself (both 0,1 satisfy "X is satisfiable")
-        # But Sat(X & X) is just Sat(X) - X can still be 0 or 1
-        # Let's do Sat(X) then Sat(~X) - together they should fail:
-        # Actually Sat(X) means X=1 is forced!
+        # sat(X) doesn't force X by itself (both 0,1 satisfy "X is satisfiable")
+        # But sat(X & X) is just sat(X) - X can still be 0 or 1
+        # Let's do sat(X) then sat(~X) - together they should fail:
+        # Actually sat(X) means X=1 is forced!
         # No: sat(expr) means "the BDD for expr is not FALSE" - it posts the constraint.
         # After sat(X), the BDD is just X (identity). X can be 0 or 1.
         # Wait — sat posts the constraint that the expression must be true.
@@ -327,7 +327,7 @@ class TestSat:
         assert deref(x) == 1
 
     def test_sat_negation_forces_zero(self):
-        """Sat(~X) forces X=0."""
+        """sat(~X) forces X=0."""
         trail = fresh_trail()
         x = Var()
         expr = Invert(operand=x)
@@ -335,7 +335,7 @@ class TestSat:
         assert deref(x) == 0
 
     def test_sat_and_two_vars(self):
-        """Sat(X & Y) forces both X=1 and Y=1."""
+        """sat(X & Y) forces both X=1 and Y=1."""
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitAnd(left=x, right=y)
@@ -344,7 +344,7 @@ class TestSat:
         assert deref(y) == 1
 
     def test_sat_or_no_force(self):
-        """Sat(X | Y) doesn't force either variable."""
+        """sat(X | Y) doesn't force either variable."""
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitOr(left=x, right=y)
@@ -358,7 +358,7 @@ class TestSat:
         assert is_var(xd) or is_var(yd)  # at least one not forced
 
     def test_sequential_sat_conjunction(self):
-        """Sat(X | Y) then Sat(~X) forces Y=1."""
+        """sat(X | Y) then sat(~X) forces Y=1."""
         trail = fresh_trail()
         x, y = Var(), Var()
         assert sat(BitOr(left=x, right=y), trail) is True
@@ -494,7 +494,7 @@ class TestSatCount:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BoolLabeling
+# bool_labeling
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -519,7 +519,7 @@ class TestBoolLabeling:
         assert sorted(results) == [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     def test_constrained_xor(self):
-        """Sat(X ^ Y) then labeling gives exactly 2 solutions."""
+        """sat(X ^ Y) then labeling gives exactly 2 solutions."""
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BitXor(left=x, right=y), trail)
@@ -549,7 +549,7 @@ class TestBoolHook:
         """Binding a CLP(B) var to 0 or 1 propagates."""
         trail = fresh_trail()
         x, y = Var(), Var()
-        # Sat(X | Y) then bind X=0 → Y must become 1
+        # sat(X | Y) then bind X=0 → Y must become 1
         sat(BitOr(left=x, right=y), trail)
         assert unify(x, 0, trail)
         assert deref(y) == 1
@@ -678,7 +678,7 @@ class TestTermConstructors:
         assert impl.right is y
 
     def test_bool_eq_in_sat(self):
-        """Sat(BoolEq(X, Y)) — X ↔ Y must hold."""
+        """sat(BoolEq(X, Y)) — X ↔ Y must hold."""
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BoolEq(left=x, right=y), trail)
@@ -690,7 +690,7 @@ class TestTermConstructors:
         assert sorted(results) == [(0, 0), (1, 1)]
 
     def test_bool_impl_in_sat(self):
-        """Sat(BoolImpl(X, Y)) — X → Y must hold."""
+        """sat(BoolImpl(X, Y)) — X → Y must hold."""
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BoolImpl(left=x, right=y), trail)
@@ -711,7 +711,7 @@ class TestHalfAdder:
         """Compute half adder via CLP(B)."""
         trail = fresh_trail()
         x, y, s, c = Var(), Var(), Var(), Var()
-        # Sum ↔ (X XOR Y)
+        # sum_ ↔ (X XOR Y)
         assert sat(BoolEq(left=s, right=BitXor(left=x, right=y)), trail)
         # Carry ↔ (X AND Y)
         assert sat(BoolEq(left=c, right=BitAnd(left=x, right=y)), trail)
@@ -751,7 +751,7 @@ class TestFullAdder:
         assert sat(BoolEq(left=s1, right=BitXor(left=x, right=y)), trail)
         # C1 ↔ (X AND Y)
         assert sat(BoolEq(left=c1, right=BitAnd(left=x, right=y)), trail)
-        # Sum ↔ (S1 XOR Cin)
+        # sum_ ↔ (S1 XOR Cin)
         assert sat(BoolEq(left=s, right=BitXor(left=s1, right=cin)), trail)
         # C2 ↔ (S1 AND Cin)
         assert sat(BoolEq(left=c2, right=BitAnd(left=s1, right=cin)), trail)
@@ -810,13 +810,13 @@ class TestPigeonHole:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Integration: circuit equivalence via Taut
+# Integration: circuit equivalence via taut
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class TestCircuitEquivalence:
     def test_demorgan(self):
-        """Taut(~(X & Y) ↔ (~X | ~Y)) should be tautology."""
+        """taut(~(X & Y) ↔ (~X | ~Y)) should be tautology."""
         trail = fresh_trail()
         x, y = Var(), Var()
         t = Var()
@@ -827,7 +827,7 @@ class TestCircuitEquivalence:
         assert deref(t) == 1
 
     def test_non_equivalence(self):
-        """Taut(X ↔ Y) is not a tautology."""
+        """taut(X ↔ Y) is not a tautology."""
         trail = fresh_trail()
         x, y = Var(), Var()
         t = Var()

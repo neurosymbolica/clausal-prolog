@@ -119,10 +119,10 @@ def test_embed_double_minus_produces_term():
 
 
 def _make_console_with_In():
-    """Console with the In builtin imported (as a user would do)."""
-    from clausal import In
+    """Console with the in_ builtin imported (as a user would do)."""
+    from clausal import in_
     console = ClausalConsole(filename="<test>")
-    console.locals["In"] = In
+    console.locals["in_"] = in_
     return console
 
 
@@ -133,7 +133,7 @@ def test_star_query_no_solutions(monkeypatch):
     from clausal import repl as _repl
     monkeypatch.setattr(_repl, "_read_char", lambda: '\r')
     try:
-        console.runsource("*(In(X, []))", "<test>", "single")
+        console.runsource("*(in_(X, []))", "<test>", "single")
     finally:
         sys.stdout = sys.__stdout__
     assert "false." in buf.getvalue()
@@ -146,7 +146,7 @@ def test_star_query_single_solution(monkeypatch):
     from clausal import repl as _repl
     monkeypatch.setattr(_repl, "_read_char", lambda: '\r')
     try:
-        console.runsource("*(In(X, [42]))", "<test>", "single")
+        console.runsource("*(in_(X, [42]))", "<test>", "single")
     finally:
         sys.stdout = sys.__stdout__
     assert "42" in buf.getvalue()
@@ -160,7 +160,7 @@ def test_star_query_conjunction(monkeypatch):
     from clausal import repl as _repl
     monkeypatch.setattr(_repl, "_read_char", lambda: next(keys))
     try:
-        console.runsource("*(In(X, [1,2,3]), In(X, [2,3,4]))", "<test>", "single")
+        console.runsource("*(in_(X, [1,2,3]), in_(X, [2,3,4]))", "<test>", "single")
     finally:
         sys.stdout = sys.__stdout__
     out = buf.getvalue()
@@ -171,13 +171,13 @@ def test_star_query_conjunction(monkeypatch):
 def test_star_query_import_then_use(monkeypatch):
     """Typical usage: import then query."""
     console = ClausalConsole(filename="<test>")
-    console.runsource("from clausal import In", "<test>", "single")
+    console.runsource("from clausal import in_", "<test>", "single")
     buf = io.StringIO()
     sys.stdout = buf
     from clausal import repl as _repl
     monkeypatch.setattr(_repl, "_read_char", lambda: '\r')
     try:
-        console.runsource("*(In(X, [1, 2, 3]))", "<test>", "single")
+        console.runsource("*(in_(X, [1, 2, 3]))", "<test>", "single")
     finally:
         sys.stdout = sys.__stdout__
     assert "1" in buf.getvalue()
@@ -290,9 +290,9 @@ class TestPtpythonIntegration:
 
     def test_compile_hook_star_query_transforms(self):
         """*(goals) is rewritten to Solutions(...)."""
-        from clausal import In
+        from clausal import in_
         repl = _FakeRepl()
-        repl._ns["In"] = In
+        repl._ns["in_"] = in_
         repl._ns["Solutions"] = __import__("clausal").Solutions
         repl._ns["_run_ipython_goal"] = __import__(
             "clausal.repl", fromlist=["_run_ipython_goal"]
@@ -302,8 +302,8 @@ class TestPtpythonIntegration:
         ).And
         repl._ns["Var"] = __import__("clausal").Var
         fn = _make_clausal_compile(repl)
-        # *(In(X, [1])) should compile without error
-        code_obj = fn("*(In(X, [1]))", "exec")
+        # *(in_(X, [1])) should compile without error
+        code_obj = fn("*(in_(X, [1]))", "exec")
         assert code_obj is not None
 
     def test_compile_hook_embed_syntax(self):

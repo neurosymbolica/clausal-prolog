@@ -36,7 +36,7 @@ from clausal.testing import collect_tests, run_test
 
 
 def _write_pl(tmp_path, name, source):
-    """Write a .pl file in tmp_path and return its str path."""
+    """write a .pl file in tmp_path and return its str path."""
     path = tmp_path / f"{name}.pl"
     path.write_text(textwrap.dedent(source))
     return str(path)
@@ -306,11 +306,11 @@ class TestPriority:
     """.clausal file takes priority over .pl when both exist."""
 
     def test_clausal_wins_over_pl(self, tmp_path):
-        # Write .clausal with fact(1) — one clause.
+        # write .clausal with fact(1) — one clause.
         clausal_file = tmp_path / "prio_test.clausal"
         clausal_file.write_text("fact(1),\n")
 
-        # Write .pl with fact(1) and fact(2) — two clauses.
+        # write .pl with fact(1) and fact(2) — two clauses.
         _write_pl(tmp_path, "prio_test", """\
             fact(1).
             fact(2).

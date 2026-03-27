@@ -1,4 +1,4 @@
--import_from(py.yaml, [Read, Write, Get])
+-import_from(py.yaml, [Read, write, Get])
 
 # ── Basic parsing ────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ Test("config pattern") <- (
 
 Test("round trip mapping") <- (
     Read("x: 1\ny: 2", DATA),
-    Write(DATA, YAML),
+    write(DATA, YAML),
     Read(YAML, DATA2),
     Get(DATA2, "x", 1),
     Get(DATA2, "y", 2)
@@ -61,7 +61,7 @@ Test("round trip mapping") <- (
 
 Test("write and read back") <- (
     Read("a: 1\nb:\n- 2\n- 3", DATA),
-    Write(DATA, YAML),
+    write(DATA, YAML),
     Read(YAML, DATA2),
     Get(DATA2, "a", 1),
     Get(DATA2, ["b", 0], 2)

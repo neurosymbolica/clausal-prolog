@@ -206,7 +206,7 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
     def test_builtin_name_mapping(self):
         src = "test :- findall(X, member(X, L), Xs)."
         result = prolog_to_clausal(src)
-        assert "FindAll" in result
+        assert "findall" in result
 
     def test_module_directive(self):
         src = ":- module(test, [foo/2, bar/1])."
@@ -251,7 +251,7 @@ class TestNamingConventions:
     def test_snake_to_pascal(self):
         src = "all_different([1, 2, 3])."
         result = prolog_to_clausal(src)
-        assert "AllDifferent" in result
+        assert "all_different" in result
 
     def test_variable_conversion(self):
         src = "foo(Head, Tail)."

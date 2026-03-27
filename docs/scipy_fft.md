@@ -71,7 +71,7 @@ Abbreviations that are the universal name are kept as-is; others are spelled out
 
 **Why `FFTransform` instead of `FFT`?**
 
-In `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a [logic variable](syntax.md), not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `FFTransform`, `FFTransform2D`, and `FFTransformND` introduces lowercase letters, making them unambiguously predicate names.
+in_ `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a [logic variable](syntax.md), not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `FFTransform`, `FFTransform2D`, and `FFTransformND` introduces lowercase letters, making them unambiguously predicate names.
 
 All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
 

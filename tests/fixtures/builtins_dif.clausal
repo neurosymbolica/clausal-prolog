@@ -1,23 +1,23 @@
-# Tests for constraint predicates: Dif/2, Eq/3, DifT/3
+# Tests for constraint predicates: dif/2, eq/3, dif_t/3
 
-# Dif/2 — disequality constraint
-NotEqual(X, Y) <- Dif(X, Y)
+# dif/2 — disequality constraint
+NotEqual(X, Y) <- dif(X, Y)
 
-# Use Dif inside a rule: pick an element different from a given value
+# Use dif inside a rule: pick an element different from a given value
 PickDifferent(X, LIST, PICKED) <- (
-    In(PICKED, LIST),
-    Dif(PICKED, X)
+    in_(PICKED, LIST),
+    dif(PICKED, X)
 )
 
-# Eq/3 — reified equality: TRUTH is True if X=Y, False if Dif(X,Y)
-ReifiedEq(X, Y, TRUTH) <- Eq(X, Y, TRUTH)
+# eq/3 — reified equality: TRUTH is True if X=Y, False if dif(X,Y)
+ReifiedEq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 
-# DifT/3 — reified disequality
-ReifiedDif(X, Y, TRUTH) <- DifT(X, Y, TRUTH)
+# dif_t/3 — reified disequality
+ReifiedDif(X, Y, TRUTH) <- dif_t(X, Y, TRUTH)
 
-# Use reified Eq to categorize pairs
-SameOrDiff(X, Y, "same") <- Eq(X, Y, True)
-SameOrDiff(X, Y, "different") <- Eq(X, Y, False)
+# Use reified eq to categorize pairs
+SameOrDiff(X, Y, "same") <- eq(X, Y, True)
+SameOrDiff(X, Y, "different") <- eq(X, Y, False)
 
 
 Test("not equal") <- NotEqual(1, 2)

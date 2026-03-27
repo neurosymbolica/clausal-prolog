@@ -1,4 +1,4 @@
-# scipy.stats — Statistics
+# scipy.stats — statistics
 
 The `scipy_stats` module wraps [`scipy.stats`](https://docs.scipy.org/doc/scipy/reference/stats.html) as Clausal predicates. It covers descriptive statistics, correlation and regression, parametric and nonparametric hypothesis tests, distribution evaluation, and frozen distribution handles.
 
@@ -332,7 +332,7 @@ ExponEntropy(H) <- (
 
 ### Frozen distribution handles (Tier 3)
 
-Freeze a distribution with fixed parameters, then evaluate it repeatedly without re-creating the distribution object each time.
+freeze a distribution with fixed parameters, then evaluate it repeatedly without re-creating the distribution object each time.
 
 ```clausal
 # skip

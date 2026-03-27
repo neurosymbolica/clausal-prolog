@@ -4,7 +4,7 @@
 
 **Depends on:** Module adapter pattern (`clausal/modules/py/*.py`), builtin registry (`clausal/logic/builtins/`), `_import_stdlib` infrastructure.
 
-**Goal:** Thin convenience wrappers for crypto hashing, HTTP requests, TCP sockets, unique atom generation (GenSym), and minor charsio additions. These are "nice-to-have" since `++()` interop covers the underlying Python functionality.
+**Goal:** Thin convenience wrappers for crypto hashing, HTTP requests, TCP sockets, unique atom generation (gensym), and minor charsio additions. These are "nice-to-have" since `++()` interop covers the underlying Python functionality.
 
 **Non-goal:** Full reimplementation of Python's networking or cryptography APIs.
 
@@ -16,7 +16,7 @@ Phase 7 is the final phase of the standard modules plan (`STD_MODULES_OVERVIEW.m
 
 The original overview grouped everything under a monolithic `crypto` module and prefixed predicates with acronyms (`TcpConnect`, `HttpGet`, `HmacVerify`). This conflicts with Clausal's naming conventions:
 - **Capitalized acronyms** (e.g. `TCP`, `HTTP`, `HMAC`, `URL`) look like logic variables
-- **One-concern-per-module** with short predicate names (e.g. `tcp.Connect`, `http.Get`, `hmac.Sign`) is cleaner
+- **One-concern-per-module** with short predicate names (e.g. `tcp.Connect`, `http.Get`, `hmac.sign`) is cleaner
 
 ---
 
@@ -26,13 +26,13 @@ The original overview grouped everything under a monolithic `crypto` module and 
 
 2. **Handle-based for stateful resources.** TCP sockets use opaque Python `socket.socket` objects (same pattern as `scipy_interpolate` spline handles).
 
-3. **GenSym is a builtin**, not a module — goes in `clausal/logic/builtins/inspection.py` alongside other term-manipulation builtins.
+3. **gensym is a builtin**, not a module — goes in `clausal/logic/builtins/inspection.py` alongside other term-manipulation builtins.
 
-4. **Charsio extras are minimal.** Only `NumberChars/2` and `NumberCodes/2` in `chars.py`. `ReadFromChars/2` (parse term from string) deferred — requires a full `.clausal` parser.
+4. **Charsio extras are minimal.** Only `number_chars/2` and `number_codes/2` in `chars.py`. `ReadFromChars/2` (parse term from string) deferred — requires a full `.clausal` parser.
 
 5. **One concern per module.** Acronym predicates (`HMAC`, `TCP`, `HTTP`, `URL`) live in their own lowercase modules so predicates can use short unqualified names. Module names follow Python style (lowercase): `py.hash`, `py.hmac`, `py.pbkdf2`, `py.http`, `py.url`, `py.tcp`.
 
-6. **Naming:** `GenSym` (camelCase — the universal name for "generate symbol", a Prolog/Lisp standard). All other predicates use TitleCase as usual.
+6. **Naming:** `gensym` (camelCase — the universal name for "generate symbol", a Prolog/Lisp standard). All other predicates use TitleCase as usual.
 
 ---
 
@@ -119,9 +119,9 @@ Builtins use the `@_builtin` decorator from `clausal/logic/builtins/_registry.py
 ```python
 from clausal.logic.builtins._registry import _builtin
 
-@_builtin("GenSym", 2)
+@_builtin("gensym", 2)
 def _gensym__2(prefix, atom, trail, k):
-    """GenSym(Prefix, Atom) — generate unique atom."""
+    """gensym(Prefix, Atom) — generate unique atom."""
     prefix_d = deref(prefix)
     if is_var(prefix_d) or not isinstance(prefix_d, str):
         return
@@ -193,13 +193,13 @@ def sol_var(goal, var):
 
 ## Sub-phases
 
-### 7a — GenSym/2 (Builtin)
+### 7a — gensym/2 (Builtin)
 
 **Modified:** `clausal/logic/builtins/inspection.py`, `tests/test_term_inspection.py`
 
 | Predicate | Description |
 |---|---|
-| `GenSym/2` | `GenSym(Prefix, Atom)` — append monotonic counter to Prefix. `GenSym("x", A)` → `"x_1"`, `"x_2"`, etc. Counter is NOT trailed (impure, matches Prolog semantics). Thread-safe via lock. |
+| `gensym/2` | `gensym(Prefix, Atom)` — append monotonic counter to Prefix. `gensym("x", A)` → `"x_1"`, `"x_2"`, etc. Counter is NOT trailed (impure, matches Prolog semantics). Thread-safe via lock. |
 
 #### Implementation
 
@@ -211,9 +211,9 @@ import threading
 _gensym_counters: dict[str, int] = {}
 _gensym_lock = threading.Lock()
 
-@_builtin("GenSym", 2)
+@_builtin("gensym", 2)
 def _gensym__2(prefix, atom, trail, k):
-    """GenSym(Prefix, Atom) — generate a unique atom by appending a counter.
+    """gensym(Prefix, Atom) — generate a unique atom by appending a counter.
 
     Counter is global and monotonically increasing. NOT trailed — survives
     backtracking. This is intentional and matches Prolog's gensym/2 semantics.
@@ -247,9 +247,9 @@ class TestGenSym:
         _gensym_counters.clear()
 
     def test_basic(self):
-        """GenSym("x", A) → "x_1"."""
+        """gensym("x", A) → "x_1"."""
         a = Var()
-        vals = sol_var(goal("GenSym", "x", a), a)
+        vals = sol_var(goal("gensym", "x", a), a)
         assert vals == ["x_1"]
 
     def test_sequential(self):
@@ -259,10 +259,10 @@ class TestGenSym:
         """Different prefixes have independent counters."""
 
     def test_unbound_prefix_fails(self):
-        """GenSym(X, A) with unbound X → no solutions."""
+        """gensym(X, A) with unbound X → no solutions."""
 
     def test_non_string_prefix_fails(self):
-        """GenSym(42, A) → no solutions."""
+        """gensym(42, A) → no solutions."""
 
     def test_counter_survives_backtracking(self):
         """Counter does NOT reset on backtracking."""
@@ -270,7 +270,7 @@ class TestGenSym:
         # After failure, next gensym should continue from incremented counter.
 
     def test_atom_already_bound_unification(self):
-        """GenSym("x", "x_1") succeeds if counter is at 1."""
+        """gensym("x", "x_1") succeeds if counter is at 1."""
 
     def test_thread_safety(self):
         """Concurrent gensym calls produce unique atoms."""
@@ -278,7 +278,7 @@ class TestGenSym:
         results = []
         def gen():
             a = Var()
-            sol_var(goal("GenSym", "t", a), a)
+            sol_var(goal("gensym", "t", a), a)
             results.append(deref(a))
         threads = [threading.Thread(target=gen) for _ in range(10)]
         for t in threads: t.start()
@@ -288,25 +288,25 @@ class TestGenSym:
 
 ---
 
-### 7b — NumberChars/2, NumberCodes/2 (Builtin)
+### 7b — number_chars/2, number_codes/2 (Builtin)
 
 **Modified:** `clausal/logic/builtins/chars.py`, `tests/test_chars.py`
 
 | Predicate | Description |
 |---|---|
-| `NumberChars/2` | `NumberChars(Number, Chars)` — bidirectional number ↔ char-list. Forward: `str(N)` → `list(s)`. Reverse: `"".join(chars)` → `int` or `float`. |
-| `NumberCodes/2` | `NumberCodes(Number, Codes)` — bidirectional number ↔ code-point-list. Same as NumberChars but with `ord()`/`chr()`. |
+| `number_chars/2` | `number_chars(Number, Chars)` — bidirectional number ↔ char-list. Forward: `str(N)` → `list(s)`. reverse: `"".join(chars)` → `int` or `float`. |
+| `number_codes/2` | `number_codes(Number, Codes)` — bidirectional number ↔ code-point-list. Same as number_chars but with `ord()`/`chr()`. |
 
 #### Implementation
 
-Add to the end of `clausal/logic/builtins/chars.py`, following the exact pattern of `AtomChars/2` (lines 173-212) and `AtomCodes/2` (lines 215-252):
+Add to the end of `clausal/logic/builtins/chars.py`, following the exact pattern of `atom_chars/2` (lines 173-212) and `atom_codes/2` (lines 215-252):
 
 ```python
-# ── NumberChars/2 ──────────────────────────────────────────────────────────────
+# ── number_chars/2 ──────────────────────────────────────────────────────────────
 
-@_builtin("NumberChars", 2)
+@_builtin("number_chars", 2)
 def _number_chars__2(number, chars, trail, k):
-    """NumberChars(Number, Chars) — bidirectional number ↔ char-list conversion.
+    """number_chars(Number, Chars) — bidirectional number ↔ char-list conversion.
 
     Number bound → unify Chars with list(str(Number)).
     Chars bound (list of single-char strings) → parse as int or float.
@@ -351,11 +351,11 @@ def _number_chars__2(number, chars, trail, k):
         raise LogicException(instantiation_error("number_chars/2"))
 
 
-# ── NumberCodes/2 ──────────────────────────────────────────────────────────────
+# ── number_codes/2 ──────────────────────────────────────────────────────────────
 
-@_builtin("NumberCodes", 2)
+@_builtin("number_codes", 2)
 def _number_codes__2(number, codes, trail, k):
-    """NumberCodes(Number, Codes) — bidirectional number ↔ code-point-list.
+    """number_codes(Number, Codes) — bidirectional number ↔ code-point-list.
 
     Number bound → unify Codes with [ord(c) for c in str(Number)].
     Codes bound (list of ints) → join as chars, parse as int or float.
@@ -408,41 +408,41 @@ Add `TestNumberChars` and `TestNumberCodes` classes to `tests/test_chars.py`:
 ```python
 class TestNumberChars:
     def test_int_forward(self):
-        """NumberChars(42, C) → ["4", "2"]."""
+        """number_chars(42, C) → ["4", "2"]."""
         v = Var()
-        assert _run("NumberChars", 2, 42, v) == 1
+        assert _run("number_chars", 2, 42, v) == 1
         assert deref(v) == ["4", "2"]
 
     def test_int_reverse(self):
-        """NumberChars(N, ["4", "2"]) → N = 42."""
+        """number_chars(N, ["4", "2"]) → N = 42."""
 
     def test_float_forward(self):
-        """NumberChars(3.14, C) → ["3", ".", "1", "4"]."""
+        """number_chars(3.14, C) → ["3", ".", "1", "4"]."""
 
     def test_float_reverse(self):
-        """NumberChars(N, ["3", ".", "1", "4"]) → N = 3.14."""
+        """number_chars(N, ["3", ".", "1", "4"]) → N = 3.14."""
 
     def test_negative(self):
-        """NumberChars(-5, C) → ["-", "5"]."""
+        """number_chars(-5, C) → ["-", "5"]."""
 
     def test_invalid_chars_fails(self):
-        """NumberChars(N, ["a", "b"]) → no solutions."""
+        """number_chars(N, ["a", "b"]) → no solutions."""
 
     def test_both_bound_consistent(self):
-        """NumberChars(42, ["4", "2"]) → succeeds."""
+        """number_chars(42, ["4", "2"]) → succeeds."""
 
     def test_both_bound_inconsistent(self):
-        """NumberChars(42, ["4", "3"]) → fails."""
+        """number_chars(42, ["4", "3"]) → fails."""
 
     def test_both_unbound_raises(self):
-        """NumberChars(N, C) with both unbound → instantiation error."""
+        """number_chars(N, C) with both unbound → instantiation error."""
 
 class TestNumberCodes:
     def test_int_forward(self):
-        """NumberCodes(42, C) → [52, 50]."""
+        """number_codes(42, C) → [52, 50]."""
 
     def test_int_reverse(self):
-        """NumberCodes(N, [52, 50]) → N = 42."""
+        """number_codes(N, [52, 50]) → N = 42."""
 ```
 
 ---
@@ -519,17 +519,17 @@ def _hash_3(algorithm, data, hex_out, trail, k):
 
 | Predicate | Description |
 |---|---|
-| `Sign/3` | `Sign(Key, Data, Hex)` — HMAC-SHA256 signature. Key and Data are strings (or bytes). Hex is hex digest. |
-| `Sign/4` | `Sign(Algorithm, Key, Data, Hex)` — HMAC with specified algorithm. |
+| `sign/3` | `sign(Key, Data, Hex)` — HMAC-SHA256 signature. Key and Data are strings (or bytes). Hex is hex digest. |
+| `sign/4` | `sign(Algorithm, Key, Data, Hex)` — HMAC with specified algorithm. |
 | `Verify/3` | `Verify(Key, Data, Hex)` — verify HMAC-SHA256. Uses `hmac.compare_digest` for constant-time comparison. Succeeds or fails. |
 | `Verify/4` | `Verify(Algorithm, Key, Data, Hex)` — verify with specified algorithm. |
 
 **Usage in `.clausal`:**
 
 ```python
--import_from(py.hmac, [Sign, Verify])
+-import_from(py.hmac, [sign, Verify])
 
-sign_message(KEY, MESSAGE, SIGNATURE) <- Sign(KEY, MESSAGE, SIGNATURE)
+sign_message(KEY, MESSAGE, SIGNATURE) <- sign(KEY, MESSAGE, SIGNATURE)
 check_message(KEY, MESSAGE, SIGNATURE) <- Verify(KEY, MESSAGE, SIGNATURE)
 ```
 
@@ -541,7 +541,7 @@ _hmac = _import_stdlib("hmac")
 _hashlib = _import_stdlib("hashlib")
 
 def _sign_3(key, data, hex_out, trail, k):
-    """Sign/3: HMAC-SHA256 (default algorithm)."""
+    """sign/3: HMAC-SHA256 (default algorithm)."""
     return _sign_4("sha256", key, data, hex_out, trail, k)
 
 def _sign_4(algorithm, key, data, hex_out, trail, k):
@@ -646,7 +646,7 @@ class TestHmacSign:
     def test_different_key_different_result(self): ...
     def test_unbound_key_fails(self): ...
     def test_custom_algorithm(self):
-        """Sign("sha512", KEY, DATA, HEX)."""
+        """sign("sha512", KEY, DATA, HEX)."""
     def test_trampoline_protocol(self): ...
 
 class TestHmacVerify:
@@ -1014,8 +1014,8 @@ class TestTcpIntegration:
 
 ## Implementation Order
 
-1. **7a — GenSym** (simplest, one function in existing file, ~8 tests)
-2. **7b — NumberChars/NumberCodes** (two functions following existing AtomChars pattern, ~10 tests)
+1. **7a — gensym** (simplest, one function in existing file, ~8 tests)
+2. **7b — number_chars/number_codes** (two functions following existing atom_chars pattern, ~10 tests)
 3. **7c — hash/hmac/pbkdf2** (three small modules, stdlib only, known test vectors, ~20 tests)
 4. **7d — http/url** (two modules, mock-based tests, ~20 tests)
 5. **7e — tcp** (one module, most complex due to lifecycle + loopback tests, ~20 tests)
@@ -1049,8 +1049,8 @@ Total: ~78 tests across all sub-phases.
 ### Modified files
 | File | Change | Sub-phase |
 |---|---|---|
-| `clausal/logic/builtins/inspection.py` | Add GenSym/2 | 7a |
-| `clausal/logic/builtins/chars.py` | Add NumberChars/2, NumberCodes/2 | 7b |
+| `clausal/logic/builtins/inspection.py` | Add gensym/2 | 7a |
+| `clausal/logic/builtins/chars.py` | Add number_chars/2, number_codes/2 | 7b |
 | `tests/test_term_inspection.py` | Add TestGenSym class | 7a |
 | `tests/test_chars.py` | Add TestNumberChars, TestNumberCodes classes | 7b |
 | `clausal/modules/py/__init__.py` | Add import examples to docstring | 7c-7e |

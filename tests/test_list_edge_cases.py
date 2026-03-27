@@ -152,34 +152,34 @@ class TestPhase1EdgeCases:
         assert results == []
 
     def test_length_zero(self):
-        """Length([], N) → N=0."""
+        """length([], N) → N=0."""
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("Length", [], n, module=mod)]
+        results = [deref(n) for _ in call("length", [], n, module=mod)]
         assert results == [0]
 
     def test_length_three(self):
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("Length", [1, 2, 3], n, module=mod)]
+        results = [deref(n) for _ in call("length", [1, 2, 3], n, module=mod)]
         assert results == [3]
 
     def test_length_singleton(self):
         mod = _lists_mod()
         n = Var()
-        results = [deref(n) for _ in call("Length", ["a"], n, module=mod)]
+        results = [deref(n) for _ in call("length", ["a"], n, module=mod)]
         assert results == [1]
 
     def test_length_check_correct(self):
-        """Length([1,2], 2) succeeds."""
+        """length([1,2], 2) succeeds."""
         mod = _lists_mod()
-        results = list(call("Length", [1, 2], 2, module=mod))
+        results = list(call("length", [1, 2], 2, module=mod))
         assert len(results) == 1
 
     def test_length_check_wrong(self):
-        """Length([1,2], 5) fails."""
+        """length([1,2], 5) fails."""
         mod = _lists_mod()
-        results = list(call("Length", [1, 2], 5, module=mod))
+        results = list(call("length", [1, 2], 5, module=mod))
         assert results == []
 
 
@@ -230,54 +230,54 @@ class TestPhase2EdgeCases:
         assert results == [10]
 
     def test_append_single_elements(self):
-        """Append([1], [2], R) → R=[1,2]."""
+        """append([1], [2], R) → R=[1,2]."""
         mod = _lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("Append", [1], [2], r, module=mod)]
+        results = [deref(r) for _ in call("append", [1], [2], r, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_compute_middle(self):
-        """Append([1], Y, [1, 2, 3]) → Y=[2,3]."""
+        """append([1], Y, [1, 2, 3]) → Y=[2,3]."""
         mod = _lists_mod()
         y = Var()
-        results = [deref(y) for _ in call("Append", [1], y, [1, 2, 3], module=mod)]
+        results = [deref(y) for _ in call("append", [1], y, [1, 2, 3], module=mod)]
         assert results == [[2, 3]]
 
     def test_append_all_vars_with_ground_result(self):
-        """Append(X, Y, [1]) — 2 splits."""
+        """append(X, Y, [1]) — 2 splits."""
         mod = _lists_mod()
         x, y = Var(), Var()
-        pairs = [(deref(x), deref(y)) for _ in call("Append", x, y, [1], module=mod)]
+        pairs = [(deref(x), deref(y)) for _ in call("append", x, y, [1], module=mod)]
         assert ([], [1]) in pairs
         assert ([1], []) in pairs
         assert len(pairs) == 2
 
     def test_append_nested_lists(self):
-        """Append([[1]], [[2]], R) → R=[[1],[2]]."""
+        """append([[1]], [[2]], R) → R=[[1],[2]]."""
         mod = _lists_mod()
         r = Var()
-        results = [deref(r) for _ in call("Append", [[1]], [[2]], r, module=mod)]
+        results = [deref(r) for _ in call("append", [[1]], [[2]], r, module=mod)]
         assert results == [[[1], [2]]]
 
     def test_last_two_elements(self):
-        """Last([1,2], X) → X=2."""
+        """last([1,2], X) → X=2."""
         mod = _lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("Last", [1, 2], x, module=mod)]
+        results = [deref(x) for _ in call("last", [1, 2], x, module=mod)]
         assert results == [2]
 
     def test_last_nested_list_element(self):
-        """Last([1, [2, 3]], X) → X=[2,3]."""
+        """last([1, [2, 3]], X) → X=[2,3]."""
         mod = _lists_mod()
         x = Var()
-        results = [deref(x) for _ in call("Last", [1, [2, 3]], x, module=mod)]
+        results = [deref(x) for _ in call("last", [1, [2, 3]], x, module=mod)]
         assert results == [[2, 3]]
 
     def test_last_empty_fails(self):
-        """Last([], X) → no solution."""
+        """last([], X) → no solution."""
         mod = _lists_mod()
         x = Var()
-        results = list(call("Last", [], x, module=mod))
+        results = list(call("last", [], x, module=mod))
         assert results == []
 
     def test_bookend_single(self):
@@ -341,25 +341,25 @@ class TestPhase3EdgeCases:
     def test_is_list_empty(self):
         """is_list([*_]) — empty list is a list."""
         mod = _edge_mod()
-        results = list(call("IsList", [], module=mod))
+        results = list(call("is_list", [], module=mod))
         assert len(results) == 1
 
     def test_is_list_nonempty(self):
         """is_list([*_]) — non-empty list is a list."""
         mod = _edge_mod()
-        results = list(call("IsList", [1, 2, 3], module=mod))
+        results = list(call("is_list", [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_is_list_non_list_fails(self):
         """is_list([*_]) — non-list fails."""
         mod = _edge_mod()
-        results = list(call("IsList", 42, module=mod))
+        results = list(call("is_list", 42, module=mod))
         assert results == []
 
     def test_is_list_string_succeeds(self):
         """is_list([*_]) — strings now match list patterns (strings as lists)."""
         mod = _edge_mod()
-        results = list(call("IsList", "hello", module=mod))
+        results = list(call("is_list", "hello", module=mod))
         assert len(results) == 1
 
     def test_has_pair_three_elements(self):

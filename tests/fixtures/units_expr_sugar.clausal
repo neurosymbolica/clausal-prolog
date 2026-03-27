@@ -3,20 +3,20 @@
 # [1,2,3](Metre) - list with unit annotation
 Test("list with unit") <- (
     X is [1.0, 2.0, 3.0](Metre),
-    HasUnits(X, Metre))
+    has_units(X, Metre))
 
 # Scalar sugar still works
 Test("scalar with unit") <- (
     X is 5.0(Metre),
-    HasUnits(X, Metre))
+    has_units(X, Metre))
 
 # Variable sugar still works
 Test("var with unit") <- (
     V is 9.8,
     X is V(Newton),
-    HasUnits(X, Newton))
+    has_units(X, Newton))
 
 # Compound unit on list
 Test("list with compound unit") <- (
     X is [0.0, 10.0, 20.0](Metre/Second),
-    HasUnits(X, Metre/Second))
+    has_units(X, Metre/Second))

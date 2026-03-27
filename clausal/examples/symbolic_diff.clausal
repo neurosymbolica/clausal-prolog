@@ -12,15 +12,15 @@ Diff(EXPR=0, VAR=0, DERIV=0),
 Diff(X, X, 1),
 
 # Constant number: Diff(c)/dVx = 0
-Diff(C, _, 0) <- IsNumber(C)
+Diff(C, _, 0) <- number(C)
 
 # Different variable: Diff(Vy)/dVx = 0
 Diff(Y, X, 0) <- (
-    IsStr(Y),
+    is_str(Y),
     Y is not X
 )
 
-# Sum: Diff(a+b)/dVx = da/dVx + db/dVx
+# sum_: Diff(a+b)/dVx = da/dVx + db/dVx
 Diff(A + B, X, DA + DB) <- (
     Diff(A, X, DA),
     Diff(B, X, DB)
@@ -34,7 +34,7 @@ Diff(A * B, X, A*DB + B*DA) <- (
 
 # Power rule: Diff(e^n)/dVx = n * e^(n-1) * de/dVx
 Diff(E ** N, X, N * E**N1 * DE) <- (
-    IsNumber(N),
+    number(N),
     N1 := N - 1,
     Diff(E, X, DE)
 )

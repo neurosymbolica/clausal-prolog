@@ -13,7 +13,7 @@ Design
 The user passes Var objects as args; the dispatch function binds them through
 the Trail.  This is the fastest path for simple predicate calls.
 
-``solve`` handles arbitrary goal terms (Call, And, Or, Is, Not, In, …).
+``solve`` handles arbitrary goal terms (Call, And, Or, Is, Not, in_, …).
 It compiles the goal on the fly as a synthetic zero-arity query predicate,
 injecting any Var objects that appear in the goal into the compiled function's
 globals so they are referenced by identity (not replaced with fresh Vars).
@@ -111,7 +111,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     allocating fresh ones.  This means the trail binds the user's Vars directly,
     making deref(user_var) work during and after each solution.
 
-    When module.module_dict is available, it is merged into the compiled
+    when module.module_dict is available, it is merged into the compiled
     function's globals so that predicate names resolve from the module namespace
     (Phase 5: cross-predicate resolution without _db string lookup).
     """
@@ -238,7 +238,7 @@ def solve(
 ) -> Iterator[Trail]:
     """Drive an arbitrary goal; yield the Trail after each solution.
 
-    The goal may be any term node: Call, And, Or, Is, Not, In, True, False, …
+    The goal may be any term node: Call, And, Or, Is, Not, in_, True, False, …
     Var objects embedded in the goal are referenced by identity in the compiled
     code so their bindings accumulate on the Trail and are readable via deref().
 

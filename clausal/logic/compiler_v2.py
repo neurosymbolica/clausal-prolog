@@ -88,7 +88,7 @@ def compile_module(
     # ── Step 3: Process module/private declarations ──────────────────────
     _process_declarations(module_items, module_dict)
 
-    # ── Step 4: Assert all clauses ───────────────────────────────────────
+    # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
     for pred_node in predicate_nodes:
         logic_module.define_predicate(pred_node)

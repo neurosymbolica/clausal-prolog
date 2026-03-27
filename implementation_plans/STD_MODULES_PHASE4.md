@@ -60,9 +60,9 @@ Everything else is one `++()` call away.
 
 ### Implementation notes
 
-- `EnvironmentVariable/2`: When Name is unbound, iterate `os.environ.items()`
+- `EnvironmentVariable/2`: when Name is unbound, iterate `os.environ.items()`
   and yield each (Name, Value) pair with trail mark/undo for backtracking.
-  When Name is bound, `os.environ.get(name)` — fail if missing.
+  when Name is bound, `os.environ.get(name)` — fail if missing.
 - `SetEnvironmentVariable/2` and `UnsetEnvironmentVariable/1` both require
   ground arguments. `os.environ[name] = value` / `del os.environ[name]`.
 - `WorkingDirectory/1` calls `os.getcwd()` and unifies. Read-only — use
@@ -398,7 +398,7 @@ show_info(INFO) <- (
 config_files(DIR, FILES) <- (
     DirectoryExists(DIR),
     DirectoryFiles(DIR, ALL),
-    Filter(FileExists, ALL, FILES)
+    include(FileExists, ALL, FILES)
 )
 
 read_config(PATH, CONTENT) <- (

@@ -181,7 +181,7 @@ def test_no_params_when_all_assigned():
     assert f() == 2
 
 def test_explicit_args_not_overridden():
-    # When args is passed explicitly, _infer_args is not called
+    # when args is passed explicitly, _infer_args is not called
     explicit = ast.arguments(
         posonlyargs=[], args=[ast.arg(arg="z")],
         vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],

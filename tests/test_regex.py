@@ -1,6 +1,6 @@
 """Tests for regex integration — API design exploration.
 
-Naming: Match, Search, FindAll, Replace, Split — qualified as re.Match etc.
+Naming: Match, Search, findall, Replace, Split — qualified as re.Match etc.
 when imported via ``-import_module(re)``.
 
 Two binding modes:
@@ -47,11 +47,11 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_REGEX_IMPORT = '-import_from(py.re, [Match, Search, Replace, Split, FindAll])\n'
+_REGEX_IMPORT = '-import_from(py.re, [Match, Search, Replace, Split, findall])\n'
 
 
 def _load(name, src_text, tmp_path):
-    """Write a .clausal file and load it."""
+    """write a .clausal file and load it."""
     p = tmp_path / f"{name}.clausal"
     p.write_text(_REGEX_IMPORT + src_text)
     mod = _load_module(name, str(p))
@@ -315,7 +315,7 @@ parse_log(LINE, LEVEL, MSG) <- (
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TIER 5: Search and FindAll
+# TIER 5: Search and findall
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestSearch:
@@ -341,40 +341,40 @@ find_kv(S, KEY, VAL) <- (
 
 
 class TestFindAll:
-    """FindAll/3: Pattern, String, Match → nondeterministic.
-    One solution per non-overlapping match. Qualified as re.FindAll to
-    avoid conflict with the meta-predicate FindAll."""
+    """findall/3: Pattern, String, Match → nondeterministic.
+    One solution per non-overlapping match. Qualified as re.findall to
+    avoid conflict with the meta-predicate findall."""
 
     def test_findall_strings(self, tmp_path):
         """No groups → each match is a plain string."""
         mod = _load("rf1", r"""
-digit_run(S, D) <- FindAll(r"\d+", S, D)
+digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
         assert _all("digit_run", "a1b23c456", module=mod) == ["1", "23", "456"]
 
     def test_findall_no_matches(self, tmp_path):
         mod = _load("rf2", r"""
-digit_run(S, D) <- FindAll(r"\d+", S, D)
+digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
         assert _all("digit_run", "abc", module=mod) == []
 
     def test_findall_with_groups(self, tmp_path):
         """Groups → each match is a tuple of group strings."""
         mod = _load("rf3", r"""
-pairs(S, PAIR) <- FindAll(r"(\w+)=(\w+)", S, PAIR)
+pairs(S, PAIR) <- findall(r"(\w+)=(\w+)", S, PAIR)
 """, tmp_path)
         results = _all("pairs", "a=1 b=2 c=3", module=mod)
         assert results == [("a", "1"), ("b", "2"), ("c", "3")]
 
     def test_findall_backtracking(self, tmp_path):
-        """FindAll solutions participate in Clausal backtracking."""
+        """findall solutions participate in Clausal backtracking."""
         mod = _load("rf4", r"""
 Line("errors: 3 warnings: 5"),
 Line("errors: 0 warnings: 1"),
 
 nonzero_error_count(COUNT) <- (
     Line(L) and
-    FindAll(r"errors: (\d+)", L, COUNT) and
+    findall(r"errors: (\d+)", L, COUNT) and
     COUNT != "0"
 )
 """, tmp_path)
@@ -519,7 +519,7 @@ parse_log(LINE, LEVEL, MSG) <- Match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)
 
     def test_tokenizer(self, tmp_path):
         mod = _load("ex2", r"""
-token(S, T) <- FindAll(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
+token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 """, tmp_path)
         assert _all("token", "x = 42 + y", module=mod) == \
             ["x", "=", "42", "+", "y"]
@@ -553,7 +553,7 @@ parse_url(S, SCHEME, HOST, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>[^/]+)
         mod = _load("ex5", r"""
 valid_email_in_csv(CSV, EMAIL) <- (
     Split(r",\s*", CSV, FIELDS) and
-    In(EMAIL, FIELDS) and
+    in_(EMAIL, FIELDS) and
     Match(r"[^@]+@[^@]+\.[^@]+$", EMAIL)
 )
 """, tmp_path)
@@ -636,7 +636,7 @@ has_parens(S) <- Search(r"\(.*?\)", S)
 
     def test_findall_nonoverlapping(self, tmp_path):
         mod = _load("ec4", r"""
-find_aa(S, M) <- FindAll(r"aa", S, M)
+find_aa(S, M) <- findall(r"aa", S, M)
 """, tmp_path)
         assert _all("find_aa", "aaaa", module=mod) == ["aa", "aa"]
 

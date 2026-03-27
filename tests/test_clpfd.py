@@ -536,7 +536,7 @@ class TestCompilerCLPFD:
                 left=LtENode(left=1, right=x),
                 right=LtENode(left=x, right=3),
             ),
-            right=Call(func=LoadName(name="Label"), args=[
+            right=Call(func=LoadName(name="label"), args=[
                 [x],
             ]),
         )
@@ -551,10 +551,10 @@ class TestCompilerCLPFD:
         x = Var()
         goal = And(
             left=And(
-                left=Call(func=LoadName(name="InDomain"), args=[x, 1, 3]),
+                left=Call(func=LoadName(name="in_domain"), args=[x, 1, 3]),
                 right=ArithNeq(left=x, right=2),
             ),
-            right=Call(func=LoadName(name="Label"), args=[[x]]),
+            right=Call(func=LoadName(name="label"), args=[[x]]),
         )
         results = []
         for _ in solve(goal, module=mod):
@@ -624,10 +624,10 @@ class TestAllDifferent:
         x, y, z = Var(), Var(), Var()
         goal = And(
             left=And(
-                left=Call(func=LoadName(name="InDomain"), args=[[x, y, z], 1, 3]),
-                right=Call(func=LoadName(name="AllDifferent"), args=[[x, y, z]]),
+                left=Call(func=LoadName(name="in_domain"), args=[[x, y, z], 1, 3]),
+                right=Call(func=LoadName(name="all_different"), args=[[x, y, z]]),
             ),
-            right=Call(func=LoadName(name="Label"), args=[[x, y, z]]),
+            right=Call(func=LoadName(name="label"), args=[[x, y, z]]),
         )
         results = []
         for _ in solve(goal, module=mod):

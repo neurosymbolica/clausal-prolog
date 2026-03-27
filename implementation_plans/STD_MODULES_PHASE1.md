@@ -14,22 +14,22 @@ programs — `freeze/2` and `when/2` enable delayed goals (coroutining), while
 ## What was actually built
 
 All 6 predicates were implemented as **compiler special forms** (not runtime
-builtins). This matches how Once, FindAll, ForAll, and catch work — the goal
+builtins). This matches how once, findall, forall, and catch work — the goal
 arguments are compiled inline at compile time via `compile_goal` dispatch.
 
 **Key design decisions that diverged from the original plan below:**
 
-- **CallNth/2 and CountAll/2** — the plan proposed runtime meta-predicate
+- **call_nth/2 and count_all/2** — the plan proposed runtime meta-predicate
   builtins, but compiler special forms are simpler and more efficient (no
   need to pass goal terms through runtime dispatch).
-- **Freeze/2** — the plan explored wakeup queues (`trail._wakeups`) and
+- **freeze/2** — the plan explored wakeup queues (`trail._wakeups`) and
   compiler-emitted drain loops. The actual implementation uses **synchronous
   hook execution** — the freeze hook drives the frozen goal generator directly
   within the attr hook callback. This is simpler (no C extension changes, no
   wakeup queue, no drain loops) and sufficient for standard freeze semantics
   (frozen goals either succeed or reject the unification).
-- **When/2** — compile-time decomposition for `IsBound` (→ Freeze) and
-  conjunction (→ chained When). Runtime helpers for `IsGround` (freeze on
+- **when/2** — compile-time decomposition for `nonvar` (→ freeze) and
+  conjunction (→ chained when). Runtime helpers for `ground` (freeze on
   all free vars, re-check on each binding) and disjunction (shared fired flag).
 - **No C extension changes** were needed. The existing attr hook protocol
   (`hook(attr_value, bound_to, trail) → bool`) was sufficient.
@@ -39,7 +39,7 @@ in `fixtures/coroutining.clausal`), including 10 meta-predicate nesting tests
 and 8 `.clausal` nesting tests.
 
 **Files created:**
-- `clausal/logic/coroutining.py` — freeze hook, When runtime helpers
+- `clausal/logic/coroutining.py` — freeze hook, when runtime helpers
 - `clausal/logic/builtins/control.py` — field registrations for PredicateMeta classes
 - `tests/test_coroutining.py` — 51 Python tests
 - `tests/fixtures/coroutining.clausal` — 20 `.clausal` integration tests
@@ -64,27 +64,27 @@ were superseded by the simpler synchronous hook approach described above.)*
 
 | Predicate | Arity | Description |
 |---|---|---|
-| `Freeze` | 2 | `Freeze(X, Goal)` — delay Goal until X is bound |
-| `When` | 2 | `When(Cond, Goal)` — delay Goal until Cond is satisfied |
-| `SetupCallCleanup` | 3 | `SetupCallCleanup(Setup, Call, Cleanup)` — deterministic cleanup |
-| `CallCleanup` | 2 | `CallCleanup(Call, Cleanup)` — shorthand (setup = true) |
-| `CallNth` | 2 | `CallNth(Goal, N)` — succeed on Nth solution only |
-| `CountAll` | 2 | `CountAll(Goal, Count)` — count solutions without collecting |
+| `freeze` | 2 | `freeze(X, Goal)` — delay Goal until X is bound |
+| `when` | 2 | `when(Cond, Goal)` — delay Goal until Cond is satisfied |
+| `setup_call_cleanup` | 3 | `setup_call_cleanup(Setup, Call, Cleanup)` — deterministic cleanup |
+| `call_cleanup` | 2 | `call_cleanup(Call, Cleanup)` — shorthand (setup = true) |
+| `call_nth` | 2 | `call_nth(Goal, N)` — succeed on Nth solution only |
+| `count_all` | 2 | `count_all(Goal, Count)` — count solutions without collecting |
 
 ---
 
-## 1a — Freeze/2
+## 1a — freeze/2
 
 **Files:** `clausal/logic/coroutining.py` (new), `clausal/logic/builtins/control.py`,
 `clausal/logic/builtins/__init__.py`, `clausal/logic/compiler.py`
 
 ### Semantics
 
-`Freeze(X, Goal)`: if X is already bound, execute Goal immediately. If X is an
+`freeze(X, Goal)`: if X is already bound, execute Goal immediately. If X is an
 unbound variable, attach Goal as an attribute and delay execution until X is
 unified with a value.
 
-When X is later bound via unification, the freeze hook fires and the delayed
+when X is later bound via unification, the freeze hook fires and the delayed
 goal is executed. Multiple freezes on the same variable accumulate — all delayed
 goals fire when the variable is bound.
 
@@ -113,7 +113,7 @@ compiled to generator functions, we need a callable that can execute the goal
 at hook-fire time. Two options:
 
 **Option A — Python callable wrapper (preferred):**
-The `Freeze` builtin receives the goal as a Python callable (via the meta-predicate
+The `freeze` builtin receives the goal as a Python callable (via the meta-predicate
 compilation path used by `call/1`). It wraps it into a thunk that, when invoked,
 runs the goal generator and checks if it produces at least one solution.
 
@@ -133,7 +133,7 @@ def _freeze_builtin(x, goal_callable, trail, k):
 ```
 
 **Option B — Compiler special form:**
-Compile `Freeze(X, Goal)` directly in the compiler (like `catch`), capturing the
+Compile `freeze(X, Goal)` directly in the compiler (like `catch`), capturing the
 goal as an AST sub-generator. This gives better performance but more compiler
 complexity.
 
@@ -178,7 +178,7 @@ Wait — this doesn't handle continuation properly. The frozen goal should
 for existence. This is the fundamental tension between hooks (synchronous
 bool return) and goals (generator-based search).
 
-**Revised approach:** Freeze hooks that need to run goals should use the
+**Revised approach:** freeze hooks that need to run goals should use the
 same pattern as CLP(FD) propagation — the hook returns True/False for
 immediate pass/fail, and any goal execution is scheduled for later. But
 standard `freeze/2` semantics require the goal to run *as part of* the
@@ -186,7 +186,7 @@ current unification — if the goal fails, the unification fails.
 
 **Final approach — compiler special form (Option B after all):**
 
-Compile `Freeze(X, Goal)` as a compiler special form. The compiler emits:
+Compile `freeze(X, Goal)` as a compiler special form. The compiler emits:
 
 ```python
 # Simple mode:
@@ -215,11 +215,11 @@ This is too complex for the hook protocol. Let me reconsider.
 
 Actually, looking at how Scryer/SWI implement freeze: the frozen goal is
 *woken* and added to the goal queue when the variable is bound. The woken
-goals are then executed as part of the normal search. In Clausal's
+goals are then executed as part of the normal search. in_ Clausal's
 generator-based architecture, this means:
 
-1. When `Freeze(X, Goal)` is called and X is unbound, store the goal.
-2. When X is later bound, the attr hook fires.
+1. when `freeze(X, Goal)` is called and X is unbound, store the goal.
+2. when X is later bound, the attr hook fires.
 3. The hook can't run generators — but it can *schedule* them.
 4. The compiler needs a "wakeup queue" check point.
 
@@ -234,12 +234,12 @@ checks disequality), but freeze needs to *run arbitrary goals*.
 
 **Pragmatic approach for Clausal:**
 
-Make `Freeze/2` a **compiler special form** (like `catch/3`). The compiler
-rewrites `Freeze(X, Goal)` into code that:
+Make `freeze/2` a **compiler special form** (like `catch/3`). The compiler
+rewrites `freeze(X, Goal)` into code that:
 
 1. Checks if X is bound → run Goal inline.
 2. If X is unbound → store a *thunk* on X, proceed with the continuation.
-   When X is later bound (during `unify`), the thunk is placed on a
+   when X is later bound (during `unify`), the thunk is placed on a
    **wakeup list** attached to the trail. After each unification in a
    compiled clause body, the compiler emits a wakeup-check loop that
    drains the list and runs each thunk as a sub-generator.
@@ -261,7 +261,7 @@ list when a freeze-attributed variable is bound. The compiled code checks
    - `register_attr_hook(FREEZE_KEY, _freeze_hook)`
 
 3. **Compiler integration** (`compiler.py`):
-   - Add `Freeze` to the special-form dispatch in `compile_goal` and
+   - Add `freeze` to the special-form dispatch in `compile_goal` and
      `compile_goal_trampoline`.
    - Simple mode: emit inline check + `put_attr` for the delayed case.
    - After every goal call that might trigger unification, emit a wakeup
@@ -270,47 +270,47 @@ list when a freeze-attributed variable is bound. The compiled code checks
 
 4. **Register as builtin** in `builtins/__init__.py` and `builtins/control.py`
    for the dispatch table (even though it's a compiler special form, it needs
-   a builtin entry for `call(Freeze(X, G))` dynamic invocation).
+   a builtin entry for `call(freeze(X, G))` dynamic invocation).
 
 5. **Tests** in `tests/test_coroutining.py`:
-   - `Freeze(X, Write(X)), X = hello` → prints "hello"
-   - `Freeze(X, X > 0), X = 5` → succeeds
-   - `Freeze(X, X > 0), X = -1` → fails
+   - `freeze(X, write(X)), X = hello` → prints "hello"
+   - `freeze(X, X > 0), X = 5` → succeeds
+   - `freeze(X, X > 0), X = -1` → fails
    - Multiple freezes on same variable
-   - Freeze on already-bound variable → immediate execution
-   - Freeze + backtracking (trail undo removes the attr)
-   - Freeze in `.clausal` file integration test
+   - freeze on already-bound variable → immediate execution
+   - freeze + backtracking (trail undo removes the attr)
+   - freeze in `.clausal` file integration test
 
 ---
 
-## 1b — When/2
+## 1b — when/2
 
 **Files:** `clausal/logic/coroutining.py`, `clausal/logic/compiler.py`
 
-**Depends on:** 1a (Freeze)
+**Depends on:** 1a (freeze)
 
 ### Semantics
 
-`When(Cond, Goal)`: delay Goal until Cond is satisfied. Conditions:
+`when(Cond, Goal)`: delay Goal until Cond is satisfied. Conditions:
 
 | Condition | Meaning |
 |---|---|
-| `nonvar(X)` / `IsBound(X)` | X is bound |
-| `ground(X)` / `IsGround(X)` | X is ground (no unbound vars) |
+| `nonvar(X)` / `nonvar(X)` | X is bound |
+| `ground(X)` / `ground(X)` | X is ground (no unbound vars) |
 | `(C1, C2)` | Both C1 and C2 satisfied (conjunction) |
 | `(C1 ; C2)` | Either C1 or C2 satisfied (disjunction) |
 
 ### Implementation
 
-`When/2` decomposes the condition and attaches freeze-style hooks to the
+`when/2` decomposes the condition and attaches freeze-style hooks to the
 relevant variables. For conjunction, all sub-conditions must be met. For
 disjunction, any sub-condition suffices.
 
-- `When(IsBound(X), Goal)` → equivalent to `Freeze(X, Goal)`.
-- `When(IsGround(X), Goal)` → freeze on every unbound var in X; when each is
+- `when(nonvar(X), Goal)` → equivalent to `freeze(X, Goal)`.
+- `when(ground(X), Goal)` → freeze on every unbound var in X; when each is
   bound, re-check groundness; fire Goal when fully ground.
-- `When((C1, C2), Goal)` → `When(C1, When(C2, Goal))`.
-- `When((C1; C2), Goal)` → attach to vars in C1 *and* C2; when either fires
+- `when((C1, C2), Goal)` → `when(C1, when(C2, Goal))`.
+- `when((C1; C2), Goal)` → attach to vars in C1 *and* C2; when either fires
   and its condition is satisfied, run Goal.
 
 This is a **compiler special form** that recursively decomposes the condition
@@ -322,29 +322,29 @@ the condition is a variable).
 1. **Condition parser** in `coroutining.py`: `_decompose_when_condition(cond)`
    returns a structured representation of the condition tree.
 
-2. **Compiler integration**: `When(Cond, Goal)` in `compile_goal` /
-   `compile_goal_trampoline`. For the common case `When(IsBound(X), Goal)`,
-   emit the same code as Freeze. For compound conditions, emit a
+2. **Compiler integration**: `when(Cond, Goal)` in `compile_goal` /
+   `compile_goal_trampoline`. For the common case `when(nonvar(X), Goal)`,
+   emit the same code as freeze. For compound conditions, emit a
    runtime `_when_check` helper call.
 
 3. **Runtime helper** `_install_when(cond, goal_thunk, trail)` in
    `coroutining.py` for dynamically-constructed conditions.
 
 4. **Tests** in `tests/test_coroutining.py`:
-   - `When(IsBound(X), Write(X)), X = hello` → prints "hello"
-   - `When(IsGround(f(X, Y)), Goal), X = 1, Y = 2` → Goal fires after Y=2
-   - `When((IsBound(X), IsBound(Y)), Goal)` → fires when both bound
-   - `When((IsBound(X) ; IsBound(Y)), Goal)` → fires when either bound
+   - `when(nonvar(X), write(X)), X = hello` → prints "hello"
+   - `when(ground(f(X, Y)), Goal), X = 1, Y = 2` → Goal fires after Y=2
+   - `when((nonvar(X), nonvar(Y)), Goal)` → fires when both bound
+   - `when((nonvar(X) ; nonvar(Y)), Goal)` → fires when either bound
 
 ---
 
-## 1c — SetupCallCleanup/3
+## 1c — setup_call_cleanup/3
 
 **Files:** `clausal/logic/compiler.py`, `clausal/logic/builtins/control.py`
 
 ### Semantics
 
-`SetupCallCleanup(Setup, Call, Cleanup)`:
+`setup_call_cleanup(Setup, Call, Cleanup)`:
 
 1. Run Setup (must succeed deterministically).
 2. Run Call (may succeed, fail, or throw).
@@ -394,10 +394,10 @@ else:
 
 ### Sub-steps for 1c
 
-1. **Compiler**: Add `SetupCallCleanup` to the special-form dispatch in both
+1. **Compiler**: Add `setup_call_cleanup` to the special-form dispatch in both
    `compile_goal` and `compile_goal_trampoline`.
 
-2. **`CallCleanup/2`**: Sugar — compile as `SetupCallCleanup(true, Call, Cleanup)`
+2. **`call_cleanup/2`**: Sugar — compile as `setup_call_cleanup(true, Call, Cleanup)`
    where `true` is a goal that always succeeds.
 
 3. **Register** both names in the builtin tables.
@@ -412,13 +412,13 @@ else:
 
 ---
 
-## 1d — CallNth/2
+## 1d — call_nth/2
 
 **Files:** `clausal/logic/builtins/control.py`
 
 ### Semantics
 
-`CallNth(Goal, N)`: call Goal, skip the first N-1 solutions, succeed on the Nth.
+`call_nth(Goal, N)`: call Goal, skip the first N-1 solutions, succeed on the Nth.
 
 ### Implementation
 
@@ -438,25 +438,25 @@ def _call_nth(goal_callable, n, trail, k):
             return
 ```
 
-Register as `("CallNth", 2)` in the builtin table with meta-predicate mode
-`CallNth(0, +)` (first arg is a goal, second is input).
+Register as `("call_nth", 2)` in the builtin table with meta-predicate mode
+`call_nth(0, +)` (first arg is a goal, second is input).
 
 ### Tests
 
-- `CallNth(Between(1, 10, X), 5)` → X = 5
-- `CallNth(Between(1, 3, X), 4)` → fails (only 3 solutions)
-- `CallNth(Member(X, [a, b, c]), 1)` → X = a
+- `call_nth(between(1, 10, X), 5)` → X = 5
+- `call_nth(between(1, 3, X), 4)` → fails (only 3 solutions)
+- `call_nth(Member(X, [a, b, c]), 1)` → X = a
 - N = 0 or negative → error
 
 ---
 
-## 1e — CountAll/2
+## 1e — count_all/2
 
 **Files:** `clausal/logic/builtins/control.py`
 
 ### Semantics
 
-`CountAll(Goal, Count)`: count the number of solutions of Goal without
+`count_all(Goal, Count)`: count the number of solutions of Goal without
 collecting them. Unifies Count with the integer count.
 
 ### Implementation
@@ -474,13 +474,13 @@ def _count_all(goal_callable, count, trail, k):
     trail.undo(mark)
 ```
 
-Register as `("CountAll", 2)` with meta-predicate mode `CountAll(0, -)`.
+Register as `("count_all", 2)` with meta-predicate mode `count_all(0, -)`.
 
 ### Tests
 
-- `CountAll(Member(_, [a, b, c]), N)` → N = 3
-- `CountAll(fail, N)` → N = 0
-- `CountAll(Between(1, 100, _), N)` → N = 100
+- `count_all(Member(_, [a, b, c]), N)` → N = 3
+- `count_all(fail, N)` → N = 0
+- `count_all(between(1, 100, _), N)` → N = 100
 - Count already bound to correct value → succeeds
 - Count already bound to wrong value → fails
 
@@ -491,8 +491,8 @@ Register as `("CountAll", 2)` with meta-predicate mode `CountAll(0, -)`.
 | File | Action |
 |---|---|
 | `clausal/logic/coroutining.py` | **New** — freeze hook, when helpers, FREEZE_KEY |
-| `clausal/logic/compiler.py` | Add Freeze, When, SetupCallCleanup, CallCleanup special forms |
-| `clausal/logic/builtins/control.py` | Add CallNth, CountAll builtins |
+| `clausal/logic/compiler.py` | Add freeze, when, setup_call_cleanup, call_cleanup special forms |
+| `clausal/logic/builtins/control.py` | Add call_nth, count_all builtins |
 | `clausal/logic/builtins/__init__.py` | Register new builtins |
 | `clausal/logic/variables/_variables.c` | Add `trail._wakeups` list (if not using Python-side Trail wrapper) |
 | `tests/test_coroutining.py` | **New** — all tests for this phase |
@@ -500,10 +500,10 @@ Register as `("CountAll", 2)` with meta-predicate mode `CountAll(0, -)`.
 
 ## Implementation Order
 
-1. **1d (CallNth)** and **1e (CountAll)** — standalone builtins, no infrastructure changes. Good warm-up.
-2. **1c (SetupCallCleanup)** — compiler special form, modeled on catch/3. No AttVar work.
-3. **1a (Freeze)** — requires wakeup queue on Trail + compiler integration.
-4. **1b (When)** — builds on Freeze.
+1. **1d (call_nth)** and **1e (count_all)** — standalone builtins, no infrastructure changes. Good warm-up.
+2. **1c (setup_call_cleanup)** — compiler special form, modeled on catch/3. No AttVar work.
+3. **1a (freeze)** — requires wakeup queue on Trail + compiler integration.
+4. **1b (when)** — builds on freeze.
 
 ## Test Count Estimate
 

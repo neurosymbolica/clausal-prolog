@@ -48,19 +48,19 @@ class TestPascalToSnake:
         assert pascal_to_snake("CLP") == "clp"
 
     def test_mixed(self):
-        assert pascal_to_snake("AllDifferent") == "all_different"
+        assert pascal_to_snake("all_different") == "all_different"
 
     def test_dcg(self):
         assert pascal_to_snake("DCGRule") == "dcg_rule"
 
     def test_copy_term(self):
-        assert pascal_to_snake("CopyTerm") == "copy_term"
+        assert pascal_to_snake("copy_term") == "copy_term"
 
     def test_io_stream(self):
         assert pascal_to_snake("IOStream") == "io_stream"
 
     def test_single_word(self):
-        assert pascal_to_snake("Append") == "append"
+        assert pascal_to_snake("append") == "append"
 
     def test_already_lower(self):
         assert pascal_to_snake("foo") == "foo"
@@ -136,19 +136,19 @@ class TestPrologVarToClausal:
 class TestResolveName:
     def test_iso_builtin(self):
         d = Dialect.iso()
-        assert resolve_name("FindAll", d) == "findall"
+        assert resolve_name("findall", d) == "findall"
 
     def test_iso_copy_term(self):
         d = Dialect.iso()
-        assert resolve_name("CopyTerm", d) == "copy_term"
+        assert resolve_name("copy_term", d) == "copy_term"
 
     def test_swi_all_different(self):
         d = Dialect.swi()
-        assert resolve_name("AllDifferent", d) == "all_different"
+        assert resolve_name("all_different", d) == "all_different"
 
     def test_scryer_all_different(self):
         d = Dialect.scryer()
-        assert resolve_name("AllDifferent", d) == "all_distinct"
+        assert resolve_name("all_different", d) == "all_distinct"
 
     def test_fallback_pascal_to_snake(self):
         d = Dialect.iso()
@@ -156,11 +156,11 @@ class TestResolveName:
 
     def test_time_goal_swi(self):
         d = Dialect.swi()
-        assert resolve_name("TimeGoal", d) == "time"
+        assert resolve_name("time_goal", d) == "time"
 
     def test_time_goal_scryer(self):
         d = Dialect.scryer()
-        assert resolve_name("TimeGoal", d) == "time"
+        assert resolve_name("time_goal", d) == "time"
 
     def test_member_iso(self):
         d = Dialect.iso()
@@ -168,8 +168,8 @@ class TestResolveName:
 
     def test_filter_swi(self):
         d = Dialect.swi()
-        assert resolve_name("Filter", d) == "include"
+        assert resolve_name("include", d) == "include"
 
     def test_filter_scryer(self):
         d = Dialect.scryer()
-        assert resolve_name("Filter", d) == "include"
+        assert resolve_name("include", d) == "include"

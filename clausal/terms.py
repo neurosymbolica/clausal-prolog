@@ -1,6 +1,6 @@
 """clausal.terms — logic term layer.
 
-Functor types and value types for the clausal logic programming system.
+functor types and value types for the clausal logic programming system.
 
 Python built-in types (int, float, str, bool, None, list) are terms directly —
 no wrapper needed.  Logic variables are Var objects.  Structured terms are
@@ -33,7 +33,7 @@ from .pythonic_ast.nodes import (
     # Unary operators
     Not, Invert, Negate,
     # Comparison / unification operators
-    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, Lt, LtE, Gt, GtE, In, NotIn,
+    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, Lt, LtE, Gt, GtE, in_, NotIn,
     # Expression nodes used in predicate bodies
     Call, LoadName, LoadAttr, LoadSubscript, Slice,
     # Predicate clause term
@@ -172,7 +172,7 @@ class SegList:
     """A first-class term representing a list with variable-length holes.
 
     A SegList is a flat sequence of alternating ConcreteSeg and VarSeg objects.
-    When every VarSeg's var is bound to a concrete list, the SegList is ground
+    when every VarSeg's var is bound to a concrete list, the SegList is ground
     and ``__walk__`` returns a plain Python list.
 
     Example::
@@ -311,7 +311,7 @@ class SegList:
             return NotImplemented
         return NotImplemented
 
-    # ── Sequence protocol (ground delegation) ────────────────────────────────
+    # ── sequence protocol (ground delegation) ────────────────────────────────
 
     def __len__(self) -> int:
         return len(self.to_list())
@@ -410,7 +410,7 @@ def _seglist_unify_gen(seglist, target_list, trail):
 
 def _multi_star_splits(n_stars: int, remainder: int):
     """Yield all ways to assign *remainder* items across *n_stars* buckets
-    (each bucket ≥ 0).  Equivalent to ``_multi_star_splits`` in compiler.py
+    (each bucket ≥ 0).  equivalent to ``_multi_star_splits`` in compiler.py
     but lives here so runtime code can import it without circular imports.
     """
     if n_stars == 0:
@@ -432,14 +432,14 @@ class SegString:
     """A SegList-like term backed by string segments instead of list segments.
 
     Segments are plain ``str`` objects (concrete text) alternating with
-    ``VarSeg`` objects (variable-length string holes).  When every VarSeg is
+    ``VarSeg`` objects (variable-length string holes).  when every VarSeg is
     bound to a string, ``__walk__`` returns a plain Python ``str``.
 
     Example::
 
         SegString(["hel", VarSeg(X), "ld"])
 
-    When ``X`` is bound to ``"lo wor"``, walking yields ``"hello world"``.
+    when ``X`` is bound to ``"lo wor"``, walking yields ``"hello world"``.
     VarSegs always bind to ``str`` (substrings), never char lists.
     """
 
@@ -1027,7 +1027,7 @@ class TermStyle:
         ``'string'``
             Python ``str`` values (rendered with surrounding quotes).
         ``'atom'``
-            Functor names in compound terms and bare names (``LoadName``).
+            functor names in compound terms and bare names (``LoadName``).
         ``'var'``
             Unbound (anonymous) variables — the *anon_var* string is coloured.
         ``'brackets'``
@@ -1218,7 +1218,7 @@ def term_pformat(
     position (infix, prefix).  Short terms are kept on one line; longer
     terms are expanded with *depth*-level indentation.
 
-    *width* is the line-width budget.  When ``None`` (the default) it is
+    *width* is the line-width budget.  when ``None`` (the default) it is
     resolved once from the terminal via ``shutil.get_terminal_size()`` and
     then threaded through all recursive calls so every sub-term uses the
     same value.
@@ -1481,7 +1481,7 @@ __all__ = [
     # Unary operators
     "Not", "Invert", "Negate",
     # Comparison / unification operators
-    "Unify", "DoesNotUnify", "Evaluate", "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "In", "NotIn",
+    "Unify", "DoesNotUnify", "Evaluate", "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "in_", "NotIn",
     # Expression nodes
     "Call", "LoadName", "LoadAttr", "LoadSubscript", "Slice",
     # Predicate clause term

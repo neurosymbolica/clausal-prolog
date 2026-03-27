@@ -169,7 +169,7 @@ class PredicateMeta(type):
     # ── Clause management ─────────────────────────────────────────────────
 
     def _assertz(cls, clause: Any) -> None:
-        """Append clause at end; invalidate compiled dispatch."""
+        """append clause at end; invalidate compiled dispatch."""
         if cls._locked:
             raise RuntimeError(
                 f"Predicate {cls.__name__}/{cls._arity} is locked. "
@@ -297,7 +297,7 @@ def make_atom(name: str) -> "PredicateMeta":
     The returned class IS the atom value: ``a = make_atom("a"); a() is a``.
     Each call creates a NEW class — call once and reuse the result.
 
-    Equivalent to ``make_predicate(name, [])``.
+    equivalent to ``make_predicate(name, [])``.
     """
     return make_predicate(name, [])
 

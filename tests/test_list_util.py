@@ -280,7 +280,7 @@ class TestSortBy:
 
 class TestMaxBy:
     def test_basic(self):
-        # MaxBy with negate key: max(-x) → element with smallest x → 1
+        # max_by with negate key: max(-x) → element with smallest x → 1
         assert run_trampoline_var(_max_by__3, _goal_negate, [3, 1, 2]) == [1]
 
     def test_single_element(self):
@@ -293,7 +293,7 @@ class TestMaxBy:
 
 class TestMinBy:
     def test_basic(self):
-        # MinBy with negate key: min(-x) → element with largest x → 3
+        # min_by with negate key: min(-x) → element with largest x → 3
         assert run_trampoline_var(_min_by__3, _goal_negate, [3, 1, 2]) == [3]
 
     def test_single_element(self):
@@ -342,55 +342,55 @@ class TestListUtilFixture:
         request.cls.mod = _load_fixture("list_util")
 
     @pytest.mark.parametrize("name", [
-        # Take
+        # take
         "take basic",
         "take zero",
         "take more than length",
         "take from empty",
-        # Drop
+        # drop
         "drop basic",
         "drop zero",
         "drop all",
         "drop more than length",
-        # SplitAt
+        # split_at
         "split_at middle",
         "split_at zero",
         "split_at end",
         "split_at beyond",
-        # Zip
+        # zip_
         "zip equal",
         "zip unequal",
         "zip empty",
-        # Replicate
+        # replicate
         "replicate basic",
         "replicate zero",
         "replicate one",
-        # SplitWith
+        # split_with
         "split_with basic",
         "split_with no sep",
         "split_with consecutive",
-        # TakeWhile
+        # take_while
         "take_while basic",
         "take_while none match",
         "take_while all match",
-        # DropWhile
+        # drop_while
         "drop_while basic",
         "drop_while none match",
         "drop_while all match",
-        # Span
+        # span
         "span basic",
-        # GroupBy
+        # group_by
         "group_by identity",
-        # SortBy
+        # sort_by
         "sort_by negate",
         "sort_by empty",
-        # MaxBy
+        # max_by
         "max_by negate",
         "max_by single",
-        # MinBy
+        # min_by
         "min_by negate",
         "min_by single",
-        # FilterMap
+        # filter_map
         "filter_map basic",
         "filter_map all pass",
         "filter_map none pass",

@@ -61,7 +61,7 @@ __all__ = [
     # Unary operators
     "UnaryPlus", "Negate", "Not", "Invert",
     # Comparison operators
-    "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "In", "NotIn",
+    "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "in_", "NotIn",
     "CompareChain",
     # Augmented assignment
     "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
@@ -77,7 +77,7 @@ __all__ = [
     "VarPositional", "VarKeyword", "Params",
     # Statements
     "Assign", "AnnAssign", "Return", "Pass", "Break", "Continue",
-    "Raise", "Assert", "Global", "Nonlocal",
+    "Raise", "assertz", "Global", "Nonlocal",
     # Logical / Prolog
     "Predicate",
     # Module-level items (pipeline split)
@@ -632,7 +632,7 @@ class Evaluate(CmpOp):
     op: ClassVar = ':='
 
 @dataclass
-class In(CmpOp):
+class in_(CmpOp):
     op: ClassVar = 'in'
 
 @dataclass
@@ -1071,7 +1071,7 @@ class Raise(Node):
     cause: Optional[Node] = None
 
 @node_class
-class Assert(Node):
+class assertz(Node):
     test: Node = None  # type: ignore[assignment]
     msg: Optional[Node] = None
 

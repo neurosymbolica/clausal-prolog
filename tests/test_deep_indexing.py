@@ -275,7 +275,7 @@ class TestDeepIndexBehavioral:
         assert results == [[1, 2]]
 
     def test_myappend_split_enumerates_all(self, lm):
-        """Append in split mode enumerates all four splits of [1,2,3]."""
+        """append in split mode enumerates all four splits of [1,2,3]."""
         from clausal.logic.solve import call
         a, b = Var(), Var()
         splits = [(list(deref(a)), list(deref(b)))
@@ -454,7 +454,7 @@ class TestDeepIndexStructural:
     # ── is_var guard for unbound arguments ────────────────────────────────────
 
     def test_list_pred_has_is_var_guard(self):
-        """When arg may be a Var, generated code includes is_var guard as fallback."""
+        """when arg may be a Var, generated code includes is_var guard as fallback."""
         func_def = _make_list_pred("t", [[], [1], [1, 2]], arity=2)
         assert _has_is_var_guard(func_def), (
             "Expected is_var(...) guard for unbound argument path in "
@@ -611,7 +611,7 @@ class TestDeepIndexEdgeCases:
         assert sols == [], f"Expected no solutions for non-list arg, got {sols}"
 
     def test_list_pred_correctness_var_arg(self):
-        """When arg is a Var (unbound), all list-headed clauses should be tried."""
+        """when arg is a Var (unbound), all list-headed clauses should be tried."""
         from clausal.logic.compiler import compile_predicate_trampoline
 
         db = Database()

@@ -12,7 +12,7 @@ Clausal builtins:
 
 Membership idiom:
   Prolog's member/2 corresponds to clausal's ``in`` / ``not in`` operators
-  in .clausal syntax.  ``X in List`` compiles to an In goal node;
+  in .clausal syntax.  ``X in List`` compiles to an in_ goal node;
   ``X not in List`` compiles to NotIn.  The member/2 builtin is also
   available for use via the call() API.
 
@@ -31,7 +31,7 @@ import pytest
 from clausal.logic.database import Module
 from clausal.logic.solve import solve, once
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import Call, LoadName, In, NotIn
+from clausal.terms import Call, LoadName, in_, NotIn
 
 
 def _call_results(functor, *args, mod=None):
@@ -61,31 +61,31 @@ class TestMember:
     def test_member_found(self):
         """member(b, [a,b,c]) succeeds."""
         mod = Module("test")
-        goal = Call(func=LoadName(name="In"), args=["b", ["a", "b", "c"]], kwargs=[])
+        goal = Call(func=LoadName(name="in_"), args=["b", ["a", "b", "c"]], kwargs=[])
         assert once(goal, mod) is not None
 
     def test_member_not_found(self):
         """member(d, [a,b,c]) fails."""
         mod = Module("test")
-        goal = Call(func=LoadName(name="In"), args=["d", ["a", "b", "c"]], kwargs=[])
+        goal = Call(func=LoadName(name="in_"), args=["d", ["a", "b", "c"]], kwargs=[])
         assert once(goal, mod) is None
 
     def test_member_enumerates(self):
         """member(X, [1,2,3]) generates 1, 2, 3."""
         x = Var()
-        results = _call_var("In", x, [1, 2, 3], var_index=0)
+        results = _call_var("in_", x, [1, 2, 3], var_index=0)
         assert results == [1, 2, 3]
 
     def test_member_empty_list(self):
         """member(X, []) fails."""
         x = Var()
-        results = _call_var("In", x, [], var_index=0)
+        results = _call_var("in_", x, [], var_index=0)
         assert results == []
 
     def test_member_duplicates(self):
         """member(X, [a,b,a]) generates a, b, a."""
         x = Var()
-        results = _call_var("In", x, ["a", "b", "a"], var_index=0)
+        results = _call_var("in_", x, ["a", "b", "a"], var_index=0)
         assert results == ["a", "b", "a"]
 
 
@@ -94,37 +94,37 @@ class TestMember:
 
 class TestInOperator:
     """The ``in`` operator is clausal's native syntax for membership.
-    ``X in [1,2,3]`` compiles to an In goal node; ``X not in [1,2,3]``
+    ``X in [1,2,3]`` compiles to an in_ goal node; ``X not in [1,2,3]``
     compiles to NotIn.  These correspond to Prolog's member/2."""
 
     def test_in_found(self):
         """'b' in ['a','b','c'] succeeds."""
-        goal = In(left="b", right=["a", "b", "c"])
+        goal = in_(left="b", right=["a", "b", "c"])
         assert once(goal, Module("test")) is not None
 
     def test_in_not_found(self):
         """'d' in ['a','b','c'] fails."""
-        goal = In(left="d", right=["a", "b", "c"])
+        goal = in_(left="d", right=["a", "b", "c"])
         assert once(goal, Module("test")) is None
 
     def test_in_enumerates(self):
         """X in [1,2,3] generates 1, 2, 3."""
         x = Var()
-        goal = In(left=x, right=[1, 2, 3])
+        goal = in_(left=x, right=[1, 2, 3])
         results = [deref(x) for _ in solve(goal, Module("test"))]
         assert results == [1, 2, 3]
 
     def test_in_empty_list(self):
         """X in [] fails."""
         x = Var()
-        goal = In(left=x, right=[])
+        goal = in_(left=x, right=[])
         results = [deref(x) for _ in solve(goal, Module("test"))]
         assert results == []
 
     def test_in_duplicates(self):
         """X in ['a','b','a'] generates a, b, a."""
         x = Var()
-        goal = In(left=x, right=["a", "b", "a"])
+        goal = in_(left=x, right=["a", "b", "a"])
         results = [deref(x) for _ in solve(goal, Module("test"))]
         assert results == ["a", "b", "a"]
 
@@ -151,28 +151,28 @@ class TestAppend:
     def test_append_two_lists(self):
         """append([1,2], [3,4], X) → X = [1,2,3,4]."""
         x = Var()
-        results = _call_var("Append", [1, 2], [3, 4], x, var_index=2)
+        results = _call_var("append", [1, 2], [3, 4], x, var_index=2)
         assert results == [[1, 2, 3, 4]]
 
     def test_append_empty_left(self):
         x = Var()
-        results = _call_var("Append", [], [1, 2], x, var_index=2)
+        results = _call_var("append", [], [1, 2], x, var_index=2)
         assert results == [[1, 2]]
 
     def test_append_empty_right(self):
         x = Var()
-        results = _call_var("Append", [1, 2], [], x, var_index=2)
+        results = _call_var("append", [1, 2], [], x, var_index=2)
         assert results == [[1, 2]]
 
     def test_append_both_empty(self):
         x = Var()
-        results = _call_var("Append", [], [], x, var_index=2)
+        results = _call_var("append", [], [], x, var_index=2)
         assert results == [[]]
 
     def test_append_split_mode(self):
         """append(X, Y, [1,2,3]) enumerates all splits."""
         x, y = Var(), Var()
-        results = _call_results("Append", x, y, [1, 2, 3])
+        results = _call_results("append", x, y, [1, 2, 3])
         expected_x = [[], [1], [1, 2], [1, 2, 3]]
         expected_y = [[1, 2, 3], [2, 3], [3], []]
         assert [r[0] for r in results] == expected_x
@@ -186,17 +186,17 @@ class TestLength:
     def test_length_of_list(self):
         """length([a,b,c], N) → N = 3."""
         n = Var()
-        results = _call_var("Length", ["a", "b", "c"], n, var_index=1)
+        results = _call_var("length", ["a", "b", "c"], n, var_index=1)
         assert results == [3]
 
     def test_length_empty(self):
         n = Var()
-        results = _call_var("Length", [], n, var_index=1)
+        results = _call_var("length", [], n, var_index=1)
         assert results == [0]
 
     def test_length_one(self):
         n = Var()
-        results = _call_var("Length", [42], n, var_index=1)
+        results = _call_var("length", [42], n, var_index=1)
         assert results == [1]
 
 
@@ -207,17 +207,17 @@ class TestLast:
     def test_last_element(self):
         """last([1,2,3], X) → X = 3."""
         x = Var()
-        results = _call_var("Last", [1, 2, 3], x, var_index=1)
+        results = _call_var("last", [1, 2, 3], x, var_index=1)
         assert results == [3]
 
     def test_last_singleton(self):
         x = Var()
-        results = _call_var("Last", [42], x, var_index=1)
+        results = _call_var("last", [42], x, var_index=1)
         assert results == [42]
 
     def test_last_empty_fails(self):
         x = Var()
-        results = _call_var("Last", [], x, var_index=1)
+        results = _call_var("last", [], x, var_index=1)
         assert results == []
 
 
@@ -228,25 +228,25 @@ class TestReverse:
     def test_reverse_list(self):
         """reverse([1,2,3], X) → X = [3,2,1]."""
         x = Var()
-        results = _call_var("Reverse", [1, 2, 3], x, var_index=1)
+        results = _call_var("reverse", [1, 2, 3], x, var_index=1)
         assert results == [[3, 2, 1]]
 
     def test_reverse_empty(self):
         x = Var()
-        results = _call_var("Reverse", [], x, var_index=1)
+        results = _call_var("reverse", [], x, var_index=1)
         assert results == [[]]
 
     def test_reverse_singleton(self):
         x = Var()
-        results = _call_var("Reverse", [42], x, var_index=1)
+        results = _call_var("reverse", [42], x, var_index=1)
         assert results == [[42]]
 
     def test_reverse_involution(self):
         """reverse(reverse(L)) = L."""
         x = Var()
-        results = _call_var("Reverse", [1, 2, 3], x, var_index=1)
+        results = _call_var("reverse", [1, 2, 3], x, var_index=1)
         y = Var()
-        results2 = _call_var("Reverse", results[0], y, var_index=1)
+        results2 = _call_var("reverse", results[0], y, var_index=1)
         assert results2 == [[1, 2, 3]]
 
 
@@ -255,31 +255,31 @@ class TestReverse:
 
 class TestNth:
     def test_getitem_first(self):
-        """GetItem(0, [a,b,c], X) → X = a."""
+        """get_item(0, [a,b,c], X) → X = a."""
         x = Var()
-        results = _call_var("GetItem", 0, ["a", "b", "c"], x, var_index=2)
+        results = _call_var("get_item", 0, ["a", "b", "c"], x, var_index=2)
         assert results == ["a"]
 
     def test_getitem_last(self):
         x = Var()
-        results = _call_var("GetItem", 2, ["a", "b", "c"], x, var_index=2)
+        results = _call_var("get_item", 2, ["a", "b", "c"], x, var_index=2)
         assert results == ["c"]
 
     def test_getitem_second(self):
-        """GetItem(1, [a,b,c], X) → X = b (0-based equivalent of nth1(2,...))."""
+        """get_item(1, [a,b,c], X) → X = b (0-based equivalent of nth1(2,...))."""
         x = Var()
-        results = _call_var("GetItem", 1, ["a", "b", "c"], x, var_index=2)
+        results = _call_var("get_item", 1, ["a", "b", "c"], x, var_index=2)
         assert results == ["b"]
 
     def test_getitem_out_of_range(self):
         x = Var()
-        results = _call_var("GetItem", 5, ["a", "b"], x, var_index=2)
+        results = _call_var("get_item", 5, ["a", "b"], x, var_index=2)
         assert results == []
 
     def test_getitem_negative_fails(self):
         """Negative index is out of range."""
         x = Var()
-        results = _call_var("GetItem", -1, ["a", "b"], x, var_index=2)
+        results = _call_var("get_item", -1, ["a", "b"], x, var_index=2)
         assert results == []
 
 
@@ -290,28 +290,28 @@ class TestSort:
     def test_sort_removes_duplicates(self):
         """ISO: sort([3,1,2,1], X) → X = [1,2,3]."""
         x = Var()
-        results = _call_var("Sort", [3, 1, 2, 1], x, var_index=1)
+        results = _call_var("sort", [3, 1, 2, 1], x, var_index=1)
         assert results == [[1, 2, 3]]
 
     def test_sort_already_sorted(self):
         x = Var()
-        results = _call_var("Sort", [1, 2, 3], x, var_index=1)
+        results = _call_var("sort", [1, 2, 3], x, var_index=1)
         assert results == [[1, 2, 3]]
 
     def test_sort_empty(self):
         x = Var()
-        results = _call_var("Sort", [], x, var_index=1)
+        results = _call_var("sort", [], x, var_index=1)
         assert results == [[]]
 
     def test_msort_preserves_duplicates(self):
         """msort([3,1,2,1], X) → X = [1,1,2,3]."""
         x = Var()
-        results = _call_var("MergeSort", [3, 1, 2, 1], x, var_index=1)
+        results = _call_var("msort", [3, 1, 2, 1], x, var_index=1)
         assert results == [[1, 1, 2, 3]]
 
     def test_sort_strings(self):
         x = Var()
-        results = _call_var("Sort", ["c", "a", "b"], x, var_index=1)
+        results = _call_var("sort", ["c", "a", "b"], x, var_index=1)
         assert results == [["a", "b", "c"]]
 
 
@@ -322,17 +322,17 @@ class TestFlatten:
     def test_flatten_nested(self):
         """flatten([1,[2,[3]],4], X) → X = [1,2,3,4]."""
         x = Var()
-        results = _call_var("Flatten", [1, [2, [3]], 4], x, var_index=1)
+        results = _call_var("flatten", [1, [2, [3]], 4], x, var_index=1)
         assert results == [[1, 2, 3, 4]]
 
     def test_flatten_already_flat(self):
         x = Var()
-        results = _call_var("Flatten", [1, 2, 3], x, var_index=1)
+        results = _call_var("flatten", [1, 2, 3], x, var_index=1)
         assert results == [[1, 2, 3]]
 
     def test_flatten_empty(self):
         x = Var()
-        results = _call_var("Flatten", [], x, var_index=1)
+        results = _call_var("flatten", [], x, var_index=1)
         assert results == [[]]
 
 
@@ -343,19 +343,19 @@ class TestPermutation:
     def test_permutation_generates_all(self):
         """permutation([1,2,3], X) generates 6 permutations."""
         x = Var()
-        results = _call_var("Permutation", [1, 2, 3], x, var_index=1)
+        results = _call_var("permutation", [1, 2, 3], x, var_index=1)
         assert len(results) == 6
         assert [1, 2, 3] in results
         assert [3, 2, 1] in results
 
     def test_permutation_empty(self):
         x = Var()
-        results = _call_var("Permutation", [], x, var_index=1)
+        results = _call_var("permutation", [], x, var_index=1)
         assert results == [[]]
 
     def test_permutation_singleton(self):
         x = Var()
-        results = _call_var("Permutation", [42], x, var_index=1)
+        results = _call_var("permutation", [42], x, var_index=1)
         assert results == [[42]]
 
 
@@ -366,17 +366,17 @@ class TestSelect:
     def test_select_element(self):
         """select(2, [1,2,3], X) → X = [1,3]."""
         x = Var()
-        results = _call_var("Select", 2, [1, 2, 3], x, var_index=2)
+        results = _call_var("select", 2, [1, 2, 3], x, var_index=2)
         assert [1, 3] in results
 
     def test_select_first(self):
         x = Var()
-        results = _call_var("Select", 1, [1, 2, 3], x, var_index=2)
+        results = _call_var("select", 1, [1, 2, 3], x, var_index=2)
         assert [2, 3] in results
 
     def test_select_not_found(self):
         x = Var()
-        results = _call_var("Select", 9, [1, 2, 3], x, var_index=2)
+        results = _call_var("select", 9, [1, 2, 3], x, var_index=2)
         assert results == []
 
 
@@ -387,25 +387,25 @@ class TestSetOperations:
     def test_subtract(self):
         """subtract([1,2,3,4], [2,4], X) → X = [1,3]."""
         x = Var()
-        results = _call_var("Subtract", [1, 2, 3, 4], [2, 4], x, var_index=2)
+        results = _call_var("subtract", [1, 2, 3, 4], [2, 4], x, var_index=2)
         assert results == [[1, 3]]
 
     def test_intersection(self):
         """intersection([1,2,3], [2,3,4], X) → X = [2,3]."""
         x = Var()
-        results = _call_var("Intersection", [1, 2, 3], [2, 3, 4], x, var_index=2)
+        results = _call_var("intersection", [1, 2, 3], [2, 3, 4], x, var_index=2)
         assert results == [[2, 3]]
 
     def test_union(self):
         """union([1,2], [2,3], X) → X = [1,2,3]."""
         x = Var()
-        results = _call_var("Union", [1, 2], [2, 3], x, var_index=2)
+        results = _call_var("union", [1, 2], [2, 3], x, var_index=2)
         assert results == [[1, 2, 3]]
 
     def test_list_to_set(self):
         """list_to_set([1,2,1,3,2], X) → X = [1,2,3]."""
         x = Var()
-        results = _call_var("ToSet", [1, 2, 1, 3, 2], x, var_index=1)
+        results = _call_var("list_to_set", [1, 2, 1, 3, 2], x, var_index=1)
         assert results == [[1, 2, 3]]
 
 
@@ -416,27 +416,27 @@ class TestAggregates:
     def test_sum_list(self):
         """sum_list([1,2,3,4], X) → X = 10."""
         x = Var()
-        results = _call_var("SumList", [1, 2, 3, 4], x, var_index=1)
+        results = _call_var("sum_list", [1, 2, 3, 4], x, var_index=1)
         assert results == [10]
 
     def test_sum_list_empty(self):
         x = Var()
-        results = _call_var("SumList", [], x, var_index=1)
+        results = _call_var("sum_list", [], x, var_index=1)
         assert results == [0]
 
     def test_max_list(self):
         """max_list([3,1,4,1,5], X) → X = 5."""
         x = Var()
-        results = _call_var("MaxList", [3, 1, 4, 1, 5], x, var_index=1)
+        results = _call_var("max_list", [3, 1, 4, 1, 5], x, var_index=1)
         assert results == [5]
 
     def test_min_list(self):
         """min_list([3,1,4,1,5], X) → X = 1."""
         x = Var()
-        results = _call_var("MinList", [3, 1, 4, 1, 5], x, var_index=1)
+        results = _call_var("min_list", [3, 1, 4, 1, 5], x, var_index=1)
         assert results == [1]
 
     def test_max_list_singleton(self):
         x = Var()
-        results = _call_var("MaxList", [42], x, var_index=1)
+        results = _call_var("max_list", [42], x, var_index=1)
         assert results == [42]

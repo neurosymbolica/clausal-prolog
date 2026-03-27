@@ -4,9 +4,9 @@
 
 **Depends on:** V2-15 (I/O builtins), Predicate-as-Class refactor (PredicateMeta)
 
-**Goal:** Add ISO-standard character and string predicates (`CharType/2`,
-`CharCode/2`, `AtomConcat/3`, `SubAtom/5`, etc.) and clause inspection
-predicates (`Listing/1`, `PortrayClause/1`). These fill the main remaining
+**Goal:** Add ISO-standard character and string predicates (`char_type/2`,
+`char_code/2`, `atom_concat/3`, `sub_atom/5`, etc.) and clause inspection
+predicates (`listing/1`, `portray_clause/1`). These fill the main remaining
 gap in Clausal's standard library: logic-aware string manipulation with
 backtracking, and runtime predicate introspection.
 
@@ -20,8 +20,8 @@ is no reason to reimplement a worse version under a Prolog API.
 ## Design Principles
 
 1. **Logic-aware string operations.** The point of these predicates (vs `++()`)
-   is that they participate in unification and backtracking. `AtomConcat(A, B,
-   "hello")` with A and B unbound enumerates all 6 splits. `CharType(C, digit)`
+   is that they participate in unification and backtracking. `atom_concat(A, B,
+   "hello")` with A and B unbound enumerates all 6 splits. `char_type(C, digit)`
    enumerates '0'..'9'. Pure Python string methods can't do this — they're
    functions, not relations.
 
@@ -38,19 +38,19 @@ is no reason to reimplement a worse version under a Prolog API.
 
 ---
 
-## 2a — CharType/2 and CharCode/2
+## 2a — char_type/2 and char_code/2
 
 **Files:** `clausal/logic/builtins/chars.py` (new), `tests/test_chars.py` (new)
 
 ### Semantics
 
-`CharType(Char, Type)` — character classification as a *relation*:
+`char_type(Char, Type)` — character classification as a *relation*:
 
 - Both bound → test: succeeds iff Char has the given Type.
 - Char bound, Type unbound → enumerate all matching types.
 - Type bound, Char unbound → enumerate all ASCII chars of that type.
 
-`CharCode(Char, Code)` — bidirectional char ↔ integer code point:
+`char_code(Char, Code)` — bidirectional char ↔ integer code point:
 
 - Char bound → unify Code with `ord(Char)`.
 - Code bound → unify Char with `chr(Code)`.
@@ -89,8 +89,8 @@ _CHAR_TYPES = {
 }
 ```
 
-Design question: should `CharType(C, Type)` with *both* unbound enumerate all
-(char, type) pairs? In standard Prolog `char_type/2`, both-unbound is an
+Design question: should `char_type(C, Type)` with *both* unbound enumerate all
+(char, type) pairs? in_ standard Prolog `char_type/2`, both-unbound is an
 `instantiation_error`. But since there are only ~1280 valid (char, type)
 pairs in ASCII (128 chars × ~10 types, with many non-matches), enumeration
 is feasible. **Decision: require at least one argument bound.** Both unbound →
@@ -105,29 +105,29 @@ validate `isinstance(c, str) and len(c) == 1`.
 ### Sub-steps for 2a
 
 1. **Create `clausal/logic/builtins/chars.py`** with `_CHAR_TYPES` dict and
-   `CharType/2` builtin implementing three modes (test, enum types, enum chars).
+   `char_type/2` builtin implementing three modes (test, enum types, enum chars).
 
-2. **Add `CharCode/2`** — bidirectional `ord`/`chr` conversion. Error if both
+2. **Add `char_code/2`** — bidirectional `ord`/`chr` conversion. Error if both
    unbound. Error if char is not length-1 string. Error if code is negative.
 
 3. **Register** in `clausal/logic/builtins/__init__.py` by importing the module.
 
 4. **Tests** in `tests/test_chars.py` (~15 tests):
-   - `CharType('a', "alpha")` → succeeds
-   - `CharType('1', "digit")` → succeeds
-   - `CharType('a', "digit")` → fails
-   - `CharType('A', "upper")` → succeeds
-   - `CharType(' ', "space")` → succeeds
-   - `CharType('!', "punct")` → succeeds
-   - `CharType(C, "digit")` → enumerates '0'..'9' (10 solutions)
-   - `CharType('a', TYPE)` → enumerates "alpha", "alnum", "lower", "ascii", "print" (5 solutions)
-   - `CharType(C, T)` both unbound → error
-   - `CharType("ab", "alpha")` → fails (not length-1)
-   - `CharCode('A', N)` → N = 65
-   - `CharCode(C, 65)` → C = 'A'
-   - `CharCode('A', 65)` → succeeds (both bound, match)
-   - `CharCode('A', 66)` → fails (both bound, mismatch)
-   - `CharCode(C, N)` both unbound → error
+   - `char_type('a', "alpha")` → succeeds
+   - `char_type('1', "digit")` → succeeds
+   - `char_type('a', "digit")` → fails
+   - `char_type('A', "upper")` → succeeds
+   - `char_type(' ', "space")` → succeeds
+   - `char_type('!', "punct")` → succeeds
+   - `char_type(C, "digit")` → enumerates '0'..'9' (10 solutions)
+   - `char_type('a', TYPE)` → enumerates "alpha", "alnum", "lower", "ascii", "print" (5 solutions)
+   - `char_type(C, T)` both unbound → error
+   - `char_type("ab", "alpha")` → fails (not length-1)
+   - `char_code('A', N)` → N = 65
+   - `char_code(C, 65)` → C = 'A'
+   - `char_code('A', 65)` → succeeds (both bound, match)
+   - `char_code('A', 66)` → fails (both bound, mismatch)
+   - `char_code(C, N)` both unbound → error
 
 ---
 
@@ -139,8 +139,8 @@ validate `isinstance(c, str) and len(c) == 1`.
 
 | Predicate | Description |
 |---|---|
-| `UpcaseAtom(Atom, Upper)` | Unify Upper with uppercase version of Atom |
-| `DowncaseAtom(Atom, Lower)` | Unify Lower with lowercase version of Atom |
+| `upcase_atom(Atom, Upper)` | Unify Upper with uppercase version of Atom |
+| `downcase_atom(Atom, Lower)` | Unify Lower with lowercase version of Atom |
 
 These are unidirectional — the first argument must be bound to a string.
 If the first argument is unbound, throw `instantiation_error`. These match
@@ -151,7 +151,7 @@ SWI-Prolog's `upcase_atom/2` and `downcase_atom/2`.
 Straightforward wrappers around `str.upper()` and `str.lower()`:
 
 ```python
-@_builtin("UpcaseAtom", 2)
+@_builtin("upcase_atom", 2)
 def _upcase_atom__2(atom, upper, trail, k):
     a = deref(atom)
     if is_var(a):
@@ -166,33 +166,33 @@ def _upcase_atom__2(atom, upper, trail, k):
 
 ### Sub-steps for 2b
 
-1. **Add `UpcaseAtom/2` and `DowncaseAtom/2`** to `chars.py`.
+1. **Add `upcase_atom/2` and `downcase_atom/2`** to `chars.py`.
 2. **Tests** (~6 tests):
-   - `UpcaseAtom("hello", S)` → S = "HELLO"
-   - `UpcaseAtom("Hello World", S)` → S = "HELLO WORLD"
-   - `DowncaseAtom("HELLO", S)` → S = "hello"
-   - `UpcaseAtom("", S)` → S = ""
-   - `UpcaseAtom(X, S)` with X unbound → instantiation_error
-   - `UpcaseAtom(42, S)` → type_error
+   - `upcase_atom("hello", S)` → S = "HELLO"
+   - `upcase_atom("Hello World", S)` → S = "HELLO WORLD"
+   - `downcase_atom("HELLO", S)` → S = "hello"
+   - `upcase_atom("", S)` → S = ""
+   - `upcase_atom(X, S)` with X unbound → instantiation_error
+   - `upcase_atom(42, S)` → type_error
 
 ---
 
-## 2c — AtomLength/2, AtomChars/2, AtomCodes/2
+## 2c — atom_length/2, atom_chars/2, atom_codes/2
 
 **Files:** `clausal/logic/builtins/chars.py`, `tests/test_chars.py`
 
 ### Semantics
 
-`AtomLength(Atom, Length)` — unify Length with the length of Atom. First
+`atom_length(Atom, length)` — unify length with the length of Atom. First
 argument must be bound.
 
-`AtomChars(Atom, Chars)` — bidirectional conversion between a string and a
+`atom_chars(Atom, Chars)` — bidirectional conversion between a string and a
 list of single-character strings:
 - Atom bound → unify Chars with `list(Atom)`.
 - Chars bound → unify Atom with `"".join(Chars)`.
 - Both bound → test equality.
 
-`AtomCodes(Atom, Codes)` — bidirectional conversion between a string and a
+`atom_codes(Atom, Codes)` — bidirectional conversion between a string and a
 list of integer character codes:
 - Atom bound → unify Codes with `[ord(c) for c in Atom]`.
 - Codes bound → unify Atom with `"".join(chr(c) for c in Codes)`.
@@ -201,56 +201,56 @@ list of integer character codes:
 
 The bidirectional predicates need mode detection (which argument is bound?).
 This is the same pattern used extensively in existing builtins (e.g.,
-`Functor/3`, `Unpack/2`, `AtomConcat/3` in Phase 2d).
+`functor/3`, `unpack/2`, `atom_concat/3` in Phase 2d).
 
-Design question for `AtomChars/2`: Clausal lists are native Python lists
-(not cons cells). So `AtomChars("hi", L)` should unify L with `['h', 'i']`
+Design question for `atom_chars/2`: Clausal lists are native Python lists
+(not cons cells). So `atom_chars("hi", L)` should unify L with `['h', 'i']`
 (a Python list). This is correct — Clausal already uses Python lists throughout.
 
-Design question for `AtomCodes/2`: same pattern — produce `[104, 105]` for
+Design question for `atom_codes/2`: same pattern — produce `[104, 105]` for
 `"hi"`. The reverse direction must validate all elements are integers.
 
 ### Sub-steps for 2c
 
-1. **Add `AtomLength/2`** — simple wrapper, Atom must be bound.
-2. **Add `AtomChars/2`** — bidirectional with mode detection.
-3. **Add `AtomCodes/2`** — bidirectional with mode detection.
+1. **Add `atom_length/2`** — simple wrapper, Atom must be bound.
+2. **Add `atom_chars/2`** — bidirectional with mode detection.
+3. **Add `atom_codes/2`** — bidirectional with mode detection.
 4. **Tests** (~12 tests):
-   - `AtomLength("hello", N)` → N = 5
-   - `AtomLength("", N)` → N = 0
-   - `AtomLength("hello", 5)` → succeeds
-   - `AtomLength("hello", 3)` → fails
-   - `AtomLength(X, N)` → instantiation_error
-   - `AtomChars("hi", L)` → L = ['h', 'i']
-   - `AtomChars(A, ['h', 'i'])` → A = "hi"
-   - `AtomChars("hi", ['h', 'i'])` → succeeds (both bound)
-   - `AtomChars("", L)` → L = []
-   - `AtomCodes("hi", L)` → L = [104, 105]
-   - `AtomCodes(A, [104, 105])` → A = "hi"
-   - `AtomCodes("hi", [104, 105])` → succeeds
+   - `atom_length("hello", N)` → N = 5
+   - `atom_length("", N)` → N = 0
+   - `atom_length("hello", 5)` → succeeds
+   - `atom_length("hello", 3)` → fails
+   - `atom_length(X, N)` → instantiation_error
+   - `atom_chars("hi", L)` → L = ['h', 'i']
+   - `atom_chars(A, ['h', 'i'])` → A = "hi"
+   - `atom_chars("hi", ['h', 'i'])` → succeeds (both bound)
+   - `atom_chars("", L)` → L = []
+   - `atom_codes("hi", L)` → L = [104, 105]
+   - `atom_codes(A, [104, 105])` → A = "hi"
+   - `atom_codes("hi", [104, 105])` → succeeds
 
 ---
 
-## 2d — AtomConcat/3
+## 2d — atom_concat/3
 
 **Files:** `clausal/logic/builtins/chars.py`, `tests/test_chars.py`
 
 ### Semantics
 
-`AtomConcat(A, B, C)` — string concatenation as a *relation*:
+`atom_concat(A, B, C)` — string concatenation as a *relation*:
 
 - A and B bound → unify C with `A + B` (forward).
 - C bound, A and/or B unbound → enumerate all splits (reverse).
 - All three bound → test `A + B == C`.
 
 This is one of the more interesting predicates because the reverse mode
-produces multiple solutions via backtracking. `AtomConcat(A, B, "abc")` has
+produces multiple solutions via backtracking. `atom_concat(A, B, "abc")` has
 4 solutions: `("","abc")`, `("a","bc")`, `("ab","c")`, `("abc","")`.
 
 ### Implementation
 
 The forward direction is trivial. The reverse direction is the interesting
-part. When C is bound and at least one of A, B is unbound:
+part. when C is bound and at least one of A, B is unbound:
 
 ```python
 # C is bound (string of length n)
@@ -275,7 +275,7 @@ For very long strings, the optimized check is better.
 when both are unbound.
 
 ```python
-@_builtin("AtomConcat", 3)
+@_builtin("atom_concat", 3)
 def _atom_concat__3(a, b, c, trail, k):
     va, vb, vc = deref(a), deref(b), deref(c)
     a_bound = not is_var(va) and isinstance(va, str)
@@ -316,64 +316,64 @@ def _atom_concat__3(a, b, c, trail, k):
 
 ### Sub-steps for 2d
 
-1. **Add `AtomConcat/3`** with optimized mode dispatch.
+1. **Add `atom_concat/3`** with optimized mode dispatch.
 2. **Tests** (~10 tests):
-   - `AtomConcat("hel", "lo", S)` → S = "hello"
-   - `AtomConcat("", "hello", S)` → S = "hello"
-   - `AtomConcat("hello", "", S)` → S = "hello"
-   - `AtomConcat(A, B, "abc")` → 4 solutions: ("","abc"), ("a","bc"), ("ab","c"), ("abc","")
-   - `AtomConcat("a", B, "abc")` → B = "bc"
-   - `AtomConcat(A, "bc", "abc")` → A = "a"
-   - `AtomConcat("a", "bc", "abc")` → succeeds (all bound, match)
-   - `AtomConcat("x", "bc", "abc")` → fails (all bound, mismatch)
-   - `AtomConcat(A, B, C)` all unbound → instantiation_error
-   - `AtomConcat("abc", B, C)` C unbound → instantiation_error
+   - `atom_concat("hel", "lo", S)` → S = "hello"
+   - `atom_concat("", "hello", S)` → S = "hello"
+   - `atom_concat("hello", "", S)` → S = "hello"
+   - `atom_concat(A, B, "abc")` → 4 solutions: ("","abc"), ("a","bc"), ("ab","c"), ("abc","")
+   - `atom_concat("a", B, "abc")` → B = "bc"
+   - `atom_concat(A, "bc", "abc")` → A = "a"
+   - `atom_concat("a", "bc", "abc")` → succeeds (all bound, match)
+   - `atom_concat("x", "bc", "abc")` → fails (all bound, mismatch)
+   - `atom_concat(A, B, C)` all unbound → instantiation_error
+   - `atom_concat("abc", B, C)` C unbound → instantiation_error
 
 ---
 
-## 2e — SubAtom/5
+## 2e — sub_atom/5
 
 **Files:** `clausal/logic/builtins/chars.py`, `tests/test_chars.py`
 
 ### Semantics
 
-`SubAtom(Atom, Before, Length, After, Sub)` — the most complex predicate in
+`sub_atom(Atom, Before, length, After, Sub)` — the most complex predicate in
 this phase. Relates a string to its substrings with position information:
 
 - **Atom** — the full string (must be bound)
 - **Before** — number of characters before the substring
-- **Length** — length of the substring
+- **length** — length of the substring
 - **After** — number of characters after the substring
 - **Sub** — the substring itself
 
-Constraint: `Before + Length + After = len(Atom)` where all are non-negative.
+Constraint: `Before + length + After = len(Atom)` where all are non-negative.
 
 This is a five-argument relation with many valid modes. The key insight is that
-any three of {Before, Length, After, len(Atom)} determine the fourth, and then
-Sub is determined. When fewer are known, we enumerate.
+any three of {Before, length, After, len(Atom)} determine the fourth, and then
+Sub is determined. when fewer are known, we enumerate.
 
 ### Mode Analysis
 
-The general approach: iterate over all valid (Before, Length) pairs consistent
+The general approach: iterate over all valid (Before, length) pairs consistent
 with the bound arguments, compute After and Sub, and unify.
 
 | Known | Strategy |
 |---|---|
-| All of Before, Length, After, Sub | Verify consistency |
-| Before + Length | Compute After, extract Sub, unify |
-| Before + After | Compute Length = len(Atom) - Before - After, extract Sub |
-| Before + Sub | Length = len(Sub), compute After, check Sub matches |
-| Length + After | Compute Before = len(Atom) - Length - After, extract Sub |
-| Length + Sub | Find all positions where Sub occurs with given length |
-| After + Sub | Compute Before + Length from After, check Sub matches |
+| All of Before, length, After, Sub | Verify consistency |
+| Before + length | Compute After, extract Sub, unify |
+| Before + After | Compute length = len(Atom) - Before - After, extract Sub |
+| Before + Sub | length = len(Sub), compute After, check Sub matches |
+| length + After | Compute Before = len(Atom) - length - After, extract Sub |
+| length + Sub | Find all positions where Sub occurs with given length |
+| After + Sub | Compute Before + length from After, check Sub matches |
 | Sub only | Find all positions of Sub in Atom |
 | Before only | Enumerate all Lengths 0..len(Atom)-Before |
-| Length only | Enumerate all Before values 0..len(Atom)-Length |
+| length only | Enumerate all Before values 0..len(Atom)-length |
 | After only | Enumerate all Before values 0..len(Atom)-After |
-| None bound | Enumerate all (Before, Length) pairs |
+| None bound | Enumerate all (Before, length) pairs |
 
 This is complex but the implementation can be unified: enumerate all valid
-(Before, Length) pairs, compute After and Sub, and try to unify all four
+(Before, length) pairs, compute After and Sub, and try to unify all four
 output arguments. The unification will fail for pairs that don't match the
 bound arguments, so we don't need separate code paths for each mode.
 
@@ -382,7 +382,7 @@ bound arguments, so we don't need separate code paths for each mode.
 The brute-force approach is clean and correct:
 
 ```python
-@_builtin("SubAtom", 5)
+@_builtin("sub_atom", 5)
 def _sub_atom__5(atom, before, length, after, sub, trail, k):
     va = deref(atom)
     if is_var(va) or not isinstance(va, str):
@@ -394,7 +394,7 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
     vb, vl, vaf, vs = deref(before), deref(length), deref(after), deref(sub)
 
     # Optimization: if Sub is bound, use str.find to locate occurrences
-    # instead of enumerating all (Before, Length) pairs.
+    # instead of enumerating all (Before, length) pairs.
     if not is_var(vs) and isinstance(vs, str):
         sub_len = len(vs)
         start = 0
@@ -411,7 +411,7 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
             start = pos + 1
         return
 
-    # General case: enumerate (Before, Length) pairs
+    # General case: enumerate (Before, length) pairs
     for b in range(n + 1):
         for l in range(n - b + 1):
             a = n - b - l
@@ -423,40 +423,40 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
             trail.undo(mark)
 ```
 
-The Sub-bound optimization is important: `SubAtom("abcabc", _, _, _, "bc")`
+The Sub-bound optimization is important: `sub_atom("abcabc", _, _, _, "bc")`
 should find positions 1 and 4 using `str.find()` (O(n) per occurrence), not
 enumerate all O(n²) substring pairs.
 
-When Before or Length is bound, the inner loop could be narrowed. But the
+when Before or length is bound, the inner loop could be narrowed. But the
 unification-based filtering is correct and fast enough for typical string
 lengths. Only optimize if profiling shows this is a bottleneck.
 
 ### Sub-steps for 2e
 
-1. **Add `SubAtom/5`** with Sub-bound optimization and general enumeration.
+1. **Add `sub_atom/5`** with Sub-bound optimization and general enumeration.
 2. **Tests** (~12 tests):
-   - `SubAtom("hello", 1, 3, 1, S)` → S = "ell"
-   - `SubAtom("hello", 0, 5, 0, S)` → S = "hello" (whole string)
-   - `SubAtom("hello", 0, 0, 5, S)` → S = "" (empty prefix)
-   - `SubAtom("hello", B, L, A, "ell")` → B=1, L=3, A=1
-   - `SubAtom("abcabc", B, _, _, "bc")` → B=1 and B=4 (two occurrences)
-   - `SubAtom("abc", B, 1, A, S)` → 3 solutions: (0,1,2,"a"), (1,1,1,"b"), (2,1,0,"c")
-   - `SubAtom("abc", B, L, A, S)` → 10 solutions (all substrings)
-   - `SubAtom("abc", 0, L, A, S)` → 4 solutions: ("","ab","abc","a") — no wait, (0,0,3,""), (0,1,2,"a"), (0,2,1,"ab"), (0,3,0,"abc")
-   - `SubAtom("hello", 1, 3, 2, "ell")` → fails (After=2 but should be 1)
-   - `SubAtom("hello", 1, 3, 1, "ell")` → succeeds (all bound, consistent)
-   - `SubAtom(X, _, _, _, _)` → instantiation_error
-   - `SubAtom("", B, L, A, S)` → 1 solution: (0,0,0,"")
+   - `sub_atom("hello", 1, 3, 1, S)` → S = "ell"
+   - `sub_atom("hello", 0, 5, 0, S)` → S = "hello" (whole string)
+   - `sub_atom("hello", 0, 0, 5, S)` → S = "" (empty prefix)
+   - `sub_atom("hello", B, L, A, "ell")` → B=1, L=3, A=1
+   - `sub_atom("abcabc", B, _, _, "bc")` → B=1 and B=4 (two occurrences)
+   - `sub_atom("abc", B, 1, A, S)` → 3 solutions: (0,1,2,"a"), (1,1,1,"b"), (2,1,0,"c")
+   - `sub_atom("abc", B, L, A, S)` → 10 solutions (all substrings)
+   - `sub_atom("abc", 0, L, A, S)` → 4 solutions: ("","ab","abc","a") — no wait, (0,0,3,""), (0,1,2,"a"), (0,2,1,"ab"), (0,3,0,"abc")
+   - `sub_atom("hello", 1, 3, 2, "ell")` → fails (After=2 but should be 1)
+   - `sub_atom("hello", 1, 3, 1, "ell")` → succeeds (all bound, consistent)
+   - `sub_atom(X, _, _, _, _)` → instantiation_error
+   - `sub_atom("", B, L, A, S)` → 1 solution: (0,0,0,"")
 
 ---
 
-## 2f — Listing/1
+## 2f — listing/1
 
 **Files:** `clausal/logic/builtins/io.py`, `tests/test_listing.py` (new)
 
 ### Semantics
 
-`Listing(Pred)` — print all clauses of a predicate to stdout in readable
+`listing(Pred)` — print all clauses of a predicate to stdout in readable
 Clausal syntax. The primary debugging predicate for inspecting definitions
 at runtime.
 
@@ -525,7 +525,7 @@ So body goals are AST nodes with `LoadName("N_")` references — their `__str__`
 produces `"N_ > 0"` and `"fib(N1_, F1_)"`. This is correct and readable.
 
 **Problem 3 — Var naming in heads:** The clause head has actual Var objects
-for its unbound fields. When we format them, we need to recover the original
+for its unbound fields. when we format them, we need to recover the original
 variable names. But Var objects are anonymous — they only have numeric IDs
 (`_42`), not names.
 
@@ -583,13 +583,13 @@ This is what SWI-Prolog does when variable names aren't available — it uses
 debugging.
 
 **Option D — Store source text on Clause objects (simplest):**
-Add a `source: str | None = None` field to the `Clause` dataclass. When the
+Add a `source: str | None = None` field to the `Clause` dataclass. when the
 import hook processes `.clausal` files, store the original source line(s) on
-each Clause. `Listing` just prints `clause.source` if available, falling back
+each Clause. `listing` just prints `clause.source` if available, falling back
 to reconstructed output for dynamically asserted clauses.
 
 This is the least work and gives the best output for the common case (clauses
-loaded from `.clausal` files). Dynamically asserted clauses (via `Assert`) get
+loaded from `.clausal` files). Dynamically asserted clauses (via `assertz`) get
 the reconstructed `_N`-variable output, which is fine.
 
 **Decision: Option D (store source text) with Option C as fallback.**
@@ -623,7 +623,7 @@ The reconstructed output is good enough for debugging:
 
 ```python
 def _format_clause(clause):
-    """Format a Clause for Listing output."""
+    """Format a Clause for listing output."""
     head_str = _format_clause_head(clause.head)
     if clause.is_fact():
         return f"{head_str}."
@@ -660,7 +660,7 @@ def _format_clause_term(val):
 
 3. **Add `_format_clause(clause)` helper** — combines head + body formatting.
 
-4. **Add `Listing/1` builtin** — iterates `pred_cls._clauses`, prints header
+4. **Add `listing/1` builtin** — iterates `pred_cls._clauses`, prints header
    and formatted clauses.
 
 5. **Handle edge cases:**
@@ -671,45 +671,45 @@ def _format_clause_term(val):
    - Predicate is a builtin → print `% name/arity — builtin`.
 
 6. **Tests** in `tests/test_listing.py` (~12 tests):
-   - Listing of a predicate with facts only → prints each fact
-   - Listing of a predicate with rules → prints `head <- (body).`
-   - Listing of a predicate with no clauses → prints "no clauses"
-   - Listing of a predicate with multiple clauses → all shown
-   - Listing with PredicateMeta instance (not class) → resolves to class
-   - Listing with non-predicate argument → type_error
-   - Listing with dynamically asserted clauses (Assert + Listing)
-   - Listing of a fact with ground head → no Var names needed
-   - `.clausal` integration test: load file, call Listing, verify output
-   - Listing output includes header comment with clause count
-   - Listing with complex body goals (arithmetic, nested calls)
-   - Listing with list patterns in head
+   - listing of a predicate with facts only → prints each fact
+   - listing of a predicate with rules → prints `head <- (body).`
+   - listing of a predicate with no clauses → prints "no clauses"
+   - listing of a predicate with multiple clauses → all shown
+   - listing with PredicateMeta instance (not class) → resolves to class
+   - listing with non-predicate argument → type_error
+   - listing with dynamically asserted clauses (assertz + listing)
+   - listing of a fact with ground head → no Var names needed
+   - `.clausal` integration test: load file, call listing, verify output
+   - listing output includes header comment with clause count
+   - listing with complex body goals (arithmetic, nested calls)
+   - listing with list patterns in head
 
 ---
 
-## 2g — PortrayClause/1
+## 2g — portray_clause/1
 
 **Files:** `clausal/logic/builtins/io.py`, `tests/test_listing.py`
 
 ### Semantics
 
-`PortrayClause(Term)` — pretty-print a term with indentation for multi-line
+`portray_clause(Term)` — pretty-print a term with indentation for multi-line
 display. This is a thin wrapper around `term_pformat()` from `clausal/terms.py`.
 
-Design question: is this distinct enough from `PrintTerm/1` to justify its
+Design question: is this distinct enough from `print_term/1` to justify its
 existence? Let's compare:
 
-- `PrintTerm/1` uses `term_str()` — single-line, compact output.
-- `PortrayClause/1` uses `term_pformat()` — multi-line, indented output for
+- `print_term/1` uses `term_str()` — single-line, compact output.
+- `portray_clause/1` uses `term_pformat()` — multi-line, indented output for
   deeply nested terms.
 
-The difference is meaningful for complex terms — `PrintTerm/1` produces a
-single long line, while `PortrayClause/1` breaks it into readable indented
+The difference is meaningful for complex terms — `print_term/1` produces a
+single long line, while `portray_clause/1` breaks it into readable indented
 lines. This justifies having both.
 
 ### Implementation
 
 ```python
-@_builtin("PortrayClause", 1)
+@_builtin("portray_clause", 1)
 def _portray_clause__1(term, trail, k):
     from clausal.logic.solve import _deref_walk
     from clausal.terms import term_pformat
@@ -720,9 +720,9 @@ def _portray_clause__1(term, trail, k):
 
 ### Sub-steps for 2g
 
-1. **Add `PortrayClause/1`** to `io.py`.
+1. **Add `portray_clause/1`** to `io.py`.
 2. **Tests** (~5 tests):
-   - Simple term → single-line output (same as PrintTerm)
+   - Simple term → single-line output (same as print_term)
    - Deeply nested term → multi-line indented output
    - List of lists → indented bracket structure
    - Unbound vars → shown as `_`
@@ -734,43 +734,43 @@ def _portray_clause__1(term, trail, k):
 
 | File | Action |
 |---|---|
-| `clausal/logic/builtins/chars.py` | **New** — CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5 |
-| `clausal/logic/builtins/io.py` | Add Listing/1, PortrayClause/1, helper functions |
+| `clausal/logic/builtins/chars.py` | **New** — char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5 |
+| `clausal/logic/builtins/io.py` | Add listing/1, portray_clause/1, helper functions |
 | `clausal/logic/builtins/__init__.py` | Import chars module |
 | `tests/test_chars.py` | **New** — character and string predicate tests |
-| `tests/test_listing.py` | **New** — Listing/1 and PortrayClause/1 tests |
-| `tests/fixtures/listing_test.clausal` | **New** — `.clausal` integration fixture for Listing |
+| `tests/test_listing.py` | **New** — listing/1 and portray_clause/1 tests |
+| `tests/fixtures/listing_test.clausal` | **New** — `.clausal` integration fixture for listing |
 | `docs/builtins.md` | Update with new predicates |
 
 ## Implementation Order
 
-1. **2a (CharType + CharCode)** — standalone, no dependencies. Establishes the
+1. **2a (char_type + char_code)** — standalone, no dependencies. Establishes the
    `chars.py` module and the registration pattern. Good warm-up.
 
-2. **2b (UpcaseAtom, DowncaseAtom)** — trivial wrappers, adds to `chars.py`.
+2. **2b (upcase_atom, downcase_atom)** — trivial wrappers, adds to `chars.py`.
 
-3. **2c (AtomLength, AtomChars, AtomCodes)** — bidirectional mode detection
+3. **2c (atom_length, atom_chars, atom_codes)** — bidirectional mode detection
    pattern, same module.
 
-4. **2d (AtomConcat)** — reverse-mode enumeration, builds on the bidirectional
+4. **2d (atom_concat)** — reverse-mode enumeration, builds on the bidirectional
    pattern from 2c.
 
-5. **2e (SubAtom)** — most complex predicate in the phase. Multi-modal
+5. **2e (sub_atom)** — most complex predicate in the phase. Multi-modal
    5-argument relation with optimization for Sub-bound case.
 
-6. **2g (PortrayClause)** — trivial wrapper around `term_pformat`.
+6. **2g (portray_clause)** — trivial wrapper around `term_pformat`.
 
-7. **2f (Listing)** — depends on understanding the Clause object structure,
+7. **2f (listing)** — depends on understanding the Clause object structure,
    PredicateMeta instance formatting, and body-goal `__str__` methods. Most
    design exploration required.
 
 ## Test Count Estimate
 
 ~72 tests across the phase:
-- CharType/2 + CharCode/2: ~15 tests
-- UpcaseAtom/2, DowncaseAtom/2: ~6 tests
-- AtomLength/2, AtomChars/2, AtomCodes/2: ~12 tests
-- AtomConcat/3: ~10 tests
-- SubAtom/5: ~12 tests
-- Listing/1: ~12 tests
-- PortrayClause/1: ~5 tests
+- char_type/2 + char_code/2: ~15 tests
+- upcase_atom/2, downcase_atom/2: ~6 tests
+- atom_length/2, atom_chars/2, atom_codes/2: ~12 tests
+- atom_concat/3: ~10 tests
+- sub_atom/5: ~12 tests
+- listing/1: ~12 tests
+- portray_clause/1: ~5 tests

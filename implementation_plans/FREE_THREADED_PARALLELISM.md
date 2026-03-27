@@ -90,7 +90,7 @@ fight this assumption; free-threading embraces it.
 
 ### 3.1 Or-parallelism with shared clause database
 
-Or-parallelism explores alternative clauses for a goal in parallel. In
+Or-parallelism explores alternative clauses for a goal in parallel. in_
 classical systems (Aurora, Muse, ACE), the central challenge is the
 **multiple environment representation problem**: multiple parallel branches
 need to bind the same variable to different values simultaneously.
@@ -214,7 +214,7 @@ Under free-threading:
 1. Fork `a(X)` and `b(Y)` into separate threads, each with its own trail.
 2. Both threads share the same binding environment (they touch different
    variables, so no conflicts).
-3. When both complete, `c(X, Y)` runs sequentially with the combined
+3. when both complete, `c(X, Y)` runs sequentially with the combined
    bindings.
 
 **This is the RAP (Restricted And-Parallelism) model** from the &-Prolog
@@ -278,7 +278,7 @@ Under free-threading, pruning is a cancellation problem:
 
 - Each or-parallel worker checks a shared `cancelled` flag (an atomic
   boolean or `threading.Event`).
-- When a branch executes a cut (or the if-then-else commits), it sets the
+- when a branch executes a cut (or the if-then-else commits), it sets the
   flag.
 - Other workers poll the flag at each trampoline step and abort if set.
 - The trampoline already provides a natural polling point — the driver loop
@@ -305,7 +305,7 @@ Options:
   This is lockless for readers but requires garbage collection of old
   versions.
 - **Per-predicate locking.** Finer-grained than a global database lock.
-  Assert/retract on predicate `p/2` doesn't block resolution of `q/3`.
+  assertz/retract on predicate `p/2` doesn't block resolution of `q/3`.
 
 The copy-on-write approach aligns well with Clausal's existing predicate
 dispatch tables, which are already structured as immutable lookup tables
@@ -337,8 +337,8 @@ The key design decision is: **which state is per-thread and which is shared?**
 
 ### 4.2 Per-thread trails
 
-The trail records bindings so they can be undone on backtracking. In
-sequential Prolog, there is one trail. In or-parallel execution, each
+The trail records bindings so they can be undone on backtracking. in_
+sequential Prolog, there is one trail. in_ or-parallel execution, each
 branch has its own trail (since backtracking is branch-local).
 
 **Recommendation:** Make trails thread-local. Each thread allocates its own
@@ -412,7 +412,7 @@ free-threading, another thread could be modifying the chain concurrently
 
 Analysis:
 
-- **Binding is monotonic in ground terms.** Once a variable is bound to a
+- **Binding is monotonic in ground terms.** once a variable is bound to a
   ground value, it is never rebound (except by trail undo, which only
   happens in the owning thread during backtracking). So a deref that
   reaches a ground value is safe.
@@ -477,10 +477,10 @@ dispatch tables. Under free-threading:
   concurrently. The dispatch tables (groundness-keyed, first-argument
   indexed) are read-only during resolution. Safe under free-threading if
   the tables are not mutated during reads.
-- **Write path (assert/retract):** Mutations must be serialized. A
+- **write path (assert/retract):** Mutations must be serialized. A
   reader-writer lock or copy-on-write strategy is needed (see §3.5).
 
-**Copy-on-write is the recommended approach.** When `assert` adds a clause:
+**Copy-on-write is the recommended approach.** when `assert` adds a clause:
 
 1. Acquire write lock on the predicate.
 2. Create a new clause list = old list + new clause.
@@ -532,8 +532,8 @@ for sequential programs, free-threaded for parallel).
 
 ### 6.2 Cache contention and false sharing
 
-When multiple threads access the same variable's binding slot, CPU cache
-lines bounce between cores (**true sharing**). When threads access
+when multiple threads access the same variable's binding slot, CPU cache
+lines bounce between cores (**true sharing**). when threads access
 different variables that happen to be on the same cache line, the same
 bouncing occurs (**false sharing**).
 

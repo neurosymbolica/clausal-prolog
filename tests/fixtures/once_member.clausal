@@ -1,6 +1,6 @@
-# FirstMember/2: like member but only returns the first match via Once()
+# FirstMember/2: like member but only returns the first match via once()
 
-FirstMember(X, LIST) <- Once(X in LIST)
+FirstMember(X, LIST) <- once(X in LIST)
 
 
 Test("first member") <- (FirstMember(X, [1, 2, 3]), X == 1)

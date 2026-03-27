@@ -16,7 +16,7 @@ color("red"),
 color("blue"),
 
 Test("assert and query") <- (
-    Assert(color("green")),
+    assertz(color("green")),
     color("green")
 )
 ```
@@ -35,15 +35,15 @@ dynamic (see [Directives](directives.md) for other directive types):
 -dynamic(cache/2)
 ```
 
-Without this directive, `Assert` and `Retract` will raise a permission error.
+Without this directive, `assertz` and `retract` will raise a permission error.
 
 ---
 
 ## Adding Clauses
 
-### Assert/1
+### assertz/1
 
-`Assert(Term)` — add a fact at the **end** of the clause list (like Prolog's
+`assertz(Term)` — add a fact at the **end** of the clause list (like Prolog's
 `assertz`).
 
 ```clausal
@@ -51,14 +51,14 @@ Without this directive, `Assert` and `Retract` will raise a permission error.
 -dynamic(fact/1)
 
 Test("assert") <- (
-    Assert(fact(42)),
+    assertz(fact(42)),
     fact(42)
 )
 ```
 
-### AssertFirst/1
+### asserta/1
 
-`AssertFirst(Term)` — add a fact at the **beginning** of the clause list (like
+`asserta(Term)` — add a fact at the **beginning** of the clause list (like
 Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
 ```clausal
@@ -68,8 +68,8 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 priority("low"),
 
 Test("assert first") <- (
-    AssertFirst(priority("high")),
-    Once(priority(X)),
+    asserta(priority("high")),
+    once(priority(X)),
     X == "high"
 )
 ```
@@ -78,9 +78,9 @@ Test("assert first") <- (
 
 ## Removing Clauses
 
-### Retract/1
+### retract/1
 
-`Retract(Term)` — remove the first clause whose head unifies with `Term`.
+`retract(Term)` — remove the first clause whose head unifies with `Term`.
 
 ```clausal
 # skip
@@ -91,14 +91,14 @@ item("b"),
 item("c"),
 
 Test("retract") <- (
-    Retract(item("b")),
+    retract(item("b")),
     not item("b"),
     item("a"),
     item("c")
 )
 ```
 
-`Retract` uses unification for matching, so you can retract by pattern:
+`retract` uses unification for matching, so you can retract by pattern:
 
 ```clausal
 # skip
@@ -109,7 +109,7 @@ pair("y", 2),
 pair("z", 3),
 
 Test("retract by pattern") <- (
-    Retract(pair("y", _)),
+    retract(pair("y", _)),
     not pair("y", 2)
 )
 ```
@@ -118,24 +118,24 @@ Test("retract by pattern") <- (
 
 ## Table Management
 
-### ClearTable/2
+### abolish_table/2
 
-`ClearTable(Functor, Arity)` — clear cached answers for a specific tabled
+`abolish_table(functor, Arity)` — clear cached answers for a specific tabled
 predicate.
 
 ```clausal
 # skip
 -table(memo_fib/2)
 
-Test("clear") <- ClearTable("memo_fib", 2)
+Test("clear") <- abolish_table("memo_fib", 2)
 ```
 
-### ClearAllTables/0
+### abolish_all_tables/0
 
-`ClearAllTables()` — clear all tabling caches at once.
+`abolish_all_tables()` — clear all tabling caches at once.
 
 ```clausal
-Test("clear all") <- ClearAllTables()
+Test("clear all") <- abolish_all_tables()
 ```
 
 ---
@@ -159,7 +159,7 @@ fib(N, F) <- (
     fib(N1, F1),
     fib(N2, F2),
     F == F1 + F2,
-    Assert(fib_cache(N, F))
+    assertz(fib_cache(N, F))
 )
 ```
 
@@ -174,9 +174,9 @@ fib(N, F) <- (
 counter(0),
 
 increment(NEW) <- (
-    Retract(counter(OLD)),
+    retract(counter(OLD)),
     NEW == OLD + 1,
-    Assert(counter(NEW))
+    assertz(counter(NEW))
 ),
 
 Test("counter") <- (
@@ -193,38 +193,38 @@ Test("counter") <- (
 -dynamic(result/1)
 
 collect_evens(LIST) <- (
-    In(X, LIST),
+    in_(X, LIST),
     X % 2 == 0,
-    Assert(result(X)),
+    assertz(result(X)),
     False
 ),
 collect_evens(_)
 ```
 
-(Prefer [`FindAll`](meta_predicates.md) for this pattern — it is cleaner and
+(Prefer [`findall`](meta_predicates.md) for this pattern — it is cleaner and
 does not require dynamic predicates.)
 
 ---
 
 ## Gotchas
 
-- **Must declare `-dynamic`** — without it, Assert/Retract raise a permission
+- **Must declare `-dynamic`** — without it, assertz/retract raise a permission
   error. This is intentional: it prevents accidental modification of predicates
   that should be stable.
-- **Assert adds facts, not rules** — `Assert(foo(X) <- bar(X))` is not
+- **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not
   supported. Only ground or partially-ground facts can be asserted.
-- **Retract removes one clause** — it removes the *first* matching clause only.
-  Call it in a loop (or use `FindAll` + multiple retracts) to remove all
+- **retract removes one clause** — it removes the *first* matching clause only.
+  Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.
-- **Order matters** — `Assert` appends, `AssertFirst` prepends. The clause
+- **Order matters** — `assertz` appends, `asserta` prepends. The clause
   order affects which solution is found first.
 - **Tabling interaction** — if a tabled predicate depends on dynamic facts,
-  remember to `ClearTable` after modifying the facts, or the cached answers
+  remember to `abolish_table` after modifying the facts, or the cached answers
   will be stale.
 
 ---
 
 *See also: [Directives](directives.md) — `-dynamic` and other predicate
 directives, [Tabling](tabling.md) — automatic memoization with `-table`,
-[Meta-Predicates](meta_predicates.md) — FindAll as an alternative to
+[Meta-Predicates](meta_predicates.md) — findall as an alternative to
 assert-based collection.*

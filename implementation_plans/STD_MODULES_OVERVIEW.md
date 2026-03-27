@@ -42,7 +42,7 @@ has (or will have) its own detailed implementation plan.
 
 ### Already Covered (full or near-full overlap)
 
-| Scryer Module | Clausal Equivalent | Notes |
+| Scryer Module | Clausal equivalent | Notes |
 |---|---|---|
 | **builtins** (core ISO) | `builtins/*` | unify, call/N, assert/retract, copy_term, findall, bagof, setof, once, catch/throw, write |
 | **lists** | `builtins/lists.py` | member, append, reverse, length, select, permutation, sort, flatten, plus extras (take, drop, zip, replicate) |
@@ -51,14 +51,14 @@ has (or will have) its own detailed implementation plan.
 | **dif** | `constraints.py` | dif/2 |
 | **dcgs** | `builtins/dcg.py` + term_rewriting | `>>` syntax, phrase/2,3. Missing `seq//1`, `seqq//1` — see Phase 5. |
 | **tabling** | `tabling.py` | SLG tabling. Missing `abolish_all_tables/0` — see Phase 5. |
-| **pairs** | `builtins/pairs.py` | Unzip, PairKeys, PairValues. Missing `GroupPairsByKey` — Phase 5. |
-| **between** | `builtins/arithmetic.py` | Between/3, Succ/2. Missing `numlist`, `gen_int`, `gen_nat` — Phase 5. |
-| **terms** | `builtins/inspection.py` | NumberVars/3, CopyTerm/2, TermVariables/2, Functor/3, Arg/3, Unpack/2 |
-| **reif** | V2-8 (reified ITE) | Reified if-then-else done. Missing dedicated `If_/3`, `TFilter/3` — Phase 5. |
+| **pairs** | `builtins/pairs.py` | pairs_keys_values, pairs_keys, pairs_values. Missing `group_pairs_by_key` — Phase 5. |
+| **between** | `builtins/arithmetic.py` | between/3, succ/2. Missing `numlist`, `gen_int`, `gen_nat` — Phase 5. |
+| **terms** | `builtins/inspection.py` | numbervars/3, copy_term/2, term_variables/2, functor/3, arg/3, unpack/2 |
+| **reif** | V2-8 (reified ITE) | Reified if-then-else done. Missing dedicated `If_/3`, `tfilter/3` — Phase 5. |
 | **lambda** | V2-9 (goal closures) | Clausal uses Pythonic lambdas — `\` notation not needed. |
-| **error** | `exceptions.py` | throw/catch done. Missing `MustBe/2`, `CanBe/2` — Phase 5. |
-| **time** | `builtins/control.py` | TimeGoal done. Missing `Sleep/1`, `CurrentTime/1` — Phase 5. |
-| **arithmetic** (extended) | `builtins/arithmetic.py` | Sign, Gcd, DivMod, Abs, Max, Min, Plus. Missing `Lcm`, `ExpMod`, `Popcount` — Phase 5. |
+| **error** | `exceptions.py` | throw/catch done. Missing `must_be/2`, `can_be/2` — Phase 5. |
+| **time** | `builtins/control.py` | time_goal done. Missing `Sleep/1`, `current_time/1` — Phase 5. |
+| **arithmetic** (extended) | `builtins/arithmetic.py` | sign, gcd, divmod_, abs_, max_, min_, plus. Missing `lcm`, `exp_mod`, `popcount` — Phase 5. |
 | **assoc** (AVL dicts) | `builtins/dict_set.py` | DictTerm (Python dict-backed) covers the practical use case. AVL trees not needed. |
 | **ordsets** | `builtins/dict_set.py` | SetTerm (Python frozenset-backed). Ordered-set operations not needed separately. |
 | **simplex** (LP) | `scipy_optimize` | `LinearProgram`/`MixedIntegerLinearProgram` are strictly superior. |
@@ -87,12 +87,12 @@ has (or will have) its own detailed implementation plan.
 
 | Item | Description |
 |---|---|
-| `Freeze/2` | Delay goal until variable is bound. AttVar-based. |
-| `When/2` | Generalized coroutining with compound conditions. |
-| `SetupCallCleanup/3` | Resource cleanup guarantee (try/finally for logic). |
-| `CallCleanup/2` | Sugar: `SetupCallCleanup(true, Call, Cleanup)`. |
-| `CallNth/2` | Succeed on Nth solution only. |
-| `CountAll/2` | Count solutions without collecting. |
+| `freeze/2` | Delay goal until variable is bound. AttVar-based. |
+| `when/2` | Generalized coroutining with compound conditions. |
+| `setup_call_cleanup/3` | Resource cleanup guarantee (try/finally for logic). |
+| `call_cleanup/2` | Sugar: `setup_call_cleanup(true, Call, Cleanup)`. |
+| `call_nth/2` | Succeed on Nth solution only. |
+| `count_all/2` | Count solutions without collecting. |
 
 All implemented as compiler special forms. 71 tests. Docs at `docs/coroutining.md`.
 
@@ -106,21 +106,21 @@ All implemented as compiler special forms. 71 tests. Docs at `docs/coroutining.m
 
 Format/2,3 intentionally omitted — Python f-strings and `str.format()` cover
 formatted output. These predicates exist because they participate in
-unification and backtracking (e.g., `AtomConcat(A, B, "hello")` enumerates
-splits, `CharType(C, digit)` enumerates digits) — things Python string
+unification and backtracking (e.g., `atom_concat(A, B, "hello")` enumerates
+splits, `char_type(C, digit)` enumerates digits) — things Python string
 methods can't do.
 
 | Item | Description |
 |---|---|
-| `CharType/2` | Character classification: alpha, digit, space, etc. Multi-modal. |
-| `CharCode/2` | Bidirectional char ↔ code point. |
-| `UpcaseAtom/2`, `DowncaseAtom/2` | Case conversion. |
-| `AtomLength/2` | String length. |
-| `AtomChars/2`, `AtomCodes/2` | Bidirectional atom ↔ char/code list conversion. |
-| `AtomConcat/3` | String concatenation as a relation (reverse enumerates splits). |
-| `SubAtom/5` | Substring extraction — 5-arg multi-modal relation. |
-| `Listing/1` | List all clauses for a predicate from `pred_cls._clauses`. |
-| `PortrayClause/1` | Pretty-print a term with indentation via `term_pformat`. |
+| `char_type/2` | Character classification: alpha, digit, space, etc. Multi-modal. |
+| `char_code/2` | Bidirectional char ↔ code point. |
+| `upcase_atom/2`, `downcase_atom/2` | Case conversion. |
+| `atom_length/2` | String length. |
+| `atom_chars/2`, `atom_codes/2` | Bidirectional atom ↔ char/code list conversion. |
+| `atom_concat/3` | String concatenation as a relation (reverse enumerates splits). |
+| `sub_atom/5` | Substring extraction — 5-arg multi-modal relation. |
+| `listing/1` | List all clauses for a predicate from `pred_cls._clauses`. |
+| `portray_clause/1` | Pretty-print a term with indentation via `term_pformat`. |
 
 All implemented as `@_builtin` predicates in `chars.py` and `io.py`. 73 tests
 across `tests/test_chars.py` and `tests/test_listing.py`.
@@ -157,21 +157,21 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 
 ---
 
-### Phase 5 — Extend Existing Builtins (Gap-Filling) ✓
+### Phase 5 — extend Existing Builtins (Gap-Filling) ✓
 
 **Status: COMPLETE** — Small additions to modules that are already mostly complete.
 
 | Area | Additions |
 |---|---|
-| CLP(FD) | `Sum/3`, `ScalarProduct/4`, `Element/3`, `Circuit/1` (global constraints). |
-| Lists | `Numlist/2,3`, `SameLength/2`, `Transpose/2`. |
+| CLP(FD) | `sum_/3`, `scalar_product/4`, `element/3`, `circuit/1` (global constraints). |
+| Lists | `numlist/2,3`, `same_length/2`, `transpose/2`. |
 | DCGs | `Seq//1`, `Seqq//1` (sequence matching helpers). |
 | Tabling | `AbolishAllTables/0`, `AbolishTable/1`. |
-| Arithmetic | `Lcm/3`, `ExpMod/4`, `Popcount/2`, `Msb/2`, `Lsb/2`. |
-| Pairs | `GroupPairsByKey/2`. |
-| Error | `MustBe/2`, `CanBe/2` (type-checking with ISO error terms). |
-| Reif | `If_/3`, `TFilter/3`, `TPartition/4` as explicit builtins. |
-| Time | `CurrentTime/1`, `Statistics/2`. (`Sleep/1` already in `py.process`, Phase 4.) |
+| Arithmetic | `lcm/3`, `exp_mod/4`, `popcount/2`, `msb/2`, `lsb/2`. |
+| Pairs | `group_pairs_by_key/2`. |
+| Error | `must_be/2`, `can_be/2` (type-checking with ISO error terms). |
+| Reif | `If_/3`, `tfilter/3`, `tpartition/4` as explicit builtins. |
+| Time | `current_time/1`, `statistics/2`. (`Sleep/1` already in `py.process`, Phase 4.) |
 
 **Detailed plan:** [`STD_MODULES_PHASE5.md`](STD_MODULES_PHASE5.md)
 
@@ -185,7 +185,7 @@ across `tests/test_chars.py` and `tests/test_listing.py`.
 |---|---|
 | `PutAtts/2` | Attach attributes to a variable. |
 | `GetAtts/2` | Retrieve attributes from a variable. |
-| `TermAttributedVariables/2` | Collect all attributed variables in a term. |
+| `term_attvars/2` | Collect all attributed variables in a term. |
 
 The internal infrastructure already exists (CLP(FD), CLP(B), dif all use it).
 This phase exposes it as a public API.
@@ -198,10 +198,10 @@ This phase exposes it as a public API.
 
 | Item | Status | Description |
 |---|---|---|
-| `GenSym/2` builtin | ✅ | Unique atom generation. Thread-safe monotonic counter. |
-| `NumberChars/2`, `NumberCodes/2` builtins | ✅ | Bidirectional number ↔ char-list / code-point-list. |
+| `gensym/2` builtin | ✅ | Unique atom generation. Thread-safe monotonic counter. |
+| `number_chars/2`, `number_codes/2` builtins | ✅ | Bidirectional number ↔ char-list / code-point-list. |
 | `py.hash` module | ✅ | `Hash/3`, `HashBytes/3`. Wraps `hashlib`. |
-| `py.hmac` module | ✅ | `Sign/3,4`, `Verify/3,4`. Wraps `hmac`. Constant-time verify. |
+| `py.hmac` module | ✅ | `sign/3,4`, `Verify/3,4`. Wraps `hmac`. Constant-time verify. |
 | `py.pbkdf2` module | ✅ | `Derive/4,5`. Wraps `hashlib.pbkdf2_hmac`. |
 | `py.http` module | ✅ | `Get/2,3`, `Post/3,4`, `Request/3`, `JSONGet/2`, `JSONPost/3`. Wraps `urllib`. |
 | `py.url` module | ✅ | `Encode/2`, `Decode/2`, `Parse/2`, `Join/2`. Wraps `urllib.parse`. |

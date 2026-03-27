@@ -58,7 +58,7 @@ def test_raw_lazy_iteration():
     it = m.query("n(X).")
     first = next(it)
     assert first["X"] == 1
-    # Drop the iterator without consuming the rest
+    # drop the iterator without consuming the rest
     del it
     # Machine should be available again
     second = list(m.query("n(X)."))

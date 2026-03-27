@@ -1,6 +1,6 @@
--import_from(py.re, [Match, Search, Replace, Split, FindAll])
+-import_from(py.re, [Match, Search, Replace, Split, findall])
 
-# Regex predicates — basic tests: Match, Search, Replace, Split, FindAll.
+# Regex predicates — basic tests: Match, Search, Replace, Split, findall.
 
 # ── Match/2: boolean test ───────────────────────────────────────────────────
 
@@ -56,13 +56,13 @@ Test("replace backreference") <- (Replace(r"(\w+)", r"[\1]", "hi lo", R) and R =
 Test("split comma") <- (Split(r",\s*", "a, b, c", F) and F == ["a", "b", "c"])
 Test("split whitespace") <- (Split(r"\s+", "x y z", F) and F == ["x", "y", "z"])
 
-# ── FindAll/3 ────────────────────────────────────────────────────────────
+# ── findall/3 ────────────────────────────────────────────────────────────
 
 Test("findall digits") <- (
-    FindAll(r"\d+", "a1b23c456", D) and D == "1"
+    findall(r"\d+", "a1b23c456", D) and D == "1"
 )
 
-Test("findall no matches fails") <- (not FindAll(r"\d+", "abc", _))
+Test("findall no matches fails") <- (not findall(r"\d+", "abc", _))
 
 # ── Edge cases ──────────────────────────────────────────────────────────────
 

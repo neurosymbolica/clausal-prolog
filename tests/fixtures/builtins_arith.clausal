@@ -1,33 +1,33 @@
-# Tests for arithmetic predicates: Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3
+# Tests for arithmetic predicates: between/3, succ/2, plus/3, abs_/2, max_/3, min_/3
 
-# Between/3: enumerate integers in a range
-InRange(LOW, HIGH, X) <- Between(LOW, HIGH, X)
+# between/3: enumerate integers in a range
+InRange(LOW, HIGH, X) <- between(LOW, HIGH, X)
 
-# Between/3: check mode
-CheckBetween(LOW, HIGH, X) <- Between(LOW, HIGH, X)
+# between/3: check mode
+CheckBetween(LOW, HIGH, X) <- between(LOW, HIGH, X)
 
-# Succ/2: Y = X + 1
-Successor(X, Y) <- Succ(X, Y)
-Predecessor(Y, X) <- Succ(X, Y)
+# succ/2: Y = X + 1
+Successor(X, Y) <- succ(X, Y)
+Predecessor(Y, X) <- succ(X, Y)
 
-# Plus/3: Z = X + Y; any two determine the third
-AddNums(X, Y, Z) <- Plus(X, Y, Z)
-Diff(Z, X, Y) <- Plus(X, Y, Z)
+# plus/3: Z = X + Y; any two determine the third
+AddNums(X, Y, Z) <- plus(X, Y, Z)
+Diff(Z, X, Y) <- plus(X, Y, Z)
 
-# CountTo/1: collects integers from 1 to N using FindAll + Between
+# CountTo/1: collects integers from 1 to N using findall + between
 CountTo(N, NUMBERS) <- (
-    FindAll(X, Between(1, N, X), NUMBERS)
+    findall(X, between(1, N, X), NUMBERS)
 )
 
-Test("between 1 to 3") <- (FindAll(X, Between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])
-Test("succ forward") <- (Succ(3, Y), Y == 4)
-Test("succ backward") <- (Succ(X, 5), X == 4)
-Test("plus forward") <- (Plus(2, 3, Z), Z == 5)
-Test("plus backward") <- (Plus(X, 3, 7), X == 4)
-Test("abs positive") <- (Abs(5, RESULT), RESULT == 5)
-Test("abs negative") <- (Abs(-3, RESULT), RESULT == 3)
-Test("max basic") <- (Max(3, 5, RESULT), RESULT == 5)
-Test("min basic") <- (Min(3, 5, RESULT), RESULT == 3)
+Test("between 1 to 3") <- (findall(X, between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])
+Test("succ forward") <- (succ(3, Y), Y == 4)
+Test("succ backward") <- (succ(X, 5), X == 4)
+Test("plus forward") <- (plus(2, 3, Z), Z == 5)
+Test("plus backward") <- (plus(X, 3, 7), X == 4)
+Test("abs positive") <- (abs_(5, RESULT), RESULT == 5)
+Test("abs negative") <- (abs_(-3, RESULT), RESULT == 3)
+Test("max basic") <- (max_(3, 5, RESULT), RESULT == 5)
+Test("min basic") <- (min_(3, 5, RESULT), RESULT == 3)
 Test("count to 3") <- (CountTo(3, NUMBERS), NUMBERS == [1, 2, 3])
 Test("in range") <- InRange(1, 5, 3)
 Test("successor") <- (Successor(4, Y), Y == 5)

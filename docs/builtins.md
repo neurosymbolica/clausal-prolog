@@ -17,44 +17,44 @@ Notation in signature lines:
     from clausal.logic.builtins import get_builtin_class
     from clausal.logic.variables import Var
 
-    Append = get_builtin_class("Append")
-    Between = get_builtin_class("Between")
+    append = get_builtin_class("append")
+    between = get_builtin_class("between")
 
     X_ = Var()
     Z_ = Var()
 
     # Positional construction
-    t = Append([1, 2], [3, 4], Z_)
-    # → Append(l1=[1, 2], l2=[3, 4], l3=Var())
+    t = append([1, 2], [3, 4], Z_)
+    # → append(l1=[1, 2], l2=[3, 4], l3=Var())
 
     # Keyword construction with partial fill (missing fields → Var())
-    t2 = Between(low=1, high=10)
-    # → Between(low=1, high=10, x=Var())
+    t2 = between(low=1, high=10)
+    # → between(low=1, high=10, x=Var())
 
     # Pattern matching works via __match_args__
     match t:
-        case Append(a, b, c):
+        case append(a, b, c):
             print(a, b, c)
     ```
 
-    Each builtin class is a full `PredicateMeta` with `_fields`, `_functor`, `_arity`, `__eq__`, `__repr__`, and `__match_args__`. Stateless builtins also have `_dispatch_fn` set (so `_get_dispatch()` works directly). DB-dependent builtins (Assert, Retract, etc.) have `_dispatch_fn = None` since they need a live database; use them for term construction only.
+    Each builtin class is a full `PredicateMeta` with `_fields`, `_functor`, `_arity`, `__eq__`, `__repr__`, and `__match_args__`. Stateless builtins also have `_dispatch_fn` set (so `_get_dispatch()` works directly). DB-dependent builtins (assertz, retract, etc.) have `_dispatch_fn = None` since they need a live database; use them for term construction only.
 
-    **Passing builtins to higher-order predicates:** Builtin predicates can be passed directly as arguments to `MapList`, `Filter`, `Exclude`, `FoldLeft`, `Call/N`, and other higher-order builtins — no lambda wrapper is needed:
+    **Passing builtins to higher-order predicates:** Builtin predicates can be passed directly as arguments to `maplist`, `include`, `exclude`, `foldl`, `Call/N`, and other higher-order builtins — no lambda wrapper is needed:
 
     ```
-    AllNumbers(XS) <- MapList(IsNumber, XS)
-    KeepInts(XS, INTS) <- Filter(IsInt, XS, INTS)
-    Incremented(XS, YS) <- MapList(Succ, XS, YS)
+    AllNumbers(XS) <- maplist(number, XS)
+    KeepInts(XS, INTS) <- include(integer, XS, INTS)
+    Incremented(XS, YS) <- maplist(succ, XS, YS)
     ```
 
     This works for any builtin or user-defined predicate whose arity matches what the higher-order predicate expects.
 
-    **Multi-arity builtins** (MapList/2,3 and phrase/2,3) are wrapped in `MultiArityBuiltin`, which routes `__call__` by argument count:
+    **Multi-arity builtins** (maplist/2,3 and phrase/2,3) are wrapped in `MultiArityBuiltin`, which routes `__call__` by argument count:
 
     ```python
-    MapList = get_builtin_class("MapList")
-    MapList(goal, [1, 2])           # → MapList/2 term
-    MapList(goal, [1, 2], [2, 4])   # → MapList/3 term
+    maplist = get_builtin_class("maplist")
+    maplist(goal, [1, 2])           # → maplist/2 term
+    maplist(goal, [1, 2], [2, 4])   # → maplist/3 term
     ```
 
     All builtin classes are locked (`_locked = True`) — they cannot be modified via assertz/retract.
@@ -72,29 +72,29 @@ Notation in signature lines:
 
 | Category | Predicates |
 |---|---|
-| [Control Flow](#control-flow) | Once, Not, If/3, throw/1, Catch/2, CatchRecover/3, catch/3, halt/0,1, SetupCallCleanup/3, CallCleanup/2 |
-| [Coroutining](#coroutining) | Freeze/2, When/2 |
-| [Meta-Predicates](#meta-predicates) | FindAll/3, BagOf/3, SetOf/3, ForAll/2, CallNth/2, CountAll/2 |
+| [Control Flow](#control-flow) | once, Not, If/3, throw/1, Catch/2, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
+| [Coroutining](#coroutining) | freeze/2, when/2 |
+| [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | Call/1..8, CallGoal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
-| [Term Inspection](#term-inspection) | Functor/3, Arg/3, Unpack/2, CopyTerm/2, TermVariables/2, NumberVars/3, GenSym/2 |
-| [Runtime Database](#runtime-database) | Assert/1, AssertFirst/1, Retract/1, ClearTable/2, ClearAllTables/0 |
-| [Keyword-Term Introspection](#keyword-term-introspection) | Vary/3, Extend/3, UnboundKeys/2, Signature/3 |
-| [Attributed Variables](#attributed-variables) | PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2 |
-| [Constraint Predicates](#constraint-predicates) | Dif/2, Eq/3, DifT/3 |
-| [CLP(ℤ) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | InDomain/3, Label/1, AllDifferent/1, Equivalent/2, Sum/3, ScalarProduct/4, Element/3, Circuit/1 |
-| [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | Sat/1, Taut/2, SatCount/2, BoolLabeling/1 |
-| [Type Checks](#type-checks) | IsVar/1, IsBound/1, IsAtom/1, IsStr/1, IsNumber/1, IsInt/1, IsFloat/1, IsCompound/1, IsCallable/1, IsList/1, IsGround/1, MustBe/2, CanBe/2 |
-| [Dict and Set Predicates](#dict-and-set-predicates) | IsDict/1, DictGet/3, DictPut/4, DictMerge/3, GenDict/3, SubDict/2, IsSet/1, SetUnion/3, SetSubset/2, GenSet/2 |
-| [Arithmetic](#arithmetic) | Between/3, Succ/2, Plus/3, Abs/2, Max/3, Min/3, Sign/2, Gcd/3, DivMod/4, Lcm/3, ExpMod/4, Popcount/2, Msb/2, Lsb/2 |
-| [List Predicates](#list-predicates) | In/2, Append/3, Length/2, Reverse/2, Sort/2, Permutation/2, Select/3, Flatten/2, Take/3, Drop/3, Zip/3, SplitWith/3, Numlist/2,3, SameLength/2, Transpose/2 |
-| [Higher-Order List Predicates](#higher-order-list-predicates) | MapList/2,3, Filter/3, Exclude/3, Partition/4, TFilter/3, TPartition/4, FoldLeft/4, TakeWhile/3, DropWhile/3, Span/4, GroupBy/3, SortBy/3, FilterMap/3 |
-| [Character/String](#characterstring) | CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5, NumberChars/2, NumberCodes/2 |
-| [I/O](#io) | Write/1, Writeln/1, PrintTerm/1, Nl/0, Tab/1, WriteToString/2, TermToString/2, Listing/1, PortrayClause/1 |
+| [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2 |
+| [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0 |
+| [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, extend/3, unbound_keys/2, signature/3 |
+| [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
+| [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
+| [CLP(ℤ) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | in_domain/3, label/1, all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1 |
+| [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
+| [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, is_str/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
+| [Dict and Set Predicates](#dict-and-set-predicates) | is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
+| [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
+| [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
+| [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
+| [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | GetLogger, Debug, Info, Warning, Error, Critical, Log, SetLevel, GetLevel, StreamHandler, FileHandler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | Now, Today, Date, Time, DateTime, DateAdd, DateSub, DateDiff, FormatDate, ParseDate, DateBetween |
-| [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, Write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
-| [Time & Statistics](#time--statistics) | CurrentTime/1, Statistics/2 |
+| [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
+| [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
 | [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `:=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `If` |
 
 ---
@@ -103,10 +103,10 @@ Notation in signature lines:
 
 These are **compiler special forms** — transformed at compile time, not dispatched via the builtin registry.
 
-### `Once/1`
+### `once/1`
 ```clausal
 # skip
-Once(+Goal)
+once(+Goal)
 ```
 Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions.
 
@@ -176,14 +176,14 @@ Python exceptions appear as `ClassName(Message)` — the same shape as any logic
 
 ---
 
-### `CatchRecover/3`
+### `catch_recover/3`
 ```clausal
 # skip
-CatchRecover(+Goal, ?Error, +Recovery)
+catch_recover(+Goal, ?Error, +Recovery)
 ```
 Execute `Goal`. If an exception is raised, unify `Error` against the exception term, then execute `Recovery`. Like `Catch/2` but with an explicit recovery goal.
 
-`CatchRecover` never re-raises. For selective catch with re-raise on mismatch, use `catch/3`.
+`catch_recover` never re-raises. For selective catch with re-raise on mismatch, use `catch/3`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`)
@@ -220,10 +220,10 @@ Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1
 
 ---
 
-### `SetupCallCleanup/3`
+### `setup_call_cleanup/3`
 ```clausal
 # skip
-SetupCallCleanup(+Setup, +Call, +Cleanup)
+setup_call_cleanup(+Setup, +Call, +Cleanup)
 ```
 Deterministic resource management (`try/finally` for logic). Setup runs once (first solution only). Call runs normally. Cleanup runs **exactly once** regardless of how Call terminates — success, failure, or exception. If Setup fails, Cleanup does not run.
 
@@ -234,12 +234,12 @@ Deterministic resource management (`try/finally` for logic). Setup runs once (fi
 
 ---
 
-### `CallCleanup/2`
+### `call_cleanup/2`
 ```clausal
 # skip
-CallCleanup(+Call, +Cleanup)
+call_cleanup(+Call, +Cleanup)
 ```
-Sugar for `SetupCallCleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
+Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py` (`_compile_setup_call_cleanup`)
@@ -254,10 +254,10 @@ Coroutining predicates delay goal execution until variables are bound. They use 
 
 *Full documentation: [Coroutining](coroutining.md)*
 
-### `Freeze/2`
+### `freeze/2`
 ```clausal
 # skip
-Freeze(?X, +Goal)
+freeze(?X, +Goal)
 ```
 Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediately. If `X` is unbound, attaches Goal as an attribute; when `X` is later unified, the frozen goal fires synchronously — failure rejects the unification.
 
@@ -268,12 +268,12 @@ Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediatel
 
 ---
 
-### `When/2`
+### `when/2`
 ```clausal
 # skip
-When(+Condition, +Goal)
+when(+Condition, +Goal)
 ```
-Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported conditions: `IsBound(X)`, `IsGround(X)`, conjunction `(C1, C2)`, disjunction `(C1 ; C2)`.
+Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported conditions: `nonvar(X)`, `ground(X)`, conjunction `(C1, C2)`, disjunction `(C1 ; C2)`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py` (`_compile_when`), `clausal/logic/coroutining.py` (`_install_when_ground`, `_install_when_disjunction`)
@@ -286,10 +286,10 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported 
 
 These are **compiler special forms** recognized by name in `compile_goal`/`compile_goal_trampoline`. Inner goals compile in simple mode as sub-generators.
 
-### `FindAll/3`
+### `findall/3`
 ```clausal
 # skip
-FindAll(+Template, +Goal, -Bag)
+findall(+Template, +Goal, -Bag)
 ```
 Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succeeds with `[]` if `Goal` has no solutions.
 
@@ -300,12 +300,12 @@ Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succe
 
 ---
 
-### `BagOf/3`
+### `bagof/3`
 ```clausal
 # skip
-BagOf(+Template, +Goal, -Bag)
+bagof(+Template, +Goal, -Bag)
 ```
-Like `FindAll/3` but fails if `Goal` has no solutions. Bag preserves duplicate solutions.
+Like `findall/3` but fails if `Goal` has no solutions. Bag preserves duplicate solutions.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py:1630`
@@ -314,12 +314,12 @@ Like `FindAll/3` but fails if `Goal` has no solutions. Bag preserves duplicate s
 
 ---
 
-### `SetOf/3`
+### `setof/3`
 ```clausal
 # skip
-SetOf(+Template, +Goal, -Set)
+setof(+Template, +Goal, -Set)
 ```
-Like `BagOf/3` but removes duplicates and sorts the result.
+Like `bagof/3` but removes duplicates and sorts the result.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/compiler.py:1637`
@@ -328,10 +328,10 @@ Like `BagOf/3` but removes duplicates and sorts the result.
 
 ---
 
-### `ForAll/2`
+### `forall/2`
 ```clausal
 # skip
-ForAll(+Cond, +Action)
+forall(+Cond, +Action)
 ```
 Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`.
 
@@ -342,10 +342,10 @@ Universal quantification: succeeds if `Action` succeeds for every solution of `C
 
 ---
 
-### `CallNth/2`
+### `call_nth/2`
 ```clausal
 # skip
-CallNth(+Goal, +N)
+call_nth(+Goal, +N)
 ```
 Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the first N-1 solutions. Fails if Goal has fewer than N solutions. Raises `type_error` if N is not a positive integer.
 
@@ -356,10 +356,10 @@ Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the firs
 
 ---
 
-### `CountAll/2`
+### `count_all/2`
 ```clausal
 # skip
-CountAll(+Goal, -Count)
+count_all(+Goal, -Count)
 ```
 Count the number of solutions of `Goal` without collecting them. Unifies `Count` with the integer result. Bindings from the inner goal are not visible after counting (the trail is unwound).
 
@@ -370,21 +370,21 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 
 ---
 
-## Time & Statistics
+## Time & statistics
 
-### `CurrentTime/1`
+### `current_time/1`
 ```clausal
 # skip
-CurrentTime(-T)
+current_time(-T)
 ```
 Unify T with the current Unix timestamp as a float (seconds since epoch).
 
 ---
 
-### `Statistics/2`
+### `statistics/2`
 ```clausal
 # skip
-Statistics(?Key, -Value)
+statistics(?Key, -Value)
 ```
 Query runtime statistics. With Key bound, looks up a specific stat. With Key unbound, enumerates all available stats via backtracking.
 
@@ -439,7 +439,7 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 # skip
 phrase(+RuleBody, +List)
 ```
-Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate class (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). Equivalent to calling the rule with `List` as the input state and `[]` as the output state.
+Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate class (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`_phrase__2`)
@@ -462,28 +462,28 @@ Also used for **state-passing DCGs**: encode state as a single-element list `[St
 
 ---
 
-### `Sequence//1`
+### `sequence//1`
 ```clausal
 # skip
-Sequence(+List)   % as DCG non-terminal: Sequence(List, S0, S)
+sequence(+List)   % as DCG non-terminal: sequence(List, S0, S)
 ```
-DCG non-terminal that matches a list of terminals in sequence. `Sequence([a, b, c])` consumes `a`, `b`, `c` from the input. Equivalent to inlining the terminals as a grammar rule body.
+DCG non-terminal that matches a list of terminals in sequence. `sequence([a, b, c])` consumes `a`, `b`, `c` from the input. equivalent to inlining the terminals as a grammar rule body.
 
 ```clausal
 # skip
-phrase(Sequence(["hello", "world"]), ["hello", "world"])       % succeeds
-phrase(Sequence(["a", "b"]), ["a", "b", "c"], REST)            % REST = ["c"]
+phrase(sequence(["hello", "world"]), ["hello", "world"])       % succeeds
+phrase(sequence(["a", "b"]), ["a", "b", "c"], REST)            % REST = ["c"]
 ```
 
 ---
 
 ## Term Inspection
 
-### `Functor/3`
+### `functor/3`
 ```clausal
 # skip
-Functor(+Term, -Name, -Arity)   % decompose
-Functor(-Term, +Name, +Arity)   % construct
+functor(+Term, -Name, -Arity)   % decompose
+functor(-Term, +Name, +Arity)   % construct
 ```
 Decompose a term into its functor name and arity, or construct a term from a name and arity (fields are fresh vars).
 
@@ -494,12 +494,12 @@ Decompose a term into its functor name and arity, or construct a term from a nam
 
 ---
 
-### `Arg/3`
+### `arg/3`
 ```clausal
 # skip
-Arg(+N, +Term, -Arg)
+arg(+N, +Term, -arg)
 ```
-Unify `Arg` with the `N`-th argument of `Term` (1-based indexing).
+Unify `arg` with the `N`-th argument of `Term` (1-based indexing).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:394`
@@ -508,11 +508,11 @@ Unify `Arg` with the `N`-th argument of `Term` (1-based indexing).
 
 ---
 
-### `Unpack/2`
+### `unpack/2`
 ```clausal
 # skip
-Unpack(+Term, -List)   % decompose: List = [Functor | Args]
-Unpack(-Term, +List)   % construct: Term from [Functor | Args]
+unpack(+Term, -List)   % decompose: List = [functor | Args]
+unpack(-Term, +List)   % construct: Term from [functor | Args]
 ```
 Decompose a term to `[functor | args]` list, or construct a term from such a list. (Prolog's `=..` operator.)
 
@@ -523,57 +523,57 @@ Decompose a term to `[functor | args]` list, or construct a term from such a lis
 
 ---
 
-### `CopyTerm/2`
+### `copy_term/2`
 ```clausal
 # skip
-CopyTerm(+Original, -Copy)
+copy_term(+Original, -Copy)
 ```
 Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_copy_term`, `CopyTerm/2`)
+    **Implementation:** `clausal/logic/builtins.py` (`_copy_term`, `copy_term/2`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
 
-### `TermVariables/2`
+### `term_variables/2`
 ```clausal
 # skip
-TermVariables(+Term, -Vars)
+term_variables(+Term, -Vars)
 ```
 Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-right with duplicates removed (same `Var` appearing multiple times in `Term` appears only once in `Vars`). Bound variables are followed and not collected.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_collect_vars`, `TermVariables/2`)
+    **Implementation:** `clausal/logic/builtins.py` (`_collect_vars`, `term_variables/2`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
 
-### `NumberVars/3`
+### `numbervars/3`
 ```clausal
 # skip
-NumberVars(+Term, +Start, -End)
+numbervars(+Term, +Start, -End)
 ```
 Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$VAR", (N,))` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`NumberVars/3`)
+    **Implementation:** `clausal/logic/builtins.py` (`numbervars/3`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
 
-### `GenSym/2`
+### `gensym/2`
 ```clausal
 # skip
-GenSym(+Prefix, -Atom)
+gensym(+Prefix, -Atom)
 ```
-Generate a unique atom by appending a monotonically increasing counter to `Prefix`. `GenSym("x", A)` produces `"x_1"`, `"x_2"`, etc. on successive calls. The counter is **not trailed** — it survives backtracking (impure, matches Prolog's `gensym/2`). Thread-safe via lock. Different prefixes maintain independent counters. `Prefix` must be a bound string; unbound or non-string prefix → fail.
+Generate a unique atom by appending a monotonically increasing counter to `Prefix`. `gensym("x", A)` produces `"x_1"`, `"x_2"`, etc. on successive calls. The counter is **not trailed** — it survives backtracking (impure, matches Prolog's `gensym/2`). Thread-safe via lock. Different prefixes maintain independent counters. `Prefix` must be a bound string; unbound or non-string prefix → fail.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins/inspection.py` (`GenSym/2`)
+    **Implementation:** `clausal/logic/builtins/inspection.py` (`gensym/2`)
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
@@ -582,10 +582,10 @@ Generate a unique atom by appending a monotonically increasing counter to `Prefi
 
 These predicates require a live `Database` reference (`_DB_BUILTINS`). They recompile the affected predicate after modification.
 
-### `Assert/1`
+### `assertz/1`
 ```clausal
 # skip
-Assert(+Clause)
+assertz(+Clause)
 ```
 Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fails on locked (non-dynamic) predicates. Ground compound facts are normalized to `Var+Is` form for output-mode queries.
 
@@ -596,10 +596,10 @@ Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fai
 
 ---
 
-### `AssertFirst/1`
+### `asserta/1`
 ```clausal
 # skip
-AssertFirst(+Clause)
+asserta(+Clause)
 ```
 Add `Clause` at the **front** of its predicate's clause list.
 
@@ -610,10 +610,10 @@ Add `Clause` at the **front** of its predicate's clause list.
 
 ---
 
-### `Retract/1`
+### `retract/1`
 ```clausal
 # skip
-Retract(+Term)
+retract(+Term)
 ```
 Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails on locked predicates.
 
@@ -624,10 +624,10 @@ Remove the **first** clause whose head unifies with `Term`. Not backtrackable �
 
 ---
 
-### `ClearTable/2`
+### `abolish_table/2`
 ```clausal
 # skip
-ClearTable(+Functor, +Arity)
+abolish_table(+functor, +Arity)
 ```
 Remove all cached answers for the named tabled predicate, forcing re-computation on the next call.
 
@@ -638,10 +638,10 @@ Remove all cached answers for the named tabled predicate, forcing re-computation
 
 ---
 
-### `ClearAllTables/0`
+### `abolish_all_tables/0`
 ```clausal
 # skip
-ClearAllTables
+abolish_all_tables
 ```
 Remove all cached tabling answers for every predicate in the current database.
 
@@ -656,10 +656,10 @@ Remove all cached tabling answers for every predicate in the current database.
 
 These predicates operate on `KWTerm` (open-world keyword terms) and `PredicateMeta` term instances.
 
-### `Vary/3`
+### `vary/3`
 ```clausal
 # skip
-Vary(+Overrides, +Term, -NewTerm)
+vary(+Overrides, +Term, -NewTerm)
 ```
 Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on functor dataclass instances and `KWTerm`.
 
@@ -670,10 +670,10 @@ Produce a copy of `Term` with field values replaced by `Overrides` (a Python `di
 
 ---
 
-### `Extend/3`
+### `extend/3`
 ```clausal
 # skip
-Extend(+Additions, +Term, -NewTerm)
+extend(+Additions, +Term, -NewTerm)
 ```
 Produce a copy of `Term` (must be a `KWTerm`) with additional fields from `Additions` (a Python `dict`). Dataclass terms have fixed schemas so only `KWTerm` is supported.
 
@@ -684,10 +684,10 @@ Produce a copy of `Term` (must be a `KWTerm`) with additional fields from `Addit
 
 ---
 
-### `UnboundKeys/2`
+### `unbound_keys/2`
 ```clausal
 # skip
-UnboundKeys(+Term, -Keys)
+unbound_keys(+Term, -Keys)
 ```
 Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term`.
 
@@ -698,10 +698,10 @@ Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term
 
 ---
 
-### `Signature/3`
+### `signature/3`
 ```clausal
 # skip
-Signature(+FunctorName, +Arity, -Names)
+signature(+FunctorName, +Arity, -Names)
 ```
 Reflect the registered parameter name list for the predicate `FunctorName/Arity`. Fails if no signature is registered.
 
@@ -718,64 +718,64 @@ Attributed variables carry key-value metadata that survives through unification.
 
 Attribute keys are strings. Attribute values can be any term. All mutations are trailed (undone on backtracking).
 
-### `PutAttr/3`
+### `put_attr/3`
 ```clausal
 # skip
-PutAttr(+Var, +Key, +Value)
+put_attr(+Var, +Key, +Value)
 ```
 Attach attribute `Value` under string `Key` to an unbound variable. Overwrites any existing value for that key. Trailed.
 
 ---
 
-### `GetAttr/3`
+### `get_attr/3`
 ```clausal
 # skip
-GetAttr(+Var, +Key, -Value)
+get_attr(+Var, +Key, -Value)
 ```
 Retrieve the attribute stored under `Key`. Fails if `Var` has no attribute for `Key`, or if `Var` is not an unbound variable.
 
 ---
 
-### `DelAttr/2`
+### `del_attr/2`
 ```clausal
 # skip
-DelAttr(+Var, +Key)
+del_attr(+Var, +Key)
 ```
 Remove the attribute under `Key`. Succeeds even if no attribute existed (no-op). Trailed.
 
 ---
 
-### `GetAttrs/2`
+### `get_attrs/2`
 ```clausal
 # skip
-GetAttrs(+Var, -Attrs)
+get_attrs(+Var, -Attrs)
 ```
 Unify `Attrs` with a `DictTerm` containing all attributes on `Var`. Empty `DictTerm` if no attributes.
 
 ---
 
-### `PutAttrs/2`
+### `put_attrs/2`
 ```clausal
 # skip
-PutAttrs(+Var, +Attrs)
+put_attrs(+Var, +Attrs)
 ```
 Set multiple attributes from a `DictTerm`. Each key-value pair is applied via `put_attr`.
 
 ---
 
-### `IsAttVar/1`
+### `attvar/1`
 ```clausal
 # skip
-IsAttVar(?Var)
+attvar(?Var)
 ```
 Succeeds if `Var` is an unbound variable with at least one attribute. Fails for bound terms and for bare (non-attributed) variables.
 
 ---
 
-### `TermAttributedVariables/2`
+### `term_attvars/2`
 ```clausal
 # skip
-TermAttributedVariables(+Term, -Vars)
+term_attvars(+Term, -Vars)
 ```
 Collect all attributed variables occurring in `Term` into a list. Traverses compound terms, lists, DictTerms, and PredicateMeta instances recursively. Each variable appears at most once.
 
@@ -783,10 +783,10 @@ Collect all attributed variables occurring in `Term` into a list. Traverses comp
 
 ## Constraint Predicates
 
-### `Dif/2`
+### `dif/2`
 ```clausal
 # skip
-Dif(+X, +Y)
+dif(+X, +Y)
 ```
 Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a constraint if either is unbound). Implemented via attributed variables; propagates through unification.
 
@@ -797,12 +797,12 @@ Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a co
 
 ---
 
-### `Eq/3` (reified)
+### `eq/3` (reified)
 ```clausal
 # skip
-Eq(+X, +Y, -T)
+eq(+X, +Y, -T)
 ```
-Reified equality. `T` is unified with `True` if `X = Y`, `False` if `Dif(X, Y)`. Suspends if neither is determined yet.
+Reified equality. `T` is unified with `True` if `X = Y`, `False` if `dif(X, Y)`. Suspends if neither is determined yet.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:812` → `clausal/logic/reif.py`
@@ -811,12 +811,12 @@ Reified equality. `T` is unified with `True` if `X = Y`, `False` if `Dif(X, Y)`.
 
 ---
 
-### `DifT/3` (reified)
+### `dif_t/3` (reified)
 ```clausal
 # skip
-DifT(+X, +Y, -T)
+dif_t(+X, +Y, -T)
 ```
-Reified disequality. `T` is `True` if `Dif(X, Y)`, `False` if `X = Y`.
+Reified disequality. `T` is `True` if `dif(X, Y)`, `False` if `X = Y`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:819` → `clausal/logic/reif.py`
@@ -829,10 +829,10 @@ Reified disequality. `T` is `True` if `Dif(X, Y)`, `False` if `X = Y`.
 
 CLP(ℤ) operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
 
-### `InDomain/3`
+### `in_domain/3`
 ```clausal
 # skip
-InDomain(+VarOrList, +Lo, +Hi)
+in_domain(+VarOrList, +Lo, +Hi)
 ```
 Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variables.
 
@@ -843,10 +843,10 @@ Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variabl
 
 ---
 
-### `Label/1`
+### `label/1`
 ```clausal
 # skip
-Label(+Vars)
+label(+Vars)
 ```
 Enumerate concrete values for a list of FD-constrained variables, backtracking over all consistent assignments.
 
@@ -857,10 +857,10 @@ Enumerate concrete values for a list of FD-constrained variables, backtracking o
 
 ---
 
-### `AllDifferent/1`
+### `all_different/1`
 ```clausal
 # skip
-AllDifferent(+Vars)
+all_different(+Vars)
 ```
 Post an all-different constraint on a list of FD variables. Propagates bounds and eliminates assigned values from other domains.
 
@@ -871,10 +871,10 @@ Post an all-different constraint on a list of FD variables. Propagates bounds an
 
 ---
 
-### `Equivalent/2`
+### `equivalent/2`
 ```clausal
 # skip
-Equivalent(+T1, +T2)
+equivalent(+T1, +T2)
 ```
 Structural equality test (old `==` behavior before CLP(ℤ) remapping). Succeeds if `T1` and `T2` are structurally identical after dereferencing.
 
@@ -885,65 +885,65 @@ Structural equality test (old `==` behavior before CLP(ℤ) remapping). Succeeds
 
 ---
 
-### `Sum/3`
+### `sum_/3`
 ```clausal
 # skip
-Sum(+Vars, +Op, +Value)
+sum_(+Vars, +Op, +Value)
 ```
 Constrain the sum of `Vars` (a list of FD variables or integers) under comparison operator `Op` to `Value`. Supported operators: `#=`, `#<`, `#>`, `#=<`, `#>=`, `#\=`.
 
 ```clausal
 # skip
-Sum([X, Y, Z], "#=", 10)   % X + Y + Z = 10
+sum_([X, Y, Z], "#=", 10)   % X + Y + Z = 10
 ```
 
 For `#=`, posts a `SumConstraint` that propagates bounds in both directions: narrows `Value` to `[min_sum, max_sum]` and narrows each variable using the remaining slack. For inequality operators, an intermediate variable is introduced and chained with the appropriate binary relational constraint. Ground lists with a ground `Value` are checked immediately without posting a constraint.
 
 ---
 
-### `ScalarProduct/4`
+### `scalar_product/4`
 ```clausal
 # skip
-ScalarProduct(+Coeffs, +Vars, +Op, +Value)
+scalar_product(+Coeffs, +Vars, +Op, +Value)
 ```
 Weighted sum constraint: `Σ(Coeffs[i] * Vars[i]) Op Value`. Coefficients must be ground integers. Lists must be the same length. Supports negative coefficients — division direction is flipped accordingly when narrowing individual variables.
 
 ```clausal
 # skip
-ScalarProduct([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
+scalar_product([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
 ```
 
-Uses the same bounds-consistency approach as `Sum/3` (`ScalarProductConstraint`). For inequality operators, an intermediate variable is introduced and chained with a binary relational constraint.
+Uses the same bounds-consistency approach as `sum_/3` (`ScalarProductConstraint`). For inequality operators, an intermediate variable is introduced and chained with a binary relational constraint.
 
 ---
 
-### `Element/3`
+### `element/3`
 ```clausal
 # skip
-Element(?Index, +List, ?Value)
+element(?Index, +List, ?Value)
 ```
-`Value` is the `Index`-th element of `List` (1-based indexing). When Index is ground, performs direct lookup. When Index is an FD variable, posts an `ElementConstraint` that propagates bidirectionally: narrows `Index` to positions whose list element overlaps `Value`'s domain, and narrows `Value` to the union of the domains at valid positions. Then enumerates the surviving valid indices.
+`Value` is the `Index`-th element of `List` (1-based indexing). when Index is ground, performs direct lookup. when Index is an FD variable, posts an `ElementConstraint` that propagates bidirectionally: narrows `Index` to positions whose list element overlaps `Value`'s domain, and narrows `Value` to the union of the domains at valid positions. Then enumerates the surviving valid indices.
 
 ```clausal
 # skip
-Element(2, [10, 20, 30], V)   % V = 20
-Element(I, [10, 20, 30], 20)  % I = 2 (propagated without labeling)
+element(2, [10, 20, 30], V)   % V = 20
+element(I, [10, 20, 30], 20)  % I = 2 (propagated without labeling)
 ```
 
 ---
 
-### `Circuit/1`
+### `circuit/1`
 ```clausal
 # skip
-Circuit(+Vars)
+circuit(+Vars)
 ```
-Constrain `Vars` to form a single Hamiltonian circuit. `Vars[i] = j` means the successor of node `i+1` is node `j` (1-based). Posts a `CircuitConstraint` that: restricts all domains to `[1, n]`, removes self-loop values, enforces AllDifferent, and detects premature sub-tours via forced-chain analysis — pruning values that would close a cycle shorter than `n`. Labeling then enumerates remaining candidates.
+Constrain `Vars` to form a single Hamiltonian circuit. `Vars[i] = j` means the successor of node `i+1` is node `j` (1-based). Posts a `CircuitConstraint` that: restricts all domains to `[1, n]`, removes self-loop values, enforces all_different, and detects premature sub-tours via forced-chain analysis — pruning values that would close a cycle shorter than `n`. Labeling then enumerates remaining candidates.
 
 ```clausal
 # skip
-Circuit([2, 3, 1])         % valid: 1→2→3→1
-% Circuit([1, 2, 3]) fails — self-loop at node 1
-% Circuit([2, 1, 4, 3]) fails — two sub-tours (detected during propagation)
+circuit([2, 3, 1])         % valid: 1→2→3→1
+% circuit([1, 2, 3]) fails — self-loop at node 1
+% circuit([2, 1, 4, 3]) fails — two sub-tours (detected during propagation)
 ```
 
 ---
@@ -952,12 +952,12 @@ Circuit([2, 3, 1])         % valid: 1→2→3→1
 
 CLP(B) uses reduced ordered BDDs (Binary Decision Diagrams) for Boolean constraint solving. Expressions use Python's bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), plus `BoolEq` (equivalence) and `BoolImpl` (implication) term constructors.
 
-### `Sat/1`
+### `sat/1`
 ```clausal
 # skip
-Sat(+Expr)
+sat(+Expr)
 ```
-Post a Boolean constraint. The expression must evaluate to true. Fails if unsatisfiable. Propagates forced values (e.g., `Sat(X & Y)` forces both to 1).
+Post a Boolean constraint. The expression must evaluate to true. Fails if unsatisfiable. Propagates forced values (e.g., `sat(X & Y)` forces both to 1).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
@@ -966,10 +966,10 @@ Post a Boolean constraint. The expression must evaluate to true. Fails if unsati
 
 ---
 
-### `Taut/2`
+### `taut/2`
 ```clausal
 # skip
-Taut(+Expr, -T)
+taut(+Expr, -T)
 ```
 Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. Fail if indeterminate.
 
@@ -980,10 +980,10 @@ Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. F
 
 ---
 
-### `SatCount/2`
+### `sat_count/2`
 ```clausal
 # skip
-SatCount(+Expr, -N)
+sat_count(+Expr, -N)
 ```
 Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
 
@@ -994,10 +994,10 @@ Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
 
 ---
 
-### `BoolLabeling/1`
+### `bool_labeling/1`
 ```clausal
 # skip
-BoolLabeling(+Vars)
+bool_labeling(+Vars)
 ```
 Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all satisfying assignments.
 
@@ -1010,10 +1010,10 @@ Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all s
 
 ## Type Checks
 
-### `IsVar/1`
+### `var/1`
 ```clausal
 # skip
-IsVar(?X)
+var(?X)
 ```
 Succeeds if `X` is an unbound logic variable.
 
@@ -1024,10 +1024,10 @@ Succeeds if `X` is an unbound logic variable.
 
 ---
 
-### `IsBound/1`
+### `nonvar/1`
 ```clausal
 # skip
-IsBound(?X)
+nonvar(?X)
 ```
 Succeeds if `X` is bound (not an unbound `Var`).
 
@@ -1038,25 +1038,25 @@ Succeeds if `X` is bound (not an unbound `Var`).
 
 ---
 
-### `IsAtom/1`
+### `atom/1`
 ```clausal
 # skip
-IsAtom(+X)
+atom(+X)
 ```
 Succeeds if `X` is a declared atom (a zero-arity PredicateMeta class).
 Atoms are created by `-private([red, blue])` or `-module(m, [red])` directives,
 or dynamically via `make_atom("name")`. Does not match plain strings — use
-`IsStr/1` for those.
+`is_str/1` for those.
 
 ---
 
-### `IsStr/1`
+### `is_str/1`
 ```clausal
 # skip
-IsStr(+X)
+is_str(+X)
 ```
 Succeeds if `X` is a Python `str`. Does not match declared atoms (use
-`IsAtom/1` for those).
+`atom/1` for those).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:877`
@@ -1065,10 +1065,10 @@ Succeeds if `X` is a Python `str`. Does not match declared atoms (use
 
 ---
 
-### `IsNumber/1`
+### `number/1`
 ```clausal
 # skip
-IsNumber(+X)
+number(+X)
 ```
 Succeeds if `X` is an `int` or `float` (excludes `bool`).
 
@@ -1079,10 +1079,10 @@ Succeeds if `X` is an `int` or `float` (excludes `bool`).
 
 ---
 
-### `IsInt/1`
+### `integer/1`
 ```clausal
 # skip
-IsInt(+X)
+integer(+X)
 ```
 Succeeds if `X` is an `int` (excludes `bool`).
 
@@ -1093,10 +1093,10 @@ Succeeds if `X` is an `int` (excludes `bool`).
 
 ---
 
-### `IsFloat/1`
+### `float_/1`
 ```clausal
 # skip
-IsFloat(+X)
+float_(+X)
 ```
 Succeeds if `X` is a Python `float`.
 
@@ -1107,10 +1107,10 @@ Succeeds if `X` is a Python `float`.
 
 ---
 
-### `IsCompound/1`
+### `compound/1`
 ```clausal
 # skip
-IsCompound(+X)
+compound(+X)
 ```
 Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `PredicateMeta` instance with at least one field).
 
@@ -1121,10 +1121,10 @@ Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `Pre
 
 ---
 
-### `IsCallable/1`
+### `callable_/1`
 ```clausal
 # skip
-IsCallable(+X)
+callable_(+X)
 ```
 Succeeds if `X` is an atom (string) or a compound term.
 
@@ -1135,10 +1135,10 @@ Succeeds if `X` is an atom (string) or a compound term.
 
 ---
 
-### `IsList/1`
+### `is_list/1`
 ```clausal
 # skip
-IsList(+X)
+is_list(+X)
 ```
 Succeeds if `X` is a Python `list`.
 
@@ -1149,10 +1149,10 @@ Succeeds if `X` is a Python `list`.
 
 ---
 
-### `IsGround/1`
+### `ground/1`
 ```clausal
 # skip
-IsGround(+X)
+ground(+X)
 ```
 Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 
@@ -1163,23 +1163,23 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 
 ---
 
-### `MustBe/2`
+### `must_be/2`
 ```clausal
 # skip
-MustBe(+Type, +Term)
+must_be(+Type, +Term)
 ```
-Assert that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound. Throws `type_error(Type, Term, "must_be/2")` if Term is ground but wrong type.
+assertz that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound. Throws `type_error(Type, Term, "must_be/2")` if Term is ground but wrong type.
 
 Supported type strings: `"integer"`, `"float"`, `"number"`, `"atom"` / `"string"`, `"list"`, `"boolean"`, `"callable"`, `"dict"`, `"compound"`.
 
 ---
 
-### `CanBe/2`
+### `can_be/2`
 ```clausal
 # skip
-CanBe(+Type, ?Term)
+can_be(+Type, ?Term)
 ```
-Assert that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. Same type strings as `MustBe/2`.
+assertz that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. Same type strings as `must_be/2`.
 
 ---
 
@@ -1192,217 +1192,217 @@ Dict and set builtins operate on `DictTerm` and `SetTerm` values. Plain Python `
     **Python tests:** `tests/test_dict_set_builtins.py` (79 tests)
     **Fixture:** `tests/fixtures/dict_set_builtins.clausal`
 
-### `IsDict/1`
+### `is_dict/1`
 ```clausal
 # skip
-IsDict(+Term)
+is_dict(+Term)
 ```
 Succeeds if `Term` is a `DictTerm`.
 
 ---
 
-### `DictSize/2`
+### `dict_size/2`
 ```clausal
 # skip
-DictSize(+Dict, -N)
+dict_size(+Dict, -N)
 ```
 `N` is the number of keys in `Dict`.
 
 ---
 
-### `DictKeys/2`
+### `dict_keys/2`
 ```clausal
 # skip
-DictKeys(+Dict, -Keys)
+dict_keys(+Dict, -Keys)
 ```
 `Keys` is the sorted list of keys (sorted by `repr` for cross-type determinism).
 
 ---
 
-### `DictValues/2`
+### `dict_values/2`
 ```clausal
 # skip
-DictValues(+Dict, -Values)
+dict_values(+Dict, -Values)
 ```
 `Values` is the list of values in key-sorted order.
 
 ---
 
-### `DictPairs/2`
+### `dict_pairs/2`
 ```clausal
 # skip
-DictPairs(?Dict, ?Pairs)
+dict_pairs(?Dict, ?Pairs)
 ```
-Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
+Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. in_ dict→pairs direction, pairs are sorted by key.
 
 ---
 
-### `DictGet/3`
+### `dict_get/3`
 ```clausal
 # skip
-DictGet(+Key, +Dict, ?Value)
+dict_get(+Key, +Dict, ?Value)
 ```
 Semidet lookup. Fails if `Key` is absent or unbound.
 
 ---
 
-### `DictPut/4`
+### `dict_put/4`
 ```clausal
 # skip
-DictPut(+Key, +Value, +OldDict, -NewDict)
+dict_put(+Key, +Value, +OldDict, -NewDict)
 ```
 Functional update: `NewDict` is `OldDict` with `Key → Value` set. Returns a new `DictTerm`.
 
 ---
 
-### `DictPutPairs/3`
+### `dict_put_pairs/3`
 ```clausal
 # skip
-DictPutPairs(+Pairs, +OldDict, -NewDict)
+dict_put_pairs(+Pairs, +OldDict, -NewDict)
 ```
-Bulk update from a `[[Key, Value], ...]` list. Equivalent to repeated `DictPut/4`.
+Bulk update from a `[[Key, Value], ...]` list. equivalent to repeated `dict_put/4`.
 
 ---
 
-### `DictRemove/3`
+### `dict_remove/3`
 ```clausal
 # skip
-DictRemove(+Key, +OldDict, -NewDict)
+dict_remove(+Key, +OldDict, -NewDict)
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is absent.
 
 ---
 
-### `DictMerge/3`
+### `dict_merge/3`
 ```clausal
 # skip
-DictMerge(+D1, +D2, -Merged)
+dict_merge(+D1, +D2, -Merged)
 ```
-Union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
+union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
 
 ---
 
-### `GenDict/3`
+### `gen_dict/3`
 ```clausal
 # skip
-GenDict(?Key, +Dict, ?Value)
+gen_dict(?Key, +Dict, ?Value)
 ```
 Nondeterministic enumeration. Yields one `Key`/`Value` binding per solution on backtracking. Can be filtered by binding `Key` before the call.
 
 ---
 
-### `SubDict/2`
+### `sub_dict/2`
 ```clausal
 # skip
-SubDict(+Pattern, +Dict)
+sub_dict(+Pattern, +Dict)
 ```
-Partial dict matching. Succeeds when every key in `Pattern` is present in `Dict` and the values unify. Extra keys in `Dict` are ignored. See [SubDict](dicts_sets.md#partial-dict-matching--subdict2) for examples.
+Partial dict matching. Succeeds when every key in `Pattern` is present in `Dict` and the values unify. Extra keys in `Dict` are ignored. See [sub_dict](dicts_sets.md#partial-dict-matching--subdict2) for examples.
 
 ---
 
-### `IsSet/1`
+### `is_set/1`
 ```clausal
 # skip
-IsSet(+Term)
+is_set(+Term)
 ```
 Succeeds if `Term` is a `SetTerm`.
 
 ---
 
-### `SetSize/2`
+### `set_size/2`
 ```clausal
 # skip
-SetSize(+Set, -N)
+set_size(+Set, -N)
 ```
 `N` is the cardinality of `Set`.
 
 ---
 
-### `SetList/2`
+### `set_list/2`
 ```clausal
 # skip
-SetList(?Set, ?List)
+set_list(?Set, ?List)
 ```
-Bidirectional: `Set` ↔ sorted list. In list→set direction, duplicates are removed.
+Bidirectional: `Set` ↔ sorted list. in_ list→set direction, duplicates are removed.
 
 ---
 
-### `SetUnion/3`
+### `set_union/3`
 ```clausal
 # skip
-SetUnion(+S1, +S2, -Union)
+set_union(+S1, +S2, -union)
 ```
 Set union.
 
 ---
 
-### `SetIntersection/3`
+### `set_intersection/3`
 ```clausal
 # skip
-SetIntersection(+S1, +S2, -Inter)
+set_intersection(+S1, +S2, -Inter)
 ```
 Set intersection.
 
 ---
 
-### `SetSubtract/3`
+### `set_subtract/3`
 ```clausal
 # skip
-SetSubtract(+S1, +S2, -Diff)
+set_subtract(+S1, +S2, -Diff)
 ```
 `Diff` = elements in `S1` not in `S2`.
 
 ---
 
-### `SetSymDiff/3`
+### `set_sym_diff/3`
 ```clausal
 # skip
-SetSymDiff(+S1, +S2, -Sym)
+set_sym_diff(+S1, +S2, -Sym)
 ```
 Symmetric difference: elements in exactly one of `S1`, `S2`.
 
 ---
 
-### `SetSubset/2`
+### `set_subset/2`
 ```clausal
 # skip
-SetSubset(+Sub, +Super)
+set_subset(+Sub, +Super)
 ```
 Succeeds if `Sub` is a subset of `Super` (including equal sets and the empty set).
 
 ---
 
-### `SetDisjoint/2`
+### `set_disjoint/2`
 ```clausal
 # skip
-SetDisjoint(+S1, +S2)
+set_disjoint(+S1, +S2)
 ```
 Succeeds if `S1` and `S2` share no elements.
 
 ---
 
-### `SetAdd/3`
+### `set_add/3`
 ```clausal
 # skip
-SetAdd(+Elem, +OldSet, -NewSet)
+set_add(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` added. No-op if already present.
 
 ---
 
-### `SetRemove/3`
+### `set_remove/3`
 ```clausal
 # skip
-SetRemove(+Elem, +OldSet, -NewSet)
+set_remove(+Elem, +OldSet, -NewSet)
 ```
 `NewSet` is `OldSet` with `Elem` removed. No-op if absent.
 
 ---
 
-### `GenSet/2`
+### `gen_set/2`
 ```clausal
 # skip
-GenSet(?Elem, +Set)
+gen_set(?Elem, +Set)
 ```
 Nondeterministic enumeration of set elements. Order is deterministic (sorted by `repr`).
 
@@ -1412,12 +1412,12 @@ Nondeterministic enumeration of set elements. Order is deterministic (sorted by 
 
 Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The predicates below provide relational arithmetic usable in both input and output modes.
 
-### `Between/3`
+### `between/3`
 ```clausal
 # skip
-Between(+Low, +High, ?X)
+between(+Low, +High, ?X)
 ```
-Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
+Check or enumerate integers in `[Low, High]` inclusive. in_ check mode (X bound) succeeds iff `Low ≤ X ≤ High`. in_ generate mode (X unbound) backtracks over each integer.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:964`
@@ -1426,10 +1426,10 @@ Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) 
 
 ---
 
-### `Succ/2`
+### `succ/2`
 ```clausal
 # skip
-Succ(?X, ?Y)   % Y = X + 1
+succ(?X, ?Y)   % Y = X + 1
 ```
 Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y - 1`. Both must be non-negative integers.
 
@@ -1440,10 +1440,10 @@ Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y -
 
 ---
 
-### `Plus/3`
+### `plus/3`
 ```clausal
 # skip
-Plus(?X, ?Y, ?Z)   % Z = X + Y
+plus(?X, ?Y, ?Z)   % Z = X + Y
 ```
 Relational addition: any two of `X`, `Y`, `Z` determine the third.
 
@@ -1454,10 +1454,10 @@ Relational addition: any two of `X`, `Y`, `Z` determine the third.
 
 ---
 
-### `Abs/2`
+### `abs_/2`
 ```clausal
 # skip
-Abs(+X, -Y)   % Y = abs(X)
+abs_(+X, -Y)   % Y = abs(X)
 ```
 Absolute value.
 
@@ -1468,10 +1468,10 @@ Absolute value.
 
 ---
 
-### `Max/3`
+### `max_/3`
 ```clausal
 # skip
-Max(+X, +Y, -Z)   % Z = max(X, Y)
+max_(+X, +Y, -Z)   % Z = max(X, Y)
 ```
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1049`
@@ -1480,10 +1480,10 @@ Max(+X, +Y, -Z)   % Z = max(X, Y)
 
 ---
 
-### `Min/3`
+### `min_/3`
 ```clausal
 # skip
-Min(+X, +Y, -Z)   % Z = min(X, Y)
+min_(+X, +Y, -Z)   % Z = min(X, Y)
 ```
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1062`
@@ -1492,83 +1492,83 @@ Min(+X, +Y, -Z)   % Z = min(X, Y)
 
 ---
 
-### `Sign/2`
+### `sign/2`
 ```clausal
 # skip
-Sign(+X, -S)   % S is -1, 0, or 1
+sign(+X, -S)   % S is -1, 0, or 1
 ```
-Sign of X. Returns -1 for negative, 0 for zero, 1 for positive. Supports Quantity values (result is always a dimensionless integer).
+sign of X. Returns -1 for negative, 0 for zero, 1 for positive. Supports Quantity values (result is always a dimensionless integer).
 
 ---
 
-### `Gcd/3`
+### `gcd/3`
 ```clausal
 # skip
-Gcd(+X, +Y, -G)   % G = gcd(X, Y)
+gcd(+X, +Y, -G)   % G = gcd(X, Y)
 ```
 Greatest common divisor of two integers. Supports Quantity values — dimensions must agree; result preserves dimensions.
 
 ---
 
-### `DivMod/4`
+### `divmod_/4`
 ```clausal
 # skip
-DivMod(+X, +Y, -Q, -R)   % Q = X // Y, R = X mod Y
+divmod_(+X, +Y, -Q, -R)   % Q = X // Y, R = X mod Y
 ```
 Integer division and modulus. Fails if Y is 0. Supports Quantity values — dimensions must agree; quotient Q is dimensionless, remainder R preserves dimensions.
 
 ---
 
-### `Lcm/3`
+### `lcm/3`
 ```clausal
 # skip
-Lcm(+X, +Y, -L)   % L = lcm(X, Y)
+lcm(+X, +Y, -L)   % L = lcm(X, Y)
 ```
 Least common multiple of two integers. Supports Quantity values — dimensions must agree; result preserves dimensions.
 
 ---
 
-### `ExpMod/4`
+### `exp_mod/4`
 ```clausal
 # skip
-ExpMod(+Base, +Exp, +Mod, -Result)   % Result = Base^Exp mod Mod
+exp_mod(+Base, +Exp, +Mod, -Result)   % Result = Base^Exp mod Mod
 ```
 Modular exponentiation using Python's efficient `pow(base, exp, mod)`. Integer-only (no Quantity support). Fails if Mod is 0.
 
 ---
 
-### `Popcount/2`
+### `popcount/2`
 ```clausal
 # skip
-Popcount(+X, -Count)   % Count = number of set bits in X
+popcount(+X, -Count)   % Count = number of set bits in X
 ```
 Population count (number of 1 bits). X must be a non-negative integer.
 
 ---
 
-### `Msb/2`
+### `msb/2`
 ```clausal
 # skip
-Msb(+X, -Bit)   % Bit = position of most significant set bit (0-indexed)
+msb(+X, -Bit)   % Bit = position of most significant set bit (0-indexed)
 ```
-Most significant bit position. X must be a positive integer. `Msb(8, B)` gives B=3.
+Most significant bit position. X must be a positive integer. `msb(8, B)` gives B=3.
 
 ---
 
-### `Lsb/2`
+### `lsb/2`
 ```clausal
 # skip
-Lsb(+X, -Bit)   % Bit = position of least significant set bit (0-indexed)
+lsb(+X, -Bit)   % Bit = position of least significant set bit (0-indexed)
 ```
-Least significant bit position. X must be a positive integer. `Lsb(12, B)` gives B=2.
+Least significant bit position. X must be a positive integer. `lsb(12, B)` gives B=2.
 
 ---
 
 !!! note "Quantity support in arithmetic"
-    `Plus`, `Abs`, `Max`, `Min`, `Sign`, `Gcd`, `DivMod`, and `Lcm` all accept
+    `plus`, `abs_`, `max_`, `min_`, `sign`, `gcd`, `divmod_`, and `lcm` all accept
     `Quantity` values (numbers with physical dimensions). Dimension mismatches
-    raise `UnitsMismatch` — they are not silenced. `ExpMod`, `Popcount`, `Msb`,
-    and `Lsb` are integer-only (bitwise operations have no dimensional
+    raise `UnitsMismatch` — they are not silenced. `exp_mod`, `popcount`, `msb`,
+    and `lsb` are integer-only (bitwise operations have no dimensional
     interpretation).
 
 ---
@@ -1577,12 +1577,12 @@ Least significant bit position. X must be a positive integer. `Lsb(12, B)` gives
 
 !!! tip "Strings accepted"
 
-    All list predicates accept strings as character lists. `Append("hel", "lo", X)` yields `X = "hello"`. When all inputs are strings and the result is a character sequence, the result is returned as a string. See [Strings as Lists](strings_as_lists.md).
+    All list predicates accept strings as character lists. `append("hel", "lo", X)` yields `X = "hello"`. when all inputs are strings and the result is a character sequence, the result is returned as a string. See [Strings as Lists](strings_as_lists.md).
 
-### `In/2`
+### `in_/2`
 ```clausal
 # skip
-In(?Elem, +List)
+in_(?Elem, +List)
 ```
 Enumerate or check membership. Backtracks over all elements.
 
@@ -1593,10 +1593,10 @@ Enumerate or check membership. Backtracks over all elements.
 
 ---
 
-### `InCheck/2`
+### `in_check/2`
 ```clausal
 # skip
-InCheck(+Elem, +List)
+in_check(+Elem, +List)
 ```
 Deterministic membership check. Succeeds at most once; no backtracking.
 
@@ -1607,10 +1607,10 @@ Deterministic membership check. Succeeds at most once; no backtracking.
 
 ---
 
-### `Append/3`
+### `append/3`
 ```clausal
 # skip
-Append(?L1, ?L2, ?L3)   % L3 = L1 ++ L2
+append(?L1, ?L2, ?L3)   % L3 = L1 ++ L2
 ```
 List concatenation. Works in all modes: given any two, determines the third. Backtracks over splits when `L3` is bound and `L1`/`L2` are unbound.
 
@@ -1621,11 +1621,11 @@ List concatenation. Works in all modes: given any two, determines the third. Bac
 
 ---
 
-### `Length/2`
+### `length/2`
 ```clausal
 # skip
-Length(+List, -N)   % N = len(List)
-Length(-List, +N)   % construct list of N fresh vars
+length(+List, -N)   % N = len(List)
+length(-List, +N)   % construct list of N fresh vars
 ```
 List length in both directions.
 
@@ -1636,10 +1636,10 @@ List length in both directions.
 
 ---
 
-### `Last/2`
+### `last/2`
 ```clausal
 # skip
-Last(+List, -Elem)
+last(+List, -Elem)
 ```
 Unify `Elem` with the last element of `List`.
 
@@ -1650,10 +1650,10 @@ Unify `Elem` with the last element of `List`.
 
 ---
 
-### `Reverse/2`
+### `reverse/2`
 ```clausal
 # skip
-Reverse(+List, -Rev)
+reverse(+List, -Rev)
 ```
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1170`
@@ -1662,10 +1662,10 @@ Reverse(+List, -Rev)
 
 ---
 
-### `GetItem/3`
+### `get_item/3`
 ```clausal
 # skip
-GetItem(+N, +List, -Elem)   % 0-based
+get_item(+N, +List, -Elem)   % 0-based
 ```
 Get the element at 0-based index `N`.
 
@@ -1676,10 +1676,10 @@ Get the element at 0-based index `N`.
 
 ---
 
-### `Flatten/2`
+### `flatten/2`
 ```clausal
 # skip
-Flatten(+Nested, -Flat)
+flatten(+Nested, -Flat)
 ```
 Recursively flatten a nested list structure.
 
@@ -1690,12 +1690,12 @@ Recursively flatten a nested list structure.
 
 ---
 
-### `MergeSort/2`
+### `msort/2`
 ```clausal
 # skip
-MergeSort(+List, -Sorted)
+msort(+List, -Sorted)
 ```
-Sort `List` preserving duplicate elements (stable sort).
+sort `List` preserving duplicate elements (stable sort).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1248`
@@ -1704,12 +1704,12 @@ Sort `List` preserving duplicate elements (stable sort).
 
 ---
 
-### `Sort/2`
+### `sort/2`
 ```clausal
 # skip
-Sort(+List, -Sorted)
+sort(+List, -Sorted)
 ```
-Sort `List` removing duplicate elements.
+sort `List` removing duplicate elements.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1265`
@@ -1718,10 +1718,10 @@ Sort `List` removing duplicate elements.
 
 ---
 
-### `Permutation/2`
+### `permutation/2`
 ```clausal
 # skip
-Permutation(+List, -Perm)
+permutation(+List, -Perm)
 ```
 Enumerate all permutations of `List` via backtracking.
 
@@ -1732,12 +1732,12 @@ Enumerate all permutations of `List` via backtracking.
 
 ---
 
-### `Select/3`
+### `select/3`
 ```clausal
 # skip
-Select(?Elem, +List, -Rest)
+select(?Elem, +List, -Rest)
 ```
-Select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtracks over all positions where `Elem` appears.
+select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtracks over all positions where `Elem` appears.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1300`
@@ -1746,10 +1746,10 @@ Select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtrac
 
 ---
 
-### `Subtract/3`
+### `subtract/3`
 ```clausal
 # skip
-Subtract(+Set1, +Set2, -Diff)
+subtract(+Set1, +Set2, -Diff)
 ```
 List difference: elements in `Set1` not in `Set2`.
 
@@ -1760,10 +1760,10 @@ List difference: elements in `Set1` not in `Set2`.
 
 ---
 
-### `Intersection/3`
+### `intersection/3`
 ```clausal
 # skip
-Intersection(+Set1, +Set2, -Inter)
+intersection(+Set1, +Set2, -Inter)
 ```
 Elements present in both `Set1` and `Set2`.
 
@@ -1774,10 +1774,10 @@ Elements present in both `Set1` and `Set2`.
 
 ---
 
-### `Union/3`
+### `union/3`
 ```clausal
 # skip
-Union(+Set1, +Set2, -Union)
+union(+Set1, +Set2, -union)
 ```
 Elements in `Set1` or `Set2`, with duplicates removed.
 
@@ -1788,10 +1788,10 @@ Elements in `Set1` or `Set2`, with duplicates removed.
 
 ---
 
-### `ToSet/2`
+### `list_to_set/2`
 ```clausal
 # skip
-ToSet(+List, -Set)
+list_to_set(+List, -Set)
 ```
 Remove duplicates from `List` preserving the first-occurrence order.
 
@@ -1802,12 +1802,12 @@ Remove duplicates from `List` preserving the first-occurrence order.
 
 ---
 
-### `SumList/2`
+### `sum_list/2`
 ```clausal
 # skip
-SumList(+List, -Sum)
+sum_list(+List, -sum_)
 ```
-Sum all numeric elements of `List`.
+sum_ all numeric elements of `List`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1375`
@@ -1816,10 +1816,10 @@ Sum all numeric elements of `List`.
 
 ---
 
-### `MaxList/2`
+### `max_list/2`
 ```clausal
 # skip
-MaxList(+List, -Max)
+max_list(+List, -max_)
 ```
 Maximum element of a non-empty numeric list.
 
@@ -1830,10 +1830,10 @@ Maximum element of a non-empty numeric list.
 
 ---
 
-### `MinList/2`
+### `min_list/2`
 ```clausal
 # skip
-MinList(+List, -Min)
+min_list(+List, -min_)
 ```
 Minimum element of a non-empty numeric list.
 
@@ -1844,10 +1844,10 @@ Minimum element of a non-empty numeric list.
 
 ---
 
-### `Take/3`
+### `take/3`
 ```clausal
 # skip
-Take(+N, +List, -Taken)
+take(+N, +List, -Taken)
 ```
 First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N = 0`, returns `[]`.
 
@@ -1858,10 +1858,10 @@ First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N 
 
 ---
 
-### `Drop/3`
+### `drop/3`
 ```clausal
 # skip
-Drop(+N, +List, -Rest)
+drop(+N, +List, -Rest)
 ```
 `List` after dropping the first `N` elements. If `N >= len(List)`, returns `[]`.
 
@@ -1872,10 +1872,10 @@ Drop(+N, +List, -Rest)
 
 ---
 
-### `SplitAt/4`
+### `split_at/4`
 ```clausal
 # skip
-SplitAt(+N, +List, -Left, -Right)
+split_at(+N, +List, -Left, -Right)
 ```
 Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Clamps to list bounds.
 
@@ -1886,10 +1886,10 @@ Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Cla
 
 ---
 
-### `Zip/3`
+### `zip_/3`
 ```clausal
 # skip
-Zip(+List1, +List2, -Pairs)
+zip_(+List1, +List2, -Pairs)
 ```
 Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter list.
 
@@ -1900,10 +1900,10 @@ Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter
 
 ---
 
-### `Replicate/3`
+### `replicate/3`
 ```clausal
 # skip
-Replicate(+N, +Elem, -List)
+replicate(+N, +Elem, -List)
 ```
 `List` of `N` copies of `Elem`.
 
@@ -1914,13 +1914,13 @@ Replicate(+N, +Elem, -List)
 
 ---
 
-### `SplitWith/3`
+### `split_with/3`
 ```clausal
 # skip
-SplitWith(+Sep, +List, -Parts)    % split mode
-SplitWith(+Sep, -List, +Parts)    % join mode
+split_with(+Sep, +List, -Parts)    % split mode
+split_with(+Sep, -List, +Parts)    % join mode
 ```
-Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleaves `Parts` with `Sep`.
+Split `List` by separator `Sep` into sublists (`Parts`). in_ join mode, interleaves `Parts` with `Sep`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_split_with__3`)
@@ -1929,10 +1929,10 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 
 ---
 
-### `Unzip/3`
+### `pairs_keys_values/3`
 ```clausal
 # skip
-Unzip(?Pairs, ?Keys, ?Values)
+pairs_keys_values(?Pairs, ?Keys, ?Values)
 ```
 Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in both directions.
 
@@ -1943,10 +1943,10 @@ Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in 
 
 ---
 
-### `PairKeys/2`
+### `pairs_keys/2`
 ```clausal
 # skip
-PairKeys(+Pairs, -Keys)
+pairs_keys(+Pairs, -Keys)
 ```
 Extract the key (first element) from each pair.
 
@@ -1957,10 +1957,10 @@ Extract the key (first element) from each pair.
 
 ---
 
-### `PairValues/2`
+### `pairs_values/2`
 ```clausal
 # skip
-PairValues(+Pairs, -Values)
+pairs_values(+Pairs, -Values)
 ```
 Extract the value (second element) from each pair.
 
@@ -1971,63 +1971,63 @@ Extract the value (second element) from each pair.
 
 ---
 
-### `GroupPairsByKey/2`
+### `group_pairs_by_key/2`
 ```clausal
 # skip
-GroupPairsByKey(+Pairs, -Groups)
+group_pairs_by_key(+Pairs, -Groups)
 ```
 Group a list of `[Key, Value]` pairs by key. Groups is a list of `[Key, Values]` where Values collects all values for that key. Order is preserved (first occurrence of key determines group order).
 
 ```clausal
 # skip
-GroupPairsByKey([["a", 1], ["b", 2], ["a", 3]], GROUPS)
+group_pairs_by_key([["a", 1], ["b", 2], ["a", 3]], GROUPS)
 % GROUPS = [["a", [1, 3]], ["b", [2]]]
 ```
 
 ---
 
-### `Numlist/3`
+### `numlist/3`
 ```clausal
 # skip
-Numlist(+Low, +High, -List)
+numlist(+Low, +High, -List)
 ```
 List is the list of integers from Low to High inclusive. Fails if Low > High.
 
 ```clausal
 # skip
-Numlist(1, 5, L)   % L = [1, 2, 3, 4, 5]
+numlist(1, 5, L)   % L = [1, 2, 3, 4, 5]
 ```
 
 ---
 
-### `Numlist/2`
+### `numlist/2`
 ```clausal
 # skip
-Numlist(+High, -List)
+numlist(+High, -List)
 ```
-Shorthand for `Numlist(1, High, List)`.
+Shorthand for `numlist(1, High, List)`.
 
 ---
 
-### `SameLength/2`
+### `same_length/2`
 ```clausal
 # skip
-SameLength(?L1, ?L2)
+same_length(?L1, ?L2)
 ```
 Succeeds if L1 and L2 have the same length. If one is ground and the other is unbound, generates a list of fresh variables with matching length.
 
 ---
 
-### `Transpose/2`
+### `transpose/2`
 ```clausal
 # skip
-Transpose(+Matrix, -Transposed)
+transpose(+Matrix, -Transposed)
 ```
 Column-wise transposition of a list of lists. All rows must be the same length (fails on non-rectangular input). Empty matrix transposes to empty list.
 
 ```clausal
 # skip
-Transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
+transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
 ```
 
 ---
@@ -2036,10 +2036,10 @@ Transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
 
 These predicates accept a **goal argument** (a lambda or named predicate). The goal is called for each list element; failures propagate as in standard higher-order patterns.
 
-### `MapList/2`
+### `maplist/2`
 ```clausal
 # skip
-MapList(+Goal, +List)
+maplist(+Goal, +List)
 ```
 Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any element fails.
 
@@ -2050,10 +2050,10 @@ Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any elem
 
 ---
 
-### `MapList/3`
+### `maplist/3`
 ```clausal
 # skip
-MapList(+Goal, +Xs, -Ys)
+maplist(+Goal, +Xs, -Ys)
 ```
 Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` per element.
 
@@ -2064,12 +2064,12 @@ Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` p
 
 ---
 
-### `Filter/3`
+### `include/3`
 ```clausal
 # skip
-Filter(+Goal, +List, -Included)
+include(+Goal, +List, -Included)
 ```
-Filter `List` keeping only elements for which `Goal(Elem)` succeeds.
+include `List` keeping only elements for which `Goal(Elem)` succeeds.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1589`
@@ -2078,12 +2078,12 @@ Filter `List` keeping only elements for which `Goal(Elem)` succeeds.
 
 ---
 
-### `Exclude/3`
+### `exclude/3`
 ```clausal
 # skip
-Exclude(+Goal, +List, -Excluded)
+exclude(+Goal, +List, -Excluded)
 ```
-Filter `List` keeping only elements for which `Goal(Elem)` **fails**.
+include `List` keeping only elements for which `Goal(Elem)` **fails**.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:1614`
@@ -2092,57 +2092,57 @@ Filter `List` keeping only elements for which `Goal(Elem)` **fails**.
 
 ---
 
-### `Partition/4`
+### `partition/4`
 ```clausal
 # skip
-Partition(+Goal, +List, -Included, -Excluded)
+partition(+Goal, +List, -Included, -Excluded)
 ```
 Split `List` into two: `Included` contains elements where `Goal(Elem)` succeeds, `Excluded` contains elements where it fails.
 
 ```clausal
 # skip
-Partition(IsInt, [1, "a", 2, "b"], YES, NO)
+partition(integer, [1, "a", 2, "b"], YES, NO)
 % YES = [1, 2], NO = ["a", "b"]
 ```
 
 ---
 
-### `TFilter/3`
+### `tfilter/3`
 ```clausal
 # skip
-TFilter(+Goal, +List, -Filtered)
+tfilter(+Goal, +List, -Filtered)
 ```
 Reified filter. Calls `Goal(Elem, T)` where T is a fresh variable bound to `True` or `False` by the goal. Keeps elements where T=True. Committed choice: only the first solution of Goal is used.
 
-Useful with reified predicates like `Eq/3` and `DifT/3` that always succeed but bind their truth-value argument.
+Useful with reified predicates like `eq/3` and `dif_t/3` that always succeed but bind their truth-value argument.
 
 ```clausal
 # skip
-TFilter(Eq(_, 1), [1, 2, 1, 3], FILTERED)
+tfilter(eq(_, 1), [1, 2, 1, 3], FILTERED)
 % FILTERED = [1, 1]
 ```
 
 ---
 
-### `TPartition/4`
+### `tpartition/4`
 ```clausal
 # skip
-TPartition(+Goal, +List, -Included, -Excluded)
+tpartition(+Goal, +List, -Included, -Excluded)
 ```
 Reified partition. Calls `Goal(Elem, T)` for each element. Elements where T=True go into `Included`, T=False into `Excluded`.
 
 ```clausal
 # skip
-TPartition(Eq(_, 1), [1, 2, 1, 3], YES, NO)
+tpartition(eq(_, 1), [1, 2, 1, 3], YES, NO)
 % YES = [1, 1], NO = [2, 3]
 ```
 
 ---
 
-### `FoldLeft/4`
+### `foldl/4`
 ```clausal
 # skip
-FoldLeft(+Goal, +List, +V0, -V)
+foldl(+Goal, +List, +V0, -V)
 ```
 Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result.
 
@@ -2153,10 +2153,10 @@ Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumu
 
 ---
 
-### `TakeWhile/3`
+### `take_while/3`
 ```clausal
 # skip
-TakeWhile(+Goal, +List, -Prefix)
+take_while(+Goal, +List, -Prefix)
 ```
 Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
 
@@ -2167,10 +2167,10 @@ Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
 
 ---
 
-### `DropWhile/3`
+### `drop_while/3`
 ```clausal
 # skip
-DropWhile(+Goal, +List, -Suffix)
+drop_while(+Goal, +List, -Suffix)
 ```
 Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
 
@@ -2181,12 +2181,12 @@ Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
 
 ---
 
-### `Span/4`
+### `span/4`
 ```clausal
 # skip
-Span(+Goal, +List, -Yes, -No)
+span(+Goal, +List, -Yes, -No)
 ```
-`TakeWhile` + `DropWhile` in one pass. `Yes` is the longest prefix where `Goal` succeeds; `No` is the rest.
+`take_while` + `drop_while` in one pass. `Yes` is the longest prefix where `Goal` succeeds; `No` is the rest.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_span__4`)
@@ -2195,10 +2195,10 @@ Span(+Goal, +List, -Yes, -No)
 
 ---
 
-### `GroupBy/3`
+### `group_by/3`
 ```clausal
 # skip
-GroupBy(+Goal, +List, -Groups)
+group_by(+Goal, +List, -Groups)
 ```
 Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with equal consecutive keys are collected into sublists.
 
@@ -2209,12 +2209,12 @@ Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with
 
 ---
 
-### `SortBy/3`
+### `sort_by/3`
 ```clausal
 # skip
-SortBy(+Goal, +List, -Sorted)
+sort_by(+Goal, +List, -Sorted)
 ```
-Sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys).
+sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order of equal keys).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_sort_by__3`)
@@ -2223,12 +2223,12 @@ Sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order
 
 ---
 
-### `MaxBy/3`
+### `max_by/3`
 ```clausal
 # skip
-MaxBy(+Goal, +List, -Max)
+max_by(+Goal, +List, -max_)
 ```
-Element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list.
+element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on empty list.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_max_by__3`)
@@ -2237,12 +2237,12 @@ Element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on
 
 ---
 
-### `MinBy/3`
+### `min_by/3`
 ```clausal
 # skip
-MinBy(+Goal, +List, -Min)
+min_by(+Goal, +List, -min_)
 ```
-Element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list.
+element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails on empty list.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_min_by__3`)
@@ -2251,10 +2251,10 @@ Element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails o
 
 ---
 
-### `FilterMap/3`
+### `filter_map/3`
 ```clausal
 # skip
-FilterMap(+Goal, +List, -Result)
+filter_map(+Goal, +List, -Result)
 ```
 Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` when the goal succeeds, skips the element when it fails.
 
@@ -2267,16 +2267,16 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 
 ## Character/String
 
-Logic-aware character and string predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `AtomConcat(A, B, "hello")` with A and B unbound enumerates all splits, `CharType(C, digit)` enumerates digits.
+Logic-aware character and string predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `atom_concat(A, B, "hello")` with A and B unbound enumerates all splits, `char_type(C, digit)` enumerates digits.
 
 !!! note "Prefer list predicates for common operations"
 
-    Since strings behave as character lists, `Append/3` subsumes `AtomConcat/3` and `Length/2` subsumes `AtomLength/2`. The string-specific predicates below remain useful for ISO compatibility, explicit type conversion (`AtomChars/2`), code-point operations (`AtomCodes/2`, `CharCode/2`), character classification (`CharType/2`), and case conversion (`UpcaseAtom/2`, `DowncaseAtom/2`). See [Strings as Lists](strings_as_lists.md).
+    Since strings behave as character lists, `append/3` subsumes `atom_concat/3` and `length/2` subsumes `atom_length/2`. The string-specific predicates below remain useful for ISO compatibility, explicit type conversion (`atom_chars/2`), code-point operations (`atom_codes/2`, `char_code/2`), character classification (`char_type/2`), and case conversion (`upcase_atom/2`, `downcase_atom/2`). See [Strings as Lists](strings_as_lists.md).
 
-### `CharType/2`
+### `char_type/2`
 ```clausal
 # skip
-CharType(?Char, ?Type)
+char_type(?Char, ?Type)
 ```
 Character classification as a relation. At least one argument must be bound. Types: `alpha`, `digit`, `alnum`, `space`, `upper`, `lower`, `ascii`, `punct`, `print`, `control`. With Char bound, enumerates matching types. With Type bound, enumerates matching ASCII characters. With both bound, tests membership.
 
@@ -2286,12 +2286,12 @@ Character classification as a relation. At least one argument must be bound. Typ
 
 ---
 
-### `CharCode/2`
+### `char_code/2`
 ```clausal
 # skip
-CharCode(?Char, ?Code)
+char_code(?Char, ?Code)
 ```
-Bidirectional char ↔ integer code point conversion. `CharCode('A', N)` unifies N with 65. `CharCode(C, 65)` unifies C with `'A'`. Both bound tests equality. Both unbound raises `instantiation_error`.
+Bidirectional char ↔ integer code point conversion. `char_code('A', N)` unifies N with 65. `char_code(C, 65)` unifies C with `'A'`. Both bound tests equality. Both unbound raises `instantiation_error`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2299,57 +2299,57 @@ Bidirectional char ↔ integer code point conversion. `CharCode('A', N)` unifies
 
 ---
 
-### `UpcaseAtom/2`
+### `upcase_atom/2`
 ```clausal
 # skip
-UpcaseAtom(+Atom, -Upper)
+upcase_atom(+Atom, -Upper)
 ```
 Unify `Upper` with the uppercase version of `Atom`. First argument must be bound to a string.
 
 ---
 
-### `DowncaseAtom/2`
+### `downcase_atom/2`
 ```clausal
 # skip
-DowncaseAtom(+Atom, -Lower)
+downcase_atom(+Atom, -Lower)
 ```
 Unify `Lower` with the lowercase version of `Atom`. First argument must be bound to a string.
 
 ---
 
-### `AtomLength/2`
+### `atom_length/2`
 ```clausal
 # skip
-AtomLength(+Atom, ?Length)
+atom_length(+Atom, ?length)
 ```
-Unify `Length` with the length of `Atom`. First argument must be bound.
+Unify `length` with the length of `Atom`. First argument must be bound.
 
 ---
 
-### `AtomChars/2`
+### `atom_chars/2`
 ```clausal
 # skip
-AtomChars(?Atom, ?Chars)
+atom_chars(?Atom, ?Chars)
 ```
-Bidirectional conversion between a string and a list of single-character strings. `AtomChars("hi", L)` unifies L with `['h', 'i']`. `AtomChars(A, ['h', 'i'])` unifies A with `"hi"`.
+Bidirectional conversion between a string and a list of single-character strings. `atom_chars("hi", L)` unifies L with `['h', 'i']`. `atom_chars(A, ['h', 'i'])` unifies A with `"hi"`.
 
 ---
 
-### `AtomCodes/2`
+### `atom_codes/2`
 ```clausal
 # skip
-AtomCodes(?Atom, ?Codes)
+atom_codes(?Atom, ?Codes)
 ```
-Bidirectional conversion between a string and a list of integer code points. `AtomCodes("hi", L)` unifies L with `[104, 105]`.
+Bidirectional conversion between a string and a list of integer code points. `atom_codes("hi", L)` unifies L with `[104, 105]`.
 
 ---
 
-### `AtomConcat/3`
+### `atom_concat/3`
 ```clausal
 # skip
-AtomConcat(?A, ?B, ?C)
+atom_concat(?A, ?B, ?C)
 ```
-String concatenation as a relation. Forward: A and B bound → unify C with `A + B`. Reverse: C bound, A and/or B unbound → enumerate all splits. `AtomConcat(A, B, "abc")` yields 4 solutions: `("","abc")`, `("a","bc")`, `("ab","c")`, `("abc","")`. Optimized paths for prefix/suffix-bound cases.
+String concatenation as a relation. Forward: A and B bound → unify C with `A + B`. reverse: C bound, A and/or B unbound → enumerate all splits. `atom_concat(A, B, "abc")` yields 4 solutions: `("","abc")`, `("a","bc")`, `("ab","c")`, `("abc","")`. Optimized paths for prefix/suffix-bound cases.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2357,12 +2357,12 @@ String concatenation as a relation. Forward: A and B bound → unify C with `A +
 
 ---
 
-### `SubAtom/5`
+### `sub_atom/5`
 ```clausal
 # skip
-SubAtom(+Atom, ?Before, ?Length, ?After, ?Sub)
+sub_atom(+Atom, ?Before, ?length, ?After, ?Sub)
 ```
-Substring relation. Relates `Atom` to its substrings with position information: `Before + Length + After = len(Atom)`, `Sub = Atom[Before:Before+Length]`. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, Length)` pairs.
+Substring relation. Relates `Atom` to its substrings with position information: `Before + length + After = len(Atom)`, `Sub = Atom[Before:Before+length]`. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, length)` pairs.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2370,18 +2370,18 @@ Substring relation. Relates `Atom` to its substrings with position information: 
 
 ---
 
-### `NumberChars/2`
+### `number_chars/2`
 ```clausal
 # skip
-NumberChars(?Number, ?Chars)
+number_chars(?Number, ?Chars)
 ```
 Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with `list(str(Number))`. Chars bound (list of single-char strings) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
 
 ```clausal
 # skip
-NumberChars(42, ["4", "2"])        # succeeds
-NumberChars(-3.14, CHARS)          # CHARS = ["-", "3", ".", "1", "4"]
-NumberChars(N, ["1", "0"])         # N = 10
+number_chars(42, ["4", "2"])        # succeeds
+number_chars(-3.14, CHARS)          # CHARS = ["-", "3", ".", "1", "4"]
+number_chars(N, ["1", "0"])         # N = 10
 ```
 
 ??? info "Implementation & tests"
@@ -2390,17 +2390,17 @@ NumberChars(N, ["1", "0"])         # N = 10
 
 ---
 
-### `NumberCodes/2`
+### `number_codes/2`
 ```clausal
 # skip
-NumberCodes(?Number, ?Codes)
+number_codes(?Number, ?Codes)
 ```
-Bidirectional number ↔ code-point-list conversion. Like `NumberChars/2` but uses integer code points (`ord`/`chr`) instead of single-character strings.
+Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but uses integer code points (`ord`/`chr`) instead of single-character strings.
 
 ```clausal
 # skip
-NumberCodes(42, [52, 50])          # succeeds (ord("4")=52, ord("2")=50)
-NumberCodes(N, [52, 50])           # N = 42
+number_codes(42, [52, 50])          # succeeds (ord("4")=52, ord("2")=50)
+number_codes(N, [52, 50])           # N = 42
 ```
 
 ??? info "Implementation & tests"
@@ -2411,119 +2411,119 @@ NumberCodes(N, [52, 50])           # N = 42
 
 ## I/O
 
-### `Write/1`
+### `write/1`
 ```clausal
 # skip
-Write(+Term)
+write(+Term)
 ```
 Print `Term` to stdout without a trailing newline. Strings are printed as-is; other values use `str()`. Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X}"` derefs `X` at search time.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`Write/1`)
+    **Implementation:** `clausal/logic/builtins.py` (`write/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `Writeln/1`
+### `writeln/1`
 ```clausal
 # skip
-Writeln(+Term)
+writeln(+Term)
 ```
-Like `Write/1` but appends a newline.
+Like `write/1` but appends a newline.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`Writeln/1`)
+    **Implementation:** `clausal/logic/builtins.py` (`writeln/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `PrintTerm/1`
+### `print_term/1`
 ```clausal
 # skip
-PrintTerm(+Term)
+print_term(+Term)
 ```
 Print the structured `term_str` representation of `Term` (strings are quoted, compounds show functor/args) followed by a newline. Useful for debugging.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`PrintTerm/1`)
+    **Implementation:** `clausal/logic/builtins.py` (`print_term/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `Nl/0`
+### `nl/0`
 ```clausal
 # skip
-Nl
+nl
 ```
-Print a newline to stdout. Equivalent to `Write("\n")`.
+Print a newline to stdout. equivalent to `write("\n")`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`Nl/0`)
+    **Implementation:** `clausal/logic/builtins.py` (`nl/0`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `Tab/1`
+### `tab/1`
 ```clausal
 # skip
-Tab(+N)
+tab(+N)
 ```
 Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`Tab/1`)
+    **Implementation:** `clausal/logic/builtins.py` (`tab/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `WriteToString/2`
+### `write_to_string/2`
 ```clausal
 # skip
-WriteToString(+Term, -String)
+write_to_string(+Term, -String)
 ```
-Unify `String` with the `Write`-style string representation of `Term` (strings pass through, others use `str()`). Does not print anything.
+Unify `String` with the `write`-style string representation of `Term` (strings pass through, others use `str()`). Does not print anything.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`WriteToString/2`)
+    **Implementation:** `clausal/logic/builtins.py` (`write_to_string/2`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `TermToString/2`
+### `term_to_string/2`
 ```clausal
 # skip
-TermToString(+Term, -String)
+term_to_string(+Term, -String)
 ```
 Unify `String` with the `term_str` representation of `Term` (structured, with quoted strings). Does not print anything.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`TermToString/2`)
+    **Implementation:** `clausal/logic/builtins.py` (`term_to_string/2`)
     **Python tests:** `tests/test_io.py`
 
 ---
 
-### `Listing/1`
+### `listing/1`
 ```clausal
 # skip
-Listing(+Predicate)
+listing(+Predicate)
 ```
 Print all clauses of a predicate to stdout in readable Clausal syntax. Accepts a `PredicateMeta` class or instance. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). Reports "no clauses" for empty predicates and "builtin" for builtin predicates.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins/io.py` (`Listing/1`)
+    **Implementation:** `clausal/logic/builtins/io.py` (`listing/1`)
     **Python tests:** `tests/test_listing.py`
 
 ---
 
-### `PortrayClause/1`
+### `portray_clause/1`
 ```clausal
 # skip
-PortrayClause(+Term)
+portray_clause(+Term)
 ```
 Pretty-print a term with indentation for multi-line display using `term_pformat`. Short terms appear on one line; deeply nested terms are expanded with depth indentation.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins/io.py` (`PortrayClause/1`)
+    **Implementation:** `clausal/logic/builtins/io.py` (`portray_clause/1`)
     **Python tests:** `tests/test_listing.py`
 
 ---
@@ -2910,7 +2910,7 @@ Nondeterministic — generates one solution for each `datetime.date` in `[Start,
 
 ## YAML (`yaml_module` module)
 
-Standard library module wrapping Python's PyYAML. Import via `-import_from(yaml_module, [Read, Write, Get, ...])`. Data is represented as **native Python objects** — `dict`, `list`, `str`, `int`, `float`, `bool`, `None` — exactly what `yaml.safe_load` returns. Any Python method can be called on them via `++()` interop. See [yaml.md](yaml.md) for full documentation.
+Standard library module wrapping Python's PyYAML. Import via `-import_from(yaml_module, [Read, write, Get, ...])`. Data is represented as **native Python objects** — `dict`, `list`, `str`, `int`, `float`, `bool`, `None` — exactly what `yaml.safe_load` returns. Any Python method can be called on them via `++()` interop. See [yaml.md](yaml.md) for full documentation.
 
 Only `yaml.safe_load` is used (no arbitrary object construction from YAML tags).
 
@@ -2926,11 +2926,11 @@ Parse a YAML string into a Python object (dict/list/scalar). Fails on invalid YA
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/yaml_module.py`
 
-### `Write/2`
+### `write/2`
 
 ```clausal
 # skip
-Write(+Data, -YamlString)
+write(+Data, -YamlString)
 ```
 
 Serialize a Python object to a YAML string (block style, human-readable).
@@ -2981,7 +2981,7 @@ Read and parse a YAML file. Fails if the file does not exist or contains invalid
 WriteFile(+Path, +Data)
 ```
 
-Write a Python object as YAML to a file.
+write a Python object as YAML to a file.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/yaml_module.py`
@@ -3007,7 +3007,7 @@ The following are not builtins in the registry — they are syntax forms compile
 | Syntax | Meaning | Compiler location |
 |--------|---------|-------------------|
 | `X is Y` | Unification (structural) | `compiler.py:1415` |
-| `X is not Y` | Disequality constraint (`Dif/2`) | `compiler.py:1436` |
+| `X is not Y` | Disequality constraint (`dif/2`) | `compiler.py:1436` |
 | `X == Expr` | Arithmetic constraint (CLP(ℤ)) | `compiler.py` (`Evaluate`) |
 | `X == Y` | CLP(ℤ) equality constraint | `compiler.py:1444` |
 | `X != Y` | CLP(ℤ) disequality constraint | `compiler.py:1451` |
@@ -3036,32 +3036,32 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/tabled_left_rec.clausal` | tabled left recursion |
     | `tests/fixtures/tabled_same_gen.clausal` | tabled same-generation |
     | `tests/fixtures/tabled_ite.clausal` | `If/3` with tabled predicate |
-    | `tests/fixtures/clpfd_queens.clausal` | `InDomain/3`, `AllDifferent/1`, `Label/1` |
-    | `tests/fixtures/clpfd_sendmore.clausal` | `InDomain/3`, `AllDifferent/1`, `Label/1` |
+    | `tests/fixtures/clpfd_queens.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
+    | `tests/fixtures/clpfd_sendmore.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
     | `tests/fixtures/wfs_win.clausal` | well-founded semantics, `not` on tabled |
     | `tests/fixtures/wfs_win_asym.clausal` | well-founded semantics, asymmetric |
-    | `tests/fixtures/reified_memberd.clausal` | `If/3`, `Dif/2` (reified ITE) |
+    | `tests/fixtures/reified_memberd.clausal` | `If/3`, `dif/2` (reified ITE) |
     | `tests/fixtures/reified_max.clausal` | `If/3` with arithmetic |
-    | `tests/fixtures/reif_eq_test.clausal` | `Eq/3` |
-    | `tests/fixtures/once_member.clausal` | `Once/1` |
-    | `tests/fixtures/meta_test.clausal` | `FindAll/3`, `SetOf/3`, `ForAll/2`, `In/2` |
-    | `tests/fixtures/builtins_inspect.clausal` | `Functor/3`, `Arg/3`, `Unpack/2` |
-    | `tests/clausal_modules/term_inspection.clausal` | `CopyTerm/2`, `TermVariables/2`, `NumberVars/3` |
-    | `tests/fixtures/builtins_db.clausal` | `Assert/1`, `AssertFirst/1`, `Retract/1` |
-    | `tests/fixtures/builtins_types.clausal` | `IsVar/1`, `IsBound/1`, `IsStr/1`, `IsNumber/1`, `IsInt/1`, `IsFloat/1`, `IsCompound/1`, `IsCallable/1`, `IsList/1`, `IsGround/1` |
-    | `tests/fixtures/builtins_arith.clausal` | `Between/3`, `Succ/2`, `Plus/3`, `Abs/2`, `Max/3`, `Min/3` |
-    | `tests/fixtures/builtins_lists.clausal` | `In/2`, `InCheck/2`, `Append/3`, `Length/2`, `Last/2`, `Reverse/2`, `GetItem/3`, `Flatten/2`, `MergeSort/2`, `Sort/2`, `Permutation/2`, `Select/3`, `Subtract/3`, `Intersection/3`, `Union/3`, `ToSet/2`, `SumList/2`, `MaxList/2`, `MinList/2`, `Unzip/3`, `PairKeys/2`, `PairValues/2` |
-    | `tests/fixtures/builtins_higher_order.clausal` | `MapList/2`, `MapList/3`, `Filter/3`, `Exclude/3`, `FoldLeft/4` |
-    | `tests/fixtures/list_util.clausal` | `Take/3`, `Drop/3`, `SplitAt/4`, `Zip/3`, `Replicate/3`, `SplitWith/3`, `TakeWhile/3`, `DropWhile/3`, `Span/4`, `GroupBy/3`, `SortBy/3`, `MaxBy/3`, `MinBy/3`, `FilterMap/3` |
-    | `tests/fixtures/builtins_keywords.clausal` | `Vary/3`, `Extend/3`, `UnboundKeys/2`, `Signature/3` |
-    | `tests/fixtures/builtins_dif.clausal` | `Dif/2`, `Eq/3`, `DifT/3` |
+    | `tests/fixtures/reif_eq_test.clausal` | `eq/3` |
+    | `tests/fixtures/once_member.clausal` | `once/1` |
+    | `tests/fixtures/meta_test.clausal` | `findall/3`, `setof/3`, `forall/2`, `in_/2` |
+    | `tests/fixtures/builtins_inspect.clausal` | `functor/3`, `arg/3`, `unpack/2` |
+    | `tests/clausal_modules/term_inspection.clausal` | `copy_term/2`, `term_variables/2`, `numbervars/3` |
+    | `tests/fixtures/builtins_db.clausal` | `assertz/1`, `asserta/1`, `retract/1` |
+    | `tests/fixtures/builtins_types.clausal` | `var/1`, `nonvar/1`, `is_str/1`, `number/1`, `integer/1`, `float_/1`, `compound/1`, `callable_/1`, `is_list/1`, `ground/1` |
+    | `tests/fixtures/builtins_arith.clausal` | `between/3`, `succ/2`, `plus/3`, `abs_/2`, `max_/3`, `min_/3` |
+    | `tests/fixtures/builtins_lists.clausal` | `in_/2`, `in_check/2`, `append/3`, `length/2`, `last/2`, `reverse/2`, `get_item/3`, `flatten/2`, `msort/2`, `sort/2`, `permutation/2`, `select/3`, `subtract/3`, `intersection/3`, `union/3`, `list_to_set/2`, `sum_list/2`, `max_list/2`, `min_list/2`, `pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2` |
+    | `tests/fixtures/builtins_higher_order.clausal` | `maplist/2`, `maplist/3`, `include/3`, `exclude/3`, `foldl/4` |
+    | `tests/fixtures/list_util.clausal` | `take/3`, `drop/3`, `split_at/4`, `zip_/3`, `replicate/3`, `split_with/3`, `take_while/3`, `drop_while/3`, `span/4`, `group_by/3`, `sort_by/3`, `max_by/3`, `min_by/3`, `filter_map/3` |
+    | `tests/fixtures/builtins_keywords.clausal` | `vary/3`, `extend/3`, `unbound_keys/2`, `signature/3` |
+    | `tests/fixtures/builtins_dif.clausal` | `dif/2`, `eq/3`, `dif_t/3` |
     | `tests/fixtures/builtins_call.clausal` | `Call/N`, `CallGoal/N` |
-    | `tests/fixtures/coroutining.clausal` | `CallNth/2`, `CountAll/2`, `SetupCallCleanup/3`, `CallCleanup/2`, `Freeze/2`, `When/2` |
+    | `tests/fixtures/coroutining.clausal` | `call_nth/2`, `count_all/2`, `setup_call_cleanup/3`, `call_cleanup/2`, `freeze/2`, `when/2` |
     | `tests/test_python_interop.py` | `++()` Python interop (13 tests) |
     | `tests/test_dcg.py` | DCG rules, `phrase/2`, `phrase/3` (26 tests) |
     | `tests/fixtures/dcg_grammar.clausal` | `phrase/2`, `phrase/3`, DCG with non-terminals, inline goals, pushback, negation |
-    | `tests/fixtures/clpb_circuit.clausal` | `Sat/1`, `BoolLabeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
+    | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `GetLogger`, `SetLevel`, `GetLevel`, `IsEnabledFor`, `Debug`, `Info`, `Warning`, `Error`, `Critical`, `Log`, `StreamHandler`, `SetFormatter`, `AddHandler`, `RemoveHandler` |
     | `tests/test_date_time.py` | `Now`, `NowUTC`, `Today`, `Date`, `Time`, `DateTime`, `TimeDelta`, `DateAdd`, `DateSub`, `DateDiff`, `FormatDate`, `ParseDate`, `DayOfWeek`, `DateBetween` (64 tests) |
-    | `tests/test_yaml_module.py` | `Read`, `Write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
-    | `tests/fixtures/yaml_basic.clausal` | `Read`, `Write`, `Get` — parsing, nested access, round-trip |
+    | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
+    | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |

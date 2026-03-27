@@ -1,6 +1,6 @@
 # Meta-Interpreter Specialization
 
-[Meta-interpreters](metainterpreters.md) (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `MatchClause`, `CopyTerm`, list manipulation, and recursive calls.
+[Meta-interpreters](metainterpreters.md) (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `MatchClause`, `copy_term`, list manipulation, and recursive calls.
 
 **Partial deduction** (partial evaluation for logic programs) eliminates this overhead. Specializing an MI with respect to a known object program produces a residual program structurally identical to the object program, but with the MI's extensions woven directly into the compiled code. This is the **first Futamura projection** applied to logic programming.
 
@@ -16,7 +16,7 @@ Clausal ships five MIs ported from Triska's [acomip](https://www.metalevel.at/ac
 -import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit, SolveTree])
 ```
 
-| MI | Signature | Extension |
+| MI | signature | Extension |
 |---|---|---|
 | `Solve` | `(GOALS, PROGRAM)` | None — vanilla |
 | `SolveCount` | `(GOALS, PROGRAM, COUNT)` | Counts inference steps |
@@ -47,7 +47,7 @@ NatnumProgram(PROGRAM) <- (
 
 This produces a new predicate `SolveCountNatnum` that:
 
-- Resolves `natnum` goals at full compiled speed (no `MatchClause`, no `Append`)
+- Resolves `natnum` goals at full compiled speed (no `MatchClause`, no `append`)
 - Preserves the counting extension from `SolveCount`
 - Drops the `PROGRAM` argument (it was static)
 
@@ -91,7 +91,7 @@ SolveNatnum([["natnum", ["s", X]], *GOALS]) <-                  # rule
     SolveNatnum([["natnum", X], *GOALS])
 ```
 
-The `MatchClause`/`Append` machinery is gone. One clause per object clause, plus the base case.
+The `MatchClause`/`append` machinery is gone. One clause per object clause, plus the base case.
 
 ### Counting MI (SolveCount)
 
@@ -111,7 +111,7 @@ The counting logic is woven into each clause. The program argument is gone.
 
 ### Object programs with builtins
 
-When an object program uses goals that aren't defined in the program itself (arithmetic, comparisons, etc.), the specializer generates a catch-all clause that dispatches unknown goals through a runtime resolver:
+when an object program uses goals that aren't defined in the program itself (arithmetic, comparisons, etc.), the specializer generates a catch-all clause that dispatches unknown goals through a runtime resolver:
 
 ```clausal
 # skip
@@ -191,7 +191,7 @@ Used by `Solve`, `SolveCount`, `SolveLimit`:
 MI([], ...)                                   # base
 MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
     MatchClause(GOAL, BODY, PROGRAM),
-    Append(BODY, GOALS, ALL_GOALS),
+    append(BODY, GOALS, ALL_GOALS),
     MI(ALL_GOALS, PROGRAM, ...)
 )
 ```

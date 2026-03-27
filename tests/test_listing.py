@@ -1,4 +1,4 @@
-"""Tests for Phase 2 clause inspection builtins: Listing/1, PortrayClause/1."""
+"""Tests for Phase 2 clause inspection builtins: listing/1, portray_clause/1."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from clausal.logic.exceptions import LogicException
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _capture_listing(pred):
-    """Run Listing(pred) and return captured stdout."""
-    dispatch = get_builtin_dispatch("Listing", 1, None)
+    """Run listing(pred) and return captured stdout."""
+    dispatch = get_builtin_dispatch("listing", 1, None)
     trail = Trail()
     buf = io.StringIO()
     old = sys.stdout
@@ -32,8 +32,8 @@ def _capture_listing(pred):
 
 
 def _capture_portray(term):
-    """Run PortrayClause(term) and return captured stdout."""
-    dispatch = get_builtin_dispatch("PortrayClause", 1, None)
+    """Run portray_clause(term) and return captured stdout."""
+    dispatch = get_builtin_dispatch("portray_clause", 1, None)
     trail = Trail()
     buf = io.StringIO()
     old = sys.stdout
@@ -57,7 +57,7 @@ class empty_pred(metaclass=PredicateMeta):
     _fields = ("x",)
 
 
-# ── Listing/1 ────────────────────────────────────────────────────────────────
+# ── listing/1 ────────────────────────────────────────────────────────────────
 
 class TestListing:
     def setup_method(self):
@@ -95,7 +95,7 @@ class TestListing:
         assert "'cat'" in output
 
     def test_instance_resolves_to_class(self):
-        """Listing with a PredicateMeta instance resolves to its class."""
+        """listing with a PredicateMeta instance resolves to its class."""
         color._assertz(Clause(color("red", "#ff0000"), []))
         inst = color("red", "#ff0000")
         output = _capture_listing(inst)
@@ -103,7 +103,7 @@ class TestListing:
 
     def test_non_predicate_error(self):
         trail = Trail()
-        dispatch = get_builtin_dispatch("Listing", 1, None)
+        dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
             solutions(StepGenerator(dispatch, None, 42, trail))
 
@@ -120,7 +120,7 @@ class TestListing:
         assert "2 clause(s)" in output
 
 
-# ── PortrayClause/1 ─────────────────────────────────────────────────────────
+# ── portray_clause/1 ─────────────────────────────────────────────────────────
 
 class TestPortrayClause:
     def test_simple_string(self):

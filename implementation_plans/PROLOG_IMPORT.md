@@ -18,13 +18,13 @@ This maximally reuses tested infrastructure. The extra parse step is negligible 
 
 ### Recursive imports work naturally
 
-When `foo.pl` contains `:- use_module(bar)`, the translator emits `-import_module(bar)` in the `.clausal` text. `EmbedTransformer` generates `import bar` bytecode. At compile time, `_process_imports()` calls `importlib.import_module("bar")`, which hits `PrologFinder`, finds `bar.pl`, translates and compiles it. Python's `sys.modules` sentinel handles circular imports.
+when `foo.pl` contains `:- use_module(bar)`, the translator emits `-import_module(bar)` in the `.clausal` text. `EmbedTransformer` generates `import bar` bytecode. At compile time, `_process_imports()` calls `importlib.import_module("bar")`, which hits `PrologFinder`, finds `bar.pl`, translates and compiles it. Python's `sys.modules` sentinel handles circular imports.
 
 ### Bytecode caching
 
 `PrologLoader` extends `importlib.abc.SourceLoader` (same as `PredicateLoader`), so `.pyc` caching works automatically. On the first import, the `.pl` file is translated → parsed → transformed → compiled to bytecode → cached as `.pyc`. On subsequent imports, the `.pyc` is loaded directly, skipping translation entirely.
 
-**Cache-hit module_items recovery:** When loading from `.pyc`, `source_to_code()` doesn't run, so `_last_transformer` is missing. The loader must re-translate the `.pl` source and re-run `EmbedTransformer` to recover `module_items`. This matches the existing pattern in `PredicateLoader` (lines 307-319 of `import_hook.py`), which re-parses `.clausal` source on cache hit. The translation step adds ~10-50ms for typical files — acceptable.
+**Cache-hit module_items recovery:** when loading from `.pyc`, `source_to_code()` doesn't run, so `_last_transformer` is missing. The loader must re-translate the `.pl` source and re-run `EmbedTransformer` to recover `module_items`. This matches the existing pattern in `PredicateLoader` (lines 307-319 of `import_hook.py`), which re-parses `.clausal` source on cache hit. The translation step adds ~10-50ms for typical files — acceptable.
 
 ---
 
@@ -272,7 +272,7 @@ def _load_prolog_module(fullname, path, dialect=None):
 
 **File:** `clausal/tools/prolog_to_clausal.py`
 
-In `_emit_use_module` (line 406), after extracting `lib_name`, handle non-library module references. Currently, when `use_module` takes a bare atom (not `library(X)`), `_extract_library_name` returns `None` and the directive is emitted as a comment. Fix this to handle:
+in_ `_emit_use_module` (line 406), after extracting `lib_name`, handle non-library module references. Currently, when `use_module` takes a bare atom (not `library(X)`), `_extract_library_name` returns `None` and the directive is emitted as a comment. Fix this to handle:
 
 - `:- use_module(bar)` → `-import_module(bar),`
 - `:- use_module('./bar')` → `-import_module(bar),`
@@ -318,7 +318,7 @@ from clausal.import_hook import _load_prolog_module
 # ── Helpers ────────────────────────────────────────────────────────
 
 def _write_pl(tmp_path, name, source):
-    """Write a .pl file and ensure tmp_path is on sys.path."""
+    """write a .pl file and ensure tmp_path is on sys.path."""
     path = tmp_path / f"{name}.pl"
     path.write_text(textwrap.dedent(source))
     if str(tmp_path) not in sys.path:
@@ -337,12 +337,12 @@ def cleanup_modules():
 **Test cases (one class per concern):**
 
 **TestBasicImport:**
-1. Write `test_pl_edge.pl` with `edge(a, b). edge(b, c).` and a `path/2` rule.
+1. write `test_pl_edge.pl` with `edge(a, b). edge(b, c).` and a `path/2` rule.
 2. `_load_prolog_module("test_pl_edge", path)`
 3. Query `mod.Edge` and `mod.Path` — verify correct solutions.
 
 **TestArithmetic:**
-1. Write `test_pl_arith.pl` with `double(X, Y) :- Y is X * 2.`
+1. write `test_pl_arith.pl` with `double(X, Y) :- Y is X * 2.`
 2. Import and query — verify `double(3, Y)` yields `Y = 6`.
 
 **TestPycacheCreation:**
@@ -361,29 +361,29 @@ def cleanup_modules():
 3. Re-import — verify new predicates are visible.
 
 **TestRecursiveImport:**
-1. Write `test_pl_base.pl` with `helper(x).`
-2. Write `test_pl_main.pl` with `:- use_module(test_pl_base).` and a rule calling `helper/1`.
+1. write `test_pl_base.pl` with `helper(x).`
+2. write `test_pl_main.pl` with `:- use_module(test_pl_base).` and a rule calling `helper/1`.
 3. Import `test_pl_main` — verify it transitively loaded `test_pl_base` and the rule works.
 
 **TestLibraryImport:**
-1. Write `.pl` with `:- use_module(library(clpfd), [all_different/1]).`
+1. write `.pl` with `:- use_module(library(clpfd), [all_different/1]).`
 2. Import and verify the predicate is available.
 
 **TestPriority:**
-1. Write both `test_pl_prio.clausal` and `test_pl_prio.pl` with different facts.
+1. write both `test_pl_prio.clausal` and `test_pl_prio.pl` with different facts.
 2. Import `test_pl_prio` — verify the `.clausal` version wins.
 
 **TestErrors:**
-1. Write `.pl` with cut (`!`) — import raises `SyntaxError` mentioning cut.
-2. Write `.pl` with if-then-else (`->`) — import raises `SyntaxError`.
-3. Write `.pl` with syntax error — import raises `SyntaxError`.
+1. write `.pl` with cut (`!`) — import raises `SyntaxError` mentioning cut.
+2. write `.pl` with if-then-else (`->`) — import raises `SyntaxError`.
+3. write `.pl` with syntax error — import raises `SyntaxError`.
 
 **TestDCG:**
-1. Write `.pl` with DCG rules (`greeting --> [hello, world].`).
+1. write `.pl` with DCG rules (`greeting --> [hello, world].`).
 2. Import and verify the DCG predicate works.
 
 **TestDynamic:**
-1. Write `.pl` with `:- dynamic(color/2).`
+1. write `.pl` with `:- dynamic(color/2).`
 2. Import and verify `assertz` works on the dynamic predicate.
 
 ### Step 8: Test fixtures

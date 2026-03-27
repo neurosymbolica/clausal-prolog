@@ -97,7 +97,7 @@ class TestUnification:
         """ISO: 1 = 1.0 fails (distinct types).
         DIFFERS: clausal C-level unify uses Python ==, so 1 == 1.0 succeeds.
         This is a known difference."""
-        # In ISO this would fail; in clausal it succeeds due to Python semantics.
+        # in_ ISO this would fail; in clausal it succeeds due to Python semantics.
         assert _goal_succeeds(Is(left=1, right=1.0))
 
     def test_different_functors_fail(self):
@@ -126,7 +126,7 @@ class TestUnification:
 
     def test_number_syntax_equivalences(self):
         """ISO test 174-175: -1 = -0x1, t(0b1,0o1,0x1) = t(1,1,1).
-        In Python, these are the same integer values."""
+        in_ Python, these are the same integer values."""
         assert -1 == -0x1  # Python-level
         assert 0b1 == 0o1 == 0x1 == 1
         # Logic-level:

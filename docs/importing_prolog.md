@@ -1,6 +1,6 @@
 # Importing Prolog Code
 
-Clausal can import `.pl` (Prolog) files directly. Drop a `.pl` file on
+Clausal can import `.pl` (Prolog) files directly. drop a `.pl` file on
 `sys.path` and `import` it — Clausal translates, compiles, and caches it
 automatically.
 
@@ -92,7 +92,7 @@ hand-optimized `.clausal` version and the right one is always loaded.
 ## Importing between `.pl` files
 
 Prolog's `:- use_module` directive is translated to Clausal's import system.
-When one `.pl` file imports another, the import hook handles both files:
+when one `.pl` file imports another, the import hook handles both files:
 
 ```prolog
 % helpers.pl
@@ -140,7 +140,7 @@ Most standard Prolog translates cleanly:
 
 The translator **rejects** programs containing:
 
-- **Cut (`!/0`)** — raises `SyntaxError`. Use `Once/1`, `dif/2`, first-argument
+- **Cut (`!/0`)** — raises `SyntaxError`. Use `once/1`, `dif/2`, first-argument
   indexing, or constraints instead.
 - **If-then-else (`(C -> T ; E)`)** — raises `SyntaxError`. Use reified
   if-then-else, separate clauses with `dif/2` guards, or constraints.

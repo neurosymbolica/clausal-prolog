@@ -60,7 +60,7 @@ Lambdas capture variables from the enclosing clause implicitly, using Python's n
 captured_add(Z, RESULT) <- CallGoal((X <- (RESULT == X + Z)), 10)
 ```
 
-When queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT == 10 + 3`.
+when queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT == 10 + 3`.
 
 ### How capture works
 
@@ -72,7 +72,7 @@ Variables fall into three categories inside a lambda body:
 | **Captured** | `Z` used in body but defined in enclosing clause | Python closure over the enclosing scope's Var |
 | **Body-local** | `T` first appearing inside the lambda body | Fresh `Var()` allocated inside the lambda function |
 
-Captured variables share the same `Var` object as the enclosing clause. When the enclosing clause binds `Z` to a value, the lambda sees that binding through the shared reference. This is correct because Python closures capture by reference, and logic variables are mutable (via trail-based binding).
+Captured variables share the same `Var` object as the enclosing clause. when the enclosing clause binds `Z` to a value, the lambda sees that binding through the shared reference. This is correct because Python closures capture by reference, and logic variables are mutable (via trail-based binding).
 
 ### Parameter shadowing
 
@@ -169,7 +169,7 @@ Key details:
 
 ### Lambda hoisting
 
-When a lambda appears as an argument to a predicate call, the compiler **hoists** it: the `FunctionDef` is emitted before the call statement, and the lambda argument is replaced with a reference to the generated function name. This means the lambda is compiled once and called by reference.
+when a lambda appears as an argument to a predicate call, the compiler **hoists** it: the `FunctionDef` is emitted before the call statement, and the lambda argument is replaced with a reference to the generated function name. This means the lambda is compiled once and called by reference.
 
 ---
 
@@ -187,55 +187,55 @@ Here `_` as the second arg to `CallGoal` is a fresh throwaway variable.
 
 ## Lambdas with meta-predicates
 
-Lambdas combine naturally with [FindAll, BagOf, SetOf, and ForAll](meta_predicates.md). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
+Lambdas combine naturally with [findall, bagof, setof, and forall](meta_predicates.md). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
 ```clausal
 # Collect squares of a list using a lambda
 squares(NS, SQS) <- (
-    FindAll(
+    findall(
         SQ,
-        (In(X, NS), SQ == X * X),
+        (in_(X, NS), SQ == X * X),
         SQS,
     )
 )
 
-# Filter with ForAll
-all_positive(NS) <- ForAll(In(X, NS), X > 0)
+# include with forall
+all_positive(NS) <- forall(in_(X, NS), X > 0)
 ```
 
-Since `FindAll` and friends are compiler special forms, the goal argument is compiled inline — it is not passed as a closure. This means any goal expression works directly as the second argument, without needing to wrap it in a lambda.
+Since `findall` and friends are compiler special forms, the goal argument is compiled inline — it is not passed as a closure. This means any goal expression works directly as the second argument, without needing to wrap it in a lambda.
 
 ---
 
 ## Lambdas with higher-order list predicates
 
-The [higher-order list builtins](higher_order.md) — `MapList`, `Filter`, `Exclude`, `FoldLeft` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
+The [higher-order list builtins](higher_order.md) — `maplist`, `include`, `exclude`, `foldl` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
 ```clausal
 # skip
 # Builtin predicates can be passed directly — no lambda needed
-all_numbers(XS) <- MapList(IsNumber, XS)
-keep_ints(XS, IS) <- Filter(IsInt, XS, IS)
-incremented(XS, YS) <- MapList(Succ, XS, YS)
+all_numbers(XS) <- maplist(number, XS)
+keep_ints(XS, IS) <- include(integer, XS, IS)
+incremented(XS, YS) <- maplist(succ, XS, YS)
 ```
 
-When the goal logic is more complex than a single predicate call, lambdas are the natural choice:
+when the goal logic is more complex than a single predicate call, lambdas are the natural choice:
 
 ```clausal
-# MapList/3 — double every element
-doubles(XS, YS) <- MapList(((X, Y) <- (Y == X * 2)), XS, YS)
+# maplist/3 — double every element
+doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
-# MapList/2 — check all positive
-all_pos(XS) <- MapList((X <- (X > 0)), XS)
+# maplist/2 — check all positive
+all_pos(XS) <- maplist((X <- (X > 0)), XS)
 
-# Filter/3 — filter positive elements
-positives(XS, PS) <- Filter((X <- (X > 0)), XS, PS)
+# include/3 — filter positive elements
+positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
-# Exclude/3 — remove even elements
-remove_evens(XS, RS) <- Exclude((X <- (M == X % 2, M is 0)), XS, RS)
+# exclude/3 — remove even elements
+remove_evens(XS, RS) <- exclude((X <- (M == X % 2, M is 0)), XS, RS)
 
-# FoldLeft/4 — sum a list
-fold_sum(XS, S) <- FoldLeft(((E, A, R) <- (R == A + E)), XS, 0, S)
+# foldl/4 — sum a list
+fold_sum(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 ```
 
 All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element. This is consistent with the Pythonic philosophy and sufficient for lambda goals, which are typically deterministic.
@@ -266,7 +266,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     )
     ```
 
-    In practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
+    in_ practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
 
     ---
 
@@ -279,8 +279,8 @@ All higher-order list predicates use **committed choice** — they take the firs
     - **Runtime**: `CallGoal/1..8` and `Call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
     - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `==` arithmetic
-    - **Higher-order builtins**: MapList/2 (all succeed, one fails, empty list, non-list, non-callable), MapList/3 (double, empty, fail mid-list), Filter/3 (filter positive, all/none match, empty), Exclude/3 (mirror of Filter), FoldLeft/4 (sum, product, empty, fail mid-fold)
+    - **Higher-order builtins**: maplist/2 (all succeed, one fails, empty list, non-list, non-callable), maplist/3 (double, empty, fail mid-list), include/3 (filter positive, all/none match, empty), exclude/3 (mirror of include), foldl/4 (sum, product, empty, fail mid-fold)
 
 ---
 
-*See also: [Higher-Order](higher_order.md) — `MapList`, `Filter`, `FoldLeft` and friends · [Meta-Predicates](meta_predicates.md) — `FindAll`, `BagOf`, `SetOf`, `ForAll`, `Call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*
+*See also: [Higher-Order](higher_order.md) — `maplist`, `include`, `foldl` and friends · [Meta-Predicates](meta_predicates.md) — `findall`, `bagof`, `setof`, `forall`, `Call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*

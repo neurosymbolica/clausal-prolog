@@ -100,7 +100,7 @@ module can be understood from its definition alone.
 ## What breaks purity
 
 The power of logic programming is rooted in the logical properties listed
-above. When these properties are violated, the core advantages are lost.
+above. when these properties are violated, the core advantages are lost.
 
 ### Negation as failure with unbound variables
 
@@ -109,8 +109,8 @@ This is **not monotonic** — adding information (binding a variable) can cause
 a previously successful negation to fail.
 
 ```clausal
-# Dangerous: X is unbound, so not In(X, [1,2,3]) may behave unexpectedly
-risky(X) <- not In(X, [1, 2, 3])
+# Dangerous: X is unbound, so not in_(X, [1,2,3]) may behave unexpectedly
+risky(X) <- not in_(X, [1, 2, 3])
 ```
 
 For disequality with unbound variables, use [`dif/2`](constraints.md) (`is not`) instead — it
@@ -118,7 +118,7 @@ is a monotonic constraint that survives and is rechecked as variables become
 bound:
 
 ```clausal
-# Safe: Dif is a constraint, not a point-in-time check
+# Safe: dif is a constraint, not a point-in-time check
 safe(X) <- (X is not 1, X is not 2)
 ```
 
@@ -157,11 +157,11 @@ Test("greeting") <- greeting_text("world", "Hello, world!")
 # Emit it only at the boundary:
 greet(NAME) <- (
     greeting_text(NAME, TEXT),
-    Writeln(TEXT)
+    writeln(TEXT)
 )
 ```
 
-### Assert/Retract at runtime
+### assertz/retract at runtime
 
 Dynamically [adding or removing clauses](database_ops.md) breaks separability — the meaning of a
 predicate now depends on what has happened during execution, not just on its
@@ -208,7 +208,7 @@ optimization. Correctness and efficiency go hand in hand.
 
 ## Declarative debugging
 
-When a pure predicate gives wrong answers, you can locate the mistake without
+when a pure predicate gives wrong answers, you can locate the mistake without
 tracing execution.
 
 ### Too many answers (program is too general)
@@ -255,13 +255,13 @@ This separation is a major attraction of logic programming, and it only works
 within the pure monotonic core. Consider the N-Queens problem:
 
 ```clausal
--import_from(clpfd, [AllDifferent, Labeling]),
+-import_from(clpfd, [all_different, Labeling]),
 
 # Logic: describe what must hold
 n_queens(N, QUEENS) <- (
-    Length(QUEENS, N),
+    length(QUEENS, N),
     QUEENS ins 1..N,
-    AllDifferent(QUEENS),
+    all_different(QUEENS),
     safe_queens(QUEENS)
 )
 
@@ -285,7 +285,7 @@ to search. This decoupling makes the approach flexible and versatile.
    work in all directions and preserve multi-directional use. Reserve `:=`
    for Python interop (e.g., string operations with `++`).
 
-2. **Use `dif/2` (`is not`) instead of `not (X is Y)`.** Dif is a monotonic
+2. **Use `dif/2` (`is not`) instead of `not (X is Y)`.** dif is a monotonic
    constraint; negation-of-unification is a point-in-time check.
 
 3. **Use reified if-then-else instead of negation as failure for conditional

@@ -18,9 +18,9 @@ Test('list unification') <- (X is [a], X == [a])
 
 Test('empty lists unify') <- (X is [], X == [])
 
-Test('different atoms: is not succeeds') <- (X is a, Dif(X, b))
+Test('different atoms: is not succeeds') <- (X is a, dif(X, b))
 
-Test('same atom: is not fails') <- (X is a, not Dif(X, a))
+Test('same atom: is not fails') <- (X is a, not dif(X, a))
 
 Test('same atom ==') <- (a == a)
 

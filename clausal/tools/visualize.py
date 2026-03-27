@@ -21,7 +21,7 @@ CLI usage
 ---------
     python -m clausal.tools.visualize   (interactive; prompts for functor/arity)
 
-In tests, call ``show()`` directly and capture output with pytest's ``-s`` flag
+in_ tests, call ``show()`` directly and capture output with pytest's ``-s`` flag
 or ``capsys``.
 """
 

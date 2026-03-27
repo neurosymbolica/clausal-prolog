@@ -14,7 +14,7 @@ from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.terms import (
     And, Or, Not,
     Unify as Is, ArithEq, Lt,
-    In,
+    in_,
     Call, LoadName,
     Compound,
 )
@@ -73,13 +73,13 @@ def _make_member_module() -> Module:
         body=[],
     ))
 
-    # Use In/2 (simpler for testing without list patterns)
-    # Actually let's use a simpler approach: member via In
+    # Use in_/2 (simpler for testing without list patterns)
+    # Actually let's use a simpler approach: member via in_
     # member(X, L) :- X in L
     x2, l2 = Var(), Var()
     db.assertz(Clause(
         head=Compound("member2", (x2, l2)),
-        body=[In(left=x2, right=l2)],
+        body=[in_(left=x2, right=l2)],
     ))
     compile_predicate_trampoline("member2", 2, db.clauses_for("member2", 2), db)
 

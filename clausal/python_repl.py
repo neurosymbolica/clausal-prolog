@@ -169,7 +169,7 @@ def _make_clausal_compile(repl):
 
     Mode promotion
     ~~~~~~~~~~~~~~
-    ptpython falls back to ``"exec"`` mode when ``"eval"`` fails.  In
+    ptpython falls back to ``"exec"`` mode when ``"eval"`` fails.  in_
     ``"exec"`` mode Python discards bare expression results — ``sys.displayhook``
     is never called, so ``Solutions`` would silently vanish.  We promote
     single-expression statements to ``"single"`` mode, which emits

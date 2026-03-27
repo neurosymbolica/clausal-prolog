@@ -390,8 +390,8 @@ def _repr_html_(self) -> str:
 def _ipython_display_(self, **kwargs):
     """Called by IPython instead of repr(); drives the interactive loop.
 
-    In Jupyter kernels, delegates to :meth:`_repr_html_` for rich HTML
-    display.  In terminal IPython, uses the interactive keypress loop.
+    in_ Jupyter kernels, delegates to :meth:`_repr_html_` for rich HTML
+    display.  in_ terminal IPython, uses the interactive keypress loop.
     """
     if _in_jupyter_kernel():
         from IPython.display import display, HTML
@@ -630,7 +630,7 @@ logic variables.
 
 ## How solutions display
 
-In a Jupyter notebook, all solutions are rendered at once (up to a configurable
+in_ a Jupyter notebook, all solutions are rendered at once (up to a configurable
 limit) as styled HTML. Each solution is separated by `or`:
 
 \```python
@@ -685,24 +685,24 @@ Test("alice is grandparent of eve") <- grandparent("alice", "eve"),
 ### List operations
 
 \```clausal
--import_from(clausal/lists, [Append, Reverse, Length]),
+-import_from(clausal/lists, [append, reverse, length]),
 
-Test("append") <- Append([1, 2], [3, 4], [1, 2, 3, 4]),
-Test("reverse") <- Reverse([1, 2, 3], [3, 2, 1]),
-Test("length") <- Length([a, b, c], 3),
+Test("append") <- append([1, 2], [3, 4], [1, 2, 3, 4]),
+Test("reverse") <- reverse([1, 2, 3], [3, 2, 1]),
+Test("length") <- length([a, b, c], 3),
 \```
 
 ### Arithmetic with constraints
 
 \```clausal
--import_from(clausal/constraints, [In, AllDifferent]),
+-import_from(clausal/constraints, [in_, all_different]),
 
 puzzle(X, Y, Z) <- (
-    In(X, 1, 9),
-    In(Y, 1, 9),
-    In(Z, 1, 9),
+    in_(X, 1, 9),
+    in_(Y, 1, 9),
+    in_(Z, 1, 9),
     X + Y + Z == 15,
-    AllDifferent([X, Y, Z]),
+    all_different([X, Y, Z]),
     X < Y,
     Y < Z
 ),
@@ -760,8 +760,8 @@ Or alternatively, reorganize into a section:
 3. **Step 2**: Add `JUPYTER_CSS`, `_html_c()`, `term_html()`, `term_pformat_html()` to `clausal/terms.py`
 4. **Step 3**: Add `_format_bindings_html()` to `clausal/repl.py`
 5. **Step 4**: Add `_repr_html_()`, `limit` param, update `_ipython_display_()` in `Solutions`
-6. **Step 5**: Write tests (`tests/test_jupyter_integration.py`, `tests/test_term_html.py`)
-7. **Step 6**: Write `docs/jupyter.md` and update `mkdocs.yml`
+6. **Step 5**: write tests (`tests/test_jupyter_integration.py`, `tests/test_term_html.py`)
+7. **Step 6**: write `docs/jupyter.md` and update `mkdocs.yml`
 
 Steps 2 and 3 can be done in parallel. Steps 5 and 6 can be done in parallel.
 

@@ -19,7 +19,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify as Is, Evaluate,
     Lt, LtE, Gt, GtE,
-    In, NotIn,
+    in_, NotIn,
     Call, LoadName,
     Compound,
 )
@@ -264,7 +264,7 @@ class TestCatch:
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
             And(
-                left=In(left=x, right=[1, 2, 3]),
+                left=in_(left=x, right=[1, 2, 3]),
                 right=Is(left=result, right=x),
             ),
             Var(),
@@ -386,34 +386,34 @@ class TestClausalIntegration:
         assert results == ["outer_error"]
 
 
-# ── throw inside FindAll ─────────────────────────────────────────────────────
+# ── throw inside findall ─────────────────────────────────────────────────────
 
 
 class TestThrowInFindAll:
     def test_throw_inside_findall_propagates(self):
-        """throw inside FindAll propagates out (not isolated)."""
+        """throw inside findall propagates out (not isolated)."""
         x = Var()
         bag = Var()
         inner = And(
-            left=In(left=x, right=[1, 2, 3]),
+            left=in_(left=x, right=[1, 2, 3]),
             right=Call(func=LoadName(name="throw"), args=["findall_err"], kwargs=[]),
         )
-        goal = Call(func=LoadName(name="FindAll"), args=[x, inner, bag], kwargs=[])
+        goal = Call(func=LoadName(name="findall"), args=[x, inner, bag], kwargs=[])
         with pytest.raises(LogicException) as exc_info:
             solutions_of(goal)
         assert exc_info.value.term == "findall_err"
 
     def test_catch_around_findall(self):
-        """catch around FindAll catches throw from inside FindAll."""
+        """catch around findall catches throw from inside findall."""
         x = Var()
         bag = Var()
         result = Var()
         e = Var()
         inner = And(
-            left=In(left=x, right=[1, 2, 3]),
+            left=in_(left=x, right=[1, 2, 3]),
             right=Call(func=LoadName(name="throw"), args=["fa_err"], kwargs=[]),
         )
-        findall = Call(func=LoadName(name="FindAll"), args=[x, inner, bag], kwargs=[])
+        findall = Call(func=LoadName(name="findall"), args=[x, inner, bag], kwargs=[])
         goal = Call(func=LoadName(name="catch"), args=[
             findall,
             e,
