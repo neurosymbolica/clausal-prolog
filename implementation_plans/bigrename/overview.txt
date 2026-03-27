@@ -1,0 +1,158 @@
+Retrospective: TitleCase → snake_case Predicate Rename
+=======================================================
+
+This rename converted all built-in predicate names from TitleCase (Prolog-style
+PascalCase, e.g. Member, Append, Write, GetItem) to snake_case (e.g. member,
+append, write, get_item). On the surface this looks like a mechanical find-
+and-replace. In practice it was not, for several interconnected reasons.
+
+
+1. SCOPE: 330 FILES TOUCHED
+-----------------------------
+The predicate names appeared everywhere: source files, tests, fixtures, golden
+files, docs, implementation plans. A naive bulk rename on all of them is
+insufficient because not every occurrence of a capitalized word is a predicate
+name — natural-language text and Python class names also start with capitals.
+The rename required judgment at each site.
+
+
+2. THE REVERSE BUILTIN MAP: FIRST-OCCURRENCE-WINS SHADOWING
+-------------------------------------------------------------
+`prolog_dialect.py` contains BUILTIN_NAME_MAP, which maps Clausal names to
+their Prolog equivalents. A separate function `_build_reverse_builtin_map()`
+inverts it so that Prolog names map back to Clausal names.
+
+The dict originally contained standalone entries for `nth0` and `nth1` before
+the `get_item` entry:
+
+    "nth0": ("nth0", "nth0", "nth0"),
+    "nth1": ("nth1", "nth1", "nth1"),
+    ...
+    "get_item": ("nth0", "nth0", "nth0"),
+
+The inversion is first-occurrence-wins. So `_REVERSE_BUILTIN_MAP["nth0"]`
+resolved to `"nth0"` (from the standalone entry) rather than `"get_item"`
+(from the actual semantic mapping). This meant `prolog_to_clausal` would
+convert `nth0(...)` in Prolog back to `nth0(...)` in Clausal output instead
+of `get_item(...)`. The fix was to delete the redundant standalone entries.
+
+The lesson: the dict has an implicit constraint (no two Clausal keys may map
+to the same Prolog name) that is not enforced anywhere, and violating it
+silently produces wrong output in one direction only.
+
+
+3. GOLDEN TEST FILES: STALE AND DOUBLY STALE
+---------------------------------------------
+The test suite includes "golden" files in two formats:
+
+  - `.pl`      — the expected Prolog output of converting a .clausal file
+  - `.clausal` — the expected Clausal output after a round-trip (Clausal →
+                  Prolog → Clausal)
+
+Both sets were generated at a point in time. After the rename:
+
+  a) The `.clausal` golden files still contained TitleCase names (e.g.
+     `GetItem(...)`) because they were produced before the rename.
+
+  b) The `.pl` golden files contained `get_item(...)` (the Clausal name)
+     instead of `nth0(...)` (the Prolog name) — because they were generated
+     when the reverse map bug above was present, so `clausal_to_prolog` was
+     not correctly converting `get_item` → `nth0`.
+
+  c) When the `.pl` files were wrong, regenerating the `.clausal` files from
+     them produced wrong results too — because `prolog_to_clausal` read
+     `get_item` as a raw identifier and fell back to `snake_to_pascal`, giving
+     `GetItem`.
+
+The fix required regenerating in the correct order: first regenerate the `.pl`
+files from the source `.clausal` files (which correctly emit `nth0`), then
+regenerate the `.clausal` golden files from those corrected `.pl` files.
+
+The lesson: golden files are a form of snapshot. They encode the state of the
+system at the time they were generated, including any bugs. When the system
+changes, the snapshots must be regenerated in the right dependency order, not
+just updated in place.
+
+
+4. GLOBAL MUTABLE PREDICATE STATE: PredicateMeta._dispatch_fn
+--------------------------------------------------------------
+The compiler registers each built-in predicate as a `PredicateMeta` class
+instance stored in a global dict `_BUILTIN_CLASSES`. When the compiler
+compiles a user predicate, it injects all entries from `_BUILTIN_CLASSES`
+into the compilation namespace. If the user predicate's functor matches a
+key in that dict, the compiler identifies `pred_cls` as that global instance
+and, after compilation, calls `pred_cls._dispatch_fn = fn` — mutating the
+global singleton.
+
+Before the rename, a test in `test_compiler_goals.py` compiled a predicate
+named `"Eq"` (TitleCase). The built-in reified equality predicate was
+named `eq/3` (snake_case). No collision.
+
+After the rename, `"Eq"` became `"eq"` throughout — including in that test
+function. Now the test compiled a predicate named `"eq"` with arity 2, which
+matched the global `eq/3` PredicateMeta. The compiler mutated
+`eq_PredicateMeta._dispatch_fn` to point to the arity-2 compiled function.
+Any subsequent test that called the real `eq/3` builtin got a
+`TypeError: eq__2() takes 5 positional arguments but 6 were given`.
+
+The failure only appeared when the tests ran in full-suite order; the affected
+tests passed in isolation. This made root cause identification expensive: it
+required bisecting the test ordering to find the polluting test.
+
+The fix was to rename the predicate in the test to `"unify_xy"`, a name that
+cannot collide with any builtin.
+
+The lesson: global mutable singletons make test isolation fragile. A rename
+that changes a test predicate name from a non-conflicting name to a
+conflicting one silently introduces cross-test state pollution that only
+manifests under specific execution orderings.
+
+
+5. THE RENAME ITSELF WAS NOT PURELY MECHANICAL
+------------------------------------------------
+Some occurrences of TitleCase words in the codebase are Python class names,
+doc headings, or natural-language text — not predicate names. A bulk sed
+replacement would have corrupted those. Each file required reading to
+determine which occurrences needed changing. With 330 files, this was
+time-consuming even with automated assistance.
+
+Additionally, the rename had to be consistent: if `Member` became `member` in
+the source, it also had to become `member` in docs, tests, golden files, and
+all tooling. Missing any one site caused test failures that required tracing
+back to an uncorrected occurrence.
+
+
+6. INTERACTION BETWEEN BUGS: THE DEBUGGING ONION
+-------------------------------------------------
+The bugs were layered. The reverse-map bug caused golden file tests to fail.
+Fixing the reverse map required regenerating golden files. Regenerating golden
+files required understanding the dependency order (`.clausal` source → `.pl`
+→ `.clausal` golden). Meanwhile, the global-state-mutation bug caused failures
+in an entirely different part of the test suite, with a symptom (wrong arity
+TypeError) that pointed at the runtime rather than at test ordering. Each fix
+exposed or clarified the next issue.
+
+The lesson: a large mechanical rename is a good way to discover latent design
+issues that were hidden because the old names happened not to trigger them.
+
+
+SUMMARY OF CONCRETE ISSUES FIXED
+----------------------------------
+1. Removed duplicate nth0/nth1 entries from BUILTIN_NAME_MAP that caused the
+   reverse map to return the wrong Clausal name for nth0/nth1 Prolog terms.
+
+2. Regenerated all prolog_golden/*.pl files from their source .clausal files,
+   so they contain correct Prolog output (nth0/nth1) rather than stale Clausal
+   names.
+
+3. Regenerated all prolog_golden/*.clausal files from the corrected .pl files,
+   so round-trip golden tests see correct snake_case Clausal names.
+
+4. Changed the predicate name in test_compiler_goals.py::test_unify_both_vars
+   from "eq" to "unify_xy" to prevent it from mutating the global eq/3
+   reified builtin PredicateMeta and poisoning subsequent tests.
+
+NET RESULT
+----------
+52 failures in bigrename workspace vs 251 in the original (pre-rename) workspace.
+All 52 remaining failures are pre-existing issues unrelated to the rename.

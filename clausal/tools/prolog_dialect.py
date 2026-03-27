@@ -194,7 +194,7 @@ BUILTIN_NAME_MAP: dict[str, tuple[str | None, str | None, str | None]] = {
     "ground":        ("ground",         None, None),
     "callable_":     ("callable",       None, None),
     "compound":      ("compound",       None, None),
-    "IsAtomic":      ("atomic",         None, None),
+    "is_atomic":     ("atomic",         None, None),
     "succ":          ("succ",           None, None),
     "plus":          ("plus",           None, None),
     "phrase":        ("phrase",         None, None),

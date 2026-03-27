@@ -1,0 +1,215 @@
+Verification Plan: TitleCase → snake_case Predicate Rename
+===========================================================
+
+WHY TESTS PASSING IS NOT SUFFICIENT
+-------------------------------------
+A large mechanical rename can be wrong in two opposite directions:
+
+  - OVER-RENAME: something that should have kept its name got renamed.
+    (e.g. a user-defined predicate in an example mistakenly renamed
+     to a builtin name, silently changing its semantics)
+
+  - UNDER-RENAME: something that should have been renamed was missed.
+    (e.g. a doc or test still calls Member(...) when the correct name
+     is now member(...))
+
+Tests only catch under-rename if there is a test that exercises the missed
+site AND the test is sensitive to the name (many tests are not — they test
+behaviour, not spelling). Tests don't catch over-renames at all because the
+renamed thing still works under its new name.
+
+There is also a third class of problem:
+
+  - MAP INCONSISTENCY: the bidirectional name table (BUILTIN_NAME_MAP +
+    _REVERSE_BUILTIN_MAP) has a broken round-trip, so Clausal→Prolog→Clausal
+    doesn't recover the original name.
+
+Tests mostly miss this too, because golden tests only cover a subset of
+predicates, and they only catch the inconsistency if the predicate actually
+appears in a golden fixture.
+
+
+VERIFICATION TOOL 1: BUILTIN NAME MAP AUDIT
+--------------------------------------------
+Script: check that every Clausal name in BUILTIN_NAME_MAP is snake_case.
+
+    from clausal.tools.prolog_dialect import BUILTIN_NAME_MAP
+    for name in BUILTIN_NAME_MAP:
+        assert name == name.lower() or name.startswith('_'), \
+            f"Non-snake_case builtin: {name}"
+
+Current state: ONE remaining TitleCase entry: `IsAtomic` (maps to
+`is_atomic/1` in Prolog — intentionally preserved because ISO Prolog's
+`is_atomic` is not the same predicate and the capital I is load-bearing?
+Needs a documented decision — see DECISION RECORD below.)
+
+
+VERIFICATION TOOL 2: ROUND-TRIP BIJECTION CHECK
+-------------------------------------------------
+The BUILTIN_NAME_MAP is used in two directions:
+  - clausal_to_prolog: Clausal name → Prolog name
+  - prolog_to_clausal: Prolog name → Clausal name (via _REVERSE_BUILTIN_MAP)
+
+For every (clausal_name → prolog_name) pair, we should check that
+_REVERSE_BUILTIN_MAP[prolog_name] == clausal_name.
+
+Current state: ONE broken round-trip:
+  is_str → atom → atom   (expected is_str)
+
+This is intentional: both `atom` and `is_str` map to the Prolog name `atom`,
+but `atom` wins the reverse map (first-occurrence-wins). This reflects a
+genuine semantic asymmetry: Prolog's `atom/1` tests for atoms (Clausal atoms),
+and `is_str/1` tests for strings; they share the same Prolog name because
+Prolog doesn't distinguish them. So `prolog_to_clausal(atom)` should yield
+`atom`, not `is_str`. The one-way loss is intentional.
+
+Any other broken round-trips are bugs. The check script:
+
+    from clausal.tools.prolog_to_clausal import _REVERSE_BUILTIN_MAP
+    from clausal.tools.prolog_dialect import BUILTIN_NAME_MAP
+    KNOWN_INTENTIONAL = {("is_str", "atom")}  # clausal_name, prolog_name
+    for clausal_name, (iso, swi, scryer) in BUILTIN_NAME_MAP.items():
+        for prolog_name in set(filter(None, [iso, swi, scryer])):
+            back = _REVERSE_BUILTIN_MAP.get(prolog_name)
+            if back != clausal_name:
+                if (clausal_name, prolog_name) not in KNOWN_INTENTIONAL:
+                    print(f"BROKEN: {clausal_name} -> {prolog_name} -> {back}")
+
+
+VERIFICATION TOOL 3: GREP FOR OLD TITLECASE BUILTIN CALLS IN .CLAUSAL FILES
+-----------------------------------------------------------------------------
+Extract the set of old TitleCase names from the original codebase (or from
+git history), then grep for them in the renamed codebase.
+
+The practical approach: grep .clausal files for any word matching the pattern
+`[A-Z][a-z]+[A-Za-z_]+\s*(` — i.e. a capital-initial word followed by `(`.
+Filter out known-legitimate TitleCase identifiers:
+
+  Legitimate TitleCase in .clausal:
+    - User-defined predicate heads (e.g. Solve, MatchClause, Edge, Path in
+      metainterpreters.clausal — these are user predicates, not builtins)
+    - Type constructor terms used as data (e.g. Pair(K, V))
+
+  Illegitimate TitleCase in .clausal (would indicate a missed rename):
+    - Any name that appears in BUILTIN_NAME_MAP or _BUILTIN_CLASSES
+
+  Script:
+    import re
+    from clausal.logic.builtins import _BUILTIN_CLASSES
+    builtin_names = set(_BUILTIN_CLASSES.keys())
+    for path in glob("**/*.clausal"):
+        for line in open(path):
+            for m in re.finditer(r'\b([A-Z][A-Za-z_]+)\s*\(', line):
+                name = m.group(1)
+                if name in builtin_names:
+                    print(f"{path}: {name}")
+
+Current state: this grep finds TitleCase calls only in user-defined
+predicates in examples (Solve, MatchClause, Edge, etc.) — none of which
+are in _BUILTIN_CLASSES. This is correct.
+
+
+VERIFICATION TOOL 4: CROSS-REFERENCE REGISTRY VS TESTS
+--------------------------------------------------------
+For every (functor, arity) in _BUILTINS and _DB_BUILTINS, verify there is at
+least one test that exercises it. This catches under-tested builtins where a
+wrong rename would go undetected.
+
+This is a coverage audit, not a rename-specific check, but it is the
+underlying reason why tests-passing is insufficient: a predicate with no test
+coverage can be silently broken.
+
+
+VERIFICATION TOOL 5: GOLDEN FILE FRESHNESS CHECK
+-------------------------------------------------
+The golden files in tests/fixtures/prolog_golden/ should be regeneratable from
+the source .clausal files and should produce identical output. A CI step that
+regenerates them and diffs against committed versions would catch drift.
+
+    for each fixture.clausal in tests/conformity/ and tests/fixtures/:
+        generated_pl = clausal_to_prolog(fixture.clausal)
+        assert generated_pl == open(prolog_golden/fixture.pl).read()
+        generated_clausal = prolog_to_clausal(generated_pl)
+        assert generated_clausal == open(prolog_golden/fixture.clausal).read()
+
+This is also the right order for REGENERATING golden files — always go
+source → .pl first, then .pl → .clausal. Never update .clausal in isolation.
+
+
+WHAT A BETTER UPFRONT PLAN WOULD HAVE LOOKED LIKE
+---------------------------------------------------
+
+Phase 0: AUDIT FIRST (before touching anything)
+
+  a) Extract the complete list of all built-in predicate names from
+     _BUILTINS, _DB_BUILTINS, and BUILTIN_NAME_MAP.
+  b) For each name, record: old name, new name, arity, files where it appears,
+     whether it's in the Prolog translation table.
+  c) Flag any name that appears both as a "user concept" and as a "builtin"
+     (the `eq` case: builtin `eq/3` for reified equality, and the intuitive
+     use of `eq` as a unification helper in tests).
+  d) Run round-trip check on BUILTIN_NAME_MAP before starting.
+  e) Flag any BUILTIN_NAME_MAP entry where multiple Clausal names map to the
+     same Prolog name (the nth0/nth1 vs get_item case).
+
+Phase 1: FIX THE MAP FIRST
+
+  Fix all issues found in BUILTIN_NAME_MAP (duplicate entries, broken
+  round-trips) before touching any other file. Regenerate golden files
+  immediately after. Commit the map fix and golden files separately from
+  the broader rename.
+
+Phase 2: RENAME IN LAYERS, COMMIT EACH LAYER
+
+  Layer A: Python source files (builtins/*.py, compiler.py, solve.py, etc.)
+  Layer B: .clausal source files (clausal/examples/, clausal/stdlib/)
+  Layer C: Test fixtures (.clausal files in tests/)
+  Layer D: Python test files (tests/*.py)
+  Layer E: Documentation (.md files)
+  Layer F: Golden file regeneration
+
+  Commit after each layer and run the full test suite. Regressions at layer N
+  point to layer N specifically, not somewhere in 330 mixed files.
+
+Phase 3: RUN VERIFICATION TOOLS 1-4 BEFORE DECLARING DONE
+
+  These are cheap scripts (minutes to write, seconds to run). The round-trip
+  check in particular would have caught the nth0/nth1 issue immediately.
+
+
+DECISION RECORD: NAMES THAT WERE NOT RENAMED
+---------------------------------------------
+Some TitleCase names were deliberately kept. Each one should be documented
+here so future maintainers don't re-open the question.
+
+  IsAtomic  (was in BUILTIN_NAME_MAP — now renamed to is_atomic)
+    Was a vestigial/dead entry: appeared only in BUILTIN_NAME_MAP with no
+    corresponding builtin registered anywhere else in the codebase.
+    Renamed to `is_atomic` as part of the verification pass.
+    Status: RESOLVED.
+
+  is_str / atom round-trip asymmetry
+    Clausal has both `atom` (for atoms) and `is_str` (for strings).
+    Both map to Prolog `atom/1` because Prolog doesn't distinguish them.
+    The reverse map resolves to `atom` (first-occurrence-wins).
+    This is intentional: importing `atom(X)` from Prolog means the
+    Python/Clausal `atom` predicate, not `is_str`.
+    Status: INTENTIONAL, no action needed.
+
+  TitleCase user-defined predicates in examples
+    e.g. Solve, MatchClause, NatnumProgram, Edge, Path in metainterpreters
+    These are user predicates, not builtins. Clausal supports TitleCase for
+    user predicates. No rename needed.
+    Status: INTENTIONAL, no action needed.
+
+
+HOW TO RUN THE VERIFICATION CHECKS NOW
+----------------------------------------
+All four verification tools above can be run as a one-off script. A good
+location would be:
+
+    implementation_plans/bigrename/verify.py
+
+Running it should produce zero output if the rename is clean (plus the
+known intentional exceptions listed above). If it produces output, each
+line is either a bug or a new item for the DECISION RECORD above.
