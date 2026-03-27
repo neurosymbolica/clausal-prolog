@@ -25,6 +25,15 @@ The **Scryer embedding** is for when you need:
 
 The two engines are separate worlds connected by Clausal's translation pipeline. You cannot unify a native Clausal `Var` with a Scryer variable directly.
 
+!!! note "Scryer embedding vs `.pl` import"
+
+    Clausal offers two ways to run Prolog code:
+
+    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine. Predicates become `PredicateMeta` classes, fully integrated with Python. Best for most programs.
+    - **Scryer embedding** (this page) runs Prolog on an actual ISO Prolog engine in-process. Best when you need Scryer's native constraint solvers, its library ecosystem, or strict ISO conformance.
+
+    The two approaches can coexist in the same project.
+
 ---
 
 ## Building the extension

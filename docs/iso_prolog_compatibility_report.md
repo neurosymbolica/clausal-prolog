@@ -465,3 +465,7 @@ Implemented in `prolog_to_clausal.py` and `clausal_to_prolog.py`:
 3. Clear error messages suggest pure alternatives (dif/2, once/1, reified ITE, indexing)
 4. Reverse direction: Clausal's reified `THEN if COND else ELSE` is also rejected
    when translating to Prolog, since it cannot be faithfully represented as `(C -> T ; E)`
+
+### Scryer Prolog Embedding — DONE
+
+For programs that need full ISO conformance rather than the translation-based compatibility described above, Clausal now embeds Scryer Prolog in-process via PyO3. `.clausal` files can be loaded directly into the embedded engine, which translates them to Prolog automatically and executes with lazy iteration over solutions. This provides a complementary path: instead of translating Prolog *into* Clausal's native engine, run it on a real ISO Prolog engine from within Python. See [Scryer Prolog Embedding](scryer.md).

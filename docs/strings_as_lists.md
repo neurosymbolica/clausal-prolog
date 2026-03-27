@@ -235,7 +235,7 @@ of characters is expected, with no loss of functionality.
 
 ## Comparison with Prolog
 
-In Prolog systems like Scryer Prolog, strings *are* lists of characters — the
+In Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
 same data structure, with no distinction. This gives maximum uniformity at the
 cost of performance (no compact string representation) and foreign-function
 interop (every string is a linked list of character atoms).

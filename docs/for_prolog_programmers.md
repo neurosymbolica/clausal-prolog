@@ -250,5 +250,10 @@ and [Purity and Monotonicity](purity.md) lay out these ideas explicitly.
 *See also: [Prolog Translation](prolog_translation.md) — automatic
 bidirectional translation between Clausal and Prolog syntax.*
 
+*See also: [Scryer Prolog Embedding](scryer.md) — if you want to run your
+Prolog programs on an actual ISO Prolog engine, Clausal embeds Scryer Prolog
+in-process. Load `.clausal` or `.pl` files and query with lazy iteration —
+no subprocess, no serialisation overhead.*
+
 *See also: [Thinking Relationally](thinking_relationally.md) — the mindset
 behind good logic programming.*

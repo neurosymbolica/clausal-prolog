@@ -45,6 +45,8 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - leverages the AST infrastructure clausal already has
 - is exactly what `clausal.trampoline` and `clausal.continuation_search` are already built toward
 
+For programs that genuinely need a WAM — ISO-conformant constraint solving, Scryer's library ecosystem, or cross-validation against a standards-compliant engine — the [Scryer Prolog embedding](scryer.md) provides one in-process, without replacing clausal's native execution model.
+
 ---
 
 ## Execution model
