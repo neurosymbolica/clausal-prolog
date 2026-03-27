@@ -1,4 +1,6 @@
--module(iso_control, [Test/1]),
+-private([a, b, c, d])
+
+-module(iso_control, [Test/1])
 
 Choose(X, _, X),
 

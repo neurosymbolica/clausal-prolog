@@ -1,4 +1,6 @@
--module(iso_type_checking, [Test/1]),
+-private([abc, hello])
+
+-module(iso_type_checking, [Test/1])
 
 IsBoundNumber(X) <- (NonVar(X), Number(X))
 

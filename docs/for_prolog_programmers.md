@@ -187,6 +187,35 @@ There is no interpreter loop. This means:
 
 ---
 
+## Importing existing Prolog code
+
+You don't have to rewrite your `.pl` files to use them in Clausal. Place them
+on `sys.path` and import directly:
+
+```python
+import clausal
+import my_prolog_module     # translates my_prolog_module.pl on the fly
+```
+
+The `.pl` file is translated to Clausal syntax, compiled, and cached as
+`.pyc` bytecode. Subsequent imports skip translation entirely.
+
+Cross-file `use_module` works too — if `main.pl` uses
+`:- use_module(helpers, [double/1]).`, importing `main` will recursively
+translate and load `helpers.pl`.
+
+**What works:** facts, rules, arithmetic, lists, DCGs, `dynamic`,
+`discontiguous`, `table`, `use_module` with import lists.
+
+**What doesn't:** cut (`!`) and if-then-else (`->`) are rejected with clear
+error messages. Bare lowercase atoms (like `red`, `foo`) used as data values
+need to be quoted strings or integers — see
+[Importing Prolog](importing_prolog.md) for details.
+
+See [Importing Prolog Code](importing_prolog.md) for the full guide.
+
+---
+
 ## A reminder about relational thinking
 
 Even experienced Prolog programmers sometimes drift into procedural habits.

@@ -1,6 +1,6 @@
 # Prolog Translation
 
-Clausal includes a bidirectional translator between `.clausal` and `.pl` (Prolog) source files. This enables exporting clausal programs for use in SWI-Prolog or Scryer Prolog, and (in future phases) importing existing Prolog code into clausal.
+Clausal includes a bidirectional translator between `.clausal` and `.pl` (Prolog) source files. This enables exporting clausal programs for use in SWI-Prolog or Scryer Prolog, and importing existing Prolog code into clausal — either via the CLI tools or directly at import time (see [import.md](import.md#importing-pl-prolog-files-directly)).
 
 ---
 
@@ -373,7 +373,7 @@ In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`
 ### Known roundtrip limitations
 
 - **DCG rules**: Prolog `-->` ↔ clausal `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
-- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(Foo/2),` → the `/2` arity indicator doesn't re-parse as clausal in the return leg. Single-leg translation works correctly in both directions.
+- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(Foo/2)` → the `/2` arity indicator doesn't re-parse as clausal in the return leg. Single-leg translation works correctly in both directions.
 - **Whitespace/formatting**: Exact text match is not guaranteed; structural equivalence is.
 
 ---
@@ -406,5 +406,6 @@ python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_gol
 - **Phase 2** (done): Dialect-specific emission, golden tests, CLI
 - **Phase 3** (done): Prolog → Clausal (tokenizer, Pratt parser, Prolog AST → `.clausal` text)
 - **Phase 4** (done): Roundtrip validation, golden Prolog→Clausal files, unified CLI
-- **Phase 5** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a clausal DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
-- **Phase 6** (stretch, not started): Additional dialects — GNU Prolog (`fd_*` constraints), ECLiPSe (`lib(ic)`, `do/2`), XSB Prolog (HiLog, tabling differences), Tau Prolog (JavaScript-hosted); each as a `Dialect` subclass
+- **Phase 5** (done): Import-time `.pl` translation — `PrologFinder`/`PrologLoader` in the import hook translate `.pl` files on the fly, with `.pyc` caching and recursive `use_module` support (see [import.md](import.md#importing-pl-prolog-files-directly))
+- **Phase 6** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a clausal DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
+- **Phase 7** (stretch, not started): Additional dialects — GNU Prolog (`fd_*` constraints), ECLiPSe (`lib(ic)`, `do/2`), XSB Prolog (HiLog, tabling differences), Tau Prolog (JavaScript-hosted); each as a `Dialect` subclass

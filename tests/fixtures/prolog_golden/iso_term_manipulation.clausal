@@ -1,4 +1,6 @@
--module(iso_term_manipulation, [Test/1]),
+-private([a, hello])
+
+-module(iso_term_manipulation, [Test/1])
 
 Test('construct atom: Functor(T, a, 0)') <- (Functor(T, a, 0), T == a)
 

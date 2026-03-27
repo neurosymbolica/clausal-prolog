@@ -1,4 +1,6 @@
--module(iso_unification, [Test/1]),
+-private([a, b, hello])
+
+-module(iso_unification, [Test/1])
 
 SameValue(X, Y) <- (X is Y, X == Y)
 

@@ -53,6 +53,55 @@ def _fact_to_predicate_node(term):
     return simple_ast.Predicate(head=term, body=simple_ast.BoolLiteral(value=True))
 
 
+def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items_fn):
+    """Shared V2 pipeline: exec bytecode, collect predicate_nodes, compile.
+
+    Parameters
+    ----------
+    loader : SourceLoader
+        The loader instance (PredicateLoader or PrologLoader).
+    module : ModuleType
+        The module being loaded.
+    module_dict : dict
+        module.__dict__.
+    filename : str
+        Source file path.
+    recover_module_items_fn : callable(path: str) -> list
+        Called on .pyc cache hit to recover module_items from source.
+        For .clausal files: re-parse the .clausal source.
+        For .pl files: re-translate .pl → .clausal, then parse.
+    """
+    from clausal.logic.compiler_v2 import compile_module
+
+    predicate_nodes = []
+    dummy_logic_module = LogicModule(module.__name__, module_dict=module_dict)
+    module_dict["$module"] = dummy_logic_module
+    module_dict["$define_predicate"] = (
+        lambda pred, lm: predicate_nodes.append(pred)
+    )
+    module_dict["$assert_fact"] = (
+        lambda term: predicate_nodes.append(_fact_to_predicate_node(term))
+    )
+    code = loader.get_code(module.__name__)
+
+    # _last_transformer is set by source_to_code.  If the code came
+    # from .pyc cache, source_to_code didn't run, so use the recovery fn.
+    transformer = getattr(loader, '_last_transformer', None)
+    if transformer is not None:
+        module_items = transformer._module_items
+    else:
+        module_items = recover_module_items_fn(filename)
+
+    _preseed_py_submodules(module_items)
+    exec(code, module_dict)
+
+    logic_module = compile_module(
+        predicate_nodes, module_items, module_dict, module.__name__,
+    )
+    module_dict["$module"] = logic_module
+    module.__clausal_module__ = logic_module
+
+
 def _define_predicate_deferred(predicate_node, logic_module, module_dict,
                                pending):
     """Assert a clause without compiling.  Record for deferred compilation."""
@@ -193,13 +242,12 @@ def _preseed_py_submodules(module_items) -> None:
 # ── Loader ───────────────────────────────────────────────────────────────────
 
 
-class PredicateLoader(SourceLoader):
-    """SourceLoader subclass for .clausal predicate modules.
+class _ClausalSourceLoader(SourceLoader):
+    """Common file I/O for .clausal and .pl loaders.
 
     Extends ``importlib.abc.SourceLoader`` to get automatic ``.pyc`` caching.
-    ``source_to_code`` performs the EmbedTransformer rewrite; the resulting
-    bytecode is cached in ``__pycache__/`` so subsequent imports skip parsing
-    and AST transformation.
+    Subclasses must implement ``source_to_code``, ``exec_module``, and
+    ``_recover_module_items``.
     """
 
     def __init__(self, fullname, path):
@@ -227,21 +275,55 @@ class PredicateLoader(SourceLoader):
         except OSError:
             pass  # silently skip if we cannot write cache
 
+
+def _parse_clausal_source(source, filename):
+    """Parse + EmbedTransformer a .clausal source string.
+
+    Returns ``(code_object, transformer)`` — the transformer carries
+    ``_module_items`` needed by the V2 pipeline.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="'str' object is not callable",
+            category=SyntaxWarning,
+        )
+        tree = ast.parse(source, filename=filename)
+        source_lines = source.splitlines(keepends=True)
+        transformer = EmbedTransformer(source_lines=source_lines)
+        tree = transformer.visit(tree)
+        ast.fix_missing_locations(tree)
+        code = compile(tree, filename=filename, mode="exec")
+        return code, transformer
+
+
+def _extract_module_items(source, filename):
+    """Re-parse .clausal source text just to recover module_items (cache-hit path)."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="'str' object is not callable",
+            category=SyntaxWarning,
+        )
+        tree = ast.parse(source, filename=filename)
+        source_lines = source.splitlines(keepends=True)
+        transformer = EmbedTransformer(source_lines=source_lines)
+        transformer.visit(tree)
+        return transformer._module_items
+
+
+class PredicateLoader(_ClausalSourceLoader):
+    """SourceLoader for .clausal predicate modules.
+
+    ``source_to_code`` performs the EmbedTransformer rewrite; the resulting
+    bytecode is cached in ``__pycache__/`` so subsequent imports skip parsing
+    and AST transformation.
+    """
+
     def source_to_code(self, data, path="<string>"):
         source = data.decode("utf-8")
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="'str' object is not callable",
-                category=SyntaxWarning,
-            )
-            tree = ast.parse(source, filename=path)
-            source_lines = source.splitlines(keepends=True)
-            transformer = EmbedTransformer(source_lines=source_lines)
-            tree = transformer.visit(tree)
-            ast.fix_missing_locations(tree)
-            # Store the transformer so _exec_module_v2 can access _module_items.
-            self._last_transformer = transformer
-            return compile(tree, filename=path, mode="exec")
+        code, transformer = _parse_clausal_source(source, path)
+        # Store the transformer so _exec_module_v2 can access _module_items.
+        self._last_transformer = transformer
+        return code
 
     def exec_module(self, module):
         filename = self._path
@@ -251,7 +333,8 @@ class PredicateLoader(SourceLoader):
         module_dict.update(predicate_builtins)
 
         if _USE_V2_PIPELINE:
-            self._exec_module_v2(module, module_dict, filename)
+            _run_v2_pipeline(self, module, module_dict, filename,
+                             self._recover_module_items)
         else:
             self._exec_module_v1(module, module_dict)
 
@@ -278,61 +361,70 @@ class PredicateLoader(SourceLoader):
                 if not logic_module.db.is_dynamic(*key):
                     obj._lock()
 
-    def _exec_module_v2(self, module, module_dict, filename):
-        """New pipeline: parse → EmbedTransformer → collect items → compile_module."""
-        from clausal.logic.compiler_v2 import compile_module
+    def _recover_module_items(self, path):
+        """Cache-hit path: re-parse .clausal source to recover module_items."""
+        source = self.get_data(path).decode("utf-8")
+        return _extract_module_items(source, path)
 
-        # Phase A: get_code() runs source_to_code (which stores
-        # _last_transformer with _module_items) and handles .pyc caching.
-        predicate_nodes = []
-        # Provide dummy $module and collection closures for bytecode exec.
-        dummy_logic_module = LogicModule(module.__name__, module_dict=module_dict)
-        module_dict["$module"] = dummy_logic_module
-        module_dict["$define_predicate"] = (
-            lambda pred, lm: predicate_nodes.append(pred)
-        )
-        module_dict["$assert_fact"] = (
-            lambda term: predicate_nodes.append(
-                _fact_to_predicate_node(term)
-            )
-        )
-        code = self.get_code(module.__name__)
 
-        # _last_transformer is set by source_to_code.  If the code came
-        # from .pyc cache, source_to_code didn't run, so we need to
-        # re-parse to get _module_items.
-        transformer = getattr(self, '_last_transformer', None)
-        if transformer is not None:
-            module_items = transformer._module_items
-        else:
-            # .pyc cache hit — re-parse source just for module_items.
-            source = self.get_data(self._path).decode("utf-8")
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="'str' object is not callable",
-                    category=SyntaxWarning,
-                )
-                tree = ast.parse(source, filename=filename)
-                source_lines = source.splitlines(keepends=True)
-                transformer = EmbedTransformer(source_lines=source_lines)
-                transformer.visit(tree)
-                module_items = transformer._module_items
+class PrologLoader(_ClausalSourceLoader):
+    """SourceLoader for .pl Prolog modules — translates to clausal on-the-fly.
 
-        # Pre-seed sys.modules for any ``py.*`` imports in this file.
-        # Python's import machinery checks parent.__path__ before calling
-        # meta-path finders, so ``from py.re import …`` will fail if
-        # sys.modules["py"] is pytest's single-file non-package ``py.py``.
-        # Seeding the entries here ensures exec() below sees a valid package.
-        _preseed_py_submodules(module_items)
+    Pipeline: .pl source → prolog_to_clausal() → .clausal text →
+              ast.parse → EmbedTransformer → bytecode (cached as .pyc)
 
-        exec(code, module_dict)
+    All Prolog-specific imports are lazy (inside methods) so loading this
+    module doesn't pull in the translator unless a .pl file is actually used.
+    """
 
-        # Phase B: compile from collected ModuleAST.
-        logic_module = compile_module(
-            predicate_nodes, module_items, module_dict, module.__name__,
-        )
-        module_dict["$module"] = logic_module
-        module.__clausal_module__ = logic_module
+    def __init__(self, fullname, path, dialect=None):
+        super().__init__(fullname, path)
+        self._dialect = dialect
+
+    def _translate(self, pl_source):
+        """Translate .pl source text to .clausal source text."""
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        from clausal.tools.prolog_dialect import Dialect
+        dialect = self._dialect or Dialect.swi()
+        return prolog_to_clausal(pl_source, dialect=dialect)
+
+    def source_to_code(self, data, path="<string>"):
+        from clausal.tools.prolog_to_clausal import PrologTranslationError
+        from clausal.tools.prolog_parser import ParseError
+
+        try:
+            pl_source = data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise SyntaxError(
+                f"Cannot import {path}: {e} (all .pl files must be UTF-8)",
+                (path, 0, 0, ""),
+            ) from e
+        try:
+            clausal_source = self._translate(pl_source)
+        except (ParseError, PrologTranslationError) as e:
+            raise SyntaxError(
+                f"Cannot import {path}: {e}",
+                (path, 0, 0, ""),
+            ) from e
+
+        code, transformer = _parse_clausal_source(clausal_source, path)
+        self._last_transformer = transformer
+        return code
+
+    def exec_module(self, module):
+        filename = self._path
+        module.__file__ = filename
+        sys.modules[module.__name__] = module
+        module_dict = module.__dict__
+        module_dict.update(predicate_builtins)
+        _run_v2_pipeline(self, module, module_dict, filename,
+                         self._recover_module_items)
+
+    def _recover_module_items(self, path):
+        """Cache-hit path: re-translate .pl source, then parse for module_items."""
+        pl_source = self.get_data(path).decode("utf-8")
+        clausal_source = self._translate(pl_source)
+        return _extract_module_items(clausal_source, path)
 
 
 # Backward-compat alias — prefer _load_module() for new code.
@@ -354,19 +446,52 @@ def _load_module(fullname, path):
     return mod
 
 
+def _load_prolog_module(fullname, path, dialect=None):
+    """Load a .pl file as a Clausal module and return it.
+
+    Test/external helper. Each call creates a fresh loader and module.
+    """
+    sys.modules.pop(fullname, None)
+    loader = PrologLoader(fullname, path, dialect=dialect)
+    spec = ModuleSpec(fullname, loader, origin=path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[fullname] = mod
+    loader.exec_module(mod)
+    return mod
+
+
 # ── Finder ───────────────────────────────────────────────────────────────────
 
 
-class PredicateFinder(MetaPathFinder):
-    def find_spec(finder, fullname, path, target=None):
-        # Search for a .clausal file matching the module name.
+class _ExtensionFinder(MetaPathFinder):
+    """Base finder that searches sys.path for files with a given extension."""
+    _extension: str = ""
+    _loader_cls: type = None
+
+    def find_spec(self, fullname, path, target=None):
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
         for dir_entry in search_dirs:
-            candidate = os.path.join(dir_entry, tail + ".clausal")
+            candidate = os.path.join(dir_entry, tail + self._extension)
             if os.path.isfile(candidate):
-                loader = PredicateLoader(fullname, candidate)
+                loader = self._loader_cls(fullname, candidate)
                 return ModuleSpec(fullname, loader, origin=candidate)
+
+
+class PredicateFinder(_ExtensionFinder):
+    """Find .clausal files and load them via PredicateLoader."""
+    _extension = ".clausal"
+    _loader_cls = PredicateLoader
+
+
+class PrologFinder(_ExtensionFinder):
+    """Find .pl Prolog files and load them via PrologLoader.
+
+    Registered after PredicateFinder so that .clausal files take priority
+    over .pl files when both exist for the same module name.
+    """
+    _extension = ".pl"
+    _loader_cls = PrologLoader
 
 
 class ModulesFinder(MetaPathFinder):
@@ -449,7 +574,7 @@ class ModulesFinder(MetaPathFinder):
         return new_spec
 
 
-sys.meta_path[:] = [PredicateFinder(), ModulesFinder(), *sys.meta_path]
+sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.meta_path]
 
 
 # ── IPython integration ───────────────────────────────────────────────────────

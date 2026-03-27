@@ -233,13 +233,80 @@ The following names are injected into every predicate module's namespace by the 
 
 ---
 
+## Importing `.pl` (Prolog) files directly
+
+Clausal can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
+
+```python
+import clausal            # installs the import hook
+import my_prolog_module   # finds and translates my_prolog_module.pl
+```
+
+The translation pipeline runs on the fly:
+
+```
+.pl source → prolog_to_clausal() → .clausal text → EmbedTransformer → bytecode
+```
+
+The resulting bytecode is cached as a `.pyc` file, so subsequent imports skip translation entirely.
+
+### Finder priority
+
+The import hook registers three finders in `sys.meta_path`, in this order:
+
+1. **PredicateFinder** — searches for `.clausal` files
+2. **PrologFinder** — searches for `.pl` files
+3. **ModulesFinder** — redirects bare names to `clausal.modules.*`
+
+If both `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` file wins.
+
+### Recursive imports
+
+When a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [Helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
+
+Library imports are mapped to Clausal built-in modules:
+
+| Prolog | Clausal |
+|---|---|
+| `:- use_module(library(clpfd), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
+| `:- use_module(library(clpz), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
+| `:- use_module(library(lists))` | *(built-in — no import emitted)* |
+| `:- use_module(library(apply))` | *(built-in — no import emitted)* |
+| `:- use_module(bar)` | `-import_module(bar)` |
+
+### Translation errors
+
+If a `.pl` file contains constructs that cannot be translated (cut, if-then-else), the import raises a `SyntaxError` with a clear message:
+
+```
+SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
+```
+
+### Caveats
+
+- **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) become bare Python names in the translated output. Unless declared via `-module(...)`, they cause `NameError` at runtime. Use quoted atoms (`'red'`), integers, or strings for data values.
+- **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError`. Avoid placing Perl scripts in directories on `sys.path`.
+- **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
+- **Stdlib shadowing:** A file like `os.pl` or `re.pl` on `sys.path` will not shadow the Python standard library (Python's built-in finders run after the Clausal finders only find their own extensions), but a file like `json.pl` could shadow `clausal.modules.json` via `ModulesFinder`. Avoid naming `.pl` files after standard Python or Clausal modules.
+
+### Loading `.pl` files programmatically
+
+```python
+from clausal.import_hook import _load_prolog_module
+
+mod = _load_prolog_module("my_prolog", "/path/to/my_prolog.pl")
+logic_module = mod.__clausal_module__
+```
+
+---
+
 ## File discovery
 
-`PredicateFinder` searches for `<modulename>.clausal` in:
+`PredicateFinder` and `PrologFinder` search for `<modulename>.clausal` and `<modulename>.pl` respectively in:
 - `sys.path` for top-level module names
 - the parent package's `__path__` for sub-modules
 
-The `.clausal` extension is the sole distinguishing criterion. Files with this extension are always handled by the import hook; standard `.py` files are unaffected.
+Standard `.py` files are unaffected — Python's built-in finders handle them independently.
 
 ---
 

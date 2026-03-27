@@ -1,10 +1,12 @@
--module(iso_arithmetic, [Test/1]),
+-import_module(prolog)
+
+-module(iso_arithmetic, [Test/1])
 
 Double(X, Y) <- (Y := X * 2)
 
 Square(X, Y) <- (Y := X * X)
 
-TriangleNumber(N, T) <- (T := N * N + 1 // 2)
+TriangleNumber(N, T) <- (T := prolog.TruncDiv(N * N + 1, 2))
 
 Test('addition: 1+2=3') <- (1 + 2 == 3)
 
@@ -12,9 +14,9 @@ Test('subtraction: 5-3=2') <- (5 - 3 == 2)
 
 Test('multiplication: 3*4=12') <- (3 * 4 == 12)
 
-Test('integer division: 7//2=3') <- (7 // 2 == 3)
+Test('integer division: 7//2=3') <- (prolog.TruncDiv(7, 2) == 3)
 
-Test('modulo: 7%2=1') <- (7 % 2 == 1)
+Test('modulo: 7%2=1') <- (prolog.TruncMod(7, 2) == 1)
 
 Test('power: 2**3=8') <- (2 ** 3 == 8)
 
@@ -28,9 +30,9 @@ Test('double negation: --5=5') <- (5 == 5)
 
 Test('subtraction negative: 3-5=-2') <- (3 - 5 == -2)
 
-Test('negative floor div: -7//2=-4') <- (-7 // 2 == -4)
+Test('negative floor div: -7//2=-4') <- (prolog.TruncDiv(-7, 2) == -4)
 
-Test('negative mod: -7%2=1') <- (-7 % 2 == 1)
+Test('negative mod: -7%2=1') <- (prolog.TruncMod(-7, 2) == 1)
 
 Test('1 < 2') <- (1 < 2)
 

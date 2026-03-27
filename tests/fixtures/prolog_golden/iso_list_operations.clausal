@@ -1,4 +1,6 @@
--module(iso_list_operations, [Test/1]),
+-private([a, b, c, d, x])
+
+-module(iso_list_operations, [Test/1])
 
 Palindrome(_xs) <- (Reverse(_xs, _xs))
 

@@ -128,7 +128,9 @@ nav:
     - Indexing: indexing.md
     - Caching: caching.md
     - Specialization: specialization.md
-  - Prolog Translation: prolog_translation.md
+  - Prolog:
+    - Importing Prolog Code: importing_prolog.md
+    - Translation Reference: prolog_translation.md
   - IPython / Jupyter: ipython.md
   - Jupyter Notebooks: jupyter.md
   - Examples: examples.md

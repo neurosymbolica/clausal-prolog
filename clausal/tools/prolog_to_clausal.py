@@ -82,10 +82,7 @@ _INFIX_MAP = {
     "-":    "-",
     "*":    "*",
     "/":    "/",
-    "//":   "//",
     "**":   "**",
-    "mod":  "%",
-    "rem":  "%",
     ",":    ",",        # conjunction stays
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
     "/\\":  "&",        # bitwise AND
@@ -93,6 +90,16 @@ _INFIX_MAP = {
     "xor":  "^",        # bitwise XOR
     "<<":   "<<",
     ">>":   ">>",       # NOTE: >> is DCG in clausal, so only in arithmetic context
+}
+
+# Prolog operators whose ISO semantics differ from Python's.
+# These are emitted as qualified calls: prolog.TruncDiv(X, Y)
+# The ``prolog`` module (clausal.modules.prolog) provides ISO-compatible
+# implementations (truncation toward zero, not floor).
+_PROLOG_QUALIFIED_OPS = {
+    "//":  "TruncDiv",   # ISO truncate-div vs Python floor-div
+    "mod": "TruncMod",   # ISO mod (sign follows dividend) vs Python %
+    "rem": "Rem",        # ISO remainder
 }
 
 # Prolog prefix → clausal equivalent
@@ -191,6 +198,7 @@ class _PrologToClausal:
                  operator_mappings: dict[str, dict] | None = None):
         self._dialect = dialect
         self._user_ops = operator_mappings or {}
+        self._data_atoms: set[str] = set()  # atoms used as data values
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
@@ -199,7 +207,17 @@ class _PrologToClausal:
             text = self._emit_item(item)
             if text is not None:
                 lines.append(text)
-        return "\n\n".join(lines) + "\n"
+        body = "\n\n".join(lines) + "\n"
+        # Prepend auto-generated directives.
+        preamble_parts: list[str] = []
+        if "prolog." in body:
+            preamble_parts.append("-import_module(prolog)")
+        if self._data_atoms:
+            atom_list = ", ".join(sorted(self._data_atoms))
+            preamble_parts.append(f"-private([{atom_list}])")
+        if preamble_parts:
+            body = "\n".join(preamble_parts) + "\n\n" + body
+        return body
 
     def _emit_item(self, item: PItem) -> str | None:
         if isinstance(item, PClause):
@@ -396,44 +414,56 @@ class _PrologToClausal:
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
             return f"# operator: op({self._emit_term(body.args[0])}, {self._emit_term(body.args[1])}, {self._emit_term(body.args[2])})"
         # Generic directive
-        return f"-{self._emit_term(body)},"
+        return f"-{self._emit_term(body)}"
 
     def _emit_module_directive(self, body: PCompound) -> str:
         name = self._emit_atom_name(body.args[0])
         exports = self._emit_export_list(body.args[1])
-        return f"-module({name}, {exports}),"
+        return f"-module({name}, {exports})"
 
     def _emit_use_module(self, body: PCompound) -> str:
-        """Emit :- use_module(library(Lib), [...]) as -import_from(...)."""
+        """Emit :- use_module(...) as -import_from(...) or -import_module(...)."""
         if len(body.args) == 0:
             return f"# use_module({self._emit_term(body)})"
 
         lib_term = body.args[0]
         lib_name = self._extract_library_name(lib_term)
-        if lib_name is None:
-            return f"# use_module: {self._emit_term(body)}"
 
-        # Check if this is a known library that maps to a clausal module
-        clausal_mod = _LIBRARY_TO_MODULE.get(lib_name)
-        if clausal_mod is None:
-            # Unknown library — use the name directly
-            clausal_mod = lib_name
+        if lib_name is not None:
+            # library(X) form — check known mapping.
+            # A None value means "built-in, no import needed".
+            if lib_name in _LIBRARY_TO_MODULE:
+                clausal_mod = _LIBRARY_TO_MODULE[lib_name]
+                if clausal_mod is None:
+                    return f"# library({lib_name}) is built-in — no import needed"
+            else:
+                # Unknown library — use the name directly as module path.
+                clausal_mod = lib_name
+        elif isinstance(lib_term, PAtom):
+            # Bare atom: use_module(bar) or use_module('./bar')
+            # Strip leading ./ from relative paths
+            name = lib_term.name
+            if name.startswith('./') or name.startswith('.\\'):
+                name = name[2:]
+            clausal_mod = name
+        else:
+            return f"# use_module: {self._emit_term(body)}"
 
         if len(body.args) >= 2:
             # With import list
             imports = self._emit_import_list(body.args[1])
-            return f"-import_from({clausal_mod}, {imports}),"
+            return f"-import_from({clausal_mod}, {imports})"
         else:
-            return f"-import_module({clausal_mod}),"
+            return f"-import_module({clausal_mod})"
 
     def _emit_meta_directive(self, kind: str, body: PCompound) -> str:
         """Emit -dynamic(pred/N), -discontiguous(pred/N), -table(pred/N)."""
         if len(body.args) == 1:
             indicator = self._emit_pred_indicator(body.args[0])
-            return f"-{kind}({indicator}),"
+            return f"-{kind}({indicator})"
         # Multiple: :- dynamic(a/1, b/2)
         indicators = ", ".join(self._emit_pred_indicator(a) for a in body.args)
-        return f"-{kind}({indicators}),"
+        return f"-{kind}({indicators})"
 
     def _emit_pred_indicator(self, term: PTerm) -> str:
         """Emit pred/N as a predicate indicator."""
@@ -470,11 +500,20 @@ class _PrologToClausal:
             return self._emit_compound(term)
         return str(term)
 
+    # Atoms that map to Python builtins and should not be collected as data atoms.
+    _BUILTIN_ATOMS = frozenset({"true", "false", "fail", "True", "False", "None"})
+
     def _emit_atom(self, atom: PAtom) -> str:
-        """Emit an atom — lowercase atoms stay as atoms in clausal."""
+        """Emit an atom as a bare name, registering it for ``-private`` declaration.
+
+        Prolog atoms like ``red``, ``foo_bar`` are symbolic constants.  In
+        Clausal they become module-level string variables declared via
+        ``-private([red, foo_bar, ...])``, which the EmbedTransformer
+        compiles to ``red = "red"`` etc.
+        """
         name = atom.name
-        # Special atoms
-        if name in ("true", "false", "fail"):
+        # Special atoms that map to Python builtins
+        if name in self._BUILTIN_ATOMS:
             return name
         if name == "!":
             raise PrologTranslationError(
@@ -492,6 +531,8 @@ class _PrologToClausal:
             return "[]"
         if name == "{}":
             return "{}"
+        # Register as a data atom (will be declared via -private).
+        self._data_atoms.add(name)
         return name
 
     def _emit_compound(self, term: PCompound) -> str:
@@ -541,6 +582,13 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"{left} {clausal_op} {right}"
 
+        # ISO operators with different semantics → prolog.'//'(X, Y)
+        if functor in _PROLOG_QUALIFIED_OPS and len(args) == 2:
+            op_name = _PROLOG_QUALIFIED_OPS[functor]
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"prolog.{op_name}({left}, {right})"
+
         # Prefix operators
         if functor in _PREFIX_MAP and len(args) == 1:
             clausal_op = _PREFIX_MAP[functor]
@@ -565,8 +613,14 @@ class _PrologToClausal:
         if isinstance(term, PAtom):
             return term.name
         if isinstance(term, PCompound):
+            # ISO operators with different semantics → prolog.'//'(X, Y)
+            if len(term.args) == 2 and term.functor in _PROLOG_QUALIFIED_OPS:
+                left = self._emit_expr(term.args[0])
+                right = self._emit_expr(term.args[1])
+                op_name = _PROLOG_QUALIFIED_OPS[term.functor]
+                return f"prolog.{op_name}({left}, {right})"
             # Arithmetic binary operators
-            if len(term.args) == 2 and term.functor in ("+", "-", "*", "/", "//", "**", "mod", "rem", "/\\", "\\/", "xor", "<<", ">>"):
+            if len(term.args) == 2 and term.functor in ("+", "-", "*", "/", "**", "/\\", "\\/", "xor", "<<", ">>"):
                 left = self._emit_expr(term.args[0])
                 right = self._emit_expr(term.args[1])
                 op = _INFIX_MAP.get(term.functor, term.functor)

@@ -115,13 +115,13 @@ class TestEmitItem:
         result = emit_clausal_item(PDirective(
             PCompound("module", (PAtom("test"), PList((), None))),
         ))
-        assert result == "-module(test, []),"
+        assert result == "-module(test, [])"
 
     def test_directive_dynamic(self):
         result = emit_clausal_item(PDirective(
             PCompound("dynamic", (PCompound("/", (PAtom("color"), PNumber(2))),)),
         ))
-        assert result == "-dynamic(Color/2),"
+        assert result == "-dynamic(Color/2)"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -211,12 +211,12 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
     def test_module_directive(self):
         src = ":- module(test, [foo/2, bar/1])."
         result = prolog_to_clausal(src)
-        assert "-module(test, [Foo/2, Bar/1])," in result
+        assert "-module(test, [Foo/2, Bar/1])" in result
 
     def test_dynamic_directive(self):
         src = ":- dynamic(color/2)."
         result = prolog_to_clausal(src)
-        assert "-dynamic(Color/2)," in result
+        assert "-dynamic(Color/2)" in result
 
     def test_use_module(self):
         src = ":- use_module(library(clpfd), [all_different/1])."
