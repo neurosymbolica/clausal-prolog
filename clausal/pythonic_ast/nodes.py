@@ -82,7 +82,7 @@ __all__ = [
     "Predicate",
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
-    "ModuleDeclaration", "PrivateDeclaration",
+    "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
     # Imports
     "Import", "ImportFrom",
     # Compound statements
@@ -1010,6 +1010,13 @@ class SpecializeDirective(Node):
     new_name: str = ""          # name for the specialized predicate
     depth: int = 0              # max unfolding depth (0 = shallow, >0 = deep)
     cpd: bool = False           # conjunctive partial deduction (deforestation)
+
+@node_class
+class TranslationsDirective(Node):
+    """Module-level -translations(lang, {English: Translated, ...})."""
+    language: str = ""
+    predicate_entries: list = field(default_factory=list)  # [(eng_fun, trans_fun, arity, arg_map)]
+    atom_entries: list = field(default_factory=list)        # [(eng_atom, trans_atom)]
 
 @node_class
 class EdcgAccDecl(Node):

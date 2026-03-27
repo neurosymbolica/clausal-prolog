@@ -15,6 +15,7 @@ from clausal.pythonic_ast.nodes import (
     PrivateDeclaration as PrivateDeclItem,
     Predicate as PredicateItem,
     SpecializeDirective as SpecializeItem,
+    TranslationsDirective as TranslationsItem,
 )
 
 load = Load()
@@ -2399,11 +2400,13 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_edcg_pass_directive(args, expr_stmt)
         if name == "edcg_pred":
             return transformer._handle_edcg_pred_directive(args, expr_stmt)
+        if name == "translations":
+            return transformer._handle_translations_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
-            f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred)"
+            f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations)"
         )
 
     def _handle_module_directive(transformer, args, expr_stmt):
@@ -2867,6 +2870,165 @@ class EmbedTransformer(NodeTransformer):
             transformer._seen_functors[pred_name] = field_names
             return _make_functor_class_ast(pred_name, field_names, expr_stmt)
         return replace(Pass(), expr_stmt)
+
+    # ── Translations directive ───────────────────────────────────────────────
+
+    def _handle_translations_directive(transformer, args, expr_stmt):
+        """Process ``-translations(lang, {English: Translated, ...})`` directive.
+
+        Emits Python calls to ``register_predicate`` / ``register_atom`` from
+        ``clausal.logic.translations`` so the translation table is populated
+        at module-load time.
+        """
+        if len(args) != 2:
+            raise SyntaxError(
+                "-translations requires two arguments: "
+                "-translations(lang, {Eng: Trans, ...})"
+            )
+        lang_node = args[0]
+        if not isinstance(lang_node, Name):
+            raise SyntaxError(
+                f"-translations: first argument must be a language atom, "
+                f"got {dump(lang_node)}"
+            )
+        lang = lang_node.id
+
+        dict_node = args[1]
+        if not isinstance(dict_node, Dict):
+            raise SyntaxError(
+                f"-translations: second argument must be a dict, "
+                f"got {dump(dict_node)}"
+            )
+
+        predicate_entries = []
+        atom_entries = []
+        stmts = []
+
+        # Import the registration functions once.
+        reg_import = replace(
+            ImportFrom(
+                module="clausal.logic.translations",
+                names=[
+                    alias(name="register_predicate", asname="_reg_pred"),
+                    alias(name="register_atom", asname="_reg_atom"),
+                ],
+                level=0,
+            ),
+            expr_stmt,
+        )
+        fix_missing_locations(reg_import)
+        stmts.append(reg_import)
+
+        for key_node, val_node in zip(dict_node.keys, dict_node.values):
+            if isinstance(key_node, Call) and isinstance(val_node, Call):
+                # Predicate: Append(LIST, ELEMENT, NEWLIST): 追加(列表, 元素, 新列表)
+                eng_func = key_node.func
+                trans_func = val_node.func
+                if not isinstance(eng_func, Name) or not isinstance(trans_func, Name):
+                    raise SyntaxError(
+                        f"-translations: predicate entries must have simple names, "
+                        f"got {dump(key_node)}: {dump(val_node)}"
+                    )
+                eng_name = eng_func.id
+                trans_name = trans_func.id
+                eng_args = []
+                for a in key_node.args:
+                    if not isinstance(a, Name):
+                        raise SyntaxError(
+                            f"-translations: predicate arguments must be names, "
+                            f"got {dump(a)}"
+                        )
+                    eng_args.append(a.id)
+                trans_args = []
+                for a in val_node.args:
+                    if not isinstance(a, Name):
+                        raise SyntaxError(
+                            f"-translations: predicate arguments must be names, "
+                            f"got {dump(a)}"
+                        )
+                    trans_args.append(a.id)
+                if len(eng_args) != len(trans_args):
+                    raise SyntaxError(
+                        f"-translations: arity mismatch for {eng_name}/{trans_name}: "
+                        f"{len(eng_args)} vs {len(trans_args)}"
+                    )
+                arity = len(eng_args)
+                arg_map = dict(zip(eng_args, trans_args))
+                predicate_entries.append((eng_name, trans_name, arity, arg_map))
+
+                # Emit: _reg_pred("ja", "Append", "追加", 3, {"LIST": "列表", ...})
+                arg_map_dict = replace(
+                    Dict(
+                        keys=[replace(Constant(value=k), expr_stmt) for k in eng_args],
+                        values=[replace(Constant(value=v), expr_stmt) for v in trans_args],
+                    ),
+                    expr_stmt,
+                )
+                call_stmt = replace(
+                    Expr(value=replace(
+                        Call(
+                            func=replace(Name(id="_reg_pred", ctx=load), expr_stmt),
+                            args=[
+                                replace(Constant(value=lang), expr_stmt),
+                                replace(Constant(value=eng_name), expr_stmt),
+                                replace(Constant(value=trans_name), expr_stmt),
+                                replace(Constant(value=arity), expr_stmt),
+                                arg_map_dict,
+                            ],
+                            keywords=[],
+                        ),
+                        expr_stmt,
+                    )),
+                    expr_stmt,
+                )
+                fix_missing_locations(call_stmt)
+                stmts.append(call_stmt)
+
+            elif isinstance(key_node, Name) and isinstance(val_node, Name):
+                # Atom: nil: 空
+                eng_atom = key_node.id
+                trans_atom = val_node.id
+                atom_entries.append((eng_atom, trans_atom))
+
+                # Emit: _reg_atom("ja", "nil", "空")
+                call_stmt = replace(
+                    Expr(value=replace(
+                        Call(
+                            func=replace(Name(id="_reg_atom", ctx=load), expr_stmt),
+                            args=[
+                                replace(Constant(value=lang), expr_stmt),
+                                replace(Constant(value=eng_atom), expr_stmt),
+                                replace(Constant(value=trans_atom), expr_stmt),
+                            ],
+                            keywords=[],
+                        ),
+                        expr_stmt,
+                    )),
+                    expr_stmt,
+                )
+                fix_missing_locations(call_stmt)
+                stmts.append(call_stmt)
+
+            else:
+                raise SyntaxError(
+                    f"-translations: each entry must be either "
+                    f"Pred(args): Trans(args) or atom: atom, "
+                    f"got {dump(key_node)}: {dump(val_node)}"
+                )
+
+        # Accumulate metadata for pipeline-split ModuleAST.
+        transformer._module_items.append(
+            TranslationsItem(
+                language=lang,
+                predicate_entries=predicate_entries,
+                atom_entries=atom_entries,
+            )
+        )
+
+        # Return statement(s) — the visit_Expr caller handles lists.
+        if len(stmts) == 1:
+            return stmts[0]
+        return stmts
 
     # ── EDCG rule rewriting ─────────────────────────────────────────────────
 

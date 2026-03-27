@@ -1039,6 +1039,7 @@ class TermStyle:
     """
     anon_var: str = '_'
     colors: dict | None = None
+    locale: str | None = None
 
 
 #: Ready-made colour scheme using standard ANSI escape codes.
@@ -1091,6 +1092,19 @@ def _c(s: str, kind: str, style: TermStyle, bd: int = 0) -> str:
 
 # ── Readable term representation ───────────────────────────────────────────────
 
+def _locale_name(name: str, style: TermStyle, arity: int | None = None) -> str:
+    """Translate *name* via *style.locale* if set, otherwise return as-is."""
+    if style.locale is None:
+        return name
+    from clausal.logic.translations import translate_predicate, translate_atom
+    if arity is not None:
+        entry = translate_predicate(style.locale, name, arity)
+        if entry is not None:
+            return entry.translated_functor
+    result = translate_atom(style.locale, name)
+    return result if result is not None else name
+
+
 def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     """Return a readable string representation of any term.
 
@@ -1119,14 +1133,14 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
     if isinstance(t, Compound):
-        functor_raw = t.functor if isinstance(t.functor, str) else term_str(t.functor, style, _bd)
+        functor_raw = _locale_name(t.functor, style, len(t.args)) if isinstance(t.functor, str) else term_str(t.functor, style, _bd)
         functor_s = _c(functor_raw, 'atom', style) if isinstance(t.functor, str) else functor_raw
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
         return functor_s + ob + args_str + cb
     if isinstance(t, KWTerm):
-        functor_s = _c(t.functor, 'atom', style)
+        functor_s = _c(_locale_name(t.functor, style, len(t)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         args = ", ".join(f"{k}={term_str(v, style, _bd + 1)}" for k, v in t.items())
@@ -1169,6 +1183,19 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         return _c(t.name, 'atom', style)
     if isinstance(t, Predicate):
         return f"{term_str(t.head, style, _bd)} <- {term_str(t.body, style, _bd)}"
+
+    # PredicateMeta instances with locale translation.
+    if style.locale is not None:
+        from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+        # Zero-arity atom class (the class IS the value).
+        if isinstance(t, type) and isinstance(t, PredicateMeta) and not t._fields:
+            return _c(_locale_name(t.__name__, style), 'atom', style)
+        if is_term_instance(t):
+            cls_name = _locale_name(type(t).__name__, style, len(term_field_names(t)))
+            ob = _c('(', 'bracket', style, _bd)
+            cb = _c(')', 'bracket', style, _bd)
+            parts = ", ".join(term_str(getattr(t, f), style, _bd + 1) for f in term_field_names(t))
+            return _c(cls_name, 'atom', style) + ob + parts + cb
 
     return repr(t)
 

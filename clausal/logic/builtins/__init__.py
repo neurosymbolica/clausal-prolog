@@ -18,6 +18,7 @@ This package is organized into submodules by category:
 - control      — CallNth/2, CountAll/2, SetupCallCleanup/3, CallCleanup/2, Freeze/2, When/2
 - chars        — CharType/2, CharCode/2, UpcaseAtom/2, DowncaseAtom/2, AtomLength/2, AtomChars/2, AtomCodes/2, AtomConcat/3, SubAtom/5
 - attributes   — PutAttr/3, GetAttr/3, DelAttr/2, GetAttrs/2, PutAttrs/2, IsAttVar/1, TermAttributedVariables/2
+- translations_builtin — Translate/3
 """
 
 # Import registry infrastructure (must come first — provides decorators).
@@ -63,6 +64,7 @@ from clausal.logic.builtins import dict_set        # noqa: F401
 from clausal.logic.builtins import control           # noqa: F401
 from clausal.logic.builtins import chars             # noqa: F401
 from clausal.logic.builtins import attributes        # noqa: F401
+from clausal.logic.builtins import translations_builtin  # noqa: F401
 
 # Import units_constraint to register HasUnits/2 before _build_all_builtin_classes runs.
 import clausal.logic.units_constraint               # noqa: F401
