@@ -38,10 +38,14 @@ Script: check that every Clausal name in BUILTIN_NAME_MAP is snake_case.
         assert name == name.lower() or name.startswith('_'), \
             f"Non-snake_case builtin: {name}"
 
-Current state: ONE remaining TitleCase entry: `IsAtomic` (maps to
-`is_atomic/1` in Prolog — intentionally preserved because ISO Prolog's
-`is_atomic` is not the same predicate and the capital I is load-bearing?
-Needs a documented decision — see DECISION RECORD below.)
+This check was written and run AFTER the rename was declared done and tests
+were passing. It immediately found `IsAtomic` — a missed rename that the
+entire test suite had not caught, because `IsAtomic` was a dead map entry
+with no registered builtin and no test that exercised the prolog_to_clausal
+path for `atomic/1`. It was invisible to tests. The script found it in under
+a second. It was then renamed to `is_atomic` (see DECISION RECORD).
+
+Current state: all Clausal builtin names in BUILTIN_NAME_MAP are snake_case.
 
 
 VERIFICATION TOOL 2: ROUND-TRIP BIJECTION CHECK
@@ -205,11 +209,27 @@ here so future maintainers don't re-open the question.
 
 HOW TO RUN THE VERIFICATION CHECKS NOW
 ----------------------------------------
-All four verification tools above can be run as a one-off script. A good
-location would be:
+All checks are implemented in:
 
     implementation_plans/bigrename/verify.py
 
-Running it should produce zero output if the rename is clean (plus the
-known intentional exceptions listed above). If it produces output, each
-line is either a bug or a new item for the DECISION RECORD above.
+Run from the repo root:
+
+    python implementation_plans/bigrename/verify.py
+
+Zero output (plus "KNOWN INTENTIONAL" lines) means the rename is clean.
+Any other output is either a bug or a new item for the DECISION RECORD.
+
+IMPORTANT — sys.path pitfall: when the script was first written and run,
+it imported the wrong `clausal` package. Python adds the script's directory
+to sys.path when running `python path/to/script.py`, NOT the current
+working directory. Since `clausal` was also installed as an editable package
+from the original (pre-rename) workspace at site-packages, the script
+silently imported the old TitleCase BUILTIN_NAME_MAP and reported 57 false
+positives. The fix — `sys.path.insert(0, str(ROOT))` at the top of the
+script — is already in place, but this is worth knowing: a verification
+script that imports from the wrong version of the package is worse than no
+script, because it creates false confidence. Always confirm which file is
+actually being imported with:
+
+    python -c "import clausal.tools.prolog_dialect as m; print(m.__file__)"
