@@ -14,7 +14,7 @@ import pytest
 from clausal.scryer import AVAILABLE
 
 needs_scryer = pytest.mark.skipif(not AVAILABLE, reason=(
-    "scryer extension not built; run: cd clausal-scryer && maturin develop --release"
+    "scryer extension not built; run: cd prolog_backends/scryer && maturin develop --release"
 ))
 
 

@@ -12,7 +12,7 @@ Usage::
 To build the GNU Prolog embedding::
 
     export GPROLOG_HOME=/path/to/gprolog-1.5.0  # built with --disable-regs -fPIC
-    cd clausal-gprolog
+    cd prolog_backends/gprolog
     pip install -e .
 
 Requires: GNU Prolog compiled from source with --disable-regs and -fPIC.
@@ -32,7 +32,7 @@ except ImportError:
 def _not_available(*args, **kwargs):
     raise ImportError(
         "clausal.gprolog requires the _gprolog_ext C extension.\n"
-        "Build: export GPROLOG_HOME=... && cd clausal-gprolog && pip install -e .\n"
+        "Build: export GPROLOG_HOME=... && cd prolog_backends/gprolog && pip install -e .\n"
         "Requires: GNU Prolog compiled with --disable-regs and -fPIC.\n"
         "See implementation_plans/GPROLOG_EMBEDDING.md for details."
     )

@@ -46,7 +46,7 @@ The Scryer embedding requires a Rust toolchain and the `scryer-prolog` source:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Build the extension (first build compiles scryer-prolog — takes a few minutes)
-cd clausal-scryer
+cd prolog_backends/scryer
 maturin develop --release
 ```
 
