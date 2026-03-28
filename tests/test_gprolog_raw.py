@@ -23,7 +23,10 @@ def machine():
     """Session-wide GNU Prolog machine.  Never closed."""
     if not HAS_EXT:
         pytest.skip("gprolog extension not built")
-    return _gprolog_ext.RawGnuPrologMachine()
+    try:
+        return _gprolog_ext.RawGnuPrologMachine()
+    except _gprolog_ext.GnuPrologError:
+        pytest.skip("GNU Prolog singleton engine already in use by another test module")
 
 
 @needs_ext

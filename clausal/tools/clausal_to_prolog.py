@@ -377,6 +377,11 @@ class _ClausalToProlog:
             head = self._convert_head(value.elts[0])
             return PClause(head)
 
+        # Bare fact (no trailing comma): Foo(1, 2)
+        if isinstance(value, python_ast.Call):
+            head = self._convert_head(value)
+            return PClause(head)
+
         # head <- body (Compare with Lt followed by USub)
         if isinstance(value, python_ast.Compare):
             arrow = self._detect_arrow(value)
