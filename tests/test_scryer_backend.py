@@ -18,6 +18,7 @@ import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect
+from clausal.tools.prolog_to_clausal import prolog_to_clausal
 
 SCRYER = shutil.which("scryer-prolog")
 needs_scryer = pytest.mark.skipif(SCRYER is None, reason="scryer-prolog not on PATH")
@@ -335,58 +336,112 @@ class TestScryerConformity:
         """ISO arithmetic tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_arithmetic")
         assert len(passed) > 0, "No tests ran"
-        # Some tests may fail due to Scryer/clausal semantic differences
-        # (e.g., floor division, mod sign) — report but don't hard-fail
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed "
-                f"(expected divergences): {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_control(self):
         """ISO control construct tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_control")
         assert len(passed) > 0, "No tests ran"
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed: {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_unification(self):
         """ISO unification tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_unification")
         assert len(passed) > 0, "No tests ran"
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed: {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_list_operations(self):
         """ISO list operation tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_list_operations")
         assert len(passed) > 0, "No tests ran"
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed: {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_type_checking(self):
         """ISO type checking tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_type_checking")
         assert len(passed) > 0, "No tests ran"
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed: {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_term_manipulation(self):
         """ISO term manipulation tests pass in Scryer."""
         passed, failed = self._run_conformity("iso_term_manipulation")
         assert len(passed) > 0, "No tests ran"
-        if failed:
-            pytest.xfail(
-                f"{len(failed)} of {len(passed) + len(failed)} tests failed: {failed[:5]}"
-            )
+        assert not failed, f"{len(failed)} tests failed: {failed}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Conformity roundtrip execution via Scryer
+# ═══════════════════════════════════════════════════════════════════════
+
+
+_CONFORMITY_NAMES = [
+    "iso_arithmetic",
+    "iso_control",
+    "iso_list_operations",
+    "iso_term_manipulation",
+    "iso_type_checking",
+    "iso_unification",
+]
+
+
+@needs_scryer
+class TestScryerConformityRoundtrip:
+    """Roundtrip: clausal → Prolog → clausal → Prolog, then execute in Scryer.
+
+    Verifies that the translator roundtrip does not break semantics: the
+    final Prolog output must still parse, and all test/1 predicates must
+    still pass in Scryer.
+    """
+
+    def _roundtrip_conformity(self, name: str) -> tuple[list[str], list[str]]:
+        """Translate conformity file through a full roundtrip and execute."""
+        # Leg 1: clausal → Prolog (Scryer dialect)
+        path = CONFORMITY / f"{name}.clausal"
+        source = path.read_text(encoding="utf-8")
+        pl1 = clausal_source_to_prolog(source, dialect=_SCRYER)
+
+        # Leg 2: Prolog → clausal
+        rt_clausal = prolog_to_clausal(pl1, dialect=_SCRYER)
+
+        # Leg 3: clausal → Prolog again (Scryer dialect)
+        pl2 = clausal_source_to_prolog(rt_clausal, dialect=_SCRYER)
+
+        prolog_clean = self._strip_module_directives(pl2)
+        return _run_all_tests(prolog_clean)
+
+    @staticmethod
+    def _strip_module_directives(prolog: str) -> str:
+        """Remove module/use_module directives that break standalone execution."""
+        return "\n".join(
+            l for l in prolog.split("\n")
+            if not l.startswith(":- module(")
+            and not l.startswith(":- use_module(")
+        )
+
+    @pytest.mark.parametrize("name", _CONFORMITY_NAMES)
+    def test_roundtrip_parses(self, name):
+        """Roundtripped Prolog output parses in Scryer without errors."""
+        path = CONFORMITY / f"{name}.clausal"
+        source = path.read_text(encoding="utf-8")
+        pl1 = clausal_source_to_prolog(source, dialect=_SCRYER)
+        rt_clausal = prolog_to_clausal(pl1, dialect=_SCRYER)
+        pl2 = clausal_source_to_prolog(rt_clausal, dialect=_SCRYER)
+        pl2_clean = self._strip_module_directives(pl2)
+        result = _run_scryer(pl2_clean, "true, halt")
+        assert result.returncode == 0, (
+            f"Scryer failed to parse roundtripped {name}:\n"
+            f"stderr: {result.stderr[:1000]}"
+        )
+
+    @pytest.mark.parametrize("name", _CONFORMITY_NAMES)
+    def test_roundtrip_execution(self, name):
+        """All test/1 predicates still pass after roundtrip through translator."""
+        passed, failed = self._roundtrip_conformity(name)
+        assert len(passed) > 0, f"No tests ran for {name}"
+        assert not failed, (
+            f"{len(failed)} of {len(passed) + len(failed)} tests failed "
+            f"after roundtrip: {failed}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -435,7 +490,6 @@ class TestScryerDialectFeatures:
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         assert "member" in prolog
 
-    @pytest.mark.xfail(reason="prolog_to_clausal does not support cut yet")
     def test_scryer_cut(self):
         """Cut is preserved through roundtrip (as ! or cut)."""
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
