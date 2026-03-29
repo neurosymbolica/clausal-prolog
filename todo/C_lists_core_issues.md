@@ -1,31 +1,27 @@
 # _lists_core.c — known issues and future work
 
-Follow-up issues from the initial Option B implementation of `_lists_core.c`.
+Follow-up issues from the Option B implementation of `_lists_core.c`.
 
-## 1. trail.mark()/undo() go through PyObject_CallMethod
+## ~~1. trail.mark()/undo() go through PyObject_CallMethod~~ DONE
 
-Every call to `trail_mark()` and `trail_undo()` in the C helpers goes through
-`PyObject_CallMethod`, which involves method name lookup, argument tuple
-creation, and Python method dispatch.  Since `Trail` is a C type defined in
-`_variables.c`, we could instead:
+Switched to `_variables_capi.h` C API.  `VarAPI->trail_mark()` and
+`VarAPI->trail_undo()` are direct C function calls (trail_mark just
+reads `trail->length`; trail_undo calls `trail_undo_to` directly).
+Also uses `VarAPI->unify()` (no occurs check) instead of going through
+`PyObject_CallFunctionObjArgs(fn_unify, ...)`.
 
-- Export a C-level header with the `TrailObject` struct layout, or
-- Add `trail_mark_fast` / `trail_undo_fast` as C API functions in `_variables.c`
-  and call them directly via a cached function pointer.
+Added `unify` (oc=0) to the `VariablesCAPI` struct alongside the
+existing `unify_oc` (oc=1), since list predicates use standard
+unification without occurs check.
 
-This would eliminate ~200ns per mark/undo call, which adds up in tight loops
-like `member_find` over long lists.
+## ~~2. make_seq_result validation is O(n) per call~~ DONE
 
-## 2. make_seq_result validation is O(n) per call
-
-`make_seq_result(items, was_string=1)` validates that ALL items are single-char
-strings before calling `PyUnicode_Join`.  In `append_split_find`, this runs for
-every split candidate, making the total validation work O(n^2).
-
-When `out_str=True` in the append split case, `items` always came from
-`list(string)`, so every element is guaranteed to be a single-char string.
-We could add a `skip_validation` parameter or a separate `seq_join_chars`
-fast path that skips the per-element check.
+Added `seq_join_chars()` fast path that calls `PyUnicode_Join` directly
+without per-element validation.  Used in `append_split_find`,
+`select_find`, and `permutation_find` where the `was_str`/`out_str`
+flag guarantees all items are single-char strings (they came from
+`_as_items()` on a string input).  The validating `make_seq_result()`
+is retained for the general case.
 
 ## 3. No direct trail access on error paths — NO ACTION NEEDED
 

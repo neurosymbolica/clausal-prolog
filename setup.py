@@ -51,6 +51,7 @@ ext_clpfd_propagate = Extension(
 ext_lists_core = Extension(
     "clausal.logic._lists_core",
     sources=["clausal/logic/_lists_core.c"],
+    include_dirs=["clausal/logic"],
     extra_compile_args=extra_compile_args,
 )
 

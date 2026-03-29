@@ -6,6 +6,9 @@
  * structure is preserved — these helpers are called from Python generators
  * that handle the trampoline protocol.
  *
+ * Uses the _variables C API capsule for direct C-level access to unify,
+ * trail_mark, and trail_undo — bypassing Python method dispatch entirely.
+ *
  * Pattern: each "find" function iterates from a start index, tries
  * unification at each candidate, and returns (next_index, trail_mark)
  * on the first success — or None when exhausted.  The Python caller
@@ -15,11 +18,13 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+/* Import the C API from _variables */
+#define VARIABLES_CAPI_CONSUMER
+#include "variables/_variables_capi.h"
+
 /* ================================================================
  * Cached references (set during module init)
  * ================================================================ */
-
-static PyObject *fn_unify  = NULL;   /* clausal.logic.variables.unify  */
 
 static PyObject *empty_string = NULL;  /* "" for PyUnicode_Join */
 
@@ -27,39 +32,29 @@ static PyObject *empty_string = NULL;  /* "" for PyUnicode_Join */
  * Helpers
  * ================================================================ */
 
-/* Call unify(t1, t2, trail) — returns 1 if success, 0 if fail, -1 on error. */
+/*
+ * Call unify(t1, t2, trail) via the direct C API (no occurs check).
+ * Returns 1 if success, 0 if fail, -1 on error.
+ */
 static inline int
-call_unify(PyObject *t1, PyObject *t2, PyObject *trail)
+call_unify(PyObject *t1, PyObject *t2, TrailObject *trail)
 {
-    PyObject *r = PyObject_CallFunctionObjArgs(fn_unify, t1, t2, trail, NULL);
+    PyObject *r = VarAPI->unify(t1, t2, trail);
     if (!r) return -1;
     int result = PyObject_IsTrue(r);
     Py_DECREF(r);
     return result;
 }
 
-/* trail.mark() → Py_ssize_t (always >= 0); returns -1 on error. */
-static inline Py_ssize_t
-trail_mark(PyObject *trail)
+/*
+ * Join a list of single-char strings into a Python str.
+ * Caller guarantees all items are single-char strings (no validation).
+ * Returns a new reference, or NULL on error.
+ */
+static inline PyObject *
+seq_join_chars(PyObject *items)
 {
-    PyObject *r = PyObject_CallMethod(trail, "mark", NULL);
-    if (!r) return -1;
-    Py_ssize_t mark = PyLong_AsSsize_t(r);
-    Py_DECREF(r);
-    return mark;
-}
-
-/* trail.undo(mark) — returns 0 on success, -1 on error. */
-static inline int
-trail_undo(PyObject *trail, Py_ssize_t mark)
-{
-    PyObject *mark_obj = PyLong_FromSsize_t(mark);
-    if (!mark_obj) return -1;
-    PyObject *r = PyObject_CallMethod(trail, "undo", "O", mark_obj);
-    Py_DECREF(mark_obj);
-    if (!r) return -1;
-    Py_DECREF(r);
-    return 0;
+    return PyUnicode_Join(empty_string, items);
 }
 
 /*
@@ -83,7 +78,7 @@ make_seq_result(PyObject *items, int was_string)
             return items;
         }
     }
-    return PyUnicode_Join(empty_string, items);
+    return seq_join_chars(items);
 }
 
 /*
@@ -123,17 +118,17 @@ build_remainder(PyObject *items, Py_ssize_t skip_idx)
 static PyObject *
 py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *items, *elem, *trail;
+    PyObject *items, *elem, *trail_obj;
     Py_ssize_t start;
 
-    if (!PyArg_ParseTuple(args, "OnOO", &items, &start, &elem, &trail))
+    if (!PyArg_ParseTuple(args, "OnOO", &items, &start, &elem, &trail_obj))
         return NULL;
 
+    TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
     for (Py_ssize_t i = start; i < len; i++) {
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) return NULL;
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         PyObject *item = PyList_GET_ITEM(items, i);
         int ok = call_unify(elem, item, trail);
@@ -144,7 +139,7 @@ py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
             return Py_BuildValue("(nn)", i + 1, mark);
         }
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     Py_RETURN_NONE;
@@ -164,16 +159,16 @@ py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *
 py_memberchk_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *items, *elem, *trail;
+    PyObject *items, *elem, *trail_obj;
 
-    if (!PyArg_ParseTuple(args, "OOO", &items, &elem, &trail))
+    if (!PyArg_ParseTuple(args, "OOO", &items, &elem, &trail_obj))
         return NULL;
 
+    TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
     for (Py_ssize_t i = 0; i < len; i++) {
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) return NULL;
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         PyObject *item = PyList_GET_ITEM(items, i);
         int ok = call_unify(elem, item, trail);
@@ -181,7 +176,7 @@ py_memberchk_find(PyObject *Py_UNUSED(module), PyObject *args)
 
         if (ok) Py_RETURN_TRUE;
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     Py_RETURN_FALSE;
@@ -200,20 +195,24 @@ py_memberchk_find(PyObject *Py_UNUSED(module), PyObject *args)
  * index i, constructs prefix=items[:i] and suffix=items[i:], applies
  * seq_result if out_str, and tries to unify l1=prefix and l2=suffix.
  *
+ * When out_str is true, items are guaranteed to be single-char strings
+ * (from _as_items on a string input), so validation is skipped.
+ *
  * On first successful double-unify: returns (i+1, mark).
  * On exhaustion: returns None.
  */
 static PyObject *
 py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *items, *l1, *l2, *trail;
+    PyObject *items, *l1, *l2, *trail_obj;
     Py_ssize_t start;
     int out_str;
 
     if (!PyArg_ParseTuple(args, "OnOOpO",
-                          &items, &start, &l1, &l2, &out_str, &trail))
+                          &items, &start, &l1, &l2, &out_str, &trail_obj))
         return NULL;
 
+    TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
     for (Py_ssize_t i = start; i <= len; i++) {
@@ -222,20 +221,19 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
         PyObject *suffix = PyList_GetSlice(items, i, len);
         if (!suffix) { Py_DECREF(prefix); return NULL; }
 
-        /* Apply _seq_result if string mode */
+        /* Apply string joining if string mode (trusted — items from a string) */
         if (out_str) {
-            PyObject *p2 = make_seq_result(prefix, 1);
+            PyObject *p2 = seq_join_chars(prefix);
             Py_DECREF(prefix);
             if (!p2) { Py_DECREF(suffix); return NULL; }
-            PyObject *s2 = make_seq_result(suffix, 1);
+            PyObject *s2 = seq_join_chars(suffix);
             Py_DECREF(suffix);
             if (!s2) { Py_DECREF(p2); return NULL; }
             prefix = p2;
             suffix = s2;
         }
 
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) { Py_DECREF(prefix); Py_DECREF(suffix); return NULL; }
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         int ok1 = call_unify(l1, prefix, trail);
         if (ok1 < 0) { Py_DECREF(prefix); Py_DECREF(suffix); return NULL; }
@@ -253,7 +251,7 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
             return Py_BuildValue("(nn)", i + 1, mark);
         }
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     Py_RETURN_NONE;
@@ -269,7 +267,10 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
  *   → (next_start, mark) | None
  *
  * For each index i in [start, len), tries to unify elem with items[i]
- * and rest with items[:i]+items[i+1:] (with seq_result if was_str).
+ * and rest with items[:i]+items[i+1:] (joined if was_str).
+ *
+ * When was_str is true, all items are single-char strings, so the
+ * remainder is joined without per-element validation.
  *
  * On first successful double-unify: returns (i+1, mark).
  * On exhaustion: returns None.
@@ -277,14 +278,15 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *
 py_select_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *items, *elem, *rest, *trail;
+    PyObject *items, *elem, *rest, *trail_obj;
     Py_ssize_t start;
     int was_str;
 
     if (!PyArg_ParseTuple(args, "OnOOpO",
-                          &items, &start, &elem, &rest, &was_str, &trail))
+                          &items, &start, &elem, &rest, &was_str, &trail_obj))
         return NULL;
 
+    TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
     for (Py_ssize_t i = start; i < len; i++) {
@@ -295,15 +297,14 @@ py_select_find(PyObject *Py_UNUSED(module), PyObject *args)
 
         PyObject *rem_val;
         if (was_str) {
-            rem_val = make_seq_result(remainder, 1);
+            rem_val = seq_join_chars(remainder);
             Py_DECREF(remainder);
             if (!rem_val) return NULL;
         } else {
             rem_val = remainder;
         }
 
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) { Py_DECREF(rem_val); return NULL; }
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         int ok1 = call_unify(elem, item, trail);
         if (ok1 < 0) { Py_DECREF(rem_val); return NULL; }
@@ -320,7 +321,7 @@ py_select_find(PyObject *Py_UNUSED(module), PyObject *args)
             return Py_BuildValue("(nn)", i + 1, mark);
         }
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     Py_RETURN_NONE;
@@ -339,16 +340,21 @@ py_select_find(PyObject *Py_UNUSED(module), PyObject *args)
  * perm_var.  On success, returns the trail mark (bindings active).
  * On exhaustion, returns None.
  *
+ * When was_str is true, the permutation elements are all single-char
+ * strings, so joining skips per-element validation.
+ *
  * The iterator is stateful, so repeated calls advance through permutations.
  */
 static PyObject *
 py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *iter, *perm_var, *trail;
+    PyObject *iter, *perm_var, *trail_obj;
     int was_str;
 
-    if (!PyArg_ParseTuple(args, "OOpO", &iter, &perm_var, &was_str, &trail))
+    if (!PyArg_ParseTuple(args, "OOpO", &iter, &perm_var, &was_str, &trail_obj))
         return NULL;
+
+    TrailObject *trail = Trail_CAST(trail_obj);
 
     PyObject *item;
     while ((item = PyIter_Next(iter)) != NULL) {
@@ -359,15 +365,14 @@ py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
 
         PyObject *result;
         if (was_str) {
-            result = make_seq_result(perm_list, 1);
+            result = seq_join_chars(perm_list);
             Py_DECREF(perm_list);
             if (!result) return NULL;
         } else {
             result = perm_list;
         }
 
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) { Py_DECREF(result); return NULL; }
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         int ok = call_unify(perm_var, result, trail);
         Py_DECREF(result);
@@ -377,7 +382,7 @@ py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
             return PyLong_FromSsize_t(mark);
         }
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     /* Check if iteration ended due to an error */
@@ -404,18 +409,18 @@ py_permutation_find(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *
 py_nth0_find(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *items, *n_var, *elem_var, *trail;
+    PyObject *items, *n_var, *elem_var, *trail_obj;
     Py_ssize_t start;
 
     if (!PyArg_ParseTuple(args, "OnOOO",
-                          &items, &start, &n_var, &elem_var, &trail))
+                          &items, &start, &n_var, &elem_var, &trail_obj))
         return NULL;
 
+    TrailObject *trail = Trail_CAST(trail_obj);
     Py_ssize_t len = PyList_GET_SIZE(items);
 
     for (Py_ssize_t i = start; i < len; i++) {
-        Py_ssize_t mark = trail_mark(trail);
-        if (mark < 0) return NULL;
+        Py_ssize_t mark = VarAPI->trail_mark(trail);
 
         PyObject *idx = PyLong_FromSsize_t(i);
         if (!idx) return NULL;
@@ -435,7 +440,7 @@ py_nth0_find(PyObject *Py_UNUSED(module), PyObject *args)
             return Py_BuildValue("(nn)", i + 1, mark);
         }
 
-        if (trail_undo(trail, mark) < 0) return NULL;
+        VarAPI->trail_undo(trail, mark);
     }
 
     Py_RETURN_NONE;
@@ -482,8 +487,8 @@ static struct PyModuleDef moduledef = {
     "_lists_core",
     "C-accelerated inner loops for core list predicates.\n"
     "\n"
-    "These functions replace the Python mark/unify/undo loops in list\n"
-    "predicates with tight C loops, reducing bytecode interpreter overhead.\n",
+    "Uses the _variables C API for direct trail_mark/trail_undo and unify\n"
+    "calls, eliminating Python method dispatch overhead.\n",
     -1,
     module_methods
 };
@@ -491,14 +496,9 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__lists_core(void)
 {
-    /* Import clausal.logic.variables */
-    PyObject *var_mod = PyImport_ImportModule("clausal.logic.variables");
-    if (!var_mod) return NULL;
-
-    fn_unify = PyObject_GetAttrString(var_mod, "unify");
-    Py_DECREF(var_mod);
-
-    if (!fn_unify) return NULL;
+    /* Import the C API capsule from _variables */
+    if (import_variables_capi() < 0)
+        return NULL;
 
     /* Cache empty string for PyUnicode_Join */
     empty_string = PyUnicode_FromString("");

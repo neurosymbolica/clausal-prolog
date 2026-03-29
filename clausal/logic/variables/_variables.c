@@ -2824,6 +2824,13 @@ capi_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail)
     return do_unify_and_wake(t1, t2, trail, 1);
 }
 
+/* Wrapper: unify (no occurs check) returning new ref */
+static PyObject *
+capi_unify(PyObject *t1, PyObject *t2, TrailObject *trail)
+{
+    return do_unify_and_wake(t1, t2, trail, 0);
+}
+
 /* Wrapper: trail_mark */
 static Py_ssize_t
 capi_trail_mark(TrailObject *trail)
@@ -3108,6 +3115,7 @@ PyInit__variables(void)
     capi_table.put_attr        = capi_put_attr;
     capi_table.is_term_instance = c_is_term_instance;
     capi_table.term_field_names = capi_term_field_names;
+    capi_table.unify            = capi_unify;
 
     {
         PyObject *cap = PyCapsule_New(

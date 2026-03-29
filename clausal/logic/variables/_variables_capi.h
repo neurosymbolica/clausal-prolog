@@ -110,6 +110,9 @@ typedef struct {
     /* term_field_names: new ref (tuple of str), NULL on error */
     PyObject *(*term_field_names)(PyObject *obj);
 
+    /* unify (no occurs check): returns new ref (Py_True/Py_False), NULL on error */
+    PyObject *(*unify)(PyObject *t1, PyObject *t2, TrailObject *trail);
+
 } VariablesCAPI;
 
 
