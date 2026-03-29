@@ -21,4 +21,10 @@ ext_trampoline = Extension(
     extra_compile_args=extra_compile_args,
 )
 
-setup(ext_modules=[ext_variables, ext_trampoline])
+ext_list_unify = Extension(
+    "clausal.logic._list_unify",
+    sources=["clausal/logic/_list_unify.c"],
+    extra_compile_args=extra_compile_args,
+)
+
+setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify])

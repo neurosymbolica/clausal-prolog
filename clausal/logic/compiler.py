@@ -214,7 +214,7 @@ class _GlobalsDb:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
+def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     """Input-mode list pattern unification: destructure a list or string.
 
     Returns True if target is a list (or string) and all elements unify.
@@ -283,7 +283,7 @@ def _head_multi_star_error():
     )
 
 
-def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
+def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
     Called after body execution when target was an unbound Var.
@@ -291,7 +291,7 @@ def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
     d = deref(target)
     if not is_var(d):
         # Already bound (e.g., by body) — switch to input mode
-        return _head_list_unify_input(target, var_vals, star_val, after_vals, trail)
+        return _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail)
     result = [deref(v) for v in var_vals]
     if star_val is not None:
         s = deref(star_val)
@@ -328,6 +328,18 @@ def _head_list_unify_output(target, var_vals, star_val, after_vals, trail):
             result.append(s)
     result.extend(deref(v) for v in after_vals)
     return unify(d, result, trail)
+
+
+# ── C-accelerated list unification (with Python fallback) ────────────────────
+_head_list_unify_input = _head_list_unify_input_py
+_head_list_unify_output = _head_list_unify_output_py
+try:
+    from clausal.logic._list_unify import (
+        _head_list_unify_input,
+        _head_list_unify_output,
+    )
+except ImportError:
+    pass
 
 
 # ── Body-position star-list unification (Phase 5) ─────────────────────────────
