@@ -13,6 +13,25 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 
+# ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
+
+try:
+    from clausal.logic._lists_core import (
+        member_find as _c_member_find,
+        memberchk_find as _c_memberchk_find,
+        append_split_find as _c_append_split_find,
+        select_find as _c_select_find,
+        permutation_find as _c_permutation_find,
+        nth0_find as _c_nth0_find,
+    )
+except ImportError:
+    _c_member_find = None
+    _c_memberchk_find = None
+    _c_append_split_find = None
+    _c_select_find = None
+    _c_permutation_find = None
+    _c_nth0_find = None
+
 
 # ── String-as-list helpers ───────────────────────────────────────────────────
 
@@ -42,11 +61,21 @@ def _member__2(this_generator, parent, elem, lst, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
-        for item in items:
-            mark = trail.mark()
-            if unify(elem, item, trail):
+        if _c_member_find is not None:
+            idx = 0
+            while True:
+                result = _c_member_find(items, idx, elem, trail)
+                if result is None:
+                    break
+                idx, mark = result
                 yield (parent, None)
-            trail.undo(mark)
+                trail.undo(mark)
+        else:
+            for item in items:
+                mark = trail.mark()
+                if unify(elem, item, trail):
+                    yield (parent, None)
+                trail.undo(mark)
     yield (parent, DONE)
 
 
@@ -56,13 +85,19 @@ def _memberchk__2(this_generator, parent, elem, lst, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
-        for item in items:
-            mark = trail.mark()
-            if unify(elem, item, trail):
+        if _c_memberchk_find is not None:
+            if _c_memberchk_find(items, elem, trail):
                 yield (parent, None)
                 yield (parent, DONE)
                 return
-            trail.undo(mark)
+        else:
+            for item in items:
+                mark = trail.mark()
+                if unify(elem, item, trail):
+                    yield (parent, None)
+                    yield (parent, DONE)
+                    return
+                trail.undo(mark)
     yield (parent, DONE)
 
 
@@ -105,13 +140,24 @@ def _append__3(this_generator, parent, l1, l2, l3, trail):
             trail.undo(mark)
     elif l3_items is not None:
         # Only L3 known: enumerate all splits
-        for i in range(len(l3_items) + 1):
-            prefix = _seq_result(l3_items[:i], _out_str)
-            suffix = _seq_result(l3_items[i:], _out_str)
-            mark = trail.mark()
-            if unify(l1, prefix, trail) and unify(l2, suffix, trail):
+        if _c_append_split_find is not None:
+            idx = 0
+            while True:
+                result = _c_append_split_find(
+                    l3_items, idx, l1, l2, _out_str, trail)
+                if result is None:
+                    break
+                idx, mark = result
                 yield (parent, None)
-            trail.undo(mark)
+                trail.undo(mark)
+        else:
+            for i in range(len(l3_items) + 1):
+                prefix = _seq_result(l3_items[:i], _out_str)
+                suffix = _seq_result(l3_items[i:], _out_str)
+                mark = trail.mark()
+                if unify(l1, prefix, trail) and unify(l2, suffix, trail):
+                    yield (parent, None)
+                trail.undo(mark)
     yield (parent, DONE)
 
 
@@ -174,11 +220,21 @@ def _nth0__3(this_generator, parent, n, lst, elem, trail):
                     yield (parent, None)
                 trail.undo(mark)
         else:
-            for i, item in enumerate(items):
-                mark = trail.mark()
-                if unify(n, i, trail) and unify(elem, item, trail):
+            if _c_nth0_find is not None:
+                idx = 0
+                while True:
+                    result = _c_nth0_find(items, idx, n, elem, trail)
+                    if result is None:
+                        break
+                    idx, mark = result
                     yield (parent, None)
-                trail.undo(mark)
+                    trail.undo(mark)
+            else:
+                for i, item in enumerate(items):
+                    mark = trail.mark()
+                    if unify(n, i, trail) and unify(elem, item, trail):
+                        yield (parent, None)
+                    trail.undo(mark)
     yield (parent, DONE)
 
 
@@ -257,11 +313,20 @@ def _permutation__2(this_generator, parent, lst, perm, trail):
     items = _as_items(lst_val)
     if items is not None:
         was_str = isinstance(lst_val, str)
-        for p in itertools.permutations(items):
-            mark = trail.mark()
-            if unify(perm, _seq_result(list(p), was_str), trail):
+        if _c_permutation_find is not None:
+            perm_iter = itertools.permutations(items)
+            while True:
+                mark = _c_permutation_find(perm_iter, perm, was_str, trail)
+                if mark is None:
+                    break
                 yield (parent, None)
-            trail.undo(mark)
+                trail.undo(mark)
+        else:
+            for p in itertools.permutations(items):
+                mark = trail.mark()
+                if unify(perm, _seq_result(list(p), was_str), trail):
+                    yield (parent, None)
+                trail.undo(mark)
     yield (parent, DONE)
 
 
@@ -272,12 +337,23 @@ def _select__3(this_generator, parent, elem, lst, rest, trail):
     items = _as_items(lst_val)
     if items is not None:
         was_str = isinstance(lst_val, str)
-        for i, item in enumerate(items):
-            mark = trail.mark()
-            remainder = _seq_result(items[:i] + items[i + 1:], was_str)
-            if unify(elem, item, trail) and unify(rest, remainder, trail):
+        if _c_select_find is not None:
+            idx = 0
+            while True:
+                result = _c_select_find(
+                    items, idx, elem, rest, was_str, trail)
+                if result is None:
+                    break
+                idx, mark = result
                 yield (parent, None)
-            trail.undo(mark)
+                trail.undo(mark)
+        else:
+            for i, item in enumerate(items):
+                mark = trail.mark()
+                remainder = _seq_result(items[:i] + items[i + 1:], was_str)
+                if unify(elem, item, trail) and unify(rest, remainder, trail):
+                    yield (parent, None)
+                trail.undo(mark)
     yield (parent, DONE)
 
 
