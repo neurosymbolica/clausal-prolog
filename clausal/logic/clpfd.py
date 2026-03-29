@@ -245,6 +245,28 @@ def _ensure_fd(var: Var, trail: Trail) -> FDVar:
 # ── Narrow + propagation queue ───────────────────────────────────────────────
 
 
+def _sync_real(var, fd_lo: float, fd_hi: float, trail):
+    """Synchronise the CLP(R) real interval on *var* with FD bounds.
+
+    Returns False on wipeout, True otherwise.  Called from both the
+    Python ``_narrow`` and the C ``c_narrow`` — the latter caches a
+    reference to this function so it never has to know ``RealVar``'s
+    constructor signature.
+    """
+    from clausal.logic.clpr import REAL_KEY, RealVar
+    real_state = get_attr(var, REAL_KEY)
+    if real_state is None:
+        return True
+    new_lo = max(real_state.lo, fd_lo)
+    new_hi = min(real_state.hi, fd_hi)
+    if new_lo > new_hi:
+        return False
+    if new_lo != real_state.lo or new_hi != real_state.hi:
+        updated = RealVar(new_lo, new_hi, real_state.constraints)
+        put_attr(var, REAL_KEY, updated, trail)
+    return True
+
+
 def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
     """Narrow var's domain to new_domain. Returns False on wipeout."""
     if not new_domain:
@@ -257,18 +279,9 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
     put_attr(var, FD_KEY, new_state, trail)
 
     # Keep real interval in sync if present
-    from clausal.logic.clpr import REAL_KEY, RealVar
-    real_state = get_attr(var, REAL_KEY)
-    if real_state is not None:
-        fd_lo = float(domain_min(new_domain))
-        fd_hi = float(domain_max(new_domain))
-        new_lo = max(real_state.lo, fd_lo)
-        new_hi = min(real_state.hi, fd_hi)
-        if new_lo > new_hi:
-            return False
-        if new_lo != real_state.lo or new_hi != real_state.hi:
-            updated = RealVar(new_lo, new_hi, real_state.constraints)
-            put_attr(var, REAL_KEY, updated, trail)
+    if not _sync_real(var, float(domain_min(new_domain)),
+                      float(domain_max(new_domain)), trail):
+        return False
 
     # Singleton → bind variable
     val = domain_singleton(new_domain)
@@ -870,6 +883,12 @@ def _ensure_term_imports():
         _Mod = Mod
         _Pow = Pow
         _Negate = Negate
+
+
+def _is_fd_expr(x) -> bool:
+    """Return True if *x* is an arithmetic expression node (Add/Sub/Mult/Negate)."""
+    _ensure_term_imports()
+    return isinstance(x, (_Add, _Sub, _Mult, _Negate))
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:

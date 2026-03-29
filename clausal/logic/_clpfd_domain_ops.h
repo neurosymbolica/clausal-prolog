@@ -237,6 +237,12 @@ domain_singleton_c(PyObject *domain)
         int eq = PyObject_RichCompareBool(lo, hi, Py_EQ);
         if (eq < 0) return NULL;
         if (eq) {
+            /* Guard: FD domains are over integers.  If the singleton value
+             * is not a Python int (e.g. float('-inf') from an unbounded
+             * sentinel), treat it as non-singleton to avoid confusing
+             * downstream code that calls PyLong_AsLongLong on the result. */
+            if (!PyLong_Check(lo))
+                Py_RETURN_NONE;
             Py_INCREF(lo);
             return lo;
         }

@@ -36,8 +36,12 @@ static PyObject *fn_real_lt = NULL;
 static PyObject *fn_real_le = NULL;
 static PyObject *REAL_KEY = NULL;
 
+/* CLP(R) sync helper (from clpfd.py) */
+static PyObject *fn_sync_real = NULL;
+
 /* Linearisation for fd_eq */
 static PyObject *fn_linearise = NULL;
+static PyObject *fn_is_fd_expr = NULL;
 static PyObject *fn_ensure_fd_py = NULL;
 
 /* Cached constants */
@@ -654,78 +658,30 @@ have_constraints:
     }
     Py_DECREF(new_state);
 
-    /* CLP(R) sync: if var has a real attribute, narrow the real interval */
-    if (REAL_KEY) {
-        PyObject *real_state = call_get_attr(var, REAL_KEY);
-        if (!real_state) return -1;
-        if (real_state != Py_None) {
-            /* Get fd bounds */
-            int64_t fd_lo, fd_hi;
-            if (domain_min_i64(new_domain, &fd_lo) < 0 ||
-                domain_max_i64(new_domain, &fd_hi) < 0) {
-                Py_DECREF(real_state);
-                return -1;
-            }
-            double fd_lo_f = (fd_lo == INT64_MIN) ? -HUGE_VAL : (double)fd_lo;
-            double fd_hi_f = (fd_hi == INT64_MAX) ? HUGE_VAL : (double)fd_hi;
-
-            PyObject *r_lo_obj = PyObject_GetAttrString(real_state, "lo");
-            PyObject *r_hi_obj = PyObject_GetAttrString(real_state, "hi");
-            if (!r_lo_obj || !r_hi_obj) {
-                Py_XDECREF(r_lo_obj);
-                Py_XDECREF(r_hi_obj);
-                Py_DECREF(real_state);
-                return -1;
-            }
-            double r_lo = PyFloat_AsDouble(r_lo_obj);
-            double r_hi = PyFloat_AsDouble(r_hi_obj);
-            Py_DECREF(r_lo_obj);
-            Py_DECREF(r_hi_obj);
-            if ((r_lo == -1.0 && PyErr_Occurred()) ||
-                (r_hi == -1.0 && PyErr_Occurred())) {
-                Py_DECREF(real_state);
-                return -1;
-            }
-
-            double new_lo = r_lo > fd_lo_f ? r_lo : fd_lo_f;
-            double new_hi = r_hi < fd_hi_f ? r_hi : fd_hi_f;
-
-            if (new_lo > new_hi) {
-                Py_DECREF(real_state);
-                return 0;  /* wipeout */
-            }
-
-            if (new_lo != r_lo || new_hi != r_hi) {
-                /* Build updated RealVar */
-                PyObject *r_constraints = PyObject_GetAttrString(real_state, "constraints");
-                if (!r_constraints) { Py_DECREF(real_state); return -1; }
-
-                PyObject *RealVarCls = (PyObject *)Py_TYPE(real_state);
-                PyObject *lo_py = PyFloat_FromDouble(new_lo);
-                PyObject *hi_py = PyFloat_FromDouble(new_hi);
-                if (!lo_py || !hi_py) {
-                    Py_XDECREF(lo_py);
-                    Py_XDECREF(hi_py);
-                    Py_DECREF(r_constraints);
-                    Py_DECREF(real_state);
-                    return -1;
-                }
-                PyObject *updated = PyObject_CallFunctionObjArgs(
-                    RealVarCls, lo_py, hi_py, r_constraints, NULL);
-                Py_DECREF(lo_py);
-                Py_DECREF(hi_py);
-                Py_DECREF(r_constraints);
-                if (!updated) { Py_DECREF(real_state); return -1; }
-
-                if (call_put_attr(var, REAL_KEY, updated, trail) < 0) {
-                    Py_DECREF(updated);
-                    Py_DECREF(real_state);
-                    return -1;
-                }
-                Py_DECREF(updated);
-            }
+    /* CLP(R) sync: delegate to Python _sync_real(var, fd_lo, fd_hi, trail)
+     * so we never depend on the RealVar constructor signature. */
+    if (fn_sync_real) {
+        int64_t fd_lo, fd_hi;
+        if (domain_min_i64(new_domain, &fd_lo) < 0 ||
+            domain_max_i64(new_domain, &fd_hi) < 0)
+            return -1;
+        double fd_lo_f = (fd_lo == INT64_MIN) ? -HUGE_VAL : (double)fd_lo;
+        double fd_hi_f = (fd_hi == INT64_MAX) ? HUGE_VAL : (double)fd_hi;
+        PyObject *lo_py = PyFloat_FromDouble(fd_lo_f);
+        PyObject *hi_py = PyFloat_FromDouble(fd_hi_f);
+        if (!lo_py || !hi_py) {
+            Py_XDECREF(lo_py);
+            Py_XDECREF(hi_py);
+            return -1;
         }
-        Py_DECREF(real_state);
+        PyObject *sr = PyObject_CallFunctionObjArgs(
+            fn_sync_real, var, lo_py, hi_py, trail, NULL);
+        Py_DECREF(lo_py);
+        Py_DECREF(hi_py);
+        if (!sr) return -1;
+        int ok = PyObject_IsTrue(sr);
+        Py_DECREF(sr);
+        if (ok <= 0) return ok;  /* 0 = wipeout, -1 = error */
     }
 
     /* Singleton → unify */
@@ -893,13 +849,14 @@ c_propagate(PyObject *queue, PyObject *trail)
             if (len == 0) break;
         }
 
-        /* Pop from front */
+        /* Pop from end — O(1) for PyList.  AC-3 converges regardless of
+         * traversal order (BFS vs DFS); popping from end avoids the O(n)
+         * element shift that PyList_SetSlice(queue, 0, 1, NULL) incurs. */
         PyObject *var;
         if (PyList_Check(queue)) {
-            var = PyList_GET_ITEM(queue, 0);
+            var = PyList_GET_ITEM(queue, len - 1);
             Py_INCREF(var);
-            /* Remove first element by slicing in-place */
-            if (PyList_SetSlice(queue, 0, 1, NULL) < 0) {
+            if (PyList_SetSlice(queue, len - 1, len, NULL) < 0) {
                 Py_DECREF(var);
                 return -1;
             }
@@ -1908,6 +1865,66 @@ ScalarProductConstraint_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 /* ================================================================
+ * __repr__ for constraint types
+ * ================================================================ */
+
+static PyObject *
+BinaryConstraint_repr(BinaryConstraintObject *self)
+{
+    const char *name = Py_TYPE(self)->tp_name;
+    /* Use the short name after the last dot */
+    const char *dot = strrchr(name, '.');
+    if (dot) name = dot + 1;
+    PyObject *lhs_repr = PyObject_Repr(self->lhs);
+    if (!lhs_repr) return NULL;
+    PyObject *rhs_repr = PyObject_Repr(self->rhs);
+    if (!rhs_repr) { Py_DECREF(lhs_repr); return NULL; }
+    PyObject *result = PyUnicode_FromFormat("%s(%U, %U)", name, lhs_repr, rhs_repr);
+    Py_DECREF(lhs_repr);
+    Py_DECREF(rhs_repr);
+    return result;
+}
+
+static PyObject *
+AllDiffConstraint_repr(AllDiffConstraintObject *self)
+{
+    PyObject *vars_repr = PyObject_Repr(self->all_vars);
+    if (!vars_repr) return NULL;
+    PyObject *result = PyUnicode_FromFormat("AllDiffConstraint(%U)", vars_repr);
+    Py_DECREF(vars_repr);
+    return result;
+}
+
+static PyObject *
+SumConstraint_repr(SumConstraintObject *self)
+{
+    PyObject *sv = PyObject_Repr(self->sum_vars);
+    if (!sv) return NULL;
+    PyObject *t = PyObject_Repr(self->total);
+    if (!t) { Py_DECREF(sv); return NULL; }
+    PyObject *result = PyUnicode_FromFormat("SumConstraint(%U, %U)", sv, t);
+    Py_DECREF(sv);
+    Py_DECREF(t);
+    return result;
+}
+
+static PyObject *
+ScalarProductConstraint_repr(ScalarProductConstraintObject *self)
+{
+    PyObject *c = PyObject_Repr(self->coeffs);
+    if (!c) return NULL;
+    PyObject *sv = PyObject_Repr(self->sum_vars);
+    if (!sv) { Py_DECREF(c); return NULL; }
+    PyObject *t = PyObject_Repr(self->total);
+    if (!t) { Py_DECREF(c); Py_DECREF(sv); return NULL; }
+    PyObject *result = PyUnicode_FromFormat("ScalarProductConstraint(%U, %U, %U)", c, sv, t);
+    Py_DECREF(c);
+    Py_DECREF(sv);
+    Py_DECREF(t);
+    return result;
+}
+
+/* ================================================================
  * Type objects for constraint types
  * ================================================================ */
 
@@ -1917,6 +1934,7 @@ ScalarProductConstraint_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         .tp_name = "clausal.logic._clpfd_propagate." #NAME, \
         .tp_basicsize = sizeof(BinaryConstraintObject), \
         .tp_dealloc = (destructor)BinaryConstraint_dealloc, \
+        .tp_repr = (reprfunc)BinaryConstraint_repr, \
         .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, \
         .tp_traverse = (traverseproc)BinaryConstraint_traverse, \
         .tp_clear = (inquiry)BinaryConstraint_clear, \
@@ -1935,6 +1953,7 @@ static PyTypeObject AllDiffConstraintType = {
     .tp_name = "clausal.logic._clpfd_propagate.AllDiffConstraint",
     .tp_basicsize = sizeof(AllDiffConstraintObject),
     .tp_dealloc = (destructor)AllDiffConstraint_dealloc,
+    .tp_repr = (reprfunc)AllDiffConstraint_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = (traverseproc)AllDiffConstraint_traverse,
     .tp_clear = (inquiry)AllDiffConstraint_clear,
@@ -1948,6 +1967,7 @@ static PyTypeObject SumConstraintType = {
     .tp_name = "clausal.logic._clpfd_propagate.SumConstraint",
     .tp_basicsize = sizeof(SumConstraintObject),
     .tp_dealloc = (destructor)SumConstraint_dealloc,
+    .tp_repr = (reprfunc)SumConstraint_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = (traverseproc)SumConstraint_traverse,
     .tp_clear = (inquiry)SumConstraint_clear,
@@ -1961,6 +1981,7 @@ static PyTypeObject ScalarProductConstraintType = {
     .tp_name = "clausal.logic._clpfd_propagate.ScalarProductConstraint",
     .tp_basicsize = sizeof(ScalarProductConstraintObject),
     .tp_dealloc = (destructor)ScalarProductConstraint_dealloc,
+    .tp_repr = (reprfunc)ScalarProductConstraint_repr,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = (traverseproc)ScalarProductConstraint_traverse,
     .tp_clear = (inquiry)ScalarProductConstraint_clear,
@@ -2284,10 +2305,22 @@ py_fd_eq(PyObject *self, PyObject *args)
         Py_RETURN_FALSE;
     }
 
-    /* Try linearisation — delegate to Python fd_eq's linearisation path */
-    /* We'll call the Python _linearise function for expression trees */
-    PyObject *lc = PyObject_CallOneArg(fn_linearise, rl);
-    PyObject *rc = PyObject_CallOneArg(fn_linearise, rr);
+    /* Try linearisation — only when at least one side is an expression tree
+     * (Add/Sub/Mult/Negate).  For plain var==int, EqConstraint suffices. */
+    PyObject *l_is_expr = PyObject_CallOneArg(fn_is_fd_expr, rl);
+    PyObject *r_is_expr = PyObject_CallOneArg(fn_is_fd_expr, rr);
+    if (!l_is_expr || !r_is_expr) {
+        Py_XDECREF(l_is_expr); Py_XDECREF(r_is_expr);
+        Py_DECREF(rl); Py_DECREF(rr);
+        return NULL;
+    }
+    int try_linearise = PyObject_IsTrue(l_is_expr) || PyObject_IsTrue(r_is_expr);
+    Py_DECREF(l_is_expr); Py_DECREF(r_is_expr);
+
+    PyObject *lc = NULL, *rc = NULL;
+    if (try_linearise) {
+    lc = PyObject_CallOneArg(fn_linearise, rl);
+    rc = PyObject_CallOneArg(fn_linearise, rr);
     if (!lc || !rc) {
         /* _linearise may return None for non-linear or non-expressions */
         PyErr_Clear();
@@ -2297,21 +2330,120 @@ py_fd_eq(PyObject *self, PyObject *args)
     }
 
     if (lc && lc != Py_None && rc && rc != Py_None) {
-        /* Both sides linearised — build ScalarProductConstraint */
-        /* Python handles the merging logic — call the Python fd_eq for this case */
-        /* It's complex (dict merging) and not hot-path — only happens for expr trees */
-        Py_DECREF(lc); Py_DECREF(rc);
+        /* Both sides linearised — merge coefficients and build
+         * ScalarProductConstraint for full bounds-consistency propagation.
+         *
+         * l == r  →  (l_coeffs - r_coeffs)·vars = r_const - l_const
+         */
+        PyObject *l_coeffs = PyTuple_GET_ITEM(lc, 0);  /* dict {var: coeff} */
+        PyObject *r_coeffs = PyTuple_GET_ITEM(rc, 0);
+        PyObject *l_const_obj = PyTuple_GET_ITEM(lc, 1);  /* int */
+        PyObject *r_const_obj = PyTuple_GET_ITEM(rc, 1);
 
-        /* Fall through to Python fd_eq for linearisation path */
-        if (fn_ensure_fd_py) {
-            /* Call the original Python fd_eq via a stored reference */
-            /* Actually, let's just use the Python _linearise + merge logic inline */
+        /* merged = dict(l_coeffs) */
+        PyObject *merged = PyDict_Copy(l_coeffs);
+        if (!merged) { Py_DECREF(lc); Py_DECREF(rc); Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+
+        /* for v, c in r_coeffs.items(): merged[v] = merged.get(v, 0) - c */
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(r_coeffs, &pos, &key, &value)) {
+            PyObject *existing = PyDict_GetItem(merged, key);  /* borrowed, NULL if absent */
+            long long ex_val = existing ? PyLong_AsLongLong(existing) : 0;
+            long long r_val = PyLong_AsLongLong(value);
+            if ((ex_val == -1 || r_val == -1) && PyErr_Occurred()) {
+                Py_DECREF(merged); Py_DECREF(lc); Py_DECREF(rc);
+                Py_DECREF(rl); Py_DECREF(rr);
+                return NULL;
+            }
+            long long new_val = ex_val - r_val;
+            if (new_val == 0) {
+                if (PyDict_DelItem(merged, key) < 0) {
+                    /* Key might not exist if ex_val was 0 via default — ignore KeyError */
+                    PyErr_Clear();
+                }
+            } else {
+                PyObject *nv = PyLong_FromLongLong(new_val);
+                if (!nv || PyDict_SetItem(merged, key, nv) < 0) {
+                    Py_XDECREF(nv);
+                    Py_DECREF(merged); Py_DECREF(lc); Py_DECREF(rc);
+                    Py_DECREF(rl); Py_DECREF(rr);
+                    return NULL;
+                }
+                Py_DECREF(nv);
+            }
         }
-        /* Simpler: just delegate the expression case to Python */
-        goto use_simple_eq;
+
+        /* value = r_const - l_const */
+        long long lc_val = PyLong_AsLongLong(l_const_obj);
+        long long rc_val = PyLong_AsLongLong(r_const_obj);
+        Py_DECREF(lc); Py_DECREF(rc);
+        if ((lc_val == -1 || rc_val == -1) && PyErr_Occurred()) {
+            Py_DECREF(merged); Py_DECREF(rl); Py_DECREF(rr);
+            return NULL;
+        }
+        long long const_value = rc_val - lc_val;
+        Py_DECREF(rl); Py_DECREF(rr);
+
+        Py_ssize_t n = PyDict_Size(merged);
+        if (n == 0) {
+            /* Purely constant: no vars remain */
+            Py_DECREF(merged);
+            return PyBool_FromLong(lc_val == rc_val);
+        }
+
+        /* Build vars_tuple and coeffs_tuple from merged dict */
+        PyObject *vars_tuple = PyTuple_New(n);
+        PyObject *coeffs_tuple = PyTuple_New(n);
+        if (!vars_tuple || !coeffs_tuple) {
+            Py_XDECREF(vars_tuple); Py_XDECREF(coeffs_tuple);
+            Py_DECREF(merged);
+            return NULL;
+        }
+        pos = 0;
+        Py_ssize_t idx = 0;
+        while (PyDict_Next(merged, &pos, &key, &value)) {
+            Py_INCREF(key);
+            PyTuple_SET_ITEM(vars_tuple, idx, key);
+            Py_INCREF(value);
+            PyTuple_SET_ITEM(coeffs_tuple, idx, value);
+            idx++;
+        }
+        Py_DECREF(merged);
+
+        /* _ensure_fd on all vars */
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *v = PyTuple_GET_ITEM(vars_tuple, i);
+            int isv = call_is_var(v);
+            if (isv < 0) { Py_DECREF(vars_tuple); Py_DECREF(coeffs_tuple); return NULL; }
+            if (isv) {
+                FDVarObject *s = c_ensure_fd(v, trail);
+                if (!s) { Py_DECREF(vars_tuple); Py_DECREF(coeffs_tuple); return NULL; }
+                Py_DECREF(s);
+            }
+        }
+
+        /* Build ScalarProductConstraint(coeffs, vars, value) */
+        PyObject *value_obj = PyLong_FromLongLong(const_value);
+        if (!value_obj) { Py_DECREF(vars_tuple); Py_DECREF(coeffs_tuple); return NULL; }
+
+        PyObject *cargs = PyTuple_Pack(3, coeffs_tuple, vars_tuple, value_obj);
+        Py_DECREF(coeffs_tuple); Py_DECREF(vars_tuple); Py_DECREF(value_obj);
+        if (!cargs) return NULL;
+
+        PyObject *constraint = ScalarProductConstraint_new(
+            &ScalarProductConstraintType, cargs, NULL);
+        Py_DECREF(cargs);
+        if (!constraint) return NULL;
+
+        int ok = c_post_constraint(constraint, trail);
+        Py_DECREF(constraint);
+        if (ok < 0) return NULL;
+        return PyBool_FromLong(ok > 0);
     }
     Py_XDECREF(lc);
     Py_XDECREF(rc);
+    } /* end if (try_linearise) */
 
 use_simple_eq:
 
@@ -2772,11 +2904,14 @@ PyInit__clpfd_propagate(void)
     fn_collect_constraint_vars = PyObject_GetAttrString(clpfd_mod, "_collect_constraint_vars");
     fn_collect_vars_from = PyObject_GetAttrString(clpfd_mod, "_collect_vars_from");
     fn_linearise = PyObject_GetAttrString(clpfd_mod, "_linearise");
+    fn_is_fd_expr = PyObject_GetAttrString(clpfd_mod, "_is_fd_expr");
     fn_ensure_fd_py = PyObject_GetAttrString(clpfd_mod, "_ensure_fd");
+    fn_sync_real = PyObject_GetAttrString(clpfd_mod, "_sync_real");
     Py_DECREF(clpfd_mod);
 
     if (!fn_expr_domain || !fn_resolve || !fn_any_real || !fn_both_ground ||
-        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise)
+        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
+        !fn_is_fd_expr)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */
