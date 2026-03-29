@@ -19,23 +19,15 @@
 #include <Python.h>
 #include <stdint.h>
 
-/* We include _ft_compat.h from the variables subpackage for the
- * free-threaded atomic macros (used by var_deref). */
-#include "variables/_ft_compat.h"
+/* Import the C API capsule from _variables — gives us deref, is_var,
+ * is_term_instance, term_field_names, unify, etc. as direct C calls. */
+#define VARIABLES_CAPI_CONSUMER
+#include "variables/_variables_capi.h"
 
 /* ================================================================
  * Forward declarations and cached references
  * ================================================================ */
 
-/* From _variables.c — we replicate the VarObject struct layout so we
- * can inline var_deref without calling into Python. */
-typedef struct {
-    PyObject_HEAD
-    PyObject *binding;
-    uint64_t  var_id;
-} VarObject;
-
-static PyTypeObject *VarType_ptr = NULL;    /* &VarType from _variables */
 static PyObject *Compound_type = NULL;
 
 /* Cached interned strings */
@@ -43,78 +35,20 @@ static PyObject *str_functor = NULL;
 static PyObject *str_args = NULL;
 static PyObject *str___name__ = NULL;
 static PyObject *str___list__ = NULL;
-static PyObject *str__fields = NULL;
-static PyObject *str___dataclass_fields__ = NULL;
-static PyObject *str_name = NULL;
-
-/* Cached callables from _variables module */
-static PyObject *py_unify_func = NULL;      /* _variables.unify */
-static PyObject *py_is_term_instance_func = NULL;
-static PyObject *py_term_field_names_func = NULL;
-
 /* _VAR sentinel — set by _register_var_sentinel() from tabling.py */
 static PyObject *VAR_sentinel = NULL;
-
-/* dataclasses.fields function */
-static PyObject *dc_fields_func = NULL;
 
 #define MAX_DEPTH 50000
 
 /* ================================================================
- * Inline var_deref — mirrors _variables.c:var_deref
+ * Inline helpers using the C API capsule
  * ================================================================ */
-
-static inline int
-is_var_type(PyObject *obj)
-{
-    return VarType_ptr && PyObject_TypeCheck(obj, VarType_ptr);
-}
-
-static inline PyObject *
-var_deref(PyObject *term)
-{
-    while (is_var_type(term)) {
-        VarObject *v = (VarObject *)term;
-        PyObject *b = FT_ATOMIC_LOAD_PTR(v->binding);
-        if (b == NULL)
-            return term;
-        term = b;
-    }
-    return term;
-}
 
 static inline int
 is_var_unbound(PyObject *term)
 {
-    /* term has already been deref'd */
-    return is_var_type(term);
-}
-
-/* ================================================================
- * Helper: c_is_term_instance (call into _variables C function)
- * ================================================================ */
-
-static int
-c_is_term_instance(PyObject *obj)
-{
-    if (!py_is_term_instance_func)
-        return 0;
-    PyObject *result = PyObject_CallOneArg(py_is_term_instance_func, obj);
-    if (!result) return -1;
-    int r = PyObject_IsTrue(result);
-    Py_DECREF(result);
-    return r;
-}
-
-static PyObject *
-c_term_field_names(PyObject *obj)
-{
-    if (!py_term_field_names_func) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "term_field_names not registered");
-        return NULL;
-    }
-    return PyObject_CallOneArg(py_term_field_names_func, obj);
+    /* term has already been deref'd via VarAPI->deref */
+    return VarAPI->is_var(term);
 }
 
 /* ================================================================
@@ -130,7 +64,7 @@ do_normalize(PyObject *term, int depth)
         return NULL;
     }
 
-    term = var_deref(term);
+    term = VarAPI->deref(term);
 
     /* Fast path: int (most common in benchmarks) */
     if (PyLong_CheckExact(term)) {
@@ -203,13 +137,13 @@ do_normalize(PyObject *term, int depth)
 
     /* Term instance (PredicateMeta or @dataclass) → (class_name, field0, ...) */
     {
-        int ti = c_is_term_instance(term);
+        int ti = VarAPI->is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
             PyObject *cls_name = PyObject_GetAttr(
                 (PyObject *)Py_TYPE(term), str___name__);
             if (!cls_name) return NULL;
-            PyObject *fields = c_term_field_names(term);
+            PyObject *fields = VarAPI->term_field_names(term);
             if (!fields) { Py_DECREF(cls_name); return NULL; }
             if (!PyTuple_Check(fields)) {
                 Py_DECREF(cls_name);
@@ -311,7 +245,7 @@ do_deref_walk(PyObject *term, int depth)
         return NULL;
     }
 
-    term = var_deref(term);
+    term = VarAPI->deref(term);
 
     /* Unbound Var — return as-is */
     if (is_var_unbound(term)) {
@@ -381,10 +315,10 @@ do_deref_walk(PyObject *term, int depth)
 
     /* Term instance (PredicateMeta or @dataclass) */
     {
-        int ti = c_is_term_instance(term);
+        int ti = VarAPI->is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
+            PyObject *fields = VarAPI->term_field_names(term);
             if (!fields) return NULL;
             if (!PyTuple_Check(fields)) {
                 Py_DECREF(fields);
@@ -488,12 +422,6 @@ py_unify_answer(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OOO", &py_args, &stored, &trail))
         return NULL;
 
-    if (!py_unify_func) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "_unify_answer: unify function not registered");
-        return NULL;
-    }
-
     /* Support both tuple and list for args/stored */
     Py_ssize_t n1, n2;
     int args_is_tuple = PyTuple_Check(py_args);
@@ -517,11 +445,10 @@ py_unify_answer(PyObject *Py_UNUSED(module), PyObject *args)
             ? PyTuple_GET_ITEM(stored, i)
             : PyList_GET_ITEM(stored, i);
 
-        PyObject *r = PyObject_CallFunction(py_unify_func, "OOO", a, s, trail);
+        PyObject *r = VarAPI->unify(a, s, (TrailObject *)trail);
         if (!r) return NULL;
-        int truthy = PyObject_IsTrue(r);
+        int truthy = (r == Py_True);
         Py_DECREF(r);
-        if (truthy < 0) return NULL;
         if (!truthy)
             Py_RETURN_FALSE;
     }
@@ -541,46 +468,15 @@ py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-py_register_types(PyObject *Py_UNUSED(module), PyObject *args)
+static int
+import_compound_type(void)
 {
-    PyObject *var_type, *compound_cls, *unify_fn,
-             *is_term_fn, *term_fields_fn;
-    if (!PyArg_ParseTuple(args, "OOOOO",
-            &var_type, &compound_cls, &unify_fn,
-            &is_term_fn, &term_fields_fn))
-        return NULL;
-
-    /* VarType */
-    if (!PyType_Check(var_type)) {
-        PyErr_SetString(PyExc_TypeError, "first arg must be Var type");
-        return NULL;
-    }
-    VarType_ptr = (PyTypeObject *)var_type;
-    /* We don't incref VarType_ptr — it's a borrowed ref from a module
-     * that stays alive for the process lifetime. */
-
-    /* Compound type */
-    Py_XDECREF(Compound_type);
-    Py_INCREF(compound_cls);
-    Compound_type = compound_cls;
-
-    /* unify */
-    Py_XDECREF(py_unify_func);
-    Py_INCREF(unify_fn);
-    py_unify_func = unify_fn;
-
-    /* is_term_instance */
-    Py_XDECREF(py_is_term_instance_func);
-    Py_INCREF(is_term_fn);
-    py_is_term_instance_func = is_term_fn;
-
-    /* term_field_names */
-    Py_XDECREF(py_term_field_names_func);
-    Py_INCREF(term_fields_fn);
-    py_term_field_names_func = term_fields_fn;
-
-    Py_RETURN_NONE;
+    PyObject *mod = PyImport_ImportModule("clausal.terms");
+    if (!mod) return -1;
+    Compound_type = PyObject_GetAttrString(mod, "Compound");
+    Py_DECREF(mod);
+    if (!Compound_type) return -1;
+    return 0;
 }
 
 /* ================================================================
@@ -600,8 +496,6 @@ static PyMethodDef module_methods[] = {
      "Unify each arg with the corresponding stored value."},
     {"_register_var_sentinel", py_register_var_sentinel, METH_O,
      "Register the _VAR sentinel object from tabling.py."},
-    {"_register_types", (PyCFunction)py_register_types, METH_VARARGS,
-     "Register Var type, Compound type, unify, is_term_instance, term_field_names."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -619,6 +513,14 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__tabling_core(void)
 {
+    /* Import the C API capsule from _variables */
+    if (import_variables_capi() < 0)
+        return NULL;
+
+    /* Import the Compound type from clausal.terms */
+    if (import_compound_type() < 0)
+        return NULL;
+
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) return NULL;
 
@@ -631,12 +533,7 @@ PyInit__tabling_core(void)
     str_args = PyUnicode_InternFromString("args");
     str___name__ = PyUnicode_InternFromString("__name__");
     str___list__ = PyUnicode_InternFromString("__list__");
-    str__fields = PyUnicode_InternFromString("_fields");
-    str___dataclass_fields__ = PyUnicode_InternFromString("__dataclass_fields__");
-    str_name = PyUnicode_InternFromString("name");
-
-    if (!str_functor || !str_args || !str___name__ || !str___list__ ||
-        !str__fields || !str___dataclass_fields__ || !str_name) {
+    if (!str_functor || !str_args || !str___name__ || !str___list__) {
         Py_DECREF(m);
         return NULL;
     }

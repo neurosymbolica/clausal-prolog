@@ -2,6 +2,7 @@
 
 import os
 import sys
+from dataclasses import dataclass
 import pytest
 
 from clausal.logic.tabling import (
@@ -21,7 +22,7 @@ from clausal.logic.tabling import (
 from clausal.logic.variables import Var, Trail, unify, deref, is_var
 from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
-from clausal.logic.solve import call
+from clausal.logic.solve import call, _deref_walk
 from clausal.logic.predicate import PredicateMeta
 from clausal.terms import Compound
 
@@ -149,6 +150,141 @@ class TestFreezeAndUnify:
         trail = Trail()
         result = _unify_answer((1,), (2,), trail)
         assert result is False
+
+
+# ── Unit tests: @dataclass terms through C tabling path ──────────────────────
+
+
+@dataclass
+class Point:
+    x: object
+    y: object
+
+
+@dataclass
+class Nested:
+    label: str
+    child: object
+
+
+class TestDataclassTerms:
+    """Exercises _normalize_for_key, _deref_walk, make_subgoal_key,
+    freeze_args, and _unify_answer with @dataclass term instances,
+    ensuring the capsule's is_term_instance + term_field_names handles
+    dataclasses correctly (not just PredicateMeta)."""
+
+    def test_normalize_dataclass_ground(self):
+        p = Point(1, 2)
+        result = _normalize_for_key(p)
+        assert result == ("Point", 1, 2)
+
+    def test_normalize_dataclass_with_var(self):
+        v = Var()
+        p = Point(v, 42)
+        result = _normalize_for_key(p)
+        assert result == ("Point", _VAR, 42)
+
+    def test_normalize_dataclass_with_bound_var(self):
+        v = Var()
+        trail = Trail()
+        unify(v, 99, trail)
+        p = Point(v, 1)
+        result = _normalize_for_key(p)
+        assert result == ("Point", 99, 1)
+
+    def test_normalize_nested_dataclass(self):
+        inner = Point(3, 4)
+        outer = Nested("origin", inner)
+        result = _normalize_for_key(outer)
+        assert result == ("Nested", "origin", ("Point", 3, 4))
+
+    def test_make_subgoal_key_dataclass(self):
+        trail = Trail()
+        p = Point(1, 2)
+        key = make_subgoal_key((p, "extra"), trail)
+        assert key == (("Point", 1, 2), "extra")
+
+    def test_make_subgoal_key_dataclass_with_var(self):
+        trail = Trail()
+        v = Var()
+        p = Point(v, 10)
+        key = make_subgoal_key((p,), trail)
+        assert key == (("Point", _VAR, 10),)
+
+    def test_freeze_dataclass_ground(self):
+        trail = Trail()
+        p = Point(1, 2)
+        result = freeze_args((p,), trail)
+        assert len(result) == 1
+        assert isinstance(result[0], Point)
+        assert result[0].x == 1
+        assert result[0].y == 2
+
+    def test_freeze_dataclass_with_bound_var(self):
+        v = Var()
+        trail = Trail()
+        unify(v, 42, trail)
+        p = Point(v, 7)
+        result = freeze_args((p,), trail)
+        frozen = result[0]
+        assert isinstance(frozen, Point)
+        assert frozen.x == 42
+        assert frozen.y == 7
+
+    def test_deref_walk_dataclass_ground(self):
+        p = Point(1, 2)
+        result = _deref_walk(p)
+        assert isinstance(result, Point)
+        assert result.x == 1
+        assert result.y == 2
+
+    def test_deref_walk_dataclass_with_bound_var(self):
+        v = Var()
+        trail = Trail()
+        unify(v, "hello", trail)
+        p = Point(v, 3)
+        result = _deref_walk(p)
+        assert isinstance(result, Point)
+        assert result.x == "hello"
+        assert result.y == 3
+
+    def test_deref_walk_nested_dataclass(self):
+        v = Var()
+        trail = Trail()
+        unify(v, 99, trail)
+        inner = Point(v, 2)
+        outer = Nested("test", inner)
+        result = _deref_walk(outer)
+        assert isinstance(result, Nested)
+        assert result.label == "test"
+        assert isinstance(result.child, Point)
+        assert result.child.x == 99
+        assert result.child.y == 2
+
+    def test_unify_answer_dataclass(self):
+        """_unify_answer unifies arg-by-arg, not the dataclass itself,
+        so we test a Var that will be bound to a dataclass via freeze."""
+        v = Var()
+        trail = Trail()
+        p = Point(1, 2)
+        result = _unify_answer((v,), (p,), trail)
+        assert result is True
+        assert deref(v) is p
+
+    def test_variant_keys_dataclass_match(self):
+        """Two calls with same-shape dataclass args (different Vars)
+        must produce the same variant key."""
+        trail = Trail()
+        k1 = make_subgoal_key((Point(Var(), 1),), trail)
+        k2 = make_subgoal_key((Point(Var(), 1),), trail)
+        assert k1 == k2
+
+    def test_variant_keys_dataclass_differ(self):
+        """Different ground field values must produce different keys."""
+        trail = Trail()
+        k1 = make_subgoal_key((Point(1, 2),), trail)
+        k2 = make_subgoal_key((Point(1, 3),), trail)
+        assert k1 != k2
 
 
 # ── Integration tests: tabled fibonacci ──────────────────────────────────────

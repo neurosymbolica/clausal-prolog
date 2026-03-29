@@ -37,6 +37,7 @@ ext_clpfd = Extension(
 ext_tabling_core = Extension(
     "clausal.logic._tabling_core",
     sources=["clausal/logic/_tabling_core.c"],
+    include_dirs=["clausal/logic"],
     extra_compile_args=extra_compile_args,
 )
 

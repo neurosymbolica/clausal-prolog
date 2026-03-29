@@ -210,11 +210,8 @@ try:
         freeze_args as _freeze_args_c,
         _unify_answer as _unify_answer_c,
         _register_var_sentinel,
-        _register_types,
     )
-    from clausal.logic.variables import Var
     _register_var_sentinel(_VAR)
-    _register_types(Var, Compound, unify, is_term_instance, term_field_names)
     _normalize_for_key = _normalize_for_key_c
     make_subgoal_key = _make_subgoal_key_c
     freeze_args = _freeze_args_c
