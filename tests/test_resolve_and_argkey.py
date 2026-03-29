@@ -1,13 +1,17 @@
-"""Tests for _resolve Var guards and _runtime_arg_key fast paths.
+"""Tests for _resolve Var guards, _runtime_arg_key fast paths, and
+unify vs unify_with_occurs_check through the C API.
 
 Verifies that:
 - fd_eq/fd_ne/fd_lt/fd_le skip _resolve() when an operand is a Var
 - _runtime_arg_key returns correct keys for int, str, bool, and other types
+- unify (no occurs check) allows circular terms
+- unify_with_occurs_check rejects circular terms
+- C extensions using VarAPI->unify vs VarAPI->unify_oc get correct behavior
 """
 
 from __future__ import annotations
 
-from clausal.logic.variables import Var, Trail, deref, is_var, get_attr
+from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify, unify_with_occurs_check
 from clausal.logic.clpfd import (
     FD_KEY, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,
     _ensure_fd, in_domain,
@@ -161,3 +165,122 @@ class TestRuntimeArgKey:
 
     def test_large_int(self):
         assert _runtime_arg_key(2**100) == 2**100
+
+
+# ── unify vs unify_with_occurs_check ─────────────────────────────────────────
+# The C API capsule exposes both:
+#   VarAPI->unify()    — no occurs check (used by _lists_core.c)
+#   VarAPI->unify_oc() — with occurs check (used by _constraints_dif.c)
+#
+# unify() allows circular terms (X = f(X) succeeds).
+# unify_with_occurs_check() rejects them (returns False, rolls back).
+# Both must handle normal unification identically.
+
+
+class TestUnifyOccursCheck:
+
+    def test_normal_unify_succeeds(self):
+        """Both paths succeed for non-circular terms."""
+        trail = fresh_trail()
+        x = Var()
+        assert unify(x, 42, trail)
+        assert deref(x) == 42
+
+    def test_normal_unify_oc_succeeds(self):
+        trail = fresh_trail()
+        x = Var()
+        assert unify_with_occurs_check(x, 42, trail)
+        assert deref(x) == 42
+
+    def test_circular_unify_succeeds(self):
+        """unify (no OC) allows X = (X,) — creates circular term."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify(x, (x,), trail)
+        assert result is True
+        # x is now bound to a tuple containing itself
+        assert deref(x) == (x,)
+
+    def test_circular_unify_oc_fails(self):
+        """unify_with_occurs_check rejects X = (X,) — circular."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify_with_occurs_check(x, (x,), trail)
+        assert result is False
+        # x should be unbound (rolled back)
+        assert is_var(deref(x))
+
+    def test_nested_circular_unify_succeeds(self):
+        """unify allows X = (1, (X,)) — nested circular."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify(x, (1, (x,)), trail)
+        assert result is True
+
+    def test_nested_circular_unify_oc_fails(self):
+        """unify_with_occurs_check rejects nested circular."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify_with_occurs_check(x, (1, (x,)), trail)
+        assert result is False
+        assert is_var(deref(x))
+
+    def test_var_var_unify(self):
+        """Both paths handle Var-Var unification."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        assert unify(x, y, trail)
+        # Now bind y → both should see it
+        assert unify(y, 99, trail)
+        assert deref(x) == 99
+
+    def test_var_var_unify_oc(self):
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        assert unify_with_occurs_check(x, y, trail)
+        assert unify_with_occurs_check(y, 99, trail)
+        assert deref(x) == 99
+
+    def test_list_unify(self):
+        """Both paths unify lists element-wise."""
+        trail = fresh_trail()
+        x = Var()
+        assert unify([1, x, 3], [1, 2, 3], trail)
+        assert deref(x) == 2
+
+    def test_list_unify_oc(self):
+        trail = fresh_trail()
+        x = Var()
+        assert unify_with_occurs_check([1, x, 3], [1, 2, 3], trail)
+        assert deref(x) == 2
+
+    def test_list_circular_unify_succeeds(self):
+        """unify allows X = [X] — circular list."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify(x, [x], trail)
+        assert result is True
+
+    def test_list_circular_unify_oc_fails(self):
+        """unify_with_occurs_check rejects X = [X]."""
+        trail = fresh_trail()
+        x = Var()
+        result = unify_with_occurs_check(x, [x], trail)
+        assert result is False
+        assert is_var(deref(x))
+
+    def test_failure_rolls_back(self):
+        """Failed unification rolls back partial bindings."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        # [x, y] vs [1, 2, 3] — length mismatch, fails
+        result = unify([x, y], [1, 2, 3], trail)
+        assert result is False
+        assert is_var(deref(x))  # rolled back
+
+    def test_failure_rolls_back_oc(self):
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        result = unify_with_occurs_check([x, y], [1, 2, 3], trail)
+        assert result is False
+        assert is_var(deref(x))
