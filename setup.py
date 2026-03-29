@@ -30,6 +30,7 @@ ext_list_unify = Extension(
 ext_clpfd = Extension(
     "clausal.logic._clpfd_core",
     sources=["clausal/logic/_clpfd_core.c"],
+    include_dirs=["clausal/logic"],
     extra_compile_args=extra_compile_args,
 )
 
@@ -39,5 +40,12 @@ ext_tabling_core = Extension(
     extra_compile_args=extra_compile_args,
 )
 
+ext_clpfd_propagate = Extension(
+    "clausal.logic._clpfd_propagate",
+    sources=["clausal/logic/_clpfd_propagate.c"],
+    include_dirs=["clausal/logic"],
+    extra_compile_args=extra_compile_args,
+)
+
 setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
-                   ext_tabling_core])
+                   ext_tabling_core, ext_clpfd_propagate])

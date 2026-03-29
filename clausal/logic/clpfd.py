@@ -2339,3 +2339,56 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     if not constraint.propagate(trail, queue):
         return False
     return propagate(queue, trail)
+
+
+# ── C-accelerated propagation (with Python fallback) ─────────────────────────
+# If the C extension is available, its versions silently replace the Python ones.
+
+_USE_C_PROPAGATE = False
+try:
+    from clausal.logic._clpfd_propagate import (
+        FDVar as _C_FDVar,
+        EqConstraint as _C_EqConstraint,
+        NeConstraint as _C_NeConstraint,
+        LtConstraint as _C_LtConstraint,
+        LeConstraint as _C_LeConstraint,
+        AllDiffConstraint as _C_AllDiffConstraint,
+        SumConstraint as _C_SumConstraint,
+        ScalarProductConstraint as _C_ScalarProductConstraint,
+        _ensure_fd as _c_ensure_fd,
+        _narrow as _c_narrow,
+        _narrow_if_changed as _c_narrow_if_changed,
+        propagate as _c_propagate,
+        _add_constraint as _c_add_constraint,
+        _post_constraint as _c_post_constraint,
+        fd_eq as _c_fd_eq,
+        fd_ne as _c_fd_ne,
+        fd_lt as _c_fd_lt,
+        fd_le as _c_fd_le,
+        _fd_hook as _c_fd_hook,
+    )
+    _USE_C_PROPAGATE = True
+except ImportError:
+    pass
+
+if _USE_C_PROPAGATE:
+    FDVar = _C_FDVar
+    EqConstraint = _C_EqConstraint
+    NeConstraint = _C_NeConstraint
+    LtConstraint = _C_LtConstraint
+    LeConstraint = _C_LeConstraint
+    AllDiffConstraint = _C_AllDiffConstraint
+    SumConstraint = _C_SumConstraint
+    ScalarProductConstraint = _C_ScalarProductConstraint
+    _ensure_fd = _c_ensure_fd
+    _narrow = _c_narrow
+    _narrow_if_changed = _c_narrow_if_changed
+    propagate = _c_propagate
+    _add_constraint = _c_add_constraint
+    _post_constraint = _c_post_constraint
+    fd_eq = _c_fd_eq
+    fd_ne = _c_fd_ne
+    fd_lt = _c_fd_lt
+    fd_le = _c_fd_le
+    # Re-register the C fd_hook
+    register_attr_hook(FD_KEY, _c_fd_hook)
