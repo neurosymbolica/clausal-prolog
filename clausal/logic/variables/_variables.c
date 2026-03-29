@@ -2478,28 +2478,44 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         }
     }
 
-    /* KWTerm: copy each value, construct new KWTerm({k: copied_v, ...}) */
+    /* KWTerm: copy each value, construct new KWTerm(functor, **{k: copied_v, ...}) */
     if (KWTerm_type) {
         int r = PyObject_IsInstance(term, KWTerm_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *items = PyMapping_Items(term);
-            if (!items) return NULL;
-            Py_ssize_t n = PyList_GET_SIZE(items);
+            /* Issue 1 fix: get functor for correct reconstruction */
+            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            if (!functor) return NULL;
+            /* Issue 2 fix: use items() call instead of PyMapping_Items */
+            PyObject *items_view = PyObject_CallMethod(term, "items", NULL);
+            if (!items_view) { Py_DECREF(functor); return NULL; }
+            PyObject *iter = PyObject_GetIter(items_view);
+            Py_DECREF(items_view);
+            if (!iter) { Py_DECREF(functor); return NULL; }
             PyObject *new_dict = PyDict_New();
-            if (!new_dict) { Py_DECREF(items); return NULL; }
-            for (Py_ssize_t i = 0; i < n; i++) {
-                PyObject *pair = PyList_GET_ITEM(items, i);
+            if (!new_dict) { Py_DECREF(functor); Py_DECREF(iter); return NULL; }
+            int err = 0;
+            PyObject *pair;
+            while ((pair = PyIter_Next(iter))) {
                 PyObject *k = PyTuple_GET_ITEM(pair, 0);
                 PyObject *v = PyTuple_GET_ITEM(pair, 1);
                 PyObject *copied_v = c_copy_term(v, var_map, depth + 1);
-                if (!copied_v) { Py_DECREF(items); Py_DECREF(new_dict); return NULL; }
+                if (!copied_v) { Py_DECREF(pair); err = 1; break; }
                 int ok = PyDict_SetItem(new_dict, k, copied_v);
                 Py_DECREF(copied_v);
-                if (ok < 0) { Py_DECREF(items); Py_DECREF(new_dict); return NULL; }
+                Py_DECREF(pair);
+                if (ok < 0) { err = 1; break; }
             }
-            Py_DECREF(items);
-            PyObject *result = PyObject_CallOneArg(KWTerm_type, new_dict);
+            Py_DECREF(iter);
+            if (err || PyErr_Occurred()) {
+                Py_DECREF(functor); Py_DECREF(new_dict); return NULL;
+            }
+            /* Reconstruct: KWTerm(functor, **new_dict) */
+            PyObject *pos_args = PyTuple_Pack(1, functor);
+            Py_DECREF(functor);
+            if (!pos_args) { Py_DECREF(new_dict); return NULL; }
+            PyObject *result = PyObject_Call(KWTerm_type, pos_args, new_dict);
+            Py_DECREF(pos_args);
             Py_DECREF(new_dict);
             return result;
         }

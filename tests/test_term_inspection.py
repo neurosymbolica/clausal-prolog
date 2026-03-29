@@ -11,7 +11,7 @@ import pytest
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Compound, Call, LoadName
+from clausal.terms import Compound, Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -447,3 +447,143 @@ class TestGenSym:
         for t in threads:
             t.join()
         assert len(set(results)) == 10  # all unique
+
+
+# ── copy_term/2 with KWTerm ────────────────────────────────────────────────────
+
+
+class TestCopyTermKWTerm:
+
+    def test_copy_kwterm_ground(self):
+        """copy_term(KWTerm('r', a=1), Y) → Y is KWTerm('r', a=1)."""
+        copy = Var()
+        vals = sol_var(goal("copy_term", KWTerm("r", a=1, b=2), copy), copy)
+        assert len(vals) == 1
+        c = vals[0]
+        assert isinstance(c, KWTerm)
+        assert c.functor == "r"
+        assert c._fields == {"a": 1, "b": 2}
+
+    def test_copy_kwterm_preserves_functor(self):
+        """Functor name is preserved correctly (not replaced by fields dict)."""
+        copy = Var()
+        vals = sol_var(goal("copy_term", KWTerm("myrel", x=99), copy), copy)
+        assert len(vals) == 1
+        assert vals[0].functor == "myrel"
+
+    def test_copy_kwterm_var_field_gets_fresh_var(self):
+        """Var in a KWTerm field → fresh Var in copy, not the original."""
+        x = Var()
+        t = KWTerm("r", a=x)
+        copy = Var()
+        mod = fresh_module()
+        trail = Trail()
+        for _ in solve(goal("copy_term", t, copy), mod, trail):
+            c = deref(copy)
+            assert isinstance(c, KWTerm)
+            assert c.functor == "r"
+            fresh = deref(c._fields["a"])
+            assert is_var(fresh)
+            assert fresh is not x
+
+    def test_copy_kwterm_sharing_preserved(self):
+        """Two fields referencing the same Var → same fresh Var in copy."""
+        x = Var()
+        t = KWTerm("r", a=x, b=x)
+        copy = Var()
+        mod = fresh_module()
+        trail = Trail()
+        for _ in solve(goal("copy_term", t, copy), mod, trail):
+            c = deref(copy)
+            assert isinstance(c, KWTerm)
+            fa = deref(c._fields["a"])
+            fb = deref(c._fields["b"])
+            assert is_var(fa) and is_var(fb)
+            assert fa is fb
+
+    def test_copy_kwterm_no_side_effects_on_original(self):
+        """copy_term does not bind Vars in the original KWTerm."""
+        x = Var()
+        t = KWTerm("r", a=x)
+        copy = Var()
+        solutions(goal("copy_term", t, copy))
+        assert is_var(deref(x))
+
+
+# ── copy_term/2 and term_variables/2 with DictTerm / SegList ──────────────────
+#
+# DictTerm and SegList are not yet handled by c_copy_term / c_collect_vars.
+# They fall through to "return as-is", meaning:
+#   - copy_term shares the *same* Var objects (no fresh copy)
+#   - term_variables returns [] (vars not collected)
+# These tests document the current behaviour so any future fix breaks visibly.
+
+
+class TestCopyTermDictTerm:
+
+    def test_copy_dictterm_ground(self):
+        """copy_term on a ground DictTerm succeeds (fall-through, shared)."""
+        copy = Var()
+        vals = sol_var(goal("copy_term", DictTerm({"k": 1}), copy), copy)
+        assert len(vals) == 1
+        assert isinstance(vals[0], DictTerm)
+
+    def test_copy_dictterm_var_not_freshened(self):
+        """DictTerm Vars are NOT freshened — copy shares the original Var."""
+        x = Var()
+        t = DictTerm({"k": x})
+        copy = Var()
+        mod = fresh_module()
+        trail = Trail()
+        for _ in solve(goal("copy_term", t, copy), mod, trail):
+            c = deref(copy)
+            assert isinstance(c, DictTerm)
+            # current behaviour: same Var object (not a fresh copy)
+            assert deref(c["k"]) is x
+
+
+class TestTermVariablesDictTerm:
+
+    def test_dictterm_vars_not_collected(self):
+        """term_variables on DictTerm currently returns [] (gap, not handled)."""
+        x = Var()
+        t = DictTerm({"k": x})
+        out = Var()
+        mod = fresh_module()
+        trail = Trail()
+        for _ in solve(goal("term_variables", t, out), mod, trail):
+            result = deref(out)
+            # current behaviour: DictTerm falls through → empty list
+            assert result == []
+
+
+class TestCopyTermSegList:
+    """Test copy_term behaviour on SegList via the C helper directly.
+
+    SegList cannot be passed through the goal compiler, so we call
+    _copy_term_impl directly to verify the current fall-through behaviour.
+    """
+
+    def test_copy_seglist_var_not_freshened(self):
+        """SegList VarSeg Vars are NOT freshened — copy shares the original."""
+        from clausal.logic.builtins._helpers import _copy_term_impl
+        x = Var()
+        t = SegList([ConcreteSeg([1, 2]), VarSeg(x)])
+        c = _copy_term_impl(t, {})
+        assert isinstance(c, SegList)
+        # current behaviour: SegList falls through → same Var object (not a fresh copy)
+        assert c._segments[1].var is x
+
+
+class TestTermVariablesSegList:
+    """Test term_variables behaviour on SegList via the C helper directly."""
+
+    def test_seglist_vars_not_collected(self):
+        """term_variables on SegList currently returns [] (gap, not handled)."""
+        from clausal.logic.builtins._helpers import _collect_vars_impl
+        x = Var()
+        t = SegList([VarSeg(x)])
+        result = []
+        _collect_vars_impl(t, set(), result)
+        # current behaviour: SegList falls through → empty list
+        assert result == []
