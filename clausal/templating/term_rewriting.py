@@ -2364,6 +2364,11 @@ class EmbedTransformer(NodeTransformer):
                 # EmbedTransformer.visit_Name (X → X.value) from mangling the
                 # names that TermTransformer needs to see as plain Name nodes.
                 return expr_stmt
+            case Call(func=Name(id="_clausal_star_query_")):
+                # Sentinel form of *(…) after text-level input transformer
+                # rewrites it for Python ≥ 3.14 compatibility.  Same treatment
+                # as Starred(): leave untouched for _StarQueryTransformer.
+                return expr_stmt
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):

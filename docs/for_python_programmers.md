@@ -40,7 +40,7 @@ There is no marshalling, no conversion, no foreign data model.
 
 **The runtime is Python.** Clausal runs on the Python VM. You can call any
 Python library from within a logic predicate using `++()`, and call logic
-predicates from Python using `clausal.query()`.
+predicates from Python using `solve()` and `deref()`.
 
 **Import works as expected.** `from my_module import my_predicate` loads
 `my_module.clausal` through Python's [import system](import.md). Bytecode is [cached](caching.md) in
@@ -102,9 +102,11 @@ color(blue),
 
 ```python
 # From Python, iterate over all answers:
+from clausal import Var, deref, solve
 from my_module import color
-for solution in clausal.query(color(X)):
-    print(solution[X])  # red, green, blue
+
+for trail in solve(color(X := Var())):
+    print(deref(X))  # red, green, blue
 ```
 
 This replaces explicit loops and generators. Instead of writing code that

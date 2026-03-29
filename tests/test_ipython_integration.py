@@ -7,7 +7,11 @@ should produce simple_ast nodes as values.
 
 import ast
 import pytest
-from clausal.import_hook import _FreshEmbedTransformer, _simple_ast_builtins
+from clausal.import_hook import (
+    _FreshEmbedTransformer, _simple_ast_builtins,
+    _star_query_input_transformer, _STAR_QUERY_SENTINEL,
+    _StarQueryTransformer,
+)
 from clausal.pythonic_ast.nodes import (
     Call, LoadName, Add, TupleLiteral,
 )
@@ -126,3 +130,75 @@ def test_simple_ast_names_in_scope():
     assert "LoadName" in _simple_ast_builtins
     assert "Call" in _simple_ast_builtins
     assert "IntLiteral" in _simple_ast_builtins
+
+
+# ── Star-query input transformer (text-level) ────────────────────────────────
+
+def test_star_query_input_transformer_single_goal():
+    lines = ["*(greeting(N))\n"]
+    result = _star_query_input_transformer(lines)
+    assert result == [f"{_STAR_QUERY_SENTINEL}(greeting(N))\n"]
+
+
+def test_star_query_input_transformer_multi_goal():
+    lines = ["*(A(X), B(X, Y))\n"]
+    result = _star_query_input_transformer(lines)
+    assert result == [f"{_STAR_QUERY_SENTINEL}(A(X), B(X, Y))\n"]
+
+
+def test_star_query_input_transformer_preserves_indent():
+    lines = ["  *(foo(X))\n"]
+    result = _star_query_input_transformer(lines)
+    assert result == [f"  {_STAR_QUERY_SENTINEL}(foo(X))\n"]
+
+
+def test_star_query_input_transformer_ignores_non_star():
+    lines = ["x = 1 + 2\n", "print(x)\n"]
+    result = _star_query_input_transformer(lines)
+    assert result == lines
+
+
+def test_star_query_input_transformer_ignores_star_not_paren():
+    lines = ["*x\n"]
+    result = _star_query_input_transformer(lines)
+    assert result == lines
+
+
+# ── Sentinel form AST rewriting ──────────────────────────────────────────────
+
+def _run_sentinel_cell(source):
+    """Simulate IPython with the text transformer + AST transformer pipeline."""
+    lines = source.splitlines(keepends=True)
+    transformed_lines = _star_query_input_transformer(lines)
+    transformed_source = "".join(transformed_lines)
+    tree = ast.parse(transformed_source)
+    tree = _FreshEmbedTransformer().visit(tree)
+    ast.fix_missing_locations(tree)
+    ns = dict(_simple_ast_builtins)
+    exec(compile(tree, "<cell>", "exec"), ns)
+    return ns
+
+
+def test_sentinel_single_goal_compiles():
+    """*(greeting(N)) should survive the full text→AST→compile pipeline."""
+    source = "*(greeting(N))\n"
+    lines = source.splitlines(keepends=True)
+    transformed = _star_query_input_transformer(lines)
+    transformed_source = "".join(transformed)
+    # Must parse and compile without error
+    tree = ast.parse(transformed_source)
+    tree = _StarQueryTransformer().visit(tree)
+    ast.fix_missing_locations(tree)
+    compile(tree, "<cell>", "exec")
+
+
+def test_sentinel_multi_goal_compiles():
+    """*(A(X), B(X, Y)) should survive the full pipeline."""
+    source = "*(A(X), B(X, Y))\n"
+    lines = source.splitlines(keepends=True)
+    transformed = _star_query_input_transformer(lines)
+    transformed_source = "".join(transformed)
+    tree = ast.parse(transformed_source)
+    tree = _StarQueryTransformer().visit(tree)
+    ast.fix_missing_locations(tree)
+    compile(tree, "<cell>", "exec")

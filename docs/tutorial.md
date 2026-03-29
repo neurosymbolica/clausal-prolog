@@ -32,19 +32,22 @@ expression).
 Query it from Python:
 
 ```python
-import clausal
+from clausal import Var, deref, solve
 from hello import greeting
-print(list(clausal.query(greeting("hello"))))
+
+for trail in solve(greeting("hello")):
+    print("yes")
 ```
 
-You should see `[{}]` — one solution, no variables to report. Try querying with a
+This prints `yes` — one solution, confirming the fact. Try querying with a
 variable:
 
 ```python
-print(list(clausal.query(greeting(X))))   # X is a logic variable
+for trail in solve(greeting(X := Var())):
+    print(deref(X))
 ```
 
-This prints every greeting in turn: `[{'X': 'hello'}, {'X': 'hi'}, {'X': 'hey there'}]`.
+This prints every greeting in turn: `hello`, `hi`, `hey there`.
 
 ??? tip "Thinking relationally"
 
@@ -86,21 +89,24 @@ the body is wrapped in parentheses.
 Query it from Python:
 
 ```python
+from clausal import Var, deref, solve
 from family import grandparent
-print(list(clausal.query(grandparent("alice", X))))
+
+for trail in solve(grandparent("alice", X := Var())):
+    print(deref(X))
 ```
 
-Result: `[{'X': 'dave'}, {'X': 'eve'}]` — both of alice's grandchildren.
+Result: `dave` then `eve` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-when you call `clausal.query(...)` you get a **generator** that yields one solution
-dictionary per answer. Clausal finds all clauses whose heads unify with the goal —
+When you call `solve(goal)` you get a **generator** that yields the Trail
+after each solution. Clausal finds all clauses whose heads unify with the goal —
 these represent logical alternatives. If a condition in the body does not hold,
 Clausal explores the remaining alternatives.
 
-To get just the first answer use `clausal.once(...)`. To collect everything into a
-list use `list(clausal.query(...))`.
+To get just the first answer use `once(goal)`. To iterate all solutions
+use a `for trail in solve(...)` loop and call `deref()` on your Var objects.
 
 ---
 
@@ -255,8 +261,13 @@ fizzbuzz(N, N),
 Query it from Python:
 
 ```python
+from clausal import Var, deref, once
 from fizzbuzz import fizzbuzz
-results = [clausal.once(fizzbuzz(n, X))["X"] for n in range(1, 16)]
+
+results = []
+for n in range(1, 16):
+    once(fizzbuzz(n, X := Var()))
+    results.append(deref(X))
 ```
 
 ---
@@ -349,11 +360,11 @@ collects any Python test files that import and exercise your predicates.
 A typical Python test wrapper looks like:
 
 ```python
-import clausal
-from mymodule import test_sum_list
+from clausal import once
+from mymodule import Test
 
 def test_sum():
-    assert list(clausal.query(test_sum_list()))
+    assert once(Test("sum [1,2,3,4] = 10")) is not None
 ```
 
 See [Testing](testing.md) for the full testing guide, including how to use fixtures
@@ -388,8 +399,13 @@ logical alternatives — together they define the complete reachability relation
 Query it from Python:
 
 ```python
+from clausal import Var, deref, solve
 from graph import reachable
-print(sorted(s["DEST"] for s in clausal.query(reachable("a", DEST))))
+
+results = set()
+for trail in solve(reachable("a", DEST := Var())):
+    results.add(deref(DEST))
+print(sorted(results))
 # ['b', 'c', 'd']
 ```
 

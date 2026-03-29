@@ -36,6 +36,7 @@ from ._variables import (
     get_attr,
     del_attr,
     register_attr_hook,
+    UnboundVarCoercionError,
 )
 
 # All logic variables are AttVars so constraints (dif, etc.) can be attached.
@@ -69,4 +70,5 @@ __all__ = [
     "del_attr",
     "register_attr_hook",
     "unregister_attr_hook",
+    "UnboundVarCoercionError",
 ]

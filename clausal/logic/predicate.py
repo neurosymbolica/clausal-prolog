@@ -39,6 +39,15 @@ def _make_init(fields: tuple[str, ...]):
     return globs["__init__"]
 
 
+def _term_iter(self):
+    """Iterate solutions for this term as a goal.
+
+    Enables ``for trail in greeting(X := Var()): print(deref(X))``.
+    """
+    from clausal.logic.solve import solve  # noqa: PLC0415
+    return solve(self)
+
+
 def _make_eq(fields: tuple[str, ...]):
     """Generate an __eq__ that compares field values."""
     def __eq__(self, other):
@@ -106,6 +115,7 @@ class PredicateMeta(type):
         cls.__eq__ = _make_eq(fields)
         cls.__repr__ = _make_repr(fields)
         cls.__hash__ = None  # mutable terms shouldn't be hashable
+        cls.__iter__ = _term_iter
         if fields:
             cls.__unify__ = _make_unify(fields)
         # For zero-field classes (atoms), skip __unify__: the class IS the

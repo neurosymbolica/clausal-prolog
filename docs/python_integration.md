@@ -57,57 +57,68 @@ Doubled(R) <- (Item(X), R is ++(X * 2))
 
 ## Querying from Python
 
-### `query` — collect binding dicts
+### `solve` — iterate all solutions
 
-The most common entry point. Returns fully-dereferenced bindings as plain Python dicts:
+The primary entry point. Yields the `Trail` after each solution — call `deref()`
+on your `Var` objects to read bindings:
 
 ```python
-from clausal.logic.solve import query
-from clausal.logic.variables import Var
-from clausal.terms import Call, LoadName
+from clausal import Var, deref, solve
+from fibonacci import Fib
 
-N = Var()
-X = Var()
-goal = Call(LoadName("fib"), (N, X))
-
-for bindings in query(goal, {"N": N, "X": X}, module=mod):
-    print(bindings)   # {"N": 0, "X": 0}, {"N": 1, "X": 1}, ...
+for trail in solve(Fib(10, F := Var())):
+    print(deref(F))  # 55
 ```
 
-Unbound Vars appear as `Var` objects in the dict. Full dereferencing is recursive: nested compound terms are walked.
+The module is inferred automatically from the predicate class. You can also pass
+it explicitly (as an imported Python module or a `Module` object):
+
+```python
+import fibonacci
+for trail in solve(Fib(10, F := Var()), fibonacci):
+    print(deref(F))
+```
 
 ### `once` — first solution only
 
 ```python
-from clausal.logic.solve import once
+from clausal import Var, deref, once
+from fibonacci import Fib
 
-trail = once(goal, module=mod)
+trail = once(Fib(10, F := Var()))
 if trail is not None:
-    print(deref(X))
+    print(deref(F))  # 55
 ```
 
 Returns the `Trail` for the first solution, or `None` if the goal fails.
+
+### `query` — collect binding dicts
+
+Wraps `solve` and returns fully-dereferenced bindings as plain Python dicts:
+
+```python
+from clausal import Var, query
+from fibonacci import Fib
+
+F = Var()
+for bindings in query(Fib(10, F), {"F": F}):
+    print(bindings)  # {"F": 55}
+```
+
+Unbound Vars appear as `Var` objects in the dict. Full dereferencing is recursive:
+nested compound terms are walked.
 
 ### `call` — drive a named predicate
 
 Lowest-overhead path — dispatches directly to the compiled function:
 
 ```python
-from clausal.logic.solve import call
-from clausal.logic.variables import Var, deref
+from clausal import Var, deref, call
+import fibonacci
 
 N = Var()
-for trail in call("fib", 7, N, module=mod):
+for trail in call("Fib", 7, N, module=fibonacci):
     print(deref(N))   # reads the binding while it is live
-```
-
-### `solve` — drive an arbitrary goal
-
-```python
-from clausal.logic.solve import solve
-
-for trail in solve(goal, module=mod):
-    print(deref(X))
 ```
 
 ### `query_wfs` — results with truth annotations
@@ -115,9 +126,10 @@ for trail in solve(goal, module=mod):
 For programs with [Well-Founded Semantics](wfs.md) (recursion through negation on [tabled](tabling.md) predicates):
 
 ```python
-from clausal.logic.solve import query_wfs
+from clausal import Var, query_wfs
 
-results = query_wfs(goal, {"X": X}, module=mod)
+X = Var()
+results = query_wfs(goal, {"X": X})
 for r in results:
     print(r["X"], r["_truth"])  # True or "undefined"
 ```

@@ -178,6 +178,54 @@ Var_format(VarObject *self, PyObject *args)
     return PyObject_Format(root, spec);
 }
 
+/* ── UnboundVarCoercionError ─────────────────────────────────────────
+ * Raised when an unbound Var is coerced to int, float, bool, etc.    */
+static PyObject *UnboundVarCoercionError = NULL;
+
+static int
+_check_bound(VarObject *self, PyObject **out)
+{
+    PyObject *root = var_deref((PyObject *)self);
+    if (root == (PyObject *)self) {
+        PyErr_SetString(UnboundVarCoercionError,
+            "Cannot coerce an unbound logic variable to a Python value. "
+            "The variable has not been bound to a concrete value yet.");
+        return -1;
+    }
+    *out = root;
+    return 0;
+}
+
+static PyObject *
+Var_int(VarObject *self)
+{
+    PyObject *root;
+    if (_check_bound(self, &root) < 0) return NULL;
+    return PyNumber_Long(root);
+}
+
+static PyObject *
+Var_float(VarObject *self)
+{
+    PyObject *root;
+    if (_check_bound(self, &root) < 0) return NULL;
+    return PyNumber_Float(root);
+}
+
+static int
+Var_bool(VarObject *self)
+{
+    PyObject *root;
+    if (_check_bound(self, &root) < 0) return -1;
+    return PyObject_IsTrue(root);
+}
+
+static PyNumberMethods Var_as_number = {
+    .nb_int        = (unaryfunc)Var_int,
+    .nb_float      = (unaryfunc)Var_float,
+    .nb_bool       = (inquiry)Var_bool,
+};
+
 static PyMethodDef Var_methods[] = {
     {"__format__", (PyCFunction)Var_format, METH_VARARGS,
      "Format the dereferenced value of this variable."},
@@ -236,6 +284,7 @@ static PyTypeObject VarType = {
     .tp_clear     = (inquiry)Var_clear,
     .tp_repr      = (reprfunc)Var_repr,
     .tp_str       = (reprfunc)Var_str,
+    .tp_as_number = &Var_as_number,
     .tp_methods   = Var_methods,
     .tp_getset    = Var_getset,
 };
@@ -1781,6 +1830,14 @@ PyInit__variables(void)
 
     Py_INCREF(&TrailType);
     if (PyModule_AddObject(m, "Trail", (PyObject *)&TrailType) < 0)
+        goto error;
+
+    /* Create UnboundVarCoercionError exception class */
+    UnboundVarCoercionError = PyErr_NewException(
+        "clausal.logic.variables.UnboundVarCoercionError", PyExc_TypeError, NULL);
+    if (!UnboundVarCoercionError) goto error;
+    Py_INCREF(UnboundVarCoercionError);
+    if (PyModule_AddObject(m, "UnboundVarCoercionError", UnboundVarCoercionError) < 0)
         goto error;
 
     return m;

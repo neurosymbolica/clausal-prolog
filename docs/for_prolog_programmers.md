@@ -50,7 +50,7 @@ out of the box, but some Prolog conventions must change.
 | `member/2` | `in_/2` | Uses Python's `in` semantics |
 | `msort/2` | `msort/2` | Full names, not abbreviations |
 | `phrase(NT, Ls)` | `phrase(nt, LS)` | DCGs use `>>` instead of `-->` |
-| `?- goal.` | `clausal.query(goal)` | From Python; or `*(goal)` in IPython |
+| `?- goal.` | `solve(goal)` / `once(goal)` | From Python; or `*(goal)` in IPython |
 
 ---
 
@@ -168,8 +168,11 @@ word_count(TEXT, N) <- (N is ++len(TEXT.split()))
 And call any Clausal predicate from Python:
 
 ```python
+from clausal import Var, deref, solve
 from my_module import reachable
-solutions = list(clausal.query(reachable("a", DEST)))
+
+for trail in solve(reachable("a", DEST := Var())):
+    print(deref(DEST))
 ```
 
 No subprocess, no marshalling, no FFI. Logic predicates are Python classes.

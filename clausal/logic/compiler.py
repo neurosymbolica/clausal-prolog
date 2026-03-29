@@ -123,6 +123,13 @@ class _DbDispatchAdapter:
             )
         return fn
 
+    def __call__(self, *args, **kwargs):
+        raise NameError(
+            f"Predicate '{self._functor}/{self._arity}' is not in scope as a term class.\n"
+            f"To construct a '{self._functor}' goal term, import it first, e.g.:\n"
+            f"  from your_module import {self._functor}"
+        )
+
 
 class _GlobalsDb:
     """Minimal db-like proxy for signature lookup from module globals.

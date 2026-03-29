@@ -2,29 +2,34 @@
 
 Public API
 ----------
-call(functor, *args, module, trail=None)    → Iterator[Trail]
-solve(goal, module, trail=None)             → Iterator[Trail]
-query(goal, variables, module, trail=None)  → Iterator[dict[str, Any]]
-once(goal, module, trail=None)              → Trail | None
+solve(goal, module=None, trail=None)             → Iterator[Trail]
+once(goal, module=None, trail=None)              → Trail | None
+query(goal, variables, module=None, trail=None)  → Iterator[dict[str, Any]]
+call(functor, *args, module, trail=None)         → Iterator[Trail]
+
+The ``module`` argument is optional for ``solve``, ``once``, and ``query``:
+when omitted, the module is inferred from the PredicateMeta classes in the
+goal term.  You can also pass an imported ``.clausal`` Python module directly
+(e.g. ``import hello; solve(greeting(X), hello)``).
 
 Design
 ------
-``call`` drives a named predicate's compiled dispatch function directly.
-The user passes Var objects as args; the dispatch function binds them through
-the Trail.  This is the fastest path for simple predicate calls.
+``solve`` handles arbitrary goal terms — both simple_ast nodes (Call, And, Or,
+…) and runtime PredicateMeta instances (e.g. ``greeting(X := Var())``).
+Runtime terms are converted to simple_ast nodes automatically.  Vars embedded
+in the goal are injected into the compiled function's globals so that the
+compiled code references the *user's* Var objects.  This lets the user read
+bindings via ``deref()`` on their original Var objects after each solution.
 
-``solve`` handles arbitrary goal terms (Call, And, Or, Is, Not, in_, …).
-It compiles the goal on the fly as a synthetic zero-arity query predicate,
-injecting any Var objects that appear in the goal into the compiled function's
-globals so they are referenced by identity (not replaced with fresh Vars).
-This lets the user read bindings via deref() on their original Var objects
-after each solution.
+``once`` returns the Trail for the first solution (bindings still live),
+or None if the goal fails.
 
 ``query`` wraps solve and fully dereferences a named set of variables,
 returning a plain dict per solution.
 
-``once`` returns the Trail for the first solution (bindings still live),
-or None if the goal fails.
+``call`` drives a named predicate's compiled dispatch function directly.
+The user passes Var objects as args.  This is the fastest path for simple
+predicate calls.
 """
 
 from __future__ import annotations
@@ -103,6 +108,31 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
                     raise exc
 
 
+def _term_to_goal(term: Any) -> Any:
+    """Convert a runtime term instance to a simple_ast goal node.
+
+    When the user writes ``solve(greeting(N := Var()))``, ``greeting(N)``
+    produces a PredicateMeta *instance* (a runtime term), not a simple_ast
+    ``Call`` node.  The compiler expects goal nodes, so we convert here.
+    Simple_ast nodes and other goal forms pass through unchanged.
+    """
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
+
+    if isinstance(type(term), PredicateMeta):
+        cls = type(term)
+        fields = term_field_names(term)
+        args = [getattr(term, f) for f in fields]
+        return AstCall(func=LoadName(name=cls.__name__), args=args, kwargs=[])
+    if isinstance(term, Compound):
+        return AstCall(
+            func=LoadName(name=term.functor),
+            args=list(term.args),
+            kwargs=[],
+        )
+    return term
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -115,6 +145,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     function's globals so that predicate names resolve from the module namespace
     (Phase 5: cross-predicate resolution without _db string lookup).
     """
+    goal = _term_to_goal(goal)
     from clausal.logic.compiler import (
         compile_predicate_trampoline,
         compile_body_trampoline,
@@ -157,6 +188,70 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 
+def _coerce_module(module) -> Module:
+    """Accept a clausal Module or a Python module imported from a .clausal file.
+
+    When *module* is a regular Python module (e.g. ``import hello_world``), the
+    logic Module stored during import-hook compilation is returned via its
+    ``__clausal_module__`` attribute.
+    """
+    if isinstance(module, Module):
+        return module
+    cm = getattr(module, '__clausal_module__', None)
+    if cm is not None:
+        return cm
+    # Last resort: wrap a bare dict / module namespace as a Module.
+    if hasattr(module, '__dict__') and hasattr(module, '__name__'):
+        return Module(module.__name__, module_dict=vars(module))
+    raise TypeError(
+        f"Expected a clausal Module or an imported .clausal module, got {type(module).__name__}"
+    )
+
+
+def _infer_module(goal) -> Module | None:
+    """Try to find a Module from PredicateMeta classes in the goal term.
+
+    Walks the goal tree looking for term instances whose type was defined in an
+    imported .clausal module.  Returns the first Module found, or None.
+    """
+    import sys
+    from clausal.logic.predicate import PredicateMeta
+
+    def _find_pred_class(term):
+        if isinstance(type(term), PredicateMeta):
+            return type(term)
+        # Walk simple_ast compound nodes (And, Or, Not, etc.)
+        for attr in ('left', 'right', 'operand', 'goal', 'condition',
+                     'then_goal', 'else_goal', 'args'):
+            child = getattr(term, attr, None)
+            if child is not None:
+                if isinstance(child, (list, tuple)):
+                    for c in child:
+                        cls = _find_pred_class(c)
+                        if cls is not None:
+                            return cls
+                else:
+                    cls = _find_pred_class(child)
+                    if cls is not None:
+                        return cls
+        return None
+
+    pred_cls = _find_pred_class(goal)
+    if pred_cls is None:
+        return None
+
+    mod_name = getattr(pred_cls, '__module__', None)
+    if mod_name is not None:
+        py_mod = sys.modules.get(mod_name)
+        if py_mod is not None:
+            cm = getattr(py_mod, '__clausal_module__', None)
+            if cm is not None:
+                return cm
+            # Fall back to wrapping the module namespace.
+            return Module(mod_name, module_dict=vars(py_mod))
+    return None
+
+
 def call(
     functor,
     *args: Any,
@@ -196,6 +291,9 @@ def call(
         yield from _drive_trampoline(dispatch_fn, trail, *args)
         return
 
+    if module is not None:
+        module = _coerce_module(module)
+
     arity = len(args)
 
     # Phase 5: look up PredicateMeta class from module globals first.
@@ -233,7 +331,7 @@ def call(
 
 def solve(
     goal: Any,
-    module: Module,
+    module=None,
     trail: Trail | None = None,
 ) -> Iterator[Trail]:
     """Drive an arbitrary goal; yield the Trail after each solution.
@@ -245,13 +343,23 @@ def solve(
     Parameters
     ----------
     goal:    goal term
-    module:  Module whose database holds compiled predicates
+    module:  Module, imported .clausal Python module, or None (auto-inferred
+             from predicate classes in the goal)
     trail:   optional Trail; a fresh one is created if not provided
 
     Yields
     ------
     Trail after each solution (bindings are live on the trail).
     """
+    if module is None:
+        module = _infer_module(goal)
+        if module is None:
+            raise TypeError(
+                "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
+                "  solve(goal, my_module)"
+            )
+    else:
+        module = _coerce_module(module)
     if trail is None:
         trail = Trail()
 
@@ -269,7 +377,7 @@ def solve(
 def query(
     goal: Any,
     variables: dict[str, Var],
-    module: Module,
+    module=None,
     trail: Trail | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Solve goal and yield one fully-dereferenced binding dict per solution.
@@ -278,7 +386,7 @@ def query(
     ----------
     goal:      goal term (embed the same Var objects as values of variables)
     variables: mapping of name → Var whose bindings to capture each solution
-    module:    Module with compiled database
+    module:    Module, imported .clausal Python module, or None (auto-inferred)
     trail:     optional Trail (fresh if not provided)
 
     Yields
@@ -292,7 +400,7 @@ def query(
 
 def once(
     goal: Any,
-    module: Module,
+    module=None,
     trail: Trail | None = None,
 ) -> Trail | None:
     """Return the Trail for the first solution, or None if the goal fails.
@@ -302,7 +410,7 @@ def once(
     Parameters
     ----------
     goal:    goal term
-    module:  Module with compiled database
+    module:  Module, imported .clausal Python module, or None (auto-inferred)
     trail:   optional Trail (fresh if not provided)
 
     Returns
@@ -317,7 +425,7 @@ def once(
 def query_wfs(
     goal: Any,
     variables: dict[str, Var],
-    module: Module,
+    module=None,
     trail: Trail | None = None,
 ) -> list[dict[str, Any]]:
     """Solve goal and return results with WFS truth annotations.

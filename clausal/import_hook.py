@@ -607,6 +607,31 @@ _simple_ast_builtins["Solutions"] = _Solutions
 _simple_ast_builtins["_run_ipython_goal"] = _run_ipython_goal
 
 
+_STAR_QUERY_SENTINEL = "_clausal_star_query_"
+
+
+def _star_query_input_transformer(lines: list[str]) -> list[str]:
+    """IPython input transformer: rewrite ``*(...)`` to a valid Python call.
+
+    Runs at the source-text level, *before* ``codeop.Compile`` checks syntax.
+    On Python ≥ 3.14 (and some IPython versions), ``*(expr)`` raises a
+    ``TypeError`` during the completeness check — before AST transformers get a
+    chance to intercept the ``Starred`` node.  By rewriting the text to
+    ``_clausal_star_query_(...)``, the source becomes a normal function call
+    that survives parsing and compilation.  ``_StarQueryTransformer`` then
+    detects the sentinel call at the AST level.
+    """
+    out = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("*("):
+            indent = line[: len(line) - len(stripped)]
+            out.append(indent + _STAR_QUERY_SENTINEL + stripped[1:])
+        else:
+            out.append(line)
+    return out
+
+
 class _StarQueryTransformer(ast.NodeTransformer):
     """Rewrite ``*(goal_expr)`` expression statements to Solutions calls.
 
@@ -620,17 +645,33 @@ class _StarQueryTransformer(ast.NodeTransformer):
     ``*(A(X), B(X, Y))``
         → ``Solutions(_run_ipython_goal(And(left=A((X:=Var())), right=B(X, (Y:=Var()))), {'X': X, 'Y': Y}, globals()))``
 
-    The form parses as ``Expr(Starred(...))`` which would be a compile-time
-    error in normal Python; we intercept it here before compilation.
-    ``EmbedTransformer.visit_Expr`` leaves ``Starred`` nodes untouched so that
-    ``visit_Name`` (X → X.value) does not mangle names that ``TermTransformer``
-    needs to see as plain ``Name`` nodes.
+    The ``*(…)`` form is rewritten at the source level by
+    ``_star_query_input_transformer`` into ``_clausal_star_query_(…)`` so that
+    it survives Python ≥ 3.14 syntax checks.  This AST transformer detects
+    both the sentinel call and (for backwards compatibility) the legacy
+    ``Expr(Starred(...))`` form.
     """
 
     def visit_Expr(self, node):
-        if not isinstance(node.value, ast.Starred):
-            return self.generic_visit(node)
-        inner = node.value.value
+        # Legacy form: Expr(Starred(...)) — may still work on some Python/IPython combos.
+        if isinstance(node.value, ast.Starred):
+            inner = node.value.value
+            return self._rewrite(node, inner)
+        # Sentinel form: Expr(Call(func=Name('_clausal_star_query_'), args=[...]))
+        if (isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == _STAR_QUERY_SENTINEL):
+            args = node.value.args
+            if len(args) == 1:
+                inner = args[0]
+            else:
+                # Multiple args: _clausal_star_query_(A(X), B(Y)) → treat as tuple
+                inner = ast.Tuple(elts=args, ctx=ast.Load())
+                ast.copy_location(inner, node)
+            return self._rewrite(node, inner)
+        return self.generic_visit(node)
+
+    def _rewrite(self, node, inner):
         tt = TermTransformer()
 
         if isinstance(inner, ast.Tuple):
@@ -746,6 +787,11 @@ def enable_ipython(ipython_globals, shell=None):
     warnings.filterwarnings("ignore", message="'str' object is not callable",
                             category=SyntaxWarning)
     shell.ast_transformers.append(_FreshEmbedTransformer())
+    # Text-level input transformer: rewrite *(…) → _clausal_star_query_(…)
+    # so the source survives Python ≥ 3.14 syntax checks before AST
+    # transformers run.
+    if hasattr(shell, 'input_transformers_post'):
+        shell.input_transformers_post.append(_star_query_input_transformer)
     ipython_globals.update(_simple_ast_builtins)
     # Inject colour-control helpers so users can tweak from any cell.
     from clausal.terms import set_style as _set_style, TermStyle as _TermStyle, ANSI_COLORS as _ANSI_COLORS

@@ -5,7 +5,7 @@ Top-level public API (Step 7 and later).
 
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.database import Module, Database, Clause
-from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
 from clausal.terms import Compound, KWTerm, Quantity, UnitsMismatch
 from clausal.logic.builtins import (
     structural_unify,
@@ -52,6 +52,7 @@ __all__ = [
     "UnitsMismatch",
     "deref",
     "unify",
+    "UnboundVarCoercionError",
     "structural_unify",
     "PredicateMeta",
     "make_predicate",
