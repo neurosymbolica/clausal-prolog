@@ -5,10 +5,11 @@ Issues and gaps in `_clpfd_propagate.c` relative to the Python reference.
 ## 1. ~~`fd_eq` linearisation falls through to `EqConstraint`~~ DONE
 
 Implemented coefficient-dict merging in C `py_fd_eq`: when at least one
-operand is an expression tree (`_is_fd_expr` guard), both sides are
-linearised, coefficients are merged (subtracting RHS from LHS), and a
-`ScalarProductConstraint` is posted for full bounds-consistency propagation.
-Added `_is_fd_expr` Python helper to gate the linearisation path.
+operand is an expression tree (C-level `PyObject_TypeCheck` against cached
+`Add`/`Sub`/`Mult`/`Negate` types), both sides are linearised, coefficients
+are merged (subtracting RHS from LHS), and a `ScalarProductConstraint` is
+posted for full bounds-consistency propagation.  Overflow-safe: falls back
+to `EqConstraint` if coefficients exceed int64.
 
 ## 2. ~~`c_propagate` pops from front of a `PyList` — O(n) per pop~~ DONE
 

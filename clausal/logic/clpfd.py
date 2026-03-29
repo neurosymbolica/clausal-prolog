@@ -245,6 +245,11 @@ def _ensure_fd(var: Var, trail: Trail) -> FDVar:
 # ── Narrow + propagation queue ───────────────────────────────────────────────
 
 
+_clpr_REAL_KEY = None
+_clpr_RealVar = None
+_clpr_loaded = False
+
+
 def _sync_real(var, fd_lo: float, fd_hi: float, trail):
     """Synchronise the CLP(R) real interval on *var* with FD bounds.
 
@@ -253,8 +258,18 @@ def _sync_real(var, fd_lo: float, fd_hi: float, trail):
     reference to this function so it never has to know ``RealVar``'s
     constructor signature.
     """
-    from clausal.logic.clpr import REAL_KEY, RealVar
-    real_state = get_attr(var, REAL_KEY)
+    global _clpr_REAL_KEY, _clpr_RealVar, _clpr_loaded
+    if not _clpr_loaded:
+        _clpr_loaded = True
+        try:
+            from clausal.logic.clpr import REAL_KEY, RealVar
+            _clpr_REAL_KEY = REAL_KEY
+            _clpr_RealVar = RealVar
+        except ImportError:
+            pass
+    if _clpr_REAL_KEY is None:
+        return True
+    real_state = get_attr(var, _clpr_REAL_KEY)
     if real_state is None:
         return True
     new_lo = max(real_state.lo, fd_lo)
@@ -262,8 +277,8 @@ def _sync_real(var, fd_lo: float, fd_hi: float, trail):
     if new_lo > new_hi:
         return False
     if new_lo != real_state.lo or new_hi != real_state.hi:
-        updated = RealVar(new_lo, new_hi, real_state.constraints)
-        put_attr(var, REAL_KEY, updated, trail)
+        updated = _clpr_RealVar(new_lo, new_hi, real_state.constraints)
+        put_attr(var, _clpr_REAL_KEY, updated, trail)
     return True
 
 
@@ -883,12 +898,6 @@ def _ensure_term_imports():
         _Mod = Mod
         _Pow = Pow
         _Negate = Negate
-
-
-def _is_fd_expr(x) -> bool:
-    """Return True if *x* is an arithmetic expression node (Add/Sub/Mult/Negate)."""
-    _ensure_term_imports()
-    return isinstance(x, (_Add, _Sub, _Mult, _Negate))
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:

@@ -41,8 +41,13 @@ static PyObject *fn_sync_real = NULL;
 
 /* Linearisation for fd_eq */
 static PyObject *fn_linearise = NULL;
-static PyObject *fn_is_fd_expr = NULL;
 static PyObject *fn_ensure_fd_py = NULL;
+
+/* Cached expression type objects for fd_eq isinstance check (may be NULL) */
+static PyTypeObject *type_Add = NULL;
+static PyTypeObject *type_Sub = NULL;
+static PyTypeObject *type_Mult = NULL;
+static PyTypeObject *type_Negate = NULL;
 
 /* Cached constants */
 static PyObject *FD_KEY_STR = NULL;  /* "fd" */
@@ -659,8 +664,9 @@ have_constraints:
     Py_DECREF(new_state);
 
     /* CLP(R) sync: delegate to Python _sync_real(var, fd_lo, fd_hi, trail)
-     * so we never depend on the RealVar constructor signature. */
-    if (fn_sync_real) {
+     * so we never depend on the RealVar constructor signature.
+     * Gate on REAL_KEY so we skip entirely when clpr isn't loaded. */
+    if (REAL_KEY && fn_sync_real) {
         int64_t fd_lo, fd_hi;
         if (domain_min_i64(new_domain, &fd_lo) < 0 ||
             domain_max_i64(new_domain, &fd_hi) < 0)
@@ -2306,16 +2312,17 @@ py_fd_eq(PyObject *self, PyObject *args)
     }
 
     /* Try linearisation — only when at least one side is an expression tree
-     * (Add/Sub/Mult/Negate).  For plain var==int, EqConstraint suffices. */
-    PyObject *l_is_expr = PyObject_CallOneArg(fn_is_fd_expr, rl);
-    PyObject *r_is_expr = PyObject_CallOneArg(fn_is_fd_expr, rr);
-    if (!l_is_expr || !r_is_expr) {
-        Py_XDECREF(l_is_expr); Py_XDECREF(r_is_expr);
-        Py_DECREF(rl); Py_DECREF(rr);
-        return NULL;
+     * (Add/Sub/Mult/Negate).  For plain var==int, EqConstraint suffices.
+     * Uses cached type objects for a fast C-level isinstance check. */
+    int try_linearise = 0;
+    if (type_Add) {  /* types are loaded; check both operands */
+        try_linearise = (
+            PyObject_TypeCheck(rl, type_Add) || PyObject_TypeCheck(rl, type_Sub) ||
+            PyObject_TypeCheck(rl, type_Mult) || PyObject_TypeCheck(rl, type_Negate) ||
+            PyObject_TypeCheck(rr, type_Add) || PyObject_TypeCheck(rr, type_Sub) ||
+            PyObject_TypeCheck(rr, type_Mult) || PyObject_TypeCheck(rr, type_Negate)
+        );
     }
-    int try_linearise = PyObject_IsTrue(l_is_expr) || PyObject_IsTrue(r_is_expr);
-    Py_DECREF(l_is_expr); Py_DECREF(r_is_expr);
 
     PyObject *lc = NULL, *rc = NULL;
     if (try_linearise) {
@@ -2344,14 +2351,19 @@ py_fd_eq(PyObject *self, PyObject *args)
         PyObject *merged = PyDict_Copy(l_coeffs);
         if (!merged) { Py_DECREF(lc); Py_DECREF(rc); Py_DECREF(rl); Py_DECREF(rr); return NULL; }
 
-        /* for v, c in r_coeffs.items(): merged[v] = merged.get(v, 0) - c */
+        /* for v, c in r_coeffs.items(): merged[v] = merged.get(v, 0) - c
+         * Uses overflow-checked conversion; on overflow we abandon the
+         * linearisation path and fall through to EqConstraint. */
         PyObject *key, *value;
         Py_ssize_t pos = 0;
+        int overflow = 0;
         while (PyDict_Next(r_coeffs, &pos, &key, &value)) {
+            int ov1 = 0, ov2 = 0;
             PyObject *existing = PyDict_GetItem(merged, key);  /* borrowed, NULL if absent */
-            long long ex_val = existing ? PyLong_AsLongLong(existing) : 0;
-            long long r_val = PyLong_AsLongLong(value);
-            if ((ex_val == -1 || r_val == -1) && PyErr_Occurred()) {
+            long long ex_val = existing ? PyLong_AsLongLongAndOverflow(existing, &ov1) : 0;
+            long long r_val = PyLong_AsLongLongAndOverflow(value, &ov2);
+            if (ov1 || ov2) { overflow = 1; break; }
+            if (PyErr_Occurred()) {
                 Py_DECREF(merged); Py_DECREF(lc); Py_DECREF(rc);
                 Py_DECREF(rl); Py_DECREF(rr);
                 return NULL;
@@ -2374,11 +2386,23 @@ py_fd_eq(PyObject *self, PyObject *args)
             }
         }
 
-        /* value = r_const - l_const */
-        long long lc_val = PyLong_AsLongLong(l_const_obj);
-        long long rc_val = PyLong_AsLongLong(r_const_obj);
+        if (overflow) {
+            /* Coefficients exceed int64 — fall through to EqConstraint */
+            Py_DECREF(merged); Py_DECREF(lc); Py_DECREF(rc);
+            goto use_simple_eq;
+        }
+
+        /* value = r_const - l_const (with overflow check) */
+        int ov_lc = 0, ov_rc = 0;
+        long long lc_val = PyLong_AsLongLongAndOverflow(l_const_obj, &ov_lc);
+        long long rc_val = PyLong_AsLongLongAndOverflow(r_const_obj, &ov_rc);
         Py_DECREF(lc); Py_DECREF(rc);
-        if ((lc_val == -1 || rc_val == -1) && PyErr_Occurred()) {
+        if (ov_lc || ov_rc) {
+            /* Constants exceed int64 — fall through to EqConstraint */
+            Py_DECREF(merged);
+            goto use_simple_eq;
+        }
+        if (PyErr_Occurred()) {
             Py_DECREF(merged); Py_DECREF(rl); Py_DECREF(rr);
             return NULL;
         }
@@ -2904,14 +2928,12 @@ PyInit__clpfd_propagate(void)
     fn_collect_constraint_vars = PyObject_GetAttrString(clpfd_mod, "_collect_constraint_vars");
     fn_collect_vars_from = PyObject_GetAttrString(clpfd_mod, "_collect_vars_from");
     fn_linearise = PyObject_GetAttrString(clpfd_mod, "_linearise");
-    fn_is_fd_expr = PyObject_GetAttrString(clpfd_mod, "_is_fd_expr");
     fn_ensure_fd_py = PyObject_GetAttrString(clpfd_mod, "_ensure_fd");
     fn_sync_real = PyObject_GetAttrString(clpfd_mod, "_sync_real");
     Py_DECREF(clpfd_mod);
 
     if (!fn_expr_domain || !fn_resolve || !fn_any_real || !fn_both_ground ||
-        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise ||
-        !fn_is_fd_expr)
+        !fn_collect_constraint_vars || !fn_collect_vars_from || !fn_linearise)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */
@@ -2934,6 +2956,29 @@ PyInit__clpfd_propagate(void)
         }
     } else {
         PyErr_Clear();
+    }
+
+    /* Try to cache expression type objects for fast isinstance in fd_eq.
+     * These are optional — if clausal.terms isn't available yet, fd_eq
+     * will simply skip the linearisation fast-path. */
+    {
+        PyObject *terms_mod = PyImport_ImportModule("clausal.terms");
+        if (terms_mod) {
+            type_Add    = (PyTypeObject *)PyObject_GetAttrString(terms_mod, "Add");
+            type_Sub    = (PyTypeObject *)PyObject_GetAttrString(terms_mod, "Sub");
+            type_Mult   = (PyTypeObject *)PyObject_GetAttrString(terms_mod, "Mult");
+            type_Negate = (PyTypeObject *)PyObject_GetAttrString(terms_mod, "Negate");
+            Py_DECREF(terms_mod);
+            if (!type_Add || !type_Sub || !type_Mult || !type_Negate) {
+                PyErr_Clear();
+                Py_XDECREF(type_Add);    type_Add = NULL;
+                Py_XDECREF(type_Sub);    type_Sub = NULL;
+                Py_XDECREF(type_Mult);   type_Mult = NULL;
+                Py_XDECREF(type_Negate); type_Negate = NULL;
+            }
+        } else {
+            PyErr_Clear();
+        }
     }
 
     /* Create cached constants */
