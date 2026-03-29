@@ -242,3 +242,30 @@ def reify_eq(x: Any, y: Any, trail: Trail) -> bool | None:
     if not grew:
         return True     # ground-equal, no bindings needed
     return None         # undetermined — needs exploration
+
+
+# ── C extension replacement ──────────────────────────────────────────────────
+
+# If the C extension is available, its versions silently replace the Python ones.
+
+_USE_C_DIF = False
+try:
+    from clausal.logic._constraints_dif import (
+        _collect_free_vars as _c_collect_free_vars,
+        _structural_unify_oc as _c_structural_unify_oc,
+        dif as _c_dif,
+        _dif_hook as _c_dif_hook,
+        reify_eq as _c_reify_eq,
+    )
+    _USE_C_DIF = True
+except ImportError:
+    pass
+
+if _USE_C_DIF:
+    _collect_free_vars = _c_collect_free_vars
+    _structural_unify_oc = _c_structural_unify_oc
+    dif = _c_dif
+    _dif_hook = _c_dif_hook
+    reify_eq = _c_reify_eq
+    # Re-register the C dif_hook
+    register_attr_hook(DIF_KEY, _c_dif_hook)

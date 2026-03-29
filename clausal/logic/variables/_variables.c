@@ -45,6 +45,12 @@ typedef struct VarObject    VarObject;
 typedef struct AttVarObject AttVarObject;
 typedef struct TrailObject  TrailObject;
 
+/* Provider: we define the struct types ourselves, so skip the header's copies.
+ * Must come after the forward declarations above since the VariablesCAPI
+ * struct references VarObject, AttVarObject, TrailObject. */
+#define VARIABLES_CAPI_PROVIDER
+#include "_variables_capi.h"
+
 static PyTypeObject VarType;
 static PyTypeObject AttVarType;
 static PyTypeObject TrailType;
@@ -2707,6 +2713,114 @@ py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* ================================================================
+ * C API capsule — exported for other C extensions
+ * ================================================================ */
+
+/* Wrapper: is_var(term) → 1 if term dereferences to unbound Var */
+static int
+capi_is_var(PyObject *term)
+{
+    PyObject *d = var_deref(term);
+    return Var_Check(d) ? 1 : 0;
+}
+
+/* Wrapper: unify_with_occurs_check returning new ref */
+static PyObject *
+capi_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail)
+{
+    return do_unify_and_wake(t1, t2, trail, 1);
+}
+
+/* Wrapper: trail_mark */
+static Py_ssize_t
+capi_trail_mark(TrailObject *trail)
+{
+    return trail->length;
+}
+
+/* Wrapper: trail_undo */
+static void
+capi_trail_undo(TrailObject *trail, Py_ssize_t mark)
+{
+    if (mark <= trail->length)
+        trail_undo_to(trail, mark);
+}
+
+/* Wrapper: get_attr → new ref (value or Py_None) */
+static PyObject *
+capi_get_attr(PyObject *var_obj, PyObject *key)
+{
+    PyObject *root = var_deref(var_obj);
+    if (!AttVar_Check(root)) {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    AttVarObject *av = AttVar_CAST(root);
+    if (!av->attrs) {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    PyObject *val = PyDict_GetItemWithError(av->attrs, key);
+    if (!val) {
+        if (PyErr_Occurred()) return NULL;
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    Py_INCREF(val);
+    return val;
+}
+
+/* Wrapper: put_attr → 0 on success, -1 on error */
+static int
+capi_put_attr(PyObject *var_obj, PyObject *key, PyObject *value,
+              TrailObject *trail)
+{
+    PyObject *root = var_deref(var_obj);
+    AttVarObject *av;
+
+    if (AttVar_Check(root)) {
+        av = AttVar_CAST(root);
+    } else if (Var_Check(root)) {
+        /* Promote Var → AttVar (simplified — full promote in py_put_attr) */
+        PyObject *result = py_put_attr(NULL, Py_BuildValue("(OOsO)",
+            root, key, value, (PyObject *)trail));
+        if (!result) return -1;
+        Py_DECREF(result);
+        return 0;
+    } else {
+        PyErr_SetString(PyExc_TypeError, "put_attr requires a Var");
+        return -1;
+    }
+
+    if (!av->attrs) {
+        av->attrs = PyDict_New();
+        if (!av->attrs) return -1;
+    }
+
+    PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
+    if (!old_attr && PyErr_Occurred()) return -1;
+
+    if (trail_push_attr(trail, av, key, old_attr) < 0)
+        return -1;
+
+    if (PyDict_SetItem(av->attrs, key, value) < 0)
+        return -1;
+
+    return 0;
+}
+
+/* Wrapper: term_field_names (calls the full py_term_field_names) */
+static PyObject *
+capi_term_field_names(PyObject *obj)
+{
+    return py_term_field_names(NULL, obj);
+}
+
+/* The singleton API table — populated in PyInit */
+static VariablesCAPI capi_table;
+
+
+/* ================================================================
  * Module definition
  * ================================================================ */
 
@@ -2887,6 +3001,30 @@ PyInit__variables(void)
     Py_INCREF(UnboundVarCoercionError);
     if (PyModule_AddObject(m, "UnboundVarCoercionError", UnboundVarCoercionError) < 0)
         goto error;
+
+    /* Populate and export the C API capsule */
+    capi_table.VarType         = &VarType;
+    capi_table.AttVarType      = &AttVarType;
+    capi_table.TrailType       = &TrailType;
+    capi_table.deref           = var_deref;
+    capi_table.is_var          = capi_is_var;
+    capi_table.unify_oc        = capi_unify_oc;
+    capi_table.trail_mark      = capi_trail_mark;
+    capi_table.trail_undo      = capi_trail_undo;
+    capi_table.get_attr        = capi_get_attr;
+    capi_table.put_attr        = capi_put_attr;
+    capi_table.is_term_instance = c_is_term_instance;
+    capi_table.term_field_names = capi_term_field_names;
+
+    {
+        PyObject *cap = PyCapsule_New(
+            &capi_table, VARIABLES_CAPI_CAPSULE_NAME, NULL);
+        if (!cap) goto error;
+        if (PyModule_AddObject(m, "_C_API", cap) < 0) {
+            Py_DECREF(cap);
+            goto error;
+        }
+    }
 
     return m;
 

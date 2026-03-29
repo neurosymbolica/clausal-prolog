@@ -53,5 +53,13 @@ ext_lists_core = Extension(
     extra_compile_args=extra_compile_args,
 )
 
+ext_constraints_dif = Extension(
+    "clausal.logic._constraints_dif",
+    sources=["clausal/logic/_constraints_dif.c"],
+    include_dirs=["clausal/logic/variables"],
+    extra_compile_args=extra_compile_args,
+)
+
 setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
-                   ext_tabling_core, ext_clpfd_propagate, ext_lists_core])
+                   ext_tabling_core, ext_clpfd_propagate, ext_lists_core,
+                   ext_constraints_dif])
