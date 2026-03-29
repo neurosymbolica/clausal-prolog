@@ -1,4 +1,4 @@
-# Skip `_resolve` for Vars in CLP(FD) constraint functions
+# Skip `_resolve` for Vars in CLP(FD) constraint functions — DONE
 
 ## Context
 

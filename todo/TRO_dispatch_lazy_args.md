@@ -1,4 +1,4 @@
-# Lazy args-list allocation in TRO dispatch closures
+# Lazy args-list allocation in TRO dispatch closures — DONE (commit 61debb3)
 
 ## Context
 

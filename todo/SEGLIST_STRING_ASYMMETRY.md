@@ -1,4 +1,4 @@
-# SegList vs Compiler: String Binding Asymmetry
+# SegList vs Compiler: String Binding Asymmetry — DONE (Phase 7)
 
 **Status:** RESOLVED in Phase 7. All paths now bind star vars to substrings.
 

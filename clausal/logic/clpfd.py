@@ -1210,8 +1210,10 @@ def fd_eq(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l == r
     # ── end fast path ──
-    l = _resolve(l)
-    r = _resolve(r)
+    if not is_var(l):
+        l = _resolve(l)
+    if not is_var(r):
+        r = _resolve(r)
     if _any_real(l, r):
         from clausal.logic.clpr import real_eq
         return real_eq(l, r, trail)
@@ -1257,8 +1259,10 @@ def fd_ne(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l != r
     # ── end fast path ──
-    l = _resolve(l)
-    r = _resolve(r)
+    if not is_var(l):
+        l = _resolve(l)
+    if not is_var(r):
+        r = _resolve(r)
     if _any_real(l, r):
         from clausal.logic.clpr import real_ne
         return real_ne(l, r, trail)
@@ -1280,8 +1284,10 @@ def fd_lt(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l < r
     # ── end fast path ──
-    l = _resolve(l)
-    r = _resolve(r)
+    if not is_var(l):
+        l = _resolve(l)
+    if not is_var(r):
+        r = _resolve(r)
     if _any_real(l, r):
         from clausal.logic.clpr import real_lt
         return real_lt(l, r, trail)
@@ -1303,8 +1309,10 @@ def fd_le(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l <= r
     # ── end fast path ──
-    l = _resolve(l)
-    r = _resolve(r)
+    if not is_var(l):
+        l = _resolve(l)
+    if not is_var(r):
+        r = _resolve(r)
     if _any_real(l, r):
         from clausal.logic.clpr import real_le
         return real_le(l, r, trail)

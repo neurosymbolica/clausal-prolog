@@ -7096,6 +7096,9 @@ def _runtime_arg_key(a: Any) -> Any:
     All four dispatch closure factories use this so that compound-term
     buckets (Phase 9a) are reachable without special-casing.
     """
+    t = type(a)
+    if t is int or t is str:
+        return a
     if isinstance(a, _INDEXABLE_TYPES):
         return a
     if isinstance(a, Compound):
