@@ -1810,3 +1810,532 @@ def fd_circuit(vars_list, trail: Trail):
         return
 
     yield from label(vars_list, trail)
+
+
+# ── Global constraints (Tier 1 + Tier 2) ───────────────────────────────────
+
+
+class CumulativeConstraint(Constraint):
+    """cumulative(Tasks, Capacity) — time-table filtering.
+
+    Each task is (start_var, duration, resource).  At every time point the
+    total resource consumption of overlapping tasks must not exceed *limit*.
+    """
+    __slots__ = ('tasks', 'limit')
+
+    def __init__(self, tasks: tuple, limit):
+        self.tasks = tasks   # tuple of (start_var, duration, resource)
+        self.limit = limit
+        vars_ = []
+        for start, _dur, _res in tasks:
+            _collect_vars_from(start, vars_)
+        _collect_vars_from(limit, vars_)
+        super().__init__(tuple(vars_))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        limit_val = deref(self.limit)
+        if isinstance(limit_val, int):
+            cap = limit_val
+        elif is_var(limit_val):
+            st = get_attr(limit_val, FD_KEY)
+            if st is None:
+                return True  # can't propagate yet
+            cap = domain_max(st.domain)
+        else:
+            return True
+
+        tasks_info = []
+        for start, dur, res in self.tasks:
+            s = deref(start)
+            d = dur if isinstance(dur, int) else deref(dur)
+            r = res if isinstance(res, int) else deref(res)
+            if not isinstance(d, int) or not isinstance(r, int):
+                return True  # can't propagate non-ground durations/resources
+            if d <= 0 or r <= 0:
+                continue  # zero-duration or zero-resource tasks are no-ops
+            if isinstance(s, int):
+                s_lo = s_hi = s
+            elif is_var(s):
+                st = get_attr(s, FD_KEY)
+                if st is None:
+                    st = _ensure_fd(s, trail)
+                s_lo = domain_min(st.domain)
+                s_hi = domain_max(st.domain)
+            else:
+                return True
+            tasks_info.append((start, s, s_lo, s_hi, d, r))
+
+        if not tasks_info:
+            return True
+
+        # Time-table filtering: build compulsory parts and check/filter
+        for i, (start_i, si, si_lo, si_hi, di, ri) in enumerate(tasks_info):
+            if not is_var(deref(start_i)):
+                continue
+            si = deref(start_i)
+            if not is_var(si):
+                continue
+            state_i = get_attr(si, FD_KEY)
+            if state_i is None:
+                continue
+
+            new_domain = state_i.domain
+            changed = False
+
+            # For each possible start time of task i, check if placing it there
+            # would exceed capacity at any time point (using compulsory parts
+            # of other tasks).
+            for t_lo, t_hi in state_i.domain:
+                if t_lo == _NEG_INF or t_hi == _POS_INF:
+                    continue  # skip unbounded intervals
+                for t in range(int(t_lo), int(t_hi) + 1):
+                    # Check resource usage at each time point in [t, t+di-1]
+                    feasible = True
+                    for tp in range(t, t + di):
+                        usage = ri  # this task's usage
+                        for j, (start_j, sj, sj_lo, sj_hi, dj, rj) in enumerate(tasks_info):
+                            if j == i:
+                                continue
+                            # Compulsory part of task j: [sj_hi, sj_lo + dj - 1]
+                            cp_start = sj_hi
+                            cp_end = sj_lo + dj - 1
+                            if cp_start <= tp <= cp_end:
+                                usage += rj
+                        if usage > cap:
+                            feasible = False
+                            break
+                    if not feasible:
+                        new_domain = domain_remove(new_domain, t)
+                        changed = True
+
+            if changed:
+                if not _narrow_if_changed(si, new_domain, trail, queue):
+                    return False
+
+        # Final check: at each time point where all tasks have compulsory parts,
+        # verify total doesn't exceed capacity
+        for i, (start_i, si, si_lo, si_hi, di, ri) in enumerate(tasks_info):
+            cp_start = si_hi
+            cp_end = si_lo + di - 1
+            if cp_start > cp_end:
+                continue  # no compulsory part
+            if cp_start == _POS_INF or cp_end == _NEG_INF:
+                continue
+            for tp in range(int(cp_start), int(cp_end) + 1):
+                usage = 0
+                for j, (start_j, sj, sj_lo, sj_hi, dj, rj) in enumerate(tasks_info):
+                    cp_s = sj_hi
+                    cp_e = sj_lo + dj - 1
+                    if cp_s <= tp <= cp_e:
+                        usage += rj
+                if usage > cap:
+                    return False
+
+        return True
+
+
+class GlobalCardinalityConstraint(Constraint):
+    """global_cardinality(Vars, Pairs) — counting constraint.
+
+    Pairs is a tuple of (value, count) pairs.  Decomposes into: for each
+    value, the number of vars equal to that value == count.
+    """
+    __slots__ = ('gc_vars', 'pairs')
+
+    def __init__(self, gc_vars: tuple, pairs: tuple):
+        self.gc_vars = gc_vars
+        self.pairs = pairs  # tuple of (value, count)
+        vars_ = list(gc_vars)
+        for _val, cnt in pairs:
+            if is_var(cnt):
+                vars_.append(cnt)
+        super().__init__(tuple(v for v in vars_ if is_var(deref(v))))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        for value, count in self.pairs:
+            count = deref(count)
+            if not isinstance(count, int):
+                continue  # can't propagate variable counts yet
+
+            # Re-deref all vars each iteration (prior narrowing may have
+            # bound some vars, making the old references stale).
+            vars_ = [deref(v) for v in self.gc_vars]
+
+            if count == 0:
+                # Remove this value from all variable domains
+                for v in vars_:
+                    if is_var(v):
+                        state = get_attr(v, FD_KEY)
+                        if state is not None and domain_contains(state.domain, value):
+                            new_d = domain_remove(state.domain, value)
+                            if not _narrow_if_changed(v, new_d, trail, queue):
+                                return False
+                continue
+
+            # Count how many vars are definitely this value (ground)
+            # and how many could possibly be this value
+            definite = 0
+            possible = 0
+            possible_vars = []
+            for v in vars_:
+                if isinstance(v, int):
+                    if v == value:
+                        definite += 1
+                elif is_var(v):
+                    state = get_attr(v, FD_KEY)
+                    if state is not None and domain_contains(state.domain, value):
+                        possible += 1
+                        possible_vars.append(v)
+                    elif state is None:
+                        possible += 1
+                        possible_vars.append(v)
+
+            if definite > count:
+                return False  # too many already assigned
+            if definite + possible < count:
+                return False  # not enough vars can take this value
+
+            if definite == count:
+                # All remaining must NOT be this value
+                for v in possible_vars:
+                    v = deref(v)
+                    if not is_var(v):
+                        continue
+                    state = get_attr(v, FD_KEY)
+                    if state is not None and domain_contains(state.domain, value):
+                        new_d = domain_remove(state.domain, value)
+                        if not _narrow_if_changed(v, new_d, trail, queue):
+                            return False
+
+            elif definite + possible == count:
+                # All possible vars MUST be this value
+                for v in possible_vars:
+                    v = deref(v)
+                    if not is_var(v):
+                        continue
+                    new_d = domain_from_range(value, value)
+                    if not _narrow_if_changed(v, new_d, trail, queue):
+                        return False
+
+        return True
+
+
+class TuplesInConstraint(Constraint):
+    """tuples_in(Tuples, Relation) — table constraint.
+
+    Each tuple of vars must match one of the allowed tuples in the relation.
+    Uses simple tabular reduction: remove values from domains that don't
+    appear in any supporting tuple.
+    """
+    __slots__ = ('tuple_vars', 'relation')
+
+    def __init__(self, tuple_vars: tuple, relation: tuple):
+        self.tuple_vars = tuple_vars   # tuple of vars
+        self.relation = relation       # tuple of allowed value-tuples
+        super().__init__(tuple(v for v in tuple_vars if is_var(deref(v))))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        n = len(self.tuple_vars)
+        vars_ = [deref(v) for v in self.tuple_vars]
+
+        # Filter relation to only tuples consistent with current domains
+        valid_tuples = []
+        for tup in self.relation:
+            if len(tup) != n:
+                continue
+            ok = True
+            for k, v in enumerate(vars_):
+                val = tup[k]
+                if isinstance(v, int):
+                    if v != val:
+                        ok = False
+                        break
+                elif is_var(v):
+                    state = get_attr(v, FD_KEY)
+                    if state is not None and not domain_contains(state.domain, val):
+                        ok = False
+                        break
+            if ok:
+                valid_tuples.append(tup)
+
+        if not valid_tuples:
+            return False  # no valid tuple exists
+
+        # For each variable position, compute the set of allowed values
+        for k, v in enumerate(vars_):
+            if not is_var(v):
+                continue
+            allowed = set()
+            for tup in valid_tuples:
+                allowed.add(tup[k])
+
+            state = get_attr(v, FD_KEY)
+            if state is None:
+                continue
+
+            # Narrow domain to only allowed values
+            new_d = state.domain
+            changed = False
+            for lo, hi in state.domain:
+                if lo == _NEG_INF or hi == _POS_INF:
+                    continue
+                for val in range(int(lo), int(hi) + 1):
+                    if val not in allowed:
+                        new_d = domain_remove(new_d, val)
+                        changed = True
+
+            if changed:
+                if not _narrow_if_changed(v, new_d, trail, queue):
+                    return False
+
+        return True
+
+
+class ZcompareConstraint(Constraint):
+    """zcompare(Order, X, Y) — reified three-way comparison.
+
+    Order is unified with '<', '=', or '>' depending on X vs Y.
+    """
+    __slots__ = ('order', 'x', 'y')
+
+    def __init__(self, order, x, y):
+        self.order = order
+        self.x = x
+        self.y = y
+        # Only track FD vars (x, y), not the order var (which is bound to a string)
+        vars_ = []
+        _collect_vars_from(x, vars_)
+        _collect_vars_from(y, vars_)
+        super().__init__(tuple(vars_))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        x = deref(self.x)
+        y = deref(self.y)
+        order = deref(self.order)
+
+        xd = _expr_domain(x, trail)
+        yd = _expr_domain(y, trail)
+        if not xd or not yd:
+            return False
+
+        x_lo, x_hi = domain_min(xd), domain_max(xd)
+        y_lo, y_hi = domain_min(yd), domain_max(yd)
+
+        if isinstance(order, str):
+            # Order is ground — enforce the relation
+            if order == '<':
+                if is_var(x):
+                    new_xd = domain_remove_above(xd, y_hi - 1)
+                    if not new_xd:
+                        return False
+                    if not _narrow_if_changed(x, new_xd, trail, queue):
+                        return False
+                if is_var(y):
+                    new_yd = domain_remove_below(yd, x_lo + 1)
+                    if not new_yd:
+                        return False
+                    if not _narrow_if_changed(y, new_yd, trail, queue):
+                        return False
+                # Check feasibility
+                xd2 = _expr_domain(deref(self.x), trail)
+                yd2 = _expr_domain(deref(self.y), trail)
+                return bool(xd2) and bool(yd2) and domain_min(xd2) < domain_max(yd2)
+            elif order == '=':
+                inter = domain_intersection(xd, yd)
+                if not inter:
+                    return False
+                if is_var(x):
+                    if not _narrow_if_changed(x, inter, trail, queue):
+                        return False
+                if is_var(y):
+                    if not _narrow_if_changed(y, inter, trail, queue):
+                        return False
+                return True
+            elif order == '>':
+                if is_var(x):
+                    new_xd = domain_remove_below(xd, y_lo + 1)
+                    if not new_xd:
+                        return False
+                    if not _narrow_if_changed(x, new_xd, trail, queue):
+                        return False
+                if is_var(y):
+                    new_yd = domain_remove_above(yd, x_hi - 1)
+                    if not new_yd:
+                        return False
+                    if not _narrow_if_changed(y, new_yd, trail, queue):
+                        return False
+                xd2 = _expr_domain(deref(self.x), trail)
+                yd2 = _expr_domain(deref(self.y), trail)
+                return bool(xd2) and bool(yd2) and domain_max(xd2) > domain_min(yd2)
+            else:
+                return False  # invalid order atom
+        elif is_var(order):
+            # Determine order from domains
+            if x_hi < y_lo:
+                return unify(order, '<', trail)
+            elif x_lo > y_hi:
+                return unify(order, '>', trail)
+            elif x_lo == x_hi and y_lo == y_hi and x_lo == y_lo:
+                return unify(order, '=', trail)
+            # Otherwise undetermined — keep constraint
+            return True
+        else:
+            return False
+
+
+# ── Public API for global constraints ──────────────────────────────────────
+
+
+def cumulative(tasks, limit, trail: Trail) -> bool:
+    """Post cumulative constraint.
+
+    *tasks* is a list of (start, duration, resource) tuples.
+    *limit* is the resource capacity (int or Var).
+    """
+    if not tasks:
+        return True  # trivially satisfied
+
+    task_tuples = []
+    for start, dur, res in tasks:
+        s = deref(start)
+        d = dur if isinstance(dur, int) else deref(dur)
+        r = res if isinstance(res, int) else deref(res)
+        if is_var(s):
+            _ensure_fd(s, trail)
+        task_tuples.append((s, d, r))
+
+    constraint = CumulativeConstraint(tuple(task_tuples), limit)
+    return _post_constraint(constraint, trail)
+
+
+def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
+    """Post global_cardinality constraint.
+
+    *vars_list* is a list of variables/integers.
+    *pairs* is a list of (value, count) pairs.
+    """
+    vars_list = deref(vars_list)
+    if not isinstance(vars_list, list):
+        return False
+
+    vars_deref = []
+    for v in vars_list:
+        v = deref(v)
+        if is_var(v):
+            _ensure_fd(v, trail)
+        vars_deref.append(v)
+
+    pairs_deref = []
+    for val, cnt in pairs:
+        cnt = deref(cnt)
+        pairs_deref.append((val, cnt))
+
+    constraint = GlobalCardinalityConstraint(tuple(vars_deref), tuple(pairs_deref))
+    return _post_constraint(constraint, trail)
+
+
+def chain(vars_list, relation, trail: Trail) -> bool:
+    """Post chain constraint: consecutive pairs satisfy *relation*.
+
+    *relation* is one of "lt", "gt", "le", "ge", "eq", "ne".
+    Decomposes into pairwise constraints.
+    """
+    vars_list = deref(vars_list)
+    if not isinstance(vars_list, list):
+        return False
+    if len(vars_list) <= 1:
+        return True  # trivially satisfied
+
+    _rel_to_fn = {
+        "lt": fd_lt, "gt": fd_gt, "le": fd_le, "ge": fd_ge,
+        "eq": fd_eq, "ne": fd_ne,
+    }
+    post_fn = _rel_to_fn.get(relation)
+    if post_fn is None:
+        return False
+
+    for i in range(len(vars_list) - 1):
+        a = deref(vars_list[i])
+        b = deref(vars_list[i + 1])
+        if is_var(a):
+            _ensure_fd(a, trail)
+        if is_var(b):
+            _ensure_fd(b, trail)
+        if not post_fn(a, b, trail):
+            return False
+    return True
+
+
+def tuples_in(tuples_list, relation, trail: Trail) -> bool:
+    """Post tuples_in constraint.
+
+    *tuples_list* is a list of variable-tuples (each a list).
+    *relation* is a list of allowed value-tuples (each a tuple).
+    """
+    if not relation:
+        return False  # empty relation — no tuple can match
+
+    relation_tuple = tuple(tuple(r) for r in relation)
+
+    for tup in tuples_list:
+        tup = deref(tup)
+        if isinstance(tup, list):
+            vars_ = []
+            for v in tup:
+                v = deref(v)
+                if is_var(v):
+                    _ensure_fd(v, trail)
+                vars_.append(v)
+            constraint = TuplesInConstraint(tuple(vars_), relation_tuple)
+            if not _post_constraint(constraint, trail):
+                return False
+        else:
+            return False
+    return True
+
+
+def zcompare(order, x, y, trail: Trail) -> bool:
+    """Post zcompare/3 constraint.
+
+    *order* will be unified with '<', '=', or '>' based on x vs y.
+    """
+    order = deref(order)
+    x = deref(x)
+    y = deref(y)
+    if is_var(x):
+        _ensure_fd(x, trail)
+    if is_var(y):
+        _ensure_fd(y, trail)
+
+    # If both x and y are ground, just determine the order directly
+    if isinstance(x, int) and isinstance(y, int):
+        if x < y:
+            return unify(order, '<', trail)
+        elif x > y:
+            return unify(order, '>', trail)
+        else:
+            return unify(order, '=', trail)
+
+    # If order is ground, use it to constrain x and y
+    if isinstance(order, str):
+        if order == '<':
+            return fd_lt(x, y, trail)
+        elif order == '>':
+            return fd_gt(x, y, trail)
+        elif order == '=':
+            return fd_eq(x, y, trail)
+        else:
+            return False
+
+    # General case: post constraint (order is a Var, x/y may be vars)
+    # Don't put FD on order — it will be bound to a string atom
+    constraint = ZcompareConstraint(order, x, y)
+    # Attach constraint only to FD vars (x and y), not order
+    for v in constraint.vars:
+        v = deref(v)
+        if is_var(v) and v is not deref(order):
+            _add_constraint(v, constraint, trail)
+    queue: deque = deque()
+    if not constraint.propagate(trail, queue):
+        return False
+    return propagate(queue, trail)
