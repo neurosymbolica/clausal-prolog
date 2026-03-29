@@ -39,7 +39,7 @@ from typing import Any, Iterator
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.logic.trampoline import StepGenerator, DONE
+from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.terms import Compound
 
 
@@ -78,42 +78,12 @@ except ImportError:
 
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
-    from clausal.logic.tabling import _TABLING_SUSPEND
-    from clausal.logic.exceptions import LogicException
-
     sg = StepGenerator(dispatch_fn, None, *args, trail)
-    try:
-        gen, value = sg.send(None)
-    except StopIteration:
-        return
     while True:
-        if gen is None:
-            if value is DONE:
-                return
-            yield trail
-            try:
-                gen, value = sg.send(None)
-            except StopIteration:
-                return
-        else:
-            try:
-                # Intercept _TABLING_SUSPEND → send DONE to parent instead
-                if value is _TABLING_SUSPEND:
-                    gen, value = gen.send(DONE)
-                else:
-                    gen, value = gen.send(value)
-            except StopIteration:
-                return
-            except LogicException as exc:
-                target = gen.parent if hasattr(gen, 'parent') else None
-                while target is not None:
-                    try:
-                        gen, value = target.throw(exc)
-                        break
-                    except LogicException:
-                        target = target.parent if hasattr(target, 'parent') else None
-                else:
-                    raise exc
+        result = _drive_until_yield(sg)
+        if result is None:
+            return
+        yield trail
 
 
 def _term_to_goal(term: Any) -> Any:

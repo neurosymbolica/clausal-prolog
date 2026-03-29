@@ -51,7 +51,7 @@ class Step:
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
 
 try:
-    from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions  # type: ignore[import-untyped]
+    from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions, _drive_until_yield  # type: ignore[import-untyped]
 except ImportError:
     # ── DONE sentinel ─────────────────────────────────────────────────────
     DONE: object = object()
@@ -173,6 +173,43 @@ except ImportError:
                             target = target.parent if hasattr(target, 'parent') else None
                     else:
                         raise exc
+
+    def _drive_until_yield(sg: StepGenerator) -> bool | None:  # type: ignore[no-redef]
+        """Pure-Python fallback for C _drive_until_yield.
+
+        Calls sg.send(None) and loops through the trampoline chain until a
+        solution is found (returns True) or the search is exhausted (returns
+        None).
+        """
+        from clausal.logic.tabling import _TABLING_SUSPEND
+        from clausal.logic.exceptions import LogicException
+
+        try:
+            gen, value = sg.send(None)
+        except StopIteration:
+            return None
+        while True:
+            if gen is None:
+                if value is DONE:
+                    return None
+                return True
+            try:
+                if value is _TABLING_SUSPEND:
+                    gen, value = gen.send(DONE)
+                else:
+                    gen, value = gen.send(value)
+            except StopIteration:
+                return None
+            except LogicException as exc:
+                target = gen.parent if hasattr(gen, 'parent') else None
+                while target is not None:
+                    try:
+                        gen, value = target.throw(type(exc), exc)
+                        break
+                    except LogicException:
+                        target = target.parent if hasattr(target, 'parent') else None
+                else:
+                    raise exc
 
 
 # ── Minimal test problem: n! ─────────────────────────────────────────────────

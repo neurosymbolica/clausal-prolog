@@ -564,6 +564,119 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
 }
 
 
+/* ── _drive_until_yield(sg) ─────────────────────────────────────────────
+ *
+ * Inner loop of _drive_trampoline moved to C.
+ *
+ * Calls sg.send(None) and then loops through the trampoline chain until
+ * either:
+ *   - A solution is found (gen == None, value != DONE) → returns Py_True
+ *   - Search exhausted (gen == None, value == DONE)    → returns Py_None
+ *   - StopIteration from send()                        → returns Py_None
+ *   - Error (LogicException unwound or propagated)     → returns NULL
+ */
+static PyObject *
+drive_until_yield_func(PyObject *Py_UNUSED(module), PyObject *sg_obj)
+{
+    if (!StepGen_Check(sg_obj)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "_drive_until_yield() argument must be a StepGenerator");
+        return NULL;
+    }
+
+    /* Eagerly resolve lazy imports while no exception is active.
+     * get_LogicException / get_TABLING_SUSPEND call PyImport_ImportModule
+     * which must not be called with an active exception. */
+    (void)get_LogicException();
+    (void)get_TABLING_SUSPEND();
+
+    /* step = sg.send(None) */
+    PyObject *step = StepGen_send(StepGen_CAST(sg_obj), Py_None);
+    if (!step) {
+        if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
+            PyErr_ExceptionMatches(PyExc_RuntimeError)) {
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        }
+        return NULL;
+    }
+
+    while (1) {
+        if (!PyTuple_CheckExact(step) || PyTuple_GET_SIZE(step) != 2) {
+            PyErr_SetString(PyExc_TypeError,
+                            "_drive_until_yield: generator must yield 2-tuples");
+            Py_DECREF(step);
+            return NULL;
+        }
+
+        PyObject *gen   = PyTuple_GET_ITEM(step, 0);  /* borrowed */
+        PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
+
+        if (gen == Py_None) {
+            int is_done = (value == g_DONE);
+            Py_DECREF(step);
+            if (is_done) {
+                Py_RETURN_NONE;   /* search exhausted */
+            }
+            Py_RETURN_TRUE;       /* solution found — caller should yield */
+        }
+
+        if (!StepGen_Check(gen)) {
+            PyErr_Format(PyExc_TypeError,
+                         "_drive_until_yield: step target must be "
+                         "StepGenerator or None, got %.200s",
+                         Py_TYPE(gen)->tp_name);
+            Py_DECREF(step);
+            return NULL;
+        }
+
+        /* Check for _TABLING_SUSPEND interception */
+        PyObject *tabling_suspend = get_TABLING_SUSPEND();
+        int is_suspend = (tabling_suspend && value == tabling_suspend);
+
+        Py_INCREF(value);
+        Py_INCREF(gen);
+        Py_DECREF(step);
+
+        if (is_suspend) {
+            step = StepGen_send(StepGen_CAST(gen), g_DONE);
+        } else {
+            step = StepGen_send(StepGen_CAST(gen), value);
+        }
+        Py_DECREF(value);
+
+        if (!step) {
+            /* StopIteration or RuntimeError from exhausted generator */
+            if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
+                PyErr_ExceptionMatches(PyExc_RuntimeError)) {
+                PyErr_Clear();
+                Py_DECREF(gen);
+                Py_RETURN_NONE;
+            }
+            /* LogicException — try to unwind through parent chain */
+            PyObject *le = get_LogicException();
+            if (le && PyErr_ExceptionMatches(le)) {
+                PyObject *new_gen, *new_value;
+                int r = unwind_logic_exception(gen, &new_gen, &new_value);
+                Py_DECREF(gen);
+                if (r == 1) {
+                    step = PyTuple_Pack(2, new_gen, new_value);
+                    Py_DECREF(new_gen);
+                    Py_DECREF(new_value);
+                    if (!step) return NULL;
+                    continue;
+                }
+                /* r == 0: uncaught (re-raised), r == -1: different error */
+                return NULL;
+            }
+            Py_DECREF(gen);
+            return NULL;
+        }
+        Py_DECREF(gen);
+    }
+}
+
+
 /* ── Module definition ───────────────────────────────────────────────── */
 
 static PyMethodDef module_methods[] = {
@@ -573,6 +686,11 @@ static PyMethodDef module_methods[] = {
     {"solutions", (PyCFunction)(void(*)(void))solutions_func, METH_VARARGS | METH_KEYWORDS,
      "solutions(root: StepGenerator, snapshot: callable = None) -> list\n\n"
      "Drive a search, calling snapshot() at each solution."},
+    {"_drive_until_yield", drive_until_yield_func, METH_O,
+     "_drive_until_yield(sg: StepGenerator) -> bool | None\n\n"
+     "Inner loop of _drive_trampoline.  Calls sg.send(None) and loops\n"
+     "through the trampoline chain until a solution (returns True) or\n"
+     "search exhaustion (returns None)."},
     {NULL}
 };
 

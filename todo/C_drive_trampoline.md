@@ -135,3 +135,40 @@ python -m pytest tests/ --ignore=tests/test_trealla_backend.py -x -q
 Expected: tottime of _drive_trampoline drops from ~0.07s to ~0.01s.
 Wall-clock improvement of ~0.05–0.10s across all benchmarks.
 Result values must not change.
+
+## Status: Option A implemented
+
+`_drive_until_yield` is now a C function in `_trampoline.c`, and
+`_drive_trampoline` in `solve.py` is a 6-line Python generator shell.
+Pure-Python fallback exists in `trampoline.py` for when the C extension
+is unavailable.
+
+### Open questions
+
+1. **RuntimeError catch may be too broad.**  `drive_until_yield_func` catches
+   both `StopIteration` and `RuntimeError` from `StepGen_send()` and treats
+   them as search exhaustion.  The original Python code only caught
+   `StopIteration`.  `StepGen_send` raises `RuntimeError` for "generator
+   returned unexpectedly (no final yield)" — a protocol violation, not normal
+   exhaustion.  Catching it silently could mask bugs in compiled predicates
+   that `return` instead of yielding `(parent, DONE)`.  The existing C
+   functions (`trampoline_func`, `solutions_func`) catch *neither*
+   StopIteration nor RuntimeError — they only handle LogicException and
+   propagate everything else.  Consider removing the RuntimeError catch (and
+   possibly the StopIteration catch) to match the stricter C convention, once
+   we confirm no code path depends on the lenient behavior.
+
+2. **Eager import failure is silently ignored.**  The `(void)get_LogicException()`
+   and `(void)get_TABLING_SUSPEND()` calls at the top of `drive_until_yield_func`
+   discard the return value.  If the import fails (returns NULL with an exception
+   set), the subsequent `StepGen_send` is called with an active exception — which
+   is undefined behavior in CPython.  In practice these imports should never fail
+   if the package is installed, and the existing lazy-import pattern in
+   `solutions_func`/`trampoline_func` has the same latent issue, so this is not a
+   regression — but it should be hardened (check return, bail on failure).
+
+3. **Option B (full C iterator) still on the table.**  The current approach
+   eliminates the Python dispatch loop but keeps a Python generator frame
+   alive across yields.  A `tp_iternext`-based C iterator would remove the
+   last Python frame from the hot path.  Worth measuring whether the remaining
+   generator overhead is significant after Option A.
