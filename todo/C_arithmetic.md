@@ -63,3 +63,26 @@ python -m pytest tests/ -k "arithmetic or between or succ or plus" -x -q
 python -m pytest tests/conformity/test_iso_arithmetic.py -x -q
 python -m pytest tests/ --ignore=tests/test_trealla_backend.py -x -q
 ```
+
+
+## IMPORTANT: Python fallback requirement
+
+All C extensions MUST keep the Python reference implementation as a fallback.
+Pattern:
+
+```python
+# Python reference implementation
+def _foo_py(...):
+    ...
+
+# C-accelerated version with fallback
+_foo = _foo_py
+try:
+    from clausal.logic._c_module import _foo
+except ImportError:
+    pass
+```
+
+Do NOT delete the Python originals when adding C versions. The codebase must
+work correctly (just slower) if C extensions fail to build.
+

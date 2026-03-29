@@ -419,3 +419,26 @@ python benchmarks/workloads.py
 - Triska (2012) "The Finite Domain Constraint Solver of SWI-Prolog" — CLP(Z) design
 - Chvátal (1983) "Linear Programming" — simplex method reference
 - SWI-Prolog `library(clpq)` source — API reference
+
+
+## IMPORTANT: Python fallback requirement
+
+All C extensions MUST keep the Python reference implementation as a fallback.
+Pattern:
+
+```python
+# Python reference implementation
+def _foo_py(...):
+    ...
+
+# C-accelerated version with fallback
+_foo = _foo_py
+try:
+    from clausal.logic._c_module import _foo
+except ImportError:
+    pass
+```
+
+Do NOT delete the Python originals when adding C versions. The codebase must
+work correctly (just slower) if C extensions fail to build.
+

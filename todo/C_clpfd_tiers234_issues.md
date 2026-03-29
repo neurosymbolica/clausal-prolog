@@ -95,3 +95,26 @@ time (not during propagation), but for constraints over many variables it
 adds Python call overhead.
 
 Not worth optimising unless profiling shows it matters.
+
+
+## IMPORTANT: Python fallback requirement
+
+All C extensions MUST keep the Python reference implementation as a fallback.
+Pattern:
+
+```python
+# Python reference implementation
+def _foo_py(...):
+    ...
+
+# C-accelerated version with fallback
+_foo = _foo_py
+try:
+    from clausal.logic._c_module import _foo
+except ImportError:
+    pass
+```
+
+Do NOT delete the Python originals when adding C versions. The codebase must
+work correctly (just slower) if C extensions fail to build.
+

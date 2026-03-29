@@ -105,3 +105,26 @@ module — negligible.
 Low.  The capsule struct is stable (no changes since it was introduced).
 `_tabling_core.c` is the only consumer to update.  All existing tabling tests
 cover the affected code paths.
+
+
+## IMPORTANT: Python fallback requirement
+
+All C extensions MUST keep the Python reference implementation as a fallback.
+Pattern:
+
+```python
+# Python reference implementation
+def _foo_py(...):
+    ...
+
+# C-accelerated version with fallback
+_foo = _foo_py
+try:
+    from clausal.logic._c_module import _foo
+except ImportError:
+    pass
+```
+
+Do NOT delete the Python originals when adding C versions. The codebase must
+work correctly (just slower) if C extensions fail to build.
+
