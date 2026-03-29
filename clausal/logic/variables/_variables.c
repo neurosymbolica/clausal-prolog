@@ -1702,6 +1702,506 @@ py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* ================================================================
+ * Predicate helpers — term inspection moved from Python to C
+ * ================================================================ */
+
+/* Cached reference to PredicateMeta (set by _register_predicate_meta) */
+static PyObject *PredicateMeta_type = NULL;
+
+/* Cached interned string "_fields" for fast attr lookup */
+static PyObject *str_fields = NULL;
+
+/* Cached references for Compound and KWTerm types */
+static PyObject *Compound_type = NULL;
+static PyObject *KWTerm_type = NULL;
+
+/*
+ * _register_predicate_meta(cls) — called from predicate.py at import time
+ */
+static PyObject *
+py_register_predicate_meta(PyObject *Py_UNUSED(module), PyObject *cls)
+{
+    Py_XDECREF(PredicateMeta_type);
+    Py_INCREF(cls);
+    PredicateMeta_type = cls;
+    if (!str_fields) {
+        str_fields = PyUnicode_InternFromString("_fields");
+        if (!str_fields) return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/*
+ * _register_term_types(compound_cls, kwterm_cls) — called at import time
+ */
+static PyObject *
+py_register_term_types(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *comp, *kw;
+    if (!PyArg_ParseTuple(args, "OO", &comp, &kw))
+        return NULL;
+    Py_XDECREF(Compound_type);
+    Py_XDECREF(KWTerm_type);
+    Py_INCREF(comp);
+    Py_INCREF(kw);
+    Compound_type = comp;
+    KWTerm_type = kw;
+    Py_RETURN_NONE;
+}
+
+/* Internal: check if obj is instance of PredicateMeta-created class */
+static int
+c_is_term_instance(PyObject *obj)
+{
+    if (PredicateMeta_type == NULL) return 0;
+    /* Exclude types/classes themselves */
+    if (PyType_Check(obj)) return 0;
+    if (PyObject_IsInstance((PyObject *)Py_TYPE(obj), PredicateMeta_type) == 1)
+        return 1;
+    /* Also check @dataclass instances */
+    {
+        static PyObject *dataclasses_mod = NULL;
+        static PyObject *is_dc_func = NULL;
+        if (!dataclasses_mod) {
+            dataclasses_mod = PyImport_ImportModule("dataclasses");
+            if (!dataclasses_mod) { PyErr_Clear(); return 0; }
+            is_dc_func = PyObject_GetAttrString(dataclasses_mod, "is_dataclass");
+            if (!is_dc_func) { PyErr_Clear(); return 0; }
+        }
+        PyObject *r = PyObject_CallOneArg(is_dc_func, obj);
+        if (!r) { PyErr_Clear(); return 0; }
+        int result = PyObject_IsTrue(r);
+        Py_DECREF(r);
+        return result > 0 ? 1 : 0;
+    }
+}
+
+/*
+ * is_term_instance(obj) -> bool
+ */
+static PyObject *
+py_is_term_instance(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    int r = c_is_term_instance(obj);
+    if (r < 0) return NULL;
+    return PyBool_FromLong(r);
+}
+
+/*
+ * term_field_names(obj) -> tuple of str
+ */
+static PyObject *
+py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    PyObject *cls = (PyObject *)Py_TYPE(obj);
+    if (PredicateMeta_type &&
+        PyObject_IsInstance(cls, PredicateMeta_type) == 1) {
+        PyObject *fields = PyObject_GetAttr(cls, str_fields);
+        if (!fields) return NULL;
+        return fields;  /* new reference from GetAttr */
+    }
+    /* @dataclass fallback */
+    {
+        static PyObject *dc_fields_func = NULL;
+        if (!dc_fields_func) {
+            PyObject *mod = PyImport_ImportModule("dataclasses");
+            if (!mod) return NULL;
+            dc_fields_func = PyObject_GetAttrString(mod, "fields");
+            Py_DECREF(mod);
+            if (!dc_fields_func) return NULL;
+        }
+        PyObject *dc_fields = PyObject_CallOneArg(dc_fields_func, obj);
+        if (!dc_fields) return NULL;
+        Py_ssize_t n = PyTuple_GET_SIZE(dc_fields);
+        PyObject *result = PyTuple_New(n);
+        if (!result) { Py_DECREF(dc_fields); return NULL; }
+        static PyObject *str_name = NULL;
+        if (!str_name) str_name = PyUnicode_InternFromString("name");
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *fname = PyObject_GetAttr(PyTuple_GET_ITEM(dc_fields, i), str_name);
+            if (!fname) { Py_DECREF(dc_fields); Py_DECREF(result); return NULL; }
+            PyTuple_SET_ITEM(result, i, fname);
+        }
+        Py_DECREF(dc_fields);
+        return result;
+    }
+}
+
+/* Internal: get field names tuple (borrowed-ish) for PredicateMeta instances */
+static PyObject *
+c_term_field_names(PyObject *obj)
+{
+    PyObject *cls = (PyObject *)Py_TYPE(obj);
+    if (PredicateMeta_type &&
+        PyObject_IsInstance(cls, PredicateMeta_type) == 1) {
+        return PyObject_GetAttr(cls, str_fields);  /* new ref */
+    }
+    return NULL;
+}
+
+/*
+ * is_atom(obj) -> bool
+ */
+static PyObject *
+py_is_atom(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    if (PredicateMeta_type == NULL)
+        Py_RETURN_FALSE;
+    if (PyObject_IsInstance(obj, PredicateMeta_type) != 1)
+        Py_RETURN_FALSE;
+    PyObject *fields = PyObject_GetAttr(obj, str_fields);
+    if (!fields) { PyErr_Clear(); Py_RETURN_FALSE; }
+    Py_ssize_t n = PyTuple_GET_SIZE(fields);
+    Py_DECREF(fields);
+    return PyBool_FromLong(n == 0);
+}
+
+/*
+ * _is_ground(term) -> bool — recursive groundness check
+ */
+static int
+c_is_ground(PyObject *term, int depth)
+{
+    if (depth > MAX_DEPTH) {
+        PyErr_SetString(PyExc_RecursionError,
+                        "_is_ground: term nesting too deep");
+        return -1;
+    }
+    term = var_deref(term);
+    if (Var_Check(term))
+        return 0;
+    /* Primitives */
+    if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
+        PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
+        return 1;
+    /* Zero-arity PredicateMeta atoms (classes) */
+    if (PyType_Check(term) && PredicateMeta_type &&
+        PyObject_IsInstance(term, PredicateMeta_type) == 1) {
+        PyObject *fields = PyObject_GetAttr(term, str_fields);
+        if (!fields) { PyErr_Clear(); return 1; }
+        int empty = (PyTuple_GET_SIZE(fields) == 0);
+        Py_DECREF(fields);
+        return empty ? 1 : 1;  /* classes are ground regardless */
+    }
+    /* Lists */
+    if (PyList_Check(term)) {
+        Py_ssize_t n = PyList_GET_SIZE(term);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            int r = c_is_ground(PyList_GET_ITEM(term, i), depth + 1);
+            if (r <= 0) return r;
+        }
+        return 1;
+    }
+    /* Compound */
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1) {
+        PyObject *functor = PyObject_GetAttrString(term, "functor");
+        if (!functor) return -1;
+        int is_str = PyUnicode_Check(functor);
+        Py_DECREF(functor);
+        if (!is_str) return 0;
+        PyObject *args = PyObject_GetAttrString(term, "args");
+        if (!args) return -1;
+        Py_ssize_t n = PyTuple_GET_SIZE(args);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            int r = c_is_ground(PyTuple_GET_ITEM(args, i), depth + 1);
+            if (r <= 0) { Py_DECREF(args); return r; }
+        }
+        Py_DECREF(args);
+        return 1;
+    }
+    /* KWTerm */
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1) {
+        PyObject *values = PyObject_CallMethod(term, "values", NULL);
+        if (!values) return -1;
+        PyObject *iter = PyObject_GetIter(values);
+        Py_DECREF(values);
+        if (!iter) return -1;
+        PyObject *item;
+        while ((item = PyIter_Next(iter))) {
+            int r = c_is_ground(item, depth + 1);
+            Py_DECREF(item);
+            if (r <= 0) { Py_DECREF(iter); return r; }
+        }
+        Py_DECREF(iter);
+        if (PyErr_Occurred()) return -1;
+        return 1;
+    }
+    /* PredicateMeta term instances */
+    if (c_is_term_instance(term)) {
+        PyObject *fields = c_term_field_names(term);
+        if (!fields) return 1;  /* not a PredicateMeta, treat as ground */
+        Py_ssize_t n = PyTuple_GET_SIZE(fields);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
+            if (!val) { Py_DECREF(fields); return -1; }
+            int r = c_is_ground(val, depth + 1);
+            Py_DECREF(val);
+            if (r <= 0) { Py_DECREF(fields); return r; }
+        }
+        Py_DECREF(fields);
+        return 1;
+    }
+    return 1;
+}
+
+static PyObject *
+py_is_ground(PyObject *Py_UNUSED(module), PyObject *arg)
+{
+    int r = c_is_ground(arg, 0);
+    if (r < 0) return NULL;
+    return PyBool_FromLong(r);
+}
+
+/*
+ * _functor_name(term) -> str | None
+ */
+static PyObject *
+py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
+{
+    /* Compound */
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1) {
+        PyObject *functor = PyObject_GetAttrString(term, "functor");
+        if (!functor) return NULL;
+        if (PyUnicode_Check(functor)) return functor;
+        Py_DECREF(functor);
+        Py_RETURN_NONE;
+    }
+    /* KWTerm */
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1) {
+        return PyObject_GetAttrString(term, "functor");
+    }
+    /* PredicateMeta instance */
+    if (c_is_term_instance(term)) {
+        return PyObject_GetAttrString((PyObject *)Py_TYPE(term), "__name__");
+    }
+    /* List */
+    if (PyList_Check(term)) {
+        if (PyList_GET_SIZE(term) == 0)
+            return PyUnicode_FromString("[]");
+        else
+            return PyUnicode_FromString(".");
+    }
+    /* Primitives */
+    if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
+        PyFloat_Check(term) || PyBytes_Check(term)) {
+        return PyObject_Repr(term);
+    }
+    if (PyUnicode_Check(term)) {
+        Py_INCREF(term);
+        return term;
+    }
+    /* Zero-arity PredicateMeta class (atom) */
+    if (PredicateMeta_type && PyObject_IsInstance(term, PredicateMeta_type) == 1) {
+        PyObject *fields = PyObject_GetAttr(term, str_fields);
+        if (fields) {
+            int empty = (PyTuple_GET_SIZE(fields) == 0);
+            Py_DECREF(fields);
+            if (empty) {
+                Py_INCREF(term);
+                return term;  /* the class IS the functor name */
+            }
+        } else {
+            PyErr_Clear();
+        }
+    }
+    Py_RETURN_NONE;
+}
+
+/*
+ * _arity(term) -> int | None
+ */
+static PyObject *
+py_arity(PyObject *Py_UNUSED(module), PyObject *term)
+{
+    /* Compound */
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1) {
+        PyObject *args = PyObject_GetAttrString(term, "args");
+        if (!args) return NULL;
+        Py_ssize_t n = PyTuple_GET_SIZE(args);
+        Py_DECREF(args);
+        return PyLong_FromSsize_t(n);
+    }
+    /* KWTerm */
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1) {
+        Py_ssize_t n = PyObject_Length(term);
+        if (n < 0) return NULL;
+        return PyLong_FromSsize_t(n);
+    }
+    /* PredicateMeta instance */
+    if (c_is_term_instance(term)) {
+        PyObject *fields = c_term_field_names(term);
+        if (!fields) {
+            /* dataclass fallback */
+            PyObject *r = py_term_field_names(NULL, term);
+            if (!r) return NULL;
+            Py_ssize_t n = PyTuple_GET_SIZE(r);
+            Py_DECREF(r);
+            return PyLong_FromSsize_t(n);
+        }
+        Py_ssize_t n = PyTuple_GET_SIZE(fields);
+        Py_DECREF(fields);
+        return PyLong_FromSsize_t(n);
+    }
+    /* List */
+    if (PyList_Check(term)) {
+        return PyLong_FromLong(PyList_GET_SIZE(term) == 0 ? 0 : 2);
+    }
+    /* Primitives */
+    if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
+        PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
+        return PyLong_FromLong(0);
+    }
+    /* Zero-arity atom */
+    if (PredicateMeta_type && PyObject_IsInstance(term, PredicateMeta_type) == 1) {
+        PyObject *fields = PyObject_GetAttr(term, str_fields);
+        if (fields) {
+            int empty = (PyTuple_GET_SIZE(fields) == 0);
+            Py_DECREF(fields);
+            if (empty) return PyLong_FromLong(0);
+        } else {
+            PyErr_Clear();
+        }
+    }
+    Py_RETURN_NONE;
+}
+
+/*
+ * _nth_arg(term, n) -> value  (1-based index)
+ */
+static PyObject *
+py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *term;
+    Py_ssize_t n;
+    if (!PyArg_ParseTuple(args, "On", &term, &n))
+        return NULL;
+    /* Compound */
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1) {
+        PyObject *cargs = PyObject_GetAttrString(term, "args");
+        if (!cargs) return NULL;
+        Py_ssize_t len = PyTuple_GET_SIZE(cargs);
+        if (n < 1 || n > len) {
+            Py_DECREF(cargs);
+            PyErr_Format(PyExc_IndexError,
+                         "arg index %zd out of range", n);
+            return NULL;
+        }
+        PyObject *result = PyTuple_GET_ITEM(cargs, n - 1);
+        Py_INCREF(result);
+        Py_DECREF(cargs);
+        return result;
+    }
+    /* KWTerm */
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1) {
+        PyObject *values = PyObject_CallMethod(term, "values", NULL);
+        if (!values) return NULL;
+        PyObject *vlist = PySequence_List(values);
+        Py_DECREF(values);
+        if (!vlist) return NULL;
+        Py_ssize_t len = PyList_GET_SIZE(vlist);
+        if (n < 1 || n > len) {
+            Py_DECREF(vlist);
+            PyErr_Format(PyExc_IndexError,
+                         "arg index %zd out of range", n);
+            return NULL;
+        }
+        PyObject *result = PyList_GET_ITEM(vlist, n - 1);
+        Py_INCREF(result);
+        Py_DECREF(vlist);
+        return result;
+    }
+    /* PredicateMeta instance */
+    if (c_is_term_instance(term)) {
+        PyObject *fields = c_term_field_names(term);
+        if (!fields) {
+            fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
+        }
+        Py_ssize_t len = PyTuple_GET_SIZE(fields);
+        if (n < 1 || n > len) {
+            Py_DECREF(fields);
+            PyErr_Format(PyExc_IndexError,
+                         "arg index %zd out of range", n);
+            return NULL;
+        }
+        PyObject *result = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, n - 1));
+        Py_DECREF(fields);
+        return result;
+    }
+    /* List */
+    if (PyList_Check(term)) {
+        Py_ssize_t len = PyList_GET_SIZE(term);
+        if (n >= 1 && n <= len) {
+            PyObject *result = PyList_GET_ITEM(term, n - 1);
+            Py_INCREF(result);
+            return result;
+        }
+    }
+    PyErr_Format(PyExc_IndexError, "arg index %zd out of range", n);
+    return NULL;
+}
+
+/*
+ * _args_list(term) -> list
+ */
+static PyObject *
+py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
+{
+    /* Compound */
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1) {
+        PyObject *args = PyObject_GetAttrString(term, "args");
+        if (!args) return NULL;
+        PyObject *result = PySequence_List(args);
+        Py_DECREF(args);
+        return result;
+    }
+    /* KWTerm */
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1) {
+        PyObject *values = PyObject_CallMethod(term, "values", NULL);
+        if (!values) return NULL;
+        PyObject *result = PySequence_List(values);
+        Py_DECREF(values);
+        return result;
+    }
+    /* PredicateMeta instance */
+    if (c_is_term_instance(term)) {
+        PyObject *fields = c_term_field_names(term);
+        if (!fields) {
+            fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
+        }
+        Py_ssize_t n = PyTuple_GET_SIZE(fields);
+        PyObject *result = PyList_New(n);
+        if (!result) { Py_DECREF(fields); return NULL; }
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
+            if (!val) { Py_DECREF(fields); Py_DECREF(result); return NULL; }
+            PyList_SET_ITEM(result, i, val);
+        }
+        Py_DECREF(fields);
+        return result;
+    }
+    /* Default: empty list */
+    return PyList_New(0);
+}
+
+/*
+ * _is_compound(term) -> bool
+ */
+static PyObject *
+py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
+{
+    if (Compound_type && PyObject_IsInstance(term, Compound_type) == 1)
+        Py_RETURN_TRUE;
+    if (KWTerm_type && PyObject_IsInstance(term, KWTerm_type) == 1)
+        Py_RETURN_TRUE;
+    if (c_is_term_instance(term))
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
+
+/* ================================================================
  * Module definition
  * ================================================================ */
 
@@ -1780,6 +2280,40 @@ static PyMethodDef module_methods[] = {
      "\n"
      "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
      "SICStus's verify_attributes/3."},
+    /* Predicate helpers */
+    {"_register_predicate_meta", py_register_predicate_meta, METH_O,
+     "_register_predicate_meta(cls)\n"
+     "Register the PredicateMeta metaclass for C-level term checks."},
+    {"_register_term_types", py_register_term_types, METH_VARARGS,
+     "_register_term_types(compound_cls, kwterm_cls)\n"
+     "Register Compound and KWTerm types for C-level term inspection."},
+    {"is_term_instance", py_is_term_instance, METH_O,
+     "is_term_instance(obj) -> bool\n"
+     "True if obj is a term instance (PredicateMeta or @dataclass)."},
+    {"term_field_names", py_term_field_names, METH_O,
+     "term_field_names(obj) -> tuple\n"
+     "Return field name strings for a term instance."},
+    {"is_atom", py_is_atom, METH_O,
+     "is_atom(obj) -> bool\n"
+     "True if obj is a zero-arity PredicateMeta class (atom)."},
+    {"_is_ground", py_is_ground, METH_O,
+     "_is_ground(term) -> bool\n"
+     "True if term contains no unbound Vars."},
+    {"_functor_name", py_functor_name, METH_O,
+     "_functor_name(term) -> str | None\n"
+     "Return the functor name of a term, or None."},
+    {"_arity", py_arity, METH_O,
+     "_arity(term) -> int | None\n"
+     "Return the arity of a term, or None."},
+    {"_nth_arg", py_nth_arg, METH_VARARGS,
+     "_nth_arg(term, n) -> value\n"
+     "Return the n-th argument (1-based) of a compound term."},
+    {"_args_list", py_args_list, METH_O,
+     "_args_list(term) -> list\n"
+     "Return the argument list of a compound term."},
+    {"_is_compound", py_is_compound, METH_O,
+     "_is_compound(term) -> bool\n"
+     "True if term is a compound term."},
     {NULL, NULL, 0, NULL}
 };
 

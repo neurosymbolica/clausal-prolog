@@ -264,36 +264,14 @@ class PredicateMeta(type):
         )
 
 
-def is_term_instance(obj: Any) -> bool:
-    """True if obj is a term instance with named fields (not a type/class).
-
-    Works for both PredicateMeta instances and @dataclass instances.
-    Does NOT match built-in AST node types (Compound, Call, KWTerm) —
-    callers that need to exclude those must check separately.
-    """
-    if isinstance(obj, type):
-        return False
-    if isinstance(type(obj), PredicateMeta):
-        return True
-    return dataclasses.is_dataclass(obj)
-
-
-def is_atom(obj: Any) -> bool:
-    """True if obj is a zero-arity PredicateMeta class (a declared atom)."""
-    return isinstance(obj, PredicateMeta) and not obj._fields
-
-
-def term_field_names(obj: Any) -> tuple[str, ...]:
-    """Return field name strings for a term instance.
-
-    Works for PredicateMeta instances and @dataclass instances.
-    """
-    cls = type(obj)
-    if isinstance(cls, PredicateMeta):
-        return cls._fields
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return tuple(f.name for f in dataclasses.fields(obj))
-    raise TypeError(f"Not a term instance: {obj!r}")
+# Register PredicateMeta with the C extension for fast term checks
+from clausal.logic.variables._variables import (
+    _register_predicate_meta,
+    is_term_instance,
+    term_field_names,
+    is_atom,
+)
+_register_predicate_meta(PredicateMeta)
 
 
 def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
