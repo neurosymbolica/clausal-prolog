@@ -70,8 +70,14 @@ class FDVar:
 # ── Domain operations ────────────────────────────────────────────────────────
 
 
-def domain_from_range(lo: int, hi: int) -> Domain:
-    """Create a single-interval domain [lo, hi]."""
+def domain_from_range(lo, hi) -> Domain:
+    """Create a single-interval domain [lo, hi].
+
+    Returns empty domain if lo > hi or either bound is NaN.
+    """
+    # NaN guard: NaN comparisons are always False, so lo > hi won't catch it
+    if lo != lo or hi != hi:  # fast NaN check (NaN != NaN is True)
+        return ()
     if lo > hi:
         return ()
     return ((lo, hi),)
@@ -313,11 +319,11 @@ class ScalarProductConstraint(Constraint):
                 return False
             v_lo, v_hi = domain_min(d), domain_max(d)
             if c >= 0:
-                min_sum += c * v_lo
-                max_sum += c * v_hi
+                min_sum += _safe_mult(c, v_lo)
+                max_sum += _safe_mult(c, v_hi)
             else:
-                min_sum += c * v_hi
-                max_sum += c * v_lo
+                min_sum += _safe_mult(c, v_hi)
+                max_sum += _safe_mult(c, v_lo)
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -333,17 +339,29 @@ class ScalarProductConstraint(Constraint):
                 continue
             d = _expr_domain(v, trail)
             v_lo, v_hi = domain_min(d), domain_max(d)
-            contrib_max = c * v_hi if c > 0 else c * v_lo
-            contrib_min = c * v_lo if c > 0 else c * v_hi
+            contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
+            contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
             other_min = min_sum - contrib_min
             other_max = max_sum - contrib_max
+            # Guard against nan from inf - inf
+            if other_min != other_min or other_max != other_max:
+                continue
             if c > 0:
                 new_v_lo = math.ceil((total_lo - other_max) / c)
                 new_v_hi = math.floor((total_hi - other_min) / c)
             else:
                 new_v_lo = math.ceil((total_hi - other_min) / c)
                 new_v_hi = math.floor((total_lo - other_max) / c)
-            new_d = domain_intersection(d, domain_from_range(int(new_v_lo), int(new_v_hi)))
+            # Guard against inf bounds (can't convert to int)
+            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
+                new_v_lo = _NEG_INF
+            else:
+                new_v_lo = int(new_v_lo)
+            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
+                new_v_hi = _POS_INF
+            else:
+                new_v_hi = int(new_v_hi)
+            new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
             if not new_d:
                 return False
             if not _narrow_if_changed(v, new_d, trail, queue):
@@ -531,8 +549,14 @@ class SumConstraint(Constraint):
             d = _expr_domain(v, trail)
             v_max = domain_max(d)
             v_min = domain_min(d)
-            new_lo = total_lo - (max_sum - v_max)
-            new_hi = total_hi - (min_sum - v_min)
+            # Guard against inf - inf = nan: if other-side bounds are
+            # infinite, we can't narrow this variable from sum info.
+            other_max = max_sum - v_max  # could be inf - inf = nan
+            other_min = min_sum - v_min
+            if other_max != other_max or other_min != other_min:
+                continue  # nan — skip narrowing
+            new_lo = total_lo - other_max
+            new_hi = total_hi - other_min
             new_d = domain_intersection(d, domain_from_range(new_lo, new_hi))
             if not new_d:
                 return False
@@ -567,11 +591,11 @@ class ScalarProductConstraint(Constraint):
                 return False
             v_lo, v_hi = domain_min(d), domain_max(d)
             if c >= 0:
-                min_sum += c * v_lo
-                max_sum += c * v_hi
+                min_sum += _safe_mult(c, v_lo)
+                max_sum += _safe_mult(c, v_hi)
             else:
-                min_sum += c * v_hi
-                max_sum += c * v_lo
+                min_sum += _safe_mult(c, v_hi)
+                max_sum += _safe_mult(c, v_lo)
 
         total_d = _expr_domain(total, trail)
         new_total_d = domain_intersection(total_d, domain_from_range(min_sum, max_sum))
@@ -587,17 +611,29 @@ class ScalarProductConstraint(Constraint):
                 continue
             d = _expr_domain(v, trail)
             v_lo, v_hi = domain_min(d), domain_max(d)
-            contrib_max = c * v_hi if c > 0 else c * v_lo
-            contrib_min = c * v_lo if c > 0 else c * v_hi
+            contrib_max = _safe_mult(c, v_hi) if c > 0 else _safe_mult(c, v_lo)
+            contrib_min = _safe_mult(c, v_lo) if c > 0 else _safe_mult(c, v_hi)
             other_min = min_sum - contrib_min
             other_max = max_sum - contrib_max
+            # Guard against nan from inf - inf
+            if other_min != other_min or other_max != other_max:
+                continue
             if c > 0:
                 new_v_lo = math.ceil((total_lo - other_max) / c)
                 new_v_hi = math.floor((total_hi - other_min) / c)
             else:
                 new_v_lo = math.ceil((total_hi - other_min) / c)
                 new_v_hi = math.floor((total_lo - other_max) / c)
-            new_d = domain_intersection(d, domain_from_range(int(new_v_lo), int(new_v_hi)))
+            # Guard against inf bounds (can't convert to int)
+            if new_v_lo == _NEG_INF or new_v_lo == _POS_INF:
+                new_v_lo = _NEG_INF
+            else:
+                new_v_lo = int(new_v_lo)
+            if new_v_hi == _NEG_INF or new_v_hi == _POS_INF:
+                new_v_hi = _POS_INF
+            else:
+                new_v_hi = int(new_v_hi)
+            new_d = domain_intersection(d, domain_from_range(new_v_lo, new_v_hi))
             if not new_d:
                 return False
             if not _narrow_if_changed(v, new_d, trail, queue):
@@ -851,15 +887,22 @@ def _domain_sub(d1: Domain, d2: Domain) -> Domain:
     return ((lo, hi),)
 
 
+def _safe_mult(a, b):
+    """Multiply handling 0 * inf → 0 (not NaN)."""
+    if a == 0 or b == 0:
+        return 0
+    return a * b
+
+
 def _domain_mult(d1: Domain, d2: Domain) -> Domain:
     """Bounds-based multiplication."""
     if not d1 or not d2:
         return ()
     corners = [
-        domain_min(d1) * domain_min(d2),
-        domain_min(d1) * domain_max(d2),
-        domain_max(d1) * domain_min(d2),
-        domain_max(d1) * domain_max(d2),
+        _safe_mult(domain_min(d1), domain_min(d2)),
+        _safe_mult(domain_min(d1), domain_max(d2)),
+        _safe_mult(domain_max(d1), domain_min(d2)),
+        _safe_mult(domain_max(d1), domain_max(d2)),
     ]
     return ((min(corners), max(corners)),)
 
