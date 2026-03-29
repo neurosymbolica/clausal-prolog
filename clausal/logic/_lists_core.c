@@ -20,8 +20,6 @@
  * ================================================================ */
 
 static PyObject *fn_unify  = NULL;   /* clausal.logic.variables.unify  */
-static PyObject *fn_deref  = NULL;   /* clausal.logic.variables.deref  */
-static PyObject *fn_is_var = NULL;   /* clausal.logic.variables.is_var */
 
 static PyObject *empty_string = NULL;  /* "" for PyUnicode_Join */
 
@@ -227,14 +225,11 @@ py_append_split_find(PyObject *Py_UNUSED(module), PyObject *args)
         /* Apply _seq_result if string mode */
         if (out_str) {
             PyObject *p2 = make_seq_result(prefix, 1);
-            PyObject *s2 = make_seq_result(suffix, 1);
             Py_DECREF(prefix);
+            if (!p2) { Py_DECREF(suffix); return NULL; }
+            PyObject *s2 = make_seq_result(suffix, 1);
             Py_DECREF(suffix);
-            if (!p2 || !s2) {
-                Py_XDECREF(p2);
-                Py_XDECREF(s2);
-                return NULL;
-            }
+            if (!s2) { Py_DECREF(p2); return NULL; }
             prefix = p2;
             suffix = s2;
         }
@@ -500,12 +495,10 @@ PyInit__lists_core(void)
     PyObject *var_mod = PyImport_ImportModule("clausal.logic.variables");
     if (!var_mod) return NULL;
 
-    fn_unify  = PyObject_GetAttrString(var_mod, "unify");
-    fn_deref  = PyObject_GetAttrString(var_mod, "deref");
-    fn_is_var = PyObject_GetAttrString(var_mod, "is_var");
+    fn_unify = PyObject_GetAttrString(var_mod, "unify");
     Py_DECREF(var_mod);
 
-    if (!fn_unify || !fn_deref || !fn_is_var) return NULL;
+    if (!fn_unify) return NULL;
 
     /* Cache empty string for PyUnicode_Join */
     empty_string = PyUnicode_FromString("");
