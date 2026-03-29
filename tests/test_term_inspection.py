@@ -566,7 +566,7 @@ class TestCopyTermSegList:
 
     def test_copy_seglist_var_not_freshened(self):
         """SegList VarSeg Vars are NOT freshened — copy shares the original."""
-        from clausal.logic.builtins._helpers import _copy_term_impl
+        from clausal.logic.builtins.inspection import _copy_term_impl
         x = Var()
         t = SegList([ConcreteSeg([1, 2]), VarSeg(x)])
         c = _copy_term_impl(t, {})
@@ -580,7 +580,7 @@ class TestTermVariablesSegList:
 
     def test_seglist_vars_not_collected(self):
         """term_variables on SegList currently returns [] (gap, not handled)."""
-        from clausal.logic.builtins._helpers import _collect_vars_impl
+        from clausal.logic.builtins.inspection import _collect_vars_impl
         x = Var()
         t = SegList([VarSeg(x)])
         result = []

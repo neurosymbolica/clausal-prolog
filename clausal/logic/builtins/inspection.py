@@ -6,14 +6,90 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.predicate import PredicateMeta
-from clausal.terms import Compound
+from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.terms import Compound, KWTerm
 
 from clausal.logic.builtins._registry import _builtin
-from clausal.logic.builtins._helpers import (
-    _functor_name, _arity, _nth_arg, _args_list,
-    _copy_term_impl, _collect_vars_impl,
-)
+from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
+
+
+# ── Python fallbacks for _copy_term / _collect_vars ───────────────────────────
+# These are the reference implementations.  The C versions in _variables.c are
+# used when available.  Keep these in sync with any changes to the C code.
+
+
+def _copy_term_py(term: Any, var_map: dict) -> Any:
+    """Recursively copy *term*, replacing each unbound Var with a fresh one.
+
+    *var_map* maps original Var id -> fresh Var so that sharing is preserved.
+    """
+    term = deref(term)
+    if is_var(term):
+        vid = id(term)
+        if vid not in var_map:
+            var_map[vid] = Var()
+        return var_map[vid]
+    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return term
+    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
+        return term
+    if isinstance(term, list):
+        return [_copy_term_py(e, var_map) for e in term]
+    if isinstance(term, Compound):
+        return Compound(term.functor, tuple(_copy_term_py(a, var_map) for a in term.args))
+    if isinstance(term, KWTerm):
+        return KWTerm(term.functor, **{k: _copy_term_py(v, var_map) for k, v in term.items()})
+    if is_term_instance(term):
+        return type(term)(**{
+            name: _copy_term_py(getattr(term, name), var_map)
+            for name in term_field_names(term)
+        })
+    return term
+
+
+def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
+    """Collect all unbound Vars in *term* into *result*, left-to-right order."""
+    if _seen is None:
+        _seen = set()
+    term = deref(term)
+    if is_var(term):
+        vid = id(term)
+        if vid not in _seen:
+            _seen.add(vid)
+            result.append(term)
+        return
+    if isinstance(term, (bool, int, float, str, bytes)) or term is None:
+        return
+    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
+        return
+    if isinstance(term, list):
+        for e in term:
+            _collect_vars_py(e, result, _seen)
+        return
+    if isinstance(term, Compound):
+        for a in term.args:
+            _collect_vars_py(a, result, _seen)
+        return
+    if isinstance(term, KWTerm):
+        for v in term.values():
+            _collect_vars_py(v, result, _seen)
+        return
+    if is_term_instance(term):
+        for name in term_field_names(term):
+            _collect_vars_py(getattr(term, name), result, _seen)
+
+
+# ── C-accelerated versions (with Python fallback) ────────────────────────────
+
+_copy_term_impl = _copy_term_py
+_collect_vars_impl = _collect_vars_py
+try:
+    from clausal.logic.variables._variables import (
+        _copy_term_impl,
+        _collect_vars_impl,
+    )
+except ImportError:
+    pass
 
 # Re-export for callers that import _copy_term directly (e.g. specialization.py)
 _copy_term = _copy_term_impl
