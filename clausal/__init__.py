@@ -15,7 +15,7 @@ from clausal.logic.builtins import (
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.exceptions import LogicException
 from clausal.repl import Solutions
-import clausal.import_hook as _import_hook  # registers .clausal finder on sys.meta_path
+import clausal._lazy_hook as _lazy_hook  # registers lightweight stub finder
 
 
 # ── Export all builtin predicate classes as top-level names ────────────────────

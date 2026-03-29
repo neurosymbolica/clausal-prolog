@@ -25,18 +25,27 @@ _MISSING = object()  # sentinel for "field not provided"
 
 
 
+_init_cache: dict[tuple[str, ...], Callable] = {}
+
+
 def _make_init(fields: tuple[str, ...]):
     """Generate an __init__ that accepts fields as keyword args with _MISSING default."""
+    cached = _init_cache.get(fields)
+    if cached is not None:
+        return cached
     if not fields:
         def __init__(self):
             pass
+        _init_cache[fields] = __init__
         return __init__
     params = ", ".join(f"{f}=_MISSING" for f in fields)
     assigns = "\n    ".join(f"self.{f} = {f}" for f in fields)
     code = f"def __init__(self, {params}):\n    {assigns}"
     globs = {"_MISSING": _MISSING}
     exec(code, globs)  # noqa: S102
-    return globs["__init__"]
+    fn = globs["__init__"]
+    _init_cache[fields] = fn
+    return fn
 
 
 def _term_iter(self):
