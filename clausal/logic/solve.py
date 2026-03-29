@@ -382,6 +382,12 @@ def query(
 ) -> Iterator[dict[str, Any]]:
     """Solve goal and yield one fully-dereferenced binding dict per solution.
 
+    .. deprecated::
+        Prefer iterating the goal directly and reading ``Var.value``::
+
+            for trail in greeting(X := Var()):
+                print(X.value)
+
     Parameters
     ----------
     goal:      goal term (embed the same Var objects as values of variables)
@@ -394,6 +400,13 @@ def query(
     dict mapping each name in variables to its fully-dereferenced value.
     Unbound Vars remain as Var objects in the dict.
     """
+    import warnings
+    warnings.warn(
+        "query() is deprecated. Iterate the goal directly and use Var.value:\n"
+        "  for trail in pred(X := Var()): print(X.value)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     for _ in solve(goal, module, trail):
         yield {name: _deref_walk(var) for name, var in variables.items()}
 

@@ -216,9 +216,12 @@ def _run_ipython_goal(goal, variables: dict, ns: dict):
     *ns* is the IPython namespace (used as the logic module's global dict).
     """
     from clausal.logic.database import Module
-    from clausal.logic.solve import query
+    from clausal.logic.solve import solve, _deref_walk
     module = Module("_ipython_query", module_dict=ns)
-    return query(goal, variables, module)
+    return (
+        {name: _deref_walk(var) for name, var in variables.items()}
+        for _ in solve(goal, module)
+    )
 
 
 class Solutions:
