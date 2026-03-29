@@ -7729,12 +7729,13 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
         if tro_state is not None:
             def dispatch(*args):
                 parent = args[1]
-                args_list = list(args)
+                args_list = None
                 while True:
                     tro_state[0] = False
-                    _a = deref(args_list[offset])
+                    _current = args_list if args_list is not None else args
+                    _a = deref(_current[offset])
                     if is_var(_a):
-                        yield from fallback_fn(*args_list)
+                        yield from fallback_fn(*_current)
                         break  # fallback has its own internal TRO loop
                     _k = _runtime_arg_key(_a)
                     try:
@@ -7742,10 +7743,12 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                     except TypeError:
                         _bfn = None
                     if _bfn is not None:
-                        yield from _bfn(*args_list)
+                        yield from _bfn(*_current)
                     else:
-                        yield from dflt_fn(*args_list)
+                        yield from dflt_fn(*_current)
                     if tro_state[0]:
+                        if args_list is None:
+                            args_list = list(args)
                         for _i in range(arity):
                             args_list[_i + 2] = tro_state[_i + 1]
                         continue
@@ -7775,12 +7778,13 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     if tro_state is not None:
         def dispatch(*args):
             parent = args[1]
-            args_list = list(args)
+            args_list = None
             while True:
                 tro_state[0] = False
+                _current = args_list if args_list is not None else args
                 _dispatched = False
                 for _pos, _idx_dict, _dflt_fn in plans:
-                    _a = deref(args_list[_pos + 2])
+                    _a = deref(_current[_pos + 2])
                     if not is_var(_a):
                         _k = _runtime_arg_key(_a)
                         try:
@@ -7788,15 +7792,17 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
                         except TypeError:
                             _bfn = None
                         if _bfn is not None:
-                            yield from _bfn(*args_list)
+                            yield from _bfn(*_current)
                         else:
-                            yield from _dflt_fn(*args_list)
+                            yield from _dflt_fn(*_current)
                         _dispatched = True
                         break
                 if not _dispatched:
-                    yield from fallback_fn(*args_list)
+                    yield from fallback_fn(*_current)
                     break  # fallback has its own internal TRO loop
                 if tro_state[0]:
+                    if args_list is None:
+                        args_list = list(args)
                     for _i in range(arity):
                         args_list[_i + 2] = tro_state[_i + 1]
                     continue
