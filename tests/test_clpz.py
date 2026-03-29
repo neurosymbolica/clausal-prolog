@@ -6,6 +6,8 @@ with float('inf') sentinels for unbounded domains.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var, get_attr
@@ -14,8 +16,10 @@ from clausal.logic.clpfd import (
     domain_from_range, domain_contains, domain_min, domain_max,
     domain_size, domain_intersection, domain_remove,
     domain_remove_above, domain_remove_below, domain_values,
+    _domain_mult, _safe_mult,
     _ensure_fd, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,
     in_domain, label, all_different,
+    ScalarProductConstraint, SumConstraint, _post_constraint,
 )
 
 
@@ -273,3 +277,189 @@ class TestExistingBehaviorUnchanged:
         for desc in tests:
             result = run_test(mod, desc)
             assert result.passed, f"sudoku test {desc!r} failed"
+
+
+# ── Inf/NaN arithmetic guards ────────────────────────────────────────────────
+
+
+class TestSafeMult:
+    """Tests for _safe_mult: 0 * inf must be 0, not NaN."""
+
+    def test_zero_times_pos_inf(self):
+        assert _safe_mult(0, _POS_INF) == 0
+
+    def test_zero_times_neg_inf(self):
+        assert _safe_mult(0, _NEG_INF) == 0
+
+    def test_pos_inf_times_zero(self):
+        assert _safe_mult(_POS_INF, 0) == 0
+
+    def test_neg_inf_times_zero(self):
+        assert _safe_mult(_NEG_INF, 0) == 0
+
+    def test_normal_mult(self):
+        assert _safe_mult(3, 4) == 12
+
+    def test_inf_times_positive(self):
+        assert _safe_mult(_POS_INF, 2) == _POS_INF
+
+    def test_neg_inf_times_positive(self):
+        assert _safe_mult(_NEG_INF, 2) == _NEG_INF
+
+
+class TestDomainFromRangeNaN:
+    """domain_from_range must reject NaN bounds."""
+
+    def test_nan_lo_rejected(self):
+        """NaN as lo bound is rejected (empty domain or TypeError)."""
+        try:
+            result = domain_from_range(float('nan'), 10)
+            assert result == ()  # Python fallback returns empty
+        except TypeError:
+            pass  # C extension raises TypeError — also acceptable
+
+    def test_nan_hi_rejected(self):
+        try:
+            result = domain_from_range(0, float('nan'))
+            assert result == ()
+        except TypeError:
+            pass
+
+    def test_both_nan_rejected(self):
+        try:
+            result = domain_from_range(float('nan'), float('nan'))
+            assert result == ()
+        except TypeError:
+            pass
+
+    def test_normal_still_works(self):
+        assert domain_from_range(1, 5) == ((1, 5),)
+
+    def test_inf_bounds_still_work(self):
+        assert domain_from_range(_NEG_INF, _POS_INF) == ((_NEG_INF, _POS_INF),)
+
+
+class TestDomainMultInf:
+    """_domain_mult must handle zero × infinity correctly."""
+
+    def test_zero_times_infinite_domain(self):
+        """[0,0] * [-inf,+inf] should be [(0,0)], not [(nan,nan)]."""
+        result = _domain_mult(
+            domain_from_range(0, 0),
+            domain_from_range(_NEG_INF, _POS_INF),
+        )
+        assert result == ((0, 0),)
+
+    def test_infinite_times_zero(self):
+        """[-inf,+inf] * [0,0] should be [(0,0)]."""
+        result = _domain_mult(
+            domain_from_range(_NEG_INF, _POS_INF),
+            domain_from_range(0, 0),
+        )
+        assert result == ((0, 0),)
+
+    def test_zero_span_times_infinite(self):
+        """[-1,1] * [-inf,+inf] should have no NaN."""
+        result = _domain_mult(
+            domain_from_range(-1, 1),
+            domain_from_range(_NEG_INF, _POS_INF),
+        )
+        lo, hi = result[0]
+        assert lo == _NEG_INF
+        assert hi == _POS_INF
+
+    def test_normal_mult(self):
+        """[2,3] * [4,5] = [8,15]."""
+        result = _domain_mult(domain_from_range(2, 3), domain_from_range(4, 5))
+        assert result == ((8, 15),)
+
+
+class TestScalarProductInfDomains:
+    """ScalarProductConstraint must not crash with inf domains."""
+
+    def test_zero_coeff_infinite_domain(self):
+        """0*X + 1*Y == 5 where X has infinite domain should not crash.
+
+        The constraint is posted successfully.  With a zero coefficient,
+        the zero-coeff term contributes nothing to the sum bounds, so
+        Y should be narrowed to 5.  If propagation is weaker (e.g. C
+        version skips linearisation), Y may remain unbound — that's
+        sound but incomplete.
+        """
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        _ensure_fd(x, trail)
+        _ensure_fd(y, trail)
+        c = ScalarProductConstraint((0, 1), (x, y), 5)
+        result = _post_constraint(c, trail)
+        assert result is True
+        # Y should be narrowed to {5} or at least contain 5
+        y_val = deref(y)
+        if not is_var(y_val):
+            assert y_val == 5
+        else:
+            state = get_attr(y, FD_KEY)
+            assert state is not None
+            assert domain_contains(state.domain, 5)
+
+    def test_all_infinite_domains(self):
+        """1*X + 1*Y == 5 where both have infinite domains should not crash."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        _ensure_fd(x, trail)
+        _ensure_fd(y, trail)
+        c = ScalarProductConstraint((1, 1), (x, y), 5)
+        result = _post_constraint(c, trail)
+        assert result is True
+
+    def test_zero_coeff_narrows_nonzero(self):
+        """0*X + 2*Y == 10 → Y should narrow to 5 (or at least contain 5)."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        _ensure_fd(x, trail)
+        _ensure_fd(y, trail)
+        c = ScalarProductConstraint((0, 2), (x, y), 10)
+        result = _post_constraint(c, trail)
+        assert result is True
+        y_val = deref(y)
+        if not is_var(y_val):
+            assert y_val == 5
+        else:
+            state = get_attr(y, FD_KEY)
+            assert state is not None
+            assert domain_contains(state.domain, 5)
+
+
+class TestSumConstraintInfDomains:
+    """SumConstraint must not produce NaN from inf - inf."""
+
+    def test_all_infinite(self):
+        """X + Y == 5 where both infinite should not crash."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        _ensure_fd(x, trail)
+        _ensure_fd(y, trail)
+        c = SumConstraint((x, y), 5)
+        result = _post_constraint(c, trail)
+        assert result is True
+
+    def test_one_bounded_one_infinite(self):
+        """X in [1,3], Y infinite, X + Y == 5 → should not crash.
+
+        Ideally Y narrows to [2,4], but with inf-guarded propagation
+        the narrowing may be skipped (inf - inf = nan guard).  The
+        constraint is sound — labeling will still find correct solutions.
+        """
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        assert in_domain(x, 1, 3, trail)
+        _ensure_fd(y, trail)
+        c = SumConstraint((x, y), 5)
+        result = _post_constraint(c, trail)
+        assert result is True
+        state_y = get_attr(y, FD_KEY)
+        assert state_y is not None
+        # Y should at least contain the valid range [2,4]
+        assert domain_contains(state_y.domain, 2)
+        assert domain_contains(state_y.domain, 3)
+        assert domain_contains(state_y.domain, 4)
