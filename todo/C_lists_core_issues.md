@@ -27,29 +27,19 @@ When `out_str=True` in the append split case, `items` always came from
 We could add a `skip_validation` parameter or a separate `seq_join_chars`
 fast path that skips the per-element check.
 
-## 3. No direct trail access on error paths
+## 3. No direct trail access on error paths — NO ACTION NEEDED
 
-If `call_unify` returns -1 (Python exception), the C helpers return NULL
-without undoing the trail to the mark.  This matches the Python generators
-(they also don't explicitly undo on exception — the trampoline's
-`LogicException` unwinding handles it).
+Design note: matches Python behavior.  The trampoline protocol guarantees
+cleanup via the caller's mark/undo.  Not a bug.
 
-However, if the exception is caught and execution continues, the trail could
-have partial bindings from the failed iteration.  Worth auditing whether the
-trampoline protocol guarantees cleanup in all exception paths.
+## 4. SegList inputs silently fall through — NO ACTION NEEDED
 
-## 4. SegList inputs silently fall through
+Matches pre-existing Python behavior.  SegList gap is documented with tests
+in `tests/test_term_inspection.py` (TestCopyTermSegList, TestTermVariablesSegList).
+Same pattern as DictTerm gap.  Will be addressed if SegList walking is ever
+needed for list predicates.
 
-The C helpers only receive Python lists (from `_as_items()`).  SegList values
-cause `_as_items()` to return None, skipping the loop entirely.  This matches
-the pre-existing Python behavior but means partially-bound lists are never
-iterated by member/append/select etc.
-
-If SegList walking is ever needed for these predicates, the C helpers would
-need to either accept SegList objects directly or the Python caller would need
-to walk the SegList before calling the C helper.
-
-## 5. Option A upgrade for hot predicates
+## 5. Option A upgrade for hot predicates — DEFERRED
 
 The current implementation is Option B (C helpers called from Python
 generators).  The Python generator frame creation and trampoline yield/resume
