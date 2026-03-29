@@ -149,7 +149,7 @@ class SuspendedConsumer:
 _SCALAR_TYPES = (bool, int, float, str, bytes)
 
 
-def _normalize_for_key(term):
+def _normalize_for_key_py(term):
     """Deref term; replace unbound Vars with _VAR sentinel."""
     term = deref(term)
     if type(term) is int:
@@ -159,39 +159,68 @@ def _normalize_for_key(term):
     if term is None or isinstance(term, _SCALAR_TYPES):
         return term
     if isinstance(term, list):
-        return ("__list__",) + tuple(_normalize_for_key(e) for e in term)
+        return ("__list__",) + tuple(_normalize_for_key_py(e) for e in term)
     if isinstance(term, Compound):
-        return (term.functor,) + tuple(_normalize_for_key(a) for a in term.args)
+        return (term.functor,) + tuple(_normalize_for_key_py(a) for a in term.args)
     if is_term_instance(term):
         return (type(term).__name__,) + tuple(
-            _normalize_for_key(getattr(term, f)) for f in term_field_names(term)
+            _normalize_for_key_py(getattr(term, f)) for f in term_field_names(term)
         )
     return term
 
+_normalize_for_key = _normalize_for_key_py
 
-def make_subgoal_key(args, trail):
+
+def _make_subgoal_key_py(args, trail):
     """Compute variant key for a tabled call's arguments."""
     return tuple([_normalize_for_key(a) for a in args])
+
+make_subgoal_key = _make_subgoal_key_py
 
 
 # ── Answer freezing ──────────────────────────────────────────────────────
 
 
-def freeze_args(args, trail):
+def _freeze_args_py(args, trail):
     """Capture a ground snapshot of current arg bindings."""
     from clausal.logic.solve import _deref_walk
     return tuple([_deref_walk(a) for a in args])
+
+freeze_args = _freeze_args_py
 
 
 # ── Answer unification ───────────────────────────────────────────────────
 
 
-def _unify_answer(args, stored, trail):
+def _unify_answer_py(args, stored, trail):
     """Unify each arg with the corresponding stored value."""
     for a, s in zip(args, stored):
         if not unify(a, s, trail):
             return False
     return True
+
+_unify_answer = _unify_answer_py
+
+# ── C acceleration (optional) ────────────────────────────────────────────
+
+try:
+    from clausal.logic._tabling_core import (
+        _normalize_for_key as _normalize_for_key_c,
+        make_subgoal_key as _make_subgoal_key_c,
+        freeze_args as _freeze_args_c,
+        _unify_answer as _unify_answer_c,
+        _register_var_sentinel,
+        _register_types,
+    )
+    from clausal.logic.variables import Var
+    _register_var_sentinel(_VAR)
+    _register_types(Var, Compound, unify, is_term_instance, term_field_names)
+    _normalize_for_key = _normalize_for_key_c
+    make_subgoal_key = _make_subgoal_key_c
+    freeze_args = _freeze_args_c
+    _unify_answer = _unify_answer_c
+except ImportError:
+    pass  # Python fallbacks above
 
 
 # ── Delayed negation runtime (WFS) ──────────────────────────────────────

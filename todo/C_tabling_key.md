@@ -183,3 +183,35 @@ python -m pytest tests/ --ignore=tests/test_trealla_backend.py -x -q
 
 Expected: bench_tabling drops by ~0.15–0.25s.
 Result values must not change.
+
+## Implementation doubts
+
+1. **VarObject struct layout is duplicated.**  `_tabling_core.c` copies the
+   `VarObject` struct definition from `_variables.c` so it can inline
+   `var_deref`.  If `VarObject` gains, removes, or reorders fields the two
+   definitions will silently diverge and `var_deref` will read garbage.
+   Consider extracting the struct into a shared header
+   (e.g. `variables/_var_layout.h`) that both files include.
+
+2. **`c_is_term_instance` / `c_term_field_names` call back through Python.**
+   These call the Python-level `is_term_instance` and `term_field_names`
+   functions (which are themselves C in `_variables.c`) via
+   `PyObject_CallOneArg`.  This adds per-call overhead that could be avoided
+   by either exposing the internal `c_is_term_instance` / `c_term_field_names`
+   from `_variables.c` as a shared header, or by duplicating the
+   `PredicateMeta_type` / `__dataclass_fields__` checks directly.  For the
+   typical tabling benchmark (ints only), this path is rarely hit, but for
+   workloads with term-instance args it could matter.
+
+3. **`_unify_answer` gains little from C.**  The C version eliminates the
+   Python `for`/`zip` loop but still calls `unify()` through
+   `PyObject_CallFunction` per element.  The per-element `unify()` call
+   dominates, so the C wrapper mainly saves the Python frame overhead for the
+   outer loop (~50K calls × ~2 args).  If profiling shows `_unify_answer`
+   is still hot, the real win would be calling `do_unify()` directly from C,
+   which requires either linking against `_variables.c` or merging the
+   extension into `_variables.c`.
+
+4. **`PredicateMeta_type` declared but unused.**  Line 40 of `_tabling_core.c`
+   declares `static PyObject *PredicateMeta_type` which is never set or read.
+   It should be removed to avoid confusion.

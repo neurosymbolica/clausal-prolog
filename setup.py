@@ -33,4 +33,11 @@ ext_clpfd = Extension(
     extra_compile_args=extra_compile_args,
 )
 
-setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd])
+ext_tabling_core = Extension(
+    "clausal.logic._tabling_core",
+    sources=["clausal/logic/_tabling_core.c"],
+    extra_compile_args=extra_compile_args,
+)
+
+setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
+                   ext_tabling_core])

@@ -46,7 +46,7 @@ from clausal.terms import Compound
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def _deref_walk(term: Any) -> Any:
+def _deref_walk_py(term: Any) -> Any:
     """Fully dereference a term, recursively walking all Var bindings.
 
     Unbound Vars remain as Var objects in the result.
@@ -57,15 +57,23 @@ def _deref_walk(term: Any) -> Any:
     if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
         return term
     if isinstance(term, list):
-        return [_deref_walk(e) for e in term]
+        return [_deref_walk_py(e) for e in term]
     if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_deref_walk(a) for a in term.args))
+        return Compound(term.functor, tuple(_deref_walk_py(a) for a in term.args))
     if is_term_instance(term):
         return type(term)(**{
-            name: _deref_walk(getattr(term, name))
+            name: _deref_walk_py(getattr(term, name))
             for name in term_field_names(term)
         })
     return term
+
+_deref_walk = _deref_walk_py
+
+try:
+    from clausal.logic._tabling_core import _deref_walk as _deref_walk_c
+    _deref_walk = _deref_walk_c
+except ImportError:
+    pass
 
 
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
