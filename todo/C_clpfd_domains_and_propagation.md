@@ -147,6 +147,29 @@ except ImportError:
    in Python — it's complex, rarely called (only for expression trees), and
    not performance-critical.
 
+## Known limitations of the C implementation (Tier 1)
+
+6. **int64 ceiling on domain bounds.**  The C extension uses `int64_t` internally
+   and `PyLong_AsLongLong` to parse bounds.  Python integers are arbitrary
+   precision; domain bounds beyond ±2^63 will raise `OverflowError` from the C
+   path where the Python fallback handles them fine.  CLP(Z) semantics promise
+   the full integer line — if large-integer workloads ever materialise, the C
+   code should use `PyLong` digit-level APIs or `PyObject` rich-compare instead
+   of unpacking to C scalars.  This applies to every C extension that touches
+   integer values (`_variables.c` var_id is uint64 too).
+
+7. **`domain_values` eagerly allocates a list.**  The Python version is a
+   generator that yields lazily.  The C version builds the full list upfront.
+   For very large finite domains (e.g. `1..1_000_000`) this spikes memory
+   where the generator would not.  A C iterator type (tp_iter / tp_iternext)
+   would fix this if it ever matters.
+
+8. **`domain_contains` and `domain_remove` require int arguments.**  They use
+   the `L` (long long) format code in `PyArg_ParseTuple`.  If a future code
+   path passes a float, they'll raise `TypeError` instead of coercing.  All
+   current callers pass ints, but this is a tighter contract than the Python
+   versions which compare with `<=` / `==` and would silently accept floats.
+
 ## How to verify
 
 ```bash

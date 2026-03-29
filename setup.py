@@ -27,4 +27,10 @@ ext_list_unify = Extension(
     extra_compile_args=extra_compile_args,
 )
 
-setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify])
+ext_clpfd = Extension(
+    "clausal.logic._clpfd_core",
+    sources=["clausal/logic/_clpfd_core.c"],
+    extra_compile_args=extra_compile_args,
+)
+
+setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd])

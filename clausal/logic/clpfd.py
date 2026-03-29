@@ -52,6 +52,30 @@ DEFAULT_MAX = _POS_INF
 Domain = tuple[tuple[int, int], ...]
 
 
+# ── C-accelerated domain operations (with Python fallback) ──────────────────
+# The Python definitions below serve as the reference implementation.
+# If the C extension is available, its versions silently replace them.
+
+_USE_C_DOMAINS = False
+try:
+    from clausal.logic._clpfd_core import (
+        domain_from_range as _c_domain_from_range,
+        domain_contains as _c_domain_contains,
+        domain_min as _c_domain_min,
+        domain_max as _c_domain_max,
+        domain_size as _c_domain_size,
+        domain_singleton as _c_domain_singleton,
+        domain_intersection as _c_domain_intersection,
+        domain_remove as _c_domain_remove,
+        domain_remove_above as _c_domain_remove_above,
+        domain_remove_below as _c_domain_remove_below,
+        domain_values as _c_domain_values,
+    )
+    _USE_C_DOMAINS = True
+except ImportError:
+    pass
+
+
 # ── FDVar: per-variable finite-domain state ──────────────────────────────────
 
 
@@ -188,6 +212,21 @@ def domain_values(domain: Domain):
                 "Use in_domain/3 to declare bounds before labeling."
             )
         yield from range(lo, hi + 1)
+
+
+# Replace Python domain ops with C versions when available
+if _USE_C_DOMAINS:
+    domain_from_range = _c_domain_from_range
+    domain_contains = _c_domain_contains
+    domain_min = _c_domain_min
+    domain_max = _c_domain_max
+    domain_size = _c_domain_size
+    domain_singleton = _c_domain_singleton
+    domain_intersection = _c_domain_intersection
+    domain_remove = _c_domain_remove
+    domain_remove_above = _c_domain_remove_above
+    domain_remove_below = _c_domain_remove_below
+    domain_values = _c_domain_values
 
 
 # ── Ensure FD state ─────────────────────────────────────────────────────────
