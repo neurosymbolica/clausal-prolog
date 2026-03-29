@@ -584,6 +584,6 @@ class TestTermVariablesSegList:
         x = Var()
         t = SegList([VarSeg(x)])
         result = []
-        _collect_vars_impl(t, set(), result)
+        _collect_vars_impl(t, result)
         # current behaviour: SegList falls through → empty list
         assert result == []

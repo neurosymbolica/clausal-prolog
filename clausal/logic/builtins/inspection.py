@@ -138,7 +138,7 @@ def _term_variables__2(term, vars_out, trail, k):
     """term_variables(Term, Vars) — unify Vars with list of unbound variables in Term."""
     term_val = deref(term)
     result: list = []
-    _collect_vars_impl(term_val, set(), result)
+    _collect_vars_impl(term_val, result)
     mark = trail.mark()
     if unify(vars_out, result, trail):
         yield None
@@ -157,7 +157,7 @@ def _number_vars__3(term, start, end, trail, k):
         return
     term_val = deref(term)
     vars_list: list = []
-    _collect_vars_impl(term_val, set(), vars_list)
+    _collect_vars_impl(term_val, vars_list)
     # Bind each unbound var to Compound("$VAR", (N,))
     marks = []
     for i, v in enumerate(vars_list):

@@ -1718,6 +1718,8 @@ static PyObject *PredicateMeta_type = NULL;
 static PyObject *str_fields = NULL;
 static PyObject *str_dataclass_fields = NULL;  /* "__dataclass_fields__" */
 static PyObject *str_name = NULL;              /* "name" */
+static PyObject *str_functor = NULL;           /* "functor" */
+static PyObject *str_args = NULL;              /* "args" */
 
 /* Cached reference to dataclasses.fields() for dataclass field introspection */
 static PyObject *dc_fields_func = NULL;
@@ -1748,6 +1750,14 @@ py_register_predicate_meta(PyObject *Py_UNUSED(module), PyObject *cls)
     if (!str_name) {
         str_name = PyUnicode_InternFromString("name");
         if (!str_name) return NULL;
+    }
+    if (!str_functor) {
+        str_functor = PyUnicode_InternFromString("functor");
+        if (!str_functor) return NULL;
+    }
+    if (!str_args) {
+        str_args = PyUnicode_InternFromString("args");
+        if (!str_args) return NULL;
     }
     if (!dc_fields_func) {
         PyObject *mod = PyImport_ImportModule("dataclasses");
@@ -1950,12 +1960,12 @@ c_is_ground(PyObject *term, int depth)
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return -1;  /* Fix #3 */
         if (r) {
-            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            PyObject *functor = PyObject_GetAttr(term, str_functor);
             if (!functor) return -1;
             int is_str = PyUnicode_Check(functor);
             Py_DECREF(functor);
             if (!is_str) return 0;
-            PyObject *args = PyObject_GetAttrString(term, "args");
+            PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) return -1;
             /* Fix #4: guard against non-tuple args */
             if (!PyTuple_Check(args)) {
@@ -2041,7 +2051,7 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            PyObject *functor = PyObject_GetAttr(term, str_functor);
             if (!functor) return NULL;
             if (PyUnicode_Check(functor)) return functor;
             Py_DECREF(functor);
@@ -2052,7 +2062,7 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
         if (r < 0) return NULL;
-        if (r) return PyObject_GetAttrString(term, "functor");
+        if (r) return PyObject_GetAttr(term, str_functor);
     }
     /* PredicateMeta instance */
     {
@@ -2110,7 +2120,7 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
         r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *args = PyObject_GetAttrString(term, "args");
+            PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) return NULL;
             if (!PyTuple_Check(args)) {
                 Py_ssize_t n = PyObject_Length(args);
@@ -2209,7 +2219,7 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
         r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *cargs = PyObject_GetAttrString(term, "args");
+            PyObject *cargs = PyObject_GetAttr(term, str_args);
             if (!cargs) return NULL;
             /* Fix #4: handle non-tuple args gracefully */
             if (!PyTuple_Check(cargs)) {
@@ -2300,7 +2310,7 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
         r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *args = PyObject_GetAttrString(term, "args");
+            PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) return NULL;
             PyObject *result = PySequence_List(args);
             Py_DECREF(args);
@@ -2450,9 +2460,9 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
         if (r) {
-            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            PyObject *functor = PyObject_GetAttr(term, str_functor);
             if (!functor) return NULL;
-            PyObject *args = PyObject_GetAttrString(term, "args");
+            PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) { Py_DECREF(functor); return NULL; }
             if (!PyTuple_Check(args)) {
                 Py_DECREF(functor); Py_DECREF(args);
@@ -2484,7 +2494,7 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         if (r < 0) return NULL;
         if (r) {
             /* Issue 1 fix: get functor for correct reconstruction */
-            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            PyObject *functor = PyObject_GetAttr(term, str_functor);
             if (!functor) return NULL;
             /* Issue 2 fix: use items() call instead of PyMapping_Items */
             PyObject *items_view = PyObject_CallMethod(term, "items", NULL);
@@ -2578,18 +2588,88 @@ py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* ================================================================
+ * UIntSet — minimal open-addressing hash set over uintptr_t keys.
+ * Used by c_collect_vars to deduplicate Var pointers without
+ * allocating a Python object per variable (issue 6).
+ * ================================================================ */
+
+#define UINT_SET_INIT_CAP 64
+
+typedef struct {
+    uintptr_t *keys;   /* 0 == empty slot; 1 == tombstone (unused here) */
+    Py_ssize_t cap;
+    Py_ssize_t count;
+} UIntSet;
+
+static int
+uint_set_init(UIntSet *s)
+{
+    s->cap   = UINT_SET_INIT_CAP;
+    s->count = 0;
+    s->keys  = (uintptr_t *)PyMem_Calloc((size_t)s->cap, sizeof(uintptr_t));
+    if (!s->keys) { PyErr_NoMemory(); return -1; }
+    return 0;
+}
+
+static void
+uint_set_free(UIntSet *s)
+{
+    PyMem_Free(s->keys);
+    s->keys = NULL;
+}
+
+/*
+ * Insert key into set.
+ * Returns 0 if newly inserted, 1 if already present, -1 on OOM.
+ * key == 0 is remapped to UINTPTR_MAX (PyObject* is never NULL).
+ */
+static int
+uint_set_add(UIntSet *s, uintptr_t key)
+{
+    if (key == 0) key = UINTPTR_MAX;
+
+    /* Grow at 70% load */
+    if (s->count * 10 >= s->cap * 7) {
+        Py_ssize_t new_cap = s->cap * 2;
+        uintptr_t *new_keys = (uintptr_t *)PyMem_Calloc((size_t)new_cap,
+                                                          sizeof(uintptr_t));
+        if (!new_keys) { PyErr_NoMemory(); return -1; }
+        for (Py_ssize_t i = 0; i < s->cap; i++) {
+            if (!s->keys[i]) continue;
+            Py_ssize_t j = (Py_ssize_t)(s->keys[i] % (uintptr_t)new_cap);
+            while (new_keys[j])
+                j = (j + 1) % new_cap;
+            new_keys[j] = s->keys[i];
+        }
+        PyMem_Free(s->keys);
+        s->keys = new_keys;
+        s->cap  = new_cap;
+    }
+
+    Py_ssize_t i = (Py_ssize_t)(key % (uintptr_t)s->cap);
+    while (s->keys[i]) {
+        if (s->keys[i] == key) return 1;  /* already present */
+        i = (i + 1) % s->cap;
+    }
+    s->keys[i] = key;
+    s->count++;
+    return 0;  /* newly inserted */
+}
+
+
+/* ================================================================
  * _collect_vars_impl — collect all unbound Vars left-to-right
  * ================================================================ */
 
 /*
- * c_collect_vars(term, seen_ids, result, depth) -> 0 ok, -1 error
+ * c_collect_vars(term, seen, result, depth) -> 0 ok, -1 error
  *
  * Appends each unique unbound Var in term to result (a PyList),
- * in left-to-right traversal order.  seen_ids (a PySet) tracks
- * pointer-based ids already added to preserve uniqueness.
+ * in left-to-right traversal order.  seen is a C-level UIntSet
+ * tracking pointer-based ids for O(1) dedup without PyLong allocation.
  */
 static int
-c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
+c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
 {
     if (depth > MAX_DEPTH) {
         PyErr_SetString(PyExc_RecursionError,
@@ -2600,15 +2680,11 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
 
     /* Unbound variable */
     if (Var_Check(term)) {
-        PyObject *vid = PyLong_FromVoidPtr(term);
-        if (!vid) return -1;
-        int contains = PySet_Contains(seen_ids, vid);
-        if (contains < 0) { Py_DECREF(vid); return -1; }
-        if (!contains) {
-            if (PySet_Add(seen_ids, vid) < 0) { Py_DECREF(vid); return -1; }
-            if (PyList_Append(result, term) < 0) { Py_DECREF(vid); return -1; }
+        int r = uint_set_add(seen, (uintptr_t)term);
+        if (r < 0) return -1;
+        if (r == 0) {  /* newly inserted */
+            if (PyList_Append(result, term) < 0) return -1;
         }
-        Py_DECREF(vid);
         return 0;
     }
 
@@ -2628,7 +2704,7 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
         for (Py_ssize_t i = 0; i < n; i++) {
-            if (c_collect_vars(PyList_GET_ITEM(term, i), seen_ids, result, depth + 1) < 0)
+            if (c_collect_vars(PyList_GET_ITEM(term, i), seen, result, depth + 1) < 0)
                 return -1;
         }
         return 0;
@@ -2639,7 +2715,7 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return -1;
         if (r) {
-            PyObject *args = PyObject_GetAttrString(term, "args");
+            PyObject *args = PyObject_GetAttr(term, str_args);
             if (!args) return -1;
             if (!PyTuple_Check(args)) {
                 Py_DECREF(args);
@@ -2648,7 +2724,7 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
             }
             Py_ssize_t n = PyTuple_GET_SIZE(args);
             for (Py_ssize_t i = 0; i < n; i++) {
-                if (c_collect_vars(PyTuple_GET_ITEM(args, i), seen_ids, result, depth + 1) < 0) {
+                if (c_collect_vars(PyTuple_GET_ITEM(args, i), seen, result, depth + 1) < 0) {
                     Py_DECREF(args);
                     return -1;
                 }
@@ -2670,7 +2746,7 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
             if (!iter) return -1;
             PyObject *item;
             while ((item = PyIter_Next(iter))) {
-                int r2 = c_collect_vars(item, seen_ids, result, depth + 1);
+                int r2 = c_collect_vars(item, seen, result, depth + 1);
                 Py_DECREF(item);
                 if (r2 < 0) { Py_DECREF(iter); return -1; }
             }
@@ -2695,7 +2771,7 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
             for (Py_ssize_t i = 0; i < n; i++) {
                 PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
                 if (!val) { Py_DECREF(fields); return -1; }
-                int r2 = c_collect_vars(val, seen_ids, result, depth + 1);
+                int r2 = c_collect_vars(val, seen, result, depth + 1);
                 Py_DECREF(val);
                 if (r2 < 0) { Py_DECREF(fields); return -1; }
             }
@@ -2708,22 +2784,23 @@ c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
 }
 
 /*
- * _collect_vars_impl(term, seen_ids_set, result_list) -> None
+ * _collect_vars_impl(term, result_list) -> None
  *
- * Python-callable wrapper.  Appends unbound Vars from term into result_list,
- * using seen_ids_set (a set of pointer-based ids) to deduplicate.
+ * Python-callable wrapper.  Appends unbound Vars from term into result_list.
+ * Uses an internal C-level UIntSet for deduplication (no Python set needed).
  * Implements the traversal used by term_variables/2 and numbervars/3.
  */
 static PyObject *
 py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *term, *seen_ids, *result;
-    if (!PyArg_ParseTuple(args, "OO!O!", &term,
-                          &PySet_Type, &seen_ids,
-                          &PyList_Type, &result))
+    PyObject *term, *result;
+    if (!PyArg_ParseTuple(args, "OO!", &term, &PyList_Type, &result))
         return NULL;
-    if (c_collect_vars(term, seen_ids, result, 0) < 0)
-        return NULL;
+    UIntSet seen;
+    if (uint_set_init(&seen) < 0) return NULL;
+    int ok = c_collect_vars(term, &seen, result, 0);
+    uint_set_free(&seen);
+    if (ok < 0) return NULL;
     Py_RETURN_NONE;
 }
 
@@ -2955,9 +3032,9 @@ static PyMethodDef module_methods[] = {
      "var_map (a dict) maps original Var id to fresh Var; pass {} initially.\n"
      "Sharing is preserved: two refs to the same Var get the same fresh copy."},
     {"_collect_vars_impl", py_collect_vars_impl, METH_VARARGS,
-     "_collect_vars_impl(term, seen_ids_set, result_list) -> None\n"
+     "_collect_vars_impl(term, result_list) -> None\n"
      "Append all unbound Vars in term to result_list in left-to-right order.\n"
-     "seen_ids_set (a set of pointer ids) deduplicates; pass set() initially."},
+     "Deduplication is handled internally via a C-level hash set."},
     {NULL, NULL, 0, NULL}
 };
 
