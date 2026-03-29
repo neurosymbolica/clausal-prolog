@@ -1,145 +1,64 @@
 # Follow-up issues in _copy_term_impl / _collect_vars_impl (C)
 
-Commit: `perf: move _copy_term and _collect_vars hot paths to C extension`
+Commit that introduced these: `perf: move _copy_term and _collect_vars hot paths to C extension`
+
+All 6 issues resolved. See commit history for details.
 
 ---
 
-## 1. KWTerm reconstruction is wrong (pre-existing Python bug, faithfully reproduced in C)
+## ~~1. KWTerm reconstruction is wrong~~ ✓ DONE
 
-Both the original Python `_copy_term` and the new C `c_copy_term` reconstruct a
-KWTerm incorrectly:
+Fixed in: `fix: correct KWTerm reconstruction and items() in c_copy_term; add gap tests`
 
-```python
-# Python original (inspection.py, before this commit)
-return KWTerm({k: _copy_term(v, var_map) for k, v in term.items()})
-# ↑ passes dict as positional `functor` arg → _functor = dict, _fields = {}
-```
-
-```c
-// C (c_copy_term in _variables.c)
-PyObject *result = PyObject_CallOneArg(KWTerm_type, new_dict);
-// ↑ KWTerm(new_dict) → same: _functor = new_dict, _fields = {}
-```
-
-**What both should do:**
-```python
-KWTerm(term.functor, **{k: _copy_term(v, var_map) for k, v in term.items()})
-```
-
-In C, use `PyObject_Call` with the functor string as first positional arg and
-the copied fields as `**kwargs`:
-```c
-PyObject *functor = PyObject_GetAttrString(term, "functor");
-PyObject *result  = PyObject_Call(KWTerm_type, PyTuple_Pack(1, functor), kwargs);
-```
-
-**Impact:** If a KWTerm ever reaches `copy_term/2`, the copy has the field dict
-as its functor and no fields.  Tests all pass today, suggesting this path is never
-exercised.  But it is silently wrong.
-
-**Fix:** Correct both the Python fallback and the C path at the same time.  Add a
-test: `copy_term(KWTerm('r', a=X), Y), Y == KWTerm('r', a=_)`.
+`c_copy_term` now calls `KWTerm(functor, **fields_dict)` via `PyObject_Call` with
+the functor string as the first positional arg and the copied fields as kwargs.
+Tests added in `TestCopyTermKWTerm`.
 
 ---
 
-## 2. `PyMapping_Items` for KWTerm in c_copy_term — use `items()` call instead
+## ~~2. `PyMapping_Items` for KWTerm~~ ✓ DONE
 
-`c_copy_term` uses `PyMapping_Items(term)` to obtain KWTerm items.
-`PyMapping_Items` uses C-level mapping protocol (`mp_subscript` + `keys()`).
-KWTerm only implements `keys()`, `values()`, `items()` at Python level; it does
-**not** implement `tp_as_mapping->mp_subscript` at C level.  `PyMapping_Items`
-falls back to calling `.items()` when subscript is missing, so it works today,
-but it is fragile.
+Fixed in same commit as #1.
 
-`c_collect_vars` and `c_is_ground` both correctly use
-`PyObject_CallMethod(term, "values", NULL)`.  `c_copy_term` should use
-`PyObject_CallMethod(term, "items", NULL)` + iterator for consistency and safety:
-
-```c
-PyObject *items_view = PyObject_CallMethod(term, "items", NULL);
-PyObject *iter = PyObject_GetIter(items_view);
-Py_DECREF(items_view);
-PyObject *pair;
-while ((pair = PyIter_Next(iter))) {
-    PyObject *k = PyTuple_GET_ITEM(pair, 0);
-    PyObject *v = PyTuple_GET_ITEM(pair, 1);
-    ...
-    Py_DECREF(pair);
-}
-```
+`PyMapping_Items(term)` replaced with `PyObject_CallMethod(term, "items", NULL)`
++ `PyIter_Next` loop, consistent with `c_collect_vars` and `c_is_ground`.
 
 ---
 
-## 3. DictTerm and SegList with Vars are silently not copied
+## ~~3. DictTerm and SegList with Vars are silently not copied~~ ✓ DONE (gap documented)
 
-`DictTerm` (`clausal.terms.DictTerm`) and `SegList` can contain logic variables,
-but neither `c_copy_term` nor `c_collect_vars` handle them.  Both fall through to
-"return as-is", meaning:
+Fixed in same commit as #1.
 
-- `copy_term(dict_term_with_var, Y)` → Y shares the **same** Var as the original
-  (not a fresh copy).
-- `term_variables(dict_term_with_var, Vs)` → Vs = [] (vars not collected).
-
-This is a **pre-existing gap** in the Python implementations too — they have the
-same blind spot.  Impact is likely small given current usage, but worth a test.
+Tests added documenting current fall-through behaviour:
+`TestCopyTermDictTerm`, `TestTermVariablesDictTerm`,
+`TestCopyTermSegList`, `TestTermVariablesSegList`.
 
 ---
 
-## 4. No caching of "functor" / "args" interned strings in _variables.c
+## ~~4. No caching of "functor" / "args" interned strings~~ ✓ DONE
 
-`c_copy_term` (and the existing `py_functor_name`, `py_arity`, `c_is_ground`)
-access Compound fields via `PyObject_GetAttrString(term, "functor")` and
-`PyObject_GetAttrString(term, "args")`.  `PyObject_GetAttrString` interns its
-string argument each call, but that is still slower than using a pre-interned
-`PyObject *` stored at module-init time.
+Fixed in: `perf: cache str_functor/str_args and use C hash set in _collect_vars; add todo`
 
-`_tabling_core.c` already caches `str_functor` and `str_args`.  `_variables.c`
-should do the same (alongside the existing `str_fields`, `str_name`), then use
-`PyObject_GetAttr(term, str_functor)` / `PyObject_GetAttr(term, str_args)`
-throughout `c_copy_term`, `c_is_ground`, `py_functor_name`, `py_arity`,
-`py_nth_arg`, `py_args_list`.
+`str_functor` and `str_args` added alongside `str_fields`/`str_name`.
+11 `PyObject_GetAttrString` call sites replaced with `PyObject_GetAttr`.
 
 ---
 
-## 5. No inter-extension C code sharing — duplicate traversal logic
+## ~~5. No inter-extension C code sharing~~ ✓ DONE (written as separate todo)
 
-`_variables.c`, `_tabling_core.c`, and `_clpfd_propagate.c` all implement
-essentially the same term-traversal pattern:
+Documented in: `todo/C_variables_capi_consolidation.md` (same commit as #4)
 
-```
-var_deref → Var check → primitive check → PredicateMeta class check →
-list → Compound → KWTerm → term instance
-```
-
-Each extension duplicates:
-- `var_deref` (struct layout replication in `_tabling_core.c`)
-- `c_is_term_instance` (C version in `_variables.c`, Python-callback version
-  in `_tabling_core.c`)
-- `c_term_field_names`
-
-**Option A:** Export a shared `_term_helpers.h` header from the `variables`
-package and `#include` it in sibling extensions (requires `include_dirs` in
-`setup.py`).
-
-**Option B:** Use PyCapsule to expose `var_deref`, `c_is_term_instance`,
-`c_term_field_names` as C-callable pointers, imported once at module init by
-each extension.
-
-Option B is cleaner for a compiled-package distribution.  Option A is simpler
-to prototype.
+`_tabling_core.c` replicates `VarObject` struct layout and calls
+`c_is_term_instance`/`c_term_field_names` via Python function objects despite
+`_variables.c` already exporting them as C function pointers via its capsule.
+The fix is tracked in the new todo file.
 
 ---
 
-## 6. `_collect_vars_impl` allocates a PyLong per variable for set membership
+## ~~6. `_collect_vars_impl` allocates a PyLong per variable~~ ✓ DONE
 
-Each unbound Var encountered in `c_collect_vars` allocates a `PyLong` via
-`PyLong_FromVoidPtr(term)` to check / insert into the `seen_ids` set.  For
-deep terms with many variables this is `O(n)` allocations that are immediately
-discarded.
+Fixed in same commit as #4.
 
-Alternative: use a C-level hash set (e.g. a small open-addressing table on the
-stack/heap using raw `uintptr_t` keys) instead of a Python `set`.  This would
-avoid all Python object allocation for the dedup bookkeeping.
-
-This is an optimisation, not a correctness issue.  Measure first before
-implementing.
+New `UIntSet` (open-addressing hash set over `uintptr_t` keys) replaces the
+Python `set` passed as `seen_ids`. `c_collect_vars` takes `UIntSet *seen`;
+`py_collect_vars_impl` manages the set internally. Callers drop the `set()` arg.
