@@ -5,7 +5,7 @@ CLP(B) provides constraint logic programming over Booleans, enabling SAT solving
 The implementation lives in `clausal/logic/clpb.py`.
 
 !!! note
-    For CLP(ℤ) (finite-domain integer constraints) and dif/2 (disequality), see [Constraints](constraints.md).
+    For CLP(ℤ) (integer constraints over all integers) and dif/2 (disequality), see [Constraints](constraints.md).
 
 ---
 

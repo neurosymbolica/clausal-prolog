@@ -224,7 +224,7 @@ Common Trealla libraries:
 | Library | Contents |
 |---|---|
 | `library(lists)` | `member/2`, `append/3`, `length/2`, `msort/2`, `permutation/2` |
-| `library(clpz)` | CLP(Z) — finite-domain constraints over integers |
+| `library(clpz)` | CLP(Z) — constraints over integers |
 | `library(dcgs)` | Definite Clause Grammars |
 | `library(dif)` | `dif/2` — sound disequality |
 | `library(assoc)` | Association lists |

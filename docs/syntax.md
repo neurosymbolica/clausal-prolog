@@ -980,7 +980,7 @@ X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
 N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
-in_domain(X, 1, 10),    # post finite domain
+in_domain(X, 1, 10),    # post integer domain
 all_different([X,Y,Z]), # pairwise disequality
 label([X, Y, Z]),      # enumerate solutions (first-fail)
 equivalent(X, Y),      # structural equality (Prolog ==/2)

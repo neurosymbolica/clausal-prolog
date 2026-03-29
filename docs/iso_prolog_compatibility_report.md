@@ -359,7 +359,7 @@ underscore for readability:
 - Meta: `findall/3`, `bagof/3`, `setof/3`, `forall/2`
 - I/O: `write/1`, `writeln/1`, `nl/0`, `tab/1`
 - Higher-order: `maplist/2,3`, `include/3` (include), `exclude/3`, `foldl/4`
-- Constraints: [`dif/2`, CLP(FD)](constraints.md), [CLP(B)](clpb.md)
+- Constraints: [`dif/2`, CLP(ℤ)](constraints.md), [CLP(B)](clpb.md)
 - DCG: [`phrase/2,3`](dcg.md)
 
 ### Still Missing

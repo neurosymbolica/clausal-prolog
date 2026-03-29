@@ -1,9 +1,11 @@
-"""clausal.logic.clpfd — CLP(FD) finite-domain constraint solver (V2-6).
+"""clausal.logic.clpfd — CLP(Z) integer constraint solver.
 
-Provides finite-domain constraint logic programming as a first-class
-language feature.  Comparison operators (``==``, ``!=``, ``<``, ``>``,
-``<=``, ``>=``) become CLP(FD) constraint operators.  Domains are stored
-as AttVar attributes under the ``"fd"`` key.
+Provides CLP(Z) constraint logic programming over all integers as a
+first-class language feature.  Variables default to the entire integer
+line (-inf, +inf) until constrained.  Comparison operators (``==``,
+``!=``, ``<``, ``>``, ``<=``, ``>=``) become CLP(Z) constraint
+operators.  Domains are stored as AttVar attributes under the ``"fd"``
+key.
 
 Domain representation
 ---------------------
@@ -41,8 +43,10 @@ from clausal.logic.variables import (
 # ── Constants ────────────────────────────────────────────────────────────────
 
 FD_KEY = "fd"
-DEFAULT_MIN = -(2**63)
-DEFAULT_MAX = 2**63
+_NEG_INF = float('-inf')
+_POS_INF = float('inf')
+DEFAULT_MIN = _NEG_INF
+DEFAULT_MAX = _POS_INF
 
 # Type alias for domains: sorted tuple of (lo, hi) inclusive intervals
 Domain = tuple[tuple[int, int], ...]
@@ -97,9 +101,14 @@ def domain_max(domain: Domain) -> int:
     return domain[-1][1]
 
 
-def domain_size(domain: Domain) -> int:
-    """Number of values in domain."""
-    return sum(hi - lo + 1 for lo, hi in domain)
+def domain_size(domain: Domain) -> int | float:
+    """Number of values in domain, or float('inf') if unbounded."""
+    total = 0
+    for lo, hi in domain:
+        if lo == _NEG_INF or hi == _POS_INF:
+            return _POS_INF
+        total += hi - lo + 1
+    return total
 
 
 def domain_singleton(domain: Domain) -> int | None:
@@ -162,8 +171,16 @@ def domain_remove_below(domain: Domain, limit: int) -> Domain:
 
 
 def domain_values(domain: Domain):
-    """Iterate over all values in domain."""
+    """Iterate over all values in a finite domain.
+
+    Raises ValueError if domain is unbounded.
+    """
     for lo, hi in domain:
+        if lo == _NEG_INF or hi == _POS_INF:
+            raise ValueError(
+                "Cannot enumerate unbounded domain. "
+                "Use in_domain/3 to declare bounds before labeling."
+            )
         yield from range(lo, hi + 1)
 
 
@@ -1269,8 +1286,8 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
             real_state = get_attr(bound_to, REAL_KEY)
             if real_state is not None:
                 import math
-                r_lo = math.ceil(real_state.lo) if real_state.lo != -math.inf else DEFAULT_MIN
-                r_hi = math.floor(real_state.hi) if real_state.hi != math.inf else DEFAULT_MAX
+                r_lo = _NEG_INF if real_state.lo == -math.inf else math.ceil(real_state.lo)
+                r_hi = _POS_INF if real_state.hi == math.inf else math.floor(real_state.hi)
                 narrowed = domain_intersection(
                     state.domain, domain_from_range(r_lo, r_hi)
                 )
@@ -1363,8 +1380,8 @@ def _post_domain(target, new_domain: Domain, trail: Trail) -> bool:
     real_state = get_attr(target, REAL_KEY)
     if real_state is not None:
         import math
-        r_lo = math.ceil(real_state.lo) if real_state.lo != -math.inf else DEFAULT_MIN
-        r_hi = math.floor(real_state.hi) if real_state.hi != math.inf else DEFAULT_MAX
+        r_lo = _NEG_INF if real_state.lo == -math.inf else math.ceil(real_state.lo)
+        r_hi = _POS_INF if real_state.hi == math.inf else math.floor(real_state.hi)
         final_domain = domain_intersection(final_domain, domain_from_range(r_lo, r_hi))
         if not final_domain:
             return False
@@ -1423,6 +1440,13 @@ def label(vars_list, trail: Trail):
     if state is None:
         yield None
         return
+
+    if domain_size(state.domain) == _POS_INF:
+        raise ValueError(
+            f"Cannot label variable with unbounded domain "
+            f"[{domain_min(state.domain)}, {domain_max(state.domain)}]. "
+            f"Use in_domain/3 to declare bounds before labeling."
+        )
 
     for val in domain_values(state.domain):
         mark = trail.mark()

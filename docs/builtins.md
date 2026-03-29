@@ -82,7 +82,7 @@ Notation in signature lines:
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, extend/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
-| [CLP(ℤ) — Finite Domain Constraints](#clpfd-finite-domain-constraints) | in_domain/3, label/1, all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1 |
+| [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, is_str/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
@@ -825,16 +825,16 @@ Reified disequality. `T` is `True` if `dif(X, Y)`, `False` if `X = Y`.
 
 ---
 
-## CLP(ℤ) — Finite Domain Constraints
+## CLP(ℤ) — Integer Constraints
 
-CLP(ℤ) operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
+CLP(ℤ) operates over **all integers** — variables default to the entire integer line `(-∞, +∞)` until constrained. Comparison operators (`==`, `!=`, `<`, `<=`, `>`, `>=`) are handled as **compiler special forms** mapping to `_fd_eq`, `_fd_ne`, `_fd_lt`, `_fd_le`, `_fd_gt`, `_fd_ge`. The predicates below are the builtin-registry interface.
 
 ### `in_domain/3`
 ```clausal
 # skip
 in_domain(+VarOrList, +Lo, +Hi)
 ```
-Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variables.
+Post the integer domain `[Lo, Hi]` on a logic variable or a list of logic variables. Required before `label/1` can enumerate values.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:829` → `clausal/logic/clpfd.py`
@@ -848,7 +848,7 @@ Post the finite domain `[Lo, Hi]` on a logic variable or a list of logic variabl
 # skip
 label(+Vars)
 ```
-Enumerate concrete values for a list of FD-constrained variables, backtracking over all consistent assignments.
+Enumerate concrete values for a list of constrained variables, backtracking over all consistent assignments. Variables must have finite domains (via `in_domain/3` or comparison constraints) — raises `ValueError` on unbounded domains.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:837` → `clausal/logic/clpfd.py`
@@ -862,7 +862,7 @@ Enumerate concrete values for a list of FD-constrained variables, backtracking o
 # skip
 all_different(+Vars)
 ```
-Post an all-different constraint on a list of FD variables. Propagates bounds and eliminates assigned values from other domains.
+Post an all-different constraint on a list of integer-constrained variables. Propagates bounds and eliminates assigned values from other domains.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:844` → `clausal/logic/clpfd.py`

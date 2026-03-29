@@ -422,7 +422,7 @@ search) — see [Tabling](tabling.md).
   properties and how to write it
 - **[Syntax reference](syntax.md)** — full grammar, all operators, clause forms
 - **[Constraints](constraints.md)** — `dif/2` for structural inequality; CLP(ℤ) for
-  finite-domain constraint solving (N-queens, Sudoku, SEND+MORE=MONEY)
+  integer constraint solving (N-queens, Sudoku, SEND+MORE=MONEY)
 - **[DCGs](dcg.md)** — Definite Clause Grammars for parsing and string generation
 - **[Examples](examples.md)** — worked examples: map colouring, Sudoku, graph
   algorithms, and more

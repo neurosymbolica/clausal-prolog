@@ -246,7 +246,7 @@ Common Scryer libraries:
 |---|---|
 | `library(lists)` | `member/2`, `append/3`, `length/2`, `nth0/3`, `msort/2`, `permutation/2` |
 | `library(between)` | `between/3`, `numlist/3` |
-| `library(clpz)` | CLP(Z) — finite-domain constraints over integers |
+| `library(clpz)` | CLP(Z) — constraints over integers |
 | `library(clpb)` | CLP(B) — Boolean constraint solving |
 | `library(dcgs)` | Definite Clause Grammars |
 | `library(tabling)` | Tabling / memoization for recursive predicates |

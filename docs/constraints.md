@@ -12,7 +12,7 @@ Clausal supports constraint logic programming through attributed variables. The 
 Two constraint solvers are built in:
 
 - **dif/2** — disequality constraint (`clausal.logic.constraints`)
-- **CLP(ℤ)** — integer constraints (`clausal.logic.clpfd`)
+- **CLP(ℤ)** — integer constraints over all integers (`clausal.logic.clpfd`)
 
 ---
 
@@ -219,7 +219,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 
 ??? abstract "Auto-domain"
 
-    when a CLP(ℤ) operator encounters an unbound Var with no domain, it auto-creates a default domain of `(-2^63, 2^63)` — effectively unbounded for practical purposes, stored as a single interval.
+    when a CLP(ℤ) operator encounters an unbound Var with no domain, it auto-creates a default domain of `(-∞, +∞)` — the entire integer line, stored as a single interval. This is true CLP(Z) semantics: variables range over all integers until explicitly constrained. To enumerate solutions with `label/1`, variables must first be given finite bounds via `in_domain/3` or comparison constraints.
 
 ??? abstract "Constraint types"
 
@@ -413,7 +413,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpfd.py` (76 tests) and `tests/test_phase5_builtins.py` (global constraint tests).
+    Tests are in `tests/test_clpfd.py` (76 tests), `tests/test_clpz.py` (CLP(Z) infinite-domain semantics), and `tests/test_phase5_builtins.py` (global constraint tests).
 
     - **Domain operations**: from_range, contains, min/max, size, singleton, intersection, remove, remove_above/below, values
     - **in_domain**: post domain, unify succeeds/fails, list, narrows existing, singleton binds, empty fails, ground int

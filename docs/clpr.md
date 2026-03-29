@@ -5,7 +5,7 @@ CLP(ℝ) provides constraint logic programming over the reals using **interval a
 The implementation lives in `clausal/logic/clpr.py`.
 
 !!! note
-    For CLP(ℤ) (finite-domain integer constraints), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
+    For CLP(ℤ) (integer constraints over all integers), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
 ---
 

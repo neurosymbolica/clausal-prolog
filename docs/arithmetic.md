@@ -213,5 +213,4 @@ Test("digit sum") <- digit_sum(123, 6)
 
 ---
 
-*See also: [CLP(ℤ)](constraints.md) — arithmetic constraints over finite
-domains, [Type Checking](type_checking.md) — integer, float_, number.*
+*See also: [CLP(ℤ)](constraints.md) — arithmetic constraints over integers, [Type Checking](type_checking.md) — integer, float_, number.*

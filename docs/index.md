@@ -104,7 +104,7 @@ for the full feature set.
 | [Predicates](predicates.md) | How to define predicates in .clausal files |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
-| [Constraints](constraints.md) | dif/2, CLP(ℤ) finite-domain constraints, and CLP(ℝ) real-domain constraints |
+| [Constraints](constraints.md) | dif/2, CLP(ℤ) integer constraints, and CLP(ℝ) real-domain constraints |
 | [CLP(ℝ)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
