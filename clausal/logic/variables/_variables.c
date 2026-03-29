@@ -2367,6 +2367,346 @@ py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
 
 
 /* ================================================================
+ * _copy_term_impl — deep copy with fresh Vars
+ * ================================================================ */
+
+/*
+ * c_copy_term(term, var_map, depth) -> new reference
+ *
+ * Recursively copies term, replacing each unbound Var with a fresh one.
+ * var_map is a PyDict mapping id(original_var) -> fresh_var (as PyLong keys).
+ * Sharing is preserved: two references to the same Var get the same fresh copy.
+ */
+static PyObject *
+c_copy_term(PyObject *term, PyObject *var_map, int depth)
+{
+    if (depth > MAX_DEPTH) {
+        PyErr_SetString(PyExc_RecursionError,
+                        "_copy_term: term nesting too deep");
+        return NULL;
+    }
+    term = var_deref(term);
+
+    /* Unbound variable: look up or create fresh Var in var_map */
+    if (Var_Check(term)) {
+        PyObject *key = PyLong_FromVoidPtr(term);
+        if (!key) return NULL;
+        PyObject *existing = PyDict_GetItemWithError(var_map, key);
+        if (existing) {
+            Py_DECREF(key);
+            Py_INCREF(existing);
+            return existing;
+        }
+        if (PyErr_Occurred()) { Py_DECREF(key); return NULL; }
+        /* Create fresh AttVar (Var = AttVar in Python, so all fresh vars must
+         * be AttVar instances to be recognised by var_deref in other modules). */
+        PyObject *fresh = PyObject_CallNoArgs((PyObject *)&AttVarType);
+        if (!fresh) { Py_DECREF(key); return NULL; }
+        if (PyDict_SetItem(var_map, key, fresh) < 0) {
+            Py_DECREF(key); Py_DECREF(fresh); return NULL;
+        }
+        Py_DECREF(key);
+        return fresh;  /* new ref (ref count raised by SetItem, returned here) */
+    }
+
+    /* Primitives: ground, return as-is */
+    if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
+        PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
+        Py_INCREF(term);
+        return term;
+    }
+
+    /* PredicateMeta class (zero-arity atom or predicate class): ground, return as-is */
+    if (PyType_Check(term) && PredicateMeta_type) {
+        int r = PyObject_IsInstance(term, PredicateMeta_type);
+        if (r < 0) return NULL;
+        if (r) {
+            Py_INCREF(term);
+            return term;
+        }
+    }
+
+    /* List: copy element-by-element */
+    if (PyList_Check(term)) {
+        Py_ssize_t n = PyList_GET_SIZE(term);
+        PyObject *result = PyList_New(n);
+        if (!result) return NULL;
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *elem = c_copy_term(PyList_GET_ITEM(term, i), var_map, depth + 1);
+            if (!elem) { Py_DECREF(result); return NULL; }
+            PyList_SET_ITEM(result, i, elem);  /* steals ref */
+        }
+        return result;
+    }
+
+    /* Compound: copy args tuple, construct new Compound(functor, new_args) */
+    if (Compound_type) {
+        int r = PyObject_IsInstance(term, Compound_type);
+        if (r < 0) return NULL;
+        if (r) {
+            PyObject *functor = PyObject_GetAttrString(term, "functor");
+            if (!functor) return NULL;
+            PyObject *args = PyObject_GetAttrString(term, "args");
+            if (!args) { Py_DECREF(functor); return NULL; }
+            if (!PyTuple_Check(args)) {
+                Py_DECREF(functor); Py_DECREF(args);
+                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
+                return NULL;
+            }
+            Py_ssize_t n = PyTuple_GET_SIZE(args);
+            PyObject *new_args = PyTuple_New(n);
+            if (!new_args) { Py_DECREF(functor); Py_DECREF(args); return NULL; }
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *copied = c_copy_term(PyTuple_GET_ITEM(args, i), var_map, depth + 1);
+                if (!copied) {
+                    Py_DECREF(functor); Py_DECREF(args); Py_DECREF(new_args);
+                    return NULL;
+                }
+                PyTuple_SET_ITEM(new_args, i, copied);  /* steals ref */
+            }
+            Py_DECREF(args);
+            PyObject *result = PyObject_CallFunctionObjArgs(Compound_type, functor, new_args, NULL);
+            Py_DECREF(functor);
+            Py_DECREF(new_args);
+            return result;
+        }
+    }
+
+    /* KWTerm: copy each value, construct new KWTerm({k: copied_v, ...}) */
+    if (KWTerm_type) {
+        int r = PyObject_IsInstance(term, KWTerm_type);
+        if (r < 0) return NULL;
+        if (r) {
+            PyObject *items = PyMapping_Items(term);
+            if (!items) return NULL;
+            Py_ssize_t n = PyList_GET_SIZE(items);
+            PyObject *new_dict = PyDict_New();
+            if (!new_dict) { Py_DECREF(items); return NULL; }
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *pair = PyList_GET_ITEM(items, i);
+                PyObject *k = PyTuple_GET_ITEM(pair, 0);
+                PyObject *v = PyTuple_GET_ITEM(pair, 1);
+                PyObject *copied_v = c_copy_term(v, var_map, depth + 1);
+                if (!copied_v) { Py_DECREF(items); Py_DECREF(new_dict); return NULL; }
+                int ok = PyDict_SetItem(new_dict, k, copied_v);
+                Py_DECREF(copied_v);
+                if (ok < 0) { Py_DECREF(items); Py_DECREF(new_dict); return NULL; }
+            }
+            Py_DECREF(items);
+            PyObject *result = PyObject_CallOneArg(KWTerm_type, new_dict);
+            Py_DECREF(new_dict);
+            return result;
+        }
+    }
+
+    /* Term instance (PredicateMeta or @dataclass): copy each field, reconstruct */
+    {
+        int ti = c_is_term_instance(term);
+        if (ti < 0) return NULL;
+        if (ti) {
+            PyObject *fields = c_term_field_names(term);
+            if (!fields && PyErr_Occurred()) return NULL;
+            if (!fields) {
+                fields = py_term_field_names(NULL, term);
+                if (!fields) return NULL;
+            }
+            Py_ssize_t n = PyTuple_GET_SIZE(fields);
+            PyObject *kwargs = PyDict_New();
+            if (!kwargs) { Py_DECREF(fields); return NULL; }
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *fname = PyTuple_GET_ITEM(fields, i);
+                PyObject *fval = PyObject_GetAttr(term, fname);
+                if (!fval) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
+                PyObject *copied_val = c_copy_term(fval, var_map, depth + 1);
+                Py_DECREF(fval);
+                if (!copied_val) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
+                int ok = PyDict_SetItem(kwargs, fname, copied_val);
+                Py_DECREF(copied_val);
+                if (ok < 0) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
+            }
+            Py_DECREF(fields);
+            PyObject *empty_args = PyTuple_New(0);
+            if (!empty_args) { Py_DECREF(kwargs); return NULL; }
+            PyObject *result = PyObject_Call((PyObject *)Py_TYPE(term), empty_args, kwargs);
+            Py_DECREF(empty_args);
+            Py_DECREF(kwargs);
+            return result;
+        }
+    }
+
+    /* Unknown term type: return as-is */
+    Py_INCREF(term);
+    return term;
+}
+
+/*
+ * _copy_term_impl(term, var_map) -> copied_term
+ *
+ * Python-callable wrapper.  var_map must be a dict (initially empty {}).
+ * Implements the recursive copy used by copy_term/2.
+ */
+static PyObject *
+py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *term, *var_map;
+    if (!PyArg_ParseTuple(args, "OO!", &term, &PyDict_Type, &var_map))
+        return NULL;
+    return c_copy_term(term, var_map, 0);
+}
+
+
+/* ================================================================
+ * _collect_vars_impl — collect all unbound Vars left-to-right
+ * ================================================================ */
+
+/*
+ * c_collect_vars(term, seen_ids, result, depth) -> 0 ok, -1 error
+ *
+ * Appends each unique unbound Var in term to result (a PyList),
+ * in left-to-right traversal order.  seen_ids (a PySet) tracks
+ * pointer-based ids already added to preserve uniqueness.
+ */
+static int
+c_collect_vars(PyObject *term, PyObject *seen_ids, PyObject *result, int depth)
+{
+    if (depth > MAX_DEPTH) {
+        PyErr_SetString(PyExc_RecursionError,
+                        "_collect_vars: term nesting too deep");
+        return -1;
+    }
+    term = var_deref(term);
+
+    /* Unbound variable */
+    if (Var_Check(term)) {
+        PyObject *vid = PyLong_FromVoidPtr(term);
+        if (!vid) return -1;
+        int contains = PySet_Contains(seen_ids, vid);
+        if (contains < 0) { Py_DECREF(vid); return -1; }
+        if (!contains) {
+            if (PySet_Add(seen_ids, vid) < 0) { Py_DECREF(vid); return -1; }
+            if (PyList_Append(result, term) < 0) { Py_DECREF(vid); return -1; }
+        }
+        Py_DECREF(vid);
+        return 0;
+    }
+
+    /* Primitives: no variables */
+    if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
+        PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
+        return 0;
+
+    /* PredicateMeta classes: no variables */
+    if (PyType_Check(term) && PredicateMeta_type) {
+        int r = PyObject_IsInstance(term, PredicateMeta_type);
+        if (r < 0) return -1;
+        if (r) return 0;
+    }
+
+    /* List */
+    if (PyList_Check(term)) {
+        Py_ssize_t n = PyList_GET_SIZE(term);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            if (c_collect_vars(PyList_GET_ITEM(term, i), seen_ids, result, depth + 1) < 0)
+                return -1;
+        }
+        return 0;
+    }
+
+    /* Compound */
+    if (Compound_type) {
+        int r = PyObject_IsInstance(term, Compound_type);
+        if (r < 0) return -1;
+        if (r) {
+            PyObject *args = PyObject_GetAttrString(term, "args");
+            if (!args) return -1;
+            if (!PyTuple_Check(args)) {
+                Py_DECREF(args);
+                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
+                return -1;
+            }
+            Py_ssize_t n = PyTuple_GET_SIZE(args);
+            for (Py_ssize_t i = 0; i < n; i++) {
+                if (c_collect_vars(PyTuple_GET_ITEM(args, i), seen_ids, result, depth + 1) < 0) {
+                    Py_DECREF(args);
+                    return -1;
+                }
+            }
+            Py_DECREF(args);
+            return 0;
+        }
+    }
+
+    /* KWTerm */
+    if (KWTerm_type) {
+        int r = PyObject_IsInstance(term, KWTerm_type);
+        if (r < 0) return -1;
+        if (r) {
+            PyObject *values = PyObject_CallMethod(term, "values", NULL);
+            if (!values) return -1;
+            PyObject *iter = PyObject_GetIter(values);
+            Py_DECREF(values);
+            if (!iter) return -1;
+            PyObject *item;
+            while ((item = PyIter_Next(iter))) {
+                int r2 = c_collect_vars(item, seen_ids, result, depth + 1);
+                Py_DECREF(item);
+                if (r2 < 0) { Py_DECREF(iter); return -1; }
+            }
+            Py_DECREF(iter);
+            if (PyErr_Occurred()) return -1;
+            return 0;
+        }
+    }
+
+    /* Term instance (PredicateMeta or @dataclass) */
+    {
+        int ti = c_is_term_instance(term);
+        if (ti < 0) return -1;
+        if (ti) {
+            PyObject *fields = c_term_field_names(term);
+            if (!fields && PyErr_Occurred()) return -1;
+            if (!fields) {
+                fields = py_term_field_names(NULL, term);
+                if (!fields) return -1;
+            }
+            Py_ssize_t n = PyTuple_GET_SIZE(fields);
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
+                if (!val) { Py_DECREF(fields); return -1; }
+                int r2 = c_collect_vars(val, seen_ids, result, depth + 1);
+                Py_DECREF(val);
+                if (r2 < 0) { Py_DECREF(fields); return -1; }
+            }
+            Py_DECREF(fields);
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * _collect_vars_impl(term, seen_ids_set, result_list) -> None
+ *
+ * Python-callable wrapper.  Appends unbound Vars from term into result_list,
+ * using seen_ids_set (a set of pointer-based ids) to deduplicate.
+ * Implements the traversal used by term_variables/2 and numbervars/3.
+ */
+static PyObject *
+py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *term, *seen_ids, *result;
+    if (!PyArg_ParseTuple(args, "OO!O!", &term,
+                          &PySet_Type, &seen_ids,
+                          &PyList_Type, &result))
+        return NULL;
+    if (c_collect_vars(term, seen_ids, result, 0) < 0)
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+
+/* ================================================================
  * Module definition
  * ================================================================ */
 
@@ -2479,6 +2819,15 @@ static PyMethodDef module_methods[] = {
     {"_is_compound", py_is_compound, METH_O,
      "_is_compound(term) -> bool\n"
      "True if term is a compound term."},
+    {"_copy_term_impl", py_copy_term_impl, METH_VARARGS,
+     "_copy_term_impl(term, var_map) -> copied_term\n"
+     "Deep-copy term, replacing each unbound Var with a fresh one.\n"
+     "var_map (a dict) maps original Var id to fresh Var; pass {} initially.\n"
+     "Sharing is preserved: two refs to the same Var get the same fresh copy."},
+    {"_collect_vars_impl", py_collect_vars_impl, METH_VARARGS,
+     "_collect_vars_impl(term, seen_ids_set, result_list) -> None\n"
+     "Append all unbound Vars in term to result_list in left-to-right order.\n"
+     "seen_ids_set (a set of pointer ids) deduplicates; pass set() initially."},
     {NULL, NULL, 0, NULL}
 };
 

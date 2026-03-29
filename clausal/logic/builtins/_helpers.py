@@ -13,6 +13,8 @@ from clausal.logic.variables._variables import (
     _args_list,
     _is_compound,
     _is_ground,
+    _copy_term_impl,
+    _collect_vars_impl,
     _register_term_types,
 )
 from clausal.terms import Compound, KWTerm
