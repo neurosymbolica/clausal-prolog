@@ -32,10 +32,10 @@ expression).
 Query it from Python:
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from hello import greeting
 
-for trail in solve(greeting("hello")):
+for trail in greeting("hello"):
     print("yes")
 ```
 
@@ -43,8 +43,8 @@ This prints `yes` — one solution, confirming the fact. Try querying with a
 variable:
 
 ```python
-for trail in solve(greeting(X := Var())):
-    print(deref(X))
+for trail in greeting(X := Var()):
+    print(X.value)
 ```
 
 This prints every greeting in turn: `hello`, `hi`, `hey there`.
@@ -89,24 +89,24 @@ the body is wrapped in parentheses.
 Query it from Python:
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from family import grandparent
 
-for trail in solve(grandparent("alice", X := Var())):
-    print(deref(X))
+for trail in grandparent("alice", X := Var()):
+    print(X.value)
 ```
 
 Result: `dave` then `eve` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-When you call `solve(goal)` you get a **generator** that yields the Trail
-after each solution. Clausal finds all clauses whose heads unify with the goal —
-these represent logical alternatives. If a condition in the body does not hold,
-Clausal explores the remaining alternatives.
+Predicate term instances are directly iterable — `for trail in goal:` yields
+the Trail after each solution. Clausal finds all clauses whose heads unify
+with the goal — these represent logical alternatives. If a condition in the body
+does not hold, Clausal explores the remaining alternatives.
 
 To get just the first answer use `once(goal)`. To iterate all solutions
-use a `for trail in solve(...)` loop and call `deref()` on your Var objects.
+use a `for trail in goal:` loop and read `X.value` on your Var objects.
 
 ---
 
@@ -261,13 +261,13 @@ fizzbuzz(N, N),
 Query it from Python:
 
 ```python
-from clausal import Var, deref, once
+from clausal import Var, once
 from fizzbuzz import fizzbuzz
 
 results = []
 for n in range(1, 16):
     once(fizzbuzz(n, X := Var()))
-    results.append(deref(X))
+    results.append(X.value)
 ```
 
 ---
@@ -399,12 +399,12 @@ logical alternatives — together they define the complete reachability relation
 Query it from Python:
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from graph import reachable
 
 results = set()
-for trail in solve(reachable("a", DEST := Var())):
-    results.add(deref(DEST))
+for trail in reachable("a", DEST := Var()):
+    results.add(DEST.value)
 print(sorted(results))
 # ['b', 'c', 'd']
 ```

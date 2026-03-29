@@ -216,9 +216,9 @@ Test("fib 10") <- Fib(10, 55)
 Or query from [Python](python_integration.md):
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from clausal.examples.fibonacci import Fib
 
-for trail in solve(Fib(10, F := Var())):
-    print(deref(F))  # 55
+for trail in Fib(10, F := Var()):
+    print(F.value)  # 55
 ```

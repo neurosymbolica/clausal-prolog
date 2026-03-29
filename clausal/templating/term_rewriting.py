@@ -3240,6 +3240,12 @@ class EmbedTransformer(NodeTransformer):
 
         return transformer.generic_visit(with_statement)
 
+    def visit_NamedExpr(transformer, node):
+        # Walrus operator: only transform the value, never the target.
+        # The target must remain a plain Name node.
+        node.value = transformer.visit(node.value)
+        return node
+
     def visit_Name(transformer, name):
         # In outer Python code, rewrite var_ / ALL_CAPS → .value to unbox a logic variable.
         if _is_logic_var_name(name.id):

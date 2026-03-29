@@ -57,44 +57,86 @@ Doubled(R) <- (Item(X), R is ++(X * 2))
 
 ## Querying from Python
 
-### `solve` — iterate all solutions
+### Direct iteration — the simplest way
 
-The primary entry point. Yields the `Trail` after each solution — call `deref()`
-on your `Var` objects to read bindings:
+Predicate term instances are directly iterable.  Each iteration yields the
+`Trail` after a solution — read bindings via `Var.value`, `int()`, `float()`,
+or `str()`:
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
+from fibonacci import Fib
+
+for trail in Fib(10, F := Var()):
+    print(F.value)  # 55
+```
+
+The module is inferred automatically from the predicate class.  No `solve` or
+`deref` import needed.
+
+`Var` objects support Python coercion:
+
+| Access | Behaviour |
+|--------|-----------|
+| `X.value` | Dereferenced value (Var if still unbound) |
+| `str(X)` | String of dereferenced value (`_N` if unbound) |
+| `int(X)` | Integer coercion (raises `UnboundVarCoercionError` if unbound) |
+| `float(X)` | Float coercion (raises `UnboundVarCoercionError` if unbound) |
+| `bool(X)` | Bool coercion (raises `UnboundVarCoercionError` if unbound) |
+| `f"{X}"` | F-string auto-deref |
+
+### `solve` — iterate with explicit module
+
+Use `solve` when you need to pass the module explicitly or when working with
+non-predicate goal terms:
+
+```python
+from clausal import Var, solve
 from fibonacci import Fib
 
 for trail in solve(Fib(10, F := Var())):
-    print(deref(F))  # 55
+    print(F.value)  # 55
 ```
 
-The module is inferred automatically from the predicate class. You can also pass
-it explicitly (as an imported Python module or a `Module` object):
+You can pass the module explicitly (as an imported Python module or a `Module`
+object):
 
 ```python
 import fibonacci
 for trail in solve(Fib(10, F := Var()), fibonacci):
-    print(deref(F))
+    print(F.value)
 ```
 
 ### `once` — first solution only
 
 ```python
-from clausal import Var, deref, once
+from clausal import Var, once
 from fibonacci import Fib
 
 trail = once(Fib(10, F := Var()))
 if trail is not None:
-    print(deref(F))  # 55
+    print(F.value)  # 55
 ```
 
 Returns the `Trail` for the first solution, or `None` if the goal fails.
 
-### `query` — collect binding dicts
+### `call` — drive a named predicate by string
 
-Wraps `solve` and returns fully-dereferenced bindings as plain Python dicts:
+Lowest-overhead path — dispatches directly to the compiled function:
+
+```python
+from clausal import Var, call
+import fibonacci
+
+for trail in call("Fib", 7, N := Var(), module=fibonacci):
+    print(N.value)
+```
+
+### `query` — collect binding dicts (deprecated)
+
+!!! warning "Deprecated"
+    `query()` is deprecated.  Iterate the goal directly and use `Var.value`:
+    `for trail in pred(X := Var()): print(X.value)`
 
 ```python
 from clausal import Var, query
@@ -104,37 +146,6 @@ F = Var()
 for bindings in query(Fib(10, F), {"F": F}):
     print(bindings)  # {"F": 55}
 ```
-
-Unbound Vars appear as `Var` objects in the dict. Full dereferencing is recursive:
-nested compound terms are walked.
-
-### `call` — drive a named predicate
-
-Lowest-overhead path — dispatches directly to the compiled function:
-
-```python
-from clausal import Var, deref, call
-import fibonacci
-
-N = Var()
-for trail in call("Fib", 7, N, module=fibonacci):
-    print(deref(N))   # reads the binding while it is live
-```
-
-### `query_wfs` — results with truth annotations
-
-For programs with [Well-Founded Semantics](wfs.md) (recursion through negation on [tabled](tabling.md) predicates):
-
-```python
-from clausal import Var, query_wfs
-
-X = Var()
-results = query_wfs(goal, {"X": X})
-for r in results:
-    print(r["X"], r["_truth"])  # True or "undefined"
-```
-
-Returns a **list** (not iterator) of binding dicts, each with a `"_truth"` key.
 
 ---
 

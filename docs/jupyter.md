@@ -49,8 +49,7 @@ limit) as styled HTML.  Each solution is separated by **or**:
 ```python
 from clausal import Member, Var, Solutions
 
-X = Var()
-Solutions(Member(X, [1, 2, 3]))
+Solutions(Member(X := Var(), [1, 2, 3]))
 ```
 
 Displays:

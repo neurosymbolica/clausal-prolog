@@ -48,10 +48,28 @@ import clausal.examples.sudoku as sudoku
 
 ## Query syntax
 
-Queries use the `*(goals)` form — a starred parenthesised expression.  This is
-valid Python at parse time (it produces a `Starred` AST node) but would be a
-compile-time error; the Clausal AST transformer intercepts it before
-compilation.
+There are two ways to query in IPython:
+
+### Plain Python iteration
+
+Since predicate terms are directly iterable, you can use a standard `for` loop:
+
+```python
+from clausal import Var
+from hello import greeting
+
+for trail in greeting(X := Var()):
+    print(X.value)
+```
+
+This works identically in plain Python scripts and IPython.
+
+### `*(goals)` — IPython-specific shorthand
+
+The `*(goals)` form is an IPython-specific shorthand that auto-declares
+uppercase variables and displays solutions interactively.  It is rewritten at
+the text level into a valid Python call before compilation (for compatibility
+with Python 3.13+).
 
 The entire expression inside `*(...)` is treated as a **clause body**, not
 ordinary Python.  Operators that have special meaning in Python are rewritten

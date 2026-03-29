@@ -124,10 +124,10 @@ query**. It asks: for which arguments does the predicate hold at all?
 
 ```python
 # The most general query for list_sum
-from clausal import Var, deref, solve
+from clausal import Var
 
-for trail in solve(list_sum(LIST := Var(), SUM := Var())):
-    print(deref(LIST), deref(SUM))
+for trail in list_sum(LIST := Var(), SUM := Var()):
+    print(LIST.value, SUM.value)
 ```
 
 This asks: "Are there any lists and sums for which `list_sum` holds?" A truly

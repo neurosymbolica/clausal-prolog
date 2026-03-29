@@ -8,11 +8,11 @@
 Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM, and the same garbage collector. No boilerplate, no latency, no memory leaks, no friction.
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from fibonacci import Fib
 
-for trail in solve(Fib(10, N := Var())):
-    print(deref(N))  # 55
+for trail in Fib(10, N := Var()):
+    print(N.value)  # 55
 ```
 
 ---
@@ -50,11 +50,11 @@ Fib(N, F) <- (
 If you need, you can call it from Python:
 
 ```python
-from clausal import Var, deref, solve
+from clausal import Var
 from fibonacci import Fib
 
-for trail in solve(Fib(10, F := Var())):
-    print(deref(F))  # 55
+for trail in Fib(10, F := Var()):
+    print(F.value)  # 55
 ```
 
 ---
