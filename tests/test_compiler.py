@@ -262,8 +262,22 @@ class TestCompileHeadToMatchCase:
         assert isinstance(case_arm.pattern, ast.MatchSequence)
         assert len(case_arm.pattern.patterns) == 2
 
-    def test_body_starts_with_trail_mark(self):
+    def test_ground_fact_skips_trail_mark(self):
         head = point(_x=1, _y=2)
+        case_arm = compile_head_to_match_case(
+            head=head,
+            body_stmts=[ast.Pass()],
+            var_context={},
+            arity=2,
+        )
+        # Ground fact: no trail mark/undo, body stmts emitted directly
+        assert not any(isinstance(s, ast.Assign) and
+                       isinstance(s.targets[0], ast.Name) and
+                       s.targets[0].id == "_mark" for s in case_arm.body)
+
+    def test_body_starts_with_trail_mark(self):
+        v = Var()
+        head = point(_x=v, _y=2)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],
@@ -277,7 +291,8 @@ class TestCompileHeadToMatchCase:
         assert first_stmt.targets[0].id == "_mark"
 
     def test_body_has_try_finally_with_undo(self):
-        head = point(_x=1, _y=2)
+        v = Var()
+        head = point(_x=v, _y=2)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],
@@ -308,7 +323,8 @@ class TestCompileHeadToMatchCase:
         assert v._id in var_context
 
     def test_body_stmts_in_try_block(self):
-        head = point(_x=1, _y=2)
+        v = Var()
+        head = point(_x=v, _y=2)
         sentinel = ast.Pass()
         case_arm = compile_head_to_match_case(
             head=head,
@@ -539,7 +555,7 @@ class TestCompilePredicate:
     # ── Trail mark/undo in case arm ──
 
     def test_trail_mark_and_undo_called_around_body(self):
-        """Verify that trail.mark() and trail.undo() are called."""
+        """Verify that trail.mark() and trail.undo() are called for non-ground clauses."""
         mark_calls = []
         undo_calls = []
 
@@ -551,7 +567,8 @@ class TestCompilePredicate:
             def undo(self, mark):
                 undo_calls.append(mark)
 
-        head = Compound("t", (1,))
+        v = Var()
+        head = Compound("t", (v,))
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("t", 1)
         fn = compile_predicate("t", 1, clauses, db)
@@ -572,7 +589,8 @@ class TestCompilePredicate:
             def undo(self, mark):
                 undo_calls.append(mark)
 
-        head = Compound("u", (1,))
+        v = Var()
+        head = Compound("u", (v,))
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("u", 1)
 

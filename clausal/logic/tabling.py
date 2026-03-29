@@ -146,12 +146,17 @@ class SuspendedConsumer:
 # ── Key computation (variant checking) ────────────────────────────────────
 
 
+_SCALAR_TYPES = (bool, int, float, str, bytes)
+
+
 def _normalize_for_key(term):
     """Deref term; replace unbound Vars with _VAR sentinel."""
     term = deref(term)
+    if type(term) is int:
+        return term
     if is_var(term):
         return _VAR
-    if term is None or isinstance(term, (bool, int, float, str, bytes)):
+    if term is None or isinstance(term, _SCALAR_TYPES):
         return term
     if isinstance(term, list):
         return ("__list__",) + tuple(_normalize_for_key(e) for e in term)
@@ -166,7 +171,7 @@ def _normalize_for_key(term):
 
 def make_subgoal_key(args, trail):
     """Compute variant key for a tabled call's arguments."""
-    return tuple(_normalize_for_key(a) for a in args)
+    return tuple([_normalize_for_key(a) for a in args])
 
 
 # ── Answer freezing ──────────────────────────────────────────────────────
@@ -175,7 +180,7 @@ def make_subgoal_key(args, trail):
 def freeze_args(args, trail):
     """Capture a ground snapshot of current arg bindings."""
     from clausal.logic.solve import _deref_walk
-    return tuple(_deref_walk(a) for a in args)
+    return tuple([_deref_walk(a) for a in args])
 
 
 # ── Answer unification ───────────────────────────────────────────────────

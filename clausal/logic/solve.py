@@ -133,6 +133,32 @@ def _term_to_goal(term: Any) -> Any:
     return term
 
 
+_VAR_SENTINEL = object()
+
+# Cache: (goal_class_or_functor, arg_type_key, module_id) → (fn, code_object, var_names)
+_query_cache: dict = {}
+
+
+def _goal_cache_key(goal: Any, module: Module):
+    """Structural key: predicate identity + which positions are Var vs ground type."""
+    from clausal.logic.predicate import PredicateMeta
+    if isinstance(type(goal), PredicateMeta):
+        cls = type(goal)
+        fields = term_field_names(goal)
+        arg_types = []
+        for f in fields:
+            v = deref(getattr(goal, f))
+            arg_types.append(_VAR_SENTINEL if is_var(v) else type(v))
+        return (cls, tuple(arg_types), id(module))
+    if isinstance(goal, Compound):
+        arg_types = []
+        for a in goal.args:
+            a = deref(a)
+            arg_types.append(_VAR_SENTINEL if is_var(a) else type(a))
+        return (goal.functor, len(goal.args), tuple(arg_types), id(module))
+    return None
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -145,6 +171,9 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     function's globals so that predicate names resolve from the module namespace
     (Phase 5: cross-predicate resolution without _db string lookup).
     """
+    # Compute cache key before AST conversion (needs original term)
+    cache_key = _goal_cache_key(goal, module)
+
     goal = _term_to_goal(goal)
     from clausal.logic.compiler import (
         compile_predicate_trampoline,
@@ -154,10 +183,21 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         _collect_types_from_term,
     )
 
+    vars_in_goal = _collect_vars(goal)
+
+    if cache_key is not None and cache_key in _query_cache:
+        cached_fn, cached_code, cached_var_names = _query_cache[cache_key]
+        # Map new Var objects to the names the cached code expects
+        import types as _types
+        new_globals = dict(cached_fn.__globals__)
+        for old_name, new_var in zip(cached_var_names, vars_in_goal):
+            new_globals[old_name] = new_var
+        fn = _types.FunctionType(cached_code, new_globals, cached_fn.__name__)
+        return fn
+
     db = module.db
 
     # Collect all Var objects reachable from goal.
-    vars_in_goal = _collect_vars(goal)
     pre_var_context = {v._id: _var_python_name(v) for v in vars_in_goal}
     extra_globals: dict = {}
     # Start with module globals so predicate names resolve from the namespace.
@@ -178,11 +218,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
     dummy_head = Compound("_query", ())
     clause = Clause(head=dummy_head, body=[goal])
-    return compile_predicate_trampoline(
+    dispatch_fn = compile_predicate_trampoline(
         "_query", 0, [clause], db,
         body_compiler=_query_body_compiler,
         globals_=extra_globals,
     )
+
+    if cache_key is not None:
+        cached_var_names = [_var_python_name(v) for v in vars_in_goal]
+        _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__, cached_var_names)
+
+    return dispatch_fn
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

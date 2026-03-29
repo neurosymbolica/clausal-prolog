@@ -227,6 +227,17 @@ def _head_list_unify_input(target, var_vals, star_val, after_vals, trail):
     """
     d = deref(target)
 
+    # ── fast path: [H, *T] on a plain list ──
+    if type(d) is list and star_val is not None and not after_vals:
+        n = len(var_vals)
+        if len(d) < n:
+            return False
+        for i in range(n):
+            if not unify(var_vals[i], d[i], trail):
+                return False
+        return unify(star_val, d[n:], trail)
+    # ── end fast path ──
+
     # Normalise SegList: walk it; if ground it becomes a plain list.
     # Non-ground SegLists can't be matched against a single-star pattern yet
     # (SegList-vs-SegList unification is Phase 6) — return False to fail.
@@ -6982,6 +6993,16 @@ def compile_head_to_match_case(
             )
 
         inner = list_var_allocs + inner
+
+    # If the head captured no variables and there are no guards that unify
+    # (dup_guards, list_guards), the clause cannot modify the trail —
+    # skip the mark/undo overhead.
+    if not head_var_ctx and not dup_guards and not list_guards:
+        return ast.match_case(
+            pattern=outer_pattern,
+            guard=None,
+            body=inner,
+        )
 
     try_finally = ast.Try(
         body=inner,

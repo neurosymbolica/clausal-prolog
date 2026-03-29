@@ -1068,8 +1068,9 @@ def _resolve(x):
 
     Returns the evaluated integer if fully ground, otherwise the original value.
     """
-    _ensure_term_imports()
-    if _Add is not None and isinstance(x, (_Add, _Sub, _Mult, _Negate)):
+    if _Add is None:
+        _ensure_term_imports()
+    if isinstance(x, (_Add, _Sub, _Mult, _Negate)):
         val = _eval_ground(x)
         if val is not None:
             return val
@@ -1084,11 +1085,11 @@ def _both_ground(l, r) -> bool:
     """True if both sides are concrete values with no unbound Vars or expression trees."""
     if is_var(l) or is_var(r):
         return False
-    _ensure_term_imports()
-    if _Add is not None:
-        expr_types = (_Add, _Sub, _Mult, _Negate, _Div, _FloorDiv, _Mod, _Pow)
-        if isinstance(l, expr_types) or isinstance(r, expr_types):
-            return False
+    if _Add is None:
+        _ensure_term_imports()
+    expr_types = (_Add, _Sub, _Mult, _Negate, _Div, _FloorDiv, _Mod, _Pow)
+    if isinstance(l, expr_types) or isinstance(r, expr_types):
+        return False
     return True
 
 
@@ -1106,13 +1107,18 @@ def fd_eq(l, r, trail: Trail) -> bool:
     """
     l = deref(l)
     r = deref(r)
+    # ── fast path: ground integer comparison ──
+    if type(l) is int and type(r) is int:
+        return l == r
+    # ── end fast path ──
     l = _resolve(l)
     r = _resolve(r)
     if _any_real(l, r):
         from clausal.logic.clpr import real_eq
         return real_eq(l, r, trail)
     # If either side is an expression tree, try to linearise
-    _ensure_term_imports()
+    if _Add is None:
+        _ensure_term_imports()
     if isinstance(l, (_Add, _Sub, _Mult, _Negate)) or isinstance(r, (_Add, _Sub, _Mult, _Negate)):
         lc = _linearise(l)
         rc = _linearise(r)
@@ -1148,6 +1154,10 @@ def fd_ne(l, r, trail: Trail) -> bool:
     """Post X != Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
+    # ── fast path: ground integer comparison ──
+    if type(l) is int and type(r) is int:
+        return l != r
+    # ── end fast path ──
     l = _resolve(l)
     r = _resolve(r)
     if _any_real(l, r):
@@ -1167,6 +1177,10 @@ def fd_lt(l, r, trail: Trail) -> bool:
     """Post X < Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
+    # ── fast path: ground integer comparison ──
+    if type(l) is int and type(r) is int:
+        return l < r
+    # ── end fast path ──
     l = _resolve(l)
     r = _resolve(r)
     if _any_real(l, r):
@@ -1186,6 +1200,10 @@ def fd_le(l, r, trail: Trail) -> bool:
     """Post X <= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
+    # ── fast path: ground integer comparison ──
+    if type(l) is int and type(r) is int:
+        return l <= r
+    # ── end fast path ──
     l = _resolve(l)
     r = _resolve(r)
     if _any_real(l, r):
@@ -1203,11 +1221,19 @@ def fd_le(l, r, trail: Trail) -> bool:
 
 def fd_gt(l, r, trail: Trail) -> bool:
     """Post X > Y.  Dispatches to CLP(R) when appropriate."""
+    l = deref(l)
+    r = deref(r)
+    if type(l) is int and type(r) is int:
+        return l > r
     return fd_lt(r, l, trail)
 
 
 def fd_ge(l, r, trail: Trail) -> bool:
     """Post X >= Y.  Dispatches to CLP(R) when appropriate."""
+    l = deref(l)
+    r = deref(r)
+    if type(l) is int and type(r) is int:
+        return l >= r
     return fd_le(r, l, trail)
 
 
