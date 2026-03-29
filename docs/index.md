@@ -7,12 +7,29 @@
 
 Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM, and the same garbage collector. No boilerplate, no latency, no memory leaks, no friction.
 
+```clausal
+# fibonacci.clausal
+
+-table(fib/2),
+
+fib(0, 0),
+fib(1, 1),
+fib(N, F) <- (
+    N > 1,
+    N1 == N - 1,
+    N2 == N - 2,
+    fib(N1, F1),
+    fib(N2, F2),
+    F == F1 + F2
+)
+```
+
 ```python
 from clausal import Var
-from fibonacci import Fib
+from fibonacci import fib
 
-for trail in Fib(10, N := Var()):
-    print(N.value)  # 55
+for trail in fib(10, F := Var()):
+    print(F.value)  # 55
 ```
 
 ---
@@ -23,39 +40,6 @@ for trail in Fib(10, N := Var()):
 - **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
 - **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
 - **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
-
----
-
-## Quick taste
-
-A `.clausal` file defines predicates using Python syntax with a trailing comma:
-
-```clausal
-# fibonacci.clausal
-
--table(Fib/2),
-
-Fib(0, 0),
-Fib(1, 1),
-Fib(N, F) <- (
-    N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
-    Fib(N1, F1),
-    Fib(N2, F2),
-    F == F1 + F2
-)
-```
-
-If you need, you can call it from Python:
-
-```python
-from clausal import Var
-from fibonacci import Fib
-
-for trail in Fib(10, F := Var()):
-    print(F.value)  # 55
-```
 
 ---
 
