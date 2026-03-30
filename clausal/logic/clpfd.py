@@ -167,6 +167,23 @@ def domain_intersection(d1: Domain, d2: Domain) -> Domain:
     return tuple(result)
 
 
+def _domain_from_set(values: set) -> Domain:
+    """Build a minimal domain from a set of integer values."""
+    if not values:
+        return ()
+    sorted_vals = sorted(values)
+    intervals: list[tuple[int, int]] = []
+    lo = hi = sorted_vals[0]
+    for v in sorted_vals[1:]:
+        if v == hi + 1:
+            hi = v
+        else:
+            intervals.append((lo, hi))
+            lo = hi = v
+    intervals.append((lo, hi))
+    return tuple(intervals)
+
+
 def domain_remove(domain: Domain, value: int) -> Domain:
     """Remove a single value from domain."""
     result: list[tuple[int, int]] = []
@@ -2196,18 +2213,12 @@ class TuplesInConstraint(Constraint):
             if state is None:
                 continue
 
-            # Narrow domain to only allowed values
-            new_d = state.domain
-            changed = False
-            for lo, hi in state.domain:
-                if lo == _NEG_INF or hi == _POS_INF:
-                    continue
-                for val in range(int(lo), int(hi) + 1):
-                    if val not in allowed:
-                        new_d = domain_remove(new_d, val)
-                        changed = True
-
-            if changed:
+            # Build domain from allowed values and intersect with current
+            if not allowed:
+                return False
+            allowed_d = _domain_from_set(allowed)
+            new_d = domain_intersection(state.domain, allowed_d)
+            if new_d != state.domain:
                 if not _narrow_if_changed(v, new_d, trail, queue):
                     return False
 
