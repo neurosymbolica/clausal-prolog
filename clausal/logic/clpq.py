@@ -716,12 +716,18 @@ _tableaux: dict[int, Tableau] = {}
 
 
 def _get_tableau(trail: Trail) -> Tableau:
-    """Get or create the global Tableau for this trail."""
+    """Get or create the global Tableau for this trail.
+
+    On first creation, registers an undo callback that removes the entry
+    when the trail is unwound past this point, preventing leaks.
+    """
     tid = id(trail)
     tab = _tableaux.get(tid)
     if tab is None:
         tab = Tableau()
         _tableaux[tid] = tab
+        # Clean up when trail unwinds past the point where CLP(Q) was first used
+        trail.record(lambda: _tableaux.pop(tid, None))
     return tab
 
 

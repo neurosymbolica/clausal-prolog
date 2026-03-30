@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from fractions import Fraction
 from typing import Any
 
 from clausal.logic.variables import (
@@ -989,9 +990,8 @@ def _eval_ground(expr):
 
     Returns int or float on success, None if expression contains unbound Vars.
     """
-    from fractions import Fraction as _Fraction  # noqa: PLC0415
     expr = deref(expr)
-    if isinstance(expr, (int, float, _Fraction)) and not isinstance(expr, bool):
+    if isinstance(expr, (int, float, Fraction)) and not isinstance(expr, bool):
         return expr
     if is_var(expr):
         return None
@@ -1018,7 +1018,6 @@ def _eval_ground(expr):
             # int/int → Fraction for exact rational arithmetic
             if isinstance(l, int) and not isinstance(l, bool) \
                and isinstance(r, int) and not isinstance(r, bool):
-                from fractions import Fraction  # noqa: PLC0415
                 return Fraction(l, r)
             return l / r
     elif isinstance(expr, _FloorDiv):
@@ -1182,15 +1181,21 @@ def _is_fd_candidate(x) -> bool:
 
 def _is_rational_arg(x) -> bool:
     """True if x is a Fraction, a Var with a rational-domain attribute,
-    or an expression tree containing one of the above."""
-    from fractions import Fraction  # noqa: PLC0415
+    or an expression tree containing one of the above.
+
+    Fast-path: plain ints and floats (the common case for CLP(Z) and CLP(R))
+    are rejected immediately without touching expression-tree imports.
+    """
     x = deref(x)
+    # Fast reject: int and float are the overwhelmingly common cases
+    if type(x) is int or type(x) is float:
+        return False
     if isinstance(x, Fraction):
         return True
     if is_var(x):
         from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
         return get_attr(x, Q_KEY) is not None
-    # Check inside expression trees
+    # Walk expression trees (only reached for Add/Sub/Mult/... nodes)
     if _Add is None:
         _ensure_term_imports()
     if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
