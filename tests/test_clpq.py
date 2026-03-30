@@ -725,7 +725,7 @@ class TestBBInf:
         """Multi-level branching: both X and Y must be integer.
         min(X + Y) with X + Y >= 5/2, X,Y in [0,10] integer.
         LP relaxation gives X+Y = 5/2 (fractional).
-        Integer optimum: X=1, Y=2 or X=0, Y=3 → min = 3."""
+        Integer optimum: X=0, Y=3 (or X=3, Y=0, etc.) → min = 3."""
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -733,6 +733,33 @@ class TestBBInf:
         result = Var()
         assert bb_inf([x, y], Add(left=x, right=y), result, trail)
         assert deref(result) == F(3)
+
+    def test_binds_variables(self):
+        """bb_inf should bind integer variables to their optimal values."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        q_ge(x, F(3, 2), trail)
+        result = Var()
+        assert bb_inf([x], x, result, trail)
+        assert deref(result) == F(2)
+        assert deref(x) == F(2)  # x must be bound, not just result
+
+    def test_binds_multiple_vars(self):
+        """bb_inf binds all constrained vars to optimal integer point."""
+        trail = Trail()
+        x, y, z = Var(), Var(), Var()
+        in_q([x, y, z], 0, 100, trail)
+        q_ge(x, Add(left=y, right=z), trail)
+        q_ge(y, F(2), trail)
+        q_ge(z, F(2), trail)
+        result = Var()
+        assert bb_inf([x, y, z], x, result, trail)
+        assert deref(result) == F(4)
+        # Variables should be bound to integers
+        assert deref(x) == F(4)
+        assert deref(y) == F(2)
+        assert deref(z) == F(2)
 
 
 class TestCoefficientGrowth:

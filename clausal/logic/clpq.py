@@ -1521,6 +1521,9 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     constraints and the additional requirement that all variables in
     *int_vars* take integer values.
 
+    Binds *result_var* to the optimal objective value and all
+    constrained variables to their optimal assignments.
+
     Uses LP relaxation at each node and branches on the most fractional
     integer variable.
     """
@@ -1538,10 +1541,16 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     obj_coeffs, obj_const = lc
 
     tableau = _get_tableau(trail)
-    best = _bb_solve(tableau, obj_coeffs, obj_const, int_ids)
-    if best is None:
+    best_val, best_tab = _bb_solve(tableau, obj_coeffs, obj_const, int_ids)
+    if best_val is None:
         return False
-    return unify(result_var, best, trail)
+    # Install the optimal tableau and bind variables
+    _snapshot_tableau(trail)
+    tid = id(trail)
+    _tableaux[tid] = best_tab
+    if not _bind_optimal(best_tab, trail):
+        return False
+    return unify(result_var, best_val, trail)
 
 
 _BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion
@@ -1550,31 +1559,33 @@ _BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion
 def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
               obj_const: Fraction, int_ids: set[int],
               best_so_far: Fraction | None = None,
+              best_tab: Tableau | None = None,
               depth: int = 0,
-              ) -> Fraction | None:
+              ) -> tuple[Fraction | None, Tableau | None]:
     """Recursive branch-and-bound solver.
 
-    Returns the optimal (minimum) objective value with integer constraints,
-    or None if infeasible.
+    Returns ``(optimal_value, optimal_tableau)`` or ``(None, None)``
+    if infeasible.  The tableau holds the variable assignments at the
+    optimal integer point.
     """
     import math
 
     if depth > _BB_MAX_DEPTH:
-        return best_so_far  # give up — return best found so far
+        return best_so_far, best_tab
 
     tab = tableau.copy()
     opt = tab.optimize(dict(obj_coeffs), 'min')
     if opt is None:
-        return None  # unbounded — shouldn't happen in well-posed MIP
+        return None, None  # unbounded
     obj_val = opt + obj_const
 
-    # Pruning: if this node's LP relaxation is worse than best known, skip
+    # Pruning
     if best_so_far is not None and obj_val >= best_so_far:
-        return best_so_far
+        return best_so_far, best_tab
 
-    # Check integrality of all int_vars
+    # Check integrality
     most_frac_vid = None
-    most_frac_dist = ZERO  # distance from nearest integer (want max)
+    most_frac_dist = ZERO
     for vid in int_ids:
         val = tab.assign.get(vid, ZERO)
         if vid in tab.parametric:
@@ -1582,7 +1593,6 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
             val = pk
             for pv, pcoeff in pc.items():
                 val += pcoeff * tab.assign.get(pv, ZERO)
-        # Check if val is integer
         if val.denominator != 1:
             frac_part = val - Fraction(math.floor(val))
             dist = min(frac_part, ONE - frac_part)
@@ -1591,8 +1601,8 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
                 most_frac_vid = vid
 
     if most_frac_vid is None:
-        # All integer vars are integral — feasible integer solution!
-        return obj_val
+        # All integer vars are integral — feasible integer solution
+        return obj_val, tab
 
     # Branch on most fractional variable
     val = tab.assign.get(most_frac_vid, ZERO)
@@ -1605,21 +1615,20 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
     ceil_val = floor_val + ONE
 
     best = best_so_far
+    b_tab = best_tab
 
-    # Branch on copies of the CURRENT node's tableau (not the root),
-    # so that bounds from ancestor branches are preserved.
     # Branch 1: vid <= floor_val
     tab1 = tab.copy()
     if tab1.set_bound(most_frac_vid, None, floor_val):
-        result1 = _bb_solve(tab1, obj_coeffs, obj_const, int_ids, best, depth + 1)
-        if result1 is not None and (best is None or result1 < best):
-            best = result1
+        v1, t1 = _bb_solve(tab1, obj_coeffs, obj_const, int_ids, best, b_tab, depth + 1)
+        if v1 is not None and (best is None or v1 < best):
+            best, b_tab = v1, t1
 
     # Branch 2: vid >= ceil_val
     tab2 = tab.copy()
     if tab2.set_bound(most_frac_vid, ceil_val, None):
-        result2 = _bb_solve(tab2, obj_coeffs, obj_const, int_ids, best, depth + 1)
-        if result2 is not None and (best is None or result2 < best):
-            best = result2
+        v2, t2 = _bb_solve(tab2, obj_coeffs, obj_const, int_ids, best, b_tab, depth + 1)
+        if v2 is not None and (best is None or v2 < best):
+            best, b_tab = v2, t2
 
-    return best
+    return best, b_tab
