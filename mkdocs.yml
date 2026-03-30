@@ -73,8 +73,9 @@ nav:
     - I/O: io.md
     - Logging: logging.md
   - Constraints:
-    - Dif & CLP(FD): constraints.md
+    - Dif & CLP(Z): constraints.md
     - CLP(B): clpb.md
+    - CLP(Q): clpq.md
     - CLP(R): clpr.md
   - Standard Library:
     - Random: random.md
