@@ -1240,6 +1240,20 @@ def _any_real(l, r) -> bool:
     return _is_real_arg(l) or _is_real_arg(r)
 
 
+def _check_no_mixed_rational_real(l, r) -> None:
+    """Raise TypeError if one arg is rational and the other is float/real."""
+    l_rat = _is_rational_arg(l)
+    r_rat = _is_rational_arg(r)
+    if l_rat and _is_real_arg(r):
+        raise TypeError(
+            "cannot mix CLP(Q) rational and CLP(R) float in the same constraint"
+        )
+    if r_rat and _is_real_arg(l):
+        raise TypeError(
+            "cannot mix CLP(Q) rational and CLP(R) float in the same constraint"
+        )
+
+
 def _resolve(x):
     """Resolve x: if it's an arithmetic expression tree, try to evaluate it.
 
@@ -1292,6 +1306,7 @@ def fd_eq(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    _check_no_mixed_rational_real(l, r)
     if _any_rational(l, r):
         from clausal.logic.clpq import q_eq  # noqa: PLC0415
         return q_eq(l, r, trail)
@@ -1344,6 +1359,7 @@ def fd_ne(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    _check_no_mixed_rational_real(l, r)
     if _any_rational(l, r):
         from clausal.logic.clpq import q_ne  # noqa: PLC0415
         return q_ne(l, r, trail)
@@ -1372,6 +1388,7 @@ def fd_lt(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    _check_no_mixed_rational_real(l, r)
     if _any_rational(l, r):
         from clausal.logic.clpq import q_lt  # noqa: PLC0415
         return q_lt(l, r, trail)
@@ -1400,6 +1417,7 @@ def fd_le(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    _check_no_mixed_rational_real(l, r)
     if _any_rational(l, r):
         from clausal.logic.clpq import q_le  # noqa: PLC0415
         return q_le(l, r, trail)

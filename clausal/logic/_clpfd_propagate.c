@@ -29,6 +29,9 @@ static PyObject *fn_both_ground = NULL;
 static PyObject *fn_collect_constraint_vars = NULL;
 static PyObject *fn_collect_vars_from = NULL;
 
+/* Mixed rational/real check */
+static PyObject *fn_check_no_mixed = NULL;
+
 /* CLP(Q) dispatch (may be NULL if clpq not available) */
 static PyObject *fn_any_rational = NULL;
 static PyObject *fn_q_eq = NULL;
@@ -2039,6 +2042,13 @@ py_fd_ne(PyObject *self, PyObject *args)
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
 
+    /* Check for mixed rational/real */
+    if (fn_check_no_mixed) {
+        PyObject *chk = PyObject_CallFunctionObjArgs(fn_check_no_mixed, rl, rr, NULL);
+        if (!chk) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        Py_DECREF(chk);
+    }
+
     /* CLP(Q) dispatch */
     if (fn_any_rational) {
         PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
@@ -2143,6 +2153,13 @@ py_fd_lt(PyObject *self, PyObject *args)
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
 
+    /* Check for mixed rational/real */
+    if (fn_check_no_mixed) {
+        PyObject *chk = PyObject_CallFunctionObjArgs(fn_check_no_mixed, rl, rr, NULL);
+        if (!chk) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        Py_DECREF(chk);
+    }
+
     /* CLP(Q) dispatch */
     if (fn_any_rational) {
         PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
@@ -2242,6 +2259,13 @@ py_fd_le(PyObject *self, PyObject *args)
     PyObject *rr = PyObject_CallOneArg(fn_resolve, dr);
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
+
+    /* Check for mixed rational/real */
+    if (fn_check_no_mixed) {
+        PyObject *chk = PyObject_CallFunctionObjArgs(fn_check_no_mixed, rl, rr, NULL);
+        if (!chk) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        Py_DECREF(chk);
+    }
 
     /* CLP(Q) dispatch */
     if (fn_any_rational) {
@@ -2343,6 +2367,13 @@ py_fd_eq(PyObject *self, PyObject *args)
     PyObject *rr = PyObject_CallOneArg(fn_resolve, dr);
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
+
+    /* Check for mixed rational/real */
+    if (fn_check_no_mixed) {
+        PyObject *chk = PyObject_CallFunctionObjArgs(fn_check_no_mixed, rl, rr, NULL);
+        if (!chk) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        Py_DECREF(chk);
+    }
 
     /* CLP(Q) dispatch */
     if (fn_any_rational) {
@@ -3060,6 +3091,22 @@ PyInit__clpfd_propagate(void)
                 Py_XDECREF(type_Mult);   type_Mult = NULL;
                 Py_XDECREF(type_Negate); type_Negate = NULL;
             }
+        } else {
+            PyErr_Clear();
+        }
+    }
+
+    /* Try to import mixed rational/real check (optional) */
+    {
+        PyObject *clpfd_mod = PyImport_ImportModule("clausal.logic.clpfd");
+        if (clpfd_mod) {
+            fn_check_no_mixed = PyObject_GetAttrString(
+                clpfd_mod, "_check_no_mixed_rational_real");
+            if (!fn_check_no_mixed) {
+                PyErr_Clear();
+                fn_check_no_mixed = NULL;
+            }
+            Py_DECREF(clpfd_mod);
         } else {
             PyErr_Clear();
         }

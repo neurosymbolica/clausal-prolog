@@ -41,7 +41,7 @@ Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The
 
 **Dispatch rule:** if either operand is a `Fraction` or a variable declared with `rational` (or `in_q`), the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z).
 
-CLP(Q) has the highest dispatch priority: if both `Fraction` and `float` appear, exact rational arithmetic wins.
+Mixing `Fraction` (CLP(Q)) and `float` (CLP(R)) operands in the same constraint raises a `TypeError`. Convert explicitly if you need to cross domains.
 
 ### `int/int` produces `Fraction`
 
@@ -580,16 +580,17 @@ The dispatch chain in `clpfd.py` (and the C extension `_clpfd_propagate.c`):
 fd_eq(l, r, trail):
     1. Fast path: type(l) is int and type(r) is int → Python ==
     2. _resolve expression trees
-    3. _any_rational(l, r) → CLP(Q) via q_eq        [NEW]
-    4. _any_real(l, r)     → CLP(R) via real_eq
-    5. Expression linearization → ScalarProductConstraint
-    6. _both_ground(l, r)  → Python ==
-    7. At least one Var    → CLP(Z) EqConstraint
+    3. _check_no_mixed_rational_real(l, r) → TypeError if mixed
+    4. _any_rational(l, r) → CLP(Q) via q_eq
+    5. _any_real(l, r)     → CLP(R) via real_eq
+    6. Expression linearization → ScalarProductConstraint
+    7. _both_ground(l, r)  → Python ==
+    8. At least one Var    → CLP(Z) EqConstraint
 ```
 
-`_any_rational` checks: is either operand a `Fraction` instance, or a `Var` with a `"clpq"` attribute?
+`_any_rational` checks: is either operand a `Fraction` instance, or a `Var` with a `"clpq"` attribute? Before dispatching, `_check_no_mixed_rational_real` raises `TypeError` if one operand is rational and the other is a float or CLP(R) variable.
 
-The C extension mirrors this check. During module initialization, it imports `_any_rational` from the Python `clpfd` module and `q_eq`, `q_ne`, `q_lt`, `q_le` from `clpq`. The dispatch in C calls the Python functions through the C-API.
+The C extension mirrors these checks. During module initialization, it imports `_check_no_mixed_rational_real`, `_any_rational` from the Python `clpfd` module and `q_eq`, `q_ne`, `q_lt`, `q_le` from `clpq`. The dispatch in C calls the Python functions through the C-API.
 
 ---
 
@@ -698,8 +699,8 @@ mixed(X, Y) <- (
 | `in_q(X, 0, 10)` then `X == 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
 | `in_domain(X, 1, 10)` then `X == 1/3` | CLP(Q): `1/3` triggers Q dispatch; FD var promoted to Q with bounds `[1, 10]` |
 | `in_domain(X, 1, 10)` then `X == 1/2` | **Fails**: `Fraction(1,2)` is not integer, FD hook rejects |
-| `in_real(X, 0.0, 10.0)` then `X == 1/3` | CLP(Q): Fraction takes priority over float |
-| `in_real(X, 0.0, 10.0)` then `in_q(X, ...)` | **TypeError**: cannot mix float and Fraction domains |
+| `in_real(X, 0.0, 10.0)` then `X == 1/3` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
+| `in_real(X, 0.0, 10.0)` then `in_q(X, ...)` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
 | `X == 5` (no declaration) | CLP(Z): both sides are `int` |
 | `X == 5.0` (no declaration) | CLP(R): float literal triggers R dispatch |
 | `X == 1/3` (no declaration) | CLP(Q): Fraction literal triggers Q dispatch |
