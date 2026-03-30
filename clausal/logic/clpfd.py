@@ -299,6 +299,20 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
                       float(domain_max(new_domain)), trail):
         return False
 
+    # Keep Q bounds in sync if present (mirrors REAL sync above)
+    from clausal.logic.clpq import Q_KEY, QVar  # noqa: PLC0415
+    q_state = get_attr(var, Q_KEY)
+    if q_state is not None:
+        fd_lo_q = Fraction(domain_min(new_domain))
+        fd_hi_q = Fraction(domain_max(new_domain))
+        new_q_lo = max(q_state.lo, fd_lo_q) if q_state.lo is not None else fd_lo_q
+        new_q_hi = min(q_state.hi, fd_hi_q) if q_state.hi is not None else fd_hi_q
+        if new_q_lo > new_q_hi:
+            return False
+        if new_q_lo != q_state.lo or new_q_hi != q_state.hi:
+            updated_q = QVar(new_q_lo, new_q_hi, q_state.tab_id)
+            put_attr(var, Q_KEY, updated_q, trail)
+
     # Singleton → bind variable
     val = domain_singleton(new_domain)
     if val is not None:
@@ -1432,9 +1446,16 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     state = attr_value
     bound_to = deref(bound_to)
 
-    if isinstance(bound_to, int):
+    # Accept int or integer-valued Fraction (e.g., Fraction(3) from CLP(Q))
+    int_val = None
+    if isinstance(bound_to, int) and not isinstance(bound_to, bool):
+        int_val = bound_to
+    elif isinstance(bound_to, Fraction) and bound_to.denominator == 1:
+        int_val = int(bound_to)
+
+    if int_val is not None:
         # Check domain membership
-        if not domain_contains(state.domain, bound_to):
+        if not domain_contains(state.domain, int_val):
             return False
         # Propagate constraints
         queue: deque = deque()

@@ -2613,8 +2613,29 @@ py_fd_hook(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    /* Case 1: bound to integer */
-    if (PyLong_Check(bt) && !PyBool_Check(bt)) {
+    /* Case 1: bound to integer (or integer-valued Fraction from CLP(Q)) */
+    int is_int_val = PyLong_Check(bt) && !PyBool_Check(bt);
+    if (!is_int_val) {
+        /* Check for Fraction with denominator == 1 */
+        PyObject *denom = PyObject_GetAttrString(bt, "denominator");
+        if (denom) {
+            PyObject *one = PyLong_FromLong(1);
+            if (one && PyObject_RichCompareBool(denom, one, Py_EQ) == 1) {
+                /* Convert Fraction to int for domain check */
+                PyObject *int_bt = PyNumber_Long(bt);
+                if (int_bt) {
+                    Py_DECREF(bt);
+                    bt = int_bt;
+                    is_int_val = 1;
+                }
+            }
+            Py_XDECREF(one);
+            Py_DECREF(denom);
+        } else {
+            PyErr_Clear();
+        }
+    }
+    if (is_int_val) {
         int64_t val = PyLong_AsLongLong(bt);
         if (val == -1 && PyErr_Occurred()) goto hook_error;
 

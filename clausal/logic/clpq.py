@@ -723,6 +723,7 @@ class Tableau:
         for bv in list(self.rows):
             if not self._check_basic(bv):
                 return False
+        self._propagate_determined()
         return self._check_diseqs()
 
     # ── Disequality check ────────────────────────────────────────────────
@@ -841,12 +842,41 @@ def _is_ground_q(x: Any) -> bool:
     return isinstance(x, (int, Fraction)) and not isinstance(x, bool)
 
 
+def _promote_fd_to_q(var: Var, trail: Trail) -> None:
+    """Add Q bounds [fd_min, fd_max] alongside the existing FD attribute.
+
+    Mirrors ``_promote_fd_to_real`` in CLP(R).  The FD attribute is kept
+    so that both hooks fire independently — FD enforces integrality and
+    domain holes, Q handles rational constraint propagation.
+
+    Unlike float conversion, ``Fraction(int)`` is always exact.
+    """
+    from clausal.logic.clpfd import FD_KEY, domain_min, domain_max  # noqa: PLC0415
+    fd_state = get_attr(var, FD_KEY)
+    if fd_state is None:
+        return
+    lo = Fraction(domain_min(fd_state.domain))
+    hi = Fraction(domain_max(fd_state.domain))
+    tableau = _get_tableau(trail)
+    _snapshot_tableau(trail)
+    tab_id = tableau.register_var(var, lo, hi)
+    put_attr(var, Q_KEY, QVar(lo, hi, tab_id), trail)
+
+
 def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
-    """Ensure all Vars in *expr* have Q-domain attributes."""
+    """Ensure all Vars in *expr* have Q-domain attributes.
+
+    If a variable has an FD attribute but no Q attribute, promotes it
+    (mirrors ``_ensure_real`` promoting FD to real in CLP(R)).
+    """
     expr = deref(expr)
     if is_var(expr):
         if get_attr(expr, Q_KEY) is None:
-            _post_q_domain(expr, None, None, trail)
+            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+            if get_attr(expr, FD_KEY) is not None:
+                _promote_fd_to_q(expr, trail)
+            else:
+                _post_q_domain(expr, None, None, trail)
         return
     _ensure_term_imports()
     if isinstance(expr, (_Add, _Sub, _Mult, _Div)):
@@ -1014,8 +1044,14 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     if is_var(bound_to):
         other = get_attr(bound_to, Q_KEY)
         if other is None:
-            put_attr(bound_to, Q_KEY, state, trail)
-            return True
+            # Check for FD state and promote (mirrors _real_hook)
+            from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+            if get_attr(bound_to, FD_KEY) is not None:
+                _promote_fd_to_q(bound_to, trail)
+                other = get_attr(bound_to, Q_KEY)
+            if other is None:
+                put_attr(bound_to, Q_KEY, state, trail)
+                return True
         # Both Q-constrained: merge bounds, add equality
         new_lo = _max_none(state.lo, other.lo)
         new_hi = _min_none(state.hi, other.hi)

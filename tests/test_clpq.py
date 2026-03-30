@@ -989,6 +989,97 @@ class TestB4SnapshotDedup:
         assert is_var(deref(y))
 
 
+class TestFDQPromotion:
+    """FD↔Q type promotion, mirroring FD↔R."""
+
+    def test_fd_var_in_q_context_inherits_bounds(self):
+        """in_domain(X, 1, 5) then Q context → Q bounds are [1, 5]."""
+        from clausal.logic.clpfd import in_domain, FD_KEY
+        from clausal.logic.clpq import _get_tableau
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 5, trail)
+        assert get_attr(x, FD_KEY) is not None
+        # Now use x in a Q context (q_le triggers _ensure_q_for_expr → _promote_fd_to_q)
+        assert q_le(x, F(3), trail)
+        q_state = get_attr(x, Q_KEY)
+        assert q_state is not None
+        # QVar inherited FD bounds exactly
+        assert q_state.lo == F(1)
+        assert q_state.hi == F(5)  # QVar stores the promoted FD bounds
+        # The tighter bound (<=3) is in the tableau, not on QVar directly
+        tab = _get_tableau(trail)
+        assert tab.hi.get(q_state.tab_id) == F(3)
+
+    def test_fd_var_promoted_to_q_keeps_fd(self):
+        """After promotion, both FD and Q attributes coexist."""
+        from clausal.logic.clpfd import in_domain, FD_KEY
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 10, trail)
+        in_q(x, 0, 20, trail)  # adds Q alongside FD
+        assert get_attr(x, FD_KEY) is not None
+        assert get_attr(x, Q_KEY) is not None
+
+    def test_integer_fraction_accepted_by_fd(self):
+        """Fraction(3) unifying with FD var succeeds if 3 in domain."""
+        from clausal.logic.clpfd import in_domain
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 5, trail)
+        assert unify(x, F(3), trail)
+        assert deref(x) == F(3)
+
+    def test_non_integer_fraction_rejected_by_fd(self):
+        """Fraction(1,2) unifying with FD var fails (not integer)."""
+        from clausal.logic.clpfd import in_domain
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 5, trail)
+        assert not unify(x, F(1, 2), trail)
+
+    def test_integer_fraction_outside_domain_rejected(self):
+        """Fraction(7) outside domain [1,5] fails."""
+        from clausal.logic.clpfd import in_domain
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 5, trail)
+        assert not unify(x, F(7), trail)
+
+    def test_q_eq_on_fd_var_with_integer_result(self):
+        """FD var in Q equation that yields integer: both domains coexist."""
+        from clausal.logic.clpfd import in_domain, FD_KEY
+        trail = Trail()
+        x, y = Var(), Var()
+        in_domain(x, 1, 10, trail)
+        in_q(y, 0, 10, trail)
+        # x + y = 10 — both constraints posted, x has FD + Q
+        assert q_eq(Add(left=x, right=y), F(10), trail)
+        assert get_attr(x, FD_KEY) is not None  # FD preserved
+        assert get_attr(x, Q_KEY) is not None   # Q added via promotion
+        # Fix y = 7 → Q solver determines x = 3
+        assert q_eq(y, F(7), trail)
+        # x should be bound to 3 (Fraction, accepted by both FD and Q hooks)
+        assert deref(x) == F(3)
+
+    def test_q_eq_on_fd_var_with_non_integer_result_fails(self):
+        """FD var in Q equation that yields non-integer: FD hook rejects."""
+        from clausal.logic.clpfd import in_domain
+        trail = Trail()
+        x = Var()
+        in_domain(x, 1, 10, trail)
+        # Directly try to bind x to a non-integer Fraction
+        assert not unify(x, F(7, 2), trail)
+
+    def test_float_still_rejected_in_q(self):
+        """Regression: float in Q context still raises TypeError."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        with pytest.raises(TypeError, match="Cannot unify CLP\\(Q\\)"):
+            unify(x, 3.14, trail)
+
+
 class TestA5FloatTypeError:
     """Issue #9: unifying a Q-var with float must raise TypeError."""
 

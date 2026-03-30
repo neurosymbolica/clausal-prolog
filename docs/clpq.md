@@ -641,13 +641,47 @@ Our implementation is a **clean-room** design based on the published papers (Hol
 
 ## Interaction with CLP(Z) and CLP(R)
 
-A variable should belong to at most one numeric domain. The dispatch order prevents ambiguity:
+### Type promotion lattice
+
+```
+int ──→ Fraction  (exact, via Fraction(n))
+int ──→ float     (lossy for large ints, via float(n))
+float ──✗──→ Fraction  (BLOCKED — lossy, raises TypeError)
+Fraction ──✗──→ float   (BLOCKED — loses exactness)
+```
+
+Integer promotion to `Fraction` is always exact. This mirrors how CLP(Z)→CLP(R) promotion works (via `_promote_fd_to_real`), but without any precision loss.
+
+### FD↔Q coexistence
+
+A variable can have **both** FD and Q attributes simultaneously, just like FD and R can coexist. When a CLP(Z) variable enters a CLP(Q) context:
+
+1. `_promote_fd_to_q` extracts the FD bounds as exact `Fraction` values and creates Q state
+2. The FD attribute is **kept** — both hooks fire independently on unification
+3. FD enforces integrality and domain holes; Q handles rational constraint propagation
+4. When FD narrows (via `_narrow`), Q bounds are tightened to match
+5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
+
+```clausal
+# skip
+% X is integer-constrained AND participates in a rational equation
+mixed(X, Y) <- (
+    in_domain(X, 1, 10),        % CLP(Z): X in {1..10}
+    in_q(Y, 0, 10),             % CLP(Q): Y in [0, 10]
+    X + Y == 10,                % Q dispatch (Y has Q attr)
+    Y == 7                      % → X = 3 (integer, accepted by both FD and Q)
+)
+```
+
+### Dispatch table
 
 | Situation | Behaviour |
 |---|---|
 | `in_q(X, 0, 10)` then `X == 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
-| `in_domain(X, 1, 10)` then `X == 1/3` | CLP(Q): `1/3` is `Fraction(1,3)`, triggers Q dispatch |
+| `in_domain(X, 1, 10)` then `X == 1/3` | CLP(Q): `1/3` triggers Q dispatch; FD var promoted to Q with bounds `[1, 10]` |
+| `in_domain(X, 1, 10)` then `X == 1/2` | **Fails**: `Fraction(1,2)` is not integer, FD hook rejects |
 | `in_real(X, 0.0, 10.0)` then `X == 1/3` | CLP(Q): Fraction takes priority over float |
+| `in_real(X, 0.0, 10.0)` then `in_q(X, ...)` | **TypeError**: cannot mix float and Fraction domains |
 | `X == 5` (no declaration) | CLP(Z): both sides are `int` |
 | `X == 5.0` (no declaration) | CLP(R): float literal triggers R dispatch |
 | `X == 1/3` (no declaration) | CLP(Q): Fraction literal triggers Q dispatch |
