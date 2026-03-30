@@ -1,7 +1,8 @@
 """Constraint builtins: dif/2, eq/3, dif_t/3, in_domain/3, label/1,
 all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1,
 sat/1, taut/2, sat_count/2, bool_labeling/1,
-in_real/1, in_real/3, label_real/1, label_real/2."""
+in_real/1, in_real/3, label_real/1, label_real/2,
+in_q/1, in_q/3, maximize/2, minimize/2."""
 
 from __future__ import annotations
 
@@ -162,3 +163,38 @@ def _label_real__2(vars_list, eps, trail, k):
     """label_real(Vars, Eps) — bisect real intervals until width <= Eps."""
     from clausal.logic.clpr import label_real as _label_real_fn  # noqa: PLC0415
     yield from _label_real_fn(vars_list, trail, eps=float(eps))
+
+
+# ── CLP(Q) builtins ─────────────────────────────────────────────────────────
+
+
+@_builtin("in_q", 1)
+def _in_q__1(var_or_list, trail, k):
+    """in_q(Var) — declare rational variable with unbounded domain."""
+    from clausal.logic.clpq import in_q as _in_q_fn  # noqa: PLC0415
+    if _in_q_fn(var_or_list, None, None, trail):
+        yield None
+
+
+@_builtin("in_q", 3)
+def _in_q__3(var_or_list, lo, hi, trail, k):
+    """in_q(Var, Lo, Hi) — declare rational variable with domain [Lo, Hi]."""
+    from clausal.logic.clpq import in_q as _in_q_fn  # noqa: PLC0415
+    if _in_q_fn(var_or_list, lo, hi, trail):
+        yield None
+
+
+@_builtin("maximize", 2)
+def _maximize__2(expr, result, trail, k):
+    """maximize(Expr, Result) — find maximum of linear expression."""
+    from clausal.logic.clpq import maximize as _maximize_fn  # noqa: PLC0415
+    if _maximize_fn(expr, result, trail):
+        yield None
+
+
+@_builtin("minimize", 2)
+def _minimize__2(expr, result, trail, k):
+    """minimize(Expr, Result) — find minimum of linear expression."""
+    from clausal.logic.clpq import minimize as _minimize_fn  # noqa: PLC0415
+    if _minimize_fn(expr, result, trail):
+        yield None

@@ -29,6 +29,13 @@ static PyObject *fn_both_ground = NULL;
 static PyObject *fn_collect_constraint_vars = NULL;
 static PyObject *fn_collect_vars_from = NULL;
 
+/* CLP(Q) dispatch (may be NULL if clpq not available) */
+static PyObject *fn_any_rational = NULL;
+static PyObject *fn_q_eq = NULL;
+static PyObject *fn_q_ne = NULL;
+static PyObject *fn_q_lt = NULL;
+static PyObject *fn_q_le = NULL;
+
 /* CLP(R) dispatch (may be NULL if clpr not available) */
 static PyObject *fn_real_eq = NULL;
 static PyObject *fn_real_ne = NULL;
@@ -2032,6 +2039,20 @@ py_fd_ne(PyObject *self, PyObject *args)
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
 
+    /* CLP(Q) dispatch */
+    if (fn_any_rational) {
+        PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
+        if (!aq) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        int is_rat = PyObject_IsTrue(aq);
+        Py_DECREF(aq);
+        if (is_rat < 0) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        if (is_rat && fn_q_ne) {
+            PyObject *result = PyObject_CallFunctionObjArgs(fn_q_ne, rl, rr, trail, NULL);
+            Py_DECREF(rl); Py_DECREF(rr);
+            return result;
+        }
+    }
+
     /* CLP(R) dispatch */
     PyObject *ar = PyObject_CallFunctionObjArgs(fn_any_real, rl, rr, NULL);
     if (!ar) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
@@ -2122,6 +2143,20 @@ py_fd_lt(PyObject *self, PyObject *args)
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
 
+    /* CLP(Q) dispatch */
+    if (fn_any_rational) {
+        PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
+        if (!aq) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        int is_rat = PyObject_IsTrue(aq);
+        Py_DECREF(aq);
+        if (is_rat < 0) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        if (is_rat && fn_q_lt) {
+            PyObject *result = PyObject_CallFunctionObjArgs(fn_q_lt, rl, rr, trail, NULL);
+            Py_DECREF(rl); Py_DECREF(rr);
+            return result;
+        }
+    }
+
     PyObject *ar = PyObject_CallFunctionObjArgs(fn_any_real, rl, rr, NULL);
     if (!ar) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
     int is_real = PyObject_IsTrue(ar);
@@ -2207,6 +2242,20 @@ py_fd_le(PyObject *self, PyObject *args)
     PyObject *rr = PyObject_CallOneArg(fn_resolve, dr);
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
+
+    /* CLP(Q) dispatch */
+    if (fn_any_rational) {
+        PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
+        if (!aq) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        int is_rat = PyObject_IsTrue(aq);
+        Py_DECREF(aq);
+        if (is_rat < 0) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        if (is_rat && fn_q_le) {
+            PyObject *result = PyObject_CallFunctionObjArgs(fn_q_le, rl, rr, trail, NULL);
+            Py_DECREF(rl); Py_DECREF(rr);
+            return result;
+        }
+    }
 
     PyObject *ar = PyObject_CallFunctionObjArgs(fn_any_real, rl, rr, NULL);
     if (!ar) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
@@ -2294,6 +2343,20 @@ py_fd_eq(PyObject *self, PyObject *args)
     PyObject *rr = PyObject_CallOneArg(fn_resolve, dr);
     Py_DECREF(dr);
     if (!rr) { Py_DECREF(rl); return NULL; }
+
+    /* CLP(Q) dispatch */
+    if (fn_any_rational) {
+        PyObject *aq = PyObject_CallFunctionObjArgs(fn_any_rational, rl, rr, NULL);
+        if (!aq) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        int is_rat = PyObject_IsTrue(aq);
+        Py_DECREF(aq);
+        if (is_rat < 0) { Py_DECREF(rl); Py_DECREF(rr); return NULL; }
+        if (is_rat && fn_q_eq) {
+            PyObject *result = PyObject_CallFunctionObjArgs(fn_q_eq, rl, rr, trail, NULL);
+            Py_DECREF(rl); Py_DECREF(rr);
+            return result;
+        }
+    }
 
     /* CLP(R) dispatch */
     PyObject *ar = PyObject_CallFunctionObjArgs(fn_any_real, rl, rr, NULL);
@@ -2979,6 +3042,31 @@ PyInit__clpfd_propagate(void)
         } else {
             PyErr_Clear();
         }
+    }
+
+    /* Try to import CLP(Q) functions (optional) */
+    fn_any_rational = PyObject_GetAttrString(
+        PyImport_ImportModule("clausal.logic.clpfd"), "_any_rational");
+    if (!fn_any_rational) {
+        PyErr_Clear();
+        fn_any_rational = NULL;
+    }
+    PyObject *clpq_mod = PyImport_ImportModule("clausal.logic.clpq");
+    if (clpq_mod) {
+        fn_q_eq = PyObject_GetAttrString(clpq_mod, "q_eq");
+        fn_q_ne = PyObject_GetAttrString(clpq_mod, "q_ne");
+        fn_q_lt = PyObject_GetAttrString(clpq_mod, "q_lt");
+        fn_q_le = PyObject_GetAttrString(clpq_mod, "q_le");
+        Py_DECREF(clpq_mod);
+        if (!fn_q_eq || !fn_q_ne || !fn_q_lt || !fn_q_le) {
+            PyErr_Clear();
+            Py_XDECREF(fn_q_eq); fn_q_eq = NULL;
+            Py_XDECREF(fn_q_ne); fn_q_ne = NULL;
+            Py_XDECREF(fn_q_lt); fn_q_lt = NULL;
+            Py_XDECREF(fn_q_le); fn_q_le = NULL;
+        }
+    } else {
+        PyErr_Clear();
     }
 
     /* Create cached constants */

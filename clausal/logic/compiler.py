@@ -43,6 +43,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import threading
+from fractions import Fraction
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, is_var, deref, unify
@@ -1549,8 +1550,20 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
         vname = var_context.get(vid, _var_python_name(term))
         return _call(_name("deref"), _name(vname))
 
-    if isinstance(term, (int, float)) and not isinstance(term, bool):
+    if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
         return ast.Constant(value=term)
+
+    # int / int → Fraction(n, d) for exact rational arithmetic
+    if isinstance(term, Div):
+        left_t = deref(term.left)
+        right_t = deref(term.right)
+        if (isinstance(left_t, int) and not isinstance(left_t, bool)
+                and isinstance(right_t, int) and not isinstance(right_t, bool)):
+            return ast.Call(
+                func=_name("_Fraction"),
+                args=[ast.Constant(value=left_t), ast.Constant(value=right_t)],
+                keywords=[],
+            )
 
     if isinstance(term, Negate):
         return ast.UnaryOp(
@@ -5630,6 +5643,7 @@ def compile_predicate_trampoline(
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
         "_seglist_unify_gen": _seglist_unify_gen,
+        "_Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
     from clausal.logic.coroutining import (  # noqa: PLC0415
@@ -8040,6 +8054,7 @@ def compile_predicate_shallow(
         "ConcreteSeg": ConcreteSeg,
         "VarSeg": VarSeg,
         "_seglist_unify_gen": _seglist_unify_gen,
+        "_Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
     from clausal.logic.coroutining import (  # noqa: PLC0415

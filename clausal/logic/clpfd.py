@@ -1174,6 +1174,23 @@ def _is_fd_candidate(x) -> bool:
     return is_var(x) or (isinstance(x, int) and not isinstance(x, bool))
 
 
+def _is_rational_arg(x) -> bool:
+    """True if x is a Fraction or a Var with a rational-domain attribute."""
+    from fractions import Fraction  # noqa: PLC0415
+    x = deref(x)
+    if isinstance(x, Fraction):
+        return True
+    if is_var(x):
+        from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
+        return get_attr(x, Q_KEY) is not None
+    return False
+
+
+def _any_rational(l, r) -> bool:
+    """True if either argument should use CLP(Q) dispatch."""
+    return _is_rational_arg(l) or _is_rational_arg(r)
+
+
 def _is_real_arg(x) -> bool:
     """True if x is a float literal or a Var with a real-domain attribute."""
     x = deref(x)
@@ -1242,6 +1259,9 @@ def fd_eq(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _any_rational(l, r):
+        from clausal.logic.clpq import q_eq  # noqa: PLC0415
+        return q_eq(l, r, trail)
     if _any_real(l, r):
         from clausal.logic.clpr import real_eq
         return real_eq(l, r, trail)
@@ -1291,6 +1311,9 @@ def fd_ne(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _any_rational(l, r):
+        from clausal.logic.clpq import q_ne  # noqa: PLC0415
+        return q_ne(l, r, trail)
     if _any_real(l, r):
         from clausal.logic.clpr import real_ne
         return real_ne(l, r, trail)
@@ -1316,6 +1339,9 @@ def fd_lt(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _any_rational(l, r):
+        from clausal.logic.clpq import q_lt  # noqa: PLC0415
+        return q_lt(l, r, trail)
     if _any_real(l, r):
         from clausal.logic.clpr import real_lt
         return real_lt(l, r, trail)
@@ -1341,6 +1367,9 @@ def fd_le(l, r, trail: Trail) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _any_rational(l, r):
+        from clausal.logic.clpq import q_le  # noqa: PLC0415
+        return q_le(l, r, trail)
     if _any_real(l, r):
         from clausal.logic.clpr import real_le
         return real_le(l, r, trail)
