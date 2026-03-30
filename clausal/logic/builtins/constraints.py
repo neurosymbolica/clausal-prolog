@@ -232,14 +232,6 @@ def _dump_q__2(vars_list, result, trail, k):
         yield None
 
 
-@_builtin("entailed", 3)
-def _entailed__3(op, l, r, trail, k):
-    """entailed(Op, L, R) — test if constraint Op(L, R) is implied by the store."""
-    from clausal.logic.clpq import entailed as _entailed_fn  # noqa: PLC0415
-    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
-    op_str = _deref(op)
-    if isinstance(op_str, str) and _entailed_fn(op_str, l, r, trail):
-        yield None
 
 
 @_builtin("entailed", 1)
