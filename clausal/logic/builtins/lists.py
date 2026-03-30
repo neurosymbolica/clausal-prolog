@@ -101,6 +101,33 @@ def _memberchk__2(this_generator, parent, elem, lst, trail):
     yield (parent, DONE)
 
 
+def _append_dr__3(this_generator, parent, l1, l2, l3, trail):
+    """Destructive-reuse variant of append/3.
+
+    When the first list (l1) has a reference count low enough to prove it is
+    not shared, extend it in-place instead of allocating a new list.  Falls
+    back to the standard (copying) implementation otherwise.
+    """
+    import sys  # noqa: PLC0415
+
+    l1_val = deref(l1)
+    # Only attempt destructive reuse for the deterministic (+,+,-) mode
+    # with an actual Python list (not string) and a low reference count.
+    if isinstance(l1_val, list) and sys.getrefcount(l1_val) <= 3:
+        l2_val = deref(l2)
+        l2_items = _as_items(l2_val)
+        if l2_items is not None:
+            l1_val.extend(l2_items)
+            mark = trail.mark()
+            if unify(l3, l1_val, trail):
+                yield (parent, None)
+            trail.undo(mark)
+            yield (parent, DONE)
+            return
+    # Fallback to standard append
+    yield from _append__3(this_generator, parent, l1, l2, l3, trail)
+
+
 @_trampoline_builtin("append", 3)
 def _append__3(this_generator, parent, l1, l2, l3, trail):
     """append(L1, L2, L3) — L3 is the concatenation of L1 and L2.

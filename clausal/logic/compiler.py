@@ -4637,12 +4637,123 @@ def compile_body_trampoline(
     return alloc_stmts + k
 
 
+# ── Destructive-reuse optimization ───────────────────────────────────────────
+#
+# When a builtin like append/3, dict_put/4, or set_union/3 consumes a
+# container that is provably dead after the call, we can dispatch to a
+# "destructive-reuse" variant that mutates the container in-place (guarded
+# by a runtime sys.getrefcount check for safety).
+#
+# Eligibility criteria (compile-time):
+#   1. Goal is a Call to one of the supported builtins.
+#   2. The "source" argument is a Var (not a literal or compound term).
+#   3. The source Var does NOT appear in the clause head (it wasn't passed
+#      in by the caller, so no external alias exists).
+#   4. The source Var is dead after the goal — it does not appear in any
+#      subsequent body goal.
+#   5. All preceding body goals are deterministic (no choice points that
+#      could backtrack through the mutation).
+
+# Maps builtin (functor, arity) → index of the "source" arg to try to reuse.
+_DR_CANDIDATES: dict[tuple[str, int], int] = {
+    ("append", 3): 0,       # append(Source, Extra, Result)
+    ("dict_put", 4): 2,     # dict_put(Key, Value, Source, Result)
+    ("set_union", 3): 0,    # set_union(Source, S2, Result)
+}
+
+
+def _find_destructive_reuse_goals(clause: Clause) -> set[int]:
+    """Return indices of body goals eligible for destructive-reuse dispatch.
+
+    Only returns indices where all five compile-time criteria are satisfied.
+    """
+    body = clause.body
+    if not body:
+        return set()
+
+    # Collect var IDs that appear in the clause head.
+    head_var_ids: set[int] = set()
+    _collect_var_ids(clause.head, head_var_ids)
+
+    eligible: set[int] = set()
+
+    for i, goal in enumerate(body):
+        goal = deref(goal)
+        # Criterion 1: must be a Call to a supported builtin.
+        if not isinstance(goal, Call):
+            continue
+        func = goal.func
+        if not isinstance(func, LoadName):
+            continue
+        dr_info = _DR_CANDIDATES.get((func.name, len(goal.args)))
+        if dr_info is None:
+            continue
+        source_idx = dr_info
+
+        # Criterion 2: source argument must be a Var.
+        source_arg = deref(goal.args[source_idx])
+        if not is_var(source_arg):
+            continue
+        source_id = source_arg._id
+
+        # Criterion 3: source Var must NOT appear in the clause head.
+        if source_id in head_var_ids:
+            continue
+
+        # Criterion 4: source Var must be dead after this goal.
+        live_after: set[int] = set()
+        for subsequent_goal in body[i + 1:]:
+            _collect_var_ids(subsequent_goal, live_after)
+        if source_id in live_after:
+            continue
+
+        # Criterion 5: all preceding goals must be deterministic.
+        if not all(_is_deterministic_goal(body[j]) for j in range(i)):
+            continue
+
+        eligible.add(i)
+
+    return eligible
+
+
+def _apply_destructive_reuse(goals: list, eligible: set[int]) -> list:
+    """Return a copy of *goals* with eligible calls rewritten to use DR variants.
+
+    Rewrites the Call's LoadName to a private name that the compiler resolves
+    to the destructive-reuse dispatch function injected into base_globals.
+    """
+    if not eligible:
+        return goals
+
+    _DR_NAME_MAP: dict[str, str] = {
+        "append": "_dr_append__3",
+        "dict_put": "_dr_dict_put__4",
+        "set_union": "_dr_set_union__3",
+    }
+
+    new_goals = list(goals)
+    for i in eligible:
+        goal = deref(new_goals[i])
+        fname = goal.func.name
+        dr_name = _DR_NAME_MAP[fname]
+        new_goals[i] = Call(
+            func=LoadName(name=dr_name),
+            args=goal.args,
+            kwargs=goal.kwargs,
+        )
+    return new_goals
+
+
 def _make_body_compiler_trampoline(
     db: Database,
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a trampoline body_compiler callable bound to db."""
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        return compile_body_trampoline(clause.body, db, var_context, "trail")
+        # Destructive-reuse optimisation: rewrite eligible goals before
+        # compiling the body so they dispatch to DR variant functions.
+        eligible = _find_destructive_reuse_goals(clause)
+        goals = _apply_destructive_reuse(clause.body, eligible)
+        return compile_body_trampoline(goals, db, var_context, "trail")
     return _body_compiler
 
 
@@ -5688,6 +5799,18 @@ def compile_predicate_trampoline(
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
+
+    # Destructive-reuse: inject DR dispatch functions into base_globals so
+    # that rewritten goal names (e.g. _dr_append__3) resolve at runtime via
+    # the locked-dispatch fast path.
+    from clausal.logic.builtins.lists import _append_dr__3 as _dr_append_fn  # noqa: PLC0415
+    from clausal.logic.builtins.dict_set import (  # noqa: PLC0415
+        _dict_put_dr__4 as _dr_dict_put_fn,
+        _set_union_dr__3 as _dr_set_union_fn,
+    )
+    base_globals[_disp_key("_dr_append__3", 3)] = _dr_append_fn
+    base_globals[_disp_key("_dr_dict_put__4", 4)] = _dr_dict_put_fn
+    base_globals[_disp_key("_dr_set_union__3", 3)] = _dr_set_union_fn
 
     # Phase 7: set compile context so _dispatch_call_trampoline can emit
     # cached dispatch names instead of fname._get_dispatch() for locked predicates.

@@ -165,6 +165,30 @@ def _dict_get__3(this_generator, parent, key, d, value, trail):
     yield (parent, DONE)
 
 
+def _dict_put_dr__4(this_generator, parent, key, value, old_dict, new_dict, trail):
+    """Destructive-reuse variant of dict_put/4.
+
+    When the old DictTerm has a low reference count (not shared), mutate its
+    internal ``_data`` dict in-place.  Falls back to the standard (copying)
+    implementation otherwise.
+    """
+    import sys  # noqa: PLC0415
+
+    key_val = deref(key)
+    old_val = deref(old_dict)
+    if (not is_var(key_val) and isinstance(old_val, DictTerm)
+            and sys.getrefcount(old_val) <= 3):
+        old_val._data[key_val] = deref(value)
+        mark = trail.mark()
+        if unify(new_dict, old_val, trail):
+            yield (parent, None)
+        trail.undo(mark)
+        yield (parent, DONE)
+        return
+    # Fallback to standard dict_put
+    yield from _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail)
+
+
 @_trampoline_builtin("dict_put", 4)
 def _dict_put__4(this_generator, parent, key, value, old_dict, new_dict, trail):
     """dict_put(Key, Value, OldDict, NewDict) — NewDict is OldDict with Key→Value."""
@@ -330,6 +354,30 @@ def _set_list__2(this_generator, parent, s, lst, trail):
             trail.undo(mark)
 
     yield (parent, DONE)
+
+
+def _set_union_dr__3(this_generator, parent, s1, s2, union, trail):
+    """Destructive-reuse variant of set_union/3.
+
+    When the first SetTerm has a low reference count (not shared), replace its
+    internal ``_elements`` frozenset in-place.  Falls back to the standard
+    (copying) implementation otherwise.
+    """
+    import sys  # noqa: PLC0415
+
+    s1_val = deref(s1)
+    s2_val = deref(s2)
+    if (isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm)
+            and sys.getrefcount(s1_val) <= 3):
+        s1_val._elements = s1_val._elements | s2_val._elements
+        mark = trail.mark()
+        if unify(union, s1_val, trail):
+            yield (parent, None)
+        trail.undo(mark)
+        yield (parent, DONE)
+        return
+    # Fallback to standard set_union
+    yield from _set_union__3(this_generator, parent, s1, s2, union, trail)
 
 
 @_trampoline_builtin("set_union", 3)
