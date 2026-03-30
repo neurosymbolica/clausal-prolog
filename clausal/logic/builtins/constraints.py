@@ -198,3 +198,29 @@ def _minimize__2(expr, result, trail, k):
     from clausal.logic.clpq import minimize as _minimize_fn  # noqa: PLC0415
     if _minimize_fn(expr, result, trail):
         yield None
+
+
+@_builtin("entailed", 3)
+def _entailed__3(op, l, r, trail, k):
+    """entailed(Op, L, R) — test if constraint Op(L, R) is implied by the store."""
+    from clausal.logic.clpq import entailed as _entailed_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
+    op_str = _deref(op)
+    if isinstance(op_str, str) and _entailed_fn(op_str, l, r, trail):
+        yield None
+
+
+@_builtin("sup", 2)
+def _sup__2(expr, result, trail, k):
+    """sup(Expr, Sup) — compute supremum without committing."""
+    from clausal.logic.clpq import sup as _sup_fn  # noqa: PLC0415
+    if _sup_fn(expr, result, trail):
+        yield None
+
+
+@_builtin("inf", 2)
+def _inf__2(expr, result, trail, k):
+    """inf(Expr, Inf) — compute infimum without committing."""
+    from clausal.logic.clpq import inf as _inf_fn  # noqa: PLC0415
+    if _inf_fn(expr, result, trail):
+        yield None

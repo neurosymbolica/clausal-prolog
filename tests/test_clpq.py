@@ -7,7 +7,8 @@ import pytest
 from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify
 from clausal.logic.clpq import (
     Q_KEY, in_q, q_eq, q_ne, q_lt, q_le, q_gt, q_ge,
-    maximize, minimize, _linearize, _get_tableau, _tableaux,
+    maximize, minimize, sup, inf, entailed,
+    _linearize, _get_tableau, _tableaux, _last_snapshot,
 )
 from clausal.terms import Add, Sub, Mult, Div, Negate
 
@@ -16,8 +17,10 @@ from clausal.terms import Add, Sub, Mult, Div, Negate
 def _clean_tableaux():
     """Clear global tableau state between tests to prevent leaks."""
     _tableaux.clear()
+    _last_snapshot.clear()
     yield
     _tableaux.clear()
+    _last_snapshot.clear()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -345,6 +348,25 @@ class TestOptimization:
         result = Var()
         assert maximize(obj, result, trail)
         assert deref(result) == F(310)
+        # B1: variables should be bound to optimal values
+        assert deref(x) == F(7)
+        assert deref(y) == F(2)
+
+    def test_minimize_lp_binds_vars(self):
+        """After minimize, X and Y should be bound to optimal point."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        assert q_le(Add(left=Mult(left=F(2), right=x), right=y), F(16), trail)
+        assert q_le(Add(left=x, right=Mult(left=F(2), right=y)), F(11), trail)
+        assert q_le(Add(left=x, right=Mult(left=F(3), right=y)), F(15), trail)
+        obj = Add(left=Mult(left=F(30), right=x), right=Mult(left=F(50), right=y))
+        result = Var()
+        assert minimize(obj, result, trail)
+        # Minimum of 30X+50Y at (0,0) = 0 with all constraints satisfied at origin
+        assert deref(result) == F(0)
+        assert deref(x) == F(0)
+        assert deref(y) == F(0)
 
     def test_minimize_lp(self):
         """Scheduling example from docs:
@@ -363,6 +385,136 @@ class TestOptimization:
         # Y limited by X+3Y<=40 and 2X+Y<=30
         # At X=0: Y>=10, 3Y<=40→Y<=40/3≈13.3, Y<=30. So Y=10, cost=30
         assert deref(cost) == F(30)
+
+
+# ── sup/inf ──────────────────────────────────────────────────────────────────
+
+
+class TestSupInf:
+    def test_sup_simple(self):
+        """sup(X) with X <= 10 → 10."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(10), trail)
+        result = Var()
+        assert sup(x, result, trail)
+        assert deref(result) == F(10)
+
+    def test_inf_simple(self):
+        """inf(X) with X >= 3 → 3."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_ge(x, F(3), trail)
+        result = Var()
+        assert inf(x, result, trail)
+        assert deref(result) == F(3)
+
+    def test_sup_does_not_bind_vars(self):
+        """sup should compute the bound WITHOUT binding X."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(10), trail)
+        result = Var()
+        assert sup(x, result, trail)
+        assert deref(result) == F(10)
+        assert is_var(deref(x))  # x must remain unbound
+
+    def test_inf_does_not_bind_vars(self):
+        """inf should compute the bound WITHOUT binding X."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_ge(x, F(3), trail)
+        result = Var()
+        assert inf(x, result, trail)
+        assert is_var(deref(x))  # x must remain unbound
+
+    def test_sup_lp(self):
+        """sup(30X + 50Y) with LP constraints → 310 (without binding X, Y)."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 1000, trail)
+        q_le(Add(left=Mult(left=F(2), right=x), right=y), F(16), trail)
+        q_le(Add(left=x, right=Mult(left=F(2), right=y)), F(11), trail)
+        q_le(Add(left=x, right=Mult(left=F(3), right=y)), F(15), trail)
+        obj = Add(left=Mult(left=F(30), right=x), right=Mult(left=F(50), right=y))
+        result = Var()
+        assert sup(obj, result, trail)
+        assert deref(result) == F(310)
+        # Variables must NOT be bound
+        assert is_var(deref(x))
+        assert is_var(deref(y))
+
+
+# ── entailed ─────────────────────────────────────────────────────────────────
+
+
+class TestEntailed:
+    def test_entailed_le_true(self):
+        """X <= 4 entails X <= 5."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(4), trail)
+        assert entailed('=<', x, F(5), trail)
+
+    def test_entailed_le_false(self):
+        """X <= 4 does NOT entail X <= 3."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(4), trail)
+        assert not entailed('=<', x, F(3), trail)
+
+    def test_entailed_ge_true(self):
+        """X >= 5 entails X >= 3."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_ge(x, F(5), trail)
+        assert entailed('>=', x, F(3), trail)
+
+    def test_entailed_eq_true(self):
+        """X == 5 entails X = 5."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_eq(x, F(5), trail)
+        assert entailed('=', x, F(5), trail)
+
+    def test_entailed_eq_false(self):
+        """X in [0, 10] does NOT entail X = 5."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert not entailed('=', x, F(5), trail)
+
+    def test_entailed_ne_true(self):
+        """X <= 4 entails X != 5 (since X can never reach 5)."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(4), trail)
+        assert entailed('\\=', x, F(5), trail)
+
+    def test_entailed_ne_false(self):
+        """X in [0, 10] does NOT entail X != 5 (X could be 5)."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert not entailed('\\=', x, F(5), trail)
+
+    def test_entailed_does_not_modify_store(self):
+        """entailed must not change the constraint store."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        entailed('=<', x, F(5), trail)
+        # x should still be unconstrained beyond [0, 10]
+        assert is_var(deref(x))
 
 
 # ── Phase 7: Linearization ──────────────────────────────────────────────────
@@ -615,6 +767,28 @@ class TestA4Disequality:
         # After undo, X != 5 is gone — X == 5 should succeed
         assert q_eq(x, F(5), trail)
         assert deref(x) == F(5)
+
+
+class TestB4SnapshotDedup:
+    """Issue #4: redundant tableau snapshots should be avoided."""
+
+    def test_multi_constraint_single_snapshot(self):
+        """A multi-step operation (q_eq triggering implied bindings) should
+        still be undoable as a single unit, proving snapshots work correctly
+        even when deduplicated."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        q_eq(Add(left=x, right=y), F(10), trail)
+        mark = trail.mark()
+        # This q_eq triggers Gaussian elimination + check_implied_bindings
+        # + potentially _q_hook — all should share one snapshot
+        q_eq(x, F(3), trail)
+        assert deref(y) == F(7)
+        trail.undo(mark)
+        # After undo, both x and y should be restored
+        assert is_var(deref(x))
+        assert is_var(deref(y))
 
 
 class TestA5FloatTypeError:

@@ -777,6 +777,7 @@ class Tableau:
 # ── Tableau storage ──────────────────────────────────────────────────────────
 
 _tableaux: dict[int, Tableau] = {}
+_last_snapshot: dict[int, int] = {}  # trail_id → trail length at last snapshot
 
 
 def _get_tableau(trail: Trail) -> Tableau:
@@ -791,15 +792,28 @@ def _get_tableau(trail: Trail) -> Tableau:
         tab = Tableau()
         _tableaux[tid] = tab
         # Clean up when trail unwinds past the point where CLP(Q) was first used
-        trail.record(lambda: _tableaux.pop(tid, None))
+        trail.record(lambda: (_tableaux.pop(tid, None),
+                              _last_snapshot.pop(tid, None)))
     return tab
 
 
 def _snapshot_tableau(trail: Trail) -> None:
-    """Save a snapshot so ``trail.undo()`` restores the tableau."""
+    """Save a snapshot so ``trail.undo()`` restores the tableau.
+
+    Deduplicates: if a snapshot was already taken at this trail position
+    (i.e., no trail entries have been added since the last snapshot),
+    skip the copy.  This avoids redundant deep copies when a single
+    logical step triggers multiple internal operations (e.g., ``q_eq``
+    → ``add_equality`` → ``check_implied_bindings`` → ``_q_hook``).
+    """
     tid = id(trail)
+    trail_len = len(trail)
+    if _last_snapshot.get(tid) == trail_len:
+        return  # already snapshotted at this point
     old = _tableaux[tid].copy()
-    trail.record(lambda: _tableaux.__setitem__(tid, old))
+    _last_snapshot[tid] = trail_len + 1  # +1 because record() adds an entry
+    trail.record(lambda: (_tableaux.__setitem__(tid, old),
+                          _last_snapshot.__setitem__(tid, 0)))
 
 
 # ── Utility helpers ──────────────────────────────────────────────────────────
@@ -1157,8 +1171,143 @@ def q_ge(l: Any, r: Any, trail: Trail) -> bool:
 # ── Public API: optimization ─────────────────────────────────────────────────
 
 
+def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Compute the supremum (upper bound) of *expr* without committing.
+
+    Unlike ``maximize``, this does not bind variables — it only computes
+    the bound.  Useful for testing entailment and computing ranges.
+    """
+    expr = deref(expr)
+    result_var = deref(result_var)
+    lc = _linearize(expr, trail)
+    if lc is None:
+        raise TypeError("sup requires a linear expression")
+    coeffs, const = lc
+    tableau = _get_tableau(trail)
+    tab_copy = tableau.copy()
+    opt = tab_copy.optimize(coeffs, 'max')
+    if opt is None:
+        return False  # unbounded
+    return unify(result_var, opt + const, trail)
+
+
+def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Compute the infimum (lower bound) of *expr* without committing.
+
+    Unlike ``minimize``, this does not bind variables — it only computes
+    the bound.
+    """
+    expr = deref(expr)
+    result_var = deref(result_var)
+    lc = _linearize(expr, trail)
+    if lc is None:
+        raise TypeError("inf requires a linear expression")
+    coeffs, const = lc
+    tableau = _get_tableau(trail)
+    tab_copy = tableau.copy()
+    opt = tab_copy.optimize(coeffs, 'min')
+    if opt is None:
+        return False  # unbounded
+    return unify(result_var, opt + const, trail)
+
+
+def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
+    """Test whether a constraint is logically implied by the current store.
+
+    *constraint_type* is one of ``'='``, ``'\\\\='``, ``'<'``, ``'=<'``,
+    ``'>'``, ``'>='``.
+
+    Returns True if the constraint holds for ALL feasible points, False
+    otherwise.  Does not modify the constraint store.
+    """
+    l, r = deref(l), deref(r)
+    _ensure_q_for_expr(l, trail)
+    _ensure_q_for_expr(r, trail)
+    lc = _linearize(l, trail)
+    rc = _linearize(r, trail)
+    if lc is None or rc is None:
+        raise TypeError("entailed requires linear constraints")
+    lk, lv = lc
+    rk, rv = rc
+    # Compute l - r as a linear expression
+    merged = dict(lk)
+    for v, c in rk.items():
+        merged[v] = merged.get(v, ZERO) - c
+    coeffs = {v: c for v, c in merged.items() if c != ZERO}
+    offset = lv - rv  # constant part of (l - r)
+
+    tableau = _get_tableau(trail)
+
+    def _sup_of_diff() -> Fraction | None:
+        tab_copy = tableau.copy()
+        return tab_copy.optimize(coeffs, 'max')
+
+    def _inf_of_diff() -> Fraction | None:
+        tab_copy = tableau.copy()
+        return tab_copy.optimize(coeffs, 'min')
+
+    if constraint_type in ('=<', '<='):
+        # l <= r ⟺ l - r <= 0 ⟺ sup(l - r) <= 0
+        s = _sup_of_diff()
+        return s is not None and s + offset <= ZERO
+    elif constraint_type in ('>=', '=>'):
+        # l >= r ⟺ l - r >= 0 ⟺ inf(l - r) >= 0
+        i = _inf_of_diff()
+        return i is not None and i + offset >= ZERO
+    elif constraint_type == '<':
+        s = _sup_of_diff()
+        return s is not None and s + offset < ZERO
+    elif constraint_type == '>':
+        i = _inf_of_diff()
+        return i is not None and i + offset > ZERO
+    elif constraint_type in ('=', '=:='):
+        # l = r ⟺ sup(l-r) = inf(l-r) = 0
+        s = _sup_of_diff()
+        i = _inf_of_diff()
+        return (s is not None and i is not None
+                and s + offset == ZERO and i + offset == ZERO)
+    elif constraint_type in ('\\=', '=\\='):
+        # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0
+        s = _sup_of_diff()
+        i = _inf_of_diff()
+        if s is None or i is None:
+            return False
+        return (s + offset < ZERO) or (i + offset > ZERO)
+    else:
+        raise ValueError(f"Unknown constraint type: {constraint_type!r}")
+
+
+def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
+    """Bind all user variables to their optimal assignments.
+
+    Called after ``optimize`` to commit the optimal point.  Variables
+    that are already bound are skipped.  Parametric variables are
+    evaluated from their definitions.
+    """
+    for vid, var in list(tableau._var_map.items()):
+        var = deref(var)
+        if not is_var(var):
+            continue
+        # Compute the variable's value at the optimal point
+        if vid in tableau.parametric:
+            pc, pk = tableau.parametric[vid]
+            val = pk
+            for pv, pcoeff in pc.items():
+                val += pcoeff * tableau.assign.get(pv, ZERO)
+        else:
+            val = tableau.assign.get(vid)
+        if val is not None:
+            if not unify(var, val, trail):
+                return False
+    return True
+
+
 def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
-    """Maximize *expr* subject to current constraints."""
+    """Maximize *expr* subject to current constraints.
+
+    Binds *result_var* to the optimal objective value and all
+    constrained variables to their optimal assignments.
+    """
     expr = deref(expr)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
@@ -1170,11 +1319,17 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tableau.optimize(coeffs, 'max')
     if opt is None:
         return False
+    if not _bind_optimal(tableau, trail):
+        return False
     return unify(result_var, opt + const, trail)
 
 
 def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
-    """Minimize *expr* subject to current constraints."""
+    """Minimize *expr* subject to current constraints.
+
+    Binds *result_var* to the optimal objective value and all
+    constrained variables to their optimal assignments.
+    """
     expr = deref(expr)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
@@ -1185,5 +1340,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'min')
     if opt is None:
+        return False
+    if not _bind_optimal(tableau, trail):
         return False
     return unify(result_var, opt + const, trail)
