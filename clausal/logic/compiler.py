@@ -5571,6 +5571,7 @@ def _build_predicate_trampoline_funcdef(
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
     emit_done: bool = True,
     tro_indices: frozenset[int] | None = None,
+    skip_trail: bool = False,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
@@ -5662,6 +5663,7 @@ def _build_predicate_trampoline_funcdef(
                 body_stmts=body_stmts,
                 var_context=var_context,
                 arity=arity,
+                skip_trail=skip_trail,
             )
             loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
@@ -6044,10 +6046,14 @@ def compile_predicate_trampoline(
                         )
                         if _b_tro_set:
                             _b_tro = _b_tro_set
+                    # Single-clause bucket: elide outer trail mark/undo
+                    # since there is no sibling clause to backtrack to.
+                    _skip_trail = len(lifted_bucket) == 1
                     bdef = _build_predicate_trampoline_funcdef(
                         bname, arity, lifted_bucket,
                         _effective_db, body_compiler, emit_done=False,
                         tro_indices=_b_tro,
+                        skip_trail=_skip_trail,
                     )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
                 # Default bucket (clauses with Var at indexed position).
@@ -7061,6 +7067,7 @@ def compile_head_to_match_case(
     arity: int,
     trail_name: str = "trail",
     mark_name: str = "_mark",
+    skip_trail: bool = False,
 ) -> ast.match_case:
     """Compile a clause head into one ``match_case`` arm.
 
@@ -7304,7 +7311,10 @@ def compile_head_to_match_case(
     # If the head captured no variables and there are no guards that unify
     # (dup_guards, list_guards), the clause cannot modify the trail —
     # skip the mark/undo overhead.
-    if not head_var_ctx and not dup_guards and not list_guards:
+    # Also skip when *skip_trail* is set (single-clause index bucket —
+    # there is no sibling clause to backtrack to, so the caller's
+    # mark/undo will clean up head bindings).
+    if skip_trail or (not head_var_ctx and not dup_guards and not list_guards):
         return ast.match_case(
             pattern=outer_pattern,
             guard=None,
@@ -8148,6 +8158,7 @@ def _build_predicate_funcdef(
     clauses: list[Clause],
     db: Database,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
+    skip_trail: bool = False,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a simple/short-stack compiled predicate.
 
@@ -8181,6 +8192,7 @@ def _build_predicate_funcdef(
             body_stmts=body_stmts,
             var_context=var_context,
             arity=arity,
+            skip_trail=skip_trail,
         )
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
@@ -8401,8 +8413,10 @@ def compile_predicate_shallow(
                 idx_dict: dict = {}
                 for key, bucket_clauses in index["buckets"].items():
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
+                    _skip_trail = len(bucket_clauses) == 1
                     bdef = _build_predicate_funcdef(
                         bname, arity, bucket_clauses, _effective_db, body_compiler,
+                        skip_trail=_skip_trail,
                     )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
                 if index["defaults"]:
@@ -8442,6 +8456,7 @@ def compile_predicate_shallow(
                                         bdef = _build_predicate_funcdef(
                                             bname, arity, bkt,
                                             _effective_db, body_compiler,
+                                            skip_trail=len(bkt) == 1,
                                         )
                                         l1_fns[kj] = functiondef_to_function(
                                             bdef, globals_=base_globals)
@@ -8497,6 +8512,7 @@ def compile_predicate_shallow(
                             jbdef = _build_predicate_funcdef(
                                 jbname, arity, bkt,
                                 _effective_db, body_compiler,
+                                skip_trail=len(bkt) == 1,
                             )
                             joint_dict[jk] = functiondef_to_function(
                                 jbdef, globals_=base_globals)
