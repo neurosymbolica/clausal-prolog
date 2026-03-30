@@ -419,3 +419,67 @@ class TestCoefficientGrowth:
         in_q(x, 0, big * 2, trail)
         assert q_eq(x, big, trail)
         assert deref(x) == big
+
+
+# ── End-to-end Clausal integration tests ─────────────────────────────────────
+# These compile and run .clausal files through the full pipeline (parser →
+# compiler → runtime dispatch), verifying every doc example end-to-end.
+
+
+class TestClausalIntegration:
+    """Run the doc examples as compiled Clausal predicates."""
+
+    @pytest.fixture(autouse=True)
+    def _load_module(self):
+        from clausal.testing import load_clausal_module
+        self.mod = load_clausal_module("tests/fixtures/clpq_examples.clausal")
+
+    def _run(self, name, arity):
+        """Run a predicate and return the first solution's deref'd args."""
+        from clausal.logic.solve import call
+        args = [Var() for _ in range(arity)]
+        for _trail in call(name, *args, module=self.mod):
+            return tuple(deref(a) for a in args)
+        return None  # no solution
+
+    def test_two_var(self):
+        result = self._run("TwoVar", 2)
+        assert result is not None
+        x, y = result
+        assert x == F(3)
+        assert y == F(7)
+
+    def test_three_var(self):
+        result = self._run("ThreeVar", 3)
+        assert result is not None
+        x, y, z = result
+        assert x == F(11, 3)
+        assert y == F(5, 3)
+        assert z == F(2, 3)
+
+    def test_rational_coeffs(self):
+        result = self._run("RationalCoeffs", 2)
+        assert result is not None
+        x, y = result
+        assert x == F(2)
+        assert y == F(0)
+
+    def test_feasible(self):
+        result = self._run("Feasible", 2)
+        assert result is not None  # just needs to succeed
+
+    def test_infeasible(self):
+        result = self._run("Infeasible", 1)
+        assert result is None  # must fail
+
+    def test_lp_maximize(self):
+        result = self._run("LP", 3)
+        assert result is not None
+        x, y, obj = result
+        assert obj == F(310)
+
+    def test_scheduling_minimize(self):
+        result = self._run("Scheduling", 3)
+        assert result is not None
+        x, y, cost = result
+        assert cost == F(30)

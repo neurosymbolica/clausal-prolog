@@ -1,0 +1,56 @@
+# CLP(Q) doc examples — each predicate matches a code block in docs/clpq.md.
+
+# --- Two-variable linear system ---
+TwoVar(X, Y) <- (
+    in_q([X, Y], 0, 10),
+    X + Y == 10,
+    X == 3
+)
+
+# --- Three equations in three unknowns ---
+ThreeVar(X, Y, Z) <- (
+    in_q([X, Y, Z], -100, 100),
+    X + Y + Z == 6,
+    X - Y == 2,
+    Y - Z == 1
+)
+
+# --- Rational coefficients ---
+RationalCoeffs(X, Y) <- (
+    in_q([X, Y], -10, 10),
+    1/2 * X + 1/3 * Y == 1,
+    Y == 0
+)
+
+# --- Feasibility ---
+Feasible(X, Y) <- (
+    in_q([X, Y], 0, 100),
+    X + Y <= 8,
+    X <= 5,
+    Y <= 6
+)
+
+# --- Infeasibility ---
+Infeasible(X) <- (
+    in_q(X, 0, 10),
+    X >= 6,
+    X <= 4
+)
+
+# --- LP maximize ---
+LP(X, Y, OBJ) <- (
+    in_q([X, Y], 0, 1000),
+    2*X + Y <= 16,
+    X + 2*Y <= 11,
+    X + 3*Y <= 15,
+    maximize(30*X + 50*Y, OBJ)
+)
+
+# --- Scheduling minimize ---
+Scheduling(X, Y, COST) <- (
+    in_q([X, Y], 0, 100),
+    X + Y >= 10,
+    2*X + Y <= 30,
+    X + 3*Y <= 40,
+    minimize(5*X + 3*Y, COST)
+)

@@ -989,8 +989,9 @@ def _eval_ground(expr):
 
     Returns int or float on success, None if expression contains unbound Vars.
     """
+    from fractions import Fraction as _Fraction  # noqa: PLC0415
     expr = deref(expr)
-    if isinstance(expr, (int, float)) and not isinstance(expr, bool):
+    if isinstance(expr, (int, float, _Fraction)) and not isinstance(expr, bool):
         return expr
     if is_var(expr):
         return None
@@ -1014,6 +1015,11 @@ def _eval_ground(expr):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
         if l is not None and r is not None and r != 0:
+            # int/int → Fraction for exact rational arithmetic
+            if isinstance(l, int) and not isinstance(l, bool) \
+               and isinstance(r, int) and not isinstance(r, bool):
+                from fractions import Fraction  # noqa: PLC0415
+                return Fraction(l, r)
             return l / r
     elif isinstance(expr, _FloorDiv):
         l = _eval_ground(expr.left)
@@ -1175,7 +1181,8 @@ def _is_fd_candidate(x) -> bool:
 
 
 def _is_rational_arg(x) -> bool:
-    """True if x is a Fraction or a Var with a rational-domain attribute."""
+    """True if x is a Fraction, a Var with a rational-domain attribute,
+    or an expression tree containing one of the above."""
     from fractions import Fraction  # noqa: PLC0415
     x = deref(x)
     if isinstance(x, Fraction):
@@ -1183,6 +1190,13 @@ def _is_rational_arg(x) -> bool:
     if is_var(x):
         from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
         return get_attr(x, Q_KEY) is not None
+    # Check inside expression trees
+    if _Add is None:
+        _ensure_term_imports()
+    if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
+        return _is_rational_arg(x.left) or _is_rational_arg(x.right)
+    if isinstance(x, _Negate):
+        return _is_rational_arg(x.operand)
     return False
 
 
