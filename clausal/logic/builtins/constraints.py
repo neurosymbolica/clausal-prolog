@@ -200,6 +200,25 @@ def _minimize__2(expr, result, trail, k):
         yield None
 
 
+@_builtin("bb_inf", 3)
+def _bb_inf__3(int_vars, expr, result, trail, k):
+    """bb_inf(IntVars, Expr, Inf) — mixed-integer optimization."""
+    from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
+    if _bb_inf_fn(_deref(int_vars), expr, result, trail):
+        yield None
+
+
+@_builtin("dump_q", 2)
+def _dump_q__2(vars_list, result, trail, k):
+    """dump_q(Vars, Constraints) — project constraint store onto Vars."""
+    from clausal.logic.clpq import dump_q as _dump_q_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref, unify as _unify  # noqa: PLC0415
+    constraints = _dump_q_fn(_deref(vars_list), trail)
+    if _unify(result, constraints, trail):
+        yield None
+
+
 @_builtin("entailed", 3)
 def _entailed__3(op, l, r, trail, k):
     """entailed(Op, L, R) — test if constraint Op(L, R) is implied by the store."""

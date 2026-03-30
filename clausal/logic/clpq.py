@@ -1347,3 +1347,270 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     if not _bind_optimal(tableau, trail):
         return False
     return unify(result_var, opt + const, trail)
+
+
+# ── Public API: projection ───────────────────────────────────────────────────
+
+
+def dump_q(target_vars: list, trail: Trail) -> list[str]:
+    """Project the constraint store onto *target_vars*.
+
+    Returns a list of constraint strings over only the target variables,
+    with all internal (slack, parametric) variables eliminated via
+    Fourier-Motzkin elimination.
+
+    Each returned string is of the form ``"{2*X + Y =< 16}"`` or ``"{X = 5}"``.
+    """
+    tableau = _get_tableau(trail)
+    target_ids = set()
+    id_to_name: dict[int, str] = {}
+    for v in target_vars:
+        v = deref(v)
+        if is_var(v):
+            target_ids.add(v._id)
+            id_to_name[v._id] = str(v)
+
+    constraints = _collect_constraints(tableau, target_ids)
+
+    # Fourier-Motzkin elimination of non-target variables
+    all_var_ids: set[int] = set()
+    for coeffs, _, _ in constraints:
+        all_var_ids.update(coeffs.keys())
+    for elim_vid in sorted(all_var_ids - target_ids):
+        constraints = _fm_eliminate(constraints, elim_vid)
+
+    return _format_constraints(constraints, id_to_name)
+
+
+def _collect_constraints(tableau: Tableau, target_ids: set[int],
+                         ) -> list[tuple[dict[int, Fraction], str, Fraction]]:
+    """Extract all constraints from the tableau as explicit triples."""
+    constraints: list[tuple[dict[int, Fraction], str, Fraction]] = []
+
+    # Parametric equalities
+    for vid, (pc, pk) in tableau.parametric.items():
+        coeffs: dict[int, Fraction] = {vid: ONE}
+        for pv, pcoeff in pc.items():
+            coeffs[pv] = coeffs.get(pv, ZERO) - pcoeff
+        coeffs = {v: c for v, c in coeffs.items() if c != ZERO}
+        if coeffs:
+            constraints.append((coeffs, '=', pk))
+
+    # Row inequalities: bv = rhs + Σ row[v]*v, bv in [lo, hi]
+    for bv, row in tableau.rows.items():
+        blo = tableau.lo.get(bv)
+        bhi = tableau.hi.get(bv)
+        rhs = tableau.rhs[bv]
+        # bv >= blo → Σ (-row[v])*v =< rhs - blo
+        if blo is not None:
+            coeffs = {v: -c for v, c in row.items() if c != ZERO}
+            if coeffs:
+                constraints.append((coeffs, '=<', rhs - blo))
+        # bv <= bhi → Σ row[v]*v =< bhi - rhs
+        if bhi is not None:
+            coeffs = {v: c for v, c in row.items() if c != ZERO}
+            if coeffs:
+                constraints.append((coeffs, '=<', bhi - rhs))
+
+    # Explicit bounds on non-basic, non-parametric variables
+    for vid in sorted(tableau.lo.keys()):
+        if vid in tableau.rows or vid in tableau.parametric:
+            continue
+        lo = tableau.lo.get(vid)
+        hi = tableau.hi.get(vid)
+        if lo is not None:
+            constraints.append(({vid: -ONE}, '=<', -lo))
+        if hi is not None:
+            constraints.append(({vid: ONE}, '=<', hi))
+
+    return constraints
+
+
+def _fm_eliminate(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
+                  elim_vid: int,
+                  ) -> list[tuple[dict[int, Fraction], str, Fraction]]:
+    """Eliminate *elim_vid* from all constraints via Fourier-Motzkin."""
+    # Prefer equality substitution if available
+    for i, (coeffs, rel, rhs) in enumerate(constraints):
+        if rel == '=' and elim_vid in coeffs:
+            c = coeffs[elim_vid]
+            result: list[tuple[dict[int, Fraction], str, Fraction]] = []
+            for j, (coeffs2, rel2, rhs2) in enumerate(constraints):
+                if j == i:
+                    other = {v: coeff for v, coeff in coeffs.items() if v != elim_vid}
+                    if other:
+                        result.append((other, '=', rhs))
+                    continue
+                c2 = coeffs2.get(elim_vid, ZERO)
+                if c2 == ZERO:
+                    result.append((coeffs2, rel2, rhs2))
+                    continue
+                new_c = {v: coeff for v, coeff in coeffs2.items() if v != elim_vid}
+                for v, oc in coeffs.items():
+                    if v != elim_vid:
+                        new_c[v] = new_c.get(v, ZERO) - c2 * oc / c
+                new_rhs = rhs2 - c2 * rhs / c
+                new_c = {v: coeff for v, coeff in new_c.items() if coeff != ZERO}
+                if new_c:
+                    result.append((new_c, rel2, new_rhs))
+            return result
+
+    # No equality — Fourier-Motzkin on inequalities
+    upper: list[tuple[dict[int, Fraction], Fraction]] = []
+    lower: list[tuple[dict[int, Fraction], Fraction]] = []
+    keep: list[tuple[dict[int, Fraction], str, Fraction]] = []
+
+    for coeffs, rel, rhs in constraints:
+        c = coeffs.get(elim_vid, ZERO)
+        if c == ZERO:
+            keep.append((coeffs, rel, rhs))
+            continue
+        rest = {v: coeff for v, coeff in coeffs.items() if v != elim_vid}
+        if c > ZERO:
+            upper.append(({v: -coeff / c for v, coeff in rest.items()}, rhs / c))
+        else:
+            lower.append(({v: -coeff / c for v, coeff in rest.items()}, rhs / c))
+
+    for lo_c, lo_r in lower:
+        for hi_c, hi_r in upper:
+            combined = dict(lo_c)
+            for v, c in hi_c.items():
+                combined[v] = combined.get(v, ZERO) - c
+            combined = {v: c for v, c in combined.items() if c != ZERO}
+            if combined:
+                keep.append((combined, '=<', hi_r - lo_r))
+
+    return keep
+
+
+def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
+                        id_to_name: dict[int, str]) -> list[str]:
+    """Format constraint triples as human-readable strings."""
+    result: list[str] = []
+    for coeffs, rel, rhs in constraints:
+        if not coeffs:
+            continue
+        terms = []
+        for vid in sorted(coeffs.keys()):
+            c = coeffs[vid]
+            name = id_to_name.get(vid, f'_{vid}')
+            if c == ONE:
+                terms.append(name)
+            elif c == -ONE:
+                terms.append(f'-{name}')
+            elif c.denominator == 1:
+                terms.append(f'{c.numerator}*{name}')
+            else:
+                terms.append(f'{c}*{name}')
+        lhs = ' + '.join(terms).replace('+ -', '- ')
+        if rel == '=':
+            result.append(f'{{{lhs} = {rhs}}}')
+        else:
+            result.append(f'{{{lhs} =< {rhs}}}')
+    return result
+
+
+# ── Public API: mixed-integer optimization ───────────────────────────────────
+
+
+def bb_inf(int_vars: list, expr: Any, result_var: Any,
+           trail: Trail) -> bool:
+    """Branch-and-bound mixed-integer optimization.
+
+    Finds the infimum (minimum) of *expr* subject to the current
+    constraints and the additional requirement that all variables in
+    *int_vars* take integer values.
+
+    Uses LP relaxation at each node and branches on the most fractional
+    integer variable.
+    """
+    expr = deref(expr)
+    result_var = deref(result_var)
+    int_ids = set()
+    for v in int_vars:
+        v = deref(v)
+        if is_var(v):
+            int_ids.add(v._id)
+
+    lc = _linearize(expr, trail)
+    if lc is None:
+        raise TypeError("bb_inf requires a linear expression")
+    obj_coeffs, obj_const = lc
+
+    tableau = _get_tableau(trail)
+    best = _bb_solve(tableau, obj_coeffs, obj_const, int_ids)
+    if best is None:
+        return False
+    return unify(result_var, best, trail)
+
+
+def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
+              obj_const: Fraction, int_ids: set[int],
+              best_so_far: Fraction | None = None,
+              ) -> Fraction | None:
+    """Recursive branch-and-bound solver.
+
+    Returns the optimal (minimum) objective value with integer constraints,
+    or None if infeasible.
+    """
+    import math
+
+    tab = tableau.copy()
+    opt = tab.optimize(dict(obj_coeffs), 'min')
+    if opt is None:
+        return None  # unbounded — shouldn't happen in well-posed MIP
+    obj_val = opt + obj_const
+
+    # Pruning: if this node's LP relaxation is worse than best known, skip
+    if best_so_far is not None and obj_val >= best_so_far:
+        return best_so_far
+
+    # Check integrality of all int_vars
+    most_frac_vid = None
+    most_frac_dist = ZERO  # distance from nearest integer (want max)
+    for vid in int_ids:
+        val = tab.assign.get(vid, ZERO)
+        if vid in tab.parametric:
+            pc, pk = tab.parametric[vid]
+            val = pk
+            for pv, pcoeff in pc.items():
+                val += pcoeff * tab.assign.get(pv, ZERO)
+        # Check if val is integer
+        if val.denominator != 1:
+            frac_part = val - Fraction(math.floor(val))
+            dist = min(frac_part, ONE - frac_part)
+            if dist > most_frac_dist:
+                most_frac_dist = dist
+                most_frac_vid = vid
+
+    if most_frac_vid is None:
+        # All integer vars are integral — feasible integer solution!
+        return obj_val
+
+    # Branch on most fractional variable
+    val = tab.assign.get(most_frac_vid, ZERO)
+    if most_frac_vid in tab.parametric:
+        pc, pk = tab.parametric[most_frac_vid]
+        val = pk
+        for pv, pcoeff in pc.items():
+            val += pcoeff * tab.assign.get(pv, ZERO)
+    floor_val = Fraction(math.floor(val))
+    ceil_val = floor_val + ONE
+
+    best = best_so_far
+
+    # Branch 1: vid <= floor_val
+    tab1 = tableau.copy()
+    if tab1.set_bound(most_frac_vid, None, floor_val):
+        result1 = _bb_solve(tab1, obj_coeffs, obj_const, int_ids, best)
+        if result1 is not None and (best is None or result1 < best):
+            best = result1
+
+    # Branch 2: vid >= ceil_val
+    tab2 = tableau.copy()
+    if tab2.set_bound(most_frac_vid, ceil_val, None):
+        result2 = _bb_solve(tab2, obj_coeffs, obj_const, int_ids, best)
+        if result2 is not None and (best is None or result2 < best):
+            best = result2
+
+    return best

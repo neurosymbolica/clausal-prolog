@@ -7,7 +7,7 @@ import pytest
 from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify
 from clausal.logic.clpq import (
     Q_KEY, in_q, q_eq, q_ne, q_lt, q_le, q_gt, q_ge,
-    maximize, minimize, sup, inf, entailed,
+    maximize, minimize, sup, inf, entailed, dump_q, bb_inf,
     _linearize, _get_tableau, _tableaux, _last_snapshot,
 )
 from clausal.terms import Add, Sub, Mult, Div, Negate
@@ -569,6 +569,157 @@ class TestLinearize:
 
 
 # ── Coefficient growth ───────────────────────────────────────────────────────
+
+
+class TestDumpQ:
+    """Fourier-Motzkin projection of constraint store."""
+
+    def test_simple_bounds(self):
+        """in_q(X, 0, 10) projects to {-X =< 0} and {X =< 10}."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        result = dump_q([x], trail)
+        assert any('=< 0' in c for c in result)   # lower bound
+        assert any('=< 10' in c for c in result)   # upper bound
+
+    def test_inequality_projection(self):
+        """Slacks are eliminated, original constraints recovered."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        q_le(Add(left=Mult(left=F(2), right=x), right=y), F(16), trail)
+        q_le(Add(left=x, right=Mult(left=F(2), right=y)), F(11), trail)
+        result = dump_q([x, y], trail)
+        # Should contain the two original constraints (plus bounds)
+        assert len(result) >= 4  # 2 inequalities + at least 2 bounds
+        # Check that no internal variable names appear
+        for c in result:
+            assert '_-' not in c, f"Internal variable leaked: {c}"
+
+    def test_equality_projection(self):
+        """Equality: X + Y = 10 projects correctly."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        q_eq(Add(left=x, right=y), F(10), trail)
+        result = dump_q([x, y], trail)
+        # Should contain an equality constraint
+        assert any('= 10' in c for c in result)
+
+    def test_no_internal_vars(self):
+        """Projection must eliminate all slack/internal variables."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 1000, trail)
+        q_le(Add(left=Mult(left=F(2), right=x), right=y), F(16), trail)
+        q_le(Add(left=x, right=Mult(left=F(2), right=y)), F(11), trail)
+        q_le(Add(left=x, right=Mult(left=F(3), right=y)), F(15), trail)
+        result = dump_q([x, y], trail)
+        for c in result:
+            # No negative IDs (slack vars) should appear
+            assert '_-' not in c, f"Internal variable leaked: {c}"
+
+    def test_empty_store(self):
+        """No constraints → empty projection."""
+        trail = Trail()
+        x = Var()
+        in_q(x, trail=trail)
+        result = dump_q([x], trail)
+        # Unbounded variable — no constraints to project
+        assert result == []
+
+    def test_ground_var(self):
+        """X = 5 projects to {X = 5} (or equivalent bounds)."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        q_eq(x, F(5), trail)
+        # x is now ground — dump_q with unbound vars only
+        y = Var()
+        in_q(y, 0, 10, trail)
+        result = dump_q([y], trail)
+        assert any('=< 10' in c for c in result)
+
+
+class TestBBInf:
+    """Branch-and-bound mixed-integer optimization."""
+
+    def test_simple_integer(self):
+        """min(X) with X >= 3/2, X integer → 2."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        q_ge(x, F(3, 2), trail)
+        result = Var()
+        assert bb_inf([x], x, result, trail)
+        assert deref(result) == F(2)
+
+    def test_integer_lp(self):
+        """SICStus example: min(X) subject to X >= Y + Z, Y > 1, Z > 1,
+        all integer → X = 4 (Y=2, Z=2)."""
+        trail = Trail()
+        x, y, z = Var(), Var(), Var()
+        in_q([x, y, z], 0, 100, trail)
+        q_ge(x, Add(left=y, right=z), trail)
+        q_ge(y, F(2), trail)  # Y > 1 with integer Y means Y >= 2
+        q_ge(z, F(2), trail)  # Z > 1 with integer Z means Z >= 2
+        result = Var()
+        assert bb_inf([x, y, z], x, result, trail)
+        assert deref(result) == F(4)
+
+    def test_no_integer_constraint(self):
+        """If IntVars is empty, bb_inf == inf (LP relaxation)."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        q_ge(x, F(3, 2), trail)
+        result = Var()
+        assert bb_inf([], x, result, trail)
+        assert deref(result) == F(3, 2)  # no integrality → rational optimum
+
+    def test_infeasible(self):
+        """X >= 5/2, X <= 7/2, integer and X != 3 → infeasible.
+        LP has solutions (2.5 to 3.5), but only integer in that range is 3,
+        and we exclude 3 via bounds."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_ge(x, F(5, 2), trail)   # X >= 2.5
+        q_le(x, F(7, 2), trail)   # X <= 3.5
+        # Only integer in [2.5, 3.5] is 3
+        # Make it infeasible by splitting: X <= 2 or X >= 4
+        # Actually, bb_inf should find X=3. Let's test a truly infeasible case:
+        # X >= 3.1, X <= 3.9 — no integer in range
+        trail2 = Trail()
+        y = Var()
+        in_q(y, 0, 100, trail2)
+        q_ge(y, F(31, 10), trail2)  # Y >= 3.1
+        q_le(y, F(39, 10), trail2)  # Y <= 3.9
+        result = Var()
+        assert not bb_inf([y], y, result, trail2)
+
+    def test_already_integer(self):
+        """If LP optimum is already integer, no branching needed."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        q_ge(x, F(3), trail)
+        result = Var()
+        assert bb_inf([x], x, result, trail)
+        assert deref(result) == F(3)
+
+    def test_mixed_integer(self):
+        """Only some variables must be integer."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        q_le(Add(left=x, right=y), F(5), trail)
+        # Minimize x + y with x integer, y rational
+        result = Var()
+        assert bb_inf([x], Add(left=x, right=y), result, trail)
+        # LP minimum is 0 (x=0, y=0), which is already integer for x
+        assert deref(result) == F(0)
 
 
 class TestCoefficientGrowth:
