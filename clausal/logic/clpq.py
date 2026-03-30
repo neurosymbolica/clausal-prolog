@@ -1221,8 +1221,11 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     otherwise.  Does not modify the constraint store.
     """
     l, r = deref(l), deref(r)
-    _ensure_q_for_expr(l, trail)
-    _ensure_q_for_expr(r, trail)
+    # Do NOT call _ensure_q_for_expr — entailed must be read-only.
+    # If variables aren't in the Q domain, linearize will still work
+    # (it just uses var._id as the key), but optimize won't know about
+    # them unless they're registered. For unregistered vars, the result
+    # is "not entailed" (the var could be anything).
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:

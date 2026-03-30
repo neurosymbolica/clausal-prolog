@@ -516,6 +516,13 @@ class TestEntailed:
         # x should still be unconstrained beyond [0, 10]
         assert is_var(deref(x))
 
+    def test_entailed_does_not_add_q_attr(self):
+        """entailed on a bare variable must not add Q attributes."""
+        trail = Trail()
+        x = Var()
+        entailed('=<', x, F(5), trail)
+        assert get_attr(x, Q_KEY) is None
+
 
 # ── Phase 7: Linearization ──────────────────────────────────────────────────
 
