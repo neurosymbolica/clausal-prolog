@@ -68,6 +68,13 @@ ext_arithmetic_core = Extension(
     extra_compile_args=extra_compile_args,
 )
 
+ext_chars_core = Extension(
+    "clausal.logic.builtins._chars_core",
+    sources=["clausal/logic/builtins/_chars_core.c"],
+    include_dirs=["clausal/logic"],
+    extra_compile_args=extra_compile_args,
+)
+
 setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
                    ext_tabling_core, ext_clpfd_propagate, ext_lists_core,
-                   ext_constraints_dif, ext_arithmetic_core])
+                   ext_constraints_dif, ext_arithmetic_core, ext_chars_core])

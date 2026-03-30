@@ -24,6 +24,25 @@ from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
 
+# ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
+
+try:
+    from clausal.logic.builtins._chars_core import (
+        char_type_find_types as _c_char_type_find_types,
+        char_type_find_chars as _c_char_type_find_chars,
+        atom_concat_split_find as _c_atom_concat_split_find,
+        sub_atom_search as _c_sub_atom_search,
+        sub_atom_enum as _c_sub_atom_enum,
+        type_name_index as _c_type_name_index,
+    )
+except ImportError:
+    _c_char_type_find_types = None
+    _c_char_type_find_chars = None
+    _c_atom_concat_split_find = None
+    _c_sub_atom_search = None
+    _c_sub_atom_enum = None
+    _c_type_name_index = None
+
 
 def _atom_to_str(val: Any) -> str | None:
     """Extract a string name from an atom value.
@@ -93,6 +112,16 @@ def _char_type__2(char, type_, trail, k):
             fn = _CHAR_TYPES.get(vt)
             if fn is not None and fn(vc):
                 yield None
+        elif _c_char_type_find_types is not None:
+            # Char bound, Type unbound → C-accelerated enumeration
+            idx = 0
+            while True:
+                result = _c_char_type_find_types(vc, idx, type_, trail)
+                if result is None:
+                    break
+                idx, mark = result
+                yield None
+                trail.undo(mark)
         else:
             # Char bound, Type unbound → enumerate matching types
             for t_name in _CHAR_TO_TYPES.get(vc, []):
@@ -100,6 +129,21 @@ def _char_type__2(char, type_, trail, k):
                 if unify(type_, t_name, trail):
                     yield None
                 trail.undo(mark)
+    elif _c_char_type_find_chars is not None and _c_type_name_index is not None:
+        # Type bound, Char unbound → C-accelerated enumeration
+        if not isinstance(vt, str):
+            return
+        tidx = _c_type_name_index(vt)
+        if tidx < 0:
+            return
+        idx = 0
+        while True:
+            result = _c_char_type_find_chars(tidx, idx, char, trail)
+            if result is None:
+                break
+            idx, mark = result
+            yield None
+            trail.undo(mark)
     else:
         # Type bound, Char unbound → enumerate matching chars
         if not isinstance(vt, str):
@@ -327,6 +371,16 @@ def _atom_concat__3(a, b, c, trail, k):
             if unify(a, sc[:len(sc) - len(sb)], trail):
                 yield None
             trail.undo(mark)
+    elif c_bound and _c_atom_concat_split_find is not None:
+        # C bound, A and B unbound: C-accelerated split enumeration
+        idx = 0
+        while True:
+            result = _c_atom_concat_split_find(sc, idx, a, b, trail)
+            if result is None:
+                break
+            idx, mark = result
+            yield None
+            trail.undo(mark)
     elif c_bound:
         # C bound, A and B unbound: enumerate all splits
         for i in range(len(sc) + 1):
@@ -361,6 +415,16 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
 
     # Optimization: if Sub is bound, use str.find to locate occurrences.
     if not is_var(vs) and isinstance(vs, str):
+        if _c_sub_atom_search is not None:
+            idx = 0
+            while True:
+                result = _c_sub_atom_search(va, vs, idx, before, length, after, trail)
+                if result is None:
+                    break
+                idx, mark = result
+                yield None
+                trail.undo(mark)
+            return
         sub_len = len(vs)
         start = 0
         while True:
@@ -380,6 +444,26 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
     # Narrow ranges when Before or length is bound.
     vb = deref(before)
     vl = deref(length)
+
+    if _c_sub_atom_enum is not None:
+        # Early exit for out-of-range bound values (avoids O(n^2) wasted unifications)
+        if not is_var(vb) and isinstance(vb, int) and (vb < 0 or vb > n):
+            return
+        if not is_var(vl) and isinstance(vl, int) and vl < 0:
+            return
+        vb_fixed = vb if (not is_var(vb) and isinstance(vb, int)) else -1
+        vl_fixed = vl if (not is_var(vl) and isinstance(vl, int)) else -1
+        flat = 0
+        while True:
+            result = _c_sub_atom_enum(
+                va, flat, before, length, after, sub,
+                vb_fixed, vl_fixed, trail)
+            if result is None:
+                break
+            flat, mark = result
+            yield None
+            trail.undo(mark)
+        return
 
     if not is_var(vb) and isinstance(vb, int):
         b_range = range(vb, vb + 1) if 0 <= vb <= n else range(0)
