@@ -64,30 +64,30 @@ class RealVar:
 # ── Outward-rounded interval arithmetic ───────────────────────────────────────
 
 
-def _dn(x: float) -> float:
+def _dn_py(x: float) -> float:
     """Round x toward -inf by one ULP (for lower bounds)."""
     return math.nextafter(x, -math.inf)
 
 
-def _up(x: float) -> float:
+def _up_py(x: float) -> float:
     """Round x toward +inf by one ULP (for upper bounds)."""
     return math.nextafter(x, math.inf)
 
 
-def _iadd(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _iadd_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     return _dn(alo + blo), _up(ahi + bhi)
 
 
-def _isub(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _isub_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     return _dn(alo - bhi), _up(ahi - blo)
 
 
-def _imul(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _imul_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     corners = [alo * blo, alo * bhi, ahi * blo, ahi * bhi]
     return _dn(min(corners)), _up(max(corners))
 
 
-def _idiv(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _idiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     """Divide [alo,ahi] by [blo,bhi]. Returns [-inf,inf] if 0 ∈ denominator."""
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
@@ -95,7 +95,7 @@ def _idiv(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]
     return _dn(min(corners)), _up(max(corners))
 
 
-def _ipow_int(alo: float, ahi: float, n: int) -> tuple[float, float]:
+def _ipow_int_py(alo: float, ahi: float, n: int) -> tuple[float, float]:
     """Interval [alo,ahi] raised to integer power n."""
     if n == 0:
         return 1.0, 1.0
@@ -114,14 +114,14 @@ def _ipow_int(alo: float, ahi: float, n: int) -> tuple[float, float]:
     return _dn(alo ** n), _up(ahi ** n)
 
 
-def _isqrt(alo: float, ahi: float) -> tuple[float, float]:
+def _isqrt_py(alo: float, ahi: float) -> tuple[float, float]:
     lo = max(0.0, alo)
     if lo > ahi:
         return math.nan, math.nan  # wipeout
     return _dn(math.sqrt(lo)), _up(math.sqrt(ahi))
 
 
-def _iabs(alo: float, ahi: float) -> tuple[float, float]:
+def _iabs_py(alo: float, ahi: float) -> tuple[float, float]:
     if alo >= 0:
         return alo, ahi
     if ahi <= 0:
@@ -129,7 +129,7 @@ def _iabs(alo: float, ahi: float) -> tuple[float, float]:
     return 0.0, max(-alo, ahi)
 
 
-def _isin(alo: float, ahi: float) -> tuple[float, float]:
+def _isin_py(alo: float, ahi: float) -> tuple[float, float]:
     """Interval of sin over [alo, ahi]."""
     if ahi - alo >= 2 * math.pi:
         return -1.0, 1.0
@@ -141,7 +141,7 @@ def _isin(alo: float, ahi: float) -> tuple[float, float]:
     return _dn(min(vals)), _up(max(vals))
 
 
-def _icos(alo: float, ahi: float) -> tuple[float, float]:
+def _icos_py(alo: float, ahi: float) -> tuple[float, float]:
     """Interval of cos over [alo, ahi]."""
     if ahi - alo >= 2 * math.pi:
         return -1.0, 1.0
@@ -153,11 +153,11 @@ def _icos(alo: float, ahi: float) -> tuple[float, float]:
     return _dn(min(vals)), _up(max(vals))
 
 
-def _iexp(alo: float, ahi: float) -> tuple[float, float]:
+def _iexp_py(alo: float, ahi: float) -> tuple[float, float]:
     return _dn(math.exp(alo)), _up(math.exp(ahi))
 
 
-def _ilog(alo: float, ahi: float) -> tuple[float, float]:
+def _ilog_py(alo: float, ahi: float) -> tuple[float, float]:
     if ahi <= 0.0:
         return math.nan, math.nan  # wipeout
     if alo <= 0.0:
@@ -165,7 +165,7 @@ def _ilog(alo: float, ahi: float) -> tuple[float, float]:
     return _dn(math.log(alo)), _up(math.log(ahi))
 
 
-def _ifloordiv(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _ifloordiv_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     """Interval of a // b (floor division)."""
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
@@ -174,7 +174,7 @@ def _ifloordiv(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, f
     return float(min(corners)), float(max(corners))
 
 
-def _imod(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
+def _imod_py(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]:
     """Interval of a % b (modulo). Conservative outer bound."""
     if blo <= 0.0 <= bhi:
         return -math.inf, math.inf
@@ -185,23 +185,57 @@ def _imod(alo: float, ahi: float, blo: float, bhi: float) -> tuple[float, float]
     return _dn(-(abs_max - 1.0)), 0.0
 
 
-def _iatan(alo: float, ahi: float) -> tuple[float, float]:
+def _iatan_py(alo: float, ahi: float) -> tuple[float, float]:
     return _dn(math.atan(alo)), _up(math.atan(ahi))
 
 
-def _iasin(alo: float, ahi: float) -> tuple[float, float]:
+def _iasin_py(alo: float, ahi: float) -> tuple[float, float]:
     clo, chi = max(-1.0, alo), min(1.0, ahi)
     if clo > chi:
         return math.nan, math.nan
     return _dn(math.asin(clo)), _up(math.asin(chi))
 
 
-def _iacos(alo: float, ahi: float) -> tuple[float, float]:
+def _iacos_py(alo: float, ahi: float) -> tuple[float, float]:
     clo, chi = max(-1.0, alo), min(1.0, ahi)
     if clo > chi:
         return math.nan, math.nan
     # acos is monotone decreasing
     return _dn(math.acos(chi)), _up(math.acos(clo))
+
+
+# ── C-accelerated versions with Python fallback ─────────────────────────────
+
+_dn = _dn_py
+_up = _up_py
+_iadd = _iadd_py
+_isub = _isub_py
+_imul = _imul_py
+_idiv = _idiv_py
+_ipow_int = _ipow_int_py
+_isqrt = _isqrt_py
+_iabs = _iabs_py
+_isin = _isin_py
+_icos = _icos_py
+_iexp = _iexp_py
+_ilog = _ilog_py
+_iatan = _iatan_py
+_iasin = _iasin_py
+_iacos = _iacos_py
+_ifloordiv = _ifloordiv_py
+_imod = _imod_py
+
+try:
+    from clausal.logic._clpr_core import (  # noqa: F811
+        _dn, _up,
+        _iadd, _isub, _imul, _idiv,
+        _ipow_int, _isqrt, _iabs,
+        _isin, _icos, _iexp, _ilog,
+        _iatan, _iasin, _iacos,
+        _ifloordiv, _imod,
+    )
+except ImportError:
+    pass
 
 
 # ── Lazy term-node imports (mirrors clpfd.py) ─────────────────────────────────
