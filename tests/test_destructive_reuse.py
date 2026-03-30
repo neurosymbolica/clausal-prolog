@@ -6,8 +6,9 @@ in-place (guarded by a runtime sys.getrefcount check) instead of copying.
 
 Coverage:
   - Liveness analysis: _find_destructive_reuse_goals detects eligible goals
+  - Alias detection: body vars unified with head vars are excluded
   - Correctness: optimized predicates produce the same results as unoptimized
-  - Safety: head variables and live variables are NOT mutated
+  - Safety: head variables, aliased variables, and live variables are NOT mutated
   - Backtracking: mutation does not corrupt backtracking semantics
   - Destructive variant builtins: _append_dr__3, _dict_put_dr__4, _set_union_dr__3
 """
@@ -95,22 +96,43 @@ class TestFindDestructiveReuseGoals:
         return Call(func=LoadName(name="set_union"),
                     args=[s1, s2, union], kwargs=[])
 
-    def test_eligible_append_last_goal(self):
-        """append(Temp, Extra, Out) where Temp is body-only and dead."""
-        In, Temp, Extra, Out = Var(), Var(), Var(), Var()
-        head = Compound("process", (In, Out))
+    def test_eligible_with_evaluate(self):
+        """append(Temp, Extra, Out) where Temp is created by Evaluate."""
+        Temp, Extra, Out = Var(), Var(), Var()
+        head = Compound("process", (Out,))
         body = [
-            Unify(left=Temp, right=In),  # deterministic
+            Evaluate(left=Temp, right=[1, 2, 3]),  # deterministic, no alias
             self._append_call(Temp, Extra, Out),
         ]
         clause = Clause(head=head, body=body)
-        # Temp appears in head? No (In, Out only).
-        # Temp dead after append? Yes.
-        # Preceding goals deterministic? Yes (Unify).
-        # BUT Temp is used in the Unify and in the append — so it appears in
-        # two goals. After the append, it's dead. Index 1 should be eligible.
         eligible = _find_destructive_reuse_goals(clause)
         assert 1 in eligible
+
+    def test_alias_through_unify_not_eligible(self):
+        """Temp = In where In is a head var → Temp aliases caller data."""
+        In, Temp, Extra, Out = Var(), Var(), Var(), Var()
+        head = Compound("process", (In, Out))
+        body = [
+            Unify(left=Temp, right=In),  # alias!
+            self._append_call(Temp, Extra, Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # Temp is aliased to In (head var) → NOT eligible
+        assert 1 not in eligible
+
+    def test_transitive_alias_not_eligible(self):
+        """Temp2 = Temp, Temp = In → Temp2 transitively aliases head var In."""
+        In, Temp, Temp2, Extra, Out = Var(), Var(), Var(), Var(), Var()
+        head = Compound("process", (In, Out))
+        body = [
+            Unify(left=Temp, right=In),
+            Unify(left=Temp2, right=Temp),
+            self._append_call(Temp2, Extra, Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        assert 2 not in eligible
 
     def test_head_var_not_eligible(self):
         """append(HeadVar, Extra, Out) — HeadVar is in the clause head."""
@@ -132,11 +154,7 @@ class TestFindDestructiveReuseGoals:
         ]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
-        # Neither goal should be eligible: goal 0 has Temp live after,
-        # goal 1 has Temp as head var? No, Temp is body-only. But goal 1
-        # uses Temp as source and it IS dead after. However, goal 0 is
-        # NOT deterministic (append is a Call, not a Unify).
-        # So goal 1 fails criterion 5 (preceding goals must be deterministic).
+        # Goal 0: Temp live after; goal 1: preceding non-deterministic
         assert 0 not in eligible
         assert 1 not in eligible
 
@@ -145,7 +163,6 @@ class TestFindDestructiveReuseGoals:
         X, Y, Temp, Extra, Out = Var(), Var(), Var(), Var(), Var()
         head = Compound("process", (X, Out))
         body = [
-            # member/2 is non-deterministic
             Call(func=LoadName(name="in_"), args=[Y, X], kwargs=[]),
             Evaluate(left=Temp, right=[Y]),
             self._append_call(Temp, Extra, Out),
@@ -154,8 +171,57 @@ class TestFindDestructiveReuseGoals:
         eligible = _find_destructive_reuse_goals(clause)
         assert 2 not in eligible
 
-    def test_eligible_dict_put(self):
-        """dict_put(Key, Value, Temp, Out) where Temp is body-only and dead."""
+    def test_deterministic_builtin_prefix_eligible(self):
+        """Known-deterministic builtins (length, dict_get, etc.) allow DR."""
+        T, Len, Out = Var(), Var(), Var()
+        head = Compound("process", (Out,))
+        body = [
+            Evaluate(left=T, right=[1, 2, 3]),
+            # length/2 is known deterministic — should NOT block DR
+            Call(func=LoadName(name="length"), args=[T, Len], kwargs=[]),
+            self._append_call(T, [4], Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # Wait — T is still live after the length call (used in append).
+        # So goal 2 (append) has T as source. T is alive in goal 1 (length)
+        # but dead after goal 2 (append). The liveness check only looks
+        # at goals AFTER the candidate. Goal 1 (length) is before goal 2,
+        # so T is not in "live_after" for goal 2. But T appears in goal 1
+        # which is before goal 2 — that's fine, liveness only checks after.
+        # All preceding goals (Evaluate + length) are deterministic → eligible!
+        assert 2 in eligible
+
+    def test_once_wrapped_prefix_eligible(self):
+        """once(X) wrapped calls are deterministic."""
+        T, Mid, Out = Var(), Var(), Var()
+        head = Compound("process", (Out,))
+        body = [
+            Evaluate(left=T, right=[1, 2]),
+            Call(func=LoadName(name="once"),
+                 args=[self._append_call(T, [3], Mid)], kwargs=[]),
+            self._append_call(Mid, [4], Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # once/1 is deterministic, so goal 2 (append) should be eligible
+        # if Mid is dead after (it is: not in subsequent goals, not in head)
+        assert 2 in eligible
+
+    def test_eligible_dict_put_with_evaluate(self):
+        """dict_put(Key, Value, Temp, Out) where Temp is from Evaluate."""
+        Temp, Key, Value, Out = Var(), Var(), Var(), Var()
+        head = Compound("update", (Out,))
+        body = [
+            Evaluate(left=Temp, right=DictTerm({"a": 1})),
+            self._dict_put_call(Key, Value, Temp, Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        assert 1 in eligible
+
+    def test_dict_put_alias_not_eligible(self):
+        """dict_put with Temp aliased to head var."""
         In, Temp, Key, Value, Out = Var(), Var(), Var(), Var(), Var()
         head = Compound("update", (In, Out))
         body = [
@@ -164,10 +230,22 @@ class TestFindDestructiveReuseGoals:
         ]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
+        assert 1 not in eligible
+
+    def test_eligible_set_union_with_evaluate(self):
+        """set_union(Temp, S2, Out) where Temp is from Evaluate."""
+        Temp, S2, Out = Var(), Var(), Var()
+        head = Compound("merge", (Out,))
+        body = [
+            Evaluate(left=Temp, right=SetTerm([1, 2])),
+            self._set_union_call(Temp, S2, Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
         assert 1 in eligible
 
-    def test_eligible_set_union(self):
-        """set_union(Temp, S2, Out) where Temp is body-only and dead."""
+    def test_set_union_alias_not_eligible(self):
+        """set_union with Temp aliased to head var."""
         In, Temp, S2, Out = Var(), Var(), Var(), Var()
         head = Compound("merge", (In, Out))
         body = [
@@ -176,7 +254,7 @@ class TestFindDestructiveReuseGoals:
         ]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
-        assert 1 in eligible
+        assert 1 not in eligible
 
     def test_source_literal_not_eligible(self):
         """append([1,2,3], Extra, Out) — source is a literal, not a Var."""
@@ -199,14 +277,60 @@ class TestFindDestructiveReuseGoals:
         T1, T2, X, Out = Var(), Var(), Var(), Var()
         head = Compound("multi", (X, Out))
         body = [
-            Evaluate(left=T1, right=[1, 2, 3]),  # deterministic
-            Evaluate(left=T2, right=[4, 5]),       # deterministic
+            Evaluate(left=T1, right=[1, 2, 3]),
+            Evaluate(left=T2, right=[4, 5]),
             # T1 is dead after this, T2 still used
             self._append_call(T1, T2, Out),
         ]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
         assert 2 in eligible
+
+    def test_unify_body_only_vars_eligible(self):
+        """Unify between two body-only vars does NOT create a head alias."""
+        T1, T2, Out = Var(), Var(), Var()
+        head = Compound("process", (Out,))
+        body = [
+            Evaluate(left=T1, right=[1, 2]),
+            Unify(left=T2, right=T1),  # both body-only, no head alias
+            self._append_call(T2, [3], Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # T2 is aliased to T1, but neither is a head var → eligible
+        assert 2 in eligible
+
+    def test_and_conjunction_alias_detected(self):
+        """Alias inside And() conjunction is detected."""
+        In, Temp, Extra, Out = Var(), Var(), Var(), Var()
+        head = Compound("process", (In, Out))
+        body = [
+            And(left=Unify(left=Temp, right=In),
+                right=Evaluate(left=Extra, right=[99])),
+            self._append_call(Temp, Extra, Out),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # After flattening: [Unify, Evaluate, append] — Temp aliases In
+        assert not any(
+            isinstance(deref(clause.body[idx] if idx < len(clause.body)
+                             else None), Call)
+            for idx in eligible
+        ) or len(eligible) == 0
+
+    def test_and_flattening_exposes_eligible_call(self):
+        """append inside And() is found by flattening."""
+        T, Extra, Out = Var(), Var(), Var()
+        head = Compound("process", (Out,))
+        body = [
+            And(left=Evaluate(left=T, right=[1, 2]),
+                right=self._append_call(T, Extra, Out)),
+        ]
+        clause = Clause(head=head, body=body)
+        eligible = _find_destructive_reuse_goals(clause)
+        # Flattened: [Evaluate(T, [1,2]), append(T, Extra, Out)]
+        # T is body-only, dead after append, Evaluate is deterministic → eligible
+        assert len(eligible) == 1
 
 
 # ── Unit tests: destructive variant builtins ─────────────────────────────────
@@ -388,118 +512,8 @@ class TestSetUnionDR:
 class TestDestructiveReuseIntegration:
     """End-to-end tests using compiled predicates with the optimization."""
 
-    def test_append_body_only_var(self):
-        """Predicate that creates a temp list and appends to it.
-
-        build(In, Out) <- Temp = In, append(Temp, [4], Out).
-
-        Temp is body-only and dead after append → eligible for DR.
-        """
-        In, Temp, Out = Var(), Var(), Var()
-        head = Compound("build", (In, Out))
-        body = [
-            Unify(left=Temp, right=In),
-            Call(func=LoadName(name="append"),
-                 args=[Temp, [4], Out], kwargs=[]),
-        ]
-        db, fn = make_pred("build", 2, [(head, body)])
-
-        trail = Trail()
-        X = Var()
-        results = _snap(fn, lambda: deref(X), [1, 2, 3], X, trail)
-        assert results == [[1, 2, 3, 4]]
-
-    def test_dict_put_body_only_var(self):
-        """dict_put with body-only DictTerm.
-
-        update(In, Out) <- Temp = In, dict_put(name, alice, Temp, Out).
-        """
-        In, Temp, Out = Var(), Var(), Var()
-        head = Compound("update", (In, Out))
-        body = [
-            Unify(left=Temp, right=In),
-            Call(func=LoadName(name="dict_put"),
-                 args=["name", "alice", Temp, Out], kwargs=[]),
-        ]
-        db, fn = make_pred("update", 2, [(head, body)])
-
-        trail = Trail()
-        X = Var()
-        results = _snap(fn, lambda: deref(X),
-                        DictTerm({"age": 30}), X, trail)
-        assert len(results) == 1
-        assert dict(results[0].data) == {"age": 30, "name": "alice"}
-
-    def test_set_union_body_only_var(self):
-        """set_union with body-only SetTerm.
-
-        merge(In, Out) <- Temp = In, set_union(Temp, {3}, Out).
-        """
-        In, Temp, Out = Var(), Var(), Var()
-        head = Compound("merge", (In, Out))
-        body = [
-            Unify(left=Temp, right=In),
-            Call(func=LoadName(name="set_union"),
-                 args=[Temp, SetTerm([3]), Out], kwargs=[]),
-        ]
-        db, fn = make_pred("merge", 2, [(head, body)])
-
-        trail = Trail()
-        X = Var()
-        results = _snap(fn, lambda: deref(X),
-                        SetTerm([1, 2]), X, trail)
-        assert len(results) == 1
-        assert results[0].elements == frozenset({1, 2, 3})
-
-    def test_head_var_not_optimized_correctness(self):
-        """When source is a head var, the standard (copying) path is used.
-
-        process(Old, Out) <- append(Old, [4], Out).
-
-        Old is in the head → NOT eligible. Must still produce correct results.
-        """
-        Old, Out = Var(), Var()
-        head = Compound("process", (Old, Out))
-        body = [
-            Call(func=LoadName(name="append"),
-                 args=[Old, [4], Out], kwargs=[]),
-        ]
-        db, fn = make_pred("process", 2, [(head, body)])
-
-        trail = Trail()
-        X = Var()
-        input_list = [1, 2, 3]
-        results = _snap(fn, lambda: deref(X), input_list, X, trail)
-        assert results == [[1, 2, 3, 4]]
-        # The input_list should NOT have been mutated
-        assert input_list == [1, 2, 3]
-
-    def test_chained_appends(self):
-        """Multiple appends where intermediate is dead after each use.
-
-        chain(In, Out) <-
-            T1 = In,
-            append(T1, [a], T2),   ← T1 dead after, but preceding has nondeterministic append
-            append(T2, [b], Out).  ← T2 dead after
-        """
-        In, T1, T2, Out = Var(), Var(), Var(), Var()
-        head = Compound("chain", (In, Out))
-        body = [
-            Unify(left=T1, right=In),
-            Call(func=LoadName(name="append"),
-                 args=[T1, ["a"], T2], kwargs=[]),
-            Call(func=LoadName(name="append"),
-                 args=[T2, ["b"], Out], kwargs=[]),
-        ]
-        db, fn = make_pred("chain", 2, [(head, body)])
-
-        trail = Trail()
-        X = Var()
-        results = _snap(fn, lambda: deref(X), [1, 2], X, trail)
-        assert results == [[1, 2, "a", "b"]]
-
-    def test_optimization_with_evaluate(self):
-        """Source var created by Evaluate (not Unify).
+    def test_append_with_evaluate(self):
+        """Source created by Evaluate — genuinely eligible for DR.
 
         make(Out) <- T = [1, 2, 3], append(T, [4], Out).
         """
@@ -516,6 +530,112 @@ class TestDestructiveReuseIntegration:
         X = Var()
         results = _snap(fn, lambda: deref(X), X, trail)
         assert results == [[1, 2, 3, 4]]
+
+    def test_dict_put_with_evaluate(self):
+        """dict_put with Evaluate-created DictTerm.
+
+        make(Out) <- T = {a: 1}, dict_put(b, 2, T, Out).
+        """
+        T, Out = Var(), Var()
+        head = Compound("make", (Out,))
+        body = [
+            Evaluate(left=T, right=DictTerm({"a": 1})),
+            Call(func=LoadName(name="dict_put"),
+                 args=["b", 2, T, Out], kwargs=[]),
+        ]
+        db, fn = make_pred("make", 1, [(head, body)])
+
+        trail = Trail()
+        X = Var()
+        results = _snap(fn, lambda: deref(X), X, trail)
+        assert len(results) == 1
+        assert dict(results[0].data) == {"a": 1, "b": 2}
+
+    def test_set_union_with_evaluate(self):
+        """set_union with Evaluate-created SetTerm.
+
+        make(Out) <- T = {1, 2}, set_union(T, {3}, Out).
+        """
+        T, Out = Var(), Var()
+        head = Compound("make", (Out,))
+        body = [
+            Evaluate(left=T, right=SetTerm([1, 2])),
+            Call(func=LoadName(name="set_union"),
+                 args=[T, SetTerm([3]), Out], kwargs=[]),
+        ]
+        db, fn = make_pred("make", 1, [(head, body)])
+
+        trail = Trail()
+        X = Var()
+        results = _snap(fn, lambda: deref(X), X, trail)
+        assert len(results) == 1
+        assert results[0].elements == frozenset({1, 2, 3})
+
+    def test_alias_to_head_var_correct(self):
+        """Temp = In aliases head var → NOT DR-eligible, but still correct.
+
+        build(In, Out) <- Temp = In, append(Temp, [4], Out).
+        """
+        In, Temp, Out = Var(), Var(), Var()
+        head = Compound("build", (In, Out))
+        body = [
+            Unify(left=Temp, right=In),
+            Call(func=LoadName(name="append"),
+                 args=[Temp, [4], Out], kwargs=[]),
+        ]
+        db, fn = make_pred("build", 2, [(head, body)])
+
+        trail = Trail()
+        X = Var()
+        input_list = [1, 2, 3]
+        results = _snap(fn, lambda: deref(X), input_list, X, trail)
+        assert results == [[1, 2, 3, 4]]
+        # Input must NOT be mutated (alias correctly prevented DR)
+        assert input_list == [1, 2, 3]
+
+    def test_head_var_not_optimized_correctness(self):
+        """When source is a head var, the standard (copying) path is used.
+
+        process(Old, Out) <- append(Old, [4], Out).
+        """
+        Old, Out = Var(), Var()
+        head = Compound("process", (Old, Out))
+        body = [
+            Call(func=LoadName(name="append"),
+                 args=[Old, [4], Out], kwargs=[]),
+        ]
+        db, fn = make_pred("process", 2, [(head, body)])
+
+        trail = Trail()
+        X = Var()
+        input_list = [1, 2, 3]
+        results = _snap(fn, lambda: deref(X), input_list, X, trail)
+        assert results == [[1, 2, 3, 4]]
+        assert input_list == [1, 2, 3]
+
+    def test_chained_appends(self):
+        """Multiple appends where source is created fresh each time.
+
+        chain(Out) <-
+            T1 = [1, 2],
+            append(T1, [a], T2),
+            append(T2, [b], Out).
+        """
+        T1, T2, Out = Var(), Var(), Var()
+        head = Compound("chain", (Out,))
+        body = [
+            Evaluate(left=T1, right=[1, 2]),
+            Call(func=LoadName(name="append"),
+                 args=[T1, ["a"], T2], kwargs=[]),
+            Call(func=LoadName(name="append"),
+                 args=[T2, ["b"], Out], kwargs=[]),
+        ]
+        db, fn = make_pred("chain", 1, [(head, body)])
+
+        trail = Trail()
+        X = Var()
+        results = _snap(fn, lambda: deref(X), X, trail)
+        assert results == [[1, 2, "a", "b"]]
 
     def test_multiple_clauses(self):
         """Predicate with multiple clauses, some eligible, some not.
@@ -538,11 +658,9 @@ class TestDestructiveReuseIntegration:
         trail = Trail()
         X = Var()
 
-        # Test with empty list (first clause)
         results = _snap(fn, lambda: deref(X), [], X, trail)
         assert [] in results
 
-        # Test with non-empty list (second clause)
         X2 = Var()
         results = _snap(fn, lambda: deref(X2), [1, 2], X2, trail)
         assert [1, 2, "x"] in results

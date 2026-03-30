@@ -37,6 +37,16 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm, SetTerm
 
+# ── Destructive-reuse: CPython refcount availability ────────────────────────
+
+import platform as _platform
+import sys as _sys
+
+_HAS_REFCOUNT: bool = (
+    _platform.python_implementation() == "CPython"
+    and hasattr(_sys, "getrefcount")
+)
+
 from clausal.logic.builtins._registry import _builtin, _trampoline_builtin
 
 
@@ -172,12 +182,10 @@ def _dict_put_dr__4(this_generator, parent, key, value, old_dict, new_dict, trai
     internal ``_data`` dict in-place.  Falls back to the standard (copying)
     implementation otherwise.
     """
-    import sys  # noqa: PLC0415
-
     key_val = deref(key)
     old_val = deref(old_dict)
-    if (not is_var(key_val) and isinstance(old_val, DictTerm)
-            and sys.getrefcount(old_val) <= 3):
+    if (_HAS_REFCOUNT and not is_var(key_val) and isinstance(old_val, DictTerm)
+            and _sys.getrefcount(old_val) <= 3):
         old_val._data[key_val] = deref(value)
         mark = trail.mark()
         if unify(new_dict, old_val, trail):
@@ -363,12 +371,14 @@ def _set_union_dr__3(this_generator, parent, s1, s2, union, trail):
     internal ``_elements`` frozenset in-place.  Falls back to the standard
     (copying) implementation otherwise.
     """
-    import sys  # noqa: PLC0415
-
     s1_val = deref(s1)
     s2_val = deref(s2)
-    if (isinstance(s1_val, SetTerm) and isinstance(s2_val, SetTerm)
-            and sys.getrefcount(s1_val) <= 3):
+    if (_HAS_REFCOUNT and isinstance(s1_val, SetTerm)
+            and isinstance(s2_val, SetTerm)
+            and _sys.getrefcount(s1_val) <= 3):
+        # Replace _elements on the reused wrapper (avoids new SetTerm alloc).
+        # Still allocates a new frozenset — true in-place set mutation would
+        # require changing SetTerm internals from frozenset to set.
         s1_val._elements = s1_val._elements | s2_val._elements
         mark = trail.mark()
         if unify(union, s1_val, trail):

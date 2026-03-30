@@ -13,6 +13,16 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 
+# ── Destructive-reuse: CPython refcount availability ────────────────────────
+
+import platform as _platform
+import sys as _sys
+
+_HAS_REFCOUNT: bool = (
+    _platform.python_implementation() == "CPython"
+    and hasattr(_sys, "getrefcount")
+)
+
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
 
 try:
@@ -108,12 +118,11 @@ def _append_dr__3(this_generator, parent, l1, l2, l3, trail):
     not shared, extend it in-place instead of allocating a new list.  Falls
     back to the standard (copying) implementation otherwise.
     """
-    import sys  # noqa: PLC0415
-
     l1_val = deref(l1)
     # Only attempt destructive reuse for the deterministic (+,+,-) mode
     # with an actual Python list (not string) and a low reference count.
-    if isinstance(l1_val, list) and sys.getrefcount(l1_val) <= 3:
+    if (_HAS_REFCOUNT and isinstance(l1_val, list)
+            and _sys.getrefcount(l1_val) <= 3):
         l2_val = deref(l2)
         l2_items = _as_items(l2_val)
         if l2_items is not None:

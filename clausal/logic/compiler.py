@@ -4662,22 +4662,108 @@ _DR_CANDIDATES: dict[tuple[str, int], int] = {
 }
 
 
+def _head_aliased_var_ids(body: list, head_var_ids: set[int]) -> set[int]:
+    """Return body-only var IDs that are transitively aliased to head vars.
+
+    Scans deterministic prefix goals for ``Unify(left=A, right=B)`` where one
+    side is (or is aliased to) a head var.  The other side is then also
+    considered aliased.  Handles transitive chains like::
+
+        Temp = In, Temp2 = Temp   →  Temp and Temp2 both alias In
+    """
+    aliased: set[int] = set(head_var_ids)
+    changed = True
+    # Collect all unify pairs first.
+    pairs: list[tuple[int, int]] = []
+    for goal in body:
+        goal = deref(goal)
+        match goal:
+            case Unify(left=l, right=r):
+                l = deref(l)
+                r = deref(r)
+                if is_var(l) and is_var(r):
+                    pairs.append((l._id, r._id))
+            case And():
+                # Flatten And chains for unify scanning.
+                _collect_unify_pairs_from_and(goal, pairs)
+            case _:
+                pass
+    # Transitive closure.
+    while changed:
+        changed = False
+        for a, b in pairs:
+            if a in aliased and b not in aliased:
+                aliased.add(b)
+                changed = True
+            elif b in aliased and a not in aliased:
+                aliased.add(a)
+                changed = True
+    return aliased
+
+
+def _collect_unify_pairs_from_and(goal: Any, pairs: list[tuple[int, int]]) -> None:
+    """Recursively extract Var-Var Unify pairs from And nodes."""
+    goal = deref(goal)
+    match goal:
+        case Unify(left=l, right=r):
+            l = deref(l)
+            r = deref(r)
+            if is_var(l) and is_var(r):
+                pairs.append((l._id, r._id))
+        case And(left=left, right=right):
+            _collect_unify_pairs_from_and(left, pairs)
+            _collect_unify_pairs_from_and(right, pairs)
+
+
+def _flatten_and_goals(goals: list) -> list:
+    """Flatten nested ``And(a, And(b, c))`` into ``[a, b, c]``.
+
+    And nodes in the body are semantically conjunctions — equivalent to a
+    flat sequence of goals.  Flattening exposes the individual goals to the
+    liveness analysis so that eligible calls inside And nodes can be detected.
+    """
+    flat: list = []
+    for goal in goals:
+        goal = deref(goal)
+        _flatten_and_single(goal, flat)
+    return flat
+
+
+def _flatten_and_single(goal: Any, out: list) -> None:
+    """Recursively flatten a single goal into *out*."""
+    match goal:
+        case And(left=l, right=r):
+            _flatten_and_single(deref(l), out)
+            _flatten_and_single(deref(r), out)
+        case _:
+            out.append(goal)
+
+
 def _find_destructive_reuse_goals(clause: Clause) -> set[int]:
     """Return indices of body goals eligible for destructive-reuse dispatch.
 
     Only returns indices where all five compile-time criteria are satisfied.
+    Analyses operate on a flattened copy of the body (And nodes expanded)
+    so that eligible calls inside conjunctions are detected.
     """
     body = clause.body
     if not body:
         return set()
 
+    # Flatten And conjunctions so individual goals are visible.
+    flat_body = _flatten_and_goals(body)
+
     # Collect var IDs that appear in the clause head.
     head_var_ids: set[int] = set()
     _collect_var_ids(clause.head, head_var_ids)
 
+    # Criterion 3 (extended): also exclude body vars aliased to head vars
+    # through Unify chains (e.g. Temp = In where In is a head var).
+    aliased_ids = _head_aliased_var_ids(flat_body, head_var_ids)
+
     eligible: set[int] = set()
 
-    for i, goal in enumerate(body):
+    for i, goal in enumerate(flat_body):
         goal = deref(goal)
         # Criterion 1: must be a Call to a supported builtin.
         if not isinstance(goal, Call):
@@ -4696,19 +4782,19 @@ def _find_destructive_reuse_goals(clause: Clause) -> set[int]:
             continue
         source_id = source_arg._id
 
-        # Criterion 3: source Var must NOT appear in the clause head.
-        if source_id in head_var_ids:
+        # Criterion 3: source Var must NOT be (or alias) a head variable.
+        if source_id in aliased_ids:
             continue
 
         # Criterion 4: source Var must be dead after this goal.
         live_after: set[int] = set()
-        for subsequent_goal in body[i + 1:]:
+        for subsequent_goal in flat_body[i + 1:]:
             _collect_var_ids(subsequent_goal, live_after)
         if source_id in live_after:
             continue
 
         # Criterion 5: all preceding goals must be deterministic.
-        if not all(_is_deterministic_goal(body[j]) for j in range(i)):
+        if not all(_is_deterministic_goal(flat_body[j]) for j in range(i)):
             continue
 
         eligible.add(i)
@@ -4749,10 +4835,12 @@ def _make_body_compiler_trampoline(
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a trampoline body_compiler callable bound to db."""
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        # Destructive-reuse optimisation: rewrite eligible goals before
-        # compiling the body so they dispatch to DR variant functions.
+        # Destructive-reuse optimisation: flatten And conjunctions, then
+        # rewrite eligible goals before compiling.  Flattening is safe
+        # because And(a, b) compiles identically to sequential [a, b].
+        flat_body = _flatten_and_goals(clause.body)
         eligible = _find_destructive_reuse_goals(clause)
-        goals = _apply_destructive_reuse(clause.body, eligible)
+        goals = _apply_destructive_reuse(flat_body, eligible)
         return compile_body_trampoline(goals, db, var_context, "trail")
     return _body_compiler
 
@@ -5024,8 +5112,42 @@ def _is_deterministic_goal(goal: Any) -> bool:
             "throw", "halt",
         ):
             return True
+        # Known-deterministic builtins: at most one solution, no backtracking.
+        case Call(func=LoadName(name=name), args=args) if (name, len(args)) in _DETERMINISTIC_BUILTINS:
+            return True
         case _:
             return False
+
+
+# Builtins known to produce at most one solution (semidet / det).
+_DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
+    # list builtins (lists.py)
+    ("length", 2), ("last", 2), ("reverse", 2), ("flatten", 2),
+    ("msort", 2), ("sort", 2), ("sum_list", 2), ("max_list", 2),
+    ("min_list", 2), ("take", 3), ("drop", 3), ("split_at", 4),
+    ("zip_", 3), ("replicate", 3),
+    ("subtract", 3), ("intersection", 3), ("union", 3),
+    ("list_to_set", 2),
+    # dict builtins (dict_set.py)
+    ("is_dict", 1), ("dict_size", 2), ("dict_keys", 2), ("dict_values", 2),
+    ("dict_pairs", 2), ("dict_get", 3), ("dict_put", 4),
+    ("dict_put_pairs", 3), ("dict_remove", 3), ("dict_merge", 3),
+    # set builtins (dict_set.py)
+    ("is_set", 1), ("set_size", 2), ("set_list", 2),
+    ("set_union", 3), ("set_intersection", 3), ("set_subtract", 3),
+    ("set_sym_diff", 3), ("set_add", 3), ("set_remove", 3),
+    # type checks / inspection
+    ("atom", 1), ("number", 1), ("integer", 1), ("float_", 1),
+    ("is_list", 1), ("callable", 1), ("ground", 1),
+    ("atom_length", 2), ("atom_chars", 2), ("atom_codes", 2),
+    ("char_code", 2), ("number_chars", 2), ("number_codes", 2),
+    ("atom_string", 2), ("term_string", 2),
+    ("succ", 2), ("plus", 3),
+    ("copy_term", 2),
+    # string builtins
+    ("atom_concat", 3), ("sub_atom", 5),
+    ("upcase_atom", 2), ("downcase_atom", 2),
+})
 
 
 def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
