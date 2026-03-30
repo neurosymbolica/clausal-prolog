@@ -76,7 +76,8 @@ X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
 | `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
-| `entailed` | 3 | `entailed("=<", X, 5)` — test if constraint is implied by current store |
+| `entailed` | 1 | `entailed(X <= 5)` — test if constraint is implied by current store |
+| `entailed` | 3 | `entailed("=<", X, 5)` — same, with explicit operator string |
 | `bb_inf` | 3 | `bb_inf(IntVars, Expr, Inf)` — mixed-integer optimization via branch-and-bound |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
@@ -148,21 +149,25 @@ bounds(X, Lo, Hi) <- (
 % X remains unbound — only Lo and Hi are set
 ```
 
-### entailed/3
+### entailed/1 and entailed/3
 
 Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
 
-The first argument is the operator as a string: `"=<"`, `">="`, `"<"`, `">"`, `"="`, `"\\="`.
+The preferred form passes the constraint directly in argument position:
 
 ```clausal
 # skip
 test_entailed(X) <- (
     in_q(X, 0, 100),
     X <= 4,
-    entailed("=<", X, 5),     % true: X <= 4 implies X <= 5
-    \+ entailed("=<", X, 3)   % false: X could be 4, which is > 3
+    entailed(X <= 5),          % true: X <= 4 implies X <= 5
+    \+ entailed(X <= 3)        % false: X could be 4, which is > 3
 )
 ```
+
+The 3-argument form with a string operator is also supported: `entailed("=<", X, 5)`.
+
+Supported comparison operators for `entailed/1`: `<=`, `>=`, `<`, `>`, `==`, `!=`.
 
 ### bb_inf/3
 

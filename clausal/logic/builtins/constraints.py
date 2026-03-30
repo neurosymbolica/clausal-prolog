@@ -242,11 +242,23 @@ def _entailed__3(op, l, r, trail, k):
         yield None
 
 
-## NOTE: entailed/1 with a constraint expression (e.g., entailed(X <= 5))
-## is not currently feasible because the compiler evaluates X <= 5 as a
-## constraint goal before passing it to entailed.  This would require
-## compiler support for quoting/reifying constraint expressions.
-## Use entailed/3 with a string operator for now: entailed("=<", X, 5).
+@_builtin("entailed", 1)
+def _entailed__1(constraint_expr, trail, k):
+    """entailed(X <= 5) — test if constraint is implied (Pythonic form).
+
+    The comparison expression is in argument position, so it arrives as
+    an AST node (e.g., LtE), not as an evaluated goal.
+    """
+    from clausal.logic.clpq import entailed as _entailed_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import LtE, Lt, GtE, Gt, ArithEq, ArithNeq  # noqa: PLC0415
+    expr = _deref(constraint_expr)
+    op_map = {LtE: '=<', Lt: '<', GtE: '>=', Gt: '>', ArithEq: '=', ArithNeq: '\\='}
+    for cls, op_str in op_map.items():
+        if isinstance(expr, cls):
+            if _entailed_fn(op_str, expr.left, expr.right, trail):
+                yield None
+            return
 
 
 @_builtin("sup", 2)

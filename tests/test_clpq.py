@@ -1152,10 +1152,57 @@ class TestPythonicAliases:
         finally:
             os.unlink(path)
 
-    # NOTE: entailed/1 with constraint expression syntax (e.g., entailed(X <= 5))
-    # is not feasible without compiler support for quoting constraints.
-    # The compiler evaluates X <= 5 as a goal before passing to entailed.
-    # Use entailed/3 with string operator: entailed("=<", X, 5).
+    def test_entailed_1_pythonic(self):
+        """entailed(X <= 5) — comparison in argument position."""
+        from clausal.logic.solve import call
+        from clausal.testing import load_clausal_module
+        import tempfile, os
+        src = '''
+TestEntailed(X) <- (
+    in_q(X, 0, 10),
+    X <= 4,
+    entailed(X <= 5)
+)
+'''
+        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+            f.write(src)
+            path = f.name
+        try:
+            mod = load_clausal_module(path)
+            x = Var()
+            found = False
+            for _ in call('TestEntailed', x, module=mod):
+                found = True
+                break
+            assert found, "entailed(X <= 5) should succeed when X <= 4"
+        finally:
+            os.unlink(path)
+
+    def test_entailed_1_fails(self):
+        """entailed(X <= 3) fails when X could be 4."""
+        from clausal.logic.solve import call
+        from clausal.testing import load_clausal_module
+        import tempfile, os
+        src = '''
+TestNotEntailed(X) <- (
+    in_q(X, 0, 10),
+    X <= 4,
+    entailed(X <= 3)
+)
+'''
+        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+            f.write(src)
+            path = f.name
+        try:
+            mod = load_clausal_module(path)
+            x = Var()
+            found = False
+            for _ in call('TestNotEntailed', x, module=mod):
+                found = True
+                break
+            assert not found, "entailed(X <= 3) should fail when X could be 4"
+        finally:
+            os.unlink(path)
 
 
 class TestClausalIntegration:
