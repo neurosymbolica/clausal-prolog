@@ -721,6 +721,19 @@ class TestBBInf:
         # LP minimum is 0 (x=0, y=0), which is already integer for x
         assert deref(result) == F(0)
 
+    def test_two_integer_vars(self):
+        """Multi-level branching: both X and Y must be integer.
+        min(X + Y) with X + Y >= 5/2, X,Y in [0,10] integer.
+        LP relaxation gives X+Y = 5/2 (fractional).
+        Integer optimum: X=1, Y=2 or X=0, Y=3 → min = 3."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        q_ge(Add(left=x, right=y), F(5, 2), trail)
+        result = Var()
+        assert bb_inf([x, y], Add(left=x, right=y), result, trail)
+        assert deref(result) == F(3)
+
 
 class TestCoefficientGrowth:
     def test_newton_sqrt2(self):

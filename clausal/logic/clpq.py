@@ -1544,9 +1544,13 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     return unify(result_var, best, trail)
 
 
+_BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion
+
+
 def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
               obj_const: Fraction, int_ids: set[int],
               best_so_far: Fraction | None = None,
+              depth: int = 0,
               ) -> Fraction | None:
     """Recursive branch-and-bound solver.
 
@@ -1554,6 +1558,9 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
     or None if infeasible.
     """
     import math
+
+    if depth > _BB_MAX_DEPTH:
+        return best_so_far  # give up — return best found so far
 
     tab = tableau.copy()
     opt = tab.optimize(dict(obj_coeffs), 'min')
@@ -1599,17 +1606,19 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
 
     best = best_so_far
 
+    # Branch on copies of the CURRENT node's tableau (not the root),
+    # so that bounds from ancestor branches are preserved.
     # Branch 1: vid <= floor_val
-    tab1 = tableau.copy()
+    tab1 = tab.copy()
     if tab1.set_bound(most_frac_vid, None, floor_val):
-        result1 = _bb_solve(tab1, obj_coeffs, obj_const, int_ids, best)
+        result1 = _bb_solve(tab1, obj_coeffs, obj_const, int_ids, best, depth + 1)
         if result1 is not None and (best is None or result1 < best):
             best = result1
 
     # Branch 2: vid >= ceil_val
-    tab2 = tableau.copy()
+    tab2 = tab.copy()
     if tab2.set_bound(most_frac_vid, ceil_val, None):
-        result2 = _bb_solve(tab2, obj_coeffs, obj_const, int_ids, best)
+        result2 = _bb_solve(tab2, obj_coeffs, obj_const, int_ids, best, depth + 1)
         if result2 is not None and (best is None or result2 < best):
             best = result2
 
