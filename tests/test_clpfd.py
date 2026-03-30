@@ -1,7 +1,7 @@
 """Tests for V2-6: CLP(FD) finite-domain constraint solver.
 
 Tests domain operations, constraint posting, propagation, labeling,
-all_different, equivalent, and compiler integration.
+all_different, structural_eq, and compiler integration.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from clausal.logic.clpfd import (
     domain_size, domain_singleton, domain_intersection, domain_remove,
     domain_remove_above, domain_remove_below, domain_values,
     _ensure_fd, _narrow, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,
-    in_domain, label, all_different, equivalent,
+    in_domain, label, all_different, structural_eq,
     EqConstraint, NeConstraint, LtConstraint, LeConstraint, AllDiffConstraint,
 )
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
@@ -262,43 +262,43 @@ class TestLabel:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Phase 1: equivalent
+# Phase 1: structural_eq (Prolog ==/2)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-class TestEquivalent:
+class TestStructuralEq:
     def test_same_atoms(self):
         trail = fresh_trail()
-        assert equivalent("a", "a", trail)
+        assert structural_eq("a", "a", trail)
 
     def test_different_atoms(self):
         trail = fresh_trail()
-        assert not equivalent("a", "b", trail)
+        assert not structural_eq("a", "b", trail)
 
     def test_same_compound(self):
         trail = fresh_trail()
-        assert equivalent(Compound("f", (1, 2)), Compound("f", (1, 2)), trail)
+        assert structural_eq(Compound("f", (1, 2)), Compound("f", (1, 2)), trail)
 
     def test_different_compound(self):
         trail = fresh_trail()
-        assert not equivalent(Compound("f", (1,)), Compound("f", (2,)), trail)
+        assert not structural_eq(Compound("f", (1,)), Compound("f", (2,)), trail)
 
     def test_var_vs_var_different(self):
-        """equivalent uses structural equality: different Vars are NOT equal."""
+        """structural_eq: different Vars are NOT equal."""
         trail = fresh_trail()
-        assert not equivalent(Var(), Var(), trail)
+        assert not structural_eq(Var(), Var(), trail)
 
     def test_var_vs_var_same(self):
         trail = fresh_trail()
         x = Var()
-        assert equivalent(x, x, trail)
+        assert structural_eq(x, x, trail)
 
     def test_bound_vars(self):
         trail = fresh_trail()
         x, y = Var(), Var()
         unify(x, 42, trail)
         unify(y, 42, trail)
-        assert equivalent(x, y, trail)
+        assert structural_eq(x, y, trail)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 """Constraint builtins: dif/2, eq/3, dif_t/3, in_domain/3, label/1,
-all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1,
+all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1,
 sat/1, taut/2, sat_count/2, bool_labeling/1,
 in_real/1, in_real/3, label_real/1, label_real/2,
 in_q/1, in_q/3, maximize/2, minimize/2."""
@@ -60,11 +60,15 @@ def _all_different__1(vars_list, trail, k):
         yield None
 
 
-@_builtin("equivalent", 2)
-def _equivalent__2(t1, t2, trail, k):
-    """equivalent(T1, T2) — structural equality (old == behavior)."""
-    from clausal.logic.clpfd import equivalent as _equiv_fn  # noqa: PLC0415
-    if _equiv_fn(t1, t2, trail):
+@_builtin("structural_eq", 2)
+def _structural_eq__2(t1, t2, trail, k):
+    """structural_eq(T1, T2) — true structural equality (Prolog ==/2).
+
+    Succeeds iff T1 and T2 are identical after dereferencing, without
+    binding variables or evaluating arithmetic.
+    """
+    from clausal.logic.constraints import structural_eq as _seq_fn  # noqa: PLC0415
+    if _seq_fn(t1, t2):
         yield None
 
 

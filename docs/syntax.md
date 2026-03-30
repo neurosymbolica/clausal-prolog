@@ -181,7 +181,7 @@ when at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `equivalent(X, Y)`, or `not equivalent(X, Y)` for inequality.
+`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `structural_eq(X, Y)`, or `not structural_eq(X, Y)` for inequality.
 
 See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
@@ -983,7 +983,7 @@ N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
 in_domain(X, 1, 10),    # post integer domain
 all_different([X,Y,Z]), # pairwise disequality
 label([X, Y, Z]),      # enumerate solutions (first-fail)
-equivalent(X, Y),      # structural equality (Prolog ==/2)
+structural_eq(X, Y),   # structural equality (Prolog ==/2)
 
 # Rules and facts
 Head <- call(X),       # single-call body (no parens needed)

@@ -192,7 +192,7 @@ The implementation lives in `clausal.logic.clpfd`.
 
 when both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. when at least one side is an unbound Var, CLP(ℤ) constraints are posted.
 
-The old structural-equality behaviour of `==` is available as the named builtin `equivalent/2`.
+For true structural equality (Prolog `==/2`) use the builtin `structural_eq/2`.
 
 ??? abstract "Domain representation"
 
@@ -284,7 +284,7 @@ The old structural-equality behaviour of `==` is available as the named builtin 
 | `in_domain` | 3 | `in_domain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
 | `label` | 1 | `label(Vars)` — enumerate values, first-fail strategy (see [labeling gotcha](#gotcha-generate-and-test-vs-constraint-and-label)) |
 | `all_different` | 1 | `all_different(Vars)` — pairwise disequality constraint |
-| `equivalent` | 2 | `equivalent(X, Y)` — structural equality (old `==` behavior) |
+| `structural_eq` | 2 | `structural_eq(X, Y)` — true structural equality (Prolog `==/2`) |
 | `sum_` | 3 | `sum_(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
 | `scalar_product` | 4 | `scalar_product(+Coeffs, +Vars, +Op, +Value)` — bounds-consistency for Σ Cᵢ·Vᵢ Op Value |
 | `element` | 3 | `element(?Index, +List, ?Value)` — arc-consistency: Value = List[Index] (1-based) |

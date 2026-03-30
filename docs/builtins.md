@@ -82,7 +82,7 @@ Notation in signature lines:
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, extend/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
-| [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, equivalent/2, sum_/3, scalar_product/4, element/3, circuit/1 |
+| [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, is_str/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
@@ -871,16 +871,18 @@ Post an all-different constraint on a list of integer-constrained variables. Pro
 
 ---
 
-### `equivalent/2`
+### `structural_eq/2`
 ```clausal
 # skip
-equivalent(+T1, +T2)
+structural_eq(+T1, +T2)
 ```
-Structural equality test (old `==` behavior before CLP(ℤ) remapping). Succeeds if `T1` and `T2` are structurally identical after dereferencing.
+True structural equality (Prolog `==/2`). Succeeds if `T1` and `T2` are identical after dereferencing variables, **without** binding any variables and **without** evaluating arithmetic. Recursively walks Compound terms, lists, SegLists, DictTerms, and user-defined term dataclasses.
+
+For structural inequality use `not structural_eq(T1, T2)`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:852` → `clausal/logic/clpfd.py`
-    **Clausal tests:** none
+    **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/constraints.py:structural_eq`
+    **Tests:** `tests/conformity/test_iso_unification.py:TestStructuralEquality`
     **Python tests:** `tests/test_clpfd.py`
 
 ---

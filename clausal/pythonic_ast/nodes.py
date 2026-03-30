@@ -61,7 +61,9 @@ __all__ = [
     # Unary operators
     "UnaryPlus", "Negate", "Not", "Invert",
     # Comparison operators
-    "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate", "in_", "NotIn",
+    "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate",
+    "StructuralEq", "StructuralNeq",
+    "in_", "NotIn",
     "CompareChain",
     # Augmented assignment
     "AddAssign", "SubAssign", "MultAssign", "DivAssign", "FloorDivAssign",
@@ -592,13 +594,41 @@ class Invert(UnaryOp):
 
 @dataclass
 class ArithEq(CmpOp):
-    """Arithmetic equality: ``X == Y``. Posts a CLP(FD) constraint (Prolog ``=:=/2``)."""
+    """Arithmetic equality: ``X == Y``.  Posts a CLP(FD/ℤ) constraint (Prolog ``=:=/2``).
+
+    .. warning:: Do **not** rename this to StructuralEq.
+       ``==`` in Clausal is *arithmetic* equality, not structural equality.
+       True structural equality (Prolog ``==/2``) is the separate ``StructuralEq``
+       node / ``structural_eq/2`` builtin.  This class has been misnamed before
+       and the confusion led to this guard comment.
+    """
     op: ClassVar = '=='
 
 @dataclass
 class ArithNeq(CmpOp):
-    """Arithmetic inequality: ``X != Y``. Posts a CLP(FD) disequality constraint (Prolog ``=\\=/2``)."""
+    """Arithmetic inequality: ``X != Y``.  Posts a CLP(FD/ℤ) disequality constraint (Prolog ``=\\=/2``).
+
+    See ``ArithEq`` warning — do **not** rename to StructuralNeq.
+    """
     op: ClassVar = '!='
+
+@dataclass
+class StructuralEq(CmpOp):
+    """Structural equality: Prolog ``==/2``.
+
+    Succeeds iff *left* and *right* are identical after dereferencing variables,
+    **without** binding any variables and **without** evaluating arithmetic.
+    """
+    op: ClassVar = '=='  # same surface syntax, but distinct AST node
+
+@dataclass
+class StructuralNeq(CmpOp):
+    """Structural inequality: Prolog ``\\==/2``.
+
+    Succeeds iff *left* and *right* are **not** identical after dereferencing,
+    **without** binding any variables and **without** evaluating arithmetic.
+    """
+    op: ClassVar = '!='  # same surface syntax, but distinct AST node
 
 @dataclass
 class Lt(CmpOp):

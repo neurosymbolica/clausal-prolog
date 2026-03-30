@@ -1562,7 +1562,7 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
 register_attr_hook(FD_KEY, _fd_hook)
 
 
-# ── Builtins: in_domain, label, all_different, equivalent ────────────────────
+# ── Builtins: in_domain, label, all_different, structural_eq ──────────────────
 
 
 def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
@@ -1715,11 +1715,19 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     return None
 
 
-def equivalent(t1, t2, trail: Trail) -> bool:
-    """Structural equality (old == behavior): succeed iff deref'd values are equal."""
-    t1 = deref(t1)
-    t2 = deref(t2)
-    return t1 == t2
+def structural_eq(t1, t2, trail: Trail) -> bool:
+    """Structural equality (Prolog ==/2): succeed iff deref'd terms are identical.
+
+    Delegates to ``clausal.logic.constraints.structural_eq`` which does a
+    proper recursive walk.  The *trail* argument is accepted for call-signature
+    compatibility with other fd_* functions but is never modified.
+    """
+    from clausal.logic.constraints import structural_eq as _seq  # noqa: PLC0415
+    return _seq(t1, t2)
+
+
+# Backward-compat alias — will be removed in a future release.
+equivalent = structural_eq
 
 
 # ── Global constraints (Phase 5) ──────────────────────────────────────────

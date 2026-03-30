@@ -24,10 +24,119 @@ from clausal.logic.variables import (
     Trail,
 )
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
-from clausal.terms import Compound
+from clausal.terms import Compound, SegList, SegString, DictTerm, SetTerm
 
 
 DIF_KEY = "dif"
+
+
+# ── Structural equality (Prolog ==/2) ────────────────────────────────────────
+
+
+def structural_eq(left: Any, right: Any) -> bool:
+    """True iff *left* and *right* are identical after dereferencing.
+
+    No variables are bound and no arithmetic evaluation is performed.
+    Corresponds to Prolog's ``==/2``.
+    """
+    left = deref(left)
+    right = deref(right)
+
+    # Identical objects (covers same Var, same int, etc.)
+    if left is right:
+        return True
+
+    # Two distinct unbound Vars → not structurally equal
+    if is_var(left) or is_var(right):
+        return False
+
+    # Atomic types — value equality
+    if isinstance(left, (bool, int, float, str, bytes, complex, type(None))):
+        return left == right
+
+    # Lists
+    if isinstance(left, list):
+        if not isinstance(right, list) or len(left) != len(right):
+            return False
+        return all(structural_eq(l, r) for l, r in zip(left, right))
+
+    # Tuples
+    if isinstance(left, tuple):
+        if not isinstance(right, tuple) or len(left) != len(right):
+            return False
+        return all(structural_eq(l, r) for l, r in zip(left, right))
+
+    # Compound terms
+    if isinstance(left, Compound):
+        if not isinstance(right, Compound):
+            return False
+        if left.functor != right.functor or len(left.args) != len(right.args):
+            return False
+        return all(structural_eq(l, r) for l, r in zip(left.args, right.args))
+
+    # SegList — walk each segment and compare element-by-element
+    if isinstance(left, SegList):
+        if not isinstance(right, SegList):
+            return False
+        left_walked = left.__walk__()
+        right_walked = right.__walk__()
+        # If both fully ground, compare as lists
+        if isinstance(left_walked, list) and isinstance(right_walked, list):
+            return structural_eq(left_walked, right_walked)
+        # Still partial — compare segment structure
+        l_segs, r_segs = left._segments, right._segments
+        if len(l_segs) != len(r_segs):
+            return False
+        return all(structural_eq(ls, rs) for ls, rs in zip(l_segs, r_segs))
+
+    # SegString — same approach as SegList
+    if isinstance(left, SegString):
+        if not isinstance(right, SegString):
+            return False
+        left_walked = left.__walk__()
+        right_walked = right.__walk__()
+        if isinstance(left_walked, str) and isinstance(right_walked, str):
+            return left_walked == right_walked
+        l_segs, r_segs = left._segments, right._segments
+        if len(l_segs) != len(r_segs):
+            return False
+        return all(structural_eq(ls, rs) for ls, rs in zip(l_segs, r_segs))
+
+    # DictTerm — compare keys and recursively compare values
+    if isinstance(left, DictTerm):
+        if not isinstance(right, DictTerm):
+            return False
+        if left.data.keys() != right.data.keys():
+            return False
+        return all(
+            structural_eq(left.data[k], right.data[k]) for k in left.data
+        )
+
+    # SetTerm — elements are ground/hashable, so frozenset == is sufficient
+    if isinstance(left, SetTerm):
+        if not isinstance(right, SetTerm):
+            return False
+        return left.elements == right.elements
+
+    # User-defined term dataclasses (same functor class)
+    if is_term_instance(left):
+        if type(left) is not type(right):
+            return False
+        for name in term_field_names(left):
+            if not structural_eq(getattr(left, name), getattr(right, name)):
+                return False
+        return True
+
+    # Fallback: Python ==
+    return left == right
+
+
+def structural_neq(left: Any, right: Any) -> bool:
+    """True iff *left* and *right* are NOT identical after dereferencing.
+
+    Corresponds to Prolog's ``\\==/2``.
+    """
+    return not structural_eq(left, right)
 
 
 # ── Free-variable collector ──────────────────────────────────────────────────

@@ -33,7 +33,9 @@ from .pythonic_ast.nodes import (
     # Unary operators
     Not, Invert, Negate,
     # Comparison / unification operators
-    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, Lt, LtE, Gt, GtE, in_, NotIn,
+    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq,
+    StructuralEq, StructuralNeq,
+    Lt, LtE, Gt, GtE, in_, NotIn,
     # Expression nodes used in predicate bodies
     Call, LoadName, LoadAttr, LoadSubscript, Slice,
     # Predicate clause term

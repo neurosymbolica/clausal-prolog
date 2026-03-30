@@ -31,7 +31,10 @@ from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.builtins import structural_unify
 from clausal.terms import (
     Compound, Unify as Is, DoesNotUnify, ArithEq, ArithNeq,
+    StructuralEq, StructuralNeq,
     And, Call, LoadName, Add,
+    SegList, ConcreteSeg, VarSeg,
+    DictTerm, SetTerm,
 )
 
 
@@ -312,3 +315,147 @@ class TestArithInequality:
     def test_two_vars(self):
         """Two different Vars are arithmetically different."""
         assert _goal_succeeds(ArithNeq(left=Var(), right=Var()))
+
+
+# ── ==/2 (true structural equality — Prolog ==/2) ───────────────────────────
+
+
+class TestStructuralEquality:
+    """Prolog ==/2: structural equality without binding or arithmetic eval."""
+
+    def test_same_atom(self):
+        assert _goal_succeeds(StructuralEq(left="a", right="a"))
+
+    def test_different_atoms(self):
+        assert _goal_fails(StructuralEq(left="a", right="b"))
+
+    def test_same_integer(self):
+        assert _goal_succeeds(StructuralEq(left=42, right=42))
+
+    def test_same_var(self):
+        """The same Var is structurally equal to itself."""
+        x = Var()
+        assert _goal_succeeds(StructuralEq(left=x, right=x))
+
+    def test_different_unbound_vars(self):
+        """Two distinct unbound Vars are NOT structurally equal."""
+        assert _goal_fails(StructuralEq(left=Var(), right=Var()))
+
+    def test_bound_var_equals_value(self):
+        """A Var bound to 5 is structurally equal to 5."""
+        x = Var()
+        t = Trail()
+        unify(x, 5, t)
+        assert _goal_succeeds(StructuralEq(left=x, right=5))
+
+    def test_no_binding(self):
+        """StructuralEq must NOT bind variables — an unbound Var vs an atom fails."""
+        x = Var()
+        assert _goal_fails(StructuralEq(left=x, right="a"))
+        # x must still be unbound
+        assert is_var(deref(x))
+
+    def test_same_compound(self):
+        assert _goal_succeeds(StructuralEq(
+            left=Compound("f", (1, 2)),
+            right=Compound("f", (1, 2)),
+        ))
+
+    def test_different_compound_args(self):
+        assert _goal_fails(StructuralEq(
+            left=Compound("f", (1,)),
+            right=Compound("f", (2,)),
+        ))
+
+    def test_different_compound_functors(self):
+        assert _goal_fails(StructuralEq(
+            left=Compound("f", (1,)),
+            right=Compound("g", (1,)),
+        ))
+
+    def test_nested_lists(self):
+        assert _goal_succeeds(StructuralEq(left=[1, [2, 3]], right=[1, [2, 3]]))
+
+    def test_list_vs_different_list(self):
+        assert _goal_fails(StructuralEq(left=[1, 2], right=[1, 3]))
+
+    # ── SegList / DictTerm / SetTerm ──────────────────────────────────────
+    # These types can't be embedded as literal AST arguments, so we test
+    # the runtime structural_eq function directly.
+
+    def test_seglist_same(self):
+        """Two SegLists with identical ground segments are structurally equal."""
+        from clausal.logic.constraints import structural_eq as seq
+        assert seq(SegList([ConcreteSeg([1, 2, 3])]), SegList([ConcreteSeg([1, 2, 3])]))
+
+    def test_seglist_different(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(SegList([ConcreteSeg([1, 2])]), SegList([ConcreteSeg([1, 3])]))
+
+    def test_seglist_with_same_var(self):
+        """SegLists sharing the same VarSeg variable are structurally equal."""
+        from clausal.logic.constraints import structural_eq as seq
+        x = Var()
+        assert seq(SegList([ConcreteSeg([1]), VarSeg(x)]), SegList([ConcreteSeg([1]), VarSeg(x)]))
+
+    def test_seglist_with_different_vars(self):
+        """SegLists with distinct VarSeg variables are NOT structurally equal."""
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(SegList([ConcreteSeg([1]), VarSeg(Var())]), SegList([ConcreteSeg([1]), VarSeg(Var())]))
+
+    def test_dictterm_same(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert seq(DictTerm({"a": 1, "b": 2}), DictTerm({"a": 1, "b": 2}))
+
+    def test_dictterm_different_values(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(DictTerm({"a": 1}), DictTerm({"a": 2}))
+
+    def test_dictterm_different_keys(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(DictTerm({"a": 1}), DictTerm({"b": 1}))
+
+    def test_dictterm_var_value_same_var(self):
+        """DictTerm values containing the same Var are structurally equal."""
+        from clausal.logic.constraints import structural_eq as seq
+        x = Var()
+        assert seq(DictTerm({"k": x}), DictTerm({"k": x}))
+
+    def test_dictterm_var_value_different_vars(self):
+        """DictTerm values with distinct Vars are NOT structurally equal."""
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(DictTerm({"k": Var()}), DictTerm({"k": Var()}))
+
+    def test_setterm_same(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert seq(SetTerm({1, 2, 3}), SetTerm({1, 2, 3}))
+
+    def test_setterm_different(self):
+        from clausal.logic.constraints import structural_eq as seq
+        assert not seq(SetTerm({1, 2}), SetTerm({1, 3}))
+
+
+# ── \==/2 (structural inequality — Prolog \==/2) ────────────────────────────
+
+
+class TestStructuralInequality:
+    """Prolog \\==/2: structural inequality without binding or arithmetic eval."""
+
+    def test_different_atoms(self):
+        assert _goal_succeeds(StructuralNeq(left="a", right="b"))
+
+    def test_same_atom(self):
+        assert _goal_fails(StructuralNeq(left="a", right="a"))
+
+    def test_unbound_var_vs_atom(self):
+        """An unbound Var is structurally different from an atom."""
+        assert _goal_succeeds(StructuralNeq(left=Var(), right="a"))
+
+    def test_two_different_vars(self):
+        """Two distinct unbound Vars are structurally different."""
+        assert _goal_succeeds(StructuralNeq(left=Var(), right=Var()))
+
+    def test_same_var(self):
+        """The same Var is NOT structurally different from itself."""
+        x = Var()
+        assert _goal_fails(StructuralNeq(left=x, right=x))

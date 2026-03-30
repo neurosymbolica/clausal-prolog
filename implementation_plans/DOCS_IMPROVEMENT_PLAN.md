@@ -35,9 +35,7 @@ The cheatsheet (lines 929–1051) and related sections have syntax that doesn't 
       EDCG directives are parsed but end-to-end rewriting is not yet implemented.
   ```
 
-### 1f. Clean up `equivalent` comment
-
-- **Line 974**: Change `equivalent(X, Y),      # structural equality (old == behavior)` to just `equivalent(X, Y),      # structural equality`. The "(old == behavior)" is confusing editorial.
+### 1f. ~~Clean up `equivalent` comment~~ (Done — `equivalent/2` renamed to `structural_eq/2`)
 
 ---
 

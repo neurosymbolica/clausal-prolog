@@ -53,7 +53,7 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
-    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq,
+    Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     in_, NotIn,
     Call, LoadName, LoadAttr,
@@ -2211,6 +2211,21 @@ def compile_goal(
                 _if(_call(_name("_fd_ne"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
+        # ── Structural equality (Prolog ==/2, \==/2) ───────────────────────
+        case StructuralEq(left=l, right=r):
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_structural_eq"), l_expr, r_expr), k_stmts),
+            ]
+
+        case StructuralNeq(left=l, right=r):
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_structural_neq"), l_expr, r_expr), k_stmts),
+            ]
+
         # ── CLP(FD) arithmetic comparisons ──────────────────────────────────
         case Lt(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
@@ -3901,6 +3916,20 @@ def compile_goal_trampoline(
                 _if(_call(_name("_fd_ne"), l_expr, r_expr, _name(trail_name)), k_stmts),
             ]
 
+        case StructuralEq(left=l, right=r):
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_structural_eq"), l_expr, r_expr), k_stmts),
+            ]
+
+        case StructuralNeq(left=l, right=r):
+            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            return [
+                _if(_call(_name("_structural_neq"), l_expr, r_expr), k_stmts),
+            ]
+
         case Lt(left=l, right=r):
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
@@ -5093,6 +5122,8 @@ def _is_deterministic_goal(goal: Any) -> bool:
             return True
         case ArithEq() | ArithNeq():
             return True
+        case StructuralEq() | StructuralNeq():
+            return True
         case Lt() | LtE() | Gt() | GtE():
             return True
         case in_() | NotIn():
@@ -5819,7 +5850,10 @@ def compile_predicate_trampoline(
         return fn
 
     from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
-    from clausal.logic.constraints import dif as _dif_fn, reify_eq as _reify_eq_fn  # noqa: PLC0415
+    from clausal.logic.constraints import (  # noqa: PLC0415
+        dif as _dif_fn, reify_eq as _reify_eq_fn,
+        structural_eq as _structural_eq_fn, structural_neq as _structural_neq_fn,
+    )
     from clausal.logic.clpfd import (  # noqa: PLC0415
         fd_eq as _fd_eq_fn, fd_ne as _fd_ne_fn,
         fd_lt as _fd_lt_fn, fd_le as _fd_le_fn,
@@ -5849,6 +5883,8 @@ def compile_predicate_trampoline(
         "_DONE": DONE,
         "_dif": _dif_fn,
         "_reify_eq": _reify_eq_fn,
+        "_structural_eq": _structural_eq_fn,
+        "_structural_neq": _structural_neq_fn,
         "_reify_fd": _reify_fd_fn,
         "_fd_eq": _fd_eq_fn,
         "_fd_ne": _fd_ne_fn,
