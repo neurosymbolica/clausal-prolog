@@ -77,7 +77,7 @@ X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
 | `entailed` | 1 | `entailed(X <= 5)` — test if constraint is implied by current store |
-| `bb_inf` | 3 | `bb_inf(IntVars, Expr, Inf)` — mixed-integer optimization via branch-and-bound |
+| `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
 `in_q/1` is also accepted as an alias for `rational/1`.
@@ -164,9 +164,11 @@ test_entailed(X) <- (
 
 Supported operators: `<=`, `>=`, `<`, `>`, `==`, `!=`.
 
-### bb_inf/3
+### int_minimize/3
 
-Mixed-integer optimization: finds the minimum of a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound. Binds all constrained variables to their optimal integer assignments.
+Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. Binds all constrained variables to their optimal integer assignments.
+
+`bb_inf/3` is accepted as an alias (SICStus compatibility).
 
 ```clausal
 # skip
@@ -174,17 +176,17 @@ Mixed-integer optimization: finds the minimum of a linear expression subject to 
 int_min(X, Cost) <- (
     in_q(X, 0, 10),
     X >= 3/2,
-    bb_inf([X], X, Cost)
+    int_minimize([X], X, Cost)
 )
 % -> X = 2, Cost = 2
 
-% SICStus example: min(X) with X >= Y + Z, Y > 1, Z > 1, all integer
-sicstus_bb(X, Y, Z, Cost) <- (
+% min(X) with X >= Y + Z, Y >= 2, Z >= 2, all integer
+resource_min(X, Y, Z, Cost) <- (
     in_q([X, Y, Z], 0, 100),
     X >= Y + Z,
     Y >= 2,
     Z >= 2,
-    bb_inf([X, Y, Z], X, Cost)
+    int_minimize([X, Y, Z], X, Cost)
 )
 % -> X = 4, Y = 2, Z = 2, Cost = 4
 ```
@@ -635,7 +637,7 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`** |
 | Bounds query | `sup/1`, `inf/1` | Same | — | **`sup/2`, `inf/2`** |
 | Entailment | `entailed/1` | Same | — | **`entailed/3`** |
-| MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`bb_inf/3`** |
+| MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`** |
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
 | Non-linear | Deferred | Deferred | — | **Rejected (TypeError)** |
 | Syntax | `{X + Y =< 8}` | Same | — | **`X + Y <= 8`** (unified) |
@@ -826,7 +828,7 @@ mixed(X, Y) <- (
     - **Disequality**: `q_ne` prevents binding to excluded value, allows other values; strict `q_lt` rejects equal; two-var disequality; backtrack restores
     - **Pivot/simplex**: upper-bound inequality feasibility, infeasible upper-bound detection, degenerate vertex, contradictory multi-var inequalities
     - **Projection**: `dump_q` simple bounds, inequality projection (no internal var leakage), equality projection, empty store
-    - **Branch-and-bound**: `bb_inf` simple integer, LP integer, no integer constraint, infeasible, already integer, mixed integer, multi-level branching, variable binding
+    - **Integer optimization**: `int_minimize` (bb_inf) simple integer, LP integer, no integer constraint, infeasible, already integer, mixed integer, multi-level branching, variable binding
     - **Linearization**: constants, ints, vars, add, scalar mult, non-linear rejection, negate
     - **Coefficient growth**: Newton sqrt(2) to 12-digit fractions, large coefficient constraints
     - **Float type safety**: `TypeError` raised when Q-variable unified with float

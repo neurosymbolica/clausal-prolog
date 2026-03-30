@@ -64,18 +64,18 @@ SupInf(X, LO, HI) <- (
     sup(X, HI)
 )
 
-# --- bb_inf integer optimization ---
+# --- int_minimize integer optimization ---
 BBSimple(X, COST) <- (
     in_q(X, 0, 10),
     X >= 3/2,
-    bb_inf([X], X, COST)
+    int_minimize([X], X, COST)
 )
 
-# --- bb_inf SICStus example ---
+# --- int_minimize multi-variable ---
 BBSicstus(X, Y, Z, COST) <- (
     in_q([X, Y, Z], 0, 100),
     X >= Y + Z,
     Y >= 2,
     Z >= 2,
-    bb_inf([X, Y, Z], X, COST)
+    int_minimize([X, Y, Z], X, COST)
 )

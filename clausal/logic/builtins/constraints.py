@@ -213,9 +213,19 @@ def _minimize__2(expr, result, trail, k):
         yield None
 
 
+@_builtin("int_minimize", 3)
+def _int_minimize__3(int_vars, expr, result, trail, k):
+    """int_minimize(IntVars, Expr, Min) — minimize with integrality constraints."""
+    from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
+    if _bb_inf_fn(_deref(int_vars), expr, result, trail):
+        yield None
+
+
+# SICStus compatibility alias
 @_builtin("bb_inf", 3)
 def _bb_inf__3(int_vars, expr, result, trail, k):
-    """bb_inf(IntVars, Expr, Inf) — mixed-integer optimization."""
+    """bb_inf(IntVars, Expr, Inf) — alias for int_minimize/3."""
     from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
     from clausal.logic.variables import deref as _deref  # noqa: PLC0415
     if _bb_inf_fn(_deref(int_vars), expr, result, trail):
