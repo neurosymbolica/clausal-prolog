@@ -7,9 +7,17 @@ import pytest
 from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify
 from clausal.logic.clpq import (
     Q_KEY, in_q, q_eq, q_ne, q_lt, q_le, q_gt, q_ge,
-    maximize, minimize, _linearize, _get_tableau,
+    maximize, minimize, _linearize, _get_tableau, _tableaux,
 )
 from clausal.terms import Add, Sub, Mult, Div, Negate
+
+
+@pytest.fixture(autouse=True)
+def _clean_tableaux():
+    """Clear global tableau state between tests to prevent leaks."""
+    _tableaux.clear()
+    yield
+    _tableaux.clear()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -419,6 +427,218 @@ class TestCoefficientGrowth:
         in_q(x, 0, big * 2, trail)
         assert q_eq(x, big, trail)
         assert deref(x) == big
+
+
+# ── Phase A: correctness fix tests ───────────────────────────────────────────
+
+
+class TestA1MaximizeSnapshot:
+    """Issue #10: maximize/minimize must snapshot before mutating tableau."""
+
+    def test_maximize_backtrack_restores_tableau(self):
+        """After backtracking past a maximize, the tableau is restored."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_le(x, F(10), trail)
+
+        mark = trail.mark()
+        result = Var()
+        assert maximize(x, result, trail)
+        assert deref(result) == F(10)
+
+        trail.undo(mark)
+        # Tableau should be restored — x is still constrained but not optimized
+        assert is_var(deref(x))
+        # Should be able to post new constraints
+        assert q_le(x, F(5), trail)
+
+    def test_minimize_backtrack_restores_tableau(self):
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 100, trail)
+        q_ge(x, F(3), trail)
+
+        mark = trail.mark()
+        result = Var()
+        assert minimize(x, result, trail)
+        assert deref(result) == F(3)
+
+        trail.undo(mark)
+        assert is_var(deref(x))
+        assert q_ge(x, F(7), trail)  # can tighten further
+
+
+class TestA2PivotBound:
+    """Issue #13: pivot must respect the target bound (lower or upper)."""
+
+    def test_upper_bound_inequality(self):
+        """System where feasibility requires variables near upper bounds."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q(x, 0, 10, trail)
+        in_q(y, 0, 10, trail)
+        # X + Y >= 15 with X,Y in [0,10] is feasible (e.g., x=10, y=5)
+        assert q_ge(Add(left=x, right=y), F(15), trail)
+        # Verify the system is feasible via optimization
+        result = Var()
+        assert maximize(Add(left=x, right=y), result, trail)
+        assert deref(result) == F(20)  # max x+y with x,y in [0,10] and x+y>=15
+
+    def test_infeasible_upper_bound(self):
+        """X + Y >= 25 with X,Y in [0,10] → infeasible."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q(x, 0, 10, trail)
+        in_q(y, 0, 10, trail)
+        assert not q_ge(Add(left=x, right=y), F(25), trail)
+
+
+class TestA3DualSimplex:
+    """Issue #3: dual simplex must handle complex inequality systems correctly."""
+
+    def test_three_constraint_feasibility(self):
+        """System that requires multiple dual simplex pivots."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        assert q_le(Add(left=x, right=y), F(10), trail)
+        assert q_ge(x, F(3), trail)
+        assert q_ge(y, F(4), trail)
+        # Feasible: e.g., x=3, y=7 or x=6, y=4
+
+    def test_tight_system(self):
+        """Constraints that leave only one feasible point via equality."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        # Use explicit equality instead of two opposing inequalities
+        assert q_eq(Add(left=x, right=y), F(10), trail)
+        assert q_eq(x, F(4), trail)
+        assert deref(y) == F(6)
+
+    def test_contradictory_inequalities(self):
+        """X + Y <= 5, X >= 3, Y >= 3 → infeasible (3+3=6 > 5)."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        assert q_le(Add(left=x, right=y), F(5), trail)
+        assert q_ge(x, F(3), trail)
+        assert not q_ge(y, F(3), trail)
+
+    def test_degenerate_vertex(self):
+        """Multiple constraints active at the same point (degeneracy)."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        assert q_le(x, F(5), trail)
+        assert q_le(y, F(5), trail)
+        assert q_le(Add(left=x, right=y), F(10), trail)  # redundant at (5,5)
+        # All three constraints are tight at x=5, y=5
+        result = Var()
+        assert maximize(Add(left=x, right=y), result, trail)
+        assert deref(result) == F(10)
+
+
+class TestA4Disequality:
+    """Issue #1: q_ne must store and check disequalities properly."""
+
+    def test_ne_prevents_binding_to_excluded_value(self):
+        """X != 5, then X == 5 must fail."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert q_ne(x, F(5), trail)
+        assert not q_eq(x, F(5), trail)
+
+    def test_ne_allows_other_values(self):
+        """X != 5, X == 3 succeeds."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert q_ne(x, F(5), trail)
+        assert q_eq(x, F(3), trail)
+        assert deref(x) == F(3)
+
+    def test_strict_lt_rejects_equal(self):
+        """X < 5 means X <= 5 AND X != 5. If X is later forced to 5, it fails."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert q_lt(x, F(5), trail)
+        assert not q_eq(x, F(5), trail)
+
+    def test_strict_lt_allows_less(self):
+        """X < 5, X == 4 succeeds."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        assert q_lt(x, F(5), trail)
+        assert q_eq(x, F(4), trail)
+
+    def test_ne_two_vars(self):
+        """X != Y, then X and Y forced equal must fail."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        assert q_ne(x, y, trail)
+        assert q_eq(x, F(5), trail)
+        assert not q_eq(y, F(5), trail)
+
+    def test_ne_two_vars_different_ok(self):
+        """X != Y, X = 5, Y = 3 succeeds."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 10, trail)
+        assert q_ne(x, y, trail)
+        assert q_eq(x, F(5), trail)
+        assert q_eq(y, F(3), trail)
+
+    def test_ne_ground_equal_fails(self):
+        """Posting q_ne(5, 5) fails immediately."""
+        trail = Trail()
+        assert not q_ne(F(5), F(5), trail)
+
+    def test_ne_ground_different_succeeds(self):
+        """Posting q_ne(5, 3) succeeds immediately."""
+        trail = Trail()
+        assert q_ne(F(5), F(3), trail)
+
+    def test_ne_backtrack_restores(self):
+        """Disequality is undone on backtrack."""
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        mark = trail.mark()
+        assert q_ne(x, F(5), trail)
+        trail.undo(mark)
+        # After undo, X != 5 is gone — X == 5 should succeed
+        assert q_eq(x, F(5), trail)
+        assert deref(x) == F(5)
+
+
+class TestA5FloatTypeError:
+    """Issue #9: unifying a Q-var with float must raise TypeError."""
+
+    def test_unify_q_var_with_float_raises(self):
+        trail = Trail()
+        x = Var()
+        in_q(x, 0, 10, trail)
+        with pytest.raises(TypeError, match="Cannot unify CLP\\(Q\\)"):
+            unify(x, 3.14, trail)
+
+    def test_float_literal_does_not_reach_q(self):
+        """fd_eq(X, 3.14) should dispatch to CLP(R), not CLP(Q)."""
+        from clausal.logic.clpfd import fd_eq
+        from clausal.logic.clpr import REAL_KEY
+        trail = Trail()
+        x = Var()
+        # No in_q — float should go to CLP(R), not CLP(Q)
+        assert fd_eq(x, 3.14, trail)
+        # x should have a real attribute, not a Q attribute
+        assert get_attr(deref(x) if not is_var(deref(x)) else x, REAL_KEY) is not None or \
+               isinstance(deref(x), float) or not is_var(deref(x))
+        assert get_attr(x, Q_KEY) is None  # must NOT have Q attribute
 
 
 # ── End-to-end Clausal integration tests ─────────────────────────────────────

@@ -183,10 +183,12 @@ class Tableau:
                           ) -> tuple[dict[int, Fraction], Fraction]:
         """Replace basic variables by their row definitions.
 
-        A basic var B has row: B = Σ row[B][j]*Xj + rhs[B].
+        Row convention: B = rhs[B] + Σ row[B][j]*Xj.
         Substituting into Σ coeffs*Xi = constant:
-            coeff * B → coeff * (Σ row[j]*Xj + rhs[B])
-        The rhs[B] is on the LHS, so subtract from RHS constant.
+            coeff * B = coeff * (rhs[B] + Σ row[j]*Xj)
+                      = coeff*rhs[B] + coeff*Σ row[j]*Xj
+        The rhs part is on the LHS, so subtract from RHS.
+        The variable part keeps its sign.
         """
         new_c: dict[int, Fraction] = {}
         new_k = constant
@@ -388,7 +390,10 @@ class Tableau:
                 return ZERO <= constant
 
         # Multi-variable: add slack
-        # Σ coeffs·Xi <= constant → slack = constant - Σ coeffs·Xi, slack >= 0
+        # Σ coeffs·Xi <= constant → slack + Σ coeffs·Xi = constant
+        # Rearrange: slack = constant - Σ coeffs·Xi
+        # Row convention: basic = rhs + Σ row[v]*v (where row stores the coeffs
+        # as-is, and assignment = rhs + Σ row[v]*assign[v])
         slack = self._fresh_slack()
         self.rows[slack] = {v: -c for v, c in coeffs.items()}
         self.rhs[slack] = constant
@@ -406,20 +411,20 @@ class Tableau:
 
     # ── Pivot ────────────────────────────────────────────────────────────
 
-    def _pivot(self, leaving: int, entering: int) -> None:
+    def _pivot(self, leaving: int, entering: int,
+               leaving_bound: Fraction | None = None) -> None:
         """Swap leaving (basic) and entering (non-basic).
 
-        The leaving row expresses: leaving = Σ row[v]*v + rhs
-        We solve for entering: entering = (leaving - Σ other*v - rhs) / row[entering]
-        Then substitute into all other rows.
+        *leaving_bound*: the value the leaving variable should take as a
+        non-basic variable after the pivot.  If None, defaults to its
+        lower bound (correct for primal simplex).
         """
         row = self.rows[leaving]
         pcoeff = row[entering]
 
         # Build new row for entering.
-        # Original row: leaving = Σ row[v]*v + rhs  (where entering is one of v)
-        # Rearrange: pcoeff*entering = leaving - Σ other_v*v - rhs
-        # entering = leaving/pcoeff - Σ (other_c/pcoeff)*v - rhs/pcoeff
+        # Original row: leaving = Σ row[v]*v + rhs  (entering is one of v)
+        # Rearrange: entering = leaving/pcoeff - Σ (other_c/pcoeff)*v - rhs/pcoeff
         new_row: dict[int, Fraction] = {}
         for v, c in row.items():
             if v != entering:
@@ -427,7 +432,7 @@ class Tableau:
         new_row[leaving] = ONE / pcoeff
         new_rhs = -self.rhs[leaving] / pcoeff
 
-        # Substitute entering's new expression into all other rows
+        # Substitute into all other rows
         for bv in list(self.rows):
             if bv == leaving:
                 continue
@@ -443,25 +448,41 @@ class Tableau:
         self.rows[entering] = new_row
         self.rhs[entering] = new_rhs
 
-        # Recompute ALL assignments from scratch (robust, avoids drift)
-        # Non-basic vars keep their current assignments (they sit at bounds)
-        # The leaving var becomes non-basic at its lower bound
-        lo = self.lo.get(leaving)
-        if lo is not None:
-            self.assign[leaving] = lo
+        # Set leaving variable to its target bound
+        if leaving_bound is not None:
+            self.assign[leaving] = leaving_bound
         else:
-            self.assign[leaving] = ZERO
-        # Recompute all basic var assignments
+            lo = self.lo.get(leaving)
+            self.assign[leaving] = lo if lo is not None else ZERO
+
+        # Recompute all basic variable assignments from their rows
+        # Convention: B = rhs + Σ row[v]*v
         for bv in self.rows:
             val = self.rhs[bv]
             for v, c in self.rows[bv].items():
-                val -= c * self.assign.get(v, ZERO)
+                val += c * self.assign.get(v, ZERO)
             self.assign[bv] = val
 
     # ── Restore feasibility (dual simplex) ───────────────────────────────
 
     def _restore_feasibility(self) -> bool:
-        """Dual simplex with Bland's rule.  Returns False if infeasible."""
+        """Dual simplex with Bland's rule.  Returns False if infeasible.
+
+        Algorithm:
+        1. Find the most infeasible basic variable (leaving).
+        2. Determine direction: below lower bound → need to increase;
+           above upper bound → need to decrease.
+        3. For each non-basic variable in the leaving row, check if
+           pivoting it in would move the leaving variable toward
+           feasibility.  A non-basic var can help if:
+           - It's at its lower bound and has room to increase
+             (coeff sign matches direction), OR
+           - It's at its upper bound and has room to decrease
+             (coeff sign matches direction).
+        4. Among eligible entering vars, pick the first by Bland's rule
+           (lowest index).
+        5. Pivot, setting the leaving var to its violated bound.
+        """
         max_iters = 2 * (len(self.rows) + len(self.lo)) + 100
         for _ in range(max_iters):
             # Find most infeasible basic variable
@@ -469,80 +490,81 @@ class Tableau:
             worst = ZERO
             for bv in self.rows:
                 val = self.assign.get(bv, ZERO)
-                lo = self.lo.get(bv)
-                hi = self.hi.get(bv)
-                if lo is not None and val < lo:
-                    viol = lo - val
+                blo = self.lo.get(bv)
+                bhi = self.hi.get(bv)
+                if blo is not None and val < blo:
+                    viol = blo - val
                     if viol > worst:
                         worst, leaving = viol, bv
-                elif hi is not None and val > hi:
-                    viol = val - hi
+                elif bhi is not None and val > bhi:
+                    viol = val - bhi
                     if viol > worst:
                         worst, leaving = viol, bv
 
             if leaving is None:
-                return True  # feasible
+                return True  # all feasible
 
             row = self.rows[leaving]
             val = self.assign[leaving]
             lo = self.lo.get(leaving)
             hi = self.hi.get(leaving)
-            entering = None
 
-            if lo is not None and val < lo:
-                # Need to increase leaving's value.
-                # basic_var = Σ row[v]*non_basic_v + rhs
-                # Increasing a non-basic var with positive coeff increases basic.
-                # But in dual simplex, we look at which non-basic var can
-                # LEAVE its bound to help. A non-basic at lower bound can
-                # increase → helps if row coeff is positive.
-                # A non-basic at upper bound can decrease → helps if row coeff
-                # is negative.
-                # Simplified Bland's: pick first var with negative coeff
-                # (we'll pivot and the leaving var takes the entering's bound).
-                # Actually: for dual simplex below-lower-bound, the standard
-                # rule is to find entering with NEGATIVE coefficient (the
-                # ratio test is inverted in dual simplex).
-                # Let's try a simpler approach: just update the non-basic
-                # variable's bound directly.
-                for v in sorted(row.keys()):
-                    c = row[v]
-                    if c < ZERO:
-                        # Decreasing v (to its lower bound) increases basic
-                        entering = v
-                        break
-                    elif c > ZERO:
-                        # Increasing v (to its upper bound) increases basic
-                        # Check if v has an upper bound it can move to
-                        v_hi = self.hi.get(v)
-                        v_val = self.assign.get(v, ZERO)
-                        if v_hi is not None and v_val < v_hi:
+            below = lo is not None and val < lo
+            # above = hi is not None and val > hi
+
+            # Row convention: B = rhs + Σ row[v]*v.
+            # Change in B when non-basic v changes by delta: row[v]*delta.
+            #
+            # To INCREASE leaving (below lower bound):
+            #   Need row[v]*delta > 0.
+            #   If v at lower bound (can increase, delta > 0): need row[v] > 0.
+            #   If v at upper bound (can decrease, delta < 0): need row[v] < 0.
+            #
+            # To DECREASE leaving (above upper bound):
+            #   Need row[v]*delta < 0.
+            #   If v at lower bound (delta > 0): need row[v] < 0.
+            #   If v at upper bound (delta < 0): need row[v] > 0.
+
+            entering = None
+            for v in sorted(row.keys()):  # Bland's rule: sorted
+                c = row[v]
+                if c == ZERO:
+                    continue
+                v_lo = self.lo.get(v)
+                v_hi = self.hi.get(v)
+                v_val = self.assign.get(v, ZERO)
+
+                if below:
+                    # Need to increase leaving
+                    if c > ZERO and v_lo is not None and v_val <= v_lo:
+                        # v at lower bound, positive coeff → increase v → increase leaving
+                        if v_hi is None or v_val < v_hi:
                             entering = v
                             break
-            elif hi is not None and val > hi:
-                # Need to decrease leaving's value.
-                for v in sorted(row.keys()):
-                    c = row[v]
-                    if c > ZERO:
-                        entering = v
-                        break
-                    elif c < ZERO:
-                        v_lo = self.lo.get(v)
-                        v_val = self.assign.get(v, ZERO)
-                        if v_lo is not None and v_val > v_lo:
+                    elif c < ZERO and v_hi is not None and v_val >= v_hi:
+                        # v at upper bound, negative coeff → decrease v → increase leaving
+                        if v_lo is None or v_val > v_lo:
+                            entering = v
+                            break
+                else:
+                    # Need to decrease leaving
+                    if c < ZERO and v_lo is not None and v_val <= v_lo:
+                        # v at lower bound, negative coeff → increase v → decrease leaving
+                        if v_hi is None or v_val < v_hi:
+                            entering = v
+                            break
+                    elif c > ZERO and v_hi is not None and v_val >= v_hi:
+                        # v at upper bound, positive coeff → decrease v → decrease leaving
+                        if v_lo is None or v_val > v_lo:
                             entering = v
                             break
 
             if entering is None:
-                return False  # infeasible
+                return False  # infeasible — no valid pivot
 
-            # Set leaving to its violated bound before pivot
-            if lo is not None and val < lo:
-                self.assign[leaving] = lo
-            elif hi is not None and val > hi:
-                self.assign[leaving] = hi
-
-            self._pivot(leaving, entering)
+            # Determine the bound the leaving variable goes to
+            leaving_bound = lo if below else hi
+            self._pivot(leaving, entering, leaving_bound=leaving_bound)
 
         return False
 
@@ -587,24 +609,34 @@ class Tableau:
                     val += c * a
                 return val
 
-            # Minimum ratio test: find which basic var first hits its lower
-            # bound as we increase the entering variable.
-            # basic_var changes by row[bv][entering] * delta.
-            # If row coeff is negative, basic_var decreases.
-            # Ratio = (bval - blo) / (-coeff) = how much entering can increase.
+            # Minimum ratio test: find which basic var first hits ANY bound
+            # as we increase the entering variable.
+            # Row convention: B = rhs + Σ row[v]*v.
+            # Increasing entering by delta changes B by row[entering]*delta.
+            # If row[entering] < 0, B decreases → may hit lower bound.
+            #   ratio = (bval - blo) / (-coeff)
+            # If row[entering] > 0, B increases → may hit upper bound.
+            #   ratio = (bhi - bval) / coeff
             leaving = None
             min_ratio: Fraction | None = None
             for bv, brow in self.rows.items():
                 if entering not in brow:
                     continue
                 coeff = brow[entering]
-                if coeff >= ZERO:
-                    continue  # positive coeff means bv increases — no limit
+                if coeff == ZERO:
+                    continue
                 bval = self.assign.get(bv, ZERO)
-                blo = self.lo.get(bv)
-                if blo is None:
-                    continue  # no lower bound — no limit
-                ratio = (bval - blo) / (-coeff)
+                ratio = None
+                if coeff < ZERO:
+                    blo = self.lo.get(bv)
+                    if blo is not None:
+                        ratio = (bval - blo) / (-coeff)
+                else:  # coeff > 0
+                    bhi = self.hi.get(bv)
+                    if bhi is not None:
+                        ratio = (bhi - bval) / coeff
+                if ratio is None:
+                    continue
                 if min_ratio is None or ratio < min_ratio:
                     min_ratio = ratio
                     leaving = bv
@@ -626,7 +658,18 @@ class Tableau:
                 obj.pop(entering, None)
                 continue
 
-            # Update objective coefficients after pivot
+            # Determine which bound the leaving variable hit
+            bv_coeff = self.rows[leaving][entering]
+            bv_val = self.assign[leaving]
+            if bv_coeff < ZERO:
+                # B decreased → hit lower bound
+                lv_bound = self.lo.get(leaving, ZERO)
+            else:
+                # B increased → hit upper bound
+                lv_bound = self.hi.get(leaving)
+
+            # Update objective coefficients after pivot.
+            # Row convention: entering = new_rhs + Σ new_row[v]*v (after pivot).
             enter_coeff = obj.pop(entering, ZERO)
             row = self.rows[leaving]
             pcoeff = row[entering]
@@ -635,10 +678,10 @@ class Tableau:
                 if v != entering:
                     obj[v] = obj.get(v, ZERO) - factor * c
             obj[leaving] = obj.get(leaving, ZERO) + factor
-            obj_k += factor * self.rhs[leaving]
+            obj_k -= factor * self.rhs[leaving]
             obj = {v: c for v, c in obj.items() if c != ZERO}
 
-            self._pivot(leaving, entering)
+            self._pivot(leaving, entering, leaving_bound=lv_bound)
 
         return None
 
@@ -685,14 +728,35 @@ class Tableau:
     # ── Disequality check ────────────────────────────────────────────────
 
     def _check_diseqs(self) -> bool:
-        """Fail if any ground disequality pair has become equal."""
-        for a, b in self.diseqs:
-            a_lo, a_hi = self.lo.get(a), self.hi.get(a)
-            b_lo, b_hi = self.lo.get(b), self.hi.get(b)
-            a_fixed = a_lo is not None and a_lo == a_hi
-            b_fixed = b_lo is not None and b_lo == b_hi
-            if a_fixed and b_fixed and self.assign.get(a) == self.assign.get(b):
-                return False
+        """Fail if any disequality is violated.
+
+        Disequalities are stored as ``('linear', coeffs, constant)``
+        meaning ``Σ coeffs[v]*v != constant``.  We check this when all
+        variables in the disequality are determined (fixed to a point).
+        """
+        for entry in self.diseqs:
+            tag, coeffs, constant = entry
+            # Check if all variables are determined
+            all_fixed = True
+            val = ZERO
+            for vid, coeff in coeffs.items():
+                vlo = self.lo.get(vid)
+                vhi = self.hi.get(vid)
+                if vlo is not None and vhi is not None and vlo == vhi:
+                    val += coeff * vlo
+                elif vid in self.parametric:
+                    # Check if parametric var is fully determined
+                    pc, pk = self.parametric[vid]
+                    if not pc:
+                        val += coeff * pk
+                    else:
+                        all_fixed = False
+                        break
+                else:
+                    all_fixed = False
+                    break
+            if all_fixed and val == constant:
+                return False  # disequality violated
         return True
 
     # ── Implied bindings ─────────────────────────────────────────────────
@@ -926,6 +990,13 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
             return False
         return tableau.check_implied_bindings(trail)
 
+    if isinstance(bound_to, float):
+        raise TypeError(
+            f"Cannot unify CLP(Q) variable with float {bound_to!r}. "
+            "Use Fraction for exact rationals, or declare the variable "
+            "with in_real instead of in_q."
+        )
+
     if is_var(bound_to):
         other = get_attr(bound_to, Q_KEY)
         if other is None:
@@ -1005,7 +1076,12 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
 
 
 def q_ne(l: Any, r: Any, trail: Trail) -> bool:
-    """Post l != r as a passive disequality."""
+    """Post l != r as a passive disequality.
+
+    The disequality is stored in the Tableau and checked whenever a
+    variable becomes ground.  If both sides are already ground at
+    posting time, it's checked immediately.
+    """
     l, r = deref(l), deref(r)
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) != Fraction(r)
@@ -1013,23 +1089,25 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     _ensure_q_for_expr(r, trail)
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
-    if lc is not None and rc is not None:
-        lk, lv = lc
-        rk, rv = rc
-        # Collect variable IDs
-        l_vars = set(lk.keys())
-        r_vars = set(rk.keys())
-        if len(l_vars) == 1 and not r_vars:
-            vid = next(iter(l_vars))
-            if len(rk) == 0:
-                tableau = _get_tableau(trail)
-                _snapshot_tableau(trail)
-                # Store disequality between vid and a value
-                # For simplicity, store as pair and check later
-                pass
-        # For now, store as a general pair of linear expressions
-        # Only checked when both sides become ground
-    return True
+    if lc is None or rc is None:
+        raise TypeError("CLP(Q) requires linear constraints")
+    lk, lv = lc
+    rk, rv = rc
+    # Compute l - r: the disequality holds when this is != 0
+    merged = dict(lk)
+    for v, c in rk.items():
+        merged[v] = merged.get(v, ZERO) - c
+    coeffs = {v: c for v, c in merged.items() if c != ZERO}
+    constant = rv - lv  # l - r = Σ coeffs[v]*v + (-constant) so l-r=0 ↔ Σ coeffs[v]*v = constant
+    if not coeffs:
+        # Pure constant: l - r = -constant, so ne iff constant != 0
+        return constant != ZERO
+    tableau = _get_tableau(trail)
+    _snapshot_tableau(trail)
+    # Store as (coefficients, constant) — the disequality is:
+    # Σ coeffs[v]*v != constant
+    tableau.diseqs.append(('linear', coeffs, constant))
+    return tableau._check_diseqs()
 
 
 def q_le(l: Any, r: Any, trail: Trail) -> bool:
@@ -1088,6 +1166,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
         raise TypeError("maximize requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
+    _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'max')
     if opt is None:
         return False
@@ -1103,6 +1182,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
         raise TypeError("minimize requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
+    _snapshot_tableau(trail)
     opt = tableau.optimize(coeffs, 'min')
     if opt is None:
         return False
