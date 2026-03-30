@@ -106,6 +106,7 @@ for the full feature set.
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
 | [Constraints](constraints.md) | dif/2, CLP(ℤ) integer constraints, and CLP(ℝ) real-domain constraints |
 | [CLP(ℝ)](clpr.md) | Interval arithmetic, non-linear propagation, and bisection labeling over the reals |
+| [CLP(Q)](clpq.md) | Exact rational constraints via Gaussian elimination and the revised simplex method |
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |

@@ -338,6 +338,24 @@ class TestOptimization:
         assert maximize(obj, result, trail)
         assert deref(result) == F(310)
 
+    def test_minimize_lp(self):
+        """Scheduling example from docs:
+        minimize 5X + 3Y subject to
+            X + Y >= 10, 2X + Y <= 30, X + 3Y <= 40, X,Y >= 0"""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_q([x, y], 0, 100, trail)
+        assert q_ge(Add(left=x, right=y), F(10), trail)
+        assert q_le(Add(left=Mult(left=F(2), right=x), right=y), F(30), trail)
+        assert q_le(Add(left=x, right=Mult(left=F(3), right=y)), F(40), trail)
+        cost = Var()
+        obj = Add(left=Mult(left=F(5), right=x), right=Mult(left=F(3), right=y))
+        assert minimize(obj, cost, trail)
+        # At optimum: minimize 5X+3Y with X+Y>=10 → cheapest is max Y
+        # Y limited by X+3Y<=40 and 2X+Y<=30
+        # At X=0: Y>=10, 3Y<=40→Y<=40/3≈13.3, Y<=30. So Y=10, cost=30
+        assert deref(cost) == F(30)
+
 
 # ── Phase 7: Linearization ──────────────────────────────────────────────────
 
