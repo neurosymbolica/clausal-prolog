@@ -417,7 +417,11 @@ if _USE_C_ARITH:
                     yield None
                 trail.undo(mark)
             return
-        # Check mode — ret is the mark
+        if ret is True:
+            # Check mode — x was already bound and in range, no trail to undo
+            yield None
+            return
+        # Check mode with unification — ret is the mark
         yield None
         trail.undo(ret)
 

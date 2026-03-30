@@ -11,6 +11,7 @@
  * Return protocol for each predicate function:
  *   - PyLong (mark):  unification succeeded; caller should yield then
  *                     trail.undo(mark).
+ *   - Py_True:        success with no trail to undo (between/3 check mode).
  *   - Py_None:        no solution (type-check fail, unify fail, etc.).
  *   - Py_False:       Quantity detected — fall back to Python impl.
  *   - Tuple:          special (between/3 generate mode returns (lo, hi)).
@@ -22,9 +23,12 @@
 #define VARIABLES_CAPI_CONSUMER
 #include "variables/_variables_capi.h"
 
-/* ── Cached type object for Quantity ──────────────────────────────────── */
+/* ── Cached references (set during module init) ──────────────────────── */
 
 static PyObject *Quantity_type = NULL;   /* clausal.terms.Quantity */
+static PyObject *cached_zero = NULL;     /* PyLong(0) */
+static PyObject *cached_one = NULL;      /* PyLong(1) */
+static PyObject *math_gcd_func = NULL;   /* math.gcd */
 
 /* Check if obj is a Quantity instance.  Returns 1/0/-1 (error). */
 static inline int
@@ -33,6 +37,18 @@ is_quantity(PyObject *obj)
     if (!Quantity_type) return 0;
     return PyObject_IsInstance(obj, Quantity_type);
 }
+
+/*
+ * Check is_quantity and propagate errors.  Returns:
+ *   1  → is Quantity (caller should Py_RETURN_FALSE to fall back)
+ *   0  → not Quantity (continue in C)
+ *  -1  → error (caller should return NULL)
+ */
+#define CHECK_QUANTITY(obj) do { \
+    int _q = is_quantity(obj); \
+    if (_q < 0) return NULL; \
+    if (_q) Py_RETURN_FALSE; \
+} while (0)
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -129,9 +145,9 @@ py_arith_between(PyObject *self, PyObject *args)
         int le = PyObject_RichCompareBool(x_val, high_val, Py_LE);
         if (le < 0) return NULL;
         if (!le) Py_RETURN_NONE;
-        /* In range — "unify" is a no-op (already bound to itself) but
-           we still need a mark for protocol consistency. */
-        return mark_unify(x, x_val, trail);
+        /* In range — x is already bound, no unification needed.
+           Return True as a sentinel for "success, no mark to undo". */
+        Py_RETURN_TRUE;
     }
     /* Generate mode: return (lo, hi) tuple for Python to iterate */
     return Py_BuildValue("(OO)", low_val, high_val);
@@ -152,22 +168,11 @@ py_arith_succ(PyObject *self, PyObject *args)
 
     if (!VarAPI->is_var(x_val)) {
         if (!is_plain_int(x_val)) Py_RETURN_NONE;
-        long long xv = PyLong_AsLongLong(x_val);
-        if (xv == -1 && PyErr_Occurred()) {
-            /* Big int — use Python arithmetic */
-            PyErr_Clear();
-            int ge = PyObject_RichCompareBool(x_val, PyLong_FromLong(0), Py_GE);
-            if (ge <= 0) { if (ge < 0) return NULL; Py_RETURN_NONE; }
-            PyObject *one = PyLong_FromLong(1);
-            PyObject *result = PyNumber_Add(x_val, one);
-            Py_DECREF(one);
-            if (!result) return NULL;
-            PyObject *ret = mark_unify(y, result, trail);
-            Py_DECREF(result);
-            return ret;
-        }
-        if (xv < 0) Py_RETURN_NONE;
-        PyObject *result = PyLong_FromLongLong(xv + 1);
+        /* x >= 0 */
+        int ge = PyObject_RichCompareBool(x_val, cached_zero, Py_GE);
+        if (ge < 0) return NULL;
+        if (!ge) Py_RETURN_NONE;
+        PyObject *result = PyNumber_Add(x_val, cached_one);
         if (!result) return NULL;
         PyObject *ret = mark_unify(y, result, trail);
         Py_DECREF(result);
@@ -175,21 +180,11 @@ py_arith_succ(PyObject *self, PyObject *args)
     }
     if (!VarAPI->is_var(y_val)) {
         if (!is_plain_int(y_val)) Py_RETURN_NONE;
-        long long yv = PyLong_AsLongLong(y_val);
-        if (yv == -1 && PyErr_Occurred()) {
-            PyErr_Clear();
-            int gt = PyObject_RichCompareBool(y_val, PyLong_FromLong(0), Py_GT);
-            if (gt <= 0) { if (gt < 0) return NULL; Py_RETURN_NONE; }
-            PyObject *one = PyLong_FromLong(1);
-            PyObject *result = PyNumber_Subtract(y_val, one);
-            Py_DECREF(one);
-            if (!result) return NULL;
-            PyObject *ret = mark_unify(x, result, trail);
-            Py_DECREF(result);
-            return ret;
-        }
-        if (yv < 1) Py_RETURN_NONE;
-        PyObject *result = PyLong_FromLongLong(yv - 1);
+        /* y > 0  (i.e. y >= 1) */
+        int gt = PyObject_RichCompareBool(y_val, cached_zero, Py_GT);
+        if (gt < 0) return NULL;
+        if (!gt) Py_RETURN_NONE;
+        PyObject *result = PyNumber_Subtract(y_val, cached_one);
         if (!result) return NULL;
         PyObject *ret = mark_unify(x, result, trail);
         Py_DECREF(result);
@@ -217,9 +212,9 @@ py_arith_plus(PyObject *self, PyObject *args)
     int z_known = !VarAPI->is_var(zv);
 
     /* Check for Quantity → fall back */
-    if (x_known && is_quantity(xv) == 1) Py_RETURN_FALSE;
-    if (y_known && is_quantity(yv) == 1) Py_RETURN_FALSE;
-    if (z_known && is_quantity(zv) == 1) Py_RETURN_FALSE;
+    if (x_known) { CHECK_QUANTITY(xv); }
+    if (y_known) { CHECK_QUANTITY(yv); }
+    if (z_known) { CHECK_QUANTITY(zv); }
 
     PyObject *result, *ret;
 
@@ -259,7 +254,7 @@ py_arith_abs(PyObject *self, PyObject *args)
 
     PyObject *xv = VarAPI->deref(x);
     if (VarAPI->is_var(xv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
     if (!is_numeric(xv)) Py_RETURN_NONE;
 
     PyObject *result = PyNumber_Absolute(xv);
@@ -282,7 +277,8 @@ py_arith_max(PyObject *self, PyObject *args)
     PyObject *xv = VarAPI->deref(x);
     PyObject *yv = VarAPI->deref(y);
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1 || is_quantity(yv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
+    CHECK_QUANTITY(yv);
 
     int cmp = PyObject_RichCompareBool(xv, yv, Py_GT);
     if (cmp < 0) return NULL;
@@ -303,7 +299,8 @@ py_arith_min(PyObject *self, PyObject *args)
     PyObject *xv = VarAPI->deref(x);
     PyObject *yv = VarAPI->deref(y);
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1 || is_quantity(yv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
+    CHECK_QUANTITY(yv);
 
     int cmp = PyObject_RichCompareBool(xv, yv, Py_LT);
     if (cmp < 0) return NULL;
@@ -323,16 +320,12 @@ py_arith_sign(PyObject *self, PyObject *args)
 
     PyObject *xv = VarAPI->deref(x);
     if (VarAPI->is_var(xv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
     if (!is_numeric(xv)) Py_RETURN_NONE;
 
-    PyObject *zero = PyLong_FromLong(0);
-    if (!zero) return NULL;
-
-    int gt = PyObject_RichCompareBool(xv, zero, Py_GT);
-    if (gt < 0) { Py_DECREF(zero); return NULL; }
-    int lt = PyObject_RichCompareBool(xv, zero, Py_LT);
-    Py_DECREF(zero);
+    int gt = PyObject_RichCompareBool(xv, cached_zero, Py_GT);
+    if (gt < 0) return NULL;
+    int lt = PyObject_RichCompareBool(xv, cached_zero, Py_LT);
     if (lt < 0) return NULL;
 
     long sign_val = gt - lt;
@@ -356,14 +349,11 @@ py_arith_gcd(PyObject *self, PyObject *args)
     PyObject *xv = VarAPI->deref(x);
     PyObject *yv = VarAPI->deref(y);
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1 || is_quantity(yv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
+    CHECK_QUANTITY(yv);
     if (!is_plain_int(xv) || !is_plain_int(yv)) Py_RETURN_NONE;
 
-    /* Use math.gcd via Python — handles big ints */
-    PyObject *math_mod = PyImport_ImportModule("math");
-    if (!math_mod) return NULL;
-    PyObject *result = PyObject_CallMethod(math_mod, "gcd", "OO", xv, yv);
-    Py_DECREF(math_mod);
+    PyObject *result = PyObject_CallFunctionObjArgs(math_gcd_func, xv, yv, NULL);
     if (!result) return NULL;
     PyObject *ret = mark_unify(g, result, trail);
     Py_DECREF(result);
@@ -383,11 +373,12 @@ py_arith_divmod(PyObject *self, PyObject *args)
     PyObject *xv = VarAPI->deref(x);
     PyObject *yv = VarAPI->deref(y);
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1 || is_quantity(yv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
+    CHECK_QUANTITY(yv);
     if (!is_plain_int(xv) || !is_plain_int(yv)) Py_RETURN_NONE;
 
     /* Check for zero divisor */
-    int is_zero = PyObject_RichCompareBool(yv, PyLong_FromLong(0), Py_EQ);
+    int is_zero = PyObject_RichCompareBool(yv, cached_zero, Py_EQ);
     if (is_zero < 0) return NULL;
     if (is_zero) Py_RETURN_NONE;
 
@@ -414,20 +405,20 @@ py_arith_lcm(PyObject *self, PyObject *args)
     PyObject *xv = VarAPI->deref(x);
     PyObject *yv = VarAPI->deref(y);
     if (VarAPI->is_var(xv) || VarAPI->is_var(yv)) Py_RETURN_NONE;
-    if (is_quantity(xv) == 1 || is_quantity(yv) == 1) Py_RETURN_FALSE;
+    CHECK_QUANTITY(xv);
+    CHECK_QUANTITY(yv);
     if (!is_plain_int(xv) || !is_plain_int(yv)) Py_RETURN_NONE;
 
-    PyObject *zero = PyLong_FromLong(0);
-    if (!zero) return NULL;
-    int xz = PyObject_RichCompareBool(xv, zero, Py_EQ);
-    int yz = PyObject_RichCompareBool(yv, zero, Py_EQ);
-    if (xz < 0 || yz < 0) { Py_DECREF(zero); return NULL; }
+    int xz = PyObject_RichCompareBool(xv, cached_zero, Py_EQ);
+    if (xz < 0) return NULL;
+    int yz = PyObject_RichCompareBool(yv, cached_zero, Py_EQ);
+    if (yz < 0) return NULL;
 
     PyObject *result;
     if (xz || yz) {
-        result = zero;  /* lcm(0, y) = lcm(x, 0) = 0 */
+        Py_INCREF(cached_zero);
+        result = cached_zero;  /* lcm(0, y) = lcm(x, 0) = 0 */
     } else {
-        Py_DECREF(zero);
         /* lcm = abs(x*y) // gcd(x,y) */
         PyObject *prod = PyNumber_Multiply(xv, yv);
         if (!prod) return NULL;
@@ -435,10 +426,7 @@ py_arith_lcm(PyObject *self, PyObject *args)
         Py_DECREF(prod);
         if (!abs_prod) return NULL;
 
-        PyObject *math_mod = PyImport_ImportModule("math");
-        if (!math_mod) { Py_DECREF(abs_prod); return NULL; }
-        PyObject *gcd_val = PyObject_CallMethod(math_mod, "gcd", "OO", xv, yv);
-        Py_DECREF(math_mod);
+        PyObject *gcd_val = PyObject_CallFunctionObjArgs(math_gcd_func, xv, yv, NULL);
         if (!gcd_val) { Py_DECREF(abs_prod); return NULL; }
 
         result = PyNumber_FloorDivide(abs_prod, gcd_val);
@@ -472,7 +460,7 @@ py_arith_exp_mod(PyObject *self, PyObject *args)
         Py_RETURN_NONE;
 
     /* mod == 0 → no solution */
-    int mz = PyObject_RichCompareBool(mv, PyLong_FromLong(0), Py_EQ);
+    int mz = PyObject_RichCompareBool(mv, cached_zero, Py_EQ);
     if (mz < 0) return NULL;
     if (mz) Py_RETURN_NONE;
 
@@ -499,7 +487,7 @@ py_arith_popcount(PyObject *self, PyObject *args)
     if (!is_plain_int(xv)) Py_RETURN_NONE;
 
     /* x >= 0 */
-    int ge = PyObject_RichCompareBool(xv, PyLong_FromLong(0), Py_GE);
+    int ge = PyObject_RichCompareBool(xv, cached_zero, Py_GE);
     if (ge < 0) return NULL;
     if (!ge) Py_RETURN_NONE;
 
@@ -526,17 +514,15 @@ py_arith_msb(PyObject *self, PyObject *args)
     if (!is_plain_int(xv)) Py_RETURN_NONE;
 
     /* x > 0 */
-    int gt = PyObject_RichCompareBool(xv, PyLong_FromLong(0), Py_GT);
+    int gt = PyObject_RichCompareBool(xv, cached_zero, Py_GT);
     if (gt < 0) return NULL;
     if (!gt) Py_RETURN_NONE;
 
     /* bit_length() - 1 */
     PyObject *bl = PyObject_CallMethod(xv, "bit_length", NULL);
     if (!bl) return NULL;
-    PyObject *one = PyLong_FromLong(1);
-    PyObject *result = PyNumber_Subtract(bl, one);
+    PyObject *result = PyNumber_Subtract(bl, cached_one);
     Py_DECREF(bl);
-    Py_DECREF(one);
     if (!result) return NULL;
     PyObject *ret = mark_unify(bit, result, trail);
     Py_DECREF(result);
@@ -558,7 +544,7 @@ py_arith_lsb(PyObject *self, PyObject *args)
     if (!is_plain_int(xv)) Py_RETURN_NONE;
 
     /* x > 0 */
-    int gt = PyObject_RichCompareBool(xv, PyLong_FromLong(0), Py_GT);
+    int gt = PyObject_RichCompareBool(xv, cached_zero, Py_GT);
     if (gt < 0) return NULL;
     if (!gt) Py_RETURN_NONE;
 
@@ -571,10 +557,8 @@ py_arith_lsb(PyObject *self, PyObject *args)
     PyObject *bl = PyObject_CallMethod(and_val, "bit_length", NULL);
     Py_DECREF(and_val);
     if (!bl) return NULL;
-    PyObject *one = PyLong_FromLong(1);
-    PyObject *result = PyNumber_Subtract(bl, one);
+    PyObject *result = PyNumber_Subtract(bl, cached_one);
     Py_DECREF(bl);
-    Py_DECREF(one);
     if (!result) return NULL;
     PyObject *ret = mark_unify(bit, result, trail);
     Py_DECREF(result);
@@ -629,12 +613,25 @@ PyInit__arithmetic_core(void)
     /* Import the _variables C API capsule */
     if (import_variables_capi() < 0) return NULL;
 
-    /* Cache the Quantity type */
+    /* Cache frequently-used constants */
+    cached_zero = PyLong_FromLong(0);
+    if (!cached_zero) return NULL;
+    cached_one = PyLong_FromLong(1);
+    if (!cached_one) return NULL;
+
+    /* Cache math.gcd */
+    PyObject *math_mod = PyImport_ImportModule("math");
+    if (!math_mod) return NULL;
+    math_gcd_func = PyObject_GetAttrString(math_mod, "gcd");
+    Py_DECREF(math_mod);
+    if (!math_gcd_func) return NULL;
+
+    /* Cache the Quantity type (optional — may not exist) */
     PyObject *terms_mod = PyImport_ImportModule("clausal.terms");
     if (terms_mod) {
         Quantity_type = PyObject_GetAttrString(terms_mod, "Quantity");
         Py_DECREF(terms_mod);
-        if (!Quantity_type) PyErr_Clear();  /* optional — Quantity may not exist */
+        if (!Quantity_type) PyErr_Clear();
     } else {
         PyErr_Clear();
     }
