@@ -72,8 +72,13 @@ X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
 |---|---|---|
 | `in_q` | 1 | `in_q(Var_or_list)` — declare rational variable(s) with unbounded domain |
 | `in_q` | 3 | `in_q(Var_or_list, Lo, Hi)` — declare rational variable(s) with domain `[Lo, Hi]` |
-| `maximize` | 2 | `maximize(Expr, Result)` — find maximum of linear expression subject to current constraints |
-| `minimize` | 2 | `minimize(Expr, Result)` — find minimum of linear expression subject to current constraints |
+| `maximize` | 2 | `maximize(Expr, Result)` — find maximum; binds all variables to optimal point |
+| `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
+| `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
+| `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
+| `entailed` | 3 | `entailed(Op, L, R)` — test if `L Op R` is implied by current constraints |
+| `bb_inf` | 3 | `bb_inf(IntVars, Expr, Inf)` — mixed-integer optimization via branch-and-bound |
+| `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
 ### in_q/1 and in_q/3
 
@@ -90,7 +95,7 @@ When the bounds collapse to a point (`lo == hi`), the variable is automatically 
 
 ### maximize/2 and minimize/2
 
-Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value. Fails if the problem is unbounded.
+Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value **and binds all constrained variables to their optimal assignments**. Fails if the problem is unbounded.
 
 ```clausal
 # skip
@@ -108,8 +113,82 @@ lp(X, Y, OBJ) <- (
     X + 3*Y <= 15,
     maximize(30*X + 50*Y, OBJ)
 )
-% -> X = 7, Y = 2, OBJ = 310  (all exact rationals)
+% -> X = 7, Y = 2, OBJ = 310  (all exact rationals, all bound)
 ```
+
+### sup/2 and inf/2
+
+Compute the upper or lower bound of a linear expression **without binding variables**. Useful for inspecting the feasible range or for implementing `entailed`.
+
+```clausal
+# skip
+bounds(X, Lo, Hi) <- (
+    in_q(X, 0, 100),
+    X <= 10,
+    X >= 3,
+    inf(X, Lo),           % Lo = 3
+    sup(X, Hi)            % Hi = 10
+)
+% X remains unbound — only Lo and Hi are set
+```
+
+### entailed/3
+
+Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
+
+The first argument is the operator as a string: `"=<"`, `">="`, `"<"`, `">"`, `"="`, `"\\="`.
+
+```clausal
+# skip
+test_entailed(X) <- (
+    in_q(X, 0, 100),
+    X <= 4,
+    entailed("=<", X, 5),     % true: X <= 4 implies X <= 5
+    \+ entailed("=<", X, 3)   % false: X could be 4, which is > 3
+)
+```
+
+### bb_inf/3
+
+Mixed-integer optimization: finds the minimum of a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound. Binds all constrained variables to their optimal integer assignments.
+
+```clausal
+# skip
+% Minimum integer X such that X >= 3/2
+int_min(X, Cost) <- (
+    in_q(X, 0, 10),
+    X >= 3/2,
+    bb_inf([X], X, Cost)
+)
+% -> X = 2, Cost = 2
+
+% SICStus example: min(X) with X >= Y + Z, Y > 1, Z > 1, all integer
+sicstus_bb(X, Y, Z, Cost) <- (
+    in_q([X, Y, Z], 0, 100),
+    X >= Y + Z,
+    Y >= 2,
+    Z >= 2,
+    bb_inf([X, Y, Z], X, Cost)
+)
+% -> X = 4, Y = 2, Z = 2, Cost = 4
+```
+
+### dump_q/2
+
+Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraint strings.
+
+```clausal
+# skip
+show_constraints(X, Y, CS) <- (
+    in_q([X, Y], 0, 100),
+    2*X + Y <= 16,
+    X + 2*Y <= 11,
+    dump_q([X, Y], CS)
+)
+% CS = ["{2*X + Y =< 16}", "{X + 2*Y =< 11}", ...]
+```
+
+This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal eliminates them correctly via Fourier-Motzkin.
 
 ---
 
@@ -538,7 +617,10 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Algorithm | Holzbaur Gaussian+simplex | Port of SICStus | — | **Holzbaur Gaussian+simplex** |
 | Arithmetic | GMP rationals | SWI rationals | — | **Python `Fraction`** |
 | Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`** |
-| Projection | Fourier-Motzkin | Broken | — | Not yet implemented |
+| Bounds query | `sup/1`, `inf/1` | Same | — | **`sup/2`, `inf/2`** |
+| Entailment | `entailed/1` | Same | — | **`entailed/3`** |
+| MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`bb_inf/3`** |
+| Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
 | Non-linear | Deferred | Deferred | — | **Rejected (TypeError)** |
 | Syntax | `{X + Y =< 8}` | Same | — | **`X + Y <= 8`** (unified) |
 | int/int | Stays integer | Stays integer | — | **Produces Fraction** |
@@ -679,7 +761,7 @@ A variable should belong to at most one numeric domain. The dispatch order preve
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpq.py` (47 tests).
+    Tests are in `tests/test_clpq.py` (105 tests).
 
     - **Dispatch**: Fraction triggers CLP(Q), int stays CLP(Z), float stays CLP(R)
     - **Domain declaration**: `in_q` basic, narrowing, infeasible, point binding, list form, unbounded, ground check
@@ -687,10 +769,19 @@ A variable should belong to at most one numeric domain. The dispatch order preve
     - **Variable binding**: `q_eq(X, Fraction)` binds X
     - **Linear equalities**: two-var, three-var (exact fractions), contradictory, redundant, rational coefficients, scaled (`2*X = 1 -> X = 1/2`), large coefficients (`999999*X = 1`)
     - **Linear inequalities**: simple le, infeasible system, two-var feasibility, redundant, zero coefficients
-    - **Backtracking**: undo restores unbound, undo restores bounds, undo restores full tableau state
-    - **Optimization**: maximize simple, minimize simple, classic LP (30X + 50Y, answer 310)
+    - **Backtracking**: undo restores unbound, undo restores bounds, undo restores full tableau state; maximize/minimize backtrack correctly
+    - **Optimization**: maximize simple, minimize simple, classic LP (30X + 50Y, answer 310), variables bound to optimal point
+    - **sup/inf**: simple bounds, LP bounds, does not bind variables
+    - **entailed**: `=<`, `>=`, `=`, `\=` entailment; does not modify store; does not add Q attributes to bare variables
+    - **Disequality**: `q_ne` prevents binding to excluded value, allows other values; strict `q_lt` rejects equal; two-var disequality; backtrack restores
+    - **Pivot/simplex**: upper-bound inequality feasibility, infeasible upper-bound detection, degenerate vertex, contradictory multi-var inequalities
+    - **Projection**: `dump_q` simple bounds, inequality projection (no internal var leakage), equality projection, empty store
+    - **Branch-and-bound**: `bb_inf` simple integer, LP integer, no integer constraint, infeasible, already integer, mixed integer, multi-level branching, variable binding
     - **Linearization**: constants, ints, vars, add, scalar mult, non-linear rejection, negate
     - **Coefficient growth**: Newton sqrt(2) to 12-digit fractions, large coefficient constraints
+    - **Float type safety**: `TypeError` raised when Q-variable unified with float
+    - **Snapshot dedup**: multi-step operation undoable as single unit
+    - **End-to-end Clausal**: all doc examples compiled and run through full pipeline (7 integration tests)
 
 ---
 

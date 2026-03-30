@@ -1075,3 +1075,26 @@ class TestClausalIntegration:
         assert result is not None
         x, y, cost = result
         assert cost == F(30)
+
+    def test_sup_inf(self):
+        result = self._run("SupInf", 3)
+        assert result is not None
+        x, lo, hi = result
+        assert lo == F(3)
+        assert hi == F(10)
+
+    def test_bb_simple(self):
+        result = self._run("BBSimple", 2)
+        assert result is not None
+        x, cost = result
+        assert cost == F(2)
+        assert x == F(2)  # variable bound to optimal integer
+
+    def test_bb_sicstus(self):
+        result = self._run("BBSicstus", 4)
+        assert result is not None
+        x, y, z, cost = result
+        assert cost == F(4)
+        assert x == F(4)
+        assert y == F(2)
+        assert z == F(2)

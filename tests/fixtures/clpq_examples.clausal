@@ -54,3 +54,28 @@ Scheduling(X, Y, COST) <- (
     X + 3*Y <= 40,
     minimize(5*X + 3*Y, COST)
 )
+
+# --- sup/inf without binding ---
+SupInf(X, LO, HI) <- (
+    in_q(X, 0, 100),
+    X <= 10,
+    X >= 3,
+    inf(X, LO),
+    sup(X, HI)
+)
+
+# --- bb_inf integer optimization ---
+BBSimple(X, COST) <- (
+    in_q(X, 0, 10),
+    X >= 3/2,
+    bb_inf([X], X, COST)
+)
+
+# --- bb_inf SICStus example ---
+BBSicstus(X, Y, Z, COST) <- (
+    in_q([X, Y, Z], 0, 100),
+    X >= Y + Z,
+    Y >= 2,
+    Z >= 2,
+    bb_inf([X, Y, Z], X, COST)
+)
