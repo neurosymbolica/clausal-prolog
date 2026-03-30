@@ -272,6 +272,320 @@ attempting CLP(Z) linearization.  If not, reorder the C dispatch.
 
 ---
 
+---
+
+# Phased remediation plan
+
+## Effort estimates
+
+| # | Issue | Effort | Risk if deferred |
+|---|---|---|---|
+| 10 | `maximize`/`minimize` missing snapshot | 5 min | High — silent corruption on backtrack |
+| 8 | `Fraction` import in hot path | 5 min | None — pure cleanup |
+| 13 | Pivot always targets lower bound | 15 min | High — wrong answers on upper-bound dual pivots |
+| 3 | Dual simplex entering-variable rule | 1-2 hr | High — wrong answers on complex inequality systems |
+| 1 | `q_ne` stub | 30 min | Medium — strict inequalities silently unsound |
+| 9 | `float` in Q hook rejected silently | 10 min | Medium — confusing silent failure |
+| 5 | `optimize` doesn't bind variables | 30 min | Medium — user surprise, differs from SICStus |
+| 4 | Redundant tableau snapshots | 30 min | None — performance only |
+| 2 | `_tableaux` memory leak | 20 min | Low — only matters for long-running processes |
+| 7 | `_is_rational_arg` tree walk overhead | 20 min | Low — only matters for large CLP(Z) expression trees |
+| 14 | C extension dispatch ordering | 30 min | Low — Python fallback covers it |
+| 11 | No `entailed`/`sup`/`inf` | 2-3 hr | None — missing feature, not broken |
+| 6 | No projection (Fourier-Motzkin) | 4-6 hr | None — missing feature, not broken |
+| 12 | No `bb_inf` | 3-4 hr | None — missing feature, not broken |
+
+---
+
+## Phase A: correctness fixes (must-do before any production use)
+
+**Estimated total: 2-3 hours**
+
+These issues can produce wrong answers or corrupt state. Fix all of them before
+advertising CLP(Q) as usable.
+
+### A1. Snapshot `maximize`/`minimize` (#10) — 5 min
+
+Add `_snapshot_tableau(trail)` as the first line of both `maximize` and
+`minimize`.  Trivial, zero risk.
+
+```python
+def maximize(expr, result_var, trail):
+    ...
+    tableau = _get_tableau(trail)
+    _snapshot_tableau(trail)          # ADD THIS
+    opt = tableau.optimize(coeffs, 'max')
+```
+
+Test: call `maximize` inside a branch, backtrack, verify tableau is restored.
+
+### A2. Fix pivot bound direction (#13) — 15 min
+
+Add a `leaving_bound` parameter to `_pivot`:
+
+```python
+def _pivot(self, leaving, entering, leaving_bound=None):
+    ...
+    # At end:
+    if leaving_bound is not None:
+        self.assign[leaving] = leaving_bound
+    elif lo is not None:
+        self.assign[leaving] = lo
+    else:
+        self.assign[leaving] = ZERO
+```
+
+Update `_restore_feasibility` to pass the correct bound:
+- Below lower → `leaving_bound = lo`
+- Above upper → `leaving_bound = hi`
+
+Update `optimize` to always pass `leaving_bound = lo` (primal simplex).
+
+Test: construct a system where a non-basic variable is at its upper bound and
+a dual pivot must set the leaving var to its upper bound.
+
+### A3. Rewrite dual simplex (#3) — 1-2 hr
+
+Replace the current `_restore_feasibility` with the textbook dual simplex:
+
+```
+while any basic variable violates its bounds:
+    leaving = most infeasible basic variable
+    if leaving < lo:  direction = +1 (need to increase)
+    else:             direction = -1 (need to decrease)
+
+    # Dual ratio test: for each non-basic var j in the leaving row
+    #   if direction * row[leaving][j] < 0:
+    #     ratio_j = obj_reduced_cost[j] / row[leaving][j]
+    #   pick j with largest (least negative) ratio (Bland's for ties)
+
+    if no eligible j: return False  # infeasible
+
+    pivot(leaving, j, leaving_bound)
+```
+
+Since we don't track reduced costs during feasibility restoration (no
+objective), use a simpler variant: pick the first eligible non-basic variable
+(by Bland's index ordering) whose pivot would move the leaving variable toward
+feasibility.  The key fix over the current code: correctly handle non-basic
+variables at upper bounds (they can *decrease* to help).
+
+Tests: add cases where non-basic vars are at upper bounds. Construct a system
+that requires an upper-bound departure during dual simplex.
+
+### A4. Implement `q_ne` properly (#1) — 30 min
+
+Replace the stub with working disequality storage.  Two cases:
+
+**Var != ground value:**
+```python
+tableau.diseqs.append(('val', var_id, Fraction(value)))
+```
+
+**Var != Var:**
+```python
+tableau.diseqs.append(('var', var_id_l, var_id_r))
+```
+
+Update `_check_diseqs` to handle both forms.  Update `check_implied_bindings`
+to call `_check_diseqs` after each binding.
+
+Tests: `q_lt(X, 5)` where X is later fixed to 5 must fail.  `q_ne(X, Y)` where
+both later become equal must fail.
+
+### A5. Raise `TypeError` for float in Q hook (#9) — 10 min
+
+Add explicit branch in `_q_hook`:
+
+```python
+if isinstance(bound_to, float):
+    raise TypeError(
+        f"Cannot unify CLP(Q) variable with float {bound_to!r}. "
+        "Use Fraction or declare the variable with in_real instead."
+    )
+```
+
+Test: `in_q(X, 0, 10), X == 1.5` should raise `TypeError`, not silently fail.
+
+---
+
+## Phase B: functional completeness (needed for SICStus parity)
+
+**Estimated total: 3-4 hours**
+
+These issues don't produce wrong answers but cause user-facing behaviour to
+differ from expectations.
+
+### B1. `optimize` binds variables (#5) — 30 min
+
+After `tableau.optimize` returns a value, iterate `_var_map` and bind each
+variable to its optimal assignment:
+
+```python
+for vid, var in tableau._var_map.items():
+    var = deref(var)
+    if is_var(var):
+        val = tableau.assign.get(vid)
+        if val is not None:
+            unify(var, val, trail)
+```
+
+Care needed: `unify` triggers `_q_hook` which calls `fix_variable`.  Since
+the Tableau already holds the optimal solution, `fix_variable` should be a
+no-op (the value matches).  But verify there's no infinite recursion.
+
+Test: after `maximize(30*X + 50*Y, OBJ)`, verify `X == 7` and `Y == 2`.
+
+### B2. Implement `sup`/`inf` (#11, partial) — 1 hr
+
+```python
+def sup(expr, trail):
+    """Compute supremum (upper bound) of expr without committing."""
+    tableau = _get_tableau(trail)
+    tab_copy = tableau.copy()  # don't mutate working tableau
+    return tab_copy.optimize(coeffs, 'max')
+
+def inf(expr, trail):
+    """Compute infimum (lower bound) of expr without committing."""
+    tableau = _get_tableau(trail)
+    tab_copy = tableau.copy()
+    return tab_copy.optimize(coeffs, 'min')
+```
+
+Register as builtins `sup/2` and `inf/2`.
+
+Test: `sup(X + Y)` subject to `X <= 4, Y <= 6, X + Y <= 8` → 8.
+
+### B3. Implement `entailed` (#11, partial) — 1 hr
+
+`entailed(Constraint)` succeeds if the constraint is implied by the current
+store.  Implementation: check whether the negation is infeasible.
+
+For `entailed(X =< 5)`:
+- Negate: `X > 5`, i.e., `X >= 5 + epsilon`.  In rationals there's no
+  epsilon, so this is `NOT(X =< 5)` = `X > 5`.  Since we can't represent open
+  bounds, check `X >= 5` infeasibility after setting `X_lo = 5 + 1`... this
+  is tricky in exact arithmetic.
+
+Simpler approach for `entailed(X =< C)`: check if `sup(X) <= C`.  For
+`entailed(X =:= C)`: check if `inf(X) == sup(X) == C`.
+
+Test: `{X =< 4}, entailed(X =< 5)` → true.  `{X =< 4}, entailed(X =< 3)` → false.
+
+### B4. Reduce snapshot overhead (#4) — 30 min
+
+Add a `_last_snapshot_mark` field to the module-level state.  In
+`_snapshot_tableau`, check if we've already snapshotted at this trail length:
+
+```python
+_last_snapshot: dict[int, int] = {}  # trail_id → trail length at last snapshot
+
+def _snapshot_tableau(trail):
+    tid = id(trail)
+    current_len = len(trail)
+    if _last_snapshot.get(tid) == current_len:
+        return  # already snapshotted at this point
+    _last_snapshot[tid] = current_len
+    old = _tableaux[tid].copy()
+    trail.record(lambda: (_tableaux.__setitem__(tid, old),
+                          _last_snapshot.__setitem__(tid, 0)))
+```
+
+Test: verify a multi-constraint step (e.g., `q_eq` that triggers
+`check_implied_bindings` which triggers `_q_hook`) creates only one snapshot.
+
+---
+
+## Phase C: cleanup and hardening
+
+**Estimated total: 1-2 hours**
+
+Non-urgent improvements. Do these when convenient, not blocking anything.
+
+### C1. Fix `Fraction` import in `_eval_ground` (#8) — 5 min
+
+Move `from fractions import Fraction` to the top of `clpfd.py` (it's already
+imported in other functions via `_is_rational_arg`).  Remove the per-call
+import.
+
+### C2. Fix `_tableaux` memory leak (#2) — 20 min
+
+Check if `Trail` supports `weakref`.  If yes, use
+`weakref.finalize(trail, cleanup)`.  If not, add a `__del__` or explicit
+`close()` method.  Alternatively, use a `WeakValueDictionary` keyed by a
+weak-referenceable wrapper.
+
+### C3. Optimize `_is_rational_arg` tree walk (#7) — 20 min
+
+Instead of walking the tree in `_is_rational_arg`, walk it lazily: check
+top-level types first, then let the CLP(Z) linearization path detect Q-vars
+and re-dispatch.  This avoids the tree walk for pure CLP(Z) programs.
+
+Alternatively, cache the result on the expression node (if nodes are mutable)
+or use a small LRU cache keyed by `id(expr)`.
+
+### C4. Audit C extension dispatch ordering (#14) — 30 min
+
+Read through `_clpfd_propagate.c` and verify that `_any_rational` is called
+before the linearization fast path in every C `fd_*` function.  If not, move
+the `_any_rational` check earlier.
+
+Write a test that exercises the specific code path: an expression tree with
+Q-declared variables going through the C `fd_eq`.  The existing
+`TestClausalIntegration` tests already cover this, so this is mainly an audit.
+
+---
+
+## Phase D: feature parity with SICStus (longer-term)
+
+**Estimated total: 7-10 hours**
+
+These are substantial features that extend CLP(Q) beyond the current scope.
+Not blocking for initial release.
+
+### D1. Constraint projection via Fourier-Motzkin (#6) — 4-6 hr
+
+Implement `dump_q(Vars, NewVars, Constraints)` that projects the constraint
+store onto `Vars`, eliminating all internal/slack variables.
+
+Algorithm: for each variable to eliminate, replace it in all inequalities
+using Fourier-Motzkin elimination (combine each upper-bound inequality with
+each lower-bound inequality for that variable).  The result may have redundant
+constraints; remove them by LP feasibility checks.
+
+This is the feature that SWI-Prolog's CLP(Q) gets wrong (broken projection).
+Getting it right is important for answer presentation.
+
+### D2. Branch-and-bound mixed-integer optimization (#12) — 3-4 hr
+
+Implement `bb_inf(IntVars, Expr, Inf)`:
+
+```
+1. Solve LP relaxation: inf = optimize(Expr, 'min')
+2. If all IntVars are integer-valued: done
+3. Pick most fractional IntVar X (closest to 0.5)
+4. Branch:
+   a. Add X <= floor(X_val), recurse
+   b. Add X >= ceil(X_val), recurse
+5. Return best feasible integer solution
+```
+
+Uses Tableau.copy() for each branch node.  Needs careful trail integration
+(each branch is a choice point).
+
+---
+
+## Summary
+
+| Phase | Issues | Effort | When |
+|---|---|---|---|
+| **A** | #10, #13, #3, #1, #9 | 2-3 hr | Before any production use |
+| **B** | #5, #11, #4 | 3-4 hr | Before advertising SICStus parity |
+| **C** | #8, #2, #7, #14 | 1-2 hr | When convenient |
+| **D** | #6, #12 | 7-10 hr | Longer-term |
+
+---
+
 ## IMPORTANT: Python fallback requirement
 
 All C extensions MUST keep the Python reference implementation as a fallback.
