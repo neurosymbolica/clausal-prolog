@@ -83,11 +83,35 @@ def _wrap_quantity(value, dims):
     return value
 
 
-# ── Predicates ─────────────────────────────────────────────────────────────
+# ── C extension import ────────────────────────────────────────────────────
+
+_USE_C_ARITH = False
+try:
+    from clausal.logic._arithmetic_core import (
+        arith_between as _c_between,
+        arith_succ as _c_succ,
+        arith_plus as _c_plus,
+        arith_abs as _c_abs,
+        arith_max as _c_max,
+        arith_min as _c_min,
+        arith_sign as _c_sign,
+        arith_gcd as _c_gcd,
+        arith_divmod as _c_divmod,
+        arith_lcm as _c_lcm,
+        arith_exp_mod as _c_exp_mod,
+        arith_popcount as _c_popcount,
+        arith_msb as _c_msb,
+        arith_lsb as _c_lsb,
+    )
+    _USE_C_ARITH = True
+except ImportError:
+    pass
 
 
-@_builtin("between", 3)
-def _between__3(low, high, x, trail, k):
+# ── Python reference implementations ──────────────────────────────────────
+
+
+def _between__3_py(low, high, x, trail, k):
     """between(Low, High, X) — X ranges over integers from Low to High inclusive."""
     low_val = deref(low)
     high_val = deref(high)
@@ -109,8 +133,7 @@ def _between__3(low, high, x, trail, k):
             trail.undo(mark)
 
 
-@_builtin("succ", 2)
-def _succ__2(x, y, trail, k):
+def _succ__2_py(x, y, trail, k):
     """succ(X, Y) — Y = X + 1 (both non-negative integers)."""
     x_val = deref(x)
     y_val = deref(y)
@@ -130,8 +153,7 @@ def _succ__2(x, y, trail, k):
         trail.undo(mark)
 
 
-@_builtin("plus", 3)
-def _plus__3(x, y, z, trail, k):
+def _plus__3_py(x, y, z, trail, k):
     """plus(X, Y, Z) — Z = X + Y; any two determine the third.
 
     Supports Quantity values — dimension mismatches raise UnitsMismatch.
@@ -161,8 +183,7 @@ def _plus__3(x, y, z, trail, k):
         trail.undo(mark)
 
 
-@_builtin("abs_", 2)
-def _abs__2(x, y, trail, k):
+def _abs__2_py(x, y, trail, k):
     """abs_(X, Y) — Y = abs(X).  Supports Quantity (preserves dimensions)."""
     x_val = deref(x)
     if is_var(x_val):
@@ -175,8 +196,7 @@ def _abs__2(x, y, trail, k):
     trail.undo(mark)
 
 
-@_builtin("max_", 3)
-def _max__3(x, y, z, trail, k):
+def _max__3_py(x, y, z, trail, k):
     """max_(X, Y, Z) — Z = max(X, Y).
 
     Supports Quantity — dimensions must agree (UnitsMismatch propagates).
@@ -192,8 +212,7 @@ def _max__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
-@_builtin("min_", 3)
-def _min__3(x, y, z, trail, k):
+def _min__3_py(x, y, z, trail, k):
     """min_(X, Y, Z) — Z = min(X, Y).
 
     Supports Quantity — dimensions must agree (UnitsMismatch propagates).
@@ -208,8 +227,7 @@ def _min__3(x, y, z, trail, k):
     trail.undo(mark)
 
 
-@_builtin("sign", 2)
-def _sign__2(x, s, trail, k):
+def _sign__2_py(x, s, trail, k):
     """sign(X, S) — S is the sign of X: -1, 0, or 1 (always dimensionless).
 
     Supports Quantity — extracts the numeric value, returns plain int.
@@ -227,8 +245,7 @@ def _sign__2(x, s, trail, k):
     trail.undo(mark)
 
 
-@_builtin("gcd", 3)
-def _gcd__3(x, y, g, trail, k):
+def _gcd__3_py(x, y, g, trail, k):
     """gcd(X, Y, G) — G is the greatest common divisor of X and Y.
 
     Supports Quantity — dimensions must agree; result has the same dimensions.
@@ -249,8 +266,7 @@ def _gcd__3(x, y, g, trail, k):
     trail.undo(mark)
 
 
-@_builtin("divmod_", 4)
-def _divmod__4(x, y, q, r, trail, k):
+def _divmod__4_py(x, y, q, r, trail, k):
     """divmod_(X, Y, Q, R) — Q is X // Y, R is X mod Y.
 
     Supports Quantity — dimensions must agree; Q is dimensionless, R keeps dimensions.
@@ -278,8 +294,7 @@ def _divmod__4(x, y, q, r, trail, k):
     trail.undo(mark)
 
 
-@_builtin("lcm", 3)
-def _lcm__3(x, y, l, trail, k):
+def _lcm__3_py(x, y, l, trail, k):
     """lcm(X, Y, L) — L is the least common multiple of X and Y.
 
     Supports Quantity — dimensions must agree; result has the same dimensions.
@@ -304,8 +319,7 @@ def _lcm__3(x, y, l, trail, k):
     trail.undo(mark)
 
 
-@_builtin("exp_mod", 4)
-def _expmod__4(base, exp, mod, result, trail, k):
+def _expmod__4_py(base, exp, mod, result, trail, k):
     """exp_mod(Base, Exp, Mod, Result) — Result is Base^Exp mod Mod.
 
     Integer-only (no Quantity support — modular exponentiation has no
@@ -327,8 +341,7 @@ def _expmod__4(base, exp, mod, result, trail, k):
     trail.undo(mark)
 
 
-@_builtin("popcount", 2)
-def _popcount__2(x, count, trail, k):
+def _popcount__2_py(x, count, trail, k):
     """popcount(X, Count) — Count is the number of set bits in X.
 
     Integer-only (bitwise operation, no Quantity support).
@@ -345,8 +358,7 @@ def _popcount__2(x, count, trail, k):
     trail.undo(mark)
 
 
-@_builtin("msb", 2)
-def _msb__2(x, bit, trail, k):
+def _msb__2_py(x, bit, trail, k):
     """msb(X, Bit) — Bit is the position of the most significant set bit (0-indexed).
 
     Integer-only (bitwise operation, no Quantity support).
@@ -363,8 +375,7 @@ def _msb__2(x, bit, trail, k):
     trail.undo(mark)
 
 
-@_builtin("lsb", 2)
-def _lsb__2(x, bit, trail, k):
+def _lsb__2_py(x, bit, trail, k):
     """lsb(X, Bit) — Bit is the position of the least significant set bit (0-indexed).
 
     Integer-only (bitwise operation, no Quantity support).
@@ -379,3 +390,207 @@ def _lsb__2(x, bit, trail, k):
     if unify(bit, result, trail):
         yield None
     trail.undo(mark)
+
+
+# ── C-accelerated wrappers ────────────────────────────────────────────────
+#
+# Return protocol from C functions:
+#   PyLong (mark)  → unify succeeded; yield then trail.undo(mark)
+#   None           → no solution
+#   False          → Quantity detected; fall back to Python
+#   tuple          → between/3 generate mode: (lo, hi)
+
+if _USE_C_ARITH:
+    def _between__3_c(low, high, x, trail, k):
+        ret = _c_between(low, high, x, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _between__3_py(low, high, x, trail, k)
+            return
+        if isinstance(ret, tuple):
+            # Generate mode — C returned (lo, hi)
+            lo, hi = ret
+            for i in range(lo, hi + 1):
+                mark = trail.mark()
+                if unify(x, i, trail):
+                    yield None
+                trail.undo(mark)
+            return
+        # Check mode — ret is the mark
+        yield None
+        trail.undo(ret)
+
+    def _succ__2_c(x, y, trail, k):
+        ret = _c_succ(x, y, trail)
+        if ret is None:
+            return
+        yield None
+        trail.undo(ret)
+
+    def _plus__3_c(x, y, z, trail, k):
+        ret = _c_plus(x, y, z, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _plus__3_py(x, y, z, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _abs__2_c(x, y, trail, k):
+        ret = _c_abs(x, y, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _abs__2_py(x, y, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _max__3_c(x, y, z, trail, k):
+        ret = _c_max(x, y, z, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _max__3_py(x, y, z, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _min__3_c(x, y, z, trail, k):
+        ret = _c_min(x, y, z, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _min__3_py(x, y, z, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _sign__2_c(x, s, trail, k):
+        ret = _c_sign(x, s, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _sign__2_py(x, s, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _gcd__3_c(x, y, g, trail, k):
+        ret = _c_gcd(x, y, g, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _gcd__3_py(x, y, g, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _divmod__4_c(x, y, q, r, trail, k):
+        ret = _c_divmod(x, y, q, r, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _divmod__4_py(x, y, q, r, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _lcm__3_c(x, y, l, trail, k):
+        ret = _c_lcm(x, y, l, trail)
+        if ret is None:
+            return
+        if ret is False:
+            yield from _lcm__3_py(x, y, l, trail, k)
+            return
+        yield None
+        trail.undo(ret)
+
+    def _expmod__4_c(base, exp, mod, result, trail, k):
+        ret = _c_exp_mod(base, exp, mod, result, trail)
+        if ret is None:
+            return
+        yield None
+        trail.undo(ret)
+
+    def _popcount__2_c(x, count, trail, k):
+        ret = _c_popcount(x, count, trail)
+        if ret is None:
+            return
+        yield None
+        trail.undo(ret)
+
+    def _msb__2_c(x, bit, trail, k):
+        ret = _c_msb(x, bit, trail)
+        if ret is None:
+            return
+        yield None
+        trail.undo(ret)
+
+    def _lsb__2_c(x, bit, trail, k):
+        ret = _c_lsb(x, bit, trail)
+        if ret is None:
+            return
+        yield None
+        trail.undo(ret)
+
+
+# ── Register builtins (C-accelerated if available, else Python) ───────────
+
+@_builtin("between", 3)
+def _between__3(low, high, x, trail, k):
+    yield from (_between__3_c if _USE_C_ARITH else _between__3_py)(low, high, x, trail, k)
+
+@_builtin("succ", 2)
+def _succ__2(x, y, trail, k):
+    yield from (_succ__2_c if _USE_C_ARITH else _succ__2_py)(x, y, trail, k)
+
+@_builtin("plus", 3)
+def _plus__3(x, y, z, trail, k):
+    yield from (_plus__3_c if _USE_C_ARITH else _plus__3_py)(x, y, z, trail, k)
+
+@_builtin("abs_", 2)
+def _abs__2(x, y, trail, k):
+    yield from (_abs__2_c if _USE_C_ARITH else _abs__2_py)(x, y, trail, k)
+
+@_builtin("max_", 3)
+def _max__3(x, y, z, trail, k):
+    yield from (_max__3_c if _USE_C_ARITH else _max__3_py)(x, y, z, trail, k)
+
+@_builtin("min_", 3)
+def _min__3(x, y, z, trail, k):
+    yield from (_min__3_c if _USE_C_ARITH else _min__3_py)(x, y, z, trail, k)
+
+@_builtin("sign", 2)
+def _sign__2(x, s, trail, k):
+    yield from (_sign__2_c if _USE_C_ARITH else _sign__2_py)(x, s, trail, k)
+
+@_builtin("gcd", 3)
+def _gcd__3(x, y, g, trail, k):
+    yield from (_gcd__3_c if _USE_C_ARITH else _gcd__3_py)(x, y, g, trail, k)
+
+@_builtin("divmod_", 4)
+def _divmod__4(x, y, q, r, trail, k):
+    yield from (_divmod__4_c if _USE_C_ARITH else _divmod__4_py)(x, y, q, r, trail, k)
+
+@_builtin("lcm", 3)
+def _lcm__3(x, y, l, trail, k):
+    yield from (_lcm__3_c if _USE_C_ARITH else _lcm__3_py)(x, y, l, trail, k)
+
+@_builtin("exp_mod", 4)
+def _expmod__4(base, exp, mod, result, trail, k):
+    yield from (_expmod__4_c if _USE_C_ARITH else _expmod__4_py)(base, exp, mod, result, trail, k)
+
+@_builtin("popcount", 2)
+def _popcount__2(x, count, trail, k):
+    yield from (_popcount__2_c if _USE_C_ARITH else _popcount__2_py)(x, count, trail, k)
+
+@_builtin("msb", 2)
+def _msb__2(x, bit, trail, k):
+    yield from (_msb__2_c if _USE_C_ARITH else _msb__2_py)(x, bit, trail, k)
+
+@_builtin("lsb", 2)
+def _lsb__2(x, bit, trail, k):
+    yield from (_lsb__2_c if _USE_C_ARITH else _lsb__2_py)(x, bit, trail, k)

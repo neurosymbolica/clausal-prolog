@@ -61,6 +61,13 @@ ext_constraints_dif = Extension(
     extra_compile_args=extra_compile_args,
 )
 
+ext_arithmetic_core = Extension(
+    "clausal.logic._arithmetic_core",
+    sources=["clausal/logic/_arithmetic_core.c"],
+    include_dirs=["clausal/logic/variables"],
+    extra_compile_args=extra_compile_args,
+)
+
 setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
                    ext_tabling_core, ext_clpfd_propagate, ext_lists_core,
-                   ext_constraints_dif])
+                   ext_constraints_dif, ext_arithmetic_core])
