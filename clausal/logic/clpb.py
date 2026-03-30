@@ -758,6 +758,47 @@ def _bool_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
 register_attr_hook(B_KEY, _bool_hook)
 
 
+# ── C acceleration with Python fallback ─────────────────────────────────────
+# Keep Python reference implementations so the module works without C.
+
+_BDDNodePy = BDDNode
+_apply_py = apply
+_negate_py = negate
+_restrict_py = restrict
+_count_paths_py = _count_paths
+_collect_bdd_var_ids_py = _collect_bdd_var_ids
+
+try:
+    from clausal.logic._clpb_core import (
+        BDDNode as _CBDDNode,
+        c_apply as _c_apply,
+        c_restrict as _c_restrict,
+        c_count_paths as _c_count_paths,
+        c_collect_bdd_var_ids as _c_collect_bdd_var_ids,
+    )
+
+    BDDNode = _CBDDNode
+
+    def apply(op: str, f, g, memo: dict | None = None):  # noqa: F811
+        return _c_apply(op, f, g, _unique_tables, _id_to_var)
+
+    def negate(bdd):  # noqa: F811
+        return _c_apply('xor', bdd, BDD_TRUE, _unique_tables, _id_to_var)
+
+    def restrict(bdd, var_id: int, value: int):  # noqa: F811
+        return _c_restrict(bdd, var_id, value, _unique_tables, _id_to_var)
+
+    def _count_paths(bdd, level_map: dict, n_vars: int, memo: dict,  # noqa: F811
+                     current_level: int = 0) -> int:
+        return _c_count_paths(bdd, level_map, n_vars)
+
+    def _collect_bdd_var_ids(bdd, result: set):  # noqa: F811
+        _c_collect_bdd_var_ids(bdd, result)
+
+except ImportError:
+    pass
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 __all__ = [

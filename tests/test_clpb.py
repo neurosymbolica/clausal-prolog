@@ -881,3 +881,293 @@ class TestClpbFixture:
         from clausal.logic.solve import call
         results = list(call("PigeonHole", module=self.logic_mod))
         assert len(results) == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NAND operation
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestNand:
+    def test_nand_true_true(self):
+        """NAND(1, 1) = 0."""
+        result = apply('nand', BDD_TRUE, BDD_TRUE)
+        assert result is BDD_FALSE
+
+    def test_nand_true_false(self):
+        """NAND(1, 0) = 1."""
+        result = apply('nand', BDD_TRUE, BDD_FALSE)
+        assert result is BDD_TRUE
+
+    def test_nand_false_true(self):
+        """NAND(0, 1) = 1."""
+        result = apply('nand', BDD_FALSE, BDD_TRUE)
+        assert result is BDD_TRUE
+
+    def test_nand_false_false(self):
+        """NAND(0, 0) = 1."""
+        result = apply('nand', BDD_FALSE, BDD_FALSE)
+        assert result is BDD_TRUE
+
+    def test_nand_with_variables(self):
+        """NAND(X, Y) is equivalent to ~(X & Y)."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        xid, yid = enumerate_var(x), enumerate_var(y)
+        x_bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        y_bdd = make_node(yid, BDD_TRUE, BDD_FALSE, y)
+
+        nand_bdd = apply('nand', x_bdd, y_bdd)
+        and_neg_bdd = negate(apply('and', x_bdd, y_bdd))
+
+        # Equivalence: nand ↔ ~and should be tautology
+        equiv = apply('equiv', nand_bdd, and_neg_bdd)
+        assert equiv is BDD_TRUE
+
+    def test_nand_self(self):
+        """NAND(X, X) = ~X."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        x_bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+
+        nand_self = apply('nand', x_bdd, x_bdd)
+        not_x = negate(x_bdd)
+
+        equiv = apply('equiv', nand_self, not_x)
+        assert equiv is BDD_TRUE
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Direct _collect_bdd_var_ids tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCollectBddVarIds:
+    def test_terminal_true(self):
+        """No var IDs in a terminal node."""
+        result = set()
+        _collect_bdd_var_ids(BDD_TRUE, result)
+        assert result == set()
+
+    def test_terminal_false(self):
+        result = set()
+        _collect_bdd_var_ids(BDD_FALSE, result)
+        assert result == set()
+
+    def test_single_variable(self):
+        """Identity BDD for one variable has one var_id."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        result = set()
+        _collect_bdd_var_ids(bdd, result)
+        assert result == {xid}
+
+    def test_two_variables(self):
+        """apply('and', X, Y) contains both var_ids."""
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        xid, yid = enumerate_var(x), enumerate_var(y)
+        x_bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        y_bdd = make_node(yid, BDD_TRUE, BDD_FALSE, y)
+        and_bdd = apply('and', x_bdd, y_bdd)
+        result = set()
+        _collect_bdd_var_ids(and_bdd, result)
+        assert xid in result
+        assert yid in result
+
+    def test_complex_bdd(self):
+        """(X & Y) | (Z ^ W) has four var_ids."""
+        trail = fresh_trail()
+        vs = [Var() for _ in range(4)]
+        ids = [enumerate_var(v) for v in vs]
+        bdds = [make_node(vid, BDD_TRUE, BDD_FALSE, v) for vid, v in zip(ids, vs)]
+        and_bdd = apply('and', bdds[0], bdds[1])
+        xor_bdd = apply('xor', bdds[2], bdds[3])
+        or_bdd = apply('or', and_bdd, xor_bdd)
+        result = set()
+        _collect_bdd_var_ids(or_bdd, result)
+        assert result == set(ids)
+
+    def test_adds_to_existing_set(self):
+        """_collect_bdd_var_ids adds to (not replaces) the result set."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        result = {999}
+        _collect_bdd_var_ids(bdd, result)
+        assert 999 in result
+        assert xid in result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Direct _propagate_forced tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPropagateForced:
+    def test_terminal_true(self):
+        """Terminal BDD_TRUE — nothing to propagate."""
+        trail = fresh_trail()
+        assert _propagate_forced(BDD_TRUE, trail) is True
+
+    def test_terminal_false(self):
+        """Terminal BDD_FALSE — nothing to propagate (returns True, it's not
+        _propagate_forced's job to detect BDD_FALSE, only forced vars)."""
+        trail = fresh_trail()
+        assert _propagate_forced(BDD_FALSE, trail) is True
+
+    def test_single_var_forced_high(self):
+        """Identity BDD (if X then 1 else 0): restrict X=0 gives FALSE → X must be 1."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        assert _propagate_forced(bdd, trail) is True
+        assert deref(x) == 1
+
+    def test_single_var_forced_low(self):
+        """Negated BDD (if X then 0 else 1): restrict X=1 gives FALSE → X must be 0."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        bdd = make_node(xid, BDD_FALSE, BDD_TRUE, x)
+        assert _propagate_forced(bdd, trail) is True
+        assert deref(x) == 0
+
+    def test_contradiction_detected(self):
+        """BDD where both cofactors are FALSE → contradiction."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        # Manually construct: if X then FALSE else FALSE
+        # This shouldn't normally be created (reduction rule), but test the check
+        bdd = BDDNode(xid, BDD_FALSE, BDD_FALSE)
+        assert _propagate_forced(bdd, trail) is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Large variable count and sat_count edge cases
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestLargeVarCount:
+    def test_20_variable_or_chain(self):
+        """OR of 20 variables: 2^20 - 1 satisfying assignments."""
+        trail = fresh_trail()
+        vs = [Var() for _ in range(20)]
+        expr = vs[0]
+        for v in vs[1:]:
+            expr = BitOr(left=expr, right=v)
+        n = Var()
+        assert sat_count(expr, n, trail) is True
+        assert deref(n) == 2**20 - 1
+
+    def test_10_variable_xor_chain(self):
+        """XOR of 10 variables: 2^9 = 512 satisfying assignments."""
+        trail = fresh_trail()
+        vs = [Var() for _ in range(10)]
+        expr = vs[0]
+        for v in vs[1:]:
+            expr = BitXor(left=expr, right=v)
+        n = Var()
+        assert sat_count(expr, n, trail) is True
+        assert deref(n) == 2**9
+
+    def test_sat_count_constant_true(self):
+        """sat_count(1) with no variables = 1."""
+        trail = fresh_trail()
+        n = Var()
+        assert sat_count(1, n, trail) is True
+        assert deref(n) == 1
+
+    def test_sat_count_constant_false(self):
+        """sat_count(0) = 0."""
+        trail = fresh_trail()
+        n = Var()
+        assert sat_count(0, n, trail) is True
+        assert deref(n) == 0
+
+    def test_sat_count_single_var_identity(self):
+        """sat_count(X) = 1 (only X=1 satisfies)."""
+        trail = fresh_trail()
+        x = Var()
+        n = Var()
+        assert sat_count(x, n, trail) is True
+        assert deref(n) == 1
+
+    def test_deep_and_chain(self):
+        """AND of 15 variables: exactly 1 satisfying assignment."""
+        trail = fresh_trail()
+        vs = [Var() for _ in range(15)]
+        expr = vs[0]
+        for v in vs[1:]:
+            expr = BitAnd(left=expr, right=v)
+        n = Var()
+        assert sat_count(expr, n, trail) is True
+        assert deref(n) == 1
+
+    def test_labeling_with_many_vars(self):
+        """Labeling 5 vars constrained by XOR: should get 2^4 = 16 solutions."""
+        trail = fresh_trail()
+        vs = [Var() for _ in range(5)]
+        expr = vs[0]
+        for v in vs[1:]:
+            expr = BitXor(left=expr, right=v)
+        sat(expr, trail)
+        results = list(bool_labeling(vs, trail))
+        assert len(results) == 16
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Direct restrict tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRestrictDirect:
+    def test_restrict_deeper_bdd(self):
+        """Restrict on a multi-level BDD correctly simplifies."""
+        trail = fresh_trail()
+        x, y, z = Var(), Var(), Var()
+        xid, yid, zid = enumerate_var(x), enumerate_var(y), enumerate_var(z)
+        x_bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+        y_bdd = make_node(yid, BDD_TRUE, BDD_FALSE, y)
+        z_bdd = make_node(zid, BDD_TRUE, BDD_FALSE, z)
+
+        # (X & Y) | Z
+        and_bdd = apply('and', x_bdd, y_bdd)
+        or_bdd = apply('or', and_bdd, z_bdd)
+
+        # Restrict Z=1 → should be TRUE (Z=1 makes X&Y | Z always true)
+        r = restrict(or_bdd, zid, 1)
+        assert r is BDD_TRUE
+
+        # Restrict Z=0 → should be X & Y
+        r = restrict(or_bdd, zid, 0)
+        # Verify: restrict further X=1,Y=1 → TRUE; X=1,Y=0 → FALSE
+        assert restrict(r, xid, 1) is not BDD_FALSE or restrict(r, yid, 1) is not BDD_FALSE
+        r_11 = restrict(restrict(r, xid, 1), yid, 1)
+        r_10 = restrict(restrict(r, xid, 1), yid, 0)
+        assert r_11 is BDD_TRUE
+        assert r_10 is BDD_FALSE
+
+    def test_restrict_preserves_other_vars(self):
+        """Restricting var not in BDD leaves BDD unchanged."""
+        trail = fresh_trail()
+        x = Var()
+        xid = enumerate_var(x)
+        unused = Var()
+        unused_id = enumerate_var(unused)
+        bdd = make_node(xid, BDD_TRUE, BDD_FALSE, x)
+
+        r = restrict(bdd, unused_id, 1)
+        # Should be identical (var not present, higher ID)
+        # The result depends on whether unused_id > xid
+        if unused_id > xid:
+            assert r is bdd
+        else:
+            # If unused_id < xid, restrict returns bdd unchanged
+            assert r is bdd

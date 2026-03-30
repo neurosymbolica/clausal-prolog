@@ -82,7 +82,13 @@ ext_clpr_core = Extension(
     libraries=["m"],
 )
 
+ext_clpb_core = Extension(
+    "clausal.logic._clpb_core",
+    sources=["clausal/logic/_clpb_core.c"],
+    extra_compile_args=extra_compile_args,
+)
+
 setup(ext_modules=[ext_variables, ext_trampoline, ext_list_unify, ext_clpfd,
                    ext_tabling_core, ext_clpfd_propagate, ext_lists_core,
                    ext_constraints_dif, ext_arithmetic_core, ext_chars_core,
-                   ext_clpr_core])
+                   ext_clpr_core, ext_clpb_core])
