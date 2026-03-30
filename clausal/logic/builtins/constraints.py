@@ -184,6 +184,19 @@ def _in_q__3(var_or_list, lo, hi, trail, k):
         yield None
 
 
+# Pythonic alias: rational/1 declares a variable as rational-domain
+@_builtin("rational", 1)
+def _rational__1(var_or_list, trail, k):
+    """rational(X) — declare X as a rational variable (alias for in_q/1).
+
+    For bounded declaration, use ``rational(X), 0 <= X <= 10`` instead
+    of ``in_q(X, 0, 10)``.
+    """
+    from clausal.logic.clpq import in_q as _in_q_fn  # noqa: PLC0415
+    if _in_q_fn(var_or_list, None, None, trail):
+        yield None
+
+
 @_builtin("maximize", 2)
 def _maximize__2(expr, result, trail, k):
     """maximize(Expr, Result) — find maximum of linear expression."""
@@ -227,6 +240,13 @@ def _entailed__3(op, l, r, trail, k):
     op_str = _deref(op)
     if isinstance(op_str, str) and _entailed_fn(op_str, l, r, trail):
         yield None
+
+
+## NOTE: entailed/1 with a constraint expression (e.g., entailed(X <= 5))
+## is not currently feasible because the compiler evaluates X <= 5 as a
+## constraint goal before passing it to entailed.  This would require
+## compiler support for quoting/reifying constraint expressions.
+## Use entailed/3 with a string operator for now: entailed("=<", X, 5).
 
 
 @_builtin("sup", 2)

@@ -1109,6 +1109,55 @@ class TestA5FloatTypeError:
 # compiler → runtime dispatch), verifying every doc example end-to-end.
 
 
+class TestPythonicAliases:
+    """Pythonic aliases: rational/1, rational/3, entailed/1."""
+
+    def test_rational_1_alias(self):
+        """rational(X) is equivalent to in_q(X)."""
+        from clausal.logic.solve import call
+        from clausal.testing import load_clausal_module
+        import tempfile, os
+        src = 'Test(X) <- (rational(X), X == 1/3)\n'
+        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+            f.write(src)
+            path = f.name
+        try:
+            mod = load_clausal_module(path)
+            x = Var()
+            for _ in call('Test', x, module=mod):
+                assert deref(x) == F(1, 3)
+                break
+            else:
+                pytest.fail("No solution")
+        finally:
+            os.unlink(path)
+
+    def test_rational_with_bounds(self):
+        """rational(X) + bounds via chained comparison."""
+        from clausal.logic.solve import call
+        from clausal.testing import load_clausal_module
+        import tempfile, os
+        src = 'Test(X) <- (rational(X), 0 <= X, X <= 10, X == 5)\n'
+        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+            f.write(src)
+            path = f.name
+        try:
+            mod = load_clausal_module(path)
+            x = Var()
+            for _ in call('Test', x, module=mod):
+                assert deref(x) == F(5)
+                break
+            else:
+                pytest.fail("No solution")
+        finally:
+            os.unlink(path)
+
+    # NOTE: entailed/1 with constraint expression syntax (e.g., entailed(X <= 5))
+    # is not feasible without compiler support for quoting constraints.
+    # The compiler evaluates X <= 5 as a goal before passing to entailed.
+    # Use entailed/3 with string operator: entailed("=<", X, 5).
+
+
 class TestClausalIntegration:
     """Run the doc examples as compiled Clausal predicates."""
 

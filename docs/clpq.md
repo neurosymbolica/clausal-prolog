@@ -39,7 +39,7 @@ Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The
 | `!=` | integer disequality | real disequality | rational disequality |
 | `<` `>` `<=` `>=` | integer comparisons | real comparisons | rational comparisons |
 
-**Dispatch rule:** if either operand is a `Fraction` or a variable declared with `in_q`, the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z).
+**Dispatch rule:** if either operand is a `Fraction` or a variable declared with `rational` (or `in_q`), the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z).
 
 CLP(Q) has the highest dispatch priority: if both `Fraction` and `float` appear, exact rational arithmetic wins.
 
@@ -70,25 +70,41 @@ X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
 
 | Builtin | Arity | Description |
 |---|---|---|
-| `in_q` | 1 | `in_q(Var_or_list)` — declare rational variable(s) with unbounded domain |
-| `in_q` | 3 | `in_q(Var_or_list, Lo, Hi)` — declare rational variable(s) with domain `[Lo, Hi]` |
+| `rational` | 1 | `rational(X)` — declare X as a rational variable |
+| `in_q` | 3 | `in_q(X, Lo, Hi)` — declare rational variable with bounds `[Lo, Hi]` |
 | `maximize` | 2 | `maximize(Expr, Result)` — find maximum; binds all variables to optimal point |
 | `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
-| `entailed` | 3 | `entailed(Op, L, R)` — test if `L Op R` is implied by current constraints |
+| `entailed` | 3 | `entailed("=<", X, 5)` — test if constraint is implied by current store |
 | `bb_inf` | 3 | `bb_inf(IntVars, Expr, Inf)` — mixed-integer optimization via branch-and-bound |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
-### in_q/1 and in_q/3
+`in_q/1` is also accepted as an alias for `rational/1`.
 
-Declares one or more variables as rational-domain. If the variable already has a rational domain, intersects with the new bounds. Fails if the intersection is empty.
+### rational/1
+
+Declares a variable as rational-domain (unbounded). This is the type declaration — it says "X is rational", nothing more.
 
 ```clausal
 # skip
-in_q(X)                       % X in (-inf, +inf)
+rational(X)                    % X is rational, unbounded
+rational([X, Y, Z])            % all three are rational
+```
+
+### in_q/3
+
+Declares a rational variable with explicit bounds. Equivalent to `rational(X), Lo <= X <= Hi`. If the variable already has bounds, intersects with the new ones. Fails if the intersection is empty.
+
+```clausal
+# skip
 in_q(X, 0, 10)                % X in [0, 10]
-in_q([X, Y, Z], 0, 100)       % all three in [0, 100]
+
+% Equivalent to:
+rational(X), 0 <= X, X <= 10
+
+% For lists, use maplist:
+maplist(lambda X: (rational(X), 0 <= X, X <= 10), [X, Y, Z])
 ```
 
 When the bounds collapse to a point (`lo == hi`), the variable is automatically unified with that value.
