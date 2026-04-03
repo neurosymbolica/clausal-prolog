@@ -161,6 +161,30 @@ class TestBvArithmetic:
             sols.append(deref(r))
         assert sols == [3]
 
+    def test_sdiv(self):
+        """Signed division: -128 / 2 = -64 (= 192 unsigned in 8-bit)."""
+        trail = Trail()
+        x, r = Var(), Var()
+        in_z3_bv([x, r], 8, trail)
+        bv_sdiv(x, 2, r, trail)
+        bv_eq(x, 128, trail)  # 128 = -128 signed in 8-bit
+        sols = []
+        for _ in label_z3_bv([r], trail):
+            sols.append(deref(r))
+        assert sols == [192]  # -64 unsigned = 192
+
+    def test_srem(self):
+        """Signed remainder: -7 % 3 = -1 (= 255 unsigned in 8-bit)."""
+        trail = Trail()
+        x, r = Var(), Var()
+        in_z3_bv([x, r], 8, trail)
+        bv_srem(x, 3, r, trail)
+        bv_eq(x, 249, trail)  # 249 = -7 signed in 8-bit
+        sols = []
+        for _ in label_z3_bv([r], trail):
+            sols.append(deref(r))
+        assert sols == [255]  # -1 unsigned = 255
+
 
 class TestBvBitwise:
     def test_and(self):
@@ -232,6 +256,30 @@ class TestBvShifts:
             sols.append(deref(r))
         assert sols == [5]
 
+    def test_ashr_positive(self):
+        """Arithmetic shift right preserves sign: 0b01100000 >> 2 = 0b00011000."""
+        trail = Trail()
+        x, r = Var(), Var()
+        in_z3_bv([x, r], 8, trail)
+        bv_ashr(x, 2, r, trail)
+        bv_eq(x, 0b01100000, trail)
+        sols = []
+        for _ in label_z3_bv([r], trail):
+            sols.append(deref(r))
+        assert sols == [0b00011000]
+
+    def test_ashr_negative(self):
+        """Arithmetic shift right sign-extends: 0b10000000 >> 2 = 0b11100000."""
+        trail = Trail()
+        x, r = Var(), Var()
+        in_z3_bv([x, r], 8, trail)
+        bv_ashr(x, 2, r, trail)
+        bv_eq(x, 0b10000000, trail)  # -128 signed
+        sols = []
+        for _ in label_z3_bv([r], trail):
+            sols.append(deref(r))
+        assert sols == [0b11100000]  # -32 signed = 224 unsigned
+
 
 class TestBvComparisons:
     def test_bv_eq_constrain(self):
@@ -293,6 +341,56 @@ class TestBvComparisons:
         bv_eq(y2, 50, trail2)
         bv_slt(x2, y2, trail2)
         assert z3_check(trail2)     # -56 <_s 50
+
+    def test_bv_sle(self):
+        """Signed <=: -1 (255) <= 0 is True."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3_bv([x, y], 8, trail)
+        bv_eq(x, 255, trail)
+        bv_eq(y, 0, trail)
+        bv_sle(x, y, trail)
+        assert z3_check(trail)
+
+    def test_bv_sge(self):
+        """Signed >=: 0 >= -1 (255) is True."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3_bv([x, y], 8, trail)
+        bv_eq(x, 0, trail)
+        bv_eq(y, 255, trail)
+        bv_sge(x, y, trail)
+        assert z3_check(trail)
+
+    def test_bv_ule(self):
+        """Unsigned <=: 5 <= 10 is True."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3_bv([x, y], 8, trail)
+        bv_eq(x, 5, trail)
+        bv_eq(y, 10, trail)
+        bv_ule(x, y, trail)
+        assert z3_check(trail)
+
+    def test_bv_ule_fails(self):
+        """Unsigned <=: 10 <= 5 is False."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3_bv([x, y], 8, trail)
+        bv_eq(x, 10, trail)
+        bv_eq(y, 5, trail)
+        bv_ule(x, y, trail)
+        assert not z3_check(trail)
+
+    def test_bv_uge(self):
+        """Unsigned >=: 255 >= 200 is True."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3_bv([x, y], 8, trail)
+        bv_eq(x, 255, trail)
+        bv_eq(y, 200, trail)
+        bv_uge(x, y, trail)
+        assert z3_check(trail)
 
 
 class TestBvStructural:

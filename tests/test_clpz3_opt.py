@@ -237,6 +237,25 @@ class TestMultiObjective:
         # Lex: first minimize x → 0, then maximize y s.t. y ≤ 10 → y = 10
         assert sols[0] == (0, 10)
 
+    def test_pareto_multiple_solutions(self):
+        """Pareto mode yields multiple Pareto-optimal solutions."""
+        trail = Trail()
+        x, y = Var(), Var()
+        in_z3([x, y], 0, 3, trail)
+        z3_le(Add(left=x, right=y), 3, trail)
+        r1, r2 = Var(), Var()
+        sols = []
+        for _ in z3_multi_optimize(
+            [(x, "maximize"), (y, "maximize")],
+            [r1, r2], "pareto", trail
+        ):
+            sols.append((deref(r1), deref(r2)))
+        # Should yield multiple Pareto-optimal points on the frontier x+y<=3
+        assert len(sols) >= 2
+        # Each solution should satisfy x + y <= 3
+        for xv, yv in sols:
+            assert xv + yv <= 3
+
     def test_box_independent(self):
         """Box mode: each objective optimized independently."""
         trail = Trail()

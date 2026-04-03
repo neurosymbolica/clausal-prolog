@@ -244,6 +244,18 @@ class TestSimplify:
         # z3_to_python may return True or 1 (bool is subclass of int)
         assert deref(r) in (True, 1)
 
+    def test_simplify_with_variable(self):
+        """Simplify expression containing a variable returns string form."""
+        trail = Trail()
+        x = Var()
+        in_z3(x, 0, 10, trail)
+        r = Var()
+        assert z3_simplify(Add(left=x, right=0), r, trail)
+        result = deref(r)
+        # Z3 simplifies x + 0 → x; result is either the int (if var resolved)
+        # or a string representation
+        assert result is not None
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Assertions Dump
