@@ -166,3 +166,116 @@ def _exactly_z3__2(vars_list, bound, trail, k):
     from clausal.logic.clpz3 import exactly_z3 as _fn
     if _fn(vars_list, bound, trail):
         yield None
+
+
+# ── Phase 4: real/rational constraints ────────────────────────────────────────
+
+@_builtin("in_z3_real", 3)
+def _in_z3_real__3(var_or_list, lo, hi, trail, k):
+    """in_z3_real(Var, Lo, Hi) — declare real variable with bounds via Z3."""
+    from clausal.logic.clpz3 import in_z3_real as _fn
+    if _fn(var_or_list, lo, hi, trail):
+        yield None
+
+
+@_builtin("in_z3_real", 1)
+def _in_z3_real__1(var_or_list, trail, k):
+    """in_z3_real(Var) — declare unbounded real variable via Z3."""
+    from clausal.logic.clpz3 import in_z3_real as _fn
+    if _fn(var_or_list, None, None, trail):
+        yield None
+
+
+@_builtin("z3_real_eq", 2)
+def _z3_real_eq__2(l, r, trail, k):
+    """z3_real_eq(L, R) — post L == R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_eq as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("z3_real_ne", 2)
+def _z3_real_ne__2(l, r, trail, k):
+    """z3_real_ne(L, R) — post L != R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_ne as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("z3_real_lt", 2)
+def _z3_real_lt__2(l, r, trail, k):
+    """z3_real_lt(L, R) — post L < R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_lt as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("z3_real_le", 2)
+def _z3_real_le__2(l, r, trail, k):
+    """z3_real_le(L, R) — post L <= R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_le as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("z3_real_gt", 2)
+def _z3_real_gt__2(l, r, trail, k):
+    """z3_real_gt(L, R) — post L > R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_gt as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("z3_real_ge", 2)
+def _z3_real_ge__2(l, r, trail, k):
+    """z3_real_ge(L, R) — post L >= R as a Z3 real constraint."""
+    from clausal.logic.clpz3 import z3_real_ge as _fn
+    if _fn(l, r, trail):
+        yield None
+
+
+@_builtin("label_z3_real", 1)
+def _label_z3_real__1(vars_list, trail, k):
+    """label_z3_real(Vars) — find one real-valued assignment via Z3."""
+    from clausal.logic.clpz3 import label_z3_real as _fn
+    yield from _fn(vars_list, trail)
+
+
+@_builtin("maximize_z3", 2)
+def _maximize_z3__2(expr, result, trail, k):
+    """maximize_z3(Expr, Result) — maximize expression via Z3 Optimize."""
+    from clausal.logic.clpz3 import maximize_z3 as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+
+@_builtin("minimize_z3", 2)
+def _minimize_z3__2(expr, result, trail, k):
+    """minimize_z3(Expr, Result) — minimize expression via Z3 Optimize."""
+    from clausal.logic.clpz3 import minimize_z3 as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+
+@_builtin("entailed_z3", 1)
+def _entailed_z3__1(constraint_expr, trail, k):
+    """entailed_z3(Expr) — succeed if Expr is implied by current Z3 constraints."""
+    from clausal.logic.clpz3 import entailed_z3 as _fn
+    if _fn(constraint_expr, trail):
+        yield None
+
+
+@_builtin("sup_z3", 2)
+def _sup_z3__2(expr, result, trail, k):
+    """sup_z3(Expr, Result) — supremum of Expr via Z3 Optimize."""
+    from clausal.logic.clpz3 import sup_z3 as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+
+@_builtin("inf_z3", 2)
+def _inf_z3__2(expr, result, trail, k):
+    """inf_z3(Expr, Result) — infimum of Expr via Z3 Optimize."""
+    from clausal.logic.clpz3 import inf_z3 as _fn
+    if _fn(expr, result, trail):
+        yield None

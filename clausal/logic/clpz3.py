@@ -775,3 +775,229 @@ def exactly_z3(vars_list: Any, k: Any, trail: Trail) -> bool:
     # Convert once to avoid double _as_list on cons-lists
     items = _as_list(vars_list)
     return at_most_z3(items, k, trail) and at_least_z3(items, k, trail)
+
+
+# ── Phase 4: real/rational constraints ────────────────────────────────────────
+
+def _to_z3_real(val: Any) -> Any:
+    """Convert a Python numeric to a Z3 RealVal (exact for Fraction, int; approx for float)."""
+    if isinstance(val, bool):
+        return _z3.RealVal(int(val))
+    if isinstance(val, Fraction):
+        return _z3.RealVal(val.numerator) / _z3.RealVal(val.denominator)
+    if isinstance(val, int):
+        return _z3.RealVal(val)
+    if isinstance(val, float):
+        # Convert via Fraction for exact representation where possible
+        return _z3.RealVal(str(Fraction(val).limit_denominator(10**15)))
+    raise TypeError(f"Cannot convert {type(val).__name__} to Z3 Real: {val!r}")
+
+
+def in_z3_real(var_or_list: Any, lo: Any, hi: Any, trail: Trail) -> bool:
+    """Declare real-sorted variable(s) with optional bounds [lo, hi].
+
+    lo/hi can be int, float, Fraction, or None for unbounded.
+    Ground values are checked against bounds (returns False if out of range).
+    For unbound Vars, registers them as RealSort and posts bound constraints.
+    """
+    state = get_z3_state(trail)
+    lo_val = deref(lo) if lo is not None else None
+    hi_val = deref(hi) if hi is not None else None
+
+    for v in _as_list(var_or_list):
+        v = deref(v)
+        if not is_var(v):
+            # Ground: check membership
+            if lo_val is not None and v < lo_val:
+                return False
+            if hi_val is not None and v > hi_val:
+                return False
+            continue
+        z3_v = z3_var_for(v, _z3.RealSort(), trail)
+        z3_push(trail)
+        if lo_val is not None:
+            state.solver.add(z3_v >= _to_z3_real(lo_val))
+        if hi_val is not None:
+            state.solver.add(z3_v <= _to_z3_real(hi_val))
+
+    return True
+
+
+def _z3_real_binary(l: Any, r: Any, trail: Trail, op) -> bool:
+    """Translate l and r to Z3 RealSort expressions and post op(l, r).
+
+    Wraps in a z3_push scope so the constraint is retracted on backtracking.
+    """
+    state = get_z3_state(trail)
+    z3_l = clausal_to_z3(l, trail, default_sort=_z3.RealSort())
+    z3_r = clausal_to_z3(r, trail, default_sort=_z3.RealSort())
+    z3_push(trail)
+    state.solver.add(op(z3_l, z3_r))
+    return True
+
+
+def z3_real_eq(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l == r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a == b)
+
+
+def z3_real_ne(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l != r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a != b)
+
+
+def z3_real_lt(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l < r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a < b)
+
+
+def z3_real_le(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l <= r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a <= b)
+
+
+def z3_real_gt(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l > r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a > b)
+
+
+def z3_real_ge(l: Any, r: Any, trail: Trail) -> bool:
+    """Post l >= r as a Z3 real constraint."""
+    return _z3_real_binary(l, r, trail, lambda a, b: a >= b)
+
+
+def label_z3_real(vars_list: Any, trail: Trail):
+    """Find one satisfying assignment for real-valued Z3 variables.
+
+    Yields at most one solution — real domains are continuous so enumeration
+    is not meaningful. Use maximize_z3/minimize_z3 for optimization.
+    Bindings are undone after the caller resumes the generator.
+    """
+    state = get_z3_state(trail)
+    items = _as_list(vars_list)
+
+    z3_vars: list = []
+    clausal_vars: list = []
+    for v in items:
+        v = deref(v)
+        if is_var(v):
+            z3_v = state.var_map.get(id(v))
+            if z3_v is None:
+                raise ValueError(
+                    "label_z3_real: variable not registered with Z3. "
+                    "Declare it first with in_z3_real()."
+                )
+            z3_vars.append(z3_v)
+            clausal_vars.append(v)
+        elif isinstance(v, (int, float, Fraction)):
+            pass  # already ground
+        else:
+            raise TypeError(
+                f"label_z3_real: expected numeric or Var, got {type(v).__name__}"
+            )
+
+    if not z3_vars:
+        if z3_check(trail):
+            yield None
+        return
+
+    if state.solver.check() == _z3.sat:
+        m = state.solver.model()
+        values = [z3_to_python(m.eval(z3v, model_completion=True))
+                  for z3v in z3_vars]
+        mark = trail.mark()
+        ok = all(unify(cv, val, trail)
+                 for cv, val in zip(clausal_vars, values))
+        if ok:
+            yield None
+        trail.undo(mark)
+
+
+def _z3_optimize(expr: Any, trail: Trail, direction: str):
+    """Internal helper: run Z3 Optimize in the given direction ('max' or 'min').
+
+    Returns the optimal Python value, or None if infeasible/unbounded-infinite.
+    """
+    state = get_z3_state(trail)
+    z3_expr = clausal_to_z3(expr, trail, default_sort=_z3.RealSort())
+
+    opt = _z3.Optimize()
+    for a in state.solver.assertions():
+        opt.add(a)
+
+    if direction == 'max':
+        handle = opt.maximize(z3_expr)
+    else:
+        handle = opt.minimize(z3_expr)
+
+    if opt.check() != _z3.sat:
+        return None
+
+    # Use the bound from the handle for the optimal value (handles +oo/-oo)
+    if direction == 'max':
+        bound = opt.upper(handle)
+    else:
+        bound = opt.lower(handle)
+
+    val = z3_to_python(bound)
+    # Detect +oo / -oo strings from Z3
+    if isinstance(val, str):
+        s = val.strip()
+        if s in ('+oo', 'oo'):
+            return float('inf')
+        if s == '-oo':
+            return float('-inf')
+        return None  # unknown or error
+    return val
+
+
+def maximize_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Maximize a linear/nonlinear expression subject to current Z3 constraints.
+
+    Uses Z3's Optimize solver (snapshot of current assertions).
+    Returns False if constraints are infeasible or objective is unbounded.
+    """
+    val = _z3_optimize(expr, trail, 'max')
+    if val is None or val == float('inf'):
+        return False
+    return unify(result_var, val, trail)
+
+
+def minimize_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Minimize a linear/nonlinear expression subject to current Z3 constraints.
+
+    Uses Z3's Optimize solver (snapshot of current assertions).
+    Returns False if constraints are infeasible or objective is unbounded below.
+    """
+    val = _z3_optimize(expr, trail, 'min')
+    if val is None or val == float('-inf'):
+        return False
+    return unify(result_var, val, trail)
+
+
+def entailed_z3(constraint_expr: Any, trail: Trail) -> bool:
+    """Test if a constraint expression is entailed by the current Z3 store.
+
+    Returns True iff constraint_expr is necessarily true given all posted
+    constraints (i.e., its negation is unsatisfiable).
+
+    constraint_expr should be a Clausal comparison AST node (ArithEq, LtE,
+    GtE, etc.) or any expression that translates to a Z3 BoolRef.
+    """
+    state = get_z3_state(trail)
+    z3_constr = clausal_to_z3(constraint_expr, trail, default_sort=_z3.RealSort())
+    state.solver.push()
+    state.solver.add(_z3.Not(z3_constr))
+    result = state.solver.check()
+    state.solver.pop()
+    return result == _z3.unsat
+
+
+def sup_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Compute supremum (maximum) of expr subject to current Z3 constraints."""
+    return maximize_z3(expr, result_var, trail)
+
+
+def inf_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Compute infimum (minimum) of expr subject to current Z3 constraints."""
+    return minimize_z3(expr, result_var, trail)

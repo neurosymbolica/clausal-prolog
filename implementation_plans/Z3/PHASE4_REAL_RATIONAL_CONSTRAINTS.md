@@ -644,3 +644,77 @@ Test("LP optimal value is 310") <- LP(_, _, OBJ), OBJ == 310
 8. Unit tests + cross-validation with CLP(Q)
 9. Integration tests (LP problems)
 10. Nonlinear tests (circles, polynomials)
+
+---
+
+## Implementation Issues (Post-Implementation Addendum)
+
+### Issue 1 — `entailed_z3` simplified to single-expression API
+
+**Plan:** The plan showed `entailed_z3(op_str, left, right, trail)` with a string operator and
+separate left/right operands, dispatched via a dict. The builtin was responsible for unwrapping
+the AST node.
+
+**Fix:** Implemented as `entailed_z3(constraint_expr, trail)` — takes a full Clausal comparison
+AST node (e.g., `LtE(left=x, right=5)`) and translates it via `clausal_to_z3`. Cleaner,
+consistent with how `taut_z3`/`sat_z3` take full expressions. The builtin is correspondingly
+simple (`entailed_z3/1` passes the whole expression through).
+
+---
+
+### Issue 2 — `_to_z3_real` float conversion uses Fraction
+
+**Plan:** Used `z3.RealVal(float_val)` directly, which converts via the float's binary
+representation (potentially many-digit decimal).
+
+**Fix:** Used `z3.RealVal(str(Fraction(val).limit_denominator(10**15)))` to get a cleaner
+rational approximation. This avoids surprising representations like `3602879701896397/36028797018963968`
+for `0.1`. For exact inputs (int, Fraction), the exact value is preserved.
+
+---
+
+### Issue 3 — `in_z3_real` uses single z3_push for both bounds
+
+**Observation:** Both lo and hi bounds are posted in a single `z3_push` scope. This means both
+are retracted together on backtracking, which is correct — they are logically one domain
+declaration. Consistent with how `in_z3` handles integer domains.
+
+---
+
+### Issue 4 — `maximize_z3`/`minimize_z3` treat unbounded objective as failure
+
+**Design decision:** If the optimization objective is unbounded (+oo/-oo), the functions return
+`False` (Prolog failure) rather than unifying with `float('inf')`. Rationale: an unbounded
+objective usually indicates a modeling error. If the user genuinely wants to detect unboundedness,
+they can use `z3_check` + entailment checks.
+
+The `_z3_optimize` helper correctly detects the +oo/-oo string output from Z3's `Optimize`
+and propagates `float('inf')`/`float('-inf')`, which `maximize_z3`/`minimize_z3` then treat
+as failure.
+
+---
+
+### Issue 5 — `label_z3_real` yields exactly one solution
+
+**Design decision:** Real-valued constraint systems have infinitely many solutions; yielding
+a single model value is the correct semantic. The one solution is undone after the generator
+resumes (same trail.undo(mark) pattern as `label_z3`). For optimization, use
+`maximize_z3`/`minimize_z3`. For discrete real solutions, the user should structure the
+problem differently (e.g., enumerate via blocking constraints — not provided).
+
+---
+
+### Issue 6 — Cross-validation with CLP(Q) uses `q_le` directly (no q_add_le)
+
+**Observation:** The plan showed `q_le(Add(Mult(2,xq), yq), 16, trail)` — this works because
+`clpq.q_le` calls `_linearize` internally which handles arithmetic AST nodes. This is
+consistent with how all CLP(Q) constraint-posting functions work. No extra helpers needed.
+
+---
+
+### Issue 7 — `entailed_z3` does not register unbound Vars
+
+**Observation:** If the constraint expression contains a Var not yet registered with Z3 (no
+`in_z3_real` call), `clausal_to_z3` raises `ValueError`. This is correct — entailment of
+an unconstrained variable is undefined. Users must register variables before testing entailment.
+No change needed.
