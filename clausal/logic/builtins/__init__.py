@@ -53,6 +53,7 @@ from clausal.logic.builtins import inspection      # noqa: F401
 from clausal.logic.builtins import database_ops    # noqa: F401
 from clausal.logic.builtins import keyword_ops     # noqa: F401
 from clausal.logic.builtins import constraints     # noqa: F401
+from clausal.logic.builtins import z3_constraints  # noqa: F401
 from clausal.logic.builtins import type_checks     # noqa: F401
 from clausal.logic.builtins import arithmetic      # noqa: F401
 from clausal.logic.builtins import lists           # noqa: F401

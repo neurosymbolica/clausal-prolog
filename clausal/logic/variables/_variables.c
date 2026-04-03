@@ -34,6 +34,7 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "_ft_compat.h"
 
@@ -481,6 +482,8 @@ struct TrailObject {
      * Trails must not be shared between threads — each thread needs its
      * own Trail.  See the threading contract in _ft_compat.h. */
     unsigned long owner_thread_id;
+    /* Weak-reference support (tp_weaklistoffset). */
+    PyObject   *weakrefs;
 };
 
 /*
@@ -515,6 +518,7 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->capacity        = 0;
         self->wakeup_list     = NULL;
         self->owner_thread_id = PyThread_get_thread_ident();
+        self->weakrefs        = NULL;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -523,6 +527,8 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void
 Trail_dealloc(TrailObject *self)
 {
+    if (self->weakrefs)
+        PyObject_ClearWeakRefs((PyObject *)self);
     PyObject_GC_UnTrack(self);
     for (Py_ssize_t i = 0; i < self->length; i++) {
         TrailEntry *e = &self->entries[i];
@@ -880,14 +886,15 @@ static PyTypeObject TrailType = {
     ),
     .tp_basicsize   = sizeof(TrailObject),
     .tp_itemsize    = 0,
-    .tp_flags       = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
-    .tp_new         = Trail_new,
-    .tp_dealloc     = (destructor)Trail_dealloc,
-    .tp_traverse    = (traverseproc)Trail_traverse,
-    .tp_clear       = (inquiry)Trail_clear,
-    .tp_repr        = (reprfunc)Trail_repr,
-    .tp_methods     = Trail_methods,
-    .tp_as_sequence = &Trail_as_sequence,
+    .tp_flags           = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_new             = Trail_new,
+    .tp_dealloc         = (destructor)Trail_dealloc,
+    .tp_traverse        = (traverseproc)Trail_traverse,
+    .tp_clear           = (inquiry)Trail_clear,
+    .tp_repr            = (reprfunc)Trail_repr,
+    .tp_methods         = Trail_methods,
+    .tp_as_sequence     = &Trail_as_sequence,
+    .tp_weaklistoffset  = offsetof(TrailObject, weakrefs),
 };
 
 

@@ -68,6 +68,7 @@ typedef struct TrailObject {
     Py_ssize_t  capacity;
     PyObject   *wakeup_list;
     unsigned long owner_thread_id;
+    PyObject   *weakrefs;
 } TrailObject;
 
 #endif  /* !VARIABLES_CAPI_PROVIDER */
