@@ -696,3 +696,19 @@ class TestIsSat:
 10. `z3_minimal_unsat_core()` — minimal core (iterative deletion)
 11. Builtin registration
 12. Tests
+
+---
+
+## Issues Encountered During Implementation
+
+### Issue 1: `z3_to_python` returns 1 for True
+Z3's `simplify(5 == 5)` returns `True`, but `z3_to_python` converts it to `1` (Python's `bool` is a subclass of `int`). Tests accept either `True` or `1`.
+
+### Issue 2: `entailed_z3` already existed from Phase 4
+Phase 4 implemented `entailed_z3(constraint_expr, trail)`. Phase 8 adds `z3_disentailed` as its complement and reuses the existing `entailed_z3` rather than duplicating as `z3_entailed_general`.
+
+### Issue 3: Named constraint indicator pattern
+Uses `Implies(indicator, constraint)` rather than `indicator == constraint` to avoid the indicator itself constraining the solver when not used as an assumption. The indicator only activates during `check(*assumptions)`.
+
+### Issue 4: Consolidated test file
+All Phase 8 tests in `tests/test_clpz3_diag.py` (30 tests): named constraints, unsat cores (basic + minimal), is_sat, entailment/disentailment, model inspection, simplification, assertions dump, stats, solver config, and debug workflow integration.

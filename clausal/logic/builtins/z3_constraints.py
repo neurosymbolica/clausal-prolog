@@ -608,3 +608,74 @@ def _z3_multi_optimize__3(objectives, results, priority, trail, k):
     """z3_multi_optimize(Objectives, Results, Priority) — multi-objective."""
     from clausal.logic.clpz3 import z3_multi_optimize
     yield from z3_multi_optimize(objectives, results, priority, trail)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 8 — Diagnostics
+# ══════════════════════════════════════════════════════════════════════════════
+
+@_builtin("z3_named", 2)
+def _z3_named__2(constraint_expr, name, trail, k):
+    """z3_named(Constraint, Name) — add named constraint for unsat core."""
+    from clausal.logic.clpz3 import z3_named
+    if z3_named(constraint_expr, name, trail): yield None
+
+@_builtin("z3_unsat_core", 1)
+def _z3_unsat_core__1(core, trail, k):
+    """z3_unsat_core(Core) — get unsat core as list of names."""
+    from clausal.logic.clpz3 import z3_unsat_core
+    if z3_unsat_core(core, trail): yield None
+
+@_builtin("z3_minimal_unsat_core", 1)
+def _z3_minimal_unsat_core__1(core, trail, k):
+    """z3_minimal_unsat_core(Core) — get minimal unsat core."""
+    from clausal.logic.clpz3 import z3_minimal_unsat_core
+    if z3_minimal_unsat_core(core, trail): yield None
+
+@_builtin("z3_is_sat", 1)
+def _z3_is_sat__1(result, trail, k):
+    """z3_is_sat(Result) — Result is 'sat', 'unsat', or 'unknown'."""
+    from clausal.logic.clpz3 import z3_is_sat
+    if z3_is_sat(result, trail): yield None
+
+@_builtin("z3_model", 2)
+def _z3_model__2(vars_list, values, trail, k):
+    """z3_model(Vars, Values) — get model without binding variables."""
+    from clausal.logic.clpz3 import z3_model
+    if z3_model(vars_list, values, trail): yield None
+
+@_builtin("z3_disentailed", 1)
+def _z3_disentailed__1(constraint_expr, trail, k):
+    """z3_disentailed(Constraint) — succeed if constraint is impossible."""
+    from clausal.logic.clpz3 import z3_disentailed
+    if z3_disentailed(constraint_expr, trail): yield None
+
+@_builtin("z3_simplify", 2)
+def _z3_simplify__2(expr, result, trail, k):
+    """z3_simplify(Expr, Result) — simplify expression via Z3."""
+    from clausal.logic.clpz3 import z3_simplify
+    if z3_simplify(expr, result, trail): yield None
+
+@_builtin("z3_assertions", 1)
+def _z3_assertions__1(assertions, trail, k):
+    """z3_assertions(List) — get all Z3 assertions as strings."""
+    from clausal.logic.clpz3 import z3_assertions
+    if z3_assertions(assertions, trail): yield None
+
+@_builtin("z3_stats", 1)
+def _z3_stats__1(stats, trail, k):
+    """z3_stats(Stats) — get solver statistics."""
+    from clausal.logic.clpz3 import z3_stats
+    if z3_stats(stats, trail): yield None
+
+@_builtin("z3_set_option", 2)
+def _z3_set_option__2(key, value, trail, k):
+    """z3_set_option(Key, Value) — set Z3 solver option."""
+    from clausal.logic.clpz3 import z3_set_option
+    if z3_set_option(key, value, trail): yield None
+
+@_builtin("z3_set_logic", 1)
+def _z3_set_logic__1(logic, trail, k):
+    """z3_set_logic(Logic) — switch to logic-specific solver."""
+    from clausal.logic.clpz3 import z3_set_logic
+    if z3_set_logic(logic, trail): yield None

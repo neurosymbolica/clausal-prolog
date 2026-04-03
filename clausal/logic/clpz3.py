@@ -1811,6 +1811,199 @@ def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Phase 8 — Diagnostics (Named Constraints, Unsat Cores, Model Inspection)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def z3_named(constraint_expr: Any, name: Any, trail: Trail) -> bool:
+    """Add a constraint with a name, trackable via unsat core.
+
+    Creates a Boolean indicator: ``indicator => constraint``.
+    The indicator is used as an assumption in ``z3_unsat_core``.
+    """
+    state = get_z3_state(trail)
+    name = deref(name)
+    if not isinstance(name, str):
+        name = str(name)
+
+    z3_expr = clausal_to_z3(constraint_expr, trail, default_sort=_z3.IntSort())
+    indicator = _z3.Bool(f"_named_{name}")
+
+    z3_push(trail)
+    state.solver.add(_z3.Implies(indicator, z3_expr))
+
+    if not hasattr(state, '_named_constraints'):
+        state._named_constraints: dict = {}
+    state._named_constraints[name] = indicator
+    trail.record(lambda: state._named_constraints.pop(name, None))
+    return True
+
+
+def z3_unsat_core(core_var: Any, trail: Trail) -> bool:
+    """Get the unsat core as a sorted list of constraint names.
+
+    Checks satisfiability using all named constraints as assumptions.
+    If unsatisfiable, *core_var* is unified with the list of names from
+    the unsatisfiable subset.  Fails if constraints are satisfiable.
+    """
+    state = get_z3_state(trail)
+    named = getattr(state, '_named_constraints', {})
+
+    if not named:
+        if state.solver.check() == _z3.unsat:
+            return unify(core_var, [], trail)
+        return False
+
+    indicators = list(named.values())
+    ind_to_name = {ind.get_id(): name for name, ind in named.items()}
+
+    result = state.solver.check(*indicators)
+    if result == _z3.unsat:
+        core = state.solver.unsat_core()
+        core_set = {c.get_id() for c in core}
+        core_names = [ind_to_name[cid] for cid in core_set if cid in ind_to_name]
+        return unify(core_var, sorted(core_names), trail)
+    return False
+
+
+def z3_minimal_unsat_core(core_var: Any, trail: Trail) -> bool:
+    """Get a minimal unsat core (no redundant constraints).
+
+    Uses iterative deletion: removes each assumption and checks if
+    the result is still unsatisfiable.  More expensive than
+    ``z3_unsat_core`` but guaranteed minimal.
+    """
+    state = get_z3_state(trail)
+    named = getattr(state, '_named_constraints', {})
+    if not named:
+        return False
+
+    indicators = list(named.values())
+    ind_to_name = {ind.get_id(): name for name, ind in named.items()}
+
+    if state.solver.check(*indicators) != _z3.unsat:
+        return False
+
+    core = list(state.solver.unsat_core())
+    minimal = list(core)
+    for c in core:
+        candidate = [x for x in minimal if x.get_id() != c.get_id()]
+        if state.solver.check(*candidate) == _z3.unsat:
+            minimal = candidate
+
+    core_set = {c.get_id() for c in minimal}
+    core_names = [ind_to_name[cid] for cid in core_set if cid in ind_to_name]
+    return unify(core_var, sorted(core_names), trail)
+
+
+def z3_is_sat(result_var: Any, trail: Trail) -> bool:
+    """Check satisfiability, unifying *result_var* with ``"sat"``,
+    ``"unsat"``, or ``"unknown"``."""
+    state = get_z3_state(trail)
+    r = state.solver.check()
+    if r == _z3.sat:
+        return unify(result_var, "sat", trail)
+    elif r == _z3.unsat:
+        return unify(result_var, "unsat", trail)
+    return unify(result_var, "unknown", trail)
+
+
+def z3_disentailed(constraint_expr: Any, trail: Trail) -> bool:
+    """Check if a constraint is disentailed (necessarily false).
+
+    Returns True iff *constraint_expr* is impossible given the store
+    (i.e., the constraint itself is unsatisfiable with the store).
+    """
+    state = get_z3_state(trail)
+    z3_expr = clausal_to_z3(constraint_expr, trail, default_sort=_z3.IntSort())
+    state.solver.push()
+    state.solver.add(z3_expr)
+    result = state.solver.check()
+    state.solver.pop()
+    return result == _z3.unsat
+
+
+def z3_model(vars_list: Any, values_var: Any, trail: Trail) -> bool:
+    """Get the current model without binding Clausal variables.
+
+    Unifies *values_var* with a list of ``[name_str, value]`` pairs.
+    """
+    state = get_z3_state(trail)
+    vars_list = _as_list(deref(vars_list))
+
+    if state.solver.check() != _z3.sat:
+        return False
+
+    m = state.solver.model()
+    pairs: list = []
+    for v in vars_list:
+        v = deref(v)
+        if is_var(v):
+            z3_v = state.var_map.get(id(v))
+            if z3_v is not None:
+                val = z3_to_python(m.eval(z3_v, model_completion=True))
+                pairs.append([str(z3_v), val])
+    return unify(values_var, pairs, trail)
+
+
+def z3_simplify(expr: Any, result_var: Any, trail: Trail) -> bool:
+    """Simplify a Z3 expression and return the result."""
+    z3_expr = clausal_to_z3(expr, trail, default_sort=_z3.IntSort())
+    simplified = _z3.simplify(z3_expr)
+    try:
+        val = z3_to_python(simplified)
+    except (TypeError, ValueError):
+        val = str(simplified)
+    return unify(result_var, val, trail)
+
+
+def z3_assertions(assertions_var: Any, trail: Trail) -> bool:
+    """Get all current Z3 assertions as a list of strings."""
+    state = get_z3_state(trail)
+    assertions = [str(a) for a in state.solver.assertions()]
+    return unify(assertions_var, assertions, trail)
+
+
+def z3_stats(stats_var: Any, trail: Trail) -> bool:
+    """Get solver statistics as a list of ``[key, value]`` pairs.
+
+    Runs ``check()`` first to populate stats.
+    """
+    state = get_z3_state(trail)
+    state.solver.check()
+    stats = state.solver.statistics()
+    pairs: list = []
+    for i in range(len(stats)):
+        key = stats[i][0]
+        val = stats[i][1]
+        pairs.append([key, val])
+    return unify(stats_var, pairs, trail)
+
+
+def z3_set_option(key: Any, value: Any, trail: Trail) -> bool:
+    """Set a Z3 solver option (e.g. ``("timeout", 30000)``)."""
+    state = get_z3_state(trail)
+    key = deref(key)
+    value = deref(value)
+    state.solver.set(key, value)
+    return True
+
+
+def z3_set_logic(logic: Any, trail: Trail) -> bool:
+    """Switch to a logic-specific solver (e.g. ``"QF_LIA"``).
+
+    Replaces the solver, copying all existing assertions.
+    """
+    state = get_z3_state(trail)
+    logic = deref(logic)
+    old_assertions = list(state.solver.assertions())
+    state.solver = _z3.SolverFor(logic)
+    for a in old_assertions:
+        state.solver.add(a)
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Phase 7 — Soft Constraints & Optimization
 # ══════════════════════════════════════════════════════════════════════════════
 
