@@ -570,3 +570,41 @@ def _z3_forall__2(var_sorts, body_fn, trail, k):
 def _z3_exists__2(var_sorts, body_fn, trail, k):
     from clausal.logic.clpz3 import z3_exists as _fn
     if _fn(var_sorts, body_fn, trail): yield None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 7 — Soft Constraints & Optimization
+# ══════════════════════════════════════════════════════════════════════════════
+
+@_builtin("z3_soft", 2)
+def _z3_soft__2(constraint_expr, weight, trail, k):
+    """z3_soft(Constraint, Weight) — add soft constraint."""
+    from clausal.logic.clpz3 import z3_soft
+    if z3_soft(constraint_expr, weight, trail):
+        yield None
+
+@_builtin("z3_soft", 3)
+def _z3_soft__3(constraint_expr, weight, group, trail, k):
+    """z3_soft(Constraint, Weight, Group) — add grouped soft constraint."""
+    from clausal.logic.clpz3 import z3_soft
+    if z3_soft(constraint_expr, weight, trail, group=group):
+        yield None
+
+@_builtin("z3_max_sat", 1)
+def _z3_max_sat__1(satisfied, trail, k):
+    """z3_max_sat(Satisfied) — maximize total satisfied soft weight."""
+    from clausal.logic.clpz3 import z3_max_sat
+    if z3_max_sat(satisfied, trail):
+        yield None
+
+@_builtin("z3_optimize_label", 4)
+def _z3_optimize_label__4(vars_list, obj_expr, result, mode, trail, k):
+    """z3_optimize_label(Vars, ObjExpr, Result, Mode) — optimize and label."""
+    from clausal.logic.clpz3 import z3_optimize_label
+    yield from z3_optimize_label(vars_list, obj_expr, result, mode, trail)
+
+@_builtin("z3_multi_optimize", 3)
+def _z3_multi_optimize__3(objectives, results, priority, trail, k):
+    """z3_multi_optimize(Objectives, Results, Priority) — multi-objective."""
+    from clausal.logic.clpz3 import z3_multi_optimize
+    yield from z3_multi_optimize(objectives, results, priority, trail)

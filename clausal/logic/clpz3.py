@@ -105,6 +105,7 @@ class Z3State:
         self.var_map: dict[int, Any] = {}   # id(Var) → Z3 ExprRef
         self.rev_map: dict[int, Var] = {}   # ExprRef.get_id() → Var
         self._counter: int = 0              # unique name counter
+        self._soft_constraints: list = []   # list of (z3_expr, weight, group) | None
 
 
 # ── State registry ────────────────────────────────────────────────────────────
@@ -924,6 +925,24 @@ def label_z3_real(vars_list: Any, trail: Trail):
         trail.undo(mark)
 
 
+def _build_optimize(state: Z3State, trail: Trail) -> Any:
+    """Create a fresh Z3 Optimize instance from current solver state.
+
+    Copies hard assertions and active soft constraints.
+    """
+    opt = _z3.Optimize()
+    for a in state.solver.assertions():
+        opt.add(a)
+    for entry in state._soft_constraints:
+        if entry is not None:
+            z3_expr, weight, group = entry
+            if group is not None:
+                opt.add_soft(z3_expr, weight, id=group)
+            else:
+                opt.add_soft(z3_expr, weight)
+    return opt
+
+
 def _z3_optimize(expr: Any, trail: Trail, direction: str):
     """Internal helper: run Z3 Optimize in the given direction ('max' or 'min').
 
@@ -932,9 +951,7 @@ def _z3_optimize(expr: Any, trail: Trail, direction: str):
     state = get_z3_state(trail)
     z3_expr = clausal_to_z3(expr, trail, default_sort=_z3.RealSort())
 
-    opt = _z3.Optimize()
-    for a in state.solver.assertions():
-        opt.add(a)
+    opt = _build_optimize(state, trail)
 
     if direction == 'max':
         handle = opt.maximize(z3_expr)
@@ -1791,3 +1808,187 @@ def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
         state.datatypes: dict = {}
     state.datatypes[name] = sort
     return sort
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 7 — Soft Constraints & Optimization
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def z3_soft(constraint_expr: Any, weight: Any, trail: Trail,
+            *, group: Any = None) -> bool:
+    """Add a soft constraint with weight.
+
+    Soft constraints are satisfied if possible.  When they conflict with
+    hard constraints or each other, Z3's Optimize maximizes total satisfied
+    weight.
+
+    The constraint is retracted on trail backtrack.
+    """
+    state = get_z3_state(trail)
+    z3_expr = clausal_to_z3(constraint_expr, trail, default_sort=_z3.IntSort())
+    weight = deref(weight)
+    if group is not None:
+        group = deref(group)
+    entry = (z3_expr, weight, group)
+    state._soft_constraints.append(entry)
+    idx = len(state._soft_constraints) - 1
+    trail.record(lambda: _remove_soft(state, idx))
+    return True
+
+
+def _remove_soft(state: Z3State, idx: int) -> None:
+    """Mark soft constraint at *idx* as removed (called on trail undo)."""
+    if idx < len(state._soft_constraints):
+        state._soft_constraints[idx] = None
+
+
+def z3_max_sat(satisfied_var: Any, trail: Trail) -> bool:
+    """MaxSAT: maximize total weight of satisfied soft constraints.
+
+    Binds *satisfied_var* to the total weight of soft constraints that
+    are satisfied in the optimal model.  Returns False on infeasibility.
+    """
+    state = get_z3_state(trail)
+    opt = _build_optimize(state, trail)
+
+    if opt.check() != _z3.sat:
+        return False
+
+    m = opt.model()
+    satisfied_weight = 0
+    for entry in state._soft_constraints:
+        if entry is not None:
+            z3_expr, weight, _ = entry
+            if _z3.is_true(m.eval(z3_expr)):
+                satisfied_weight += weight
+
+    return unify(satisfied_var, satisfied_weight, trail)
+
+
+def z3_optimize_label(vars_list: Any, objective_expr: Any,
+                      result_var: Any, mode: Any, trail: Trail):
+    """Find the optimal solution, bind variables, and yield once.
+
+    mode: ``"maximize"`` or ``"minimize"``
+
+    Yields exactly one solution (the optimal assignment).  Bindings are
+    undone on backtrack so the generator can be re-entered.
+    """
+    state = get_z3_state(trail)
+    vars_list = _as_list(deref(vars_list))
+    mode = deref(mode)
+
+    z3_vars: list = []
+    clausal_vars: list = []
+    for v in vars_list:
+        v = deref(v)
+        if is_var(v):
+            z3_v = state.var_map.get(id(v))
+            if z3_v is None:
+                raise ValueError(f"z3_optimize_label: variable not registered")
+            z3_vars.append(z3_v)
+            clausal_vars.append(v)
+        # ground values are ignored during labeling
+
+    z3_obj = clausal_to_z3(objective_expr, trail, default_sort=_z3.IntSort())
+
+    opt = _build_optimize(state, trail)
+
+    if mode == "maximize":
+        handle = opt.maximize(z3_obj)
+    elif mode == "minimize":
+        handle = opt.minimize(z3_obj)
+    else:
+        raise ValueError(
+            f"z3_optimize_label: mode must be 'maximize' or 'minimize', got {mode!r}"
+        )
+
+    if opt.check() != _z3.sat:
+        return
+
+    m = opt.model()
+    # Get optimal objective value
+    if mode == "maximize":
+        bound = opt.upper(handle)
+    else:
+        bound = opt.lower(handle)
+    obj_val = z3_to_python(bound)
+    if isinstance(obj_val, str):
+        s = obj_val.strip()
+        if s in ('+oo', 'oo'):
+            obj_val = float('inf')
+        elif s == '-oo':
+            obj_val = float('-inf')
+        else:
+            return  # unknown
+
+    mark = trail.mark()
+    ok = unify(result_var, obj_val, trail)
+    if ok:
+        for cv, z3v in zip(clausal_vars, z3_vars):
+            val = z3_to_python(m.eval(z3v, model_completion=True))
+            if not unify(cv, val, trail):
+                ok = False
+                break
+    if ok:
+        yield None
+    trail.undo(mark)
+
+
+def z3_multi_optimize(objectives: Any, results: Any, priority: Any,
+                      trail: Trail):
+    """Multi-objective optimization.
+
+    objectives: list of ``(expr, mode)`` where mode is ``"maximize"``
+                or ``"minimize"``
+    results:    list of Vars to bind to optimal objective values
+    priority:   ``"lex"``, ``"pareto"``, or ``"box"``
+
+    For ``"pareto"`` mode, yields multiple Pareto-optimal solutions.
+    For ``"lex"`` and ``"box"``, yields one solution.
+    """
+    state = get_z3_state(trail)
+    objectives = deref(objectives)
+    results = _as_list(deref(results))
+    priority = deref(priority)
+
+    opt = _build_optimize(state, trail)
+    opt.set(priority=priority)
+
+    handles = []
+    z3_objs = []
+    for expr, mode in objectives:
+        z3_expr = clausal_to_z3(expr, trail, default_sort=_z3.RealSort())
+        z3_objs.append(z3_expr)
+        if mode == "maximize":
+            handles.append(opt.maximize(z3_expr))
+        else:
+            handles.append(opt.minimize(z3_expr))
+
+    if priority == "pareto":
+        while opt.check() == _z3.sat:
+            m = opt.model()
+            mark = trail.mark()
+            ok = True
+            for rv, z3_e in zip(results, z3_objs):
+                val = z3_to_python(m.eval(z3_e))
+                if not unify(rv, val, trail):
+                    ok = False
+                    break
+            if ok:
+                yield None
+            trail.undo(mark)
+    else:
+        if opt.check() == _z3.sat:
+            m = opt.model()
+            mark = trail.mark()
+            ok = True
+            for rv, z3_e in zip(results, z3_objs):
+                val = z3_to_python(m.eval(z3_e))
+                if not unify(rv, val, trail):
+                    ok = False
+                    break
+            if ok:
+                yield None
+            trail.undo(mark)

@@ -530,3 +530,19 @@ class TestMultiObjective:
 7. Builtin registration
 8. Unit tests
 9. Integration tests (scheduling, diet problem, MaxSAT)
+
+---
+
+## Issues Encountered During Implementation
+
+### Issue 1: `_build_optimize` shared helper
+Extracted the Optimize reconstruction logic (copy assertions + soft constraints) into `_build_optimize()` to share between `_z3_optimize`, `z3_max_sat`, `z3_optimize_label`, and `z3_multi_optimize`.
+
+### Issue 2: Soft constraints interact with maximize/minimize objectives
+Z3's Optimize treats soft constraints as part of the optimization problem. `maximize(x)` with `add_soft(x <= 5)` returns x=5, not x=10, because the optimizer balances the objective against soft constraint penalties. This is Z3's intended behavior.
+
+### Issue 3: `in_z3_real` requires bounds
+Phase 4's `in_z3_real(var, lo, hi, trail)` requires explicit bounds. Tests initially tried `in_z3_real(x, trail)` which fails. Fixed by providing explicit bounds.
+
+### Issue 4: Consolidated test file
+All Phase 7 tests placed in `tests/test_clpz3_opt.py` (26 tests): soft constraints, MaxSAT, optimize+label, multi-objective (lex/box), integration (scheduling), and real-valued optimization.
