@@ -149,6 +149,7 @@ for the full feature set.
 | [Exceptions](exceptions.md) | throw/catch, structured error terms |
 | [Coroutining](coroutining.md) | freeze/2, when/2, setup_call_cleanup/3, call_nth/2, count_all/2 |
 | [CLP(B)](clpb.md) | Boolean constraint programming |
+| [Z3 SMT Solver](z3.md) | Multi-theory constraints via Z3 — integers, reals, booleans, bitvectors, arrays, strings, optimization, unsat cores |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
 | [Trealla Prolog Embedding](trealla.md) | In-process Trealla Prolog engine via ctypes — fast, lightweight, instant startup |
