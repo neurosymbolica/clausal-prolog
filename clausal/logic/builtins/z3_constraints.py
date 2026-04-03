@@ -289,3 +289,284 @@ def _z3_table__2(vars_list, tuples_list, trail, k):
     from clausal.logic.clpz3 import z3_table as _fn
     if _fn(vars_list, tuples_list, trail):
         yield None
+
+
+# ── Phase 6: advanced theories ────────────────────────────────────────────────
+
+# ─ Bitvectors ─
+
+@_builtin("in_z3_bv", 2)
+def _in_z3_bv__2(var_or_list, width, trail, k):
+    """in_z3_bv(Var, Width) — declare bitvector variable(s)."""
+    from clausal.logic.clpz3 import in_z3_bv as _fn
+    if _fn(var_or_list, width, trail): yield None
+
+@_builtin("label_z3_bv", 1)
+def _label_z3_bv__1(vars_list, trail, k):
+    """label_z3_bv(Vars) — enumerate bitvector solutions."""
+    from clausal.logic.clpz3 import label_z3_bv as _fn
+    yield from _fn(vars_list, trail)
+
+@_builtin("bv_add", 3)
+def _bv_add__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_add as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_sub", 3)
+def _bv_sub__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_sub as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_mul", 3)
+def _bv_mul__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_mul as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_udiv", 3)
+def _bv_udiv__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_udiv as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_sdiv", 3)
+def _bv_sdiv__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_sdiv as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_urem", 3)
+def _bv_urem__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_urem as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_srem", 3)
+def _bv_srem__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_srem as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_and", 3)
+def _bv_and__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_and as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_or", 3)
+def _bv_or__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_or as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_xor", 3)
+def _bv_xor__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_xor as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_not", 2)
+def _bv_not__2(x, r, trail, k):
+    from clausal.logic.clpz3 import bv_not as _fn
+    if _fn(x, r, trail): yield None
+
+@_builtin("bv_shl", 3)
+def _bv_shl__3(x, n, r, trail, k):
+    from clausal.logic.clpz3 import bv_shl as _fn
+    if _fn(x, n, r, trail): yield None
+
+@_builtin("bv_lshr", 3)
+def _bv_lshr__3(x, n, r, trail, k):
+    from clausal.logic.clpz3 import bv_lshr as _fn
+    if _fn(x, n, r, trail): yield None
+
+@_builtin("bv_ashr", 3)
+def _bv_ashr__3(x, n, r, trail, k):
+    from clausal.logic.clpz3 import bv_ashr as _fn
+    if _fn(x, n, r, trail): yield None
+
+@_builtin("bv_eq", 2)
+def _bv_eq__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_eq as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_ne", 2)
+def _bv_ne__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_ne as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_slt", 2)
+def _bv_slt__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_slt as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_sle", 2)
+def _bv_sle__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_sle as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_sgt", 2)
+def _bv_sgt__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_sgt as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_sge", 2)
+def _bv_sge__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_sge as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_ult", 2)
+def _bv_ult__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_ult as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_ule", 2)
+def _bv_ule__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_ule as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_ugt", 2)
+def _bv_ugt__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_ugt as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_uge", 2)
+def _bv_uge__2(x, y, trail, k):
+    from clausal.logic.clpz3 import bv_uge as _fn
+    if _fn(x, y, trail): yield None
+
+@_builtin("bv_concat", 3)
+def _bv_concat__3(x, y, r, trail, k):
+    from clausal.logic.clpz3 import bv_concat as _fn
+    if _fn(x, y, r, trail): yield None
+
+@_builtin("bv_extract", 4)
+def _bv_extract__4(hi, lo, x, r, trail, k):
+    from clausal.logic.clpz3 import bv_extract as _fn
+    if _fn(hi, lo, x, r, trail): yield None
+
+@_builtin("bv_zext", 3)
+def _bv_zext__3(x, n, r, trail, k):
+    from clausal.logic.clpz3 import bv_zext as _fn
+    if _fn(x, n, r, trail): yield None
+
+@_builtin("bv_sext", 3)
+def _bv_sext__3(x, n, r, trail, k):
+    from clausal.logic.clpz3 import bv_sext as _fn
+    if _fn(x, n, r, trail): yield None
+
+
+# ─ Arrays ─
+
+@_builtin("z3_array", 3)
+def _z3_array__3(var, domain_sort, range_sort, trail, k):
+    """z3_array(Var, DomainSort, RangeSort) — declare array variable."""
+    from clausal.logic.clpz3 import z3_array as _fn
+    if _fn(var, domain_sort, range_sort, trail): yield None
+
+@_builtin("z3_select", 3)
+def _z3_select__3(array, index, value, trail, k):
+    """z3_select(Array, Index, Value) — Select(array, index) == value."""
+    from clausal.logic.clpz3 import z3_select as _fn
+    if _fn(array, index, value, trail): yield None
+
+@_builtin("z3_store", 4)
+def _z3_store__4(array, index, value, result, trail, k):
+    """z3_store(Array, Index, Value, Result) — result == Store(array, index, value)."""
+    from clausal.logic.clpz3 import z3_store as _fn
+    if _fn(array, index, value, result, trail): yield None
+
+@_builtin("z3_const_array", 3)
+def _z3_const_array__3(value, domain_sort, result, trail, k):
+    """z3_const_array(Value, DomainSort, Result) — constant array."""
+    from clausal.logic.clpz3 import z3_const_array as _fn
+    if _fn(value, domain_sort, result, trail): yield None
+
+
+# ─ Sets ─
+
+@_builtin("z3_set", 2)
+def _z3_set__2(var, elem_sort, trail, k):
+    from clausal.logic.clpz3 import z3_set as _fn
+    if _fn(var, elem_sort, trail): yield None
+
+@_builtin("z3_set_member", 2)
+def _z3_set_member__2(elem, s, trail, k):
+    from clausal.logic.clpz3 import z3_set_member as _fn
+    if _fn(elem, s, trail): yield None
+
+@_builtin("z3_set_not_member", 2)
+def _z3_set_not_member__2(elem, s, trail, k):
+    from clausal.logic.clpz3 import z3_set_not_member as _fn
+    if _fn(elem, s, trail): yield None
+
+@_builtin("z3_set_subset", 2)
+def _z3_set_subset__2(s1, s2, trail, k):
+    from clausal.logic.clpz3 import z3_set_subset as _fn
+    if _fn(s1, s2, trail): yield None
+
+@_builtin("z3_set_union", 3)
+def _z3_set_union__3(s1, s2, r, trail, k):
+    from clausal.logic.clpz3 import z3_set_union as _fn
+    if _fn(s1, s2, r, trail): yield None
+
+@_builtin("z3_set_intersect", 3)
+def _z3_set_intersect__3(s1, s2, r, trail, k):
+    from clausal.logic.clpz3 import z3_set_intersect as _fn
+    if _fn(s1, s2, r, trail): yield None
+
+@_builtin("z3_set_add", 3)
+def _z3_set_add__3(s, elem, r, trail, k):
+    from clausal.logic.clpz3 import z3_set_add as _fn
+    if _fn(s, elem, r, trail): yield None
+
+
+# ─ Strings ─
+
+@_builtin("z3_string", 1)
+def _z3_string__1(var, trail, k):
+    from clausal.logic.clpz3 import z3_string as _fn
+    if _fn(var, trail): yield None
+
+@_builtin("z3_str_length", 2)
+def _z3_str_length__2(s, n, trail, k):
+    from clausal.logic.clpz3 import z3_str_length as _fn
+    if _fn(s, n, trail): yield None
+
+@_builtin("z3_str_contains", 2)
+def _z3_str_contains__2(s, sub, trail, k):
+    from clausal.logic.clpz3 import z3_str_contains as _fn
+    if _fn(s, sub, trail): yield None
+
+@_builtin("z3_str_concat", 3)
+def _z3_str_concat__3(s1, s2, r, trail, k):
+    from clausal.logic.clpz3 import z3_str_concat as _fn
+    if _fn(s1, s2, r, trail): yield None
+
+@_builtin("z3_str_regex", 2)
+def _z3_str_regex__2(s, pattern, trail, k):
+    from clausal.logic.clpz3 import z3_str_regex as _fn
+    if _fn(s, pattern, trail): yield None
+
+@_builtin("label_z3_str", 1)
+def _label_z3_str__1(var, trail, k):
+    from clausal.logic.clpz3 import label_z3_str as _fn
+    yield from _fn(var, trail)
+
+
+# ─ Uninterpreted functions ─
+
+@_builtin("z3_function", 3)
+def _z3_function__3(var, domain_sorts, range_sort, trail, k):
+    from clausal.logic.clpz3 import z3_function as _fn
+    if _fn(var, domain_sorts, range_sort, trail): yield None
+
+@_builtin("z3_app", 3)
+def _z3_app__3(func_var, args, result, trail, k):
+    from clausal.logic.clpz3 import z3_app as _fn
+    if _fn(func_var, args, result, trail): yield None
+
+
+# ─ Quantifiers ─
+
+@_builtin("z3_forall", 2)
+def _z3_forall__2(var_sorts, body_fn, trail, k):
+    from clausal.logic.clpz3 import z3_forall as _fn
+    if _fn(var_sorts, body_fn, trail): yield None
+
+@_builtin("z3_exists", 2)
+def _z3_exists__2(var_sorts, body_fn, trail, k):
+    from clausal.logic.clpz3 import z3_exists as _fn
+    if _fn(var_sorts, body_fn, trail): yield None

@@ -184,6 +184,10 @@ def clausal_to_z3(expr: Any, trail: Trail, default_sort: Any = None) -> Any:
     """
     expr = deref(expr)
 
+    # ── Z3 expressions passed through directly ────────────────────────────────
+    if isinstance(expr, _z3.ExprRef):
+        return expr
+
     # ── Ground values ────────────────────────────────────────────────────────
     # bool must come before int (bool is a subclass of int)
     if isinstance(expr, bool):
@@ -194,6 +198,8 @@ def clausal_to_z3(expr: Any, trail: Trail, default_sort: Any = None) -> Any:
         return _z3.RealVal(expr)
     if isinstance(expr, Fraction):
         return _z3.RealVal(expr.numerator) / _z3.RealVal(expr.denominator)
+    if isinstance(expr, str):
+        return _z3.StringVal(expr)
 
     # ── Logic variable ───────────────────────────────────────────────────────
     if is_var(expr):
@@ -276,12 +282,13 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
     """Convert a Z3 model value to a Python value.
 
     Mapping:
-    - Z3 integer  → Python int
-    - Z3 rational → Fraction (exact)
-    - Z3 true     → 1  (Clausal uses 0/1 for booleans)
-    - Z3 false    → 0
-    - Z3 algebraic number → float approximation
-    - Other       → str (fallback)
+    - Z3 integer       → Python int
+    - Z3 rational      → Fraction (exact)
+    - Z3 true/false    → 1 / 0  (Clausal uses 0/1 for booleans)
+    - Z3 bitvector     → Python int (unsigned)
+    - Z3 string        → Python str
+    - Z3 algebraic     → float approximation
+    - Other            → str (fallback)
     """
     if _z3.is_int_value(z3_val):
         return z3_val.as_long()
@@ -291,6 +298,10 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
         return 1
     if _z3.is_false(z3_val):
         return 0
+    if _z3.is_bv_value(z3_val):
+        return z3_val.as_long()
+    if _z3.is_string_value(z3_val):
+        return z3_val.as_string()
     if _z3.is_algebraic_value(z3_val):
         return float(z3_val.approx(20))
     return str(z3_val)
@@ -1200,3 +1211,583 @@ def z3_table(vars_list: Any, tuples_list: Any, trail: Trail) -> bool:
     z3_push(trail)
     state.solver.add(_z3.Or(clauses))
     return True
+
+
+# ── Phase 6: advanced theories ────────────────────────────────────────────────
+
+# ── BV helpers ────────────────────────────────────────────────────────────────
+
+def _z3_bv_expr(val: Any, trail: Trail) -> Any:
+    """Return the Z3 BitVec expression for a registered Clausal Var.
+
+    Raises ValueError if the var is not yet registered with in_z3_bv().
+    """
+    val = deref(val)
+    if is_var(val):
+        state = get_z3_state(trail)
+        z3_v = state.var_map.get(id(val))
+        if z3_v is None:
+            raise ValueError(
+                "BV variable not registered with Z3. Call in_z3_bv first."
+            )
+        return z3_v
+    raise TypeError(
+        f"_z3_bv_expr: expected registered BV Var, got {type(val).__name__!r}"
+    )
+
+
+def _z3_bv_val(val: Any, sort: Any, trail: Trail) -> Any:
+    """Convert val to a Z3 BitVec expression of the given sort.
+
+    - int → BitVecVal(val, sort)
+    - registered Var → existing Z3 constant
+    - unregistered Var → auto-register with sort
+    """
+    val = deref(val)
+    if isinstance(val, int):
+        return _z3.BitVecVal(val, sort)
+    if is_var(val):
+        state = get_z3_state(trail)
+        existing = state.var_map.get(id(val))
+        if existing is not None:
+            return existing
+        return z3_var_for(val, sort, trail)
+    raise TypeError(
+        f"_z3_bv_val: expected int or Var, got {type(val).__name__!r}"
+    )
+
+
+def _bv_binop(x: Any, y: Any, result: Any, op, trail: Trail) -> bool:
+    """Post result == op(x, y) for BV operands of the same sort."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    sort = z3_x.sort()
+    z3_y = _z3_bv_val(y, sort, trail)
+    z3_r = _z3_bv_val(result, sort, trail)
+    z3_push(trail)
+    state.solver.add(z3_r == op(z3_x, z3_y))
+    return True
+
+
+def _bv_unop(x: Any, result: Any, op, trail: Trail) -> bool:
+    """Post result == op(x) for a BV unary operation."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    z3_r = _z3_bv_val(result, z3_x.sort(), trail)
+    z3_push(trail)
+    state.solver.add(z3_r == op(z3_x))
+    return True
+
+
+def _bv_cmp(x: Any, y: Any, trail: Trail, op) -> bool:
+    """Post a BV comparison constraint (signed or unsigned)."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    z3_y = _z3_bv_val(y, z3_x.sort(), trail)
+    z3_push(trail)
+    state.solver.add(op(z3_x, z3_y))
+    return True
+
+
+# ── Bitvectors ────────────────────────────────────────────────────────────────
+
+def in_z3_bv(var_or_list: Any, width: int, trail: Trail) -> bool:
+    """Declare bitvector variable(s) of the given bit-width.
+
+    The variable is registered with BitVecSort(width) but no domain
+    constraints are posted — the full 2^width range is available.
+    """
+    for v in _as_list(var_or_list):
+        v = deref(v)
+        if is_var(v):
+            z3_var_for(v, _z3.BitVecSort(width), trail)
+        elif isinstance(v, int):
+            pass  # ground — nothing to register
+        else:
+            raise TypeError(
+                f"in_z3_bv: expected int or Var, got {type(v).__name__!r}"
+            )
+    return True
+
+
+def label_z3_bv(vars_list: Any, trail: Trail):
+    """Enumerate bitvector solutions via blocking clauses.
+
+    Generator: yields None for each solution with vars bound to int values.
+    Same blocking-clause pattern as label_z3 for integers.
+    """
+    state = get_z3_state(trail)
+    items = _as_list(vars_list)
+
+    z3_vars: list = []
+    clausal_vars: list = []
+    for v in items:
+        v = deref(v)
+        if is_var(v):
+            z3_v = state.var_map.get(id(v))
+            if z3_v is None:
+                raise ValueError(
+                    "label_z3_bv: variable not registered. Call in_z3_bv first."
+                )
+            z3_vars.append(z3_v)
+            clausal_vars.append(v)
+        elif isinstance(v, int):
+            pass  # already ground
+        else:
+            raise TypeError(
+                f"label_z3_bv: expected int or Var, got {type(v).__name__!r}"
+            )
+
+    if not z3_vars:
+        if z3_check(trail):
+            yield None
+        return
+
+    z3_push(trail)
+
+    while state.solver.check() == _z3.sat:
+        m = state.solver.model()
+        values = [z3_to_python(m.eval(z3v, model_completion=True))
+                  for z3v in z3_vars]
+        mark = trail.mark()
+        ok = all(unify(cv, val, trail)
+                 for cv, val in zip(clausal_vars, values))
+        if ok:
+            yield None
+        trail.undo(mark)
+        block = _z3.Or([z3v != m.eval(z3v, model_completion=True)
+                        for z3v in z3_vars])
+        state.solver.add(block)
+
+
+# BV arithmetic (result-binding)
+def bv_add(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a+b, trail)
+def bv_sub(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a-b, trail)
+def bv_mul(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a*b, trail)
+def bv_udiv(x, y, result, trail): return _bv_binop(x, y, result, _z3.UDiv, trail)
+def bv_sdiv(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a/b, trail)
+def bv_urem(x, y, result, trail): return _bv_binop(x, y, result, _z3.URem, trail)
+def bv_srem(x, y, result, trail): return _bv_binop(x, y, result, _z3.SRem, trail)
+
+# BV bitwise (result-binding)
+def bv_and(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a&b, trail)
+def bv_or(x, y, result, trail):  return _bv_binop(x, y, result, lambda a,b: a|b, trail)
+def bv_xor(x, y, result, trail): return _bv_binop(x, y, result, lambda a,b: a^b, trail)
+def bv_not(x, result, trail):    return _bv_unop(x, result, lambda a: ~a, trail)
+
+# BV shifts (result-binding)
+def bv_shl(x, n, result, trail):  return _bv_binop(x, n, result, lambda a,b: a<<b, trail)
+def bv_lshr(x, n, result, trail): return _bv_binop(x, n, result, _z3.LShR, trail)
+def bv_ashr(x, n, result, trail): return _bv_binop(x, n, result, lambda a,b: a>>b, trail)
+
+# BV signed comparisons (constraint-posting)
+def bv_eq(x, y, trail):  return _bv_cmp(x, y, trail, lambda a,b: a==b)
+def bv_ne(x, y, trail):  return _bv_cmp(x, y, trail, lambda a,b: a!=b)
+def bv_slt(x, y, trail): return _bv_cmp(x, y, trail, lambda a,b: a<b)
+def bv_sle(x, y, trail): return _bv_cmp(x, y, trail, lambda a,b: a<=b)
+def bv_sgt(x, y, trail): return _bv_cmp(x, y, trail, lambda a,b: a>b)
+def bv_sge(x, y, trail): return _bv_cmp(x, y, trail, lambda a,b: a>=b)
+
+# BV unsigned comparisons (constraint-posting)
+def bv_ult(x, y, trail): return _bv_cmp(x, y, trail, _z3.ULT)
+def bv_ule(x, y, trail): return _bv_cmp(x, y, trail, _z3.ULE)
+def bv_ugt(x, y, trail): return _bv_cmp(x, y, trail, _z3.UGT)
+def bv_uge(x, y, trail): return _bv_cmp(x, y, trail, _z3.UGE)
+
+
+def bv_concat(x: Any, y: Any, result: Any, trail: Trail) -> bool:
+    """Post result == Concat(x, y). Result width = width(x) + width(y)."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    z3_y = _z3_bv_expr(y, trail)
+    result_sort = _z3.BitVecSort(z3_x.size() + z3_y.size())
+    z3_r = _z3_bv_val(result, result_sort, trail)
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.Concat(z3_x, z3_y))
+    return True
+
+
+def bv_extract(hi: int, lo: int, x: Any, result: Any, trail: Trail) -> bool:
+    """Post result == Extract(hi, lo, x). Result width = hi - lo + 1."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    result_sort = _z3.BitVecSort(hi - lo + 1)
+    z3_r = _z3_bv_val(result, result_sort, trail)
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.Extract(hi, lo, z3_x))
+    return True
+
+
+def bv_zext(x: Any, n: int, result: Any, trail: Trail) -> bool:
+    """Post result == ZeroExt(n, x). Result width = width(x) + n."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    result_sort = _z3.BitVecSort(z3_x.size() + n)
+    z3_r = _z3_bv_val(result, result_sort, trail)
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.ZeroExt(n, z3_x))
+    return True
+
+
+def bv_sext(x: Any, n: int, result: Any, trail: Trail) -> bool:
+    """Post result == SignExt(n, x). Result width = width(x) + n."""
+    state = get_z3_state(trail)
+    z3_x = _z3_bv_expr(x, trail)
+    result_sort = _z3.BitVecSort(z3_x.size() + n)
+    z3_r = _z3_bv_val(result, result_sort, trail)
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.SignExt(n, z3_x))
+    return True
+
+
+# ── Arrays ────────────────────────────────────────────────────────────────────
+
+def z3_array(var: Any, domain_sort: Any, range_sort: Any, trail: Trail) -> bool:
+    """Declare an array variable: Array(domain_sort → range_sort).
+
+    domain_sort and range_sort are Z3 sort objects (e.g., _z3.IntSort()).
+    """
+    var = deref(var)
+    if not is_var(var):
+        raise TypeError(f"z3_array: expected Var, got {type(var).__name__!r}")
+    z3_var_for(var, _z3.ArraySort(domain_sort, range_sort), trail)
+    return True
+
+
+def z3_select(array: Any, index: Any, value: Any, trail: Trail) -> bool:
+    """Post Select(array, index) == value.
+
+    If value is an unbound Var, auto-registers it with the array's range sort.
+    """
+    state = get_z3_state(trail)
+    z3_arr = clausal_to_z3(array, trail)
+    z3_idx = clausal_to_z3(index, trail, default_sort=z3_arr.sort().domain())
+    range_sort = z3_arr.sort().range()
+    value_d = deref(value)
+    z3_val = (z3_var_for(value_d, range_sort, trail) if is_var(value_d)
+              else clausal_to_z3(value_d, trail, default_sort=range_sort))
+    z3_push(trail)
+    state.solver.add(_z3.Select(z3_arr, z3_idx) == z3_val)
+    return True
+
+
+def z3_store(array: Any, index: Any, value: Any, result: Any, trail: Trail) -> bool:
+    """Post result == Store(array, index, value).
+
+    If result is an unbound Var, auto-registers it with the array's sort.
+    """
+    state = get_z3_state(trail)
+    z3_arr = clausal_to_z3(array, trail)
+    arr_sort = z3_arr.sort()
+    z3_idx = clausal_to_z3(index, trail, default_sort=arr_sort.domain())
+    z3_val = clausal_to_z3(value, trail, default_sort=arr_sort.range())
+    result_d = deref(result)
+    z3_res = (z3_var_for(result_d, arr_sort, trail) if is_var(result_d)
+              else clausal_to_z3(result_d, trail))
+    z3_push(trail)
+    state.solver.add(z3_res == _z3.Store(z3_arr, z3_idx, z3_val))
+    return True
+
+
+def z3_const_array(value: Any, domain_sort: Any, result: Any, trail: Trail) -> bool:
+    """Post result == K(domain_sort, value) — array where every index maps to value."""
+    state = get_z3_state(trail)
+    z3_val = clausal_to_z3(value, trail)
+    arr = _z3.K(domain_sort, z3_val)
+    result_d = deref(result)
+    z3_res = (z3_var_for(result_d, arr.sort(), trail) if is_var(result_d)
+              else clausal_to_z3(result_d, trail))
+    z3_push(trail)
+    state.solver.add(z3_res == arr)
+    return True
+
+
+# ── Sets ──────────────────────────────────────────────────────────────────────
+
+def z3_set(var: Any, elem_sort: Any, trail: Trail) -> bool:
+    """Declare a set variable over elem_sort (encoded as Array(elem_sort, Bool))."""
+    var = deref(var)
+    if not is_var(var):
+        raise TypeError(f"z3_set: expected Var, got {type(var).__name__!r}")
+    z3_var_for(var, _z3.SetSort(elem_sort), trail)
+    return True
+
+
+def z3_set_member(elem: Any, s: Any, trail: Trail) -> bool:
+    """Post elem ∈ s."""
+    state = get_z3_state(trail)
+    z3_e = clausal_to_z3(elem, trail)
+    z3_s = clausal_to_z3(s, trail)
+    z3_push(trail)
+    state.solver.add(_z3.IsMember(z3_e, z3_s))
+    return True
+
+
+def z3_set_not_member(elem: Any, s: Any, trail: Trail) -> bool:
+    """Post elem ∉ s."""
+    state = get_z3_state(trail)
+    z3_e = clausal_to_z3(elem, trail)
+    z3_s = clausal_to_z3(s, trail)
+    z3_push(trail)
+    state.solver.add(_z3.Not(_z3.IsMember(z3_e, z3_s)))
+    return True
+
+
+def z3_set_subset(s1: Any, s2: Any, trail: Trail) -> bool:
+    """Post s1 ⊆ s2."""
+    state = get_z3_state(trail)
+    z3_s1 = clausal_to_z3(s1, trail)
+    z3_s2 = clausal_to_z3(s2, trail)
+    z3_push(trail)
+    state.solver.add(_z3.IsSubset(z3_s1, z3_s2))
+    return True
+
+
+def z3_set_union(s1: Any, s2: Any, result: Any, trail: Trail) -> bool:
+    """Post result == s1 ∪ s2."""
+    state = get_z3_state(trail)
+    z3_s1 = clausal_to_z3(s1, trail)
+    z3_s2 = clausal_to_z3(s2, trail)
+    result_d = deref(result)
+    z3_r = (z3_var_for(result_d, z3_s1.sort(), trail) if is_var(result_d)
+            else clausal_to_z3(result_d, trail))
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.SetUnion(z3_s1, z3_s2))
+    return True
+
+
+def z3_set_intersect(s1: Any, s2: Any, result: Any, trail: Trail) -> bool:
+    """Post result == s1 ∩ s2."""
+    state = get_z3_state(trail)
+    z3_s1 = clausal_to_z3(s1, trail)
+    z3_s2 = clausal_to_z3(s2, trail)
+    result_d = deref(result)
+    z3_r = (z3_var_for(result_d, z3_s1.sort(), trail) if is_var(result_d)
+            else clausal_to_z3(result_d, trail))
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.SetIntersect(z3_s1, z3_s2))
+    return True
+
+
+def z3_set_add(s: Any, elem: Any, result: Any, trail: Trail) -> bool:
+    """Post result == s ∪ {elem}."""
+    state = get_z3_state(trail)
+    z3_s = clausal_to_z3(s, trail)
+    z3_e = clausal_to_z3(elem, trail)
+    result_d = deref(result)
+    z3_r = (z3_var_for(result_d, z3_s.sort(), trail) if is_var(result_d)
+            else clausal_to_z3(result_d, trail))
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.SetAdd(z3_s, z3_e))
+    return True
+
+
+# ── Strings ───────────────────────────────────────────────────────────────────
+
+def z3_string(var: Any, trail: Trail) -> bool:
+    """Declare a string variable."""
+    var = deref(var)
+    if not is_var(var):
+        raise TypeError(f"z3_string: expected Var, got {type(var).__name__!r}")
+    z3_var_for(var, _z3.StringSort(), trail)
+    return True
+
+
+def z3_str_length(s: Any, n: Any, trail: Trail) -> bool:
+    """Post Length(s) == n."""
+    state = get_z3_state(trail)
+    z3_s = clausal_to_z3(s, trail, default_sort=_z3.StringSort())
+    n_d = deref(n)
+    z3_n = (z3_var_for(n_d, _z3.IntSort(), trail) if is_var(n_d)
+            else clausal_to_z3(n_d, trail, default_sort=_z3.IntSort()))
+    z3_push(trail)
+    state.solver.add(_z3.Length(z3_s) == z3_n)
+    return True
+
+
+def z3_str_contains(s: Any, substr: Any, trail: Trail) -> bool:
+    """Post Contains(s, substr)."""
+    state = get_z3_state(trail)
+    z3_s = clausal_to_z3(s, trail, default_sort=_z3.StringSort())
+    z3_sub = clausal_to_z3(deref(substr), trail, default_sort=_z3.StringSort())
+    z3_push(trail)
+    state.solver.add(_z3.Contains(z3_s, z3_sub))
+    return True
+
+
+def z3_str_concat(s1: Any, s2: Any, result: Any, trail: Trail) -> bool:
+    """Post result == Concat(s1, s2)."""
+    state = get_z3_state(trail)
+    z3_s1 = clausal_to_z3(s1, trail, default_sort=_z3.StringSort())
+    z3_s2 = clausal_to_z3(s2, trail, default_sort=_z3.StringSort())
+    result_d = deref(result)
+    z3_r = (z3_var_for(result_d, _z3.StringSort(), trail) if is_var(result_d)
+            else clausal_to_z3(result_d, trail, default_sort=_z3.StringSort()))
+    z3_push(trail)
+    state.solver.add(z3_r == _z3.Concat(z3_s1, z3_s2))
+    return True
+
+
+def z3_str_regex(s: Any, pattern: Any, trail: Trail) -> bool:
+    """Post InRe(s, pattern) — s matches the Z3 regex pattern.
+
+    pattern can be a Z3 ReRef (built with z3.Re, z3.Star, etc.) or a
+    string (converted via z3.Re).
+    """
+    state = get_z3_state(trail)
+    z3_s = clausal_to_z3(s, trail, default_sort=_z3.StringSort())
+    if isinstance(pattern, str):
+        z3_re = _z3.Re(pattern)
+    else:
+        z3_re = pattern
+    z3_push(trail)
+    state.solver.add(_z3.InRe(z3_s, z3_re))
+    return True
+
+
+def label_z3_str(var: Any, trail: Trail):
+    """Find one satisfying assignment for a Z3 string variable.
+
+    Yields at most one solution (string domains are infinite).
+    Bindings are undone after the caller resumes the generator.
+    """
+    state = get_z3_state(trail)
+    v = deref(var)
+    if not is_var(v):
+        yield None
+        return
+
+    z3_v = state.var_map.get(id(v))
+    if z3_v is None:
+        raise ValueError(
+            "label_z3_str: variable not registered. Call z3_string first."
+        )
+
+    if state.solver.check() == _z3.sat:
+        m = state.solver.model()
+        val = z3_to_python(m.eval(z3_v, model_completion=True))
+        mark = trail.mark()
+        if unify(v, val, trail):
+            yield None
+        trail.undo(mark)
+
+
+# ── Uninterpreted functions ───────────────────────────────────────────────────
+
+class Z3FuncInfo:
+    """Metadata for a Z3 uninterpreted function, stored as a Var attribute."""
+    __slots__ = ('func', 'domain_sorts', 'range_sort')
+
+    def __init__(self, func: Any, domain_sorts: list, range_sort: Any) -> None:
+        self.func = func
+        self.domain_sorts = domain_sorts
+        self.range_sort = range_sort
+
+
+def z3_function(var: Any, domain_sorts: list, range_sort: Any, trail: Trail) -> bool:
+    """Declare an uninterpreted function and attach it to a Clausal Var.
+
+    domain_sorts: list of Z3 sort objects for argument types
+    range_sort: Z3 sort for return type
+
+    The function declaration is stored as a Z3FuncInfo attribute on var.
+    """
+    state = get_z3_state(trail)
+    state._counter += 1
+    func = _z3.Function(f"uf_{state._counter}", *domain_sorts, range_sort)
+    var_d = deref(var)
+    if not is_var(var_d):
+        raise TypeError(f"z3_function: expected Var, got {type(var_d).__name__!r}")
+    put_attr(var_d, Z3_KEY, Z3FuncInfo(func, domain_sorts, range_sort), trail)
+    return True
+
+
+def z3_app(func_var: Any, args: list, result: Any, trail: Trail) -> bool:
+    """Post result == func_var(args...) for an uninterpreted function.
+
+    func_var must have been declared with z3_function.
+    """
+    state = get_z3_state(trail)
+    info = get_attr(deref(func_var), Z3_KEY)
+    if not isinstance(info, Z3FuncInfo):
+        raise TypeError(
+            "z3_app: func_var is not an uninterpreted function. "
+            "Declare it first with z3_function."
+        )
+    args_list = _as_list(args)
+    z3_args = [clausal_to_z3(deref(a), trail, default_sort=info.domain_sorts[i])
+               for i, a in enumerate(args_list)]
+    result_d = deref(result)
+    z3_r = (z3_var_for(result_d, info.range_sort, trail) if is_var(result_d)
+            else clausal_to_z3(result_d, trail, default_sort=info.range_sort))
+    z3_push(trail)
+    state.solver.add(z3_r == info.func(*z3_args))
+    return True
+
+
+# ── Quantifiers ───────────────────────────────────────────────────────────────
+
+def z3_forall(var_sorts: list, body_fn, trail: Trail) -> bool:
+    """Post a universal quantification ForAll(vars, body).
+
+    var_sorts: list of (name, sort) pairs for quantified variables.
+    body_fn: callable taking Z3 bound variable expressions, returning a BoolRef.
+
+    Note: Z3's E-matching heuristics handle instantiation. Providing patterns
+    via ForAll(..., patterns=[...]) can improve performance but is not exposed
+    here — use z3_forall_raw for that.
+    """
+    state = get_z3_state(trail)
+    bound = [_z3.Const(name, sort) for name, sort in var_sorts]
+    body = body_fn(*bound)
+    z3_push(trail)
+    state.solver.add(_z3.ForAll(bound, body))
+    return True
+
+
+def z3_exists(var_sorts: list, body_fn, trail: Trail) -> bool:
+    """Post an existential quantification Exists(vars, body).
+
+    var_sorts: list of (name, sort) pairs for quantified variables.
+    body_fn: callable taking Z3 bound variable expressions, returning a BoolRef.
+    """
+    state = get_z3_state(trail)
+    bound = [_z3.Const(name, sort) for name, sort in var_sorts]
+    body = body_fn(*bound)
+    z3_push(trail)
+    state.solver.add(_z3.Exists(bound, body))
+    return True
+
+
+# ── Algebraic datatypes ───────────────────────────────────────────────────────
+
+def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
+    """Declare a Z3 algebraic datatype and store it in Z3State.datatypes.
+
+    constructors: list of (ctor_name, [(field_name, sort_or_typename), ...])
+                  Use the datatype name string for self-referential fields.
+
+    Returns the created Z3 sort object. Also registers the sort under
+    state.datatypes[name] for later use.
+
+    Example (linked list):
+        z3_declare_datatype("IntList", [
+            ("nil",  []),
+            ("cons", [("head", z3.IntSort()), ("tail", "IntList")]),
+        ], trail)
+    """
+    state = get_z3_state(trail)
+    dt = _z3.Datatype(name)
+    for ctor_name, fields in constructors:
+        processed: list = []
+        for fname, fsort in fields:
+            if isinstance(fsort, str):
+                processed.append((fname, dt))  # self-reference
+            else:
+                processed.append((fname, fsort))
+        dt.declare(ctor_name, *processed)
+    sort = dt.create()
+    if not hasattr(state, 'datatypes'):
+        state.datatypes: dict = {}
+    state.datatypes[name] = sort
+    return sort

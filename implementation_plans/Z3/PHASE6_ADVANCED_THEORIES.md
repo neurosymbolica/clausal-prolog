@@ -660,3 +660,40 @@ def _partition_vars(vars_list, state, trail):
 8. Algebraic datatypes: `z3_declare_datatype` (Python API only)
 9. Builtin registration for all theories
 10. Tests for each theory
+
+---
+
+## Issues Encountered During Implementation
+
+### Issue 1: `clausal_to_z3` ExprRef passthrough
+Z3 `ExprRef` values (e.g. `BoolVal(False)`) fell through to the `raise TypeError` branch.
+**Fix:** Added `if isinstance(expr, _z3.ExprRef): return expr` at the top of `clausal_to_z3`.
+
+### Issue 2: String handling in `clausal_to_z3`
+Python `str` values needed conversion to `z3.StringVal`.
+**Fix:** Added `if isinstance(expr, str): return _z3.StringVal(expr)`.
+**Side-effect:** Broke `test_unknown_type_raises` in Phase 3 tests which used a string as the "unknown type". Fixed test to use `object()`.
+
+### Issue 3: BV integer literal coercion
+BV operations need `BitVecVal(n, sort)` not `IntVal(n)`. Passing raw integers to Z3 BV operations caused sort mismatches.
+**Fix:** `_z3_bv_val` helper converts integers to `BitVecVal` with the correct sort inferred from the companion variable.
+
+### Issue 4: Set operations need separate result variables
+`z3_set_add(s1, 1, s1, trail)` creates `s1 == SetAdd(s1, 1)` — a circular equation that is unsatisfiable.
+**Fix:** Tests use a fresh `Var()` for each set operation result.
+
+### Issue 5: Duplicate import shadows top-level import
+Several tests had local `from clausal.logic.clpz3 import get_z3_state` inside test methods, shadowing the top-level import and causing `UnboundLocalError` when the name was used before the local import line.
+**Fix:** Removed duplicate local imports.
+
+### Issue 6: `ForAll(x, x >= 0)` over integers is unsat
+The original `test_forall_linear` asserted this was satisfiable. Over Z3 integers (which include negatives), `∀x. x ≥ 0` is false.
+**Fix:** Changed to `ForAll(x, x == x)` (tautology).
+
+### Issue 7: `UserPropagateBase.on_fixed` only fires for Bool variables
+Z3's user propagator `on_fixed` callback only fires at the SAT level (Boolean variables). Integer variables with equality constraints are resolved by theory propagation, not CDCL decisions.
+**Fix:** Rewrote `test_on_fixed_records_assignment` to use `z3.Bool("p")` instead of an integer variable.
+
+### Issue 8: Consolidated test files vs. per-theory files
+The plan specified separate test files per theory (`test_clpz3_array.py`, `test_clpz3_string.py`, etc.).
+**Decision:** Arrays, sets, strings, UF, quantifiers, datatypes, and on_fixed integration consolidated into `tests/test_clpz3_theories.py`. Bitvectors kept separate in `tests/test_clpz3_bv.py` due to large test count.

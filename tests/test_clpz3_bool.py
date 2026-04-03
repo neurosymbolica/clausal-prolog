@@ -110,7 +110,7 @@ class TestClausalboolToZ3:
     def test_unknown_type_raises(self):
         trail = Trail()
         with pytest.raises(TypeError):
-            clausal_bool_to_z3("not_a_bool_expr", trail)
+            clausal_bool_to_z3(object(), trail)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
