@@ -679,3 +679,321 @@ def _z3_set_logic__1(logic, trail, k):
     """z3_set_logic(Logic) — switch to logic-specific solver."""
     from clausal.logic.clpz3 import z3_set_logic
     if z3_set_logic(logic, trail): yield None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module API — z3.integer, z3.real, z3.bitvector, z3.boolean, z3.label, etc.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@_builtin("z3.integer", 1)
+def _z3_mod_integer(constraints, trail, k):
+    """z3.integer({constraints}) — post integer constraints."""
+    import z3 as _z3
+    from clausal.logic.clpz3 import z3_constraint_block
+    if z3_constraint_block(constraints, _z3.IntSort(), trail): yield None
+
+@_builtin("z3.real", 1)
+def _z3_mod_real(constraints, trail, k):
+    """z3.real({constraints}) — post real-valued constraints."""
+    import z3 as _z3
+    from clausal.logic.clpz3 import z3_constraint_block
+    if z3_constraint_block(constraints, _z3.RealSort(), trail): yield None
+
+@_builtin("z3.boolean", 1)
+def _z3_mod_boolean(constraints, trail, k):
+    """z3.boolean({constraints}) — post boolean constraints."""
+    import z3 as _z3
+    from clausal.logic.clpz3 import z3_constraint_block
+    if z3_constraint_block(constraints, _z3.BoolSort(), trail): yield None
+
+@_builtin("z3.bitvector", 2)
+def _z3_mod_bitvector(width, constraints, trail, k):
+    """z3.bitvector(Width, {constraints}) — post bitvector constraints."""
+    import z3 as _z3
+    from clausal.logic.variables import deref
+    w = deref(width)
+    from clausal.logic.clpz3 import z3_constraint_block
+    if z3_constraint_block(constraints, _z3.BitVecSort(w), trail): yield None
+
+@_builtin("z3.label", 1)
+def _z3_mod_label(vars_list, trail, k):
+    """z3.label(Vars) — sort-polymorphic labeling."""
+    from clausal.logic.clpz3 import label_z3_polymorphic
+    yield from label_z3_polymorphic(vars_list, trail)
+
+@_builtin("z3.check", 0)
+def _z3_mod_check(trail, k):
+    """z3.check() — satisfiability check."""
+    from clausal.logic.clpz3 import z3_check
+    if z3_check(trail): yield None
+
+@_builtin("z3.all_different", 1)
+def _z3_mod_all_different(vars_list, trail, k):
+    """z3.all_different(Vars) — post Distinct constraint."""
+    from clausal.logic.clpz3 import all_different_z3
+    if all_different_z3(vars_list, trail): yield None
+
+@_builtin("z3.maximize", 2)
+def _z3_mod_maximize(expr, result, trail, k):
+    """z3.maximize(Expr, Result) — maximize expression."""
+    from clausal.logic.clpz3 import maximize_z3
+    if maximize_z3(expr, result, trail): yield None
+
+@_builtin("z3.minimize", 2)
+def _z3_mod_minimize(expr, result, trail, k):
+    """z3.minimize(Expr, Result) — minimize expression."""
+    from clausal.logic.clpz3 import minimize_z3
+    if minimize_z3(expr, result, trail): yield None
+
+@_builtin("z3.entailed", 1)
+def _z3_mod_entailed(constraint, trail, k):
+    """z3.entailed(Constraint) — succeed if constraint is implied."""
+    from clausal.logic.clpz3 import entailed_z3
+    if entailed_z3(constraint, trail): yield None
+
+@_builtin("z3.disentailed", 1)
+def _z3_mod_disentailed(constraint, trail, k):
+    """z3.disentailed(Constraint) — succeed if constraint is impossible."""
+    from clausal.logic.clpz3 import z3_disentailed
+    if z3_disentailed(constraint, trail): yield None
+
+@_builtin("z3.soft", 2)
+def _z3_mod_soft(constraint, weight, trail, k):
+    """z3.soft(Constraint, Weight) — add soft constraint."""
+    from clausal.logic.clpz3 import z3_soft
+    if z3_soft(constraint, weight, trail): yield None
+
+@_builtin("z3.soft", 3)
+def _z3_mod_soft_grouped(constraint, weight, group, trail, k):
+    """z3.soft(Constraint, Weight, Group) — add grouped soft constraint."""
+    from clausal.logic.clpz3 import z3_soft
+    if z3_soft(constraint, weight, trail, group=group): yield None
+
+@_builtin("z3.maximize_satisfaction", 1)
+def _z3_mod_max_sat(satisfied, trail, k):
+    """z3.maximize_satisfaction(Satisfied) — MaxSAT."""
+    from clausal.logic.clpz3 import z3_max_sat
+    if z3_max_sat(satisfied, trail): yield None
+
+@_builtin("z3.optimize_label", 4)
+def _z3_mod_opt_label(vars_list, obj_expr, result, mode, trail, k):
+    """z3.optimize_label(Vars, Obj, Result, Mode) — optimize and label."""
+    from clausal.logic.clpz3 import z3_optimize_label
+    yield from z3_optimize_label(vars_list, obj_expr, result, mode, trail)
+
+@_builtin("z3.named", 2)
+def _z3_mod_named(constraint, name, trail, k):
+    """z3.named(Constraint, Name) — add named constraint for unsat core."""
+    from clausal.logic.clpz3 import z3_named
+    if z3_named(constraint, name, trail): yield None
+
+@_builtin("z3.unsatisfiable_core", 1)
+def _z3_mod_unsat_core(core, trail, k):
+    """z3.unsatisfiable_core(Core) — get unsat core."""
+    from clausal.logic.clpz3 import z3_unsat_core
+    if z3_unsat_core(core, trail): yield None
+
+@_builtin("z3.minimal_unsatisfiable_core", 1)
+def _z3_mod_min_unsat_core(core, trail, k):
+    """z3.minimal_unsatisfiable_core(Core) — get minimal unsat core."""
+    from clausal.logic.clpz3 import z3_minimal_unsat_core
+    if z3_minimal_unsat_core(core, trail): yield None
+
+@_builtin("z3.satisfiability", 1)
+def _z3_mod_is_sat(result, trail, k):
+    """z3.satisfiability(Result) — 'sat', 'unsat', or 'unknown'."""
+    from clausal.logic.clpz3 import z3_is_sat
+    if z3_is_sat(result, trail): yield None
+
+@_builtin("z3.model", 2)
+def _z3_mod_model(vars_list, values, trail, k):
+    """z3.model(Vars, Values) — get model without binding."""
+    from clausal.logic.clpz3 import z3_model
+    if z3_model(vars_list, values, trail): yield None
+
+@_builtin("z3.simplify", 2)
+def _z3_mod_simplify(expr, result, trail, k):
+    """z3.simplify(Expr, Result) — simplify expression."""
+    from clausal.logic.clpz3 import z3_simplify
+    if z3_simplify(expr, result, trail): yield None
+
+@_builtin("z3.assertions", 1)
+def _z3_mod_assertions(assertions, trail, k):
+    """z3.assertions(List) — dump constraint store."""
+    from clausal.logic.clpz3 import z3_assertions
+    if z3_assertions(assertions, trail): yield None
+
+@_builtin("z3.statistics", 1)
+def _z3_mod_stats(stats, trail, k):
+    """z3.statistics(Stats) — get solver statistics."""
+    from clausal.logic.clpz3 import z3_stats
+    if z3_stats(stats, trail): yield None
+
+@_builtin("z3.set_option", 2)
+def _z3_mod_set_option(key, value, trail, k):
+    """z3.set_option(Key, Value) — set solver option."""
+    from clausal.logic.clpz3 import z3_set_option
+    if z3_set_option(key, value, trail): yield None
+
+@_builtin("z3.set_logic", 1)
+def _z3_mod_set_logic(logic, trail, k):
+    """z3.set_logic(Logic) — switch to logic-specific solver."""
+    from clausal.logic.clpz3 import z3_set_logic
+    if z3_set_logic(logic, trail): yield None
+
+@_builtin("z3.table", 2)
+def _z3_mod_table(vars_list, tuples, trail, k):
+    """z3.table(Vars, Tuples) — extensional constraint."""
+    from clausal.logic.clpz3 import z3_table
+    if z3_table(vars_list, tuples, trail): yield None
+
+@_builtin("z3.at_most", 2)
+def _z3_mod_at_most(vars_list, n, trail, k):
+    """z3.at_most(Vars, K) — at most K true."""
+    from clausal.logic.clpz3 import at_most_z3
+    if at_most_z3(vars_list, n, trail): yield None
+
+@_builtin("z3.at_least", 2)
+def _z3_mod_at_least(vars_list, n, trail, k):
+    """z3.at_least(Vars, K) — at least K true."""
+    from clausal.logic.clpz3 import at_least_z3
+    if at_least_z3(vars_list, n, trail): yield None
+
+@_builtin("z3.exactly", 2)
+def _z3_mod_exactly(vars_list, n, trail, k):
+    """z3.exactly(Vars, K) — exactly K true."""
+    from clausal.logic.clpz3 import exactly_z3
+    if exactly_z3(vars_list, n, trail): yield None
+
+# ─ BV structural ops (no Python operator equivalent) ─
+
+@_builtin("z3.extract", 4)
+def _z3_mod_extract(hi, lo, x, result, trail, k):
+    """z3.extract(Hi, Lo, X, Result) — bit extraction."""
+    from clausal.logic.clpz3 import bv_extract
+    if bv_extract(hi, lo, x, result, trail): yield None
+
+@_builtin("z3.concat", 3)
+def _z3_mod_concat(x, y, result, trail, k):
+    """z3.concat(X, Y, Result) — bitvector concatenation."""
+    from clausal.logic.clpz3 import bv_concat
+    if bv_concat(x, y, result, trail): yield None
+
+@_builtin("z3.zero_extend", 3)
+def _z3_mod_zext(x, n, result, trail, k):
+    """z3.zero_extend(X, N, Result) — zero-extend bitvector."""
+    from clausal.logic.clpz3 import bv_zext
+    if bv_zext(x, n, result, trail): yield None
+
+@_builtin("z3.sign_extend", 3)
+def _z3_mod_sext(x, n, result, trail, k):
+    """z3.sign_extend(X, N, Result) — sign-extend bitvector."""
+    from clausal.logic.clpz3 import bv_sext
+    if bv_sext(x, n, result, trail): yield None
+
+# ─ Arrays, sets, strings, UF, quantifiers, datatypes ─
+
+@_builtin("z3.array", 3)
+def _z3_mod_array(var, domain_sort, range_sort, trail, k):
+    from clausal.logic.clpz3 import z3_array
+    if z3_array(var, domain_sort, range_sort, trail): yield None
+
+@_builtin("z3.select", 3)
+def _z3_mod_select(array, index, value, trail, k):
+    from clausal.logic.clpz3 import z3_select
+    if z3_select(array, index, value, trail): yield None
+
+@_builtin("z3.store", 4)
+def _z3_mod_store(array, index, value, result, trail, k):
+    from clausal.logic.clpz3 import z3_store
+    if z3_store(array, index, value, result, trail): yield None
+
+@_builtin("z3.constant_array", 3)
+def _z3_mod_const_array(value, domain_sort, result, trail, k):
+    from clausal.logic.clpz3 import z3_const_array
+    if z3_const_array(value, domain_sort, result, trail): yield None
+
+@_builtin("z3.set", 2)
+def _z3_mod_set(var, elem_sort, trail, k):
+    from clausal.logic.clpz3 import z3_set
+    if z3_set(var, elem_sort, trail): yield None
+
+@_builtin("z3.set_member", 2)
+def _z3_mod_set_member(elem, s, trail, k):
+    from clausal.logic.clpz3 import z3_set_member
+    if z3_set_member(elem, s, trail): yield None
+
+@_builtin("z3.set_not_member", 2)
+def _z3_mod_set_not_member(elem, s, trail, k):
+    from clausal.logic.clpz3 import z3_set_not_member
+    if z3_set_not_member(elem, s, trail): yield None
+
+@_builtin("z3.set_subset", 2)
+def _z3_mod_set_subset(s1, s2, trail, k):
+    from clausal.logic.clpz3 import z3_set_subset
+    if z3_set_subset(s1, s2, trail): yield None
+
+@_builtin("z3.set_union", 3)
+def _z3_mod_set_union(s1, s2, result, trail, k):
+    from clausal.logic.clpz3 import z3_set_union
+    if z3_set_union(s1, s2, result, trail): yield None
+
+@_builtin("z3.set_intersect", 3)
+def _z3_mod_set_intersect(s1, s2, result, trail, k):
+    from clausal.logic.clpz3 import z3_set_intersect
+    if z3_set_intersect(s1, s2, result, trail): yield None
+
+@_builtin("z3.set_add", 3)
+def _z3_mod_set_add(s, elem, result, trail, k):
+    from clausal.logic.clpz3 import z3_set_add
+    if z3_set_add(s, elem, result, trail): yield None
+
+@_builtin("z3.string", 1)
+def _z3_mod_string(var, trail, k):
+    from clausal.logic.clpz3 import z3_string
+    if z3_string(var, trail): yield None
+
+@_builtin("z3.string_length", 2)
+def _z3_mod_str_length(s, n, trail, k):
+    from clausal.logic.clpz3 import z3_str_length
+    if z3_str_length(s, n, trail): yield None
+
+@_builtin("z3.string_contains", 2)
+def _z3_mod_str_contains(s, sub, trail, k):
+    from clausal.logic.clpz3 import z3_str_contains
+    if z3_str_contains(s, sub, trail): yield None
+
+@_builtin("z3.string_concat", 3)
+def _z3_mod_str_concat(s1, s2, result, trail, k):
+    from clausal.logic.clpz3 import z3_str_concat
+    if z3_str_concat(s1, s2, result, trail): yield None
+
+@_builtin("z3.string_regex", 2)
+def _z3_mod_str_regex(s, pattern, trail, k):
+    from clausal.logic.clpz3 import z3_str_regex
+    if z3_str_regex(s, pattern, trail): yield None
+
+@_builtin("z3.function", 3)
+def _z3_mod_function(var, domain_sorts, range_sort, trail, k):
+    from clausal.logic.clpz3 import z3_function
+    if z3_function(var, domain_sorts, range_sort, trail): yield None
+
+@_builtin("z3.apply", 3)
+def _z3_mod_apply(func_var, args, result, trail, k):
+    from clausal.logic.clpz3 import z3_app
+    if z3_app(func_var, args, result, trail): yield None
+
+@_builtin("z3.forall", 2)
+def _z3_mod_forall(var_sorts, body_fn, trail, k):
+    from clausal.logic.clpz3 import z3_forall
+    if z3_forall(var_sorts, body_fn, trail): yield None
+
+@_builtin("z3.exists", 2)
+def _z3_mod_exists(var_sorts, body_fn, trail, k):
+    from clausal.logic.clpz3 import z3_exists
+    if z3_exists(var_sorts, body_fn, trail): yield None
+
+@_builtin("z3.declare_datatype", 2)
+def _z3_mod_datatype(name, constructors, trail, k):
+    from clausal.logic.clpz3 import z3_declare_datatype
+    if z3_declare_datatype(name, constructors, trail) is not None: yield None

@@ -68,6 +68,7 @@ from clausal.pythonic_ast.nodes import (
     And as _And, Or as _Or, Not as _Not,
     ArithEq as _ArithEq, ArithNeq as _ArithNeq,
     Lt as _Lt, LtE as _LtE, Gt as _Gt, GtE as _GtE,
+    CompareChain as _CompareChain,
 )
 
 
@@ -194,6 +195,11 @@ def clausal_to_z3(expr: Any, trail: Trail, default_sort: Any = None) -> Any:
     if isinstance(expr, bool):
         return _z3.BoolVal(expr)
     if isinstance(expr, int):
+        # When default_sort is a BitVecSort, emit BitVecVal instead of IntVal
+        if (default_sort is not None and _z3.is_bv_sort(default_sort)):
+            return _z3.BitVecVal(expr, default_sort)
+        if default_sort == _z3.RealSort():
+            return _z3.RealVal(expr)
         return _z3.IntVal(expr)
     if isinstance(expr, float):
         return _z3.RealVal(expr)
@@ -242,34 +248,77 @@ def clausal_to_z3(expr: Any, trail: Trail, default_sort: Any = None) -> Any:
         return (clausal_to_z3(expr.left, trail, default_sort) !=
                 clausal_to_z3(expr.right, trail, default_sort))
     if isinstance(expr, _Lt):
-        return (clausal_to_z3(expr.left, trail, default_sort) <
-                clausal_to_z3(expr.right, trail, default_sort))
+        l = clausal_to_z3(expr.left, trail, default_sort)
+        r = clausal_to_z3(expr.right, trail, default_sort)
+        if default_sort is not None and _z3.is_bv_sort(default_sort):
+            return _z3.ULT(l, r)
+        return l < r
     if isinstance(expr, _LtE):
-        return (clausal_to_z3(expr.left, trail, default_sort) <=
-                clausal_to_z3(expr.right, trail, default_sort))
+        l = clausal_to_z3(expr.left, trail, default_sort)
+        r = clausal_to_z3(expr.right, trail, default_sort)
+        if default_sort is not None and _z3.is_bv_sort(default_sort):
+            return _z3.ULE(l, r)
+        return l <= r
     if isinstance(expr, _Gt):
-        return (clausal_to_z3(expr.left, trail, default_sort) >
-                clausal_to_z3(expr.right, trail, default_sort))
+        l = clausal_to_z3(expr.left, trail, default_sort)
+        r = clausal_to_z3(expr.right, trail, default_sort)
+        if default_sort is not None and _z3.is_bv_sort(default_sort):
+            return _z3.UGT(l, r)
+        return l > r
     if isinstance(expr, _GtE):
-        return (clausal_to_z3(expr.left, trail, default_sort) >=
-                clausal_to_z3(expr.right, trail, default_sort))
+        l = clausal_to_z3(expr.left, trail, default_sort)
+        r = clausal_to_z3(expr.right, trail, default_sort)
+        if default_sort is not None and _z3.is_bv_sort(default_sort):
+            return _z3.UGE(l, r)
+        return l >= r
 
-    # ── Boolean binary operators ─────────────────────────────────────────────
-    # These arise from CLP(B) expressions and Boolean arithmetic
-    if isinstance(expr, (_And, _BitAnd)):
-        bool_sort = _z3.BoolSort() if _HAS_Z3 else None
+    # ── Chained comparisons (1 <= X <= 10) ──────────────────────────────────
+    if isinstance(expr, _CompareChain):
+        parts = [clausal_to_z3(cmp, trail, default_sort)
+                 for cmp in expr.comparisons]
+        return _z3.And(*parts) if len(parts) > 1 else parts[0]
+
+    # ── Boolean / bitwise operators ─────────────────────────────────────────
+    # In BV context, BitAnd/BitOr/BitXor/Invert produce BV operations.
+    # In Bool context, they produce logical And/Or/Xor/Not.
+    _bv_context = (default_sort is not None and _z3.is_bv_sort(default_sort))
+
+    if isinstance(expr, _BitAnd):
+        if _bv_context:
+            return (clausal_to_z3(expr.left, trail, default_sort) &
+                    clausal_to_z3(expr.right, trail, default_sort))
+        bool_sort = _z3.BoolSort()
         return _z3.And(clausal_to_z3(expr.left, trail, bool_sort),
                        clausal_to_z3(expr.right, trail, bool_sort))
-    if isinstance(expr, (_Or, _BitOr)):
-        bool_sort = _z3.BoolSort() if _HAS_Z3 else None
+    if isinstance(expr, _BitOr):
+        if _bv_context:
+            return (clausal_to_z3(expr.left, trail, default_sort) |
+                    clausal_to_z3(expr.right, trail, default_sort))
+        bool_sort = _z3.BoolSort()
         return _z3.Or(clausal_to_z3(expr.left, trail, bool_sort),
                       clausal_to_z3(expr.right, trail, bool_sort))
     if isinstance(expr, _BitXor):
-        bool_sort = _z3.BoolSort() if _HAS_Z3 else None
+        if _bv_context:
+            return (clausal_to_z3(expr.left, trail, default_sort) ^
+                    clausal_to_z3(expr.right, trail, default_sort))
+        bool_sort = _z3.BoolSort()
         return _z3.Xor(clausal_to_z3(expr.left, trail, bool_sort),
                        clausal_to_z3(expr.right, trail, bool_sort))
-    if isinstance(expr, (_Not, _Invert)):
-        bool_sort = _z3.BoolSort() if _HAS_Z3 else None
+    if isinstance(expr, _Invert):
+        if _bv_context:
+            return ~clausal_to_z3(expr.operand, trail, default_sort)
+        bool_sort = _z3.BoolSort()
+        return _z3.Not(clausal_to_z3(expr.operand, trail, bool_sort))
+    if isinstance(expr, _And):
+        bool_sort = _z3.BoolSort()
+        return _z3.And(clausal_to_z3(expr.left, trail, bool_sort),
+                       clausal_to_z3(expr.right, trail, bool_sort))
+    if isinstance(expr, _Or):
+        bool_sort = _z3.BoolSort()
+        return _z3.Or(clausal_to_z3(expr.left, trail, bool_sort),
+                      clausal_to_z3(expr.right, trail, bool_sort))
+    if isinstance(expr, _Not):
+        bool_sort = _z3.BoolSort()
         return _z3.Not(clausal_to_z3(expr.operand, trail, bool_sort))
 
     raise TypeError(
@@ -2185,3 +2234,94 @@ def z3_multi_optimize(objectives: Any, results: Any, priority: Any,
             if ok:
                 yield None
             trail.undo(mark)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module API — constraint block evaluator
+# ══════════════════════════════════════════════════════════════════════════════
+
+from clausal.terms import SetTerm as _SetTerm
+
+
+def z3_constraint_block(constraint_set: Any, sort: Any, trail: Trail) -> bool:
+    """Walk constraint elements from a SetTerm and post each under *sort*.
+
+    Each element is a Clausal AST node (e.g. ``LtE(X, 10)``,
+    ``CompareChain([LtE(1, X), LtE(X, 10)])``).  Unbound Vars encountered
+    during translation are auto-registered with the given Z3 sort.
+    """
+    if isinstance(constraint_set, _SetTerm):
+        elements = list(constraint_set)
+    elif isinstance(constraint_set, (list, tuple)):
+        elements = list(constraint_set)
+    else:
+        elements = [constraint_set]
+
+    for elem in elements:
+        elem = deref(elem)
+        z3_expr = clausal_to_z3(elem, trail, default_sort=sort)
+        z3_push(trail)
+        get_z3_state(trail).solver.add(z3_expr)
+    return True
+
+
+def label_z3_polymorphic(vars_list: Any, trail: Trail):
+    """Sort-polymorphic labeling: dispatches based on each variable's Z3 sort.
+
+    Handles IntSort, BoolSort, BitVecSort, RealSort, and StringSort
+    in a single call.  All variables must be registered with Z3.
+    """
+    state = get_z3_state(trail)
+    items = _as_list(deref(vars_list))
+
+    # Collect Z3 vars and their sorts
+    z3_vars: list = []
+    clausal_vars: list = []
+    for v in items:
+        v = deref(v)
+        if not is_var(v):
+            continue
+        z3_v = state.var_map.get(id(v))
+        if z3_v is None:
+            raise ValueError(
+                f"label: variable not registered with Z3. "
+                f"Declare it first with z3.integer, z3.real, etc."
+            )
+        z3_vars.append(z3_v)
+        clausal_vars.append(v)
+
+    if not z3_vars:
+        yield None
+        return
+
+    # Use blocking-clause enumeration (works for all finite-domain sorts)
+    while state.solver.check() == _z3.sat:
+        m = state.solver.model()
+        mark = trail.mark()
+        ok = True
+        blocking: list = []
+        for cv, z3v in zip(clausal_vars, z3_vars):
+            val = z3_to_python(m.eval(z3v, model_completion=True))
+            if not unify(cv, val, trail):
+                ok = False
+                break
+            blocking.append(z3v != m.eval(z3v, model_completion=True))
+        if ok:
+            yield None
+        trail.undo(mark)
+
+        # For real/string sorts: only one solution (continuous domains)
+        if any(_is_continuous_sort(z3v.sort()) for z3v in z3_vars):
+            break
+
+        if not blocking:
+            break
+        # Block this solution
+        z3_push(trail)
+        state.solver.add(_z3.Or(*blocking))
+
+
+def _is_continuous_sort(sort: Any) -> bool:
+    """Return True for sorts that have continuous/infinite domains."""
+    return (sort == _z3.RealSort() or
+            (hasattr(_z3, 'StringSort') and sort == _z3.StringSort()))

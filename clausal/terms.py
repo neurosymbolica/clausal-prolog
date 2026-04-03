@@ -683,16 +683,23 @@ class DictTerm:
 class SetTerm:
     """Unification-aware set term.
 
-    Elements must be ground (hashable). Backed by frozenset for immutability.
-    Two SetTerms unify iff they contain the same elements.
+    When all elements are hashable, backed by frozenset for immutability and
+    fast equality.  When any element is unhashable (e.g. AST constraint nodes
+    inside ``z3.integer({...})``), falls back to a tuple.  The tuple variant
+    is iterable and containable but has O(n) membership and no hash.
     """
-    __slots__ = ("_elements",)
+    __slots__ = ("_elements", "_hashable")
 
     def __init__(self, elements):
-        self._elements = frozenset(elements)
+        try:
+            self._elements = frozenset(elements)
+            self._hashable = True
+        except TypeError:
+            self._elements = tuple(elements)
+            self._hashable = False
 
     @property
-    def elements(self) -> frozenset:
+    def elements(self):
         return self._elements
 
     def __len__(self): return len(self._elements)
@@ -700,10 +707,16 @@ class SetTerm:
     def __iter__(self): return iter(self._elements)
 
     def __eq__(self, other):
-        return isinstance(other, SetTerm) and self._elements == other._elements
+        if not isinstance(other, SetTerm):
+            return False
+        if self._hashable and other._hashable:
+            return self._elements == other._elements
+        return sorted(repr(e) for e in self) == sorted(repr(e) for e in other)
 
     def __hash__(self):
-        return hash(self._elements)
+        if self._hashable:
+            return hash(self._elements)
+        raise TypeError("unhashable SetTerm (contains non-hashable elements)")
 
     def __repr__(self):
         inner = ", ".join(repr(e) for e in sorted(self._elements, key=repr))
@@ -713,7 +726,7 @@ class SetTerm:
         """Called by C do_unify: element-wise equality (elements are ground)."""
         if not isinstance(other, SetTerm):
             return NotImplemented
-        return self._elements == other._elements
+        return self == other
 
 
 # ── Quantity — number with physical dimensions ────────────────────────────────
