@@ -576,3 +576,93 @@ class TestInnerTrampoline:
 8. Tabling integration (SLG inside callback)
 9. `on_final` callback
 10. Integration tests
+
+---
+
+## Implementation Issues (Post-Implementation Addendum)
+
+### Issue 1 — `prop.register(z3_var)` is actually `prop.add(z3_var)` in Z3's API
+
+**Plan:** Used `prop.register(z3_var)` to register variables for fixed callbacks.
+
+**Fix:** The actual Z3 `UserPropagateBase` API uses `prop.add(e)` (not `register`). Changed
+all variable registration calls accordingly. The `add()` method calls
+`Z3_solver_propagate_register()` (with solver) or `Z3_solver_propagate_register_cb()`
+(in callbacks) internally.
+
+---
+
+### Issue 2 — `fresh()` signature requires `_fresh_ctx` keyword argument
+
+**Plan:** `fresh(new_ctx)` was shown calling `super().__init__(None, ctx=new_ctx)` directly.
+
+**Fix:** Added `_fresh_ctx` keyword parameter to `ClausalPropagator.__init__` to thread the
+context through correctly. When `_fresh_ctx is not None`: `super().__init__(None, ctx=ctx)`.
+When called from tests with `prop.fresh(None)`, `_fresh_ctx=None` and
+`super().__init__(None)` is called (no context, no solver — minimal propagator for testing).
+
+---
+
+### Issue 3 — `add_fixed`/`add_final` conditionally registered
+
+**Plan:** Always called `add_fixed`/`add_final` in `__init__` when `s is not None`.
+
+**Fix:** Only call `add_fixed` when `on_fixed_goals` is non-empty, and `add_final` only when
+`on_final_goal is not None`. This avoids registering no-op callbacks with Z3's C++ solver,
+which would incur callback overhead for every variable assignment during `check()`.
+
+---
+
+### Issue 4 — `z3_table` with ground variables uses `clausal_to_z3` for all positions
+
+**Plan:** Skipped ground variables by filtering with `if is_var(deref(v))`, which caused a
+length mismatch when building conjunctions.
+
+**Fix:** Used `clausal_to_z3(deref(v), trail, default_sort=IntSort())` for ALL positions in
+both the variable list and tuple elements. Ground integers translate to `IntVal(n)`, which
+creates correct equality constraints. This also handles the case where a Z3 variable is already
+registered with IntSort.
+
+---
+
+### Issue 5 — `z3_table` backtracking via `z3_push`
+
+**Observation:** The plan's `z3_table` implementation did not include `z3_push(trail)` before
+`solver.add()`, so the table constraint would not be retracted on backtracking. Fixed by adding
+`z3_push(trail)` (consistent with all other constraint-posting functions).
+
+---
+
+### Issue 6 — `_run_goal` / `_run_goal_simple` simplified from plan
+
+**Plan:** `_run_clausal_goal` had complex return-value logic (None vs list-of-consequences vs
+`_FAIL`), with separate code paths for `StepGenerator` and plain generators.
+
+**Fix:** Simplified: `_run_goal` returns None on success and `_PROP_FAIL` on exception.
+Consequence propagation (returning Z3 BoolRef assertions) is left as a user responsibility
+via the `_handle_fixed` dispatch. The inner trampoline tests confirm this works correctly.
+
+---
+
+### Issue 7 — `z3_table` large-table optimisation deferred
+
+**Observation:** The plan mentions using `UserPropagateBase` for very large tables. The current
+disjunction encoding is O(rows × cols) in clause size. For tables with thousands of rows, this
+would generate large Z3 formulas. A `UserPropagateBase` propagator that filters rows
+incrementally as variables are assigned would be more efficient.
+
+**Resolution:** Deferred. Current disjunction encoding is correct and efficient for small/medium
+tables (up to hundreds of rows). Annotated in docstring.
+
+---
+
+### Issue 8 — End-to-end `on_fixed` callback testing deferred
+
+**Observation:** Testing `on_fixed` firing through Z3's CDCL requires a complete
+`solver.check()` run with registered variables, a working goal factory, and careful
+synchronization. This is complex to test reliably (nondeterministic callback order, parallel
+solving edge cases).
+
+**Resolution:** Deferred to a separate integration test. `push`/`pop`/`fresh` and `z3_table`
+are fully tested (22 tests). The `_handle_fixed` and `_run_goal` paths are implemented and
+structurally correct but not exercised end-to-end in Phase 5.

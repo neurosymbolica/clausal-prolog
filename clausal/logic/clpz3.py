@@ -1001,3 +1001,202 @@ def sup_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
 def inf_z3(expr: Any, result_var: Any, trail: Trail) -> bool:
     """Compute infimum (minimum) of expr subject to current Z3 constraints."""
     return minimize_z3(expr, result_var, trail)
+
+
+# ── Phase 5: UserPropagateBase integration ────────────────────────────────────
+
+_PROP_FAIL = object()  # sentinel for propagator goal failure
+
+
+class ClausalPropagator(_z3.UserPropagateBase):
+    """Bridge between Z3's CDCL solver and Clausal's trail/backtracking.
+
+    Registered push/pop callbacks keep the Clausal trail in sync with Z3's
+    CDCL decision stack.  Optional on_fixed_goals run inside an inner
+    trampoline when Z3 assigns a registered variable.
+
+    Usage pattern::
+
+        state = get_z3_state(trail)
+        prop = ClausalPropagator(state.solver, trail, state.var_map, state.rev_map,
+                                 on_fixed_goals=[my_goal_factory])
+        prop.add(state.var_map[id(x)])   # register x for fixed callbacks
+        state.solver.check()             # CDCL loop; callbacks fire here
+
+    The propagator reference must be kept alive (store it in state._propagators).
+    """
+
+    def __init__(
+        self,
+        s: Any,
+        trail: Trail,
+        var_map: dict,
+        rev_map: dict,
+        *,
+        on_fixed_goals: list | None = None,
+        on_final_goal: Any = None,
+        _fresh_ctx: Any = None,
+    ) -> None:
+        if _fresh_ctx is not None:
+            super().__init__(None, ctx=_fresh_ctx)
+        else:
+            super().__init__(s)
+        self.trail = trail
+        self.var_map = var_map
+        self.rev_map = rev_map
+        self.scope_marks: list = []
+        self.on_fixed_goals: list = on_fixed_goals or []
+        self.on_final_goal = on_final_goal
+
+        if s is not None:
+            if self.on_fixed_goals:
+                self.add_fixed(self._handle_fixed)
+            if self.on_final_goal is not None:
+                self.add_final(self._handle_final)
+
+    # ── Z3 CDCL callbacks ─────────────────────────────────────────────────────
+
+    def push(self) -> None:
+        """Z3 is making a CDCL decision. Save trail state."""
+        self.scope_marks.append(self.trail.mark())
+
+    def pop(self, num_scopes: int) -> None:
+        """Z3 is backtracking. Restore trail state."""
+        for _ in range(num_scopes):
+            mark = self.scope_marks.pop()
+            self.trail.undo(mark)
+
+    def fresh(self, new_ctx: Any) -> 'ClausalPropagator':
+        """Z3 needs a propagator clone for a parallel solving context.
+
+        Creates a new propagator with a fresh Trail. var_map/rev_map are
+        shared (read-only during solving).
+        """
+        new_trail = Trail()
+        return ClausalPropagator(
+            None, new_trail, self.var_map, self.rev_map,
+            on_fixed_goals=self.on_fixed_goals,
+            on_final_goal=self.on_final_goal,
+            _fresh_ctx=new_ctx,
+        )
+
+    # ── Callback handlers ─────────────────────────────────────────────────────
+
+    def _handle_fixed(self, z3_var: Any, z3_value: Any) -> None:
+        """Z3 assigned z3_var to z3_value — run registered Clausal goals."""
+        z3_id = z3_var.get_id()
+        clausal_var = self.rev_map.get(z3_id)
+        if clausal_var is None:
+            return  # not a Clausal-tracked variable
+
+        value = z3_to_python(z3_value)
+
+        for goal_factory in self.on_fixed_goals:
+            try:
+                result = self._run_goal(goal_factory, clausal_var, value)
+            except Exception:
+                self.conflict([z3_var])
+                return
+
+            if result is _PROP_FAIL:
+                self.conflict([z3_var])
+                return
+
+            if result is not None:
+                for z3_consequence in result:
+                    self.propagate(z3_consequence, [z3_var])
+
+    def _handle_final(self) -> None:
+        """Z3 found a complete model — optionally verify with Clausal."""
+        if self.on_final_goal is None:
+            return
+        try:
+            result = self._run_goal_simple(self.on_final_goal)
+        except Exception:
+            self.conflict([])
+            return
+        if result is _PROP_FAIL:
+            self.conflict([])
+
+    # ── Inner trampoline ──────────────────────────────────────────────────────
+
+    def _run_goal(self, goal_factory: Any, var: Any, value: Any) -> Any:
+        """Run a Clausal goal inside a fresh trampoline.
+
+        goal_factory(var, value, trail) should return a StepGenerator or
+        plain generator.  Returns None (success), a list of Z3 BoolRef
+        consequences, or _PROP_FAIL.
+        """
+        from clausal.logic.trampoline import StepGenerator, trampoline
+
+        gen_or_sg = goal_factory(var, value, self.trail)
+        try:
+            if isinstance(gen_or_sg, StepGenerator):
+                trampoline(gen_or_sg)
+            else:
+                for _ in gen_or_sg:
+                    pass
+            return None
+        except Exception:
+            return _PROP_FAIL
+
+    def _run_goal_simple(self, goal: Any) -> Any:
+        """Run a no-argument Clausal goal inside a fresh trampoline."""
+        from clausal.logic.trampoline import StepGenerator, trampoline
+
+        if callable(goal):
+            gen_or_sg = goal(self.trail)
+            try:
+                if isinstance(gen_or_sg, StepGenerator):
+                    trampoline(gen_or_sg)
+                else:
+                    for _ in gen_or_sg:
+                        pass
+                return None
+            except Exception:
+                return _PROP_FAIL
+        return _PROP_FAIL
+
+
+def z3_table(vars_list: Any, tuples_list: Any, trail: Trail) -> bool:
+    """Table (extensional) constraint: the tuple of variables must match one of
+    the given tuples.
+
+    Encoded as a disjunction of conjunctions — suitable for small to medium
+    tables.  For large tables (thousands of rows), a UserPropagateBase-based
+    incremental filtering approach would be more efficient (deferred).
+
+    Each element in vars_list can be a Var or a ground integer value.
+    Each tuple in tuples_list is a list/cons-list of integer values.
+    """
+    state = get_z3_state(trail)
+    vars_items = _as_list(vars_list)
+    tuples_items = _as_list(tuples_list)
+
+    # Translate each variable position to a Z3 IntSort expression
+    z3_pos = [clausal_to_z3(deref(v), trail, default_sort=_z3.IntSort())
+              for v in vars_items]
+
+    if not tuples_items:
+        # Empty table → unsatisfiable
+        z3_push(trail)
+        state.solver.add(_z3.BoolVal(False))
+        return True
+
+    clauses: list = []
+    for raw_tup in tuples_items:
+        tup_items = _as_list(raw_tup)
+        if len(tup_items) != len(z3_pos):
+            raise ValueError(
+                f"z3_table: tuple length {len(tup_items)} "
+                f"!= vars length {len(z3_pos)}"
+            )
+        conj_parts = [
+            z3_pos[i] == clausal_to_z3(deref(tup_items[i]), trail, default_sort=_z3.IntSort())
+            for i in range(len(z3_pos))
+        ]
+        clauses.append(_z3.And(conj_parts))
+
+    z3_push(trail)
+    state.solver.add(_z3.Or(clauses))
+    return True

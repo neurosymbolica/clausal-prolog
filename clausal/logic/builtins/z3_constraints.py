@@ -279,3 +279,13 @@ def _inf_z3__2(expr, result, trail, k):
     from clausal.logic.clpz3 import inf_z3 as _fn
     if _fn(expr, result, trail):
         yield None
+
+
+# ── Phase 5: UserPropagateBase / table constraint ─────────────────────────────
+
+@_builtin("z3_table", 2)
+def _z3_table__2(vars_list, tuples_list, trail, k):
+    """z3_table(Vars, Tuples) — table/extensional constraint via Z3."""
+    from clausal.logic.clpz3 import z3_table as _fn
+    if _fn(vars_list, tuples_list, trail):
+        yield None
