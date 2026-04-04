@@ -100,7 +100,7 @@ class TestClprConstraintBlock:
         trail = Trail()
         x = Var()
         assert clpr_constraint_block((
-            ArithEq(left=x, right=3.14),
+            ArithEq(left=x, right=3),
         ), trail)
 
     def test_chained_comparison(self):
@@ -108,7 +108,7 @@ class TestClprConstraintBlock:
         trail = Trail()
         x = Var()
         assert clpr_constraint_block((
-            CompareChain(comparisons=[LtE(left=0.0, right=x), LtE(left=x, right=10.0)]),
+            CompareChain(comparisons=[LtE(left=0, right=x), LtE(left=x, right=10)]),
         ), trail)
 
     def test_inequality(self):
@@ -116,8 +116,8 @@ class TestClprConstraintBlock:
         trail = Trail()
         x = Var()
         assert clpr_constraint_block((
-            GtE(left=x, right=0.0),
-            LtE(left=x, right=1.0),
+            GtE(left=x, right=0),
+            LtE(left=x, right=1),
         ), trail)
 
     def test_unsatisfiable_returns_false(self):
@@ -125,8 +125,8 @@ class TestClprConstraintBlock:
         trail = Trail()
         x = Var()
         result = clpr_constraint_block((
-            GtE(left=x, right=10.0),
-            LtE(left=x, right=5.0),
+            GtE(left=x, right=10),
+            LtE(left=x, right=5),
         ), trail)
         assert not result
 
@@ -135,8 +135,8 @@ class TestClprConstraintBlock:
         trail = Trail()
         x = Var()
         assert clpr_constraint_block((
-            CompareChain(comparisons=[LtE(left=0.0, right=x), LtE(left=x, right=10.0)]),
-            ArithEq(left=Mult(left=x, right=2.0), right=6.0),
+            CompareChain(comparisons=[LtE(left=0, right=x), LtE(left=x, right=10)]),
+            ArithEq(left=Mult(left=x, right=2), right=6),
         ), trail)
 
     def test_label(self):

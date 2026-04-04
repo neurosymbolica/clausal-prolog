@@ -92,7 +92,7 @@ Optimal(X, Y, Cost) <- (
     clpq.rational((
         0 <= X <= 1,
         0 <= Y <= 1,
-        X + Y == Fraction(3, 4),
+        X + Y == 3/4,
     )),
     clpq.maximize(X, Cost),
 )

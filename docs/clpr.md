@@ -67,9 +67,9 @@ CLP(R) constraints can also be posted via the `clpr` module namespace using cons
 # skip
 Circle(X, Y) <- (
     clpr.real((
-        -10.0 <= X <= 10.0,
-        -10.0 <= Y <= 10.0,
-        X * X + Y * Y == 25.0,
+        -10 <= X <= 10,
+        -10 <= Y <= 10,
+        X * X + Y * Y == 25,
     )),
     clpr.label([X, Y]),
 )
