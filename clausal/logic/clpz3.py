@@ -2240,20 +2240,16 @@ def z3_multi_optimize(objectives: Any, results: Any, priority: Any,
 # Module API — constraint block evaluator
 # ══════════════════════════════════════════════════════════════════════════════
 
-from clausal.terms import SetTerm as _SetTerm
-
-
 def z3_constraint_block(constraint_set: Any, sort: Any, trail: Trail) -> bool:
-    """Walk constraint elements from a SetTerm and post each under *sort*.
+    """Walk constraint elements and post each under *sort*.
 
+    *constraint_set* is typically a tuple (from ``(C1, C2, ...)``) or list.
     Each element is a Clausal AST node (e.g. ``LtE(X, 10)``,
     ``CompareChain([LtE(1, X), LtE(X, 10)])``).  Unbound Vars encountered
     during translation are auto-registered with the given Z3 sort.
     """
-    if isinstance(constraint_set, _SetTerm):
-        elements = list(constraint_set)
-    elif isinstance(constraint_set, (list, tuple)):
-        elements = list(constraint_set)
+    if isinstance(constraint_set, (list, tuple)):
+        elements = constraint_set
     else:
         elements = [constraint_set]
 
