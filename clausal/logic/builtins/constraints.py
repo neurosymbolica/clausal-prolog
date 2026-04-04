@@ -281,3 +281,88 @@ def _inf__2(expr, result, trail, k):
     from clausal.logic.clpq import inf as _inf_fn  # noqa: PLC0415
     if _inf_fn(expr, result, trail):
         yield None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module API — clpq.rational, clpr.real, clpq.maximize, etc.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── CLP(Q) module ────────────────────────────────────────────────────────────
+
+@_builtin("clpq.rational", 1)
+def _clpq_mod_rational(constraints, trail, k):
+    """clpq.rational((constraints)) — post rational constraints."""
+    from clausal.logic.clpq import clpq_constraint_block
+    if clpq_constraint_block(constraints, trail):
+        yield None
+
+@_builtin("clpq.maximize", 2)
+def _clpq_mod_maximize(expr, result, trail, k):
+    """clpq.maximize(Expr, Result) — maximize over rationals."""
+    from clausal.logic.clpq import maximize as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+@_builtin("clpq.minimize", 2)
+def _clpq_mod_minimize(expr, result, trail, k):
+    """clpq.minimize(Expr, Result) — minimize over rationals."""
+    from clausal.logic.clpq import minimize as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+@_builtin("clpq.supremum", 2)
+def _clpq_mod_sup(expr, result, trail, k):
+    """clpq.supremum(Expr, Result) — compute upper bound without committing."""
+    from clausal.logic.clpq import sup as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+@_builtin("clpq.infimum", 2)
+def _clpq_mod_inf(expr, result, trail, k):
+    """clpq.infimum(Expr, Result) — compute lower bound without committing."""
+    from clausal.logic.clpq import inf as _fn
+    if _fn(expr, result, trail):
+        yield None
+
+@_builtin("clpq.entailed", 1)
+def _clpq_mod_entailed(constraint, trail, k):
+    """clpq.entailed(Constraint) — succeed if constraint is implied."""
+    from clausal.logic.clpq import entailed as _fn
+    from clausal.logic.variables import deref as _deref
+    from clausal.pythonic_ast.nodes import LtE, Lt, GtE, Gt, ArithEq, ArithNeq
+    node = _deref(constraint)
+    op_map = {LtE: "le", Lt: "lt", GtE: "ge", Gt: "gt", ArithEq: "eq", ArithNeq: "ne"}
+    op = op_map.get(type(node))
+    if op and _fn(op, node.left, node.right, trail):
+        yield None
+
+@_builtin("clpq.dump", 2)
+def _clpq_mod_dump(vars_list, result, trail, k):
+    """clpq.dump(Vars, Constraints) — dump constraint store."""
+    from clausal.logic.clpq import dump_q as _fn
+    from clausal.logic.variables import deref as _deref, unify as _unify
+    constraints = _fn(_deref(vars_list), trail)
+    if _unify(result, constraints, trail):
+        yield None
+
+# ── CLP(R) module ────────────────────────────────────────────────────────────
+
+@_builtin("clpr.real", 1)
+def _clpr_mod_real(constraints, trail, k):
+    """clpr.real((constraints)) — post real-domain constraints."""
+    from clausal.logic.clpr import clpr_constraint_block
+    if clpr_constraint_block(constraints, trail):
+        yield None
+
+@_builtin("clpr.label", 1)
+def _clpr_mod_label(vars_list, trail, k):
+    """clpr.label(Vars) — bisection labeling over reals."""
+    from clausal.logic.clpr import label_real
+    yield from label_real(vars_list, trail)
+
+@_builtin("clpr.label", 2)
+def _clpr_mod_label_eps(vars_list, eps, trail, k):
+    """clpr.label(Vars, Eps) — bisection labeling with precision."""
+    from clausal.logic.clpr import label_real
+    from clausal.logic.variables import deref as _deref
+    yield from label_real(vars_list, trail, eps=float(_deref(eps)))

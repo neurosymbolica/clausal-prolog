@@ -241,10 +241,12 @@ except ImportError:
 # ── Lazy term-node imports (mirrors clpfd.py) ─────────────────────────────────
 
 _Add = _Sub = _Mult = _Div = _FloorDiv = _Mod = _Pow = _Negate = None
+_ArithEq = _ArithNeq = _Lt = _LtE = _Gt = _GtE = _CompareChain = None
 
 
 def _ensure_term_imports() -> None:
     global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate
+    global _ArithEq, _ArithNeq, _Lt, _LtE, _Gt, _GtE, _CompareChain
     if _Add is None:
         from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate
         _Add = Add
@@ -255,6 +257,13 @@ def _ensure_term_imports() -> None:
         _Mod = Mod
         _Pow = Pow
         _Negate = Negate
+    if _ArithEq is None:
+        from clausal.pythonic_ast.nodes import (
+            ArithEq, ArithNeq, Lt, LtE, Gt, GtE, CompareChain,
+        )
+        _ArithEq, _ArithNeq = ArithEq, ArithNeq
+        _Lt, _LtE, _Gt, _GtE = Lt, LtE, Gt, GtE
+        _CompareChain = CompareChain
 
 
 # ── Expression interval evaluator ─────────────────────────────────────────────
@@ -955,3 +964,54 @@ def _bisect_var(var: Var, vars_list: list, trail: Trail, eps: float | None):
 
     # Restore to state before any bisection
     trail.undo(outer_mark)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module API — constraint block evaluator
+# ══════════════════════════════════════════════════════════════════════════════
+
+def clpr_constraint_block(constraints: Any, trail: Trail) -> bool:
+    """Walk a tuple of Clausal AST constraint nodes and post each via CLP(R).
+
+    Handles comparisons and ``CompareChain``.  Variables are auto-registered
+    as real-domain.
+    """
+    _ensure_term_imports()
+    if isinstance(constraints, (list, tuple)):
+        elements = constraints
+    else:
+        elements = [constraints]
+
+    for elem in elements:
+        elem = deref(elem)
+        if not _post_real_constraint_node(elem, trail):
+            return False
+    return True
+
+
+def _post_real_constraint_node(node: Any, trail: Trail) -> bool:
+    """Post a single AST constraint node to CLP(R)."""
+    _ensure_term_imports()
+
+    if isinstance(node, _CompareChain):
+        for cmp in node.comparisons:
+            if not _post_real_constraint_node(cmp, trail):
+                return False
+        return True
+
+    if isinstance(node, _ArithEq):
+        return real_eq(node.left, node.right, trail)
+    if isinstance(node, _ArithNeq):
+        return real_ne(node.left, node.right, trail)
+    if isinstance(node, _LtE):
+        return real_le(node.left, node.right, trail)
+    if isinstance(node, _Lt):
+        return real_lt(node.left, node.right, trail)
+    if isinstance(node, _GtE):
+        return real_ge(node.left, node.right, trail)
+    if isinstance(node, _Gt):
+        return real_gt(node.left, node.right, trail)
+
+    raise TypeError(
+        f"clpr constraint block: unsupported node {type(node).__name__}: {node}"
+    )

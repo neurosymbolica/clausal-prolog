@@ -82,6 +82,34 @@ X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
 
 `in_q/1` is also accepted as an alias for `rational/1`.
 
+### Module API
+
+CLP(Q) constraints can also be posted via the `clpq` module namespace using constraint blocks:
+
+```python
+# skip
+Optimal(X, Y, Cost) <- (
+    clpq.rational((
+        0 <= X <= 1,
+        0 <= Y <= 1,
+        X + Y == Fraction(3, 4),
+    )),
+    clpq.maximize(X, Cost),
+)
+```
+
+| Module Predicate | Arity | Description |
+|---|---|---|
+| `clpq.rational` | 1 | `clpq.rational((constraints))` — post rational constraints |
+| `clpq.maximize` | 2 | `clpq.maximize(Expr, Result)` — maximize over rationals |
+| `clpq.minimize` | 2 | `clpq.minimize(Expr, Result)` — minimize over rationals |
+| `clpq.supremum` | 2 | `clpq.supremum(Expr, Result)` — compute upper bound without committing |
+| `clpq.infimum` | 2 | `clpq.infimum(Expr, Result)` — compute lower bound without committing |
+| `clpq.entailed` | 1 | `clpq.entailed(X <= 5)` — test if constraint is implied |
+| `clpq.dump` | 2 | `clpq.dump(Vars, Constraints)` — project constraint store |
+
+Inside the constraint block, standard Python operators (`+`, `-`, `*`, `<`, `<=`, `==`, `!=`, `>`, `>=`) are interpreted as rational constraints. Chained comparisons like `0 <= X <= 1` work naturally. Variables are auto-declared as rational.
+
 ### rational/1
 
 Declares a variable as rational-domain (unbounded). This is the type declaration — it says "X is rational", nothing more.

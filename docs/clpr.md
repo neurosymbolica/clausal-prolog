@@ -59,6 +59,30 @@ Without an `Eps`, bisection continues until the midpoint equals an endpoint in I
 
 Each branch of the bisection is a separate solution. Use `label_real` after posting all constraints to enumerate solutions.
 
+### Module API
+
+CLP(R) constraints can also be posted via the `clpr` module namespace using constraint blocks:
+
+```python
+# skip
+Circle(X, Y) <- (
+    clpr.real((
+        -10.0 <= X <= 10.0,
+        -10.0 <= Y <= 10.0,
+        X * X + Y * Y == 25.0,
+    )),
+    clpr.label([X, Y]),
+)
+```
+
+| Module Predicate | Arity | Description |
+|---|---|---|
+| `clpr.real` | 1 | `clpr.real((constraints))` — post real constraints |
+| `clpr.label` | 1 | `clpr.label(Vars)` — bisection labeling |
+| `clpr.label` | 2 | `clpr.label(Vars, Eps)` — bisection with precision |
+
+Inside the constraint block, standard Python operators are interpreted as real-domain constraints. Variables are auto-declared as real. Chained comparisons like `0.0 <= X <= 1.0` work naturally.
+
 ---
 
 ## Constraint examples

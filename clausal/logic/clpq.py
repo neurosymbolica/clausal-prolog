@@ -40,13 +40,22 @@ ONE = Fraction(1)
 # ── Lazy term imports ────────────────────────────────────────────────────────
 
 _Add = _Sub = _Mult = _Div = _Negate = None
+_ArithEq = _ArithNeq = _Lt = _LtE = _Gt = _GtE = _CompareChain = None
 
 
 def _ensure_term_imports():
     global _Add, _Sub, _Mult, _Div, _Negate
+    global _ArithEq, _ArithNeq, _Lt, _LtE, _Gt, _GtE, _CompareChain
     if _Add is None:
         from clausal.terms import Add, Sub, Mult, Div, Negate
         _Add, _Sub, _Mult, _Div, _Negate = Add, Sub, Mult, Div, Negate
+    if _ArithEq is None:
+        from clausal.pythonic_ast.nodes import (
+            ArithEq, ArithNeq, Lt, LtE, Gt, GtE, CompareChain,
+        )
+        _ArithEq, _ArithNeq = ArithEq, ArithNeq
+        _Lt, _LtE, _Gt, _GtE = Lt, LtE, Gt, GtE
+        _CompareChain = CompareChain
 
 
 # ── QVar: per-variable rational-domain state ─────────────────────────────────
@@ -1668,3 +1677,55 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
             best, b_tab = v2, t2
 
     return best, b_tab
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module API — constraint block evaluator
+# ══════════════════════════════════════════════════════════════════════════════
+
+def clpq_constraint_block(constraints: Any, trail: Trail) -> bool:
+    """Walk a tuple of Clausal AST constraint nodes and post each via CLP(Q).
+
+    Handles comparisons (``LtE``, ``Lt``, ``GtE``, ``Gt``, ``ArithEq``,
+    ``ArithNeq``) and ``CompareChain`` (chained comparisons like
+    ``1 <= X <= 10``).  Variables are auto-registered as rational.
+    """
+    _ensure_term_imports()
+    if isinstance(constraints, (list, tuple)):
+        elements = constraints
+    else:
+        elements = [constraints]
+
+    for elem in elements:
+        elem = deref(elem)
+        if not _post_q_constraint_node(elem, trail):
+            return False
+    return True
+
+
+def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
+    """Post a single AST constraint node to CLP(Q)."""
+    _ensure_term_imports()
+
+    if isinstance(node, _CompareChain):
+        for cmp in node.comparisons:
+            if not _post_q_constraint_node(cmp, trail):
+                return False
+        return True
+
+    if isinstance(node, _ArithEq):
+        return q_eq(node.left, node.right, trail)
+    if isinstance(node, _ArithNeq):
+        return q_ne(node.left, node.right, trail)
+    if isinstance(node, _LtE):
+        return q_le(node.left, node.right, trail)
+    if isinstance(node, _Lt):
+        return q_lt(node.left, node.right, trail)
+    if isinstance(node, _GtE):
+        return q_ge(node.left, node.right, trail)
+    if isinstance(node, _Gt):
+        return q_gt(node.left, node.right, trail)
+
+    raise TypeError(
+        f"clpq constraint block: unsupported node {type(node).__name__}: {node}"
+    )
