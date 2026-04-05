@@ -1,0 +1,53 @@
+# Z3 real constraint tests — exercises z3.real, z3.minimize, z3.maximize,
+# z3.entailed, z3.disentailed.
+
+# ── Basic real constraints ──────────────────────────────────────────────────
+
+Bounded(X) <- (
+    z3.real((
+        0 <= X <= 10,
+    )),
+    z3.label([X]),
+)
+
+Test("real bounded sat") <- Bounded(_)
+
+# ── Minimize ────────────────────────────────────────────────────────────────
+
+Test("real minimize") <- (
+    z3.real((
+        0 <= X <= 10,
+        0 <= Y <= 10,
+        2 * X + 3 * Y >= 6,
+    )),
+    z3.minimize(2 * X + 3 * Y, COST),
+    COST == 6,
+)
+
+# ── Maximize ────────────────────────────────────────────────────────────────
+
+Test("real maximize") <- (
+    z3.real((
+        0 <= X <= 10,
+        0 <= Y <= 10,
+    )),
+    z3.maximize(X + Y, COST),
+    COST == 20,
+)
+
+# ── Entailment ──────────────────────────────────────────────────────────────
+
+Test("real entailed") <- (
+    z3.integer((5 <= X <= 10)),
+    z3.entailed(X >= 5),
+)
+
+Test("real not entailed") <- (
+    z3.integer((1 <= X <= 10)),
+    not(z3.entailed(X >= 5)),
+)
+
+Test("real disentailed") <- (
+    z3.integer((5 <= X <= 10)),
+    z3.disentailed(X < 5),
+)

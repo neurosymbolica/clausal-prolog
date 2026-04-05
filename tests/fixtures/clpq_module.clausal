@@ -1,0 +1,76 @@
+# CLP(Q) module API tests — exercises clpq.rational, clpq.maximize,
+# clpq.minimize, clpq.supremum, clpq.infimum.
+
+# ── Basic rational constraints ──────────────────────────────────────────────
+
+Test("clpq rational equality") <- (
+    clpq.rational((X == 1/3,)),
+    X == 1/3,
+)
+
+Test("clpq rational bounds") <- (
+    clpq.rational((
+        0 <= X <= 1,
+        X == 3/4,
+    )),
+    X == 3/4,
+)
+
+Test("clpq rational linear system") <- (
+    clpq.rational((
+        X + Y == 1,
+        X - Y == 1/2,
+    )),
+    X == 3/4,
+    Y == 1/4,
+)
+
+# ── Infeasibility ───────────────────────────────────────────────────────────
+
+Test("clpq infeasible") <- (
+    not(clpq.rational((X >= 10, X <= 5)))
+)
+
+# ── Maximize / minimize ────────────────────────────────────────────────────
+
+Test("clpq maximize") <- (
+    clpq.rational((
+        0 <= X <= 10,
+        0 <= Y <= 10,
+        2*X + Y <= 16,
+        X + 2*Y <= 11,
+        X + 3*Y <= 15,
+    )),
+    clpq.maximize(30*X + 50*Y, OBJ),
+    OBJ == 310,
+)
+
+Test("clpq minimize") <- (
+    clpq.rational((
+        0 <= X <= 100,
+        0 <= Y <= 100,
+        X + Y >= 10,
+    )),
+    clpq.minimize(X + Y, COST),
+    COST == 10,
+)
+
+# ── Supremum / infimum ─────────────────────────────────────────────────────
+
+Test("clpq supremum") <- (
+    clpq.rational((
+        0 <= X <= 10,
+        X <= 7,
+    )),
+    clpq.supremum(X, HI),
+    HI == 7,
+)
+
+Test("clpq infimum") <- (
+    clpq.rational((
+        0 <= X <= 10,
+        X >= 3,
+    )),
+    clpq.infimum(X, LO),
+    LO == 3,
+)

@@ -1,0 +1,79 @@
+# Z3 bitvector constraint tests — exercises z3.bitvector, z3.extract,
+# z3.concat, z3.zero_extend, z3.sign_extend.
+
+# ── Basic BV constraints ────────────────────────────────────────────────────
+
+SmallBV(X) <- (
+    z3.bitvector(4, (X < 3,)),
+    z3.label([X]),
+)
+
+Test("bv4 < 3 has 3 solutions") <- (count_all(SmallBV(_), N), N == 3)
+
+# ── Bitwise AND ─────────────────────────────────────────────────────────────
+
+Mask(X, R) <- (
+    z3.bitvector(8, (
+        X == 171,
+        X & 240 == R,
+    )),
+    z3.label([R]),
+)
+
+Test("bv mask 0xAB & 0xF0") <- (Mask(_, R), R == 160)
+
+# ── Arithmetic wraparound ───────────────────────────────────────────────────
+
+Wrap(R) <- (
+    z3.bitvector(8, (
+        X == 200,
+        Y == 100,
+        X + Y == R,
+    )),
+    z3.label([R]),
+)
+
+Test("bv8 wraparound 200+100") <- (Wrap(R), R == 44)
+
+# ── Extract ─────────────────────────────────────────────────────────────────
+
+UpperNibble(R) <- (
+    z3.bitvector(8, (X == 171,)),
+    z3.extract(7, 4, X, R),
+    z3.label([R]),
+)
+
+Test("bv extract upper nibble") <- (UpperNibble(R), R == 10)
+
+# ── Concat ──────────────────────────────────────────────────────────────────
+
+ConcatNibbles(R) <- (
+    z3.bitvector(4, (
+        X == 10,
+        Y == 11,
+    )),
+    z3.concat(X, Y, R),
+    z3.label([R]),
+)
+
+Test("bv concat 0xA 0xB") <- (ConcatNibbles(R), R == 171)
+
+# ── Zero extend ─────────────────────────────────────────────────────────────
+
+ZExt(R) <- (
+    z3.bitvector(4, (X == 5,)),
+    z3.zero_extend(X, 4, R),
+    z3.label([R]),
+)
+
+Test("bv zero extend 4->8") <- (ZExt(R), R == 5)
+
+# ── Sign extend ─────────────────────────────────────────────────────────────
+
+SExt(R) <- (
+    z3.bitvector(4, (X == 15,)),
+    z3.sign_extend(X, 4, R),
+    z3.label([R]),
+)
+
+Test("bv sign extend -1 to 8bit") <- (SExt(R), R == 255)

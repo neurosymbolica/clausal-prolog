@@ -1,0 +1,39 @@
+# Z3 mixed theory tests — exercises multiple theories on the same trail,
+# solver configuration.
+
+# ── Integer + all_different (N-Queens style) ────────────────────────────────
+
+FourQueens(Q1, Q2, Q3, Q4) <- (
+    z3.integer((
+        1 <= Q1 <= 4,
+        1 <= Q2 <= 4,
+        1 <= Q3 <= 4,
+        1 <= Q4 <= 4,
+        Q1 - Q2 != 1, Q2 - Q1 != 1,
+        Q1 - Q3 != 2, Q3 - Q1 != 2,
+        Q1 - Q4 != 3, Q4 - Q1 != 3,
+        Q2 - Q3 != 1, Q3 - Q2 != 1,
+        Q2 - Q4 != 2, Q4 - Q2 != 2,
+        Q3 - Q4 != 1, Q4 - Q3 != 1,
+    )),
+    z3.all_different([Q1, Q2, Q3, Q4]),
+    z3.label([Q1, Q2, Q3, Q4]),
+)
+
+Test("4-queens has 2 solutions") <- (count_all(FourQueens(_, _, _, _), N), N == 2)
+Test("4-queens solution 1") <- FourQueens(2, 4, 1, 3)
+Test("4-queens solution 2") <- FourQueens(3, 1, 4, 2)
+
+# ── Solver configuration ───────────────────────────────────────────────────
+
+Test("set logic QF_LIA") <- (
+    z3.integer((1 <= X <= 10)),
+    z3.set_logic("QF_LIA"),
+    z3.check(),
+)
+
+Test("set option timeout") <- (
+    z3.set_option("timeout", 5000),
+    z3.integer((1 <= X <= 10)),
+    z3.check(),
+)

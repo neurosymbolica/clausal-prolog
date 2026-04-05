@@ -1,0 +1,48 @@
+# Z3 optimization tests — exercises z3.soft, z3.maximize_satisfaction,
+# z3.optimize_label.
+
+# ── Soft constraints ────────────────────────────────────────────────────────
+
+Test("soft higher weight wins") <- (
+    z3.integer((0 <= X <= 10)),
+    z3.soft(X <= 3, 2),
+    z3.soft(X >= 7, 5),
+    z3.maximize_satisfaction(SAT),
+    SAT == 5,
+)
+
+# ── Soft all satisfiable ───────────────────────────────────────────────────
+
+Test("soft all satisfiable") <- (
+    z3.integer((0 <= X <= 10)),
+    z3.soft(X >= 0, 3),
+    z3.soft(X <= 10, 5),
+    z3.maximize_satisfaction(SAT),
+    SAT == 8,
+)
+
+# ── Optimize label ──────────────────────────────────────────────────────────
+
+MinSchedule(T1, T2, T3, COST) <- (
+    z3.integer((
+        0 <= T1 <= 100,
+        0 <= T2 <= 100,
+        0 <= T3 <= 100,
+        T1 + 5 <= T2,
+        T2 + 3 <= T3,
+    )),
+    z3.optimize_label([T1, T2, T3], T3, COST, "minimize"),
+)
+
+Test("optimize label minimize") <- (MinSchedule(0, 5, 8, 8))
+
+MaxObj(COST) <- (
+    z3.integer((
+        0 <= X <= 10,
+        0 <= Y <= 10,
+        X + Y <= 15,
+    )),
+    z3.optimize_label([X, Y], X + Y, COST, "maximize"),
+)
+
+Test("optimize label maximize") <- (MaxObj(COST), COST == 15)

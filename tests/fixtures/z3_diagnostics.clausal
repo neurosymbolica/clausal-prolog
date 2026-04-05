@@ -1,0 +1,57 @@
+# Z3 diagnostics tests — exercises z3.named, z3.unsatisfiable_core,
+# z3.satisfiability, z3.model, z3.simplify, z3.assertions.
+
+# ── Named constraints and unsat core ────────────────────────────────────────
+
+Test("unsat core finds conflict") <- (
+    z3.integer((1 <= X <= 10)),
+    z3.named(X > 8, "x_high"),
+    z3.named(X < 3, "x_low"),
+    z3.unsatisfiable_core(CORE),
+    in_("x_high", CORE),
+    in_("x_low", CORE),
+)
+
+Test("sat has no core") <- (
+    z3.integer((1 <= X <= 10)),
+    z3.named(X > 5, "x_big"),
+    not(z3.unsatisfiable_core(_)),
+)
+
+# ── Satisfiability ──────────────────────────────────────────────────────────
+
+Test("satisfiability sat") <- (
+    z3.integer((1 <= X <= 10)),
+    z3.satisfiability(R),
+    R == "sat",
+)
+
+Test("satisfiability unsat") <- (
+    z3.integer((X >= 10, X <= 5)),
+    z3.satisfiability(R),
+    R == "unsat",
+)
+
+# ── Model inspection ────────────────────────────────────────────────────────
+
+Test("model without binding") <- (
+    z3.integer((X == 7,)),
+    z3.model([X], [[NAME, VAL]]),
+    VAL == 7,
+)
+
+# ── Simplify ────────────────────────────────────────────────────────────────
+
+Test("simplify constant") <- (
+    z3.simplify(2 + 3, R),
+    R == 5,
+)
+
+# ── Assertions dump ─────────────────────────────────────────────────────────
+
+Test("assertions non-empty") <- (
+    z3.integer((1 <= X <= 10)),
+    z3.assertions(A),
+    length(A, N),
+    N >= 1,
+)

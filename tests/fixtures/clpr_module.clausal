@@ -1,0 +1,32 @@
+# CLP(R) module API tests — exercises clpr.real, clpr.label.
+
+# ── Basic real constraints ──────────────────────────────────────────────────
+
+Test("clpr real equality") <- (
+    clpr.real((X == 3.0,)),
+    clpr.label([X]),
+)
+
+Test("clpr real bounds") <- (
+    clpr.real((
+        0 <= X <= 10,
+        X == 5.0,
+    )),
+    clpr.label([X]),
+)
+
+# ── Infeasibility ───────────────────────────────────────────────────────────
+
+Test("clpr infeasible") <- (
+    not(clpr.real((X >= 10, X <= 5)))
+)
+
+# ── Arithmetic ──────────────────────────────────────────────────────────────
+
+Test("clpr arithmetic") <- (
+    clpr.real((
+        0 <= X <= 10,
+        X * 2 == 6.0,
+    )),
+    clpr.label([X]),
+)
