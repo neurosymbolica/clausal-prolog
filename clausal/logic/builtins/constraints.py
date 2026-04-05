@@ -331,7 +331,7 @@ def _clpq_mod_entailed(constraint, trail, k):
     from clausal.logic.variables import deref as _deref
     from clausal.pythonic_ast.nodes import LtE, Lt, GtE, Gt, ArithEq, ArithNeq
     node = _deref(constraint)
-    op_map = {LtE: "le", Lt: "lt", GtE: "ge", Gt: "gt", ArithEq: "eq", ArithNeq: "ne"}
+    op_map = {LtE: "=<", Lt: "<", GtE: ">=", Gt: ">", ArithEq: "=", ArithNeq: "\\="}
     op = op_map.get(type(node))
     if op and _fn(op, node.left, node.right, trail):
         yield None

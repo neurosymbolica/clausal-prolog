@@ -155,6 +155,21 @@ class TestClprConstraintBlock:
 # Unsupported node type
 # ══════════════════════════════════════════════════════════════════════════════
 
+class TestClpqEntailed:
+    def test_entailed_by_bounds(self):
+        """clpq.entailed succeeds when constraint is implied."""
+        from clausal.logic.clpq import clpq_constraint_block, entailed
+        trail = Trail()
+        x = Var()
+        assert clpq_constraint_block((
+            CompareChain(comparisons=[LtE(left=5, right=x), LtE(left=x, right=10)]),
+        ), trail)
+        # x >= 5 is entailed
+        assert entailed(">=", x, 5, trail)
+        # x < 5 is NOT entailed
+        assert not entailed("<", x, 5, trail)
+
+
 class TestUnsupportedNodes:
     def test_clpq_unsupported_raises(self):
         from clausal.logic.clpq import clpq_constraint_block

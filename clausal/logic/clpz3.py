@@ -2253,11 +2253,15 @@ def z3_constraint_block(constraint_set: Any, sort: Any, trail: Trail) -> bool:
     else:
         elements = [constraint_set]
 
-    for elem in elements:
-        elem = deref(elem)
-        z3_expr = clausal_to_z3(elem, trail, default_sort=sort)
-        z3_push(trail)
-        get_z3_state(trail).solver.add(z3_expr)
+    if not elements:
+        return True
+
+    state = get_z3_state(trail)
+    z3_exprs = [clausal_to_z3(deref(elem), trail, default_sort=sort)
+                for elem in elements]
+    z3_push(trail)
+    for expr in z3_exprs:
+        state.solver.add(expr)
     return True
 
 
@@ -2287,34 +2291,36 @@ def label_z3_polymorphic(vars_list: Any, trail: Trail):
         clausal_vars.append(v)
 
     if not z3_vars:
-        yield None
+        # All ground — yield one solution iff store is satisfiable.
+        if z3_check(trail):
+            yield None
         return
 
-    # Use blocking-clause enumeration (works for all finite-domain sorts)
+    # For continuous sorts (real, string): yield at most one model.
+    continuous = any(_is_continuous_sort(z3v.sort()) for z3v in z3_vars)
+
+    # Push a scope for blocking clauses — popped on backtrack.
+    z3_push(trail)
+
     while state.solver.check() == _z3.sat:
         m = state.solver.model()
+        values = [z3_to_python(m.eval(z3v, model_completion=True))
+                  for z3v in z3_vars]
+
         mark = trail.mark()
-        ok = True
-        blocking: list = []
-        for cv, z3v in zip(clausal_vars, z3_vars):
-            val = z3_to_python(m.eval(z3v, model_completion=True))
-            if not unify(cv, val, trail):
-                ok = False
-                break
-            blocking.append(z3v != m.eval(z3v, model_completion=True))
+        ok = all(unify(cv, val, trail)
+                 for cv, val in zip(clausal_vars, values))
         if ok:
             yield None
         trail.undo(mark)
 
-        # For real/string sorts: only one solution (continuous domains)
-        if any(_is_continuous_sort(z3v.sort()) for z3v in z3_vars):
+        if continuous:
             break
 
-        if not blocking:
-            break
-        # Block this solution
-        z3_push(trail)
-        state.solver.add(_z3.Or(*blocking))
+        # Block this assignment so next check() finds a new one.
+        block = _z3.Or([z3v != m.eval(z3v, model_completion=True)
+                        for z3v in z3_vars])
+        state.solver.add(block)
 
 
 def _is_continuous_sort(sort: Any) -> bool:
