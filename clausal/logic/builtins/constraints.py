@@ -366,3 +366,8 @@ def _clpr_mod_label_eps(vars_list, eps, trail, k):
     from clausal.logic.clpr import label_real
     from clausal.logic.variables import deref as _deref
     yield from label_real(vars_list, trail, eps=float(_deref(eps)))
+
+
+# ── PySAT builtins ──────────────────────────────────────────────────────────
+# Import to register pysat.* builtins (cadical, glucose, minisat, etc.)
+import clausal.logic.builtins.sat_constraints  # noqa: E402, F401
