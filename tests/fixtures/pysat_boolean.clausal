@@ -1,0 +1,179 @@
+# PySAT Boolean satisfiability tests — exercises pysat.cadical, pysat.solve,
+# pysat.check, pysat.count, pysat.at_most, pysat.at_least, pysat.exactly.
+
+# ── Basic constraint blocks ─────────────────────────────────────────────────
+
+XorSolve(X, Y) <- (
+    pysat.cadical((X ^ Y,)),
+    pysat.solve([X, Y]),
+)
+
+Test("xor 2 solutions") <- (count_all(XorSolve(_, _), N), N == 2)
+Test("xor solution 0,1") <- XorSolve(0, 1)
+Test("xor solution 1,0") <- XorSolve(1, 0)
+
+AndSolve(X, Y) <- (
+    pysat.cadical((X & Y,)),
+    pysat.solve([X, Y]),
+)
+
+Test("and forces both 1") <- (AndSolve(X, Y), X == 1, Y == 1)
+Test("and 1 solution") <- (count_all(AndSolve(_, _), N), N == 1)
+
+OrSolve(X, Y) <- (
+    pysat.cadical((X | Y,)),
+    pysat.solve([X, Y]),
+)
+
+Test("or 3 solutions") <- (count_all(OrSolve(_, _), N), N == 3)
+Test("or excludes 0,0") <- (not(OrSolve(0, 0)))
+
+# ── Negation ────────────────────────────────────────────────────────────────
+
+NegSolve(X) <- (
+    pysat.cadical((~X,)),
+    pysat.solve([X]),
+)
+
+Test("not forces 0") <- (NegSolve(X), X == 0)
+
+# ── Equality / disequality ──────────────────────────────────────────────────
+
+EqSolve(X, Y) <- (
+    pysat.cadical((X == Y,)),
+    pysat.solve([X, Y]),
+)
+
+Test("eq 2 solutions") <- (count_all(EqSolve(_, _), N), N == 2)
+Test("eq 0,0") <- EqSolve(0, 0)
+Test("eq 1,1") <- EqSolve(1, 1)
+
+NeqSolve(X, Y) <- (
+    pysat.cadical((X != Y,)),
+    pysat.solve([X, Y]),
+)
+
+Test("neq 2 solutions") <- (count_all(NeqSolve(_, _), N), N == 2)
+Test("neq 0,1") <- NeqSolve(0, 1)
+Test("neq 1,0") <- NeqSolve(1, 0)
+
+# ── Unsatisfiable ───────────────────────────────────────────────────────────
+
+Test("unsat x and not x") <- (
+    pysat.cadical((X & ~X,)),
+    not(pysat.check()),
+)
+
+# ── Combined disjunctions ──────────────────────────────────────────────────
+
+ForcesY(X, Y) <- (
+    pysat.cadical((
+        X | Y,
+        ~X | Y,
+    )),
+    pysat.solve([X, Y]),
+)
+
+Test("combined forces Y=1") <- (ForcesY(_, Y), Y == 1)
+Test("combined 2 solutions") <- (count_all(ForcesY(_, _), N), N == 2)
+
+# ── Counting ────────────────────────────────────────────────────────────────
+
+Test("count xor") <- (
+    pysat.cadical((X ^ Y,)),
+    pysat.count([X, Y], N),
+    N == 2,
+)
+
+Test("count or") <- (
+    pysat.cadical((X | Y,)),
+    pysat.count([X, Y], N),
+    N == 3,
+)
+
+# ── Cardinality ─────────────────────────────────────────────────────────────
+
+AtMostOneSolve(X, Y, Z) <- (
+    pysat.at_most([X, Y, Z], 1),
+    pysat.solve([X, Y, Z]),
+)
+
+Test("at_most 1 of 3: 4 solutions") <- (count_all(AtMostOneSolve(_, _, _), N), N == 4)
+
+AtLeastTwoSolve(X, Y, Z) <- (
+    pysat.at_least([X, Y, Z], 2),
+    pysat.solve([X, Y, Z]),
+)
+
+Test("at_least 2 of 3: 4 solutions") <- (count_all(AtLeastTwoSolve(_, _, _), N), N == 4)
+
+ExactlyTwoSolve(X, Y, Z) <- (
+    pysat.exactly([X, Y, Z], 2),
+    pysat.solve([X, Y, Z]),
+)
+
+Test("exactly 2 of 3: 3 solutions") <- (count_all(ExactlyTwoSolve(_, _, _), N), N == 3)
+
+ExactlyZero(X, Y) <- (
+    pysat.exactly([X, Y], 0),
+    pysat.solve([X, Y]),
+)
+
+Test("exactly 0: both false") <- (ExactlyZero(X, Y), X == 0, Y == 0)
+Test("exactly 0: 1 solution") <- (count_all(ExactlyZero(_, _), N), N == 1)
+
+# ── Pigeonhole (UNSAT) ─────────────────────────────────────────────────────
+
+Test("pigeonhole 3-into-2 unsat") <- (
+    # Each pigeon in at least one hole
+    pysat.at_least([P1H1, P1H2], 1),
+    pysat.at_least([P2H1, P2H2], 1),
+    pysat.at_least([P3H1, P3H2], 1),
+    # Each hole has at most one pigeon
+    pysat.at_most([P1H1, P2H1, P3H1], 1),
+    pysat.at_most([P1H2, P2H2, P3H2], 1),
+    not(pysat.check()),
+)
+
+# ── Combined cardinality + clauses ──────────────────────────────────────────
+
+ExactlyOneCombined(X, Y, Z) <- (
+    pysat.cadical((X | Y | Z,)),
+    pysat.at_most([X, Y, Z], 1),
+    pysat.solve([X, Y, Z]),
+)
+
+Test("combined exactly-one 3 solutions") <- (count_all(ExactlyOneCombined(_, _, _), N), N == 3)
+
+# ── Graph coloring (integration) ───────────────────────────────────────────
+
+# 3-color a triangle: nodes A, B, C with edges A-B, B-C, A-C
+# Each node has vars for R, G, B; exactly one color per node,
+# adjacent nodes can't share a color.
+
+TriangleColor(AR, AG, AB, BR, BG, BB, CR, CG, CB) <- (
+    pysat.exactly([AR, AG, AB], 1),
+    pysat.exactly([BR, BG, BB], 1),
+    pysat.exactly([CR, CG, CB], 1),
+    # A-B: different colors
+    pysat.cadical((
+        ~AR | ~BR,
+        ~AG | ~BG,
+        ~AB | ~BB,
+    )),
+    # B-C: different colors
+    pysat.cadical((
+        ~BR | ~CR,
+        ~BG | ~CG,
+        ~BB | ~CB,
+    )),
+    # A-C: different colors
+    pysat.cadical((
+        ~AR | ~CR,
+        ~AG | ~CG,
+        ~AB | ~CB,
+    )),
+    pysat.solve([AR, AG, AB, BR, BG, BB, CR, CG, CB]),
+)
+
+Test("triangle coloring 6 solutions") <- (count_all(TriangleColor(_, _, _, _, _, _, _, _, _), N), N == 6)

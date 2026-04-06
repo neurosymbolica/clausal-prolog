@@ -294,134 +294,10 @@ class TestTseitinTransformation:
         assert root == -vx
 
 
-class TestConstraintBlock:
+# TestConstraintBlock: problem-solving tests moved to pysat_boolean.clausal
 
-    def test_simple_disjunctions(self):
-        """(X | Y, ~X | Y) -> Y must be True."""
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((
-            BitOr(left=x, right=y),
-            BitOr(left=Invert(operand=x), right=y),
-        ), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert all(s[1] == 1 for s in sols)
-        assert len(sols) == 2
-
-    def test_xor_constraint(self):
-        """X ^ Y has exactly 2 solutions: (0,1) and (1,0)."""
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((BitXor(left=x, right=y),), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sorted(sols) == [(0, 1), (1, 0)]
-
-    def test_and_constraint(self):
-        """X & Y forces both to 1."""
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((BitAnd(left=x, right=y),), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sols == [(1, 1)]
-
-    def test_unsat_constraint(self):
-        """X & ~X is unsatisfiable."""
-        trail = Trail()
-        x = Var()
-        sat_constraint_block((
-            BitAnd(left=x, right=Invert(operand=x)),
-        ), 'cadical195', trail)
-        assert not sat_check(trail)
-
-    def test_block_backtracking(self):
-        """Constraint block is retracted on backtrack."""
-        trail = Trail()
-        x = Var()
-        sat_var_for(x, trail)
-
-        mark = trail.mark()
-        sat_constraint_block((
-            Invert(operand=x),   # forces x=0
-        ), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x], trail):
-            sols.append(deref(x))
-        assert sols == [0]
-
-        trail.undo(mark)
-        # Now unconstrained
-        sols2 = []
-        for _ in label_sat([x], trail):
-            sols2.append(deref(x))
-        assert sorted(sols2) == [0, 1]
-
-    def test_eq_constraint(self):
-        """X == Y has 2 solutions: (0,0) and (1,1)."""
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((ArithEq(left=x, right=y),), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sorted(sols) == [(0, 0), (1, 1)]
-
-    def test_neq_constraint(self):
-        """X != Y has 2 solutions: (0,1) and (1,0)."""
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((ArithNeq(left=x, right=y),), 'cadical195', trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sorted(sols) == [(0, 1), (1, 0)]
-
-    def test_multiple_solvers(self):
-        """Different trails can use different solvers."""
-        trail1 = Trail()
-        x1 = Var()
-        sat_constraint_block((x1,), 'cadical195', trail1)
-        assert sat_check(trail1)
-
-        trail2 = Trail()
-        x2 = Var()
-        sat_constraint_block((x2,), 'glucose', trail2)
-        assert sat_check(trail2)
-
-
-class TestLabeling:
-
-    def test_single_var_two_solutions(self):
-        trail = Trail()
-        x = Var()
-        sat_var_for(x, trail)
-        # No constraints — tautology
-        sat_push(trail)
-        sat_add_clause([sat_var_for(x, trail), -sat_var_for(x, trail)], trail)
-        sols = []
-        for _ in label_sat([x], trail):
-            sols.append(deref(x))
-        assert sorted(sols) == [0, 1]
-
-    def test_three_vars_eight_solutions(self):
-        """Unconstrained 3 vars -> 8 solutions."""
-        trail = Trail()
-        x, y, z = Var(), Var(), Var()
-        # Register vars with trivial tautologies
-        vx = sat_var_for(x, trail)
-        vy = sat_var_for(y, trail)
-        vz = sat_var_for(z, trail)
-        sat_push(trail)
-        sat_add_clause([vx, -vx], trail)
-        sat_add_clause([vy, -vy], trail)
-        sat_add_clause([vz, -vz], trail)
-        count = sum(1 for _ in label_sat([x, y, z], trail))
-        assert count == 8
+class TestLabelingInfrastructure:
+    """Infrastructure tests for labeling — generator protocol, binding semantics."""
 
     def test_bindings_undone_after_labeling(self):
         trail = Trail()
@@ -433,14 +309,6 @@ class TestLabeling:
             assert not is_var(deref(x))  # bound during iteration
         assert is_var(deref(x))  # unbound after
 
-    def test_sat_count(self):
-        trail = Trail()
-        x, y = Var(), Var()
-        sat_constraint_block((
-            BitOr(left=x, right=y),  # at least one true
-        ), 'cadical195', trail)
-        assert sat_count([x, y], trail) == 3  # (1,0), (0,1), (1,1)
-
     def test_ground_vars_skipped(self):
         """Ground values in the label list are accepted."""
         trail = Trail()
@@ -450,16 +318,6 @@ class TestLabeling:
         for _ in label_sat([x, 1], trail):
             sols.append(deref(x))
         assert sols == [1]
-
-    def test_all_ground_sat(self):
-        """All-ground list, SAT formula → one solution."""
-        trail = Trail()
-        x = Var()
-        sat_constraint_block((x,), 'cadical195', trail)
-        # Manually bind x=1 before labeling
-        unify(x, 1, trail)
-        count = sum(1 for _ in label_sat([1], trail))
-        assert count == 1
 
     def test_nested_search(self):
         """Inner labeling does not corrupt outer state."""
@@ -479,96 +337,33 @@ class TestLabeling:
         assert sorted(outer) == [(0, 1), (1, 2)]
 
 
+# TestCardinality: problem-solving tests moved to pysat_boolean.clausal
+
 # ═══════════════════════════════════════════════════════════════════════════
-# Phase 3: Cardinality Constraints
+# Cardinality Edge Cases (infrastructure)
 # ═══════════════════════════════════════════════════════════════════════════
 
-class TestCardinality:
+# TestCardinality problem-solving removed (in pysat_boolean.clausal)
 
-    def test_at_most_one(self):
-        """at_most([X, Y, Z], 1): 4 solutions (000, 100, 010, 001)."""
+# TestCardinality and TestIntegration problem-solving tests moved to
+# pysat_boolean.clausal. Infrastructure tests kept below.
+
+class TestBacktrackingStress:
+
+    def test_deep_backtracking_stress(self):
+        """Many push/undo cycles don't break the solver."""
         trail = Trail()
-        x, y, z = Var(), Var(), Var()
-        for v in [x, y, z]:
-            sat_var_for(v, trail)
-        sat_at_most([x, y, z], 1, trail)
-        count = sum(1 for _ in label_sat([x, y, z], trail))
-        assert count == 4
+        x = Var()
+        v = sat_var_for(x, trail)
 
-    def test_at_least_two(self):
-        """at_least([X, Y, Z], 2): 4 solutions (110, 101, 011, 111)."""
-        trail = Trail()
-        x, y, z = Var(), Var(), Var()
-        for v in [x, y, z]:
-            sat_var_for(v, trail)
-        sat_at_least([x, y, z], 2, trail)
-        count = sum(1 for _ in label_sat([x, y, z], trail))
-        assert count == 4
-
-    def test_exactly_two(self):
-        """exactly([X, Y, Z], 2): 3 solutions (110, 101, 011)."""
-        trail = Trail()
-        x, y, z = Var(), Var(), Var()
-        for v in [x, y, z]:
-            sat_var_for(v, trail)
-        sat_exactly([x, y, z], 2, trail)
-        count = sum(1 for _ in label_sat([x, y, z], trail))
-        assert count == 3
-
-    def test_exactly_zero(self):
-        """exactly([X, Y], 0): 1 solution (0, 0)."""
-        trail = Trail()
-        x, y = Var(), Var()
-        for v in [x, y]:
-            sat_var_for(v, trail)
-        sat_exactly([x, y], 0, trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sols == [(0, 0)]
-
-    def test_at_most_zero(self):
-        """at_most([X, Y], 0): all must be 0."""
-        trail = Trail()
-        x, y = Var(), Var()
-        for v in [x, y]:
-            sat_var_for(v, trail)
-        sat_at_most([x, y], 0, trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sols == [(0, 0)]
-
-    def test_at_least_all(self):
-        """at_least([X, Y], 2): both must be 1."""
-        trail = Trail()
-        x, y = Var(), Var()
-        for v in [x, y]:
-            sat_var_for(v, trail)
-        sat_at_least([x, y], 2, trail)
-        sols = []
-        for _ in label_sat([x, y], trail):
-            sols.append((deref(x), deref(y)))
-        assert sols == [(1, 1)]
-
-    def test_pigeonhole_unsat(self):
-        """3 pigeons, 2 holes: UNSAT with at-most-one per hole."""
-        trail = Trail()
-        # p[i][j] = pigeon i in hole j
-        p = [[Var() for _ in range(2)] for _ in range(3)]
-        for row in p:
-            for v in row:
-                sat_var_for(v, trail)
-
-        # Each pigeon in at least one hole
-        for i in range(3):
-            sat_at_least(p[i], 1, trail)
-
-        # Each hole has at most one pigeon
-        for j in range(2):
-            sat_at_most([p[i][j] for i in range(3)], 1, trail)
-
-        assert not sat_check(trail)
+        for _ in range(50):
+            mark = trail.mark()
+            sat_push(trail)
+            sat_add_clause([v], trail)
+            sat_add_clause([-v], trail)
+            assert not sat_check(trail)
+            trail.undo(mark)
+            assert sat_check(trail)
 
     def test_cardinality_backtracks(self):
         """Cardinality constraints retracted on backtrack."""
@@ -585,86 +380,6 @@ class TestCardinality:
         trail.undo(mark)
         count2 = sum(1 for _ in label_sat([x, y, z], trail))
         assert count2 == 8
-
-    def test_combined_cardinality_and_clauses(self):
-        """Combine cardinality with regular clauses."""
-        trail = Trail()
-        x, y, z = Var(), Var(), Var()
-        # At least one true
-        sat_constraint_block((
-            BitOr(left=x, right=BitOr(left=y, right=z)),
-        ), 'cadical195', trail)
-        # At most one true
-        sat_at_most([x, y, z], 1, trail)
-        # Combined: exactly one true
-        count = sum(1 for _ in label_sat([x, y, z], trail))
-        assert count == 3
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Integration: Complex Problems
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestIntegration:
-
-    def test_graph_coloring_triangle(self):
-        """3-color a triangle graph (3 nodes, 3 edges)."""
-        trail = Trail()
-        # Each node has 3 color vars (R, G, B)
-        ar, ag, ab = Var(), Var(), Var()
-        br, bg, bb = Var(), Var(), Var()
-        cr, cg, cb = Var(), Var(), Var()
-        all_vars = [ar, ag, ab, br, bg, bb, cr, cg, cb]
-
-        # Exactly one color per node
-        for v in all_vars:
-            sat_var_for(v, trail)
-        sat_exactly([ar, ag, ab], 1, trail)
-        sat_exactly([br, bg, bb], 1, trail)
-        sat_exactly([cr, cg, cb], 1, trail)
-
-        # Adjacent nodes differ (a-b, b-c, a-c)
-        for r1, g1, b1, r2, g2, b2 in [
-            (ar, ag, ab, br, bg, bb),
-            (br, bg, bb, cr, cg, cb),
-            (ar, ag, ab, cr, cg, cb),
-        ]:
-            sat_constraint_block((
-                BitOr(left=Invert(operand=r1), right=Invert(operand=r2)),
-                BitOr(left=Invert(operand=g1), right=Invert(operand=g2)),
-                BitOr(left=Invert(operand=b1), right=Invert(operand=b2)),
-            ), 'cadical195', trail)
-
-        sols = list(label_sat(all_vars, trail))
-        # Triangle has 3! = 6 valid 3-colorings
-        assert len(sols) == 6
-
-    def test_all_different_boolean(self):
-        """N Boolean vars, at most 1 true: pigeonhole-like test."""
-        trail = Trail()
-        n = 5
-        vs = [Var() for _ in range(n)]
-        for v in vs:
-            sat_var_for(v, trail)
-        sat_at_most(vs, 1, trail)
-        sat_at_least(vs, 1, trail)
-        count = sum(1 for _ in label_sat(vs, trail))
-        assert count == n  # exactly n solutions (one hot)
-
-    def test_deep_backtracking_stress(self):
-        """Many push/undo cycles don't break the solver."""
-        trail = Trail()
-        x = Var()
-        v = sat_var_for(x, trail)
-
-        for _ in range(50):
-            mark = trail.mark()
-            sat_push(trail)
-            sat_add_clause([v], trail)
-            sat_add_clause([-v], trail)
-            assert not sat_check(trail)
-            trail.undo(mark)
-            assert sat_check(trail)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
