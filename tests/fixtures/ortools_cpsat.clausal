@@ -1,0 +1,245 @@
+# OR-Tools CP-SAT integration tests
+
+# ── Domain declaration & basic labeling ────────────────────────────────────
+
+Test("cpsat in_ contiguous domain") <- (
+    ortools.cpsat.in_(X, 1, 5),
+    ortools.cpsat.solve([X]),
+    X >= 1, X <= 5
+)
+
+Test("cpsat in_ sparse domain") <- (
+    ortools.cpsat.in_(X, [2, 4, 6]),
+    ortools.cpsat.solve([X]),
+    X >= 2
+)
+
+Test("cpsat bool declares 0-1 variable") <- (
+    ortools.cpsat.bool(B),
+    ortools.cpsat.solve([B]),
+    B >= 0, B <= 1
+)
+
+Test("cpsat check succeeds on SAT problem") <- (
+    ortools.cpsat.in_(X, 1, 10),
+    ortools.cpsat.check()
+)
+
+# ── Arithmetic constraint blocks ──────────────────────────────────────────
+
+Test("cpsat sum constraint") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat.in_(Y, 0, 10),
+    ortools.cpsat((X + Y == 7,)),
+    ortools.cpsat.solve([X, Y]),
+    V := X + Y, V == 7
+)
+
+Test("cpsat difference constraint") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat.in_(Y, 0, 10),
+    ortools.cpsat((X - Y == 3,)),
+    ortools.cpsat.solve([X, Y]),
+    V := X - Y, V == 3
+)
+
+Test("cpsat product with constant") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat((3 * X == 12,)),
+    ortools.cpsat.solve([X]),
+    X == 4
+)
+
+Test("cpsat less-than") <- (
+    ortools.cpsat.in_(X, 1, 10),
+    ortools.cpsat.in_(Y, 1, 10),
+    ortools.cpsat((X < Y,)),
+    ortools.cpsat.solve([X, Y]),
+    X < Y
+)
+
+Test("cpsat greater-or-equal") <- (
+    ortools.cpsat.in_(X, 1, 10),
+    ortools.cpsat((X >= 8,)),
+    ortools.cpsat.solve([X]),
+    X >= 8
+)
+
+Test("cpsat not-equal") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.in_(Y, 1, 3),
+    ortools.cpsat((X != Y,)),
+    ortools.cpsat.solve([X, Y]),
+    X != Y
+)
+
+# ── All-different ──────────────────────────────────────────────────────────
+
+Test("cpsat all_different 3 vars") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.in_(Y, 1, 3),
+    ortools.cpsat.in_(Z, 1, 3),
+    ortools.cpsat.all_different([X, Y, Z]),
+    ortools.cpsat.solve([X, Y, Z]),
+    X != Y, Y != Z, X != Z
+)
+
+Test("cpsat all_different count is 6") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.in_(Y, 1, 3),
+    ortools.cpsat.in_(Z, 1, 3),
+    ortools.cpsat.all_different([X, Y, Z]),
+    ortools.cpsat.count([X, Y, Z], N),
+    N == 6
+)
+
+Test("cpsat all_different pigeonhole UNSAT") <- (
+    ortools.cpsat.in_(X, 1, 2),
+    ortools.cpsat.in_(Y, 1, 2),
+    ortools.cpsat.in_(Z, 1, 2),
+    ortools.cpsat.all_different([X, Y, Z]),
+    not ortools.cpsat.check()
+)
+
+# ── 4-Queens (inline, no maplist) ─────────────────────────────────────────
+
+Test("cpsat 4-queens has solutions") <- (
+    ortools.cpsat.in_(Q1, 1, 4),
+    ortools.cpsat.in_(Q2, 1, 4),
+    ortools.cpsat.in_(Q3, 1, 4),
+    ortools.cpsat.in_(Q4, 1, 4),
+    ortools.cpsat.all_different([Q1, Q2, Q3, Q4]),
+    ortools.cpsat((Q1 - Q2 != 1, Q2 - Q1 != 1)),
+    ortools.cpsat((Q1 - Q3 != 2, Q3 - Q1 != 2)),
+    ortools.cpsat((Q1 - Q4 != 3, Q4 - Q1 != 3)),
+    ortools.cpsat((Q2 - Q3 != 1, Q3 - Q2 != 1)),
+    ortools.cpsat((Q2 - Q4 != 2, Q4 - Q2 != 2)),
+    ortools.cpsat((Q3 - Q4 != 1, Q4 - Q3 != 1)),
+    ortools.cpsat.solve([Q1, Q2, Q3, Q4])
+)
+
+Test("cpsat 4-queens exactly 2 solutions") <- (
+    ortools.cpsat.in_(Q1, 1, 4),
+    ortools.cpsat.in_(Q2, 1, 4),
+    ortools.cpsat.in_(Q3, 1, 4),
+    ortools.cpsat.in_(Q4, 1, 4),
+    ortools.cpsat.all_different([Q1, Q2, Q3, Q4]),
+    ortools.cpsat((Q1 - Q2 != 1, Q2 - Q1 != 1)),
+    ortools.cpsat((Q1 - Q3 != 2, Q3 - Q1 != 2)),
+    ortools.cpsat((Q1 - Q4 != 3, Q4 - Q1 != 3)),
+    ortools.cpsat((Q2 - Q3 != 1, Q3 - Q2 != 1)),
+    ortools.cpsat((Q2 - Q4 != 2, Q4 - Q2 != 2)),
+    ortools.cpsat((Q3 - Q4 != 1, Q4 - Q3 != 1)),
+    ortools.cpsat.count([Q1, Q2, Q3, Q4], N),
+    N == 2
+)
+
+# ── Table constraint ──────────────────────────────────────────────────────
+
+Test("cpsat table allowed 3 assignments") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.in_(Y, 1, 3),
+    ortools.cpsat.table([X, Y], [[1, 2], [2, 3], [3, 1]]),
+    ortools.cpsat.count([X, Y], N),
+    N == 3
+)
+
+# ── Boolean constraints ───────────────────────────────────────────────────
+
+Test("cpsat bool_or at least one true") <- (
+    ortools.cpsat.bool(A),
+    ortools.cpsat.bool(B),
+    ortools.cpsat.bool_or([A, B]),
+    ortools.cpsat.check()
+)
+
+Test("cpsat exactly_one has 3 solutions") <- (
+    ortools.cpsat.bool(A),
+    ortools.cpsat.bool(B),
+    ortools.cpsat.bool(C),
+    ortools.cpsat.exactly_one([A, B, C]),
+    ortools.cpsat.count([A, B, C], N),
+    N == 3
+)
+
+Test("cpsat implication a=>b has 3 solutions") <- (
+    ortools.cpsat.bool(A),
+    ortools.cpsat.bool(B),
+    ortools.cpsat.implication(A, B),
+    ortools.cpsat.count([A, B], N),
+    N == 3
+)
+
+# ── Optimization ──────────────────────────────────────────────────────────
+
+Test("cpsat minimize sum") <- (
+    ortools.cpsat.in_(X, 0, 100),
+    ortools.cpsat.in_(Y, 0, 100),
+    ortools.cpsat((X + Y >= 10,)),
+    ortools.cpsat.minimize(X + Y, VAL),
+    VAL == 10
+)
+
+Test("cpsat maximize sum") <- (
+    ortools.cpsat.in_(X, 0, 12),
+    ortools.cpsat.in_(Y, 0, 12),
+    ortools.cpsat((X + Y <= 20,)),
+    ortools.cpsat.maximize(X + Y, VAL),
+    VAL == 20
+)
+
+Test("cpsat 0-1 knapsack via maximize") <- (
+    ortools.cpsat.bool(I1),
+    ortools.cpsat.bool(I2),
+    ortools.cpsat.bool(I3),
+    ortools.cpsat((10*I1 + 20*I2 + 30*I3 <= 50,)),
+    ortools.cpsat.maximize(60*I1 + 100*I2 + 120*I3, VAL),
+    VAL == 220
+)
+
+# ── Hints ──────────────────────────────────────────────────────────────────
+
+Test("cpsat hint does not constrain") <- (
+    ortools.cpsat.in_(X, 1, 100),
+    ortools.cpsat.hint([X], [42]),
+    ortools.cpsat.check()
+)
+
+# ── Labeling properties ───────────────────────────────────────────────────
+
+Test("cpsat solve enumerates 5 values") <- (
+    ortools.cpsat.in_(X, 1, 5),
+    findall(X, ortools.cpsat.solve([X]), SOLS),
+    length(SOLS, 5)
+)
+
+Test("cpsat solve binds integer") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.solve([X]),
+    integer(X)
+)
+
+# ── Table with no valid assignment ─────────────────────────────────────────
+
+Test("cpsat table restricts to allowed tuples") <- (
+    ortools.cpsat.in_(X, 1, 3),
+    ortools.cpsat.in_(Y, 1, 3),
+    ortools.cpsat.table([X, Y], [[1, 3], [3, 1]]),
+    ortools.cpsat.count([X, Y], N),
+    N == 2
+)
+
+# ── UNSAT constraint block ────────────────────────────────────────────────
+
+Test("cpsat simple UNSAT") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat((X >= 8, X <= 3)),
+    not ortools.cpsat.check()
+)
+
+Test("cpsat sum exceeds domain UNSAT") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat.in_(Y, 0, 10),
+    ortools.cpsat((X + Y == 25,)),
+    not ortools.cpsat.check()
+)

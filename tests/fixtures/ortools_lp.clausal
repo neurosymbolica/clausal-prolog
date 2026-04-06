@@ -1,0 +1,47 @@
+# OR-Tools LP integration tests (GLOP only — one LP solver per trail)
+
+Test("glop simple feasible") <- (
+    ortools.lp.var(X, 0.0, 100.0),
+    ortools.glop((X <= 50,)),
+    ortools.lp.check()
+)
+
+Test("glop simple infeasible") <- (
+    ortools.lp.var(X, 0.0, 10.0),
+    ortools.glop((X >= 20,)),
+    not ortools.lp.check()
+)
+
+Test("glop minimize 3x+5y s.t. x+y>=10") <- (
+    ortools.lp.var(X, 0.0, 100.0),
+    ortools.lp.var(Y, 0.0, 100.0),
+    ortools.glop((X + Y >= 10,)),
+    ortools.lp.minimize(3*X + 5*Y, VAL),
+    VAL > 29.9, VAL < 30.1
+)
+
+Diet(BREAD, MILK, COST) <- (
+    ortools.lp.var(BREAD, 0.0, 10.0),
+    ortools.lp.var(MILK, 0.0, 10.0),
+    ortools.glop((
+        2*BREAD + 3*MILK >= 6,
+        BREAD + 2*MILK >= 4
+    )),
+    ortools.lp.minimize(2*BREAD + 3*MILK, COST),
+    ortools.lp.solve([BREAD, MILK])
+)
+
+Test("diet problem has a solution") <- Diet(BREAD, MILK, COST)
+
+Test("diet problem cost is non-negative") <- (
+    Diet(BREAD, MILK, COST),
+    COST >= 0
+)
+
+Test("lp solve binds variable values") <- (
+    ortools.lp.var(X, 0.0, 100.0),
+    ortools.lp.var(Y, 0.0, 100.0),
+    ortools.glop((X + Y == 10,)),
+    ortools.lp.solve([X, Y]),
+    number(X), number(Y)
+)

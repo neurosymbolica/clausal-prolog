@@ -371,3 +371,7 @@ def _clpr_mod_label_eps(vars_list, eps, trail, k):
 # ── PySAT builtins ──────────────────────────────────────────────────────────
 # Import to register pysat.* builtins (cadical, glucose, minisat, etc.)
 import clausal.logic.builtins.sat_constraints  # noqa: E402, F401
+
+# ── OR-Tools builtins ──────────────────────────────────────────────────────
+# Import to register ortools.* builtins (cpsat, glop, scip, graph, routing)
+import clausal.logic.builtins.ortools_constraints  # noqa: E402, F401

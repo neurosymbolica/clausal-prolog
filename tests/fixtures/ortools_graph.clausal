@@ -1,0 +1,84 @@
+# OR-Tools graph algorithm integration tests
+#
+# Covers: max_flow, min_cost_flow, assignment, knapsack.
+
+# ── Max flow ──────────────────────────────────────────────────────────────
+
+Test("max flow single arc") <- (
+    ortools.graph.max_flow([[0, 1, 42]], 0, 1, FLOW),
+    FLOW == 42
+)
+
+Test("max flow bottleneck") <- (
+    ortools.graph.max_flow(
+        [[0, 1, 100], [1, 2, 5], [2, 3, 100]],
+        0, 3, FLOW),
+    FLOW == 5
+)
+
+Test("max flow diamond network") <- (
+    ortools.graph.max_flow(
+        [[0, 1, 20], [0, 2, 30], [1, 2, 10], [1, 3, 30], [2, 3, 20]],
+        0, 3, FLOW),
+    FLOW == 40
+)
+
+# ── Min cost flow ─────────────────────────────────────────────────────────
+
+Test("min cost flow single arc") <- (
+    ortools.graph.min_cost_flow(
+        [[0, 1, 10, 5]],
+        [[0, 7], [1, -7]],
+        COST),
+    COST == 35
+)
+
+Test("min cost flow cheaper path") <- (
+    ortools.graph.min_cost_flow(
+        [[0, 1, 10, 1], [0, 2, 10, 5], [1, 3, 10, 0], [2, 3, 10, 0]],
+        [[0, 5], [3, -5]],
+        COST),
+    COST == 5
+)
+
+# ── Assignment ─────────────────────────────────────────────────────────────
+
+Test("assignment 3x3 optimal") <- (
+    ortools.graph.assignment(
+        [[90, 80, 75], [35, 85, 55], [125, 45, 110]],
+        ASSIGN, COST),
+    COST == 155,
+    ASSIGN == [2, 0, 1]
+)
+
+Test("assignment 2x2") <- (
+    ortools.graph.assignment([[1, 2], [3, 4]], ASSIGN, COST),
+    COST == 5
+)
+
+# ── Knapsack ──────────────────────────────────────────────────────────────
+
+Test("knapsack 0-1 classic") <- (
+    ortools.knapsack(
+        [60, 100, 120],
+        [[10, 20, 30]],
+        [50],
+        SEL, TOTAL),
+    TOTAL == 220,
+    SEL == [0, 1, 1]
+)
+
+Test("knapsack single item fits") <- (
+    ortools.knapsack([42], [[10]], [10], SEL, TOTAL),
+    TOTAL == 42,
+    SEL == [1]
+)
+
+Test("knapsack multidimensional positive") <- (
+    ortools.knapsack(
+        [10, 20, 30],
+        [[5, 10, 15], [3, 6, 9]],
+        [20, 12],
+        SEL, TOTAL),
+    TOTAL > 0
+)
