@@ -29,6 +29,29 @@ def _require_routing() -> None:
         )
 
 
+# ── Adaptive solve ────────────────────────────────────────────────────────
+
+import time as _time
+
+_DEFAULT_TIMEOUT_MS = 50   # initial timeout: 50ms
+
+
+def _solve_with_adaptive_timeout(routing, search_params):
+    """Solve with GUIDED_LOCAL_SEARCH, doubling timeout until a solution is found.
+
+    Starts at _DEFAULT_TIMEOUT_MS, doubles on failure, up to 10x the default.
+    """
+    timeout_ms = _DEFAULT_TIMEOUT_MS
+    max_ms = _DEFAULT_TIMEOUT_MS * 10
+    while timeout_ms <= max_ms:
+        search_params.time_limit.FromMilliseconds(timeout_ms)
+        solution = routing.SolveWithParameters(search_params)
+        if solution is not None:
+            return solution
+        timeout_ms *= 2
+    return None
+
+
 # ── _as_list helper ────────────────────────────────────────────────────────
 
 def _as_list(val: Any) -> list:
@@ -86,9 +109,8 @@ def or_tsp(distances: Any, depot: Any, trail: Trail) -> tuple:
     search_params.local_search_metaheuristic = (
         _routing_enums.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_params.time_limit.FromSeconds(30)
 
-    solution = routing.SolveWithParameters(search_params)
+    solution = _solve_with_adaptive_timeout(routing, search_params)
     if solution is None:
         return None
 
@@ -169,9 +191,8 @@ def or_vrp(distances: Any, demands: Any, vehicle_capacities: Any,
     search_params.local_search_metaheuristic = (
         _routing_enums.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_params.time_limit.FromSeconds(30)
 
-    solution = routing.SolveWithParameters(search_params)
+    solution = _solve_with_adaptive_timeout(routing, search_params)
     if solution is None:
         return None
 
@@ -275,9 +296,8 @@ def or_vrptw(distances: Any, time_windows: Any, depot: Any,
     search_params.local_search_metaheuristic = (
         _routing_enums.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_params.time_limit.FromSeconds(30)
 
-    solution = routing.SolveWithParameters(search_params)
+    solution = _solve_with_adaptive_timeout(routing, search_params)
     if solution is None:
         return None
 
