@@ -1,0 +1,116 @@
+# First-class constraint tests — verifies that constraint tuples can be
+# constructed as data (via is/2 unification) and passed to solvers at runtime,
+# exercising the deref-before-isinstance fix in all constraint block handlers.
+
+# ── Z3 integer ─────────────────────────────────────────────────────────────
+
+Test("z3 first-class single constraint") <- (
+    C is (1 <= X <= 10),
+    z3.integer(C),
+    z3.label([X]),
+    X >= 1, X <= 10
+)
+
+Test("z3 first-class constraint tuple") <- (
+    C is (1 <= X <= 10, X + Y == 7, 1 <= Y <= 10),
+    z3.integer(C),
+    z3.label([X, Y]),
+    V is X + Y, V == 7
+)
+
+Test("z3 first-class constraint count") <- (
+    C is (1 <= X <= 5),
+    z3.integer(C),
+    count_all(z3.label([X]), N),
+    N == 5
+)
+
+# ── Z3 boolean ─────────────────────────────────────────────────────────────
+
+Test("z3 first-class boolean") <- (
+    C is (A | B),
+    z3.boolean(C),
+    count_all(z3.label([A, B]), N),
+    N == 3
+)
+
+# ── PySAT ──────────────────────────────────────────────────────────────────
+
+Test("pysat first-class single clause") <- (
+    C is (X ^ Y),
+    pysat.cadical(C),
+    pysat.count([X, Y], N),
+    N == 2
+)
+
+Test("pysat first-class clause tuple") <- (
+    C is (X | Y, ~X | Y),
+    pysat.cadical(C),
+    pysat.solve([X, Y]),
+    Y == 1
+)
+
+# ── CLP(Q) ─────────────────────────────────────────────────────────────────
+
+Test("clpq first-class single constraint") <- (
+    C is (X == 3/4),
+    clpq.rational(C),
+    X == 3/4
+)
+
+Test("clpq first-class constraint tuple") <- (
+    C is (X + Y == 1, X - Y == 1/2),
+    clpq.rational(C),
+    X == 3/4,
+    Y == 1/4
+)
+
+# ── CLP(R) ─────────────────────────────────────────────────────────────────
+
+Test("clpr first-class single constraint") <- (
+    C is (X == 5.0),
+    clpr.real(C),
+    clpr.label([X])
+)
+
+Test("clpr first-class constraint tuple") <- (
+    C is (0 <= X <= 10, X * 2 == 6.0),
+    clpr.real(C),
+    clpr.label([X])
+)
+
+# ── GLOP (LP) ──────────────────────────────────────────────────────────────
+
+Test("glop first-class single constraint") <- (
+    ortools.lp.var(X, 0.0, 100.0),
+    C is (X <= 50),
+    ortools.glop(C),
+    ortools.lp.check()
+)
+
+Test("glop first-class constraint tuple") <- (
+    ortools.lp.var(X, 0.0, 100.0),
+    ortools.lp.var(Y, 0.0, 100.0),
+    C is (X + Y >= 10, X <= 50),
+    ortools.glop(C),
+    ortools.lp.check()
+)
+
+# ── CP-SAT ─────────────────────────────────────────────────────────────────
+
+Test("cpsat first-class comparison constraint") <- (
+    ortools.cpsat.in_(X, 1, 10),
+    C is (X >= 5),
+    ortools.cpsat(C),
+    ortools.cpsat.solve([X]),
+    X >= 5
+)
+
+Test("cpsat first-class arithmetic constraint") <- (
+    ortools.cpsat.in_(X, 0, 10),
+    ortools.cpsat.in_(Y, 0, 10),
+    C is (X + Y == 7),
+    ortools.cpsat(C),
+    ortools.cpsat.solve([X, Y]),
+    V is X + Y, V == 7
+)

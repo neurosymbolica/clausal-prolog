@@ -1691,6 +1691,7 @@ def clpq_constraint_block(constraints: Any, trail: Trail) -> bool:
     ``1 <= X <= 10``).  Variables are auto-registered as rational.
     """
     _ensure_term_imports()
+    constraints = deref(constraints)
     if isinstance(constraints, (list, tuple)):
         elements = constraints
     else:

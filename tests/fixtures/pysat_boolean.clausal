@@ -4,7 +4,7 @@
 # ── Basic constraint blocks ─────────────────────────────────────────────────
 
 XorSolve(X, Y) <- (
-    pysat.cadical((X ^ Y,)),
+    pysat.cadical(X ^ Y),
     pysat.solve([X, Y]),
 )
 
@@ -13,7 +13,7 @@ Test("xor solution 0,1") <- XorSolve(0, 1)
 Test("xor solution 1,0") <- XorSolve(1, 0)
 
 AndSolve(X, Y) <- (
-    pysat.cadical((X & Y,)),
+    pysat.cadical(X & Y),
     pysat.solve([X, Y]),
 )
 
@@ -21,7 +21,7 @@ Test("and forces both 1") <- (AndSolve(X, Y), X == 1, Y == 1)
 Test("and 1 solution") <- (count_all(AndSolve(_, _), N), N == 1)
 
 OrSolve(X, Y) <- (
-    pysat.cadical((X | Y,)),
+    pysat.cadical(X | Y),
     pysat.solve([X, Y]),
 )
 
@@ -31,7 +31,7 @@ Test("or excludes 0,0") <- (not(OrSolve(0, 0)))
 # ── Negation ────────────────────────────────────────────────────────────────
 
 NegSolve(X) <- (
-    pysat.cadical((~X,)),
+    pysat.cadical(~X),
     pysat.solve([X]),
 )
 
@@ -40,7 +40,7 @@ Test("not forces 0") <- (NegSolve(X), X == 0)
 # ── Equality / disequality ──────────────────────────────────────────────────
 
 EqSolve(X, Y) <- (
-    pysat.cadical((X == Y,)),
+    pysat.cadical(X == Y),
     pysat.solve([X, Y]),
 )
 
@@ -49,7 +49,7 @@ Test("eq 0,0") <- EqSolve(0, 0)
 Test("eq 1,1") <- EqSolve(1, 1)
 
 NeqSolve(X, Y) <- (
-    pysat.cadical((X != Y,)),
+    pysat.cadical(X != Y),
     pysat.solve([X, Y]),
 )
 
@@ -60,7 +60,7 @@ Test("neq 1,0") <- NeqSolve(1, 0)
 # ── Unsatisfiable ───────────────────────────────────────────────────────────
 
 Test("unsat x and not x") <- (
-    pysat.cadical((X & ~X,)),
+    pysat.cadical(X & ~X),
     not(pysat.check()),
 )
 
@@ -80,13 +80,13 @@ Test("combined 2 solutions") <- (count_all(ForcesY(_, _), N), N == 2)
 # ── Counting ────────────────────────────────────────────────────────────────
 
 Test("count xor") <- (
-    pysat.cadical((X ^ Y,)),
+    pysat.cadical(X ^ Y),
     pysat.count([X, Y], N),
     N == 2,
 )
 
 Test("count or") <- (
-    pysat.cadical((X | Y,)),
+    pysat.cadical(X | Y),
     pysat.count([X, Y], N),
     N == 3,
 )
@@ -138,7 +138,7 @@ Test("pigeonhole 3-into-2 unsat") <- (
 # ── Combined cardinality + clauses ──────────────────────────────────────────
 
 ExactlyOneCombined(X, Y, Z) <- (
-    pysat.cadical((X | Y | Z,)),
+    pysat.cadical(X | Y | Z),
     pysat.at_most([X, Y, Z], 1),
     pysat.solve([X, Y, Z]),
 )

@@ -2248,6 +2248,7 @@ def z3_constraint_block(constraint_set: Any, sort: Any, trail: Trail) -> bool:
     ``CompareChain([LtE(1, X), LtE(X, 10)])``).  Unbound Vars encountered
     during translation are auto-registered with the given Z3 sort.
     """
+    constraint_set = deref(constraint_set)
     if isinstance(constraint_set, (list, tuple)):
         elements = constraint_set
     else:

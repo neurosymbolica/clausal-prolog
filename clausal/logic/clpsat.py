@@ -434,6 +434,7 @@ def sat_constraint_block(constraint_set: Any, solver_name: str,
     """
     get_sat_state(trail, solver_name)  # ensure state exists with right solver
 
+    constraint_set = deref(constraint_set)
     if isinstance(constraint_set, (list, tuple)):
         elements = list(constraint_set)
     else:

@@ -21,21 +21,19 @@ Test("sat has no core") <- (
 # ── Satisfiability ──────────────────────────────────────────────────────────
 
 Test("satisfiability sat") <- (
-    z3.integer((1 <= X <= 10)),
-    z3.satisfiability(R),
-    R == "sat",
+    z3.integer(1 <= X <= 10),
+    z3.satisfiability("sat"),
 )
 
 Test("satisfiability unsat") <- (
     z3.integer((X >= 10, X <= 5)),
-    z3.satisfiability(R),
-    R == "unsat",
+    z3.satisfiability("unsat"),
 )
 
 # ── Model inspection ────────────────────────────────────────────────────────
 
 Test("model without binding") <- (
-    z3.integer((X == 7,)),
+    z3.integer(X == 7),
     z3.model([X], [[NAME, VAL]]),
     VAL == 7,
 )

@@ -365,6 +365,7 @@ def lp_constraint_block(constraint_set: Any, solver_name: str,
                         trail: Trail) -> bool:
     """Post a block of linear constraints."""
     state = get_lp_state(trail, solver_name)
+    constraint_set = deref(constraint_set)
     if isinstance(constraint_set, (list, tuple)):
         elements = constraint_set
     else:

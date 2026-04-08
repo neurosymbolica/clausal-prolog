@@ -520,6 +520,7 @@ def or_constraint_block(constraint_set: Any, trail: Trail) -> bool:
     Each element in the tuple/list is a comparison expression.
     All constraints are guarded by a single activation literal for this block.
     """
+    constraint_set = deref(constraint_set)
     if isinstance(constraint_set, (list, tuple)):
         elements = constraint_set
     else:

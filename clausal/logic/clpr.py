@@ -977,6 +977,7 @@ def clpr_constraint_block(constraints: Any, trail: Trail) -> bool:
     as real-domain.
     """
     _ensure_term_imports()
+    constraints = deref(constraints)
     if isinstance(constraints, (list, tuple)):
         elements = constraints
     else:

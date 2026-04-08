@@ -4,7 +4,7 @@
 # ── Basic boolean constraints ───────────────────────────────────────────────
 
 OrSolve(A, B) <- (
-    z3.boolean((A | B,)),
+    z3.boolean(A | B),
     z3.label([A, B]),
 )
 
@@ -13,7 +13,7 @@ Test("boolean or has 3 solutions") <- (count_all(OrSolve(_, _), N), N == 3)
 # ── At most / at least / exactly ────────────────────────────────────────────
 
 AtMostTwo(A, B, C) <- (
-    z3.boolean((A | B | C,)),
+    z3.boolean(A | B | C),
     z3.at_most([A, B, C], 2),
     z3.label([A, B, C]),
 )
