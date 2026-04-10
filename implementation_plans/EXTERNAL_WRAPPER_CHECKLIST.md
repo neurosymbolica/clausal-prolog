@@ -17,6 +17,7 @@ with these sections filled in:
 4. **Tier Classification** — every planned predicate assigned to a tier
 5. **Scope Decision** — what's in, what's out, what stays as `++()`
 5b. **`++()` Escape Minimisation** — constants exported, check predicates, string representations
+5c. **Quantity Awareness** — propagator assigned per predicate (algebraic, pass-through, dimensionless, strip)
 6. **Term Language** — tagged tuples and their semantics
 7. **Predicate Catalogue** — name, arity variants, modes, tier, purity
 8. **Submodule Breakdown** — how to split a large library across files
@@ -261,6 +262,40 @@ exporting commonly-needed constants directly from `py.lib`.
 representations are simplified (e.g. device -> string), and which check
 predicates are added. The goal is that the showcase example (Step 9) has
 no `++()` escapes.
+
+---
+
+## Step 5c — Quantity (Units) Awareness
+
+Clausal has a `Quantity` type for dimensional analysis — a numeric value
+with physical dimensions (metres, seconds, kilograms, etc.). Existing
+scipy wrappers handle Quantities transparently via `make_quantity_aware()`
+from `clausal/modules/py/_scipy_units.py`. **This is zero-overhead when
+disabled** — a single flag bypasses all checking.
+
+For any wrapper that does numeric computation, decide how each predicate
+handles Quantities. The four propagator patterns:
+
+| Propagator | When to use | Example |
+|---|---|---|
+| **Algebraic** | Arithmetic ops — add requires matching dims, mul merges | `add`, `mul`, `matmul` |
+| `PASS_THROUGH_FIRST` | Output dims = first input's dims | FFT, reshape |
+| `REQUIRE_DIMENSIONLESS` | Input must be plain numbers | trig, exp, log |
+| `STRIP_TO_PLAIN` | Output is always dimensionless | comparisons, boolean ops, norms |
+
+Implementation is one line per predicate — wrap with `make_quantity_aware()`:
+
+```python
+from clausal.modules.py._scipy_units import make_quantity_aware, PASS_THROUGH_FIRST
+
+# Before: plain
+_raw_fft = lambda t: _th().fft.fft(t)
+# After: Quantity-aware, zero-cost when disabled
+_raw_fft = make_quantity_aware(_raw_fft, PASS_THROUGH_FIRST)
+```
+
+**Write-up:** For each predicate in the catalogue, note which propagator
+applies. Group by propagator in the plan for efficient implementation.
 
 ---
 
@@ -629,7 +664,24 @@ For every term in the design:
 
 ---
 
-## Checklist J — Plan Document Completeness
+## Checklist K — Quantity (Units) Awareness
+
+For wrappers that do numeric computation:
+
+- [ ] Every numeric predicate has a propagator assigned (algebraic,
+      PASS_THROUGH_FIRST, REQUIRE_DIMENSIONLESS, or STRIP_TO_PLAIN)
+- [ ] Arithmetic ops (add, mul, matmul, etc.) use algebraic propagation
+- [ ] Trig, exp/log, and other transcendental functions require dimensionless
+- [ ] Comparison/boolean output predicates strip to plain
+- [ ] Shape operations pass through first input's dims
+- [ ] Predicates are wrapped with `make_quantity_aware()` from
+      `clausal/modules/py/_scipy_units.py`
+- [ ] At least one `.clausal` test exercises a Quantity-bearing input
+- [ ] Performance verified: zero overhead when `_SCIPY_UNITS_ENABLED = False`
+
+---
+
+## Checklist L — Plan Document Completeness
 
 Before the plan is considered ready for implementation:
 
@@ -654,6 +706,7 @@ Before the plan is considered ready for implementation:
 - [ ] Scope passes Checklist G
 - [ ] `++()` escapes pass Checklist H
 - [ ] `.clausal` syntax pass Checklist I
+- [ ] Quantity propagators assigned for numeric predicates (Checklist K)
 
 ---
 
