@@ -94,4 +94,18 @@ Note gradient utilities as impure.
 
 ## Issues
 
-_To be populated during implementation._
+1. **`clip_grad_value` arity mismatch.** The plan specified `/3` with
+   modes `(+params, +clip_value)` — only 2 user-visible args, not 3.
+   Implemented as arity 2 (matching the actual argument count).
+   `clip_grad_value_` returns `None`, so a custom dispatch was used
+   instead of `_pure` (which expects a return value to unify).
+
+2. **`clip_grad_norm` arity.** Plan said `/4` with 3 modes
+   `(+params, +max_norm, -total_norm)`. Implemented as arity 3 with
+   default `norm_type=2.0`. An opts-dict variant could be added later
+   if needed.
+
+3. **`current_lr` and gradient utilities need constructed objects.**
+   Schedulers require an optimizer which requires a model — these can't
+   easily be created in `.clausal`. Tested via Python unit tests instead
+   of `.clausal` fixtures.

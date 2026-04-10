@@ -26,8 +26,7 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 
 - [Phase 11 — nn.functional](phase11_nn_functional.md): activations, conv, pooling, normalization, loss functions
 
-### Planned
-- [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, grad clipping
+- [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, current_lr, grad clipping
 
 ---
 
