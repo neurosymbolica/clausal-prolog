@@ -229,4 +229,26 @@ Test("save and load roundtrip") <- (
 
 ## Issues
 
-_To be populated during implementation._
+### 1. CamelCase-to-snake_case conversion abandoned — FIXED
+
+The plan suggested converting PyTorch class names to snake_case
+(`CrossEntropyLoss` -> `cross_entropy_loss`). This produced incorrect
+results for names with unconventional casing (`ReLU` -> `re_lu`,
+`RMSprop` -> `rm_sprop`). Switched to using the original PyTorch class
+names directly as atoms (`"Linear"`, `"ReLU"`, `"CrossEntropyLoss"`).
+This follows the "follow the library's naming convention" principle.
+
+### 2. Class identity comparison via `is` after predicate binding — NOTED
+
+`CLASS is torch.nn.Linear` fails when `CLASS` was bound by a predicate
+(via `unify`) rather than by a previous `is` expression. The `is`
+operator evaluates its RHS as an expression, which may not produce a
+value identical to what `unify` bound. Tests use `++(CLASS(10, 5))`
+to construct with the looked-up class, or simply call the lookup
+twice to verify determinism, rather than comparing class identity.
+
+### 3. `torch.load` requires `weights_only=True` — FIXED
+
+Modern PyTorch (2.6+) defaults to `weights_only=True` and warns/errors
+without it. The `load/2` implementation passes `weights_only=True`
+explicitly.

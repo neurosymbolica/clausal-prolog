@@ -443,14 +443,25 @@ them from any plan document rather than duplicating.
 
 ## Checklist A — Naming Conventions
 
+The convention is **least surprise for people already using the library**.
+The wrapper serves users coming from the library to Clausal, so names
+should match what they already know from the library's docs and API.
+
 | Element | Convention | Example |
 |---|---|---|
-| Predicate names | Follow wrapped library's convention; usually lowercase | `cross_distance`, `load_model` |
-| Datatype constructors | TitleCase if the library uses it | `Tensor`, `Dataset`, `Quantity` |
+| Predicate names | Follow wrapped library's convention | `cross_distance`, `load_model` |
+| Datatype/class names | Use the library's own names | `"Linear"`, `"ReLU"`, `"Adam"` |
 | Variables | ALLCAPS | `X`, `RESULT`, `HANDLE` |
 | Module path | `py.library_name` | `py.scipy_spatial`, `py.torch` |
 | Private helpers | `_snake_case` | `_ensure_loaded()`, `_alloc_handle()` |
-| Atoms/constants | snake_case | `random_forest`, `euclidean` |
+| Atoms/constants | Follow the library | `random_forest`, `euclidean` |
+
+### Don't normalise case
+
+Do **not** convert library names to a different case convention. CamelCase
+to snake_case conversion is fragile — it breaks on names with
+unconventional casing (`ReLU` -> `re_lu`, `RMSprop` -> `rm_sprop`,
+`BatchNorm2d` -> ambiguous). Use the library's original names directly.
 
 ### Abbreviations
 
@@ -681,11 +692,12 @@ Before the plan is considered ready for implementation:
 8. **Fail, don't crash.** Python exceptions become predicate failure, enabling
    backtracking. Never propagate exceptions to the user.
 
-9. **Follow the library's naming.** Predicate names match the wrapped
-   library's conventions. Usually lowercase; TitleCase for datatypes if
-   the library uses it. ALLCAPS variables. No unnecessary renaming.
-   Avoid abbreviations unless they're domain-standard (e.g. `fft` is fine,
-   `cdist` is not — expand to `cross_distance`).
+9. **Least surprise for library users.** The wrapper serves people who
+   already know the library. Names should match what they see in the
+   library's own docs and API. Don't normalise case — CamelCase to
+   snake_case conversion is fragile and produces unrecognisable names.
+   Avoid abbreviations unless they're domain-standard (e.g. `fft` is
+   fine, `cdist` is not — expand to `cross_distance`).
 
 10. **Progressive arity.** Required args at the core arity. Defaulted
     keyword arguments from the wrapped library passed via dict.

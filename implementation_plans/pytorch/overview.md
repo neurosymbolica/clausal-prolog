@@ -11,9 +11,21 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 
 ## Phases
 
+### Implemented
 - [Phase 1 — Tensor Core](phase1_tensor_core.md): creation, properties, math, shape ops
 - [Phase 2 — Conversions and Module Structure](phase2_conversions_modules.md): bijective conversions, nn.Module enumeration
 - [Phase 3 — Registries and IO](phase3_registries_io.md): fact tables, save/load
+
+### Planned
+- [Phase 4 — Linear Algebra](phase4_linalg.md): det, inv, svd, eig, solve, cholesky, qr
+- [Phase 5 — FFT](phase5_fft.md): fft/ifft, rfft/irfft, fftshift (all bijective pairs)
+- [Phase 6 — Comparisons and Logic](phase6_comparisons_logic.md): eq/gt/lt, logical ops, where, masked_select
+- [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, trig, exp/log, cumsum
+- [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, flip, roll, expand
+- [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, sampling, cdf/icdf
+- [Phase 10 — Datasets](phase10_data.md): TensorDataset, item access, element enumeration
+- [Phase 11 — nn.functional](phase11_nn_functional.md): conv, pooling, normalization, loss functions
+- [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, grad clipping
 
 ---
 
@@ -228,6 +240,29 @@ architectures. Builds on Phase 2 (module queries) but needs design work.
 
 **Data pipeline** — relational dataset definition. Needs design work on
 how to express transforms.
+
+---
+
+## Overlap with scipy / sklearn
+
+Several PyTorch phases cover the same mathematical operations as existing
+scipy/sklearn wrappers. The difference is the data type: scipy operates
+on numpy arrays, PyTorch on tensors (GPU-accelerated, autograd-aware).
+Users choose based on their data.
+
+| PyTorch Phase | scipy/sklearn equivalent | Notes |
+|---|---|---|
+| Phase 4 (linalg) | `scipy_linalg.py`: Determinant, Inverse, SingularValueDecompose, EigenDecompose, Solve, Cholesky, QrDecompose | Nearly 1:1 overlap |
+| Phase 5 (FFT) | `scipy_fft.py`: FFTransform, RealFFT, DiscreteCosineTransform | Nearly 1:1 overlap |
+| Phase 7 (advanced math) | `scipy_special.py`: Gamma, Erf, Bessel functions; trig is in numpy | Partial overlap — scipy has more special functions, PyTorch has autograd |
+| Phase 9 (distributions) | `scipy_stats.py`: StatsDist, StatsFreezeDist, StatsFrozenPdf/Cdf/Rvs | Similar API shape — construct, query, sample |
+| Phase 11 (nn.functional) | No scipy equivalent | Neural network-specific |
+| Phase 6 (comparisons) | No scipy equivalent | Tensor-level operations |
+
+The naming conventions differ: scipy wrappers use TitleCase (`SingularValueDecompose`),
+PyTorch wrappers use the library's own names (`svd`). This reflects the
+"least surprise for library users" principle — each wrapper follows its
+own library.
 
 ---
 
