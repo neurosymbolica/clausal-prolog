@@ -84,7 +84,7 @@ IO-heavy and iterator-based.
 |---|---|---|
 | `tensor.squeeze(d)` / `tensor.unsqueeze(d)` | `squeeze(T, DIM, T2)` | Strict inverses at a given dim |
 | `tensor.flatten(s,e)` / `tensor.unflatten(d,shape)` | `flatten(T, START, END, T2)` | Inverse needs original shape |
-| `torch.from_numpy(a)` / `tensor.numpy()` | `numpy(TENSOR, ARRAY)` | Bidirectional, shared memory |
+| `torch.from_numpy(a)` / `tensor.numpy()` | `tensor_numpy(TENSOR, ARRAY)` | Bidirectional, shared memory |
 | `tensor.tolist()` / `torch.tensor(list)` | `tensor_list(TENSOR, LIST)` | Bidirectional, copies data |
 | `torch.save(obj, path)` / `torch.load(path)` | `saved(OBJ, PATH)` | Serialization pair |
 | `tensor.transpose(d0,d1)` self-inverse | `transpose(T, D0, D1, T2)` | `transpose(transpose(T)) == T` |
@@ -200,7 +200,7 @@ Pure, relational, natural fit for backtracking. ~8 predicates.
 
 **Registries** — layer, activation, loss, dtype fact tables. ~4 predicates.
 
-**Bijections** — squeeze/unsqueeze, flatten/unflatten, numpy conversion,
+**Bijections** — squeeze/unsqueeze, flatten/unflatten, tensor_numpy conversion,
 save/load. ~6 predicates.
 
 ### Out of scope (stay as `++()`)
@@ -320,7 +320,7 @@ These are lightweight — most of the term language *is* PyTorch's own types.
 
 | Name | Arity | Modes | Purity | Bijective? | Description |
 |---|---|---|---|---|---|
-| `numpy` | `/2` | `(+T,-A)`, `(-T,+A)` | pure | yes — shared memory | Tensor <-> numpy |
+| `tensor_numpy` | `/2` | `(+T,-A)`, `(-T,+A)` | pure | yes — shared memory | Tensor <-> numpy |
 | `tensor_list` | `/2` | `(+T,-L)`, `(-T,+L)` | pure | yes — copies | Tensor <-> nested list |
 
 ### Module structure (nondeterministic enumeration)
@@ -378,41 +378,42 @@ itself — no need to define or re-export them.
 ## Showcase Example
 
 ```clausal
--import_from(py.torch, [tensor, zeros, shape, dtype, device, matmul,
+-import_from(py.torch, [tensor, zeros, randn, shape, dtype, device, matmul,
                          reshape, squeeze, unsqueeze, relu, softmax,
-                         numpy, tensor_list])
+                         tensor_numpy, tensor_list, element_count])
 -import_from(py.torch_nn, [named_parameter, named_module, layer])
 
-% Pure tensor computation
+# Pure tensor computation — no ++() needed
 classify(INPUT, PROBS) <- (
-    W1 is ++(torch.randn(784, 256)),
-    W2 is ++(torch.randn(256, 10)),
+    randn([784, 256], W1),
+    randn([256, 10], W2),
     matmul(INPUT, W1, H),
     relu(H, H_ACT),
     matmul(H_ACT, W2, LOGITS),
     softmax(LOGITS, 1, PROBS)
 )
 
-% Enumerate all parameters in a model
+# Enumerate all parameters in a model
 large_parameters(MODEL, NAME, PARAM) <- (
     named_parameter(MODEL, NAME, PARAM),
     element_count(PARAM, N),
     N > 1000
 )
 
-% Find all conv layers in a model
+# Find all conv layers in a model
 conv_layers(MODEL, NAME, MOD) <- (
     named_module(MODEL, NAME, MOD),
-    ++isinstance(MOD, torch.nn.Conv2d)
+    layer(conv2d, CONV_CLASS),
+    ++(isinstance(MOD, CONV_CLASS))
 )
 
-% Multi-mode: query or check shape
+# Multi-mode: query or check shape
 check_batch_shape(T, BATCH_SIZE) <- (
     shape(T, S),
     S is [BATCH_SIZE, *_]
 )
 
-% Enumerate available layer types
+# Enumerate available layer types
 all_layers(LAYERS) <- (
     findall(NAME, layer(NAME, _), LAYERS)
 )
@@ -422,7 +423,7 @@ all_layers(LAYERS) <- (
 
 ## Design Notes
 
-Upfront observations to keep in mind during implementation:
+Upfront observations, updated with Phase 1 implementation learnings:
 
 1. **`shape/2`, `dtype/2`, `device/2` in `(+T, +S)` mode are check-only.**
    They don't reshape/cast/transfer — that's what `reshape/3` and `++(T.to(...))`
@@ -433,11 +434,38 @@ Upfront observations to keep in mind during implementation:
 
 3. **`tensor/2` name collision** is a non-issue — module-scoped imports prevent it.
 
-4. **GPU tensor equality.** PyTorch's `==` is element-wise, not scalar. Use
-   `++(torch.equal(T1, T2))` or compare via `tensor_list` in tests.
+4. **GPU tensor equality.** PyTorch's `==` is element-wise, not scalar. Compare
+   via `tensor_list` in tests, or use Clausal comparison operators on scalars.
 
 5. **`randn` randomness** is acceptable — same category as `random_float/1`
    in Prolog. "Pure" in the sense of no side effects.
 
 6. **Registry maintenance.** Consider generating fact tables from `torch.nn`
    introspection rather than hardcoding, to stay current across PyTorch versions.
+
+### Lessons from Phase 1
+
+7. **Deep-deref required.** `deref()` does not recurse into lists/dicts.
+   Any predicate taking list or dict arguments (shape lists, tensor lists,
+   opts dicts) must use `_deep_deref()`. The `_pure()` helper applies it
+   automatically.
+
+8. **`.clausal` syntax is Python.** Comments use `#` not `%`. Negation is
+   `not(goal)` not `\+`. No unicode in comments.
+
+9. **Export constants to avoid `++()`.** Dtype constants (`float32`, `float64`,
+   etc.) are exported directly from `py.torch` via `__getattr__`. `device/2`
+   returns strings (`"cpu"`) not `torch.device` objects. Check predicates
+   (`is_contiguous/1`) added for boolean properties.
+
+10. **`++()` in goal position is a silent no-op.** It evaluates the expression
+    but always succeeds regardless of the result. Never use for boolean checks
+    in tests — use Clausal's own comparison operators or dedicated predicates.
+
+11. **Module name shadowing.** `import_from(py.torch, ...)` registers a Clausal
+    module under the name `torch`, which shadows `import_module(torch)`. Export
+    commonly-needed constants from `py.torch` to avoid needing both.
+
+12. **`numpy` renamed to `tensor_numpy`.** The name `numpy` shadowed
+    `import_module(numpy)` and was a library name used as a verb. Renamed to
+    match the `tensor_list` pattern.

@@ -16,11 +16,12 @@ with these sections filled in:
 3. **Purity Analysis** — what's pure, what needs state threading, what needs solver-style wrapping
 4. **Tier Classification** — every planned predicate assigned to a tier
 5. **Scope Decision** — what's in, what's out, what stays as `++()`
+5b. **`++()` Escape Minimisation** — constants exported, check predicates, string representations
 6. **Term Language** — tagged tuples and their semantics
 7. **Predicate Catalogue** — name, arity variants, modes, tier, purity
 8. **Submodule Breakdown** — how to split a large library across files
 9. **Phased Implementation** — phases with predicates, `.clausal` tests, and docs per phase
-10. **Issues** — reviewed, all resolved (fixed / dismissed / deferred to a phase)
+10. **Issues** — in each phase file, for unexpected issues during implementation
 
 ---
 
@@ -201,6 +202,65 @@ predicates. That 10:1 ratio is typical.
 
 **Write-up:** An explicit "In Scope / Out of Scope / Deferred" section
 in the plan, with rationale for borderline calls.
+
+---
+
+## Step 5b — Minimise `++()` Escapes
+
+`++()` is Clausal's escape hatch to raw Python. Every `++()` in user code
+is a failure of the wrapper — it means the user had to drop out of the
+relational world. The goal is **zero or near-zero `++()` in typical usage**.
+
+Audit the planned predicate surface for places users would need `++()` and
+eliminate them:
+
+### Export library constants directly
+
+If the library has important constants (dtypes, enum values, sentinel
+objects), export them from the wrapper module so users can import them
+by name rather than writing `++(torch.float32)`.
+
+```clausal
+# BAD: user needs ++() escape for every dtype
+zeros([3, 4], {"dtype": ++(torch.float64)}, T)
+
+# GOOD: dtype constants exported, importable by name
+-import_from(py.torch, [zeros, float64])
+zeros([3, 4], {"dtype": float64}, T)
+```
+
+### Use string representations for non-comparable objects
+
+If the library has objects that don't compare well with `==` (e.g.
+`torch.device`), return string representations instead. Strings are
+naturally relational — they unify, compare, and pattern-match.
+
+### Add check predicates for boolean properties
+
+If users would write `++(obj.some_property)` to test a boolean, add a
+check predicate instead. `++()` in goal position is a **silent no-op** —
+it evaluates the expression but always succeeds regardless of the result.
+This is a trap that produces silently vacuous tests.
+
+```clausal
+# BAD: always succeeds, even when tensor is NOT contiguous
+++(T.is_contiguous())
+
+# GOOD: fails if not contiguous
+is_contiguous(T)
+```
+
+### Watch for module name shadowing
+
+`import_from(py.lib, [...])` registers a Clausal module under the name
+`lib`, which shadows any `import_module(lib)`. If users need both the
+Python module and Clausal predicates, this is a conflict. Mitigate by
+exporting commonly-needed constants directly from `py.lib`.
+
+**Write-up:** Document in the plan which constants are exported, which
+representations are simplified (e.g. device -> string), and which check
+predicates are added. The goal is that the showcase example (Step 9) has
+no `++()` escapes.
 
 ---
 
@@ -525,7 +585,40 @@ For every term in the design:
 
 ---
 
-## Checklist H — Plan Document Completeness
+## Checklist H — `++()` Escape Minimisation
+
+- [ ] Library constants (dtypes, enums, sentinels) exported directly from
+      the wrapper module — importable by name, no `++()` needed
+- [ ] Non-comparable objects (devices, configs) represented as strings or
+      other naturally-relational types
+- [ ] Boolean properties have dedicated check predicates — no `++(obj.prop)`
+      in goal position (which is a silent no-op)
+- [ ] Module name shadowing documented — note if `import_from(py.lib, ...)`
+      conflicts with `import_module(lib)`
+- [ ] The showcase example has zero `++()` escapes
+- [ ] `.clausal` tests have zero `++()` escapes (except for constructing
+      test fixtures from the Python API where no predicate exists yet)
+
+---
+
+## Checklist I — `.clausal` Syntax
+
+`.clausal` files are parsed as Python AST, not Prolog. Common pitfalls:
+
+- [ ] Comments use `#`, not `%`
+- [ ] Negation-as-failure is `not(goal)`, not `\+`
+- [ ] List head/tail is `[HEAD, *REST]`, not `[HEAD | TAIL]`
+- [ ] No unicode characters in comments (causes `SyntaxError`)
+- [ ] `++()` in goal position **always succeeds** — never use it for
+      boolean checks (e.g. `++(x > 0)` is vacuous). Use Clausal's own
+      comparison operators or dedicated check predicates instead.
+- [ ] Predicates that take list/dict arguments need deep-dereferencing —
+      `deref()` does not recursively unwrap Vars inside containers. Use
+      `_deep_deref()` or equivalent in the implementation.
+
+---
+
+## Checklist J — Plan Document Completeness
 
 Before the plan is considered ready for implementation:
 
@@ -534,19 +627,22 @@ Before the plan is considered ready for implementation:
 - [ ] Purity analysis complete for all operations (Step 3)
 - [ ] Tier classification done for all predicates (Step 4)
 - [ ] Scope decision documented with rationale (Step 5)
+- [ ] `++()` escapes minimised — constants exported, check predicates added (Step 5b)
 - [ ] Term Language section with all constructors (Step 6)
 - [ ] Predicate Catalogue table complete (Step 7)
 - [ ] Submodule breakdown if needed (Step 8)
-- [ ] Showcase example validates the design (Step 9)
+- [ ] Showcase example validates the design — **zero `++()` escapes** (Step 9)
 - [ ] Implementation phased, each phase has predicates + `.clausal` tests + docs (Step 10)
 - [ ] All doc examples backed by `.clausal` tests
 - [ ] Python tests limited to infrastructure unit tests only
-- [ ] Issues section complete — all issues fixed, dismissed, or deferred with phase (Step 11)
+- [ ] Issues section in each phase file, initially empty (Step 11)
 - [ ] All names pass Checklist A
 - [ ] All predicates pass Checklist D (purity)
 - [ ] All predicates pass Checklist E (quality)
 - [ ] All terms pass Checklist F
 - [ ] Scope passes Checklist G
+- [ ] `++()` escapes pass Checklist H
+- [ ] `.clausal` syntax pass Checklist I
 
 ---
 

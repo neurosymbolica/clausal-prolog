@@ -3,10 +3,11 @@
 Adds bidirectional tensor conversions and nn.Module enumeration predicates.
 
 **Depends on:** Phase 1 — `clausal/modules/py/torch.py` must exist with
-tensor creation and property predicates.
+tensor creation, property predicates, and the `_deep_deref()`, `_pure()`,
+`_pred()`, `_property_2()`, `_bidir_2()` helpers.
 
 **Files to create/modify:**
-- Modify `clausal/modules/py/torch.py` — add `numpy/2`, `tensor_list/2`
+- Modify `clausal/modules/py/torch.py` — add `tensor_numpy/2`, `tensor_list/2`
 - Create `clausal/modules/py/torch_nn.py` — module enumeration predicates
 
 ---
@@ -17,7 +18,7 @@ tensor creation and property predicates.
 
 | Name | Arity | Modes | Bijective? | Description |
 |---|---|---|---|---|
-| `numpy` | `/2` | `(+T,-A)`, `(-T,+A)` | yes — shared memory | Tensor <-> numpy array |
+| `tensor_numpy` | `/2` | `(+T,-A)`, `(-T,+A)` | yes — shared memory | Tensor <-> numpy array |
 | `tensor_list` | `/2` | `(+T,-L)`, `(-T,+L)` | yes — copies data | Tensor <-> nested Python list |
 
 ### Module enumeration (in `py.torch_nn`)
@@ -35,41 +36,29 @@ tensor creation and property predicates.
 
 ## Context and Reference Patterns
 
-### Bijective conversions (`numpy/2`, `tensor_list/2`)
+### Bijective conversions (`tensor_numpy/2`, `tensor_list/2`)
 
 These are multi-mode: which direction to convert depends on which argument
-is bound. Implement with explicit mode dispatch.
-
-Follow the pattern in `clausal/modules/py/sklearn.py` — the `_algorithm_2`
-function (around line 180) shows how to check `isinstance(deref(var), Var)`
-to determine which arguments are bound vs free:
+is bound. Phase 1 already established the `_bidir_2()` helper in
+`clausal/modules/py/torch.py` — use it. It handles all four mode
+combinations (forward, reverse, check, both-unbound).
 
 ```python
-def _numpy_2(this_generator, parent, tensor_var, array_var, trail):
-    t = deref(tensor_var)
-    a = deref(array_var)
-    torch = _ensure_torch()
-
-    if not isinstance(t, Var) and isinstance(a, Var):
-        # Forward: tensor -> numpy
-        result = t.detach().cpu().numpy()
-        if unify(array_var, result, trail):
-            yield (parent, None)
-    elif isinstance(t, Var) and not isinstance(a, Var):
-        # Reverse: numpy -> tensor
-        result = torch.from_numpy(a)
-        if unify(tensor_var, result, trail):
-            yield (parent, None)
-    elif not isinstance(t, Var) and not isinstance(a, Var):
-        # Check: both bound, verify roundtrip
-        import numpy as np
-        if np.array_equal(t.detach().cpu().numpy(), a):
-            yield (parent, None)
-    yield (parent, DONE)
+# _bidir_2() from Phase 1 — already in torch.py
+# forward_fn: called when first arg is bound, second is unbound
+# backward_fn: called when first arg is unbound, second is bound
+tensor_numpy = _pred("tensor_numpy",
+    (2, _bidir_2(
+        forward_fn=lambda t: t.detach().cpu().numpy(),
+        backward_fn=lambda a: _th().from_numpy(a),
+    )),
+)
 ```
 
-Note: `tensor.numpy()` requires CPU tensors. The wrapper should call
-`.detach().cpu().numpy()` to handle GPU tensors transparently.
+Note: `tensor.numpy()` requires CPU tensors. The forward function must
+call `.detach().cpu().numpy()` to handle GPU tensors transparently.
+
+For `tensor_list`, the backward function is `lambda l: _th().tensor(l)`.
 
 ### Nondeterministic module enumeration
 
@@ -99,36 +88,50 @@ the same pattern over `model.modules()`, `model.named_modules()`,
 
 ### File structure for `torch_nn.py`
 
-Same layout as `torch.py` (Phase 1): lazy import, `_pred()` factory,
-`ModulePredicate`. Import `deref`, `unify`, `Var`, `DONE` from
-`clausal.logic.util`. No need to import anything from `torch.py` — the
-PyTorch types come from PyTorch itself.
+Same layout as `torch.py` (Phase 1): lazy import with `_ensure_torch()`,
+`_pred()` factory, `ModulePredicate`. Import `deref`, `unify`, `Var`,
+`DONE` from `clausal.logic.util`. Use `is_var()` for mode dispatch.
+
+No need to import anything from `py.torch` — the PyTorch types come from
+PyTorch itself.
 
 ---
 
 ## Example Usage
 
+Note: `.clausal` files use Python syntax — `#` comments, `not(...)` for
+negation, `[H, *REST]` for list decomposition. `++()` in goal position
+always succeeds and should not be used for boolean checks.
+
+Where models need to be constructed from the Python API for testing, use
+`-import_module(torch)` and construct via `++()`. This is acceptable for
+test fixtures — the goal is zero `++()` in the *predicates being tested*.
+
 ```clausal
--import_from(py.torch, [tensor, numpy, tensor_list])
+-import_from(py.torch, [tensor, tensor_numpy, tensor_list, shape])
 -import_from(py.torch_nn, [parameter, named_parameter, module,
                             named_module, child, named_child])
+-import_module(torch)
+-import_module(numpy)
 
-Test("numpy forward: tensor to array") <- (
+# Conversion tests
+
+Test("tensor_numpy forward") <- (
     tensor([1.0, 2.0, 3.0], T),
-    numpy(T, ARR),
-    ++isinstance(ARR, ++(numpy.ndarray))
-)
-
-Test("numpy reverse: array to tensor") <- (
-    ARR is ++(numpy.array([1.0, 2.0, 3.0])),
-    numpy(T, ARR),
+    tensor_numpy(T, ARR),
     tensor_list(T, [1.0, 2.0, 3.0])
 )
 
-Test("numpy roundtrip") <- (
+Test("tensor_numpy reverse") <- (
+    ARR is ++(numpy.array([1.0, 2.0, 3.0])),
+    tensor_numpy(T, ARR),
+    tensor_list(T, [1.0, 2.0, 3.0])
+)
+
+Test("tensor_numpy roundtrip") <- (
     tensor([1.0, 2.0, 3.0], T),
-    numpy(T, ARR),
-    numpy(T2, ARR),
+    tensor_numpy(T, ARR),
+    tensor_numpy(T2, ARR),
     tensor_list(T2, [1.0, 2.0, 3.0])
 )
 
@@ -141,6 +144,8 @@ Test("tensor_list reverse") <- (
     tensor_list(T, [[1.0, 2.0], [3.0, 4.0]]),
     shape(T, [2, 2])
 )
+
+# Module enumeration tests
 
 Test("enumerate parameters of Linear") <- (
     MODEL is ++(torch.nn.Linear(10, 5)),
@@ -163,7 +168,7 @@ Test("enumerate submodules of Sequential") <- (
     )),
     findall(N-M, named_module(MODEL, N, M), PAIRS),
     length(PAIRS, LEN),
-    LEN >= 4    % Sequential itself + 3 children
+    LEN >= 4    # Sequential itself + 3 children
 )
 
 Test("direct children only") <- (
@@ -191,20 +196,20 @@ Test("named children") <- (
 
 ## Tests
 
-**`.clausal` integration tests** (`tests/clausal_files/torch_conversions.clausal`):
-- `numpy/2` in forward, reverse, and check modes
+**`.clausal` integration tests** (`tests/fixtures/torch_conversions.clausal`):
+- `tensor_numpy/2` in forward, reverse, and check modes
 - `tensor_list/2` in both modes
 - Roundtrip: tensor -> numpy -> tensor, tensor -> list -> tensor
-- Edge cases: scalar tensors, empty tensors, GPU tensors (if available)
+- Edge cases: scalar tensors, empty tensors
 
-**`.clausal` integration tests** (`tests/clausal_files/torch_nn.clausal`):
+**`.clausal` integration tests** (`tests/fixtures/torch_nn_tests.clausal`):
 - All six enumeration predicates with `findall`
 - `nn.Linear` (has weight + bias)
 - `nn.Sequential` with mixed layer types
 - Nested models (Sequential containing Sequential)
 - Models with no parameters (e.g. `nn.ReLU()`)
 
-**Python unit tests** (`tests/test_torch_nn_infra.py`):
+**Python unit tests:**
 - Only if `torch_nn.py` has non-trivial infrastructure beyond the standard
   pattern. Likely not needed.
 
@@ -212,7 +217,7 @@ Test("named children") <- (
 
 ## Docs
 
-- Update `docs/torch.md` with `numpy/2` and `tensor_list/2` — modes,
+- Update `docs/torch.md` with `tensor_numpy/2` and `tensor_list/2` — modes,
   bijective nature, examples
 - Create `docs/torch_nn.md` — module enumeration predicates, nondeterministic
   semantics, examples with `findall`

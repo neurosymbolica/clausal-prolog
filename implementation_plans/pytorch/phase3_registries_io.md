@@ -3,7 +3,8 @@
 Adds fact tables for layer/activation/loss/optimizer types, plus save/load.
 
 **Depends on:** Phase 2 — `clausal/modules/py/torch_nn.py` must exist
-with module enumeration predicates.
+with module enumeration predicates and the nondeterministic enumeration
+pattern (`trail.mark()` / `trail.undo()`).
 
 **Files to modify:**
 - `clausal/modules/py/torch_nn.py` — add registry predicates
@@ -41,43 +42,13 @@ with module enumeration predicates.
 
 ### Registry fact tables
 
-Follow the pattern in `clausal/modules/py/sklearn.py` — see
-`_ALGORITHM_FACTS` (a list of `(name, role)` tuples around line 50) and
-the `_algorithm_2` dispatch function (around line 180) which enumerates
-them via backtracking with `trail.mark()` / `trail.undo()`.
+These are nondeterministic enumerations over static data — the same
+`trail.mark()` / `trail.undo()` pattern used in Phase 2 for module
+enumeration, and in Phase 1's `_property_2()` for mode dispatch.
 
-Build similar fact lists:
-
-```python
-_LAYER_FACTS = [
-    ("linear", "nn.Linear"),
-    ("conv1d", "nn.Conv1d"),
-    ("conv2d", "nn.Conv2d"),
-    ("conv3d", "nn.Conv3d"),
-    ("conv_transpose1d", "nn.ConvTranspose1d"),
-    ("conv_transpose2d", "nn.ConvTranspose2d"),
-    ("batch_norm1d", "nn.BatchNorm1d"),
-    ("batch_norm2d", "nn.BatchNorm2d"),
-    ("layer_norm", "nn.LayerNorm"),
-    ("group_norm", "nn.GroupNorm"),
-    ("instance_norm1d", "nn.InstanceNorm1d"),
-    ("instance_norm2d", "nn.InstanceNorm2d"),
-    ("dropout", "nn.Dropout"),
-    ("dropout2d", "nn.Dropout2d"),
-    ("embedding", "nn.Embedding"),
-    ("lstm", "nn.LSTM"),
-    ("gru", "nn.GRU"),
-    ("rnn", "nn.RNN"),
-    ("transformer", "nn.Transformer"),
-    ("transformer_encoder", "nn.TransformerEncoder"),
-    ("transformer_decoder", "nn.TransformerDecoder"),
-    ("multi_head_attention", "nn.MultiheadAttention"),
-]
-```
-
-However, rather than hardcoding, consider **introspecting `torch.nn`** at
-import time to build the list dynamically. This keeps the registry current
-across PyTorch versions:
+Rather than hardcoding fact lists, **introspect `torch.nn`** at import
+time to build them dynamically. This keeps registries current across
+PyTorch versions:
 
 ```python
 def _build_layer_facts():
@@ -86,50 +57,61 @@ def _build_layer_facts():
     for name in dir(nn):
         cls = getattr(nn, name)
         if isinstance(cls, type) and issubclass(cls, nn.Module):
-            # Convert CamelCase to snake_case for the atom name
             snake = _camel_to_snake(name)
             facts.append((snake, cls))
     return facts
 ```
 
-This approach should be validated during implementation — check whether
-it produces a sensible list and whether the snake_case conversion handles
-PyTorch's naming (e.g. `BatchNorm2d` -> `batch_norm2d`).
+Validate during implementation that:
+- `_camel_to_snake` handles PyTorch naming correctly (e.g. `BatchNorm2d` -> `batch_norm_2d` or `batch_norm2d`)
+- The resulting list is sensible (filters out internal/private classes)
+- Similar introspection works for activations (functional API in `torch.nn.functional`) and losses
+
+For `activation/2`, consider introspecting both `torch.nn` (module-based
+activations like `nn.ReLU`) and `torch.nn.functional` (function-based
+like `F.relu`).
+
+For `optimizer_type/2`, introspect `torch.optim`.
+
+### Exported constants from Phase 1
+
+Phase 1 exports dtype constants (`float32`, `float64`, `int32`, etc.)
+directly from `py.torch` via `__getattr__`. Use these in tests and docs
+instead of `++()` escapes:
+
+```clausal
+# GOOD: use exported dtype constant
+-import_from(py.torch, [float32, dtype_info])
+dtype_info(float32, bits, 32)
+
+# BAD: ++() escape
+dtype_info(++(torch.float32), bits, 32)
+```
+
+Similarly, registry tests should export layer/activation classes or use
+the name-based lookup mode rather than `++()` for class references.
 
 ### Dtype info
 
-`dtype_info/3` is a three-argument fact table enumerating properties of
-each dtype. Structure as a static dict:
-
-```python
-_DTYPE_PROPS = {
-    torch.float16:  {"bits": 16, "is_floating_point": True,  "is_complex": False, "is_signed": True},
-    torch.float32:  {"bits": 32, "is_floating_point": True,  "is_complex": False, "is_signed": True},
-    torch.float64:  {"bits": 64, "is_floating_point": True,  "is_complex": False, "is_signed": True},
-    torch.int8:     {"bits": 8,  "is_floating_point": False, "is_complex": False, "is_signed": True},
-    torch.int16:    {"bits": 16, "is_floating_point": False, "is_complex": False, "is_signed": True},
-    torch.int32:    {"bits": 32, "is_floating_point": False, "is_complex": False, "is_signed": True},
-    torch.int64:    {"bits": 64, "is_floating_point": False, "is_complex": False, "is_signed": True},
-    torch.bool:     {"bits": 1,  "is_floating_point": False, "is_complex": False, "is_signed": False},
-    # ... etc
-}
-```
+`dtype_info/3` is a three-argument fact table. Phase 1 already exports
+dtype constants, so the first argument can use those directly.
 
 Dispatch: if `dtype` is bound but `key` is unbound, enumerate all
 key-value pairs for that dtype. If both `dtype` and `key` are bound,
-look up and unify the value.
+look up and unify the value. Follow the `_property_2()` pattern from
+Phase 1 (`clausal/modules/py/torch.py`) for mode dispatch via `is_var()`.
 
 ### Save/Load (impure)
 
-These are thin wrappers. Mark them clearly as impure in docs:
+These are thin wrappers. Use the same `_pure()` pattern from Phase 1 but
+document them as impure:
 
 ```python
 def _save_2(this_generator, parent, obj_var, path_var, trail):
     obj = deref(obj_var)
     path = deref(path_var)
-    torch = _ensure_torch()
     try:
-        torch.save(obj, str(path))
+        _th().save(obj, str(path))
     except Exception:
         yield (parent, DONE)
         return
@@ -143,9 +125,16 @@ def _save_2(this_generator, parent, obj_var, path_var, trail):
 
 ## Example Usage
 
+Note: `.clausal` files use Python syntax — `#` comments, `not(...)` for
+negation. Use exported constants from `py.torch` instead of `++()` escapes
+wherever possible. `++()` in goal position always succeeds — never use for
+boolean checks.
+
 ```clausal
 -import_from(py.torch_nn, [layer, activation, loss_fn, optimizer_type])
--import_from(py.torch, [dtype_info, save, load, zeros])
+-import_from(py.torch, [dtype_info, save, load, zeros, shape, float32])
+
+# Registry tests
 
 Test("enumerate all layer types") <- (
     findall(N, layer(N, _), NS),
@@ -154,14 +143,10 @@ Test("enumerate all layer types") <- (
     member(lstm, NS)
 )
 
-Test("lookup specific layer class") <- (
+Test("lookup specific layer by name") <- (
     layer(linear, CLASS),
-    CLASS == ++(torch.nn.Linear)
-)
-
-Test("reverse lookup: class to name") <- (
-    layer(NAME, ++(torch.nn.Linear)),
-    NAME == linear
+    NAME is ++(CLASS.__name__),
+    NAME == "Linear"
 )
 
 Test("enumerate activations") <- (
@@ -184,16 +169,20 @@ Test("enumerate optimizer types") <- (
     member(sgd, NS)
 )
 
+# Dtype info — using exported constant, no ++() needed
+
 Test("dtype info query") <- (
-    dtype_info(++(torch.float32), bits, BITS),
+    dtype_info(float32, bits, BITS),
     BITS == 32
 )
 
 Test("dtype info enumerate keys") <- (
-    findall(K-V, dtype_info(++(torch.float32), K, V), PROPS),
+    findall(K-V, dtype_info(float32, K, V), PROPS),
     member(bits-32, PROPS),
     member(is_floating_point-true, PROPS)
 )
+
+# IO — impure
 
 Test("save and load roundtrip") <- (
     zeros([3, 4], T),
@@ -208,13 +197,13 @@ Test("save and load roundtrip") <- (
 
 ## Tests
 
-**`.clausal` integration tests** (`tests/clausal_files/torch_registries.clausal`):
-- All four registries: `findall` enumeration, specific lookup, reverse lookup
-- `dtype_info` in query and enumerate modes
+**`.clausal` integration tests** (`tests/fixtures/torch_registries_tests.clausal`):
+- All four registries: `findall` enumeration, specific name lookup, reverse lookup
+- `dtype_info` in query and enumerate modes — using exported dtype constants
 - Registry completeness: check that known layers/activations/losses/optimizers
   appear
 
-**`.clausal` integration tests** (`tests/clausal_files/torch_io.clausal`):
+**`.clausal` integration tests** (`tests/fixtures/torch_io_tests.clausal`):
 - `save/2` and `load/2` roundtrip with tensors
 - `save/2` and `load/2` roundtrip with model state_dict
 - Load nonexistent file fails (predicate failure, not crash)
@@ -234,6 +223,7 @@ Test("save and load roundtrip") <- (
 - Update `docs/torch.md` with `dtype_info/3` and `save/2`, `load/2`
 - Note `save/2` and `load/2` as impure
 - All code examples must appear in `.clausal` test files
+- Use exported dtype constants in all examples, not `++()` escapes
 
 ---
 

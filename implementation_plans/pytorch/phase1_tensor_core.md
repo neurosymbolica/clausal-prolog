@@ -247,4 +247,56 @@ Create `docs/torch.md`:
 
 ## Issues
 
-_To be populated during implementation._
+### 1. `deref` does not deep-deref container contents — FIXED
+
+`deref()` on a list or dict returns the container with Var objects still
+inside. This affects all predicates that take list or dict arguments:
+shape lists like `[N, M]`, tensor lists like `[A, B]`, and opts dicts
+like `{"dtype": DT}`. Fixed by introducing `_deep_deref()` which
+recursively unwraps Vars inside lists and dicts, and using it in the
+`_pure()` helper so all predicates benefit.
+
+### 2. `.clausal` files use Python syntax, not Prolog syntax — FIXED
+
+- Comments must use `#`, not `%` (files go through `ast.parse`)
+- Negation-as-failure is `not(...)`, not `\+`
+- Unicode characters in comments cause `SyntaxError`
+
+### 3. Avoiding `++()` escapes — FIXED
+
+Dtype constants (`float32`, `float64`, etc.) are exported directly from
+`py.torch` so users can import them by name. The `device/2` predicate
+returns a string (`"cpu"`) rather than a `torch.device` object. An
+`is_contiguous/1` predicate was added to avoid `++(T.is_contiguous())`
+escapes. Use `-import_module(torch)` or `-import_module(numpy)` for
+direct access to Python module attributes.
+
+### 4. `import_from(py.torch, ...)` shadows `import_module(torch)` — NOTED
+
+Importing from `py.torch` registers the Clausal module under the name
+`torch`, which shadows any `-import_module(torch)`. Dtype constants are
+exported from `py.torch` to avoid needing both. If users need both the
+Python `torch` module and `py.torch` predicates, they must use
+`-import_module(torch)` *without* `import_from(py.torch, ...)`, or
+accept that `torch.*` resolves through the Clausal module.
+
+### 5. Predicate naming: `numpy` renamed to `tensor_numpy` — FIXED
+
+The original name `numpy` for the tensor-to-numpy conversion predicate
+was problematic: it shadowed `-import_module(numpy)` and used a library
+name as a verb. Renamed to `tensor_numpy` to match the `tensor_list`
+pattern — both are nouns describing the same data in a different form.
+
+### 6. `sum`/`max`/`min`/`abs` shadow Python builtins — DISMISSED
+
+These names match the library's API. Module-scoped imports prevent
+collision in user code. Inside the implementation file, the Python
+builtins are not needed.
+
+### 7. `++()` in goal position is a no-op — FIXED
+
+`++(expr)` in goal position evaluates the Python expression but always
+succeeds regardless of the result. Tests initially used patterns like
+`++(V > 0.999)` which were silently vacuous. Fixed by using Clausal's
+own comparison operators (`V > 0.999`) or dedicated predicates
+(`is_contiguous/1`).
