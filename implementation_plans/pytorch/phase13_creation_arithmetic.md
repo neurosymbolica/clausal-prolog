@@ -125,4 +125,30 @@ Update `docs/torch.md` with creation variants and arithmetic sections.
 
 ## Issues
 
-None — all predicates implemented cleanly following existing patterns.
+### 1. `diag` is input-polymorphic, not bijective — NOTED
+
+The plan describes `diag` as multi-mode, but it's implemented with
+`_pure()` which is forward-only. PyTorch's `torch.diag` accepts both
+1D (create diagonal matrix) and 2D (extract diagonal) inputs, but
+that's input polymorphism — the user can't bind the output and recover
+the input. The plan's "multi-mode" wording is misleading. Should be
+documented as input-polymorphic, not bijective/multi-mode.
+
+### 2. `rand`/`randint` tests only check bounds — NOTED
+
+Tests verify values fall within expected range but would silently pass
+if the implementation returned a constant (e.g. `torch.full` instead of
+`torch.rand`). A test calling `rand` twice and checking results differ
+would be more rigorous.
+
+### 3. Missing edge case tests — NOTED
+
+Untested: `diag` with non-square matrix, `diag` with negative offset,
+opts-dict variants of `rand`/`randint`/`logspace`/`empty` (higher-arity
+overloads defined but not exercised).
+
+### 4. `empty` utility as a predicate is questionable — NOTED
+
+`empty` returns uninitialized memory — any value test is meaningless,
+only shape can be verified. Marginal benefit over `++(torch.empty(...))`.
+Kept for API completeness but users should prefer `zeros` or `ones`.
