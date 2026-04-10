@@ -441,6 +441,16 @@ Phasing guidelines:
 - Dependencies between phases are explicit — name the files/terms/predicates
   that must exist before this phase can start
 
+### Commits
+
+Commit **at least once per phase** — a completed phase with its predicates,
+tests, and docs is a natural commit point. Also commit on significant
+progress within a phase (e.g. after implementing a group of predicates,
+after fixing an issue). Don't accumulate large uncommitted changes.
+
+Update the phase's Issues section and the overview's Implemented/Planned
+lists before committing.
+
 ---
 
 ## Step 11 — Review (Issues Section)

@@ -108,4 +108,6 @@ Create `docs/torch_data.md`.
 
 ## Issues
 
-_To be populated during implementation._
+No issues. Straightforward implementation using established patterns:
+`_pure` from `_helpers`, `_property_2` with query/check modes,
+nondeterministic enumeration with `trail.mark()`/`trail.undo()`.

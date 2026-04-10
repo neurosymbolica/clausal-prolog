@@ -22,9 +22,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 
 - [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, narrow, expand, repeat, tile, flip, roll
 - [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, make_distribution, sample, log_prob, entropy, mean, variance, stddev, cdf/icdf
+- [Phase 10 — Datasets](phase10_data.md): tensor_dataset, dataset_length, dataset_item, dataset_element (nondeterministic)
 
 ### Planned
-- [Phase 10 — Datasets](phase10_data.md): TensorDataset, item access, element enumeration
 - [Phase 11 — nn.functional](phase11_nn_functional.md): conv, pooling, normalization, loss functions
 - [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, grad clipping
 
