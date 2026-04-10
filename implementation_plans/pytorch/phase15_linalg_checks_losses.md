@@ -178,4 +178,15 @@ Update `docs/torch_functional.md` with pad and additional losses.
 
 ## Issues
 
-_To be populated during implementation._
+### 1. Added `nan`, `inf`, `neg_inf` constants — ADDITION
+
+Not in the original plan. Added as importable constants from `py.torch`
+(via the existing `__getattr__` / dtype cache mechanism) so that
+`.clausal` tests and user code can write `tensor([1.0, nan, inf], T)`
+instead of using `++()` to call `float('nan')`.
+
+### 2. `kl_div` default reduction will change — NOTED
+
+PyTorch warns that `reduction='mean'` (the current default) will change
+to `'batchmean'` in a future release. The opts-dict overload lets users
+pass `{"reduction": "batchmean"}` explicitly.

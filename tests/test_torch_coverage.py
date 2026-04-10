@@ -64,6 +64,7 @@ _TENSOR_MATH = [
 _TENSOR_COMPARISON = [
     "eq", "ne", "gt", "lt", "ge", "le", "equal", "allclose",
     "isnan", "isinf", "isfinite",
+    "has_nan", "has_inf", "all_finite",
 ]
 
 _TENSOR_LOGIC = [
@@ -214,11 +215,12 @@ class TestTorchCoverage:
         all_expected = set()
         for names in _ALL_EXPECTED.values():
             all_expected.update(names)
-        # Dtype constants are expected exports but not predicates
+        # Constants are expected exports but not predicates
         dtype_names = {
             "float16", "float32", "float64", "bfloat16",
             "int8", "int16", "int32", "int64", "uint8",
             "bool", "complex64", "complex128",
+            "nan", "inf", "neg_inf",
         }
         extra = self.wrapped - all_expected - dtype_names
         if extra:
