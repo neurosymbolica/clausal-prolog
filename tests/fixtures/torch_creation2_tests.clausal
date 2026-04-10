@@ -1,0 +1,200 @@
+-import_from(py.torch, [
+    tensor, shape, dtype, tensor_list, allclose, equal,
+    zeros_like, ones_like, full_like, empty,
+    rand, randint, logspace, diag,
+    sub, div, neg,
+    gt, all, ge, le,
+    float64
+])
+
+# --- zeros_like ---
+
+Test("zeros_like preserves shape and dtype") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    zeros_like(T, Z),
+    shape(Z, [2, 2]),
+    dtype(T, DT),
+    dtype(Z, DT)
+)
+
+Test("zeros_like all zeros") <- (
+    tensor([5.0, 6.0, 7.0], T),
+    zeros_like(T, Z),
+    tensor_list(Z, [0.0, 0.0, 0.0])
+)
+
+# --- ones_like ---
+
+Test("ones_like preserves shape") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    ones_like(T, O),
+    shape(O, [2, 2])
+)
+
+Test("ones_like all ones") <- (
+    tensor([5.0, 6.0], T),
+    ones_like(T, O),
+    tensor_list(O, [1.0, 1.0])
+)
+
+# --- full_like ---
+
+Test("full_like preserves shape") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    full_like(T, 7.0, F),
+    shape(F, [2, 2])
+)
+
+Test("full_like fills with value") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    full_like(T, 42.0, F),
+    tensor_list(F, [42.0, 42.0, 42.0])
+)
+
+# --- empty ---
+
+Test("empty shape") <- (
+    empty([2, 3], T),
+    shape(T, [2, 3])
+)
+
+Test("empty with opts shape") <- (
+    empty([4], {}, T),
+    shape(T, [4])
+)
+
+# --- rand ---
+
+Test("rand shape") <- (
+    rand([3, 4], T),
+    shape(T, [3, 4])
+)
+
+Test("rand values in range") <- (
+    rand([100], T),
+    tensor(0.0, ZERO),
+    ge(T, ZERO, GE_MASK),
+    all(GE_MASK),
+    tensor(1.0, ONE),
+    le(T, ONE, LE_MASK),
+    all(LE_MASK)
+)
+
+Test("rand produces varying values") <- (
+    rand([1000], A),
+    rand([1000], B),
+    not(equal(A, B))
+)
+
+Test("rand with opts") <- (
+    rand([3], {"dtype": float64}, T),
+    shape(T, [3]),
+    dtype(T, float64)
+)
+
+# --- randint ---
+
+Test("randint shape") <- (
+    randint(0, 10, [5, 3], T),
+    shape(T, [5, 3])
+)
+
+Test("randint values in range") <- (
+    randint(0, 10, [100], T),
+    tensor(0, ZERO),
+    ge(T, ZERO, GE_MASK),
+    all(GE_MASK),
+    tensor(10, TEN),
+    gt(TEN, T, LT_MASK),
+    all(LT_MASK)
+)
+
+Test("randint produces varying values") <- (
+    randint(0, 1000, [1000], A),
+    randint(0, 1000, [1000], B),
+    not(equal(A, B))
+)
+
+# --- logspace ---
+
+Test("logspace shape") <- (
+    logspace(0.0, 2.0, 5, T),
+    shape(T, [5])
+)
+
+Test("logspace endpoints") <- (
+    logspace(0.0, 2.0, 3, T),
+    # 10^0=1, 10^1=10, 10^2=100
+    tensor([1.0, 10.0, 100.0], EXPECTED),
+    allclose(T, EXPECTED)
+)
+
+Test("logspace with opts") <- (
+    logspace(0.0, 1.0, 3, {"dtype": float64}, T),
+    shape(T, [3]),
+    dtype(T, float64)
+)
+
+Test("empty with dtype opt") <- (
+    empty([2, 2], {"dtype": float64}, T),
+    shape(T, [2, 2]),
+    dtype(T, float64)
+)
+
+# --- diag ---
+
+Test("diag from 1D creates matrix") <- (
+    tensor([1.0, 2.0, 3.0], V),
+    diag(V, M),
+    shape(M, [3, 3])
+)
+
+Test("diag from 2D extracts diagonal") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], M),
+    diag(M, V),
+    tensor_list(V, [1.0, 4.0])
+)
+
+Test("diag with offset") <- (
+    tensor([1.0, 2.0], V),
+    diag(V, 1, M),
+    shape(M, [3, 3])
+)
+
+Test("diag with negative offset") <- (
+    tensor([1.0, 2.0], V),
+    diag(V, -1, M),
+    shape(M, [3, 3])
+)
+
+Test("diag from non-square matrix") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], M),
+    diag(M, V),
+    tensor_list(V, [1.0, 5.0])
+)
+
+# --- sub ---
+
+Test("sub known values") <- (
+    tensor([5.0, 3.0], A),
+    tensor([2.0, 1.0], B),
+    sub(A, B, C),
+    tensor_list(C, [3.0, 2.0])
+)
+
+# --- div ---
+
+Test("div known values") <- (
+    tensor([6.0, 8.0], A),
+    tensor([2.0, 4.0], B),
+    div(A, B, C),
+    tensor_list(C, [3.0, 2.0])
+)
+
+# --- neg ---
+
+Test("neg known values") <- (
+    tensor([1.0, -2.0, 3.0], T),
+    neg(T, R),
+    tensor_list(R, [-1.0, 2.0, -3.0])
+)

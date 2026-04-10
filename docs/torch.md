@@ -1427,6 +1427,144 @@ cumprod(T, 0, P)
 
 ---
 
+## Creation Variants (Phase 13)
+
+### zeros_like, ones_like, full_like
+
+```clausal
+# skip
+zeros_like(T, R)
+ones_like(T, R)
+full_like(T, VALUE, R)
+```
+
+Create tensors with the same shape, dtype, and device as an existing tensor.
+
+```clausal
+# skip
+tensor([[1.0, 2.0], [3.0, 4.0]], T),
+zeros_like(T, Z),
+shape(Z, [2, 2])
+# Z has same dtype and device as T
+```
+
+### empty
+
+```clausal
+# skip
+empty(SHAPE, T)
+empty(SHAPE, OPTS, T)
+```
+
+Create an uninitialized tensor. Values are indeterminate.
+
+### rand, randint
+
+```clausal
+# skip
+rand(SHAPE, T)
+rand(SHAPE, OPTS, T)
+randint(LOW, HIGH, SHAPE, T)
+randint(LOW, HIGH, SHAPE, OPTS, T)
+```
+
+`rand` produces uniform random values in `[0, 1)`.
+`randint` produces random integers in `[LOW, HIGH)`.
+
+```clausal
+# skip
+rand([3, 4], T),
+shape(T, [3, 4])
+
+randint(0, 10, [5], T)
+# T contains integers 0..9
+```
+
+### logspace
+
+```clausal
+# skip
+logspace(START, END, STEPS, T)
+logspace(START, END, STEPS, OPTS, T)
+```
+
+Logarithmically spaced values: `10^START` to `10^END`.
+
+```clausal
+# skip
+logspace(0.0, 2.0, 3, T)
+# T = [1.0, 10.0, 100.0]
+```
+
+### diag
+
+```clausal
+# skip
+diag(T, R)
+diag(T, DIAGONAL, R)
+```
+
+Input-polymorphic: if input is 1D, creates a 2D diagonal matrix.
+If input is 2D, extracts the diagonal. This is forward-only — you
+cannot bind the output and recover the input. Optional `DIAGONAL`
+offset (default 0, positive = above main diagonal, negative = below).
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0], V),
+diag(V, M),
+shape(M, [3, 3])
+
+tensor([[1.0, 2.0], [3.0, 4.0]], M),
+diag(M, V)
+# V = [1.0, 4.0]
+```
+
+---
+
+## Arithmetic Gaps (Phase 13)
+
+### sub
+
+```clausal
+# skip
+sub(A, B, C)
+```
+
+Element-wise subtraction: `C = A - B`.
+
+### div
+
+```clausal
+# skip
+div(A, B, C)
+```
+
+Element-wise division: `C = A / B`.
+
+### neg
+
+```clausal
+# skip
+neg(T, R)
+```
+
+Element-wise negation: `R = -T`.
+
+```clausal
+# skip
+tensor([5.0, 3.0], A),
+tensor([2.0, 1.0], B),
+sub(A, B, C)
+# C = [3.0, 2.0]
+
+tensor([1.0, -2.0, 3.0], T),
+neg(T, R)
+# R = [-1.0, 2.0, -3.0]
+```
+
+---
+
 ## Design Notes
 
 1. **`shape/2`, `dtype/2`, `device/2` in `(+T, +S)` mode are check-only.**

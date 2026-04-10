@@ -658,6 +658,62 @@ class TestSchedulerGradUtils:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Creation variants and arithmetic gaps .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchCreation2Fixture:
+    """Run Test predicates from tests/fixtures/torch_creation2_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_creation2_tests")
+
+    @pytest.mark.parametrize("name", [
+        # zeros_like
+        "zeros_like preserves shape and dtype",
+        "zeros_like all zeros",
+        # ones_like
+        "ones_like preserves shape",
+        "ones_like all ones",
+        # full_like
+        "full_like preserves shape",
+        "full_like fills with value",
+        # empty
+        "empty shape",
+        "empty with opts shape",
+        "empty with dtype opt",
+        # rand
+        "rand shape",
+        "rand values in range",
+        "rand produces varying values",
+        "rand with opts",
+        # randint
+        "randint shape",
+        "randint values in range",
+        "randint produces varying values",
+        # logspace
+        "logspace shape",
+        "logspace endpoints",
+        "logspace with opts",
+        # diag
+        "diag from 1D creates matrix",
+        "diag from 2D extracts diagonal",
+        "diag with offset",
+        "diag with negative offset",
+        "diag from non-square matrix",
+        # sub
+        "sub known values",
+        # div
+        "div known values",
+        # neg
+        "neg known values",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Infrastructure unit tests
 # ════════════════════════════════════════════════════════════════════════════
 

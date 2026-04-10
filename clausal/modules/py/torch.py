@@ -6,7 +6,12 @@ for use in .clausal files via::
     -import_from(py.torch, [tensor, zeros, ones, randn, shape, dtype, device,
                              reshape, matmul, add, relu, softmax,
                              tensor_numpy, tensor_list, float32, float64,
-                             det, inv, svd, solve, cholesky, qr, norm])
+                             det, inv, svd, solve, cholesky, qr, norm,
+                             fft_transform, real_fft, fft_shift,
+                             eq, gt, lt, where, equal, allclose,
+                             logical_and, any, all, masked_select,
+                             einsum, logarithm, sine, cosine, tangent,
+                             sqrt, pow, sigmoid, cumsum, cumprod])
 
 Phase 1 — Tensor Core
 ----------------------
@@ -55,9 +60,105 @@ Shape operations:
     permute(T, DIMS, T2)            Reorder all dims
     contiguous(T, T2)               Make memory contiguous
 
+Phase 8 — Additional Shape Operations
+---------------------------------------
+    split(T, SIZE, LIST) / split(T, SIZE, DIM, LIST)   Split into chunks
+    chunk(T, N, LIST)    / chunk(T, N, DIM, LIST)      Split into N chunks
+    unbind(T, DIM, LIST)                                Remove dim, return list
+    narrow(T, DIM, START, LENGTH, R)                    Narrow along dimension
+    expand(T, SIZES, R)                                 Broadcast to larger size
+    repeat(T, REPEATS, R)                               Tile tensor
+    tile(T, REPS, R)                                    Tile (numpy-style)
+    flip(T, DIMS, R)                                    Reverse along dims
+    roll(T, SHIFTS, R) / roll(T, SHIFTS, DIMS, R)      Circular shift
+
 Conversions (bijective):
     tensor_numpy(TENSOR, ARRAY)  Tensor <-> numpy (bidirectional, shared memory)
     tensor_list(TENSOR, LIST)    Tensor <-> nested list (bidirectional, copies)
+
+Phase 5 — FFT
+--------------
+Pure FFT operations via torch.fft.  Bijective pairs are single predicates.
+
+    fft_transform(T, F) / fft_transform(T, DIM, F)          Complex FFT (+T,-F) / (-T,+F)
+    real_fft(T, F) / real_fft(T, DIM, F)                    Real FFT (+T,-F) / (-T,+F)
+    fft_transform_2d(T, F)                                   2D FFT (+T,-F) / (-T,+F)
+    fft_transform_nd(T, F)                                   N-D FFT (+T,-F) / (-T,+F)
+    fft_shift(T, S)                                          Shift zero-freq (+T,-S) / (-T,+S)
+    fft_frequencies(N, F) / fft_frequencies(N, D, F)         DFT sample frequencies
+    real_fft_frequencies(N, F) / real_fft_frequencies(N, D, F)  Real FFT sample frequencies
+
+Phase 6 — Comparisons, Logic, and Selection
+---------------------------------------------
+Element-wise comparison, logical operations, and conditional selection.
+
+Comparisons:
+    eq(A, B, C)                  Element-wise equality (bool tensor)
+    ne(A, B, C)                  Element-wise not-equal
+    gt(A, B, C)                  Element-wise greater-than
+    lt(A, B, C)                  Element-wise less-than
+    ge(A, B, C)                  Element-wise greater-or-equal
+    le(A, B, C)                  Element-wise less-or-equal
+    equal(A, B)                  True if all elements equal (check predicate)
+    allclose(A, B)               Approximate equality check
+    allclose(A, B, ATOL, RTOL)   Approximate equality with tolerances
+
+Logic:
+    logical_and(A, B, C)         Element-wise AND
+    logical_or(A, B, C)          Element-wise OR
+    logical_not(A, B)            Element-wise NOT
+    logical_xor(A, B, C)         Element-wise XOR
+    any(T)  /  any(T, DIM)       Any element true (check predicate)
+    all(T)  /  all(T, DIM)       All elements true (check predicate)
+
+Selection:
+    where(COND, X, Y, R)         Select from X or Y based on condition
+    masked_select(T, MASK, R)    Elements where mask is true
+    index_select(T, DIM, IDX, R) Select along dimension
+    gather(T, DIM, IDX, R)       Gather along dimension
+    scatter(T, DIM, IDX, SRC, R) Scatter src into T
+
+Phase 7 — Einsum and Advanced Math
+------------------------------------
+Einstein summation and additional math operations.
+
+Einsum:
+    einsum(EQ, TENSORS, R)              Einstein summation
+
+Bijective (inverse pairs):
+    logarithm(EXP, VAL)                 exp/log bidirectional
+    sine(ANGLE, VAL)                    sin/asin bidirectional
+    cosine(ANGLE, VAL)                  cos/acos bidirectional
+    tangent(ANGLE, VAL)                 tan/atan bidirectional
+
+Non-bijective:
+    sqrt(T, R)                          Square root
+    pow(T, EXP, R)                      Element-wise power
+    atan2(Y, X, R)                      Two-argument arctangent
+    sinh(T, R)  cosh(T, R)  tanh(T, R)  Hyperbolic functions
+    sigmoid(T, R)                        Logistic sigmoid
+    log_softmax(T, DIM, R)              Log-softmax
+    floor(T, R)  ceil(T, R)  round(T, R)  Rounding
+    sign(T, R)                           Sign function
+    cumsum(T, DIM, R)                    Cumulative sum
+    cumprod(T, DIM, R)                   Cumulative product
+
+Phase 13 — Creation Variants and Arithmetic Gaps
+--------------------------------------------------
+Creation variants:
+    zeros_like(T, R)                     Zero tensor, same shape/dtype/device
+    ones_like(T, R)                      Ones tensor, same shape/dtype/device
+    full_like(T, VALUE, R)               Filled tensor, same shape/dtype/device
+    empty(SHAPE, T) / empty(SHAPE, OPTS, T)  Uninitialized tensor
+    rand(SHAPE, T)  / rand(SHAPE, OPTS, T)   Uniform random [0, 1)
+    randint(LOW, HIGH, SHAPE, T) / with OPTS Random integers
+    logspace(START, END, STEPS, T) / with OPTS  Logarithmically spaced
+    diag(T, R)  /  diag(T, DIAGONAL, R)  Create diagonal or extract diagonal
+
+Arithmetic gaps:
+    sub(A, B, C)                         Element-wise subtract
+    div(A, B, C)                         Element-wise divide
+    neg(T, R)                            Element-wise negate
 
 Phase 4 — Linear Algebra
 -------------------------
@@ -80,11 +181,10 @@ Pure tensor linear algebra via torch.linalg.
 from __future__ import annotations
 
 import threading as _threading
-from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py._helpers import _pred, _deep_deref, _pure
 
 
 # ── Lazy torch import ────────────────────────────────────────────────────
@@ -107,42 +207,6 @@ def _ensure_torch():
 def _th():
     _ensure_torch()
     return _torch
-
-
-# ── Dispatch helpers ─────────────────────────────────────────────────────
-
-def _pred(name: str, *arity_fns) -> ModulePredicate:
-    p = ModulePredicate(name)
-    for arity, fn in arity_fns:
-        p._register(arity, fn)
-    return p
-
-
-def _deep_deref(val):
-    """Deref a value, recursively deref-ing list elements and dict values."""
-    val = deref(val)
-    if isinstance(val, list):
-        return [_deep_deref(x) for x in val]
-    if isinstance(val, dict):
-        return {k: _deep_deref(v) for k, v in val.items()}
-    return val
-
-
-def _pure(fn: Callable) -> Callable:
-    """Wrap a pure function: deep-deref all inputs, call fn(*inputs), unify RESULT."""
-    def dispatch(this_generator, parent, *args):
-        trail = args[-1]
-        result_var = args[-2]
-        inputs = [_deep_deref(x) for x in args[:-2]]
-        try:
-            out = fn(*inputs)
-        except Exception:
-            yield (parent, DONE)
-            return
-        if unify(result_var, out, trail):
-            yield (parent, None)
-        yield (parent, DONE)
-    return dispatch
 
 
 def _property_2(getter):
@@ -201,6 +265,43 @@ def _bidir_2(forward, backward):
                 pass
 
         # Both unbound: fail
+        yield (parent, DONE)
+    return dispatch
+
+
+def _bidir_3_mid(forward, backward):
+    """Bidirectional with a middle arg: (+X,+M,-Y) forward, (-X,+M,+Y) backward."""
+    def dispatch(this_generator, parent, x_raw, mid_raw, y_raw, trail):
+        x = deref(x_raw)
+        m = _deep_deref(mid_raw)
+        y = deref(y_raw)
+
+        if not is_var(x) and is_var(y):
+            try:
+                out = forward(x, m)
+            except Exception:
+                yield (parent, DONE)
+                return
+            if unify(y_raw, out, trail):
+                yield (parent, None)
+
+        elif is_var(x) and not is_var(y):
+            try:
+                out = backward(y, m)
+            except Exception:
+                yield (parent, DONE)
+                return
+            if unify(x_raw, out, trail):
+                yield (parent, None)
+
+        elif not is_var(x) and not is_var(y):
+            try:
+                out = forward(x, m)
+                if unify(y_raw, out, trail):
+                    yield (parent, None)
+            except Exception:
+                pass
+
         yield (parent, DONE)
     return dispatch
 
@@ -296,6 +397,47 @@ def _check_1(predicate_fn):
 is_contiguous = _pred("is_contiguous",
     (1, _check_1(lambda t: t.is_contiguous())),
 )
+
+
+def _check_2(predicate_fn):
+    """Check predicate on two tensors: succeed if predicate_fn(a, b) is truthy."""
+    def dispatch(this_generator, parent, a_var, b_var, trail):
+        a = _deep_deref(deref(a_var))
+        b = _deep_deref(deref(b_var))
+        try:
+            if predicate_fn(a, b):
+                yield (parent, None)
+        except Exception:
+            pass
+        yield (parent, DONE)
+    return dispatch
+
+
+def _check_bool(fn):
+    """Check predicate: succeed if fn(tensor) is truthy."""
+    def dispatch(this_generator, parent, tensor_var, trail):
+        t = _deep_deref(deref(tensor_var))
+        try:
+            if fn(t):
+                yield (parent, None)
+        except Exception:
+            pass
+        yield (parent, DONE)
+    return dispatch
+
+
+def _check_bool_dim(fn):
+    """Check predicate with dim: succeed if fn(tensor, dim) is truthy."""
+    def dispatch(this_generator, parent, tensor_var, dim_var, trail):
+        t = _deep_deref(deref(tensor_var))
+        d = int(deref(dim_var))
+        try:
+            if fn(t, d):
+                yield (parent, None)
+        except Exception:
+            pass
+        yield (parent, DONE)
+    return dispatch
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -397,6 +539,50 @@ permute = _pred("permute",
 
 contiguous = _pred("contiguous",
     (2, _pure(lambda t: t.contiguous())),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Additional shape operations (Phase 8)
+# ═══════════════════════════════════════════════════════════════════════════
+
+split = _pred("split",
+    (3, _pure(lambda t, size: list(t.split(int(size))))),
+    (4, _pure(lambda t, size, dim: list(t.split(int(size), dim=int(dim))))),
+)
+
+chunk = _pred("chunk",
+    (3, _pure(lambda t, n: list(t.chunk(int(n))))),
+    (4, _pure(lambda t, n, dim: list(t.chunk(int(n), dim=int(dim))))),
+)
+
+unbind = _pred("unbind",
+    (3, _pure(lambda t, dim: list(t.unbind(int(dim))))),
+)
+
+narrow = _pred("narrow",
+    (5, _pure(lambda t, dim, start, length: t.narrow(int(dim), int(start), int(length)))),
+)
+
+expand = _pred("expand",
+    (3, _pure(lambda t, sizes: t.expand(sizes))),
+)
+
+repeat = _pred("repeat",
+    (3, _pure(lambda t, repeats: t.repeat(repeats))),
+)
+
+tile = _pred("tile",
+    (3, _pure(lambda t, reps: _th().tile(t, reps))),
+)
+
+flip = _pred("flip",
+    (3, _pure(lambda t, dims: _th().flip(t, dims))),
+)
+
+roll = _pred("roll",
+    (3, _pure(lambda t, shifts: _th().roll(t, int(shifts)))),
+    (4, _pure(lambda t, shifts, dims: _th().roll(t, int(shifts), int(dims)))),
 )
 
 
@@ -509,6 +695,64 @@ load = _pred("load",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# FFT (Phase 5) — bijective pairs
+# ═══════════════════════════════════════════════════════════════════════════
+
+fft_transform = _pred("fft_transform",
+    (2, _bidir_2(
+        lambda t: _th().fft.fft(t),
+        lambda f: _th().fft.ifft(f),
+    )),
+    (3, _bidir_3_mid(
+        lambda t, dim: _th().fft.fft(t, dim=int(dim)),
+        lambda f, dim: _th().fft.ifft(f, dim=int(dim)),
+    )),
+)
+
+real_fft = _pred("real_fft",
+    (2, _bidir_2(
+        lambda t: _th().fft.rfft(t),
+        lambda f: _th().fft.irfft(f),
+    )),
+    (3, _bidir_3_mid(
+        lambda t, dim: _th().fft.rfft(t, dim=int(dim)),
+        lambda f, dim: _th().fft.irfft(f, dim=int(dim)),
+    )),
+)
+
+fft_transform_2d = _pred("fft_transform_2d",
+    (2, _bidir_2(
+        lambda t: _th().fft.fft2(t),
+        lambda f: _th().fft.ifft2(f),
+    )),
+)
+
+fft_transform_nd = _pred("fft_transform_nd",
+    (2, _bidir_2(
+        lambda t: _th().fft.fftn(t),
+        lambda f: _th().fft.ifftn(f),
+    )),
+)
+
+fft_shift = _pred("fft_shift",
+    (2, _bidir_2(
+        lambda t: _th().fft.fftshift(t),
+        lambda f: _th().fft.ifftshift(f),
+    )),
+)
+
+fft_frequencies = _pred("fft_frequencies",
+    (2, _pure(lambda n: _th().fft.fftfreq(int(n)))),
+    (3, _pure(lambda n, d: _th().fft.fftfreq(int(n), d=float(d)))),
+)
+
+real_fft_frequencies = _pred("real_fft_frequencies",
+    (2, _pure(lambda n: _th().fft.rfftfreq(int(n)))),
+    (3, _pure(lambda n, d: _th().fft.rfftfreq(int(n), d=float(d)))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Linear algebra (Phase 4)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -563,6 +807,272 @@ dot = _pred("dot",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Comparisons, Logic, and Selection (Phase 6)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# -- Element-wise comparisons --
+
+eq = _pred("eq",
+    (3, _pure(lambda a, b: _th().eq(a, b))),
+)
+
+ne = _pred("ne",
+    (3, _pure(lambda a, b: _th().ne(a, b))),
+)
+
+gt = _pred("gt",
+    (3, _pure(lambda a, b: _th().gt(a, b))),
+)
+
+lt = _pred("lt",
+    (3, _pure(lambda a, b: _th().lt(a, b))),
+)
+
+ge = _pred("ge",
+    (3, _pure(lambda a, b: _th().ge(a, b))),
+)
+
+le = _pred("le",
+    (3, _pure(lambda a, b: _th().le(a, b))),
+)
+
+# -- Check predicates --
+
+equal = _pred("equal",
+    (2, _check_2(lambda a, b: _th().equal(a, b))),
+)
+
+
+def _allclose_4(this_generator, parent, a_var, b_var, atol_var, rtol_var, trail):
+    a = _deep_deref(deref(a_var))
+    b = _deep_deref(deref(b_var))
+    atol = float(deref(atol_var))
+    rtol = float(deref(rtol_var))
+    try:
+        if _th().allclose(a, b, atol=atol, rtol=rtol):
+            yield (parent, None)
+    except Exception:
+        pass
+    yield (parent, DONE)
+
+
+allclose = _pred("allclose",
+    (2, _check_2(lambda a, b: _th().allclose(a, b))),
+    (4, _allclose_4),
+)
+
+# -- Logical operations --
+
+logical_and = _pred("logical_and",
+    (3, _pure(lambda a, b: _th().logical_and(a, b))),
+)
+
+logical_or = _pred("logical_or",
+    (3, _pure(lambda a, b: _th().logical_or(a, b))),
+)
+
+logical_not = _pred("logical_not",
+    (2, _pure(lambda a: _th().logical_not(a))),
+)
+
+logical_xor = _pred("logical_xor",
+    (3, _pure(lambda a, b: _th().logical_xor(a, b))),
+)
+
+any = _pred("any",
+    (1, _check_bool(lambda t: _th().any(t).item())),
+    (2, _check_bool_dim(lambda t, d: _th().any(t, dim=d).any().item())),
+)
+
+all = _pred("all",
+    (1, _check_bool(lambda t: _th().all(t).item())),
+    (2, _check_bool_dim(lambda t, d: _th().all(t, dim=d).all().item())),
+)
+
+# -- Selection --
+
+where = _pred("where",
+    (4, _pure(lambda cond, x, y: _th().where(cond, x, y))),
+)
+
+masked_select = _pred("masked_select",
+    (3, _pure(lambda t, mask: _th().masked_select(t, mask))),
+)
+
+index_select = _pred("index_select",
+    (4, _pure(lambda t, dim, idx: _th().index_select(t, int(dim), idx))),
+)
+
+gather = _pred("gather",
+    (4, _pure(lambda t, dim, idx: _th().gather(t, int(dim), idx))),
+)
+
+scatter = _pred("scatter",
+    (5, _pure(lambda t, dim, idx, src: t.scatter(int(dim), idx, src))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Einsum and Advanced Math (Phase 7)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# -- Einsum --
+
+einsum = _pred("einsum",
+    (3, _pure(lambda eq, tensors: _th().einsum(eq, *tensors))),
+)
+
+# -- Bijective trig / log --
+
+logarithm = _pred("logarithm",
+    (2, _bidir_2(
+        lambda x: _th().exp(x),
+        lambda y: _th().log(y),
+    )),
+)
+
+sine = _pred("sine",
+    (2, _bidir_2(
+        lambda a: _th().sin(a),
+        lambda v: _th().asin(v),
+    )),
+)
+
+cosine = _pred("cosine",
+    (2, _bidir_2(
+        lambda a: _th().cos(a),
+        lambda v: _th().acos(v),
+    )),
+)
+
+tangent = _pred("tangent",
+    (2, _bidir_2(
+        lambda a: _th().tan(a),
+        lambda v: _th().atan(v),
+    )),
+)
+
+# -- Non-bijective math --
+
+sqrt = _pred("sqrt",
+    (2, _pure(lambda t: _th().sqrt(t))),
+)
+
+pow = _pred("pow",
+    (3, _pure(lambda t, exp: _th().pow(t, exp))),
+)
+
+atan2 = _pred("atan2",
+    (3, _pure(lambda y, x: _th().atan2(y, x))),
+)
+
+sinh = _pred("sinh",
+    (2, _pure(lambda t: _th().sinh(t))),
+)
+
+cosh = _pred("cosh",
+    (2, _pure(lambda t: _th().cosh(t))),
+)
+
+tanh = _pred("tanh",
+    (2, _pure(lambda t: _th().tanh(t))),
+)
+
+sigmoid = _pred("sigmoid",
+    (2, _pure(lambda t: _th().sigmoid(t))),
+)
+
+log_softmax = _pred("log_softmax",
+    (3, _pure(lambda t, dim: _th().nn.functional.log_softmax(t, dim=int(dim)))),
+)
+
+floor = _pred("floor",
+    (2, _pure(lambda t: _th().floor(t))),
+)
+
+ceil = _pred("ceil",
+    (2, _pure(lambda t: _th().ceil(t))),
+)
+
+round = _pred("round",
+    (2, _pure(lambda t: _th().round(t))),
+)
+
+sign = _pred("sign",
+    (2, _pure(lambda t: _th().sign(t))),
+)
+
+cumsum = _pred("cumsum",
+    (3, _pure(lambda t, dim: _th().cumsum(t, int(dim)))),
+)
+
+cumprod = _pred("cumprod",
+    (3, _pure(lambda t, dim: _th().cumprod(t, int(dim)))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 13 — Creation variants
+# ═══════════════════════════════════════════════════════════════════════════
+
+zeros_like = _pred("zeros_like",
+    (2, _pure(lambda t: _th().zeros_like(t))),
+)
+
+ones_like = _pred("ones_like",
+    (2, _pure(lambda t: _th().ones_like(t))),
+)
+
+full_like = _pred("full_like",
+    (3, _pure(lambda t, value: _th().full_like(t, value))),
+)
+
+empty = _pred("empty",
+    (2, _pure(lambda shape: _th().empty(shape))),
+    (3, _pure(lambda shape, opts: _th().empty(shape, **opts))),
+)
+
+rand = _pred("rand",
+    (2, _pure(lambda shape: _th().rand(shape))),
+    (3, _pure(lambda shape, opts: _th().rand(shape, **opts))),
+)
+
+randint = _pred("randint",
+    (4, _pure(lambda low, high, shape: _th().randint(int(low), int(high), shape))),
+    (5, _pure(lambda low, high, shape, opts:
+              _th().randint(int(low), int(high), shape, **opts))),
+)
+
+logspace = _pred("logspace",
+    (4, _pure(lambda start, end, steps: _th().logspace(start, end, int(steps)))),
+    (5, _pure(lambda start, end, steps, opts:
+              _th().logspace(start, end, int(steps), **opts))),
+)
+
+diag = _pred("diag",
+    (2, _pure(lambda t: _th().diag(t))),
+    (3, _pure(lambda t, diagonal: _th().diag(t, int(diagonal)))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 13 — Arithmetic gaps
+# ═══════════════════════════════════════════════════════════════════════════
+
+sub = _pred("sub",
+    (3, _pure(lambda a, b: _th().sub(a, b))),
+)
+
+div = _pred("div",
+    (3, _pure(lambda a, b: _th().div(a, b))),
+)
+
+neg = _pred("neg",
+    (2, _pure(lambda t: _th().neg(t))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Dtype constants (re-exported from torch for direct import)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -605,15 +1115,39 @@ __all__ = [
     # Shape operations
     "reshape", "squeeze", "unsqueeze", "flatten", "unflatten",
     "transpose", "permute", "contiguous",
+    # Additional shape operations (Phase 8)
+    "split", "chunk", "unbind", "narrow",
+    "expand", "repeat", "tile", "flip", "roll",
     # Conversions
     "tensor_numpy", "tensor_list",
     # Dtype info
     "dtype_info",
     # IO (impure)
     "save", "load",
+    # FFT (bijective pairs)
+    "fft_transform", "real_fft",
+    "fft_transform_2d", "fft_transform_nd",
+    "fft_shift", "fft_frequencies", "real_fft_frequencies",
     # Linear algebra
     "det", "inv", "solve", "svd", "eig", "cholesky", "qr",
     "norm", "matrix_rank", "pinv", "cross", "dot",
+    # Comparisons, logic, selection
+    "eq", "ne", "gt", "lt", "ge", "le", "equal", "allclose",
+    "logical_and", "logical_or", "logical_not", "logical_xor",
+    "any", "all",
+    "where", "masked_select", "index_select", "gather", "scatter",
+    # Einsum and advanced math
+    "einsum",
+    "logarithm", "sine", "cosine", "tangent",
+    "sqrt", "pow", "atan2",
+    "sinh", "cosh", "tanh", "sigmoid", "log_softmax",
+    "floor", "ceil", "round", "sign",
+    "cumsum", "cumprod",
+    # Creation variants (Phase 13)
+    "zeros_like", "ones_like", "full_like", "empty",
+    "rand", "randint", "logspace", "diag",
+    # Arithmetic gaps (Phase 13)
+    "sub", "div", "neg",
     # Dtype constants
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64", "uint8",
