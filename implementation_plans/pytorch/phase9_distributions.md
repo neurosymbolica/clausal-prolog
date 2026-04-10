@@ -151,4 +151,25 @@ sampling, `cdf`/`icdf` bijection.
 
 ## Issues
 
-_To be populated during implementation._
+### 1. List-to-tensor conversion in `make_distribution` params
+
+Distribution constructors (e.g. `Categorical`) require tensor arguments,
+but Clausal dict literals produce plain Python lists for array-like values.
+`_make_distribution` now auto-converts list values in the params dict to
+tensors via `torch.tensor(v)`.
+
+### 2. Separate module file — no `_pure()` reuse
+
+`torch_distributions.py` is a new file (`clausal/modules/py/torch_distributions.py`)
+rather than being added to `torch.py`. The `_pure()`, `_property_2()`,
+`_deep_deref()`, and `_fact_table_2()` helpers were duplicated locally
+(small, self-contained closures). Imports `_ensure_torch`, `_th`, and
+`_deep_deref` from `torch.py`; duplicates the others to keep the module
+self-contained like `torch_nn.py`.
+
+### 3. No handle/freeze pattern needed
+
+Unlike `scipy_stats.py` which uses a handle registry for frozen
+distributions, `torch.distributions` objects are lightweight and
+stateless (no file handles, no accumulated state). Distribution objects
+are passed directly as Clausal terms — no handle allocation needed.

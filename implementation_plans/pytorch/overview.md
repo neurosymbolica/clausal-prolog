@@ -21,9 +21,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 - [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, logarithm, sine, cosine, tangent (bijective), sqrt, pow, atan2, sinh, cosh, tanh, sigmoid, log_softmax, floor, ceil, round, sign, cumsum, cumprod
 
 - [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, narrow, expand, repeat, tile, flip, roll
+- [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, make_distribution, sample, log_prob, entropy, mean, variance, stddev, cdf/icdf
 
 ### Planned
-- [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, sampling, cdf/icdf
 - [Phase 10 — Datasets](phase10_data.md): TensorDataset, item access, element enumeration
 - [Phase 11 — nn.functional](phase11_nn_functional.md): conv, pooling, normalization, loss functions
 - [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, grad clipping
