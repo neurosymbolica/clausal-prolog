@@ -18,10 +18,11 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 - [Phase 4 — Linear Algebra](phase4_linalg.md): det, inv, svd, eig, solve, cholesky, qr, norm, matrix_rank, pinv, cross, dot
 - [Phase 5 — FFT](phase5_fft.md): fft_transform, real_fft, fft_transform_2d, fft_transform_nd, fft_shift (all bijective), fft_frequencies, real_fft_frequencies
 - [Phase 6 — Comparisons and Logic](phase6_comparisons_logic.md): eq/ne/gt/lt/ge/le, equal, allclose, logical ops, any/all, where, masked_select, index_select, gather, scatter
+- [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, logarithm, sine, cosine, tangent (bijective), sqrt, pow, atan2, sinh, cosh, tanh, sigmoid, log_softmax, floor, ceil, round, sign, cumsum, cumprod
+
+- [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, narrow, expand, repeat, tile, flip, roll
 
 ### Planned
-- [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, trig, exp/log, cumsum
-- [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, flip, roll, expand
 - [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, sampling, cdf/icdf
 - [Phase 10 — Datasets](phase10_data.md): TensorDataset, item access, element enumeration
 - [Phase 11 — nn.functional](phase11_nn_functional.md): conv, pooling, normalization, loss functions

@@ -111,4 +111,7 @@ Update `docs/torch.md` with additional shape operations section.
 
 ## Issues
 
-_To be populated during implementation._
+No issues encountered. All predicates follow the existing `_pure()` +
+`_pred()` pattern. `split`, `chunk`, and `unbind` return PyTorch tuples —
+converted to lists via `list()` for Clausal compatibility, as anticipated
+in the plan.
