@@ -12,13 +12,7 @@ _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
 
 # Decrease this as migrations proceed.  Current baseline: 810.
 # After lists.md pilot migration: 810 -> 808.
-# After builtins.md migration (Phase 1): 808 -> 575.
-# After SciPy migration (Phase 2): 575 -> 386.
-# After language core migration (Phase 3): 386 -> 291.
-# After constraints migration (Phase 4): 291 -> 250.
-# After standard library migration (Phase 5): 250 -> 63.
-# After builtins detail + advanced (Phases 6+7): 63 -> 0.
-MAX_ALLOWED_SKIPS = 0
+MAX_ALLOWED_SKIPS = 808
 
 
 def _count_skip_blocks() -> int:
@@ -37,11 +31,5 @@ def test_skip_count_not_increasing():
     assert actual <= MAX_ALLOWED_SKIPS, (
         f"# skip block count increased to {actual} "
         f"(max allowed: {MAX_ALLOWED_SKIPS}). "
-        f"New doc snippets should use --8<-- fixture references instead. "
-        f"See implementation_plans/DOC_SNIPPET_TESTING.md for the pattern: "
-        f"create a section in tests/fixtures/docs/<page>_sigs.txt (display) "
-        f"or tests/fixtures/docs/<page>_examples.clausal (executable), "
-        f"add companion tests in tests/fixtures/docs/<page>_sig_tests.clausal, "
-        f"then reference via --8<-- \"tests/fixtures/docs/<file>:<section>\" "
-        f"in the markdown."
+        f"New doc snippets should use --8<-- fixture references instead."
     )

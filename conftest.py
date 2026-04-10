@@ -123,6 +123,12 @@ def _should_skip(content: str) -> bool:
     return first_line in ("# skip", "# clausal: skip")
 
 
+def _is_snippet_block(content: str) -> bool:
+    """True if the block consists entirely of --8<-- snippet includes."""
+    lines = [line.strip() for line in content.strip().split("\n") if line.strip()]
+    return bool(lines) and all(line.startswith("--8<--") for line in lines)
+
+
 class DocMdFile(pytest.File):
     def collect(self):
         blocks = _extract_clausal_blocks(self.path)
@@ -135,6 +141,17 @@ class DocMdFile(pytest.File):
                     desc=None,
                     lineno=lineno,
                     skipped=True,
+                )
+                continue
+
+            if _is_snippet_block(content):
+                yield DocItem.from_parent(
+                    self,
+                    name=f"L{lineno} [snippet]",
+                    mod=None,
+                    desc=None,
+                    lineno=lineno,
+                    snippet=True,
                 )
                 continue
 
@@ -188,7 +205,8 @@ class DocMdFile(pytest.File):
 
 class DocItem(pytest.Item):
     def __init__(self, name, parent, mod, desc, lineno,
-                 load_error=None, load_output="", skipped=False):
+                 load_error=None, load_output="", skipped=False,
+                 snippet=False):
         super().__init__(name, parent)
         self._mod = mod
         self._desc = desc
@@ -196,10 +214,14 @@ class DocItem(pytest.Item):
         self._load_error = load_error
         self._load_output = load_output
         self._skipped = skipped
+        self._snippet = snippet
 
     def runtest(self):
         if self._skipped:
             pytest.skip("marked # skip")
+
+        if self._snippet:
+            return  # tested via the source fixture file
 
         if self._load_output:
             self.add_report_section("call", "stdout", self._load_output)

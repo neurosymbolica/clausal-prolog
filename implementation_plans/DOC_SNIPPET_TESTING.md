@@ -43,86 +43,11 @@ Create `tests/fixtures/docs/` for doc-snippet fixture files. Convention: one fil
 ### Important: Clausal syntax in fixture files
 
 When writing `.clausal` fixture files, note:
-- **Predicate names are almost always lowercase** (e.g., `partition`, `head_tail`, `is_positive`) - this is in keeping with Prolog (and a lot of Python). There was a big refactor of TitleCase to lower_case, but many names were missed, especially in skipped doc snippets.
-- **Fact clauses (no body) need a trailing comma** to avoid being parsed as Python expressions (e.g., `partition([], _, [], []),`)
-- **Single-clause predicates with bodies work fine** (e.g., `is_positive(X) <- (X > 0)`) - by convention, if the body is a single name or single call, it doesn't need ().
+- **Predicate names must start uppercase** (e.g., `Partition`, `HeadTail`, `IsPositive`)
+- **Fact clauses (no body) need `<- True`** to avoid being parsed as Python expressions (e.g., `Partition([], _, [], []) <- True`)
+- **Single-clause predicates with bodies work fine** (e.g., `IsPositive(X) <- (X > 0)`)
 - **`call` is lowercase** (builtin), not `Call` (which the original untested docs incorrectly used)
 - This means some doc snippets will be *corrected* during migration, not just verified — which is the whole point
-
-### Lessons from Phase 1 (builtins.md)
-
-These pitfalls came up repeatedly and will affect all later phases:
-
-**Variables vs names vs atoms:**
-- Variables are ALLCAPS (`X`, `BAG`) or start with `_`. Everything else is a predicate/functor name.
-- Names starting with uppercase but not all-caps are predicate names (`Partition`, `Test`), not variables.
-- Bare lowercase names are predicate calls, not atoms. Use quoted strings for atom values: `"runtime"` not `runtime`, `"my_key"` not `my_key`.
-
-**Boolean and goal syntax:**
-- `true`/`false` as bare names cause `LoadName` errors — they are Python values, not Clausal goals. Use `True`/`False` for boolean values in comparisons (`T == True`), and real goals like `(1 == 1)` where a goal is needed.
-- `not` after `<-` must be parenthesized: `Test("x") <- (not (goal))`.
-- Assignment uses `X is VALUE`, not `X = VALUE` (which is invalid syntax).
-
-**Predicates that don't match their doc names:**
-- `Catch/2` does not exist as a callable predicate — it's only `catch/3` (a compiler special form). The docs list it separately but it compiles to `catch(Goal, Error, true)`.
-- `atom/1` follows ISO Prolog: strings are NOT atoms. `atom("hello")` fails. Use `is_str` for string checks.
-- `compound/1`: lists are not compound terms. Use negation to test callability: `(not compound(42))`.
-
-**Operator syntax:**
-- CLP(B) uses `|` for OR, `&` for AND, `~` for NOT — not `+`/`*`/`-`.
-- DCG rules use `>>` not `-->`: `greeting >> (["hello"])`.
-
-**Runtime database:**
-- `assertz`/`retract` require a prior `-dynamic(Pred/arity)` directive.
-
-**Module predicates:**
-- Import paths: `log` (not `logging`), `date_time` (not `datetime`), `yaml_module` (not `yaml`).
-- `SetLevel` takes string names (`"warning"`), `GetLevel` returns uppercase strings (`"WARNING"`), not numeric levels.
-- `functor/3` works on atoms and lists, not arbitrary `f(1,2)` terms (the predicate must be in scope).
-- `arg/3` is 1-based on lists, not 0-based.
-
-### Lessons from Phase 2 (SciPy)
-
-**pymdownx.snippets section names:**
-- Section names **cannot start with a digit**. `1_d_transforms` silently fails to resolve; rename to `fft_1d_transforms`. Check all generated names.
-
-**Constants modules vs predicate modules:**
-- Some modules export **values**, not predicates. `scipy_constants` exports `SpeedOfLight` as a `Quantity` value, not a callable predicate. Test with `nonvar(SpeedOfLight)`, not `SpeedOfLight(C)`.
-
-**SciPy predicate argument patterns:**
-- `MakeCSR` takes CSR components `(DATA, INDICES, INDPTR, HANDLE)`, not a dense matrix.
-- `RootScalar` requires method and bracket: `RootScalar(FN, "bisect", [LO, HI], R)`.
-- `KMeans2` result key is `"centroid"` (singular), not `"centroids"`.
-- Spline/interpolation predicates need 5+ data points for proper fitting.
-- Many predicates use `ResultGet(R, KEY, VALUE)` to extract named results from dict-like result objects.
-
-**Phase 2 was entirely Kind B (display-only blocks):**
-All 189 SciPy skip blocks were display-only signatures/examples. None contained Test clauses. This meant `.txt` files + companion `.clausal` test files for everything, no Kind A `.clausal` snippet files needed.
-
-### Lessons from Phase 3 (Language core)
-
-**Indented code blocks inside admonitions:**
-Many docs use `??? example` or `??? info` admonitions with indented code blocks. The extraction script must handle fenced blocks that start with whitespace (e.g., `    ```clausal`). The `# skip` line may be at column 0 even when the block content is indented. When replacing these blocks, preserve the original indentation in the `--8<--` reference line.
-
-**Mixed Kind A + Kind B files:**
-`coroutining.md` had both display blocks (9) and executable blocks with Test clauses (5). These go to separate files: display → `.txt`, executable → `.clausal`. Both are referenced from the same markdown file.
-
-### Process tips (all phases)
-
-**Extraction must handle indented fences:**
-Use `stripped = line.strip()` and check `stripped.startswith('```clausal')` instead of `line.startswith(...)`. The `# skip` marker may be at column 0 even when the fence and content are indented (MkDocs admonitions). When writing the `--8<--` replacement, preserve the original indent.
-
-**Section name rules:**
-- Cannot start with a digit (pymdownx.snippets silently fails). Prefix with a category: `fft_1d_transforms`.
-- Use `_ex2`, `_ex3` suffixes for multiple blocks under the same heading, not `_2`, `_3` (avoids confusion with arity).
-- Derive from h3 heading first, fall back to h2.
-
-**Companion test strategy:**
-- Before writing tests from scratch, check `tests/fixtures/` for existing test files for that module. They show correct imports, predicate names, and argument patterns.
-- For value-exporting modules (like `scipy_constants`), use `nonvar(Name)` not `Name(V)`.
-- For predicates with `ResultGet`, check the existing tests for the correct key names — they're often surprising (`"centroid"` not `"centroids"`).
-
-**The actual skip counts in the plan are approximate.** The ratchet test's `_count_skip_blocks()` is the source of truth. Always measure the actual count after migration rather than relying on plan arithmetic.
 
 ### Step 3: Handle the two kinds of `# skip` blocks
 
@@ -136,7 +61,7 @@ These go in `.clausal` fixture files with named sections and Test clauses:
 # --8<-- [end:torch_import]
 
 # --8<-- [start:eq_example]
-test("doc: eq element-wise") <- (
+Test("doc: eq element-wise") <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([1.0, 0.0, 3.0], B),
     eq(A, B, C),
@@ -173,8 +98,8 @@ Pair with a companion `.clausal` test file that validates each predicate exists:
 ```clausal
 -import_from(py.torch, [tensor, shape])
 
-test("tensor exists") <- tensor([1.0], _)
-test("shape exists") <- (tensor([1.0, 2.0], T), shape(T, [2]))
+Test("tensor exists") <- tensor([1.0], _)
+Test("shape exists") <- (tensor([1.0, 2.0], T), shape(T, [2]))
 ```
 
 Signature `.txt` files: `tests/fixtures/docs/torch_sigs.txt`
@@ -232,10 +157,10 @@ user-defined predicates should be uppercase.
 #### Phase 0 — Infrastructure + Pilot (DONE)
 - `lists.md` (2 skips) — pilot migration, infrastructure setup
 
-#### Phase 1 — Builtins index (233 skips) (DONE)
+#### Phase 1 — Builtins index (233 skips)
 - `builtins.md` (233) — mostly predicate signatures
 
-#### Phase 2 — SciPy (189 skips) (DONE)
+#### Phase 2 — SciPy (186 skips)
 - `scipy_spatial.md` (28)
 - `scipy_signal.md` (26)
 - `scipy_sparse.md` (24)
@@ -251,14 +176,14 @@ user-defined predicates should be uppercase.
 - `scipy_cluster.md` (8)
 - `scipy_differentiate.md` (5)
 
-#### Phase 3 — Language core (81 skips) (DONE)
+#### Phase 3 — Language core (81 skips)
 - `syntax.md` (25)
 - `dicts_sets.md` (24)
 - `coroutining.md` (14)
 - `exceptions.md` (11)
 - `directives.md` (7)
 
-#### Phase 4 — Constraints (41 skips) (DONE)
+#### Phase 4 — Constraints (41 skips)
 - `clpq.md` (17)
 - `clpr.md` (9)
 - `constraints.md` (8)

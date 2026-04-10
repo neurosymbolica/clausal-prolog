@@ -1,0 +1,6 @@
+--8<-- [start:list_syntax]
+[]                     # empty list
+[1, 2, 3]             # three elements
+[HEAD, *TAIL]          # head/tail destructuring (like Prolog [H|T])
+[A, B, *REST]          # first two elements + rest
+--8<-- [end:list_syntax]

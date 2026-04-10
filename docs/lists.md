@@ -26,11 +26,7 @@ Test("not palindrome") <- (not palindrome([1, 2, 3]))
 ## List Syntax
 
 ```clausal
-# skip
-[]                     # empty list
-[1, 2, 3]             # three elements
-[HEAD, *TAIL]          # head/tail destructuring (like Prolog [H|T])
-[A, B, *REST]          # first two elements + rest
+--8<-- "tests/fixtures/docs/lists_sigs.txt:list_syntax"
 ```
 
 Clause heads can describe list structure using `[HEAD, *TAIL]`, relating the
@@ -326,16 +322,7 @@ rotate([FIRST, *REST], YS) <- (
 Using [Call/N](higher_order.md#calln) to apply a predicate argument:
 
 ```clausal
-# skip
-partition([], _, [], []),
-partition([X, *XS], PRED, [X, *YES], NO) <- (
-    Call(PRED, X),
-    partition(XS, PRED, YES, NO)
-),
-partition([X, *XS], PRED, YES, [X, *NO]) <- (
-    not Call(PRED, X),
-    partition(XS, PRED, YES, NO)
-)
+--8<-- "tests/fixtures/docs/lists_examples.clausal:partition_example"
 ```
 
 ### Sliding window
