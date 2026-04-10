@@ -1,4 +1,4 @@
-# Add _deep_deref to scipy wrappers
+# ~~Add _deep_deref to scipy wrappers~~ DONE
 
 `_deep_deref()` was introduced in `clausal/modules/py/torch.py` during
 Phase 1 to recursively unwrap Var objects inside lists and dicts before
@@ -25,7 +25,8 @@ Either:
 2. Extract `_pure()` and `_deep_deref()` into a shared utility (see
    `todo/shared_pure_helper.md`)
 
-## Priority
+## Resolution
 
-Low — scipy users typically pass plain values, not Clausal variables in
-containers. But it's a latent bug that will surface eventually.
+Fixed by extracting `_pure()` (with `_deep_deref`) into
+`clausal/modules/py/_helpers.py`. Both scipy_spatial.py and scipy_sparse.py
+now import the shared `_pure` which uses `_deep_deref` automatically.

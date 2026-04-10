@@ -1,4 +1,4 @@
-# Fix registry name inconsistency in docs and plans
+# ~~Fix registry name inconsistency in docs and plans~~ DONE
 
 The PyTorch Phase 3 implementation uses original PyTorch class names as
 string atoms: `"Linear"`, `"ReLU"`, `"CrossEntropyLoss"`, `"Adam"`.

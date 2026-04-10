@@ -1,4 +1,4 @@
-# Extract shared _pure() helper
+# ~~Extract shared _pure() helper~~ DONE
 
 `_pure()` is duplicated in 4 files, each with slightly different behaviour:
 
@@ -29,7 +29,9 @@ Extract into a shared module, e.g. `clausal/modules/py/_helpers.py`:
 
 Then each wrapper imports from `_helpers` instead of defining its own.
 
-## Priority
+## Resolution
 
-Medium — more wrappers means more copies. Fix before adding new
-library wrappers to avoid further divergence.
+Created `clausal/modules/py/_helpers.py` with shared `_pred`, `_deep_deref`,
+`_pure`, and `_fact_table_2`. Updated all wrapper files to import from
+`_helpers` instead of defining their own copies. `scipy_special.py` retains
+its custom `_pred` (wraps with `make_quantity_aware`).
