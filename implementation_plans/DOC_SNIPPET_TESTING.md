@@ -107,6 +107,23 @@ Many docs use `??? example` or `??? info` admonitions with indented code blocks.
 **Mixed Kind A + Kind B files:**
 `coroutining.md` had both display blocks (9) and executable blocks with Test clauses (5). These go to separate files: display → `.txt`, executable → `.clausal`. Both are referenced from the same markdown file.
 
+### Process tips (all phases)
+
+**Extraction must handle indented fences:**
+Use `stripped = line.strip()` and check `stripped.startswith('```clausal')` instead of `line.startswith(...)`. The `# skip` marker may be at column 0 even when the fence and content are indented (MkDocs admonitions). When writing the `--8<--` replacement, preserve the original indent.
+
+**Section name rules:**
+- Cannot start with a digit (pymdownx.snippets silently fails). Prefix with a category: `fft_1d_transforms`.
+- Use `_ex2`, `_ex3` suffixes for multiple blocks under the same heading, not `_2`, `_3` (avoids confusion with arity).
+- Derive from h3 heading first, fall back to h2.
+
+**Companion test strategy:**
+- Before writing tests from scratch, check `tests/fixtures/` for existing test files for that module. They show correct imports, predicate names, and argument patterns.
+- For value-exporting modules (like `scipy_constants`), use `nonvar(Name)` not `Name(V)`.
+- For predicates with `ResultGet`, check the existing tests for the correct key names — they're often surprising (`"centroid"` not `"centroids"`).
+
+**The actual skip counts in the plan are approximate.** The ratchet test's `_count_skip_blocks()` is the source of truth. Always measure the actual count after migration rather than relying on plan arithmetic.
+
 ### Step 3: Handle the two kinds of `# skip` blocks
 
 **Kind A — Executable code (examples, imports): ~490 blocks**
