@@ -7,15 +7,13 @@ The `scipy_interpolate` module wraps [`scipy.interpolate`](https://docs.scipy.or
 ## Import
 
 ```clausal
-# skip
--import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free, ...])
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_interpolate, [MakeSpline, EvalSpline, ...])
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:import_ex2"
 ```
 
 ---
@@ -73,87 +71,43 @@ Predicate names use full English words where scipy uses abbreviations:
 #### `MakeSpline` — recommended 1-D spline
 
 ```clausal
-# skip
-MakeSpline(X, Y, RESULT)
-MakeSpline(X, Y, K, RESULT)
-MakeSpline(X, Y, K, BC_TYPE, RESULT)
-    → scipy.interpolate.make_interp_spline(x, y, k=K, bc_type=BC_TYPE)
-    X:       1-D array of sample positions (strictly increasing)
-    Y:       1-D array of sample values
-    K:       spline degree (default 3 = cubic)
-    BC_TYPE: boundary conditions — None or list of (order, value) pairs
-    RESULT:  integer handle
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors"
 ```
 
 #### `MakeCubic` — cubic spline with configurable boundary conditions
 
 ```clausal
-# skip
-MakeCubic(X, Y, RESULT)
-MakeCubic(X, Y, BC_TYPE, RESULT)
-    → scipy.interpolate.CubicSpline(x, y, bc_type=BC_TYPE)
-    BC_TYPE: 'not-a-knot' (default), 'clamped', 'natural', 'periodic',
-             or a 2-tuple of (first_deriv, second_deriv) conditions
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex2"
 ```
 
 #### `MakePCHIP` — monotone cubic (good for noisy data)
 
 ```clausal
-# skip
-MakePCHIP(X, Y, RESULT)
-MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
-    → scipy.interpolate.PchipInterpolator(x, y, extrapolate=EXTRAPOLATE)
-    EXTRAPOLATE: True (default) / False / None
-    Preserves monotonicity; does not overshoot between data points.
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex3"
 ```
 
 #### `MakeAkima` — Akima 1-D interpolator
 
 ```clausal
-# skip
-MakeAkima(X, Y, RESULT)
-    → scipy.interpolate.Akima1DInterpolator(x, y)
-    Less sensitive to outliers than cubic splines.
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex4"
 ```
 
 #### `MakeLinear1D` — legacy piecewise interpolation
 
 ```clausal
-# skip
-MakeLinear1D(X, Y, RESULT)
-MakeLinear1D(X, Y, KIND, RESULT)
-    → scipy.interpolate.interp1d(x, y, kind=KIND)
-    KIND: 'linear' (default), 'nearest', 'nearest-up', 'zero',
-          'slinear', 'quadratic', 'cubic', 'previous', 'next'
-    Note: deprecated in SciPy ≥ 1.14; prefer MakeSpline for new code.
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex5"
 ```
 
 #### `MakeRegularGrid` — N-D interpolation on a regular grid
 
 ```clausal
-# skip
-MakeRegularGrid(POINTS, VALUES, RESULT)
-MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
-    → scipy.interpolate.RegularGridInterpolator(points, values, method=METHOD)
-    POINTS: tuple of 1-D arrays, one per dimension (lengths m1, m2, …)
-    VALUES: N-D array of shape (m1, m2, …)
-    METHOD: 'linear' (default), 'nearest', 'slinear', 'cubic', 'quintic'
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex6"
 ```
 
 #### `MakeRadialBasis` — radial basis function interpolation
 
 ```clausal
-# skip
-MakeRadialBasis(X, Y, RESULT)
-MakeRadialBasis(X, Y, FUNCTION, RESULT)
-MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
-    → scipy.interpolate.RBFInterpolator(x, y, kernel=FUNCTION, smoothing=SMOOTH)
-    X:        2-D array of sample points, shape (n_samples, n_dims)
-    Y:        1-D array of sample values, length n_samples
-    FUNCTION: kernel name — 'linear', 'thin_plate_spline', 'cubic', 'quintic',
-              'multiquadric' (default), 'inverse_multiquadric',
-              'inverse_quadratic', 'gaussian'
-    SMOOTH:   smoothing parameter (0 = exact interpolation, default 0)
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex7"
 ```
 
 ---
@@ -166,17 +120,7 @@ Works with handles from `MakeSpline`, `MakeCubic`,
 `MakePCHIP`, `MakeAkima`, and `MakeLinear1D`.
 
 ```clausal
-# skip
-EvalSpline(HANDLE, X, Y)                   # bidirectional (arity-3)
-    X ground, Y unbound → Y = spline(x)    # forward: evaluate at query point(s)
-    Y ground, X unbound → X = root-find    # backward: find x such that spline(x) = y
-    Both ground         → consistency check: succeeds iff spline(x) ≈ y
-
-EvalSpline(HANDLE, X, NU, RESULT)          # unidirectional (arity-4)
-    HANDLE: integer from any Make1D predicate
-    X:      query point(s)
-    NU:     derivative order (default 0 = function value)
-    RESULT: interpolated value(s) at X
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators"
 ```
 
 **Backward direction**: uses `scipy.optimize.brentq` root-finding over the spline's domain `[x_min, x_max]`. Succeeds with a single root for monotone splines; fails (no solution) when the target `Y` is outside the spline's range or the spline is not monotone over the whole domain. Use a monotone constructor (`MakePCHIP`) when the backward direction must be reliable.
@@ -204,23 +148,13 @@ SplineInvert(XS, YS, TARGET, X) <- (
 #### `EvalRegularGrid` — evaluate an N-D regular-grid interpolator
 
 ```clausal
-# skip
-EvalRegularGrid(HANDLE, XI, RESULT)
-EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
-    HANDLE: integer from MakeRegularGrid
-    XI:     array of query points, shape (..., ndim)
-    METHOD: override the interpolation method for this call
-    RESULT: array of interpolated values
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators_ex2"
 ```
 
 #### `EvalRadialBasis` — evaluate an RBF interpolator
 
 ```clausal
-# skip
-EvalRadialBasis(HANDLE, X, RESULT)
-    HANDLE: integer from MakeRadialBasis
-    X:      2-D array of query points, shape (n_query, n_dims)
-    RESULT: 1-D array of interpolated values
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators_ex3"
 ```
 
 ---
@@ -233,33 +167,19 @@ These predicates operate on handles from any of the 1-D spline constructors
 #### `SplineIntegral` — definite integral
 
 ```clausal
-# skip
-SplineIntegral(HANDLE, A, B, RESULT)
-    Compute the definite integral of the spline from A to B.
-    HANDLE: spline handle
-    A, B:   integration limits (scalars)
-    RESULT: scalar — value of the integral
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities"
 ```
 
 #### `SplineDerivative` — derivative spline
 
 ```clausal
-# skip
-SplineDerivative(HANDLE, RESULT)
-SplineDerivative(HANDLE, ORDER, RESULT)
-    Return a new HANDLE for the ORDER-th derivative of the spline.
-    ORDER:  derivative order (default 1)
-    RESULT: new integer handle — must be freed separately
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities_ex2"
 ```
 
 #### `SplineRoots` — zero-crossings
 
 ```clausal
-# skip
-SplineRoots(HANDLE, RESULT)
-    Return the real roots (zero-crossings) of the spline within its domain.
-    RESULT: Python list of root values
-    Note: only defined for CubicSpline; other spline types may raise an error.
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities_ex3"
 ```
 
 ---
@@ -267,10 +187,7 @@ SplineRoots(HANDLE, RESULT)
 ### Lifecycle: `Free`
 
 ```clausal
-# skip
-Free(HANDLE)
-    Release HANDLE from the handle registry.
-    Always succeeds, even if HANDLE is not registered.
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:lifecycle_free"
 ```
 
 Good practice: call `Free` when the interpolator is no longer needed to prevent unbounded registry growth.
@@ -282,15 +199,7 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 ### 1-D spline fitting and evaluation
 
 ```clausal
-# skip
--import_from(scipy_interpolate, [MakeCubic, EvalSpline, Free])
-
-# Fit a cubic spline to sample data and evaluate at new points.
-FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
-    MakeCubic(XS, YS, HANDLE),
-    EvalSpline(HANDLE, QUERY_XS, VALUES),
-    Free(HANDLE)
-)
+--8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_1d_fitting_and_evaluation"
 ```
 
 ### Spline integration and derivative

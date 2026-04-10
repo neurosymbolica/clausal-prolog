@@ -13,8 +13,7 @@ All predicates in this module are **compiler special forms** — they are compil
 ## freeze/2
 
 ```clausal
-# skip
-freeze(X, Goal)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2"
 ```
 
 Delay `Goal` until variable `X` is bound.
@@ -25,37 +24,11 @@ Delay `Goal` until variable `X` is bound.
 Multiple freezes on the same variable accumulate. All fire when the variable is bound. Backtracking undoes the attribute (the freeze is removed if the trail is unwound).
 
 ```clausal
-# skip
-# Guard: X must be positive when bound
-Guarded(X) <- (
-    freeze(X, X > 0),
-    X is 5
-)
-# succeeds — 5 > 0
-
-Rejected(X) <- (
-    freeze(X, X > 0),
-    X is -1
-)
-# fails — the unification X = -1 is rejected because -1 > 0 fails
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex2"
 ```
 
 ```clausal
-# skip
-# Deferred binding
-Deferred(Y) <- (
-    freeze(X, Y is X),
-    X is "hello"
-)
-# Y = "hello" — the frozen goal Y is X fires when X is bound
-
-# Multiple freezes on the same variable
-Multi(Y, Z) <- (
-    freeze(X, Y is X),
-    freeze(X, Z is X),
-    X is 42
-)
-# Y = 42, Z = 42
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex3"
 ```
 
 ??? info "Implementation"
@@ -68,8 +41,7 @@ Multi(Y, Z) <- (
 ## when/2
 
 ```clausal
-# skip
-when(Condition, Goal)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:when_2"
 ```
 
 Generalized coroutining: delay `Goal` until `Condition` is satisfied.
@@ -84,29 +56,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 | `(C1 ; C2)` | Disjunction: either C1 or C2 suffices |
 
 ```clausal
-# skip
-# equivalent to freeze(X, Goal)
-Test("when isbound") <- (
-    when(nonvar(X), Y is X),
-    X is 42,
-    Y is 42
-)
-
-# Conjunction: fire when both X and Y are bound
-Test("when conjunction") <- (
-    when((nonvar(X), nonvar(Y)), R is "done"),
-    X is 1,
-    Y is 2,
-    R is "done"
-)
-
-# ground: fire when term is fully ground
-Test("when ground") <- (
-    when(ground([X, Y]), R is "all ground"),
-    X is 1,
-    Y is 2,
-    R is "all ground"
-)
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:supported_conditions"
 ```
 
 ### How conditions decompose
@@ -126,8 +76,7 @@ Test("when ground") <- (
 ## setup_call_cleanup/3
 
 ```clausal
-# skip
-setup_call_cleanup(Setup, Call, Cleanup)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:setup_call_cleanup_3"
 ```
 
 Deterministic resource management — the logic programming equivalent of `try/finally`.
@@ -142,22 +91,7 @@ Deterministic resource management — the logic programming equivalent of `try/f
 If **Setup fails**, the whole goal fails and Cleanup does **not** run.
 
 ```clausal
-# skip
-# Basic pattern: open/use/close
-ProcessFile(PATH, RESULT) <- setup_call_cleanup(
-    HANDLE is ++open(PATH),
-    (DATA is ++HANDLE.read(), RESULT is DATA),
-    ++HANDLE.close()
-)
-
-# Call fails — Cleanup still runs, overall fails
-Test("scc call fails") <- (
-    not setup_call_cleanup(
-        S is 1,
-        in_(X, []),
-        C is 3
-    )
-)
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:setup_call_cleanup_3_ex2"
 ```
 
 ---
@@ -165,18 +99,13 @@ Test("scc call fails") <- (
 ## call_cleanup/2
 
 ```clausal
-# skip
-call_cleanup(Call, Cleanup)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2"
 ```
 
 Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
 
 ```clausal
-# skip
-SafeQuery(GOAL) <- call_cleanup(
-    call_goal(GOAL),
-    writeln("query finished")
-)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2_ex2"
 ```
 
 ---
@@ -184,8 +113,7 @@ SafeQuery(GOAL) <- call_cleanup(
 ## call_nth/2
 
 ```clausal
-# skip
-call_nth(+Goal, +N)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_nth_2"
 ```
 
 Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions are skipped.
@@ -195,17 +123,7 @@ Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions ar
 - Only the Nth solution's bindings are visible to the continuation.
 
 ```clausal
-# skip
-# Get the 3rd member
-Test("third") <- (
-    call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
-    X is 30
-)
-
-# N exceeds available solutions — fails
-Test("too few") <- (
-    not call_nth(in_(X, [1, 2]), 5)
-)
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:call_nth_2_ex2"
 ```
 
 ---
@@ -213,8 +131,7 @@ Test("too few") <- (
 ## count_all/2
 
 ```clausal
-# skip
-count_all(+Goal, -Count)
+--8<-- "tests/fixtures/docs/coroutining_sigs.txt:count_all_2"
 ```
 
 Count the number of solutions of `Goal` without collecting them. Unifies `Count` with the integer result.
@@ -222,24 +139,7 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
 
 ```clausal
-# skip
-# Count members
-Test("count") <- (
-    count_all(in_(X, ["a", "b", "c", "d"]), N),
-    N is 4
-)
-
-# No solutions — 0
-Test("empty") <- (
-    count_all(in_(X, []), N),
-    N is 0
-)
-
-# With filter
-Test("filtered") <- (
-    count_all((in_(X, [1, 2, 3, 4, 5]), X > 3), N),
-    N is 2
-)
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:count_all_2_ex2"
 ```
 
 ---
@@ -249,42 +149,7 @@ Test("filtered") <- (
 All Phase 1 predicates are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
 
 ```clausal
-# skip
-# findall wrapping call_nth
-Test("findall+callnth") <- (
-    findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
-    BAG is [20]
-)
-
-# catch wrapping call_nth with bad N
-Test("catch+callnth") <- (
-    catch(
-        call_nth(in_(X, [1, 2, 3]), 0),
-        _,
-        R is "caught"
-    ),
-    R is "caught"
-)
-
-# freeze inside findall
-Test("findall+freeze") <- (
-    findall(
-        Y,
-        (freeze(X, Y is X), X is 99),
-        BAG
-    ),
-    BAG is [99]
-)
-
-# count_all inside findall
-Test("findall+countall") <- (
-    findall(
-        N,
-        count_all(in_(X, ["a", "b", "c"]), N),
-        BAG
-    ),
-    BAG is [3]
-)
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:nesting_inside_meta_predicates"
 ```
 
 ---

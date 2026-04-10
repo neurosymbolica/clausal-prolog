@@ -6,15 +6,13 @@ Provides spatial distance functions and spatial data-structure predicates from
 ## Import
 
 ```clausal
-# skip
--import_from(scipy_spatial, [CrossDistance, PairwiseDistance, MakeKdTree, ...])
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:import"
 ```
 
 or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_spatial, [CrossDistance, ...])
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:import_ex2"
 ```
 
 ---
@@ -37,10 +35,7 @@ or via the canonical `py.*` path:
 ### CrossDistance
 
 ```clausal
-# skip
-CrossDistance(XA, XB, RESULT)
-CrossDistance(XA, XB, METRIC, RESULT)
-CrossDistance(XA, XB, METRIC, KWARGS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance"
 ```
 
 Compute the distance between each pair of rows from `XA` and `XB`.
@@ -52,18 +47,13 @@ Wraps `scipy.spatial.distance.cdist`.
 - `RESULT`: `(m × n)` distance matrix
 
 ```clausal
-# skip
-CrossDistance(++([[0.0, 0.0]]), ++([[3.0, 4.0]]), 'euclidean', D),
-V is ++(float(D[0, 0]))   % V = 5.0
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance_ex2"
 ```
 
 ### PairwiseDistance
 
 ```clausal
-# skip
-PairwiseDistance(X, RESULT)
-PairwiseDistance(X, METRIC, RESULT)
-PairwiseDistance(X, METRIC, KWARGS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance"
 ```
 
 Compute pairwise distances between all rows within a single array `X`.
@@ -73,32 +63,26 @@ Wraps `scipy.spatial.distance.pdist`.
 - `RESULT`: condensed distance vector of length `n*(n-1)/2`
 
 ```clausal
-# skip
-PairwiseDistance(++([[0.0,0.0],[3.0,4.0]]), 'euclidean', D),
-V is ++(float(D[0]))   % V = 5.0
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance_ex2"
 ```
 
 ### SquareForm
 
 ```clausal
-# skip
-SquareForm(X, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform"
 ```
 
 Convert between a condensed distance vector and a square distance matrix.
 Wraps `scipy.spatial.distance.squareform`.
 
 ```clausal
-# skip
-PairwiseDistance(PTS, CONDENSED),
-SquareForm(CONDENSED, SQUARE)   % SQUARE is the full n×n matrix
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform_ex2"
 ```
 
 ### PointDistance
 
 ```clausal
-# skip
-PointDistance(METRIC, X, Y, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pointdistance"
 ```
 
 Compute the scalar distance between two individual points using the named
@@ -109,8 +93,7 @@ metric.
 - `RESULT`: float scalar
 
 ```clausal
-# skip
-PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pointdistance_ex2"
 ```
 
 ---
@@ -120,9 +103,7 @@ PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
 ### MakeKdTree
 
 ```clausal
-# skip
-MakeKdTree(DATA, RESULT)
-MakeKdTree(DATA, LEAFSIZE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makekdtree"
 ```
 
 Build a KD-tree for fast nearest-neighbour queries.
@@ -135,9 +116,7 @@ Wraps `scipy.spatial.KDTree`.
 ### KdTreeQuery
 
 ```clausal
-# skip
-KdTreeQuery(HANDLE, X, RESULT)
-KdTreeQuery(HANDLE, X, K, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery"
 ```
 
 Query the KD-tree for the `K` nearest neighbours of each point in `X`.
@@ -147,17 +126,13 @@ Query the KD-tree for the `K` nearest neighbours of each point in `X`.
 - `RESULT`: dict with keys `'distances'` and `'indices'`
 
 ```clausal
-# skip
-MakeKdTree(DATA, KD),
-KdTreeQuery(KD, QUERY, 3, R),
-NEAREST is ++(R['indices'])
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery_ex2"
 ```
 
 ### KdTreeQueryBall
 
 ```clausal
-# skip
-KdTreeQueryBall(HANDLE, X, RADIUS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequeryball"
 ```
 
 Find all points within `RADIUS` of each query point.
@@ -167,8 +142,7 @@ Find all points within `RADIUS` of each query point.
 ### KdTreeQueryPairs
 
 ```clausal
-# skip
-KdTreeQueryPairs(HANDLE, RADIUS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequerypairs"
 ```
 
 Find all pairs of points in the tree within `RADIUS` of each other.
@@ -182,8 +156,7 @@ Find all pairs of points in the tree within `RADIUS` of each other.
 ### MakeConvexHull
 
 ```clausal
-# skip
-MakeConvexHull(POINTS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makeconvexhull"
 ```
 
 Compute the convex hull of a set of points.
@@ -195,8 +168,7 @@ Wraps `scipy.spatial.ConvexHull`.
 ### ConvexHullAttr
 
 ```clausal
-# skip
-ConvexHullAttr(HANDLE, ATTR, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:convexhullattr"
 ```
 
 Retrieve an attribute of the `ConvexHull` object.
@@ -212,10 +184,7 @@ Retrieve an attribute of the `ConvexHull` object.
 | `'coplanar'` | int array | Coplanar points not on hull |
 
 ```clausal
-# skip
-MakeConvexHull(PTS, H),
-ConvexHullAttr(H, 'volume', VOL),
-Free(H)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:convexhullattr_ex2"
 ```
 
 ---
@@ -225,8 +194,7 @@ Free(H)
 ### MakeDelaunay
 
 ```clausal
-# skip
-MakeDelaunay(POINTS, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makedelaunay"
 ```
 
 Compute the Delaunay triangulation.
@@ -237,9 +205,7 @@ Wraps `scipy.spatial.Delaunay`.
 ### DelaunayFindSimplex
 
 ```clausal
-# skip
-DelaunayFindSimplex(HANDLE, XI, RESULT)
-DelaunayFindSimplex(HANDLE, XI, BRUTEFORCE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex"
 ```
 
 Find the simplex containing each point in `XI`.
@@ -249,10 +215,7 @@ Find the simplex containing each point in `XI`.
 - `RESULT`: int array; `-1` for points outside the triangulation
 
 ```clausal
-# skip
-MakeDelaunay(PTS, H),
-DelaunayFindSimplex(H, ++([[0.5, 0.3]]), IDX),
-++(int(IDX[0]) >= 0)   % point is inside
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex_ex2"
 ```
 
 ---
@@ -264,8 +227,7 @@ Wraps `scipy.spatial.transform.Rotation`.
 ### MakeRotation
 
 ```clausal
-# skip
-MakeRotation(METHOD, DATA, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makerotation"
 ```
 
 Construct a rotation from a given representation.
@@ -283,9 +245,7 @@ Construct a rotation from a given representation.
 ### RotationApply
 
 ```clausal
-# skip
-RotationApply(HANDLE, VECTORS, RESULT)
-RotationApply(HANDLE, VECTORS, INVERSE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationapply"
 ```
 
 Apply the rotation to an array of 3-D vectors.
@@ -296,9 +256,7 @@ Apply the rotation to an array of 3-D vectors.
 ### RotationAs
 
 ```clausal
-# skip
-RotationAs(HANDLE, FORM, RESULT)
-RotationAs(HANDLE, FORM, SEQ, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationas"
 ```
 
 Export the rotation to a different representation.
@@ -309,8 +267,7 @@ Export the rotation to a different representation.
 ### RotationCompose
 
 ```clausal
-# skip
-RotationCompose(HANDLE_A, HANDLE_B, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationcompose"
 ```
 
 Compose two rotations: `HANDLE_B` is applied first, then `HANDLE_A`.
@@ -319,8 +276,7 @@ Returns a new handle.
 ### RotationInverse
 
 ```clausal
-# skip
-RotationInverse(HANDLE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationinverse"
 ```
 
 Return the inverse of the rotation as a new handle.
@@ -330,8 +286,7 @@ Return the inverse of the rotation as a new handle.
 ## Lifecycle — Free
 
 ```clausal
-# skip
-Free(HANDLE)
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:lifecycle"
 ```
 
 Release the object registered under `HANDLE`. Always succeeds, even if the
@@ -342,22 +297,7 @@ handle is unknown or already freed.
 ## Complete Example
 
 ```clausal
-# skip
--import_from(scipy_spatial, [CrossDistance, MakeKdTree, KdTreeQuery,
-                              MakeRotation, RotationApply, RotationAs, Free])
-
-# Find the two nearest neighbours of each point
-nearest_two(POINTS, INDICES) <- (
-    MakeKdTree(POINTS, KD),
-    KdTreeQuery(KD, POINTS, 2, R),
-    INDICES is ++(R['indices'][:, 1]),
-    Free(KD))
-
-# Rotate a batch of vectors by 90 degrees around Z
-rotate_z90(VECTORS, ROTATED) <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 1.5707963267948966]), ROT),
-    RotationApply(ROT, VECTORS, ROTATED),
-    Free(ROT))
+--8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:complete_example"
 ```
 
 ---

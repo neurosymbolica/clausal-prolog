@@ -1,0 +1,100 @@
+# === Dict builtins ===
+
+--8<-- [start:is_dict_1]
+is_dict(+Term)
+--8<-- [end:is_dict_1]
+
+--8<-- [start:dict_size_2]
+dict_size(+Dict, -N)
+--8<-- [end:dict_size_2]
+
+--8<-- [start:dict_keys_2]
+dict_keys(+Dict, -Keys)
+--8<-- [end:dict_keys_2]
+
+--8<-- [start:dict_values_2]
+dict_values(+Dict, -Values)
+--8<-- [end:dict_values_2]
+
+--8<-- [start:dict_pairs_2]
+dict_pairs(?Dict, ?Pairs)
+--8<-- [end:dict_pairs_2]
+
+--8<-- [start:dict_get_3]
+dict_get(+Key, +Dict, ?Value)
+--8<-- [end:dict_get_3]
+
+--8<-- [start:dict_put_4]
+dict_put(+Key, +Value, +OldDict, -NewDict)
+--8<-- [end:dict_put_4]
+
+--8<-- [start:dict_put_pairs_3]
+dict_put_pairs(+Pairs, +OldDict, -NewDict)
+--8<-- [end:dict_put_pairs_3]
+
+--8<-- [start:dict_remove_3]
+dict_remove(+Key, +OldDict, -NewDict)
+--8<-- [end:dict_remove_3]
+
+--8<-- [start:dict_merge_3]
+dict_merge(+D1, +D2, -Merged)
+--8<-- [end:dict_merge_3]
+
+--8<-- [start:gen_dict_3]
+gen_dict(?Key, +Dict, ?Value)
+--8<-- [end:gen_dict_3]
+
+--8<-- [start:sub_dict_2]
+sub_dict(+Pattern, +Dict)
+--8<-- [end:sub_dict_2]
+
+
+# === Set builtins ===
+
+--8<-- [start:is_set_1]
+is_set(+Term)
+--8<-- [end:is_set_1]
+
+--8<-- [start:set_size_2]
+set_size(+Set, -N)
+--8<-- [end:set_size_2]
+
+--8<-- [start:set_list_2]
+set_list(?Set, ?List)
+--8<-- [end:set_list_2]
+
+--8<-- [start:set_union_3]
+set_union(+S1, +S2, -union)
+--8<-- [end:set_union_3]
+
+--8<-- [start:set_intersection_3]
+set_intersection(+S1, +S2, -Inter)
+--8<-- [end:set_intersection_3]
+
+--8<-- [start:set_subtract_3]
+set_subtract(+S1, +S2, -Diff)
+--8<-- [end:set_subtract_3]
+
+--8<-- [start:set_sym_diff_3]
+set_sym_diff(+S1, +S2, -Sym)
+--8<-- [end:set_sym_diff_3]
+
+--8<-- [start:set_subset_2]
+set_subset(+Sub, +Super)
+--8<-- [end:set_subset_2]
+
+--8<-- [start:set_disjoint_2]
+set_disjoint(+S1, +S2)
+--8<-- [end:set_disjoint_2]
+
+--8<-- [start:set_add_3]
+set_add(+Elem, +OldSet, -NewSet)
+--8<-- [end:set_add_3]
+
+--8<-- [start:set_remove_3]
+set_remove(+Elem, +OldSet, -NewSet)
+--8<-- [end:set_remove_3]
+
+--8<-- [start:gen_set_2]
+gen_set(?Elem, +Set)
+--8<-- [end:gen_set_2]

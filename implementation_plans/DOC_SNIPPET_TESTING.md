@@ -81,6 +81,32 @@ These pitfalls came up repeatedly and will affect all later phases:
 - `functor/3` works on atoms and lists, not arbitrary `f(1,2)` terms (the predicate must be in scope).
 - `arg/3` is 1-based on lists, not 0-based.
 
+### Lessons from Phase 2 (SciPy)
+
+**pymdownx.snippets section names:**
+- Section names **cannot start with a digit**. `1_d_transforms` silently fails to resolve; rename to `fft_1d_transforms`. Check all generated names.
+
+**Constants modules vs predicate modules:**
+- Some modules export **values**, not predicates. `scipy_constants` exports `SpeedOfLight` as a `Quantity` value, not a callable predicate. Test with `nonvar(SpeedOfLight)`, not `SpeedOfLight(C)`.
+
+**SciPy predicate argument patterns:**
+- `MakeCSR` takes CSR components `(DATA, INDICES, INDPTR, HANDLE)`, not a dense matrix.
+- `RootScalar` requires method and bracket: `RootScalar(FN, "bisect", [LO, HI], R)`.
+- `KMeans2` result key is `"centroid"` (singular), not `"centroids"`.
+- Spline/interpolation predicates need 5+ data points for proper fitting.
+- Many predicates use `ResultGet(R, KEY, VALUE)` to extract named results from dict-like result objects.
+
+**Phase 2 was entirely Kind B (display-only blocks):**
+All 189 SciPy skip blocks were display-only signatures/examples. None contained Test clauses. This meant `.txt` files + companion `.clausal` test files for everything, no Kind A `.clausal` snippet files needed.
+
+### Lessons from Phase 3 (Language core)
+
+**Indented code blocks inside admonitions:**
+Many docs use `??? example` or `??? info` admonitions with indented code blocks. The extraction script must handle fenced blocks that start with whitespace (e.g., `    ```clausal`). The `# skip` line may be at column 0 even when the block content is indented. When replacing these blocks, preserve the original indentation in the `--8<--` reference line.
+
+**Mixed Kind A + Kind B files:**
+`coroutining.md` had both display blocks (9) and executable blocks with Test clauses (5). These go to separate files: display → `.txt`, executable → `.clausal`. Both are referenced from the same markdown file.
+
 ### Step 3: Handle the two kinds of `# skip` blocks
 
 **Kind A — Executable code (examples, imports): ~490 blocks**
@@ -192,7 +218,7 @@ user-defined predicates should be uppercase.
 #### Phase 1 — Builtins index (233 skips) (DONE)
 - `builtins.md` (233) — mostly predicate signatures
 
-#### Phase 2 — SciPy (186 skips)
+#### Phase 2 — SciPy (189 skips) (DONE)
 - `scipy_spatial.md` (28)
 - `scipy_signal.md` (26)
 - `scipy_sparse.md` (24)
@@ -208,7 +234,7 @@ user-defined predicates should be uppercase.
 - `scipy_cluster.md` (8)
 - `scipy_differentiate.md` (5)
 
-#### Phase 3 — Language core (81 skips)
+#### Phase 3 — Language core (81 skips) (DONE)
 - `syntax.md` (25)
 - `dicts_sets.md` (24)
 - `coroutining.md` (14)

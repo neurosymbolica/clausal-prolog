@@ -7,15 +7,13 @@ The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/refe
 ## Import
 
 ```clausal
-# skip
--import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_fft, [FFTransform, RealFFT, ...])
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:import_ex2"
 ```
 
 ---
@@ -39,9 +37,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 | `FFTShift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
 ```clausal
-# skip
-FFTransform(++(np.array([1,0,0,0])), RESULT),
-# RESULT is unified with the complex spectrum array
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:bidirectionality"
 ```
 
 ---
@@ -82,16 +78,7 @@ All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, et
 ### 1-D transforms
 
 ```clausal
-# skip
-FFTransform(X, Y)                  # bidirectional
-    X ground, Y unbound → Y = fft(x)   # forward DFT
-    Y ground, X unbound → X = ifft(y)  # backward (inverse DFT)
-    Both ground         → consistency check: succeeds iff fft(x) ≈ y
-    X:      real or complex 1-D array
-    Y:      complex array of length len(X)
-
-FFTransform(X, N, Y)               # bidirectional; N always ground
-    N: output length (zero-pads or truncates).
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_1d_transforms"
 ```
 
 Example — frequency analysis of a sine wave:
@@ -111,16 +98,7 @@ FrequencySpectrum(SIGNAL, FREQS, SPECTRUM) <- (
 ### 2-D transforms
 
 ```clausal
-# skip
-FFTransform2D(X, Y)                # bidirectional
-    X ground, Y unbound → Y = fft2(x)   # 2-D forward DFT over last two axes
-    Y ground, X unbound → X = ifft2(y)  # backward (2-D inverse DFT)
-    Both ground         → consistency check: succeeds iff fft2(x) ≈ y
-    X:      2-D real or complex array
-    Y:      complex array of the same shape
-
-FFTransform2D(X, S, Y)             # bidirectional; S always ground
-    S: output shape as (rows, cols); zero-pads or truncates X to this shape.
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_2d_transforms"
 ```
 
 Example — round-trip:
@@ -139,15 +117,7 @@ RoundTrip2D(IMAGE, RECOVERED) <- (
 ### N-D transforms
 
 ```clausal
-# skip
-FFTransformND(X, Y)                # bidirectional
-    X ground, Y unbound → Y = fftn(x)   # N-D forward DFT over all axes
-    Y ground, X unbound → X = ifftn(y)  # backward (N-D inverse DFT)
-    Both ground         → consistency check: succeeds iff fftn(x) ≈ y
-    Y:      complex array of the same shape as X
-
-FFTransformND(X, S, Y)             # bidirectional; S always ground
-    S: list of output lengths, one per axis.
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_nd_transforms"
 ```
 
 ---
@@ -157,15 +127,7 @@ FFTransformND(X, S, Y)             # bidirectional; S always ground
 `RealFFT` exploits conjugate symmetry to halve storage for real signals. The output of `RealFFT` has length `N//2 + 1`.
 
 ```clausal
-# skip
-RealFFT(X, Y)                      # bidirectional
-    X ground, Y unbound → Y = rfft(x)   forward: complex half-spectrum of length N//2 + 1
-    Y ground, X unbound → X = irfft(y)  backward: real array of length 2*(len(Y)-1)
-    Both ground         → consistency check: succeeds iff rfft(x) ≈ y
-    Note: assumes even-length original signal when going backward without N.
-
-RealFFT(X, N, Y)                   # bidirectional; N always ground
-    N: explicit length for unambiguous round-trips of odd-length originals.
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:real_input_transforms"
 ```
 
 Example — filter a 1-D signal in the frequency domain:
@@ -187,21 +149,7 @@ LowPassFilter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
 ### Cosine and sine transforms
 
 ```clausal
-# skip
-DiscreteCosineTransform(X, Y)              # bidirectional
-    X ground, Y unbound → Y = dct(x)   (type-2 default)
-    Y ground, X unbound → X = idct(y)
-    Both ground         → consistency check: succeeds iff dct(x) ≈ y
-
-DiscreteCosineTransform(X, TYPE, Y)        # bidirectional; TYPE always ground
-    TYPE: integer 1–4 selecting the DCT variant.
-
-DiscreteSineTransform(X, Y)                # bidirectional
-    X ground, Y unbound → Y = dst(x)   (type-2 default)
-    Y ground, X unbound → X = idst(y)
-    Both ground         → consistency check: succeeds iff dst(x) ≈ y
-
-DiscreteSineTransform(X, TYPE, Y)          # bidirectional; TYPE always ground
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:cosine_and_sine_transforms"
 ```
 
 DCT types:
@@ -218,28 +166,7 @@ DCT types:
 ### Utility
 
 ```clausal
-# skip
-FFTFrequencies(N, RESULT)
-    DFT sample frequencies for a length-N transform with unit sample spacing.
-    RESULT: real array of length N
-    Layout: [0, 1/N, 2/N, ..., -k/N, ..., -1/N]
-            where k = N//2
-
-FFTFrequencies(N, D, RESULT)
-    D: sample spacing in seconds (reciprocal of sample rate).
-       Frequencies are in cycles per unit time (Hz if D is in seconds).
-
-RealFFTFrequencies(N, RESULT)
-    Sample frequencies for a length-N real FFT output.
-    RESULT: real array of length N//2 + 1 (all non-negative)
-
-RealFFTFrequencies(N, D, RESULT)
-    D: sample spacing.
-
-FFTShift(X, Y)                     # bidirectional
-    X ground, Y unbound → Y = fftshift(x)   (DC to centre)
-    Y ground, X unbound → X = ifftshift(y)  (DC back to index 0)
-    Both ground         → consistency check: succeeds iff fftshift(x) ≈ y
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:utility"
 ```
 
 Example — plot-ready spectrum:
@@ -263,31 +190,13 @@ CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 ### Round-trip: 1-D signal
 
 ```clausal
-# skip
--import_from(scipy_fft, [FFTransform])
-
-TestRoundTrip(SIGNAL) <- (
-    FFTransform(SIGNAL, SPECTRUM),
-    FFTransform(RECOVERED, SPECTRUM),
-    % check first element recovered correctly
-    ERR is ++(abs(float(RECOVERED[0].real) - float(SIGNAL[0]))),
-    ERR < 1e-10
-)
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:round_trip_1_d_signal"
 ```
 
 ### Convolution via FFT
 
 ```clausal
-# skip
--import_from(scipy_fft, [FFTransform])
-
-# Linear convolution of two equal-length signals (circular; pad as needed)
-FFTConvolve(A, B, RESULT) <- (
-    FFTransform(A, FA),
-    FFTransform(B, FB),
-    PRODUCT is ++(FA * FB),
-    FFTransform(RESULT, ++PRODUCT)
-)
+--8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:convolution_via_fft"
 ```
 
 ### Image spectrum (2-D)

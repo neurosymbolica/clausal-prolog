@@ -1,0 +1,84 @@
+# === Syntax ===
+
+--8<-- [start:throw_1]
+Throw(error(type_error(integer, foo), context))
+--8<-- [end:throw_1]
+
+--8<-- [start:catch_2]
+Catch(Goal, ERROR)
+--8<-- [end:catch_2]
+
+--8<-- [start:catch_2_ex2]
+# Catch any exception
+Catch(Goal, ERROR)
+
+# Catch a specific Python exception by class
+Catch(++(some_python_call()), ValueError(MSG))
+
+# Catch a structured logic error
+Catch(Goal, error(type_error(_, _), _))
+--8<-- [end:catch_2_ex2]
+
+--8<-- [start:catch_recover_3]
+catch_recover(Goal, ERROR, Recovery)
+--8<-- [end:catch_recover_3]
+
+--8<-- [start:catch_3]
+catch(
+    ++(some_python_call()),
+    ValueError(MSG),
+    handle_error(MSG)
+)
+--8<-- [end:catch_3]
+
+
+# === Unified Exception Representation ===
+
+--8<-- [start:unified_exception_representation]
+# Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
+# Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
+
+Catch(Goal, ERROR)          # always catches, binds ERROR
+catch_recover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
+catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
+--8<-- [end:unified_exception_representation]
+
+# === Additional (indented blocks) ===
+
+--8<-- [start:logicexception]
+check_int(X, R) <- catch(
+    (X > 0, R is "positive"),
+    error(type_error(_, _), _),
+    R is "not a number"
+)
+--8<-- [end:logicexception]
+
+--8<-- [start:logicexception_ex2]
+safe_parse(S, R) <- (
+    Catch(++(int(S)), ValueError(_)),
+    R is "parse error"
+)
+--8<-- [end:logicexception_ex2]
+
+--8<-- [start:logicexception_ex3]
+logged_op(X, Y, R) <- catch_recover(
+    (R == X / Y),
+    ERR,
+    (write(ERR), R is "error")
+)
+--8<-- [end:logicexception_ex3]
+
+--8<-- [start:logicexception_ex4]
+logged_div(X, Y, R) <- catch(
+    (R == X / Y),
+    E,
+    (write(E), Throw(E))
+)
+--8<-- [end:logicexception_ex4]
+
+--8<-- [start:logicexception_ex5]
+safe_run(GOAL, R) <- (
+    Catch(call_goal(GOAL), _),
+    R is "ok"
+)
+--8<-- [end:logicexception_ex5]

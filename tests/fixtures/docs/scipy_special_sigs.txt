@@ -1,0 +1,205 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(scipy_special, [Gamma, Erf, BesselJ, EllipticK, ...])
+--8<-- [end:import]
+
+--8<-- [start:import_ex2]
+-import_from(py.scipy_special, [Gamma, Erf, BesselJ, ...])
+--8<-- [end:import_ex2]
+
+
+# === Predicate catalogue ===
+
+--8<-- [start:gamma_and_related]
+Gamma(X, RESULT)
+    RESULT = Γ(x)
+
+GammaLog(X, RESULT)
+    RESULT = log Γ(x)   # more numerically stable than log(Gamma(x))
+
+GammaSign(X, RESULT)
+    RESULT = sign of Γ(x)   # +1 or -1
+
+BetaLog(A, B, RESULT)
+    RESULT = log B(a,b) = log Γ(a) + log Γ(b) − log Γ(a+b)
+
+Digamma(X, RESULT)
+    RESULT = ψ(x) = Γ'(x) / Γ(x)   # logarithmic derivative of gamma
+
+Polygamma(N, X, RESULT)
+    RESULT = ψ^(n)(x)   # N-th derivative of digamma
+
+Factorial(N, RESULT)                  # exact=False (float)
+Factorial(N, EXACT, RESULT)           # EXACT=True returns an integer
+
+Comb(N, K, RESULT)                    # C(n,k), inexact
+Comb(N, K, EXACT, RESULT)             # EXACT=True returns an integer
+Comb(N, K, EXACT, REPETITION, RESULT) # with-repetition variant
+
+Perm(N, K, RESULT)                    # P(n,k), inexact
+Perm(N, K, EXACT, RESULT)             # EXACT=True returns an integer
+--8<-- [end:gamma_and_related]
+
+--8<-- [start:error_functions]
+Erf(X, Y)
+    X ground, Y unbound → Y = erf(x)
+    Y ground, X unbound → X = erfinv(y)   # inverse direction
+    Both ground         → consistency check: succeeds iff erf(x) ≈ y
+
+ErfComplement(X, Y)
+    X ground, Y unbound → Y = erfc(x)
+    Y ground, X unbound → X = erfcinv(y)
+    Both ground         → consistency check: succeeds iff erfc(x) ≈ y
+
+NormalCdf(X, P)
+    X ground, P unbound → P = Φ(x)   # standard normal CDF
+    P ground, X unbound → X = Φ⁻¹(p) # probit / quantile function
+    Both ground         → consistency check: succeeds iff Φ(x) ≈ p
+--8<-- [end:error_functions]
+
+--8<-- [start:error_functions_ex2]
+# Forward: P = Φ(1.96) ≈ 0.975
+NormalCdf(1.96, P)
+
+# Backward: X = Φ⁻¹(0.975) ≈ 1.96
+NormalCdf(X, 0.975)
+
+# Round-trip
+CheckQuantile(X) <- (
+    NormalCdf(X, P),
+    NormalCdf(X2, P),
+    DIFF is ++(abs(float(X2) - float(X))),
+    DIFF < 1e-9
+)
+--8<-- [end:error_functions_ex2]
+
+--8<-- [start:incomplete_gamma_beta_and_box_cox]
+GammaInc(A, X, Y)
+    A fixed (always ground).
+    X ground, Y unbound → Y = gammainc(a, x)    # regularised lower incomplete gamma
+    Y ground, X unbound → X = gammaincinv(a, y)
+    Both ground         → consistency check: succeeds iff gammainc(a, x) ≈ y
+
+GammaIncComplement(A, X, Y)
+    A fixed.
+    X ground, Y unbound → Y = gammaincc(a, x)   # upper tail
+    Y ground, X unbound → X = gammainccinv(a, y)
+    Both ground         → consistency check: succeeds iff gammaincc(a, x) ≈ y
+
+BetaInc(A, B, X, Y)
+    A, B fixed.
+    X ground, Y unbound → Y = betainc(a, b, x)
+    Y ground, X unbound → X = betaincinv(a, b, y)
+    Both ground         → consistency check: succeeds iff betainc(a, b, x) ≈ y
+
+Boxcox(Lambda, X, Y)
+    Lambda fixed (always first argument).
+    X ground, Y unbound → Y = boxcox(x, lambda)
+    Y ground, X unbound → X = inv_boxcox(y, lambda)
+    Both ground         → consistency check: succeeds iff boxcox(x, lambda) ≈ y
+
+Boxcox1p(Lambda, X, Y)
+    Lambda fixed (always first argument).
+    X ground, Y unbound → Y = boxcox1p(x, lambda)
+    Y ground, X unbound → X = inv_boxcox1p(y, lambda)
+    Both ground         → consistency check: succeeds iff boxcox1p(x, lambda) ≈ y
+--8<-- [end:incomplete_gamma_beta_and_box_cox]
+
+--8<-- [start:bessel_functions]
+BesselJ(N, X, RESULT)       # J_n(x), first kind, integer order
+BesselY(N, X, RESULT)       # Y_n(x), second kind, integer order
+
+BesselJReal(V, Z, RESULT)   # J_v(z), first kind, real order
+BesselYReal(V, Z, RESULT)   # Y_v(z), second kind, real order
+
+BesselK(N, X, RESULT)       # K_n(x), modified Bessel of second kind
+BesselI(V, X, RESULT)       # I_v(x), modified Bessel of first kind
+
+BesselJZeros(N, NT, RESULT)
+    RESULT: array of first NT zeros of J_n
+
+SphericalBesselJ(N, Z, RESULT)              # j_n(z), derivative=False
+SphericalBesselJ(N, Z, DERIVATIVE, RESULT)  # derivative=DERIVATIVE
+--8<-- [end:bessel_functions]
+
+--8<-- [start:elliptic_integrals]
+EllipticK(M, RESULT)
+    RESULT = K(m) = ∫₀^{π/2} (1 − m sin²θ)^{−½} dθ   # complete, first kind
+
+EllipticE(M, RESULT)
+    RESULT = E(m) = ∫₀^{π/2} (1 − m sin²θ)^{½} dθ    # complete, second kind
+
+EllipticKIncomplete(PHI, M, RESULT)
+    RESULT = K(φ, m)   # incomplete, first kind
+
+EllipticEIncomplete(PHI, M, RESULT)
+    RESULT = E(φ, m)   # incomplete, second kind
+--8<-- [end:elliptic_integrals]
+
+--8<-- [start:hypergeometric_functions]
+Hypergeometric1F1(A, B, X, RESULT)
+    RESULT = ₁F₁(a; b; x)   # confluent / Kummer's function
+
+Hypergeometric2F1(A, B, C, Z, RESULT)
+    RESULT = ₂F₁(a, b; c; z)   # Gauss hypergeometric function
+
+Hypergeometric0F1(B, X, RESULT)
+    RESULT = ₀F₁(; b; x)
+--8<-- [end:hypergeometric_functions]
+
+--8<-- [start:information_theory]
+Entr(X, RESULT)
+    RESULT = −x log(x)   # entropy element-wise; 0 when x=0
+
+KlDivergence(X, Y, RESULT)
+    RESULT = x log(x/y) − x + y   # Kullback-Leibler element-wise
+
+LogSumExp(A, RESULT)                        # log(sum(exp(a)))
+LogSumExp(A, AXIS, B, KEEPDIMS, RESULT)     # with axis, weights, keepdims
+--8<-- [end:information_theory]
+
+--8<-- [start:orthogonal_polynomials]
+AssocLegendre(M, V, X, RESULT)
+    RESULT = P_v^m(x)   # associated Legendre function; M is the order, V the degree
+
+LegendrePoly(N, X, RESULT)
+    RESULT = P_n(x)   # Legendre polynomial
+
+ChebyshevT(N, X, RESULT)
+    RESULT = T_n(x)   # Chebyshev polynomial of first kind
+
+ChebyshevU(N, X, RESULT)
+    RESULT = U_n(x)   # Chebyshev polynomial of second kind
+
+HermiteH(N, X, RESULT)
+    RESULT = H_n(x)   # physicists' Hermite polynomial
+
+GeneralizedLaguerre(N, ALPHA, X, RESULT)
+    RESULT = L_n^α(x)   # generalised Laguerre polynomial
+--8<-- [end:orthogonal_polynomials]
+
+--8<-- [start:convenience_misc]
+CubeRoot(X, RESULT)
+    RESULT = x^(1/3)   # works correctly for negative x
+
+Exp10(X, RESULT)
+    RESULT = 10^x
+
+Exp2(X, RESULT)
+    RESULT = 2^x
+
+Logit(X, Y)                        # bidirectional
+    X ground, Y unbound → Y = log(x / (1−x))      # logit function
+    Y ground, X unbound → X = 1 / (1 + exp(−y))   # sigmoid / expit (inverse)
+    Both ground         → consistency check: succeeds iff logit(x) ≈ y
+
+LambertW(Z, RESULT)               # principal branch (k=0)
+LambertW(Z, K, TOL, RESULT)       # branch K with tolerance TOL
+
+XLogY(X, Y, RESULT)
+    RESULT = x · log(y)   # 0 when x=0 (safe for entropy-style computations)
+
+XLog1pY(X, Y, RESULT)
+    RESULT = x · log(1+y)   # 0 when x=0
+--8<-- [end:convenience_misc]

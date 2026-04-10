@@ -1,0 +1,149 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free, ...])
+--8<-- [end:import]
+
+--8<-- [start:import_ex2]
+-import_from(py.scipy_interpolate, [MakeSpline, EvalSpline, ...])
+--8<-- [end:import_ex2]
+
+
+# === Predicate catalogue ===
+
+--8<-- [start:constructors]
+MakeSpline(X, Y, RESULT)
+MakeSpline(X, Y, K, RESULT)
+MakeSpline(X, Y, K, BC_TYPE, RESULT)
+    → scipy.interpolate.make_interp_spline(x, y, k=K, bc_type=BC_TYPE)
+    X:       1-D array of sample positions (strictly increasing)
+    Y:       1-D array of sample values
+    K:       spline degree (default 3 = cubic)
+    BC_TYPE: boundary conditions — None or list of (order, value) pairs
+    RESULT:  integer handle
+--8<-- [end:constructors]
+
+--8<-- [start:constructors_ex2]
+MakeCubic(X, Y, RESULT)
+MakeCubic(X, Y, BC_TYPE, RESULT)
+    → scipy.interpolate.CubicSpline(x, y, bc_type=BC_TYPE)
+    BC_TYPE: 'not-a-knot' (default), 'clamped', 'natural', 'periodic',
+             or a 2-tuple of (first_deriv, second_deriv) conditions
+--8<-- [end:constructors_ex2]
+
+--8<-- [start:constructors_ex3]
+MakePCHIP(X, Y, RESULT)
+MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
+    → scipy.interpolate.PchipInterpolator(x, y, extrapolate=EXTRAPOLATE)
+    EXTRAPOLATE: True (default) / False / None
+    Preserves monotonicity; does not overshoot between data points.
+--8<-- [end:constructors_ex3]
+
+--8<-- [start:constructors_ex4]
+MakeAkima(X, Y, RESULT)
+    → scipy.interpolate.Akima1DInterpolator(x, y)
+    Less sensitive to outliers than cubic splines.
+--8<-- [end:constructors_ex4]
+
+--8<-- [start:constructors_ex5]
+MakeLinear1D(X, Y, RESULT)
+MakeLinear1D(X, Y, KIND, RESULT)
+    → scipy.interpolate.interp1d(x, y, kind=KIND)
+    KIND: 'linear' (default), 'nearest', 'nearest-up', 'zero',
+          'slinear', 'quadratic', 'cubic', 'previous', 'next'
+    Note: deprecated in SciPy ≥ 1.14; prefer MakeSpline for new code.
+--8<-- [end:constructors_ex5]
+
+--8<-- [start:constructors_ex6]
+MakeRegularGrid(POINTS, VALUES, RESULT)
+MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
+    → scipy.interpolate.RegularGridInterpolator(points, values, method=METHOD)
+    POINTS: tuple of 1-D arrays, one per dimension (lengths m1, m2, …)
+    VALUES: N-D array of shape (m1, m2, …)
+    METHOD: 'linear' (default), 'nearest', 'slinear', 'cubic', 'quintic'
+--8<-- [end:constructors_ex6]
+
+--8<-- [start:constructors_ex7]
+MakeRadialBasis(X, Y, RESULT)
+MakeRadialBasis(X, Y, FUNCTION, RESULT)
+MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
+    → scipy.interpolate.RBFInterpolator(x, y, kernel=FUNCTION, smoothing=SMOOTH)
+    X:        2-D array of sample points, shape (n_samples, n_dims)
+    Y:        1-D array of sample values, length n_samples
+    FUNCTION: kernel name — 'linear', 'thin_plate_spline', 'cubic', 'quintic',
+              'multiquadric' (default), 'inverse_multiquadric',
+              'inverse_quadratic', 'gaussian'
+    SMOOTH:   smoothing parameter (0 = exact interpolation, default 0)
+--8<-- [end:constructors_ex7]
+
+--8<-- [start:evaluators]
+EvalSpline(HANDLE, X, Y)                   # bidirectional (arity-3)
+    X ground, Y unbound → Y = spline(x)    # forward: evaluate at query point(s)
+    Y ground, X unbound → X = root-find    # backward: find x such that spline(x) = y
+    Both ground         → consistency check: succeeds iff spline(x) ≈ y
+
+EvalSpline(HANDLE, X, NU, RESULT)          # unidirectional (arity-4)
+    HANDLE: integer from any Make1D predicate
+    X:      query point(s)
+    NU:     derivative order (default 0 = function value)
+    RESULT: interpolated value(s) at X
+--8<-- [end:evaluators]
+
+--8<-- [start:evaluators_ex2]
+EvalRegularGrid(HANDLE, XI, RESULT)
+EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
+    HANDLE: integer from MakeRegularGrid
+    XI:     array of query points, shape (..., ndim)
+    METHOD: override the interpolation method for this call
+    RESULT: array of interpolated values
+--8<-- [end:evaluators_ex2]
+
+--8<-- [start:evaluators_ex3]
+EvalRadialBasis(HANDLE, X, RESULT)
+    HANDLE: integer from MakeRadialBasis
+    X:      2-D array of query points, shape (n_query, n_dims)
+    RESULT: 1-D array of interpolated values
+--8<-- [end:evaluators_ex3]
+
+--8<-- [start:spline_utilities]
+SplineIntegral(HANDLE, A, B, RESULT)
+    Compute the definite integral of the spline from A to B.
+    HANDLE: spline handle
+    A, B:   integration limits (scalars)
+    RESULT: scalar — value of the integral
+--8<-- [end:spline_utilities]
+
+--8<-- [start:spline_utilities_ex2]
+SplineDerivative(HANDLE, RESULT)
+SplineDerivative(HANDLE, ORDER, RESULT)
+    Return a new HANDLE for the ORDER-th derivative of the spline.
+    ORDER:  derivative order (default 1)
+    RESULT: new integer handle — must be freed separately
+--8<-- [end:spline_utilities_ex2]
+
+--8<-- [start:spline_utilities_ex3]
+SplineRoots(HANDLE, RESULT)
+    Return the real roots (zero-crossings) of the spline within its domain.
+    RESULT: Python list of root values
+    Note: only defined for CubicSpline; other spline types may raise an error.
+--8<-- [end:spline_utilities_ex3]
+
+--8<-- [start:lifecycle_free]
+Free(HANDLE)
+    Release HANDLE from the handle registry.
+    Always succeeds, even if HANDLE is not registered.
+--8<-- [end:lifecycle_free]
+
+
+# === Complete examples ===
+
+--8<-- [start:spline_1d_fitting_and_evaluation]
+-import_from(scipy_interpolate, [MakeCubic, EvalSpline, Free])
+
+# Fit a cubic spline to sample data and evaluate at new points.
+FitAndEval(XS, YS, QUERY_XS, VALUES) <- (
+    MakeCubic(XS, YS, HANDLE),
+    EvalSpline(HANDLE, QUERY_XS, VALUES),
+    Free(HANDLE)
+)
+--8<-- [end:spline_1d_fitting_and_evaluation]

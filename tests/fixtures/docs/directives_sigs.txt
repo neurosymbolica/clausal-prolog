@@ -1,0 +1,39 @@
+# === Import Directives ===
+
+--8<-- [start:import_from]
+-import_from(utils, [Double, Helper])
+--8<-- [end:import_from]
+
+--8<-- [start:import_from_ex2]
+-import_from(utils, [alias(Double, MyDouble)])
+--8<-- [end:import_from_ex2]
+
+--8<-- [start:import_module]
+-import_module(utils)
+--8<-- [end:import_module]
+
+
+# === Predicate Property Directives ===
+
+--8<-- [start:meta_predicate]
+-meta_predicate(my_map(2, +, -))
+--8<-- [end:meta_predicate]
+
+
+# === Specialization Directive ===
+
+--8<-- [start:specialize]
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+--8<-- [end:specialize]
+
+--8<-- [start:specialize_ex2]
+-specialize(MI, Source, alias=Name, depth=5)     # deep unfolding
+-specialize(MI, Source, alias=Name, cpd=True)     # conjunctive partial deduction
+--8<-- [end:specialize_ex2]
+
+
+# === EDCG Directives ===
+
+--8<-- [start:edcg_pred]
+-edcg_pred(scaled_inc, 0, [counter, scale])
+--8<-- [end:edcg_pred]

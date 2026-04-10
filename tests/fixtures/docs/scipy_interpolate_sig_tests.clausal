@@ -1,0 +1,16 @@
+# Companion tests for docs/scipy_interpolate.md signature blocks.
+-import_from(scipy_interpolate, [MakeSpline, MakeCubic, EvalSpline, Free])
+
+Test("make spline exists") <- (
+    MakeSpline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
+    EvalSpline(H, [0.0, 4.0], VALS),
+    V0 is ++(float(VALS[0])),
+    ++(abs(V0 - 0.0)) < 1e-8,
+    Free(H))
+
+Test("make cubic exists") <- (
+    MakeCubic([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
+    EvalSpline(H, [2.0], VALS),
+    V is ++(float(VALS[0])),
+    ++(abs(V - 4.0)) < 1e-8,
+    Free(H))

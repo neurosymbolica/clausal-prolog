@@ -1,0 +1,115 @@
+# Doc snippet fixtures for docs/coroutining.md
+
+# --8<-- [start:supported_conditions]
+# equivalent to freeze(X, Goal)
+Test("when isbound") <- (
+    when(nonvar(X), Y is X),
+    X is 42,
+    Y is 42
+)
+
+# Conjunction: fire when both X and Y are bound
+Test("when conjunction") <- (
+    when((nonvar(X), nonvar(Y)), R is "done"),
+    X is 1,
+    Y is 2,
+    R is "done"
+)
+
+# ground: fire when term is fully ground
+Test("when ground") <- (
+    when(ground([X, Y]), R is "all ground"),
+    X is 1,
+    Y is 2,
+    R is "all ground"
+)
+# --8<-- [end:supported_conditions]
+
+# --8<-- [start:setup_call_cleanup_3_ex2]
+# Basic pattern: open/use/close
+ProcessFile(PATH, RESULT) <- setup_call_cleanup(
+    HANDLE is ++open(PATH),
+    (DATA is ++HANDLE.read(), RESULT is DATA),
+    ++HANDLE.close()
+)
+
+# Call fails — Cleanup still runs, overall fails
+Test("scc call fails") <- (
+    not setup_call_cleanup(
+        S is 1,
+        in_(X, []),
+        C is 3
+    )
+)
+# --8<-- [end:setup_call_cleanup_3_ex2]
+
+# --8<-- [start:call_nth_2_ex2]
+# Get the 3rd member
+Test("third") <- (
+    call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
+    X is 30
+)
+
+# N exceeds available solutions — fails
+Test("too few") <- (
+    not call_nth(in_(X, [1, 2]), 5)
+)
+# --8<-- [end:call_nth_2_ex2]
+
+# --8<-- [start:count_all_2_ex2]
+# Count members
+Test("count") <- (
+    count_all(in_(X, ["a", "b", "c", "d"]), N),
+    N is 4
+)
+
+# No solutions — 0
+Test("empty") <- (
+    count_all(in_(X, []), N),
+    N is 0
+)
+
+# With filter
+Test("filtered") <- (
+    count_all((in_(X, [1, 2, 3, 4, 5]), X > 3), N),
+    N is 2
+)
+# --8<-- [end:count_all_2_ex2]
+
+# --8<-- [start:nesting_inside_meta_predicates]
+# findall wrapping call_nth
+Test("findall+callnth") <- (
+    findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
+    BAG is [20]
+)
+
+# catch wrapping call_nth with bad N
+Test("catch+callnth") <- (
+    catch(
+        call_nth(in_(X, [1, 2, 3]), 0),
+        _,
+        R is "caught"
+    ),
+    R is "caught"
+)
+
+# freeze inside findall
+Test("findall+freeze") <- (
+    findall(
+        Y,
+        (freeze(X, Y is X), X is 99),
+        BAG
+    ),
+    BAG is [99]
+)
+
+# count_all inside findall
+Test("findall+countall") <- (
+    findall(
+        N,
+        count_all(in_(X, ["a", "b", "c"]), N),
+        BAG
+    ),
+    BAG is [3]
+)
+# --8<-- [end:nesting_inside_meta_predicates]

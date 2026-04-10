@@ -7,15 +7,13 @@ The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/sc
 ## Import
 
 ```clausal
-# skip
--import_from(scipy_ndimage, [GaussianFilter, label, Zoom, ...])
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_ndimage, [GaussianFilter, ...])
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:import_ex2"
 ```
 
 ---
@@ -54,25 +52,7 @@ Predicates are imported from `scipy_ndimage`, so there is no module prefix in th
 ### Smoothing filters
 
 ```clausal
-# skip
-GaussianFilter(INPUT, SIGMA, RESULT)
-    Gaussian smoothing of INPUT with standard deviation SIGMA.
-    INPUT:  N-D real array
-    SIGMA:  scalar (same sigma for all axes) or sequence of one sigma per axis
-    RESULT: smoothed array of the same shape as INPUT
-
-UniformFilter(INPUT, RESULT)
-    Box (uniform/mean) filter with default size 3.
-    RESULT: filtered array of the same shape as INPUT
-
-UniformFilter(INPUT, SIZE, RESULT)
-    SIZE: integer side length of the box kernel (same for all axes).
-
-MedianFilter(INPUT, SIZE, RESULT)
-    Median filter of INPUT using a box of side SIZE.
-    INPUT:  N-D real array
-    SIZE:   integer (same for all axes) or sequence of one size per axis
-    RESULT: filtered array of the same shape as INPUT
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:smoothing_filters"
 ```
 
 Example — smooth a noisy 1-D signal:
@@ -90,13 +70,7 @@ SmoothSignal(NOISY, SMOOTHED) <- (
 ### Convolution
 
 ```clausal
-# skip
-Convolve(INPUT, WEIGHTS, RESULT)
-    N-D discrete convolution of INPUT with kernel WEIGHTS.
-    INPUT:    N-D real array
-    WEIGHTS:  kernel array (must have the same number of dimensions as INPUT)
-    RESULT:   convolved array of the same shape as INPUT
-    Note: boundary is handled with reflect mode by default.
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:convolution"
 ```
 
 Example — edge detection with a simple difference kernel:
@@ -115,14 +89,7 @@ EdgeDetect(SIGNAL, EDGES) <- (
 ### Connected-component labelling
 
 ```clausal
-# skip
-label(INPUT, RESULT)
-    label connected components of non-zero values in INPUT.
-    INPUT:  N-D integer or boolean array (non-zero = foreground)
-    RESULT: dict with two keys:
-        'label_array'  — integer array of the same shape, each component
-                         assigned a unique positive integer; background = 0
-        'num_features' — total number of labelled components (integer)
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:connected_component_labelling"
 ```
 
 Example — count blobs in a binary image:
@@ -144,22 +111,7 @@ All four predicates operate on boolean (or 0/1 integer) arrays and use the
 default 3×3 (or 3-point in 1-D) structuring element.
 
 ```clausal
-# skip
-BinaryErosion(INPUT, RESULT)
-    Erode: keep only True pixels whose entire neighbourhood is True.
-    Shrinks foreground objects; removes isolated pixels.
-
-BinaryDilation(INPUT, RESULT)
-    Dilate: set True any pixel adjacent to a True pixel.
-    Expands foreground objects.
-
-BinaryOpening(INPUT, RESULT)
-    Open = erosion followed by dilation.
-    Removes small isolated foreground regions; smooths object boundaries.
-
-BinaryClosing(INPUT, RESULT)
-    Close = dilation followed by erosion.
-    Fills small holes and gaps inside foreground regions.
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:morphological_operations"
 ```
 
 Example — remove noise then fill gaps in a binary mask:
@@ -178,26 +130,7 @@ CleanMask(RAW_MASK, CLEAN) <- (
 ### Geometric transforms
 
 ```clausal
-# skip
-Zoom(INPUT, ZOOM, RESULT)
-    Rescale INPUT by the given zoom factor.
-    INPUT:  N-D array
-    ZOOM:   scalar (same factor for all axes) or sequence of one factor per axis
-    RESULT: rescaled array; shape is round(shape * zoom) per axis
-
-Rotate(INPUT, ANGLE, RESULT)
-    Rotate a 2-D array by ANGLE degrees (counter-clockwise).
-    INPUT:  2-D array
-    ANGLE:  rotation angle in degrees
-    RESULT: rotated array; output shape is chosen to contain the full rotated
-            image (reshape=True by default); background filled with 0.0
-
-Shift(INPUT, SHIFT, RESULT)
-    Shift INPUT by the given offset.
-    INPUT:  N-D array
-    SHIFT:  scalar (same for all axes) or sequence of one offset per axis
-    RESULT: shifted array of the same shape; regions shifted out of bounds are
-            filled with 0.0 (constant mode)
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:geometric_transforms"
 ```
 
 Example — centre-crop after zoom:
@@ -215,18 +148,7 @@ ZoomImage(IMAGE, FACTOR, ZOOMED) <- (
 ### Measurement
 
 ```clausal
-# skip
-FindObjects(INPUT, RESULT)
-    Find bounding-box slices for each labelled component in INPUT.
-    INPUT:  integer-labelled array (e.g., the 'label_array' from label)
-    RESULT: list of slice-tuple bounding boxes, one per component;
-            RESULT[i] is a tuple of slice objects covering component i+1;
-            components whose label is absent give None entries
-
-CenterOfMass(INPUT, RESULT)
-    Compute the centre of mass of INPUT.
-    INPUT:  N-D real array (values used as weights)
-    RESULT: tuple of length N giving the centre-of-mass coordinate per axis
+--8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:measurement"
 ```
 
 Example — find the centroid of a blob:

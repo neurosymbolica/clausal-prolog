@@ -19,8 +19,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 Or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_constants, [Value, Unit, ...])
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:import"
 ```
 
 ---
@@ -74,10 +73,7 @@ Look up a CODATA physical constant value by its full name string.
 - `RESULT`: float value in SI units
 
 ```clausal
-# skip
-Value('speed of light in vacuum', C),   % C = 299792458.0 m/s
-Value('Planck constant', H),            % H = 6.626070e-34 J·s
-Value('elementary charge', E)           % E = 1.602177e-19 C
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup"
 ```
 
 Fails if `NAME` is not a recognised CODATA name.
@@ -93,9 +89,7 @@ Access all three CODATA fields for a constant in a single call.
 - `UNCERTAINTY`: float, absolute uncertainty (not relative — use `Precision` for relative)
 
 ```clausal
-# skip
-Lookup('electron mass', V, U, ERR)
-# V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex2"
 ```
 
 Fails if `NAME` is not recognised, or if any output argument fails to unify.
@@ -110,13 +104,7 @@ Search the CODATA database by substring; returns all matching constant names.
 - `NAMES`: list of matching name strings; empty list if no match
 
 ```clausal
-# skip
-Find('electron mass', NAMES)
-# NAMES = ['alpha particle-electron mass ratio',
-# 'deuteron-electron mass ratio', 'electron mass', ...]
-
-Find('zzznomatch', NAMES)
-# NAMES = []
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex3"
 ```
 
 ---
@@ -128,9 +116,7 @@ Return all CODATA constant names as a list.
 - `NAMES`: list of all name strings in `scipy.constants.physical_constants`
 
 ```clausal
-# skip
-AllNames(NAMES),
-++(len(NAMES))   % 300+ depending on scipy version
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex4"
 ```
 
 ---
@@ -142,8 +128,7 @@ Return the SI unit string for a named CODATA constant.
 - `RESULT`: a string such as `'m s^-1'` or `'J s'`
 
 ```clausal
-# skip
-Unit('speed of light in vacuum', U)  % U = 'm s^-1'
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex5"
 ```
 
 ---
@@ -155,9 +140,7 @@ Return the relative uncertainty of a named CODATA constant.
 - `RESULT`: float, e.g. `0.0` for exact definitions, `2.2e-5` for G
 
 ```clausal
-# skip
-Precision('Newtonian constant of gravitation', P)  % P > 0 (G has uncertainty)
-Precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex6"
 ```
 
 ---
@@ -231,25 +214,7 @@ SI giga prefix: 1 × 10⁹.
 ## Example
 
 ```clausal
-# skip
--import_from(scipy_constants, [SpeedOfLight, BoltzmannConstant,
-                                AvogadroConstant, Value, Unit])
-
-# Thermal energy at room temperature (kT at 300 K)
-ThermalEnergy(KT) <-
-    BoltzmannConstant(K),
-    KT is K * 300.
-
-# Check that c agrees with CODATA lookup
-CheckC <-
-    SpeedOfLight(C_DIRECT),
-    Value('speed of light in vacuum', C_LOOKUP),
-    C_DIRECT == C_LOOKUP.
-
-# Print the unit of Planck's constant
-PlanckUnit <-
-    Unit('Planck constant', U),
-    writeln(U).
+--8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:example"
 ```
 
 ---

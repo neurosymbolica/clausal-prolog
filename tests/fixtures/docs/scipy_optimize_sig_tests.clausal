@@ -1,0 +1,14 @@
+# Companion tests for docs/scipy_optimize.md signature blocks.
+-import_from(scipy_optimize, [Minimize, RootScalar, ResultGet])
+
+Test("minimize exists") <- (
+    Minimize(++(lambda x: float(x[0]**2)), [3.0], R),
+    ResultGet(R, "x", X),
+    ABS is ++(abs(float(X[0]))),
+    ABS < 1e-4)
+
+Test("root scalar exists") <- (
+    RootScalar(++(lambda x: x**2 - 4.0), "bisect", [1.0, 3.0], R),
+    ResultGet(R, "root", ROOT),
+    DIFF is ++(abs(float(ROOT) - 2.0)),
+    DIFF < 1e-6)

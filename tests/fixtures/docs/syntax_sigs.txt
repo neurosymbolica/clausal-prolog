@@ -1,0 +1,337 @@
+# === Escape operators ===
+
+--8<-- [start:escape_operators]
+# Logic term containing a Python value:
+point(--x_coord, --y_coord),
+
+# Python expression containing a logic term:
+my_term = ++foo(X, bar(Y))
+
+# Capture Python code as AST without running it:
+ast_node = ~~(x + y * z)
+--8<-- [end:escape_operators]
+
+
+# === Atoms ===
+
+--8<-- [start:atoms]
+# These are atoms:
+color(red),
+status(active),
+greeting("hello world"),
+--8<-- [end:atoms]
+
+
+# === Unification ===
+
+--8<-- [start:unification]
+X is 42,
+X is Y,
+X is not Y,   # disequality constraint (dif/2)
+--8<-- [end:unification]
+
+
+# === Horn clauses ===
+
+--8<-- [start:horn_clauses]
+Head <- Body,
+--8<-- [end:horn_clauses]
+
+--8<-- [start:body_style]
+SyntaxError: clause body must be parenthesized or a single call:
+    write  head <- (body)  or  head <- goal(X)
+--8<-- [end:body_style]
+
+--8<-- [start:conjunction_style]
+Rule >> ListDescription,
+--8<-- [end:conjunction_style]
+
+
+# === Lists ===
+
+--8<-- [start:lists]
+[]               # empty list (singleton)
+[a, 1, X]        # a simple list
+[FIRST, *REST]   # head/tail decomposition
+[*BEFORE, PIVOT, *AFTER]  # multiple spread patterns
+--8<-- [end:lists]
+
+
+# === Strings ===
+
+--8<-- [start:strings]
+u"ABC" is [A, B, C] is ['A', 'B', 'C'],
+--8<-- [end:strings]
+
+
+# === [Python interop](python_integration.md) — `++()` escape ===
+
+--8<-- [start:unit_literal_sugar]
+5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
+9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
+-3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
+--8<-- [end:unit_literal_sugar]
+
+--8<-- [start:unit_literal_sugar_ex2]
+F(Newton)         # → has_units(F, Newton) — F must be bound to a Newton value
+F is 9.8(Newton)  # binds F; hook checks dims match
+--8<-- [end:unit_literal_sugar_ex2]
+
+
+# === Immediate goals *(planned)* ===
+
+--8<-- [start:immediate_goals]
++ goal,     # assert/call immediately ('+' distinguishes from a fact)
+- term,     # retract term
+--8<-- [end:immediate_goals]
+
+
+# === Module qualification ===
+
+--8<-- [start:module_qualification]
+utils.Double(X, Y),    # qualified call after -import_module(utils)
+--8<-- [end:module_qualification]
+
+
+# === Definite Clause Grammars — `>>` ===
+
+--8<-- [start:invoking_dcgs_with_phrase]
+# phrase/2 — must consume the entire input list
+valid_sentence(S) <- phrase(sentence, S)
+
+# phrase/3 — partial parse, remaining input bound to REST
+phrase(digit(D), [3, "plus", 4], REST)
+--8<-- [end:invoking_dcgs_with_phrase]
+
+--8<-- [start:dcgs_as_general_state_passing]
+# Read current state (passthrough — state is not modified)
+(state(S), [S]) >> ([S])
+
+# Read old state S0, replace with S
+(state(S0, S), [S]) >> ([S0])
+--8<-- [end:dcgs_as_general_state_passing]
+
+
+# === Extended DCGs — EDCGs ===
+
+--8<-- [start:declaring_predicates]
+-edcg_pred(inc, 0, [counter])           # 0 visible args, uses counter
+-edcg_pred(process, 1, [counter, items]) # 1 visible arg, uses counter + items
+-edcg_pred(parse, 0, [counter, dcg])     # uses counter + standard DCG list
+-edcg_pred(scaled_inc, 0, [counter, scale])  # accumulator + passed arg
+--8<-- [end:declaring_predicates]
+
+--8<-- [start:edcg_rule_syntax]
+# Push a value to a named accumulator: [value] // acc_name
+inc >> ([1] // counter)
+
+# Read current accumulator value: acc_name / Var
+get_and_inc(V) >> (counter / V, [1] // counter)
+
+# Read a passed argument: pass_name / Var
+scaled_inc >> (scale / S, [S] // counter)
+
+# Terminal list (requires 'dcg' in the predicate's accumulator list)
+token(T) >> ([T], [1] // counter)
+
+# Inline goals don't thread accumulators
+inc_if_positive >> (counter / N, {N >= 0}, [1] // counter)
+
+# Sub-calls: accumulators are threaded automatically
+count3 >> (inc, inc, inc)
+
+# Empty body: all accumulators pass through unchanged
+noop >> ([])
+--8<-- [end:edcg_rule_syntax]
+
+--8<-- [start:multiple_accumulators]
+-edcg_pred(inc_only, 0, [counter])          # only counter
+-edcg_pred(do_both, 1, [counter, items])    # counter + items
+
+inc_only >> ([1] // counter)
+do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
+--8<-- [end:multiple_accumulators]
+
+--8<-- [start:calling_edcg_predicates]
+# -edcg_pred(count_elems, 1, [len])
+# Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
+my_length(L, N) <- count_elems(L, _edcg_len_in_=0, _edcg_len_out_=N)
+--8<-- [end:calling_edcg_predicates]
+
+
+# === Meta-predicates ===
+
+--8<-- [start:call_n]
+call_goal((X <- (X > 0)), 5),        # call_goal/2: succeeds
+Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
+--8<-- [end:call_n]
+
+--8<-- [start:higher_order_list_predicates]
+# maplist/2 — check Goal(Elem) succeeds for every element
+maplist((X <- (X > 0)), [1, 2, 3]),              # succeeds
+
+# maplist/3 — map Goal(X, Y) over list, collect results
+maplist(((X, Y) <- (Y == X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
+
+# include/3 — keep elements where Goal(Elem) succeeds
+include((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
+
+# exclude/3 — keep elements where Goal(Elem) fails
+exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
+
+# foldl/4 — left fold with Goal(Elem, Acc0, Acc1)
+foldl(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
+--8<-- [end:higher_order_list_predicates]
+
+
+# === [Constraint logic programming](constraints.md) ===
+
+--8<-- [start:constraint_logic_programming]
+in_domain(X, 1, 9),
+all_different([X, Y, Z]),
+X + Y < Z,
+label([X, Y, Z])
+--8<-- [end:constraint_logic_programming]
+
+
+# === Syntax cheat sheet ===
+
+--8<-- [start:syntax_cheat_sheet]
+# Variables (ALL-CAPS preferred; leading-underscore also valid)
+X, HEAD, REST          # ALL-CAPS logic variables
+_x, _head, _rest       # leading-underscore style (also valid)
+_                      # anonymous variable (always unifies, stores nothing)
+
+# Atoms
+Atom, 'an atom', '+'   # atoms (titlecase or quoted string)
+--python_obj           # any Python object used as an atom
+
+# Lists
+[]                     # empty list
+[a, 1, X]              # simple list
+[FIRST, *REST]         # head/tail
+
+# Strings
+u"hello"               # list of character atoms
+
+# Dicts (DictTerm — keys ground, values may be Vars)
+{"x": 1, "y": 2}              # ground dict
+{"x": X, "y": Y}              # dict with variable values
+{"addr": {"city": C}}         # nested dict
+
+# Sets (SetTerm — elements must be ground)
+{1, 2, 3}                     # set of integers
+{"red", "green", "blue"}      # set of strings
+
+# Unification
+X is Y,                # unify
+X is not Y,            # dif constraint (must stay different)
+not (X is Y),          # immediate check (don't unify right now)
+
+# Arithmetic / CLP(ℤ) constraints
+(N == X + 1),          # arithmetic constraint
+X == Y,                # arithmetic equality constraint
+X != Y,                # arithmetic disequality constraint
+X < Y,                 # less-than constraint
+X <= Y,                # less-or-equal constraint
+N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
+in_domain(X, 1, 10),    # post integer domain
+all_different([X,Y,Z]), # pairwise disequality
+label([X, Y, Z]),      # enumerate solutions (first-fail)
+structural_eq(X, Y),   # structural equality (Prolog ==/2)
+
+# Rules and facts
+Head <- call(X),       # single-call body (no parens needed)
+Head <- (Body),        # operator body (parens required)
+Fact,                  # fact (trivially true)
+Rule >> ListDescription,   # DCG rule
+
+# Goals
+goal(A, B),            # compound goal
+not goal,              # negation as failure
+assertz(goal),          # assert fact/rule at runtime
+retract(term),         # retract first matching clause
+
+# Module qualification
+utils.Double(X, Y),    # qualified call (after -import_module(utils))
+
+# Escaping
+--python_expr          # Python inside logic term
+++logic_term           # logic term inside Python expression
+~~python_expr          # capture as AST node
+
+# Lambdas (anonymous clauses)
+call_goal((X <- (R == X + 1)), 5)                             # R = 6
+call_goal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
+
+# Meta-predicates
+findall(X, in_(X, [1,2,3]), BAG),          # BAG = [1,2,3]
+bagof(X, in_(X, LIST), BAG),              # fails if LIST empty
+setof(X, in_(X, XS), BAG),               # deduplicates
+forall(in_(X, NS), X > 0),               # universal quantification
+Call(GOAL, ARG1),                          # Call/2 (alias for call_goal/2)
+
+# F-strings — logic variables auto-deref at search time
+writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
+writeln(f"{X:.2f}"),                   # format specs work
+write_to_string(f"{X} and {Y}", S),    # capture as string
+
+# DCGs — >> defines grammar rules with difference lists
+greeting >> (["hello", "world"]),          # terminal sequence
+sentence >> (noun_phrase, verb_phrase),    # non-terminal chain
+digit(D) >> ([D], {D >= 0}, {D <= 9}),    # args + inline goals
+letter >> (["a"] or ["b"] or ["c"]),      # disjunction
+not_a >> (not ["a"], [X]),                # negation
+(peek(T), [T]) >> ([T]),                  # pushback/semicontext
+phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
+phrase(digit(D), [3], REST),              # phrase/3 — partial parse
+
+# EDCGs — Extended DCGs (multiple named accumulators + passed args)
+-edcg_acc(counter, X, IN, OUT, {OUT == IN + X})  # declare accumulator
+-edcg_pass(config)                                # declare passed arg
+-edcg_pred(inc, 0, [counter])                     # declare pred's hidden args
+inc >> ([1] // counter)                   # [value] // acc — push to accumulator
+get(V) >> (counter / V)                   # acc / Var — read current value
+scaled >> (scale / S, [S] // counter)     # pass / Var — read passed arg
+
+# Python interop — ++() evaluates Python at search time
+N is ++len(L),                       # call Python builtin
+R is ++S.upper(),                    # method call on deref'd var
+R is ++(X + 1),                      # Python arithmetic
+R is ++L[0],                         # subscript access
+R is ++D[K],                         # dict access
+++print(X),                          # side-effect goal
+
+# Higher-order list predicates
+maplist(GOAL, [1, 2, 3]),                   # check GOAL on each element
+maplist(GOAL, XS, YS),                      # map GOAL(X, Y) over list
+include(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
+exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
+foldl(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
+get_item(INDEX, LIST, ELEM),                 # 0-based index access
+in_check(ELEM, LIST),                        # deterministic membership check
+unpack(TERM, LIST),                         # decompose/construct term
+--8<-- [end:syntax_cheat_sheet]
+
+# === Additional (indented blocks) ===
+
+--8<-- [start:body_style_ex2]
+sorted_asc([_]),
+palindrome(XS) <- reverse(XS, XS)
+--8<-- [end:body_style_ex2]
+
+--8<-- [start:body_style_ex3]
+always_true <- True,
+--8<-- [end:body_style_ex3]
+
+--8<-- [start:body_style_ex4]
+safe_max(X, Y, X) <- (X >= Y)
+fib(N, RESULT) <- (
+    N > 1,
+    N1 == N - 1,
+    N2 == N - 2,
+    fib(N1, A),
+    fib(N2, B),
+    RESULT == A + B
+)
+--8<-- [end:body_style_ex4]

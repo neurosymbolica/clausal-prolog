@@ -6,15 +6,13 @@ from `scipy.sparse` and `scipy.sparse.linalg` as [importable](import.md) clausal
 ## Import
 
 ```clausal
-# skip
--import_from(scipy_sparse, [MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye, ...])
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:import"
 ```
 
 or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_sparse, [MakeCSR, ...])
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:import_ex2"
 ```
 
 ---
@@ -39,10 +37,7 @@ HANDLE.  Pass the HANDLE to conversion, inspection, or linalg predicates.
 ### MakeCSR
 
 ```clausal
-# skip
-MakeCSR(DATA, INDICES, INDPTR, RESULT)
-MakeCSR(DATA, INDICES, INDPTR, SHAPE, RESULT)
-MakeCSR(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsr"
 ```
 
 Build a CSR (Compressed Sparse Row) matrix.
@@ -56,20 +51,13 @@ Wraps `scipy.sparse.csr_matrix((data, indices, indptr), shape=SHAPE, dtype=DTYPE
 - `RESULT`: integer HANDLE
 
 ```clausal
-# skip
-DATA is ++([1.0, 2.0, 3.0]),
-IDX  is ++([0, 1, 2]),
-PTR  is ++([0, 1, 2, 3]),
-MakeCSR(DATA, IDX, PTR, H)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsr_ex2"
 ```
 
 ### MakeCSC
 
 ```clausal
-# skip
-MakeCSC(DATA, INDICES, INDPTR, RESULT)
-MakeCSC(DATA, INDICES, INDPTR, SHAPE, RESULT)
-MakeCSC(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsc"
 ```
 
 Build a CSC (Compressed Sparse Column) matrix.
@@ -80,9 +68,7 @@ pointers.
 ### MakeCOO
 
 ```clausal
-# skip
-MakeCOO(DATA, ROW, COL, RESULT)
-MakeCOO(DATA, ROW, COL, SHAPE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecoo"
 ```
 
 Build a COO (Coordinate) sparse matrix.
@@ -94,20 +80,13 @@ Wraps `scipy.sparse.coo_matrix((data, (row, col)), shape=SHAPE)`.
 - `RESULT`: integer HANDLE
 
 ```clausal
-# skip
-DATA is ++([1.0, 2.0]),
-ROW  is ++([0, 1]),
-COL  is ++([1, 0]),
-MakeCOO(DATA, ROW, COL, ++(tuple([2, 2])), H)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecoo_ex2"
 ```
 
 ### MakeDiagonals
 
 ```clausal
-# skip
-MakeDiagonals(DIAGONALS, RESULT)
-MakeDiagonals(DIAGONALS, OFFSETS, RESULT)
-MakeDiagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makediagonals"
 ```
 
 Build a sparse diagonal matrix.
@@ -120,18 +99,13 @@ Wraps `scipy.sparse.diags(diagonals, offsets=OFFSETS, shape=SHAPE)`.
 - `RESULT`: integer HANDLE
 
 ```clausal
-# skip
-MakeDiagonals(++([1.0, 2.0, 3.0]), H)        % 3x3 identity-like diagonal
-MakeDiagonals(++([1.0, 2.0]), 1, ++(tuple([3, 3])), H)   % superdiagonal
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makediagonals_ex2"
 ```
 
 ### MakeEye
 
 ```clausal
-# skip
-MakeEye(N, RESULT)
-MakeEye(N, M, RESULT)
-MakeEye(N, M, K, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makeeye"
 ```
 
 Build a sparse identity or shifted-diagonal matrix.
@@ -143,9 +117,7 @@ Wraps `scipy.sparse.eye(N, M=M, k=K)`.
 - `RESULT`: integer HANDLE
 
 ```clausal
-# skip
-MakeEye(4, H),
-ToDense(H, D)   % D is the 4x4 identity matrix
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makeeye_ex2"
 ```
 
 ---
@@ -155,9 +127,7 @@ ToDense(H, D)   % D is the 4x4 identity matrix
 ### ToDense
 
 ```clausal
-# skip
-ToDense(HANDLE, RESULT)
-ToDense(HANDLE, ORDER, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:todense"
 ```
 
 Convert a sparse matrix to a dense NumPy array.
@@ -170,9 +140,7 @@ Wraps `handle.toarray(order=ORDER)`.
 ### FromDense
 
 ```clausal
-# skip
-FromDense(DENSE, RESULT)
-FromDense(DENSE, FORMAT, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:fromdense"
 ```
 
 Convert a dense array to a sparse matrix handle.
@@ -183,9 +151,7 @@ Convert a dense array to a sparse matrix handle.
 - `RESULT`: integer HANDLE
 
 ```clausal
-# skip
-A is ++([[1.0, 0.0], [0.0, 2.0]]),
-FromDense(A, 'csc', H)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:fromdense_ex2"
 ```
 
 ---
@@ -195,24 +161,19 @@ FromDense(A, 'csc', H)
 ### Shape
 
 ```clausal
-# skip
-Shape(HANDLE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:shape"
 ```
 
 Return the shape of the sparse matrix as a `(rows, cols)` tuple.
 
 ```clausal
-# skip
-Shape(H, S),
-R is ++(S[0]),
-C is ++(S[1])
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:shape_ex2"
 ```
 
 ### NonzeroCount
 
 ```clausal
-# skip
-NonzeroCount(HANDLE, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:nonzerocount"
 ```
 
 Return the number of stored (non-zero) elements (`handle.nnz`).
@@ -224,10 +185,7 @@ Return the number of stored (non-zero) elements (`handle.nnz`).
 ### Solve
 
 ```clausal
-# skip
-Solve(A, B, RESULT)
-Solve(A, B, PERMC_SPEC, RESULT)
-Solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:solve"
 ```
 
 Solve the sparse linear system `A @ X = B`.
@@ -241,18 +199,13 @@ Wraps `scipy.sparse.linalg.spsolve(a, b, permc_spec=..., use_umfpack=...)`.
 - `RESULT`: dense solution array X
 
 ```clausal
-# skip
-MakeCSR(DATA, IDX, PTR, ++(tuple([3, 3])), A),
-Solve(A, B, X),
-Free(A)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:solve_ex2"
 ```
 
 ### EigenDecomposeHermitian
 
 ```clausal
-# skip
-EigenDecomposeHermitian(A, RESULT)
-EigenDecomposeHermitian(A, K, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:eigendecomposehermitian"
 ```
 
 Compute K eigenvalues and eigenvectors of a real-symmetric or complex-Hermitian
@@ -264,17 +217,13 @@ sparse matrix.  Wraps `scipy.sparse.linalg.eigsh(a, k=K)`.
   `'eigenvectors'` (n × K array)
 
 ```clausal
-# skip
-EigenDecomposeHermitian(H, 3, R),
-EV is ++(R['eigenvalues'])    % 3 smallest eigenvalues
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:eigendecomposehermitian_ex2"
 ```
 
 ### SingularValueDecompose
 
 ```clausal
-# skip
-SingularValueDecompose(A, RESULT)
-SingularValueDecompose(A, K, RESULT)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:singularvaluedecompose"
 ```
 
 Compute K largest singular values and vectors via ARPACK.
@@ -286,9 +235,7 @@ Wraps `scipy.sparse.linalg.svds(a, k=K)`.
   `'s'` (singular values, length K), `'vt'` (right singular vectors, K × m)
 
 ```clausal
-# skip
-SingularValueDecompose(H, 2, R),
-S is ++(R['s'])    % 2 largest singular values
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:singularvaluedecompose_ex2"
 ```
 
 ---
@@ -298,8 +245,7 @@ S is ++(R['s'])    % 2 largest singular values
 ### Free
 
 ```clausal
-# skip
-Free(HANDLE)
+--8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:free"
 ```
 
 Release the sparse matrix registered under HANDLE.  Always succeeds.

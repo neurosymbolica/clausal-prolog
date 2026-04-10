@@ -33,15 +33,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 
 Example:
 ```clausal
-# skip
-# Logic term containing a Python value:
-point(--x_coord, --y_coord),
-
-# Python expression containing a logic term:
-my_term = ++foo(X, bar(Y))
-
-# Capture Python code as AST without running it:
-ast_node = ~~(x + y * z)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:escape_operators"
 ```
 
 ---
@@ -84,11 +76,7 @@ Inside a logical term:
 - identifiers in `TitleCase` or `lowercase` that are not logic variable names are atoms
 
 ```clausal
-# skip
-# These are atoms:
-color(red),
-status(active),
-greeting("hello world"),
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
 ```
 
 Atoms that conflict with Python keywords or builtins are written as strings: `'not'`, `'is'`, `'max'`.
@@ -112,10 +100,7 @@ PascalCase keeps the builtin namespace cleanly separate from both Python keyword
 Unification is written with `is`:
 
 ```clausal
-# skip
-X is 42,
-X is Y,
-X is not Y,   # disequality constraint (dif/2)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:unification"
 ```
 
 Why `is` rather than `=`?
@@ -190,8 +175,7 @@ See [constraints.md](constraints.md) for the full CLP(ℤ) design, including dom
 ## Horn clauses
 
 ```clausal
-# skip
-Head <- Body,
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:horn_clauses"
 ```
 
 The `<-` operator denotes a Horn clause (rule). It will never be added to Python's expression grammar because it conflicts with `x < -y` (less-than applied to a negated value) — but only when there is no surrounding whitespace. With whitespace, it is unambiguous and parseable.
@@ -202,29 +186,17 @@ The body after `<-` must be one of:
 
 - **A single call** — no parentheses needed:
   ```clausal
-# skip
-  sorted_asc([_]),
-  palindrome(XS) <- reverse(XS, XS)
+  --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex2"
   ```
 
 - **A bare name** — no parentheses needed:
   ```clausal
-# skip
-  always_true <- True,
+  --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex3"
   ```
 
 - **Anything else** — parenthesized:
   ```clausal
-# skip
-  safe_max(X, Y, X) <- (X >= Y)
-  fib(N, RESULT) <- (
-      N > 1,
-      N1 == N - 1,
-      N2 == N - 2,
-      fib(N1, A),
-      fib(N2, B),
-      RESULT == A + B
-  )
+  --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex4"
   ```
 
 This rule exists because Python's parser sees `<-` as `<` followed by unary `-`. when the body contains operators (`+`, `<`, `and`, `or`, `not`, etc.), the `-` gets absorbed into the body expression and the AST is silently mangled. Parentheses force Python to treat the body as a single grouped expression, keeping the `-` at the top where the term rewriter can find it. Calls and bare names are safe without parentheses because they bind tighter than unary `-`.
@@ -232,9 +204,7 @@ This rule exists because Python's parser sees `<-` as `<` followed by unary `-`.
 To keep things safe, attempting to write an unparenthesized operator body produces a clear error:
 
 ```clausal
-# skip
-SyntaxError: clause body must be parenthesized or a single call:
-    write  head <- (body)  or  head <- goal(X)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style"
 ```
 
 ### Conjunction style
@@ -275,8 +245,7 @@ parent(bob, ann),
 Grammar rules (Definite Clause Grammars):
 
 ```clausal
-# skip
-Rule >> ListDescription,
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:conjunction_style"
 ```
 
 ---
@@ -284,11 +253,7 @@ Rule >> ListDescription,
 ## Lists
 
 ```clausal
-# skip
-[]               # empty list (singleton)
-[a, 1, X]        # a simple list
-[FIRST, *REST]   # head/tail decomposition
-[*BEFORE, PIVOT, *AFTER]  # multiple spread patterns
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:lists"
 ```
 
 Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread syntax rather than `|`. The empty list is a singleton — unlike Python, two `[]` literals are the same object.
@@ -339,8 +304,7 @@ See [Dicts & Sets](dicts_sets.md) for details.
 Strings prefixed with `u""` are [lists of character atoms](strings_as_lists.md):
 
 ```clausal
-# skip
-u"ABC" is [A, B, C] is ['A', 'B', 'C'],
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:strings"
 ```
 
 All list operations apply to strings. Plain string literals (without `u`) are atoms.
@@ -416,19 +380,14 @@ A special case of the `++()` pattern: when a numeric literal is used as the
 callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 
 ```clausal
-# skip
-5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
-9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
--3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:unit_literal_sugar"
 ```
 
 when a **logic variable** is used as the callable instead, `X(Unit)` becomes a
 goal that posts a dimension constraint on `X`:
 
 ```clausal
-# skip
-F(Newton)         # → has_units(F, Newton) — F must be bound to a Newton value
-F is 9.8(Newton)  # binds F; hook checks dims match
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:unit_literal_sugar_ex2"
 ```
 
 See [Units](units.md) for the full reference.
@@ -449,9 +408,7 @@ not goal,              # negation as failure
 > **Note:** This syntax is not yet implemented. Use the `assertz(goal)` and `retract(term)` builtins directly.
 
 ```clausal
-# skip
-+ goal,     # assert/call immediately ('+' distinguishes from a fact)
-- term,     # retract term
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:immediate_goals"
 ```
 
 ---
@@ -461,8 +418,7 @@ not goal,              # negation as failure
 Predicates from imported modules are called with dotted notation after loading the module:
 
 ```clausal
-# skip
-utils.Double(X, Y),    # qualified call after -import_module(utils)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:module_qualification"
 ```
 
 See [Directives](directives.md) and [Import System](import.md) for details.
@@ -557,12 +513,7 @@ After the body matches `[T]`, the pushback `[T]` is prepended to the remainder.
 Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 
 ```clausal
-# skip
-# phrase/2 — must consume the entire input list
-valid_sentence(S) <- phrase(sentence, S)
-
-# phrase/3 — partial parse, remaining input bound to REST
-phrase(digit(D), [3, "plus", 4], REST)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:invoking_dcgs_with_phrase"
 ```
 
 `phrase/2` passes `[]` as the expected remainder, so the rule must consume all input. `phrase/3` leaves the remainder as a logic variable for partial parsing.
@@ -610,12 +561,7 @@ DCGs are not just for parsing — they are a **general state-passing mechanism**
 Two reusable nonterminals form the core of state-passing DCGs:
 
 ```clausal
-# skip
-# Read current state (passthrough — state is not modified)
-(state(S), [S]) >> ([S])
-
-# Read old state S0, replace with S
-(state(S0, S), [S]) >> ([S0])
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:dcgs_as_general_state_passing"
 ```
 
 `state/1` reads the current state value into `S` without modifying it. `state/2` reads the old state into `S0` and writes `S` as the new state. Copy these into any module that needs state threading.
@@ -715,11 +661,7 @@ A **passed argument** is a read-only value threaded unchanged through all sub-ca
 Each EDCG predicate must declare its **visible arity** and which accumulators/passes it uses:
 
 ```clausal
-# skip
--edcg_pred(inc, 0, [counter])           # 0 visible args, uses counter
--edcg_pred(process, 1, [counter, items]) # 1 visible arg, uses counter + items
--edcg_pred(parse, 0, [counter, dcg])     # uses counter + standard DCG list
--edcg_pred(scaled_inc, 0, [counter, scale])  # accumulator + passed arg
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:declaring_predicates"
 ```
 
 The special name `dcg` refers to the standard DCG difference-list accumulator. Include it when your EDCG rule also parses tokens.
@@ -729,27 +671,7 @@ The special name `dcg` refers to the standard DCG difference-list accumulator. I
 EDCG rules use `>>` just like standard DCGs, with additional operators:
 
 ```clausal
-# skip
-# Push a value to a named accumulator: [value] // acc_name
-inc >> ([1] // counter)
-
-# Read current accumulator value: acc_name / Var
-get_and_inc(V) >> (counter / V, [1] // counter)
-
-# Read a passed argument: pass_name / Var
-scaled_inc >> (scale / S, [S] // counter)
-
-# Terminal list (requires 'dcg' in the predicate's accumulator list)
-token(T) >> ([T], [1] // counter)
-
-# Inline goals don't thread accumulators
-inc_if_positive >> (counter / N, {N >= 0}, [1] // counter)
-
-# Sub-calls: accumulators are threaded automatically
-count3 >> (inc, inc, inc)
-
-# Empty body: all accumulators pass through unchanged
-noop >> ([])
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:edcg_rule_syntax"
 ```
 
 The `//` operator pushes a value through the accumulator's joiner goal. The `/` operator reads the current state without modifying it.
@@ -770,12 +692,7 @@ process(X) >> ([1] // counter, [X] // items)
 when a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
 
 ```clausal
-# skip
--edcg_pred(inc_only, 0, [counter])          # only counter
--edcg_pred(do_both, 1, [counter, items])    # counter + items
-
-inc_only >> ([1] // counter)
-do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:multiple_accumulators"
 ```
 
 ### Calling EDCG predicates
@@ -783,10 +700,7 @@ do_both(X) >> (inc_only, [X] // items)    # inc_only threads counter only
 EDCG predicates are compiled to ordinary predicates with hidden arguments appended in declaration order: 2 per accumulator (in, out) + 1 per pass. You can call them from regular `<-` clauses using keyword syntax:
 
 ```clausal
-# skip
-# -edcg_pred(count_elems, 1, [len])
-# Compiled arity: 1 (visible) + 2 (len_in, len_out) = 3
-my_length(L, N) <- count_elems(L, _edcg_len_in_=0, _edcg_len_out_=N)
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:calling_edcg_predicates"
 ```
 
 Or positionally — hidden args follow visible args in the order declared:
@@ -875,9 +789,7 @@ forall(in_(X, [2, -1, 6]), X > 0),  # fails
 `Call/N` invokes a goal closure with extra arguments. It is an alias for `call_goal/N`:
 
 ```clausal
-# skip
-call_goal((X <- (X > 0)), 5),        # call_goal/2: succeeds
-Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:call_n"
 ```
 
 `call/1` through `call/8` are available (as are `call_goal/1` through `call_goal/8`).
@@ -887,21 +799,7 @@ Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
 ```clausal
-# skip
-# maplist/2 — check Goal(Elem) succeeds for every element
-maplist((X <- (X > 0)), [1, 2, 3]),              # succeeds
-
-# maplist/3 — map Goal(X, Y) over list, collect results
-maplist(((X, Y) <- (Y == X * 2)), [1, 2, 3], YS),  # YS = [2, 4, 6]
-
-# include/3 — keep elements where Goal(Elem) succeeds
-include((X <- (X > 0)), [1, -2, 3, -4], R),      # R = [1, 3]
-
-# exclude/3 — keep elements where Goal(Elem) fails
-exclude((X <- (X > 0)), [1, -2, 3, -4], R),     # R = [-2, -4]
-
-# foldl/4 — left fold with Goal(Elem, Acc0, Acc1)
-foldl(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:higher_order_list_predicates"
 ```
 
 ---
@@ -911,11 +809,7 @@ foldl(((E, A, R) <- (R == A + E)), [1, 2, 3], 0, SUM),  # SUM = 6
 Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](clpb.md) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
 ```clausal
-# skip
-in_domain(X, 1, 9),
-all_different([X, Y, Z]),
-X + Y < Z,
-label([X, Y, Z])
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:constraint_logic_programming"
 ```
 
 See [Constraints](constraints.md) for the full API.
@@ -941,121 +835,7 @@ The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely ne
 ## Syntax cheat sheet
 
 ```clausal
-# skip
-# Variables (ALL-CAPS preferred; leading-underscore also valid)
-X, HEAD, REST          # ALL-CAPS logic variables
-_x, _head, _rest       # leading-underscore style (also valid)
-_                      # anonymous variable (always unifies, stores nothing)
-
-# Atoms
-Atom, 'an atom', '+'   # atoms (titlecase or quoted string)
---python_obj           # any Python object used as an atom
-
-# Lists
-[]                     # empty list
-[a, 1, X]              # simple list
-[FIRST, *REST]         # head/tail
-
-# Strings
-u"hello"               # list of character atoms
-
-# Dicts (DictTerm — keys ground, values may be Vars)
-{"x": 1, "y": 2}              # ground dict
-{"x": X, "y": Y}              # dict with variable values
-{"addr": {"city": C}}         # nested dict
-
-# Sets (SetTerm — elements must be ground)
-{1, 2, 3}                     # set of integers
-{"red", "green", "blue"}      # set of strings
-
-# Unification
-X is Y,                # unify
-X is not Y,            # dif constraint (must stay different)
-not (X is Y),          # immediate check (don't unify right now)
-
-# Arithmetic / CLP(ℤ) constraints
-(N == X + 1),          # arithmetic constraint
-X == Y,                # arithmetic equality constraint
-X != Y,                # arithmetic disequality constraint
-X < Y,                 # less-than constraint
-X <= Y,                # less-or-equal constraint
-N := X + 1,            # eager arithmetic evaluation (Prolog is/2)
-in_domain(X, 1, 10),    # post integer domain
-all_different([X,Y,Z]), # pairwise disequality
-label([X, Y, Z]),      # enumerate solutions (first-fail)
-structural_eq(X, Y),   # structural equality (Prolog ==/2)
-
-# Rules and facts
-Head <- call(X),       # single-call body (no parens needed)
-Head <- (Body),        # operator body (parens required)
-Fact,                  # fact (trivially true)
-Rule >> ListDescription,   # DCG rule
-
-# Goals
-goal(A, B),            # compound goal
-not goal,              # negation as failure
-assertz(goal),          # assert fact/rule at runtime
-retract(term),         # retract first matching clause
-
-# Module qualification
-utils.Double(X, Y),    # qualified call (after -import_module(utils))
-
-# Escaping
---python_expr          # Python inside logic term
-++logic_term           # logic term inside Python expression
-~~python_expr          # capture as AST node
-
-# Lambdas (anonymous clauses)
-call_goal((X <- (R == X + 1)), 5)                             # R = 6
-call_goal(((X, Y) <- (R == X + Y)), A, B)                 # multi-param
-
-# Meta-predicates
-findall(X, in_(X, [1,2,3]), BAG),          # BAG = [1,2,3]
-bagof(X, in_(X, LIST), BAG),              # fails if LIST empty
-setof(X, in_(X, XS), BAG),               # deduplicates
-forall(in_(X, NS), X > 0),               # universal quantification
-Call(GOAL, ARG1),                          # Call/2 (alias for call_goal/2)
-
-# F-strings — logic variables auto-deref at search time
-writeln(f"Hello, {NAME}!"),            # prints bound value of NAME
-writeln(f"{X:.2f}"),                   # format specs work
-write_to_string(f"{X} and {Y}", S),    # capture as string
-
-# DCGs — >> defines grammar rules with difference lists
-greeting >> (["hello", "world"]),          # terminal sequence
-sentence >> (noun_phrase, verb_phrase),    # non-terminal chain
-digit(D) >> ([D], {D >= 0}, {D <= 9}),    # args + inline goals
-letter >> (["a"] or ["b"] or ["c"]),      # disjunction
-not_a >> (not ["a"], [X]),                # negation
-(peek(T), [T]) >> ([T]),                  # pushback/semicontext
-phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
-phrase(digit(D), [3], REST),              # phrase/3 — partial parse
-
-# EDCGs — Extended DCGs (multiple named accumulators + passed args)
--edcg_acc(counter, X, IN, OUT, {OUT == IN + X})  # declare accumulator
--edcg_pass(config)                                # declare passed arg
--edcg_pred(inc, 0, [counter])                     # declare pred's hidden args
-inc >> ([1] // counter)                   # [value] // acc — push to accumulator
-get(V) >> (counter / V)                   # acc / Var — read current value
-scaled >> (scale / S, [S] // counter)     # pass / Var — read passed arg
-
-# Python interop — ++() evaluates Python at search time
-N is ++len(L),                       # call Python builtin
-R is ++S.upper(),                    # method call on deref'd var
-R is ++(X + 1),                      # Python arithmetic
-R is ++L[0],                         # subscript access
-R is ++D[K],                         # dict access
-++print(X),                          # side-effect goal
-
-# Higher-order list predicates
-maplist(GOAL, [1, 2, 3]),                   # check GOAL on each element
-maplist(GOAL, XS, YS),                      # map GOAL(X, Y) over list
-include(GOAL, LIST, KEPT),                   # keep where GOAL succeeds
-exclude(GOAL, LIST, REMOVED),               # keep where GOAL fails
-foldl(GOAL, LIST, ACC0, RESULT),         # left fold with GOAL(Elem, Acc, Next)
-get_item(INDEX, LIST, ELEM),                 # 0-based index access
-in_check(ELEM, LIST),                        # deterministic membership check
-unpack(TERM, LIST),                         # decompose/construct term
+--8<-- "tests/fixtures/docs/syntax_sigs.txt:syntax_cheat_sheet"
 ```
 
 ---

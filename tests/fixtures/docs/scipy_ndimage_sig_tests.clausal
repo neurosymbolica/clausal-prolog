@@ -1,0 +1,10 @@
+# Companion tests for docs/scipy_ndimage.md signature blocks.
+-import_from(scipy_ndimage, [GaussianFilter, UniformFilter, MedianFilter, label])
+
+Test("gaussian filter exists") <- (
+    GaussianFilter([[1.0, 2.0], [3.0, 4.0]], 1.0, R),
+    nonvar(R))
+
+Test("label exists") <- (
+    label([[1, 0], [0, 1]], R),
+    nonvar(R))

@@ -16,8 +16,7 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 Or via the canonical `py.*` path:
 
 ```clausal
-# skip
--import_from(py.scipy_cluster, [Linkage, FlatCluster, ...])
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:import"
 ```
 
 ---
@@ -63,9 +62,7 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 - `RESULT`: ndarray of shape `(n-1, 4)` — the linkage matrix `Z`
 
 ```clausal
-# skip
-Linkage(DATA, 'ward', Z),
-# Z is the linkage matrix for ward hierarchical clustering
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering"
 ```
 
 ---
@@ -82,10 +79,7 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 - `RESULT`: ndarray of shape `(n,)` — integer cluster assignment for each observation
 
 ```clausal
-# skip
-Linkage(DATA, 'ward', Z),
-FlatCluster(Z, 3, 'maxclust', LABELS),
-# LABELS[i] is the cluster number for observation i
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex2"
 ```
 
 ---
@@ -99,11 +93,7 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 - `RESULT`: dict with keys `icoord`, `dcoord`, `ivl`, `leaves`, `color_list`
 
 ```clausal
-# skip
-Linkage(DATA, 'ward', Z),
-Dendrogram(Z, D),
-ResultGet(D, 'leaves', LEAVES),
-# LEAVES is the list of leaf node indices
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex3"
 ```
 
 ---
@@ -117,12 +107,7 @@ Compute cophenetic distances from linkage matrix `Z`.
 - With `Y` (condensed pairwise distances): `RESULT` is `dict {'c': float, 'd': ndarray}` where `c` is the cophenetic correlation coefficient and `d` is the cophenetic distance array
 
 ```clausal
-# skip
-Linkage(DATA, 'ward', Z),
-Y is ++(pdist(DATA)),
-Cophenet(Z, Y, RESULT),
-ResultGet(RESULT, 'c', C),
-# C is the cophenetic correlation coefficient (1.0 = perfect)
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex4"
 ```
 
 ---
@@ -136,10 +121,7 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 - `RESULT`: ndarray of shape `(n-1, 4)` — each row is `[mean, std, count, inconsistency_coefficient]`
 
 ```clausal
-# skip
-Linkage(DATA, 'ward', Z),
-Inconsistent(Z, STATS),
-# STATS[i, 3] is the inconsistency coefficient for merge i
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex5"
 ```
 
 ---
@@ -175,11 +157,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 - `RESULT`: dict `{'codebook': ndarray shape (K, D), 'distortion': float}`
 
 ```clausal
-# skip
-KMeans(DATA, 2, RESULT),
-ResultGet(RESULT, 'codebook', CODEBOOK),
-ResultGet(RESULT, 'distortion', D),
-# D is the mean Euclidean distance to the nearest centroid
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:vector_quantisation"
 ```
 
 ---
@@ -238,19 +216,7 @@ ResultGet(R, 'distortion', D),
 ## Typical pipeline
 
 ```clausal
-# skip
-# 1. Load and whiten data
-Whiten(RAW_DATA, DATA),
-
-# 2. Hierarchical clustering to explore structure
-Linkage(DATA, 'ward', Z),
-FlatCluster(Z, 3, 'maxclust', LABELS),
-
-# 3. k-means for production assignment
-KMeans(DATA, 3, KR),
-ResultGet(KR, 'codebook', CODEBOOK),
-VectorQuantize(DATA, CODEBOOK, VQR),
-ResultGet(VQR, 'code', ASSIGNMENTS).
+--8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:typical_pipeline"
 ```
 
 ---

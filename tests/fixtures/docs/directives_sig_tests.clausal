@@ -1,0 +1,7 @@
+# Companion tests for docs/directives.md signature blocks.
+# Validates that directive-related predicates exist.
+
+Test("import_from works") <- (
+    length([1, 2, 3], N),
+    N == 3
+)

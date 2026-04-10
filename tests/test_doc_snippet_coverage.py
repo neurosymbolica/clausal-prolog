@@ -13,7 +13,9 @@ _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
 # Decrease this as migrations proceed.  Current baseline: 810.
 # After lists.md pilot migration: 810 -> 808.
 # After builtins.md migration (Phase 1): 808 -> 575.
-MAX_ALLOWED_SKIPS = 575
+# After SciPy migration (Phase 2): 575 -> 386.
+# After language core migration (Phase 3): 386 -> 291.
+MAX_ALLOWED_SKIPS = 291
 
 
 def _count_skip_blocks() -> int:

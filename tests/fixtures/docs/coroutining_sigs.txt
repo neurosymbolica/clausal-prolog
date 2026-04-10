@@ -1,0 +1,79 @@
+# === freeze/2 ===
+
+--8<-- [start:freeze_2]
+freeze(X, Goal)
+--8<-- [end:freeze_2]
+
+--8<-- [start:freeze_2_ex2]
+# Guard: X must be positive when bound
+Guarded(X) <- (
+    freeze(X, X > 0),
+    X is 5
+)
+# succeeds — 5 > 0
+
+Rejected(X) <- (
+    freeze(X, X > 0),
+    X is -1
+)
+# fails — the unification X = -1 is rejected because -1 > 0 fails
+--8<-- [end:freeze_2_ex2]
+
+--8<-- [start:freeze_2_ex3]
+# Deferred binding
+Deferred(Y) <- (
+    freeze(X, Y is X),
+    X is "hello"
+)
+# Y = "hello" — the frozen goal Y is X fires when X is bound
+
+# Multiple freezes on the same variable
+Multi(Y, Z) <- (
+    freeze(X, Y is X),
+    freeze(X, Z is X),
+    X is 42
+)
+# Y = 42, Z = 42
+--8<-- [end:freeze_2_ex3]
+
+
+# === when/2 ===
+
+--8<-- [start:when_2]
+when(Condition, Goal)
+--8<-- [end:when_2]
+
+
+# === setup_call_cleanup/3 ===
+
+--8<-- [start:setup_call_cleanup_3]
+setup_call_cleanup(Setup, Call, Cleanup)
+--8<-- [end:setup_call_cleanup_3]
+
+
+# === call_cleanup/2 ===
+
+--8<-- [start:call_cleanup_2]
+call_cleanup(Call, Cleanup)
+--8<-- [end:call_cleanup_2]
+
+--8<-- [start:call_cleanup_2_ex2]
+SafeQuery(GOAL) <- call_cleanup(
+    call_goal(GOAL),
+    writeln("query finished")
+)
+--8<-- [end:call_cleanup_2_ex2]
+
+
+# === call_nth/2 ===
+
+--8<-- [start:call_nth_2]
+call_nth(+Goal, +N)
+--8<-- [end:call_nth_2]
+
+
+# === count_all/2 ===
+
+--8<-- [start:count_all_2]
+count_all(+Goal, -Count)
+--8<-- [end:count_all_2]

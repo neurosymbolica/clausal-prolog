@@ -156,36 +156,31 @@ All dict builtins are in `clausal/logic/builtins/dict_set.py`. They use `DictTer
 
 ### `is_dict/1`
 ```clausal
-# skip
-is_dict(+Term)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:is_dict_1"
 ```
 Succeeds if `Term` is a `DictTerm`.
 
 ### `dict_size/2`
 ```clausal
-# skip
-dict_size(+Dict, -N)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_size_2"
 ```
 `N` is the number of keys in `Dict`.
 
 ### `dict_keys/2`
 ```clausal
-# skip
-dict_keys(+Dict, -Keys)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_keys_2"
 ```
 `Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
 
 ### `dict_values/2`
 ```clausal
-# skip
-dict_values(+Dict, -Values)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_values_2"
 ```
 `Values` is the list of values in key-sorted order (same ordering as `dict_keys`).
 
 ### `dict_pairs/2`
 ```clausal
-# skip
-dict_pairs(?Dict, ?Pairs)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_pairs_2"
 ```
 Bidirectional conversion between a `DictTerm` and a list of `[Key, Value]` 2-element lists.
 
@@ -201,8 +196,7 @@ dict_pairs(DICT, [["x", 10], ["y", 20]])
 
 ### `dict_get/3`
 ```clausal
-# skip
-dict_get(+Key, +Dict, ?Value)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_get_3"
 ```
 Semidet: succeeds if `Key` is in `Dict` and `Value` unifies with `Dict[Key]`. Fails if the key is absent or `Key` is unbound.
 
@@ -213,8 +207,7 @@ dict_get("name", {"name": "Alice", "age": 30}, NAME)
 
 ### `dict_put/4`
 ```clausal
-# skip
-dict_put(+Key, +Value, +OldDict, -NewDict)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_put_4"
 ```
 `NewDict` is `OldDict` with `Key → Value` inserted or overwritten. Returns a new `DictTerm`; the original is unchanged.
 
@@ -225,8 +218,7 @@ dict_put("b", 99, {"a": 1, "b": 0}, NEW)
 
 ### `dict_put_pairs/3`
 ```clausal
-# skip
-dict_put_pairs(+Pairs, +OldDict, -NewDict)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_put_pairs_3"
 ```
 Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. equivalent to calling `dict_put/4` for each pair in order.
 
@@ -237,8 +229,7 @@ dict_put_pairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
 
 ### `dict_remove/3`
 ```clausal
-# skip
-dict_remove(+Key, +OldDict, -NewDict)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_remove_3"
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is not present.
 
@@ -249,8 +240,7 @@ dict_remove("b", {"a": 1, "b": 2, "c": 3}, NEW)
 
 ### `dict_merge/3`
 ```clausal
-# skip
-dict_merge(+D1, +D2, -Merged)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_merge_3"
 ```
 `Merged` is the union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
 
@@ -261,8 +251,7 @@ dict_merge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
 
 ### `gen_dict/3`
 ```clausal
-# skip
-gen_dict(?Key, +Dict, ?Value)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_dict_3"
 ```
 Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. equivalent to SWI's `gen_assoc/3`.
 
@@ -279,8 +268,7 @@ gen_dict("a", {"a": 1, "b": 2}, VALUE)
 
 ### `sub_dict/2`
 ```clausal
-# skip
-sub_dict(+Pattern, +Dict)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:sub_dict_2"
 ```
 Partial dict matching: succeeds when every key in `Pattern` is also in `Dict`, and the corresponding values unify. Extra keys in `Dict` are ignored.
 
@@ -304,22 +292,19 @@ sub_dict({"z": 1}, {"x": 1, "y": 2})
 
 ### `is_set/1`
 ```clausal
-# skip
-is_set(+Term)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:is_set_1"
 ```
 Succeeds if `Term` is a `SetTerm`.
 
 ### `set_size/2`
 ```clausal
-# skip
-set_size(+Set, -N)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_size_2"
 ```
 `N` is the cardinality of `Set`.
 
 ### `set_list/2`
 ```clausal
-# skip
-set_list(?Set, ?List)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_list_2"
 ```
 Bidirectional conversion between a `SetTerm` and a sorted list.
 
@@ -333,64 +318,55 @@ set_list(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
 
 ### `set_union/3`
 ```clausal
-# skip
-set_union(+S1, +S2, -union)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_union_3"
 ```
 `union` is the set union of `S1` and `S2`.
 
 ### `set_intersection/3`
 ```clausal
-# skip
-set_intersection(+S1, +S2, -Inter)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_intersection_3"
 ```
 `Inter` is the set intersection of `S1` and `S2`.
 
 ### `set_subtract/3`
 ```clausal
-# skip
-set_subtract(+S1, +S2, -Diff)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_subtract_3"
 ```
 `Diff` is `S1` minus `S2` (elements in `S1` not in `S2`).
 
 ### `set_sym_diff/3`
 ```clausal
-# skip
-set_sym_diff(+S1, +S2, -Sym)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_sym_diff_3"
 ```
 `Sym` is the symmetric difference of `S1` and `S2` (elements in exactly one of the two sets).
 
 ### `set_subset/2`
 ```clausal
-# skip
-set_subset(+Sub, +Super)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_subset_2"
 ```
 Succeeds if every element of `Sub` is also in `Super`. An empty set is a subset of any set.
 
 ### `set_disjoint/2`
 ```clausal
-# skip
-set_disjoint(+S1, +S2)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_disjoint_2"
 ```
 Succeeds if `S1` and `S2` have no elements in common.
 
 ### `set_add/3`
 ```clausal
-# skip
-set_add(+Elem, +OldSet, -NewSet)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_add_3"
 ```
 `NewSet` is `OldSet` with `Elem` added. If `Elem` is already present, `NewSet = OldSet`.
 
 ### `set_remove/3`
 ```clausal
-# skip
-set_remove(+Elem, +OldSet, -NewSet)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_remove_3"
 ```
 `NewSet` is `OldSet` with `Elem` removed. If `Elem` is absent, `NewSet = OldSet`.
 
 ### `gen_set/2`
 ```clausal
-# skip
-gen_set(?Elem, +Set)
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_set_2"
 ```
 Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).
 

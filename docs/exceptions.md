@@ -13,8 +13,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
 Raises an exception with a structured error term:
 
 ```clausal
-# skip
-Throw(error(type_error(integer, foo), context))
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:throw_1"
 ```
 
 Any term can be thrown — strings, atoms, or structured error terms.
@@ -24,8 +23,7 @@ Any term can be thrown — strings, atoms, or structured error terms.
 Catches any exception and binds the error term to a variable or pattern:
 
 ```clausal
-# skip
-Catch(Goal, ERROR)
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_2"
 ```
 
 - **Goal** — the goal to execute; all solutions pass through if no exception
@@ -34,15 +32,7 @@ Catch(Goal, ERROR)
 `Catch/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms.
 
 ```clausal
-# skip
-# Catch any exception
-Catch(Goal, ERROR)
-
-# Catch a specific Python exception by class
-Catch(++(some_python_call()), ValueError(MSG))
-
-# Catch a structured logic error
-Catch(Goal, error(type_error(_, _), _))
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_2_ex2"
 ```
 
 ### catch_recover/3
@@ -50,8 +40,7 @@ Catch(Goal, error(type_error(_, _), _))
 Like `Catch/2` but with an explicit recovery goal:
 
 ```clausal
-# skip
-catch_recover(Goal, ERROR, Recovery)
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_recover_3"
 ```
 
 - **Goal** — the goal to execute
@@ -84,12 +73,7 @@ safe_div(X, Y, R) <- catch(
 them the same way as logic throw terms:
 
 ```clausal
-# skip
-catch(
-    ++(some_python_call()),
-    ValueError(MSG),
-    handle_error(MSG)
-)
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_3"
 ```
 
 If the Python exception does not match the catcher it is re-raised unchanged.
@@ -113,13 +97,7 @@ Clausal terms during catch. Python exceptions become `Compound(ClassName,
 no distinction between catching a logic throw and catching a Python exception:
 
 ```clausal
-# skip
-# Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
-# Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
-
-Catch(Goal, ERROR)          # always catches, binds ERROR
-catch_recover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
-catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
+--8<-- "tests/fixtures/docs/exceptions_sigs.txt:unified_exception_representation"
 ```
 
 ---
@@ -161,50 +139,27 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     **Catch a type error:**
     ```clausal
-# skip
-    check_int(X, R) <- catch(
-        (X > 0, R is "positive"),
-        error(type_error(_, _), _),
-        R is "not a number"
-    )
+    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception"
     ```
 
     **Catch a Python exception (no recovery needed):**
     ```clausal
-# skip
-    safe_parse(S, R) <- (
-        Catch(++(int(S)), ValueError(_)),
-        R is "parse error"
-    )
+    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex2"
     ```
 
     **catch_recover with error access:**
     ```clausal
-# skip
-    logged_op(X, Y, R) <- catch_recover(
-        (R == X / Y),
-        ERR,
-        (write(ERR), R is "error")
-    )
+    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex3"
     ```
 
     **Re-throw after logging:**
     ```clausal
-# skip
-    logged_div(X, Y, R) <- catch(
-        (R == X / Y),
-        E,
-        (write(E), Throw(E))
-    )
+    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex4"
     ```
 
     **Catch-all:**
     ```clausal
-# skip
-    safe_run(GOAL, R) <- (
-        Catch(call_goal(GOAL), _),
-        R is "ok"
-    )
+    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex5"
     ```
 
     ---

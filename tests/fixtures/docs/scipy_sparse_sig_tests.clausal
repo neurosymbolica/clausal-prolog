@@ -1,0 +1,17 @@
+# Companion tests for docs/scipy_sparse.md signature blocks.
+-import_from(scipy_sparse, [MakeCSR, MakeEye, ToDense, Shape, NonzeroCount, Free])
+
+Test("makecsr exists") <- (
+    DATA is [1.0, 2.0, 3.0],
+    IDX is [0, 1, 2],
+    PTR is [0, 1, 2, 3],
+    MakeCSR(DATA, IDX, PTR, H),
+    NonzeroCount(H, NNZ),
+    NNZ == 3,
+    Free(H))
+
+Test("makeeye exists") <- (
+    MakeEye(3, H),
+    NonzeroCount(H, N),
+    N == 3,
+    Free(H))

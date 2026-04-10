@@ -49,12 +49,7 @@ Compute the scalar derivative of `F` at point `X` using Richardson extrapolation
 - `RESULT`: result dict — see fields below
 
 ```clausal
-# skip
-Derivative(++(numpy.sin), 0.0, R),
-ResultGet(R, 'df', DF)   % DF ≈ 1.0
-
-Derivative(++(lambda x, a: a*x**2), 3.0, [5.0], R),
-ResultGet(R, 'df', DF)   % DF ≈ 30.0 (d/dx 5x² = 10x; at x=3 → 30)
+--8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:derivative"
 ```
 
 **Result fields**:
@@ -80,10 +75,7 @@ Compute the Jacobian matrix of a vector-valued function `F` at point `X`.
 - `RESULT`: result dict — see fields below
 
 ```clausal
-# skip
-Jacobian(++(lambda x: numpy.array([x[0]**2, x[1]**3])),
-         ++(numpy.array([2.0, 3.0])), R),
-ResultGet(R, 'df', J)   % J ≈ [[4, 0], [0, 27]]
+--8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:jacobian"
 ```
 
 **Result fields** (note: `'x'` and `'nit'` are not present for Jacobian):
@@ -107,10 +99,7 @@ Compute the Hessian matrix of a scalar-valued function `F` at point `X`.
 - `RESULT`: result dict — see fields below
 
 ```clausal
-# skip
-Hessian(++(lambda x: x[0]**2 + x[1]**2),
-        ++(numpy.array([1.0, 2.0])), R),
-ResultGet(R, 'ddf', H)  % H ≈ [[2, 0], [0, 2]]
+--8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:hessian"
 ```
 
 **Result fields** (note: `'x'`, `'nit'`, and `'nfev'` are not present for Hessian):
@@ -135,10 +124,7 @@ Extract a named field from a differentiation result dict.
 Fails if `FIELD` is not present in `RESULT`.
 
 ```clausal
-# skip
-Derivative(++(lambda x: x**3), 2.0, R),
-ResultGet(R, 'df', DF),    % DF ≈ 12.0
-ResultGet(R, 'error', ERR) % ERR is the estimated error
+--8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:resultget"
 ```
 
 ---
@@ -146,21 +132,7 @@ ResultGet(R, 'error', ERR) % ERR is the estimated error
 ## Example
 
 ```clausal
-# skip
--import_from(scipy_differentiate, [Derivative, Jacobian, ResultGet])
--import_from(numpy, [Array])
-
-# Numerical derivative of x³ at x = 2 (exact answer: 12)
-CubeDerivative(DF) <-
-    Derivative(++(lambda x: x**3), 2.0, R),
-    ResultGet(R, 'df', DF).
-
-# Jacobian of f(x) = [x₀², x₁³] at [1, 2]
-QuadraticJacobian(J) <-
-    F is ++(lambda x: __import__('numpy').array([x[0]**2, x[1]**3])),
-    X is ++(__import__('numpy').array([1.0, 2.0])),
-    Jacobian(F, X, R),
-    ResultGet(R, 'df', J).
+--8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:example"
 ```
 
 ---

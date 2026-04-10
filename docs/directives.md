@@ -29,15 +29,13 @@ Declares predicates that are internal to the module. Private predicates get prop
 Import specific predicates from another module:
 
 ```clausal
-# skip
--import_from(utils, [Double, Helper])
+--8<-- "tests/fixtures/docs/directives_sigs.txt:import_from"
 ```
 
 With aliasing:
 
 ```clausal
-# skip
--import_from(utils, [alias(Double, MyDouble)])
+--8<-- "tests/fixtures/docs/directives_sigs.txt:import_from_ex2"
 ```
 
 This imports `Double` from `utils` but makes it available locally as `MyDouble`.
@@ -47,8 +45,7 @@ This imports `Double` from `utils` but makes it available locally as `MyDouble`.
 Import all exported predicates from a module:
 
 ```clausal
-# skip
--import_module(utils)
+--8<-- "tests/fixtures/docs/directives_sigs.txt:import_module"
 ```
 
 Imported predicates are accessed via qualified names: `utils.Double(X, Y)`.
@@ -130,8 +127,7 @@ module system needs to know which arguments are goals (to resolve them in the
 correct module context).
 
 ```clausal
-# skip
--meta_predicate(my_map(2, +, -))
+--8<-- "tests/fixtures/docs/directives_sigs.txt:meta_predicate"
 ```
 
 The `2` means the first argument is a goal that takes 2 extra arguments.
@@ -166,8 +162,7 @@ matters. See [Compiler](compiler.md) for details on the two compilation modes.
 ### -specialize
 
 ```clausal
-# skip
--specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+--8<-- "tests/fixtures/docs/directives_sigs.txt:specialize"
 ```
 
 Specializes a [meta-interpreter](metainterpreters.md) with respect to an object program, producing a new predicate with interpretation overhead removed. The MI pattern is auto-detected from the clause structure.
@@ -175,9 +170,7 @@ Specializes a [meta-interpreter](metainterpreters.md) with respect to an object 
 Options:
 
 ```clausal
-# skip
--specialize(MI, Source, alias=Name, depth=5)     # deep unfolding
--specialize(MI, Source, alias=Name, cpd=True)     # conjunctive partial deduction
+--8<-- "tests/fixtures/docs/directives_sigs.txt:specialize_ex2"
 ```
 
 See [Meta-Interpreter Specialization](specialization.md) for full details.
@@ -210,8 +203,7 @@ Declares a passed argument — a value that threads through EDCG nonterminals wi
 ### -edcg_pred
 
 ```clausal
-# skip
--edcg_pred(scaled_inc, 0, [counter, scale])
+--8<-- "tests/fixtures/docs/directives_sigs.txt:edcg_pred"
 ```
 
 Declares how many visible arguments a predicate has and which accumulators/passed arguments it uses.
