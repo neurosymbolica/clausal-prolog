@@ -1,0 +1,107 @@
+-import_module(torch)
+-import_from(py.torch_nn, [parameter, named_parameter, module,
+                            named_module, child, named_child])
+
+# --- parameter / named_parameter ---
+
+Test("named_parameter enumerates weight and bias") <- (
+    MODEL is torch.nn.Linear(10, 5),
+    findall(NAME, named_parameter(MODEL, NAME, _), NAMES),
+    in_("weight", NAMES),
+    in_("bias", NAMES)
+)
+
+Test("parameter count for Linear") <- (
+    MODEL is torch.nn.Linear(10, 5),
+    findall(P, parameter(MODEL, P), PS),
+    length(PS, 2)
+)
+
+Test("parameter count for no-param module") <- (
+    MODEL is torch.nn.ReLU(),
+    findall(P, parameter(MODEL, P), PS),
+    length(PS, 0)
+)
+
+# --- module / named_module ---
+
+Test("named_module includes self and children") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2)
+    ),
+    findall(N, named_module(MODEL, N, _), NAMES),
+    in_("", NAMES),
+    in_("0", NAMES),
+    in_("1", NAMES),
+    in_("2", NAMES)
+)
+
+Test("module count for Sequential") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2)
+    ),
+    findall(M, module(MODEL, M), MS),
+    length(MS, LEN),
+    LEN >= 4
+)
+
+# --- child / named_child ---
+
+Test("child count for Sequential") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2)
+    ),
+    findall(C, child(MODEL, C), CS),
+    length(CS, 3)
+)
+
+Test("named_child names") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU()
+    ),
+    findall(N, named_child(MODEL, N, _), NAMES),
+    in_("0", NAMES),
+    in_("1", NAMES)
+)
+
+Test("child of leaf module is empty") <- (
+    MODEL is torch.nn.Linear(4, 2),
+    findall(C, child(MODEL, C), CS),
+    length(CS, 0)
+)
+
+# --- Nested models ---
+
+Test("named_module recurses into nested Sequential") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.Sequential(torch.nn.Linear(5, 3))
+    ),
+    findall(N, named_module(MODEL, N, _), NAMES),
+    in_("1.0", NAMES)
+)
+
+Test("named_parameter recurses into nested model") <- (
+    MODEL is torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.Sequential(torch.nn.Linear(5, 3))
+    ),
+    findall(N, named_parameter(MODEL, N, _), NAMES),
+    in_("0.weight", NAMES),
+    in_("1.0.weight", NAMES)
+)
+
+# ++() dereferences variables, so intermediate model construction works
+Test("nested model via ++() deref") <- (
+    INNER is torch.nn.Sequential(torch.nn.Linear(5, 3)),
+    MODEL is torch.nn.Sequential(torch.nn.Linear(10, 5), ++(INNER)),
+    findall(N, named_module(MODEL, N, _), NAMES),
+    in_("1.0", NAMES)
+)

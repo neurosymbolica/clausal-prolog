@@ -227,4 +227,25 @@ Test("named children") <- (
 
 ## Issues
 
-_To be populated during implementation._
+### 1. Conversions already implemented in Phase 1 — NOTED
+
+`tensor_numpy/2` and `tensor_list/2` were implemented during Phase 1
+as they shared infrastructure with the property predicates. Phase 2
+only added `torch_nn.py`.
+
+### 2. Var objects passed to `torch.nn.Sequential()` constructor — FIXED
+
+Constructing nested models with intermediate variables like
+`INNER is torch.nn.Sequential(...), MODEL is torch.nn.Sequential(..., INNER)`
+fails because `INNER` is still an `AttVar` when the outer constructor
+runs — `nn.Sequential` rejects non-Module arguments.
+
+Bare variables in `is` RHS expressions are **not** dereferenced. But
+`++()` **does** deref its captured variables (via `PyThunk` compilation).
+So `MODEL is torch.nn.Sequential(..., ++(INNER))` works correctly.
+
+Two options:
+- Inline: `MODEL is torch.nn.Sequential(..., torch.nn.Sequential(...))`
+- Deref: `MODEL is torch.nn.Sequential(..., ++(INNER))`
+
+Test added for the `++()` approach.
