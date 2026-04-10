@@ -1,0 +1,87 @@
+# Companion tests for docs/date_time.md display snippets.
+
+-import_from(date_time, [Now, NowUTC, Today, Date, Time, DateTime,
+                         TimeDelta, DateAdd, DateSub, DateDiff,
+                         FormatDate, ParseDate, DayOfWeek])
+
+# ── Now/Today ────────────────────────────────────────────────────────────────
+
+Test("now") <- Now(_)
+Test("now utc") <- NowUTC(_)
+Test("today") <- Today(_)
+
+# ── Date ─────────────────────────────────────────────────────────────────────
+
+Test("date construct") <- Date(2026, 3, 16, _)
+
+Test("date decompose") <- (
+    Date(2026, 3, 16, D),
+    Date(Y, M, DAY, D),
+    Y == 2026,
+    M == 3,
+    DAY == 16
+)
+
+# ── Time ─────────────────────────────────────────────────────────────────────
+
+Test("time construct") <- Time(14, 30, 0, _)
+
+Test("time decompose") <- (
+    Time(14, 30, 0, T),
+    Time(H, M, S, T),
+    H == 14,
+    M == 30,
+    S == 0
+)
+
+# ── DateTime ─────────────────────────────────────────────────────────────────
+
+Test("datetime construct") <- DateTime(2026, 3, 16, 14, 30, 0, _)
+
+# ── TimeDelta ────────────────────────────────────────────────────────────────
+
+Test("timedelta construct") <- TimeDelta(7, 0, _)
+
+# ── Arithmetic ───────────────────────────────────────────────────────────────
+
+Test("date add") <- (
+    Date(2026, 3, 16, D),
+    TimeDelta(7, 0, TD),
+    DateAdd(D, TD, R),
+    Date(2026, 3, 23, R)
+)
+
+Test("date sub") <- (
+    Date(2026, 3, 23, D),
+    TimeDelta(7, 0, TD),
+    DateSub(D, TD, R),
+    Date(2026, 3, 16, R)
+)
+
+Test("date diff") <- (
+    Date(2026, 3, 23, D1),
+    Date(2026, 3, 16, D2),
+    DateDiff(D1, D2, TD),
+    TimeDelta(7, 0, TD)
+)
+
+# ── Format/Parse ─────────────────────────────────────────────────────────────
+
+Test("format date") <- (
+    Date(2026, 3, 16, D),
+    FormatDate(D, "%Y-%m-%d", S),
+    S == "2026-03-16"
+)
+
+Test("parse date") <- (
+    ParseDate("2026-03-16", "%Y-%m-%d", DT),
+    nonvar(DT)
+)
+
+# ── DayOfWeek ────────────────────────────────────────────────────────────────
+
+Test("day of week") <- (
+    Date(2026, 3, 16, D),
+    DayOfWeek(D, DOW),
+    number(DOW)
+)

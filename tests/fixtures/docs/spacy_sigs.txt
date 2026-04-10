@@ -1,0 +1,106 @@
+# Display snippets for docs/spacy.md
+
+--8<-- [start:load_model_1_sig]
+LoadModel(+Name)
+--8<-- [end:load_model_1_sig]
+
+--8<-- [start:load_model_1_ex]
+LoadModel("en_core_web_sm")
+--8<-- [end:load_model_1_ex]
+
+--8<-- [start:load_model_2_sig]
+LoadModel(+Name, +Alias)
+--8<-- [end:load_model_2_sig]
+
+--8<-- [start:load_model_2_ex]
+LoadModel("en_core_web_sm", "en")
+LoadModel("en_core_web_lg", "en_lg")
+--8<-- [end:load_model_2_ex]
+
+--8<-- [start:unload_model_sig]
+UnloadModel(+Alias)
+--8<-- [end:unload_model_sig]
+
+--8<-- [start:current_model_sig]
+CurrentModel(?Alias)
+--8<-- [end:current_model_sig]
+
+--8<-- [start:process_sig]
+Process(+Alias, +Text, -Doc)
+--8<-- [end:process_sig]
+
+--8<-- [start:token_2_sig]
+Token(+Doc, -Tok)
+--8<-- [end:token_2_sig]
+
+--8<-- [start:token_3_sig]
+Token(+Doc, ?Index, -Tok)
+--8<-- [end:token_3_sig]
+
+--8<-- [start:token_text_sig]
+TokenText(+Tok, ?Text)
+--8<-- [end:token_text_sig]
+
+--8<-- [start:token_list_sig]
+TokenList(+Doc, -Tokens)
+--8<-- [end:token_list_sig]
+
+--8<-- [start:pos_sig]
+Pos(+Tok, ?Tag)
+--8<-- [end:pos_sig]
+
+--8<-- [start:tag_sig]
+Tag(+Tok, ?FineTag)
+--8<-- [end:tag_sig]
+
+--8<-- [start:lemma_sig]
+Lemma(+Tok, ?Lem)
+--8<-- [end:lemma_sig]
+
+--8<-- [start:dep_sig]
+Dep(+Tok, ?label)
+--8<-- [end:dep_sig]
+
+--8<-- [start:head_sig]
+Head(+Tok, ?HeadText)
+--8<-- [end:head_sig]
+
+--8<-- [start:shape_sig]
+Shape(+Tok, ?Shp)
+--8<-- [end:shape_sig]
+
+--8<-- [start:is_alpha_sig]
+IsAlpha(+Tok)
+--8<-- [end:is_alpha_sig]
+
+--8<-- [start:is_stop_sig]
+IsStop(+Tok)
+--8<-- [end:is_stop_sig]
+
+--8<-- [start:entity_2_sig]
+Entity(+Doc, -Ent)
+--8<-- [end:entity_2_sig]
+
+--8<-- [start:entity_3_sig]
+Entity(+Doc, +label, -Ent)
+--8<-- [end:entity_3_sig]
+
+--8<-- [start:entity_list_sig]
+EntityList(+Doc, -Ents)
+--8<-- [end:entity_list_sig]
+
+--8<-- [start:sentence_sig]
+Sentence(+Doc, -Sent)
+--8<-- [end:sentence_sig]
+
+--8<-- [start:sentence_list_sig]
+SentenceList(+Doc, -Sents)
+--8<-- [end:sentence_list_sig]
+
+--8<-- [start:similarity_sig]
+Similarity(+Alias, +Text1, +Text2, -Score)
+--8<-- [end:similarity_sig]
+
+--8<-- [start:noun_chunk_sig]
+NounChunk(+Doc, -Chunk)
+--8<-- [end:noun_chunk_sig]

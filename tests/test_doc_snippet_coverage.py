@@ -16,7 +16,8 @@ _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
 # After SciPy migration (Phase 2): 575 -> 386.
 # After language core migration (Phase 3): 386 -> 291.
 # After constraints migration (Phase 4): 291 -> 250.
-MAX_ALLOWED_SKIPS = 250
+# After standard library migration (Phase 5): 250 -> 63.
+MAX_ALLOWED_SKIPS = 63
 
 
 def _count_skip_blocks() -> int:

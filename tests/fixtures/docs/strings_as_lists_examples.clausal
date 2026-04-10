@@ -1,0 +1,63 @@
+# Doc snippet fixtures for docs/strings_as_lists.md
+
+# Helper to test unification (== is Python equality, head matching is unification)
+same(X, X),
+
+# --8<-- [start:unification]
+Test("string = char list") <- same("abc", ["a", "b", "c"])
+Test("with vars") <- (same("abc", [X, Y, Z]), X == "a", Y == "b", Z == "c")
+Test("partial") <- (same("hello", ["h", "e", X, Y, "o"]), X == "l", Y == "l")
+# --8<-- [end:unification]
+
+# --8<-- [start:empty_string]
+Test("empty") <- same("", [])
+# --8<-- [end:empty_string]
+
+# --8<-- [start:pattern_matching]
+starts_with([*PREFIX, *_], PREFIX),
+ends_with([*_, *SUFFIX], SUFFIX),
+contains([*_, X, *_], X),
+
+Test("prefix") <- starts_with("hello", "hel")
+Test("suffix") <- ends_with("hello", "lo")
+Test("contains l") <- contains("hello", "l")
+# --8<-- [end:pattern_matching]
+
+# --8<-- [start:append_examples]
+Test("concat") <- append("hel", "lo", "hello")
+Test("prefix match") <- (append("hel", X, "hello"), X == "lo")
+Test("suffix match") <- (append(X, "lo", "hello"), X == "hel")
+# --8<-- [end:append_examples]
+
+# --8<-- [start:length_example]
+Test("length") <- length("hello", 5)
+# --8<-- [end:length_example]
+
+# --8<-- [start:member_examples]
+Test("member") <- in_("e", "hello")
+Test("enumerate") <- (
+    findall(C, in_(C, "abc"), CHARS),
+    CHARS == ["a", "b", "c"]
+)
+# --8<-- [end:member_examples]
+
+# --8<-- [start:reverse_example]
+Test("reverse") <- reverse("hello", "olleh")
+# --8<-- [end:reverse_example]
+
+# --8<-- [start:take_drop_split]
+Test("take") <- take(3, "hello", "hel")
+Test("drop") <- drop(3, "hello", "lo")
+Test("split") <- split_at(3, "hello", "hel", "lo")
+# --8<-- [end:take_drop_split]
+
+# --8<-- [start:get_item_example]
+Test("index") <- (get_item(1, "hello", C), C == "e")
+# --8<-- [end:get_item_example]
+
+# --8<-- [start:type_checking]
+Test("is_chars string") <- is_chars("hello")
+Test("is_chars list") <- is_chars([1, 2, 3])
+Test("is_list string fails") <- (not is_list("hello"))
+Test("is_str list fails") <- (not is_str([1, 2, 3]))
+# --8<-- [end:type_checking]

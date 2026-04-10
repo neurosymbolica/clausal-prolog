@@ -40,15 +40,7 @@ VerifyMessage(KEY, MSG, SIG) <- Verify(KEY, MSG, SIG)
 **Data** can be a string (UTF-8 encoded) or `bytes`.
 
 ```clausal
-# skip
-Hash("sha256", "abc", HEX)
-# HEX = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-
-Hash("md5", "", HEX)
-# HEX = "d41d8cd98f00b204e9800998ecf8427e"
-
-HashBytes("sha256", "abc", RAW)
-# RAW is 32 bytes
+--8<-- "tests/fixtures/docs/crypto_sigs.txt:hash_examples"
 ```
 
 Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbound.
@@ -72,11 +64,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 `hmac.compare_digest` for constant-time comparison.
 
 ```clausal
-# skip
-sign("secret-key", "message", SIG)
-Verify("secret-key", "message", SIG)   # succeeds
-
-sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
+--8<-- "tests/fixtures/docs/crypto_sigs.txt:hmac_examples"
 ```
 
 ---
@@ -96,12 +84,7 @@ sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
 `Iterations` must be a positive integer.
 
 ```clausal
-# skip
-Derive("password", "salt", 100000, HASH)
-# HASH is a 64-character hex string (32 bytes)
-
-Derive("password", "salt", 100000, 64, HASH)
-# HASH is a 128-character hex string (64 bytes)
+--8<-- "tests/fixtures/docs/crypto_sigs.txt:pbkdf2_examples"
 ```
 
 ---
@@ -111,34 +94,19 @@ Derive("password", "salt", 100000, 64, HASH)
     ### File integrity check (using the [Files](files.md) module)
 
     ```clausal
-# skip
-    -import_from(py.hash, [Hash])
-    -import_from(py.files, [ReadFileToString])
-
-    FileHash(PATH, HASH) <- (
-        ReadFileToString(PATH, CONTENT),
-        Hash("sha256", CONTENT, HASH)
-    )
+    --8<-- "tests/fixtures/docs/crypto_sigs.txt:file_integrity"
     ```
 
     ### API request signing
 
     ```clausal
-# skip
-    -import_from(py.hmac, [sign])
-
-    SignedRequest(KEY, BODY, SIGNATURE) <- (
-        sign("sha256", KEY, BODY, SIGNATURE)
-    )
+    --8<-- "tests/fixtures/docs/crypto_sigs.txt:api_signing"
     ```
 
     ### Password hashing
 
     ```clausal
-# skip
-    -import_from(py.pbkdf2, [Derive])
-
-    HashPassword(PASSWORD, SALT, HASH) <- Derive(PASSWORD, SALT, 100000, HASH)
+    --8<-- "tests/fixtures/docs/crypto_sigs.txt:password_hashing"
     ```
 
 ---

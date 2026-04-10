@@ -9,13 +9,7 @@ signatures. They use Python's native keyword argument syntax.
 ## Quick Example
 
 ```clausal
-# skip
-point(1, 2, 3),
-
-Test("vary") <- (
-    vary({"y": 99}, point(1, 2, 3), RESULT),
-    RESULT == point(1, 99, 3)
-)
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:quick_example"
 ```
 
 ---
@@ -44,18 +38,7 @@ This is Python's native keyword syntax — no special Clausal syntax needed. See
 new values. `Overrides` is a Python dict mapping field names to new values.
 
 ```clausal
-# skip
-point(1, 2, 3),
-
-Test("change one field") <- (
-    vary({"x": 100}, point(1, 2, 3), R),
-    R == point(100, 2, 3)
-),
-
-Test("change multiple") <- (
-    vary({"x": 10, "z": 30}, point(1, 2, 3), R),
-    R == point(10, 2, 30)
-)
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:vary_examples"
 ```
 
 Works for both predicate-class terms and KWTerms.
@@ -73,17 +56,7 @@ Raises an error if you try to override an existing key — use `vary` for that.
 (contain logic variables).
 
 ```clausal
-# skip
-point(1, 2, 3),
-
-Test("unbound") <- (
-    unbound_keys(point(1, Y, Z), KEYS),
-    in_("y", KEYS),
-    in_("z", KEYS),
-    length(KEYS, 2)
-),
-
-Test("fully bound") <- unbound_keys(point(1, 2, 3), [])
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:unbound_keys_examples"
 ```
 
 ### signature/3
@@ -93,13 +66,7 @@ predicate. Given a functor name and arity, unifies `Names` with the tuple of
 field names.
 
 ```clausal
-# skip
-point(1, 2, 3),
-
-Test("signature") <- (
-    signature("point", 3, NAMES),
-    NAMES == ("x", "y", "z")
-)
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:signature_example"
 ```
 
 This is a database-dependent operation — the predicate must have been defined
@@ -112,32 +79,19 @@ This is a database-dependent operation — the predicate must have been defined
 ### Default values via vary
 
 ```clausal
-# skip
-with_defaults(TERM, RESULT) <- (
-    vary({"color": "black", "size": 12}, TERM, RESULT)
-)
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:default_values"
 ```
 
 ### Inspect which fields need filling
 
 ```clausal
-# skip
-needs_input(TERM) <- (
-    unbound_keys(TERM, KEYS),
-    length(KEYS, N),
-    N > 0
-)
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:inspect_fields"
 ```
 
 ### Reflect on predicate structure
 
 ```clausal
-# skip
-describe_predicate(NAME, ARITY) <- (
-    signature(NAME, ARITY, FIELD_NAMES),
-    writeln(f"Predicate {NAME}/{ARITY}"),
-    writeln(f"Fields: {FIELD_NAMES}")
-)
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:reflect_predicate"
 ```
 
 ---

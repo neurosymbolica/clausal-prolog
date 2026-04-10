@@ -1,0 +1,51 @@
+# Display snippets for docs/tcp.md
+
+--8<-- [start:connect_example]
+Connect("example.com", 80, SOCKET)
+--8<-- [end:connect_example]
+
+--8<-- [start:server_example]
+Listen("0.0.0.0", 8080, SERVER),
+Accept(SERVER, CLIENT),
+Receive(CLIENT, DATA),
+Send(CLIENT, DATA),    # echo back
+Close(CLIENT),
+Close(SERVER)
+--8<-- [end:server_example]
+
+--8<-- [start:data_transfer_examples]
+Send(SOCKET, "Hello, server!")
+Receive(SOCKET, RESPONSE)
+
+# Custom buffer size
+Receive(SOCKET, 65536, LARGE_DATA)
+--8<-- [end:data_transfer_examples]
+
+--8<-- [start:socket_management_example]
+SetTimeout(SOCKET, 5.0),     # 5-second timeout
+Receive(SOCKET, DATA)         # fails if no data within 5 seconds
+--8<-- [end:socket_management_example]
+
+--8<-- [start:tcp_client_example]
+-import_from(py.tcp, [Connect, Send, Receive, Close])
+
+TcpRequest(HOST, PORT, REQUEST, RESPONSE) <- (
+    Connect(HOST, PORT, S),
+    Send(S, REQUEST),
+    Receive(S, RESPONSE),
+    Close(S)
+)
+--8<-- [end:tcp_client_example]
+
+--8<-- [start:echo_server_example]
+-import_from(py.tcp, [Listen, Accept, Send, Receive, Close])
+
+EchoServer(PORT) <- (
+    Listen("0.0.0.0", PORT, SERVER),
+    Accept(SERVER, CLIENT),
+    Receive(CLIENT, DATA),
+    Send(CLIENT, DATA),
+    Close(CLIENT),
+    Close(SERVER)
+)
+--8<-- [end:echo_server_example]

@@ -1,0 +1,24 @@
+# Companion tests for docs/http.md display snippets.
+# HTTP predicates need network access — test URL utilities only.
+
+-import_from(py.url, [Encode, Decode, Parse, Join])
+
+Test("url encode") <- (
+    Encode("hello world", E),
+    E == "hello%20world"
+)
+
+Test("url decode") <- (
+    Decode("hello%20world", S),
+    S == "hello world"
+)
+
+Test("url parse") <- (
+    Parse("https://example.com:8080/path?q=1#frag", PARTS),
+    nonvar(PARTS)
+)
+
+Test("url join") <- (
+    Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL),
+    is_str(URL)
+)

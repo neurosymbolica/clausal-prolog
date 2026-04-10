@@ -1,0 +1,79 @@
+# Companion tests for docs/logging.md display snippets.
+
+-import_from(py.logging, [
+    GetLogger, Debug, Info, Warning, Error, Critical,
+    SetLevel, GetLevel, IsEnabledFor, Log,
+    AddHandler, RemoveHandler,
+    StreamHandler, SetFormatter
+])
+
+# ── Logger management ────────────────────────────────────────────────────────
+
+Test("get logger named") <- GetLogger("test.doc.named", _)
+
+Test("get logger default") <- GetLogger(_)
+
+Test("set and get level") <- (
+    GetLogger("test.doc.level", L),
+    SetLevel(L, "debug"),
+    GetLevel(L, LEVEL),
+    LEVEL == "DEBUG"
+)
+
+Test("is enabled for") <- (
+    GetLogger("test.doc.enabled", L),
+    SetLevel(L, "debug"),
+    IsEnabledFor(L, "debug")
+)
+
+# ── Logging predicates ───────────────────────────────────────────────────────
+
+Test("debug succeeds") <- (
+    GetLogger("test.doc.debug", L),
+    SetLevel(L, "debug"),
+    Debug(L, "test message")
+)
+
+Test("info succeeds") <- (
+    GetLogger("test.doc.info", L),
+    Info(L, "test message")
+)
+
+Test("warning succeeds") <- (
+    GetLogger("test.doc.warn", L),
+    Warning(L, "test message")
+)
+
+Test("error succeeds") <- (
+    GetLogger("test.doc.err", L),
+    Error(L, "test message")
+)
+
+Test("critical succeeds") <- (
+    GetLogger("test.doc.crit", L),
+    Critical(L, "test message")
+)
+
+Test("log at level") <- (
+    GetLogger("test.doc.log", L),
+    Log(L, "info", "test message")
+)
+
+# ── Handler management ───────────────────────────────────────────────────────
+
+Test("stream handler") <- (
+    StreamHandler("stderr", H),
+    nonvar(H)
+)
+
+Test("set formatter") <- (
+    StreamHandler("stderr", H),
+    SetFormatter(H, "%(message)s")
+)
+
+Test("add and remove handler") <- (
+    GetLogger("test.doc.handler", L),
+    StreamHandler("stderr", H),
+    AddHandler(L, H),
+    RemoveHandler(L, H)
+)

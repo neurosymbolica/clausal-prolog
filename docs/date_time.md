@@ -53,10 +53,7 @@ IsoDate(Y, M, D, S) <- (
 ### Now/1, NowUTC/1, Today/1
 
 ```clausal
-# skip
-Now(DT)        # DT = datetime.datetime.now()
-NowUTC(DT)     # DT = datetime.datetime.now(UTC)
-Today(D)       # D = datetime.date.today()
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:now_today"
 ```
 
 ### Date/4 — Bidirectional
@@ -64,12 +61,7 @@ Today(D)       # D = datetime.date.today()
 `Date(Year, Month, Day, DateObj)` — construct or decompose:
 
 ```clausal
-# skip
-# Construct
-Date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
-
-# Decompose
-Date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:date_examples"
 ```
 
 ### Time/4 — Bidirectional
@@ -77,9 +69,7 @@ Date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
 `Time(Hour, Minute, Second, TimeObj)`:
 
 ```clausal
-# skip
-Time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
-Time(H, M, S, T)      # decompose T into components
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:time_examples"
 ```
 
 ### DateTime/7 — Bidirectional
@@ -87,9 +77,7 @@ Time(H, M, S, T)      # decompose T into components
 `DateTime(Year, Month, Day, Hour, Minute, Second, DtObj)`:
 
 ```clausal
-# skip
-DateTime(2026, 3, 16, 14, 30, 0, DT)
-# DT = datetime.datetime(2026, 3, 16, 14, 30, 0)
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:datetime_example"
 ```
 
 ### TimeDelta/3 — Bidirectional
@@ -97,45 +85,37 @@ DateTime(2026, 3, 16, 14, 30, 0, DT)
 `TimeDelta(Days, Seconds, TdObj)`:
 
 ```clausal
-# skip
-TimeDelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
-TimeDelta(D, S, TD)    # decompose TD into days and seconds
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:timedelta_examples"
 ```
 
 ### DateAdd/3, DateSub/3
 
 ```clausal
-# skip
-DateAdd(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
-DateSub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:date_add_sub"
 ```
 
 ### DateDiff/3
 
 ```clausal
-# skip
-DateDiff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:date_diff"
 ```
 
 ### FormatDate/3
 
 ```clausal
-# skip
-FormatDate(DT, "%Y-%m-%d", S)    # S = "2026-03-16"
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:format_date"
 ```
 
 ### ParseDate/3
 
 ```clausal
-# skip
-ParseDate("2026-03-16", "%Y-%m-%d", DT)    # DT = datetime.datetime(...)
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:parse_date"
 ```
 
 ### DayOfWeek/2
 
 ```clausal
-# skip
-DayOfWeek(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
+--8<-- "tests/fixtures/docs/date_time_sigs.txt:day_of_week"
 ```
 
 ### DateBetween/3 — Nondeterministic

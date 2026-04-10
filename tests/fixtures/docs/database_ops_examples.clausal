@@ -1,0 +1,74 @@
+# Doc snippet fixtures for docs/database_ops.md
+
+# --8<-- [start:quick_example]
+-dynamic(Color/1)
+
+Color("red"),
+Color("blue"),
+
+Test("assert and query") <- (
+    assertz(Color("green")),
+    Color("green")
+)
+# --8<-- [end:quick_example]
+
+# --8<-- [start:dynamic_directive]
+-dynamic(Counter/1)
+-dynamic(Cache/2)
+# --8<-- [end:dynamic_directive]
+
+# --8<-- [start:assertz_example]
+-dynamic(Fact/1)
+
+Fact("init"),
+
+Test("assert") <- (
+    assertz(Fact(42)),
+    Fact(42)
+)
+# --8<-- [end:assertz_example]
+
+# --8<-- [start:asserta_example]
+-dynamic(Priority/1)
+
+Priority("low"),
+
+Test("assert first") <- (
+    asserta(Priority("high")),
+    Priority("high")
+)
+# --8<-- [end:asserta_example]
+
+# --8<-- [start:retract_example]
+-dynamic(Item/1)
+
+Item("a"),
+Item("b"),
+Item("c"),
+
+Test("retract") <- (
+    retract(Item("b")),
+    (not Item("b")),
+    Item("a"),
+    Item("c")
+)
+# --8<-- [end:retract_example]
+
+# --8<-- [start:retract_pattern]
+-dynamic(Pair/2)
+
+Pair("x", 1),
+Pair("y", 2),
+Pair("z", 3),
+
+Test("retract by pattern") <- (
+    retract(Pair("y", _)),
+    (not Pair("y", 2))
+)
+# --8<-- [end:retract_pattern]
+
+# --8<-- [start:abolish_table_example]
+-table(MemoFib/2)
+
+Test("clear") <- abolish_table("MemoFib", 2)
+# --8<-- [end:abolish_table_example]

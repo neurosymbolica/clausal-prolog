@@ -1,0 +1,77 @@
+# Companion tests for docs/spacy.md display snippets.
+
+-import_from(spacy_module, [LoadModel, UnloadModel, CurrentModel, Process,
+                            Token, TokenText, TokenList,
+                            Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
+                            Entity, EntityList,
+                            Sentence, SentenceList,
+                            Similarity,
+                            NounChunk])
+
+# ── Setup helper ────────────────────────────────────────────────────────────
+
+setup(DOC) <- (LoadModel("en_core_web_sm", "sig_test"), Process("sig_test", "Apple is looking at buying U.K. startup for $1 billion.", DOC))
+
+# ── Layer 1 — Model management ─────────────────────────────────────────────
+
+Test("load model arity 1") <- LoadModel("en_core_web_sm")
+
+Test("load model arity 2") <- LoadModel("en_core_web_sm", "sig_alias")
+
+Test("unload model") <- (LoadModel("en_core_web_sm", "sig_unload"), UnloadModel("sig_unload"))
+
+Test("current model") <- (LoadModel("en_core_web_sm", "sig_cm"), CurrentModel("sig_cm"))
+
+# ── Layer 2 — Process ──────────────────────────────────────────────────────
+
+Test("process") <- (LoadModel("en_core_web_sm", "sig_proc"), Process("sig_proc", "Hello world.", _))
+
+# ── Layer 3 — Tokens ───────────────────────────────────────────────────────
+
+Test("token 2") <- (setup(DOC), Token(DOC, TOK), TokenText(TOK, "Apple"))
+
+Test("token 3") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, "Apple"))
+
+Test("token text") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, T), T == "Apple")
+
+Test("token list") <- (setup(DOC), TokenList(DOC, TOKS), FIRST is ++TOKS[0], T is ++FIRST["text"], T == "Apple")
+
+# ── Layer 4 — Annotations ──────────────────────────────────────────────────
+
+Test("pos") <- (setup(DOC), Token(DOC, 0, TOK), Pos(TOK, "PROPN"))
+
+Test("tag") <- (setup(DOC), Token(DOC, 0, TOK), Tag(TOK, _))
+
+Test("lemma") <- (setup(DOC), Token(DOC, 2, TOK), Lemma(TOK, "look"))
+
+Test("dep") <- (setup(DOC), Token(DOC, 0, TOK), Dep(TOK, "nsubj"))
+
+Test("head") <- (setup(DOC), Token(DOC, 0, TOK), Head(TOK, _))
+
+Test("shape") <- (setup(DOC), Token(DOC, 0, TOK), Shape(TOK, "Xxxxx"))
+
+Test("is alpha") <- (setup(DOC), Token(DOC, 0, TOK), IsAlpha(TOK))
+
+Test("is stop") <- (setup(DOC), Token(DOC, 1, TOK), IsStop(TOK))
+
+# ── Layer 5 — NER ──────────────────────────────────────────────────────────
+
+Test("entity 2") <- (setup(DOC), Entity(DOC, E), T is ++E["text"], T == "Apple")
+
+Test("entity 3") <- (setup(DOC), Entity(DOC, "ORG", E), T is ++E["text"], T == "Apple")
+
+Test("entity list") <- (setup(DOC), EntityList(DOC, ENTS), FIRST is ++ENTS[0], T is ++FIRST["text"], T == "Apple")
+
+# ── Layer 6 — Sentences ────────────────────────────────────────────────────
+
+Test("sentence") <- (setup(DOC), Sentence(DOC, _))
+
+Test("sentence list") <- (setup(DOC), SentenceList(DOC, SENTS), FIRST is ++SENTS[0], FIRST == "Apple is looking at buying U.K. startup for $1 billion.")
+
+# ── Layer 7 — Similarity ───────────────────────────────────────────────────
+
+Test("similarity") <- (LoadModel("en_core_web_sm", "sig_sim"), Similarity("sig_sim", "cat", "dog", _))
+
+# ── Layer 8 — Noun chunks ──────────────────────────────────────────────────
+
+Test("noun chunk") <- (setup(DOC), NounChunk(DOC, C), T is ++C["text"], T == "Apple")

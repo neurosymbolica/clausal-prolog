@@ -44,14 +44,7 @@ Main <- (
 | `Post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
 
 ```clausal
-# skip
-Get("http://example.com", BODY)
-
-Get("http://api.example.com/data",
-    {"Authorization": "Bearer TOKEN"},
-    BODY)
-
-Post("http://example.com/submit", "key=value", RESPONSE)
+--8<-- "tests/fixtures/docs/http_sigs.txt:simple_request_examples"
 ```
 
 ### General request
@@ -74,8 +67,7 @@ Unlike `Get` and `Post`, `Request` does **not** fail on 4xx/5xx — it returns
 the status code so you can handle errors explicitly.
 
 ```clausal
-# skip
-Request({"url": "http://example.com", "method": "HEAD"}, STATUS, BODY)
+--8<-- "tests/fixtures/docs/http_sigs.txt:general_request_example"
 ```
 
 ### JSON requests
@@ -89,13 +81,7 @@ JSON objects are converted to [`DictTerm`](dicts_sets.md), arrays to lists, usin
 conversion as the [`py.json`](json.md) module.
 
 ```clausal
-# skip
-JSONGet("http://api.example.com/users/1", USER),
-py.json.Get(USER, "name", NAME)
-
-JSONPost("http://api.example.com/items",
-         {"name": "Widget", "price": 9.99},
-         RESPONSE)
+--8<-- "tests/fixtures/docs/http_sigs.txt:json_request_examples"
 ```
 
 ---
@@ -116,9 +102,7 @@ JSONPost("http://api.example.com/items",
 ### Encode / Decode
 
 ```clausal
-# skip
-Encode("hello world", E)   # E = "hello%20world"
-Decode("hello%20world", S) # S = "hello world"
+--8<-- "tests/fixtures/docs/http_sigs.txt:url_encode_examples"
 ```
 
 Encode uses `safe=""` — all special characters are encoded.
@@ -129,13 +113,7 @@ Encode uses `safe=""` — all special characters are encoded.
 `fragment`. Port is an integer (0 if not specified).
 
 ```clausal
-# skip
-Parse("https://example.com:8080/path?q=1#frag", PARTS)
-# PARTS = {"scheme": "https", "host": "example.com", "port": 8080,
-#           "path": "/path", "query": "q=1", "fragment": "frag"}
-
-Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
-# URL = "https://example.com/api"
+--8<-- "tests/fixtures/docs/http_sigs.txt:url_parse_examples"
 ```
 
 ---
@@ -145,27 +123,13 @@ Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
     ### Build a query URL
 
     ```clausal
-# skip
-    -import_from(py.url, [Encode, Join])
-    -import_from(py.http, [JSONGet])
-
-    SearchApi(QUERY, RESULTS) <- (
-        Encode(QUERY, SAFE_QUERY),
-        atom_concat("https://api.example.com/search?q=", SAFE_QUERY, URL),
-        JSONGet(URL, RESULTS)
-    )
+    --8<-- "tests/fixtures/docs/http_sigs.txt:build_query_url"
     ```
 
     ### Check API health
 
     ```clausal
-# skip
-    -import_from(py.http, [Request])
-
-    HealthCheck(URL) <- (
-        Request({"url": URL, "timeout": 5}, STATUS, _),
-        STATUS == 200
-    )
+    --8<-- "tests/fixtures/docs/http_sigs.txt:health_check"
     ```
 
 ---

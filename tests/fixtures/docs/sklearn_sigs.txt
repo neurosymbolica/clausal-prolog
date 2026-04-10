@@ -1,0 +1,114 @@
+# Display snippets for docs/sklearn.md
+
+--8<-- [start:term_constructors]
+# Destructure a dataset
+LoadDataset("iris", D), D is ("Dataset", X, Y)
+
+# Destructure a fitted model
+Fit(Est("svc", {}), D, F), F is ("Fitted", E, H)
+--8<-- [end:term_constructors]
+
+--8<-- [start:algorithm_examples]
+# Check that random_forest is a classifier
+Algorithm("random_forest", "classifier")
+
+# Enumerate all regressors
+Algorithm(ALGO, "regressor")
+--8<-- [end:algorithm_examples]
+
+--8<-- [start:data_loading_examples]
+# Load and split iris
+LoadDataset("iris", D),
+SplitData(D, 0.2, 42, S),
+S is ("Split", TRAIN, TEST)
+
+# Synthetic classification data
+MakeDataset("classification",
+            {"n_samples": 200, "n_features": 5, "random_state": 42},
+            D)
+--8<-- [end:data_loading_examples]
+
+--8<-- [start:fit_predict_examples]
+# Classification workflow
+LoadDataset("iris", D),
+Fit(Est("random_forest", {"n_estimators": 100}), D, F),
+D is ("Dataset", X, Y),
+Predict(F, X, PREDS)
+
+# PCA transform
+LoadDataset("iris", D),
+D is ("Dataset", X, Y),
+Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F),
+Transform(F, X, REDUCED)
+--8<-- [end:fit_predict_examples]
+
+--8<-- [start:scoring_examples]
+# Score a classifier
+Score(F, D, S), S > 0.9
+
+# 3-fold cross-validation
+CrossValScore(Est("logistic_regression", {"max_iter": 200}),
+              D, 3, SCORES)
+
+# Multi-metric CV
+CrossValidate(Est("logistic_regression", {"max_iter": 200}),
+              D, 3, ["accuracy", "f1_weighted"], R)
+--8<-- [end:scoring_examples]
+
+--8<-- [start:pipeline_example]
+Pipeline([("scaler", Est("standard_scaler", {})),
+          ("clf", Est("logistic_regression", {"max_iter": 200}))],
+         PIPE),
+LoadDataset("iris", D),
+Fit(PIPE, D, F),
+Score(F, D, S)
+--8<-- [end:pipeline_example]
+
+--8<-- [start:grid_search_example]
+LoadDataset("iris", D),
+GridSearch(Est("svc", {}),
+           {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
+           D, 3, BEST),
+BestParams(BEST, PARAMS),
+BestScore(BEST, SCORE)
+--8<-- [end:grid_search_example]
+
+--8<-- [start:learned_example]
+Fit(Est("random_forest", {"n_estimators": 10}), D, F),
+Learned(F, "feature_importances", FI)
+--8<-- [end:learned_example]
+
+--8<-- [start:complete_workflow]
+-import_from(sklearn, [Est, Dataset, Fitted, Split,
+                       LoadDataset, SplitData, Fit, Predict, Score,
+                       ConfusionMatrix, Learned])
+
+% Load, split, train, evaluate
+IrisWorkflow(SCORE, IMPORTANCES) <- (
+    LoadDataset("iris", D),
+    SplitData(D, 0.2, 42, S),
+    S is ("Split", TRAIN, TEST),
+    Fit(Est("random_forest", {"n_estimators": 100, "random_state": 42}),
+        TRAIN, F),
+    Score(F, TEST, SCORE),
+    Learned(F, "feature_importances", IMPORTANCES)
+)
+--8<-- [end:complete_workflow]
+
+--8<-- [start:pipeline_grid_search]
+-import_from(sklearn, [Est, LoadDataset, Pipeline, Fit, Score,
+                       GridSearch, BestParams, BestScore])
+
+SearchBestPipeline(PARAMS, SCORE) <- (
+    LoadDataset("iris", D),
+    Pipeline([("scaler", Est("standard_scaler", {})),
+              ("clf", Est("svc", {}))],
+             PIPE),
+    GridSearch(PIPE,
+               {"clf__C": [0.1, 1.0, 10.0],
+                "clf__kernel": ["rbf", "linear"]},
+               D, 5, "accuracy", BEST),
+    BestParams(BEST, PARAMS),
+    BestScore(BEST, SCORE)
+)
+--8<-- [end:pipeline_grid_search]

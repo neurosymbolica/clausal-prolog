@@ -58,9 +58,7 @@ when the same Var appears in multiple arguments to a predicate, it maps to the s
 Predicate results are wrapped in `SymExpr`, which overrides `__eq__` to do symbolic comparison. This means Clausal's native `==` works for comparing symbolic results:
 
 ```clausal
-# skip
-Diff(X**3, X, R),
-R == 3*X**2             # symbolic comparison, not structural
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:symbolic_equality"
 ```
 
 This handles term reordering (SymPy may internally reorder `x + 1` to `1 + x`) and alpha-equivalence (different variable names between the result and the expected value).
@@ -72,19 +70,13 @@ Numeric results (integers, floats) are collapsed to plain Python values, so `Sim
 Results from one predicate can be fed directly into another:
 
 ```clausal
-# skip
-Diff(X**4, X, D),
-Integrate(D, X, I),
-I == X**4
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining"
 ```
 
 The `==` operator also preserves symbolic equality through chains:
 
 ```clausal
-# skip
-Diff(X**3, X, D),
-R == D + 1,
-R == 3*X**2 + 1
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining_ex2"
 ```
 
 ---
@@ -98,9 +90,7 @@ R == 3*X**2 + 1
 `Simplify(Expr, Result)` — simplify an expression:
 
 ```clausal
-# skip
-Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
-Simplify((X**2 - 1) / (X - 1), R),  R == X + 1
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:simplify_2"
 ```
 
 #### Expand/2
@@ -108,9 +98,7 @@ Simplify((X**2 - 1) / (X - 1), R),  R == X + 1
 `Expand(Expr, Result)` — algebraic expansion:
 
 ```clausal
-# skip
-Expand((X + 1)**2, R),  R == X**2 + 2*X + 1
-Expand((X + Y)**2, R),  R == X**2 + 2*X*Y + Y**2
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_2"
 ```
 
 #### Factor/2
@@ -118,9 +106,7 @@ Expand((X + Y)**2, R),  R == X**2 + 2*X*Y + Y**2
 `Factor(Expr, Result)` — factorization:
 
 ```clausal
-# skip
-Factor(X**2 - 1, R),      R == (X - 1) * (X + 1)
-Factor(X**2 + 5*X + 6, R), R == (X + 2) * (X + 3)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_2"
 ```
 
 #### Solve/3
@@ -128,10 +114,7 @@ Factor(X**2 + 5*X + 6, R), R == (X + 2) * (X + 3)
 `Solve(Equation, Var, Solution)` — solve equation = 0 for Var. **Nondeterministic** — yields one solution per answer on backtracking:
 
 ```clausal
-# skip
-Solve(2*X - 6, X, S),  S == 3
-Solve(X**2 - 4, X, S), S == 2     # first solution
-Solve(X**2 - 4, X, S), S == -2    # second solution (on backtracking)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_3"
 ```
 
 #### SolveAll/3
@@ -139,10 +122,7 @@ Solve(X**2 - 4, X, S), S == -2    # second solution (on backtracking)
 `SolveAll(Equation, Var, Solutions)` — deterministic, unifies Solutions with a list:
 
 ```clausal
-# skip
-SolveAll(X**2 - 9, X, SOLS),
-S is ++sorted(SOLS),
-S == [-3, 3]
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_all_3"
 ```
 
 #### Diff/2, Diff/3
@@ -151,10 +131,7 @@ S == [-3, 3]
 `Diff(Expr, Var, Result)` — differentiate w.r.t. specified variable:
 
 ```clausal
-# skip
-Diff(X**3, X, R),          R == 3*X**2
-Diff(sin(X), X, R),        R == cos(X)
-Diff(X*Y + X**2, X, R),    R == Y + 2*X    # partial derivative
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:diff_2_3"
 ```
 
 #### Integrate/2, Integrate/3
@@ -163,9 +140,7 @@ Diff(X*Y + X**2, X, R),    R == Y + 2*X    # partial derivative
 `Integrate(Expr, Var, Result)` — w.r.t. specified variable:
 
 ```clausal
-# skip
-Integrate(X**2, X, R),     R == X**3 / 3
-Integrate(cos(X), X, R),   R == sin(X)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:integrate_2_3"
 ```
 
 #### Limit/4
@@ -173,10 +148,7 @@ Integrate(cos(X), X, R),   R == sin(X)
 `Limit(Expr, Var, Point, Result)` — limit as Var approaches Point:
 
 ```clausal
-# skip
-Limit(X + 1, X, 0, R),     R == 1
-Limit(1/X, X, inf, R),     R == 0
-Limit(sin(X)/X, X, 0, R),  R == 1
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:limit_4"
 ```
 
 #### Series/4, Series/5
@@ -185,9 +157,7 @@ Limit(sin(X)/X, X, 0, R),  R == 1
 `Series(Expr, Var, Point, N, Result)` — around a specified point:
 
 ```clausal
-# skip
-Series(1/(1-X), X, 4, R),
-R == 1 + X + X**2 + X**3
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:series_4_5"
 ```
 
 ### Algebra extras
@@ -197,9 +167,7 @@ R == 1 + X + X**2 + X**3
 `Collect(Expr, Var, Result)` — collect terms by powers of Var:
 
 ```clausal
-# skip
-Collect(X**2 + 2*X + X*Y, X, R),
-R == X**2 + X*(Y + 2)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:collect_3"
 ```
 
 #### Cancel/2
@@ -207,8 +175,7 @@ R == X**2 + X*(Y + 2)
 `Cancel(Expr, Result)` — cancel common factors in a rational expression:
 
 ```clausal
-# skip
-Cancel((X**2 - 1) / (X - 1), R),  R == X + 1
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:cancel_2"
 ```
 
 #### Apart/2, Apart/3
@@ -216,9 +183,7 @@ Cancel((X**2 - 1) / (X - 1), R),  R == X + 1
 `Apart(Expr, Result)` — partial fraction decomposition:
 
 ```clausal
-# skip
-Apart(1 / (X**2 - 1), R),
-R == 1/(2*(X - 1)) - 1/(2*(X + 1))
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:apart_2_3"
 ```
 
 #### Together/2
@@ -226,8 +191,7 @@ R == 1/(2*(X - 1)) - 1/(2*(X + 1))
 `Together(Expr, Result)` — combine fractions over a common denominator:
 
 ```clausal
-# skip
-Together(1/X + 1/Y, R),  R == (X + Y) / (X * Y)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:together_2"
 ```
 
 #### Degree/2, Degree/3
@@ -235,8 +199,7 @@ Together(1/X + 1/Y, R),  R == (X + Y) / (X * Y)
 `Degree(Expr, Result)` / `Degree(Expr, Var, Result)` — polynomial degree:
 
 ```clausal
-# skip
-Degree(X**3 + 2*X + 1, X, D),  D == 3
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:degree_2_3"
 ```
 
 #### Coeffs/3
@@ -244,8 +207,7 @@ Degree(X**3 + 2*X + 1, X, D),  D == 3
 `Coeffs(Expr, Var, Result)` — polynomial coefficients (highest degree first):
 
 ```clausal
-# skip
-Coeffs(2*X**3 - X + 7, X, C),  C == [2, 0, -1, 7]
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:coeffs_3"
 ```
 
 #### Roots/3
@@ -253,12 +215,7 @@ Coeffs(2*X**3 - X + 7, X, C),  C == [2, 0, -1, 7]
 `Roots(Equation, Var, Pair)` — **nondeterministic**, yields `(root, multiplicity)` tuples:
 
 ```clausal
-# skip
-Roots(X**2 - 2*X + 1, X, PAIR),
-ROOT is ++PAIR[0],
-MULT is ++PAIR[1],
-ROOT == 1,
-MULT == 2
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:roots_3"
 ```
 
 ### Trigonometry
@@ -268,9 +225,7 @@ MULT == 2
 `TrigSimp(Expr, Result)` — simplify trigonometric expressions:
 
 ```clausal
-# skip
-TrigSimp(sin(X)**2 + cos(X)**2, R),  R == 1
-TrigSimp(2 * sin(X) * cos(X), R),    R == sin(2*X)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:trig_simp_2"
 ```
 
 #### ExpandTrig/2
@@ -278,9 +233,7 @@ TrigSimp(2 * sin(X) * cos(X), R),    R == sin(2*X)
 `ExpandTrig(Expr, Result)` — expand trig identities:
 
 ```clausal
-# skip
-ExpandTrig(sin(X + Y), R),
-R == sin(X)*cos(Y) + sin(Y)*cos(X)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_trig_2"
 ```
 
 ### Number theory
@@ -290,9 +243,7 @@ R == sin(X)*cos(Y) + sin(Y)*cos(X)
 `IsPrime(N)` — succeeds if N is prime:
 
 ```clausal
-# skip
-IsPrime(7)              # succeeds
-not IsPrime(4)          # succeeds
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:is_prime_1"
 ```
 
 #### NextPrime/2
@@ -300,8 +251,7 @@ not IsPrime(4)          # succeeds
 `NextPrime(N, Result)` — smallest prime greater than N:
 
 ```clausal
-# skip
-NextPrime(7, P),  P == 11
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:next_prime_2"
 ```
 
 #### FactorInt/2
@@ -309,8 +259,7 @@ NextPrime(7, P),  P == 11
 `FactorInt(N, Result)` — prime factorization as `{prime: exponent}` dict:
 
 ```clausal
-# skip
-FactorInt(360, F),  F is ++{2: 3, 3: 2, 5: 1}
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_int_2"
 ```
 
 #### Divisors/2
@@ -318,8 +267,7 @@ FactorInt(360, F),  F is ++{2: 3, 3: 2, 5: 1}
 `Divisors(N, Result)` — sorted list of positive divisors:
 
 ```clausal
-# skip
-Divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:divisors_2"
 ```
 
 #### gcd/3, lcm/3
@@ -327,10 +275,7 @@ Divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
 `gcd(A, B, Result)` / `lcm(A, B, Result)` — symbolic GCD/LCM (works on both integers and polynomials):
 
 ```clausal
-# skip
-gcd(12, 8, R),          R == 4
-gcd(X**2 - 1, X - 1, R), R == X - 1
-lcm(4, 6, R),            R == 12
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:gcd_lcm_3"
 ```
 
 ### Special functions
@@ -340,9 +285,7 @@ lcm(4, 6, R),            R == 12
 `sum_(Expr, Var, Low, High, Result)` — symbolic summation:
 
 ```clausal
-# skip
-sum_(I, I, 1, N, R),      R == N*(N + 1)/2
-sum_(I**2, I, 1, 5, R),   R == 55
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:sum_5"
 ```
 
 #### Product/5
@@ -350,8 +293,7 @@ sum_(I**2, I, 1, 5, R),   R == 55
 `Product(Expr, Var, Low, High, Result)` — symbolic product:
 
 ```clausal
-# skip
-Product(I, I, 1, 5, R),  R == 120
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:product_5"
 ```
 
 #### Binomial/3
@@ -359,9 +301,7 @@ Product(I, I, 1, 5, R),  R == 120
 `Binomial(N, K, Result)` — binomial coefficient:
 
 ```clausal
-# skip
-Binomial(5, 2, R),   R == 10
-Binomial(N, 2, R),   R == N*(N - 1)/2
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:binomial_3"
 ```
 
 ### Printing
@@ -371,8 +311,7 @@ Binomial(N, 2, R),   R == N*(N - 1)/2
 `Latex(Expr, String)` — convert expression to LaTeX:
 
 ```clausal
-# skip
-Latex(X**2 + 1, S),  ++("x^{2}" in S)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:latex_2"
 ```
 
 #### Pretty/2
@@ -380,8 +319,7 @@ Latex(X**2 + 1, S),  ++("x^{2}" in S)
 `Pretty(Expr, String)` — Unicode pretty-print:
 
 ```clausal
-# skip
-Pretty(X**2, S),  ++("2" in S)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:pretty_2"
 ```
 
 #### MathML/2
@@ -395,8 +333,7 @@ Pretty(X**2, S),  ++("2" in S)
 `Subs(Expr, Bindings, Result)` — substitute values. Bindings is a dict or list of pairs:
 
 ```clausal
-# skip
-Subs(X**2 + 1, ++{X: 3}, R),  R == 10
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:subs_3"
 ```
 
 Note: binding dicts with logic variable keys must be wrapped in `++()` so the Vars are dereferenced.
@@ -406,8 +343,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 `FreeVars(Expr, Names)` — sorted list of free symbol name strings:
 
 ```clausal
-# skip
-FreeVars(42, V),  V == []
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:free_vars_2"
 ```
 
 ### Display and comparison
@@ -417,8 +353,7 @@ FreeVars(42, V),  V == []
 `SymStr(Expr, String)` — convert expression to a readable string via SymPy:
 
 ```clausal
-# skip
-SymStr(42, S),  S == "42"
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_str_2"
 ```
 
 #### SymEqual/2
@@ -426,9 +361,7 @@ SymStr(42, S),  S == "42"
 `SymEqual(A, B)` — explicit symbolic equality (usually `==` suffices, but `SymEqual` is available for cases where both sides are raw Clausal terms):
 
 ```clausal
-# skip
-SymEqual(X**2 + 1, 1 + X**2)
-SymEqual((X + 1)**2 - X**2, 2*X + 1)
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_equal_2"
 ```
 
 ### Conversion
@@ -438,11 +371,7 @@ SymEqual((X + 1)**2 - X**2, 2*X + 1)
 `Sym(Name, Symbol)` — create a named SymPy Symbol. Rarely needed since predicates auto-convert Vars, but useful when you want a specific display name:
 
 ```clausal
-# skip
-Sym("x", X),
-EXPR is ++(X**2 + 1),
-S is ++str(EXPR),
-S == "x**2 + 1"
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_2"
 ```
 
 #### ToSympy/2, FromSympy/2
@@ -467,11 +396,7 @@ Importable callables that produce `Compound` terms. These are converted to SymPy
 Usage:
 
 ```clausal
-# skip
--import_from(sympy_module, [Diff, sin, cos, exp, log, sqrt])
-
-Diff(sin(X), X, R),  R == cos(X)
-Simplify(exp(log(X)), R),  R == X
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:math_functions_usage"
 ```
 
 ---
@@ -487,10 +412,7 @@ Simplify(exp(log(X)), R),  R == X
 Usage:
 
 ```clausal
-# skip
--import_from(sympy_module, [Limit, inf, pi])
-
-Limit(1/X, X, inf, R),  R == 0
+--8<-- "tests/fixtures/docs/sympy_sigs.txt:constants_usage"
 ```
 
 ---

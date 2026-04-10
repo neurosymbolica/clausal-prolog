@@ -67,9 +67,7 @@ For `UUIDv3` and `UUIDv5`, the namespace argument accepts string aliases or raw 
 | `"x500"` | `uuid.NAMESPACE_X500` |
 
 ```clausal
-# skip
-UUIDv3("dns", "example.com", U)
-UUIDv5("url", "https://example.com", U)
+--8<-- "tests/fixtures/docs/uuid_sigs.txt:generation_examples"
 ```
 
 ---
@@ -87,15 +85,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `UUIDInt(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
 
 ```clausal
-# skip
-# Generate a UUID and get its string form
-UUIDv4(U), UUIDStr(U, S)
-
-# Parse a UUID from a string
-UUIDStr(U, "550e8400-e29b-41d4-a716-446655440000")
-
-# Convert to hex
-UUIDHex(U, "550e8400e29b41d4a716446655440000")
+--8<-- "tests/fixtures/docs/uuid_sigs.txt:conversion_examples"
 ```
 
 ---
@@ -109,12 +99,7 @@ UUIDHex(U, "550e8400e29b41d4a716446655440000")
 | `IsUUID(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
 
 ```clausal
-# skip
-# Check that a UUID is version 4
-UUIDv4(U), UUIDVersion(U, 4)
-
-# Type-check
-IsUUID(U)
+--8<-- "tests/fixtures/docs/uuid_sigs.txt:inspection_examples"
 ```
 
 ---
@@ -124,25 +109,13 @@ IsUUID(U)
     ### Session tokens
 
     ```clausal
-# skip
-    -import_from(uuid, [UUIDv4, UUIDStr])
-    
-    NewSession(USERID, TOKEN) <- (
-        UUIDv4(U),
-        UUIDStr(U, TOKEN)
-    )
+    --8<-- "tests/fixtures/docs/uuid_sigs.txt:session_tokens"
     ```
 
     ### Deterministic IDs
 
     ```clausal
-# skip
-    -import_from(uuid, [UUIDv5, UUIDStr])
-    
-    ResourceId(TYPE, NAME, ID) <- (
-        UUIDv5("url", NAME, U),
-        UUIDStr(U, ID)
-    )
+    --8<-- "tests/fixtures/docs/uuid_sigs.txt:deterministic_ids"
     ```
 
 ---

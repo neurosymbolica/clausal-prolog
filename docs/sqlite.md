@@ -51,8 +51,7 @@ Connections are identified by string aliases. A module-level registry maps alias
 ### `SQLiteConnect/2`
 
 ```clausal
-# skip
-SQLiteConnect(+Path, +Alias)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:connect_sig"
 ```
 
 Open a SQLite database at `Path` and register it under `Alias`. `Path` can be a file path or `":memory:"` for an in-memory database.
@@ -62,8 +61,7 @@ Open a SQLite database at `Path` and register it under `Alias`. `Path` can be a 
 ### `SQLiteDisconnect/1`
 
 ```clausal
-# skip
-SQLiteDisconnect(+Alias)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:disconnect_sig"
 ```
 
 Close the connection and unregister `Alias`. **Fails** if `Alias` is not connected.
@@ -71,8 +69,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 ### `SQLiteCurrentConnection/1`
 
 ```clausal
-# skip
-SQLiteCurrentConnection(?Alias)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:current_connection_sig"
 ```
 
 when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. when `Alias` is ground, succeeds if that alias is currently connected.
@@ -93,8 +90,7 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 ### `SQLiteQuery/3`
 
 ```clausal
-# skip
-SQLiteQuery(+Alias, +SQL, -Row)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_sig"
 ```
 
 Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Multi-column rows are Python tuples; single-column rows are unwrapped to the bare value.
@@ -112,8 +108,7 @@ AllNames(NAME) <- SQLiteQuery("db", "SELECT name FROM users", NAME)
 ### `SQLiteQuery/4`
 
 ```clausal
-# skip
-SQLiteQuery(+Alias, +SQL, +Params, -Row)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_params_sig"
 ```
 
 Parameterized query with `?` placeholders. `Params` is a list of values.
@@ -127,8 +122,7 @@ OlderThan(MIN_AGE, NAME) <- (
 ### `SQLiteExec/2`
 
 ```clausal
-# skip
-SQLiteExec(+Alias, +SQL)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:exec_sig"
 ```
 
 Execute a DDL or DML statement (CREATE, INSERT, UPDATE, DELETE). **Succeeds once** and auto-commits.
@@ -143,8 +137,7 @@ Setup <- (
 ### `SQLiteExec/3`
 
 ```clausal
-# skip
-SQLiteExec(+Alias, +SQL, +Params)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:exec_params_sig"
 ```
 
 Parameterized DML with `?` placeholders. Auto-commits.
@@ -158,8 +151,7 @@ AddUser(NAME, AGE) <- (
 ### `SQLiteRowCount/3`
 
 ```clausal
-# skip
-SQLiteRowCount(+Alias, +SQL, -Count)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:row_count_sig"
 ```
 
 Execute DML and unify `Count` with the number of affected rows.
@@ -178,8 +170,7 @@ Cleanup(N) <- (
 ### `SQLiteTable/2`
 
 ```clausal
-# skip
-SQLiteTable(+Alias, ?TableName)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:table_sig"
 ```
 
 when `TableName` is unbound, **nondeterministically enumerates** all table names. when ground, succeeds if that table exists.
@@ -193,8 +184,7 @@ ListTables(T) <- SQLiteTable("db", T)
 ### `SQLiteColumn/4`
 
 ```clausal
-# skip
-SQLiteColumn(+Alias, +Table, ?ColName, ?ColType)
+--8<-- "tests/fixtures/docs/sqlite_sigs.txt:column_sig"
 ```
 
 Enumerate columns of a table. Yields `(ColName, ColType)` pairs. Column types are SQLite type strings: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
@@ -213,59 +203,19 @@ ShowSchema(COL, TYPE) <- (
     ### CRUD operations
 
     ```clausal
-# skip
-    -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
-
-    Init <- (
-        SQLiteConnect(":memory:", "app"),
-        SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
-    )
-    
-    AddNote(BODY) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [BODY])
-
-    AllNotes(ID, BODY) <- SQLiteQuery("app", "SELECT id, body FROM notes", (ID, BODY))
-
-    SearchNotes(TERM, BODY) <- (
-        SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [TERM], BODY)
-    )
+    --8<-- "tests/fixtures/docs/sqlite_sigs.txt:crud_example"
     ```
 
     ### Joining tables
 
     ```clausal
-# skip
-    -import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
-
-    Setup <- (
-        SQLiteConnect(":memory:", "hr"),
-        SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)"),
-        SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)"),
-        SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')"),
-        SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')"),
-        SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)"),
-        SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
-    )
-
-    EmpDept(EMP, DEPT) <- (
-        Setup,
-        SQLiteQuery("hr",
-            "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
-            (EMP, DEPT))
-    )
+    --8<-- "tests/fixtures/docs/sqlite_sigs.txt:join_example"
     ```
 
     ### Schema exploration
 
     ```clausal
-# skip
-    -import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
-
-    Describe(DB) <- (
-        SQLiteTable(DB, TABLE),
-        ++print(f"\n{TABLE}:"),
-        SQLiteColumn(DB, TABLE, COL, TYPE),
-        ++print(f"  {COL} {TYPE}")
-    )
+    --8<-- "tests/fixtures/docs/sqlite_sigs.txt:schema_example"
     ```
 
     ---

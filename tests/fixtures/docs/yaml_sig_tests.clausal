@@ -1,0 +1,40 @@
+# Companion tests for docs/yaml.md display snippets.
+
+-import_from(py.yaml, [Read, write, ReadAll, WriteAll, Get])
+
+# ── Read ─────────────────────────────────────────────────────────────────────
+
+Test("parse mapping") <- (
+    Read("name: alice\nage: 30", D),
+    Get(D, "name", "alice"),
+    Get(D, "age", 30)
+)
+
+Test("parse list") <- (
+    Read("[1, 2, 3]", D),
+    D == [1, 2, 3]
+)
+
+# ── ReadAll ──────────────────────────────────────────────────────────────────
+
+Test("multi doc") <- (
+    ReadAll("a: 1\n---\nb: 2", DOCS),
+    LEN is ++len(DOCS),
+    LEN == 2
+)
+
+# ── write ────────────────────────────────────────────────────────────────────
+
+Test("serialize roundtrip") <- (
+    DATA is ++{"x": 1, "y": 2},
+    write(DATA, S),
+    Read(S, D),
+    Get(D, "x", 1)
+)
+
+# ── Get (nested) ─────────────────────────────────────────────────────────────
+
+Test("nested access") <- (
+    Read("items:\n  - name: first\n  - name: second", D),
+    Get(D, ["items", 1, "name"], "second")
+)

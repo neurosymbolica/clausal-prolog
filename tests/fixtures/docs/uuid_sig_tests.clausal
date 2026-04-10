@@ -1,0 +1,50 @@
+# Companion tests for docs/uuid.md display snippets.
+# Validates that documented predicates exist and work as shown.
+
+-import_from(py.uuid, [UUIDv4, UUIDv3, UUIDv5, UUIDStr, UUIDHex, UUIDVersion, IsUUID])
+
+# ── Generation ───────────────────────────────────────────────────────────────
+
+Test("uuid3 generation") <- UUIDv3("dns", "example.com", _)
+
+Test("uuid5 generation") <- UUIDv5("url", "https://example.com", _)
+
+# ── Conversion ───────────────────────────────────────────────────────────────
+
+Test("uuid4 to string") <- (
+    UUIDv4(U),
+    UUIDStr(U, S),
+    is_str(S)
+)
+
+Test("uuid from string") <- UUIDStr(_, "550e8400-e29b-41d4-a716-446655440000")
+
+Test("uuid from hex") <- UUIDHex(_, "550e8400e29b41d4a716446655440000")
+
+# ── Inspection ───────────────────────────────────────────────────────────────
+
+Test("uuid4 version check") <- (
+    UUIDv4(U),
+    UUIDVersion(U, 4)
+)
+
+Test("is_uuid check") <- (
+    UUIDv4(U),
+    IsUUID(U)
+)
+
+# ── Session tokens example ───────────────────────────────────────────────────
+
+Test("session token pattern") <- (
+    UUIDv4(U),
+    UUIDStr(U, TOKEN),
+    is_str(TOKEN)
+)
+
+# ── Deterministic IDs example ────────────────────────────────────────────────
+
+Test("deterministic id pattern") <- (
+    UUIDv5("url", "https://example.com", U),
+    UUIDStr(U, ID),
+    is_str(ID)
+)

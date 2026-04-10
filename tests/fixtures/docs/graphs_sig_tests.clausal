@@ -1,0 +1,76 @@
+# Companion tests for docs/graphs.md display snippets.
+
+-import_from(graphs, [
+    Vertices, Neighbors, Degree, HasEdge,
+    IsConnected, BreadthFirstNodes, DepthFirstNodes,
+    FindPath, ShortestPath, PathCost,
+    ConnectedComponents, TopologicalSort, HasCycle,
+    SpanningTree, MinSpanningTree,
+    ReverseEdges, MergeGraphs
+])
+
+# ── Query predicates ─────────────────────────────────────────────────────────
+
+Test("vertices") <- (
+    Vertices([["a", "b"], ["b", "c"]], V),
+    length(V, 3)
+)
+
+Test("neighbors") <- (
+    Neighbors([["a", "b"], ["b", "c"]], "b", N),
+    in_("a", N),
+    in_("c", N)
+)
+
+Test("degree") <- Degree([["a", "b"], ["b", "c"]], "b", 2)
+
+Test("has edge") <- HasEdge([["a", "b"], ["b", "c"]], "a", "b")
+
+# ── Traversal ────────────────────────────────────────────────────────────────
+
+Test("bfs") <- (
+    BreadthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
+    length(N, 4)
+)
+
+Test("dfs") <- (
+    DepthFirstNodes([["a", "b"], ["b", "c"], ["c", "d"]], "a", N),
+    length(N, 4)
+)
+
+# ── Pathfinding ──────────────────────────────────────────────────────────────
+
+Test("find path") <- FindPath([["a", "b"], ["b", "c"], ["a", "c"]], "a", "c", _)
+
+Test("shortest path weighted") <- (
+    ShortestPath([["a", "b", 1], ["b", "c", 2], ["a", "c", 10]], "a", "c", P),
+    P == ["a", "b", "c"]
+)
+
+Test("path cost") <- PathCost([["a", "b", 3], ["b", "c", 5]], ["a", "b", "c"], 8)
+
+# ── Components ───────────────────────────────────────────────────────────────
+
+Test("connected components") <- (
+    ConnectedComponents([["a", "b"], ["c", "d"]], C),
+    length(C, 2)
+)
+
+Test("topological sort") <- TopologicalSort([["a", "b"], ["b", "c"], ["a", "c"]], _)
+
+Test("is connected") <- IsConnected([["a", "b"], ["b", "c"]])
+
+# ── Trees ────────────────────────────────────────────────────────────────────
+
+Test("min spanning tree") <- (
+    MinSpanningTree([["a", "b", 1], ["b", "c", 2], ["a", "c", 4]], _, C),
+    C == 3
+)
+
+# ── Transforms ───────────────────────────────────────────────────────────────
+
+Test("reverse edges") <- (
+    ReverseEdges([["a", "b"], ["c", "d"]], R),
+    in_(["b", "a"], R),
+    in_(["d", "c"], R)
+)

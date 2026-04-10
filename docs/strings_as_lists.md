@@ -26,10 +26,7 @@ level, `"hello"` and `['h', 'e', 'l', 'l', 'o']` are interchangeable.
 A string unifies with a list of single-character strings:
 
 ```clausal
-# skip
-Test("string = char list") <- "abc" == ['a', 'b', 'c']
-Test("with vars") <- ("abc" == [X, Y, Z], X == 'a', Y == 'b', Z == 'c')
-Test("partial") <- ("hello" == ['h', 'e', X, Y, 'o'], X == 'l', Y == 'l')
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:unification"
 ```
 
 String-to-string unification is unchanged — `"abc" = "abc"` succeeds by
@@ -38,8 +35,7 @@ equality (no element-wise comparison needed).
 The empty string unifies with the empty list:
 
 ```clausal
-# skip
-Test("empty") <- "" == []
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:empty_string"
 ```
 
 ---
@@ -50,14 +46,7 @@ Multi-star list patterns work on strings. Star variables bind to
 **substrings** (not character lists), preserving the `str` type:
 
 ```clausal
-# skip
-starts_with([*Prefix, *_], Prefix)
-ends_with([*_, *Suffix], Suffix)
-contains([*_, X, *_], X)
-
-Test("prefix") <- starts_with("hello", "hel")
-Test("suffix") <- ends_with("hello", "lo")
-Test("contains l") <- contains("hello", 'l')
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:pattern_matching"
 ```
 
 This is the same pattern syntax used for lists — no special string patterns
@@ -74,52 +63,37 @@ is a character sequence, the result is returned as a string:
 ### append
 
 ```clausal
-# skip
-Test("concat") <- append("hel", "lo", "hello")
-Test("prefix match") <- append("hel", X, "hello"), X == "lo"
-Test("suffix match") <- append(X, "lo", "hello"), X == "hel"
-Test("split") <- append(X, Y, "hello"), X == "he", Y == "llo"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:append_examples"
 ```
 
 ### length
 
 ```clausal
-# skip
-Test("length") <- length("hello", 5)
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:length_example"
 ```
 
 ### in_ (Member)
 
 ```clausal
-# skip
-Test("member") <- in_('e', "hello")
-Test("enumerate") <- (
-    findall(C, in_(C, "abc"), Chars),
-    Chars == ['a', 'b', 'c']
-)
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:member_examples"
 ```
 
 ### reverse
 
 ```clausal
-# skip
-Test("reverse") <- reverse("hello", "olleh")
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:reverse_example"
 ```
 
 ### take, drop, split_at
 
 ```clausal
-# skip
-Test("take") <- take(3, "hello", "hel")
-Test("drop") <- drop(3, "hello", "lo")
-Test("split") <- split_at(3, "hello", "hel", "lo")
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:take_drop_split"
 ```
 
 ### get_item
 
 ```clausal
-# skip
-Test("index") <- get_item("hello", 1, 'e')
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:get_item_example"
 ```
 
 ---
@@ -175,11 +149,7 @@ Use `is_chars/1` when you want to accept both strings and lists. Use `is_list/1`
 or `is_str/1` when you need to distinguish the two.
 
 ```clausal
-# skip
-Test("is_chars string") <- is_chars("hello")
-Test("is_chars list") <- is_chars([1, 2, 3])
-Test("is_list string fails") <- not is_list("hello")
-Test("is_str list fails") <- not is_str([1, 2, 3])
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:type_checking"
 ```
 
 ---

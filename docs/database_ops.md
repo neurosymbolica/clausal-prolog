@@ -9,16 +9,7 @@ memoization, and self-modifying programs.
 ## Quick Example
 
 ```clausal
-# skip
--dynamic(color/1)
-
-color("red"),
-color("blue"),
-
-Test("assert and query") <- (
-    assertz(color("green")),
-    color("green")
-)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:quick_example"
 ```
 
 ---
@@ -30,9 +21,7 @@ clauses at runtime. To allow runtime modification, declare the predicate as
 dynamic (see [Directives](directives.md) for other directive types):
 
 ```clausal
-# skip
--dynamic(counter/1)
--dynamic(cache/2)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
 ```
 
 Without this directive, `assertz` and `retract` will raise a permission error.
@@ -47,13 +36,7 @@ Without this directive, `assertz` and `retract` will raise a permission error.
 `assertz`).
 
 ```clausal
-# skip
--dynamic(fact/1)
-
-Test("assert") <- (
-    assertz(fact(42)),
-    fact(42)
-)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:assertz_example"
 ```
 
 ### asserta/1
@@ -62,16 +45,7 @@ Test("assert") <- (
 Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
 ```clausal
-# skip
--dynamic(priority/1)
-
-priority("low"),
-
-Test("assert first") <- (
-    asserta(priority("high")),
-    once(priority(X)),
-    X == "high"
-)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:asserta_example"
 ```
 
 ---
@@ -83,35 +57,13 @@ Test("assert first") <- (
 `retract(Term)` — remove the first clause whose head unifies with `Term`.
 
 ```clausal
-# skip
--dynamic(item/1)
-
-item("a"),
-item("b"),
-item("c"),
-
-Test("retract") <- (
-    retract(item("b")),
-    not item("b"),
-    item("a"),
-    item("c")
-)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
 ```
 
 `retract` uses unification for matching, so you can retract by pattern:
 
 ```clausal
-# skip
--dynamic(pair/2)
-
-pair("x", 1),
-pair("y", 2),
-pair("z", 3),
-
-Test("retract by pattern") <- (
-    retract(pair("y", _)),
-    not pair("y", 2)
-)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_pattern"
 ```
 
 ---
@@ -124,10 +76,7 @@ Test("retract by pattern") <- (
 predicate.
 
 ```clausal
-# skip
--table(memo_fib/2)
-
-Test("clear") <- abolish_table("memo_fib", 2)
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:abolish_table_example"
 ```
 
 ### abolish_all_tables/0
@@ -147,20 +96,7 @@ Test("clear all") <- abolish_all_tables()
 Use assert to cache computed results:
 
 ```clausal
-# skip
--dynamic(fib_cache/2)
-
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
-    N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
-    fib(N1, F1),
-    fib(N2, F2),
-    F == F1 + F2,
-    assertz(fib_cache(N, F))
-)
+--8<-- "tests/fixtures/docs/database_ops_sigs.txt:memoization_recipe"
 ```
 
 (For automatic memoization, consider [`-table`](tabling.md) instead.)
@@ -168,37 +104,13 @@ fib(N, F) <- (
 ### Counter / mutable state
 
 ```clausal
-# skip
--dynamic(counter/1)
-
-counter(0),
-
-increment(NEW) <- (
-    retract(counter(OLD)),
-    NEW == OLD + 1,
-    assertz(counter(NEW))
-),
-
-Test("counter") <- (
-    increment(1),
-    increment(2),
-    counter(2)
-)
+--8<-- "tests/fixtures/docs/database_ops_sigs.txt:counter_recipe"
 ```
 
 ### Collecting facts from a computation
 
 ```clausal
-# skip
--dynamic(result/1)
-
-collect_evens(LIST) <- (
-    in_(X, LIST),
-    X % 2 == 0,
-    assertz(result(X)),
-    False
-),
-collect_evens(_)
+--8<-- "tests/fixtures/docs/database_ops_sigs.txt:collect_recipe"
 ```
 
 (Prefer [`findall`](meta_predicates.md) for this pattern — it is cleaner and

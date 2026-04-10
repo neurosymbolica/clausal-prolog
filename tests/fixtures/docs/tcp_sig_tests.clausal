@@ -1,0 +1,15 @@
+# Companion tests for docs/tcp.md display snippets.
+# TCP predicates require network I/O — test via loopback echo.
+
+-import_from(py.tcp, [Connect, Listen, Accept, Send, Receive, Close, SetTimeout])
+
+Test("listen on ephemeral port") <- (
+    Listen("127.0.0.1", 0, SERVER),
+    Close(SERVER)
+)
+
+Test("set timeout") <- (
+    Listen("127.0.0.1", 0, SERVER),
+    SetTimeout(SERVER, 1.0),
+    Close(SERVER)
+)

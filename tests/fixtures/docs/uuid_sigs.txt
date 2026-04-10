@@ -1,0 +1,43 @@
+# Display snippets for docs/uuid.md
+
+--8<-- [start:generation_examples]
+UUIDv3("dns", "example.com", U)
+UUIDv5("url", "https://example.com", U)
+--8<-- [end:generation_examples]
+
+--8<-- [start:conversion_examples]
+# Generate a UUID and get its string form
+UUIDv4(U), UUIDStr(U, S)
+
+# Parse a UUID from a string
+UUIDStr(U, "550e8400-e29b-41d4-a716-446655440000")
+
+# Convert to hex
+UUIDHex(U, "550e8400e29b41d4a716446655440000")
+--8<-- [end:conversion_examples]
+
+--8<-- [start:inspection_examples]
+# Check that a UUID is version 4
+UUIDv4(U), UUIDVersion(U, 4)
+
+# Type-check
+IsUUID(U)
+--8<-- [end:inspection_examples]
+
+--8<-- [start:session_tokens]
+-import_from(uuid, [UUIDv4, UUIDStr])
+
+NewSession(USERID, TOKEN) <- (
+    UUIDv4(U),
+    UUIDStr(U, TOKEN)
+)
+--8<-- [end:session_tokens]
+
+--8<-- [start:deterministic_ids]
+-import_from(uuid, [UUIDv5, UUIDStr])
+
+ResourceId(TYPE, NAME, ID) <- (
+    UUIDv5("url", NAME, U),
+    UUIDStr(U, ID)
+)
+--8<-- [end:deterministic_ids]

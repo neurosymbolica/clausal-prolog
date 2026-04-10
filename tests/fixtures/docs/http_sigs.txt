@@ -1,0 +1,58 @@
+# Display snippets for docs/http.md
+
+--8<-- [start:simple_request_examples]
+Get("http://example.com", BODY)
+
+Get("http://api.example.com/data",
+    {"Authorization": "Bearer TOKEN"},
+    BODY)
+
+Post("http://example.com/submit", "key=value", RESPONSE)
+--8<-- [end:simple_request_examples]
+
+--8<-- [start:general_request_example]
+Request({"url": "http://example.com", "method": "HEAD"}, STATUS, BODY)
+--8<-- [end:general_request_example]
+
+--8<-- [start:json_request_examples]
+JSONGet("http://api.example.com/users/1", USER),
+py.json.Get(USER, "name", NAME)
+
+JSONPost("http://api.example.com/items",
+         {"name": "Widget", "price": 9.99},
+         RESPONSE)
+--8<-- [end:json_request_examples]
+
+--8<-- [start:url_encode_examples]
+Encode("hello world", E)   # E = "hello%20world"
+Decode("hello%20world", S) # S = "hello world"
+--8<-- [end:url_encode_examples]
+
+--8<-- [start:url_parse_examples]
+Parse("https://example.com:8080/path?q=1#frag", PARTS)
+# PARTS = {"scheme": "https", "host": "example.com", "port": 8080,
+#           "path": "/path", "query": "q=1", "fragment": "frag"}
+
+Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
+# URL = "https://example.com/api"
+--8<-- [end:url_parse_examples]
+
+--8<-- [start:build_query_url]
+-import_from(py.url, [Encode, Join])
+-import_from(py.http, [JSONGet])
+
+SearchApi(QUERY, RESULTS) <- (
+    Encode(QUERY, SAFE_QUERY),
+    atom_concat("https://api.example.com/search?q=", SAFE_QUERY, URL),
+    JSONGet(URL, RESULTS)
+)
+--8<-- [end:build_query_url]
+
+--8<-- [start:health_check]
+-import_from(py.http, [Request])
+
+HealthCheck(URL) <- (
+    Request({"url": URL, "timeout": 5}, STATUS, _),
+    STATUS == 200
+)
+--8<-- [end:health_check]

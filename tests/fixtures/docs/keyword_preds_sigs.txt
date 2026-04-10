@@ -1,0 +1,23 @@
+# Display snippets for docs/keyword_preds.md
+
+--8<-- [start:default_values]
+with_defaults(TERM, RESULT) <- (
+    vary({"color": "black", "size": 12}, TERM, RESULT)
+)
+--8<-- [end:default_values]
+
+--8<-- [start:inspect_fields]
+needs_input(TERM) <- (
+    unbound_keys(TERM, KEYS),
+    length(KEYS, N),
+    N > 0
+)
+--8<-- [end:inspect_fields]
+
+--8<-- [start:reflect_predicate]
+describe_predicate(NAME, ARITY) <- (
+    signature(NAME, ARITY, FIELD_NAMES),
+    writeln(f"Predicate {NAME}/{ARITY}"),
+    writeln(f"Fields: {FIELD_NAMES}")
+)
+--8<-- [end:reflect_predicate]

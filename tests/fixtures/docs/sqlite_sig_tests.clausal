@@ -1,0 +1,56 @@
+# Companion tests for docs/sqlite.md display snippets.
+
+-import_from(sqlite, [SQLiteConnect, SQLiteDisconnect, SQLiteCurrentConnection,
+                      SQLiteExec, SQLiteQuery, SQLiteRowCount,
+                      SQLiteTable, SQLiteColumn])
+
+# ── Connection ───────────────────────────────────────────────────────────────
+
+Test("connect") <- (
+    SQLiteConnect(":memory:", "doc_test_conn"),
+    SQLiteCurrentConnection("doc_test_conn")
+)
+
+# ── Exec and Query ───────────────────────────────────────────────────────────
+
+Test("exec and query") <- (
+    SQLiteConnect(":memory:", "doc_test_eq"),
+    SQLiteExec("doc_test_eq", "CREATE TABLE t1 (x INTEGER)"),
+    SQLiteExec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
+    SQLiteQuery("doc_test_eq", "SELECT x FROM t1", V),
+    V == 42
+)
+
+Test("query params") <- (
+    SQLiteConnect(":memory:", "doc_test_qp"),
+    SQLiteExec("doc_test_qp", "CREATE TABLE t2 (x INTEGER)"),
+    SQLiteExec("doc_test_qp", "INSERT INTO t2 VALUES (1)"),
+    SQLiteExec("doc_test_qp", "INSERT INTO t2 VALUES (2)"),
+    SQLiteQuery("doc_test_qp", "SELECT x FROM t2 WHERE x > ?", [1], V),
+    V == 2
+)
+
+# ── Row count ────────────────────────────────────────────────────────────────
+
+Test("row count") <- (
+    SQLiteConnect(":memory:", "doc_test_rc"),
+    SQLiteExec("doc_test_rc", "CREATE TABLE t3 (x INTEGER)"),
+    SQLiteExec("doc_test_rc", "INSERT INTO t3 VALUES (1)"),
+    SQLiteExec("doc_test_rc", "INSERT INTO t3 VALUES (2)"),
+    SQLiteRowCount("doc_test_rc", "DELETE FROM t3", N),
+    N == 2
+)
+
+# ── Schema introspection ─────────────────────────────────────────────────────
+
+Test("table exists") <- (
+    SQLiteConnect(":memory:", "doc_test_tbl"),
+    SQLiteExec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    SQLiteTable("doc_test_tbl", "users")
+)
+
+Test("column info") <- (
+    SQLiteConnect(":memory:", "doc_test_col"),
+    SQLiteExec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
+    SQLiteColumn("doc_test_col", "items", "id", _)
+)

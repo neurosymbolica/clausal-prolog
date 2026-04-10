@@ -1,0 +1,47 @@
+# Display snippets for docs/database_ops.md
+
+--8<-- [start:memoization_recipe]
+-dynamic(FibCache/2)
+
+Fib(0, 0),
+Fib(1, 1),
+Fib(N, F) <- (
+    N > 1,
+    N1 is N - 1,
+    N2 is N - 2,
+    Fib(N1, F1),
+    Fib(N2, F2),
+    F is F1 + F2,
+    assertz(FibCache(N, F))
+)
+--8<-- [end:memoization_recipe]
+
+--8<-- [start:counter_recipe]
+-dynamic(Ctr/1)
+
+Ctr(0),
+
+Increment(NEW) <- (
+    retract(Ctr(OLD)),
+    NEW is OLD + 1,
+    assertz(Ctr(NEW))
+)
+
+Test("counter") <- (
+    Increment(1),
+    Increment(2),
+    Ctr(2)
+)
+--8<-- [end:counter_recipe]
+
+--8<-- [start:collect_recipe]
+-dynamic(Result/1)
+
+CollectEvens(LIST) <- (
+    in_(X, LIST),
+    X % 2 == 0,
+    assertz(Result(X)),
+    False
+)
+CollectEvens(_),
+--8<-- [end:collect_recipe]

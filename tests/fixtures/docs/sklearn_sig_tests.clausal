@@ -1,0 +1,53 @@
+# Companion tests for docs/sklearn.md display snippets.
+
+-import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
+                       Score, Algorithm, Learned, MakeDataset, SplitData,
+                       Pipeline, CrossValScore])
+
+# ── Algorithm registry ───────────────────────────────────────────────────────
+
+Test("random_forest is classifier") <- Algorithm("random_forest", "classifier")
+
+Test("pca is transformer") <- Algorithm("pca", "transformer")
+
+# ── Data loading ─────────────────────────────────────────────────────────────
+
+Test("load iris") <- (
+    LoadDataset("iris", D),
+    D is ("Dataset", _, _)
+)
+
+Test("make synthetic") <- (
+    MakeDataset("classification",
+                {"n_samples": 50, "n_features": 4, "random_state": 42},
+                D),
+    D is ("Dataset", _, _)
+)
+
+# ── Fit and predict ──────────────────────────────────────────────────────────
+
+Test("fit and predict") <- (
+    LoadDataset("iris", D),
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    D is ("Dataset", X, _),
+    Predict(F, X, PREDS),
+    nonvar(PREDS)
+)
+
+# ── Score ────────────────────────────────────────────────────────────────────
+
+Test("score") <- (
+    LoadDataset("iris", D),
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    Score(F, D, S),
+    S > 0.8
+)
+
+# ── Learned attributes ───────────────────────────────────────────────────────
+
+Test("feature importances") <- (
+    LoadDataset("iris", D),
+    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    Learned(F, "feature_importances", FI),
+    nonvar(FI)
+)

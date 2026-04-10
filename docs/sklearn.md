@@ -62,12 +62,7 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 | `Split(train, test)` | `("Split", train_dataset, test_dataset)` | Train/test partition |
 
 ```clausal
-# skip
-# Destructure a dataset
-LoadDataset("iris", D), D is ("Dataset", X, Y)
-
-# Destructure a fitted model
-Fit(Est("svc", {}), D, F), F is ("Fitted", E, H)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:term_constructors"
 ```
 
 ---
@@ -95,12 +90,7 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
     **Clusterers**: `kmeans`, `dbscan`, `agglomerative`
 
 ```clausal
-# skip
-# Check that random_forest is a classifier
-Algorithm("random_forest", "classifier")
-
-# Enumerate all regressors
-Algorithm(ALGO, "regressor")
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:algorithm_examples"
 ```
 
 ---
@@ -117,16 +107,7 @@ Algorithm(ALGO, "regressor")
 | `StratifiedSplit(Dataset, K, Split)` | `+Dataset, +K, -Split` | Stratified K-fold via backtracking |
 
 ```clausal
-# skip
-# Load and split iris
-LoadDataset("iris", D),
-SplitData(D, 0.2, 42, S),
-S is ("Split", TRAIN, TEST)
-
-# Synthetic classification data
-MakeDataset("classification",
-            {"n_samples": 200, "n_features": 5, "random_state": 42},
-            D)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:data_loading_examples"
 ```
 
 ---
@@ -144,18 +125,7 @@ MakeDataset("classification",
 | `DecisionFunction(Fitted, X, Scores)` | `+Fitted, +X, -Scores` | Decision function scores |
 
 ```clausal
-# skip
-# Classification workflow
-LoadDataset("iris", D),
-Fit(Est("random_forest", {"n_estimators": 100}), D, F),
-D is ("Dataset", X, Y),
-Predict(F, X, PREDS)
-
-# PCA transform
-LoadDataset("iris", D),
-D is ("Dataset", X, Y),
-Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), F),
-Transform(F, X, REDUCED)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:fit_predict_examples"
 ```
 
 ---
@@ -176,17 +146,7 @@ Transform(F, X, REDUCED)
 Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"precision"`, `"recall"`, `"roc_auc"`, `"r2"`, `"mse"`, `"mae"`, `"rmse"`.
 
 ```clausal
-# skip
-# Score a classifier
-Score(F, D, S), S > 0.9
-
-# 3-fold cross-validation
-CrossValScore(Est("logistic_regression", {"max_iter": 200}),
-              D, 3, SCORES)
-
-# Multi-metric CV
-CrossValidate(Est("logistic_regression", {"max_iter": 200}),
-              D, 3, ["accuracy", "f1_weighted"], R)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:scoring_examples"
 ```
 
 **Cross-validation strategies**: pass an integer for stratified K-fold (recommended for classification), or use `kfold(K)` for plain K-fold.
@@ -203,13 +163,7 @@ CrossValidate(Est("logistic_regression", {"max_iter": 200}),
 Steps are a list of `(name, Est(...))` tuples:
 
 ```clausal
-# skip
-Pipeline([("scaler", Est("standard_scaler", {})),
-          ("clf", Est("logistic_regression", {"max_iter": 200}))],
-         PIPE),
-LoadDataset("iris", D),
-Fit(PIPE, D, F),
-Score(F, D, S)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_example"
 ```
 
 ---
@@ -226,13 +180,7 @@ Score(F, D, S)
 | `SearchResults(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
 ```clausal
-# skip
-LoadDataset("iris", D),
-GridSearch(Est("svc", {}),
-           {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
-           D, 3, BEST),
-BestParams(BEST, PARAMS),
-BestScore(BEST, SCORE)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:grid_search_example"
 ```
 
 ---
@@ -244,9 +192,7 @@ BestScore(BEST, SCORE)
 | `Learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
 ```clausal
-# skip
-Fit(Est("random_forest", {"n_estimators": 10}), D, F),
-Learned(F, "feature_importances", FI)
+--8<-- "tests/fixtures/docs/sklearn_sigs.txt:learned_example"
 ```
 
 ---
@@ -274,42 +220,13 @@ Learned(F, "feature_importances", FI)
 ??? example "Complete workflow example"
 
     ```clausal
-# skip
-    -import_from(sklearn, [Est, Dataset, Fitted, Split,
-                           LoadDataset, SplitData, Fit, Predict, Score,
-                           ConfusionMatrix, Learned])
-
-    % Load, split, train, evaluate
-    IrisWorkflow(SCORE, IMPORTANCES) <- (
-        LoadDataset("iris", D),
-        SplitData(D, 0.2, 42, S),
-        S is ("Split", TRAIN, TEST),
-        Fit(Est("random_forest", {"n_estimators": 100, "random_state": 42}),
-            TRAIN, F),
-        Score(F, TEST, SCORE),
-        Learned(F, "feature_importances", IMPORTANCES)
-    )
+    --8<-- "tests/fixtures/docs/sklearn_sigs.txt:complete_workflow"
     ```
 
 ??? example "Pipeline with grid search"
 
     ```clausal
-# skip
-    -import_from(sklearn, [Est, LoadDataset, Pipeline, Fit, Score,
-                           GridSearch, BestParams, BestScore])
-
-    SearchBestPipeline(PARAMS, SCORE) <- (
-        LoadDataset("iris", D),
-        Pipeline([("scaler", Est("standard_scaler", {})),
-                  ("clf", Est("svc", {}))],
-                 PIPE),
-        GridSearch(PIPE,
-                   {"clf__C": [0.1, 1.0, 10.0],
-                    "clf__kernel": ["rbf", "linear"]},
-                   D, 5, "accuracy", BEST),
-        BestParams(BEST, PARAMS),
-        BestScore(BEST, SCORE)
-    )
+    --8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_grid_search"
     ```
 
 ---

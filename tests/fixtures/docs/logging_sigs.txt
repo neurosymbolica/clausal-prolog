@@ -1,0 +1,124 @@
+# Display snippets for docs/logging.md
+
+--8<-- [start:debug_sig]
+Debug(+Msg)
+Debug(+Logger, +Msg)
+--8<-- [end:debug_sig]
+
+--8<-- [start:info_sig]
+Info(+Msg)
+Info(+Logger, +Msg)
+--8<-- [end:info_sig]
+
+--8<-- [start:warning_sig]
+Warning(+Msg)
+Warning(+Logger, +Msg)
+--8<-- [end:warning_sig]
+
+--8<-- [start:error_sig]
+Error(+Msg)
+Error(+Logger, +Msg)
+--8<-- [end:error_sig]
+
+--8<-- [start:critical_sig]
+Critical(+Msg)
+Critical(+Logger, +Msg)
+--8<-- [end:critical_sig]
+
+--8<-- [start:log_sig]
+Log(+Logger, +Level, +Msg)
+--8<-- [end:log_sig]
+
+--8<-- [start:fstring_example]
+Info(L, f"User {USERID} logged in from {IP}")
+--8<-- [end:fstring_example]
+
+--8<-- [start:get_logger_sig]
+GetLogger(-Logger)
+GetLogger(+Name, -Logger)
+--8<-- [end:get_logger_sig]
+
+--8<-- [start:set_level_sig]
+SetLevel(+Logger, +Level)
+--8<-- [end:set_level_sig]
+
+--8<-- [start:get_level_sig]
+GetLevel(+Logger, -Level)
+--8<-- [end:get_level_sig]
+
+--8<-- [start:is_enabled_for_sig]
+IsEnabledFor(+Logger, +Level)
+--8<-- [end:is_enabled_for_sig]
+
+--8<-- [start:stream_handler_sig]
+StreamHandler(+StreamName, -Handler)
+--8<-- [end:stream_handler_sig]
+
+--8<-- [start:file_handler_sig]
+FileHandler(+Path, -Handler)
+--8<-- [end:file_handler_sig]
+
+--8<-- [start:set_formatter_sig]
+SetFormatter(+Handler, +FormatString)
+--8<-- [end:set_formatter_sig]
+
+--8<-- [start:add_handler_sig]
+AddHandler(+Logger, +Handler)
+--8<-- [end:add_handler_sig]
+
+--8<-- [start:remove_handler_sig]
+RemoveHandler(+Logger, +Handler)
+--8<-- [end:remove_handler_sig]
+
+--8<-- [start:basic_config_sig]
+BasicConfig(+Opts)
+--8<-- [end:basic_config_sig]
+
+--8<-- [start:basic_usage]
+-import_from(log, [GetLogger, Info, Warning, SetLevel])
+
+Init(L) <- (
+    GetLogger("myapp", L),
+    SetLevel(L, "info"),
+    Info(L, "Application started")
+)
+
+ProcessItem(L, ITEM) <- (
+    ITEM > 0,
+    Info(L, f"Processing item {ITEM}")
+)
+ProcessItem(L, ITEM) <- (
+    ITEM =< 0,
+    Warning(L, f"Skipping invalid item {ITEM}")
+)
+--8<-- [end:basic_usage]
+
+--8<-- [start:custom_handler]
+-import_from(log, [
+    GetLogger, Info, SetLevel,
+    StreamHandler, FileHandler, SetFormatter, AddHandler
+])
+
+SetupLogging(L) <- (
+    GetLogger("myapp", L),
+    SetLevel(L, "debug"),
+    FileHandler("/var/log/myapp.log", FH),
+    SetFormatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s"),
+    AddHandler(L, FH),
+    StreamHandler("stderr", SH),
+    SetFormatter(SH, "%(levelname)s: %(message)s"),
+    AddHandler(L, SH)
+)
+--8<-- [end:custom_handler]
+
+--8<-- [start:logger_hierarchy]
+-import_from(log, [GetLogger, Info, SetLevel])
+
+Setup <- (
+    GetLogger("myapp", PARENT),
+    SetLevel(PARENT, "info"),
+    GetLogger("myapp.db", DBLOG),
+    SetLevel(DBLOG, "debug"),
+    Info(DBLOG, "DB logger inherits parent's handlers")
+)
+--8<-- [end:logger_hierarchy]

@@ -47,37 +47,31 @@ Models are loaded once and kept in a module-level registry under string aliases.
 ### `LoadModel/1`
 
 ```clausal
-# skip
-LoadModel(+Name)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_sig"
 ```
 
 Load a spaCy model by name; the model name is used as the alias. Idempotent — if the alias is already loaded, succeeds immediately.
 
 ```clausal
-# skip
-LoadModel("en_core_web_sm")
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_ex"
 ```
 
 ### `LoadModel/2`
 
 ```clausal
-# skip
-LoadModel(+Name, +Alias)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_sig"
 ```
 
 Load `Name` under a custom `Alias`. Useful for loading the same model under multiple names or for shorter identifiers.
 
 ```clausal
-# skip
-LoadModel("en_core_web_sm", "en")
-LoadModel("en_core_web_lg", "en_lg")
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_ex"
 ```
 
 ### `UnloadModel/1`
 
 ```clausal
-# skip
-UnloadModel(+Alias)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:unload_model_sig"
 ```
 
 Remove the model from the registry. **Fails** if the alias is not registered.
@@ -85,8 +79,7 @@ Remove the model from the registry. **Fails** if the alias is not registered.
 ### `CurrentModel/1`
 
 ```clausal
-# skip
-CurrentModel(?Alias)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:current_model_sig"
 ```
 
 when `Alias` is unbound, **nondeterministically enumerates** all registered aliases. when ground, succeeds if that alias is currently loaded.
@@ -102,8 +95,7 @@ ListModels(A) <- CurrentModel(A)
 ### `Process/3`
 
 ```clausal
-# skip
-Process(+Alias, +Text, -Doc)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:process_sig"
 ```
 
 Run `Text` through the model registered as `Alias` and unify `Doc` with the resulting spaCy `Doc` object. The Doc object is an opaque handle passed to all downstream predicates.
@@ -138,8 +130,7 @@ A token is represented as a plain Python dict with keys:
 ### `Token/2`
 
 ```clausal
-# skip
-Token(+Doc, -Tok)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:token_2_sig"
 ```
 
 **Nondeterministic.** Yields one solution per token in `Doc`, binding `Tok` to the token dict.
@@ -151,8 +142,7 @@ AllTokens(DOC, TOK) <- Token(DOC, TOK)
 ### `Token/3`
 
 ```clausal
-# skip
-Token(+Doc, ?Index, -Tok)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:token_3_sig"
 ```
 
 when `Index` is ground, retrieves the token at that position (fails if out of range). when `Index` is unbound, iterates all tokens and binds `Index` to each token's position.
@@ -165,8 +155,7 @@ IndexedTokens(DOC, I, TOK) <- Token(DOC, I, TOK)
 ### `TokenText/2`
 
 ```clausal
-# skip
-TokenText(+Tok, ?Text)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:token_text_sig"
 ```
 
 Unify `Text` with the surface form of a token dict. equivalent to `T is ++Tok["text"]` but more readable.
@@ -178,8 +167,7 @@ IsApple(TOK) <- TokenText(TOK, "Apple")
 ### `TokenList/2`
 
 ```clausal
-# skip
-TokenList(+Doc, -Tokens)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:token_list_sig"
 ```
 
 Unify `Tokens` with a list of all token dicts in the document. Deterministic.
@@ -197,8 +185,7 @@ All annotation predicates take a token dict as their first argument and unify th
 ### `Pos/2`
 
 ```clausal
-# skip
-Pos(+Tok, ?Tag)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:pos_sig"
 ```
 
 Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"ADJ"`, etc.
@@ -209,8 +196,7 @@ Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"
 ### `Tag/2`
 
 ```clausal
-# skip
-Tag(+Tok, ?FineTag)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:tag_sig"
 ```
 
 Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for English Penn Treebank).
@@ -218,8 +204,7 @@ Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for E
 ### `Lemma/2`
 
 ```clausal
-# skip
-Lemma(+Tok, ?Lem)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:lemma_sig"
 ```
 
 Lemmatised form of the token (e.g. `"run"` for `"running"`).
@@ -227,8 +212,7 @@ Lemmatised form of the token (e.g. `"run"` for `"running"`).
 ### `Dep/2`
 
 ```clausal
-# skip
-Dep(+Tok, ?label)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:dep_sig"
 ```
 
 Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
@@ -236,8 +220,7 @@ Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
 ### `Head/2`
 
 ```clausal
-# skip
-Head(+Tok, ?HeadText)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:head_sig"
 ```
 
 Surface form of the syntactic head token.
@@ -245,8 +228,7 @@ Surface form of the syntactic head token.
 ### `Shape/2`
 
 ```clausal
-# skip
-Shape(+Tok, ?Shp)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:shape_sig"
 ```
 
 Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
@@ -254,8 +236,7 @@ Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 ### `IsAlpha/1`
 
 ```clausal
-# skip
-IsAlpha(+Tok)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:is_alpha_sig"
 ```
 
 **Succeeds** if the token consists entirely of alphabetic characters. **Fails** otherwise.
@@ -263,8 +244,7 @@ IsAlpha(+Tok)
 ### `IsStop/1`
 
 ```clausal
-# skip
-IsStop(+Tok)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:is_stop_sig"
 ```
 
 **Succeeds** if the token is a stop word in the model's language. **Fails** otherwise.
@@ -278,8 +258,7 @@ An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `e
 ### `Entity/2`
 
 ```clausal
-# skip
-Entity(+Doc, -Ent)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_2_sig"
 ```
 
 **Nondeterministic.** Yields one solution per entity in the document.
@@ -291,8 +270,7 @@ Orgs(DOC, ENT) <- (Entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
 ### `Entity/3`
 
 ```clausal
-# skip
-Entity(+Doc, +label, -Ent)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_3_sig"
 ```
 
 Filtered iteration — only yields entities whose label matches `label`.
@@ -305,8 +283,7 @@ Orgs(DOC, ENT) <- Entity(DOC, "ORG", ENT)
 ### `EntityList/2`
 
 ```clausal
-# skip
-EntityList(+Doc, -Ents)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_list_sig"
 ```
 
 Unify `Ents` with a list of all entity dicts. Deterministic.
@@ -320,8 +297,7 @@ Sentences are plain strings (the `.text` of each spaCy `span`).
 ### `Sentence/2`
 
 ```clausal
-# skip
-Sentence(+Doc, -Sent)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_sig"
 ```
 
 **Nondeterministic.** Yields one solution per sentence.
@@ -329,8 +305,7 @@ Sentence(+Doc, -Sent)
 ### `SentenceList/2`
 
 ```clausal
-# skip
-SentenceList(+Doc, -Sents)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_list_sig"
 ```
 
 Unify `Sents` with a list of all sentence strings. Deterministic.
@@ -345,8 +320,7 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 ### `Similarity/4`
 
 ```clausal
-# skip
-Similarity(+Alias, +Text1, +Text2, -Score)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:similarity_sig"
 ```
 
 Process both texts through the model and unify `Score` with their cosine similarity as a float in `[0.0, 1.0]`.
@@ -370,8 +344,7 @@ A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_te
 ### `NounChunk/2`
 
 ```clausal
-# skip
-NounChunk(+Doc, -Chunk)
+--8<-- "tests/fixtures/docs/spacy_sigs.txt:noun_chunk_sig"
 ```
 
 **Nondeterministic.** Yields one solution per noun chunk.

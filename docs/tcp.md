@@ -51,8 +51,7 @@ Main <- (
 | `Connect(Host, Port, Socket)` | `+Host, +Port, -Socket` | Connect to TCP server, bind opaque socket handle |
 
 ```clausal
-# skip
-Connect("example.com", 80, SOCKET)
+--8<-- "tests/fixtures/docs/tcp_sigs.txt:connect_example"
 ```
 
 Fails if the connection is refused or the host is unreachable.
@@ -67,13 +66,7 @@ Fails if the connection is refused or the host is unreachable.
 | `Accept(ServerSocket, ClientSocket)` | `+Server, -Client` | Accept incoming connection. Blocks until a client connects. |
 
 ```clausal
-# skip
-Listen("0.0.0.0", 8080, SERVER),
-Accept(SERVER, CLIENT),
-Receive(CLIENT, DATA),
-Send(CLIENT, DATA),    # echo back
-Close(CLIENT),
-Close(SERVER)
+--8<-- "tests/fixtures/docs/tcp_sigs.txt:server_example"
 ```
 
 ---
@@ -90,12 +83,7 @@ Close(SERVER)
 decoding fails. Fails if the connection is closed (no data received).
 
 ```clausal
-# skip
-Send(SOCKET, "Hello, server!")
-Receive(SOCKET, RESPONSE)
-
-# Custom buffer size
-Receive(SOCKET, 65536, LARGE_DATA)
+--8<-- "tests/fixtures/docs/tcp_sigs.txt:data_transfer_examples"
 ```
 
 ---
@@ -108,9 +96,7 @@ Receive(SOCKET, 65536, LARGE_DATA)
 | `SetTimeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). Subsequent operations fail on timeout. |
 
 ```clausal
-# skip
-SetTimeout(SOCKET, 5.0),     # 5-second timeout
-Receive(SOCKET, DATA)         # fails if no data within 5 seconds
+--8<-- "tests/fixtures/docs/tcp_sigs.txt:socket_management_example"
 ```
 
 ---
@@ -120,31 +106,13 @@ Receive(SOCKET, DATA)         # fails if no data within 5 seconds
     ### Simple TCP client
 
     ```clausal
-# skip
-    -import_from(py.tcp, [Connect, Send, Receive, Close])
-
-    TcpRequest(HOST, PORT, REQUEST, RESPONSE) <- (
-        Connect(HOST, PORT, S),
-        Send(S, REQUEST),
-        Receive(S, RESPONSE),
-        Close(S)
-    )
+    --8<-- "tests/fixtures/docs/tcp_sigs.txt:tcp_client_example"
     ```
 
     ### Echo server (single client)
 
     ```clausal
-# skip
-    -import_from(py.tcp, [Listen, Accept, Send, Receive, Close])
-
-    EchoServer(PORT) <- (
-        Listen("0.0.0.0", PORT, SERVER),
-        Accept(SERVER, CLIENT),
-        Receive(CLIENT, DATA),
-        Send(CLIENT, DATA),
-        Close(CLIENT),
-        Close(SERVER)
-    )
+    --8<-- "tests/fixtures/docs/tcp_sigs.txt:echo_server_example"
     ```
 
 ---

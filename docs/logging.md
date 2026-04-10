@@ -69,9 +69,7 @@ All logging predicates **always succeed** — they are side-effects. A message b
 ### `Debug/1`, `Debug/2`
 
 ```clausal
-# skip
-Debug(+Msg)
-Debug(+Logger, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:debug_sig"
 ```
 
 Log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
@@ -79,9 +77,7 @@ Log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
 ### `Info/1`, `Info/2`
 
 ```clausal
-# skip
-Info(+Msg)
-Info(+Logger, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:info_sig"
 ```
 
 Log at INFO level.
@@ -89,9 +85,7 @@ Log at INFO level.
 ### `Warning/1`, `Warning/2`
 
 ```clausal
-# skip
-Warning(+Msg)
-Warning(+Logger, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:warning_sig"
 ```
 
 Log at WARNING level.
@@ -99,9 +93,7 @@ Log at WARNING level.
 ### `Error/1`, `Error/2`
 
 ```clausal
-# skip
-Error(+Msg)
-Error(+Logger, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:error_sig"
 ```
 
 Log at ERROR level.
@@ -109,9 +101,7 @@ Log at ERROR level.
 ### `Critical/1`, `Critical/2`
 
 ```clausal
-# skip
-Critical(+Msg)
-Critical(+Logger, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:critical_sig"
 ```
 
 Log at CRITICAL level.
@@ -119,8 +109,7 @@ Log at CRITICAL level.
 ### `Log/3`
 
 ```clausal
-# skip
-Log(+Logger, +Level, +Msg)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:log_sig"
 ```
 
 Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an integer.
@@ -130,8 +119,7 @@ Log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 Messages are Python strings. Clausal's [f-string support](io.md) means interpolation works naturally:
 
 ```clausal
-# skip
-Info(L, f"User {USERID} logged in from {IP}")
+--8<-- "tests/fixtures/docs/logging_sigs.txt:fstring_example"
 ```
 
 Logic variables in f-strings are auto-dereferenced at search time.
@@ -143,9 +131,7 @@ Logic variables in f-strings are auto-dereferenced at search time.
 ### `GetLogger/1`, `GetLogger/2`
 
 ```clausal
-# skip
-GetLogger(-Logger)
-GetLogger(+Name, -Logger)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:get_logger_sig"
 ```
 
 Unify `Logger` with a Python `logging.Logger` instance. The arity-1 form returns the default `"clausal"` logger. Logger objects are opaque — they unify via identity, not structure.
@@ -155,8 +141,7 @@ Python's logger hierarchy applies: `GetLogger("myapp.db", L)` creates a child of
 ### `SetLevel/2`
 
 ```clausal
-# skip
-SetLevel(+Logger, +Level)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:set_level_sig"
 ```
 
 Set the logger's level. Messages below this level will be discarded (but the logging predicate still succeeds). `Level` is a string or integer.
@@ -164,8 +149,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 ### `GetLevel/2`
 
 ```clausal
-# skip
-GetLevel(+Logger, -Level)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:get_level_sig"
 ```
 
 Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"`).
@@ -173,8 +157,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 ### `IsEnabledFor/2`
 
 ```clausal
-# skip
-IsEnabledFor(+Logger, +Level)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:is_enabled_for_sig"
 ```
 
 **Succeeds** if the logger would process a message at `Level`; **fails** otherwise. This is the one logging predicate that can fail — useful for guarding expensive message construction:
@@ -193,8 +176,7 @@ Process(L, DATA) <- (
 ### `StreamHandler/2`
 
 ```clausal
-# skip
-StreamHandler(+StreamName, -Handler)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:stream_handler_sig"
 ```
 
 Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
@@ -202,8 +184,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 ### `FileHandler/2`
 
 ```clausal
-# skip
-FileHandler(+Path, -Handler)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:file_handler_sig"
 ```
 
 Create a `logging.FileHandler` that writes to the given file path.
@@ -211,8 +192,7 @@ Create a `logging.FileHandler` that writes to the given file path.
 ### `SetFormatter/2`
 
 ```clausal
-# skip
-SetFormatter(+Handler, +FormatString)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:set_formatter_sig"
 ```
 
 Set a `logging.Formatter` on the handler using Python's format string syntax (e.g. `"%(asctime)s [%(levelname)s] %(message)s"`).
@@ -220,8 +200,7 @@ Set a `logging.Formatter` on the handler using Python's format string syntax (e.
 ### `AddHandler/2`
 
 ```clausal
-# skip
-AddHandler(+Logger, +Handler)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:add_handler_sig"
 ```
 
 Add a handler to the logger.
@@ -229,8 +208,7 @@ Add a handler to the logger.
 ### `RemoveHandler/2`
 
 ```clausal
-# skip
-RemoveHandler(+Logger, +Handler)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:remove_handler_sig"
 ```
 
 Remove a handler from the logger.
@@ -238,8 +216,7 @@ Remove a handler from the logger.
 ### `BasicConfig/1`
 
 ```clausal
-# skip
-BasicConfig(+Opts)
+--8<-- "tests/fixtures/docs/logging_sigs.txt:basic_config_sig"
 ```
 
 Call `logging.basicConfig()` with a Python dict of options. Supported keys: `level`, `format`, `datefmt`, `filename`, `filemode`, `stream`. Note: `basicConfig` only takes effect if the root logger has no handlers yet.
@@ -251,59 +228,19 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
     ### Basic usage
 
     ```clausal
-# skip
-    -import_from(log, [GetLogger, Info, Warning, SetLevel])
-    
-    Init(L) <- (
-        GetLogger("myapp", L),
-        SetLevel(L, "info"),
-        Info(L, "Application started")
-    )
-
-    ProcessItem(L, ITEM) <- (
-        ITEM > 0,
-        Info(L, f"Processing item {ITEM}")
-    )
-    ProcessItem(L, ITEM) <- (
-        ITEM =< 0,
-        Warning(L, f"Skipping invalid item {ITEM}")
-    )
+    --8<-- "tests/fixtures/docs/logging_sigs.txt:basic_usage"
     ```
 
     ### Custom handler and formatter
 
     ```clausal
-# skip
-    -import_from(log, [
-        GetLogger, Info, SetLevel,
-        StreamHandler, FileHandler, SetFormatter, AddHandler
-    ])
-    
-    SetupLogging(L) <- (
-        GetLogger("myapp", L),
-        SetLevel(L, "debug"),
-        FileHandler("/var/log/myapp.log", FH),
-        SetFormatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s"),
-        AddHandler(L, FH),
-        StreamHandler("stderr", SH),
-        SetFormatter(SH, "%(levelname)s: %(message)s"),
-        AddHandler(L, SH)
-    )
+    --8<-- "tests/fixtures/docs/logging_sigs.txt:custom_handler"
     ```
 
     ### Logger hierarchy
 
     ```clausal
-# skip
-    -import_from(log, [GetLogger, Info, SetLevel])
-    
-    Setup <- (
-        GetLogger("myapp", PARENT),
-        SetLevel(PARENT, "info"),
-        GetLogger("myapp.db", DBLOG),
-        SetLevel(DBLOG, "debug"),
-        Info(DBLOG, "DB logger inherits parent's handlers")
-    )
+    --8<-- "tests/fixtures/docs/logging_sigs.txt:logger_hierarchy"
     ```
 
     ---

@@ -67,8 +67,7 @@ Only `yaml.safe_load` is used — no arbitrary Python object construction from Y
 ### `Read/2`
 
 ```clausal
-# skip
-Read(+YamlString, -Data)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:read_sig"
 ```
 
 Parse a YAML string into a Python object. Fails on invalid YAML.
@@ -85,8 +84,7 @@ Test("parse mapping") <- (
 ### `ReadAll/2`
 
 ```clausal
-# skip
-ReadAll(+YamlString, -DocList)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:read_all_sig"
 ```
 
 Parse a multi-document YAML string (documents separated by `---`) into a list of Python objects.
@@ -104,8 +102,7 @@ Test("multi-doc") <- (
 ### `ReadFile/2`
 
 ```clausal
-# skip
-ReadFile(+Path, -Data)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:read_file_sig"
 ```
 
 Read and parse a YAML file from disk. Fails if the file does not exist or contains invalid YAML.
@@ -121,8 +118,7 @@ LoadConfig(PATH, CFG) <- ReadFile(PATH, CFG)
 ### `write/2`
 
 ```clausal
-# skip
-write(+Data, -YamlString)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:write_sig"
 ```
 
 Serialize a Python object to a YAML string. Uses block style (`default_flow_style=False`) for human-readable output.
@@ -142,8 +138,7 @@ Test("serialize") <- (
 ### `WriteAll/2`
 
 ```clausal
-# skip
-WriteAll(+DocList, -YamlString)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:write_all_sig"
 ```
 
 Serialize a list of Python objects to a multi-document YAML string with `---` separators.
@@ -151,8 +146,7 @@ Serialize a list of Python objects to a multi-document YAML string with `---` se
 ### `WriteFile/2`
 
 ```clausal
-# skip
-WriteFile(+Path, +Data)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:write_file_sig"
 ```
 
 write a Python object as YAML to a file. Always succeeds if the write completes; fails on I/O errors.
@@ -164,8 +158,7 @@ write a Python object as YAML to a file. Always succeeds if the write completes;
 ### `Get/3`
 
 ```clausal
-# skip
-Get(+Data, +Path, -Value)
+--8<-- "tests/fixtures/docs/yaml_sigs.txt:get_sig"
 ```
 
 Navigate a nested dict/list structure by key path. `Path` can be:
@@ -192,53 +185,25 @@ Test("nested access") <- (
     ### Parse a config file
 
     ```clausal
-# skip
-    -import_from(yaml_module, [ReadFile, Get])
-    
-    DbConfig(PATH, HOST, PORT, NAME) <- (
-        ReadFile(PATH, CFG),
-        Get(CFG, ["database", "host"], HOST),
-        Get(CFG, ["database", "port"], PORT),
-        Get(CFG, ["database", "name"], NAME)
-    )
+    --8<-- "tests/fixtures/docs/yaml_sigs.txt:parse_config"
     ```
 
     ### Round-trip
 
     ```clausal
-# skip
-    -import_from(yaml_module, [Read, write, Get])
-    
-    RoundTrip(YAML, KEY, VAL) <- (
-        Read(YAML, D),
-        write(D, S),
-        Read(S, D2),
-        Get(D2, KEY, VAL)
-    )
+    --8<-- "tests/fixtures/docs/yaml_sigs.txt:round_trip"
     ```
 
     ### Multi-document Kubernetes manifests
 
     ```clausal
-# skip
-    -import_from(yaml_module, [ReadAll, Get])
-    
-    ServiceNames(YAML, NAMES) <- (
-        ReadAll(YAML, DOCS),
-        maplist([D, N] >> Get(D, ["metadata", "name"], N), DOCS, NAMES)
-    )
+    --8<-- "tests/fixtures/docs/yaml_sigs.txt:k8s_manifests"
     ```
 
     ### Python interop for complex access
 
     ```clausal
-# skip
-    -import_from(yaml_module, [Read])
-    
-    AllKeys(YAML, KEYS) <- (
-        Read(YAML, D),
-        KEYS is ++(list(D.keys()))
-    )
+    --8<-- "tests/fixtures/docs/yaml_sigs.txt:python_interop"
     ```
 
     ---

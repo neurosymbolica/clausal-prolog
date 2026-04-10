@@ -1,0 +1,90 @@
+# Display snippets for docs/sqlite.md
+
+--8<-- [start:connect_sig]
+SQLiteConnect(+Path, +Alias)
+--8<-- [end:connect_sig]
+
+--8<-- [start:disconnect_sig]
+SQLiteDisconnect(+Alias)
+--8<-- [end:disconnect_sig]
+
+--8<-- [start:current_connection_sig]
+SQLiteCurrentConnection(?Alias)
+--8<-- [end:current_connection_sig]
+
+--8<-- [start:query_sig]
+SQLiteQuery(+Alias, +SQL, -Row)
+--8<-- [end:query_sig]
+
+--8<-- [start:query_params_sig]
+SQLiteQuery(+Alias, +SQL, +Params, -Row)
+--8<-- [end:query_params_sig]
+
+--8<-- [start:exec_sig]
+SQLiteExec(+Alias, +SQL)
+--8<-- [end:exec_sig]
+
+--8<-- [start:exec_params_sig]
+SQLiteExec(+Alias, +SQL, +Params)
+--8<-- [end:exec_params_sig]
+
+--8<-- [start:row_count_sig]
+SQLiteRowCount(+Alias, +SQL, -Count)
+--8<-- [end:row_count_sig]
+
+--8<-- [start:table_sig]
+SQLiteTable(+Alias, ?TableName)
+--8<-- [end:table_sig]
+
+--8<-- [start:column_sig]
+SQLiteColumn(+Alias, +Table, ?ColName, ?ColType)
+--8<-- [end:column_sig]
+
+--8<-- [start:crud_example]
+-import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
+
+Init <- (
+    SQLiteConnect(":memory:", "app"),
+    SQLiteExec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
+)
+
+AddNote(BODY) <- SQLiteExec("app", "INSERT INTO notes (body) VALUES (?)", [BODY])
+
+AllNotes(ID, BODY) <- SQLiteQuery("app", "SELECT id, body FROM notes", (ID, BODY))
+
+SearchNotes(TERM, BODY) <- (
+    SQLiteQuery("app", "SELECT body FROM notes WHERE body LIKE ?", [TERM], BODY)
+)
+--8<-- [end:crud_example]
+
+--8<-- [start:join_example]
+-import_from(sqlite, [SQLiteConnect, SQLiteExec, SQLiteQuery])
+
+Setup <- (
+    SQLiteConnect(":memory:", "hr"),
+    SQLiteExec("hr", "CREATE TABLE dept (id INTEGER, name TEXT)"),
+    SQLiteExec("hr", "CREATE TABLE emp (name TEXT, dept_id INTEGER)"),
+    SQLiteExec("hr", "INSERT INTO dept VALUES (1, 'Engineering')"),
+    SQLiteExec("hr", "INSERT INTO dept VALUES (2, 'Marketing')"),
+    SQLiteExec("hr", "INSERT INTO emp VALUES ('Alice', 1)"),
+    SQLiteExec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
+)
+
+EmpDept(EMP, DEPT) <- (
+    Setup,
+    SQLiteQuery("hr",
+        "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
+        (EMP, DEPT))
+)
+--8<-- [end:join_example]
+
+--8<-- [start:schema_example]
+-import_from(sqlite, [SQLiteConnect, SQLiteTable, SQLiteColumn])
+
+Describe(DB) <- (
+    SQLiteTable(DB, TABLE),
+    ++print(f"\n{TABLE}:"),
+    SQLiteColumn(DB, TABLE, COL, TYPE),
+    ++print(f"  {COL} {TYPE}")
+)
+--8<-- [end:schema_example]
