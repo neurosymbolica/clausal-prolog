@@ -156,4 +156,33 @@ Update `docs/torch.md` with statistics and selection sections.
 
 ## Issues
 
-_To be populated during implementation._
+### 1. Missing opts-dict arities for keyword arguments — NOTED
+
+Several predicates don't expose important PyTorch keyword arguments.
+Per Checklist E, defaulted keyword args should be passable via opts dict.
+
+- `sort`/`argsort`: no `descending` option (always ascending)
+- `topk`: no `largest` option (always largest-k, no smallest-k)
+- `std`/`var`: no `unbiased`/`correction` option (always Bessel's N-1)
+- `unique`: no `return_counts`, `return_inverse`, `sorted` options
+
+These should get higher-arity variants accepting opts dicts, e.g.
+`sort(T, DIM, OPTS, R)` where `OPTS` is `{"descending": True}`.
+
+### 2. `unique` returns only values — NOTED
+
+PyTorch's `unique` can also return counts and inverse indices, which
+are the most useful modes for many applications. The current wrapper
+only returns the sorted unique values. An opts-dict variant or
+separate `unique_with_counts` predicate would expose this.
+
+### 3. `median` return type varies by arity — NOTED
+
+Arity 2 returns a scalar tensor, arity 3 returns a `(values, indices)`
+tuple. This matches PyTorch's own API but may surprise users expecting
+consistent tuple returns. Documented as-is.
+
+### 4. Tuple returns follow Phase 4 pattern — OK
+
+`median` with dim, `sort`, and `topk` return `(values, indices)` tuples
+matching the `svd`/`eig`/`qr` pattern from Phase 4. This is consistent.
