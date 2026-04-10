@@ -506,6 +506,158 @@ class TestTorchDistributionsFixture:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# nn.functional .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchFunctionalFixture:
+    """Run Test predicates from tests/fixtures/torch_functional_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_functional_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Activations
+        "leaky_relu default",
+        "leaky_relu custom slope",
+        "elu default",
+        "elu custom alpha",
+        "selu",
+        "gelu",
+        "silu",
+        "mish",
+        "hardswish",
+        "hardsigmoid",
+        "gelu positive passthrough",
+        # Convolutions
+        "conv1d shape",
+        "conv2d shape",
+        "conv2d with padding",
+        "conv2d with stride",
+        "conv3d shape",
+        # Pooling
+        "max_pool1d",
+        "max_pool2d",
+        "max_pool2d with stride",
+        "avg_pool1d",
+        "avg_pool2d",
+        "adaptive_avg_pool1d",
+        "adaptive_avg_pool2d",
+        # Normalization
+        "batch_norm shape preserved",
+        "layer_norm shape preserved",
+        "layer_norm multi-dim",
+        "normalize default",
+        "normalize with dim",
+        # Loss functions
+        "cross_entropy",
+        "cross_entropy with reduction",
+        "mse_loss",
+        "mse_loss nonzero",
+        "l1_loss",
+        "nll_loss",
+        "binary_cross_entropy",
+        # Dropout
+        "dropout eval mode",
+        "dropout with opts",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Schedulers and gradient utilities .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchSchedulersFixture:
+    """Run Test predicates from tests/fixtures/torch_schedulers_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_schedulers_tests")
+
+    @pytest.mark.parametrize("name", [
+        "enumerate schedulers",
+        "scheduler lookup StepLR",
+        "scheduler lookup MultiStepLR",
+        "scheduler lookup CyclicLR",
+        "scheduler lookup OneCycleLR",
+        "scheduler lookup ReduceLROnPlateau",
+        "scheduler lookup LambdaLR",
+        "scheduler lookup LinearLR",
+        "scheduler lookup ConstantLR",
+        "scheduler lookup PolynomialLR",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Scheduler and gradient utility unit tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestSchedulerGradUtils:
+    """Unit tests for current_lr, clip_grad_norm, clip_grad_value.
+
+    These predicates need objects (schedulers, parameter lists with grads)
+    that are hard to construct in .clausal, so they are tested via Python.
+    """
+
+    def _nn_module(self):
+        """Load torch_nn as a Clausal Module for call()."""
+        import clausal.modules.py.torch_nn as nn_mod
+        from clausal.logic.database import Module
+        return Module("torch_nn", module_dict=vars(nn_mod))
+
+    def test_current_lr(self):
+        import torch
+        from clausal.logic.variables import Var, deref
+        model = torch.nn.Linear(2, 2)
+        opt = torch.optim.SGD(model.parameters(), lr=0.1)
+        sched = torch.optim.lr_scheduler.StepLR(opt, step_size=1)
+        result_var = Var()
+        mod = self._nn_module()
+        for _ in call("current_lr", sched, result_var, module=mod):
+            assert deref(result_var) == [0.1]
+            break
+
+    def test_clip_grad_norm(self):
+        import torch
+        from clausal.logic.variables import Var, deref
+        model = torch.nn.Linear(2, 2)
+        x = torch.randn(1, 2)
+        loss = model(x).sum()
+        loss.backward()
+        params = list(model.parameters())
+        result_var = Var()
+        mod = self._nn_module()
+        for _ in call("clip_grad_norm", params, 1.0, result_var, module=mod):
+            assert isinstance(deref(result_var), torch.Tensor)
+            break
+
+    def test_clip_grad_value(self):
+        import torch
+        model = torch.nn.Linear(2, 2)
+        x = torch.randn(1, 2)
+        loss = model(x).sum()
+        loss.backward()
+        params = list(model.parameters())
+        mod = self._nn_module()
+        succeeded = False
+        for _ in call("clip_grad_value", params, 0.5, module=mod):
+            succeeded = True
+            break
+        assert succeeded
+        # Verify gradients are clipped
+        for p in params:
+            if p.grad is not None:
+                assert p.grad.abs().max() <= 0.5 + 1e-6
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Infrastructure unit tests
 # ════════════════════════════════════════════════════════════════════════════
 

@@ -1,11 +1,14 @@
 """clausal.modules.py.torch_nn — nn.Module predicates for Clausal.
 
 Provides nondeterministic enumeration of PyTorch nn.Module structure and
-registry fact tables for layers, activations, losses, and optimizers::
+registry fact tables for layers, activations, losses, optimizers, and
+LR schedulers::
 
     -import_from(py.torch_nn, [parameter, named_parameter, module,
                                 named_module, child, named_child,
-                                layer, activation, loss_fn, optimizer_type])
+                                layer, activation, loss_fn, optimizer_type,
+                                scheduler_type, current_lr,
+                                clip_grad_norm, clip_grad_value])
 
 Module enumeration
 ------------------
@@ -22,9 +25,20 @@ layer(NAME, CLASS)                  Available nn.Module layer types.
 activation(NAME, CLASS)             Activation modules (nn.ReLU, etc.).
 loss_fn(NAME, CLASS)                Loss functions (nn.CrossEntropyLoss, etc.).
 optimizer_type(NAME, CLASS)         Optimizer types (Adam, SGD, etc.).
+scheduler_type(NAME, CLASS)         LR scheduler types (StepLR, etc.).
+
+Scheduler queries
+-----------------
+current_lr(SCHEDULER, LRs)         Get current learning rate(s).
+
+Gradient utilities (impure)
+----------------------------
+clip_grad_norm(PARAMS, MAX_NORM, NORM_TYPE, TOTAL_NORM)
+                                    Clip gradient norms in-place.
+clip_grad_value(PARAMS, CLIP_VALUE) Clip gradient values in-place.
 
 Names use the original PyTorch class names (e.g. "Linear", "ReLU",
-"CrossEntropyLoss", "Adam").
+"CrossEntropyLoss", "Adam", "StepLR").
 """
 
 from __future__ import annotations
@@ -33,17 +47,11 @@ import threading as _threading
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py._helpers import _pred, _deep_deref, _pure, _fact_table_2
 from clausal.modules.py.torch import _ensure_torch, _th
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
-
-def _pred(name: str, *arity_fns) -> ModulePredicate:
-    p = ModulePredicate(name)
-    for arity, fn in arity_fns:
-        p._register(arity, fn)
-    return p
 
 
 def _enumerate_2(iter_fn):
@@ -230,6 +238,80 @@ optimizer_type = _pred("optimizer_type",
 )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# LR Scheduler registry and queries (Phase 12)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _build_scheduler_facts():
+    """Build (name, class) pairs for LR scheduler types."""
+    _ensure_torch()
+    sched = _th().optim.lr_scheduler
+    base = sched.LRScheduler
+    return [(name, getattr(sched, name)) for name in sorted(dir(sched))
+            if not name.startswith("_")
+            and isinstance(getattr(sched, name, None), type)
+            and issubclass(getattr(sched, name), base)
+            and name != "LRScheduler"]
+
+
+scheduler_type = _pred("scheduler_type",
+    (2, _fact_table_2(_build_scheduler_facts)),
+)
+
+
+def _property_2(getter):
+    """Property predicate: (+obj, -value) or (+obj, +value) check."""
+    def dispatch(this_generator, parent, obj_var, value_var, trail):
+        obj = deref(obj_var)
+        v = deref(value_var)
+        try:
+            actual = getter(obj)
+        except Exception:
+            yield (parent, DONE)
+            return
+        if is_var(v):
+            if unify(value_var, actual, trail):
+                yield (parent, None)
+        else:
+            if actual == v:
+                yield (parent, None)
+        yield (parent, DONE)
+    return dispatch
+
+
+current_lr = _pred("current_lr",
+    (2, _property_2(lambda s: s.get_last_lr())),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Gradient utilities (impure — Phase 12)
+# ═══════════════════════════════════════════════════════════════════════════
+
+clip_grad_norm = _pred("clip_grad_norm",
+    (3, _pure(lambda params, max_norm:
+              _th().nn.utils.clip_grad_norm_(list(params), max_norm))),
+)
+
+
+def _clip_grad_value_dispatch(this_generator, parent, params_var, clip_var, trail):
+    """Impure: clip gradient values in-place, always succeeds."""
+    params = _deep_deref(params_var)
+    clip_value = deref(clip_var)
+    try:
+        _th().nn.utils.clip_grad_value_(list(params), clip_value)
+    except Exception:
+        yield (parent, DONE)
+        return
+    yield (parent, None)
+    yield (parent, DONE)
+
+
+clip_grad_value = _pred("clip_grad_value",
+    (2, _clip_grad_value_dispatch),
+)
+
+
 # ── Module-level exports ──────────────────────────────────────────────────
 
 __all__ = [
@@ -237,4 +319,6 @@ __all__ = [
     "module", "named_module",
     "child", "named_child",
     "layer", "activation", "loss_fn", "optimizer_type",
+    "scheduler_type", "current_lr",
+    "clip_grad_norm", "clip_grad_value",
 ]

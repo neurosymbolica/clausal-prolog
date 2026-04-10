@@ -1,7 +1,8 @@
-# torch_nn — Module Structure and Registries
+# torch_nn — Module Structure, Registries, and Gradient Utilities
 
-Provides nondeterministic enumeration of PyTorch `nn.Module` structure
-and registry fact tables for layers, activations, losses, and optimizers.
+Provides nondeterministic enumeration of PyTorch `nn.Module` structure,
+registry fact tables for layers, activations, losses, optimizers, and
+LR schedulers, plus gradient utility predicates.
 
 ## Import
 
@@ -9,7 +10,9 @@ and registry fact tables for layers, activations, losses, and optimizers.
 # skip
 -import_from(py.torch_nn, [parameter, named_parameter, module,
                             named_module, child, named_child,
-                            layer, activation, loss_fn, optimizer_type])
+                            layer, activation, loss_fn, optimizer_type,
+                            scheduler_type, current_lr,
+                            clip_grad_norm, clip_grad_value])
 ```
 
 ---
@@ -175,6 +178,66 @@ findall(N, optimizer_type(N, _), NS),
 in_("Adam", NS),
 in_("SGD", NS)
 ```
+
+### scheduler_type
+
+```clausal
+# skip
+scheduler_type(NAME, CLASS)
+```
+
+Enumerate LR scheduler types (`StepLR`, `CosineAnnealingLR`,
+`ExponentialLR`, `ReduceLROnPlateau`, etc.). Built by introspecting
+`torch.optim.lr_scheduler`.
+
+```clausal
+# skip
+findall(N, scheduler_type(N, _), NS),
+in_("StepLR", NS),
+in_("CosineAnnealingLR", NS)
+```
+
+---
+
+## Scheduler Queries
+
+### current_lr
+
+```clausal
+# skip
+current_lr(SCHEDULER, LRs)
+```
+
+Get the current learning rate(s) from a scheduler. Returns a list of
+learning rates (one per parameter group). Supports query `(+sched, -lrs)`
+and check `(+sched, +lrs)` modes.
+
+---
+
+## Gradient Utilities (Impure)
+
+These predicates modify gradient tensors **in-place** and are documented
+as impure. They are commonly needed at the boundary of training loops.
+
+### clip_grad_norm
+
+```clausal
+# skip
+clip_grad_norm(PARAMS, MAX_NORM, TOTAL_NORM)
+```
+
+Clip gradient norms in-place. Returns the total norm before clipping.
+`PARAMS` is a list of parameter tensors.
+
+### clip_grad_value
+
+```clausal
+# skip
+clip_grad_value(PARAMS, CLIP_VALUE)
+```
+
+Clip gradient values in-place to `[-CLIP_VALUE, +CLIP_VALUE]`.
+Always succeeds (no return value).
 
 ---
 
