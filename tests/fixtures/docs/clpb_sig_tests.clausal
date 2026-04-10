@@ -1,0 +1,7 @@
+# Companion tests for docs/clpb.md signature blocks.
+
+Test("sat exists") <- sat(X | ~X)
+
+Test("taut exists") <- taut(X | ~X, T)
+
+Test("sat_count exists") <- sat_count(X | ~X, N)

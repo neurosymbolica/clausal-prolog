@@ -1,0 +1,57 @@
+# === Builtins ===
+
+--8<-- [start:sat_1]
+sat(X & Y)                # both must be 1
+sat(X | Y)                # at least one must be 1
+sat(~X)                     # X must be 0
+sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+sat(BoolImpl(X, Y))       # X → Y (implication)
+--8<-- [end:sat_1]
+
+--8<-- [start:sat_1_ex2]
+sat(X | Y), sat(~X | Z), sat(Y & Z)
+--8<-- [end:sat_1_ex2]
+
+--8<-- [start:taut_2]
+# De Morgan's law — tautology
+taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+
+# Contradiction
+taut(X & ~X, T)                          # T = 0
+
+# Neither (indeterminate) — taut fails
+taut(X | Y, T)                            # fails
+--8<-- [end:taut_2]
+
+--8<-- [start:sat_count_2]
+sat_count(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
+sat_count(X & Y, N)       # N = 1  (AND has 1 solution)
+sat_count(X | Y, N)       # N = 3  (OR has 3 solutions)
+--8<-- [end:sat_count_2]
+
+--8<-- [start:half_adder]
+HalfAdder(X, Y, SUM, CARRY) <- (
+    sat(BoolEq(SUM, X ^ Y)),
+    sat(BoolEq(CARRY, X & Y))
+)
+--8<-- [end:half_adder]
+
+--8<-- [start:pigeon_hole]
+PigeonHole() <- (
+    sat(P11 | P12),
+    sat(P21 | P22),
+    sat(P31 | P32),
+    sat(~(P11 & P21)),
+    sat(~(P11 & P31)),
+    sat(~(P21 & P31)),
+    sat(~(P12 & P22)),
+    sat(~(P12 & P32)),
+    sat(~(P22 & P32)),
+    bool_labeling([P11, P12, P21, P22, P31, P32])
+)
+# no solutions
+--8<-- [end:pigeon_hole]
+
+--8<-- [start:circuit_equivalence]
+taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+--8<-- [end:circuit_equivalence]

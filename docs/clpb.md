@@ -40,19 +40,13 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 Posts a Boolean constraint. Fails immediately if the formula is unsatisfiable:
 
 ```clausal
-# skip
-sat(X & Y)                # both must be 1
-sat(X | Y)                # at least one must be 1
-sat(~X)                     # X must be 0
-sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
-sat(BoolImpl(X, Y))       # X → Y (implication)
+--8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_1"
 ```
 
 Multiple `sat` calls on shared variables build a single constraint network:
 
 ```clausal
-# skip
-sat(X | Y), sat(~X | Z), sat(Y & Z)
+--8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_1_ex2"
 ```
 
 ### taut/2
@@ -60,15 +54,7 @@ sat(X | Y), sat(~X | Z), sat(Y & Z)
 Tests if a formula is a tautology, contradiction, or neither:
 
 ```clausal
-# skip
-# De Morgan's law — tautology
-taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
-
-# Contradiction
-taut(X & ~X, T)                          # T = 0
-
-# Neither (indeterminate) — taut fails
-taut(X | Y, T)                            # fails
+--8<-- "tests/fixtures/docs/clpb_sigs.txt:taut_2"
 ```
 
 ### sat_count/2
@@ -76,10 +62,7 @@ taut(X | Y, T)                            # fails
 Counts the number of satisfying assignments:
 
 ```clausal
-# skip
-sat_count(X ^ Y, N)       # N = 2  (XOR has 2 solutions)
-sat_count(X & Y, N)       # N = 1  (AND has 1 solution)
-sat_count(X | Y, N)       # N = 3  (OR has 3 solutions)
+--8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_count_2"
 ```
 
 ### bool_labeling/1
@@ -101,11 +84,7 @@ solve(X, Y) <- (
     ### Half Adder
 
     ```clausal
-# skip
-    HalfAdder(X, Y, SUM, CARRY) <- (
-        sat(BoolEq(SUM, X ^ Y)),
-        sat(BoolEq(CARRY, X & Y))
-    )
+    --8<-- "tests/fixtures/docs/clpb_sigs.txt:half_adder"
     ```
 
     ### Pigeon-Hole (unsatisfiable)
@@ -113,20 +92,7 @@ solve(X, Y) <- (
     3 pigeons in 2 holes — no solution exists:
 
     ```clausal
-# skip
-    PigeonHole() <- (
-        sat(P11 | P12),
-        sat(P21 | P22),
-        sat(P31 | P32),
-        sat(~(P11 & P21)),
-        sat(~(P11 & P31)),
-        sat(~(P21 & P31)),
-        sat(~(P12 & P22)),
-        sat(~(P12 & P32)),
-        sat(~(P22 & P32)),
-        bool_labeling([P11, P12, P21, P22, P31, P32])
-    )
-    # no solutions
+    --8<-- "tests/fixtures/docs/clpb_sigs.txt:pigeon_hole"
     ```
 
     ### circuit Equivalence
@@ -134,8 +100,7 @@ solve(X, Y) <- (
     Verify De Morgan's law via tautology check:
 
     ```clausal
-# skip
-    taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+    --8<-- "tests/fixtures/docs/clpb_sigs.txt:circuit_equivalence"
     ```
 
     ---

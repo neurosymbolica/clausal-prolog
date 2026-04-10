@@ -39,10 +39,7 @@ This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) be
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
 ```clausal
-# skip
-in_real(X)                    % X ∈ [-∞, +∞]
-in_real(X, 0.0, 1.0)          % X ∈ [0, 1]
-in_real([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:in_real_1_and_in_real_3"
 ```
 
 ### label_real/1 and label_real/2
@@ -50,9 +47,7 @@ in_real([X, Y, Z], -5.0, 5.0)   % all three ∈ [-5, 5]
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(ℤ)).
 
 ```clausal
-# skip
-label_real([X, Y])            % bisect to IEEE float precision
-label_real([X, Y], 1.0e-9)   % bisect until width ≤ 1e-9
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:label_real_1_and_label_real_2"
 ```
 
 Without an `Eps`, bisection continues until the midpoint equals an endpoint in IEEE arithmetic — the interval is indistinguishable from a point. With `Eps`, it stops when `hi - lo ≤ Eps`.
@@ -90,41 +85,17 @@ Inside the constraint block, standard Python operators are interpreted as real-d
 ### Linear constraints
 
 ```clausal
-# skip
-# Two-variable linear system: 2x + 3y = 12, x - y = 1
-linear_system(X, Y) <- (
-    in_real(X, -100.0, 100.0),
-    in_real(Y, -100.0, 100.0),
-    2.0 * X + 3.0 * Y == 12.0,
-    X - Y == 1.0,
-    label_real([X, Y], 1.0e-9)
-)
-# → X ≈ 3.0, Y ≈ 2.0
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:linear_constraints"
 ```
 
 ### Non-linear constraints
 
 ```clausal
-# skip
-# Unit circle (first quadrant)
-unit_circle(X, Y) <- (
-    in_real(X, 0.0, 1.0),
-    in_real(Y, 0.0, 1.0),
-    X * X + Y * Y == 1.0,
-    label_real([X, Y], 1.0e-9)
-)
-# → X ≈ 0.7071..., Y ≈ 0.7071...  (and other points)
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints"
 ```
 
 ```clausal
-# skip
-# Square root: find x where x^2 = 2
-sqrt2(X) <- (
-    in_real(X, 0.0, 2.0),
-    X * X == 2.0,
-    label_real([X], 1.0e-12)
-)
-# → X ≈ 1.4142135623730951
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints_ex2"
 ```
 
 ### Mixed FD and real
@@ -132,16 +103,7 @@ sqrt2(X) <- (
 Integer and real variables can appear together. when an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
 ```clausal
-# skip
-# Worker schedule: integer hours, real cost
-task(HOURS, COST) <- (
-    in_domain(HOURS, 1, 8),         % integer hours (CLP(ℤ))
-    in_real(COST, 10.0, 100.0),     % real cost (CLP(ℝ))
-    COST >= HOURS * 12.5,          % mixes FD + real
-    HOURS <= 6,
-    label([HOURS]),
-    label_real([COST], 1.0e-6)
-)
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real"
 ```
 
 in_ this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
@@ -149,14 +111,7 @@ in_ this example, `HOURS` keeps its FD domain `{1..8}` even after participating 
 You can also add an FD domain to a variable that already has a real interval:
 
 ```clausal
-# skip
-# Start with a real constraint, then restrict to integers
-mixed(X) <- (
-    in_real(X, 0.0, 100.0),
-    X * X <= 50.0,
-    in_domain(X, 1, 10),    % adds FD domain alongside real
-    label([X])
-)
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real_ex2"
 ```
 
 The FD domain is automatically narrowed against the real interval (and vice versa), so the tightest bounds from either domain are always used.
@@ -164,14 +119,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 ### Float literals trigger CLP(ℝ) automatically
 
 ```clausal
-# skip
-# No in_real needed — the float literal 9.0 triggers CLP(ℝ)
-pythagorean_real(X, Y) <- (
-    in_real(X, 0.0, 10.0),
-    in_real(Y, 0.0, 10.0),
-    X * X + Y * Y == 25.0,
-    label_real([X, Y], 1.0e-6)
-)
+--8<-- "tests/fixtures/docs/clpr_sigs.txt:float_literals_trigger_clp"
 ```
 
 ---

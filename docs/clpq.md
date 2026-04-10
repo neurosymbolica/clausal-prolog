@@ -48,10 +48,7 @@ Mixing `Fraction` (CLP(Q)) and `float` (CLP(R)) operands in the same constraint 
 In Clausal, **integer division always produces an exact rational**:
 
 ```clausal
-# skip
-X := 1/3            % Fraction(1, 3) — exact, not 0.333...
-X := 7/2            % Fraction(7, 2) — exact, not 3.5
-X := 22/7           % Fraction(22, 7) — exact
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
 ```
 
 This is a deliberate language design choice. In a logic programming language, exactness is the natural default. If you want IEEE float division, use a float literal on either side: `1.0/3` or `7/2.0`.
@@ -59,9 +56,7 @@ This is a deliberate language design choice. In a logic programming language, ex
 Because `int/int` produces `Fraction`, rational constraints arise naturally:
 
 ```clausal
-# skip
-X == 1/3            % CLP(Q) constraint: X = Fraction(1, 3)
-X + Y == 1/2        % CLP(Q) constraint: X + Y = Fraction(1, 2)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
 ```
 
 ---
@@ -115,9 +110,7 @@ Inside the constraint block, standard Python operators (`+`, `-`, `*`, `<`, `<=`
 Declares a variable as rational-domain (unbounded). This is the type declaration — it says "X is rational", nothing more.
 
 ```clausal
-# skip
-rational(X)                    % X is rational, unbounded
-rational([X, Y, Z])            % all three are rational
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:rational_1"
 ```
 
 ### in_q/3
@@ -125,14 +118,7 @@ rational([X, Y, Z])            % all three are rational
 Declares a rational variable with explicit bounds. Equivalent to `rational(X), Lo <= X <= Hi`. If the variable already has bounds, intersects with the new ones. Fails if the intersection is empty.
 
 ```clausal
-# skip
-in_q(X, 0, 10)                % X in [0, 10]
-
-% Equivalent to:
-rational(X), 0 <= X, X <= 10
-
-% For lists, use maplist:
-maplist(lambda X: (rational(X), 0 <= X, X <= 10), [X, Y, Z])
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:in_q_3"
 ```
 
 When the bounds collapse to a point (`lo == hi`), the variable is automatically unified with that value.
@@ -142,22 +128,7 @@ When the bounds collapse to a point (`lo == hi`), the variable is automatically 
 Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value **and binds all constrained variables to their optimal assignments**. Fails if the problem is unbounded.
 
 ```clausal
-# skip
-% Classic linear program:
-% maximize 30*X + 50*Y subject to:
-%   2*X + Y <= 16
-%   X + 2*Y <= 11
-%   X + 3*Y <= 15
-%   X, Y >= 0
-
-lp(X, Y, OBJ) <- (
-    in_q([X, Y], 0, 1000),
-    2*X + Y <= 16,
-    X + 2*Y <= 11,
-    X + 3*Y <= 15,
-    maximize(30*X + 50*Y, OBJ)
-)
-% -> X = 7, Y = 2, OBJ = 310  (all exact rationals, all bound)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:maximize_2_and_minimize_2"
 ```
 
 ### sup/2 and inf/2
@@ -165,15 +136,7 @@ lp(X, Y, OBJ) <- (
 Compute the upper or lower bound of a linear expression **without binding variables**. Useful for inspecting the feasible range or for implementing `entailed`.
 
 ```clausal
-# skip
-bounds(X, Lo, Hi) <- (
-    in_q(X, 0, 100),
-    X <= 10,
-    X >= 3,
-    inf(X, Lo),           % Lo = 3
-    sup(X, Hi)            % Hi = 10
-)
-% X remains unbound — only Lo and Hi are set
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:sup_2_and_inf_2"
 ```
 
 ### entailed/1
@@ -181,13 +144,7 @@ bounds(X, Lo, Hi) <- (
 Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
 
 ```clausal
-# skip
-test_entailed(X) <- (
-    in_q(X, 0, 100),
-    X <= 4,
-    entailed(X <= 5),          % true: X <= 4 implies X <= 5
-    \+ entailed(X <= 3)        % false: X could be 4, which is > 3
-)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:entailed_1"
 ```
 
 Supported operators: `<=`, `>=`, `<`, `>`, `==`, `!=`.
@@ -199,24 +156,7 @@ Minimize a linear expression subject to the current constraints **and** the requ
 `bb_inf/3` is accepted as an alias (SICStus compatibility).
 
 ```clausal
-# skip
-% Minimum integer X such that X >= 3/2
-int_min(X, Cost) <- (
-    in_q(X, 0, 10),
-    X >= 3/2,
-    int_minimize([X], X, Cost)
-)
-% -> X = 2, Cost = 2
-
-% min(X) with X >= Y + Z, Y >= 2, Z >= 2, all integer
-resource_min(X, Y, Z, Cost) <- (
-    in_q([X, Y, Z], 0, 100),
-    X >= Y + Z,
-    Y >= 2,
-    Z >= 2,
-    int_minimize([X, Y, Z], X, Cost)
-)
-% -> X = 4, Y = 2, Z = 2, Cost = 4
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
 ```
 
 ### dump_q/2
@@ -224,14 +164,7 @@ resource_min(X, Y, Z, Cost) <- (
 Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraint strings.
 
 ```clausal
-# skip
-show_constraints(X, Y, CS) <- (
-    in_q([X, Y], 0, 100),
-    2*X + Y <= 16,
-    X + 2*Y <= 11,
-    dump_q([X, Y], CS)
-)
-% CS = ["{2*X + Y =< 16}", "{X + 2*Y =< 11}", ...]
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
 ```
 
 This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal eliminates them correctly via Fourier-Motzkin.
@@ -243,77 +176,31 @@ This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables l
 ### Linear equalities
 
 ```clausal
-# skip
-% Two-variable system: X + Y = 10, X = 3 -> Y = 7
-two_var(X, Y) <- (
-    in_q([X, Y], 0, 10),
-    X + Y == 10,
-    X == 3
-)
-% -> X = 3, Y = 7  (exact)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities"
 ```
 
 ```clausal
-# skip
-% Three equations in three unknowns:
-% X + Y + Z = 6, X - Y = 2, Y - Z = 1
-three_var(X, Y, Z) <- (
-    in_q([X, Y, Z], -100, 100),
-    X + Y + Z == 6,
-    X - Y == 2,
-    Y - Z == 1
-)
-% -> X = 11/3, Y = 5/3, Z = 2/3  (exact fractions)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex2"
 ```
 
 ```clausal
-# skip
-% Rational coefficients: (1/2)*X + (1/3)*Y = 1, Y = 0
-rational_coeffs(X, Y) <- (
-    in_q([X, Y], -10, 10),
-    1/2 * X + 1/3 * Y == 1,
-    Y == 0
-)
-% -> X = 2, Y = 0
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex3"
 ```
 
 ### Linear inequalities
 
 ```clausal
-# skip
-% Feasibility: X + Y <= 8, X <= 5, Y <= 6
-feasible(X, Y) <- (
-    in_q([X, Y], 0, 100),
-    X + Y <= 8,
-    X <= 5,
-    Y <= 6
-)
-% Succeeds — the feasible region is non-empty
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities"
 ```
 
 ```clausal
-# skip
-% Infeasible: X >= 6 and X <= 4 is impossible
-infeasible(X) <- (
-    in_q(X, 0, 10),
-    X >= 6,
-    X <= 4
-)
-% Fails — no solution exists
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities_ex2"
 ```
 
 ### Optimization
 
 ```clausal
-# skip
-% Minimize cost subject to resource constraints
-scheduling(X, Y, COST) <- (
-    in_q([X, Y], 0, 100),
-    X + Y >= 10,          % need at least 10 total
-    2*X + Y <= 30,        % resource constraint 1
-    X + 3*Y <= 40,        % resource constraint 2
-    minimize(5*X + 3*Y, COST)
-)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:optimization"
 ```
 
 ---
@@ -710,14 +597,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
 
 ```clausal
-# skip
-% X is integer-constrained AND participates in a rational equation
-mixed(X, Y) <- (
-    in_domain(X, 1, 10),        % CLP(Z): X in {1..10}
-    in_q(Y, 0, 10),             % CLP(Q): Y in [0, 10]
-    X + Y == 10,                % Q dispatch (Y has Q attr)
-    Y == 7                      % → X = 3 (integer, accepted by both FD and Q)
-)
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
 ```
 
 ### Dispatch table
@@ -798,31 +678,13 @@ mixed(X, Y) <- (
     **LP optimization:**
 
     ```clausal
-    # skip
-    LP(X, Y, OBJ) <- (
-        in_q([X, Y], 0, 1000),
-        2*X + Y <= 16,
-        X + 2*Y <= 11,
-        X + 3*Y <= 15,
-        maximize(30*X + 50*Y, OBJ)
-    )
-    % -> X = 7, Y = 2, OBJ = 310
+    --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table"
     ```
 
     **Backtracking (constraints are undone when a branch fails):**
 
     ```clausal
-    # skip
-    % First branch: X = 5.  Second branch: X = 3.
-    % Each branch sees only its own constraints.
-    choice(X) <- (
-        in_q(X, 0, 10),
-        X == 5
-    )
-    choice(X) <- (
-        in_q(X, 0, 10),
-        X == 3
-    )
+    --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table_ex2"
     ```
 
     **Inspecting variable state (Python runtime API):**

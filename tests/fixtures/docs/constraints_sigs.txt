@@ -1,0 +1,52 @@
+# === dif/2 — Disequality constraint ===
+
+--8<-- [start:semantics]
+X is not Y, X is 1, Y is 2    # succeeds: 1 ≠ 2
+--8<-- [end:semantics]
+
+--8<-- [start:semantics_ex2]
+X is not Y, X is 1, Y is 1    # fails: dif violated when Y=1
+--8<-- [end:semantics_ex2]
+
+--8<-- [start:semantics_ex3]
+X is not 1, X is not 2, X is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
+X is not 1, X is not 2, X is 1    # fails: dif(X, 1) violated
+--8<-- [end:semantics_ex3]
+
+--8<-- [start:semantics_ex4]
+not (X is Y)    # fails if X and Y are both unbound (they CAN unify)
+--8<-- [end:semantics_ex4]
+
+
+# === CLP(B) — Boolean Constraints ===
+
+--8<-- [start:syntax_examples]
+sat(X & Y)                # both must be 1
+sat(X | Y)                # at least one must be 1
+sat(~X)                    # X must be 0
+sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
+sat(BoolImpl(X, Y))       # X → Y (implication)
+--8<-- [end:syntax_examples]
+
+--8<-- [start:syntax_examples_ex2]
+taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+--8<-- [end:syntax_examples_ex2]
+
+--8<-- [start:syntax_examples_ex3]
+sat_count(X ^ Y, N)       # N = 2
+sat_count(X & Y, N)       # N = 1
+sat_count(X | Y, N)       # N = 3
+--8<-- [end:syntax_examples_ex3]
+
+
+# === CLP(ℝ) — Real-domain Constraints ===
+
+--8<-- [start:unified_dispatch]
+# Float literal triggers CLP(ℝ)
+sqrt2(X) <- (
+    in_real(X, 0.0, 2.0),
+    X * X == 2.0,
+    label_real([X], 1.0e-12)
+)
+# → X ≈ 1.4142135623730951
+--8<-- [end:unified_dispatch]

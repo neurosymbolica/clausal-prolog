@@ -57,27 +57,22 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
     **Constraint succeeds — terms stay different:**
     ```clausal
-# skip
-    X is not Y, X is 1, Y is 2    # succeeds: 1 ≠ 2
+    --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics"
     ```
 
     **Constraint fails — terms become equal:**
     ```clausal
-# skip
-    X is not Y, X is 1, Y is 1    # fails: dif violated when Y=1
+    --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex2"
     ```
 
     **Multiple constraints:**
     ```clausal
-# skip
-    X is not 1, X is not 2, X is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
-    X is not 1, X is not 2, X is 1    # fails: dif(X, 1) violated
+    --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex3"
     ```
 
     **Immediate check (old semantics):**
     ```clausal
-# skip
-    not (X is Y)    # fails if X and Y are both unbound (they CAN unify)
+    --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex4"
     ```
 
     ---
@@ -501,12 +496,7 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 
 **Posting constraints:**
 ```clausal
-# skip
-sat(X & Y)                # both must be 1
-sat(X | Y)                # at least one must be 1
-sat(~X)                    # X must be 0
-sat(BoolEq(X, Y))         # X ↔ Y (equivalence)
-sat(BoolImpl(X, Y))       # X → Y (implication)
+--8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples"
 ```
 
 **Half adder:**
@@ -519,16 +509,12 @@ HalfAdder(X, Y, SUM, CARRY) <- (
 
 **Tautology check (De Morgan's law):**
 ```clausal
-# skip
-taut(BoolEq(~(X & Y), ~X | ~Y), T)   # T = 1
+--8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples_ex2"
 ```
 
 **Model counting:**
 ```clausal
-# skip
-sat_count(X ^ Y, N)       # N = 2
-sat_count(X & Y, N)       # N = 1
-sat_count(X | Y, N)       # N = 3
+--8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples_ex3"
 ```
 
 **Labeling (enumerate all solutions):**
@@ -644,14 +630,7 @@ Quick reference:
 The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `in_real`. No separate operator set or brace syntax is needed.
 
 ```clausal
-# skip
-# Float literal triggers CLP(ℝ)
-sqrt2(X) <- (
-    in_real(X, 0.0, 2.0),
-    X * X == 2.0,
-    label_real([X], 1.0e-12)
-)
-# → X ≈ 1.4142135623730951
+--8<-- "tests/fixtures/docs/constraints_sigs.txt:unified_dispatch"
 ```
 
 ### Cross-domain notes
