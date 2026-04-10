@@ -17,9 +17,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 - [Phase 3 — Registries and IO](phase3_registries_io.md): fact tables, save/load
 - [Phase 4 — Linear Algebra](phase4_linalg.md): det, inv, svd, eig, solve, cholesky, qr, norm, matrix_rank, pinv, cross, dot
 - [Phase 5 — FFT](phase5_fft.md): fft_transform, real_fft, fft_transform_2d, fft_transform_nd, fft_shift (all bijective), fft_frequencies, real_fft_frequencies
+- [Phase 6 — Comparisons and Logic](phase6_comparisons_logic.md): eq/ne/gt/lt/ge/le, equal, allclose, logical ops, any/all, where, masked_select, index_select, gather, scatter
 
 ### Planned
-- [Phase 6 — Comparisons and Logic](phase6_comparisons_logic.md): eq/gt/lt, logical ops, where, masked_select
 - [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, trig, exp/log, cumsum
 - [Phase 8 — Additional Shape Ops](phase8_more_shape_ops.md): split, chunk, unbind, flip, roll, expand
 - [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, sampling, cdf/icdf

@@ -658,6 +658,7 @@ For every term in the design:
 - [ ] `++()` in goal position **always succeeds** — never use it for
       boolean checks (e.g. `++(x > 0)` is vacuous). Use Clausal's own
       comparison operators or dedicated check predicates instead.
+- [ ] Boolean literals are `True`/`False` (Python), not `true`/`false`
 - [ ] Predicates that take list/dict arguments need deep-dereferencing —
       `deref()` does not recursively unwrap Vars inside containers. Use
       `_deep_deref()` or equivalent in the implementation.

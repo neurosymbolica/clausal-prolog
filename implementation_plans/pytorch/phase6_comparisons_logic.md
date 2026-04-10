@@ -137,4 +137,13 @@ Update `docs/torch.md` with comparisons, logic, selection sections.
 
 ## Issues
 
-_To be populated during implementation._
+- Plan examples used lowercase `true`/`false` for bool values in `.clausal`
+  files. Clausal uses Python's `True`/`False`. All fixture tests updated.
+
+- `any/2` and `all/2` (with dim) are check predicates that succeed if the
+  condition holds across all slices. `torch.any(t, dim=d)` returns a tensor
+  of per-slice results; we reduce with `.any().item()` / `.all().item()`
+  to produce a single boolean for the check.
+
+- Added three new helpers to `torch.py`: `_check_2` (binary check predicate),
+  `_check_bool` (unary bool check), `_check_bool_dim` (bool check with dim).
