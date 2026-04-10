@@ -49,6 +49,38 @@ When writing `.clausal` fixture files, note:
 - **`call` is lowercase** (builtin), not `Call` (which the original untested docs incorrectly used)
 - This means some doc snippets will be *corrected* during migration, not just verified — which is the whole point
 
+### Lessons from Phase 1 (builtins.md)
+
+These pitfalls came up repeatedly and will affect all later phases:
+
+**Variables vs names vs atoms:**
+- Variables are ALLCAPS (`X`, `BAG`) or start with `_`. Everything else is a predicate/functor name.
+- Names starting with uppercase but not all-caps are predicate names (`Partition`, `Test`), not variables.
+- Bare lowercase names are predicate calls, not atoms. Use quoted strings for atom values: `"runtime"` not `runtime`, `"my_key"` not `my_key`.
+
+**Boolean and goal syntax:**
+- `true`/`false` as bare names cause `LoadName` errors — they are Python values, not Clausal goals. Use `True`/`False` for boolean values in comparisons (`T == True`), and real goals like `(1 == 1)` where a goal is needed.
+- `not` after `<-` must be parenthesized: `Test("x") <- (not (goal))`.
+- Assignment uses `X is VALUE`, not `X = VALUE` (which is invalid syntax).
+
+**Predicates that don't match their doc names:**
+- `Catch/2` does not exist as a callable predicate — it's only `catch/3` (a compiler special form). The docs list it separately but it compiles to `catch(Goal, Error, true)`.
+- `atom/1` follows ISO Prolog: strings are NOT atoms. `atom("hello")` fails. Use `is_str` for string checks.
+- `compound/1`: lists are not compound terms. Use negation to test callability: `(not compound(42))`.
+
+**Operator syntax:**
+- CLP(B) uses `|` for OR, `&` for AND, `~` for NOT — not `+`/`*`/`-`.
+- DCG rules use `>>` not `-->`: `greeting >> (["hello"])`.
+
+**Runtime database:**
+- `assertz`/`retract` require a prior `-dynamic(Pred/arity)` directive.
+
+**Module predicates:**
+- Import paths: `log` (not `logging`), `date_time` (not `datetime`), `yaml_module` (not `yaml`).
+- `SetLevel` takes string names (`"warning"`), `GetLevel` returns uppercase strings (`"WARNING"`), not numeric levels.
+- `functor/3` works on atoms and lists, not arbitrary `f(1,2)` terms (the predicate must be in scope).
+- `arg/3` is 1-based on lists, not 0-based.
+
 ### Step 3: Handle the two kinds of `# skip` blocks
 
 **Kind A — Executable code (examples, imports): ~490 blocks**
