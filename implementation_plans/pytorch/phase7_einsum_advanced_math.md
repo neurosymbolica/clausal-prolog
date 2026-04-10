@@ -176,4 +176,10 @@ which predicates are bijective.
 
 ## Issues
 
-_To be populated during implementation._
+1. **`tanh` near-boundary test**: Initial test using `gt(tanh([-10, ...]), -1.0)`
+   failed because `tanh(-10.0) ≈ -1.0` within float precision. Replaced with
+   a shape test and a `tanh(0) = 0` exactness test.
+2. **`abs/2` already in Phase 1**: Skipped — no duplicate registration needed.
+3. **`einsum` trace returns 0-dim tensor**: The `einsum("ii->", ...)` equation
+   produces a scalar (0-dim) tensor, not a Python float. Tests use `allclose`
+   against a `tensor([5.0])` which works because PyTorch broadcasts.
