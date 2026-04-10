@@ -163,4 +163,6 @@ Create `docs/torch_functional.md` or update `docs/torch.md`.
 
 ## Issues
 
-_To be populated during implementation._
+No implementation issues. All predicates are straightforward Tier 1 pure
+wrappers using `_pred`/`_pure`. The opts-dict pattern from Phase 1
+worked without modification for conv/pooling/norm/loss keyword arguments.

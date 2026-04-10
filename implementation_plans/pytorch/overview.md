@@ -24,8 +24,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 - [Phase 9 — Distributions](phase9_distributions.md): torch.distributions registry, make_distribution, sample, log_prob, entropy, mean, variance, stddev, cdf/icdf
 - [Phase 10 — Datasets](phase10_data.md): tensor_dataset, dataset_length, dataset_item, dataset_element (nondeterministic)
 
+- [Phase 11 — nn.functional](phase11_nn_functional.md): activations, conv, pooling, normalization, loss functions
+
 ### Planned
-- [Phase 11 — nn.functional](phase11_nn_functional.md): conv, pooling, normalization, loss functions
 - [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, grad clipping
 
 ---
