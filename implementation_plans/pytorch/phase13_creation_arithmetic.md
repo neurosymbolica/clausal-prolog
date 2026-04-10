@@ -125,4 +125,4 @@ Update `docs/torch.md` with creation variants and arithmetic sections.
 
 ## Issues
 
-_To be populated during implementation._
+None — all predicates implemented cleanly following existing patterns.

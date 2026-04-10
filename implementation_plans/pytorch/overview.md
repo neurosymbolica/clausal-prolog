@@ -28,8 +28,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 
 - [Phase 12 — LR Schedulers and Gradient Utils](phase12_lr_schedulers_grad_utils.md): scheduler registry, current_lr, grad clipping
 
+- [Phase 13 — Creation Variants and Arithmetic](phase13_creation_arithmetic.md): zeros_like, ones_like, full_like, empty, rand, randint, logspace, diag, sub, div, neg
+
 ### Planned
-- [Phase 13 — Creation Variants and Arithmetic](phase13_creation_arithmetic.md): zeros_like, ones_like, full_like, rand, randint, diag, sub, div, neg
 - [Phase 14 — Statistics and Selection](phase14_statistics_selection.md): median, std, var, argmin, argmax, sort, argsort, topk, nonzero, unique
 - [Phase 15 — Linalg Extras, Checks, Pad, Losses](phase15_linalg_checks_losses.md): triu, tril, trace, isnan, isinf, isfinite, pad, smooth_l1_loss, huber_loss, kl_div
 
