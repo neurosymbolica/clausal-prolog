@@ -15,9 +15,9 @@ what's impure, and don't pretend GPU mutation is backtrackable.
 - [Phase 1 — Tensor Core](phase1_tensor_core.md): creation, properties, math, shape ops
 - [Phase 2 — Conversions and Module Structure](phase2_conversions_modules.md): bijective conversions, nn.Module enumeration
 - [Phase 3 — Registries and IO](phase3_registries_io.md): fact tables, save/load
+- [Phase 4 — Linear Algebra](phase4_linalg.md): det, inv, svd, eig, solve, cholesky, qr, norm, matrix_rank, pinv, cross, dot
 
 ### Planned
-- [Phase 4 — Linear Algebra](phase4_linalg.md): det, inv, svd, eig, solve, cholesky, qr
 - [Phase 5 — FFT](phase5_fft.md): fft/ifft, rfft/irfft, fftshift (all bijective pairs)
 - [Phase 6 — Comparisons and Logic](phase6_comparisons_logic.md): eq/gt/lt, logical ops, where, masked_select
 - [Phase 7 — Einsum and Advanced Math](phase7_einsum_advanced_math.md): einsum, trig, exp/log, cumsum

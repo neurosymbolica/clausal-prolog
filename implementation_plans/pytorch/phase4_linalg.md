@@ -128,4 +128,16 @@ by `.clausal` tests.
 
 ## Issues
 
-_To be populated during implementation._
+1. **SVD full_matrices default.** `torch.linalg.svd` defaults to
+   `full_matrices=True`, so for an `(m, n)` matrix with `m < n`, Vh is
+   `(n, n)` not `(m, n)`. The plan's example had wrong shapes for the
+   rectangular case. Tests corrected to match actual PyTorch behavior.
+
+2. **No issues with `_pure()` pattern.** All 12 predicates fit cleanly
+   into the existing `_pure()` helper. Decompositions returning
+   `NamedTuple` needed `tuple()` wrapping to produce plain tuples for
+   Clausal unification — same as the plan anticipated.
+
+3. **`dot` is `torch.dot`, not `torch.linalg.dot`.** `torch.linalg` has
+   no `dot` — it lives at the top-level `torch` namespace. `cross` is
+   in `torch.linalg`.
