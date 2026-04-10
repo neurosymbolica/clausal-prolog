@@ -43,9 +43,9 @@ Create `tests/fixtures/docs/` for doc-snippet fixture files. Convention: one fil
 ### Important: Clausal syntax in fixture files
 
 When writing `.clausal` fixture files, note:
-- **Predicate names must start uppercase** (e.g., `Partition`, `HeadTail`, `IsPositive`)
-- **Fact clauses (no body) need `<- True`** to avoid being parsed as Python expressions (e.g., `Partition([], _, [], []) <- True`)
-- **Single-clause predicates with bodies work fine** (e.g., `IsPositive(X) <- (X > 0)`)
+- **Predicate names are almost always lowercase** (e.g., `partition`, `head_tail`, `is_positive`) - this is in keeping with Prolog (and a lot of Python). There was a big refactor of TitleCase to lower_case, but many names were missed, especially in skipped doc snippets.
+- **Fact clauses (no body) need a trailing comma** to avoid being parsed as Python expressions (e.g., `partition([], _, [], []),`)
+- **Single-clause predicates with bodies work fine** (e.g., `is_positive(X) <- (X > 0)`) - by convention, if the body is a single name or single call, it doesn't need ().
 - **`call` is lowercase** (builtin), not `Call` (which the original untested docs incorrectly used)
 - This means some doc snippets will be *corrected* during migration, not just verified — which is the whole point
 
@@ -61,7 +61,7 @@ These go in `.clausal` fixture files with named sections and Test clauses:
 # --8<-- [end:torch_import]
 
 # --8<-- [start:eq_example]
-Test("doc: eq element-wise") <- (
+test("doc: eq element-wise") <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([1.0, 0.0, 3.0], B),
     eq(A, B, C),
@@ -98,8 +98,8 @@ Pair with a companion `.clausal` test file that validates each predicate exists:
 ```clausal
 -import_from(py.torch, [tensor, shape])
 
-Test("tensor exists") <- tensor([1.0], _)
-Test("shape exists") <- (tensor([1.0, 2.0], T), shape(T, [2]))
+test("tensor exists") <- tensor([1.0], _)
+test("shape exists") <- (tensor([1.0, 2.0], T), shape(T, [2]))
 ```
 
 Signature `.txt` files: `tests/fixtures/docs/torch_sigs.txt`
@@ -157,7 +157,7 @@ user-defined predicates should be uppercase.
 #### Phase 0 — Infrastructure + Pilot (DONE)
 - `lists.md` (2 skips) — pilot migration, infrastructure setup
 
-#### Phase 1 — Builtins index (233 skips)
+#### Phase 1 — Builtins index (233 skips) (DONE)
 - `builtins.md` (233) — mostly predicate signatures
 
 #### Phase 2 — SciPy (186 skips)

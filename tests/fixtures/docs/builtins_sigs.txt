@@ -1,0 +1,1027 @@
+# === Control Flow ===
+
+--8<-- [start:once_1]
+once(+Goal)
+--8<-- [end:once_1]
+
+--8<-- [start:not_1]
+not +Goal
+--8<-- [end:not_1]
+
+--8<-- [start:if_3]
+If(+Cond, +Then, +Else)
+--8<-- [end:if_3]
+
+--8<-- [start:throw_1]
+throw(+Term)
+--8<-- [end:throw_1]
+
+--8<-- [start:catch_2]
+Catch(+Goal, ?Error)
+--8<-- [end:catch_2]
+
+--8<-- [start:catch_recover_3]
+catch_recover(+Goal, ?Error, +Recovery)
+--8<-- [end:catch_recover_3]
+
+--8<-- [start:catch_3]
+catch(+Goal, ?Catcher, +Recovery)
+--8<-- [end:catch_3]
+
+--8<-- [start:halt_0]
+halt
+halt(+Code)
+--8<-- [end:halt_0]
+
+--8<-- [start:setup_call_cleanup_3]
+setup_call_cleanup(+Setup, +Call, +Cleanup)
+--8<-- [end:setup_call_cleanup_3]
+
+--8<-- [start:call_cleanup_2]
+call_cleanup(+Call, +Cleanup)
+--8<-- [end:call_cleanup_2]
+
+
+# === Coroutining ===
+
+--8<-- [start:freeze_2]
+freeze(?X, +Goal)
+--8<-- [end:freeze_2]
+
+--8<-- [start:when_2]
+when(+Condition, +Goal)
+--8<-- [end:when_2]
+
+
+# === Meta-Predicates ===
+
+--8<-- [start:findall_3]
+findall(+Template, +Goal, -Bag)
+--8<-- [end:findall_3]
+
+--8<-- [start:bagof_3]
+bagof(+Template, +Goal, -Bag)
+--8<-- [end:bagof_3]
+
+--8<-- [start:setof_3]
+setof(+Template, +Goal, -Set)
+--8<-- [end:setof_3]
+
+--8<-- [start:forall_2]
+forall(+Cond, +Action)
+--8<-- [end:forall_2]
+
+--8<-- [start:call_nth_2]
+call_nth(+Goal, +N)
+--8<-- [end:call_nth_2]
+
+--8<-- [start:count_all_2]
+count_all(+Goal, -Count)
+--8<-- [end:count_all_2]
+
+
+# === Time & statistics ===
+
+--8<-- [start:current_time_1]
+current_time(-T)
+--8<-- [end:current_time_1]
+
+--8<-- [start:statistics_2]
+statistics(?Key, -Value)
+--8<-- [end:statistics_2]
+
+
+# === Higher-Order Call ===
+
+--8<-- [start:call]
+Call(+Goal)
+Call(+Goal, +A1)
+Call(+Goal, +A1, +A2)
+...
+Call(+Goal, +A1, ..., +A7)
+--8<-- [end:call]
+
+--8<-- [start:call_goal_1]
+call_goal(+Goal)
+call_goal(+Goal, +A1)
+call_goal(+Goal, +A1, +A2)
+--8<-- [end:call_goal_1]
+
+
+# === DCG (Definite Clause Grammars) ===
+
+--8<-- [start:phrase_2]
+phrase(+RuleBody, +List)
+--8<-- [end:phrase_2]
+
+--8<-- [start:phrase_3]
+phrase(+RuleBody, +List, ?Rest)
+--8<-- [end:phrase_3]
+
+--8<-- [start:sequence]
+sequence(+List)   % as DCG non-terminal: sequence(List, S0, S)
+--8<-- [end:sequence]
+
+--8<-- [start:sequence_ex2]
+phrase(sequence(["hello", "world"]), ["hello", "world"])       % succeeds
+phrase(sequence(["a", "b"]), ["a", "b", "c"], REST)            % REST = ["c"]
+--8<-- [end:sequence_ex2]
+
+
+# === Term Inspection ===
+
+--8<-- [start:functor_3]
+functor(+Term, -Name, -Arity)   % decompose
+functor(-Term, +Name, +Arity)   % construct
+--8<-- [end:functor_3]
+
+--8<-- [start:arg_3]
+arg(+N, +Term, -arg)
+--8<-- [end:arg_3]
+
+--8<-- [start:unpack_2]
+unpack(+Term, -List)   % decompose: List = [functor | Args]
+unpack(-Term, +List)   % construct: Term from [functor | Args]
+--8<-- [end:unpack_2]
+
+--8<-- [start:copy_term_2]
+copy_term(+Original, -Copy)
+--8<-- [end:copy_term_2]
+
+--8<-- [start:term_variables_2]
+term_variables(+Term, -Vars)
+--8<-- [end:term_variables_2]
+
+--8<-- [start:numbervars_3]
+numbervars(+Term, +Start, -End)
+--8<-- [end:numbervars_3]
+
+--8<-- [start:gensym_2]
+gensym(+Prefix, -Atom)
+--8<-- [end:gensym_2]
+
+
+# === Runtime Database ===
+
+--8<-- [start:assertz_1]
+assertz(+Clause)
+--8<-- [end:assertz_1]
+
+--8<-- [start:asserta_1]
+asserta(+Clause)
+--8<-- [end:asserta_1]
+
+--8<-- [start:retract_1]
+retract(+Term)
+--8<-- [end:retract_1]
+
+--8<-- [start:abolish_table_2]
+abolish_table(+functor, +Arity)
+--8<-- [end:abolish_table_2]
+
+--8<-- [start:abolish_all_tables_0]
+abolish_all_tables
+--8<-- [end:abolish_all_tables_0]
+
+
+# === Keyword-Term Introspection ===
+
+--8<-- [start:vary_3]
+vary(+Overrides, +Term, -NewTerm)
+--8<-- [end:vary_3]
+
+--8<-- [start:extend_3]
+extend(+Additions, +Term, -NewTerm)
+--8<-- [end:extend_3]
+
+--8<-- [start:unbound_keys_2]
+unbound_keys(+Term, -Keys)
+--8<-- [end:unbound_keys_2]
+
+--8<-- [start:signature_3]
+signature(+FunctorName, +Arity, -Names)
+--8<-- [end:signature_3]
+
+
+# === Attributed Variables ===
+
+--8<-- [start:put_attr_3]
+put_attr(+Var, +Key, +Value)
+--8<-- [end:put_attr_3]
+
+--8<-- [start:get_attr_3]
+get_attr(+Var, +Key, -Value)
+--8<-- [end:get_attr_3]
+
+--8<-- [start:del_attr_2]
+del_attr(+Var, +Key)
+--8<-- [end:del_attr_2]
+
+--8<-- [start:get_attrs_2]
+get_attrs(+Var, -Attrs)
+--8<-- [end:get_attrs_2]
+
+--8<-- [start:put_attrs_2]
+put_attrs(+Var, +Attrs)
+--8<-- [end:put_attrs_2]
+
+--8<-- [start:attvar_1]
+attvar(?Var)
+--8<-- [end:attvar_1]
+
+--8<-- [start:term_attvars_2]
+term_attvars(+Term, -Vars)
+--8<-- [end:term_attvars_2]
+
+
+# === Constraint Predicates ===
+
+--8<-- [start:dif_2]
+dif(+X, +Y)
+--8<-- [end:dif_2]
+
+--8<-- [start:eq_3]
+eq(+X, +Y, -T)
+--8<-- [end:eq_3]
+
+--8<-- [start:dif_t_3]
+dif_t(+X, +Y, -T)
+--8<-- [end:dif_t_3]
+
+
+# === CLP(ℤ) — Integer Constraints ===
+
+--8<-- [start:in_domain_3]
+in_domain(+VarOrList, +Lo, +Hi)
+--8<-- [end:in_domain_3]
+
+--8<-- [start:label_1]
+label(+Vars)
+--8<-- [end:label_1]
+
+--8<-- [start:all_different_1]
+all_different(+Vars)
+--8<-- [end:all_different_1]
+
+--8<-- [start:structural_eq_2]
+structural_eq(+T1, +T2)
+--8<-- [end:structural_eq_2]
+
+--8<-- [start:sum__3]
+sum_(+Vars, +Op, +Value)
+--8<-- [end:sum__3]
+
+--8<-- [start:sum__3_ex2]
+sum_([X, Y, Z], "#=", 10)   % X + Y + Z = 10
+--8<-- [end:sum__3_ex2]
+
+--8<-- [start:scalar_product_4]
+scalar_product(+Coeffs, +Vars, +Op, +Value)
+--8<-- [end:scalar_product_4]
+
+--8<-- [start:scalar_product_4_ex2]
+scalar_product([2, 3], [X, Y], "#=", 12)   % 2X + 3Y = 12
+--8<-- [end:scalar_product_4_ex2]
+
+--8<-- [start:element_3]
+element(?Index, +List, ?Value)
+--8<-- [end:element_3]
+
+--8<-- [start:element_3_ex2]
+element(2, [10, 20, 30], V)   % V = 20
+element(I, [10, 20, 30], 20)  % I = 2 (propagated without labeling)
+--8<-- [end:element_3_ex2]
+
+--8<-- [start:circuit_1]
+circuit(+Vars)
+--8<-- [end:circuit_1]
+
+--8<-- [start:circuit_1_ex2]
+circuit([2, 3, 1])         % valid: 1→2→3→1
+% circuit([1, 2, 3]) fails — self-loop at node 1
+% circuit([2, 1, 4, 3]) fails — two sub-tours (detected during propagation)
+--8<-- [end:circuit_1_ex2]
+
+
+# === CLP(B) — Boolean Constraints ===
+
+--8<-- [start:sat_1]
+sat(+Expr)
+--8<-- [end:sat_1]
+
+--8<-- [start:taut_2]
+taut(+Expr, -T)
+--8<-- [end:taut_2]
+
+--8<-- [start:sat_count_2]
+sat_count(+Expr, -N)
+--8<-- [end:sat_count_2]
+
+--8<-- [start:bool_labeling_1]
+bool_labeling(+Vars)
+--8<-- [end:bool_labeling_1]
+
+
+# === Type Checks ===
+
+--8<-- [start:var_1]
+var(?X)
+--8<-- [end:var_1]
+
+--8<-- [start:nonvar_1]
+nonvar(?X)
+--8<-- [end:nonvar_1]
+
+--8<-- [start:atom_1]
+atom(+X)
+--8<-- [end:atom_1]
+
+--8<-- [start:is_str_1]
+is_str(+X)
+--8<-- [end:is_str_1]
+
+--8<-- [start:number_1]
+number(+X)
+--8<-- [end:number_1]
+
+--8<-- [start:integer_1]
+integer(+X)
+--8<-- [end:integer_1]
+
+--8<-- [start:float__1]
+float_(+X)
+--8<-- [end:float__1]
+
+--8<-- [start:compound_1]
+compound(+X)
+--8<-- [end:compound_1]
+
+--8<-- [start:callable__1]
+callable_(+X)
+--8<-- [end:callable__1]
+
+--8<-- [start:is_list_1]
+is_list(+X)
+--8<-- [end:is_list_1]
+
+--8<-- [start:ground_1]
+ground(+X)
+--8<-- [end:ground_1]
+
+--8<-- [start:must_be_2]
+must_be(+Type, +Term)
+--8<-- [end:must_be_2]
+
+--8<-- [start:can_be_2]
+can_be(+Type, ?Term)
+--8<-- [end:can_be_2]
+
+
+# === Dict and Set Predicates ===
+
+--8<-- [start:is_dict_1]
+is_dict(+Term)
+--8<-- [end:is_dict_1]
+
+--8<-- [start:dict_size_2]
+dict_size(+Dict, -N)
+--8<-- [end:dict_size_2]
+
+--8<-- [start:dict_keys_2]
+dict_keys(+Dict, -Keys)
+--8<-- [end:dict_keys_2]
+
+--8<-- [start:dict_values_2]
+dict_values(+Dict, -Values)
+--8<-- [end:dict_values_2]
+
+--8<-- [start:dict_pairs_2]
+dict_pairs(?Dict, ?Pairs)
+--8<-- [end:dict_pairs_2]
+
+--8<-- [start:dict_get_3]
+dict_get(+Key, +Dict, ?Value)
+--8<-- [end:dict_get_3]
+
+--8<-- [start:dict_put_4]
+dict_put(+Key, +Value, +OldDict, -NewDict)
+--8<-- [end:dict_put_4]
+
+--8<-- [start:dict_put_pairs_3]
+dict_put_pairs(+Pairs, +OldDict, -NewDict)
+--8<-- [end:dict_put_pairs_3]
+
+--8<-- [start:dict_remove_3]
+dict_remove(+Key, +OldDict, -NewDict)
+--8<-- [end:dict_remove_3]
+
+--8<-- [start:dict_merge_3]
+dict_merge(+D1, +D2, -Merged)
+--8<-- [end:dict_merge_3]
+
+--8<-- [start:gen_dict_3]
+gen_dict(?Key, +Dict, ?Value)
+--8<-- [end:gen_dict_3]
+
+--8<-- [start:sub_dict_2]
+sub_dict(+Pattern, +Dict)
+--8<-- [end:sub_dict_2]
+
+--8<-- [start:is_set_1]
+is_set(+Term)
+--8<-- [end:is_set_1]
+
+--8<-- [start:set_size_2]
+set_size(+Set, -N)
+--8<-- [end:set_size_2]
+
+--8<-- [start:set_list_2]
+set_list(?Set, ?List)
+--8<-- [end:set_list_2]
+
+--8<-- [start:set_union_3]
+set_union(+S1, +S2, -union)
+--8<-- [end:set_union_3]
+
+--8<-- [start:set_intersection_3]
+set_intersection(+S1, +S2, -Inter)
+--8<-- [end:set_intersection_3]
+
+--8<-- [start:set_subtract_3]
+set_subtract(+S1, +S2, -Diff)
+--8<-- [end:set_subtract_3]
+
+--8<-- [start:set_sym_diff_3]
+set_sym_diff(+S1, +S2, -Sym)
+--8<-- [end:set_sym_diff_3]
+
+--8<-- [start:set_subset_2]
+set_subset(+Sub, +Super)
+--8<-- [end:set_subset_2]
+
+--8<-- [start:set_disjoint_2]
+set_disjoint(+S1, +S2)
+--8<-- [end:set_disjoint_2]
+
+--8<-- [start:set_add_3]
+set_add(+Elem, +OldSet, -NewSet)
+--8<-- [end:set_add_3]
+
+--8<-- [start:set_remove_3]
+set_remove(+Elem, +OldSet, -NewSet)
+--8<-- [end:set_remove_3]
+
+--8<-- [start:gen_set_2]
+gen_set(?Elem, +Set)
+--8<-- [end:gen_set_2]
+
+
+# === Arithmetic ===
+
+--8<-- [start:between_3]
+between(+Low, +High, ?X)
+--8<-- [end:between_3]
+
+--8<-- [start:succ_2]
+succ(?X, ?Y)   % Y = X + 1
+--8<-- [end:succ_2]
+
+--8<-- [start:plus_3]
+plus(?X, ?Y, ?Z)   % Z = X + Y
+--8<-- [end:plus_3]
+
+--8<-- [start:abs__2]
+abs_(+X, -Y)   % Y = abs(X)
+--8<-- [end:abs__2]
+
+--8<-- [start:max__3]
+max_(+X, +Y, -Z)   % Z = max(X, Y)
+--8<-- [end:max__3]
+
+--8<-- [start:min__3]
+min_(+X, +Y, -Z)   % Z = min(X, Y)
+--8<-- [end:min__3]
+
+--8<-- [start:sign_2]
+sign(+X, -S)   % S is -1, 0, or 1
+--8<-- [end:sign_2]
+
+--8<-- [start:gcd_3]
+gcd(+X, +Y, -G)   % G = gcd(X, Y)
+--8<-- [end:gcd_3]
+
+--8<-- [start:divmod__4]
+divmod_(+X, +Y, -Q, -R)   % Q = X // Y, R = X mod Y
+--8<-- [end:divmod__4]
+
+--8<-- [start:lcm_3]
+lcm(+X, +Y, -L)   % L = lcm(X, Y)
+--8<-- [end:lcm_3]
+
+--8<-- [start:exp_mod_4]
+exp_mod(+Base, +Exp, +Mod, -Result)   % Result = Base^Exp mod Mod
+--8<-- [end:exp_mod_4]
+
+--8<-- [start:popcount_2]
+popcount(+X, -Count)   % Count = number of set bits in X
+--8<-- [end:popcount_2]
+
+--8<-- [start:msb_2]
+msb(+X, -Bit)   % Bit = position of most significant set bit (0-indexed)
+--8<-- [end:msb_2]
+
+--8<-- [start:lsb_2]
+lsb(+X, -Bit)   % Bit = position of least significant set bit (0-indexed)
+--8<-- [end:lsb_2]
+
+
+# === List Predicates ===
+
+--8<-- [start:in__2]
+in_(?Elem, +List)
+--8<-- [end:in__2]
+
+--8<-- [start:in_check_2]
+in_check(+Elem, +List)
+--8<-- [end:in_check_2]
+
+--8<-- [start:append_3]
+append(?L1, ?L2, ?L3)   % L3 = L1 ++ L2
+--8<-- [end:append_3]
+
+--8<-- [start:length_2]
+length(+List, -N)   % N = len(List)
+length(-List, +N)   % construct list of N fresh vars
+--8<-- [end:length_2]
+
+--8<-- [start:last_2]
+last(+List, -Elem)
+--8<-- [end:last_2]
+
+--8<-- [start:reverse_2]
+reverse(+List, -Rev)
+--8<-- [end:reverse_2]
+
+--8<-- [start:get_item_3]
+get_item(+N, +List, -Elem)   % 0-based
+--8<-- [end:get_item_3]
+
+--8<-- [start:flatten_2]
+flatten(+Nested, -Flat)
+--8<-- [end:flatten_2]
+
+--8<-- [start:msort_2]
+msort(+List, -Sorted)
+--8<-- [end:msort_2]
+
+--8<-- [start:sort_2]
+sort(+List, -Sorted)
+--8<-- [end:sort_2]
+
+--8<-- [start:permutation_2]
+permutation(+List, -Perm)
+--8<-- [end:permutation_2]
+
+--8<-- [start:select_3]
+select(?Elem, +List, -Rest)
+--8<-- [end:select_3]
+
+--8<-- [start:subtract_3]
+subtract(+Set1, +Set2, -Diff)
+--8<-- [end:subtract_3]
+
+--8<-- [start:intersection_3]
+intersection(+Set1, +Set2, -Inter)
+--8<-- [end:intersection_3]
+
+--8<-- [start:union_3]
+union(+Set1, +Set2, -union)
+--8<-- [end:union_3]
+
+--8<-- [start:list_to_set_2]
+list_to_set(+List, -Set)
+--8<-- [end:list_to_set_2]
+
+--8<-- [start:sum_list_2]
+sum_list(+List, -sum_)
+--8<-- [end:sum_list_2]
+
+--8<-- [start:max_list_2]
+max_list(+List, -max_)
+--8<-- [end:max_list_2]
+
+--8<-- [start:min_list_2]
+min_list(+List, -min_)
+--8<-- [end:min_list_2]
+
+--8<-- [start:take_3]
+take(+N, +List, -Taken)
+--8<-- [end:take_3]
+
+--8<-- [start:drop_3]
+drop(+N, +List, -Rest)
+--8<-- [end:drop_3]
+
+--8<-- [start:split_at_4]
+split_at(+N, +List, -Left, -Right)
+--8<-- [end:split_at_4]
+
+--8<-- [start:zip__3]
+zip_(+List1, +List2, -Pairs)
+--8<-- [end:zip__3]
+
+--8<-- [start:replicate_3]
+replicate(+N, +Elem, -List)
+--8<-- [end:replicate_3]
+
+--8<-- [start:split_with_3]
+split_with(+Sep, +List, -Parts)    % split mode
+split_with(+Sep, -List, +Parts)    % join mode
+--8<-- [end:split_with_3]
+
+--8<-- [start:pairs_keys_values_3]
+pairs_keys_values(?Pairs, ?Keys, ?Values)
+--8<-- [end:pairs_keys_values_3]
+
+--8<-- [start:pairs_keys_2]
+pairs_keys(+Pairs, -Keys)
+--8<-- [end:pairs_keys_2]
+
+--8<-- [start:pairs_values_2]
+pairs_values(+Pairs, -Values)
+--8<-- [end:pairs_values_2]
+
+--8<-- [start:group_pairs_by_key_2]
+group_pairs_by_key(+Pairs, -Groups)
+--8<-- [end:group_pairs_by_key_2]
+
+--8<-- [start:group_pairs_by_key_2_ex2]
+group_pairs_by_key([["a", 1], ["b", 2], ["a", 3]], GROUPS)
+% GROUPS = [["a", [1, 3]], ["b", [2]]]
+--8<-- [end:group_pairs_by_key_2_ex2]
+
+--8<-- [start:numlist_3]
+numlist(+Low, +High, -List)
+--8<-- [end:numlist_3]
+
+--8<-- [start:numlist_3_ex2]
+numlist(1, 5, L)   % L = [1, 2, 3, 4, 5]
+--8<-- [end:numlist_3_ex2]
+
+--8<-- [start:numlist_2]
+numlist(+High, -List)
+--8<-- [end:numlist_2]
+
+--8<-- [start:same_length_2]
+same_length(?L1, ?L2)
+--8<-- [end:same_length_2]
+
+--8<-- [start:transpose_2]
+transpose(+Matrix, -Transposed)
+--8<-- [end:transpose_2]
+
+--8<-- [start:transpose_2_ex2]
+transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
+--8<-- [end:transpose_2_ex2]
+
+
+# === Higher-Order List Predicates ===
+
+--8<-- [start:maplist_2]
+maplist(+Goal, +List)
+--8<-- [end:maplist_2]
+
+--8<-- [start:maplist_3]
+maplist(+Goal, +Xs, -Ys)
+--8<-- [end:maplist_3]
+
+--8<-- [start:include_3]
+include(+Goal, +List, -Included)
+--8<-- [end:include_3]
+
+--8<-- [start:exclude_3]
+exclude(+Goal, +List, -Excluded)
+--8<-- [end:exclude_3]
+
+--8<-- [start:partition_4]
+partition(+Goal, +List, -Included, -Excluded)
+--8<-- [end:partition_4]
+
+--8<-- [start:partition_4_ex2]
+partition(integer, [1, "a", 2, "b"], YES, NO)
+% YES = [1, 2], NO = ["a", "b"]
+--8<-- [end:partition_4_ex2]
+
+--8<-- [start:tfilter_3]
+tfilter(+Goal, +List, -Filtered)
+--8<-- [end:tfilter_3]
+
+--8<-- [start:tfilter_3_ex2]
+tfilter(eq(_, 1), [1, 2, 1, 3], FILTERED)
+% FILTERED = [1, 1]
+--8<-- [end:tfilter_3_ex2]
+
+--8<-- [start:tpartition_4]
+tpartition(+Goal, +List, -Included, -Excluded)
+--8<-- [end:tpartition_4]
+
+--8<-- [start:tpartition_4_ex2]
+tpartition(eq(_, 1), [1, 2, 1, 3], YES, NO)
+% YES = [1, 1], NO = [2, 3]
+--8<-- [end:tpartition_4_ex2]
+
+--8<-- [start:foldl_4]
+foldl(+Goal, +List, +V0, -V)
+--8<-- [end:foldl_4]
+
+--8<-- [start:take_while_3]
+take_while(+Goal, +List, -Prefix)
+--8<-- [end:take_while_3]
+
+--8<-- [start:drop_while_3]
+drop_while(+Goal, +List, -Suffix)
+--8<-- [end:drop_while_3]
+
+--8<-- [start:span_4]
+span(+Goal, +List, -Yes, -No)
+--8<-- [end:span_4]
+
+--8<-- [start:group_by_3]
+group_by(+Goal, +List, -Groups)
+--8<-- [end:group_by_3]
+
+--8<-- [start:sort_by_3]
+sort_by(+Goal, +List, -Sorted)
+--8<-- [end:sort_by_3]
+
+--8<-- [start:max_by_3]
+max_by(+Goal, +List, -max_)
+--8<-- [end:max_by_3]
+
+--8<-- [start:min_by_3]
+min_by(+Goal, +List, -min_)
+--8<-- [end:min_by_3]
+
+--8<-- [start:filter_map_3]
+filter_map(+Goal, +List, -Result)
+--8<-- [end:filter_map_3]
+
+
+# === Character/String ===
+
+--8<-- [start:char_type_2]
+char_type(?Char, ?Type)
+--8<-- [end:char_type_2]
+
+--8<-- [start:char_code_2]
+char_code(?Char, ?Code)
+--8<-- [end:char_code_2]
+
+--8<-- [start:upcase_atom_2]
+upcase_atom(+Atom, -Upper)
+--8<-- [end:upcase_atom_2]
+
+--8<-- [start:downcase_atom_2]
+downcase_atom(+Atom, -Lower)
+--8<-- [end:downcase_atom_2]
+
+--8<-- [start:atom_length_2]
+atom_length(+Atom, ?length)
+--8<-- [end:atom_length_2]
+
+--8<-- [start:atom_chars_2]
+atom_chars(?Atom, ?Chars)
+--8<-- [end:atom_chars_2]
+
+--8<-- [start:atom_codes_2]
+atom_codes(?Atom, ?Codes)
+--8<-- [end:atom_codes_2]
+
+--8<-- [start:atom_concat_3]
+atom_concat(?A, ?B, ?C)
+--8<-- [end:atom_concat_3]
+
+--8<-- [start:sub_atom_5]
+sub_atom(+Atom, ?Before, ?length, ?After, ?Sub)
+--8<-- [end:sub_atom_5]
+
+--8<-- [start:number_chars_2]
+number_chars(?Number, ?Chars)
+--8<-- [end:number_chars_2]
+
+--8<-- [start:number_chars_2_ex2]
+number_chars(42, ["4", "2"])        # succeeds
+number_chars(-3.14, CHARS)          # CHARS = ["-", "3", ".", "1", "4"]
+number_chars(N, ["1", "0"])         # N = 10
+--8<-- [end:number_chars_2_ex2]
+
+--8<-- [start:number_codes_2]
+number_codes(?Number, ?Codes)
+--8<-- [end:number_codes_2]
+
+--8<-- [start:number_codes_2_ex2]
+number_codes(42, [52, 50])          # succeeds (ord("4")=52, ord("2")=50)
+number_codes(N, [52, 50])           # N = 42
+--8<-- [end:number_codes_2_ex2]
+
+
+# === I/O ===
+
+--8<-- [start:write_1]
+write(+Term)
+--8<-- [end:write_1]
+
+--8<-- [start:writeln_1]
+writeln(+Term)
+--8<-- [end:writeln_1]
+
+--8<-- [start:print_term_1]
+print_term(+Term)
+--8<-- [end:print_term_1]
+
+--8<-- [start:nl_0]
+nl
+--8<-- [end:nl_0]
+
+--8<-- [start:tab_1]
+tab(+N)
+--8<-- [end:tab_1]
+
+--8<-- [start:write_to_string_2]
+write_to_string(+Term, -String)
+--8<-- [end:write_to_string_2]
+
+--8<-- [start:term_to_string_2]
+term_to_string(+Term, -String)
+--8<-- [end:term_to_string_2]
+
+--8<-- [start:listing_1]
+listing(+Predicate)
+--8<-- [end:listing_1]
+
+--8<-- [start:portray_clause_1]
+portray_clause(+Term)
+--8<-- [end:portray_clause_1]
+
+
+# === Logging (`log` module) ===
+
+--8<-- [start:getlogger_1]
+GetLogger(-Logger)
+GetLogger(+Name, -Logger)
+--8<-- [end:getlogger_1]
+
+--8<-- [start:debug_1]
+Debug(+Msg)
+Debug(+Logger, +Msg)
+--8<-- [end:debug_1]
+
+--8<-- [start:info_1]
+Info(+Msg)
+Info(+Logger, +Msg)
+--8<-- [end:info_1]
+
+--8<-- [start:warning_1]
+Warning(+Msg)
+Warning(+Logger, +Msg)
+--8<-- [end:warning_1]
+
+--8<-- [start:error_1]
+Error(+Msg)
+Error(+Logger, +Msg)
+--8<-- [end:error_1]
+
+--8<-- [start:critical_1]
+Critical(+Msg)
+Critical(+Logger, +Msg)
+--8<-- [end:critical_1]
+
+--8<-- [start:log_3]
+Log(+Logger, +Level, +Msg)
+--8<-- [end:log_3]
+
+--8<-- [start:setlevel_2]
+SetLevel(+Logger, +Level)
+--8<-- [end:setlevel_2]
+
+--8<-- [start:getlevel_2]
+GetLevel(+Logger, -Level)
+--8<-- [end:getlevel_2]
+
+--8<-- [start:isenabledfor_2]
+IsEnabledFor(+Logger, +Level)
+--8<-- [end:isenabledfor_2]
+
+--8<-- [start:streamhandler_2]
+StreamHandler(+StreamName, -Handler)
+--8<-- [end:streamhandler_2]
+
+--8<-- [start:filehandler_2]
+FileHandler(+Path, -Handler)
+--8<-- [end:filehandler_2]
+
+--8<-- [start:setformatter_2]
+SetFormatter(+Handler, +FormatString)
+--8<-- [end:setformatter_2]
+
+--8<-- [start:addhandler_2]
+AddHandler(+Logger, +Handler)
+--8<-- [end:addhandler_2]
+
+--8<-- [start:removehandler_2]
+RemoveHandler(+Logger, +Handler)
+--8<-- [end:removehandler_2]
+
+--8<-- [start:basicconfig_1]
+BasicConfig(+Opts)
+--8<-- [end:basicconfig_1]
+
+
+# === Date & Time (`date_time` module) ===
+
+--8<-- [start:now_1]
+Now(-DT)
+--8<-- [end:now_1]
+
+--8<-- [start:nowutc_1]
+NowUTC(-DT)
+--8<-- [end:nowutc_1]
+
+--8<-- [start:today_1]
+Today(-D)
+--8<-- [end:today_1]
+
+--8<-- [start:date_4]
+Date(?Year, ?Month, ?Day, ?DateObj)
+--8<-- [end:date_4]
+
+--8<-- [start:time_4]
+Time(?Hour, ?Minute, ?Second, ?TimeObj)
+--8<-- [end:time_4]
+
+--8<-- [start:datetime_7]
+DateTime(?Year, ?Month, ?Day, ?Hour, ?Minute, ?Second, ?DtObj)
+--8<-- [end:datetime_7]
+
+--8<-- [start:timedelta_3]
+TimeDelta(?Days, ?Seconds, ?TdObj)
+--8<-- [end:timedelta_3]
+
+--8<-- [start:dateadd_3]
+DateAdd(+DateOrDatetime, +Timedelta, -Result)
+--8<-- [end:dateadd_3]
+
+--8<-- [start:datesub_3]
+DateSub(+DateOrDatetime, +Timedelta, -Result)
+--8<-- [end:datesub_3]
+
+--8<-- [start:datediff_3]
+DateDiff(+D1, +D2, -Timedelta)
+--8<-- [end:datediff_3]
+
+--8<-- [start:formatdate_3]
+FormatDate(+DateOrDatetime, +FormatStr, -ResultStr)
+--8<-- [end:formatdate_3]
+
+--8<-- [start:parsedate_3]
+ParseDate(+String, +FormatStr, -DatetimeObj)
+--8<-- [end:parsedate_3]
+
+--8<-- [start:dayofweek_2]
+DayOfWeek(+DateOrDatetime, -Weekday)
+--8<-- [end:dayofweek_2]
+
+--8<-- [start:datebetween_3]
+DateBetween(+Start, +End, -D)
+--8<-- [end:datebetween_3]
+
+
+# === YAML (`yaml_module` module) ===
+
+--8<-- [start:read_2]
+Read(+YamlString, -Data)
+--8<-- [end:read_2]
+
+--8<-- [start:write_2]
+write(+Data, -YamlString)
+--8<-- [end:write_2]
+
+--8<-- [start:readall_2]
+ReadAll(+YamlString, -DocList)
+--8<-- [end:readall_2]
+
+--8<-- [start:writeall_2]
+WriteAll(+DocList, -YamlString)
+--8<-- [end:writeall_2]
+
+--8<-- [start:readfile_2]
+ReadFile(+Path, -Data)
+--8<-- [end:readfile_2]
+
+--8<-- [start:writefile_2]
+WriteFile(+Path, +Data)
+--8<-- [end:writefile_2]
+
+--8<-- [start:get_3]
+Get(+Data, +Path, -Value)
+--8<-- [end:get_3]
