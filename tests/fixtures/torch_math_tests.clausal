@@ -1,0 +1,249 @@
+-import_from(py.torch, [
+    tensor, shape, tensor_list, allclose,
+    einsum, logarithm, sine, cosine, tangent,
+    sqrt, pow, atan2, sinh, cosh, tanh,
+    sigmoid, log_softmax,
+    floor, ceil, round, sign,
+    cumsum, cumprod,
+    gt, all
+])
+
+# --- einsum ---
+
+Test("einsum matmul") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    tensor([[5.0, 6.0], [7.0, 8.0]], B),
+    einsum("ij,jk->ik", [A, B], C),
+    shape(C, [2, 2])
+)
+
+Test("einsum trace") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    einsum("ii->", [A], T),
+    # trace = 1 + 4 = 5
+    tensor([5.0], EXPECTED),
+    allclose(T, EXPECTED)
+)
+
+Test("einsum outer product") <- (
+    tensor([1.0, 2.0, 3.0], A),
+    tensor([4.0, 5.0], B),
+    einsum("i,j->ij", [A, B], C),
+    shape(C, [3, 2])
+)
+
+Test("einsum batch matmul") <- (
+    tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], A),
+    tensor([[[1.0, 0.0], [0.0, 1.0]], [[1.0, 0.0], [0.0, 1.0]]], B),
+    einsum("bij,bjk->bik", [A, B], C),
+    shape(C, [2, 2, 2])
+)
+
+# --- logarithm (bijective: exp/log) ---
+
+Test("logarithm forward (exp)") <- (
+    tensor([0.0, 1.0, 2.0], EXPONENT),
+    logarithm(EXPONENT, VALUE),
+    shape(VALUE, [3])
+)
+
+Test("logarithm backward (log)") <- (
+    tensor([1.0, 2.0, 3.0], VALUE),
+    logarithm(EXPONENT, VALUE),
+    shape(EXPONENT, [3])
+)
+
+Test("logarithm roundtrip") <- (
+    tensor([1.0, 2.0, 3.0], X),
+    logarithm(X, Y),
+    logarithm(X2, Y),
+    allclose(X, X2)
+)
+
+# --- sine (bijective: sin/asin) ---
+
+Test("sine forward") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    sine(ANGLE, VALUE),
+    shape(VALUE, [3])
+)
+
+Test("sine roundtrip") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    sine(ANGLE, VALUE),
+    sine(ANGLE2, VALUE),
+    allclose(ANGLE, ANGLE2)
+)
+
+# --- cosine (bijective: cos/acos) ---
+
+Test("cosine forward") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    cosine(ANGLE, VALUE),
+    shape(VALUE, [3])
+)
+
+Test("cosine roundtrip") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    cosine(ANGLE, VALUE),
+    cosine(ANGLE2, VALUE),
+    allclose(ANGLE, ANGLE2)
+)
+
+# --- tangent (bijective: tan/atan) ---
+
+Test("tangent forward") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    tangent(ANGLE, VALUE),
+    shape(VALUE, [3])
+)
+
+Test("tangent roundtrip") <- (
+    tensor([0.1, 0.5, 0.9], ANGLE),
+    tangent(ANGLE, VALUE),
+    tangent(ANGLE2, VALUE),
+    allclose(ANGLE, ANGLE2)
+)
+
+# --- sqrt ---
+
+Test("sqrt known values") <- (
+    tensor([1.0, 4.0, 9.0, 16.0], T),
+    sqrt(T, R),
+    tensor([1.0, 2.0, 3.0, 4.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- pow ---
+
+Test("pow squares") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    pow(T, 2.0, R),
+    tensor([1.0, 4.0, 9.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+Test("pow cubes") <- (
+    tensor([2.0, 3.0], T),
+    pow(T, 3.0, R),
+    tensor([8.0, 27.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- atan2 ---
+
+Test("atan2 known values") <- (
+    tensor([1.0, 0.0], Y),
+    tensor([0.0, 1.0], X),
+    atan2(Y, X, R),
+    shape(R, [2])
+)
+
+# --- hyperbolic functions ---
+
+Test("sinh shape") <- (
+    tensor([0.0, 1.0, 2.0], T),
+    sinh(T, R),
+    shape(R, [3])
+)
+
+Test("cosh shape") <- (
+    tensor([0.0, 1.0, 2.0], T),
+    cosh(T, R),
+    shape(R, [3])
+)
+
+Test("tanh range") <- (
+    tensor([0.0, 1.0, -1.0], T),
+    tanh(T, R),
+    shape(R, [3])
+)
+
+Test("tanh at zero") <- (
+    tensor([0.0], T),
+    tanh(T, R),
+    tensor([0.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- sigmoid ---
+
+Test("sigmoid range") <- (
+    tensor([-10.0, 0.0, 10.0], T),
+    sigmoid(T, R),
+    # sigmoid(0) = 0.5
+    tensor([0.5], HALF),
+    tensor_list(R, L),
+    shape(R, [3])
+)
+
+Test("sigmoid at zero") <- (
+    tensor([0.0], T),
+    sigmoid(T, R),
+    tensor([0.5], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- log_softmax ---
+
+Test("log_softmax shape") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    log_softmax(T, 1, R),
+    shape(R, [2, 3])
+)
+
+# --- rounding ---
+
+Test("floor values") <- (
+    tensor([1.7, 2.3, -0.5], T),
+    floor(T, R),
+    tensor([1.0, 2.0, -1.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+Test("ceil values") <- (
+    tensor([1.2, 2.8, -0.5], T),
+    ceil(T, R),
+    tensor([2.0, 3.0, 0.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+Test("round values") <- (
+    tensor([1.4, 1.5, 2.5, 2.6], T),
+    round(T, R),
+    tensor([1.0, 2.0, 2.0, 3.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- sign ---
+
+Test("sign values") <- (
+    tensor([-3.0, 0.0, 5.0], T),
+    sign(T, R),
+    tensor([-1.0, 0.0, 1.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+# --- cumsum ---
+
+Test("cumsum known sequence") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    cumsum(T, 0, R),
+    tensor([1.0, 3.0, 6.0, 10.0], EXPECTED),
+    allclose(R, EXPECTED)
+)
+
+Test("cumsum 2d along dim 1") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    cumsum(T, 1, R),
+    shape(R, [2, 3])
+)
+
+# --- cumprod ---
+
+Test("cumprod known sequence") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    cumprod(T, 0, R),
+    tensor([1.0, 2.0, 6.0, 24.0], EXPECTED),
+    allclose(R, EXPECTED)
+)

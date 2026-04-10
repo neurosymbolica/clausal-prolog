@@ -1,0 +1,164 @@
+-import_from(py.torch_distributions, [
+    distribution, make_distribution,
+    sample, log_prob, entropy,
+    mean, variance, stddev,
+    cdf, icdf
+])
+-import_from(py.torch, [tensor, shape, tensor_list, allclose])
+
+# --- distribution/2: registry enumeration ---
+
+Test("enumerate distributions") <- (
+    findall(N, distribution(N, _), NS),
+    in_("Normal", NS),
+    in_("Bernoulli", NS),
+    in_("Uniform", NS)
+)
+
+Test("distribution lookup by name") <- (
+    distribution("Normal", _)
+)
+
+# --- make_distribution/3: construction ---
+
+Test("make normal distribution") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, _)
+)
+
+Test("make bernoulli distribution") <- (
+    make_distribution("Bernoulli", {"probs": 0.5}, _)
+)
+
+Test("make uniform distribution") <- (
+    make_distribution("Uniform", {"low": 0.0, "high": 1.0}, _)
+)
+
+Test("make poisson distribution") <- (
+    make_distribution("Poisson", {"rate": 3.0}, _)
+)
+
+Test("make categorical distribution") <- (
+    tensor([0.25, 0.25, 0.25, 0.25], P),
+    make_distribution("Categorical", {"probs": P}, _)
+)
+
+# --- mean/2, variance/2, stddev/2 ---
+
+Test("normal mean") <- (
+    make_distribution("Normal", {"loc": 2.0, "scale": 1.0}, D),
+    mean(D, M),
+    tensor_list(M, 2.0)
+)
+
+Test("normal variance") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 3.0}, D),
+    variance(D, V),
+    tensor_list(V, 9.0)
+)
+
+Test("normal stddev") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 3.0}, D),
+    stddev(D, S),
+    tensor_list(S, 3.0)
+)
+
+Test("uniform mean") <- (
+    make_distribution("Uniform", {"low": 0.0, "high": 10.0}, D),
+    mean(D, M),
+    tensor_list(M, 5.0)
+)
+
+# --- entropy/2 ---
+
+Test("normal entropy") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    entropy(D, H),
+    shape(H, [])
+)
+
+# --- sample/2, sample/3 ---
+
+Test("sample scalar") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    sample(D, S),
+    shape(S, [])
+)
+
+Test("sample with shape") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    sample(D, [100], S),
+    shape(S, [100])
+)
+
+Test("sample 2d shape") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    sample(D, [3, 4], S),
+    shape(S, [3, 4])
+)
+
+Test("sample bernoulli") <- (
+    make_distribution("Bernoulli", {"probs": 0.5}, D),
+    sample(D, [10], S),
+    shape(S, [10])
+)
+
+# --- log_prob/3 ---
+
+Test("log_prob normal at mean") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    tensor(0.0, V),
+    log_prob(D, V, LP),
+    # log(1/sqrt(2*pi)) ~ -0.9189
+    tensor_list(LP, LPV),
+    LPV < -0.91,
+    LPV > -0.93
+)
+
+Test("log_prob bernoulli") <- (
+    make_distribution("Bernoulli", {"probs": 0.5}, D),
+    tensor(1.0, V),
+    log_prob(D, V, LP),
+    # log(0.5) ~ -0.6931
+    tensor_list(LP, LPV),
+    LPV < -0.69,
+    LPV > -0.70
+)
+
+# --- cdf/3, icdf/3 ---
+
+Test("cdf normal at mean") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    tensor(0.0, V),
+    cdf(D, V, P),
+    # CDF at mean = 0.5
+    tensor_list(P, PV),
+    PV > 0.49,
+    PV < 0.51
+)
+
+Test("icdf normal median") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    tensor(0.5, P),
+    icdf(D, P, V),
+    # median of standard normal = 0.0
+    tensor_list(V, VV),
+    VV > -0.01,
+    VV < 0.01
+)
+
+Test("cdf icdf roundtrip") <- (
+    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+    tensor(0.5, V),
+    cdf(D, V, P),
+    icdf(D, P, V2),
+    allclose(V, V2)
+)
+
+Test("cdf uniform") <- (
+    make_distribution("Uniform", {"low": 0.0, "high": 1.0}, D),
+    tensor(0.25, V),
+    cdf(D, V, P),
+    tensor_list(P, PV),
+    PV > 0.24,
+    PV < 0.26
+)

@@ -1,0 +1,214 @@
+# Phase 8 — Additional shape operations integration tests.
+
+-import_from(py.torch, [tensor, zeros, ones, split, chunk, unbind, narrow,
+                         expand, repeat, tile, flip, roll,
+                         cat, stack, shape, tensor_list, equal])
+
+# ── split ────────────────────────────────────────────────────────────────
+
+Test("split into equal chunks") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+    split(T, 2, PARTS),
+    length(PARTS, 3),
+    PARTS is [P1, P2, P3],
+    tensor_list(P1, [1.0, 2.0]),
+    tensor_list(P2, [3.0, 4.0]),
+    tensor_list(P3, [5.0, 6.0])
+)
+
+Test("split with dim") <- (
+    tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], T),
+    split(T, 2, 1, PARTS),
+    length(PARTS, 2),
+    PARTS is [P1, P2],
+    tensor_list(P1, [[1.0, 2.0], [5.0, 6.0]]),
+    tensor_list(P2, [[3.0, 4.0], [7.0, 8.0]])
+)
+
+Test("split then cat roundtrip") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+    split(T, 2, PARTS),
+    cat(PARTS, 0, T2),
+    tensor_list(T2, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+)
+
+Test("split uneven") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0], T),
+    split(T, 2, PARTS),
+    length(PARTS, 3),
+    PARTS is [_, _, LAST],
+    shape(LAST, [1])
+)
+
+# ── chunk ────────────────────────────────────────────────────────────────
+
+Test("chunk into n parts") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+    chunk(T, 3, PARTS),
+    length(PARTS, 3),
+    PARTS is [P1, P2, P3],
+    tensor_list(P1, [1.0, 2.0]),
+    tensor_list(P2, [3.0, 4.0]),
+    tensor_list(P3, [5.0, 6.0])
+)
+
+Test("chunk with dim") <- (
+    tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], T),
+    chunk(T, 2, 1, PARTS),
+    length(PARTS, 2),
+    PARTS is [P1, P2],
+    tensor_list(P1, [[1.0, 2.0], [5.0, 6.0]]),
+    tensor_list(P2, [[3.0, 4.0], [7.0, 8.0]])
+)
+
+Test("chunk then cat roundtrip") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+    chunk(T, 2, PARTS),
+    cat(PARTS, 0, T2),
+    tensor_list(T2, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+)
+
+Test("chunk non-divisible") <- (
+    tensor([1.0, 2.0, 3.0, 4.0, 5.0], T),
+    chunk(T, 3, PARTS),
+    length(PARTS, 3),
+    PARTS is [P1, P2, P3],
+    shape(P1, [2]),
+    shape(P2, [2]),
+    shape(P3, [1])
+)
+
+# ── unbind ───────────────────────────────────────────────────────────────
+
+Test("unbind along dim 0") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
+    unbind(T, 0, ROWS),
+    length(ROWS, 3),
+    ROWS is [R1, R2, R3],
+    tensor_list(R1, [1.0, 2.0]),
+    tensor_list(R2, [3.0, 4.0]),
+    tensor_list(R3, [5.0, 6.0])
+)
+
+Test("unbind along dim 1") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    unbind(T, 1, COLS),
+    length(COLS, 2),
+    COLS is [C1, C2],
+    tensor_list(C1, [1.0, 3.0]),
+    tensor_list(C2, [2.0, 4.0])
+)
+
+Test("unbind then stack roundtrip") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    unbind(T, 0, ROWS),
+    stack(ROWS, 0, T2),
+    equal(T, T2)
+)
+
+# ── narrow ───────────────────────────────────────────────────────────────
+
+Test("narrow along dim 0") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
+    narrow(T, 0, 1, 2, R),
+    tensor_list(R, [[3.0, 4.0], [5.0, 6.0]])
+)
+
+Test("narrow along dim 1") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    narrow(T, 1, 0, 2, R),
+    tensor_list(R, [[1.0, 2.0], [4.0, 5.0]])
+)
+
+Test("narrow shape") <- (
+    zeros([4, 6], T),
+    narrow(T, 1, 2, 3, R),
+    shape(R, [4, 3])
+)
+
+# ── expand ───────────────────────────────────────────────────────────────
+
+Test("expand broadcasts") <- (
+    tensor([[1.0], [2.0], [3.0]], T),
+    expand(T, [3, 4], R),
+    shape(R, [3, 4]),
+    tensor_list(R, [[1.0, 1.0, 1.0, 1.0],
+                     [2.0, 2.0, 2.0, 2.0],
+                     [3.0, 3.0, 3.0, 3.0]])
+)
+
+Test("expand with -1") <- (
+    tensor([[1.0, 2.0]], T),
+    expand(T, [3, -1], R),
+    shape(R, [3, 2])
+)
+
+# ── repeat ───────────────────────────────────────────────────────────────
+
+Test("repeat tiles") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    repeat(T, [2], R),
+    tensor_list(R, [1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+)
+
+Test("repeat 2d") <- (
+    tensor([[1.0, 2.0]], T),
+    repeat(T, [2, 3], R),
+    shape(R, [2, 6])
+)
+
+# ── tile ─────────────────────────────────────────────────────────────────
+
+Test("tile 1d") <- (
+    tensor([1.0, 2.0], T),
+    tile(T, [3], R),
+    tensor_list(R, [1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+)
+
+Test("tile 2d") <- (
+    tensor([[1.0, 2.0]], T),
+    tile(T, [2, 3], R),
+    shape(R, [2, 6])
+)
+
+# ── flip ─────────────────────────────────────────────────────────────────
+
+Test("flip 1d") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    flip(T, [0], F),
+    tensor_list(F, [3.0, 2.0, 1.0])
+)
+
+Test("flip self-inverse") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    flip(T, [0], F),
+    flip(F, [0], T2),
+    tensor_list(T2, [1.0, 2.0, 3.0])
+)
+
+Test("flip 2d along dim 1") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    flip(T, [1], F),
+    tensor_list(F, [[3.0, 2.0, 1.0], [6.0, 5.0, 4.0]])
+)
+
+# ── roll ─────────────────────────────────────────────────────────────────
+
+Test("roll shifts elements") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    roll(T, 1, R),
+    tensor_list(R, [4.0, 1.0, 2.0, 3.0])
+)
+
+Test("roll roundtrip") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    roll(T, 2, R),
+    roll(R, -2, T2),
+    tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+)
+
+Test("roll with dim") <- (
+    tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+    roll(T, 1, 1, R),
+    tensor_list(R, [[3.0, 1.0, 2.0], [6.0, 4.0, 5.0]])
+)

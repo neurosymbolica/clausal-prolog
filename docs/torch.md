@@ -437,6 +437,174 @@ Return a contiguous-in-memory copy of the tensor.
 
 ---
 
+## Additional Shape Operations
+
+### split
+
+```clausal
+# skip
+split(T, SIZE, LIST)
+split(T, SIZE, DIM, LIST)
+```
+
+Split a tensor into chunks of `SIZE` elements along `DIM` (default 0).
+Returns a list of tensors. The last chunk may be smaller if the tensor
+size is not divisible by `SIZE`. Inverse of `cat`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+split(T, 2, PARTS),
+length(PARTS, 3),
+cat(PARTS, 0, T2),
+equal(T, T2)
+```
+
+### chunk
+
+```clausal
+# skip
+chunk(T, N, LIST)
+chunk(T, N, DIM, LIST)
+```
+
+Split a tensor into `N` chunks along `DIM` (default 0). If the tensor
+size is not divisible by `N`, the last chunk will be smaller. Inverse
+of `cat`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+chunk(T, 3, PARTS),
+length(PARTS, 3)
+```
+
+### unbind
+
+```clausal
+# skip
+unbind(T, DIM, LIST)
+```
+
+Remove dimension `DIM` and return a list of slices. Inverse of `stack`.
+
+```clausal
+# skip
+tensor([[1.0, 2.0], [3.0, 4.0]], T),
+unbind(T, 0, ROWS),
+length(ROWS, 2),
+stack(ROWS, 0, T2),
+equal(T, T2)
+```
+
+### narrow
+
+```clausal
+# skip
+narrow(T, DIM, START, LENGTH, R)
+```
+
+Narrow a tensor along `DIM` from `START` for `LENGTH` elements.
+
+```clausal
+# skip
+tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+narrow(T, 1, 0, 2, R),
+tensor_list(R, [[1.0, 2.0], [4.0, 5.0]])
+```
+
+### expand
+
+```clausal
+# skip
+expand(T, SIZES, R)
+```
+
+Broadcast a tensor to a larger size. Use `-1` to keep a dimension
+unchanged. Not invertible (lossy).
+
+```clausal
+# skip
+tensor([[1.0], [2.0], [3.0]], T),
+expand(T, [3, 4], R),
+shape(R, [3, 4])
+```
+
+### repeat
+
+```clausal
+# skip
+repeat(T, REPEATS, R)
+```
+
+Tile a tensor by repeating it along each dimension. Not invertible
+(lossy).
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0], T),
+repeat(T, [2], R),
+tensor_list(R, [1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+```
+
+### tile
+
+```clausal
+# skip
+tile(T, REPS, R)
+```
+
+Tile a tensor (numpy-style). Similar to `repeat` but follows NumPy
+semantics for dimension handling. Not invertible (lossy).
+
+```clausal
+# skip
+tensor([1.0, 2.0], T),
+tile(T, [3], R),
+tensor_list(R, [1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+```
+
+### flip
+
+```clausal
+# skip
+flip(T, DIMS, R)
+```
+
+Reverse the order of elements along the given dimensions. Self-inverse:
+`flip(flip(T, DIMS), DIMS) == T`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0], T),
+flip(T, [0], F),
+tensor_list(F, [3.0, 2.0, 1.0]),
+flip(F, [0], T2),
+tensor_list(T2, [1.0, 2.0, 3.0])
+```
+
+### roll
+
+```clausal
+# skip
+roll(T, SHIFTS, R)
+roll(T, SHIFTS, DIMS, R)
+```
+
+Circular shift elements by `SHIFTS` positions. Roll by `n` is inverted
+by roll by `-n`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0], T),
+roll(T, 1, R),
+tensor_list(R, [4.0, 1.0, 2.0, 3.0]),
+roll(R, -1, T2),
+tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+```
+
+---
+
 ## Conversions (Bijective)
 
 ### tensor_list
@@ -762,6 +930,499 @@ tensor([1.0, 2.0, 3.0], A),
 tensor([4.0, 5.0, 6.0], B),
 dot(A, B, C)
 # C = 32.0
+```
+
+---
+
+## FFT (Bijective Pairs)
+
+Pure FFT operations via `torch.fft`. Each transform pair is a single
+bidirectional predicate: `(+T, -F)` computes the forward transform,
+`(-T, +F)` computes the inverse.
+
+```clausal
+# skip
+-import_from(py.torch, [tensor, fft_transform, real_fft,
+                         fft_transform_2d, fft_transform_nd,
+                         fft_shift, fft_frequencies, real_fft_frequencies])
+```
+
+### fft_transform
+
+```clausal
+# skip
+fft_transform(T, F)
+fft_transform(T, DIM, F)
+```
+
+Bijective complex-to-complex FFT. Forward: `(+T, -F)`. Inverse: `(-T, +F)`.
+Optional `DIM` specifies the dimension to transform along.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0], T),
+fft_transform(T, F),
+shape(F, [4]),
+fft_transform(T2, F),
+shape(T2, [4])
+```
+
+### real_fft
+
+```clausal
+# skip
+real_fft(T, F)
+real_fft(T, DIM, F)
+```
+
+Bijective real-to-complex FFT. Forward output length is `n//2 + 1`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0], T),
+real_fft(T, F),
+shape(F, [3]),
+real_fft(T2, F),
+shape(T2, [4])
+```
+
+### fft_transform_2d
+
+```clausal
+# skip
+fft_transform_2d(T, F)
+```
+
+Bijective 2-dimensional FFT.
+
+### fft_transform_nd
+
+```clausal
+# skip
+fft_transform_nd(T, F)
+```
+
+Bijective N-dimensional FFT. Transforms along all dimensions.
+
+### fft_shift
+
+```clausal
+# skip
+fft_shift(T, S)
+```
+
+Bijective zero-frequency shift. Forward shifts zero-freq to centre,
+inverse shifts it back.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0], T),
+fft_shift(T, S),
+tensor_list(S, [3.0, 4.0, 1.0, 2.0]),
+fft_shift(T2, S),
+tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+```
+
+### fft_frequencies, real_fft_frequencies
+
+```clausal
+# skip
+fft_frequencies(N, F)
+fft_frequencies(N, D, F)
+real_fft_frequencies(N, F)
+real_fft_frequencies(N, D, F)
+```
+
+DFT sample frequencies (not bijective). `N` is the window length, `D`
+is the sample spacing (default 1.0). `real_fft_frequencies` returns
+`n//2 + 1` frequencies.
+
+```clausal
+# skip
+fft_frequencies(4, F),
+shape(F, [4])
+
+real_fft_frequencies(4, F2),
+shape(F2, [3])
+```
+
+---
+
+## Comparisons
+
+Element-wise comparison predicates. All return bool tensors.
+
+### eq, ne, gt, lt, ge, le
+
+```clausal
+# skip
+eq(A, B, C)
+ne(A, B, C)
+gt(A, B, C)
+lt(A, B, C)
+ge(A, B, C)
+le(A, B, C)
+```
+
+Element-wise comparison, producing a bool tensor.
+
+```clausal
+# skip
+tensor([1.0, 5.0, 3.0], A),
+tensor([2.0, 2.0, 3.0], B),
+gt(A, B, C),
+tensor_list(C, [False, True, False])
+```
+
+### equal
+
+```clausal
+# skip
+equal(A, B)
+```
+
+Check predicate: succeeds if all elements of `A` and `B` are equal.
+No output variable — use `not(equal(A, B))` for inequality check.
+
+### allclose
+
+```clausal
+# skip
+allclose(A, B)
+allclose(A, B, ATOL, RTOL)
+```
+
+Check predicate: succeeds if tensors are approximately equal.
+Optional `ATOL` (absolute tolerance) and `RTOL` (relative tolerance).
+
+```clausal
+# skip
+tensor([1.0, 2.0], A),
+tensor([1.01, 2.01], B),
+allclose(A, B, 0.1, 0.0)
+```
+
+---
+
+## Logical Operations
+
+### logical_and, logical_or, logical_xor
+
+```clausal
+# skip
+logical_and(A, B, C)
+logical_or(A, B, C)
+logical_xor(A, B, C)
+```
+
+Element-wise logical operations on bool tensors.
+
+### logical_not
+
+```clausal
+# skip
+logical_not(A, B)
+```
+
+Element-wise logical NOT.
+
+### any, all
+
+```clausal
+# skip
+any(T)
+any(T, DIM)
+all(T)
+all(T, DIM)
+```
+
+Check predicates: succeed if any/all elements are true.
+With `DIM`, checks along that dimension (succeeds if the condition
+holds for at least one slice).
+
+```clausal
+# skip
+tensor([False, True, False], T),
+any(T)    # succeeds
+
+tensor([True, True, True], T2),
+all(T2)   # succeeds
+```
+
+---
+
+## Selection
+
+### where
+
+```clausal
+# skip
+where(COND, X, Y, R)
+```
+
+Select elements from `X` where `COND` is true, from `Y` where false.
+
+```clausal
+# skip
+tensor([True, False, True], COND),
+tensor([1.0, 2.0, 3.0], X),
+tensor([10.0, 20.0, 30.0], Y),
+where(COND, X, Y, R),
+tensor_list(R, [1.0, 20.0, 3.0])
+```
+
+### masked_select
+
+```clausal
+# skip
+masked_select(T, MASK, R)
+```
+
+Select elements where `MASK` is true. Returns a 1-D tensor.
+
+### index_select
+
+```clausal
+# skip
+index_select(T, DIM, INDICES, R)
+```
+
+Select slices along `DIM` at the given `INDICES`.
+
+```clausal
+# skip
+tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
+tensor([0, 2], IDX),
+index_select(T, 0, IDX, R),
+tensor_list(R, [[1.0, 2.0], [5.0, 6.0]])
+```
+
+### gather
+
+```clausal
+# skip
+gather(T, DIM, INDICES, R)
+```
+
+Gather values along `DIM` using index tensor.
+
+### scatter
+
+```clausal
+# skip
+scatter(T, DIM, INDICES, SRC, R)
+```
+
+Scatter `SRC` values into `T` at positions given by `INDICES` along `DIM`.
+
+---
+
+## Einsum
+
+### einsum
+
+```clausal
+# skip
+einsum(EQUATION, TENSORS, RESULT)
+```
+
+Einstein summation notation. `EQUATION` is a string like `"ij,jk->ik"`,
+`TENSORS` is a list of tensors.
+
+```clausal
+# skip
+tensor([[1.0, 2.0], [3.0, 4.0]], A),
+tensor([[5.0, 6.0], [7.0, 8.0]], B),
+einsum("ij,jk->ik", [A, B], C),
+shape(C, [2, 2])
+
+# Trace
+einsum("ii->", [A], T)
+# T = 5.0
+
+# Outer product
+tensor([1.0, 2.0], X),
+tensor([3.0, 4.0, 5.0], Y),
+einsum("i,j->ij", [X, Y], O),
+shape(O, [2, 3])
+```
+
+---
+
+## Advanced Math (Bijective)
+
+These predicates are bidirectional — bind either argument and the other
+is computed. Uses `_bidir_2` internally.
+
+### logarithm
+
+```clausal
+# skip
+logarithm(EXPONENT, VALUE)
+```
+
+`VALUE = exp(EXPONENT)`. Forward: exp. Backward: log.
+
+```clausal
+# skip
+tensor([0.0, 1.0], EXP),
+logarithm(EXP, VAL)
+# VAL = [1.0, e]
+
+tensor([1.0, 2.0], VAL2),
+logarithm(EXP2, VAL2)
+# EXP2 = [0.0, ln(2)]
+```
+
+### sine
+
+```clausal
+# skip
+sine(ANGLE, VALUE)
+```
+
+Forward: sin. Backward: asin. Domain for backward: `VALUE` in [-1, 1].
+
+### cosine
+
+```clausal
+# skip
+cosine(ANGLE, VALUE)
+```
+
+Forward: cos. Backward: acos.
+
+### tangent
+
+```clausal
+# skip
+tangent(ANGLE, VALUE)
+```
+
+Forward: tan. Backward: atan.
+
+---
+
+## Advanced Math (Non-Bijective)
+
+One-directional predicates — all inputs must be bound.
+
+### sqrt
+
+```clausal
+# skip
+sqrt(T, R)
+```
+
+Element-wise square root.
+
+### pow
+
+```clausal
+# skip
+pow(T, EXPONENT, R)
+```
+
+Element-wise power.
+
+```clausal
+# skip
+tensor([2.0, 3.0], T),
+pow(T, 2.0, R)
+# R = [4.0, 9.0]
+```
+
+### atan2
+
+```clausal
+# skip
+atan2(Y, X, R)
+```
+
+Two-argument arctangent.
+
+### sinh, cosh, tanh
+
+```clausal
+# skip
+sinh(T, R)
+cosh(T, R)
+tanh(T, R)
+```
+
+Hyperbolic functions.
+
+### sigmoid
+
+```clausal
+# skip
+sigmoid(T, R)
+```
+
+Logistic sigmoid. Output in (0, 1).
+
+```clausal
+# skip
+tensor([0.0], T),
+sigmoid(T, R)
+# R = [0.5]
+```
+
+### log_softmax
+
+```clausal
+# skip
+log_softmax(T, DIM, R)
+```
+
+Log of softmax along `DIM`. Numerically more stable than
+`log(softmax(T))`.
+
+### floor, ceil, round
+
+```clausal
+# skip
+floor(T, R)
+ceil(T, R)
+round(T, R)
+```
+
+Rounding operations. Not invertible.
+
+```clausal
+# skip
+tensor([1.7, 2.3, -0.5], T),
+floor(T, R)
+# R = [1.0, 2.0, -1.0]
+```
+
+### sign
+
+```clausal
+# skip
+sign(T, R)
+```
+
+Sign function: returns -1, 0, or +1 per element.
+
+### cumsum, cumprod
+
+```clausal
+# skip
+cumsum(T, DIM, R)
+cumprod(T, DIM, R)
+```
+
+Cumulative sum/product along `DIM`.
+
+```clausal
+# skip
+tensor([1.0, 2.0, 3.0, 4.0], T),
+cumsum(T, 0, R)
+# R = [1.0, 3.0, 6.0, 10.0]
+
+cumprod(T, 0, P)
+# P = [1.0, 2.0, 6.0, 24.0]
 ```
 
 ---

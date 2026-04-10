@@ -151,21 +151,24 @@ sampling, `cdf`/`icdf` bijection.
 
 ## Issues
 
-### 1. List-to-tensor conversion in `make_distribution` params
+### 1. `_deep_deref` didn't handle `DictTerm`
 
-Distribution constructors (e.g. `Categorical`) require tensor arguments,
-but Clausal dict literals produce plain Python lists for array-like values.
-`_make_distribution` now auto-converts list values in the params dict to
-tensors via `torch.tensor(v)`.
+Dict literals with variable values (e.g. `{"probs": P}` where `P` is
+bound to a tensor) produce a `DictTerm`, not a plain `dict`.
+`_deep_deref` in `torch.py` only checked `isinstance(val, dict)`,
+so `DictTerm` values passed through un-deref'd — the distribution
+constructor received `AttVar` objects instead of tensors.
+
+**Fix:** Added `isinstance(val, DictTerm)` check to `_deep_deref` in
+`torch.py`. This benefits all phases, not just distributions.
 
 ### 2. Separate module file — no `_pure()` reuse
 
 `torch_distributions.py` is a new file (`clausal/modules/py/torch_distributions.py`)
 rather than being added to `torch.py`. The `_pure()`, `_property_2()`,
-`_deep_deref()`, and `_fact_table_2()` helpers were duplicated locally
-(small, self-contained closures). Imports `_ensure_torch`, `_th`, and
-`_deep_deref` from `torch.py`; duplicates the others to keep the module
-self-contained like `torch_nn.py`.
+and `_fact_table_2()` helpers were duplicated locally (small,
+self-contained closures). Imports `_ensure_torch`, `_th`, and
+`_deep_deref` from `torch.py`.
 
 ### 3. No handle/freeze pattern needed
 

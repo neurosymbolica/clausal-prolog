@@ -84,13 +84,13 @@ Test("element-wise gt") <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 2.0], B),
     gt(A, B, MASK),
-    tensor_list(MASK, [false, true, true])
+    tensor_list(MASK, [False, True, True])
 )
 
 Test("where selects conditionally") <- (
     tensor([1.0, 2.0, 3.0], X),
     tensor([10.0, 20.0, 30.0], Y),
-    tensor([true, false, true], COND),
+    tensor([True, False, True], COND),
     where(COND, X, Y, R),
     tensor_list(R, [1.0, 20.0, 3.0])
 )
@@ -109,7 +109,7 @@ Test("equal check fails") <- (
 
 Test("masked_select") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
-    tensor([true, false, true, false], MASK),
+    tensor([True, False, True, False], MASK),
     masked_select(T, MASK, R),
     tensor_list(R, [1.0, 3.0])
 )

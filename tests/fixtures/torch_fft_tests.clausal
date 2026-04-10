@@ -1,0 +1,117 @@
+-import_from(py.torch, [
+    tensor, zeros, shape, tensor_list,
+    fft_transform, real_fft,
+    fft_transform_2d, fft_transform_nd,
+    fft_shift, fft_frequencies, real_fft_frequencies
+])
+
+# --- fft_transform: bijective complex FFT ---
+
+Test("fft_transform forward and inverse") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    fft_transform(T, F),
+    shape(F, [4]),
+    fft_transform(T2, F),
+    shape(T2, [4])
+)
+
+Test("fft_transform with dim forward") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    fft_transform(T, 1, F),
+    shape(F, [2, 2])
+)
+
+Test("fft_transform with dim inverse") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    fft_transform(T, 0, F),
+    fft_transform(T2, 0, F),
+    shape(T2, [2, 2])
+)
+
+# --- real_fft: bijective real-to-complex FFT ---
+
+Test("real_fft forward shape") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    real_fft(T, F),
+    shape(F, [3])
+)
+
+Test("real_fft roundtrip") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    real_fft(T, F),
+    real_fft(T2, F),
+    shape(T2, [4])
+)
+
+Test("real_fft with dim") <- (
+    tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], T),
+    real_fft(T, 1, F),
+    shape(F, [2, 3])
+)
+
+# --- fft_transform_2d: bijective 2D FFT ---
+
+Test("fft_transform_2d forward") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    fft_transform_2d(T, F),
+    shape(F, [2, 2])
+)
+
+Test("fft_transform_2d roundtrip") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], T),
+    fft_transform_2d(T, F),
+    fft_transform_2d(T2, F),
+    shape(T2, [2, 2])
+)
+
+# --- fft_transform_nd: bijective N-D FFT ---
+
+Test("fft_transform_nd forward") <- (
+    zeros([2, 3, 4], T),
+    fft_transform_nd(T, F),
+    shape(F, [2, 3, 4])
+)
+
+Test("fft_transform_nd roundtrip") <- (
+    zeros([2, 3, 4], T),
+    fft_transform_nd(T, F),
+    fft_transform_nd(T2, F),
+    shape(T2, [2, 3, 4])
+)
+
+# --- fft_shift: bijective shift ---
+
+Test("fft_shift roundtrip") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    fft_shift(T, S),
+    fft_shift(T2, S),
+    tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+)
+
+Test("fft_shift changes order") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    fft_shift(T, S),
+    tensor_list(S, [3.0, 4.0, 1.0, 2.0])
+)
+
+# --- fft_frequencies / real_fft_frequencies ---
+
+Test("fft_frequencies shape") <- (
+    fft_frequencies(4, F),
+    shape(F, [4])
+)
+
+Test("fft_frequencies with spacing") <- (
+    fft_frequencies(4, 0.5, F),
+    shape(F, [4])
+)
+
+Test("real_fft_frequencies shape") <- (
+    real_fft_frequencies(4, F),
+    shape(F, [3])
+)
+
+Test("real_fft_frequencies with spacing") <- (
+    real_fft_frequencies(4, 0.5, F),
+    shape(F, [3])
+)

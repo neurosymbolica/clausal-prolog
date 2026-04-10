@@ -255,6 +255,257 @@ class TestTorchLinalgFixture:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# FFT .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchFFTFixture:
+    """Run Test predicates from tests/fixtures/torch_fft_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_fft_tests")
+
+    @pytest.mark.parametrize("name", [
+        # fft_transform (bijective complex FFT)
+        "fft_transform forward and inverse",
+        "fft_transform with dim forward",
+        "fft_transform with dim inverse",
+        # real_fft (bijective real FFT)
+        "real_fft forward shape",
+        "real_fft roundtrip",
+        "real_fft with dim",
+        # fft_transform_2d
+        "fft_transform_2d forward",
+        "fft_transform_2d roundtrip",
+        # fft_transform_nd
+        "fft_transform_nd forward",
+        "fft_transform_nd roundtrip",
+        # fft_shift (bijective)
+        "fft_shift roundtrip",
+        "fft_shift changes order",
+        # fft_frequencies / real_fft_frequencies
+        "fft_frequencies shape",
+        "fft_frequencies with spacing",
+        "real_fft_frequencies shape",
+        "real_fft_frequencies with spacing",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Comparisons, logic, selection .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchComparisonFixture:
+    """Run Test predicates from tests/fixtures/torch_comparison_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_comparison_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Element-wise comparisons
+        "eq element-wise",
+        "ne element-wise",
+        "gt element-wise",
+        "lt element-wise",
+        "ge element-wise",
+        "le element-wise",
+        # Check predicates
+        "equal check succeeds",
+        "equal check fails",
+        "allclose check succeeds",
+        "allclose check with tolerance",
+        "allclose check fails",
+        # Logical operations
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "logical_xor",
+        # any / all
+        "any succeeds when some True",
+        "any fails when all False",
+        "all succeeds when all True",
+        "all fails when some False",
+        "any with dim",
+        "all with dim",
+        # Selection
+        "where selects conditionally",
+        "masked_select",
+        "index_select",
+        "gather along dim",
+        "scatter into zeros",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Einsum and advanced math .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchMathFixture:
+    """Run Test predicates from tests/fixtures/torch_math_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_math_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Einsum
+        "einsum matmul",
+        "einsum trace",
+        "einsum outer product",
+        "einsum batch matmul",
+        # Logarithm (bijective)
+        "logarithm forward (exp)",
+        "logarithm backward (log)",
+        "logarithm roundtrip",
+        # Sine (bijective)
+        "sine forward",
+        "sine roundtrip",
+        # Cosine (bijective)
+        "cosine forward",
+        "cosine roundtrip",
+        # Tangent (bijective)
+        "tangent forward",
+        "tangent roundtrip",
+        # sqrt, pow
+        "sqrt known values",
+        "pow squares",
+        "pow cubes",
+        # atan2
+        "atan2 known values",
+        # Hyperbolic
+        "sinh shape",
+        "cosh shape",
+        "tanh range",
+        "tanh at zero",
+        # Sigmoid
+        "sigmoid range",
+        "sigmoid at zero",
+        # Log-softmax
+        "log_softmax shape",
+        # Rounding
+        "floor values",
+        "ceil values",
+        "round values",
+        # Sign
+        "sign values",
+        # Cumulative
+        "cumsum known sequence",
+        "cumsum 2d along dim 1",
+        "cumprod known sequence",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Additional shape operations .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchShape2Fixture:
+    """Run Test predicates from tests/fixtures/torch_shape2_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_shape2_tests")
+
+    @pytest.mark.parametrize("name", [
+        # split
+        "split into equal chunks",
+        "split with dim",
+        "split then cat roundtrip",
+        "split uneven",
+        # chunk
+        "chunk into n parts",
+        "chunk with dim",
+        "chunk then cat roundtrip",
+        "chunk non-divisible",
+        # unbind
+        "unbind along dim 0",
+        "unbind along dim 1",
+        "unbind then stack roundtrip",
+        # narrow
+        "narrow along dim 0",
+        "narrow along dim 1",
+        "narrow shape",
+        # expand
+        "expand broadcasts",
+        "expand with -1",
+        # repeat
+        "repeat tiles",
+        "repeat 2d",
+        # tile
+        "tile 1d",
+        "tile 2d",
+        # flip
+        "flip 1d",
+        "flip self-inverse",
+        "flip 2d along dim 1",
+        # roll
+        "roll shifts elements",
+        "roll roundtrip",
+        "roll with dim",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Distributions .clausal integration tests
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestTorchDistributionsFixture:
+    """Run Test predicates from tests/fixtures/torch_distributions_tests.clausal."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.mod = _load_fixture("torch_distributions_tests")
+
+    @pytest.mark.parametrize("name", [
+        # Registry
+        "enumerate distributions",
+        "distribution lookup by name",
+        # Construction
+        "make normal distribution",
+        "make bernoulli distribution",
+        "make uniform distribution",
+        "make poisson distribution",
+        "make categorical distribution",
+        # Properties
+        "normal mean",
+        "normal variance",
+        "normal stddev",
+        "uniform mean",
+        # Entropy
+        "normal entropy",
+        # Sampling
+        "sample scalar",
+        "sample with shape",
+        "sample 2d shape",
+        "sample bernoulli",
+        # Log probability
+        "log_prob normal at mean",
+        "log_prob bernoulli",
+        # CDF / Inverse CDF
+        "cdf normal at mean",
+        "icdf normal median",
+        "cdf icdf roundtrip",
+        "cdf uniform",
+    ])
+    def test_fixture(self, name):
+        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Infrastructure unit tests
 # ════════════════════════════════════════════════════════════════════════════
 

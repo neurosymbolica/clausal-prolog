@@ -1,17 +1,15 @@
 # Phase 5 — FFT
 
-Fast Fourier Transform operations. All are strict bijective pairs
-(transform/inverse transform).
+Fast Fourier Transform operations. Transform/inverse pairs are single
+bijective predicates using `_bidir_2` / `_bidir_3_mid`.
 
 **Depends on:** Phase 1 — `clausal/modules/py/torch.py` helpers.
 
-**File to modify:** `clausal/modules/py/torch.py`
+**File modified:** `clausal/modules/py/torch.py`
 
 **Overlap with scipy:** `scipy_fft.py` covers the same operations on
 numpy arrays (`FFTransform`, `RealFFT`, etc.). The PyTorch versions
-operate on tensors (GPU-accelerated). The naming here follows PyTorch's
-API (`fft`, `ifft`, `rfft`, `irfft`), which matches the standard
-domain terminology.
+operate on tensors (GPU-accelerated). Same bijective-predicate pattern.
 
 ---
 
@@ -19,71 +17,61 @@ domain terminology.
 
 | Name | Arity | Modes | Bijective? | Description |
 |---|---|---|---|---|
-| `fft` | `/2, /3` | `(+T, -F)`, `(+T, +dim, -F)` | yes — `ifft` | Complex-to-complex FFT |
-| `ifft` | `/2, /3` | `(+F, -T)`, `(+F, +dim, -T)` | yes — `fft` | Inverse FFT |
-| `rfft` | `/2, /3` | `(+T, -F)`, `(+T, +dim, -F)` | yes — `irfft` | Real-to-complex FFT |
-| `irfft` | `/2, /3` | `(+F, -T)`, `(+F, +dim, -T)` | yes — `rfft` | Complex-to-real inverse FFT |
-| `fft2` | `/2` | `(+T, -F)` | yes — `ifft2` | 2D FFT |
-| `ifft2` | `/2` | `(+F, -T)` | yes — `fft2` | 2D inverse FFT |
-| `fftn` | `/2` | `(+T, -F)` | yes — `ifftn` | N-dimensional FFT |
-| `ifftn` | `/2` | `(+F, -T)` | yes — `fftn` | N-dimensional inverse FFT |
-| `fftfreq` | `/2, /3` | `(+n, -F)`, `(+n, +d, -F)` | no | Sample frequencies |
-| `rfftfreq` | `/2, /3` | `(+n, -F)`, `(+n, +d, -F)` | no | Real FFT sample frequencies |
-| `fftshift` | `/2` | `(+T, -S)` | yes — `ifftshift` | Shift zero-freq to centre |
-| `ifftshift` | `/2` | `(+S, -T)` | yes — `fftshift` | Inverse shift |
-
-`fft`/`ifft` are domain-standard abbreviations — acceptable per naming rules.
+| `fft_transform` | `/2, /3` | `(+T,-F)`, `(-T,+F)`, `(+T,+dim,-F)` | yes | Complex FFT / inverse |
+| `real_fft` | `/2, /3` | `(+T,-F)`, `(-T,+F)`, `(+T,+dim,-F)` | yes | Real-to-complex FFT / inverse |
+| `fft_transform_2d` | `/2` | `(+T,-F)`, `(-T,+F)` | yes | 2D FFT / inverse |
+| `fft_transform_nd` | `/2` | `(+T,-F)`, `(-T,+F)` | yes | N-dimensional FFT / inverse |
+| `fft_shift` | `/2` | `(+T,-S)`, `(-T,+S)` | yes | Shift zero-freq to centre / back |
+| `fft_frequencies` | `/2, /3` | `(+n,-F)`, `(+n,+d,-F)` | no | DFT sample frequencies |
+| `real_fft_frequencies` | `/2, /3` | `(+n,-F)`, `(+n,+d,-F)` | no | Real FFT sample frequencies |
 
 ---
 
-## Context and Reference Patterns
+## Design Decision: Bijective Predicates
 
-All Tier 1 (pure). Same `_pure()` + `_pred()` pattern as Phase 1.
+The original plan had separate `fft`/`ifft`, `rfft`/`irfft` etc. predicates.
+These were collapsed into single bidirectional predicates (`fft_transform`,
+`real_fft`, etc.) to match the relational pattern — the same predicate
+expresses both directions of the relationship, like `tensor_numpy` and
+`tensor_list` in Phase 1.
 
-All operations are in `torch.fft` submodule:
-
-```python
-fft = _pred("fft",
-    (2, _pure(lambda t: _th().fft.fft(t))),
-    (3, _pure(lambda t, dim: _th().fft.fft(t, dim=int(dim)))),
-)
-```
+A new helper `_bidir_3_mid` was added for the arity-3 dim variants:
+`(+X, +MID, -Y)` forward, `(-X, +MID, +Y)` backward.
 
 ---
 
 ## Example Usage
 
 ```clausal
--import_from(py.torch, [tensor, fft, ifft, rfft, irfft, fftshift,
-                         ifftshift, fftfreq, shape, tensor_list])
+-import_from(py.torch, [tensor, fft_transform, real_fft, fft_shift,
+                         fft_frequencies, shape, tensor_list])
 
-# FFT/IFFT are inverses
-Test("fft ifft roundtrip") <- (
+# FFT is bijective: same predicate for forward and inverse
+Test("fft_transform roundtrip") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
-    fft(T, F),
-    ifft(F, T2),
-    # T2 should be close to T (complex, take real part)
+    fft_transform(T, F),
+    fft_transform(T2, F),
     shape(T2, [4])
 )
 
 # Real FFT
-Test("rfft shape") <- (
+Test("real_fft shape") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
-    rfft(T, F),
+    real_fft(T, F),
     shape(F, [3])    # n//2 + 1 for real FFT
 )
 
-# fftshift/ifftshift are inverses
-Test("fftshift roundtrip") <- (
+# fft_shift is bijective
+Test("fft_shift roundtrip") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
-    fftshift(T, S),
-    ifftshift(S, T2),
+    fft_shift(T, S),
+    fft_shift(T2, S),
     tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
 )
 
 # Frequency bins
-Test("fftfreq") <- (
-    fftfreq(4, F),
+Test("fft_frequencies") <- (
+    fft_frequencies(4, F),
     shape(F, [4])
 )
 ```
@@ -93,19 +81,21 @@ Test("fftfreq") <- (
 ## Tests
 
 **`.clausal` integration tests** (`tests/fixtures/torch_fft_tests.clausal`):
-- Every bijective pair roundtrip: fft/ifft, rfft/irfft, fft2/ifft2, fftshift/ifftshift
-- Shape verification for rfft output (n//2 + 1)
-- Dim argument variants
-- fftfreq/rfftfreq shape checks
+- Every bijective predicate roundtrip: fft_transform, real_fft, fft_transform_2d, fft_transform_nd, fft_shift
+- Shape verification for real_fft output (n//2 + 1)
+- Dim argument variants for fft_transform and real_fft
+- fft_frequencies/real_fft_frequencies shape checks
+- Value check for fft_shift output ordering
 
 ---
 
 ## Docs
 
-Update `docs/torch.md` with FFT section. Note bijective pairs.
+Updated `docs/torch.md` with FFT section. Notes bijective design.
 
 ---
 
 ## Issues
 
-_To be populated during implementation._
+- Added `_bidir_3_mid` helper to `torch.py` for arity-3 bidirectional
+  predicates with a ground middle argument (used by dim variants).
