@@ -594,6 +594,9 @@ For every predicate in the catalogue:
 - [ ] Arity variants cover required-only through useful optional combos
 - [ ] Defaulted keyword arguments from the wrapped library passed via dict
 - [ ] All supported modes documented
+- [ ] Unsupported modes (e.g. all-unbound) fail cleanly — instantiation
+      error or predicate failure, not silent success or crash. Test the
+      most-general query (all args unbound) for each predicate.
 - [ ] Nondeterministic predicates identified and marked
 - [ ] Tier assigned
 - [ ] At least one usage example in .clausal syntax
