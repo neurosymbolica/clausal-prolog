@@ -300,3 +300,12 @@ succeeds regardless of the result. Tests initially used patterns like
 `++(V > 0.999)` which were silently vacuous. Fixed by using Clausal's
 own comparison operators (`V > 0.999`) or dedicated predicates
 (`is_contiguous/1`).
+
+### 8. `squeeze`/`unsqueeze` and `flatten`/`unflatten` should be bijective — DEFERRED
+
+These were implemented as separate predicates, but `squeeze(T, DIM, T2)`
+could work bidirectionally (if T bound → squeeze, if T2 bound → unsqueeze).
+The no-dim variant `squeeze(T, T2)` is harder — unsqueeze needs to know
+which dim to insert. Consider collapsing the dim-variant into a single
+bijective predicate in a future cleanup pass. Same applies to
+`flatten`/`unflatten` where unflatten needs the original shape.
