@@ -160,6 +160,39 @@ Arithmetic gaps:
     div(A, B, C)                         Element-wise divide
     neg(T, R)                            Element-wise negate
 
+Phase 14 — Statistics and Selection
+-------------------------------------
+Statistical reductions:
+    median(T, M)  /  median(T, DIM, M)   Median (dim variant returns (values, indices) tuple)
+    std(T, S)     /  std(T, DIM, S)      Standard deviation
+    var(T, V)     /  var(T, DIM, V)      Variance
+
+Selection and sorting:
+    argmin(T, I)  /  argmin(T, DIM, I)   Index of minimum
+    argmax(T, I)  /  argmax(T, DIM, I)   Index of maximum
+    sort(T, R)    /  sort(T, DIM, R)     Sort (returns (values, indices) tuple)
+    argsort(T, I) /  argsort(T, DIM, I)  Indices that would sort
+    topk(T, K, R) /  topk(T, K, DIM, R) Top-k (returns (values, indices) tuple)
+    nonzero(T, NZ)                       Indices of nonzero elements
+    unique(T, U)                         Unique elements (sorted)
+
+Phase 15 — Linalg Extras and Numeric Checks
+---------------------------------------------
+Linalg extras:
+    triu(T, R)  /  triu(T, DIAGONAL, R)  Upper triangular
+    tril(T, R)  /  tril(T, DIAGONAL, R)  Lower triangular
+    trace(T, R)                          Sum of diagonal elements
+
+Numeric checks (element-wise, return bool tensors):
+    isnan(T, R)                          Element-wise NaN check
+    isinf(T, R)                          Element-wise infinity check
+    isfinite(T, R)                       Element-wise finiteness check
+
+Numeric checks (check predicates, succeed/fail):
+    has_nan(T)                           Succeeds if any NaN
+    has_inf(T)                           Succeeds if any infinity
+    all_finite(T)                        Succeeds if all finite
+
 Phase 4 — Linear Algebra
 -------------------------
 Pure tensor linear algebra via torch.linalg.
@@ -312,6 +345,7 @@ def _bidir_3_mid(forward, backward):
 
 tensor = _pred("tensor",
     (2, _pure(lambda data: _th().tensor(data))),
+    (3, _pure(lambda data, opts: _th().tensor(data, **opts))),
 )
 
 zeros = _pred("zeros",
@@ -333,6 +367,8 @@ arange = _pred("arange",
     (2, _pure(lambda end: _th().arange(end))),
     (3, _pure(lambda start, end: _th().arange(start, end))),
     (4, _pure(lambda start, end, step: _th().arange(start, end, step))),
+    (5, _pure(lambda start, end, step, opts:
+              _th().arange(start, end, step, **opts))),
 )
 
 linspace = _pred("linspace",
@@ -349,6 +385,7 @@ full = _pred("full",
 eye = _pred("eye",
     (2, _pure(lambda n: _th().eye(int(n)))),
     (3, _pure(lambda n, m: _th().eye(int(n), int(m)))),
+    (4, _pure(lambda n, m, opts: _th().eye(int(n), int(m), **opts))),
 )
 
 
@@ -1073,7 +1110,120 @@ neg = _pred("neg",
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Dtype constants (re-exported from torch for direct import)
+# Phase 14 — Statistical reductions
+# ═══════════════════════════════════════════════════════════════════════════
+
+median = _pred("median",
+    (2, _pure(lambda t: _th().median(t))),
+    (3, _pure(lambda t, dim: tuple(_th().median(t, int(dim))))),
+)
+
+std = _pred("std",
+    (2, _pure(lambda t: _th().std(t))),
+    (3, _pure(lambda t, dim: _th().std(t, int(dim)))),
+    (4, _pure(lambda t, dim, opts: _th().std(t, int(dim), **opts))),
+)
+
+var = _pred("var",
+    (2, _pure(lambda t: _th().var(t))),
+    (3, _pure(lambda t, dim: _th().var(t, int(dim)))),
+    (4, _pure(lambda t, dim, opts: _th().var(t, int(dim), **opts))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 14 — Selection and sorting
+# ═══════════════════════════════════════════════════════════════════════════
+
+argmin = _pred("argmin",
+    (2, _pure(lambda t: _th().argmin(t))),
+    (3, _pure(lambda t, dim: _th().argmin(t, int(dim)))),
+)
+
+argmax = _pred("argmax",
+    (2, _pure(lambda t: _th().argmax(t))),
+    (3, _pure(lambda t, dim: _th().argmax(t, int(dim)))),
+)
+
+sort = _pred("sort",
+    (2, _pure(lambda t: tuple(_th().sort(t)))),
+    (3, _pure(lambda t, dim: tuple(_th().sort(t, dim=int(dim))))),
+    (4, _pure(lambda t, dim, opts: tuple(_th().sort(t, dim=int(dim), **opts)))),
+)
+
+argsort = _pred("argsort",
+    (2, _pure(lambda t: _th().argsort(t))),
+    (3, _pure(lambda t, dim: _th().argsort(t, dim=int(dim)))),
+    (4, _pure(lambda t, dim, opts: _th().argsort(t, dim=int(dim), **opts))),
+)
+
+topk = _pred("topk",
+    (3, _pure(lambda t, k: tuple(_th().topk(t, int(k))))),
+    (4, _pure(lambda t, k, dim: tuple(_th().topk(t, int(k), dim=int(dim))))),
+    (5, _pure(lambda t, k, dim, opts:
+              tuple(_th().topk(t, int(k), dim=int(dim), **opts)))),
+)
+
+nonzero = _pred("nonzero",
+    (2, _pure(lambda t: _th().nonzero(t))),
+)
+
+unique = _pred("unique",
+    (2, _pure(lambda t: _th().unique(t))),
+    (3, _pure(lambda t, opts: _th().unique(t, **opts))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 15 — Linalg extras
+# ═══════════════════════════════════════════════════════════════════════════
+
+triu = _pred("triu",
+    (2, _pure(lambda t: _th().triu(t))),
+    (3, _pure(lambda t, diag: _th().triu(t, diagonal=int(diag)))),
+)
+
+tril = _pred("tril",
+    (2, _pure(lambda t: _th().tril(t))),
+    (3, _pure(lambda t, diag: _th().tril(t, diagonal=int(diag)))),
+)
+
+trace = _pred("trace",
+    (2, _pure(lambda t: _th().trace(t))),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 15 — Numeric checks
+# ═══════════════════════════════════════════════════════════════════════════
+
+isnan = _pred("isnan",
+    (2, _pure(lambda t: _th().isnan(t))),
+)
+
+isinf = _pred("isinf",
+    (2, _pure(lambda t: _th().isinf(t))),
+)
+
+isfinite = _pred("isfinite",
+    (2, _pure(lambda t: _th().isfinite(t))),
+)
+
+has_nan = _pred("has_nan",
+    (1, _check_bool(lambda t: _th().isnan(t).any().item())),
+)
+
+has_inf = _pred("has_inf",
+    (1, _check_bool(lambda t: _th().isinf(t).any().item())),
+)
+
+all_finite = _pred("all_finite",
+    (1, _check_bool(lambda t: _th().isfinite(t).all().item())),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Dtype and numeric constants (re-exported from torch for direct import)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _export_dtypes():
@@ -1086,6 +1236,8 @@ def _export_dtypes():
         "uint8": t.uint8,
         "bool": t.bool,
         "complex64": t.complex64, "complex128": t.complex128,
+        # Numeric constants (also available as AST-level builtins: NaN, Inf, -Inf)
+        "NaN": float("nan"), "Inf": float("inf"),
     }
 
 # Populate module-level dtype names lazily on first access via __getattr__
@@ -1148,8 +1300,18 @@ __all__ = [
     "rand", "randint", "logspace", "diag",
     # Arithmetic gaps (Phase 13)
     "sub", "div", "neg",
+    # Statistics and selection (Phase 14)
+    "median", "std", "var",
+    "argmin", "argmax", "sort", "argsort", "topk",
+    "nonzero", "unique",
+    # Linalg extras (Phase 15)
+    "triu", "tril", "trace",
+    # Numeric checks (Phase 15)
+    "isnan", "isinf", "isfinite", "has_nan", "has_inf", "all_finite",
     # Dtype constants
     "float16", "float32", "float64", "bfloat16",
     "int8", "int16", "int32", "int64", "uint8",
     "bool", "complex64", "complex128",
+    # Numeric constants (also AST-level builtins, no import needed)
+    "NaN", "Inf",
 ]
