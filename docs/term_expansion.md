@@ -7,18 +7,7 @@ Term expansion and goal expansion are compile-time transformation passes that re
 ## Quick Example
 
 ```clausal
-# skip
-# Every fact automatically gets a "logged" wrapper
-TermExpansion(
-    q(fact(X)),
-    [q(fact(X)), q(logged_fact(X))],
-    STATE, STATE
-)
-
-fact("a"),
-fact("b"),
-# After expansion, the module also contains:
-# logged_fact("a"), logged_fact("b")
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quick_example"
 ```
 
 ---
@@ -30,11 +19,7 @@ Term expansion rewrites module items (clauses, facts, directives) at load time, 
 ### Writing Expansion Rules
 
 ```clausal
-# skip
-TermExpansion(INPUT, OUTPUT, MODULE_STATE, NEW_STATE) <- (
-    # transform INPUT into OUTPUT
-    ...
-)
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:writing_expansion_rules"
 ```
 
 Arguments:
@@ -49,8 +34,7 @@ Arguments:
 If no rule matches an item, it passes through unchanged. You can also write an explicit identity rule:
 
 ```clausal
-# skip
-TermExpansion(ITEM, ITEM, STATE, STATE) <- True
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:identity_expansion"
 ```
 
 ### Suppressing Items
@@ -58,9 +42,7 @@ TermExpansion(ITEM, ITEM, STATE, STATE) <- True
 Return an empty list to remove an item from the module:
 
 ```clausal
-# skip
-# Remove all facts for "debug" predicate
-TermExpansion(q(debug(X)), [], STATE, STATE) <- True
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:suppressing_items"
 ```
 
 ### One-to-Many Expansion
@@ -68,9 +50,7 @@ TermExpansion(q(debug(X)), [], STATE, STATE) <- True
 Return a list to expand one item into multiple items. This is the most powerful pattern — it lets a single declaration generate multiple clauses:
 
 ```clausal
-# skip
-# Duplicate every item (expansion_provider.clausal)
-TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:one_to_many_expansion"
 ```
 
 **Walkthrough**: when this rule is active and the module contains `color("red"),`:
@@ -84,10 +64,7 @@ TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
 The `q()` function creates term templates in expansion rules. It quotes a term so it can be manipulated as data:
 
 ```clausal
-# skip
-# Without q(): the expansion rule would try to CALL double_fact(X)
-# With q(): double_fact(X) is treated as data to be transformed
-TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S)
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quasi_quotation"
 ```
 
 Variables inside `q()` are shared between the pattern and the replacement. in_ the example above, `X` in the input pattern is the same `X` in both output terms.
@@ -97,11 +74,7 @@ Variables inside `q()` are shared between the pattern and the replacement. in_ t
 The STATE arguments thread a value through all expansions in order. Use this to count items, collect metadata, or coordinate between rules:
 
 ```clausal
-# skip
-# Count clauses as they are expanded
-TermExpansion(ITEM, ITEM, COUNT, NEXT) <- (
-    NEXT == COUNT + 1
-)
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:module_state_threading"
 ```
 
 Start the count at 0 — the expansion engine initializes MODULE_STATE to `None` if no initial value is set.
@@ -113,19 +86,11 @@ Start the count at 0 — the expansion engine initializes MODULE_STATE to `None`
 Expansion rules can be [imported](import.md) from other modules. The imported rules apply to items in the **importing** module:
 
 ```clausal
-# skip
-# expansion_provider.clausal
-TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:importing_expansion_rules"
 ```
 
 ```clausal
-# skip
-# my_module.clausal — imports TE rules from provider
--import_from(expansion_provider, [TermExpansion])
-
-color("red"),
-color("green"),
-# Each color fact is duplicated by the imported expansion rule
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:importing_expansion_rules_ex2"
 ```
 
 This lets you build reusable expansion libraries.
@@ -154,13 +119,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transf
 **[Regex](regex.md) auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables:
 
 ```clausal
-# skip
-# What you write:
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
-
-# What the compiler sees (after expansion):
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
-YEAR is _G["YEAR"], MONTH is _G["MONTH"]
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:regex_auto_binding"
 ```
 
 **Pattern precompilation**: String-literal regex patterns are compiled to `re.Pattern` objects at load time, avoiding runtime recompilation.

@@ -47,10 +47,7 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 `PyThunk` values are evaluated fresh for each solution during backtracking:
 
 ```clausal
-# skip
-Item(1), Item(2), Item(3),
-Doubled(R) <- (Item(X), R is ++(X * 2))
-# yields R = 2, 4, 6
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:python_escape_example"
 ```
 
 ---

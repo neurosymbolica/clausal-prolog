@@ -1,0 +1,129 @@
+# Display snippets for miscellaneous Phase 7 doc files
+
+# === metainterpreters.md ===
+
+--8<-- [start:metainterp_graph_test]
+Test("tree path(a,c) transitive") <- (
+    GraphProgram(P),
+    TreeSolve(P, path("a", "c")),
+    TREE is solve_tree(P, path("a", "c")),
+    nonvar(TREE)
+)
+--8<-- [end:metainterp_graph_test]
+
+--8<-- [start:metainterp_tree_display]
+TREE is [
+[Natnum(succ(succ(0))), [
+  [Natnum(succ(0)), [
+    [Natnum(0), []]
+  ]]
+]]
+]
+--8<-- [end:metainterp_tree_display]
+
+# === wfs.md ===
+
+--8<-- [start:wfs_example]
+-table(wins/1)
+
+move("a", "b"),
+move("b", "c"),
+move("c", "a"),
+
+wins(X) <- (move(X, Y), (not wins(Y)))
+--8<-- [end:wfs_example]
+
+--8<-- [start:wfs_directive]
+-table(pred/arity)
+--8<-- [end:wfs_directive]
+
+# === testing.md ===
+
+--8<-- [start:test_syntax]
+Test("description") <- goal1, goal2, ...
+--8<-- [end:test_syntax]
+
+--8<-- [start:test_output]
+clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
+clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
+--8<-- [end:test_output]
+
+# === examples.md ===
+
+--8<-- [start:fib_definition]
+Fib(N=0, F=0),
+Fib(N=1, F=1),
+Fib(N, F) <- (N > 1, F is Fib(N - 1) + Fib(N - 2))
+--8<-- [end:fib_definition]
+
+--8<-- [start:fib_test]
+# in_ your .clausal file
+Test("fib 10") <- Fib(10, 55)
+--8<-- [end:fib_test]
+
+# === architecture.md ===
+
+--8<-- [start:architecture_diagram]
+clausal.trealla              embedded Trealla Prolog engine (ctypes/C, optional)
+clausal.scryer               embedded Scryer Prolog engine (PyO3/Rust, optional)
+clausal.logic                core logic engine
+├── compiler.py              Clausal → Python codegen (AST)
+├── database.py              predicate clause storage + indexing
+├── builtins/                built-in predicates
+│   ├── lists.py             append, in_, reverse, sort, ...
+│   ├── arith.py             is, succ, plus, ...
+│   ├── io.py                write, writeln, read_term, ...
+│   └── ...
+├── clpfd.py                 CLP(FD) — finite-domain constraints
+├── clpr.py                  CLP(R) — real-number constraints
+├── clpb.py                  CLP(B) — boolean constraints
+├── tabling.py               SLG resolution (tabling / memoization)
+├── trail.py                 trail-based backtracking
+└── variables.py             logic variables (Var)
+clausal.modules              standard library modules
+├── regex.py                 regular expressions
+├── date_time.py             date/time predicates
+├── sqlite.py                SQLite database
+└── ...
+clausal.testing              pytest integration (ClausalFile collector)
+--8<-- [end:architecture_diagram]
+
+# === caching.md ===
+
+--8<-- [start:caching_phases]
+exec() phase:     assert clause 1, assert clause 2, ..., assert clause N
+compile phase:    compile_predicate(all N clauses)  <- once
+--8<-- [end:caching_phases]
+
+# === compiler.md ===
+
+--8<-- [start:compiler_phases]
+Phase A: Source -> EmbedTransformer -> module_items + Python AST bytecode
+Phase B: compile_module(predicate_nodes, module_items, module_dict) -> compiled predicates
+--8<-- [end:compiler_phases]
+
+# === dcg.md ===
+
+--8<-- [start:dcg_phrase_example]
+phrase(digit(D), [5])    # D = 5
+--8<-- [end:dcg_phrase_example]
+
+# === files.md ===
+
+--8<-- [start:directory_listing]
+print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln(ENTRY), fail)
+--8<-- [end:directory_listing]
+
+# === reified_ite.md ===
+
+--8<-- [start:if_signature]
+If(condition, then_goal, else_goal)
+--8<-- [end:if_signature]
+
+# === python_integration.md ===
+
+--8<-- [start:python_escape_example]
+Item(1), Item(2), Item(3),
+Doubled(R) <- (Item(X), R is ++(X * 2))
+Test("doubled") <- Doubled(4)
+--8<-- [end:python_escape_example]

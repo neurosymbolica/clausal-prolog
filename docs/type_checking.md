@@ -8,12 +8,7 @@ succeed or fail — they never bind variables.
 ## Quick Example
 
 ```clausal
-# skip
-describe(X, "variable")  <- var(X),
-describe(X, "integer")   <- (nonvar(X), integer(X)),
-describe(X, "string")    <- (nonvar(X), is_str(X)),
-describe(X, "compound")  <- (nonvar(X), compound(X)),
-describe(X, "other")     <- nonvar(X)
+--8<-- "tests/fixtures/docs/type_checking_sigs.txt:describe_example"
 ```
 
 ---

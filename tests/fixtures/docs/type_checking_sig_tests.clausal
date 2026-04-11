@@ -1,0 +1,5 @@
+# Companion tests for docs/type_checking.md display snippets.
+
+Test("var check") <- var(_)
+Test("integer check") <- integer(42)
+Test("is_str check") <- is_str("hello")

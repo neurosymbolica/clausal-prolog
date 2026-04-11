@@ -1,0 +1,24 @@
+# Display snippets for docs/meta_predicates.md
+
+--8<-- [start:filter_map_example]
+double_positives(XS, RS) <- filter_map(
+    ((X, Y) <- (X > 0, Y == X * 2)),
+    XS, RS
+)
+--8<-- [end:filter_map_example]
+
+--8<-- [start:meta_with_inline]
+# findall with inline goal — no lambda required
+squares(NS, SQS) <- findall(SQ, (in_(X, NS), SQ == X * X), SQS)
+
+# forall with inline condition and action
+all_positive(NS) <- forall(in_(X, NS), X > 0)
+--8<-- [end:meta_with_inline]
+
+--8<-- [start:higher_order_with_lambda]
+# include with lambda
+positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
+
+# include with a builtin predicate directly
+keep_ints(XS, IS) <- include(integer, XS, IS)
+--8<-- [end:higher_order_with_lambda]

@@ -1,0 +1,21 @@
+# Display snippets for docs/control.md
+
+--8<-- [start:time_goal_1]
+Test("time") <- time_goal(append([1, 2], [3, 4], _))
+--8<-- [end:time_goal_1]
+
+--8<-- [start:time_goal_2]
+Test("measure") <- (
+    time_goal(length(LIST, 1000), SECS),
+    SECS < 1.0
+)
+--8<-- [end:time_goal_2]
+
+--8<-- [start:benchmark_recipe]
+compare_approaches(GOAL_A, GOAL_B) <- (
+    time_goal(GOAL_A, TIME_A),
+    time_goal(GOAL_B, TIME_B),
+    FASTER == (TIME_A < TIME_B),
+    writeln(f"A: {TIME_A}s, B: {TIME_B}s")
+)
+--8<-- [end:benchmark_recipe]

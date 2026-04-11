@@ -39,8 +39,7 @@ Test("any") <- (any_member(X, [10, 20, 30]), X == 10)
 The goal's solutions pass through unchanged.
 
 ```clausal
-# skip
-Test("time") <- time_goal(append([1, 2], [3, 4], _))
+--8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_1"
 ```
 
 Output (to stderr):
@@ -55,11 +54,7 @@ Wall: 0.000123s  CPU: 0.000098s
 wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
 ```clausal
-# skip
-Test("measure") <- (
-    time_goal(length(LIST, 1000), SECS),
-    SECS < 1.0
-)
+--8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_2"
 ```
 
 ---
@@ -69,13 +64,7 @@ Test("measure") <- (
 ### Benchmark two approaches
 
 ```clausal
-# skip
-compare_approaches(GOAL_A, GOAL_B) <- (
-    time_goal(GOAL_A, TIME_A),
-    time_goal(GOAL_B, TIME_B),
-    FASTER == (TIME_A < TIME_B),
-    writeln(f"A: {TIME_A}s, B: {TIME_B}s")
-)
+--8<-- "tests/fixtures/docs/control_sigs.txt:benchmark_recipe"
 ```
 
 ### Guard with once

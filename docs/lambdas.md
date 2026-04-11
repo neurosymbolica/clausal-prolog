@@ -100,12 +100,7 @@ Lambdas are invoked with the `call_goal` builtin, which takes a goal closure and
 The extra arguments are passed as positional parameters to the lambda:
 
 ```clausal
-# skip
-# lambda receives X = 5
-call_goal((X <- (X > 0)), 5)
-
-# lambda receives X = 5, Y = RESULT
-call_goal(((X, Y) <- (Y == X * 2)), 5, RESULT)
+--8<-- "tests/fixtures/docs/lambdas_sigs.txt:call_goal_examples"
 ```
 
 ### Multi-solution lambdas
@@ -143,8 +138,7 @@ This is transparent — no special syntax is needed. The bridge (`_tramp_call`) 
 Lambdas compile to **simple-mode** Python generator functions. A lambda like:
 
 ```clausal
-# skip
-(X, Y) <- (Y == X + Z)
+--8<-- "tests/fixtures/docs/lambdas_sigs.txt:compilation_example"
 ```
 
 compiles to approximately:
@@ -212,11 +206,7 @@ Since `findall` and friends are compiler special forms, the goal argument is com
 The [higher-order list builtins](higher_order.md) — `maplist`, `include`, `exclude`, `foldl` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
 ```clausal
-# skip
-# Builtin predicates can be passed directly — no lambda needed
-all_numbers(XS) <- maplist(number, XS)
-keep_ints(XS, IS) <- include(integer, XS, IS)
-incremented(XS, YS) <- maplist(succ, XS, YS)
+--8<-- "tests/fixtures/docs/lambdas_sigs.txt:builtin_as_goal"
 ```
 
 when the goal logic is more complex than a single predicate call, lambdas are the natural choice:

@@ -111,8 +111,7 @@ This is safe because no predicate is queried during module load — `.clausal` f
 ### `-import_from` — selective import
 
 ```clausal
-# skip
--import_from(myapp.graphs.utils, [ShortestPath, Reachable])
+--8<-- "tests/fixtures/docs/import_sigs.txt:import_from_directive"
 ```
 
 This emits `from myapp.graphs.utils import ShortestPath, Reachable` in the generated Python code. The imported `PredicateMeta` classes land in module globals, where the compiler picks them up and wires dispatch automatically.
@@ -126,8 +125,7 @@ Connected(X, Y) <- Reachable(X, Y)
 #### Aliases
 
 ```clausal
-# skip
--import_from(myapp.graphs.utils, [alias(Reachable, Reach)])
+--8<-- "tests/fixtures/docs/import_sigs.txt:alias_directive"
 ```
 
 Generates `from myapp.graphs.utils import Reachable as Reach`. Use the alias name in clause bodies:
@@ -145,8 +143,7 @@ Behind the scenes, imported predicates are stored under a fully-qualified dotted
 ### `-import_module` — whole-module import with qualified calls
 
 ```clausal
-# skip
--import_module(myapp.graphs.utils)
+--8<-- "tests/fixtures/docs/import_sigs.txt:import_module_directive"
 ```
 
 This emits `import myapp.graphs.utils` in the generated Python code. The module object lands in globals. Predicates are accessed via qualified (dotted) names:
@@ -162,9 +159,7 @@ Qualified calls are resolved at compile time: the compiler walks the dotted attr
 The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or leading underscore like `_x`) are rejected with a `SyntaxError`:
 
 ```clausal
-# skip
-Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
-Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
+--8<-- "tests/fixtures/docs/import_sigs.txt:qualified_name_errors"
 ```
 
 Only simple dotted name chains are supported. Computed attribute access or method calls are not valid in predicate position.

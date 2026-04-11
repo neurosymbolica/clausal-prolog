@@ -17,7 +17,8 @@ _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
 # After language core migration (Phase 3): 386 -> 291.
 # After constraints migration (Phase 4): 291 -> 250.
 # After standard library migration (Phase 5): 250 -> 63.
-MAX_ALLOWED_SKIPS = 63
+# After builtins detail + advanced (Phases 6+7): 63 -> 0.
+MAX_ALLOWED_SKIPS = 0
 
 
 def _count_skip_blocks() -> int:

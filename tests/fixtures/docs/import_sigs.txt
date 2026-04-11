@@ -1,0 +1,18 @@
+# === Module System and Import Hook ===
+
+# --8<-- [start:import_from_directive]
+-import_from(myapp.graphs.utils, [ShortestPath, Reachable])
+# --8<-- [end:import_from_directive]
+
+# --8<-- [start:alias_directive]
+-import_from(myapp.graphs.utils, [alias(Reachable, Reach)])
+# --8<-- [end:alias_directive]
+
+# --8<-- [start:import_module_directive]
+-import_module(myapp.graphs.utils)
+# --8<-- [end:import_module_directive]
+
+# --8<-- [start:qualified_name_errors]
+Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
+Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
+# --8<-- [end:qualified_name_errors]

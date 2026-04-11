@@ -27,16 +27,13 @@ The named groups `YEAR` and `MONTH` are automatically bound to the clause variab
 ## Import
 
 ```clausal
-# skip
--import_from(regex, [Match, Search, Replace, Split, findall])
+--8<-- "tests/fixtures/docs/regex_sigs.txt:import_from"
 ```
 
 Or via [module import](import.md):
 
 ```clausal
-# skip
--import_module(regex)
-# then use regex.Match(...), regex.Search(...), etc.
+--8<-- "tests/fixtures/docs/regex_sigs.txt:import_module"
 ```
 
 ---
@@ -171,13 +168,7 @@ Test("extract port") <- (
 The goal expansion pass detects `(?P<NAME>...)` patterns where NAME matches a variable in scope. It rewrites the Match/2 call into Match/3 plus unification:
 
 ```clausal
-# skip
-# Before expansion (what you write):
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
-
-# After expansion (what the compiler sees):
-Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
-YEAR is _G["YEAR"], MONTH is _G["MONTH"]
+--8<-- "tests/fixtures/docs/regex_sigs.txt:expansion_example"
 ```
 
 You never see the expanded form — just use the variable names in your pattern.

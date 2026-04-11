@@ -244,11 +244,7 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- (K == abs(X))), XS, SS)
 `filter_map(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
 
 ```clausal
-# skip
-double_positives(XS, RS) <- filter_map(
-    ((X, Y) <- (X > 0, Y == X * 2))
-    XS, RS
-)
+--8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:filter_map_example"
 ```
 
 ### Additional List Predicates
@@ -266,23 +262,13 @@ double_positives(XS, RS) <- filter_map(
     Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
 
     ```clausal
-# skip
-    # findall with inline goal — no lambda required
-    squares(NS, SQS) <- findall(SQ, (in_(X, NS), SQ == X * X), SQS)
-
-    # forall with inline condition and action
-    all_positive(NS) <- forall(in_(X, NS), X > 0)
+    --8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:meta_with_inline"
     ```
 
     Higher-order list predicates take either lambdas or predicate references:
 
     ```clausal
-# skip
-    # include with lambda
-    positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
-
-    # include with a builtin predicate directly
-    keep_ints(XS, IS) <- include(integer, XS, IS)
+    --8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:higher_order_with_lambda"
     ```
 
     See [Lambdas](lambdas.md) for full lambda syntax and semantics.

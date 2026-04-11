@@ -18,10 +18,7 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
 Classic Fibonacci sequence with pattern-matching base cases:
 
 ```clausal
-# skip
-Fib(N=0, F=0),
-Fib(N=1, F=1),
-Fib(N, F) <- (N > 1, ...)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_definition"
 ```
 
 *See: [Tabling](tabling.md), [Arithmetic builtins](builtins.md#arithmetic)*
@@ -208,9 +205,7 @@ DCG state threading patterns: counter (`inc`, `count3`), tree leaf counting (`co
 Add test predicates to any example file, then run with pytest:
 
 ```clausal
-# skip
-# in_ your .clausal file
-Test("fib 10") <- Fib(10, 55)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_test"
 ```
 
 Or query from [Python](python_integration.md):

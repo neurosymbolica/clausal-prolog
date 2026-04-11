@@ -1,0 +1,71 @@
+# === Tutorial: Thread-Safe Clausal Predicates ===
+
+# --8<-- [start:pure_predicates]
+# These are all safe for concurrent queries:
+
+append([], YS, YS),
+append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)
+
+Member(X, [X, *_]),
+Member(X, [_, *T]) <- Member(X, T)
+
+Factorial(0, 1),
+Factorial(N, F) <- (
+    N > 0,
+    N1 == N - 1,
+    Factorial(N1, F1),
+    F == N * F1
+)
+# --8<-- [end:pure_predicates]
+
+# --8<-- [start:tabled_predicates]
+-private([A, B, C, D])
+-table(Path/2)
+
+Edge(A, B),
+Edge(B, C),
+Edge(C, D)
+
+Path(X, Y) <- Edge(X, Y)
+Path(X, Y) <- (Path(X, Z) and Edge(Z, Y))
+# --8<-- [end:tabled_predicates]
+
+# --8<-- [start:clpz_predicates]
+-use(clpfd)
+
+NQueens(N, QS) <- (
+    length(QS, N),
+    QS ins 1..N,
+    all_different(QS),
+    SafeQueens(QS),
+    label(QS)
+)
+# --8<-- [end:clpz_predicates]
+
+# --8<-- [start:dynamic_predicates]
+-dynamic(counter/1)
+
+# Set up facts before parallel queries:
+counter(0)
+counter(1)
+counter(2)
+# --8<-- [end:dynamic_predicates]
+
+# --8<-- [start:side_effects]
+# Output from different threads will interleave unpredictably
+Log(MSG) <- py_call(print, MSG)
+# --8<-- [end:side_effects]
+
+# --8<-- [start:pure_design]
+# Good: pure predicate, caller handles I/O
+Solve(Input, Output) <- (
+    parse(Input, Parsed),
+    process(Parsed, Output)
+)
+# --8<-- [end:pure_design]
+
+# --8<-- [start:correctness_tests]
+# Verify the predicate works correctly (sequential)
+Test("append nil") <- (MyAppend([], [1, 2], R) and R is [1, 2])
+Test("append cons") <- (MyAppend([1], [2, 3], R) and R is [1, 2, 3])
+# --8<-- [end:correctness_tests]

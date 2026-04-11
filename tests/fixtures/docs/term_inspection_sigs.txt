@@ -1,0 +1,26 @@
+# Display snippets for docs/term_inspection.md
+
+--8<-- [start:gensym_example]
+gensym("x", A1),  # A1 = "x_1"
+gensym("x", A2),  # A2 = "x_2"
+gensym("y", A3)   # A3 = "y_1" (independent counter)
+--8<-- [end:gensym_example]
+
+--8<-- [start:map_args_recipe]
+point(1, 2, 3),
+
+map_args(GOAL_, TERM_, RESULT_) <- (
+    unpack(TERM_, [FUNCTOR_, *ARGS_]),
+    maplist(GOAL_, ARGS_, NEW_ARGS_),
+    unpack(RESULT_, [FUNCTOR_, *NEW_ARGS_])
+)
+--8<-- [end:map_args_recipe]
+
+--8<-- [start:rewrite_arg_recipe]
+edge("a", "b"),
+
+rewrite_first_arg(TERM_, NEW_ARG_, RESULT_) <- (
+    unpack(TERM_, [F_, _, *REST_]),
+    unpack(RESULT_, [F_, NEW_ARG_, *REST_])
+)
+--8<-- [end:rewrite_arg_recipe]

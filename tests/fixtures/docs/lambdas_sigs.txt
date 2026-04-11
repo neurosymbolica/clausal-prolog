@@ -1,0 +1,20 @@
+# Display snippets for docs/lambdas.md
+
+--8<-- [start:call_goal_examples]
+# lambda receives X = 5
+call_goal((X <- (X > 0)), 5)
+
+# lambda receives X = 5, Y = RESULT
+call_goal(((X, Y) <- (Y == X * 2)), 5, RESULT)
+--8<-- [end:call_goal_examples]
+
+--8<-- [start:compilation_example]
+(X, Y) <- (Y == X + Z)
+--8<-- [end:compilation_example]
+
+--8<-- [start:builtin_as_goal]
+# Builtin predicates can be passed directly — no lambda needed
+all_numbers(XS) <- maplist(number, XS)
+keep_ints(XS, IS) <- include(integer, XS, IS)
+incremented(XS, YS) <- maplist(succ, XS, YS)
+--8<-- [end:builtin_as_goal]

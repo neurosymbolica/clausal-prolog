@@ -1,0 +1,14 @@
+# Companion tests for docs/specialization.md signature blocks.
+
+-import_from(clausal.examples.metainterpreters, [SolveCount])
+
+NatnumProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", X]], [["natnum", X]]]
+    ]
+)
+
+-specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+
+Test("count natnum(s(s(0)))") <- SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)

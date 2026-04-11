@@ -1,0 +1,12 @@
+# Companion tests for docs/indexing.md signature blocks.
+
+# --- color_query_modes ---
+
+color("red",    "warm"),
+color("blue",   "cool"),
+color("green",  "cool"),
+color("yellow", "warm"),
+color("white",  "neutral")
+
+Test("color first arg ground") <- color("red", TEMP)
+Test("color second arg ground") <- color(NAME, "warm")

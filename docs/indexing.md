@@ -240,10 +240,7 @@ Groundness-keyed dispatch generalises first-argument indexing to **multi-argumen
 First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
 ```clausal
-# skip
-color("red", TEMP)       # first arg ground  → first-arg index handles this
-color(NAME, "warm")      # second arg ground → first-arg index can't help
-color(NAME, TEMP)        # neither ground    → full scan either way
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:color_query_modes"
 ```
 
 With groundness-keyed dispatch, querying `color(NAME, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
@@ -412,11 +409,7 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 Without compound-key indexing, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
 
 ```clausal
-# skip
-Shape(circle(R), R) <- true
-Shape(rect(W, H), W) <- true
-Shape(triangle(A, B, C), A) <- true
-Shape(sq(S), S) <- true
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_keys"
 ```
 
 had no indexing at all on `arg0`, even though the four clauses are perfectly discriminated by functor name.
@@ -424,10 +417,7 @@ had no indexing at all on `arg0`, even though the four clauses are perfectly dis
 With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
 
 ```clausal
-# skip
-Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
-                         idx_dict[("circle", 1)] → circle bucket
-                         Q unified with 42
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_dispatch"
 ```
 
 ---
@@ -437,10 +427,7 @@ Shape(circle(42), Q)  →  _runtime_arg_key(circle(42)) = ("circle", 1)
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
 ```clausal
-# skip
-Combo(fire, dry, hot)   Combo(fire, wet, cold)
-Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
-Combo(wind, dry, hot)   Combo(wind, wet, cold)
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_example"
 ```
 
 - arg 0 (`fire/ice/wind`): 3 distinct values
@@ -452,12 +439,7 @@ Combo(wind, dry, hot)   Combo(wind, wet, cold)
 when activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
 ```clausal
-# skip
-                         both ground ──→ joint_dict[(ki, kj)] ──→ bucket_fn
-                        /                                        └─ default_fn
-dispatch(*args) ───────┤  only argI ground ──→ single-I dispatch
-                        \  only argJ ground ──→ single-J dispatch
-                         neither ground   ──→ fallback_fn (all clauses)
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_dispatch"
 ```
 
 Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
@@ -469,8 +451,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 when joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
 ```clausal
-# skip
-Level 0: {argI_key → (level1_buckets_or_None, level1_all_clauses)}
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_structure"
 ```
 
 Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_build_arg_index` on `argJ` is attempted with a lower threshold (2 instead of 4).
@@ -478,22 +459,7 @@ Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_
 **Level-1 default is all clauses in the level-0 bucket** (not just var-headed clauses). This is the key correctness requirement: when `argJ` is unbound at call time, every clause in the level-0 bucket is a potential match and must be tried.
 
 ```clausal
-# skip
-                       argI var ──────────────────────────────────→ fallback_fn
-                      /
-dispatch(*args) ──────
-                      \
-                       argI ground ──→ level0.get(ki)
-                                        │
-                                        ├─ miss ────────────────→ level0_default_fn
-                                        │
-                                        └─ hit (l1_buckets, l1_all)
-                                                │
-                                                ├─ argJ var ───→ l1_all_fn
-                                                │
-                                                └─ argJ ground → l1_buckets.get(kj)
-                                                                   ├─ hit  → bucket_fn
-                                                                   └─ miss → l1_all_fn
+--8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_dispatch"
 ```
 
 **Performance characteristics** relative to single-arg dispatch on `argI`:

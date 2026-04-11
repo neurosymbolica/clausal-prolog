@@ -222,19 +222,7 @@ Path("a", "c")
 in_ Clausal list notation:
 
 ```clausal
-# skip
-Test("tree path(a,c) transitive") <- (
-    GraphProgram(P),
-    SolveTree([Path("a", "c")], P, TREE),
-    TREE is [
-        [Path("a", "c"), [
-            [Edge("a", "b"), []],
-            [Path("b", "c"), [
-                [Edge("b", "c"), []]
-            ]]
-        ]]
-    ],
-)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_graph_test"
 ```
 
 **Example: `Natnum(s(s(0)))`**
@@ -246,14 +234,7 @@ Natnum(succ(succ(0)))
 ```
 
 ```clausal
-# skip
-TREE is [
-    [Natnum(succ(succ(0))), [
-        [Natnum(succ(0)), [
-            [Natnum(0), []]
-        ]]
-    ]]
-],
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_tree_display"
 ```
 
 ---

@@ -1,0 +1,8 @@
+# Companion tests for docs/regex.md display snippets.
+
+-import_from(regex, [Match, Search, Replace, Split])
+
+Test("match exists") <- Match(r"\d+", "123")
+Test("search exists") <- Search(r"\d+", "abc123")
+Test("replace exists") <- (Replace(r"\s+", " ", "a  b", R), R == "a b")
+Test("split exists") <- (Split(r",", "a,b,c", F), F == ["a", "b", "c"])

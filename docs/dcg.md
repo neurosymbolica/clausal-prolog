@@ -167,8 +167,7 @@ partial_parse(INPUT, REST) <- phrase(noun_phrase, INPUT, REST)
 For rules with extra arguments, pass them as part of the rule:
 
 ```clausal
-# skip
-phrase(digit(D), [5])    # D = 5
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:dcg_phrase_example"
 ```
 
 ---

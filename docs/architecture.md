@@ -3,24 +3,7 @@
 ## Layer stack
 
 ```clausal
-# skip
-clausal.trealla              embedded Trealla Prolog engine (ctypes/C, optional)
-clausal.scryer               embedded Scryer Prolog engine (PyO3/Rust, optional)
-clausal.modules              standard library modules (regex, log, …)
-clausal.logic.goal_expansion body-goal rewriting pass
-clausal.logic.compiler_v2    module-level compilation pipeline
-clausal.logic.term_expansion TermExpansion/4 rewrite engine
-clausal.logic.tabling (wfs)  well-founded semantics
-clausal.logic.clpfd          CLP(ℤ) integer constraints
-clausal.logic.constraints    dif/2 via attribute variables
-clausal.logic.tabling        SLG resolution
-clausal.logic.compiler       Prolog-style predicates → Python generator AST
-clausal.continuation_search  greenlet-based search iterator
-clausal.trampoline           generator trampoline, stack-safe CPS
-clausal.logic.variables      C extension: unification, trails, backtracking, AttVars
-clausal.term_rewriting       DSL syntax → AST (DCG >> rewriting, q() quasi-quotation)
-clausal.simple_ast           term representation (homoiconic)
-clausal.import_hook          transparent import; module system; ModulesFinder
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:architecture_diagram"
 ```
 
 The import hook handles both `.clausal` and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.

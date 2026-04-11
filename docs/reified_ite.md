@@ -13,8 +13,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 in_ `.clausal` files, use the `If` function call:
 
 ```clausal
-# skip
-If(condition, then_goal, else_goal)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
 ```
 
 This compiles to a reified three-way branch when the condition is a built-in reifiable operation, or a sound double-evaluation fallback otherwise.

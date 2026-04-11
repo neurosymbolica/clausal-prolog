@@ -11,13 +11,7 @@ Standard negation-as-failure (`not Goal`) works fine when negation is not recurs
 WFS handles this by delaying negation until enough information is available:
 
 ```clausal
-# skip
--table(wins/1)
-
-wins(X) <- (
-    move(X, Y),
-    not wins(Y)
-)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_example"
 ```
 
 Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
@@ -140,8 +134,7 @@ Undefined does NOT mean "error" — it is a legitimate third truth value. in_ ga
 WFS only applies to **tabled** predicates. Mark them with the [`-table` directive](directives.md):
 
 ```clausal
-# skip
--table(pred/arity)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_directive"
 ```
 
 Non-tabled predicates with negation use standard negation-as-failure (which can loop on recursive negation).

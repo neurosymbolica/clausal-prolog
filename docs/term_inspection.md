@@ -149,10 +149,7 @@ This is useful for displaying terms with readable variable names.
 increasing counter to `Prefix`.
 
 ```clausal
-# skip
-gensym("x", A1),  # A1 = "x_1"
-gensym("x", A2),  # A2 = "x_2"
-gensym("y", A3)   # A3 = "y_1" (independent counter)
+--8<-- "tests/fixtures/docs/term_inspection_sigs.txt:gensym_example"
 ```
 
 The counter is **impure** — it does not reset on backtracking. This matches
@@ -168,14 +165,7 @@ meta-programming or code generation.
 Transform all arguments of any term by applying a goal (using [maplist](higher_order.md)):
 
 ```clausal
-# skip
-point(1, 2, 3),
-
-map_args(GOAL_, TERM_, RESULT_) <- (
-    unpack(TERM_, [FUNCTOR_, *ARGS_]),
-    maplist(GOAL_, ARGS_, NEW_ARGS_),
-    unpack(RESULT_, [FUNCTOR_, *NEW_ARGS_])
-)
+--8<-- "tests/fixtures/docs/term_inspection_sigs.txt:map_args_recipe"
 ```
 
 ### Count variables in a term
@@ -189,13 +179,7 @@ Test("count") <- var_count([X_, 1, Y_, Z_], 3)
 ### Clone a predicate call with different arguments
 
 ```clausal
-# skip
-edge("a", "b"),
-
-rewrite_first_arg(TERM_, NEW_ARG_, RESULT_) <- (
-    unpack(TERM_, [F_, _, *REST_]),
-    unpack(RESULT_, [F_, NEW_ARG_, *REST_])
-)
+--8<-- "tests/fixtures/docs/term_inspection_sigs.txt:rewrite_arg_recipe"
 ```
 
 ---

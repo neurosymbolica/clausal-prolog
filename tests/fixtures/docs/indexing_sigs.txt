@@ -1,0 +1,56 @@
+# === Predicate Indexing ===
+
+# --8<-- [start:color_query_modes]
+color("red", TEMP)       # first arg ground  -> first-arg index handles this
+color(NAME, "warm")      # second arg ground -> first-arg index can't help
+color(NAME, TEMP)        # neither ground    -> full scan either way
+# --8<-- [end:color_query_modes]
+
+# --8<-- [start:compound_keys]
+Shape(circle(R), R) <- true
+Shape(rect(W, H), W) <- true
+Shape(triangle(A, B, C), A) <- true
+Shape(sq(S), S) <- true
+# --8<-- [end:compound_keys]
+
+# --8<-- [start:compound_dispatch]
+Shape(circle(42), Q)  ->  _runtime_arg_key(circle(42)) = ("circle", 1)
+                         idx_dict[("circle", 1)] -> circle bucket
+                         Q unified with 42
+# --8<-- [end:compound_dispatch]
+
+# --8<-- [start:flat_joint_example]
+Combo(fire, dry, hot)   Combo(fire, wet, cold)
+Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
+Combo(wind, dry, hot)   Combo(wind, wet, cold)
+# --8<-- [end:flat_joint_example]
+
+# --8<-- [start:flat_joint_dispatch]
+                         both ground ──→ joint_dict[(ki, kj)] ──→ bucket_fn
+                        /                                        └─ default_fn
+dispatch(*args) ───────┤  only argI ground ──→ single-I dispatch
+                        \  only argJ ground ──→ single-J dispatch
+                         neither ground   ──→ fallback_fn (all clauses)
+# --8<-- [end:flat_joint_dispatch]
+
+# --8<-- [start:secondary_structure]
+Level 0: {argI_key → (level1_buckets_or_None, level1_all_clauses)}
+# --8<-- [end:secondary_structure]
+
+# --8<-- [start:secondary_dispatch]
+                       argI var ──────────────────────────────────→ fallback_fn
+                      /
+dispatch(*args) ──────
+                      \
+                       argI ground ──→ level0.get(ki)
+                                        │
+                                        ├─ miss ────────────────→ level0_default_fn
+                                        │
+                                        └─ hit (l1_buckets, l1_all)
+                                                │
+                                                ├─ argJ var ───→ l1_all_fn
+                                                │
+                                                └─ argJ ground → l1_buckets.get(kj)
+                                                                   ├─ hit  → bucket_fn
+                                                                   └─ miss → l1_all_fn
+# --8<-- [end:secondary_dispatch]

@@ -79,9 +79,7 @@ Previously, each `$define_predicate` call immediately compiled the predicate wit
 With deferred compilation, `$define_predicate` and `$assert_fact` only assert clauses and record the predicate key in a `pending` dict. After `exec()` completes, `_compile_all_pending()` compiles each predicate exactly once with the full clause set:
 
 ```clausal
-# skip
-exec() phase:     assert clause 1, assert clause 2, ..., assert clause N
-compile phase:    compile_predicate(all N clauses)  ← once
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:caching_phases"
 ```
 
 Total: O(N) compilation work per predicate.

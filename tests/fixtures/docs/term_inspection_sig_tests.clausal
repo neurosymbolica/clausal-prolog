@@ -1,0 +1,14 @@
+# Companion tests for docs/term_inspection.md display snippets.
+
+Test("gensym generates unique") <- (
+    gensym("test_doc_", A1),
+    gensym("test_doc_", A2),
+    dif(A1, A2)
+)
+
+Test("unpack decompose") <- unpack("hello", ["hello"])
+
+Test("numbervars") <- (
+    numbervars([X, Y, Z], 0, END),
+    END == 3
+)

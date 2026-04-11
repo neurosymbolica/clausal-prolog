@@ -1,0 +1,72 @@
+# Display snippets for docs/term_expansion.md
+
+--8<-- [start:quick_example]
+# Every fact automatically gets a "logged" wrapper
+TermExpansion(
+    q(fact(X)),
+    [q(fact(X)), q(logged_fact(X))],
+    STATE, STATE
+)
+
+fact("a"),
+fact("b"),
+# After expansion, the module also contains:
+# logged_fact("a"), logged_fact("b")
+--8<-- [end:quick_example]
+
+--8<-- [start:writing_expansion_rules]
+TermExpansion(INPUT, OUTPUT, MODULE_STATE, NEW_STATE) <- (
+    # transform INPUT into OUTPUT
+    ...
+)
+--8<-- [end:writing_expansion_rules]
+
+--8<-- [start:identity_expansion]
+TermExpansion(ITEM, ITEM, STATE, STATE) <- True
+--8<-- [end:identity_expansion]
+
+--8<-- [start:suppressing_items]
+# Remove all facts for "debug" predicate
+TermExpansion(q(debug(X)), [], STATE, STATE) <- True
+--8<-- [end:suppressing_items]
+
+--8<-- [start:one_to_many_expansion]
+# Duplicate every item (expansion_provider.clausal)
+TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
+--8<-- [end:one_to_many_expansion]
+
+--8<-- [start:quasi_quotation]
+# Without q(): the expansion rule would try to CALL double_fact(X)
+# With q(): double_fact(X) is treated as data to be transformed
+TermExpansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S)
+--8<-- [end:quasi_quotation]
+
+--8<-- [start:module_state_threading]
+# Count clauses as they are expanded
+TermExpansion(ITEM, ITEM, COUNT, NEXT) <- (
+    NEXT == COUNT + 1
+)
+--8<-- [end:module_state_threading]
+
+--8<-- [start:importing_expansion_rules]
+# expansion_provider.clausal
+TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
+--8<-- [end:importing_expansion_rules]
+
+--8<-- [start:importing_expansion_rules_ex2]
+# my_module.clausal — imports TE rules from provider
+-import_from(expansion_provider, [TermExpansion])
+
+color("red"),
+color("green"),
+# Each color fact is duplicated by the imported expansion rule
+--8<-- [end:importing_expansion_rules_ex2]
+
+--8<-- [start:regex_auto_binding]
+# What you write:
+Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
+
+# What the compiler sees (after expansion):
+Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
+YEAR is _G["YEAR"], MONTH is _G["MONTH"]
+--8<-- [end:regex_auto_binding]

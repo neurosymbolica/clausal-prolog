@@ -54,8 +54,7 @@ This produces a new predicate `SolveCountNatnum` that:
 Call it directly:
 
 ```clausal
-# skip
-Test("count natnum(s(s(0)))") <- SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
+--8<-- "tests/fixtures/docs/specialization_sigs.txt:count_natnum_test"
 ```
 
 ### Directive syntax
@@ -114,9 +113,7 @@ The counting logic is woven into each clause. The program argument is gone.
 when an object program uses goals that aren't defined in the program itself (arithmetic, comparisons, etc.), the specializer generates a catch-all clause that dispatches unknown goals through a runtime resolver:
 
 ```clausal
-# skip
-# Factorial uses gt, sub, mul — these are residual goals
--specialize(Solve, FactorialProgram, alias=SolveFactorial)
+--8<-- "tests/fixtures/docs/specialization_sigs.txt:specialize_factorial"
 ```
 
 The catch-all handles `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `add`, `sub`, `mul`, `div`, `mod`, and `true` automatically. User-defined predicates in the module dict are also resolved.
@@ -128,8 +125,7 @@ The catch-all handles `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `add`, `sub`, `mul`
 With `depth=N`, the specializer recursively unfolds body goals that match object-program heads, up to N levels:
 
 ```clausal
-# skip
--specialize(SolveCount, NatnumProgram, alias=DeepCount, depth=5)
+--8<-- "tests/fixtures/docs/specialization_sigs.txt:deep_unfolding"
 ```
 
 Termination is guaranteed by:
@@ -147,8 +143,7 @@ Deep unfolding inlines deterministic goals (single matching object clause), prod
 With `cpd=True`, the specializer applies **deforestation** — eliminating intermediate goal-list constructions by unfolding the first goal in a constructed list against *all* matching object clauses:
 
 ```clausal
-# skip
--specialize(Solve, GraphProgram, alias=SolveGraphCpd, cpd=True)
+--8<-- "tests/fixtures/docs/specialization_sigs.txt:cpd_directive"
 ```
 
 ### Before CPD (Phase 1 output)

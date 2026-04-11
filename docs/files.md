@@ -57,8 +57,7 @@ list_dir(DIR, FILES) <- DirectoryFiles(DIR, FILES)
 `DirectoryEntries(Dir, Entry)` — enumerate directory entries one at a time via backtracking.
 
 ```clausal
-# skip
-print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln(ENTRY), fail)
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:directory_listing"
 ```
 
 ### File Metadata

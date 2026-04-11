@@ -22,22 +22,7 @@ predicates is safe for concurrent use. The C extension handles all the
 locking internally.
 
 ```clausal
-# skip
-# These are all safe for concurrent queries:
-
-append([], YS, YS),
-append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)
-
-Member(X, [X, *_]),
-Member(X, [_, *T]) <- Member(X, T)
-
-Factorial(0, 1),
-Factorial(N, F) <- (
-    N > 0,
-    N1 == N - 1,
-    Factorial(N1, F1),
-    F == N * F1
-)
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:pure_predicates"
 ```
 
 !!! tip "Use `==` for arithmetic"
@@ -57,16 +42,7 @@ of the parallelism roadmap will add shared memo tables where multiple
 threads contribute answers to the same table.
 
 ```clausal
-# skip
--private([A, B, C, D])
--table(Path/2)
-
-Edge(A, B),
-Edge(B, C),
-Edge(C, D)
-
-Path(X, Y) <- Edge(X, Y)
-Path(X, Y) <- (Path(X, Z) and Edge(Z, Y))
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:tabled_predicates"
 ```
 
 Multiple threads can query `Path` concurrently. Each thread builds
@@ -80,16 +56,7 @@ attribute access. As long as each thread works with its own constraint
 variables (the normal case), constraint solving is safe.
 
 ```clausal
-# skip
--use(clpfd)
-
-NQueens(N, QS) <- (
-    length(QS, N),
-    QS ins 1..N,
-    all_different(QS),
-    SafeQueens(QS),
-    label(QS)
-)
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:clpz_predicates"
 ```
 
 Multiple threads can solve N-Queens for different N values concurrently.
@@ -106,13 +73,7 @@ Dynamic predicates modify the clause database at runtime. Concurrent
 before launching threads and then only reading is fine:
 
 ```clausal
-# skip
--dynamic(counter/1)
-
-# Set up facts before parallel queries:
-counter(0)
-counter(1)
-counter(2)
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:dynamic_predicates"
 ```
 
 ```python
@@ -132,9 +93,7 @@ are safe in the sense that they won't crash, but the *ordering* of side
 effects across threads is nondeterministic:
 
 ```clausal
-# skip
-# Output from different threads will interleave unpredictably
-Log(MSG) <- py_call(print, MSG)
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:side_effects"
 ```
 
 Use Python-level synchronization (locks, queues) if you need ordered output.
@@ -149,12 +108,7 @@ Predicates that only unify and backtrack are trivially safe. Push
 side effects to the Python caller:
 
 ```clausal
-# skip
-# Good: pure predicate, caller handles I/O
-Solve(Input, Output) <- (
-    parse(Input, Parsed),
-    process(Parsed, Output)
-)
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:pure_design"
 ```
 
 ```python
@@ -213,10 +167,7 @@ in Python test files (`tests/test_free_threading.py`).
 ### `.clausal` tests for correctness
 
 ```clausal
-# skip
-# Verify the predicate works correctly (sequential)
-Test("append nil") <- (MyAppend([], [1, 2], R) and R is [1, 2])
-Test("append cons") <- (MyAppend([1], [2, 3], R) and R is [1, 2, 3])
+--8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:correctness_tests"
 ```
 
 ### Python tests for concurrency

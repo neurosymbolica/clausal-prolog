@@ -7,8 +7,7 @@ Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inlin
 Any `.clausal` file (see [Syntax](syntax.md)) can include test clauses of the form:
 
 ```clausal
-# skip
-Test("description") <- goal1, goal2, ...
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
 A test passes if its body succeeds (produces at least one solution). Tests live alongside the predicates they exercise:
@@ -57,9 +56,7 @@ python -m pytest clausal/examples/fibonacci.clausal -v
 Output looks like:
 
 ```clausal
-# skip
-clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
-clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
+--8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
 This means `.clausal` tests and Python tests can run together in one `pytest` invocation. Imported Prolog `.pl` files with `Test/1` clauses can also be tested — see [Importing Prolog](importing_prolog.md).
