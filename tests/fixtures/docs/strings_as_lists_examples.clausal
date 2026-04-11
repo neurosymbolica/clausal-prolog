@@ -1,16 +1,13 @@
 # Doc snippet fixtures for docs/strings_as_lists.md
 
-# Helper to test unification (== is Python equality, head matching is unification)
-same(X, X),
-
 # --8<-- [start:unification]
-Test("string = char list") <- same("abc", ["a", "b", "c"])
-Test("with vars") <- (same("abc", [X, Y, Z]), X == "a", Y == "b", Z == "c")
-Test("partial") <- (same("hello", ["h", "e", X, Y, "o"]), X == "l", Y == "l")
+Test("string = char list") <- ("abc" is ["a", "b", "c"])
+Test("with vars") <- ("abc" is [X, Y, Z], X == "a", Y == "b", Z == "c")
+Test("partial") <- ("hello" is ["h", "e", X, Y, "o"], X == "l", Y == "l")
 # --8<-- [end:unification]
 
 # --8<-- [start:empty_string]
-Test("empty") <- same("", [])
+Test("empty") <- ("" is [])
 # --8<-- [end:empty_string]
 
 # --8<-- [start:pattern_matching]
