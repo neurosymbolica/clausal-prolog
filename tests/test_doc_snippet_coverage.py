@@ -37,5 +37,11 @@ def test_skip_count_not_increasing():
     assert actual <= MAX_ALLOWED_SKIPS, (
         f"# skip block count increased to {actual} "
         f"(max allowed: {MAX_ALLOWED_SKIPS}). "
-        f"New doc snippets should use --8<-- fixture references instead."
+        f"New doc snippets should use --8<-- fixture references instead. "
+        f"See implementation_plans/DOC_SNIPPET_TESTING.md for the pattern: "
+        f"create a section in tests/fixtures/docs/<page>_sigs.txt (display) "
+        f"or tests/fixtures/docs/<page>_examples.clausal (executable), "
+        f"add companion tests in tests/fixtures/docs/<page>_sig_tests.clausal, "
+        f"then reference via --8<-- \"tests/fixtures/docs/<file>:<section>\" "
+        f"in the markdown."
     )
