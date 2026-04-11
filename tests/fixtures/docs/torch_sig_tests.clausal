@@ -1,70 +1,327 @@
-# Companion tests for docs/torch.md display snippets.
+# Companion tests for docs/torch.md signature blocks.
+# Validates that documented predicates exist and accept the documented arities.
 
 -import_from(py.torch, [
     tensor, zeros, ones, randn, arange, linspace, full, eye,
-    shape, dtype, device,
-    reshape, transpose, squeeze, unsqueeze, cat, stack,
-    add, sub, mul, matmul,
-    relu, softmax, sigmoid,
-    tensor_list, tensor_numpy,
-    float32, int64
+    shape, dtype, device, dim, element_count, requires_gradient,
+    is_contiguous,
+    matmul, add, mul, cat, stack, sum, mean, max, min,
+    clamp, abs, softmax, relu,
+    reshape, squeeze, unsqueeze, flatten, unflatten,
+    transpose, permute, contiguous,
+    split, chunk, unbind, narrow, expand, repeat, tile,
+    flip, roll,
+    tensor_numpy, tensor_list,
+    float32, float64, int32,
+    dtype_info,
+    det, inv, solve, svd, cholesky, qr,
+    norm, matrix_rank, pinv, cross, dot,
+    fft_transform, real_fft, fft_shift,
+    fft_frequencies, real_fft_frequencies,
+    eq, ne, gt, lt, ge, le, equal, allclose,
+    logical_and, logical_or, logical_xor, logical_not,
+    where, masked_select, index_select, gather, scatter,
+    einsum,
+    logarithm, sine, cosine, tangent,
+    sqrt, pow, atan2, sinh, cosh, tanh,
+    sigmoid, log_softmax,
+    floor, ceil, round, sign,
+    cumsum, cumprod,
+    zeros_like, ones_like, full_like, empty,
+    rand, randint, logspace, diag,
+    sub, div, neg,
+    median, std, var,
+    argmin, argmax, sort, argsort, topk,
+    nonzero, unique
 ])
 
-# ── Creation ─────────────────────────────────────────────────────────────────
+# -- Creation --
 
-Test("tensor") <- (tensor([1.0, 2.0, 3.0], T), shape(T, [3]))
-
-Test("zeros") <- (zeros([2, 3], T), shape(T, [2, 3]))
-
-Test("ones") <- (ones([3], T), shape(T, [3]))
-
-Test("arange") <- (arange(0, 5, 1, T), shape(T, [5]))
-
-Test("eye") <- (eye(3, T), shape(T, [3, 3]))
-
-# ── Shape ops ────────────────────────────────────────────────────────────────
-
-Test("reshape") <- (
-    tensor([1.0, 2.0, 3.0, 4.0], T),
-    reshape(T, [2, 2], R),
-    shape(R, [2, 2])
+Test("tensor exists") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    shape(T, [3])
 )
 
-Test("squeeze") <- (
-    ones([1, 3, 1], T),
-    squeeze(T, R),
-    shape(R, [3])
+Test("zeros exists") <- (
+    zeros([2, 3], T),
+    shape(T, [2, 3])
 )
 
-# ── Math ─────────────────────────────────────────────────────────────────────
+Test("ones exists") <- (
+    ones([2, 3], T),
+    shape(T, [2, 3])
+)
 
-Test("add") <- (
+Test("randn exists") <- (
+    randn([3, 4], T),
+    shape(T, [3, 4])
+)
+
+Test("arange exists") <- (
+    arange(5, T),
+    shape(T, [5])
+)
+
+Test("linspace exists") <- (
+    linspace(0.0, 1.0, 5, T),
+    shape(T, [5])
+)
+
+Test("full exists") <- (
+    full([2, 3], 7.0, T),
+    shape(T, [2, 3])
+)
+
+Test("eye exists") <- (
+    eye(3, T),
+    shape(T, [3, 3])
+)
+
+# -- Properties --
+
+Test("shape exists") <- (
+    zeros([3, 4, 5], T),
+    shape(T, [3, 4, 5])
+)
+
+Test("dtype exists") <- (
+    zeros([2], T),
+    dtype(T, float32)
+)
+
+Test("device exists") <- (
+    zeros([2], T),
+    device(T, "cpu")
+)
+
+Test("dim exists") <- (
+    zeros([2, 3], T),
+    dim(T, 2)
+)
+
+Test("element_count exists") <- (
+    zeros([2, 3], T),
+    element_count(T, 6)
+)
+
+Test("is_contiguous exists") <- (
+    zeros([2, 3], T),
+    is_contiguous(T)
+)
+
+# -- Math --
+
+Test("matmul exists") <- (
+    zeros([2, 3], A),
+    zeros([3, 4], B),
+    matmul(A, B, C),
+    shape(C, [2, 4])
+)
+
+Test("add exists") <- (
     tensor([1.0, 2.0], A),
     tensor([3.0, 4.0], B),
     add(A, B, C),
     shape(C, [2])
 )
 
-Test("matmul") <- (
-    tensor([[1.0, 2.0], [3.0, 4.0]], A),
-    tensor([[5.0], [6.0]], B),
-    matmul(A, B, C),
-    shape(C, [2, 1])
+Test("cat exists") <- (
+    zeros([2, 3], A),
+    ones([2, 3], B),
+    cat([A, B], 0, C),
+    shape(C, [4, 3])
 )
 
-# ── Activation ───────────────────────────────────────────────────────────────
+Test("sum exists") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    sum(T, S),
+    nonvar(S)
+)
 
-Test("relu") <- (
+Test("relu exists") <- (
     tensor([-1.0, 0.0, 1.0], T),
-    relu(T, R),
-    tensor_list(R, L),
-    L == [0.0, 0.0, 1.0]
+    relu(T, T2),
+    tensor_list(T2, [0.0, 0.0, 1.0])
 )
 
-# ── Conversion ───────────────────────────────────────────────────────────────
+Test("softmax exists") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    softmax(T, 0, T2),
+    shape(T2, [3])
+)
 
-Test("tensor_list roundtrip") <- (
+# -- Shape --
+
+Test("reshape exists") <- (
+    arange(6, T),
+    reshape(T, [2, 3], T2),
+    shape(T2, [2, 3])
+)
+
+Test("squeeze exists") <- (
+    zeros([3, 1, 4], T),
+    squeeze(T, 1, T2),
+    shape(T2, [3, 4])
+)
+
+Test("unsqueeze exists") <- (
+    zeros([3, 4], T),
+    unsqueeze(T, 1, T2),
+    shape(T2, [3, 1, 4])
+)
+
+Test("flatten exists") <- (
+    zeros([2, 3, 4], T),
+    flatten(T, T2),
+    shape(T2, [24])
+)
+
+Test("transpose exists") <- (
+    zeros([2, 3], T),
+    transpose(T, 0, 1, T2),
+    shape(T2, [3, 2])
+)
+
+Test("split exists") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    split(T, 2, PARTS),
+    length(PARTS, 2)
+)
+
+Test("flip exists") <- (
+    tensor([1.0, 2.0, 3.0], T),
+    flip(T, [0], F),
+    tensor_list(F, [3.0, 2.0, 1.0])
+)
+
+# -- Conversions --
+
+Test("tensor_list exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     tensor_list(T, L),
     L == [1.0, 2.0, 3.0]
+)
+
+# -- Linear Algebra --
+
+Test("det exists") <- (
+    eye(2, A),
+    det(A, D),
+    nonvar(D)
+)
+
+Test("inv exists") <- (
+    eye(3, I),
+    inv(I, B),
+    shape(B, [3, 3])
+)
+
+Test("norm exists") <- (
+    tensor([3.0, 4.0], A),
+    norm(A, N),
+    nonvar(N)
+)
+
+# -- FFT --
+
+Test("fft_transform exists") <- (
+    tensor([1.0, 2.0, 3.0, 4.0], T),
+    fft_transform(T, F),
+    shape(F, [4])
+)
+
+# -- Comparisons --
+
+Test("eq exists") <- (
+    tensor([1.0, 2.0], A),
+    tensor([1.0, 3.0], B),
+    eq(A, B, C),
+    shape(C, [2])
+)
+
+Test("equal exists") <- (
+    tensor([1.0, 2.0], A),
+    tensor([1.0, 2.0], B),
+    equal(A, B)
+)
+
+# -- Selection --
+
+Test("where exists") <- (
+    tensor([1.0, 2.0], X),
+    tensor([10.0, 20.0], Y),
+    gt(X, Y, COND),
+    where(COND, X, Y, R),
+    shape(R, [2])
+)
+
+# -- Einsum --
+
+Test("einsum exists") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], A),
+    tensor([[5.0, 6.0], [7.0, 8.0]], B),
+    einsum("ij,jk->ik", [A, B], C),
+    shape(C, [2, 2])
+)
+
+# -- Advanced Math --
+
+Test("sqrt exists") <- (
+    tensor([4.0, 9.0], T),
+    sqrt(T, R),
+    nonvar(R)
+)
+
+Test("sigmoid exists") <- (
+    tensor([0.0], T),
+    sigmoid(T, R),
+    nonvar(R)
+)
+
+# -- Creation Variants --
+
+Test("zeros_like exists") <- (
+    tensor([1.0, 2.0], T),
+    zeros_like(T, Z),
+    shape(Z, [2])
+)
+
+Test("rand exists") <- (
+    rand([3, 4], T),
+    shape(T, [3, 4])
+)
+
+Test("diag exists") <- (
+    tensor([1.0, 2.0, 3.0], V),
+    diag(V, M),
+    shape(M, [3, 3])
+)
+
+# -- Arithmetic Gaps --
+
+Test("sub exists") <- (
+    tensor([5.0, 3.0], A),
+    tensor([2.0, 1.0], B),
+    sub(A, B, C),
+    nonvar(C)
+)
+
+Test("neg exists") <- (
+    tensor([1.0, -2.0], T),
+    neg(T, R),
+    nonvar(R)
+)
+
+# -- Stats/Selection --
+
+Test("sort exists") <- (
+    tensor([3.0, 1.0, 2.0], T),
+    sort(T, RESULT),
+    nonvar(RESULT)
+)
+
+Test("unique exists") <- (
+    tensor([3.0, 1.0, 2.0, 1.0], T),
+    unique(T, U),
+    nonvar(U)
 )
