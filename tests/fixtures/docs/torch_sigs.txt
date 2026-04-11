@@ -1,0 +1,1025 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(py.torch, [tensor, zeros, ones, randn, shape, dtype, device,
+                         reshape, matmul, add, relu, softmax,
+                         tensor_numpy, tensor_list,
+                         float32, float64, int32, int64])
+--8<-- [end:import]
+
+
+# === Tensor Creation ===
+
+--8<-- [start:tensor]
+tensor(DATA, T)
+--8<-- [end:tensor]
+
+--8<-- [start:tensor_ex2]
+tensor([1.0, 2.0, 3.0], T),
+shape(T, [3])
+--8<-- [end:tensor_ex2]
+
+--8<-- [start:zeros_ones]
+zeros(SHAPE, T)
+zeros(SHAPE, OPTS, T)
+ones(SHAPE, T)
+ones(SHAPE, OPTS, T)
+--8<-- [end:zeros_ones]
+
+--8<-- [start:zeros_ones_ex2]
+zeros([3, 4], T),
+shape(T, [3, 4])
+
+zeros([2, 3], {"dtype": float64}, T),
+dtype(T, float64)
+--8<-- [end:zeros_ones_ex2]
+
+--8<-- [start:randn]
+randn(SHAPE, T)
+randn(SHAPE, OPTS, T)
+--8<-- [end:randn]
+
+--8<-- [start:arange]
+arange(END, T)
+arange(START, END, T)
+arange(START, END, STEP, T)
+--8<-- [end:arange]
+
+--8<-- [start:arange_ex2]
+arange(5, T),
+shape(T, [5])
+
+arange(0, 10, 2, T),
+shape(T, [5])
+--8<-- [end:arange_ex2]
+
+--8<-- [start:linspace]
+linspace(START, END, STEPS, T)
+linspace(START, END, STEPS, OPTS, T)
+--8<-- [end:linspace]
+
+--8<-- [start:full]
+full(SHAPE, VALUE, T)
+full(SHAPE, VALUE, OPTS, T)
+--8<-- [end:full]
+
+--8<-- [start:full_ex2]
+full([2, 3], 7.0, T),
+tensor_list(T, [[7.0, 7.0, 7.0], [7.0, 7.0, 7.0]])
+--8<-- [end:full_ex2]
+
+--8<-- [start:eye]
+eye(N, T)
+eye(N, M, T)
+--8<-- [end:eye]
+
+
+# === Tensor Properties (Multi-Mode) ===
+
+--8<-- [start:shape]
+shape(T, S)
+--8<-- [end:shape]
+
+--8<-- [start:shape_ex2]
+zeros([3, 4, 5], T),
+shape(T, S),        # S = [3, 4, 5]
+shape(T, [3, 4, 5]) # check mode: succeeds
+--8<-- [end:shape_ex2]
+
+--8<-- [start:dtype]
+dtype(T, D)
+--8<-- [end:dtype]
+
+--8<-- [start:dtype_ex2]
+zeros([2], T),
+dtype(T, D),        # D = torch.float32
+dtype(T, float32)   # check mode: succeeds
+--8<-- [end:dtype_ex2]
+
+--8<-- [start:device]
+device(T, D)
+--8<-- [end:device]
+
+--8<-- [start:device_ex2]
+zeros([2], T),
+device(T, "cpu")    # check mode: succeeds
+--8<-- [end:device_ex2]
+
+--8<-- [start:dim]
+dim(T, N)
+--8<-- [end:dim]
+
+--8<-- [start:element_count]
+element_count(T, N)
+--8<-- [end:element_count]
+
+--8<-- [start:requires_gradient]
+requires_gradient(T, B)
+--8<-- [end:requires_gradient]
+
+--8<-- [start:is_contiguous]
+is_contiguous(T)
+--8<-- [end:is_contiguous]
+
+
+# === Tensor Math ===
+
+--8<-- [start:matmul]
+matmul(A, B, C)
+--8<-- [end:matmul]
+
+--8<-- [start:matmul_ex2]
+zeros([2, 3], A),
+zeros([3, 4], B),
+matmul(A, B, C),
+shape(C, [2, 4])
+--8<-- [end:matmul_ex2]
+
+--8<-- [start:add_mul]
+add(A, B, C)
+mul(A, B, C)
+--8<-- [end:add_mul]
+
+--8<-- [start:add_mul_ex2]
+tensor([1.0, 2.0, 3.0], A),
+tensor([10.0, 20.0, 30.0], B),
+add(A, B, C),
+tensor_list(C, [11.0, 22.0, 33.0])
+--8<-- [end:add_mul_ex2]
+
+--8<-- [start:cat_stack]
+cat(TENSORS, DIM, T)
+stack(TENSORS, DIM, T)
+--8<-- [end:cat_stack]
+
+--8<-- [start:cat_stack_ex2]
+zeros([2, 3], A),
+ones([2, 3], B),
+cat([A, B], 0, C),
+shape(C, [4, 3])
+--8<-- [end:cat_stack_ex2]
+
+--8<-- [start:sum_mean_max_min]
+sum(T, S)
+sum(T, DIM, S)
+mean(T, M)
+mean(T, DIM, M)
+max(T, M)
+max(T, DIM, M)
+min(T, M)
+min(T, DIM, M)
+--8<-- [end:sum_mean_max_min]
+
+--8<-- [start:sum_mean_max_min_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], T),
+sum(T, S),
+tensor_list(S, 10.0)
+
+sum(T, 0, S2),
+tensor_list(S2, [4.0, 6.0])
+--8<-- [end:sum_mean_max_min_ex2]
+
+--8<-- [start:clamp]
+clamp(T, MIN, MAX, T2)
+--8<-- [end:clamp]
+
+--8<-- [start:abs]
+abs(T, T2)
+--8<-- [end:abs]
+
+--8<-- [start:softmax]
+softmax(T, DIM, T2)
+--8<-- [end:softmax]
+
+--8<-- [start:relu]
+relu(T, T2)
+--8<-- [end:relu]
+
+--8<-- [start:relu_ex2]
+tensor([-1.0, 0.0, 1.0], T),
+relu(T, T2),
+tensor_list(T2, [0.0, 0.0, 1.0])
+--8<-- [end:relu_ex2]
+
+
+# === Shape Operations ===
+
+--8<-- [start:reshape]
+reshape(T, SHAPE, T2)
+--8<-- [end:reshape]
+
+--8<-- [start:squeeze_unsqueeze]
+squeeze(T, T2)
+squeeze(T, DIM, T2)
+unsqueeze(T, DIM, T2)
+--8<-- [end:squeeze_unsqueeze]
+
+--8<-- [start:squeeze_unsqueeze_ex2]
+zeros([3, 1, 4], T),
+squeeze(T, 1, T2),
+shape(T2, [3, 4]),
+unsqueeze(T2, 1, T3),
+shape(T3, [3, 1, 4])
+--8<-- [end:squeeze_unsqueeze_ex2]
+
+--8<-- [start:flatten_unflatten]
+flatten(T, T2)
+flatten(T, START, END, T2)
+unflatten(T, DIM, SHAPE, T2)
+--8<-- [end:flatten_unflatten]
+
+--8<-- [start:flatten_unflatten_ex2]
+zeros([2, 3, 4], T),
+flatten(T, 0, 1, FLAT),
+shape(FLAT, [6, 4]),
+unflatten(FLAT, 0, [2, 3], T2),
+shape(T2, [2, 3, 4])
+--8<-- [end:flatten_unflatten_ex2]
+
+--8<-- [start:transpose]
+transpose(T, D0, D1, T2)
+--8<-- [end:transpose]
+
+--8<-- [start:permute]
+permute(T, DIMS, T2)
+--8<-- [end:permute]
+
+--8<-- [start:contiguous]
+contiguous(T, T2)
+--8<-- [end:contiguous]
+
+
+# === Additional Shape Operations ===
+
+--8<-- [start:split]
+split(T, SIZE, LIST)
+split(T, SIZE, DIM, LIST)
+--8<-- [end:split]
+
+--8<-- [start:split_ex2]
+tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+split(T, 2, PARTS),
+length(PARTS, 3),
+cat(PARTS, 0, T2),
+equal(T, T2)
+--8<-- [end:split_ex2]
+
+--8<-- [start:chunk]
+chunk(T, N, LIST)
+chunk(T, N, DIM, LIST)
+--8<-- [end:chunk]
+
+--8<-- [start:chunk_ex2]
+tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
+chunk(T, 3, PARTS),
+length(PARTS, 3)
+--8<-- [end:chunk_ex2]
+
+--8<-- [start:unbind]
+unbind(T, DIM, LIST)
+--8<-- [end:unbind]
+
+--8<-- [start:unbind_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], T),
+unbind(T, 0, ROWS),
+length(ROWS, 2),
+stack(ROWS, 0, T2),
+equal(T, T2)
+--8<-- [end:unbind_ex2]
+
+--8<-- [start:narrow]
+narrow(T, DIM, START, LENGTH, R)
+--8<-- [end:narrow]
+
+--8<-- [start:narrow_ex2]
+tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
+narrow(T, 1, 0, 2, R),
+tensor_list(R, [[1.0, 2.0], [4.0, 5.0]])
+--8<-- [end:narrow_ex2]
+
+--8<-- [start:expand]
+expand(T, SIZES, R)
+--8<-- [end:expand]
+
+--8<-- [start:expand_ex2]
+tensor([[1.0], [2.0], [3.0]], T),
+expand(T, [3, 4], R),
+shape(R, [3, 4])
+--8<-- [end:expand_ex2]
+
+--8<-- [start:repeat]
+repeat(T, REPEATS, R)
+--8<-- [end:repeat]
+
+--8<-- [start:repeat_ex2]
+tensor([1.0, 2.0, 3.0], T),
+repeat(T, [2], R),
+tensor_list(R, [1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+--8<-- [end:repeat_ex2]
+
+--8<-- [start:tile]
+tile(T, REPS, R)
+--8<-- [end:tile]
+
+--8<-- [start:tile_ex2]
+tensor([1.0, 2.0], T),
+tile(T, [3], R),
+tensor_list(R, [1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+--8<-- [end:tile_ex2]
+
+--8<-- [start:flip]
+flip(T, DIMS, R)
+--8<-- [end:flip]
+
+--8<-- [start:flip_ex2]
+tensor([1.0, 2.0, 3.0], T),
+flip(T, [0], F),
+tensor_list(F, [3.0, 2.0, 1.0]),
+flip(F, [0], T2),
+tensor_list(T2, [1.0, 2.0, 3.0])
+--8<-- [end:flip_ex2]
+
+--8<-- [start:roll]
+roll(T, SHIFTS, R)
+roll(T, SHIFTS, DIMS, R)
+--8<-- [end:roll]
+
+--8<-- [start:roll_ex2]
+tensor([1.0, 2.0, 3.0, 4.0], T),
+roll(T, 1, R),
+tensor_list(R, [4.0, 1.0, 2.0, 3.0]),
+roll(R, -1, T2),
+tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+--8<-- [end:roll_ex2]
+
+
+# === Conversions (Bijective) ===
+
+--8<-- [start:tensor_list]
+tensor_list(TENSOR, LIST)
+--8<-- [end:tensor_list]
+
+--8<-- [start:tensor_list_ex2]
+tensor([1.0, 2.0, 3.0], T),
+tensor_list(T, L),
+L == [1.0, 2.0, 3.0]
+
+tensor_list(T2, [4.0, 5.0, 6.0]),
+shape(T2, [3])
+--8<-- [end:tensor_list_ex2]
+
+--8<-- [start:tensor_numpy]
+tensor_numpy(TENSOR, ARRAY)
+--8<-- [end:tensor_numpy]
+
+--8<-- [start:tensor_numpy_ex2]
+-import_module(numpy)
+-import_from(py.torch, [tensor, tensor_numpy, tensor_list])
+
+tensor_numpy(T, numpy.array([1.0, 2.0, 3.0])),
+tensor_list(T, [1.0, 2.0, 3.0])
+--8<-- [end:tensor_numpy_ex2]
+
+
+# === Dtype Info ===
+
+--8<-- [start:dtype_info]
+dtype_info(DTYPE, KEY, VALUE)
+--8<-- [end:dtype_info]
+
+--8<-- [start:dtype_info_ex2]
+-import_from(py.torch, [dtype_info, float32])
+
+dtype_info(float32, "bits", BITS),     # BITS = 32
+dtype_info(float32, "is_floating_point", True)
+--8<-- [end:dtype_info_ex2]
+
+
+# === IO (Impure) ===
+
+--8<-- [start:save]
+save(OBJ, PATH)
+--8<-- [end:save]
+
+--8<-- [start:load]
+load(PATH, OBJ)
+--8<-- [end:load]
+
+--8<-- [start:load_ex2]
+zeros([3, 4], T),
+save(T, "/tmp/test.pt"),
+load("/tmp/test.pt", T2),
+shape(T2, [3, 4])
+--8<-- [end:load_ex2]
+
+
+# === Linear Algebra ===
+
+--8<-- [start:linear_algebra]
+-import_from(py.torch, [tensor, eye, det, inv, svd, solve, cholesky,
+                         qr, norm, matrix_rank, pinv, cross, dot])
+--8<-- [end:linear_algebra]
+
+--8<-- [start:det]
+det(A, D)
+--8<-- [end:det]
+
+--8<-- [start:det_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], A),
+det(A, D)
+# D ≈ -2.0
+--8<-- [end:det_ex2]
+
+--8<-- [start:inv]
+inv(A, B)
+--8<-- [end:inv]
+
+--8<-- [start:inv_ex2]
+eye(3, I),
+inv(I, B)
+# B is the identity matrix
+--8<-- [end:inv_ex2]
+
+--8<-- [start:solve]
+solve(A, B, X)
+--8<-- [end:solve]
+
+--8<-- [start:solve_ex2]
+eye(2, A),
+tensor([3.0, 4.0], B),
+solve(A, B, X)
+# X = [3.0, 4.0]
+--8<-- [end:solve_ex2]
+
+--8<-- [start:svd]
+svd(A, RESULT)
+--8<-- [end:svd]
+
+--8<-- [start:svd_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], A),
+svd(A, RESULT),
+RESULT is (U, S, VH),
+shape(U, [2, 2]),
+shape(S, [2]),
+shape(VH, [2, 2])
+--8<-- [end:svd_ex2]
+
+--8<-- [start:eig]
+eig(A, RESULT)
+--8<-- [end:eig]
+
+--8<-- [start:eig_ex2]
+tensor([[1.0, 2.0], [2.0, 1.0]], A),
+eig(A, RESULT),
+RESULT is (L, V),
+shape(L, [2]),
+shape(V, [2, 2])
+--8<-- [end:eig_ex2]
+
+--8<-- [start:cholesky]
+cholesky(A, L)
+--8<-- [end:cholesky]
+
+--8<-- [start:cholesky_ex2]
+tensor([[4.0, 2.0], [2.0, 3.0]], A),
+cholesky(A, L),
+shape(L, [2, 2])
+--8<-- [end:cholesky_ex2]
+
+--8<-- [start:qr]
+qr(A, RESULT)
+--8<-- [end:qr]
+
+--8<-- [start:qr_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], A),
+qr(A, RESULT),
+RESULT is (Q, R),
+shape(Q, [3, 2]),
+shape(R, [2, 2])
+--8<-- [end:qr_ex2]
+
+--8<-- [start:norm]
+norm(A, N)
+norm(A, ORD, N)
+--8<-- [end:norm]
+
+--8<-- [start:norm_ex2]
+tensor([3.0, 4.0], A),
+norm(A, N)
+# N = 5.0
+
+norm(A, 1, N1)
+# N1 = 7.0
+--8<-- [end:norm_ex2]
+
+--8<-- [start:matrix_rank]
+matrix_rank(A, R)
+--8<-- [end:matrix_rank]
+
+--8<-- [start:matrix_rank_ex2]
+eye(3, I),
+matrix_rank(I, R)
+# R = 3
+--8<-- [end:matrix_rank_ex2]
+
+--8<-- [start:pinv]
+pinv(A, B)
+--8<-- [end:pinv]
+
+--8<-- [start:pinv_ex2]
+tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
+pinv(A, B),
+shape(B, [3, 2])
+--8<-- [end:pinv_ex2]
+
+--8<-- [start:cross]
+cross(A, B, C)
+--8<-- [end:cross]
+
+--8<-- [start:cross_ex2]
+tensor([1.0, 0.0, 0.0], A),
+tensor([0.0, 1.0, 0.0], B),
+cross(A, B, C)
+# C = [0.0, 0.0, 1.0]
+--8<-- [end:cross_ex2]
+
+--8<-- [start:dot]
+dot(A, B, C)
+--8<-- [end:dot]
+
+--8<-- [start:dot_ex2]
+tensor([1.0, 2.0, 3.0], A),
+tensor([4.0, 5.0, 6.0], B),
+dot(A, B, C)
+# C = 32.0
+--8<-- [end:dot_ex2]
+
+
+# === FFT (Bijective Pairs) ===
+
+--8<-- [start:fft_bijective_pairs]
+-import_from(py.torch, [tensor, fft_transform, real_fft,
+                         fft_transform_2d, fft_transform_nd,
+                         fft_shift, fft_frequencies, real_fft_frequencies])
+--8<-- [end:fft_bijective_pairs]
+
+--8<-- [start:fft_transform]
+fft_transform(T, F)
+fft_transform(T, DIM, F)
+--8<-- [end:fft_transform]
+
+--8<-- [start:fft_transform_ex2]
+tensor([1.0, 2.0, 3.0, 4.0], T),
+fft_transform(T, F),
+shape(F, [4]),
+fft_transform(T2, F),
+shape(T2, [4])
+--8<-- [end:fft_transform_ex2]
+
+--8<-- [start:real_fft]
+real_fft(T, F)
+real_fft(T, DIM, F)
+--8<-- [end:real_fft]
+
+--8<-- [start:real_fft_ex2]
+tensor([1.0, 2.0, 3.0, 4.0], T),
+real_fft(T, F),
+shape(F, [3]),
+real_fft(T2, F),
+shape(T2, [4])
+--8<-- [end:real_fft_ex2]
+
+--8<-- [start:fft_transform_2d]
+fft_transform_2d(T, F)
+--8<-- [end:fft_transform_2d]
+
+--8<-- [start:fft_transform_nd]
+fft_transform_nd(T, F)
+--8<-- [end:fft_transform_nd]
+
+--8<-- [start:fft_shift]
+fft_shift(T, S)
+--8<-- [end:fft_shift]
+
+--8<-- [start:fft_shift_ex2]
+tensor([1.0, 2.0, 3.0, 4.0], T),
+fft_shift(T, S),
+tensor_list(S, [3.0, 4.0, 1.0, 2.0]),
+fft_shift(T2, S),
+tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+--8<-- [end:fft_shift_ex2]
+
+--8<-- [start:fft_frequencies_real_fft_frequencies]
+fft_frequencies(N, F)
+fft_frequencies(N, D, F)
+real_fft_frequencies(N, F)
+real_fft_frequencies(N, D, F)
+--8<-- [end:fft_frequencies_real_fft_frequencies]
+
+--8<-- [start:fft_frequencies_real_fft_frequencies_ex2]
+fft_frequencies(4, F),
+shape(F, [4])
+
+real_fft_frequencies(4, F2),
+shape(F2, [3])
+--8<-- [end:fft_frequencies_real_fft_frequencies_ex2]
+
+
+# === Comparisons ===
+
+--8<-- [start:eq_ne_gt_lt_ge_le]
+eq(A, B, C)
+ne(A, B, C)
+gt(A, B, C)
+lt(A, B, C)
+ge(A, B, C)
+le(A, B, C)
+--8<-- [end:eq_ne_gt_lt_ge_le]
+
+--8<-- [start:eq_ne_gt_lt_ge_le_ex2]
+tensor([1.0, 5.0, 3.0], A),
+tensor([2.0, 2.0, 3.0], B),
+gt(A, B, C),
+tensor_list(C, [False, True, False])
+--8<-- [end:eq_ne_gt_lt_ge_le_ex2]
+
+--8<-- [start:equal]
+equal(A, B)
+--8<-- [end:equal]
+
+--8<-- [start:allclose]
+allclose(A, B)
+allclose(A, B, ATOL, RTOL)
+--8<-- [end:allclose]
+
+--8<-- [start:allclose_ex2]
+tensor([1.0, 2.0], A),
+tensor([1.01, 2.01], B),
+allclose(A, B, 0.1, 0.0)
+--8<-- [end:allclose_ex2]
+
+
+# === Logical Operations ===
+
+--8<-- [start:logical_and_logical_or_logical_xor]
+logical_and(A, B, C)
+logical_or(A, B, C)
+logical_xor(A, B, C)
+--8<-- [end:logical_and_logical_or_logical_xor]
+
+--8<-- [start:logical_not]
+logical_not(A, B)
+--8<-- [end:logical_not]
+
+--8<-- [start:any_all]
+any(T)
+any(T, DIM)
+all(T)
+all(T, DIM)
+--8<-- [end:any_all]
+
+--8<-- [start:any_all_ex2]
+tensor([False, True, False], T),
+any(T)    # succeeds
+
+tensor([True, True, True], T2),
+all(T2)   # succeeds
+--8<-- [end:any_all_ex2]
+
+
+# === Selection ===
+
+--8<-- [start:where]
+where(COND, X, Y, R)
+--8<-- [end:where]
+
+--8<-- [start:where_ex2]
+tensor([True, False, True], COND),
+tensor([1.0, 2.0, 3.0], X),
+tensor([10.0, 20.0, 30.0], Y),
+where(COND, X, Y, R),
+tensor_list(R, [1.0, 20.0, 3.0])
+--8<-- [end:where_ex2]
+
+--8<-- [start:masked_select]
+masked_select(T, MASK, R)
+--8<-- [end:masked_select]
+
+--8<-- [start:index_select]
+index_select(T, DIM, INDICES, R)
+--8<-- [end:index_select]
+
+--8<-- [start:index_select_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
+tensor([0, 2], IDX),
+index_select(T, 0, IDX, R),
+tensor_list(R, [[1.0, 2.0], [5.0, 6.0]])
+--8<-- [end:index_select_ex2]
+
+--8<-- [start:gather]
+gather(T, DIM, INDICES, R)
+--8<-- [end:gather]
+
+--8<-- [start:scatter]
+scatter(T, DIM, INDICES, SRC, R)
+--8<-- [end:scatter]
+
+
+# === Einsum ===
+
+--8<-- [start:einsum]
+einsum(EQUATION, TENSORS, RESULT)
+--8<-- [end:einsum]
+
+--8<-- [start:einsum_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], A),
+tensor([[5.0, 6.0], [7.0, 8.0]], B),
+einsum("ij,jk->ik", [A, B], C),
+shape(C, [2, 2])
+
+# Trace
+einsum("ii->", [A], T)
+# T = 5.0
+
+# Outer product
+tensor([1.0, 2.0], X),
+tensor([3.0, 4.0, 5.0], Y),
+einsum("i,j->ij", [X, Y], O),
+shape(O, [2, 3])
+--8<-- [end:einsum_ex2]
+
+
+# === Advanced Math (Bijective) ===
+
+--8<-- [start:logarithm]
+logarithm(EXPONENT, VALUE)
+--8<-- [end:logarithm]
+
+--8<-- [start:logarithm_ex2]
+tensor([0.0, 1.0], EXP),
+logarithm(EXP, VAL)
+# VAL = [1.0, e]
+
+tensor([1.0, 2.0], VAL2),
+logarithm(EXP2, VAL2)
+# EXP2 = [0.0, ln(2)]
+--8<-- [end:logarithm_ex2]
+
+--8<-- [start:sine]
+sine(ANGLE, VALUE)
+--8<-- [end:sine]
+
+--8<-- [start:cosine]
+cosine(ANGLE, VALUE)
+--8<-- [end:cosine]
+
+--8<-- [start:tangent]
+tangent(ANGLE, VALUE)
+--8<-- [end:tangent]
+
+
+# === Advanced Math (Non-Bijective) ===
+
+--8<-- [start:sqrt]
+sqrt(T, R)
+--8<-- [end:sqrt]
+
+--8<-- [start:pow]
+pow(T, EXPONENT, R)
+--8<-- [end:pow]
+
+--8<-- [start:pow_ex2]
+tensor([2.0, 3.0], T),
+pow(T, 2.0, R)
+# R = [4.0, 9.0]
+--8<-- [end:pow_ex2]
+
+--8<-- [start:atan2]
+atan2(Y, X, R)
+--8<-- [end:atan2]
+
+--8<-- [start:sinh_cosh_tanh]
+sinh(T, R)
+cosh(T, R)
+tanh(T, R)
+--8<-- [end:sinh_cosh_tanh]
+
+--8<-- [start:sigmoid]
+sigmoid(T, R)
+--8<-- [end:sigmoid]
+
+--8<-- [start:sigmoid_ex2]
+tensor([0.0], T),
+sigmoid(T, R)
+# R = [0.5]
+--8<-- [end:sigmoid_ex2]
+
+--8<-- [start:log_softmax]
+log_softmax(T, DIM, R)
+--8<-- [end:log_softmax]
+
+--8<-- [start:floor_ceil_round]
+floor(T, R)
+ceil(T, R)
+round(T, R)
+--8<-- [end:floor_ceil_round]
+
+--8<-- [start:floor_ceil_round_ex2]
+tensor([1.7, 2.3, -0.5], T),
+floor(T, R)
+# R = [1.0, 2.0, -1.0]
+--8<-- [end:floor_ceil_round_ex2]
+
+--8<-- [start:sign]
+sign(T, R)
+--8<-- [end:sign]
+
+--8<-- [start:cumsum_cumprod]
+cumsum(T, DIM, R)
+cumprod(T, DIM, R)
+--8<-- [end:cumsum_cumprod]
+
+--8<-- [start:cumsum_cumprod_ex2]
+tensor([1.0, 2.0, 3.0, 4.0], T),
+cumsum(T, 0, R)
+# R = [1.0, 3.0, 6.0, 10.0]
+
+cumprod(T, 0, P)
+# P = [1.0, 2.0, 6.0, 24.0]
+--8<-- [end:cumsum_cumprod_ex2]
+
+
+# === Creation Variants (Phase 13) ===
+
+--8<-- [start:zeros_like_ones_like_full_like]
+zeros_like(T, R)
+ones_like(T, R)
+full_like(T, VALUE, R)
+--8<-- [end:zeros_like_ones_like_full_like]
+
+--8<-- [start:zeros_like_ones_like_full_like_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0]], T),
+zeros_like(T, Z),
+shape(Z, [2, 2])
+# Z has same dtype and device as T
+--8<-- [end:zeros_like_ones_like_full_like_ex2]
+
+--8<-- [start:empty]
+empty(SHAPE, T)
+empty(SHAPE, OPTS, T)
+--8<-- [end:empty]
+
+--8<-- [start:rand_randint]
+rand(SHAPE, T)
+rand(SHAPE, OPTS, T)
+randint(LOW, HIGH, SHAPE, T)
+randint(LOW, HIGH, SHAPE, OPTS, T)
+--8<-- [end:rand_randint]
+
+--8<-- [start:rand_randint_ex2]
+rand([3, 4], T),
+shape(T, [3, 4])
+
+randint(0, 10, [5], T)
+# T contains integers 0..9
+--8<-- [end:rand_randint_ex2]
+
+--8<-- [start:logspace]
+logspace(START, END, STEPS, T)
+logspace(START, END, STEPS, OPTS, T)
+--8<-- [end:logspace]
+
+--8<-- [start:logspace_ex2]
+logspace(0.0, 2.0, 3, T)
+# T = [1.0, 10.0, 100.0]
+--8<-- [end:logspace_ex2]
+
+--8<-- [start:diag]
+diag(T, R)
+diag(T, DIAGONAL, R)
+--8<-- [end:diag]
+
+--8<-- [start:diag_ex2]
+tensor([1.0, 2.0, 3.0], V),
+diag(V, M),
+shape(M, [3, 3])
+
+tensor([[1.0, 2.0], [3.0, 4.0]], M),
+diag(M, V)
+# V = [1.0, 4.0]
+--8<-- [end:diag_ex2]
+
+
+# === Arithmetic Gaps (Phase 13) ===
+
+--8<-- [start:sub]
+sub(A, B, C)
+--8<-- [end:sub]
+
+--8<-- [start:div]
+div(A, B, C)
+--8<-- [end:div]
+
+--8<-- [start:neg]
+neg(T, R)
+--8<-- [end:neg]
+
+--8<-- [start:neg_ex2]
+tensor([5.0, 3.0], A),
+tensor([2.0, 1.0], B),
+sub(A, B, C)
+# C = [3.0, 2.0]
+
+tensor([1.0, -2.0, 3.0], T),
+neg(T, R)
+# R = [-1.0, 2.0, -3.0]
+--8<-- [end:neg_ex2]
+
+
+# === Statistical Reductions (Phase 14) ===
+
+--8<-- [start:median]
+median(T, M)
+median(T, DIM, RESULT)
+--8<-- [end:median]
+
+--8<-- [start:median_ex2]
+tensor([1.0, 3.0, 2.0], T),
+median(T, M)
+# M = 2.0
+
+tensor([[3.0, 1.0, 2.0], [6.0, 4.0, 5.0]], T),
+median(T, 1, RESULT),
+RESULT is (VALS, IDXS)
+# VALS = [2.0, 5.0]
+--8<-- [end:median_ex2]
+
+--8<-- [start:std_var]
+std(T, S)
+std(T, DIM, S)
+var(T, V)
+var(T, DIM, V)
+--8<-- [end:std_var]
+
+
+# === Selection and Sorting (Phase 14) ===
+
+--8<-- [start:argmin_argmax]
+argmin(T, I)
+argmin(T, DIM, I)
+argmax(T, I)
+argmax(T, DIM, I)
+--8<-- [end:argmin_argmax]
+
+--8<-- [start:argmin_argmax_ex2]
+tensor([5.0, 1.0, 3.0], T),
+argmin(T, I)
+# I = 1
+
+tensor([1.0, 5.0, 3.0], T),
+argmax(T, I)
+# I = 1
+--8<-- [end:argmin_argmax_ex2]
+
+--8<-- [start:sort]
+sort(T, RESULT)
+sort(T, DIM, RESULT)
+--8<-- [end:sort]
+
+--8<-- [start:sort_ex2]
+tensor([3.0, 1.0, 2.0], T),
+sort(T, RESULT),
+RESULT is (VALS, IDXS)
+# VALS = [1.0, 2.0, 3.0], IDXS = [1, 2, 0]
+--8<-- [end:sort_ex2]
+
+--8<-- [start:argsort]
+argsort(T, I)
+argsort(T, DIM, I)
+--8<-- [end:argsort]
+
+--8<-- [start:topk]
+topk(T, K, RESULT)
+topk(T, K, DIM, RESULT)
+--8<-- [end:topk]
+
+--8<-- [start:topk_ex2]
+tensor([1.0, 5.0, 3.0, 4.0, 2.0], T),
+topk(T, 3, RESULT),
+RESULT is (VALS, IDXS)
+# VALS = [5.0, 4.0, 3.0]
+--8<-- [end:topk_ex2]
+
+--8<-- [start:nonzero]
+nonzero(T, NZ)
+--8<-- [end:nonzero]
+
+--8<-- [start:unique]
+unique(T, U)
+--8<-- [end:unique]
+
+--8<-- [start:unique_ex2]
+tensor([3, 1, 2, 1, 3], T),
+unique(T, U)
+# U = [1, 2, 3]
+--8<-- [end:unique_ex2]

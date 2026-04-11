@@ -7,9 +7,7 @@ Dataset *definition* and item access are relational. Iteration
 ## Import
 
 ```clausal
-# skip
--import_from(py.torch_data, [tensor_dataset, dataset_length,
-                              dataset_item, dataset_element])
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:import"
 ```
 
 ---
@@ -29,18 +27,14 @@ Dataset *definition* and item access are relational. Iteration
 ### tensor_dataset
 
 ```clausal
-# skip
-tensor_dataset(TENSORS, DS)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:tensor_dataset"
 ```
 
 Create a `TensorDataset` from a list of tensors. All tensors must have
 the same first dimension (number of samples).
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], X),
-tensor([0, 1, 0], Y),
-tensor_dataset([X, Y], DS)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:tensor_dataset_ex2"
 ```
 
 ---
@@ -50,17 +44,14 @@ tensor_dataset([X, Y], DS)
 ### dataset_length
 
 ```clausal
-# skip
-dataset_length(DS, N)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_length"
 ```
 
 Number of items in the dataset. Supports query `(+ds, -n)` and check
 `(+ds, +n)` modes.
 
 ```clausal
-# skip
-tensor_dataset([X, Y], DS),
-dataset_length(DS, 3)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_length_ex2"
 ```
 
 ---
@@ -70,17 +61,14 @@ dataset_length(DS, 3)
 ### dataset_item
 
 ```clausal
-# skip
-dataset_item(DS, INDEX, ITEM)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_item"
 ```
 
 Get a single item by index. Returns a tuple of tensors (one per tensor
 in the dataset). Access tuple elements via `++()`:
 
 ```clausal
-# skip
-dataset_item(DS, 0, ITEM),
-X0 is ++(ITEM[0])
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_item_ex2"
 ```
 
 Fails gracefully on out-of-bounds indices.
@@ -92,16 +80,12 @@ Fails gracefully on out-of-bounds indices.
 ### dataset_element
 
 ```clausal
-# skip
-dataset_element(DS, ITEM)
-dataset_element(DS, INDEX, ITEM)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_element"
 ```
 
 Enumerate items via backtracking. The 2-arity version yields each item;
 the 3-arity version yields `(index, item)` pairs.
 
 ```clausal
-# skip
-findall(I, dataset_element(DS, I, _), INDICES),
-length(INDICES, 3)
+--8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_element_ex2"
 ```

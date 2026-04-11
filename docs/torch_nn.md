@@ -7,12 +7,7 @@ LR schedulers, plus gradient utility predicates.
 ## Import
 
 ```clausal
-# skip
--import_from(py.torch_nn, [parameter, named_parameter, module,
-                            named_module, child, named_child,
-                            layer, activation, loss_fn, optimizer_type,
-                            scheduler_type, current_lr,
-                            clip_grad_norm, clip_grad_value])
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:import"
 ```
 
 ---
@@ -25,43 +20,31 @@ results into a list.
 ### parameter
 
 ```clausal
-# skip
-parameter(MODEL, PARAM)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:parameter"
 ```
 
 Enumerate all parameter tensors in `MODEL`.
 
 ```clausal
-# skip
--import_module(torch)
-
-MODEL is torch.nn.Linear(10, 5),
-findall(P, parameter(MODEL, P), PS),
-length(PS, 2)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:parameter_ex2"
 ```
 
 ### named_parameter
 
 ```clausal
-# skip
-named_parameter(MODEL, NAME, PARAM)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_parameter"
 ```
 
 Enumerate `(name, tensor)` pairs for all parameters.
 
 ```clausal
-# skip
-MODEL is torch.nn.Linear(10, 5),
-findall(NAME, named_parameter(MODEL, NAME, _), NAMES),
-in_("weight", NAMES),
-in_("bias", NAMES)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_parameter_ex2"
 ```
 
 ### module
 
 ```clausal
-# skip
-module(MODEL, SUBMODULE)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:module"
 ```
 
 Enumerate all submodules recursively, including `MODEL` itself.
@@ -69,32 +52,20 @@ Enumerate all submodules recursively, including `MODEL` itself.
 ### named_module
 
 ```clausal
-# skip
-named_module(MODEL, NAME, SUBMODULE)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_module"
 ```
 
 Enumerate `(name, submodule)` pairs recursively. The root module has
 name `""`.
 
 ```clausal
-# skip
-MODEL is torch.nn.Sequential(
-    torch.nn.Linear(10, 5),
-    torch.nn.ReLU(),
-    torch.nn.Linear(5, 2)
-),
-findall(N, named_module(MODEL, N, _), NAMES),
-in_("", NAMES),
-in_("0", NAMES),
-in_("1", NAMES),
-in_("2", NAMES)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_module_ex2"
 ```
 
 ### child
 
 ```clausal
-# skip
-child(MODEL, CHILD)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:child"
 ```
 
 Enumerate direct children only (not recursive).
@@ -102,21 +73,13 @@ Enumerate direct children only (not recursive).
 ### named_child
 
 ```clausal
-# skip
-named_child(MODEL, NAME, CHILD)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_child"
 ```
 
 Enumerate `(name, child)` pairs for direct children only.
 
 ```clausal
-# skip
-MODEL is torch.nn.Sequential(
-    torch.nn.Linear(10, 5),
-    torch.nn.ReLU()
-),
-findall(N, named_child(MODEL, N, _), NAMES),
-in_("0", NAMES),
-in_("1", NAMES)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_child_ex2"
 ```
 
 ---
@@ -130,26 +93,20 @@ Names use the original PyTorch class names (e.g. `"Linear"`, `"ReLU"`,
 ### layer
 
 ```clausal
-# skip
-layer(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:layer"
 ```
 
 Enumerate all `nn.Module` subclasses. Built by introspecting `torch.nn`
 at import time, so it stays current across PyTorch versions.
 
 ```clausal
-# skip
-findall(N, layer(N, _), NS),
-in_("Linear", NS),
-in_("Conv2d", NS),
-in_("LSTM", NS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:layer_ex2"
 ```
 
 ### activation
 
 ```clausal
-# skip
-activation(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:activation"
 ```
 
 Enumerate activation modules (`ReLU`, `Sigmoid`, `Tanh`, `Softmax`, etc.).
@@ -157,8 +114,7 @@ Enumerate activation modules (`ReLU`, `Sigmoid`, `Tanh`, `Softmax`, etc.).
 ### loss_fn
 
 ```clausal
-# skip
-loss_fn(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:loss_fn"
 ```
 
 Enumerate loss functions (`CrossEntropyLoss`, `MSELoss`, `BCELoss`, etc.).
@@ -166,24 +122,19 @@ Enumerate loss functions (`CrossEntropyLoss`, `MSELoss`, `BCELoss`, etc.).
 ### optimizer_type
 
 ```clausal
-# skip
-optimizer_type(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:optimizer_type"
 ```
 
 Enumerate optimizer types (`Adam`, `SGD`, `AdamW`, `RMSprop`, etc.).
 
 ```clausal
-# skip
-findall(N, optimizer_type(N, _), NS),
-in_("Adam", NS),
-in_("SGD", NS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:optimizer_type_ex2"
 ```
 
 ### scheduler_type
 
 ```clausal
-# skip
-scheduler_type(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:scheduler_type"
 ```
 
 Enumerate LR scheduler types (`StepLR`, `CosineAnnealingLR`,
@@ -191,10 +142,7 @@ Enumerate LR scheduler types (`StepLR`, `CosineAnnealingLR`,
 `torch.optim.lr_scheduler`.
 
 ```clausal
-# skip
-findall(N, scheduler_type(N, _), NS),
-in_("StepLR", NS),
-in_("CosineAnnealingLR", NS)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:scheduler_type_ex2"
 ```
 
 ---
@@ -204,8 +152,7 @@ in_("CosineAnnealingLR", NS)
 ### current_lr
 
 ```clausal
-# skip
-current_lr(SCHEDULER, LRs)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:current_lr"
 ```
 
 Get the current learning rate(s) from a scheduler. Returns a list of
@@ -222,8 +169,7 @@ as impure. They are commonly needed at the boundary of training loops.
 ### clip_grad_norm
 
 ```clausal
-# skip
-clip_grad_norm(PARAMS, MAX_NORM, TOTAL_NORM)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:clip_grad_norm"
 ```
 
 Clip gradient norms in-place. Returns the total norm before clipping.
@@ -232,8 +178,7 @@ Clip gradient norms in-place. Returns the total norm before clipping.
 ### clip_grad_value
 
 ```clausal
-# skip
-clip_grad_value(PARAMS, CLIP_VALUE)
+--8<-- "tests/fixtures/docs/torch_nn_sigs.txt:clip_grad_value"
 ```
 
 Clip gradient values in-place to `[-CLIP_VALUE, +CLIP_VALUE]`.

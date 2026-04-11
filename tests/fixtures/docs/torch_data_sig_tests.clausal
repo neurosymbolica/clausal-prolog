@@ -1,0 +1,34 @@
+# Companion tests for docs/torch_data.md signature blocks.
+-import_from(py.torch, [tensor, shape, tensor_list])
+-import_from(py.torch_data, [tensor_dataset, dataset_length,
+                              dataset_item, dataset_element])
+
+Test("tensor_dataset construction") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], X),
+    tensor([0, 1, 0], Y),
+    tensor_dataset([X, Y], DS),
+    dataset_length(DS, 3)
+)
+
+Test("dataset_length query") <- (
+    tensor([[1.0, 2.0], [3.0, 4.0]], X),
+    tensor_dataset([X], DS),
+    dataset_length(DS, N),
+    N == 2
+)
+
+Test("dataset_item access") <- (
+    tensor([[10.0], [20.0], [30.0]], X),
+    tensor([1, 2, 3], Y),
+    tensor_dataset([X, Y], DS),
+    dataset_item(DS, 0, ITEM),
+    X0 is ++(ITEM[0]),
+    tensor_list(X0, [10.0])
+)
+
+Test("dataset_element enumerate") <- (
+    tensor([[1.0], [2.0], [3.0]], X),
+    tensor_dataset([X], DS),
+    findall(I, dataset_element(DS, I, _), INDICES),
+    length(INDICES, 3)
+)

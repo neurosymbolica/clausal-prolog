@@ -7,11 +7,7 @@ shape operations, and conversions.
 ## Import
 
 ```clausal
-# skip
--import_from(py.torch, [tensor, zeros, ones, randn, shape, dtype, device,
-                         reshape, matmul, add, relu, softmax,
-                         tensor_numpy, tensor_list,
-                         float32, float64, int32, int64])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:import"
 ```
 
 Dtype constants (`float32`, `float64`, `int32`, etc.) are exported
@@ -35,45 +31,31 @@ directly — no need for `++()` escape to access them.
 ### tensor
 
 ```clausal
-# skip
-tensor(DATA, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor"
 ```
 
 Create a tensor from a Python list or nested list.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], T),
-shape(T, [3])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor_ex2"
 ```
 
 ### zeros, ones
 
 ```clausal
-# skip
-zeros(SHAPE, T)
-zeros(SHAPE, OPTS, T)
-ones(SHAPE, T)
-ones(SHAPE, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:zeros_ones"
 ```
 
 Create zero/one-filled tensors. `OPTS` is a dict for `dtype`/`device` kwargs.
 
 ```clausal
-# skip
-zeros([3, 4], T),
-shape(T, [3, 4])
-
-zeros([2, 3], {"dtype": float64}, T),
-dtype(T, float64)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:zeros_ones_ex2"
 ```
 
 ### randn
 
 ```clausal
-# skip
-randn(SHAPE, T)
-randn(SHAPE, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:randn"
 ```
 
 Create a tensor filled with values from a standard normal distribution.
@@ -81,29 +63,19 @@ Create a tensor filled with values from a standard normal distribution.
 ### arange
 
 ```clausal
-# skip
-arange(END, T)
-arange(START, END, T)
-arange(START, END, STEP, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:arange"
 ```
 
 Create a 1-D tensor with values from a range.
 
 ```clausal
-# skip
-arange(5, T),
-shape(T, [5])
-
-arange(0, 10, 2, T),
-shape(T, [5])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:arange_ex2"
 ```
 
 ### linspace
 
 ```clausal
-# skip
-linspace(START, END, STEPS, T)
-linspace(START, END, STEPS, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:linspace"
 ```
 
 Create a 1-D tensor with `STEPS` evenly spaced values from `START` to `END`.
@@ -111,25 +83,19 @@ Create a 1-D tensor with `STEPS` evenly spaced values from `START` to `END`.
 ### full
 
 ```clausal
-# skip
-full(SHAPE, VALUE, T)
-full(SHAPE, VALUE, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:full"
 ```
 
 Create a tensor filled with `VALUE`.
 
 ```clausal
-# skip
-full([2, 3], 7.0, T),
-tensor_list(T, [[7.0, 7.0, 7.0], [7.0, 7.0, 7.0]])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:full_ex2"
 ```
 
 ### eye
 
 ```clausal
-# skip
-eye(N, T)
-eye(N, M, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:eye"
 ```
 
 Create an identity matrix of size `N x N` or `N x M`.
@@ -145,55 +111,43 @@ These predicates support two modes:
 ### shape
 
 ```clausal
-# skip
-shape(T, S)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:shape"
 ```
 
 Query or check the shape of a tensor. Shape is a list of integers.
 
 ```clausal
-# skip
-zeros([3, 4, 5], T),
-shape(T, S),        # S = [3, 4, 5]
-shape(T, [3, 4, 5]) # check mode: succeeds
+--8<-- "tests/fixtures/docs/torch_sigs.txt:shape_ex2"
 ```
 
 ### dtype
 
 ```clausal
-# skip
-dtype(T, D)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dtype"
 ```
 
 Query or check the data type of a tensor.
 
 ```clausal
-# skip
-zeros([2], T),
-dtype(T, D),        # D = torch.float32
-dtype(T, float32)   # check mode: succeeds
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dtype_ex2"
 ```
 
 ### device
 
 ```clausal
-# skip
-device(T, D)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:device"
 ```
 
 Query or check the device of a tensor. Returns a string (`"cpu"`, `"cuda:0"`, etc.).
 
 ```clausal
-# skip
-zeros([2], T),
-device(T, "cpu")    # check mode: succeeds
+--8<-- "tests/fixtures/docs/torch_sigs.txt:device_ex2"
 ```
 
 ### dim
 
 ```clausal
-# skip
-dim(T, N)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dim"
 ```
 
 Query the number of dimensions.
@@ -201,8 +155,7 @@ Query the number of dimensions.
 ### element_count
 
 ```clausal
-# skip
-element_count(T, N)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:element_count"
 ```
 
 Query the total number of elements.
@@ -210,8 +163,7 @@ Query the total number of elements.
 ### requires_gradient
 
 ```clausal
-# skip
-requires_gradient(T, B)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:requires_gradient"
 ```
 
 Query the gradient tracking flag (boolean).
@@ -219,8 +171,7 @@ Query the gradient tracking flag (boolean).
 ### is_contiguous
 
 ```clausal
-# skip
-is_contiguous(T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:is_contiguous"
 ```
 
 Succeeds if the tensor is contiguous in memory.
@@ -234,68 +185,43 @@ All math predicates are pure: they produce new tensors without mutating inputs.
 ### matmul
 
 ```clausal
-# skip
-matmul(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:matmul"
 ```
 
 Matrix multiplication.
 
 ```clausal
-# skip
-zeros([2, 3], A),
-zeros([3, 4], B),
-matmul(A, B, C),
-shape(C, [2, 4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:matmul_ex2"
 ```
 
 ### add, mul
 
 ```clausal
-# skip
-add(A, B, C)
-mul(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:add_mul"
 ```
 
 Element-wise addition and multiplication.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], A),
-tensor([10.0, 20.0, 30.0], B),
-add(A, B, C),
-tensor_list(C, [11.0, 22.0, 33.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:add_mul_ex2"
 ```
 
 ### cat, stack
 
 ```clausal
-# skip
-cat(TENSORS, DIM, T)
-stack(TENSORS, DIM, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cat_stack"
 ```
 
 Concatenate or stack a list of tensors along a dimension.
 
 ```clausal
-# skip
-zeros([2, 3], A),
-ones([2, 3], B),
-cat([A, B], 0, C),
-shape(C, [4, 3])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cat_stack_ex2"
 ```
 
 ### sum, mean, max, min
 
 ```clausal
-# skip
-sum(T, S)
-sum(T, DIM, S)
-mean(T, M)
-mean(T, DIM, M)
-max(T, M)
-max(T, DIM, M)
-min(T, M)
-min(T, DIM, M)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sum_mean_max_min"
 ```
 
 Reduction operations. Without `DIM`, reduces over all elements.
@@ -303,20 +229,13 @@ With `DIM`, reduces along that dimension. `max`/`min` along a dimension
 return only the values (not indices).
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], T),
-sum(T, S),
-tensor_list(S, 10.0)
-
-sum(T, 0, S2),
-tensor_list(S2, [4.0, 6.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sum_mean_max_min_ex2"
 ```
 
 ### clamp
 
 ```clausal
-# skip
-clamp(T, MIN, MAX, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:clamp"
 ```
 
 Clamp all values to `[MIN, MAX]`.
@@ -324,8 +243,7 @@ Clamp all values to `[MIN, MAX]`.
 ### abs
 
 ```clausal
-# skip
-abs(T, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:abs"
 ```
 
 Element-wise absolute value.
@@ -333,8 +251,7 @@ Element-wise absolute value.
 ### softmax
 
 ```clausal
-# skip
-softmax(T, DIM, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:softmax"
 ```
 
 Apply softmax along `DIM`.
@@ -342,17 +259,13 @@ Apply softmax along `DIM`.
 ### relu
 
 ```clausal
-# skip
-relu(T, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:relu"
 ```
 
 Apply ReLU activation (zeroes negatives).
 
 ```clausal
-# skip
-tensor([-1.0, 0.0, 1.0], T),
-relu(T, T2),
-tensor_list(T2, [0.0, 0.0, 1.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:relu_ex2"
 ```
 
 ---
@@ -362,8 +275,7 @@ tensor_list(T2, [0.0, 0.0, 1.0])
 ### reshape
 
 ```clausal
-# skip
-reshape(T, SHAPE, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:reshape"
 ```
 
 Reshape a tensor to `SHAPE`.
@@ -371,48 +283,31 @@ Reshape a tensor to `SHAPE`.
 ### squeeze, unsqueeze
 
 ```clausal
-# skip
-squeeze(T, T2)
-squeeze(T, DIM, T2)
-unsqueeze(T, DIM, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:squeeze_unsqueeze"
 ```
 
 Remove or add size-1 dimensions. These are inverses of each other.
 
 ```clausal
-# skip
-zeros([3, 1, 4], T),
-squeeze(T, 1, T2),
-shape(T2, [3, 4]),
-unsqueeze(T2, 1, T3),
-shape(T3, [3, 1, 4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:squeeze_unsqueeze_ex2"
 ```
 
 ### flatten, unflatten
 
 ```clausal
-# skip
-flatten(T, T2)
-flatten(T, START, END, T2)
-unflatten(T, DIM, SHAPE, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:flatten_unflatten"
 ```
 
 Flatten or unflatten dimensions. These are inverses of each other.
 
 ```clausal
-# skip
-zeros([2, 3, 4], T),
-flatten(T, 0, 1, FLAT),
-shape(FLAT, [6, 4]),
-unflatten(FLAT, 0, [2, 3], T2),
-shape(T2, [2, 3, 4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:flatten_unflatten_ex2"
 ```
 
 ### transpose
 
 ```clausal
-# skip
-transpose(T, D0, D1, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:transpose"
 ```
 
 Swap two dimensions. Self-inverse: transposing twice returns the original.
@@ -420,8 +315,7 @@ Swap two dimensions. Self-inverse: transposing twice returns the original.
 ### permute
 
 ```clausal
-# skip
-permute(T, DIMS, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:permute"
 ```
 
 Reorder all dimensions.
@@ -429,8 +323,7 @@ Reorder all dimensions.
 ### contiguous
 
 ```clausal
-# skip
-contiguous(T, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:contiguous"
 ```
 
 Return a contiguous-in-memory copy of the tensor.
@@ -442,9 +335,7 @@ Return a contiguous-in-memory copy of the tensor.
 ### split
 
 ```clausal
-# skip
-split(T, SIZE, LIST)
-split(T, SIZE, DIM, LIST)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:split"
 ```
 
 Split a tensor into chunks of `SIZE` elements along `DIM` (default 0).
@@ -452,20 +343,13 @@ Returns a list of tensors. The last chunk may be smaller if the tensor
 size is not divisible by `SIZE`. Inverse of `cat`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
-split(T, 2, PARTS),
-length(PARTS, 3),
-cat(PARTS, 0, T2),
-equal(T, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:split_ex2"
 ```
 
 ### chunk
 
 ```clausal
-# skip
-chunk(T, N, LIST)
-chunk(T, N, DIM, LIST)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:chunk"
 ```
 
 Split a tensor into `N` chunks along `DIM` (default 0). If the tensor
@@ -473,134 +357,96 @@ size is not divisible by `N`, the last chunk will be smaller. Inverse
 of `cat`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], T),
-chunk(T, 3, PARTS),
-length(PARTS, 3)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:chunk_ex2"
 ```
 
 ### unbind
 
 ```clausal
-# skip
-unbind(T, DIM, LIST)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:unbind"
 ```
 
 Remove dimension `DIM` and return a list of slices. Inverse of `stack`.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], T),
-unbind(T, 0, ROWS),
-length(ROWS, 2),
-stack(ROWS, 0, T2),
-equal(T, T2)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:unbind_ex2"
 ```
 
 ### narrow
 
 ```clausal
-# skip
-narrow(T, DIM, START, LENGTH, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:narrow"
 ```
 
 Narrow a tensor along `DIM` from `START` for `LENGTH` elements.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
-narrow(T, 1, 0, 2, R),
-tensor_list(R, [[1.0, 2.0], [4.0, 5.0]])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:narrow_ex2"
 ```
 
 ### expand
 
 ```clausal
-# skip
-expand(T, SIZES, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:expand"
 ```
 
 Broadcast a tensor to a larger size. Use `-1` to keep a dimension
 unchanged. Not invertible (lossy).
 
 ```clausal
-# skip
-tensor([[1.0], [2.0], [3.0]], T),
-expand(T, [3, 4], R),
-shape(R, [3, 4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:expand_ex2"
 ```
 
 ### repeat
 
 ```clausal
-# skip
-repeat(T, REPEATS, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:repeat"
 ```
 
 Tile a tensor by repeating it along each dimension. Not invertible
 (lossy).
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], T),
-repeat(T, [2], R),
-tensor_list(R, [1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:repeat_ex2"
 ```
 
 ### tile
 
 ```clausal
-# skip
-tile(T, REPS, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tile"
 ```
 
 Tile a tensor (numpy-style). Similar to `repeat` but follows NumPy
 semantics for dimension handling. Not invertible (lossy).
 
 ```clausal
-# skip
-tensor([1.0, 2.0], T),
-tile(T, [3], R),
-tensor_list(R, [1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tile_ex2"
 ```
 
 ### flip
 
 ```clausal
-# skip
-flip(T, DIMS, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:flip"
 ```
 
 Reverse the order of elements along the given dimensions. Self-inverse:
 `flip(flip(T, DIMS), DIMS) == T`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], T),
-flip(T, [0], F),
-tensor_list(F, [3.0, 2.0, 1.0]),
-flip(F, [0], T2),
-tensor_list(T2, [1.0, 2.0, 3.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:flip_ex2"
 ```
 
 ### roll
 
 ```clausal
-# skip
-roll(T, SHIFTS, R)
-roll(T, SHIFTS, DIMS, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:roll"
 ```
 
 Circular shift elements by `SHIFTS` positions. Roll by `n` is inverted
 by roll by `-n`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0], T),
-roll(T, 1, R),
-tensor_list(R, [4.0, 1.0, 2.0, 3.0]),
-roll(R, -1, T2),
-tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:roll_ex2"
 ```
 
 ---
@@ -610,8 +456,7 @@ tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
 ### tensor_list
 
 ```clausal
-# skip
-tensor_list(TENSOR, LIST)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor_list"
 ```
 
 Bidirectional conversion between a tensor and a nested Python list.
@@ -621,20 +466,13 @@ Bidirectional conversion between a tensor and a nested Python list.
 - `(+TENSOR, +LIST)`: check consistency
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], T),
-tensor_list(T, L),
-L == [1.0, 2.0, 3.0]
-
-tensor_list(T2, [4.0, 5.0, 6.0]),
-shape(T2, [3])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor_list_ex2"
 ```
 
 ### tensor_numpy
 
 ```clausal
-# skip
-tensor_numpy(TENSOR, ARRAY)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor_numpy"
 ```
 
 Bidirectional relationship between a tensor and a NumPy array (shared memory).
@@ -643,12 +481,7 @@ Bidirectional relationship between a tensor and a NumPy array (shared memory).
 - `(-TENSOR, +ARRAY)`: get the tensor for a numpy array
 
 ```clausal
-# skip
--import_module(numpy)
--import_from(py.torch, [tensor, tensor_numpy, tensor_list])
-
-tensor_numpy(T, numpy.array([1.0, 2.0, 3.0])),
-tensor_list(T, [1.0, 2.0, 3.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tensor_numpy_ex2"
 ```
 
 ---
@@ -658,8 +491,7 @@ tensor_list(T, [1.0, 2.0, 3.0])
 ### dtype_info
 
 ```clausal
-# skip
-dtype_info(DTYPE, KEY, VALUE)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dtype_info"
 ```
 
 Query properties of a dtype. `DTYPE` must be bound (use an exported
@@ -669,11 +501,7 @@ enumerate all properties.
 Available keys: `"bits"`, `"is_floating_point"`, `"is_complex"`.
 
 ```clausal
-# skip
--import_from(py.torch, [dtype_info, float32])
-
-dtype_info(float32, "bits", BITS),     # BITS = 32
-dtype_info(float32, "is_floating_point", True)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dtype_info_ex2"
 ```
 
 ---
@@ -685,8 +513,7 @@ These predicates perform file IO and are **not backtracking-safe**.
 ### save
 
 ```clausal
-# skip
-save(OBJ, PATH)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:save"
 ```
 
 Save a tensor or model state to a file. Wraps `torch.save`.
@@ -694,19 +521,14 @@ Save a tensor or model state to a file. Wraps `torch.save`.
 ### load
 
 ```clausal
-# skip
-load(PATH, OBJ)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:load"
 ```
 
 Load a tensor or model state from a file. Wraps `torch.load`.
 Fails (predicate failure, not crash) if the file doesn't exist.
 
 ```clausal
-# skip
-zeros([3, 4], T),
-save(T, "/tmp/test.pt"),
-load("/tmp/test.pt", T2),
-shape(T2, [3, 4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:load_ex2"
 ```
 
 ---
@@ -717,219 +539,155 @@ Pure linear algebra operations via `torch.linalg`. All predicates are
 Tier 1 (pure, no state). Decompositions return tuples — unpack with `is`.
 
 ```clausal
-# skip
--import_from(py.torch, [tensor, eye, det, inv, svd, solve, cholesky,
-                         qr, norm, matrix_rank, pinv, cross, dot])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:linear_algebra"
 ```
 
 ### det
 
 ```clausal
-# skip
-det(A, D)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:det"
 ```
 
 Compute the determinant of a square matrix.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], A),
-det(A, D)
-# D ≈ -2.0
+--8<-- "tests/fixtures/docs/torch_sigs.txt:det_ex2"
 ```
 
 ### inv
 
 ```clausal
-# skip
-inv(A, B)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:inv"
 ```
 
 Compute the matrix inverse. Self-inverse: `inv(inv(A)) ≈ A`.
 Fails on singular matrices.
 
 ```clausal
-# skip
-eye(3, I),
-inv(I, B)
-# B is the identity matrix
+--8<-- "tests/fixtures/docs/torch_sigs.txt:inv_ex2"
 ```
 
 ### solve
 
 ```clausal
-# skip
-solve(A, B, X)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:solve"
 ```
 
 Solve the linear system `AX = B`.
 
 ```clausal
-# skip
-eye(2, A),
-tensor([3.0, 4.0], B),
-solve(A, B, X)
-# X = [3.0, 4.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:solve_ex2"
 ```
 
 ### svd
 
 ```clausal
-# skip
-svd(A, RESULT)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:svd"
 ```
 
 Singular value decomposition. Returns a `(U, S, Vh)` tuple.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], A),
-svd(A, RESULT),
-RESULT is (U, S, VH),
-shape(U, [2, 2]),
-shape(S, [2]),
-shape(VH, [2, 2])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:svd_ex2"
 ```
 
 ### eig
 
 ```clausal
-# skip
-eig(A, RESULT)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:eig"
 ```
 
 Eigendecomposition. Returns a `(L, V)` tuple of eigenvalues and
 eigenvectors. Eigenvalues may be complex.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [2.0, 1.0]], A),
-eig(A, RESULT),
-RESULT is (L, V),
-shape(L, [2]),
-shape(V, [2, 2])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:eig_ex2"
 ```
 
 ### cholesky
 
 ```clausal
-# skip
-cholesky(A, L)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cholesky"
 ```
 
 Cholesky decomposition of a positive-definite matrix. `A = L @ L.T`.
 Fails on non-positive-definite matrices.
 
 ```clausal
-# skip
-tensor([[4.0, 2.0], [2.0, 3.0]], A),
-cholesky(A, L),
-shape(L, [2, 2])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cholesky_ex2"
 ```
 
 ### qr
 
 ```clausal
-# skip
-qr(A, RESULT)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:qr"
 ```
 
 QR decomposition. Returns a `(Q, R)` tuple.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], A),
-qr(A, RESULT),
-RESULT is (Q, R),
-shape(Q, [3, 2]),
-shape(R, [2, 2])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:qr_ex2"
 ```
 
 ### norm
 
 ```clausal
-# skip
-norm(A, N)
-norm(A, ORD, N)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:norm"
 ```
 
 Matrix or vector norm. Without `ORD`, computes the Frobenius norm (matrix)
 or 2-norm (vector). With `ORD`, computes the specified norm.
 
 ```clausal
-# skip
-tensor([3.0, 4.0], A),
-norm(A, N)
-# N = 5.0
-
-norm(A, 1, N1)
-# N1 = 7.0
+--8<-- "tests/fixtures/docs/torch_sigs.txt:norm_ex2"
 ```
 
 ### matrix_rank
 
 ```clausal
-# skip
-matrix_rank(A, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:matrix_rank"
 ```
 
 Compute the numerical rank of a matrix.
 
 ```clausal
-# skip
-eye(3, I),
-matrix_rank(I, R)
-# R = 3
+--8<-- "tests/fixtures/docs/torch_sigs.txt:matrix_rank_ex2"
 ```
 
 ### pinv
 
 ```clausal
-# skip
-pinv(A, B)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:pinv"
 ```
 
 Moore-Penrose pseudoinverse. Works on any matrix shape.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
-pinv(A, B),
-shape(B, [3, 2])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:pinv_ex2"
 ```
 
 ### cross
 
 ```clausal
-# skip
-cross(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cross"
 ```
 
 Cross product of two 3-element vectors.
 
 ```clausal
-# skip
-tensor([1.0, 0.0, 0.0], A),
-tensor([0.0, 1.0, 0.0], B),
-cross(A, B, C)
-# C = [0.0, 0.0, 1.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cross_ex2"
 ```
 
 ### dot
 
 ```clausal
-# skip
-dot(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dot"
 ```
 
 Dot product of two 1-D tensors.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], A),
-tensor([4.0, 5.0, 6.0], B),
-dot(A, B, C)
-# C = 32.0
+--8<-- "tests/fixtures/docs/torch_sigs.txt:dot_ex2"
 ```
 
 ---
@@ -941,56 +699,38 @@ bidirectional predicate: `(+T, -F)` computes the forward transform,
 `(-T, +F)` computes the inverse.
 
 ```clausal
-# skip
--import_from(py.torch, [tensor, fft_transform, real_fft,
-                         fft_transform_2d, fft_transform_nd,
-                         fft_shift, fft_frequencies, real_fft_frequencies])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_bijective_pairs"
 ```
 
 ### fft_transform
 
 ```clausal
-# skip
-fft_transform(T, F)
-fft_transform(T, DIM, F)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_transform"
 ```
 
 Bijective complex-to-complex FFT. Forward: `(+T, -F)`. Inverse: `(-T, +F)`.
 Optional `DIM` specifies the dimension to transform along.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0], T),
-fft_transform(T, F),
-shape(F, [4]),
-fft_transform(T2, F),
-shape(T2, [4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_transform_ex2"
 ```
 
 ### real_fft
 
 ```clausal
-# skip
-real_fft(T, F)
-real_fft(T, DIM, F)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:real_fft"
 ```
 
 Bijective real-to-complex FFT. Forward output length is `n//2 + 1`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0], T),
-real_fft(T, F),
-shape(F, [3]),
-real_fft(T2, F),
-shape(T2, [4])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:real_fft_ex2"
 ```
 
 ### fft_transform_2d
 
 ```clausal
-# skip
-fft_transform_2d(T, F)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_transform_2d"
 ```
 
 Bijective 2-dimensional FFT.
@@ -998,8 +738,7 @@ Bijective 2-dimensional FFT.
 ### fft_transform_nd
 
 ```clausal
-# skip
-fft_transform_nd(T, F)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_transform_nd"
 ```
 
 Bijective N-dimensional FFT. Transforms along all dimensions.
@@ -1007,30 +746,20 @@ Bijective N-dimensional FFT. Transforms along all dimensions.
 ### fft_shift
 
 ```clausal
-# skip
-fft_shift(T, S)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_shift"
 ```
 
 Bijective zero-frequency shift. Forward shifts zero-freq to centre,
 inverse shifts it back.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0], T),
-fft_shift(T, S),
-tensor_list(S, [3.0, 4.0, 1.0, 2.0]),
-fft_shift(T2, S),
-tensor_list(T2, [1.0, 2.0, 3.0, 4.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_shift_ex2"
 ```
 
 ### fft_frequencies, real_fft_frequencies
 
 ```clausal
-# skip
-fft_frequencies(N, F)
-fft_frequencies(N, D, F)
-real_fft_frequencies(N, F)
-real_fft_frequencies(N, D, F)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_frequencies_real_fft_frequencies"
 ```
 
 DFT sample frequencies (not bijective). `N` is the window length, `D`
@@ -1038,12 +767,7 @@ is the sample spacing (default 1.0). `real_fft_frequencies` returns
 `n//2 + 1` frequencies.
 
 ```clausal
-# skip
-fft_frequencies(4, F),
-shape(F, [4])
-
-real_fft_frequencies(4, F2),
-shape(F2, [3])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:fft_frequencies_real_fft_frequencies_ex2"
 ```
 
 ---
@@ -1055,30 +779,19 @@ Element-wise comparison predicates. All return bool tensors.
 ### eq, ne, gt, lt, ge, le
 
 ```clausal
-# skip
-eq(A, B, C)
-ne(A, B, C)
-gt(A, B, C)
-lt(A, B, C)
-ge(A, B, C)
-le(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:eq_ne_gt_lt_ge_le"
 ```
 
 Element-wise comparison, producing a bool tensor.
 
 ```clausal
-# skip
-tensor([1.0, 5.0, 3.0], A),
-tensor([2.0, 2.0, 3.0], B),
-gt(A, B, C),
-tensor_list(C, [False, True, False])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:eq_ne_gt_lt_ge_le_ex2"
 ```
 
 ### equal
 
 ```clausal
-# skip
-equal(A, B)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:equal"
 ```
 
 Check predicate: succeeds if all elements of `A` and `B` are equal.
@@ -1087,19 +800,14 @@ No output variable — use `not(equal(A, B))` for inequality check.
 ### allclose
 
 ```clausal
-# skip
-allclose(A, B)
-allclose(A, B, ATOL, RTOL)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:allclose"
 ```
 
 Check predicate: succeeds if tensors are approximately equal.
 Optional `ATOL` (absolute tolerance) and `RTOL` (relative tolerance).
 
 ```clausal
-# skip
-tensor([1.0, 2.0], A),
-tensor([1.01, 2.01], B),
-allclose(A, B, 0.1, 0.0)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:allclose_ex2"
 ```
 
 ---
@@ -1109,10 +817,7 @@ allclose(A, B, 0.1, 0.0)
 ### logical_and, logical_or, logical_xor
 
 ```clausal
-# skip
-logical_and(A, B, C)
-logical_or(A, B, C)
-logical_xor(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logical_and_logical_or_logical_xor"
 ```
 
 Element-wise logical operations on bool tensors.
@@ -1120,8 +825,7 @@ Element-wise logical operations on bool tensors.
 ### logical_not
 
 ```clausal
-# skip
-logical_not(A, B)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logical_not"
 ```
 
 Element-wise logical NOT.
@@ -1129,11 +833,7 @@ Element-wise logical NOT.
 ### any, all
 
 ```clausal
-# skip
-any(T)
-any(T, DIM)
-all(T)
-all(T, DIM)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:any_all"
 ```
 
 Check predicates: succeed if any/all elements are true.
@@ -1141,12 +841,7 @@ With `DIM`, checks along that dimension (succeeds if the condition
 holds for at least one slice).
 
 ```clausal
-# skip
-tensor([False, True, False], T),
-any(T)    # succeeds
-
-tensor([True, True, True], T2),
-all(T2)   # succeeds
+--8<-- "tests/fixtures/docs/torch_sigs.txt:any_all_ex2"
 ```
 
 ---
@@ -1156,26 +851,19 @@ all(T2)   # succeeds
 ### where
 
 ```clausal
-# skip
-where(COND, X, Y, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:where"
 ```
 
 Select elements from `X` where `COND` is true, from `Y` where false.
 
 ```clausal
-# skip
-tensor([True, False, True], COND),
-tensor([1.0, 2.0, 3.0], X),
-tensor([10.0, 20.0, 30.0], Y),
-where(COND, X, Y, R),
-tensor_list(R, [1.0, 20.0, 3.0])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:where_ex2"
 ```
 
 ### masked_select
 
 ```clausal
-# skip
-masked_select(T, MASK, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:masked_select"
 ```
 
 Select elements where `MASK` is true. Returns a 1-D tensor.
@@ -1183,25 +871,19 @@ Select elements where `MASK` is true. Returns a 1-D tensor.
 ### index_select
 
 ```clausal
-# skip
-index_select(T, DIM, INDICES, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:index_select"
 ```
 
 Select slices along `DIM` at the given `INDICES`.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
-tensor([0, 2], IDX),
-index_select(T, 0, IDX, R),
-tensor_list(R, [[1.0, 2.0], [5.0, 6.0]])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:index_select_ex2"
 ```
 
 ### gather
 
 ```clausal
-# skip
-gather(T, DIM, INDICES, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:gather"
 ```
 
 Gather values along `DIM` using index tensor.
@@ -1209,8 +891,7 @@ Gather values along `DIM` using index tensor.
 ### scatter
 
 ```clausal
-# skip
-scatter(T, DIM, INDICES, SRC, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:scatter"
 ```
 
 Scatter `SRC` values into `T` at positions given by `INDICES` along `DIM`.
@@ -1222,29 +903,14 @@ Scatter `SRC` values into `T` at positions given by `INDICES` along `DIM`.
 ### einsum
 
 ```clausal
-# skip
-einsum(EQUATION, TENSORS, RESULT)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:einsum"
 ```
 
 Einstein summation notation. `EQUATION` is a string like `"ij,jk->ik"`,
 `TENSORS` is a list of tensors.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], A),
-tensor([[5.0, 6.0], [7.0, 8.0]], B),
-einsum("ij,jk->ik", [A, B], C),
-shape(C, [2, 2])
-
-# Trace
-einsum("ii->", [A], T)
-# T = 5.0
-
-# Outer product
-tensor([1.0, 2.0], X),
-tensor([3.0, 4.0, 5.0], Y),
-einsum("i,j->ij", [X, Y], O),
-shape(O, [2, 3])
+--8<-- "tests/fixtures/docs/torch_sigs.txt:einsum_ex2"
 ```
 
 ---
@@ -1257,28 +923,19 @@ is computed. Uses `_bidir_2` internally.
 ### logarithm
 
 ```clausal
-# skip
-logarithm(EXPONENT, VALUE)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logarithm"
 ```
 
 `VALUE = exp(EXPONENT)`. Forward: exp. Backward: log.
 
 ```clausal
-# skip
-tensor([0.0, 1.0], EXP),
-logarithm(EXP, VAL)
-# VAL = [1.0, e]
-
-tensor([1.0, 2.0], VAL2),
-logarithm(EXP2, VAL2)
-# EXP2 = [0.0, ln(2)]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logarithm_ex2"
 ```
 
 ### sine
 
 ```clausal
-# skip
-sine(ANGLE, VALUE)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sine"
 ```
 
 Forward: sin. Backward: asin. Domain for backward: `VALUE` in [-1, 1].
@@ -1286,8 +943,7 @@ Forward: sin. Backward: asin. Domain for backward: `VALUE` in [-1, 1].
 ### cosine
 
 ```clausal
-# skip
-cosine(ANGLE, VALUE)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cosine"
 ```
 
 Forward: cos. Backward: acos.
@@ -1295,8 +951,7 @@ Forward: cos. Backward: acos.
 ### tangent
 
 ```clausal
-# skip
-tangent(ANGLE, VALUE)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:tangent"
 ```
 
 Forward: tan. Backward: atan.
@@ -1310,8 +965,7 @@ One-directional predicates — all inputs must be bound.
 ### sqrt
 
 ```clausal
-# skip
-sqrt(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sqrt"
 ```
 
 Element-wise square root.
@@ -1319,24 +973,19 @@ Element-wise square root.
 ### pow
 
 ```clausal
-# skip
-pow(T, EXPONENT, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:pow"
 ```
 
 Element-wise power.
 
 ```clausal
-# skip
-tensor([2.0, 3.0], T),
-pow(T, 2.0, R)
-# R = [4.0, 9.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:pow_ex2"
 ```
 
 ### atan2
 
 ```clausal
-# skip
-atan2(Y, X, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:atan2"
 ```
 
 Two-argument arctangent.
@@ -1344,10 +993,7 @@ Two-argument arctangent.
 ### sinh, cosh, tanh
 
 ```clausal
-# skip
-sinh(T, R)
-cosh(T, R)
-tanh(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sinh_cosh_tanh"
 ```
 
 Hyperbolic functions.
@@ -1355,24 +1001,19 @@ Hyperbolic functions.
 ### sigmoid
 
 ```clausal
-# skip
-sigmoid(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sigmoid"
 ```
 
 Logistic sigmoid. Output in (0, 1).
 
 ```clausal
-# skip
-tensor([0.0], T),
-sigmoid(T, R)
-# R = [0.5]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sigmoid_ex2"
 ```
 
 ### log_softmax
 
 ```clausal
-# skip
-log_softmax(T, DIM, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:log_softmax"
 ```
 
 Log of softmax along `DIM`. Numerically more stable than
@@ -1381,26 +1022,19 @@ Log of softmax along `DIM`. Numerically more stable than
 ### floor, ceil, round
 
 ```clausal
-# skip
-floor(T, R)
-ceil(T, R)
-round(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:floor_ceil_round"
 ```
 
 Rounding operations. Not invertible.
 
 ```clausal
-# skip
-tensor([1.7, 2.3, -0.5], T),
-floor(T, R)
-# R = [1.0, 2.0, -1.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:floor_ceil_round_ex2"
 ```
 
 ### sign
 
 ```clausal
-# skip
-sign(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sign"
 ```
 
 Sign function: returns -1, 0, or +1 per element.
@@ -1408,21 +1042,13 @@ Sign function: returns -1, 0, or +1 per element.
 ### cumsum, cumprod
 
 ```clausal
-# skip
-cumsum(T, DIM, R)
-cumprod(T, DIM, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cumsum_cumprod"
 ```
 
 Cumulative sum/product along `DIM`.
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0, 4.0], T),
-cumsum(T, 0, R)
-# R = [1.0, 3.0, 6.0, 10.0]
-
-cumprod(T, 0, P)
-# P = [1.0, 2.0, 6.0, 24.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:cumsum_cumprod_ex2"
 ```
 
 ---
@@ -1432,28 +1058,19 @@ cumprod(T, 0, P)
 ### zeros_like, ones_like, full_like
 
 ```clausal
-# skip
-zeros_like(T, R)
-ones_like(T, R)
-full_like(T, VALUE, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:zeros_like_ones_like_full_like"
 ```
 
 Create tensors with the same shape, dtype, and device as an existing tensor.
 
 ```clausal
-# skip
-tensor([[1.0, 2.0], [3.0, 4.0]], T),
-zeros_like(T, Z),
-shape(Z, [2, 2])
-# Z has same dtype and device as T
+--8<-- "tests/fixtures/docs/torch_sigs.txt:zeros_like_ones_like_full_like_ex2"
 ```
 
 ### empty
 
 ```clausal
-# skip
-empty(SHAPE, T)
-empty(SHAPE, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:empty"
 ```
 
 Create an uninitialized tensor. Values are indeterminate.
@@ -1461,47 +1078,32 @@ Create an uninitialized tensor. Values are indeterminate.
 ### rand, randint
 
 ```clausal
-# skip
-rand(SHAPE, T)
-rand(SHAPE, OPTS, T)
-randint(LOW, HIGH, SHAPE, T)
-randint(LOW, HIGH, SHAPE, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:rand_randint"
 ```
 
 `rand` produces uniform random values in `[0, 1)`.
 `randint` produces random integers in `[LOW, HIGH)`.
 
 ```clausal
-# skip
-rand([3, 4], T),
-shape(T, [3, 4])
-
-randint(0, 10, [5], T)
-# T contains integers 0..9
+--8<-- "tests/fixtures/docs/torch_sigs.txt:rand_randint_ex2"
 ```
 
 ### logspace
 
 ```clausal
-# skip
-logspace(START, END, STEPS, T)
-logspace(START, END, STEPS, OPTS, T)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logspace"
 ```
 
 Logarithmically spaced values: `10^START` to `10^END`.
 
 ```clausal
-# skip
-logspace(0.0, 2.0, 3, T)
-# T = [1.0, 10.0, 100.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:logspace_ex2"
 ```
 
 ### diag
 
 ```clausal
-# skip
-diag(T, R)
-diag(T, DIAGONAL, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:diag"
 ```
 
 Input-polymorphic: if input is 1D, creates a 2D diagonal matrix.
@@ -1510,14 +1112,7 @@ cannot bind the output and recover the input. Optional `DIAGONAL`
 offset (default 0, positive = above main diagonal, negative = below).
 
 ```clausal
-# skip
-tensor([1.0, 2.0, 3.0], V),
-diag(V, M),
-shape(M, [3, 3])
-
-tensor([[1.0, 2.0], [3.0, 4.0]], M),
-diag(M, V)
-# V = [1.0, 4.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:diag_ex2"
 ```
 
 ---
@@ -1527,8 +1122,7 @@ diag(M, V)
 ### sub
 
 ```clausal
-# skip
-sub(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sub"
 ```
 
 Element-wise subtraction: `C = A - B`.
@@ -1536,8 +1130,7 @@ Element-wise subtraction: `C = A - B`.
 ### div
 
 ```clausal
-# skip
-div(A, B, C)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:div"
 ```
 
 Element-wise division: `C = A / B`.
@@ -1545,22 +1138,109 @@ Element-wise division: `C = A / B`.
 ### neg
 
 ```clausal
-# skip
-neg(T, R)
+--8<-- "tests/fixtures/docs/torch_sigs.txt:neg"
 ```
 
 Element-wise negation: `R = -T`.
 
 ```clausal
-# skip
-tensor([5.0, 3.0], A),
-tensor([2.0, 1.0], B),
-sub(A, B, C)
-# C = [3.0, 2.0]
+--8<-- "tests/fixtures/docs/torch_sigs.txt:neg_ex2"
+```
 
-tensor([1.0, -2.0, 3.0], T),
-neg(T, R)
-# R = [-1.0, 2.0, -3.0]
+---
+
+## Statistical Reductions (Phase 14)
+
+### median
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:median"
+```
+
+Without `DIM`, returns the median scalar. With `DIM`, returns a
+`(values, indices)` tuple — decompose with `RESULT is (VALS, IDXS)`.
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:median_ex2"
+```
+
+### std, var
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:std_var"
+```
+
+Standard deviation and variance. Without `DIM`, reduces over all
+elements. With `DIM`, reduces along that dimension.
+
+---
+
+## Selection and Sorting (Phase 14)
+
+### argmin, argmax
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:argmin_argmax"
+```
+
+Without `DIM`, returns the index into the flattened tensor. With `DIM`,
+returns a tensor of indices along that dimension.
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:argmin_argmax_ex2"
+```
+
+### sort
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sort"
+```
+
+Returns a `(values, indices)` tuple. Decompose with `RESULT is (VALS, IDXS)`.
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:sort_ex2"
+```
+
+### argsort
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:argsort"
+```
+
+Returns indices that would sort the tensor.
+
+### topk
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:topk"
+```
+
+Returns `(values, indices)` tuple of the `K` largest elements.
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:topk_ex2"
+```
+
+### nonzero
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:nonzero"
+```
+
+Returns a 2D tensor of shape `(N, ndim)` where each row is the index
+of a nonzero element.
+
+### unique
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:unique"
+```
+
+Returns unique elements, sorted.
+
+```clausal
+--8<-- "tests/fixtures/docs/torch_sigs.txt:unique_ex2"
 ```
 
 ---

@@ -1,0 +1,134 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(py.torch_nn, [parameter, named_parameter, module,
+                            named_module, child, named_child,
+                            layer, activation, loss_fn, optimizer_type,
+                            scheduler_type, current_lr,
+                            clip_grad_norm, clip_grad_value])
+--8<-- [end:import]
+
+
+# === Predicates ===
+
+--8<-- [start:parameter]
+parameter(MODEL, PARAM)
+--8<-- [end:parameter]
+
+--8<-- [start:parameter_ex2]
+-import_module(torch)
+
+MODEL is torch.nn.Linear(10, 5),
+findall(P, parameter(MODEL, P), PS),
+length(PS, 2)
+--8<-- [end:parameter_ex2]
+
+--8<-- [start:named_parameter]
+named_parameter(MODEL, NAME, PARAM)
+--8<-- [end:named_parameter]
+
+--8<-- [start:named_parameter_ex2]
+MODEL is torch.nn.Linear(10, 5),
+findall(NAME, named_parameter(MODEL, NAME, _), NAMES),
+in_("weight", NAMES),
+in_("bias", NAMES)
+--8<-- [end:named_parameter_ex2]
+
+--8<-- [start:module]
+module(MODEL, SUBMODULE)
+--8<-- [end:module]
+
+--8<-- [start:named_module]
+named_module(MODEL, NAME, SUBMODULE)
+--8<-- [end:named_module]
+
+--8<-- [start:named_module_ex2]
+MODEL is torch.nn.Sequential(
+    torch.nn.Linear(10, 5),
+    torch.nn.ReLU(),
+    torch.nn.Linear(5, 2)
+),
+findall(N, named_module(MODEL, N, _), NAMES),
+in_("", NAMES),
+in_("0", NAMES),
+in_("1", NAMES),
+in_("2", NAMES)
+--8<-- [end:named_module_ex2]
+
+--8<-- [start:child]
+child(MODEL, CHILD)
+--8<-- [end:child]
+
+--8<-- [start:named_child]
+named_child(MODEL, NAME, CHILD)
+--8<-- [end:named_child]
+
+--8<-- [start:named_child_ex2]
+MODEL is torch.nn.Sequential(
+    torch.nn.Linear(10, 5),
+    torch.nn.ReLU()
+),
+findall(N, named_child(MODEL, N, _), NAMES),
+in_("0", NAMES),
+in_("1", NAMES)
+--8<-- [end:named_child_ex2]
+
+
+# === Registries ===
+
+--8<-- [start:layer]
+layer(NAME, CLASS)
+--8<-- [end:layer]
+
+--8<-- [start:layer_ex2]
+findall(N, layer(N, _), NS),
+in_("Linear", NS),
+in_("Conv2d", NS),
+in_("LSTM", NS)
+--8<-- [end:layer_ex2]
+
+--8<-- [start:activation]
+activation(NAME, CLASS)
+--8<-- [end:activation]
+
+--8<-- [start:loss_fn]
+loss_fn(NAME, CLASS)
+--8<-- [end:loss_fn]
+
+--8<-- [start:optimizer_type]
+optimizer_type(NAME, CLASS)
+--8<-- [end:optimizer_type]
+
+--8<-- [start:optimizer_type_ex2]
+findall(N, optimizer_type(N, _), NS),
+in_("Adam", NS),
+in_("SGD", NS)
+--8<-- [end:optimizer_type_ex2]
+
+--8<-- [start:scheduler_type]
+scheduler_type(NAME, CLASS)
+--8<-- [end:scheduler_type]
+
+--8<-- [start:scheduler_type_ex2]
+findall(N, scheduler_type(N, _), NS),
+in_("StepLR", NS),
+in_("CosineAnnealingLR", NS)
+--8<-- [end:scheduler_type_ex2]
+
+
+# === Scheduler Queries ===
+
+--8<-- [start:current_lr]
+current_lr(SCHEDULER, LRs)
+--8<-- [end:current_lr]
+
+
+# === Gradient Utilities ===
+
+--8<-- [start:clip_grad_norm]
+clip_grad_norm(PARAMS, MAX_NORM, TOTAL_NORM)
+--8<-- [end:clip_grad_norm]
+
+--8<-- [start:clip_grad_value]
+clip_grad_value(PARAMS, CLIP_VALUE)
+--8<-- [end:clip_grad_value]

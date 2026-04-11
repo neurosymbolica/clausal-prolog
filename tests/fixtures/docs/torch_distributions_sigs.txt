@@ -1,0 +1,98 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(py.torch_distributions, [distribution, make_distribution,
+    sample, log_prob, entropy, mean, variance, stddev, cdf, icdf])
+--8<-- [end:import]
+
+
+# === Distribution Registry ===
+
+--8<-- [start:distribution]
+distribution(NAME, CLASS)
+--8<-- [end:distribution]
+
+--8<-- [start:distribution_ex2]
+findall(N, distribution(N, _), NS),
+in_("Normal", NS)
+--8<-- [end:distribution_ex2]
+
+
+# === Construction ===
+
+--8<-- [start:make_distribution]
+make_distribution(NAME, PARAMS, DIST)
+--8<-- [end:make_distribution]
+
+--8<-- [start:make_distribution_ex2]
+make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D)
+--8<-- [end:make_distribution_ex2]
+
+--8<-- [start:make_distribution_ex3]
+make_distribution("Categorical", {"probs": [0.25, 0.25, 0.25, 0.25]}, D)
+--8<-- [end:make_distribution_ex3]
+
+
+# === Properties ===
+
+--8<-- [start:mean_variance_stddev]
+mean(DIST, M)
+variance(DIST, V)
+stddev(DIST, S)
+--8<-- [end:mean_variance_stddev]
+
+--8<-- [start:mean_variance_stddev_ex2]
+make_distribution("Normal", {"loc": 2.0, "scale": 1.0}, D),
+mean(D, M),
+tensor_list(M, 2.0)
+--8<-- [end:mean_variance_stddev_ex2]
+
+--8<-- [start:entropy]
+entropy(DIST, H)
+--8<-- [end:entropy]
+
+
+# === Sampling ===
+
+--8<-- [start:sample]
+sample(DIST, S)
+sample(DIST, SHAPE, S)
+--8<-- [end:sample]
+
+--8<-- [start:sample_ex2]
+make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+sample(D, [100], S),
+shape(S, [100])
+--8<-- [end:sample_ex2]
+
+
+# === Log Probability ===
+
+--8<-- [start:log_prob]
+log_prob(DIST, VALUE, LP)
+--8<-- [end:log_prob]
+
+--8<-- [start:log_prob_ex2]
+make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+tensor(0.0, V),
+log_prob(D, V, LP)
+--8<-- [end:log_prob_ex2]
+
+
+# === CDF / Inverse CDF ===
+
+--8<-- [start:cdf]
+cdf(DIST, VALUE, PROB)
+--8<-- [end:cdf]
+
+--8<-- [start:icdf]
+icdf(DIST, PROB, VALUE)
+--8<-- [end:icdf]
+
+--8<-- [start:cdf_icdf_roundtrip]
+make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+tensor(0.5, V),
+cdf(D, V, P),
+icdf(D, P, V2),
+allclose(V, V2)
+--8<-- [end:cdf_icdf_roundtrip]

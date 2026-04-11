@@ -1,0 +1,56 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(py.torch_data, [tensor_dataset, dataset_length,
+                              dataset_item, dataset_element])
+--8<-- [end:import]
+
+
+# === Construction ===
+
+--8<-- [start:tensor_dataset]
+tensor_dataset(TENSORS, DS)
+--8<-- [end:tensor_dataset]
+
+--8<-- [start:tensor_dataset_ex2]
+tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], X),
+tensor([0, 1, 0], Y),
+tensor_dataset([X, Y], DS)
+--8<-- [end:tensor_dataset_ex2]
+
+
+# === Properties ===
+
+--8<-- [start:dataset_length]
+dataset_length(DS, N)
+--8<-- [end:dataset_length]
+
+--8<-- [start:dataset_length_ex2]
+tensor_dataset([X, Y], DS),
+dataset_length(DS, 3)
+--8<-- [end:dataset_length_ex2]
+
+
+# === Item Access ===
+
+--8<-- [start:dataset_item]
+dataset_item(DS, INDEX, ITEM)
+--8<-- [end:dataset_item]
+
+--8<-- [start:dataset_item_ex2]
+dataset_item(DS, 0, ITEM),
+X0 is ++(ITEM[0])
+--8<-- [end:dataset_item_ex2]
+
+
+# === Enumeration ===
+
+--8<-- [start:dataset_element]
+dataset_element(DS, ITEM)
+dataset_element(DS, INDEX, ITEM)
+--8<-- [end:dataset_element]
+
+--8<-- [start:dataset_element_ex2]
+findall(I, dataset_element(DS, I, _), INDICES),
+length(INDICES, 3)
+--8<-- [end:dataset_element_ex2]

@@ -6,9 +6,7 @@ log-probability, and property queries.
 ## Import
 
 ```clausal
-# skip
--import_from(py.torch_distributions, [distribution, make_distribution,
-    sample, log_prob, entropy, mean, variance, stddev, cdf, icdf])
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:import"
 ```
 
 ---
@@ -28,8 +26,7 @@ log-probability, and property queries.
 ### distribution
 
 ```clausal
-# skip
-distribution(NAME, CLASS)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:distribution"
 ```
 
 Enumerate available distribution types. Names use original PyTorch class
@@ -38,9 +35,7 @@ names (`"Normal"`, `"Bernoulli"`, `"Categorical"`, etc.).
 **Modes:** `(+name, -class)` lookup, `(-name, -class)` enumerate all.
 
 ```clausal
-# skip
-findall(N, distribution(N, _), NS),
-in_("Normal", NS)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:distribution_ex2"
 ```
 
 ---
@@ -50,21 +45,18 @@ in_("Normal", NS)
 ### make_distribution
 
 ```clausal
-# skip
-make_distribution(NAME, PARAMS, DIST)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution"
 ```
 
 Construct a distribution from a name string and a params dict. List
 values in the params dict are automatically converted to tensors.
 
 ```clausal
-# skip
-make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution_ex2"
 ```
 
 ```clausal
-# skip
-make_distribution("Categorical", {"probs": [0.25, 0.25, 0.25, 0.25]}, D)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution_ex3"
 ```
 
 ---
@@ -74,26 +66,19 @@ make_distribution("Categorical", {"probs": [0.25, 0.25, 0.25, 0.25]}, D)
 ### mean, variance, stddev
 
 ```clausal
-# skip
-mean(DIST, M)
-variance(DIST, V)
-stddev(DIST, S)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:mean_variance_stddev"
 ```
 
 Query distribution properties. Returns tensors.
 
 ```clausal
-# skip
-make_distribution("Normal", {"loc": 2.0, "scale": 1.0}, D),
-mean(D, M),
-tensor_list(M, 2.0)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:mean_variance_stddev_ex2"
 ```
 
 ### entropy
 
 ```clausal
-# skip
-entropy(DIST, H)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:entropy"
 ```
 
 Distribution entropy (scalar tensor).
@@ -105,9 +90,7 @@ Distribution entropy (scalar tensor).
 ### sample
 
 ```clausal
-# skip
-sample(DIST, S)
-sample(DIST, SHAPE, S)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:sample"
 ```
 
 Draw sample(s) from a distribution. Without a shape argument, draws a
@@ -115,10 +98,7 @@ single sample matching the distribution's batch/event shape. With a
 shape list, draws that many samples.
 
 ```clausal
-# skip
-make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
-sample(D, [100], S),
-shape(S, [100])
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:sample_ex2"
 ```
 
 ---
@@ -128,17 +108,13 @@ shape(S, [100])
 ### log_prob
 
 ```clausal
-# skip
-log_prob(DIST, VALUE, LP)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:log_prob"
 ```
 
 Compute the log probability of a value under the distribution.
 
 ```clausal
-# skip
-make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
-tensor(0.0, V),
-log_prob(D, V, LP)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:log_prob_ex2"
 ```
 
 ---
@@ -148,8 +124,7 @@ log_prob(D, V, LP)
 ### cdf
 
 ```clausal
-# skip
-cdf(DIST, VALUE, PROB)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:cdf"
 ```
 
 Cumulative distribution function — probability that a random variable
@@ -158,8 +133,7 @@ is less than or equal to `VALUE`.
 ### icdf
 
 ```clausal
-# skip
-icdf(DIST, PROB, VALUE)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:icdf"
 ```
 
 Inverse CDF (quantile function) — the value at which the CDF equals
@@ -168,10 +142,5 @@ Inverse CDF (quantile function) — the value at which the CDF equals
 `cdf` and `icdf` are inverses: `icdf(D, cdf(D, X)) ≈ X`.
 
 ```clausal
-# skip
-make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
-tensor(0.5, V),
-cdf(D, V, P),
-icdf(D, P, V2),
-allclose(V, V2)
+--8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:cdf_icdf_roundtrip"
 ```

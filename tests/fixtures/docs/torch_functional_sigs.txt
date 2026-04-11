@@ -1,0 +1,89 @@
+# === Import ===
+
+--8<-- [start:import]
+-import_from(py.torch_functional, [gelu, conv2d, max_pool2d,
+    cross_entropy, mse_loss, layer_norm, normalize, dropout])
+--8<-- [end:import]
+
+
+# === Activations ===
+
+--8<-- [start:activations]
+tensor([-1.0, 0.0, 1.0], T),
+gelu(T, R),
+shape(R, [3])
+--8<-- [end:activations]
+
+--8<-- [start:activations_ex2]
+tensor([-1.0, 0.0, 1.0], T),
+leaky_relu(T, 0.2, R)
+--8<-- [end:activations_ex2]
+
+
+# === Convolutions ===
+
+--8<-- [start:convolutions]
+randn([1, 1, 5, 5], INPUT),
+randn([1, 1, 3, 3], WEIGHT),
+conv2d(INPUT, WEIGHT, OUTPUT),
+shape(OUTPUT, [1, 1, 3, 3])
+--8<-- [end:convolutions]
+
+--8<-- [start:convolutions_ex2]
+conv2d(INPUT, WEIGHT, {"padding": 1, "stride": 2}, OUTPUT)
+--8<-- [end:convolutions_ex2]
+
+
+# === Pooling ===
+
+--8<-- [start:pooling]
+randn([1, 1, 4, 4], INPUT),
+max_pool2d(INPUT, 2, OUTPUT),
+shape(OUTPUT, [1, 1, 2, 2])
+--8<-- [end:pooling]
+
+--8<-- [start:pooling_ex2]
+randn([1, 1, 10, 10], INPUT),
+adaptive_avg_pool2d(INPUT, [3, 3], OUTPUT),
+shape(OUTPUT, [1, 1, 3, 3])
+--8<-- [end:pooling_ex2]
+
+
+# === Normalization ===
+
+--8<-- [start:normalization]
+randn([2, 3, 4], INPUT),
+layer_norm(INPUT, [4], OUTPUT),
+shape(OUTPUT, [2, 3, 4])
+--8<-- [end:normalization]
+
+--8<-- [start:normalization_ex2]
+randn([2, 3, 4], INPUT),
+zeros([3], MEAN),
+ones([3], VAR),
+batch_norm(INPUT, MEAN, VAR, OUTPUT)
+--8<-- [end:normalization_ex2]
+
+
+# === Loss Functions ===
+
+--8<-- [start:loss_functions]
+randn([3, 5], LOGITS),
+tensor([0, 2, 1], TARGETS),
+cross_entropy(LOGITS, TARGETS, LOSS),
+shape(LOSS, [])
+--8<-- [end:loss_functions]
+
+--8<-- [start:loss_functions_ex2]
+tensor([1.0, 2.0, 3.0], PRED),
+tensor([1.0, 2.0, 3.0], TARGET),
+mse_loss(PRED, TARGET, LOSS)
+--8<-- [end:loss_functions_ex2]
+
+
+# === Dropout ===
+
+--8<-- [start:dropout]
+tensor([1.0, 2.0, 3.0], T),
+dropout(T, R)
+--8<-- [end:dropout]
