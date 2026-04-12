@@ -592,40 +592,24 @@ def _make_secondary_dispatch_trampoline(
     return dispatch
 
 
-def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
-    """Build an indexed dispatch wrapper for simple/short-stack mode.
+def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tail_yield):
+    """Shared indexed-dispatch builder.
 
-    Legacy V2-1 wrapper — indexes only on the first argument.
-    Superseded by :func:`_make_groundness_dispatch_simple` for V2-2.
+    Routes on the first predicate argument (at ``args[arg_offset]``):
+
+    - unbound Var → ``all_fn`` (covers every clause)
+    - otherwise   → ``idx_dict[key]`` if known, else ``default_fn``
+
+    The strategy differences are minimal:
+
+    - ``arg_offset``: 0 for simple (predicate args start at position 0);
+      2 for trampoline (positions 0/1 are ``self_generator``/``parent``).
+    - ``tail_yield``: ``None`` for simple; ``lambda args: (args[1], done)``
+      for trampoline, which terminates with a ``(parent, DONE)`` tuple
+      as required by the Step protocol.
     """
     def dispatch(*args):
-        _a0 = deref(args[0])
-        if is_var(_a0):
-            yield from all_fn(*args)
-            return
-        _k = _runtime_arg_key(_a0)
-        try:
-            _bfn = idx_dict.get(_k)
-        except TypeError:
-            _bfn = None
-        if _bfn is not None:
-            yield from _bfn(*args)
-        else:
-            yield from default_fn(*args)
-    dispatch.__name__ = all_fn.__name__
-    dispatch.__qualname__ = all_fn.__qualname__
-    return dispatch
-
-
-def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
-    """Build an indexed dispatch wrapper for trampoline mode.
-
-    Legacy V2-1 wrapper — indexes only on the first argument.
-    Superseded by :func:`_make_groundness_dispatch_trampoline` for V2-2.
-    """
-    def dispatch(*args):
-        parent = args[1]
-        _a0 = deref(args[2])  # first predicate arg is at index 2
+        _a0 = deref(args[arg_offset])
         if is_var(_a0):
             yield from all_fn(*args)
         else:
@@ -638,10 +622,37 @@ def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
                 yield from _bfn(*args)
             else:
                 yield from default_fn(*args)
-        yield (parent, done)
+        if tail_yield is not None:
+            yield tail_yield(args)
     dispatch.__name__ = all_fn.__name__
     dispatch.__qualname__ = all_fn.__qualname__
     return dispatch
+
+
+def _make_indexed_dispatch_simple(all_fn, idx_dict, default_fn):
+    """Build an indexed dispatch wrapper for simple/short-stack mode.
+
+    Legacy V2-1 wrapper — indexes only on the first argument.
+    Superseded by :func:`_make_groundness_dispatch_simple` for V2-2.
+    """
+    return _make_indexed_dispatch_impl(
+        all_fn, idx_dict, default_fn,
+        arg_offset=0,
+        tail_yield=None,
+    )
+
+
+def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
+    """Build an indexed dispatch wrapper for trampoline mode.
+
+    Legacy V2-1 wrapper — indexes only on the first argument.
+    Superseded by :func:`_make_groundness_dispatch_trampoline` for V2-2.
+    """
+    return _make_indexed_dispatch_impl(
+        all_fn, idx_dict, default_fn,
+        arg_offset=2,
+        tail_yield=lambda args: (args[1], done),
+    )
 
 
 # ── V2-2: Groundness-keyed dispatch ─────────────────────────────────────────
