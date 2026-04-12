@@ -48,6 +48,7 @@ from .terms_to_ast import (
     term_to_ast_expr, arith_to_ast_expr,
     _is_star_list, _dotted_name_from_loadattr,
 )
+from .compile_ctx import CompileCtx
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
 from . import _monolith as _m
@@ -694,14 +695,15 @@ def _compile_shared_meta_call(
 
 def _compile_body_impl(
     goals: list,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
+    ctx: CompileCtx,
     *,
     leaf_yield: ast.stmt,
     compile_goal_fn,
 ) -> list[ast.stmt]:
     """Shared conjunction compilation, parameterised on strategy.
+
+    Takes a :class:`CompileCtx` bundling ``db``, ``var_context``,
+    ``trail_name`` (and, trampoline-only, ``self_name``/``parent_name``).
 
     Both ``compile_body`` (shallow) and ``compile_body_trampoline`` reduce
     to this helper — they only differ in:
@@ -709,21 +711,23 @@ def _compile_body_impl(
     - ``leaf_yield``: the statement emitted at the innermost continuation
       to surface a solution (``yield None`` for shallow, ``yield (parent, None)``
       for trampoline).
-    - ``compile_goal_fn``: the goal-compiler callable that wraps each outer
-      goal around the accumulating continuation.  ``compile_goal`` for
-      shallow; a closure around ``compile_goal_trampoline`` for trampoline
-      (bound to ``self_name``/``parent_name``).
+    - ``compile_goal_fn``: the goal-compiler callable, signature
+      ``(goal, ctx, k_stmts) -> list[ast.stmt]``.  Shallow passes a
+      thin adapter around ``compile_goal``; trampoline passes an adapter
+      that forwards ``ctx.self_name``/``ctx.parent_name`` to
+      ``compile_goal_trampoline``.
 
     Body-only Vars (variables that appear in the body but not the head) are
     pre-allocated via ``_preallocate_body_vars`` so that they are registered
-    in ``var_context`` as named locals before right-to-left compilation begins.
-    This prevents UnboundLocalError when an outer goal references a Var that
-    would otherwise only be walrus-introduced inside a later (inner) goal.
+    in ``ctx.var_context`` as named locals before right-to-left compilation
+    begins.  This prevents UnboundLocalError when an outer goal references a
+    Var that would otherwise only be walrus-introduced inside a later (inner)
+    goal.
     """
-    alloc_stmts = _preallocate_body_vars(goals, var_context)
+    alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
     k: list[ast.stmt] = [leaf_yield]
     for goal in reversed(goals):
-        k = compile_goal_fn(goal, db, var_context, trail_name, k)
+        k = compile_goal_fn(goal, ctx, k)
     return alloc_stmts + k
 
 
@@ -738,10 +742,13 @@ def compile_body(
     The leaf continuation is ``yield None`` (one solution).  See
     ``_compile_body_impl`` for the shared right-to-left reduction.
     """
+    ctx = CompileCtx(db=db, var_context=var_context, trail_name=trail_name)
     return _compile_body_impl(
-        goals, db, var_context, trail_name,
+        goals, ctx,
         leaf_yield=_yield_none_stmt(),
-        compile_goal_fn=compile_goal,
+        compile_goal_fn=lambda goal, ctx_, k: compile_goal(
+            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
+        ),
     )
 
 
@@ -766,6 +773,10 @@ def _make_body_compiler_impl(
     trampoline-only optimisation (its ``_dr_*__N`` dispatch builtins only
     exist in trampoline mode), so making it a per-strategy hook rather
     than hard-wiring it keeps each strategy correct by construction.
+
+    The returned callable keeps the legacy ``(clause, var_context)``
+    signature for compatibility with predicate compilation, which hasn't
+    yet migrated to :class:`CompileCtx`.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
         goals = preprocess_clause(clause) if preprocess_clause is not None else clause.body

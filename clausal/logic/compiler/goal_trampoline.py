@@ -54,6 +54,7 @@ from .goal_shallow import (
     _compile_shared_membership_goal,
     _compile_shared_meta_call,
 )
+from .compile_ctx import CompileCtx
 from . import _monolith as _m
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
@@ -627,10 +628,18 @@ def compile_body_trampoline(
     surfaced to the calling generator.  See ``_compile_body_impl`` for
     the shared right-to-left reduction.
     """
-    def _compile_goal(goal, db_, vc, tn, k):
-        return compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+    ctx = CompileCtx(
+        db=db, var_context=var_context, trail_name=trail_name,
+        self_name=self_name, parent_name=parent_name,
+    )
+
+    def _compile_goal(goal, ctx_, k):
+        return compile_goal_trampoline(
+            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
+            ctx_.self_name, ctx_.parent_name,
+        )
     return _compile_body_impl(
-        goals, db, var_context, trail_name,
+        goals, ctx,
         leaf_yield=_yield_step_stmt(_name(parent_name), ast.Constant(None)),
         compile_goal_fn=_compile_goal,
     )
