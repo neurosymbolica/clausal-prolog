@@ -734,6 +734,127 @@ def _compile_throw(
     ]
 
 
+def _compile_catch_impl(
+    catcher: Any,
+    var_context: dict[int, str],
+    trail_name: str,
+    *,
+    goal_body_stmts: list[ast.stmt],
+    recovery_body_stmts: list[ast.stmt],
+    always_catch: bool,
+) -> list[ast.stmt]:
+    """Shared catch-block assembly.
+
+    Both shallow and trampoline ``catch`` compilers produce the same
+    try/except skeleton around strategy-specific *goal body* and
+    *recovery body* AST lists.  The skeleton is:
+
+    - ``_catch_mark = trail.mark()``
+    - ``try: <goal_body_stmts>``
+    - ``except Exception as _exc: ...``
+
+      The except block extracts the exception's term (``_LogicException.term``
+      or ``_python_error_term(exc)`` for plain Python exceptions), undoes
+      the trail to the catch mark, then tries to unify the catcher with
+      the extracted term.  On match, run ``recovery_body_stmts``.  On
+      miss, either undo + re-raise (``always_catch=False``, plain
+      ``catch/3``) or undo + fall through (``always_catch=True``,
+      ``catch_error``/``catch_recover``).
+
+    Each strategy supplies:
+
+    - ``goal_body_stmts``: for shallow, a sub-generator ``def`` + ``for``
+      loop; for trampoline, the raw trampoline-compiled stmts.
+    - ``recovery_body_stmts``: same shape difference.
+    """
+    catch_mark = _fresh("_catch_m")
+    exc_name = _fresh("_exc")
+    term_name = _fresh("_term")
+    unify_mark = _fresh("_catch_um")
+
+    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
+
+    term_extract = _assign(
+        term_name,
+        ast.IfExp(
+            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
+            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
+            orelse=_call(_name("_python_error_term"), _name(exc_name)),
+        ),
+    )
+
+    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
+    orelse_stmts: list[ast.stmt] = (
+        [] if always_catch
+        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
+    )
+    except_body: list[ast.stmt] = [
+        term_extract,
+        _undo_stmt(catch_mark, trail_name),
+        _assign_mark(unify_mark, trail_name),
+        ast.If(
+            test=_call(
+                _name("unify"), catcher_expr, _name(term_name), _name(trail_name),
+            ),
+            body=recovery_body_stmts or [ast.Pass()],
+            orelse=orelse_stmts or [ast.Pass()],
+        ),
+        _undo_stmt(unify_mark, trail_name),
+    ]
+
+    handler = ast.ExceptHandler(
+        type=_name("Exception"),
+        name=exc_name,
+        body=except_body,
+    )
+
+    try_block = ast.Try(
+        body=goal_body_stmts,
+        handlers=[handler],
+        orelse=[],
+        finalbody=[],
+    )
+
+    return [_assign_mark(catch_mark, trail_name), try_block]
+
+
+def _make_catch_subgen_fn_and_loop(
+    name_prefix: str,
+    compiled_stmts: list[ast.stmt],
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Wrap shallow-compiled *compiled_stmts* as a sub-generator ``def`` + ``for`` loop.
+
+    Returns the two statements that both shallow ``catch`` arms (goal
+    body and recovery body) need: a FunctionDef for the sub-generator
+    and a for-loop driving it with *k_stmts* as the per-solution body.
+    The sub-generator ends with ``return; yield`` to satisfy Python's
+    generator typing without actually reaching the yield.
+    """
+    gen_name = _fresh(name_prefix)
+    gen_body = compiled_stmts + [
+        ast.Return(value=ast.Constant(value=None)),
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ]
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=gen_body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_m._EXTRA_FUNCDEF,
+    )
+    loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+    return [gen_fn, loop]
+
+
 def _compile_catch(
     goal_arg: Any,
     catcher: Any,
@@ -754,141 +875,39 @@ def _compile_catch(
         catch_error(Goal, Error)                # always_catch=True, recovery=True
         catch_recover(Goal, Error, Recovery)  # always_catch=True
 
-    Generates::
-
-        _catch_mark_N = trail.mark()
-        def _catch_gen_N():
-            <compiled goal with k = [yield None]>
-            return; yield
-        try:
-            for _ in _catch_gen_N():
-                <k_stmts>
-        except Exception as _exc_N:
-            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
-                      else _python_error_term(_exc_N)
-            trail.undo(_catch_mark_N)
-            _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _term_N, trail):
-                def _catch_rec_N():
-                    <compiled recovery with k = [yield None]>
-                    return; yield
-                for _ in _catch_rec_N():
-                    <k_stmts>
-            else:
-                trail.undo(_catch_um_N)
-                raise
-            trail.undo(_catch_um_N)
+    Uses ``_compile_catch_impl`` for the shared try/except skeleton.
+    Here we wrap the goal and recovery as simple-mode sub-generator
+    functions (``def _catch_gen_N(): ...``) driven by ``for`` loops,
+    and place the outer ``for goal_loop`` inside the try body and the
+    recovery's ``for rec_loop`` inside the if-unify-matched branch.
     """
-    catch_mark = _fresh("_catch_m")
-    gen_name = _fresh("_catch_gen")
-    exc_name = _fresh("_exc")
-    term_name = _fresh("_term")
-    unify_mark = _fresh("_catch_um")
-    rec_gen_name = _fresh("_catch_rec")
-
-    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
-
-    # Compile inner goal as sub-generator (simple mode)
-    inner_stmts = _m.compile_goal(goal_arg, db, var_context, trail_name, [_yield_none_stmt()])
-    gen_body = inner_stmts + [
-        ast.Return(value=ast.Constant(value=None)),
-        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-    ]
-    gen_fn = ast.FunctionDef(
-        name=gen_name,
-        args=ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
-            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-        ),
-        body=gen_body,
-        decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+    # Compile goal + recovery as sub-generators (simple mode).
+    goal_stmts = _m.compile_goal(
+        goal_arg, db, var_context, trail_name, [_yield_none_stmt()],
+    )
+    recovery_stmts = _m.compile_goal(
+        recovery, db, var_context, trail_name, [_yield_none_stmt()],
     )
 
-    # for loop over goal generator
-    goal_loop = ast.For(
-        target=_name("_", ast.Store()),
-        iter=_call(_name(gen_name)),
-        body=k_stmts or [ast.Pass()],
-        orelse=[],
+    goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
+        "_catch_gen", goal_stmts, k_stmts,
+    )
+    rec_gen_fn, rec_loop = _make_catch_subgen_fn_and_loop(
+        "_catch_rec", recovery_stmts, k_stmts,
     )
 
-    # Compile recovery as sub-generator (simple mode)
-    recovery_stmts = _m.compile_goal(recovery, db, var_context, trail_name, [_yield_none_stmt()])
-    rec_body = recovery_stmts + [
-        ast.Return(value=ast.Constant(value=None)),
-        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-    ]
-    rec_fn = ast.FunctionDef(
-        name=rec_gen_name,
-        args=ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
-            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-        ),
-        body=rec_body,
-        decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+    # The sub-generator def must live outside the try block (it's
+    # referenced by the for-loop inside); the recovery def + loop both
+    # live inside the except handler's body.
+    body = _compile_catch_impl(
+        catcher, var_context, trail_name,
+        goal_body_stmts=[goal_loop],
+        recovery_body_stmts=[rec_gen_fn, rec_loop],
+        always_catch=always_catch,
     )
-
-    # Recovery for loop
-    rec_loop = ast.For(
-        target=_name("_", ast.Store()),
-        iter=_call(_name(rec_gen_name)),
-        body=k_stmts or [ast.Pass()],
-        orelse=[],
-    )
-
-    # term extraction: _LogicException carries .term; Python exceptions are wrapped
-    term_extract = _assign(
-        term_name,
-        ast.IfExp(
-            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
-            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
-            orelse=_call(_name("_python_error_term"), _name(exc_name)),
-        ),
-    )
-
-    # except block: extract term, undo trail, match catcher, run recovery
-    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
-    orelse_stmts: list[ast.stmt] = (
-        [] if always_catch
-        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
-    )
-    except_body: list[ast.stmt] = [
-        term_extract,
-        _undo_stmt(catch_mark, trail_name),
-        _assign_mark(unify_mark, trail_name),
-        ast.If(
-            test=_call(
-                _name("unify"),
-                catcher_expr,
-                _name(term_name),
-                _name(trail_name),
-            ),
-            body=[rec_fn, rec_loop],
-            orelse=orelse_stmts or [ast.Pass()],
-        ),
-        _undo_stmt(unify_mark, trail_name),
-    ]
-
-    handler = ast.ExceptHandler(
-        type=_name("Exception"),
-        name=exc_name,
-        body=except_body,
-    )
-
-    try_block = ast.Try(
-        body=[goal_loop],
-        handlers=[handler],
-        orelse=[],
-        finalbody=[],
-    )
-
-    return [
-        _assign_mark(catch_mark, trail_name),
-        gen_fn,
-        try_block,
-    ]
+    # _compile_catch_impl returns [mark, try_block]; splice goal_gen_fn
+    # between them so the sub-generator def precedes its reference.
+    return [body[0], goal_gen_fn, body[1]]
 
 
 def _compile_catch_trampoline(
@@ -907,98 +926,24 @@ def _compile_catch_trampoline(
     Catches both ``throw/1`` (LogicException) and plain Python exceptions.
     Python exceptions are wrapped as ``ClassName(Message)``.
 
-    Generates::
-
-        _catch_mark_N = trail.mark()
-        try:
-            _gen_N = StepGenerator(goal_dispatch, this_generator, ..., trail)
-            _st_N = (yield (_gen_N, None))
-            while _st_N is not _DONE:
-                <k_stmts>
-                _st_N = (yield (_gen_N, None))
-        except Exception as _exc_N:
-            _term_N = _exc_N.term if isinstance(_exc_N, _LogicException) \\
-                      else _python_error_term(_exc_N)
-            trail.undo(_catch_mark_N)
-            _catch_um_N = trail.mark()
-            if unify(<catcher_expr>, _term_N, trail):
-                _gen_rec_N = StepGenerator(rec_dispatch, this_generator, ..., trail)
-                _st_rec_N = (yield (_gen_rec_N, None))
-                while _st_rec_N is not _DONE:
-                    <k_stmts>
-                    _st_rec_N = (yield (_gen_rec_N, None))
-            else:
-                trail.undo(_catch_um_N)
-                raise
-            trail.undo(_catch_um_N)
+    Uses ``_compile_catch_impl`` for the shared try/except skeleton;
+    the trampoline goal/recovery bodies are the direct trampoline-
+    compiled stmt lists — no sub-generator wrapping is needed because
+    the trampoline Step protocol handles suspend/resume within the
+    surrounding function's yield-loop.
     """
-    catch_mark = _fresh("_catch_m")
-    exc_name = _fresh("_exc")
-    term_name = _fresh("_term")
-    unify_mark = _fresh("_catch_um")
-
-    catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
-
-    # Compile goal as trampoline call
     goal_stmts = _m.compile_goal_trampoline(
         goal_arg, db, var_context, trail_name, k_stmts, self_name,
     )
-
-    # Compile recovery as trampoline call
     recovery_stmts = _m.compile_goal_trampoline(
         recovery, db, var_context, trail_name, k_stmts, self_name,
     )
-
-    # term extraction: _LogicException carries .term; Python exceptions are wrapped
-    term_extract = _assign(
-        term_name,
-        ast.IfExp(
-            test=_call(_name("isinstance"), _name(exc_name), _name("_LogicException")),
-            body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
-            orelse=_call(_name("_python_error_term"), _name(exc_name)),
-        ),
+    return _compile_catch_impl(
+        catcher, var_context, trail_name,
+        goal_body_stmts=goal_stmts,
+        recovery_body_stmts=recovery_stmts,
+        always_catch=always_catch,
     )
-
-    # except block: extract term, undo trail, match catcher, run recovery
-    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
-    orelse_stmts_t: list[ast.stmt] = (
-        [] if always_catch
-        else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
-    )
-    except_body: list[ast.stmt] = [
-        term_extract,
-        _undo_stmt(catch_mark, trail_name),
-        _assign_mark(unify_mark, trail_name),
-        ast.If(
-            test=_call(
-                _name("unify"),
-                catcher_expr,
-                _name(term_name),
-                _name(trail_name),
-            ),
-            body=recovery_stmts or [ast.Pass()],
-            orelse=orelse_stmts_t or [ast.Pass()],
-        ),
-        _undo_stmt(unify_mark, trail_name),
-    ]
-
-    handler = ast.ExceptHandler(
-        type=_name("Exception"),
-        name=exc_name,
-        body=except_body,
-    )
-
-    try_block = ast.Try(
-        body=goal_stmts,
-        handlers=[handler],
-        orelse=[],
-        finalbody=[],
-    )
-
-    return [
-        _assign_mark(catch_mark, trail_name),
-        try_block,
-    ]
 
 
 # ── Goal lambda compilation ──────────────────────────────────────────────────
