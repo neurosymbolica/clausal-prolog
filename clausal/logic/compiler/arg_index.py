@@ -667,6 +667,55 @@ def _make_indexed_dispatch_trampoline(all_fn, idx_dict, default_fn, done):
 # ── V2-2: Groundness-keyed dispatch ─────────────────────────────────────────
 
 
+def _groundness_dispatch_body_single(args, pos, idx_dict, dflt_fn, fallback_fn):
+    """Yield from the appropriate bucket for a single-position groundness plan.
+
+    If ``args[pos]`` is an unbound Var, fall back to the all-clauses
+    scan.  Otherwise look up the bucket keyed on the arg's runtime
+    value; missing or TypeError key means the default fn.
+    """
+    _a = deref(args[pos])
+    if is_var(_a):
+        yield from fallback_fn(*args)
+        return
+    _k = _runtime_arg_key(_a)
+    try:
+        _bfn = idx_dict.get(_k)
+    except TypeError:
+        _bfn = None
+    if _bfn is not None:
+        yield from _bfn(*args)
+    else:
+        yield from dflt_fn(*args)
+
+
+def _groundness_dispatch_body_multi(args, plans, fallback_fn, arg_offset):
+    """Yield from the first plan whose position has a ground argument.
+
+    ``plans`` is a list of ``(pos, idx_dict, default_fn)`` sorted by
+    selectivity.  Each position is checked in order; the first ground
+    arg triggers its index lookup and short-circuits.  If all positions
+    are unbound Vars, fall back to the all-clauses scan.
+
+    ``arg_offset`` is added to each plan's ``pos`` — 0 for simple mode,
+    2 for trampoline (to skip ``self_generator`` / ``parent``).
+    """
+    for _pos, _idx_dict, _dflt_fn in plans:
+        _a = deref(args[_pos + arg_offset])
+        if not is_var(_a):
+            _k = _runtime_arg_key(_a)
+            try:
+                _bfn = _idx_dict.get(_k)
+            except TypeError:
+                _bfn = None
+            if _bfn is not None:
+                yield from _bfn(*args)
+            else:
+                yield from _dflt_fn(*args)
+            return
+    yield from fallback_fn(*args)
+
+
 def _make_groundness_dispatch_simple(plans, fallback_fn):
     """Build a groundness-keyed dispatch selector for simple/short-stack mode.
 
@@ -675,44 +724,22 @@ def _make_groundness_dispatch_simple(plans, fallback_fn):
     checks each position's argument; the first ground argument triggers
     index lookup on that position.  If no argument is ground, *fallback_fn*
     (all clauses, linear scan) is used.
+
+    A single-position plan gets a specialised fast path that skips the
+    iteration.  See ``_groundness_dispatch_body_single`` /
+    ``_groundness_dispatch_body_multi`` for the shared bodies.
     """
     if len(plans) == 1:
-        # Single-position fast path — avoid the loop overhead.
         pos, idx_dict, dflt_fn = plans[0]
         def dispatch(*args):
-            _a = deref(args[pos])
-            if is_var(_a):
-                yield from fallback_fn(*args)
-                return
-            _k = _runtime_arg_key(_a)
-            try:
-                _bfn = idx_dict.get(_k)
-            except TypeError:
-                _bfn = None
-            if _bfn is not None:
-                yield from _bfn(*args)
-            else:
-                yield from dflt_fn(*args)
-        dispatch.__name__ = fallback_fn.__name__
-        dispatch.__qualname__ = fallback_fn.__qualname__
-        return dispatch
-
-    # Multi-position selector — check positions in selectivity order.
-    def dispatch(*args):
-        for _pos, _idx_dict, _dflt_fn in plans:
-            _a = deref(args[_pos])
-            if not is_var(_a):
-                _k = _runtime_arg_key(_a)
-                try:
-                    _bfn = _idx_dict.get(_k)
-                except TypeError:
-                    _bfn = None
-                if _bfn is not None:
-                    yield from _bfn(*args)
-                else:
-                    yield from _dflt_fn(*args)
-                return
-        yield from fallback_fn(*args)
+            yield from _groundness_dispatch_body_single(
+                args, pos, idx_dict, dflt_fn, fallback_fn,
+            )
+    else:
+        def dispatch(*args):
+            yield from _groundness_dispatch_body_multi(
+                args, plans, fallback_fn, arg_offset=0,
+            )
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
@@ -765,19 +792,9 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
         else:
             def dispatch(*args):
                 parent = args[1]
-                _a = deref(args[offset])
-                if is_var(_a):
-                    yield from fallback_fn(*args)
-                else:
-                    _k = _runtime_arg_key(_a)
-                    try:
-                        _bfn = idx_dict.get(_k)
-                    except TypeError:
-                        _bfn = None
-                    if _bfn is not None:
-                        yield from _bfn(*args)
-                    else:
-                        yield from dflt_fn(*args)
+                yield from _groundness_dispatch_body_single(
+                    args, offset, idx_dict, dflt_fn, fallback_fn,
+                )
                 yield (parent, done)
         dispatch.__name__ = fallback_fn.__name__
         dispatch.__qualname__ = fallback_fn.__qualname__
@@ -819,21 +836,9 @@ def _make_groundness_dispatch_trampoline(plans, fallback_fn, done,
     else:
         def dispatch(*args):
             parent = args[1]
-            for _pos, _idx_dict, _dflt_fn in plans:
-                _a = deref(args[_pos + 2])
-                if not is_var(_a):
-                    _k = _runtime_arg_key(_a)
-                    try:
-                        _bfn = _idx_dict.get(_k)
-                    except TypeError:
-                        _bfn = None
-                    if _bfn is not None:
-                        yield from _bfn(*args)
-                    else:
-                        yield from _dflt_fn(*args)
-                    yield (parent, done)
-                    return
-            yield from fallback_fn(*args)
+            yield from _groundness_dispatch_body_multi(
+                args, plans, fallback_fn, arg_offset=2,
+            )
             yield (parent, done)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
