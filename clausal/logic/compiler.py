@@ -162,6 +162,17 @@ from clausal.logic.tabling import (  # noqa: E402
 )
 _naf_tabled_fn_s = _naf_tabled_fn
 
+# ── Compiled-code naming constants (Phase 0.5b) ──────────────────────────────
+# Names emitted into generated function signatures and locals.  Centralised
+# here so the split into submodules does not have to re-decide ownership of
+# these literals in every submodule.
+_MARK_PREFIX = "_m"            # fresh mark variable prefix (_fresh(_MARK_PREFIX))
+_TRAIL_PARAM_NAME = "trail"    # compiled-function trail parameter
+_K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
+_DISP_PREFIX = "_disp_"        # locked-dispatch globals-key prefix
+_TRAMP_PARENT_NAME = "_tramp_parent"   # trampoline parent-generator parameter
+_THIS_GEN_NAME = "this_generator"      # trampoline self-reference parameter
+
 
 # Phase 7: thread-local context for locked-predicate dispatch caching.
 # Set during compile_predicate_trampoline / compile_predicate so that
@@ -1848,7 +1859,7 @@ def _compile_single_star_is(
     star_expr = term_to_ast_expr(star_val, var_context, eval_arith=False) if star_val is not None else ast.Constant(value=None)
     after_exprs = [term_to_ast_expr(v, var_context, eval_arith=False) for v in after_vals]
 
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
     return [
         _assign_mark(mark, trail_name),
         _if(
@@ -1953,7 +1964,7 @@ def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts)
     arity = len(call_args)
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in call_args]
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
 
     naf_call = _call(
         _name("_naf_tabled"),
@@ -2035,7 +2046,7 @@ def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_st
         true_stmts, false_stmts = then_stmts, else_stmts
 
     # Undetermined branch: explore both (unify for "true", dif for "false")
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
     # "unify" path → then (or else if swapped)
     unify_branch_stmts = compile_goal(then, db, var_context, trail_name, k_stmts) if not swap else compile_goal(else_, db, var_context, trail_name, k_stmts)
     # "dif" path → else (or then if swapped)
@@ -2083,7 +2094,7 @@ def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_st
     else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
 
     # Undetermined: post FD constraint for then path, negated for else path
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
     fd_then_stmts = compile_goal(then, db, var_context, trail_name, k_stmts)
     fd_else_stmts = compile_goal(else_, db, var_context, trail_name, k_stmts)
 
@@ -2149,7 +2160,7 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
         # Tabled predicates: must use _naf_tabled for WFS soundness.
         # Still evaluate condition once for the true path, but use
         # _naf_tabled separately for the false path.
-        true_mark = _fresh("_m")
+        true_mark = _fresh(_MARK_PREFIX)
         true_block = [
             _assign_mark(true_mark, trail_name),
             ast.For(
@@ -2171,7 +2182,7 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
             _name(trail_name),
             _name("_table_store"),
         )
-        naf_mark = _fresh("_m")
+        naf_mark = _fresh(_MARK_PREFIX)
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),
@@ -2183,7 +2194,7 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
         # Run condition once; for each solution run then. After exhaustion,
         # if no solutions were found, run else.
         found_flag = _fresh("_found")
-        mark = _fresh("_m")
+        mark = _fresh(_MARK_PREFIX)
         return [
             cond_fn,
             _assign(found_flag, ast.Constant(value=False)),
@@ -2247,7 +2258,7 @@ def compile_goal(
                 return _compile_star_is(l, r, var_context, trail_name, k_stmts)
             if _is_star_list(r):
                 return _compile_star_is(r, l, var_context, trail_name, k_stmts)
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
@@ -2258,7 +2269,7 @@ def compile_goal(
 
         # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
         case Evaluate(left=l, right=r):
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context)
             r_expr = arith_to_ast_expr(r, var_context)
             return [
@@ -2351,7 +2362,7 @@ def compile_goal(
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             left_stmts = compile_goal(l, db, var_context, trail_name, k_stmts)
             right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts)
             # Note: both branches share var_context; body-only vars in Or
@@ -2397,7 +2408,7 @@ def compile_goal(
                 decorator_list=[], returns=None, type_comment=None,
                 **_EXTRA_FUNCDEF,
             )
-            naf_mark = _fresh("_m")
+            naf_mark = _fresh(_MARK_PREFIX)
             return [
                 naf_fn,
                 _assign(naf_flag, ast.Constant(value=True)),
@@ -2425,7 +2436,7 @@ def compile_goal(
         # ── Membership / enumeration ─────────────────────────────────────────
         case in_(left=elem, right=collection):
             loop_var = _fresh("_el")
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
@@ -2448,7 +2459,7 @@ def compile_goal(
         case NotIn(left=elem, right=collection):
             found_flag = _fresh("_found")
             loop_var = _fresh("_el")
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
@@ -2605,7 +2616,7 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
         decorator_list=[], returns=None, type_comment=None,
         **_EXTRA_FUNCDEF,
     )
-    once_mark = _fresh("_m")
+    once_mark = _fresh(_MARK_PREFIX)
     return [
         once_fn,
         _assign_mark(once_mark, trail_name),
@@ -3566,7 +3577,7 @@ def _compile_goal_lambda(
         posonlyargs=[],
         args=[ast.arg(arg=n) for n in param_arg_names] + [
             ast.arg(arg=trail_name),
-            ast.arg(arg="k"),
+            ast.arg(arg=_K_PARAM_NAME),
         ],
         vararg=None,
         kwonlyargs=[],
@@ -3704,7 +3715,7 @@ def compile_body(
 def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a body_compiler callable bound to db."""
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        return compile_body(clause.body, db, var_context, "trail")
+        return compile_body(clause.body, db, var_context, _TRAIL_PARAM_NAME)
     return _body_compiler
 
 
@@ -3903,8 +3914,8 @@ def compile_goal_trampoline(
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
-    self_name: str = "this_generator",
-    parent_name: str = "_tramp_parent",
+    self_name: str = _THIS_GEN_NAME,
+    parent_name: str = _TRAMP_PARENT_NAME,
 ) -> list[ast.stmt]:
     """Compile a goal using the trampoline tuple protocol.
 
@@ -3950,7 +3961,7 @@ def compile_goal_trampoline(
                 return _compile_star_is(l, r, var_context, trail_name, k_stmts)
             if _is_star_list(r):
                 return _compile_star_is(r, l, var_context, trail_name, k_stmts)
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
@@ -3961,7 +3972,7 @@ def compile_goal_trampoline(
 
         # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
         case Evaluate(left=l, right=r):
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context)
             r_expr = arith_to_ast_expr(r, var_context)
             return [
@@ -4054,7 +4065,7 @@ def compile_goal_trampoline(
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             left_stmts = compile_goal_trampoline(
                 l, db, var_context, trail_name, k_stmts, self_name, parent_name
             )
@@ -4108,7 +4119,7 @@ def compile_goal_trampoline(
                 decorator_list=[], returns=None, type_comment=None,
                 **_EXTRA_FUNCDEF,
             )
-            naf_mark = _fresh("_m")
+            naf_mark = _fresh(_MARK_PREFIX)
             # Mini-trampoline: create StepGenerator, loop until solution or DONE.
             # _naf_sg = StepGenerator(_naf_gen_fn, None, trail)
             # _naf_g, _naf_v = _naf_sg.send(None)
@@ -4194,7 +4205,7 @@ def compile_goal_trampoline(
         # ── Membership / enumeration (Python for-loop, safe) ─────────────────
         case in_(left=elem, right=collection):
             loop_var = _fresh("_el")
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
@@ -4217,7 +4228,7 @@ def compile_goal_trampoline(
         case NotIn(left=elem, right=collection):
             found_flag = _fresh("_found")
             loop_var = _fresh("_el")
-            mark = _fresh("_m")
+            mark = _fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
@@ -4483,7 +4494,7 @@ def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail
         true_stmts, false_stmts = then_stmts, else_stmts
         unify_branch, dif_branch = then_stmts, else_stmts
 
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
 
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -4524,7 +4535,7 @@ def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail
     then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
     else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
 
-    mark = _fresh("_m")
+    mark = _fresh(_MARK_PREFIX)
 
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -4599,7 +4610,7 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
     sg_name = _fresh("_ite_sg")
     g_name = _fresh("_ite_g")
     v_name = _fresh("_ite_v")
-    true_mark = _fresh("_m")
+    true_mark = _fresh(_MARK_PREFIX)
     found_flag = _fresh("_found")
 
     sg_create = _assign(sg_name,
@@ -4697,7 +4708,7 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
             _name(trail_name),
             _name("_table_store"),
         )
-        naf_mark = _fresh("_m")
+        naf_mark = _fresh(_MARK_PREFIX)
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),
@@ -4723,8 +4734,8 @@ def compile_body_trampoline(
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
-    parent_name: str = "_tramp_parent",
-    self_name: str = "this_generator",
+    parent_name: str = _TRAMP_PARENT_NAME,
+    self_name: str = _THIS_GEN_NAME,
 ) -> list[ast.stmt]:
     """Compile a flat list of goals as a conjunction using the Step protocol.
 
@@ -4945,7 +4956,7 @@ def _make_body_compiler_trampoline(
         flat_body = _flatten_and_goals(clause.body)
         eligible = _find_destructive_reuse_goals(clause)
         goals = _apply_destructive_reuse(flat_body, eligible)
-        return compile_body_trampoline(goals, db, var_context, "trail")
+        return compile_body_trampoline(goals, db, var_context, _TRAIL_PARAM_NAME)
     return _body_compiler
 
 
@@ -5505,8 +5516,8 @@ def _compile_tro_tail(
     trail_name: str,
     tro_mode: str = "loop",
     check_indices: frozenset[int] | None = None,
-    self_name: str = "this_generator",
-    parent_name: str = "_tramp_parent",
+    self_name: str = _THIS_GEN_NAME,
+    parent_name: str = _TRAMP_PARENT_NAME,
 ) -> list[ast.stmt]:
     """Compile TRO tail-call: snapshot new args, set TRO flag/state.
 
@@ -5666,7 +5677,7 @@ def _build_predicate_trampoline_funcdef(
     # Full functions use "loop" mode (while True + continue).
     tro_mode = "signal" if (use_tro and not emit_done) else "loop"
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
+    params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
 
     # Statements that go inside the TRO while-loop (or directly in the func body).
     loop_stmts: list[ast.stmt] = []
@@ -5701,7 +5712,7 @@ def _build_predicate_trampoline_funcdef(
                                         _tset=_tro_clause_set, _fn=functor,
                                         _ar=arity, _db=db, _tm=_tro_m):
                 if id(clause) in _tset:
-                    return _compile_tro_body(clause, _fn, _ar, _db, var_context, "trail",
+                    return _compile_tro_body(clause, _fn, _ar, _db, var_context, _TRAIL_PARAM_NAME,
                                              tro_mode=_tm)
                 return _orig_bc(clause, var_context)
             loop_stmts.extend(
@@ -5723,7 +5734,7 @@ def _build_predicate_trampoline_funcdef(
             if use_tro and ci in tro_indices:
                 # TRO clause: compile prefix goals normally, replace tail call.
                 tro_body_stmts = _compile_tro_body(
-                    clause, functor, arity, db, var_context, "trail",
+                    clause, functor, arity, db, var_context, _TRAIL_PARAM_NAME,
                     tro_mode=tro_mode,
                 )
                 body_stmts = tro_body_stmts
@@ -5785,7 +5796,7 @@ def _build_predicate_trampoline_funcdef(
         all_stmts = loop_stmts
 
     if emit_done:
-        all_stmts.append(_yield_step_stmt(_name("_tramp_parent"), _name("_DONE")))
+        all_stmts.append(_yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")))
 
     # A generator function needs at least one yield or a return+yield pair.
     if not all_stmts:
@@ -5860,7 +5871,7 @@ def _compile_tro_body(
     for goal in reversed(prefix_goals):
         k = compile_goal_trampoline(
             goal, db, var_context, trail_name, k,
-            "this_generator", "_tramp_parent",
+            _THIS_GEN_NAME, _TRAMP_PARENT_NAME,
         )
     return alloc_stmts + k
 
@@ -6012,7 +6023,7 @@ def compile_predicate_trampoline(
 
     # Phase 7: set compile context so _dispatch_call_trampoline can emit
     # cached dispatch names instead of fname._get_dispatch() for locked predicates.
-    _locked_keys = frozenset(k for k in base_globals if k.startswith("_disp_"))
+    _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
     _compile_context_local.locked_dispatch_keys = _locked_keys
     # Phase 10f: initialise bucket-ref maps for call-site specialisation.
@@ -6336,7 +6347,7 @@ def compile_predicate_trampoline_ast(
         body_compiler = _make_body_compiler_trampoline(db)
     if not clauses:
         arg_names = [f"arg{i}" for i in range(arity)]
-        params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
+        params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
         func_def = ast.FunctionDef(
             name=f"{functor}__{arity}",
             args=ast.arguments(
@@ -6344,7 +6355,7 @@ def compile_predicate_trampoline_ast(
                 vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
             ),
             body=[
-                _yield_step_stmt(_name("_tramp_parent"), _name("_DONE")),
+                _yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")),
             ],
             decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
         )
@@ -6356,7 +6367,7 @@ def compile_predicate_trampoline_ast(
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = ["this_generator", "_tramp_parent"] + arg_names + ["trail"]
+    params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
         name=func_name,
@@ -6370,7 +6381,7 @@ def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
             defaults=[],
         ),
         body=[
-            _yield_step_stmt(_name("_tramp_parent"), _name("_DONE")),
+            _yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")),
         ],
         decorator_list=[],
         returns=None,
@@ -7101,7 +7112,7 @@ def compile_head_to_match_case(
     body_stmts: list[ast.stmt],
     var_context: dict[int, str],
     arity: int,
-    trail_name: str = "trail",
+    trail_name: str = _TRAIL_PARAM_NAME,
     mark_name: str = "_mark",
     skip_trail: bool = False,
 ) -> ast.match_case:
@@ -8200,7 +8211,7 @@ def _build_predicate_funcdef(
     ``compile_predicate_ast`` (which returns the FunctionDef directly).
     """
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = arg_names + ["trail", "k"]
+    params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
 
     all_stmts: list[ast.stmt] = []
 
@@ -8402,7 +8413,7 @@ def compile_predicate_shallow(
 
     # Phase 7: set compile context so _dispatch_call_iter can emit cached
     # dispatch names instead of fname._get_dispatch() for locked predicates.
-    _locked_keys = frozenset(k for k in base_globals if k.startswith("_disp_"))
+    _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
     _compile_context_local.locked_dispatch_keys = _locked_keys
     try:
@@ -8619,7 +8630,7 @@ def compile_predicate_shallow_ast(
         body_compiler = _make_body_compiler(db)
     if not clauses:
         arg_names = [f"arg{i}" for i in range(arity)]
-        params = arg_names + ["trail", "k"]
+        params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
         return ast.FunctionDef(
             name=f"{functor}__{arity}",
             args=ast.arguments(
@@ -8657,7 +8668,7 @@ def _stub_body_stmts() -> list[ast.stmt]:
 def _compile_always_fail(functor: str, arity: int) -> Callable:
     """Return a generator function that matches any args but never yields."""
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = arg_names + ["trail", "k"]
+    params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
         name=func_name,
