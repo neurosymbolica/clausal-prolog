@@ -63,28 +63,53 @@ _FD_REIFY_INFO: dict[type, tuple[str, str, str]] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts):
-    """Compile a reified if-then-else for a reifiable condition.
+def _compile_reified_ite_impl(
+    test, then, else_, db, var_context, trail_name, k_stmts,
+    *,
+    compile_eq,
+    compile_fd,
+):
+    """Shared three-way-branch dispatcher for reified ITE.
+
+    Routes on the shape of *test*:
+
+    - ``Unify(l, r)``       → ``compile_eq(..., swap=False)``
+    - ``DoesNotUnify(l, r)`` → ``compile_eq(..., swap=True)``
+    - any other cmp         → ``compile_fd(test, ...)``
+
+    The two callable hooks are the strategy-specific ``_eq`` / ``_fd``
+    compilers.  Shallow passes ``_compile_reified_ite_eq`` /
+    ``_compile_reified_ite_fd`` directly; trampoline passes closures that
+    bind ``self_name``/``parent_name`` before forwarding.
 
     Generates a three-way branch:
-    - True (ground-satisfied): run then
-    - False (ground-violated): run else
-    - None (undetermined): explore both with appropriate constraints
+    - True  (ground-satisfied): run *then*
+    - False (ground-violated):  run *else*
+    - None  (undetermined):     explore both with appropriate constraints
     """
     match test:
         case Unify(left=l, right=r):
-            return _compile_reified_ite_eq(
+            return compile_eq(
                 l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False
             )
         case DoesNotUnify(left=l, right=r):
-            return _compile_reified_ite_eq(
+            return compile_eq(
                 l, r, then, else_, db, var_context, trail_name, k_stmts, swap=True
             )
         case _:
             # CLP(FD) comparison
-            return _compile_reified_ite_fd(
+            return compile_fd(
                 test, then, else_, db, var_context, trail_name, k_stmts
             )
+
+
+def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts):
+    """Shallow variant: see ``_compile_reified_ite_impl`` for the shape."""
+    return _compile_reified_ite_impl(
+        test, then, else_, db, var_context, trail_name, k_stmts,
+        compile_eq=_compile_reified_ite_eq,
+        compile_fd=_compile_reified_ite_fd,
+    )
 
 
 def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
@@ -280,23 +305,28 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
 
 def _compile_reified_ite_trampoline(test, then, else_, db, var_context, trail_name,
                                      k_stmts, self_name, parent_name):
-    """Trampoline variant of _compile_reified_ite."""
-    match test:
-        case Unify(left=l, right=r):
-            return _compile_reified_ite_eq_trampoline(
-                l, r, then, else_, db, var_context, trail_name,
-                k_stmts, self_name, parent_name, swap=False,
-            )
-        case DoesNotUnify(left=l, right=r):
-            return _compile_reified_ite_eq_trampoline(
-                l, r, then, else_, db, var_context, trail_name,
-                k_stmts, self_name, parent_name, swap=True,
-            )
-        case _:
-            return _compile_reified_ite_fd_trampoline(
-                test, then, else_, db, var_context, trail_name,
-                k_stmts, self_name, parent_name,
-            )
+    """Trampoline variant: see ``_compile_reified_ite_impl`` for the shape.
+
+    The ``_eq`` and ``_fd`` trampoline sub-compilers take two extra
+    positional args (``self_name``, ``parent_name``).  We bind them in
+    closures so the shared dispatcher can call them with the same
+    signature as the shallow variants.
+    """
+    def _eq(l, r, then, else_, db, vc, tn, k, swap=False):
+        return _compile_reified_ite_eq_trampoline(
+            l, r, then, else_, db, vc, tn, k, self_name, parent_name, swap=swap,
+        )
+
+    def _fd(test, then, else_, db, vc, tn, k):
+        return _compile_reified_ite_fd_trampoline(
+            test, then, else_, db, vc, tn, k, self_name, parent_name,
+        )
+
+    return _compile_reified_ite_impl(
+        test, then, else_, db, var_context, trail_name, k_stmts,
+        compile_eq=_eq,
+        compile_fd=_fd,
+    )
 
 
 def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail_name,
