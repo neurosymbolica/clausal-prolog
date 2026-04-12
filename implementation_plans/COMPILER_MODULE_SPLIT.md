@@ -92,6 +92,41 @@ move**. Each one becomes its own PR, scoped to the relevant submodule.
    dispatch, and continuation protocol. Start with the smallest pair
    (`compile_body` / `compile_body_trampoline`, ~90% identical) to
    prove the pattern.
+
+   **Status (partial, in progress):** 13 pairs deduped so far —
+   `compile_body`, `_make_body_compiler`, `_compile_reified_ite`
+   dispatcher, `_compile_reified_ite_eq`, `_compile_reified_ite_fd`,
+   `_compile_predicate_call`, `_compile_catch`, `_make_indexed_dispatch`,
+   `_make_secondary_dispatch`, `_make_joint_dispatch` (non-TRO),
+   `_make_groundness_dispatch` (non-TRO), plus three partial extractions
+   from `compile_goal` (12 deterministic arms, 13 meta-predicate arms,
+   2 membership arms).  Key patterns: (a) pass the strategy-specific
+   ``compile_goal_fn`` as a kwarg, with trampoline using a closure that
+   binds ``self_name``/``parent_name``; (b) ``arg_offset`` + ``tail_yield``
+   for dispatch builders; (c) ``preprocess_clause`` hook for trampoline-
+   only pre-passes like destructive-reuse.
+
+   **Note on the earlier flagged "semantic asymmetry" in `_compile_reified_ite_eq`
+   / `_fd`:** the concern was that shallow's double-compile of then/else
+   arms could diverge from trampoline's single-compile if body-only Vars
+   got walrus-introduced in one branch but referenced bare in another.
+   Investigation (see commit "resolve + dedup reified-ITE _eq and _fd
+   pairs") showed ``_preallocate_body_vars`` in ``compile_body`` walks
+   the whole clause tree and pre-emits ``_vN = Var()`` for every body-only
+   Var recursively, including inside ITE arms.  By the time the ITE
+   compilers run, no walrus fires.  The "asymmetry" was redundant work,
+   not a correctness difference — resolved and deduped.
+
+   **Still not deduped:**
+
+   - `_compile_general_ite` / `_trampoline` pair (non-reifiable ITE —
+     trampoline has a ~100-line mini-trampoline that has no shallow
+     counterpart).  This is a genuine structural difference; dedup
+     requires a strategy-object or substantial refactor.
+   - Full `compile_goal` / `_trampoline` dedup — the remaining ~11
+     strategy-specific arms (And, Or, Not, IfExpr, TupleLiteral,
+     catch-family, forall, predicate-call family) need a proper
+     strategy adapter rather than mechanical extraction.
 2. **Context object for compile-time threading**. Replace
    `(db, var_context, trail_name, k_stmts[, self_name, parent_name])`
    with a `CompileCtx` dataclass. Large touch but mechanical.
