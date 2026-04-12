@@ -50,6 +50,7 @@ from .globals_env import _disp_key, _preallocate_body_vars
 from .goal_shallow import (
     _compile_body_impl, _make_body_compiler_impl,
     _compile_predicate_call_impl,
+    _compile_deterministic_goal,
 )
 from . import _monolith as _m
 
@@ -318,98 +319,13 @@ def compile_goal_trampoline(
         call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
         return [ast.Expr(value=call_expr)] + list(k_stmts)
 
+    # Strategy-agnostic deterministic cases (unify, evaluate, dif, FD
+    # comparisons, structural comparisons) — shared with shallow.
+    det = _compile_deterministic_goal(goal, var_context, trail_name, k_stmts)
+    if det is not None:
+        return det
+
     match goal:
-
-        # ── Deterministic goals — identical to simple mode ───────────────────
-        case Unify(left=l, right=r):
-            # Phase 5: detect star-list patterns in body Unify goals
-            if _is_star_list(l):
-                return _compile_star_is(l, r, var_context, trail_name, k_stmts)
-            if _is_star_list(r):
-                return _compile_star_is(r, l, var_context, trail_name, k_stmts)
-            mark = _fresh(_MARK_PREFIX)
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _assign_mark(mark, trail_name),
-                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
-                _undo_stmt(mark, trail_name),
-            ]
-
-        # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
-        case Evaluate(left=l, right=r):
-            mark = _fresh(_MARK_PREFIX)
-            l_expr = term_to_ast_expr(l, var_context)
-            r_expr = arith_to_ast_expr(r, var_context)
-            return [
-                _assign_mark(mark, trail_name),
-                _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
-                _undo_stmt(mark, trail_name),
-            ]
-
-        case DoesNotUnify(left=l, right=r):
-            # dif/2 semantics: post constraint, succeed if terms can stay different.
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case ArithEq(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_eq"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case ArithNeq(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_ne"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case StructuralEq(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_structural_eq"), l_expr, r_expr), k_stmts),
-            ]
-
-        case StructuralNeq(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_structural_neq"), l_expr, r_expr), k_stmts),
-            ]
-
-        case Lt(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_lt"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case LtE(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_le"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case Gt(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_gt"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
-
-        case GtE(left=l, right=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-            return [
-                _if(_call(_name("_fd_ge"), l_expr, r_expr, _name(trail_name)), k_stmts),
-            ]
 
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
