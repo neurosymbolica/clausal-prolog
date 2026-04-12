@@ -47,7 +47,10 @@ from .terms_to_ast import (
 )
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
-from .goal_shallow import _compile_body_impl, _make_body_compiler_impl
+from .goal_shallow import (
+    _compile_body_impl, _make_body_compiler_impl,
+    _compile_predicate_call_impl,
+)
 from . import _monolith as _m
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
@@ -761,58 +764,42 @@ def _compile_predicate_call_trampoline(
     while loop exits.
 
     WK-4 keyword normalisation is applied identically to the simple variant.
+    See ``_compile_predicate_call_impl`` in ``goal_shallow`` for the shared
+    front-end (arg ordering + lambda hoist + arg_expr lowering).
     """
+    def _emit(arity, arg_exprs, k_stmts):
+        gen_name = _fresh("_gen")
+        status_name = _fresh("_st")
 
-    n_pos = len(call_args)
-    arity = n_pos + len(call_kwargs)
+        call_expr = _dispatch_call_trampoline(
+            fname, arity, arg_exprs, trail_name, self_name,
+        )
 
-    ordered_args: list = list(call_args)
-    if call_kwargs:
-        sig = db.signature_for(fname, arity)
-        if sig is None:
-            raise RuntimeError(
-                f"No signature registered for {fname}/{arity}; "
-                "cannot compile keyword call without a signature"
-            )
-        kw_dict = {kw.name: kw.value for kw in call_kwargs if isinstance(kw, KWNode)}
-        for param_name in sig[n_pos:]:
-            if param_name not in kw_dict:
-                raise RuntimeError(
-                    f"Missing argument {param_name!r} in keyword call to {fname}/{arity}"
-                )
-            ordered_args.append(kw_dict[param_name])
+        # _gen_N = dispatch(self, arg0, …, trail)
+        gen_assign = _assign(gen_name, call_expr)
 
-    # Hoist any Lambda arguments to FunctionDef statements
-    ordered_args, lambda_defs = _hoist_lambda_args(
-        ordered_args, var_context, db, trail_name,
+        # _st_N = (yield Step(_gen_N, None))
+        first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
+
+        # while _st_N is not _DONE: k_stmts; _st_N = (yield Step(_gen_N, None))
+        loop_body = (k_stmts or [ast.Pass()]) + [
+            _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
+        ]
+        loop = ast.While(
+            test=ast.Compare(
+                left=_name(status_name),
+                ops=[ast.IsNot()],
+                comparators=[_name("_DONE")],
+            ),
+            body=loop_body,
+            orelse=[],
+        )
+        return [gen_assign, first_step, loop]
+
+    return _compile_predicate_call_impl(
+        fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts,
+        emit_dispatch=_emit,
     )
-
-    arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
-    gen_name = _fresh("_gen")
-    status_name = _fresh("_st")
-
-    call_expr = _dispatch_call_trampoline(fname, arity, arg_exprs, trail_name, self_name)
-
-    # _gen_N = dispatch(self, arg0, …, trail)
-    gen_assign = _assign(gen_name, call_expr)
-
-    # _st_N = (yield Step(_gen_N, None))
-    first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
-
-    # while _st_N is not _DONE: k_stmts; _st_N = (yield Step(_gen_N, None))
-    loop_body = (k_stmts or [ast.Pass()]) + [
-        _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
-    ]
-    loop = ast.While(
-        test=ast.Compare(
-            left=_name(status_name),
-            ops=[ast.IsNot()],
-            comparators=[_name("_DONE")],
-        ),
-        body=loop_body,
-        orelse=[],
-    )
-    return lambda_defs + [gen_assign, first_step, loop]
 
 
 

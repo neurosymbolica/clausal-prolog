@@ -518,22 +518,34 @@ def compile_goal(
 
 
 
-def _compile_predicate_call(
+def _compile_predicate_call_impl(
     fname: str,
     call_args: list,
-    call_kwargs: list,   # list of Keyword nodes from the term
+    call_kwargs: list,
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
+    *,
+    emit_dispatch,
 ) -> list[ast.stmt]:
-    """Compile a call to a named predicate.
+    """Shared predicate-call compilation: arg normalisation + lambda hoist.
 
-    WK-4: when kwargs are present, look up the predicate's signature in the
-    database and reorder keyword args to positional order.  Raises RuntimeError
-    if no signature is registered.
+    Both ``_compile_predicate_call`` (shallow) and
+    ``_compile_predicate_call_trampoline`` share identical front-ends:
+
+    1. WK-4 keyword normalisation — reorder kwargs into positional order
+       using the predicate's signature.  Raises RuntimeError if kwargs
+       are present but no signature is registered, or if a required
+       kwarg is missing.
+    2. Hoist Lambda arguments to FunctionDef statements.
+    3. Compile each ordered arg to an AST expression.
+
+    The *emit_dispatch* hook then produces the strategy-specific tail
+    (simple-mode ``for`` loop over a generator, or trampoline-mode
+    ``_gen_N`` + ``_st_N`` while loop) given ``(arity, arg_exprs, k_stmts)``.
+    The returned statements are prepended with the hoisted lambda defs.
     """
-
     n_pos = len(call_args)
     arity = n_pos + len(call_kwargs)
 
@@ -559,15 +571,38 @@ def _compile_predicate_call(
     )
 
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
-    iter_expr = _dispatch_call_iter(fname, arity, arg_exprs, trail_name)
-    return lambda_defs + [
-        ast.For(
-            target=_name("_", ast.Store()),
-            iter=iter_expr,
-            body=k_stmts or [ast.Pass()],
-            orelse=[],
-        )
-    ]
+    return lambda_defs + emit_dispatch(arity, arg_exprs, k_stmts)
+
+
+def _compile_predicate_call(
+    fname: str,
+    call_args: list,
+    call_kwargs: list,   # list of Keyword nodes from the term
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Compile a call to a named predicate (shallow strategy).
+
+    Emits a ``for`` loop over the predicate's generator.
+    See ``_compile_predicate_call_impl`` for the shared front-end.
+    """
+    def _emit(arity, arg_exprs, k_stmts):
+        iter_expr = _dispatch_call_iter(fname, arity, arg_exprs, trail_name)
+        return [
+            ast.For(
+                target=_name("_", ast.Store()),
+                iter=iter_expr,
+                body=k_stmts or [ast.Pass()],
+                orelse=[],
+            )
+        ]
+
+    return _compile_predicate_call_impl(
+        fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts,
+        emit_dispatch=_emit,
+    )
 
 
 # ── compile_body ───────────────────────────────────────────────────────────────
