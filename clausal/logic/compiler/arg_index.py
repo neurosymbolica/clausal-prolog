@@ -488,76 +488,38 @@ def _build_secondary_index(
     }
 
 
-def _make_secondary_dispatch_simple(
-    sec_idx: dict,
-    level0_compiled: dict,     # {ki: (level1_fn_dict or None, level1_default_fn)}
-    level0_default_fn: Callable,
-    fallback_fn: Callable,
-) -> Callable:
-    """Build a two-level hierarchical dispatch for simple mode.  (Phase 9c)
-
-    Decision tree:
-    - *pos_i* var → *fallback_fn*
-    - *pos_i* ground, key unknown → *level0_default_fn*
-    - *pos_i* ground, key found:
-      - *pos_j* var or no level-1 index → level-1 default fn
-      - *pos_j* ground, key found → level-1 bucket fn
-      - *pos_j* ground, key unknown → level-1 default fn
-    """
-    pos_i = sec_idx["pos_i"]
-    pos_j = sec_idx["pos_j"]
-
-    def dispatch(*args):
-        _ai = deref(args[pos_i])
-        if is_var(_ai):
-            yield from fallback_fn(*args)
-            return
-        _ki = _runtime_arg_key(_ai)
-        try:
-            _entry = level0_compiled.get(_ki)
-        except TypeError:
-            _entry = None
-        if _entry is None:
-            yield from level0_default_fn(*args)
-            return
-        level1_fns, level1_default_fn = _entry
-        if level1_fns is None:
-            yield from level1_default_fn(*args)
-            return
-        _aj = deref(args[pos_j])
-        if is_var(_aj):
-            yield from level1_default_fn(*args)
-            return
-        _kj = _runtime_arg_key(_aj)
-        try:
-            _bfn = level1_fns.get(_kj)
-        except TypeError:
-            _bfn = None
-        if _bfn is not None:
-            yield from _bfn(*args)
-        else:
-            yield from level1_default_fn(*args)
-    dispatch.__name__ = fallback_fn.__name__
-    dispatch.__qualname__ = fallback_fn.__qualname__
-    return dispatch
-
-
-def _make_secondary_dispatch_trampoline(
+def _make_secondary_dispatch_impl(
     sec_idx: dict,
     level0_compiled: dict,
     level0_default_fn: Callable,
     fallback_fn: Callable,
-    done: Any,
+    *,
+    arg_offset: int,
+    tail_yield,
 ) -> Callable:
-    """Build a two-level hierarchical dispatch for trampoline mode.  (Phase 9c)"""
-    pos_i = sec_idx["pos_i"]
-    pos_j = sec_idx["pos_j"]
-    offset_i = pos_i + 2
-    offset_j = pos_j + 2
+    """Shared two-level hierarchical dispatch builder.
+
+    Decision tree:
+    - *pos_i* var → ``fallback_fn``
+    - *pos_i* ground, key unknown → ``level0_default_fn``
+    - *pos_i* ground, key found:
+      - *pos_j* var or no level-1 index → level-1 default fn
+      - *pos_j* ground, key found → level-1 bucket fn
+      - *pos_j* ground, key unknown → level-1 default fn
+
+    Strategy differences are the same as in ``_make_indexed_dispatch_impl``:
+
+    - ``arg_offset``: 0 for simple, 2 for trampoline (to skip the
+      ``self_generator``/``parent`` prefix in trampoline-mode args).
+    - ``tail_yield``: ``None`` for simple (early returns terminate the
+      generator); ``lambda args: (args[1], done)`` for trampoline, which
+      emits the ``(parent, DONE)`` exhaustion sentinel at the end.
+    """
+    pos_i = sec_idx["pos_i"] + arg_offset
+    pos_j = sec_idx["pos_j"] + arg_offset
 
     def dispatch(*args):
-        parent = args[1]
-        _ai = deref(args[offset_i])
+        _ai = deref(args[pos_i])
         if is_var(_ai):
             yield from fallback_fn(*args)
         else:
@@ -573,7 +535,7 @@ def _make_secondary_dispatch_trampoline(
                 if level1_fns is None:
                     yield from level1_default_fn(*args)
                 else:
-                    _aj = deref(args[offset_j])
+                    _aj = deref(args[pos_j])
                     if is_var(_aj):
                         yield from level1_default_fn(*args)
                     else:
@@ -586,10 +548,43 @@ def _make_secondary_dispatch_trampoline(
                             yield from _bfn(*args)
                         else:
                             yield from level1_default_fn(*args)
-        yield (parent, done)
+        if tail_yield is not None:
+            yield tail_yield(args)
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
+
+
+def _make_secondary_dispatch_simple(
+    sec_idx: dict,
+    level0_compiled: dict,     # {ki: (level1_fn_dict or None, level1_default_fn)}
+    level0_default_fn: Callable,
+    fallback_fn: Callable,
+) -> Callable:
+    """Build a two-level hierarchical dispatch for simple mode.  (Phase 9c)
+
+    See ``_make_secondary_dispatch_impl`` for the decision tree.
+    """
+    return _make_secondary_dispatch_impl(
+        sec_idx, level0_compiled, level0_default_fn, fallback_fn,
+        arg_offset=0,
+        tail_yield=None,
+    )
+
+
+def _make_secondary_dispatch_trampoline(
+    sec_idx: dict,
+    level0_compiled: dict,
+    level0_default_fn: Callable,
+    fallback_fn: Callable,
+    done: Any,
+) -> Callable:
+    """Build a two-level hierarchical dispatch for trampoline mode.  (Phase 9c)"""
+    return _make_secondary_dispatch_impl(
+        sec_idx, level0_compiled, level0_default_fn, fallback_fn,
+        arg_offset=2,
+        tail_yield=lambda args: (args[1], done),
+    )
 
 
 def _make_indexed_dispatch_impl(all_fn, idx_dict, default_fn, *, arg_offset, tail_yield):
