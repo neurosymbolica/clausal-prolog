@@ -67,6 +67,101 @@ from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 
+# ── Hoisted formerly function-local imports (Phase 0.5a) ─────────────────────
+# These were inner imports scattered through compile entrypoints.  Moved to
+# module scope after verifying no import cycle results.  Multiple aliases for
+# the same symbol are kept verbatim so call sites don't need editing.
+import sys as _sys  # noqa: E402
+import warnings  # noqa: E402
+from collections import defaultdict  # noqa: E402
+
+from clausal.terms import DictTerm, SetTerm, KWTerm, PyThunk  # noqa: E402
+_DictTerm = DictTerm
+_SetTerm = SetTerm
+_PyThunk = PyThunk
+_KWTerm = KWTerm
+_KWTerm_t = KWTerm
+_DictTerm_t = DictTerm
+_SetTerm_t = SetTerm
+_DictTerm_s = DictTerm
+_SetTerm_s = SetTerm
+
+from clausal.pythonic_ast.nodes import (  # noqa: E402
+    SetLiteral as _SetLiteral,
+    Call as AstCall,
+    LoadName as AstLoadName,
+    Keyword as KWNode,
+)
+_SL = _SetLiteral
+_SetLiteral_t = _SetLiteral
+
+from clausal.logic.builtins import (  # noqa: E402
+    get_builtin_predicate,
+    BuiltinPredicate,
+    _BUILTIN_CLASSES,
+)
+from clausal.logic.builtins.lists import _append_dr__3 as _dr_append_fn  # noqa: E402
+from clausal.logic.builtins.dict_set import (  # noqa: E402
+    _dict_put_dr__4 as _dr_dict_put_fn,
+    _set_union_dr__3 as _dr_set_union_fn,
+)
+
+from clausal.logic.constraints import (  # noqa: E402
+    dif as _dif_fn,
+    reify_eq as _reify_eq_fn,
+    structural_eq as _structural_eq_fn,
+    structural_neq as _structural_neq_fn,
+)
+_dif_fn_s = _dif_fn
+_reify_eq_fn_s = _reify_eq_fn
+
+from clausal.logic.clpfd import (  # noqa: E402
+    fd_eq as _fd_eq_fn,
+    fd_ne as _fd_ne_fn,
+    fd_lt as _fd_lt_fn,
+    fd_le as _fd_le_fn,
+    fd_gt as _fd_gt_fn,
+    fd_ge as _fd_ge_fn,
+    reify_fd as _reify_fd_fn,
+)
+_fd_eq_fn_s = _fd_eq_fn
+_fd_ne_fn_s = _fd_ne_fn
+_fd_lt_fn_s = _fd_lt_fn
+_fd_le_fn_s = _fd_le_fn
+_fd_gt_fn_s = _fd_gt_fn
+_fd_ge_fn_s = _fd_ge_fn
+_reify_fd_fn_s = _reify_fd_fn
+
+from clausal.logic.exceptions import (  # noqa: E402
+    LogicException as _LogicException_cls,
+    python_error_term as _python_error_term_fn,
+    type_error as _type_error_fn,
+)
+_python_error_term_fn_s = _python_error_term_fn
+_type_error_fn_s = _type_error_fn
+
+from clausal.logic.variables import (  # noqa: E402
+    get_attr as _get_attr_fn,
+    put_attr as _put_attr_fn,
+)
+_get_attr_fn_s = _get_attr_fn
+_put_attr_fn_s = _put_attr_fn
+
+from clausal.logic.coroutining import (  # noqa: E402
+    _install_when_ground as _install_when_ground_fn,
+    _install_when_disjunction as _install_when_disjunction_fn,
+    _install_when_condition as _install_when_condition_fn,
+)
+_install_when_ground_fn_s = _install_when_ground_fn
+_install_when_disjunction_fn_s = _install_when_disjunction_fn
+_install_when_condition_fn_s = _install_when_condition_fn
+
+from clausal.logic.tabling import (  # noqa: E402
+    _naf_tabled as _naf_tabled_fn,
+    _TABLING_SUSPEND,
+)
+_naf_tabled_fn_s = _naf_tabled_fn
+
 
 # Phase 7: thread-local context for locked-predicate dispatch caching.
 # Set during compile_predicate_trampoline / compile_predicate so that
@@ -535,7 +630,6 @@ def _in_iter(collection, pair_mode):
     (e.g. ``(KEY, VALUE) in DICT``).  For DictTerms, pair_mode switches
     from key iteration to (key, value) pair iteration.
     """
-    from clausal.terms import DictTerm  # noqa: PLC0415
     if pair_mode and isinstance(collection, DictTerm):
         return collection.items()
     return iter(collection)
@@ -702,7 +796,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
         return result
 
     # DictTerm: recurse into values (keys are ground)
-    from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
     if isinstance(term, DictTerm):
         result = []
         for v in term.values():
@@ -714,7 +807,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
         return []
 
     # SetLiteral (AST node): elements may contain vars
-    from clausal.pythonic_ast.nodes import SetLiteral as _SL  # noqa: PLC0415
     if isinstance(term, _SL):
         result = []
         for e in term.elements:
@@ -722,7 +814,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
         return result
 
     # KWTerm: recurse into field values
-    from clausal.terms import KWTerm  # noqa: PLC0415
     if isinstance(term, KWTerm):
         result = []
         for v in term.values():
@@ -793,7 +884,6 @@ def _collect_py_thunks(clauses: list[Clause]) -> dict[str, Any]:
     found in clause body goals.  The compiler references these names when
     emitting thunk calls.
     """
-    from clausal.terms import PyThunk  # noqa: PLC0415
     thunks: dict[str, Any] = {}
 
     def _walk(term: Any) -> None:
@@ -922,7 +1012,6 @@ def _collect_globals_info(
     Replaces ``_collect_head_types``, ``_collect_py_thunks``, and
     ``_collect_call_targets`` with a single tree walk.
     """
-    from clausal.terms import PyThunk as _PyThunk  # noqa: PLC0415
 
     types: dict[str, type] = {}
     thunks: dict[str, Any] = {}
@@ -1018,7 +1107,6 @@ def _inject_call_targets(
     - If fname is a builtin, inject a BuiltinPredicate adapter.
     - Otherwise, skip (predicate must be resolved at runtime or is missing).
     """
-    from clausal.logic.builtins import get_builtin_predicate, BuiltinPredicate  # noqa: PLC0415
     call_targets = _collect_call_targets(clauses)
     for target_name, target_arity in call_targets:
         existing = base_globals.get(target_name)
@@ -1053,7 +1141,6 @@ def _inject_call_targets(
             # "tests.fixtures.utils.Helper"), resolve via sys.modules.
             # The dotted key is "module.path.PredName"; the module is
             # "module.path" and the attr is "PredName".
-            import sys as _sys  # noqa: PLC0415
             mod_path = ".".join(parts[:-1])
             attr_name = parts[-1]
             mod_obj = _sys.modules.get(mod_path)
@@ -1102,7 +1189,6 @@ def _inject_resolved_targets(
     function directly instead of calling ``_get_dispatch()`` on every
     predicate invocation.
     """
-    from clausal.logic.builtins import get_builtin_predicate, BuiltinPredicate  # noqa: PLC0415
 
     def _maybe_cache_dispatch(obj: Any, name: str, arity: int) -> None:
         """Phase 7: if obj is a locked, compiled PredicateMeta, cache its dispatch."""
@@ -1140,7 +1226,6 @@ def _inject_resolved_targets(
             if obj is not None:
                 base_globals[target_name] = obj
                 continue
-            import sys as _sys  # noqa: PLC0415
             mod_path = ".".join(parts[:-1])
             attr_name = parts[-1]
             mod_obj = _sys.modules.get(mod_path)
@@ -1335,7 +1420,6 @@ def term_to_ast_expr(
             values=[term_to_ast_expr(v, var_context, eval_arith=eval_arith) for v in term.values()],
         )
 
-    from clausal.terms import DictTerm, SetTerm  # noqa: PLC0415
 
     if isinstance(term, DictTerm):
         return _call(
@@ -1356,7 +1440,6 @@ def term_to_ast_expr(
         )
 
     # SetLiteral (AST node from visit_Set): emit SetTerm([elem, ...]) constructor
-    from clausal.pythonic_ast.nodes import SetLiteral as _SetLiteral_t  # noqa: PLC0415
     if isinstance(term, _SetLiteral_t):
         return _call(
             _name("SetTerm"),
@@ -1470,7 +1553,6 @@ def term_to_ast_expr(
         )
 
     # KWTerm: generate KWTerm("functor", key=val, ...)
-    from clausal.terms import KWTerm  # noqa: PLC0415
     if isinstance(term, KWTerm):
         keywords = [
             ast.keyword(arg=k, value=term_to_ast_expr(v, var_context, eval_arith=eval_arith))
@@ -1486,7 +1568,6 @@ def term_to_ast_expr(
     # Used for f-strings in .clausal files and ++() Python escapes.
     # The thunk stores a callable (lambda) and a list of Var objects.
     # The compiler emits: thunk.fn(deref(local0), deref(local1), ...)
-    from clausal.terms import PyThunk  # noqa: PLC0415
     if isinstance(term, PyThunk):
         # Reference to the thunk's .fn stored in compiled function globals.
         # Use a unique name to avoid collisions.
@@ -2153,7 +2234,6 @@ def compile_goal(
         return []
 
     # PyThunk as a goal — evaluate for side effects, then continue.
-    from clausal.terms import PyThunk  # noqa: PLC0415
     if isinstance(goal, PyThunk):
         call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
         return [ast.Expr(value=call_expr)] + list(k_stmts)
@@ -2953,7 +3033,6 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
     - ``when(ground(X), Goal)`` → runtime ``_install_when_ground``
     - ``when(Or(C1, C2), Goal)`` → runtime ``_install_when_disjunction``
     """
-    from clausal.pythonic_ast.nodes import Call as AstCall, LoadName as AstLoadName
 
     # when(nonvar(X), Goal) → freeze(X, Goal)
     if (isinstance(cond, AstCall)
@@ -3558,7 +3637,6 @@ def _compile_predicate_call(
     database and reorder keyword args to positional order.  Raises RuntimeError
     if no signature is registered.
     """
-    from clausal.pythonic_ast.nodes import Keyword as KWNode
 
     n_pos = len(call_args)
     arity = n_pos + len(call_kwargs)
@@ -3678,7 +3756,6 @@ def _inject_bucket_refs_trampoline(
     ``_compile_context_local.joint_bucket_ref_map`` so that
     :func:`_dispatch_call_trampoline` can emit a direct bucket reference.
     """
-    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
 
     brmap: dict = {}
     jbrmap: dict = {}
@@ -3860,7 +3937,6 @@ def compile_goal_trampoline(
         return []
 
     # PyThunk as a goal — evaluate for side effects, then continue.
-    from clausal.terms import PyThunk  # noqa: PLC0415
     if isinstance(goal, PyThunk):
         call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
         return [ast.Expr(value=call_expr)] + list(k_stmts)
@@ -4312,7 +4388,6 @@ def _compile_predicate_call_trampoline(
 
     WK-4 keyword normalisation is applied identically to the simple variant.
     """
-    from clausal.pythonic_ast.nodes import Keyword as KWNode
 
     n_pos = len(call_args)
     arity = n_pos + len(call_kwargs)
@@ -5112,7 +5187,6 @@ def _is_deterministic_goal(goal: Any) -> bool:
         return True
 
     # PyThunk as goal (side effect) is deterministic.
-    from clausal.terms import PyThunk  # noqa: PLC0415
     if isinstance(goal, PyThunk):
         return True
 
@@ -5385,7 +5459,6 @@ def _contains_star_unpack(term: Any) -> bool:
 
 def _collect_var_ids(term: Any, ids: set[int]) -> None:
     """Recursively collect all Var IDs from a term."""
-    from clausal.terms import DictTerm as _DictTerm  # noqa: PLC0415
 
     term = deref(term)
     if is_var(term):
@@ -5453,7 +5526,6 @@ def _compile_tro_tail(
     flag is NOT set and execution falls back to a normal ``StepGenerator``
     call (emitted inline).
     """
-    from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: PLC0415
 
     call_args = list(tail_call.args)
     call_kwargs = tail_call.kwargs or []
@@ -5851,27 +5923,6 @@ def compile_predicate_trampoline(
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    from clausal.terms import KWTerm as _KWTerm_t  # noqa: PLC0415
-    from clausal.logic.constraints import (  # noqa: PLC0415
-        dif as _dif_fn, reify_eq as _reify_eq_fn,
-        structural_eq as _structural_eq_fn, structural_neq as _structural_neq_fn,
-    )
-    from clausal.logic.clpfd import (  # noqa: PLC0415
-        fd_eq as _fd_eq_fn, fd_ne as _fd_ne_fn,
-        fd_lt as _fd_lt_fn, fd_le as _fd_le_fn,
-        fd_gt as _fd_gt_fn, fd_ge as _fd_ge_fn,
-        reify_fd as _reify_fd_fn,
-    )
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException as _LogicException_cls,
-        python_error_term as _python_error_term_fn,
-        type_error as _type_error_fn,
-    )
-    from clausal.logic.variables import (  # noqa: PLC0415
-        get_attr as _get_attr_fn,
-        put_attr as _put_attr_fn,
-    )
-    from clausal.terms import DictTerm as _DictTerm_t, SetTerm as _SetTerm_t  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm_t,
@@ -5917,18 +5968,11 @@ def compile_predicate_trampoline(
         "_Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
-    from clausal.logic.coroutining import (  # noqa: PLC0415
-        _install_when_ground as _install_when_ground_fn,
-        _install_when_disjunction as _install_when_disjunction_fn,
-        _install_when_condition as _install_when_condition_fn,
-    )
     base_globals["_install_when_ground"] = _install_when_ground_fn
     base_globals["_install_when_disjunction"] = _install_when_disjunction_fn
     base_globals["_install_when_condition"] = _install_when_condition_fn
     # WFS: inject _naf_tabled, _table_store, and _TABLING_SUSPEND for tabled NAF
     if db is not None:
-        from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn  # noqa: PLC0415
-        from clausal.logic.tabling import _TABLING_SUSPEND  # noqa: PLC0415
         base_globals["_naf_tabled"] = _naf_tabled_fn
         base_globals["_table_store"] = db.table_store
         base_globals["_TABLING_SUSPEND"] = _TABLING_SUSPEND
@@ -5948,7 +5992,6 @@ def compile_predicate_trampoline(
     # PredicateMeta/MultiArityBuiltin class: it is callable as a term
     # constructor (needed when a goal appears as an argument to a meta-predicate
     # such as time_goal) and also provides _get_dispatch().
-    from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)
         if existing is None or (
@@ -5963,11 +6006,6 @@ def compile_predicate_trampoline(
     # Destructive-reuse: inject DR dispatch functions into base_globals so
     # that rewritten goal names (e.g. _dr_append__3) resolve at runtime via
     # the locked-dispatch fast path.
-    from clausal.logic.builtins.lists import _append_dr__3 as _dr_append_fn  # noqa: PLC0415
-    from clausal.logic.builtins.dict_set import (  # noqa: PLC0415
-        _dict_put_dr__4 as _dr_dict_put_fn,
-        _set_union_dr__3 as _dr_set_union_fn,
-    )
     base_globals[_disp_key("_dr_append__3", 3)] = _dr_append_fn
     base_globals[_disp_key("_dr_dict_put__4", 4)] = _dr_dict_put_fn
     base_globals[_disp_key("_dr_set_union__3", 3)] = _dr_set_union_fn
@@ -6661,7 +6699,6 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # DictTerm → wildcard capture + unify guard (pairwise value unification)
-    from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm  # noqa: PLC0415
     if isinstance(term, _DictTerm):
         # Register Var values in var_context so they get python names
         for val in term.values():
@@ -6684,7 +6721,6 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # SetLiteral (AST node) → wildcard capture + unify guard
-    from clausal.pythonic_ast.nodes import SetLiteral as _SetLiteral  # noqa: PLC0415
     if isinstance(term, _SetLiteral):
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
@@ -7134,7 +7170,6 @@ def compile_head_to_match_case(
     dict_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] == "dict"]
     set_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] in ("set", "set_literal")]
     if dict_guards or set_guards:
-        from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm  # noqa: PLC0415
         dict_set_stmts: list[ast.stmt] = []
         # Pre-allocate Vars for dict value patterns
         _ds_alloc_seen: set[str] = set()
@@ -7532,7 +7567,6 @@ def _build_arg_index(
     if not specific_indices:
         return None  # all defaults — indexing won't help
     # Group specific clauses by key
-    from collections import defaultdict
     bucket_map: dict[Any, list[int]] = defaultdict(list)
     for i in specific_indices:
         bucket_map[keys[i]].append(i)
@@ -7613,7 +7647,6 @@ def _build_joint_arg_index(
     if len(specific_indices) < threshold:
         return None
     default_indices = [i for i, k in enumerate(keys) if k is _INDEX_VAR]
-    from collections import defaultdict
     bucket_map: dict[Any, list[int]] = defaultdict(list)
     for i in specific_indices:
         bucket_map[keys[i]].append(i)
@@ -8291,24 +8324,6 @@ def compile_predicate_shallow(
         _install(db, functor, arity, fn, pred_cls=pred_cls)
         return fn
 
-    from clausal.terms import KWTerm as _KWTerm  # noqa: PLC0415
-    from clausal.logic.constraints import dif as _dif_fn_s, reify_eq as _reify_eq_fn_s  # noqa: PLC0415
-    from clausal.logic.clpfd import (  # noqa: PLC0415
-        fd_eq as _fd_eq_fn_s, fd_ne as _fd_ne_fn_s,
-        fd_lt as _fd_lt_fn_s, fd_le as _fd_le_fn_s,
-        fd_gt as _fd_gt_fn_s, fd_ge as _fd_ge_fn_s,
-        reify_fd as _reify_fd_fn_s,
-    )
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException as _LogicException_cls,
-        python_error_term as _python_error_term_fn_s,
-        type_error as _type_error_fn_s,
-    )
-    from clausal.logic.variables import (  # noqa: PLC0415
-        get_attr as _get_attr_fn_s,
-        put_attr as _put_attr_fn_s,
-    )
-    from clausal.terms import DictTerm as _DictTerm_s, SetTerm as _SetTerm_s  # noqa: PLC0415
     base_globals: dict = {
         "Compound": Compound,
         "KWTerm": _KWTerm,
@@ -8350,17 +8365,11 @@ def compile_predicate_shallow(
         "_Fraction": Fraction,
     }
     # Ensure freeze/when hooks are registered.
-    from clausal.logic.coroutining import (  # noqa: PLC0415
-        _install_when_ground as _install_when_ground_fn_s,
-        _install_when_disjunction as _install_when_disjunction_fn_s,
-        _install_when_condition as _install_when_condition_fn_s,
-    )
     base_globals["_install_when_ground"] = _install_when_ground_fn_s
     base_globals["_install_when_disjunction"] = _install_when_disjunction_fn_s
     base_globals["_install_when_condition"] = _install_when_condition_fn_s
     # WFS: inject _naf_tabled and _table_store for tabled NAF
     if db is not None:
-        from clausal.logic.tabling import _naf_tabled as _naf_tabled_fn_s  # noqa: PLC0415
         base_globals["_naf_tabled"] = _naf_tabled_fn_s
         base_globals["_table_store"] = db.table_store
     # Phase 6: single combined traversal replacing three separate walks.
@@ -8379,7 +8388,6 @@ def compile_predicate_shallow(
     # PredicateMeta/MultiArityBuiltin class: it is callable as a term
     # constructor (needed when a goal appears as an argument to a meta-predicate
     # such as time_goal) and also provides _get_dispatch().
-    from clausal.logic.builtins import _BUILTIN_CLASSES, BuiltinPredicate  # noqa: PLC0415
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)
         if existing is None or (
@@ -8582,7 +8590,6 @@ def compile_predicate(
     Use ``compile_predicate_shallow`` for shallow/bounded predicates or
     ``compile_predicate_trampoline`` for the stack-safe production path.
     """
-    import warnings
     warnings.warn(
         "compile_predicate() is deprecated — use compile_predicate_shallow() "
         "or compile_predicate_trampoline()",
@@ -8634,7 +8641,6 @@ def compile_predicate_ast(
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
 ) -> ast.FunctionDef:
     """Deprecated alias for ``compile_predicate_shallow_ast``."""
-    import warnings
     warnings.warn(
         "compile_predicate_ast() is deprecated — use compile_predicate_shallow_ast()",
         DeprecationWarning,
