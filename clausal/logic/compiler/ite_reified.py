@@ -112,45 +112,17 @@ def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts
     )
 
 
-def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
-    """Compile reified ITE for equality/disequality conditions.
-
-    when swap=False (Unify):   True→then, False→else
-    when swap=True  (DoesNot): True→else, False→then  (inverted reify_eq)
+def _three_way_reif_branch(
+    reif_var: str,
+    reif_call: ast.expr,
+    true_stmts: list[ast.stmt],
+    false_stmts: list[ast.stmt],
+    undetermined: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Assemble the ``if reif is True / elif is False / else: undetermined``
+    three-way branch common to all reified-ITE compilers.
     """
-    reif_var = _fresh("_reif")
-    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-
-    then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts)
-    else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts)
-
-    if swap:
-        true_stmts, false_stmts = else_stmts, then_stmts
-    else:
-        true_stmts, false_stmts = then_stmts, else_stmts
-
-    # Undetermined branch: explore both (unify for "true", dif for "false")
-    mark = _fresh(_MARK_PREFIX)
-    # "unify" path → then (or else if swapped)
-    unify_branch_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts) if not swap else _m.compile_goal(else_, db, var_context, trail_name, k_stmts)
-    # "dif" path → else (or then if swapped)
-    dif_branch_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts) if not swap else _m.compile_goal(then, db, var_context, trail_name, k_stmts)
-
-    undetermined = [
-        _assign_mark(mark, trail_name),
-        _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), unify_branch_stmts),
-        _undo_stmt(mark, trail_name),
-        _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), dif_branch_stmts),
-    ]
-
-    # _reif_N = _reify_eq(l, r, trail)
-    reif_assign = _assign(reif_var,
-        _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name)))
-
-    # if _reif_N is True: <true_stmts>
-    # elif _reif_N is False: <false_stmts>
-    # else: <undetermined>
+    reif_assign = _assign(reif_var, reif_call)
     branch = ast.If(
         test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
         body=true_stmts or [ast.Pass()],
@@ -162,12 +134,78 @@ def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_st
             ),
         ],
     )
-
     return [reif_assign, branch]
 
 
-def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_stmts):
-    """Compile reified ITE for CLP(FD) comparison conditions."""
+def _compile_reified_ite_eq_impl(
+    l, r, then, else_, db, var_context, trail_name, k_stmts,
+    *,
+    compile_goal_fn,
+    swap: bool,
+):
+    """Shared ``_compile_reified_ite_eq`` body.
+
+    Strategies differ only in which ``compile_goal_fn`` they pass in:
+    shallow uses the raw ``compile_goal``; trampoline uses a closure
+    over ``compile_goal_trampoline`` that binds ``self_name`` and
+    ``parent_name``.
+
+    The then/else goals are each compiled once and the resulting stmt
+    lists are placed in both the determined branch and the undetermined
+    exploration branch.  This is safe because ``_preallocate_body_vars``
+    (called by ``compile_body``) has already walked the clause tree and
+    emitted ``_vN = Var()`` for every body-only Var before any goal is
+    compiled, so ``term_to_ast_expr`` inside the ITE never needs to
+    introduce a walrus binding in one branch that another branch would
+    reference unbound.
+
+    swap=False (Unify):      True→then, False→else
+    swap=True  (DoesNotUnify): True→else, False→then  (inverted reify_eq)
+    """
+    reif_var = _fresh("_reif")
+    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+
+    then_stmts = compile_goal_fn(then, db, var_context, trail_name, k_stmts)
+    else_stmts = compile_goal_fn(else_, db, var_context, trail_name, k_stmts)
+
+    if swap:
+        true_stmts, false_stmts = else_stmts, then_stmts
+    else:
+        true_stmts, false_stmts = then_stmts, else_stmts
+
+    # Undetermined branch: explore both (unify for "true", dif for "false").
+    # Reuses true_stmts / false_stmts — only one branch executes at runtime.
+    mark = _fresh(_MARK_PREFIX)
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
+        _undo_stmt(mark, trail_name),
+        _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
+    ]
+
+    reif_call = _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name))
+    return _three_way_reif_branch(reif_var, reif_call, true_stmts, false_stmts, undetermined)
+
+
+def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
+    """Shallow reified ITE for equality/disequality — wraps ``_impl``."""
+    return _compile_reified_ite_eq_impl(
+        l, r, then, else_, db, var_context, trail_name, k_stmts,
+        compile_goal_fn=_m.compile_goal,
+        swap=swap,
+    )
+
+
+def _compile_reified_ite_fd_impl(
+    test, then, else_, db, var_context, trail_name, k_stmts,
+    *,
+    compile_goal_fn,
+):
+    """Shared ``_compile_reified_ite_fd`` body — strategy differs only
+    in ``compile_goal_fn``.  Same then/else reuse rationale as
+    ``_compile_reified_ite_eq_impl``.
+    """
     test_type = type(test)
     op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
 
@@ -175,40 +213,31 @@ def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_st
     l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
 
-    then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts)
-    else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts)
+    then_stmts = compile_goal_fn(then, db, var_context, trail_name, k_stmts)
+    else_stmts = compile_goal_fn(else_, db, var_context, trail_name, k_stmts)
 
-    # Undetermined: post FD constraint for then path, negated for else path
+    # Undetermined: post FD constraint for then path, negated for else path.
+    # Reuses then_stmts / else_stmts — only one branch executes at runtime.
     mark = _fresh(_MARK_PREFIX)
-    fd_then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts)
-    fd_else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts)
-
     undetermined = [
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), fd_then_stmts),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
         _undo_stmt(mark, trail_name),
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), fd_else_stmts),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
         _undo_stmt(mark, trail_name),
     ]
 
-    # _reif_N = _reify_fd("op", l, r, trail)
-    reif_assign = _assign(reif_var,
-        _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name)))
+    reif_call = _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name))
+    return _three_way_reif_branch(reif_var, reif_call, then_stmts, else_stmts, undetermined)
 
-    branch = ast.If(
-        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
-        body=then_stmts or [ast.Pass()],
-        orelse=[
-            ast.If(
-                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
-                body=else_stmts or [ast.Pass()],
-                orelse=undetermined,
-            ),
-        ],
+
+def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_stmts):
+    """Shallow reified ITE for CLP(FD) comparison — wraps ``_impl``."""
+    return _compile_reified_ite_fd_impl(
+        test, then, else_, db, var_context, trail_name, k_stmts,
+        compile_goal_fn=_m.compile_goal,
     )
-
-    return [reif_assign, branch]
 
 
 def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts):
@@ -331,90 +360,27 @@ def _compile_reified_ite_trampoline(test, then, else_, db, var_context, trail_na
 
 def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail_name,
                                         k_stmts, self_name, parent_name, swap=False):
-    """Trampoline variant of _compile_reified_ite_eq."""
-    reif_var = _fresh("_reif")
-    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
-
-    _cgt = _m.compile_goal_trampoline  # shorthand
-    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
-
-    if swap:
-        true_stmts, false_stmts = else_stmts, then_stmts
-        unify_branch, dif_branch = else_stmts, then_stmts
-    else:
-        true_stmts, false_stmts = then_stmts, else_stmts
-        unify_branch, dif_branch = then_stmts, else_stmts
-
-    mark = _fresh(_MARK_PREFIX)
-
-    undetermined = [
-        _assign_mark(mark, trail_name),
-        _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), unify_branch),
-        _undo_stmt(mark, trail_name),
-        _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), dif_branch),
-    ]
-
-    reif_assign = _assign(reif_var,
-        _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name)))
-
-    branch = ast.If(
-        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
-        body=true_stmts or [ast.Pass()],
-        orelse=[
-            ast.If(
-                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
-                body=false_stmts or [ast.Pass()],
-                orelse=undetermined,
-            ),
-        ],
+    """Trampoline variant — wraps ``_compile_reified_ite_eq_impl`` with a
+    closure that binds ``self_name``/``parent_name`` to ``compile_goal_trampoline``.
+    """
+    def _cgt(goal, db_, vc, tn, k):
+        return _m.compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+    return _compile_reified_ite_eq_impl(
+        l, r, then, else_, db, var_context, trail_name, k_stmts,
+        compile_goal_fn=_cgt,
+        swap=swap,
     )
-
-    return [reif_assign, branch]
 
 
 def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail_name,
                                         k_stmts, self_name, parent_name):
-    """Trampoline variant of _compile_reified_ite_fd."""
-    test_type = type(test)
-    op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
-
-    reif_var = _fresh("_reif")
-    l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
-    r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
-
-    _cgt = _m.compile_goal_trampoline
-    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
-
-    mark = _fresh(_MARK_PREFIX)
-
-    undetermined = [
-        _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
-        _undo_stmt(mark, trail_name),
-        _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
-        _undo_stmt(mark, trail_name),
-    ]
-
-    reif_assign = _assign(reif_var,
-        _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name)))
-
-    branch = ast.If(
-        test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
-        body=then_stmts or [ast.Pass()],
-        orelse=[
-            ast.If(
-                test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(False)]),
-                body=else_stmts or [ast.Pass()],
-                orelse=undetermined,
-            ),
-        ],
+    """Trampoline variant — wraps ``_compile_reified_ite_fd_impl``."""
+    def _cgt(goal, db_, vc, tn, k):
+        return _m.compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+    return _compile_reified_ite_fd_impl(
+        test, then, else_, db, var_context, trail_name, k_stmts,
+        compile_goal_fn=_cgt,
     )
-
-    return [reif_assign, branch]
 
 
 def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_name,
