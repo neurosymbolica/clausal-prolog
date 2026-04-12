@@ -14,6 +14,18 @@ from typing import Any
 from clausal.pythonic_ast.nodes import TupleLiteral
 
 
+# ── Compiled-code naming constants ────────────────────────────────────────────
+# Names emitted into generated function signatures and locals.  Centralised
+# here (in the deepest-leaf submodule) so any other submodule can import them
+# without creating a cycle back through _monolith.
+_MARK_PREFIX = "_m"            # fresh mark variable prefix (_fresh(_MARK_PREFIX))
+_TRAIL_PARAM_NAME = "trail"    # compiled-function trail parameter
+_K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
+_DISP_PREFIX = "_disp_"        # locked-dispatch globals-key prefix
+_TRAMP_PARENT_NAME = "_tramp_parent"   # trampoline parent-generator parameter
+_THIS_GEN_NAME = "this_generator"      # trampoline self-reference parameter
+
+
 # ── ast helpers ────────────────────────────────────────────────────────────────
 
 
