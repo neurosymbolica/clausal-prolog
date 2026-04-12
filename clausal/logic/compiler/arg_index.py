@@ -333,6 +333,38 @@ def _analyze_joint_index_positions(
     return None
 
 
+def _joint_dispatch_body(
+    args, pos_i: int, pos_j: int,
+    joint_dict: dict, joint_default_fn,
+    single_i_dispatch, single_j_dispatch,
+    fallback_fn,
+):
+    """Yield from the appropriate clause bucket given *args* at (pos_i, pos_j).
+
+    Returns a bool indicating whether the fallback path was taken — the
+    TRO variant uses this to know when the internal loop must break
+    (the fallback itself owns the TRO loop).
+    """
+    _ai = deref(args[pos_i])
+    _aj = deref(args[pos_j])
+    if not is_var(_ai) and not is_var(_aj):
+        _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
+        try:
+            _bfn = joint_dict.get(_jk)
+        except TypeError:
+            _bfn = None
+        if _bfn is not None:
+            yield from _bfn(*args)
+        else:
+            yield from joint_default_fn(*args)
+    elif not is_var(_ai):
+        yield from single_i_dispatch(*args)
+    elif not is_var(_aj):
+        yield from single_j_dispatch(*args)
+    else:
+        yield from fallback_fn(*args)
+
+
 def _make_joint_dispatch_simple(
     pos_i: int, pos_j: int,
     joint_dict: dict, joint_default_fn,
@@ -348,24 +380,10 @@ def _make_joint_dispatch_simple(
     4. Neither ground → *fallback_fn* (linear scan)
     """
     def dispatch(*args):
-        _ai = deref(args[pos_i])
-        _aj = deref(args[pos_j])
-        if not is_var(_ai) and not is_var(_aj):
-            _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
-            try:
-                _bfn = joint_dict.get(_jk)
-            except TypeError:
-                _bfn = None
-            if _bfn is not None:
-                yield from _bfn(*args)
-            else:
-                yield from joint_default_fn(*args)
-        elif not is_var(_ai):
-            yield from single_i_dispatch(*args)
-        elif not is_var(_aj):
-            yield from single_j_dispatch(*args)
-        else:
-            yield from fallback_fn(*args)
+        yield from _joint_dispatch_body(
+            args, pos_i, pos_j, joint_dict, joint_default_fn,
+            single_i_dispatch, single_j_dispatch, fallback_fn,
+        )
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
@@ -378,7 +396,13 @@ def _make_joint_dispatch_trampoline(
     fallback_fn, done,
     tro_state=None, arity=0,
 ) -> Callable:
-    """Build a flat joint-key dispatch for trampoline mode.  (Phase 9b)"""
+    """Build a flat joint-key dispatch for trampoline mode.  (Phase 9b)
+
+    Same decision tree as :func:`_make_joint_dispatch_simple`, wrapped
+    with the trampoline Step protocol (``(parent, DONE)`` tail-yield)
+    and, when *tro_state* is supplied, an inner TRO tail-call loop that
+    restarts dispatch when a clause signals a tail call.
+    """
     offset_i = pos_i + 2
     offset_j = pos_j + 2
 
@@ -388,6 +412,9 @@ def _make_joint_dispatch_trampoline(
             args_list = list(args)
             while True:
                 tro_state[0] = False
+                # The fallback path owns its own TRO loop, so we must break
+                # out of this outer loop when it fires.  Inline the body
+                # here to detect that case via which branch was taken.
                 _ai = deref(args_list[offset_i])
                 _aj = deref(args_list[offset_j])
                 if not is_var(_ai) and not is_var(_aj):
@@ -416,25 +443,12 @@ def _make_joint_dispatch_trampoline(
     else:
         def dispatch(*args):
             parent = args[1]
-            _ai = deref(args[offset_i])
-            _aj = deref(args[offset_j])
-            if not is_var(_ai) and not is_var(_aj):
-                _jk = (_runtime_arg_key(_ai), _runtime_arg_key(_aj))
-                try:
-                    _bfn = joint_dict.get(_jk)
-                except TypeError:
-                    _bfn = None
-                if _bfn is not None:
-                    yield from _bfn(*args)
-                else:
-                    yield from joint_default_fn(*args)
-            elif not is_var(_ai):
-                yield from single_i_dispatch(*args)
-            elif not is_var(_aj):
-                yield from single_j_dispatch(*args)
-            else:
-                yield from fallback_fn(*args)
+            yield from _joint_dispatch_body(
+                args, offset_i, offset_j, joint_dict, joint_default_fn,
+                single_i_dispatch, single_j_dispatch, fallback_fn,
+            )
             yield (parent, done)
+
     dispatch.__name__ = fallback_fn.__name__
     dispatch.__qualname__ = fallback_fn.__qualname__
     return dispatch
