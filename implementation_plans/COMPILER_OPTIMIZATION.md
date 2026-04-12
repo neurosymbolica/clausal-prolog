@@ -4,6 +4,17 @@ Working branch: `compiler-opt`
 Worktree: `/workspace/clausal-opt`
 Base: `main` @ 82da4ad
 
+> **Note (post-COMPILER_MODULE_SPLIT refactor):**
+> `clausal/logic/compiler.py` is now the package
+> `clausal/logic/compiler/` — see
+> `implementation_plans/COMPILER_MODULE_SPLIT.md` for the layout.
+> File-path references and line numbers in this document are
+> historical snapshots; symbol names are still valid and still
+> importable as ``from clausal.logic.compiler import X``.  When
+> acting on a reference like ``compiler.py:3459``, grep the symbol
+> name inside ``clausal/logic/compiler/`` to locate its current
+> submodule and line.
+
 ---
 
 ## Part 1 — The existing system

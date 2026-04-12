@@ -17,6 +17,113 @@ require either distributing the Phase 0.5a aliases into every consuming
 submodule or creating a dedicated `_state.py`.  Left as a deferred
 cleanup — see "Deferred refactors" below.
 
+## As-shipped deltas from the original plan
+
+Small deviations discovered during execution.  Recorded here so the
+plan and the code agree.
+
+1. **Naming constants live in `_ast_helpers.py`, not `_monolith.py`.**
+   The plan placed `_MARK_PREFIX`, `_TRAIL_PARAM_NAME`, `_K_PARAM_NAME`,
+   `_DISP_PREFIX`, `_TRAMP_PARENT_NAME`, `_THIS_GEN_NAME` in the
+   naming-constants block of `_monolith`.  During phase 6 we hit a
+   `star_segments → _monolith` import cycle, so the constants moved to
+   the deepest leaf (`_ast_helpers`) where any submodule can import
+   them without cycling.
+
+2. **Star-list parsing leaves live in `terms_to_ast.py`, not
+   `star_segments.py`.**  `term_to_ast_expr` uses `_parse_star_segments`
+   and `_count_stars`; `star_segments._compile_*_is` use
+   `term_to_ast_expr`.  To break this cycle the four parsing leaves
+   (`_is_star_list`, `_parse_star_segments`, `_count_stars`,
+   `_dotted_name_from_loadattr`) moved into `terms_to_ast.py`.
+   `star_segments.py` keeps only the three `_compile_*_is` functions.
+
+3. **Cross-strategy calls use `_m.` lazy attribute access, not
+   direct imports.**  `goal_trampoline.compile_goal_trampoline`'s
+   `forall/2` handler rewrites into shallow form and calls
+   `_m.compile_goal(…)`.  Similarly, `ite_reified`, `control_constructs`,
+   and `tro` all reach the goal compilers through the `_m` alias on
+   `_monolith`.  The alias is bound at import time; the attribute
+   lookup is at call time, which sidesteps the module-load-order
+   cycles.  `_EXTRA_FUNCDEF` is referenced the same way from submodules
+   that load before `predicate.py`.
+
+4. **`predicate.py` bulk-copies Phase 0.5a aliases via `for _n in
+   dir(_m)`.**  The ~50 hoisted runtime-helper aliases
+   (`_fd_eq_fn`, `_DictTerm_t`, `_KWTerm_s`, …) and the runtime helpers
+   (`_head_list_unify_input`, `_body_star_unify`, `_in_iter`,
+   `_build_star_list`, …) stayed in `_monolith`'s namespace.  Rather
+   than enumerate them, `predicate.py` ends its header with::
+
+       for _n in dir(_m):
+           if not _n.startswith("__"):
+               globals().setdefault(_n, getattr(_m, _n))
+       del _n
+
+   so the moved function bodies resolve bare-name references without
+   any rewriting.
+
+5. **Phase 19 was folded into each move commit.**  Every extracted
+   submodule got a module docstring as part of its phase — there is no
+   separate documentation phase.
+
+6. **Phase 18 did not delete `_monolith.py`.**  It remains as a
+   366-line residual hub (hoisted imports, thread-local state,
+   re-export shims) because removing it would require a non-trivial
+   redistribution of shared state.  Listed in "Deferred refactors" as
+   candidate #8.
+
+7. **`__init__.py` keeps its `__getattr__` delegation.**  The plan
+   originally intended phase 18 to replace delegation with an explicit
+   re-export list.  Enumerating every private helper that tests /
+   builtins / tools import (e.g. `_body_multi_star_unify`,
+   `_extract_first_arg_key`, `_build_star_list`) would be
+   several dozen names with no readability benefit; delegation stays.
+
+## Deferred refactors (after Phase 18)
+
+These are real smells worth fixing — just **not during the structural
+move**. Each one becomes its own PR, scoped to the relevant submodule.
+
+1. **Shallow/trampoline de-duplication** (the 3000-line prize). With
+   twins co-located per submodule, each de-dup is a single-file diff.
+   Likely approach: extract the shared control-flow skeleton and
+   parameterise on a "strategy adapter" that provides leaf-yield, call
+   dispatch, and continuation protocol. Start with the smallest pair
+   (`compile_body` / `compile_body_trampoline`, ~90% identical) to
+   prove the pattern.
+2. **Context object for compile-time threading**. Replace
+   `(db, var_context, trail_name, k_stmts[, self_name, parent_name])`
+   with a `CompileCtx` dataclass. Large touch but mechanical.
+3. **Break up the 300–500 line functions**. Top targets:
+   `compile_predicate_trampoline` (489), `compile_goal_trampoline`
+   (464), `compile_goal` (383). Each `match` arm is a natural
+   extraction point.
+4. **Naming normalisation**: decide on `_py` suffix convention for
+   runtime helpers; rename `compile_goal` → `compile_goal_shallow`
+   (with a deprecated alias) for symmetry.
+5. **Builtin-call name table**: extract `"unify"`, `"_dif"`, `"_fd_eq"`
+   etc. to a single registry shared by shallow and trampoline paths.
+6. **Inline `_shallow_to_trampoline`** (single caller).
+7. **Head-matching nesting** in `head_to_match_pattern` (depth 10) —
+   extract per-pattern-kind helpers.
+8. **Retire `_monolith.py`**.  Either distribute the Phase 0.5a
+   hoisted aliases back into their consuming submodules, or move them
+   into a dedicated `_shared_state.py` alongside `_compile_context_local`.
+   Also re-decide whether each submodule should import the aliases
+   directly or whether `predicate.py`'s bulk-copy pattern generalises.
+
+**Suggested ordering:** #1 first (start with the `compile_body` pair —
+smallest, ~90% identical, cleanest proof of the strategy-adapter
+pattern).  #8 is cosmetic and can wait.  #2 + #3 are big touches worth
+doing together once #1 has defined the shape of the post-dedup code.
+
+Out of scope even after the split unless specifically requested:
+
+- Changing the public API.
+- Unifying `compiler.py` and `compiler_v2.py`.
+- Touching the C extension codepaths (`_list_unify.c` etc.).
+
 Goal: turn the monolithic `clausal/logic/compiler.py` (8725 lines) into a
 cohesive package `clausal/logic/compiler/` organised by **functional
 cohesion** (things used together live together), without refactoring
@@ -606,42 +713,6 @@ inner imports. A cycle between modules A and B is a signal that:
   revision.
 
 (Empty until Phase 0.5a runs.)
-
----
-
-## Deferred refactors (after Phase 19)
-
-These are real smells worth fixing — just **not during the structural
-move**. Each one becomes its own PR, scoped to the relevant submodule.
-
-1. **Shallow/trampoline de-duplication** (the 3000-line prize). With
-   twins co-located per submodule, each de-dup is a single-file diff.
-   Likely approach: extract the shared control-flow skeleton and
-   parameterise on a "strategy adapter" that provides leaf-yield, call
-   dispatch, and continuation protocol. Start with the smallest pair
-   (`compile_body` / `compile_body_trampoline`, ~90% identical) to
-   prove the pattern.
-2. **Context object for compile-time threading**. Replace
-   `(db, var_context, trail_name, k_stmts[, self_name, parent_name])`
-   with a `CompileCtx` dataclass. Large touch but mechanical.
-3. **Break up the 300–500 line functions**. Top targets:
-   `compile_predicate_trampoline` (489), `compile_goal_trampoline`
-   (464), `compile_goal` (383). Each `match` arm is a natural
-   extraction point.
-4. **Naming normalisation**: decide on `_py` suffix convention for
-   runtime helpers; rename `compile_goal` → `compile_goal_shallow`
-   (with a deprecated alias) for symmetry.
-5. **Builtin-call name table**: extract `"unify"`, `"_dif"`, `"_fd_eq"`
-   etc. to a single registry shared by shallow and trampoline paths.
-6. **Inline `_shallow_to_trampoline`** (single caller).
-7. **Head-matching nesting** in `head_to_match_pattern` (depth 10) —
-   extract per-pattern-kind helpers.
-
-Out of scope even after the split unless specifically requested:
-
-- Changing the public API.
-- Unifying `compiler.py` and `compiler_v2.py`.
-- Touching the C extension codepaths (`_list_unify.c` etc.).
 
 ---
 
