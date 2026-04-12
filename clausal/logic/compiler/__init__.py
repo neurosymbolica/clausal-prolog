@@ -1,16 +1,39 @@
 """clausal.logic.compiler — predicate compiler package.
 
-This package is currently a thin shim over ``_monolith.py`` (the former
-``compiler.py``).  Subsequent phases of the module-split plan (see
-``implementation_plans/COMPILER_MODULE_SPLIT.md``) will migrate cohesive
-groups of functions out of ``_monolith.py`` into focused submodules.
-The public import surface stays stable throughout.
+Organized by functional cohesion (see
+``implementation_plans/COMPILER_MODULE_SPLIT.md``):
 
-During the split, ``__getattr__`` delegates unknown attribute lookups
-to ``_monolith``, so both public entrypoints and private helpers remain
-importable from ``clausal.logic.compiler`` without needing to enumerate
-every symbol here.  After Phase 18 (retirement of ``_monolith.py``) this
-shim is replaced by an explicit re-export list.
+- ``_ast_helpers``      — AST-construction leaves + naming constants
+- ``_vars``             — Var-collection and -naming helpers
+- ``head_list_unify``   — runtime bidirectional list-pattern unification
+- ``terms_to_ast``      — term → Python AST lowering (+ star parsing)
+- ``star_segments``     — body-Is star-list compilation
+- ``globals_env``       — compile-time globals-dict construction
+- ``head_match``        — head term → match-case patterns
+- ``ite_reified``       — reified if-then-else (shallow + trampoline)
+- ``tabled_naf``        — WFS tabled negation helpers
+- ``control_constructs``— once, catch, setup_call_cleanup, freeze, when, …
+- ``goal_shallow``      — ``compile_goal`` / ``compile_body`` (shallow)
+- ``goal_trampoline``   — trampoline counterparts
+- ``list_dispatch``     — single-position list-structure dispatch
+- ``arg_index``         — first-arg + joint + secondary + groundness dispatch
+- ``destructive_reuse`` — dead-source container-reuse rewrite
+- ``tro``               — tail-recursion optimization analysis + rewrite
+- ``predicate``         — top-level ``compile_predicate_*`` entrypoints
+- ``_monolith``         — residual shared state + re-export hub (see below)
+
+The ``_monolith`` submodule holds the hoisted Phase 0.5a runtime-helper
+aliases (``_fd_eq_fn``, ``_DictTerm_t``, …) and the thread-local
+``_compile_context_local``; these are shared module-level state that
+multiple submodules reference lazily.  It also re-exports every
+moved-out symbol so external code can still import any name from
+``clausal.logic.compiler`` regardless of which submodule owns it.
+
+The ``__getattr__`` delegation below forwards unknown-attribute lookups
+to ``_monolith``.  This preserves backward compatibility with the many
+call sites (tests, builtins, tools) that import private helpers like
+``_body_multi_star_unify`` or ``_extract_first_arg_key`` directly from
+``clausal.logic.compiler``.
 """
 
 from . import _monolith as _monolith
@@ -37,12 +60,11 @@ from ._monolith import (  # noqa: F401
 def __getattr__(name):
     """Forward unknown-attribute lookups to ``_monolith``.
 
-    Tests and internal modules import a few private helpers
+    Tests and internal modules import private helpers
     (``_body_multi_star_unify``, ``_build_star_list``,
     ``_extract_first_arg_key``, …) from ``clausal.logic.compiler``.
-    Rather than enumerate each one during the split, we delegate.
-    Once all symbols have migrated to focused submodules, this
-    delegation is replaced by explicit re-exports.
+    Rather than enumerate each one, we delegate — ``_monolith``
+    re-exports every symbol from the topic-specific submodules.
     """
     try:
         return getattr(_monolith, name)

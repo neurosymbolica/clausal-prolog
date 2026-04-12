@@ -1,6 +1,21 @@
 # Compiler module split
 
-## Status: Planning
+## Status: Structural split complete (phases 0–18)
+
+All 16 submodules extracted; 10400 tests pass at every phase.
+`_monolith.py` is now a 366-line residual shared-state + re-export hub
+containing only the Phase 0.5a hoisted runtime-helper aliases
+(`_fd_eq_fn`, `_DictTerm_t`, …), the thread-local
+`_compile_context_local`, and `from .<submodule> import …` lines that
+preserve the public attribute surface on `clausal.logic.compiler`.
+
+Phase 19 (per-submodule docstrings) was done inline — each extracted
+submodule got a docstring as part of its move commit.
+
+Deleting `_monolith.py` outright (the original phase 18 aim) would
+require either distributing the Phase 0.5a aliases into every consuming
+submodule or creating a dedicated `_state.py`.  Left as a deferred
+cleanup — see "Deferred refactors" below.
 
 Goal: turn the monolithic `clausal/logic/compiler.py` (8725 lines) into a
 cohesive package `clausal/logic/compiler/` organised by **functional
