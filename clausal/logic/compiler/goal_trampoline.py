@@ -47,7 +47,7 @@ from .terms_to_ast import (
 )
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
-from .goal_shallow import _compile_body_impl
+from .goal_shallow import _compile_body_impl, _make_body_compiler_impl
 from . import _monolith as _m
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
@@ -842,16 +842,34 @@ def compile_body_trampoline(
     )
 
 
+def _dr_preprocess(clause: Clause) -> list:
+    """Destructive-reuse preprocess: flatten And conjunctions, then rewrite.
+
+    Flattening is safe because ``And(a, b)`` compiles identically to the
+    sequential goal list ``[a, b]``.  The rewrite replaces eligible
+    ``append``/``dict_put``/``set_union`` calls with their ``_dr_*``
+    in-place variants when the source container is provably dead.
+
+    Trampoline-only: the ``_dr_*__N`` dispatch functions live in
+    ``clausal.logic.builtins.{lists,dict_set}`` and only exist in
+    trampoline form; wiring this into shallow would require shallow
+    equivalents that don't currently exist.
+    """
+    flat_body = _flatten_and_goals(clause.body)
+    eligible = _find_destructive_reuse_goals(clause)
+    return _apply_destructive_reuse(flat_body, eligible)
+
+
 def _make_body_compiler_trampoline(
     db: Database,
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
-    """Return a trampoline body_compiler callable bound to db."""
-    def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        # Destructive-reuse optimisation: flatten And conjunctions, then
-        # rewrite eligible goals before compiling.  Flattening is safe
-        # because And(a, b) compiles identically to sequential [a, b].
-        flat_body = _flatten_and_goals(clause.body)
-        eligible = _find_destructive_reuse_goals(clause)
-        goals = _apply_destructive_reuse(flat_body, eligible)
-        return compile_body_trampoline(goals, db, var_context, _TRAIL_PARAM_NAME)
-    return _body_compiler
+    """Return a trampoline body_compiler callable bound to db.
+
+    Applies destructive-reuse rewriting as a preprocess step; see
+    ``_dr_preprocess`` for why this is trampoline-only.
+    """
+    return _make_body_compiler_impl(
+        db,
+        body_compile_fn=compile_body_trampoline,
+        preprocess_clause=_dr_preprocess,
+    )

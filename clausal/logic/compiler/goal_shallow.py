@@ -626,10 +626,39 @@ def compile_body(
     )
 
 
-def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
-    """Return a body_compiler callable bound to db."""
+def _make_body_compiler_impl(
+    db: Database,
+    *,
+    body_compile_fn,
+    preprocess_clause=None,
+) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
+    """Shared factory for strategy-specific body-compiler closures.
+
+    Returns a ``(clause, var_context) -> list[ast.stmt]`` callable that:
+
+    1. Runs ``preprocess_clause(clause)`` to obtain the goal list.  Default
+       is ``clause.body`` (identity).  The trampoline strategy passes a
+       destructive-reuse rewriter here — see ``_make_body_compiler_trampoline``.
+    2. Delegates to ``body_compile_fn(goals, db, var_context, trail_name)``
+       (``compile_body`` or ``compile_body_trampoline``).
+
+    The preprocess hook is what keeps the shallow and trampoline body
+    compilers honestly different: destructive-reuse rewriting is a
+    trampoline-only optimisation (its ``_dr_*__N`` dispatch builtins only
+    exist in trampoline mode), so making it a per-strategy hook rather
+    than hard-wiring it keeps each strategy correct by construction.
+    """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        return compile_body(clause.body, db, var_context, _TRAIL_PARAM_NAME)
+        goals = preprocess_clause(clause) if preprocess_clause is not None else clause.body
+        return body_compile_fn(goals, db, var_context, _TRAIL_PARAM_NAME)
     return _body_compiler
+
+
+def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
+    """Return a shallow body_compiler callable bound to db.
+
+    No preprocess hook — shallow compiles ``clause.body`` as-is.
+    """
+    return _make_body_compiler_impl(db, body_compile_fn=compile_body)
 
 
