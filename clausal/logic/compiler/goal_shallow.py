@@ -173,6 +173,9 @@ def compile_goal(
     det = _compile_deterministic_goal(goal, var_context, trail_name, k_stmts)
     if det is not None:
         return det
+    membership = _compile_shared_membership_goal(goal, var_context, trail_name, k_stmts)
+    if membership is not None:
+        return membership
     meta = _compile_shared_meta_call(goal, db, var_context, trail_name, k_stmts)
     if meta is not None:
         return meta
@@ -267,57 +270,6 @@ def compile_goal(
                 return _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts)
 
         # ── Membership / enumeration ─────────────────────────────────────────
-        case in_(left=elem, right=collection):
-            loop_var = _fresh("_el")
-            mark = _fresh(_MARK_PREFIX)
-            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
-            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
-            return [
-                ast.For(
-                    target=_name(loop_var, ast.Store()),
-                    iter=_in_iter_expr(elem, coll_expr),
-                    body=[
-                        _assign_mark(mark, trail_name),
-                        _if(
-                            _call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
-                            k_stmts,
-                        ),
-                        _undo_stmt(mark, trail_name),
-                    ],
-                    orelse=[],
-                )
-            ]
-
-        # ── Non-membership ───────────────────────────────────────────────────
-        case NotIn(left=elem, right=collection):
-            found_flag = _fresh("_found")
-            loop_var = _fresh("_el")
-            mark = _fresh(_MARK_PREFIX)
-            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
-            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
-            return [
-                _assign(found_flag, ast.Constant(value=False)),
-                ast.For(
-                    target=_name(loop_var, ast.Store()),
-                    iter=_in_iter_expr(elem, coll_expr),
-                    body=[
-                        _assign_mark(mark, trail_name),
-                        ast.If(
-                            test=_call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
-                            body=[
-                                _assign(found_flag, ast.Constant(value=True)),
-                                _undo_stmt(mark, trail_name),
-                                ast.Break(),
-                            ],
-                            orelse=[_undo_stmt(mark, trail_name)],
-                        ),
-                    ],
-                    orelse=[],
-                ),
-                _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
-            ]
-
-        # ── throw(Term) — raise LogicException ────────────────────────────
         # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
             return _compile_catch(
@@ -569,6 +521,74 @@ def _compile_deterministic_goal(
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _if(_call(_name("_fd_ge"), l_expr, r_expr, _name(trail_name)), k_stmts),
+            ]
+
+    return None
+
+
+def _compile_shared_membership_goal(
+    goal,
+    var_context: dict[int, str],
+    trail_name: str,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt] | None:
+    """Compile ``in_`` / ``NotIn`` membership goals — strategy-agnostic.
+
+    These produce multiple / single solutions respectively, but the AST
+    they emit (a ``for`` loop over ``_in_iter(...)`` with unify + mark/undo)
+    is identical in shallow and trampoline mode, so both strategies'
+    ``match`` dispatchers delegate here.
+    """
+    match goal:
+        # ── Membership ───────────────────────────────────────────────────────
+        case in_(left=elem, right=collection):
+            loop_var = _fresh("_el")
+            mark = _fresh(_MARK_PREFIX)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
+            return [
+                ast.For(
+                    target=_name(loop_var, ast.Store()),
+                    iter=_in_iter_expr(elem, coll_expr),
+                    body=[
+                        _assign_mark(mark, trail_name),
+                        _if(
+                            _call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                            k_stmts,
+                        ),
+                        _undo_stmt(mark, trail_name),
+                    ],
+                    orelse=[],
+                )
+            ]
+
+        # ── Non-membership ───────────────────────────────────────────────────
+        case NotIn(left=elem, right=collection):
+            found_flag = _fresh("_found")
+            loop_var = _fresh("_el")
+            mark = _fresh(_MARK_PREFIX)
+            elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
+            coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
+            return [
+                _assign(found_flag, ast.Constant(value=False)),
+                ast.For(
+                    target=_name(loop_var, ast.Store()),
+                    iter=_in_iter_expr(elem, coll_expr),
+                    body=[
+                        _assign_mark(mark, trail_name),
+                        ast.If(
+                            test=_call(_name("unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                            body=[
+                                _assign(found_flag, ast.Constant(value=True)),
+                                _undo_stmt(mark, trail_name),
+                                ast.Break(),
+                            ],
+                            orelse=[_undo_stmt(mark, trail_name)],
+                        ),
+                    ],
+                    orelse=[],
+                ),
+                _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
 
     return None
