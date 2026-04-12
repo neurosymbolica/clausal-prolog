@@ -573,16 +573,27 @@ def _compile_predicate_call(
 # ── compile_body ───────────────────────────────────────────────────────────────
 
 
-def compile_body(
+def _compile_body_impl(
     goals: list,
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
+    *,
+    leaf_yield: ast.stmt,
+    compile_goal_fn,
 ) -> list[ast.stmt]:
-    """Compile a flat list of goals as a conjunction.
+    """Shared conjunction compilation, parameterised on strategy.
 
-    The leaf continuation is ``yield None`` (one solution).
-    Goals are processed right-to-left so each wraps the next as its k_stmts.
+    Both ``compile_body`` (shallow) and ``compile_body_trampoline`` reduce
+    to this helper — they only differ in:
+
+    - ``leaf_yield``: the statement emitted at the innermost continuation
+      to surface a solution (``yield None`` for shallow, ``yield (parent, None)``
+      for trampoline).
+    - ``compile_goal_fn``: the goal-compiler callable that wraps each outer
+      goal around the accumulating continuation.  ``compile_goal`` for
+      shallow; a closure around ``compile_goal_trampoline`` for trampoline
+      (bound to ``self_name``/``parent_name``).
 
     Body-only Vars (variables that appear in the body but not the head) are
     pre-allocated via ``_preallocate_body_vars`` so that they are registered
@@ -591,10 +602,28 @@ def compile_body(
     would otherwise only be walrus-introduced inside a later (inner) goal.
     """
     alloc_stmts = _preallocate_body_vars(goals, var_context)
-    k: list[ast.stmt] = [_yield_none_stmt()]
+    k: list[ast.stmt] = [leaf_yield]
     for goal in reversed(goals):
-        k = compile_goal(goal, db, var_context, trail_name, k)
+        k = compile_goal_fn(goal, db, var_context, trail_name, k)
     return alloc_stmts + k
+
+
+def compile_body(
+    goals: list,
+    db: Database,
+    var_context: dict[int, str],
+    trail_name: str,
+) -> list[ast.stmt]:
+    """Compile a flat list of goals as a conjunction (shallow strategy).
+
+    The leaf continuation is ``yield None`` (one solution).  See
+    ``_compile_body_impl`` for the shared right-to-left reduction.
+    """
+    return _compile_body_impl(
+        goals, db, var_context, trail_name,
+        leaf_yield=_yield_none_stmt(),
+        compile_goal_fn=compile_goal,
+    )
 
 
 def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:

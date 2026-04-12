@@ -47,6 +47,7 @@ from .terms_to_ast import (
 )
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
+from .goal_shallow import _compile_body_impl
 from . import _monolith as _m
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
@@ -826,19 +827,19 @@ def compile_body_trampoline(
     parent_name: str = _TRAMP_PARENT_NAME,
     self_name: str = _THIS_GEN_NAME,
 ) -> list[ast.stmt]:
-    """Compile a flat list of goals as a conjunction using the Step protocol.
+    """Compile a flat list of goals as a conjunction (trampoline strategy).
 
-    The leaf continuation is ``yield Step(parent, None)`` — one solution
-    surfaced to the calling generator.
-
-    Builds right-to-left: each goal wraps the next as its k_stmts, ending
-    with the leaf.  Body-only Vars are pre-allocated (same fix as compile_body).
+    The leaf continuation is ``yield (parent, None)`` — one solution
+    surfaced to the calling generator.  See ``_compile_body_impl`` for
+    the shared right-to-left reduction.
     """
-    alloc_stmts = _preallocate_body_vars(goals, var_context)
-    k: list[ast.stmt] = [_yield_step_stmt(_name(parent_name), ast.Constant(None))]
-    for goal in reversed(goals):
-        k = compile_goal_trampoline(goal, db, var_context, trail_name, k, self_name, parent_name)
-    return alloc_stmts + k
+    def _compile_goal(goal, db_, vc, tn, k):
+        return compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+    return _compile_body_impl(
+        goals, db, var_context, trail_name,
+        leaf_yield=_yield_step_stmt(_name(parent_name), ast.Constant(None)),
+        compile_goal_fn=_compile_goal,
+    )
 
 
 def _make_body_compiler_trampoline(
