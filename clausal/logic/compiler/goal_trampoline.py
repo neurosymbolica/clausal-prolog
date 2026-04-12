@@ -51,6 +51,7 @@ from .goal_shallow import (
     _compile_body_impl, _make_body_compiler_impl,
     _compile_predicate_call_impl,
     _compile_deterministic_goal,
+    _compile_shared_meta_call,
 )
 from . import _monolith as _m
 
@@ -319,11 +320,14 @@ def compile_goal_trampoline(
         call_expr = term_to_ast_expr(goal, var_context, eval_arith=False)
         return [ast.Expr(value=call_expr)] + list(k_stmts)
 
-    # Strategy-agnostic deterministic cases (unify, evaluate, dif, FD
-    # comparisons, structural comparisons) — shared with shallow.
+    # Strategy-agnostic cases (deterministic goals + shared meta-predicate
+    # calls that delegate to control_constructs) — shared with shallow.
     det = _compile_deterministic_goal(goal, var_context, trail_name, k_stmts)
     if det is not None:
         return det
+    meta = _compile_shared_meta_call(goal, db, var_context, trail_name, k_stmts)
+    if meta is not None:
+        return meta
 
     match goal:
 
@@ -535,10 +539,6 @@ def compile_goal_trampoline(
                 _if(ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)), k_stmts),
             ]
 
-        # ── throw(Term) — raise LogicException ────────────────────────────
-        case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
-            return _compile_throw(term_arg, var_context)
-
         # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
             return _compile_catch_trampoline(
@@ -558,68 +558,6 @@ def compile_goal_trampoline(
             return _compile_catch_trampoline(
                 goal_arg, error_var, recovery, db, var_context,
                 trail_name, k_stmts, self_name, always_catch=True,
-            )
-
-        # ── halt/0, halt/1 — exit ────────────────────────────────────────
-        case Call(func=LoadName(name="halt"), args=[], kwargs=[]):
-            return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
-
-        case Call(func=LoadName(name="halt"), args=[code_arg], kwargs=[]):
-            code_expr = term_to_ast_expr(code_arg, var_context, eval_arith=True)
-            return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
-
-        # ── once(goal) — commit to first solution ──────────────────────────
-        case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
-            # Inner compiles in simple mode (sub-generator), same as NAF.
-            return _compile_once(inner, db, var_context, trail_name, k_stmts)
-
-        # ── call_nth/2 — succeed on Nth solution only ─────────────────────
-        case Call(func=LoadName(name="call_nth"), args=[inner, n_arg], kwargs=[]):
-            return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
-
-        # ── count_all/2 — count solutions without collecting ──────────────
-        case Call(func=LoadName(name="count_all"), args=[inner, count_arg], kwargs=[]):
-            return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
-
-        # ── setup_call_cleanup/3 — deterministic cleanup ───────────────────
-        case Call(func=LoadName(name="setup_call_cleanup"), args=[setup, call_g, cleanup], kwargs=[]):
-            return _compile_setup_call_cleanup(
-                setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
-            )
-
-        # ── call_cleanup/2 — sugar for setup_call_cleanup(true, Call, Cleanup)
-        case Call(func=LoadName(name="call_cleanup"), args=[call_g, cleanup], kwargs=[]):
-            return _compile_setup_call_cleanup(
-                True, call_g, cleanup, db, var_context, trail_name, k_stmts,
-            )
-
-        # ── freeze/2 — delay goal until variable is bound ───────────────
-        case Call(func=LoadName(name="freeze"), args=[x_arg, goal_arg], kwargs=[]):
-            return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
-
-        # ── when/2 — generalized coroutining ────────────────────────────────
-        case Call(func=LoadName(name="when"), args=[cond_arg, goal_arg], kwargs=[]):
-            return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
-
-        # ── findall/3 — collect all solutions ───────────────────────────────
-        case Call(func=LoadName(name="findall"), args=[template, inner_goal, bag], kwargs=[]):
-            return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
-                fail_on_empty=False, dedup=False,
-            )
-
-        # ── bagof/3 — findall that fails on empty ─────────────────────────
-        case Call(func=LoadName(name="bagof"), args=[template, inner_goal, bag], kwargs=[]):
-            return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
-                fail_on_empty=True, dedup=False,
-            )
-
-        # ── setof/3 — bagof + dedup ───────────────────────────────────────
-        case Call(func=LoadName(name="setof"), args=[template, inner_goal, bag], kwargs=[]):
-            return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
-                fail_on_empty=True, dedup=True,
             )
 
         # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
