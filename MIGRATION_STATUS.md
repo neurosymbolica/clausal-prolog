@@ -97,7 +97,56 @@ also fails pre-migration.
 
 **Phase 4 net adds**: 69 Test clauses (`meta.clausal` +28, `higher_order.clausal` +28, `lambdas.clausal` +13). 1 file slimmed (test_clausal_modules.py 102 → 33 tests). 14 stdlib wrappers audit-confirmed-as-infra. 1 deferred (yaml).
 
-## Phase 5+ — To do
+## Phase 5 — SciPy / Torch / numeric
+
+All files in this phase fall into one of two patterns, both of which are
+correctly classified as Python-level infrastructure:
+
+1. **Direct adapter import** — `from clausal.modules.py.scipy_X import
+   Predicate, ...` + `_drive(pred, args)` helper that calls `_get_dispatch`
+   directly to verify the adapter's Var-binding / exception / arity
+   handling. Test the adapter implementation, not language behavior.
+
+2. **Fixture-runner** — parametrized `test_fixture(name)` methods that
+   `_load_module` a .clausal fixture and run its Test clauses. The runner
+   itself is integration-infra; the *behavior* is in the fixture.
+
+Behavior coverage at the .clausal surface is comprehensive:
+
+| .clausal fixture group | Test clause count |
+|---|---:|
+| scipy_*.clausal (cluster, constants, differentiate, fft, integrate, interpolate, linalg, ndimage, optimize, sparse, spatial, special, stats — incl. `_bidir` variants) | ~440 |
+| torch_*.clausal (comparison, creation2, data, distributions, fft, functional, io, linalg, math, nn, registry, schedulers, shape2, tensor) | ~230 |
+| sklearn_*.clausal (basic, data, metrics, pipeline, search) | ~50 |
+| spacy / sympy / units fixtures | ~80 |
+
+| file | status | reason |
+|---|---|---|
+| `test_scipy_cluster.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_constants.py` | ✅ keep | Adapter import |
+| `test_scipy_differentiate.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_fft.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_integrate.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_interpolate.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_linalg.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_ndimage.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_optimize.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_signal.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_sparse.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_spatial.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_special.py` | ✅ keep | Adapter import + `_drive` |
+| `test_scipy_stats.py` | ✅ keep | Adapter import + `_drive` |
+| `test_torch.py` | ✅ keep | Parametrized fixture runner + lazy-import / opts unit tests |
+| `test_torch_coverage.py` | ✅ keep | Coverage matrix runner |
+| `test_units.py` | ✅ keep | Quantity protocol (`__unify__` / `__walk__` / `__occurs_check__` / UnitsMismatch / attributed-var) — infra |
+| `test_spacy_module.py` | ✅ keep | Adapter import |
+| `test_sympy_module.py` | ✅ keep | Adapter import |
+
+**Phase 5 net adds**: zero. All 19 files audit-confirmed-stay-as-infra.
+The behavior layer is already comprehensively covered by .clausal
+fixtures (~800 Test clauses across scipy/torch/sklearn/spacy/sympy/units).
+
+## Phase 6+ — To do
 
 See `MIGRATION_CANDIDATES.md`. Suggested next batches:
 
