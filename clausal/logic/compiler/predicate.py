@@ -95,6 +95,7 @@ from .arg_index import (
 from .tro import (
     _detect_tro_clause, _compile_tro_body,
 )
+from .compile_ctx import CompilationContext
 from .goal_shallow import (
     compile_body, _make_body_compiler,
 )
@@ -1101,8 +1102,20 @@ def compile_predicate_shallow(
     # Choose the effective db for body compilation (may be a no-db proxy).
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
 
+    # Per-predicate ctx carrying shared state (locked_dispatch_keys etc.).
+    # Populated below after base_globals analysis; body_compiler captures
+    # this instance by reference and sees mutations at compile time.
+    # (B1b: only locked_dispatch_keys migrates here for the shallow path.
+    # bucket_ref_map / joint_bucket_ref_map still go through the thread-
+    # local until B1c.)
+    ctx_template = CompilationContext(
+        db=_effective_db,
+        var_context={},  # placeholder; per-clause dict is overlaid at compile time
+        trail_name=_TRAIL_PARAM_NAME,
+    )
+
     if body_compiler is None:
-        body_compiler = _make_body_compiler(_effective_db)
+        body_compiler = _make_body_compiler(_effective_db, ctx_template=ctx_template)
 
     # Resolve pred_cls: explicit param > globals_ > auto-detect later.
     if pred_cls is None:
@@ -1193,7 +1206,16 @@ def compile_predicate_shallow(
 
     # Phase 7: set compile context so _dispatch_call_iter can emit cached
     # dispatch names instead of fname._get_dispatch() for locked predicates.
+    #
+    # Two channels still present during slice B1b:
+    #   - ctx_template.locked_dispatch_keys — read by _dispatch_call_iter
+    #     when the caller threaded ctx through (the shallow internal path).
+    #   - _compile_context_local.locked_dispatch_keys — read by
+    #     compile_goal as a fallback when no ctx was passed (legacy /
+    #     external callers) and by the trampoline path.
+    # B1c retires the thread-local once the trampoline migrates to ctx too.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
+    ctx_template.locked_dispatch_keys = _locked_keys
     _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
     _compile_context_local.locked_dispatch_keys = _locked_keys
     try:

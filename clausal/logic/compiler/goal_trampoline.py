@@ -621,17 +621,34 @@ def compile_body_trampoline(
     trail_name: str,
     parent_name: str = _TRAMP_PARENT_NAME,
     self_name: str = _THIS_GEN_NAME,
+    *,
+    ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
     """Compile a flat list of goals as a conjunction (trampoline strategy).
 
     The leaf continuation is ``yield (parent, None)`` — one solution
     surfaced to the calling generator.  See ``_compile_body_impl`` for
     the shared right-to-left reduction.
+
+    ``ctx`` is currently accepted for signature compatibility with
+    ``_make_body_compiler_impl`` (which passes ``ctx=ctx_template``), but
+    the trampoline path still reads ``locked_dispatch_keys`` /
+    ``bucket_ref_map`` / ``joint_bucket_ref_map`` from the thread-local
+    ``_compile_context_local``.  Slice B1c migrates those onto ctx too;
+    until then, passing ctx here is a no-op.
     """
-    ctx = CompilationContext(
-        db=db, var_context=var_context, trail_name=trail_name,
-        self_name=self_name, parent_name=parent_name,
-    )
+    if ctx is not None:
+        # Caller supplied per-predicate ctx; use it but overlay the
+        # per-clause trail/var_context/self_name/parent_name.
+        ctx = ctx.replace(
+            db=db, var_context=var_context, trail_name=trail_name,
+            self_name=self_name, parent_name=parent_name,
+        )
+    else:
+        ctx = CompilationContext(
+            db=db, var_context=var_context, trail_name=trail_name,
+            self_name=self_name, parent_name=parent_name,
+        )
 
     def _compile_goal(goal, ctx_, k):
         return compile_goal_trampoline(

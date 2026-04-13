@@ -69,17 +69,22 @@ from .control_constructs import (
 )
 
 # Thread-local context for locked-predicate dispatch caching.
-# Lives in _monolith; referenced lazily by _dispatch_call_iter.  Scheduled
-# to migrate onto CompilationContext.locked_dispatch_keys in slice B1b/B1c —
-# see implementation_plans/SLICE_B_PROGRESS.md.
+# Still referenced here as a FALLBACK for legacy callers of compile_goal
+# that don't pass ``ctx`` (external callers: tests, solve.py, etc.).
+# When a caller passes ctx, ``ctx.locked_dispatch_keys`` is authoritative.
+# The shallow path's own internal machinery (compile_predicate_shallow →
+# _make_body_compiler → compile_body → compile_goal → _compile_predicate_call
+# → _dispatch_call_iter) threads ctx all the way; the thread-local is
+# consulted only when compile_goal is entered without a ctx.  B1c will
+# retire the thread-local once the trampoline path migrates too.
 _compile_context_local = _m._compile_context_local
 
 
 def _dispatch_call_iter(
+    ctx: CompilationContext,
     fname: str,
     arity: int,
     arg_exprs: list[ast.expr],
-    trail_name: str,
 ) -> ast.expr:
     """Generate: _tramp_call(fname._get_dispatch(), (arg0, …, argN), trail)
 
@@ -87,13 +92,13 @@ def _dispatch_call_iter(
     ``fname`` is resolved from the compiled function's globals, where it
     refers to either a PredicateMeta class or a _DbDispatchAdapter shim.
 
-    Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a pre-captured
-    dispatch function in base_globals) instead of ``fname._get_dispatch()``.
+    Phase 7: if the predicate is locked (its dispatch fn pre-cached in
+    ``base_globals`` under ``_disp_Foo_N``), emits that direct name
+    reference instead of the slower ``fname._get_dispatch()`` call.
+    Locked keys live on ``ctx.locked_dispatch_keys``.
     """
-    # Phase 7: use cached dispatch name for locked predicates
     dk = _disp_key(fname, arity)
-    locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
-    if dk in locked_keys:
+    if dk in ctx.locked_dispatch_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
         dispatch_expr = ast.Call(
@@ -104,7 +109,7 @@ def _dispatch_call_iter(
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
     return ast.Call(
         func=_name("_tramp_call"),
-        args=[dispatch_expr, args_tuple, _name(trail_name)],
+        args=[dispatch_expr, args_tuple, _name(ctx.trail_name)],
         keywords=[],
     )
 
@@ -143,6 +148,8 @@ def compile_goal(
     var_context: dict[int, str],
     trail_name: str,
     k_stmts: list[ast.stmt],
+    *,
+    ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
     """Compile a goal term into Python statements.
 
@@ -156,7 +163,24 @@ def compile_goal(
     var_context: mutable Var._id → python_name dict; extended for body-only Vars
     trail_name : name of the trail parameter in the enclosing compiled function
     k_stmts    : continuation statements to inline on success
+    ctx        : optional pre-constructed CompilationContext.  When the
+                 caller is internal (e.g. ``compile_body`` or a recursive
+                 goal), ctx is supplied and carries shared per-predicate
+                 state like ``locked_dispatch_keys``.  External callers
+                 (tests, ``solve.py``) don't need to know about ctx; when
+                 ``ctx is None``, one is constructed from the tuple args,
+                 with ``locked_dispatch_keys`` pulled from the thread-local
+                 ``_compile_context_local`` (the legacy back-channel — see
+                 B1c for the plan to retire it).
     """
+    if ctx is None:
+        ctx = CompilationContext(
+            db=db, var_context=var_context, trail_name=trail_name,
+            locked_dispatch_keys=getattr(
+                _compile_context_local, "locked_dispatch_keys", frozenset(),
+            ),
+        )
+
     goal = deref(goal)
 
     # Booleans — must be tested before isinstance(term, int) in the general path
@@ -296,20 +320,16 @@ def compile_goal(
         # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
         case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
-            return compile_goal(rewritten, db, var_context, trail_name, k_stmts)
+            return compile_goal(rewritten, db, var_context, trail_name, k_stmts, ctx=ctx)
 
         # ── Compile-time-known predicate call ────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
-            return _compile_predicate_call(
-                fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts
-            )
+            return _compile_predicate_call(ctx, fname, call_args, call_kwargs, k_stmts)
 
         # ── Qualified predicate call (mod.Pred(X_)) ──────────────────────────
         case Call(func=LoadAttr() as attr, args=call_args, kwargs=call_kwargs):
             fname = _dotted_name_from_loadattr(attr)
-            return _compile_predicate_call(
-                fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts
-            )
+            return _compile_predicate_call(ctx, fname, call_args, call_kwargs, k_stmts)
 
         case Call():
             raise NotImplementedError(
@@ -381,12 +401,10 @@ def _compile_predicate_call_impl(
 
 
 def _compile_predicate_call(
+    ctx: CompilationContext,
     fname: str,
     call_args: list,
     call_kwargs: list,   # list of Keyword nodes from the term
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile a call to a named predicate (shallow strategy).
@@ -395,7 +413,7 @@ def _compile_predicate_call(
     See ``_compile_predicate_call_impl`` for the shared front-end.
     """
     def _emit(arity, arg_exprs, k_stmts):
-        iter_expr = _dispatch_call_iter(fname, arity, arg_exprs, trail_name)
+        iter_expr = _dispatch_call_iter(ctx, fname, arity, arg_exprs)
         return [
             ast.For(
                 target=_name("_", ast.Store()),
@@ -406,7 +424,8 @@ def _compile_predicate_call(
         ]
 
     return _compile_predicate_call_impl(
-        fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts,
+        fname, call_args, call_kwargs,
+        ctx.db, ctx.var_context, ctx.trail_name, k_stmts,
         emit_dispatch=_emit,
     )
 
@@ -738,18 +757,39 @@ def compile_body(
     db: Database,
     var_context: dict[int, str],
     trail_name: str,
+    *,
+    ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
     """Compile a flat list of goals as a conjunction (shallow strategy).
 
     The leaf continuation is ``yield None`` (one solution).  See
     ``_compile_body_impl`` for the shared right-to-left reduction.
+
+    When the caller is internal (``_make_body_compiler``), it passes
+    the shared per-predicate ctx so that ``locked_dispatch_keys`` etc.
+    propagate to nested goal compilations.  External callers don't
+    pass ctx; the thread-local ``_compile_context_local`` supplies the
+    locked-dispatch state as a legacy fallback (see B1c for retirement).
     """
-    ctx = CompilationContext(db=db, var_context=var_context, trail_name=trail_name)
+    if ctx is None:
+        ctx = CompilationContext(
+            db=db, var_context=var_context, trail_name=trail_name,
+            locked_dispatch_keys=getattr(
+                _compile_context_local, "locked_dispatch_keys", frozenset(),
+            ),
+        )
+    else:
+        # Caller-supplied ctx: var_context is this clause's fresh dict;
+        # swap it in so compile_body's body-only-Var pre-allocation
+        # populates the right context.
+        ctx = ctx.replace(
+            db=db, var_context=var_context, trail_name=trail_name,
+        )
     return _compile_body_impl(
         goals, ctx,
         leaf_yield=_yield_none_stmt(),
         compile_goal_fn=lambda goal, ctx_, k: compile_goal(
-            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
+            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_,
         ),
     )
 
@@ -759,6 +799,7 @@ def _make_body_compiler_impl(
     *,
     body_compile_fn,
     preprocess_clause=None,
+    ctx_template: CompilationContext | None = None,
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Shared factory for strategy-specific body-compiler closures.
 
@@ -776,21 +817,41 @@ def _make_body_compiler_impl(
     exist in trampoline mode), so making it a per-strategy hook rather
     than hard-wiring it keeps each strategy correct by construction.
 
+    ``ctx_template`` — optional pre-populated CompilationContext carrying
+    per-predicate state (``locked_dispatch_keys`` in particular).  When
+    supplied, each per-clause call forks a ctx from it (replacing
+    ``var_context`` with the clause's fresh dict), so downstream goal
+    compilation sees the right shared state.  When omitted, body
+    compilation falls back to constructing ctx from the tuple args alone
+    (and reading the thread-local for locked keys) — the legacy path.
+
     The returned callable keeps the legacy ``(clause, var_context)``
     signature for compatibility with predicate compilation, which hasn't
-    yet migrated to :class:`CompilationContext`.
+    yet migrated to explicit ctx passing.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
         goals = preprocess_clause(clause) if preprocess_clause is not None else clause.body
-        return body_compile_fn(goals, db, var_context, _TRAIL_PARAM_NAME)
+        return body_compile_fn(
+            goals, db, var_context, _TRAIL_PARAM_NAME,
+            ctx=ctx_template,
+        )
     return _body_compiler
 
 
-def _make_body_compiler(db: Database) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
+def _make_body_compiler(
+    db: Database,
+    *,
+    ctx_template: CompilationContext | None = None,
+) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a shallow body_compiler callable bound to db.
 
     No preprocess hook — shallow compiles ``clause.body`` as-is.
+    ``ctx_template`` optionally carries per-predicate shared state.
     """
-    return _make_body_compiler_impl(db, body_compile_fn=compile_body)
+    return _make_body_compiler_impl(
+        db,
+        body_compile_fn=compile_body,
+        ctx_template=ctx_template,
+    )
 
 

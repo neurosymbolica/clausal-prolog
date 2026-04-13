@@ -71,17 +71,65 @@ Tests: 10409 pass, 0 fail (ex-trealla).
 ### B1b — `_dispatch_call_iter` takes ctx; plumb `locked_dispatch_keys` through
 
 **Scope:** `_dispatch_call_iter(ctx, fname, arity, arg_exprs)` reads
-from `ctx.locked_dispatch_keys`.  `_compile_predicate_call` constructs
-ctx locally at its boundary (using the tuple args already passed) and
-forwards to `_dispatch_call_iter`.  `compile_goal` passes ctx to
-`_compile_predicate_call` via a kwarg addition — for compile_goal
-itself the thread-local stays authoritative for this sub-slice.
+from `ctx.locked_dispatch_keys`.  `_compile_predicate_call` takes ctx
+and passes it to `_dispatch_call_iter`.  `compile_goal` accepts an
+optional `ctx` kwarg (constructing one locally from tuple args +
+thread-local-fallback when omitted).  `compile_body` similarly.
+`_make_body_compiler` accepts a `ctx_template` that flows through to
+`compile_body` and into `compile_goal`'s inner calls.
+`compile_predicate_shallow` builds a shared `ctx_template`, captures
+it in `body_compiler`, and mutates `ctx_template.locked_dispatch_keys`
+at the same point it writes the thread-local.
 
 Covers the shallow path only; the trampoline-path equivalents
 (`_dispatch_call_trampoline`, `_inject_bucket_refs_trampoline`) move
 in **B1c**.
 
-**Status:** ☐ not started
+**Status:** ✅ done
+
+Delivered:
+
+- ``CompilationContext.locked_dispatch_keys`` is authoritative for
+  the shallow path's dispatch emission.  The thread-local
+  ``_compile_context_local.locked_dispatch_keys`` is still written
+  by ``compile_predicate_shallow`` (same value), and still consulted
+  by ``compile_goal``'s ctx fallback for legacy callers that don't
+  pass ctx (external callers: tests, ``solve.py``, etc.).  Dual-write
+  is explicit; B1c retires the thread-local.
+- ``_dispatch_call_iter`` signature changed from
+  ``(fname, arity, arg_exprs, trail_name)`` to ``(ctx, fname, arity,
+  arg_exprs)``.
+- ``_compile_predicate_call`` signature changed from
+  ``(fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts)``
+  to ``(ctx, fname, call_args, call_kwargs, k_stmts)``.  Its two
+  callers in ``compile_goal`` match-arms updated accordingly.
+- ``compile_goal`` gained ``ctx: CompilationContext | None = None``
+  kwarg.  Constructs ctx from tuple args + thread-local fallback
+  when omitted; otherwise uses the passed ctx.  Recursive internal
+  calls (currently only ``forall``'s rewrite) pass ctx explicitly.
+- ``compile_body`` gained the same ``ctx`` kwarg.  When caller
+  supplies ctx, it overlays ``db`` / ``var_context`` / ``trail_name``
+  via ``ctx.replace()`` — preserving the per-predicate shared fields
+  (``locked_dispatch_keys`` etc.) while swapping in the per-clause
+  ``var_context``.
+- ``compile_body_trampoline`` also accepts ``ctx`` kwarg (for
+  signature compatibility with ``_make_body_compiler_impl``) but
+  currently still reads the thread-local for its own dispatch
+  emission.  B1c plumbs ctx through to it.
+- ``_make_body_compiler_impl`` gained ``ctx_template`` kwarg.
+  When supplied, each per-clause call forwards ctx_template via
+  ``body_compile_fn(..., ctx=ctx_template)``.  The closure captures
+  ctx_template *by reference*, so mutations after closure creation
+  (predicate.py sets ``ctx_template.locked_dispatch_keys =
+  _locked_keys`` after base_globals analysis) are visible at
+  compile time.
+- ``compile_predicate_shallow`` now constructs ``ctx_template`` up
+  front, passes it to ``_make_body_compiler``, and sets
+  ``ctx_template.locked_dispatch_keys`` at the same point it updates
+  the thread-local.
+
+Tests: 10409 pass, 0 fail (ex-trealla).  AST output unchanged
+(same locked keys flow through both channels).
 
 ### B1c — Trampoline-side thread-local migration
 
