@@ -560,12 +560,35 @@ itself passes with the shrunk allowed-list.
 
 **Scope:** Carried forward from slice A review (item 1): the C
 extensions physically belong in `runtime/`. Requires `setup.py`
-extension-path updates.  Also reconsider whether
-`clausal/logic/trampoline.py` / `clausal/logic/variables.py` should
-migrate under `runtime/` too — both are referenced from compiled-
-predicate `base_globals`.
+extension-path updates.
 
-**Status:** ☐ not started (review question; scope TBD)
+**Status:** ✅ done
+
+Delivered:
+
+- ``clausal/logic/_list_unify.c`` → ``clausal/logic/runtime/_list_unify.c``
+- ``clausal/logic/_trampoline.c`` → ``clausal/logic/runtime/_trampoline.c``
+- ``setup.py`` ``ext_trampoline`` / ``ext_list_unify`` module names
+  and source paths updated to the ``clausal.logic.runtime.*`` namespace.
+- ``clausal/logic/runtime/list_unify.py`` C-accelerator import now
+  pulls from ``clausal.logic.runtime._list_unify``.
+- ``clausal/logic/trampoline.py`` C-accelerator import now pulls from
+  ``clausal.logic.runtime._trampoline``.
+- Stale ``.so`` artifacts at the old paths removed; rebuild via
+  ``python setup.py build_ext --inplace`` produces the new-location
+  artifacts cleanly.
+
+Deferred (scope TBD — review decision):
+
+- ``clausal/logic/trampoline.py`` and ``clausal/logic/variables/``
+  remain at their current locations.  Both are referenced from
+  compiled-predicate ``base_globals`` and are runtime-flavoured in
+  nature, but they're imported from ~198 sites across the package
+  and the runtime/compile boundary test already treats them as
+  runtime-side.  The cost/benefit of the rename exceeds B8's "move
+  the C extensions" charter.  Tracked as a standalone future cleanup.
+
+Tests: 10409 pass, 0 fail (ex-trealla).
 
 ---
 

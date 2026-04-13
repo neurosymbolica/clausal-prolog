@@ -51,7 +51,7 @@ class Step:
 # trampoline, and solutions.  Fall back to pure-Python implementations below.
 
 try:
-    from clausal.logic._trampoline import DONE, StepGenerator, trampoline, solutions, _drive_until_yield  # type: ignore[import-untyped]
+    from clausal.logic.runtime._trampoline import DONE, StepGenerator, trampoline, solutions, _drive_until_yield  # type: ignore[import-untyped]
 except ImportError:
     # ── DONE sentinel ─────────────────────────────────────────────────────
     DONE: object = object()

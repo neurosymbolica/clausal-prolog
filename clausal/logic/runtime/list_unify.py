@@ -204,7 +204,7 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
 _head_list_unify_input = _head_list_unify_input_py
 _head_list_unify_output = _head_list_unify_output_py
 try:
-    from clausal.logic._list_unify import (  # noqa: F811
+    from clausal.logic.runtime._list_unify import (  # noqa: F811
         _head_list_unify_input,
         _head_list_unify_output,
     )

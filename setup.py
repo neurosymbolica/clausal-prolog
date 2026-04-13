@@ -16,14 +16,14 @@ ext_variables = Extension(
 )
 
 ext_trampoline = Extension(
-    "clausal.logic._trampoline",
-    sources=["clausal/logic/_trampoline.c"],
+    "clausal.logic.runtime._trampoline",
+    sources=["clausal/logic/runtime/_trampoline.c"],
     extra_compile_args=extra_compile_args,
 )
 
 ext_list_unify = Extension(
-    "clausal.logic._list_unify",
-    sources=["clausal/logic/_list_unify.c"],
+    "clausal.logic.runtime._list_unify",
+    sources=["clausal/logic/runtime/_list_unify.c"],
     extra_compile_args=extra_compile_args,
 )
 
