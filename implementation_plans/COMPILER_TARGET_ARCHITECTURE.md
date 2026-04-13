@@ -355,6 +355,108 @@ to. **Target-agnostic and strategy-agnostic**: no Python AST, no
 yield protocols, no C types, no LLVM instructions. Just logic-level
 operations over logic-level operands.
 
+#### Why a separate type and not existing `clausal.terms` classes
+
+The term classes in `clausal.pythonic_ast.nodes` (`Unify`,
+`DoesNotUnify`, `And`, `Or`, `Not`, `Lt`, `ArithEq`, `Call`,
+`IfExpr`, `TupleLiteral`, etc.) are **context-polymorphic** — the
+same class means different things depending on where it sits in
+the tree:
+
+| Class                        | In goal position          | In expression / term position       |
+|------------------------------|---------------------------|-------------------------------------|
+| `And`, `Or`                  | Conjunction / disjunction | Short-circuit boolean               |
+| `Not`                        | NAF                       | Logical negation                    |
+| `Unify`, `DoesNotUnify`      | Unify / dif constraint    | `is` / `is not` comparison          |
+| `Lt`, `LtE`, `Gt`, `GtE`     | FD comparison constraint  | Arithmetic comparison in an expr    |
+| `ArithEq`, `ArithNeq`        | FD equality constraint    | `==` / `!=` comparison              |
+| `in_`, `NotIn`               | Membership iteration      | `in` comparison                     |
+| `Evaluate`                   | Evaluate-and-unify        | (not used in expressions)           |
+| `Add`, `Sub`, `Mult`, …      | (not goals)               | Arithmetic expressions              |
+| `Call(func=LoadName, args)`  | Predicate call            | Structural data term                |
+| `IfExpr`                     | If-then-else goal         | Ternary expression                  |
+| `TupleLiteral`               | Conjunction               | Tuple data term                     |
+| `list[Node]`                 | Sequential conjunction    | List data term                      |
+
+The existing compiler handles this by putting **all the disambiguation
+logic inside `compile_goal`**. Which interpretation a node gets depends
+on which function processes it (`compile_goal` — goal context;
+`term_to_ast_expr(eval_arith=True)` — arithmetic-expression context;
+`term_to_ast_expr(eval_arith=False)` — data-term context). The types
+don't carry the distinction; the caller has to know.
+
+Consequences of this context-polymorphism:
+
+- **Analysis passes must know context.** Asking "is this `Call`
+  TRO-eligible?" requires checking that the `Call` is in body-tail
+  position — not somewhere nested as data. The type alone can't tell you.
+- **Optimisation hints can't live on the nodes.** Marking a `Call`
+  as `tail_recursive=True` would stick that flag on every `Call`
+  that shares the node-equality — including non-goal `Call`s.
+- **Same-shape different-meaning is error-prone.** A future bug in
+  which an arithmetic `Lt` gets pattern-matched as a goal-position
+  `FDCompare` is hard to rule out at the type level.
+- **Refactoring existing term classes affects both roles at once.**
+  Can't change `Unify`'s fields without auditing every use site for
+  which role it plays.
+
+#### Solution: lower from terms to `GoalOp` at the start of body compilation
+
+`GoalOp` is the **disambiguated** form. A goal-position `Not` becomes
+`Negate`; an expression-position `Not` stays as a `clausal.terms.Not`
+inside an `ArithExpr`. A goal-position `Call(func=LoadName("once"))`
+becomes `MetaCall(kind="once", ...)`; a data-position `Call` stays
+as `clausal.terms.Call`. Each goal term gets exactly one role by the
+time it reaches analyses or lowering.
+
+```
+clausal.terms / pythonic_ast.nodes
+           │
+           │  parser output — context-polymorphic
+           │
+           ▼
+    phase "body" starts:
+           │
+           │  terms_to_goalop(clause.body)
+           │    — disambiguates goal vs expr vs term position
+           │
+           ▼
+         GoalOp tree  (canonical, closed set, annotation-ready)
+           │
+           │  analysis passes (TRO, DR, call-site specialisation)
+           │    write optimisation hints back onto GoalOp nodes
+           │
+           ▼
+       optimised GoalOp
+           │
+           │  backend lowering (lower_python_trampoline / lower_c / …)
+           │
+           ▼
+      target-specific output
+```
+
+The disambiguation step runs **once** per clause body at the start
+of phase 5 (body). After that point, every type in the IR carries its
+goal-position meaning unambiguously.
+
+#### Why keep them separate rather than unify later
+
+Even if it turns out `GoalOp` and existing terms have no operational
+differences once disambiguated, keeping them as separate types is
+defensive. If later work reveals a genuine operational difference
+(one of the types needs a field the other doesn't, one evolves for
+a new backend, one gains semantic checks the other can't have), we
+don't have to stop and resolve a conflict by either compromising the
+design or doing a large refactor. Merging two types that turned out
+equivalent is trivial; splitting one that turned out to have two
+distinct roles is painful — we've already lived through this with
+Prolog-style Call-as-both-goal-and-data.
+
+The cost of a separate `GoalOp` hierarchy is a single one-shot
+lowering pass (`terms_to_goalop`). The benefit is every downstream
+pass being typed in the domain it actually operates in. On net this
+is a cheap insurance policy.
+
 ```python
 # Operands are logic-level — the same types Clause.body uses.
 # Term = Var | Compound | int | str | ... | TupleLiteral | DictTerm | ...
@@ -1017,12 +1119,16 @@ These need answers, not just hand-waving:
 
 **Q1. Does `GoalOp` actually simplify things, or does it add a layer
 without payoff?**
-Risk: building an IR for a compiler that already works may be
-over-engineering. Mitigation: prototype IR lowering for a small
-subset (Unify, SubCall, Sequence, Branch) and see if the resulting
-strategy-specific emit functions are short and obvious. If they're
-as long as today's `compile_goal` arms, the IR isn't earning its
-keep.
+**Resolved:** yes, a separate `GoalOp` hierarchy earns its keep. The
+existing `clausal.terms` / `pythonic_ast.nodes` classes are context-
+polymorphic (same type means different things in goal vs expression
+vs data-term position); disambiguating once at the start of body
+compilation is cheaper than threading context through every analysis
+and lowering pass. See §4 *Why a separate type and not existing
+`clausal.terms` classes*. Migration plan: prototype the
+`terms_to_goalop` lowering and lowering-to-Python-AST for a small
+subset (Unify, SubCall, Sequence, Branch) first, to validate the
+IR shape before committing to the full set.
 
 **Q2. Is `Strategy` a protocol or an ABC?**
 Python protocols are duck-typed and don't require runtime checks;
