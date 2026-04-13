@@ -341,13 +341,13 @@ def compile_goal_trampoline(
 
     # Strategy-agnostic cases (deterministic goals + shared meta-predicate
     # calls that delegate to control_constructs) — shared with shallow.
-    det = _compile_deterministic_goal(goal, var_context, trail_name, k_stmts)
+    det = _compile_deterministic_goal(ctx, goal, k_stmts)
     if det is not None:
         return det
-    membership = _compile_shared_membership_goal(goal, var_context, trail_name, k_stmts)
+    membership = _compile_shared_membership_goal(ctx, goal, k_stmts)
     if membership is not None:
         return membership
-    meta = _compile_shared_meta_call(goal, db, var_context, trail_name, k_stmts)
+    meta = _compile_shared_meta_call(ctx, goal, k_stmts)
     if meta is not None:
         return meta
 
@@ -501,35 +501,24 @@ def compile_goal_trampoline(
         # ── Reified if-then-else ───────────────────────────────────────────
         case IfExpr(test=test, body=then, orelse=else_):
             if _is_reifiable(test):
-                return _compile_reified_ite_trampoline(
-                    test, then, else_, db, var_context, trail_name,
-                    k_stmts, self_name, parent_name,
-                )
+                return _compile_reified_ite_trampoline(ctx, test, then, else_, k_stmts)
             else:
-                return _compile_general_ite_trampoline(
-                    test, then, else_, db, var_context, trail_name,
-                    k_stmts, self_name, parent_name,
-                )
+                return _compile_general_ite_trampoline(ctx, test, then, else_, k_stmts)
 
         # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
-            return _compile_catch_trampoline(
-                goal_arg, catcher, recovery, db, var_context,
-                trail_name, k_stmts, self_name,
-            )
+            return _compile_catch_trampoline(ctx, goal_arg, catcher, recovery, k_stmts)
 
         # ── catch_error(Goal, Error) — catch any exception, bind Error ──────────
         case Call(func=LoadName(name="catch_error"), args=[goal_arg, error_var], kwargs=[]):
             return _compile_catch_trampoline(
-                goal_arg, error_var, True, db, var_context,
-                trail_name, k_stmts, self_name, always_catch=True,
+                ctx, goal_arg, error_var, True, k_stmts, always_catch=True,
             )
 
         # ── catch_recover(Goal, Error, Recovery) — catch, bind, recover ───
         case Call(func=LoadName(name="catch_recover"), args=[goal_arg, error_var, recovery], kwargs=[]):
             return _compile_catch_trampoline(
-                goal_arg, error_var, recovery, db, var_context,
-                trail_name, k_stmts, self_name, always_catch=True,
+                ctx, goal_arg, error_var, recovery, k_stmts, always_catch=True,
             )
 
         # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
@@ -588,10 +577,6 @@ def _compile_predicate_call_trampoline(
     See ``_compile_predicate_call_impl`` in ``goal_shallow`` for the shared
     front-end (arg ordering + lambda hoist + arg_expr lowering).
     """
-    trail_name = ctx.trail_name
-    db = ctx.db
-    var_context = ctx.var_context
-
     def _emit(arity, arg_exprs, k_stmts):
         gen_name = _fresh("_gen")
         status_name = _fresh("_st")
@@ -622,7 +607,7 @@ def _compile_predicate_call_trampoline(
         return [gen_assign, first_step, loop]
 
     return _compile_predicate_call_impl(
-        fname, call_args, call_kwargs, db, var_context, trail_name, k_stmts,
+        ctx, fname, call_args, call_kwargs, k_stmts,
         emit_dispatch=_emit,
     )
 

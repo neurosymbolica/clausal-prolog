@@ -392,9 +392,12 @@ def _compile_tro_tail(
             ordered_args.append(kw_dict[param_name])
 
     # Hoist any lambda arguments (reuse existing helper).
-    ordered_args, lambda_defs = _hoist_lambda_args(
-        ordered_args, var_context, db, trail_name,
+    from .compile_ctx import CompilationContext as _CC_hoist
+    _hoist_ctx = _CC_hoist(
+        db=db, var_context=var_context, trail_name=trail_name,
+        self_name=self_name, parent_name=parent_name,
     )
+    ordered_args, lambda_defs = _hoist_lambda_args(_hoist_ctx, ordered_args)
 
     stmts: list[ast.stmt] = list(lambda_defs)
 

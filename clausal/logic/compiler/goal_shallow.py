@@ -197,13 +197,13 @@ def compile_goal(
     # Strategy-agnostic deterministic cases (unify, evaluate, dif, FD
     # comparisons, structural comparisons) are identical between shallow
     # and trampoline — handle them in the shared helpers first.
-    det = _compile_deterministic_goal(goal, var_context, trail_name, k_stmts)
+    det = _compile_deterministic_goal(ctx, goal, k_stmts)
     if det is not None:
         return det
-    membership = _compile_shared_membership_goal(goal, var_context, trail_name, k_stmts)
+    membership = _compile_shared_membership_goal(ctx, goal, k_stmts)
     if membership is not None:
         return membership
-    meta = _compile_shared_meta_call(goal, db, var_context, trail_name, k_stmts)
+    meta = _compile_shared_meta_call(ctx, goal, k_stmts)
     if meta is not None:
         return meta
 
@@ -212,22 +212,22 @@ def compile_goal(
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
             # Build right-to-left: r's stmts become k for l
-            inner_k = compile_goal(r, db, var_context, trail_name, k_stmts)
-            return compile_goal(l, db, var_context, trail_name, inner_k)
+            inner_k = compile_goal(r, db, var_context, trail_name, k_stmts, ctx=ctx)
+            return compile_goal(l, db, var_context, trail_name, inner_k, ctx=ctx)
 
         # ── Tuple-as-conjunction ─────────────────────────────────────────────
         # (A, B, C) in goal position → treat as conjunction (same as A and B and C)
         case TupleLiteral(elements=elems) if elems:
             k = k_stmts
             for goal in reversed(elems):
-                k = compile_goal(goal, db, var_context, trail_name, k)
+                k = compile_goal(goal, db, var_context, trail_name, k, ctx=ctx)
             return k
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
             mark = _fresh(_MARK_PREFIX)
-            left_stmts = compile_goal(l, db, var_context, trail_name, k_stmts)
-            right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts)
+            left_stmts = compile_goal(l, db, var_context, trail_name, k_stmts, ctx=ctx)
+            right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts, ctx=ctx)
             # Note: both branches share var_context; body-only vars in Or
             # branches that differ between branches are a known POC limitation.
             # After trail.undo(mark) the trail is already back at mark, so the
@@ -253,7 +253,7 @@ def compile_goal(
             # bindings that the sub-generator leaves before failing).
             naf_gen = _fresh("_naf_gen")
             naf_flag = _fresh("_naf")
-            inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+            inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
             # Always append ``return; yield`` so the NAF function is a generator
             # type even when inner_stmts is empty (e.g. inner goal is False).
             # The dead ``yield`` after ``return`` is the standard Python trick.
@@ -292,28 +292,26 @@ def compile_goal(
         # ── Reified if-then-else ───────────────────────────────────────────
         case IfExpr(test=test, body=then, orelse=else_):
             if _is_reifiable(test):
-                return _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts)
+                return _compile_reified_ite(ctx, test, then, else_, k_stmts)
             else:
-                return _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts)
+                return _compile_general_ite(ctx, test, then, else_, k_stmts)
 
         # ── Membership / enumeration ─────────────────────────────────────────
         # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
-            return _compile_catch(
-                goal_arg, catcher, recovery, db, var_context, trail_name, k_stmts,
-            )
+            return _compile_catch(ctx, goal_arg, catcher, recovery, k_stmts)
 
         # ── catch_error(Goal, Error) — catch any exception, bind Error ──────────
         case Call(func=LoadName(name="catch_error"), args=[goal_arg, error_var], kwargs=[]):
             return _compile_catch(
-                goal_arg, error_var, True, db, var_context, trail_name, k_stmts,
+                ctx, goal_arg, error_var, True, k_stmts,
                 always_catch=True,
             )
 
         # ── catch_recover(Goal, Error, Recovery) — catch, bind, recover ───
         case Call(func=LoadName(name="catch_recover"), args=[goal_arg, error_var, recovery], kwargs=[]):
             return _compile_catch(
-                goal_arg, error_var, recovery, db, var_context, trail_name, k_stmts,
+                ctx, goal_arg, error_var, recovery, k_stmts,
                 always_catch=True,
             )
 
@@ -321,6 +319,7 @@ def compile_goal(
         case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
             return compile_goal(rewritten, db, var_context, trail_name, k_stmts, ctx=ctx)
+
 
         # ── Compile-time-known predicate call ────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
@@ -345,12 +344,10 @@ def compile_goal(
 
 
 def _compile_predicate_call_impl(
+    ctx: CompilationContext,
     fname: str,
     call_args: list,
     call_kwargs: list,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
     *,
     emit_dispatch,
@@ -372,6 +369,8 @@ def _compile_predicate_call_impl(
     ``_gen_N`` + ``_st_N`` while loop) given ``(arity, arg_exprs, k_stmts)``.
     The returned statements are prepended with the hoisted lambda defs.
     """
+    db = ctx.db
+    var_context = ctx.var_context
     n_pos = len(call_args)
     arity = n_pos + len(call_kwargs)
 
@@ -392,9 +391,7 @@ def _compile_predicate_call_impl(
             ordered_args.append(kw_dict[param_name])
 
     # Hoist any Lambda arguments to FunctionDef statements
-    ordered_args, lambda_defs = _hoist_lambda_args(
-        ordered_args, var_context, db, trail_name,
-    )
+    ordered_args, lambda_defs = _hoist_lambda_args(ctx, ordered_args)
 
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     return lambda_defs + emit_dispatch(arity, arg_exprs, k_stmts)
@@ -424,8 +421,7 @@ def _compile_predicate_call(
         ]
 
     return _compile_predicate_call_impl(
-        fname, call_args, call_kwargs,
-        ctx.db, ctx.var_context, ctx.trail_name, k_stmts,
+        ctx, fname, call_args, call_kwargs, k_stmts,
         emit_dispatch=_emit,
     )
 
@@ -434,9 +430,8 @@ def _compile_predicate_call(
 
 
 def _compile_deterministic_goal(
+    ctx: CompilationContext,
     goal,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt] | None:
     """Try to compile *goal* as one of the strategy-agnostic deterministic
@@ -449,17 +444,16 @@ def _compile_deterministic_goal(
     calls wrapped in mark/undo (where appropriate), all producing at
     most one solution and therefore the same AST under both strategies.
     """
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     match goal:
         # ── Unification ─────────────────────────────────────────────────────
         case Unify(left=l, right=r):
             # Phase 5: detect star-list patterns in body Unify goals
             if _is_star_list(l) or _is_star_list(r):
-                _sctx = CompilationContext(
-                    db=None, var_context=var_context, trail_name=trail_name,
-                )
                 if _is_star_list(l):
-                    return _compile_star_is(_sctx, l, r, k_stmts)
-                return _compile_star_is(_sctx, r, l, k_stmts)
+                    return _compile_star_is(ctx, l, r, k_stmts)
+                return _compile_star_is(ctx, r, l, k_stmts)
             mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
@@ -552,9 +546,8 @@ def _compile_deterministic_goal(
 
 
 def _compile_shared_membership_goal(
+    ctx: CompilationContext,
     goal,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt] | None:
     """Compile ``in_`` / ``NotIn`` membership goals — strategy-agnostic.
@@ -564,6 +557,8 @@ def _compile_shared_membership_goal(
     is identical in shallow and trampoline mode, so both strategies'
     ``match`` dispatchers delegate here.
     """
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     match goal:
         # ── Membership ───────────────────────────────────────────────────────
         case in_(left=elem, right=collection):
@@ -620,10 +615,8 @@ def _compile_shared_membership_goal(
 
 
 def _compile_shared_meta_call(
+    ctx: CompilationContext,
     goal,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt] | None:
     """Try to compile *goal* as one of the meta-predicate calls that share
@@ -648,10 +641,11 @@ def _compile_shared_meta_call(
     - ``when(Cond, G)``                      → ``_compile_when``
     - ``findall/bagof/setof(T, G, Bag)``     → ``_compile_find_all_core`` with flags
     """
+    var_context = ctx.var_context
     match goal:
         # ── throw(Term) — raise a logic exception ────────────────────────
         case Call(func=LoadName(name="throw"), args=[term_arg], kwargs=[]):
-            return _compile_throw(term_arg, var_context)
+            return _compile_throw(ctx, term_arg)
 
         # ── halt/0, halt/1 — exit ────────────────────────────────────────
         case Call(func=LoadName(name="halt"), args=[], kwargs=[]):
@@ -663,54 +657,50 @@ def _compile_shared_meta_call(
 
         # ── once(goal) — commit to first solution ──────────────────────────
         case Call(func=LoadName(name="once"), args=[inner], kwargs=[]):
-            return _compile_once(inner, db, var_context, trail_name, k_stmts)
+            return _compile_once(ctx, inner, k_stmts)
 
         # ── call_nth/2 — succeed on Nth solution only ─────────────────────
         case Call(func=LoadName(name="call_nth"), args=[inner, n_arg], kwargs=[]):
-            return _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts)
+            return _compile_call_nth(ctx, inner, n_arg, k_stmts)
 
         # ── count_all/2 — count solutions without collecting ──────────────
         case Call(func=LoadName(name="count_all"), args=[inner, count_arg], kwargs=[]):
-            return _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts)
+            return _compile_count_all(ctx, inner, count_arg, k_stmts)
 
         # ── setup_call_cleanup/3 — deterministic cleanup ───────────────────
         case Call(func=LoadName(name="setup_call_cleanup"), args=[setup, call_g, cleanup], kwargs=[]):
-            return _compile_setup_call_cleanup(
-                setup, call_g, cleanup, db, var_context, trail_name, k_stmts,
-            )
+            return _compile_setup_call_cleanup(ctx, setup, call_g, cleanup, k_stmts)
 
         # ── call_cleanup/2 — sugar for setup_call_cleanup(true, Call, Cleanup)
         case Call(func=LoadName(name="call_cleanup"), args=[call_g, cleanup], kwargs=[]):
-            return _compile_setup_call_cleanup(
-                True, call_g, cleanup, db, var_context, trail_name, k_stmts,
-            )
+            return _compile_setup_call_cleanup(ctx, True, call_g, cleanup, k_stmts)
 
         # ── freeze/2 — delay goal until variable is bound ───────────────
         case Call(func=LoadName(name="freeze"), args=[x_arg, goal_arg], kwargs=[]):
-            return _compile_freeze(x_arg, goal_arg, db, var_context, trail_name, k_stmts)
+            return _compile_freeze(ctx, x_arg, goal_arg, k_stmts)
 
         # ── when/2 — generalized coroutining ────────────────────────────────
         case Call(func=LoadName(name="when"), args=[cond_arg, goal_arg], kwargs=[]):
-            return _compile_when(cond_arg, goal_arg, db, var_context, trail_name, k_stmts)
+            return _compile_when(ctx, cond_arg, goal_arg, k_stmts)
 
         # ── findall/3 — collect all solutions ───────────────────────────────
         case Call(func=LoadName(name="findall"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                ctx, template, inner_goal, bag, k_stmts,
                 fail_on_empty=False, dedup=False,
             )
 
         # ── bagof/3 — findall that fails on empty ─────────────────────────
         case Call(func=LoadName(name="bagof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                ctx, template, inner_goal, bag, k_stmts,
                 fail_on_empty=True, dedup=False,
             )
 
         # ── setof/3 — bagof + dedup ───────────────────────────────────────
         case Call(func=LoadName(name="setof"), args=[template, inner_goal, bag], kwargs=[]):
             return _compile_find_all_core(
-                template, inner_goal, bag, db, var_context, trail_name, k_stmts,
+                ctx, template, inner_goal, bag, k_stmts,
                 fail_on_empty=True, dedup=True,
             )
 

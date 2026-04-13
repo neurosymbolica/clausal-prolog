@@ -41,6 +41,7 @@ from ._ast_helpers import (
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .globals_env import _preallocate_body_vars
 from .terms_to_ast import term_to_ast_expr, arith_to_ast_expr
+from .compile_ctx import CompilationContext
 from . import _monolith as _m
 from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: E402
 
@@ -50,12 +51,13 @@ AstLoadName = LoadName
 
 
 def _compile_arith_cmp(
+    ctx: CompilationContext,
     l: Any,
     r: Any,
     ast_op: ast.cmpop,
-    var_context: dict[int, str],
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
+    var_context = ctx.var_context
     l_expr = arith_to_ast_expr(l, var_context)
     r_expr = arith_to_ast_expr(r, var_context)
     test = ast.Compare(left=l_expr, ops=[ast_op], comparators=[r_expr])
@@ -63,21 +65,27 @@ def _compile_arith_cmp(
 
 
 def _deref_cmp(
+    ctx: CompilationContext,
     l: Any,
     r: Any,
     ast_op: ast.cmpop,
-    var_context: dict[int, str],
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile a structural comparison using deref on both sides."""
+    var_context = ctx.var_context
     l_expr = _call(_name("deref"), term_to_ast_expr(l, var_context, eval_arith=False))
     r_expr = _call(_name("deref"), term_to_ast_expr(r, var_context, eval_arith=False))
     test = ast.Compare(left=l_expr, ops=[ast_op], comparators=[r_expr])
     return [_if(test, k_stmts)]
-def _compile_once(inner, db, var_context, trail_name, k_stmts):
+
+
+def _compile_once(ctx: CompilationContext, inner, k_stmts):
     """Compile once(goal) — take first solution of inner goal, then continue."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     once_gen = _fresh("_once_gen")
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     once_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -106,26 +114,11 @@ def _compile_once(inner, db, var_context, trail_name, k_stmts):
     ]
 
 
-def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
-    """Compile call_nth(Goal, N) — succeed on the Nth solution of Goal only.
-
-    Generates::
-
-        _cn_count_N = 0
-        _cn_n_N = deref(<n_expr>)
-        if not isinstance(_cn_n_N, int) or _cn_n_N < 1:
-            raise _LogicException(_type_error("positive_integer", _cn_n_N, "call_nth/2"))
-        _cn_m_N = trail.mark()
-        def _cn_gen_N():
-            <compiled inner goal with k = [yield None]>
-            return; yield
-        for _ in _cn_gen_N():
-            _cn_count_N += 1
-            if _cn_count_N == _cn_n_N:
-                <k_stmts>
-                break
-        trail.undo(_cn_m_N)
-    """
+def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
+    """Compile call_nth(Goal, N) — succeed on the Nth solution of Goal only."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     count_var = _fresh("_cn_count")
     n_var = _fresh("_cn_n")
     mark_var = _fresh("_cn_m")
@@ -133,7 +126,7 @@ def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
 
     n_expr = term_to_ast_expr(n_arg, var_context, eval_arith=True)
 
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -175,7 +168,6 @@ def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
         orelse=[],
     )
 
-    # for loop: count solutions, break at Nth
     count_incr = ast.AugAssign(
         target=_name(count_var, ast.Store()),
         op=ast.Add(),
@@ -208,24 +200,11 @@ def _compile_call_nth(inner, n_arg, db, var_context, trail_name, k_stmts):
     ]
 
 
-def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
-    """Compile count_all(Goal, Count) — count solutions without collecting.
-
-    Generates::
-
-        _ca_n_N = 0
-        _ca_m_N = trail.mark()
-        def _ca_gen_N():
-            <compiled inner goal with k = [yield None]>
-            return; yield
-        for _ in _ca_gen_N():
-            _ca_n_N += 1
-        trail.undo(_ca_m_N)
-        _ca_um_N = trail.mark()
-        if unify(<count_expr>, _ca_n_N, trail):
-            <k_stmts>
-        trail.undo(_ca_um_N)
-    """
+def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
+    """Compile count_all(Goal, Count) — count solutions without collecting."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     n_var = _fresh("_ca_n")
     mark_var = _fresh("_ca_m")
     gen_name = _fresh("_ca_gen")
@@ -233,7 +212,7 @@ def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
 
     count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
 
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()])
+    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -279,38 +258,11 @@ def _compile_count_all(inner, count_arg, db, var_context, trail_name, k_stmts):
     ]
 
 
-def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_name, k_stmts):
-    """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup.
-
-    Generates::
-
-        _scc_m_N = trail.mark()
-        def _scc_setup_N():
-            <compiled Setup with k = [yield None]>
-            return; yield
-        _scc_ok_N = False
-        for _ in _scc_setup_N():
-            _scc_ok_N = True
-            break
-        if _scc_ok_N:
-            _scc_exc_N = None
-            def _scc_call_N():
-                <compiled Call with k = [yield None]>
-                return; yield
-            try:
-                for _ in _scc_call_N():
-                    <k_stmts>
-            except Exception as _scc_e_N:
-                _scc_exc_N = _scc_e_N
-            finally:
-                def _scc_cleanup_N():
-                    <compiled Cleanup with k = [yield None]>
-                    return; yield
-                for _ in _scc_cleanup_N():
-                    break
-                if _scc_exc_N is not None:
-                    raise _scc_exc_N
-    """
+def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k_stmts):
+    """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     mark_var = _fresh("_scc_m")
     setup_gen = _fresh("_scc_setup")
     ok_var = _fresh("_scc_ok")
@@ -320,7 +272,7 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
     cleanup_gen = _fresh("_scc_cleanup")
 
     def _make_sub_gen(name, goal):
-        stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+        stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
         body = stmts + [
             ast.Return(value=ast.Constant(value=None)),
             ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -340,7 +292,6 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
     call_fn = _make_sub_gen(call_gen, call)
     cleanup_fn = _make_sub_gen(cleanup_gen, cleanup)
 
-    # Setup loop — run once, set ok flag
     setup_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(setup_gen)),
@@ -351,7 +302,6 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
         orelse=[],
     )
 
-    # Call loop
     call_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(call_gen)),
@@ -359,7 +309,6 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
         orelse=[],
     )
 
-    # Cleanup loop — run once
     cleanup_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(cleanup_gen)),
@@ -367,14 +316,12 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
         orelse=[],
     )
 
-    # Exception handler
     handler = ast.ExceptHandler(
         type=_name("Exception"),
         name=exc_e,
         body=[_assign(exc_var, _name(exc_e))],
     )
 
-    # Re-raise if exception
     reraise = ast.If(
         test=ast.Compare(
             left=_name(exc_var),
@@ -392,7 +339,6 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
         finalbody=[cleanup_fn, cleanup_loop, reraise],
     )
 
-    # if ok: try/finally
     if_ok = ast.If(
         test=_name(ok_var),
         body=[_assign(exc_var, ast.Constant(value=None)), call_fn, try_block],
@@ -408,25 +354,11 @@ def _compile_setup_call_cleanup(setup, call, cleanup, db, var_context, trail_nam
     ]
 
 
-def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
-    """Compile freeze(X, Goal) — delay Goal until X is bound.
-
-    Generates::
-
-        _fz_x_N = deref(<x_expr>)
-        if not is_var(_fz_x_N):
-            # Already bound — run Goal immediately
-            <compiled Goal with k = k_stmts>
-        else:
-            def _fz_thunk_N():
-                <compiled Goal with k = [yield None]>
-                return; yield
-            _fz_old_N = _get_attr(_fz_x_N, "freeze")
-            _fz_goals_N = list(_fz_old_N) if _fz_old_N else []
-            _fz_goals_N.append(_fz_thunk_N)
-            _put_attr(_fz_x_N, "freeze", _fz_goals_N, trail)
-            <k_stmts>
-    """
+def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
+    """Compile freeze(X, Goal) — delay Goal until X is bound."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     x_var = _fresh("_fz_x")
     thunk_name = _fresh("_fz_thunk")
     old_var = _fresh("_fz_old")
@@ -434,11 +366,9 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
 
     x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
 
-    # Compile goal for the "already bound" branch (inline with k_stmts)
-    bound_stmts = _m.compile_goal(goal, db, var_context, trail_name, k_stmts)
+    bound_stmts = _m.compile_goal(goal, db, var_context, trail_name, k_stmts, ctx=ctx)
 
-    # Compile goal as a thunk (closure) for the "deferred" branch
-    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -454,13 +384,11 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
         **_m._EXTRA_FUNCDEF,
     )
 
-    # _fz_old_N = _get_attr(_fz_x_N, "freeze")
     get_old = _assign(
         old_var,
         _call(_name("_get_attr"), _name(x_var), ast.Constant(value="freeze")),
     )
 
-    # _fz_goals_N = list(_fz_old_N) if _fz_old_N else []
     make_goals = _assign(
         goals_var,
         ast.IfExp(
@@ -470,7 +398,6 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
         ),
     )
 
-    # _fz_goals_N.append(_fz_thunk_N)
     append_thunk = ast.Expr(
         value=_call(
             _attr(goals_var, "append"),
@@ -478,7 +405,6 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
         ),
     )
 
-    # _put_attr(_fz_x_N, "freeze", _fz_goals_N, trail)
     put_attr_stmt = ast.Expr(
         value=_call(
             _name("_put_attr"),
@@ -489,7 +415,6 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
         ),
     )
 
-    # if not is_var(...): <bound> else: <deferred>
     check = ast.If(
         test=ast.UnaryOp(
             op=ast.Not(),
@@ -511,36 +436,30 @@ def _compile_freeze(x_arg, goal, db, var_context, trail_name, k_stmts):
     ]
 
 
-def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
-    """Compile when(Cond, Goal) — delay Goal until Cond is satisfied.
-
-    Handles common conditions at compile time:
-    - ``when(nonvar(X), Goal)`` → compiles as ``freeze(X, Goal)``
-    - ``when(And(C1, C2), Goal)`` → ``when(C1, when(C2, Goal))``
-    - ``when(ground(X), Goal)`` → runtime ``_install_when_ground``
-    - ``when(Or(C1, C2), Goal)`` → runtime ``_install_when_disjunction``
-    """
+def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
+    """Compile when(Cond, Goal) — delay Goal until Cond is satisfied."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
 
     # when(nonvar(X), Goal) → freeze(X, Goal)
     if (isinstance(cond, AstCall)
             and isinstance(cond.func, AstLoadName)
             and cond.func.name == "nonvar"
             and len(cond.args) == 1):
-        return _compile_freeze(cond.args[0], goal, db, var_context, trail_name, k_stmts)
+        return _compile_freeze(ctx, cond.args[0], goal, k_stmts)
 
-    # when((C1, C2), Goal) → when(C1, when(C2, Goal)) [conjunction]
+    # when((C1, C2), Goal) → when(C1, when(C2, Goal))
     if isinstance(cond, And):
         inner_when = AstCall(
             func=AstLoadName(name="when"),
             args=[cond.right, goal],
             kwargs=[],
         )
-        return _compile_when(cond.left, inner_when, db, var_context, trail_name, k_stmts)
+        return _compile_when(ctx, cond.left, inner_when, k_stmts)
 
-    # For ground and Or conditions, use runtime dispatch.
-    # Compile goal as thunk, emit runtime _install_when_condition call.
     thunk_name = _fresh("_when_thunk")
-    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()])
+    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -558,7 +477,6 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
 
     cond_expr = term_to_ast_expr(cond, var_context, eval_arith=False)
 
-    # when(ground(X), Goal)
     if (isinstance(cond, AstCall)
             and isinstance(cond.func, AstLoadName)
             and cond.func.name == "ground"
@@ -571,7 +489,6 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
         ))
         return [thunk_fn, install_call] + (k_stmts or [])
 
-    # when((C1; C2), Goal) [disjunction]
     if isinstance(cond, Or):
         c1_expr = term_to_ast_expr(cond.left, var_context, eval_arith=False)
         c2_expr = term_to_ast_expr(cond.right, var_context, eval_arith=False)
@@ -584,7 +501,6 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
         ))
         return [thunk_fn, install_call] + (k_stmts or [])
 
-    # Fallback: runtime condition dispatch
     install_call = ast.Expr(value=_call(
         _name("_install_when_condition"),
         cond_expr,
@@ -595,36 +511,19 @@ def _compile_when(cond, goal, db, var_context, trail_name, k_stmts):
 
 
 def _compile_find_all_core(
+    ctx: CompilationContext,
     template: Any,
     inner_goal: Any,
     bag: Any,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
     *,
     fail_on_empty: bool = False,
     dedup: bool = False,
 ) -> list[ast.stmt]:
-    """Compile find_all/3, bag_of/3, set_of/3 as special forms.
-
-    Generates::
-
-        _fa_results_N = []
-        _fa_m_N = trail.mark()
-        def _fa_gen_N():
-            <compiled inner_goal with k = [yield None]>
-            return; yield
-        for _ in _fa_gen_N():
-            _fa_results_N.append(_deref_walk(<template_expr>))
-        trail.undo(_fa_m_N)
-        # optional dedup: _fa_results_N = _set_of_dedup(_fa_results_N)
-        # optional empty check: if _fa_results_N:
-        _fa_um_N = trail.mark()
-        if unify(<bag_expr>, _fa_results_N, trail):
-            <k_stmts>
-        trail.undo(_fa_um_N)
-    """
+    """Compile find_all/3, bag_of/3, set_of/3 as special forms."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     results_var = _fresh("_fa_results")
     mark_var = _fresh("_fa_m")
     gen_name = _fresh("_fa_gen")
@@ -633,8 +532,7 @@ def _compile_find_all_core(
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
     bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
 
-    # Compile inner goal as sub-generator (simple mode, like once/NAF)
-    inner_stmts = _m.compile_goal(inner_goal, db, var_context, trail_name, [_yield_none_stmt()])
+    inner_stmts = _m.compile_goal(inner_goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -650,7 +548,6 @@ def _compile_find_all_core(
         **_m._EXTRA_FUNCDEF,
     )
 
-    # Build the for-loop that collects results
     append_call = ast.Expr(value=_call(
         _attr(results_var, "append"),
         _call(_name("_deref_walk"), template_expr),
@@ -662,7 +559,6 @@ def _compile_find_all_core(
         orelse=[],
     )
 
-    # Unify bag with results + k_stmts
     unify_block = [
         _assign_mark(unify_mark, trail_name),
         ast.If(
@@ -681,14 +577,12 @@ def _compile_find_all_core(
         _undo_stmt(mark_var, trail_name),
     ]
 
-    # Optional dedup (set_of)
     if dedup:
         stmts.append(_assign(
             results_var,
             _call(_name("_set_of_dedup"), _name(results_var)),
         ))
 
-    # Optional empty check (bag_of, set_of)
     if fail_on_empty:
         stmts.append(ast.If(
             test=_name(results_var),
@@ -705,15 +599,7 @@ def _compile_find_all_core(
 
 
 def _catcher_to_structural(term: Any) -> Any:
-    """Recursively convert Call nodes to Compound in a catcher term.
-
-    ``catch/3`` catcher patterns and ``Catch/2`` error patterns appear in
-    *term* position, not goal position. ``Call(LoadName("Foo"), [arg])``
-    should construct ``Compound("Foo", (arg,))`` at runtime, not call the
-    dispatch function for ``Foo``. This avoids collisions with
-    ``_inject_call_targets`` which replaces functor names with
-    ``_DbDispatchAdapter`` objects that are not callable as constructors.
-    """
+    """Recursively convert Call nodes to Compound in a catcher term."""
     if isinstance(term, Call) and isinstance(term.func, LoadName) and not term.kwargs:
         new_args = [_catcher_to_structural(a) for a in term.args]
         return Compound(term.func.name, tuple(new_args))
@@ -721,13 +607,11 @@ def _catcher_to_structural(term: Any) -> Any:
 
 
 def _compile_throw(
+    ctx: CompilationContext,
     term_arg: Any,
-    var_context: dict[int, str],
 ) -> list[ast.stmt]:
-    """Compile throw(Term) — raise LogicException(term_expr).
-
-    Same in both simple and trampoline modes — Python raise propagates naturally.
-    """
+    """Compile throw(Term) — raise LogicException(term_expr)."""
+    var_context = ctx.var_context
     term_expr = term_to_ast_expr(term_arg, var_context, eval_arith=False)
     return [
         ast.Raise(exc=_call(_name("_LogicException"), term_expr)),
@@ -735,38 +619,16 @@ def _compile_throw(
 
 
 def _compile_catch_impl(
+    ctx: CompilationContext,
     catcher: Any,
-    var_context: dict[int, str],
-    trail_name: str,
     *,
     goal_body_stmts: list[ast.stmt],
     recovery_body_stmts: list[ast.stmt],
     always_catch: bool,
 ) -> list[ast.stmt]:
-    """Shared catch-block assembly.
-
-    Both shallow and trampoline ``catch`` compilers produce the same
-    try/except skeleton around strategy-specific *goal body* and
-    *recovery body* AST lists.  The skeleton is:
-
-    - ``_catch_mark = trail.mark()``
-    - ``try: <goal_body_stmts>``
-    - ``except Exception as _exc: ...``
-
-      The except block extracts the exception's term (``_LogicException.term``
-      or ``_python_error_term(exc)`` for plain Python exceptions), undoes
-      the trail to the catch mark, then tries to unify the catcher with
-      the extracted term.  On match, run ``recovery_body_stmts``.  On
-      miss, either undo + re-raise (``always_catch=False``, plain
-      ``catch/3``) or undo + fall through (``always_catch=True``,
-      ``catch_error``/``catch_recover``).
-
-    Each strategy supplies:
-
-    - ``goal_body_stmts``: for shallow, a sub-generator ``def`` + ``for``
-      loop; for trampoline, the raw trampoline-compiled stmts.
-    - ``recovery_body_stmts``: same shape difference.
-    """
+    """Shared catch-block assembly."""
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     catch_mark = _fresh("_catch_m")
     exc_name = _fresh("_exc")
     term_name = _fresh("_term")
@@ -783,7 +645,6 @@ def _compile_catch_impl(
         ),
     )
 
-    # always_catch=True (catch_error/2, catch_recover/3): never re-raise on mismatch
     orelse_stmts: list[ast.stmt] = (
         [] if always_catch
         else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
@@ -823,14 +684,7 @@ def _make_catch_subgen_fn_and_loop(
     compiled_stmts: list[ast.stmt],
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
-    """Wrap shallow-compiled *compiled_stmts* as a sub-generator ``def`` + ``for`` loop.
-
-    Returns the two statements that both shallow ``catch`` arms (goal
-    body and recovery body) need: a FunctionDef for the sub-generator
-    and a for-loop driving it with *k_stmts* as the per-solution body.
-    The sub-generator ends with ``return; yield`` to satisfy Python's
-    generator typing without actually reaching the yield.
-    """
+    """Wrap shallow-compiled *compiled_stmts* as a sub-generator ``def`` + ``for`` loop."""
     gen_name = _fresh(name_prefix)
     gen_body = compiled_stmts + [
         ast.Return(value=ast.Constant(value=None)),
@@ -856,37 +710,23 @@ def _make_catch_subgen_fn_and_loop(
 
 
 def _compile_catch(
+    ctx: CompilationContext,
     goal_arg: Any,
     catcher: Any,
     recovery: Any,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
+    *,
     always_catch: bool = False,
 ) -> list[ast.stmt]:
-    """Compile catch(Goal, Catcher, Recovery) in simple mode.
-
-    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
-    Python exceptions are wrapped as ``ClassName(Message)`` so that Clausal
-    code can match them the same way as logic terms::
-
-        catch(Goal, UnitsMismatch(_), Recovery)
-        catch_error(Goal, Error)                # always_catch=True, recovery=True
-        catch_recover(Goal, Error, Recovery)  # always_catch=True
-
-    Uses ``_compile_catch_impl`` for the shared try/except skeleton.
-    Here we wrap the goal and recovery as simple-mode sub-generator
-    functions (``def _catch_gen_N(): ...``) driven by ``for`` loops,
-    and place the outer ``for goal_loop`` inside the try body and the
-    recovery's ``for rec_loop`` inside the if-unify-matched branch.
-    """
-    # Compile goal + recovery as sub-generators (simple mode).
+    """Compile catch(Goal, Catcher, Recovery) in simple mode."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     goal_stmts = _m.compile_goal(
-        goal_arg, db, var_context, trail_name, [_yield_none_stmt()],
+        goal_arg, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx,
     )
     recovery_stmts = _m.compile_goal(
-        recovery, db, var_context, trail_name, [_yield_none_stmt()],
+        recovery, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx,
     )
 
     goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
@@ -896,50 +736,38 @@ def _compile_catch(
         "_catch_rec", recovery_stmts, k_stmts,
     )
 
-    # The sub-generator def must live outside the try block (it's
-    # referenced by the for-loop inside); the recovery def + loop both
-    # live inside the except handler's body.
     body = _compile_catch_impl(
-        catcher, var_context, trail_name,
+        ctx, catcher,
         goal_body_stmts=[goal_loop],
         recovery_body_stmts=[rec_gen_fn, rec_loop],
         always_catch=always_catch,
     )
-    # _compile_catch_impl returns [mark, try_block]; splice goal_gen_fn
-    # between them so the sub-generator def precedes its reference.
     return [body[0], goal_gen_fn, body[1]]
 
 
 def _compile_catch_trampoline(
+    ctx: CompilationContext,
     goal_arg: Any,
     catcher: Any,
     recovery: Any,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
-    self_name: str,
+    *,
     always_catch: bool = False,
 ) -> list[ast.stmt]:
-    """Compile catch(Goal, Catcher, Recovery) in trampoline mode.
-
-    Catches both ``throw/1`` (LogicException) and plain Python exceptions.
-    Python exceptions are wrapped as ``ClassName(Message)``.
-
-    Uses ``_compile_catch_impl`` for the shared try/except skeleton;
-    the trampoline goal/recovery bodies are the direct trampoline-
-    compiled stmt lists — no sub-generator wrapping is needed because
-    the trampoline Step protocol handles suspend/resume within the
-    surrounding function's yield-loop.
-    """
+    """Compile catch(Goal, Catcher, Recovery) in trampoline mode."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
+    self_name = ctx.self_name
+    parent_name = ctx.parent_name
     goal_stmts = _m.compile_goal_trampoline(
-        goal_arg, db, var_context, trail_name, k_stmts, self_name,
+        goal_arg, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
     )
     recovery_stmts = _m.compile_goal_trampoline(
-        recovery, db, var_context, trail_name, k_stmts, self_name,
+        recovery, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
     )
     return _compile_catch_impl(
-        catcher, var_context, trail_name,
+        ctx, catcher,
         goal_body_stmts=goal_stmts,
         recovery_body_stmts=recovery_stmts,
         always_catch=always_catch,
@@ -950,50 +778,31 @@ def _compile_catch_trampoline(
 
 
 def _compile_goal_lambda(
+    ctx: CompilationContext,
     lambda_node: Lambda,
-    enclosing_var_context: dict[int, str],
-    db: Database,
-    trail_name: str,
 ) -> tuple[str, ast.FunctionDef]:
-    """Compile a Lambda node to a simple-mode dispatch function.
-
-    Returns ``(func_name, func_def)`` — a FunctionDef statement that should be
-    emitted before the enclosing call, and the name to reference it by.
-
-    The generated function has signature::
-
-        def _lambda_N(X_, Y_, trail, k):
-            # body-only Var allocations
-            # compiled goal body with k_stmts = [yield None]
-            return; yield  # ensure generator
-
-    Lambda params are direct function arguments (not Var + unify).
-    Param references in the body are LoadName nodes — term_to_ast_expr
-    maps them to the function arg names directly.
-    Captured variables from the enclosing scope are Python closure references.
-    """
+    """Compile a Lambda node to a simple-mode dispatch function."""
+    db = ctx.db
+    enclosing_var_context = ctx.var_context
+    trail_name = ctx.trail_name
     func_name = _fresh("_lambda")
 
-    # Inherit captured vars from enclosing scope.
-    # Param references are LoadName nodes (not Vars), so they don't need
-    # entries in var_context — term_to_ast_expr handles them directly.
     body_vc: dict[int, str] = dict(enclosing_var_context)
     param_arg_names: list[str] = [param.name for param in lambda_node.params.params]
 
-    # Compile the lambda body goals
     body_goals = _flatten_conjunction(lambda_node.body)
     alloc_stmts = _preallocate_body_vars(body_goals, body_vc)
 
+    body_ctx = ctx.replace(var_context=body_vc)
     k: list[ast.stmt] = [_yield_none_stmt()]
     for goal in reversed(body_goals):
-        k = _m.compile_goal(goal, db, body_vc, trail_name, k)
+        k = _m.compile_goal(goal, db, body_vc, trail_name, k, ctx=body_ctx)
 
     body_stmts = alloc_stmts + k + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
     ]
 
-    # Build the function arguments: X_, Y_, ..., trail, k
     func_args = ast.arguments(
         posonlyargs=[],
         args=[ast.arg(arg=n) for n in param_arg_names] + [
@@ -1029,24 +838,15 @@ def _flatten_conjunction(goal) -> list:
 
 
 def _hoist_lambda_args(
+    ctx: CompilationContext,
     ordered_args: list,
-    enclosing_var_context: dict[int, str],
-    db: Database,
-    trail_name: str,
 ) -> tuple[list, list[ast.stmt]]:
-    """Scan call args for Lambda nodes; compile them and replace with name refs.
-
-    Returns ``(processed_args, lambda_defs)`` where processed_args has Lambda
-    nodes replaced with LoadName references to the generated functions, and
-    lambda_defs is the list of FunctionDef statements to emit before the call.
-    """
+    """Scan call args for Lambda nodes; compile them and replace with name refs."""
     lambda_defs: list[ast.stmt] = []
     processed: list = []
     for a in ordered_args:
         if isinstance(a, Lambda):
-            func_name, func_def = _compile_goal_lambda(
-                a, enclosing_var_context, db, trail_name,
-            )
+            func_name, func_def = _compile_goal_lambda(ctx, a)
             lambda_defs.append(func_def)
             processed.append(LoadName(name=func_name))
         else:

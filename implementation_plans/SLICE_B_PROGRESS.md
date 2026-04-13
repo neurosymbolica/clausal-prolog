@@ -195,20 +195,97 @@ Tests: 10409 pass, 0 fail (ex-trealla).
 
 **Scope:** Functions currently taking `(..., db, var_context,
 trail_name, k_stmts[, self_name, parent_name])` migrate to taking
-`(ctx, ..., k_stmts)`.  Cohort order (smallest call-graphs first):
+`(ctx, ..., k_stmts)`.  Split into three cohorts.
 
-- Star-Is compilers (`_compile_star_is`, `_compile_single_star_is`,
-  `_compile_multi_star_is` in `star_segments.py`).
-- Tabled NAF (`_compile_tabled_naf_simple` in `tabled_naf.py`).
-- Control constructs (`_compile_once`, `_compile_catch`,
-  `_compile_freeze`, `_compile_when`, `_compile_find_all_core`,
-  `_compile_throw`, `_compile_catch(+_trampoline)`,
-  `_compile_goal_lambda`, `_compile_call_nth`, `_compile_count_all`,
-  `_compile_setup_call_cleanup`, `_compile_arith_cmp`, `_deref_cmp`).
-- Reified ITE (`_compile_reified_ite_eq_impl`,
-  `_compile_reified_ite_fd_impl`, `_compile_general_ite(+_trampoline)`).
+**Status:** ✅ done (B2a + B2b + B2c)
 
-**Status:** ☐ not started
+### B2a — Star-Is + tabled NAF
+
+**Status:** ✅ done
+
+Delivered:
+
+- ``_compile_star_is`` / ``_compile_single_star_is`` /
+  ``_compile_multi_star_is`` in ``star_segments.py`` migrated to
+  ``(ctx, ...)``.
+- ``_compile_tabled_naf_simple`` in ``tabled_naf.py`` migrated.
+- Shallow Unify + Not branches and the trampoline Not branch
+  updated.  The shallow Unify branch built a minimal ctx inline
+  because ``_compile_deterministic_goal`` had not yet been
+  migrated; B2b cleaned that up.
+
+Tests: 10409 pass (ex-trealla).
+
+### B2b — Control constructs, reified ITE, and shared-goal helpers
+
+**Status:** ✅ done
+
+Delivered:
+
+- All helpers in ``control_constructs.py`` migrated to
+  ``(ctx, ..., k_stmts)``: ``_compile_arith_cmp``, ``_deref_cmp``,
+  ``_compile_once``, ``_compile_call_nth``, ``_compile_count_all``,
+  ``_compile_setup_call_cleanup``, ``_compile_freeze``,
+  ``_compile_when``, ``_compile_find_all_core``, ``_compile_throw``,
+  ``_compile_catch_impl``, ``_compile_catch``,
+  ``_compile_catch_trampoline``, ``_compile_goal_lambda``,
+  ``_hoist_lambda_args``.  ``_flatten_conjunction`` and
+  ``_catcher_to_structural`` left alone (no ctx needed).
+- Recursive ``_m.compile_goal`` / ``_m.compile_goal_trampoline`` calls
+  inside these helpers now forward ``ctx=ctx``.
+  ``_compile_catch_trampoline`` inherits ``self_name`` /
+  ``parent_name`` from ctx (previously an extra positional arg).
+- ``_compile_deterministic_goal`` / ``_compile_shared_membership_goal``
+  / ``_compile_shared_meta_call`` in ``goal_shallow.py`` migrated to
+  ``(ctx, goal, k_stmts)``.  Their call sites in ``compile_goal`` /
+  ``compile_goal_trampoline`` updated.  The shallow Unify / star-Is
+  branch no longer builds a throwaway inline ctx.
+- ``_compile_predicate_call_impl`` migrated to
+  ``(ctx, fname, call_args, call_kwargs, k_stmts, *, emit_dispatch)``.
+  Its two callers (shallow + trampoline predicate-call) pass ctx.
+- Shallow ``compile_goal``'s ``And`` / ``Or`` / ``TupleLiteral`` /
+  ``Not`` recursive calls forward ``ctx=ctx`` (was missing on most
+  of these arms before this slice).
+- ``tro.py``'s TRO-tail emitter builds a local ctx before calling
+  ``_hoist_lambda_args``.
+- ``tests/test_lambdas.py``'s direct tests of ``_compile_goal_lambda``
+  updated to use a small ``_mkctx`` helper.
+- ``_compile_reified_ite`` / ``_compile_reified_ite_trampoline``,
+  ``_compile_reified_ite_eq(_trampoline)`` + ``_impl``,
+  ``_compile_reified_ite_fd(_trampoline)`` + ``_impl``,
+  ``_compile_general_ite`` / ``_compile_general_ite_trampoline`` in
+  ``ite_reified.py`` all migrated to ``(ctx, ..., k_stmts)``.  The
+  trampoline variants inherit ``self_name`` / ``parent_name`` from
+  ctx; ``_compile_general_ite_trampoline``'s condition sub-generator
+  forks a ctx via ``ctx.replace(self_name=..., parent_name=...)``.
+
+Tests: 10409 pass (ex-trealla).
+
+### B2c — Retire the `_compile_context_local` thread-local
+
+**Status:** ✅ done
+
+Delivered:
+
+- ``_compile_context_local`` thread-local **retired**: removed from
+  ``_monolith.py``, from the module-level re-assignments in
+  ``goal_shallow.py`` / ``goal_trampoline.py``, and from the
+  read/restore block pairs in ``predicate.py``
+  (``compile_predicate_shallow`` and
+  ``compile_predicate_trampoline``) and ``tro.py``.  The
+  ``if ctx is None`` fallbacks in ``compile_goal`` /
+  ``compile_goal_trampoline`` now construct a plain
+  ``CompilationContext`` without consulting any thread-local.
+  ``ctx_template`` on ``predicate.py`` is authoritative for
+  ``locked_dispatch_keys`` / ``bucket_ref_map`` /
+  ``joint_bucket_ref_map``.
+- ``tests/test_callsite_specialization.py``: ``_mkctx`` now
+  constructs a ``CompilationContext`` with fresh maps supplied per
+  test; the old ``_compile_context_local.bucket_ref_map = {}`` setup
+  stanzas deleted.  The ``test_bucket_ref_map_populated`` test asserts
+  against the ctx's ``bucket_ref_map`` rather than the thread-local.
+
+Tests: 10409 pass (ex-trealla).
 
 ### B3 — Migrate `compile_goal` / `compile_goal_trampoline` dispatchers
 

@@ -35,6 +35,7 @@ from ._ast_helpers import (
     _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr
+from .compile_ctx import CompilationContext
 from . import _monolith as _m
 
 
@@ -64,49 +65,26 @@ _FD_REIFY_INFO: dict[type, tuple[str, str, str]] = {
 
 
 def _compile_reified_ite_impl(
-    test, then, else_, db, var_context, trail_name, k_stmts,
+    ctx: CompilationContext,
+    test, then, else_, k_stmts,
     *,
     compile_eq,
     compile_fd,
 ):
-    """Shared three-way-branch dispatcher for reified ITE.
-
-    Routes on the shape of *test*:
-
-    - ``Unify(l, r)``       → ``compile_eq(..., swap=False)``
-    - ``DoesNotUnify(l, r)`` → ``compile_eq(..., swap=True)``
-    - any other cmp         → ``compile_fd(test, ...)``
-
-    The two callable hooks are the strategy-specific ``_eq`` / ``_fd``
-    compilers.  Shallow passes ``_compile_reified_ite_eq`` /
-    ``_compile_reified_ite_fd`` directly; trampoline passes closures that
-    bind ``self_name``/``parent_name`` before forwarding.
-
-    Generates a three-way branch:
-    - True  (ground-satisfied): run *then*
-    - False (ground-violated):  run *else*
-    - None  (undetermined):     explore both with appropriate constraints
-    """
+    """Shared three-way-branch dispatcher for reified ITE."""
     match test:
         case Unify(left=l, right=r):
-            return compile_eq(
-                l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False
-            )
+            return compile_eq(ctx, l, r, then, else_, k_stmts, swap=False)
         case DoesNotUnify(left=l, right=r):
-            return compile_eq(
-                l, r, then, else_, db, var_context, trail_name, k_stmts, swap=True
-            )
+            return compile_eq(ctx, l, r, then, else_, k_stmts, swap=True)
         case _:
-            # CLP(FD) comparison
-            return compile_fd(
-                test, then, else_, db, var_context, trail_name, k_stmts
-            )
+            return compile_fd(ctx, test, then, else_, k_stmts)
 
 
-def _compile_reified_ite(test, then, else_, db, var_context, trail_name, k_stmts):
+def _compile_reified_ite(ctx: CompilationContext, test, then, else_, k_stmts):
     """Shallow variant: see ``_compile_reified_ite_impl`` for the shape."""
     return _compile_reified_ite_impl(
-        test, then, else_, db, var_context, trail_name, k_stmts,
+        ctx, test, then, else_, k_stmts,
         compile_eq=_compile_reified_ite_eq,
         compile_fd=_compile_reified_ite_fd,
     )
@@ -119,9 +97,7 @@ def _three_way_reif_branch(
     false_stmts: list[ast.stmt],
     undetermined: list[ast.stmt],
 ) -> list[ast.stmt]:
-    """Assemble the ``if reif is True / elif is False / else: undetermined``
-    three-way branch common to all reified-ITE compilers.
-    """
+    """Assemble the three-way branch."""
     reif_assign = _assign(reif_var, reif_call)
     branch = ast.If(
         test=ast.Compare(left=_name(reif_var), ops=[ast.Is()], comparators=[ast.Constant(True)]),
@@ -138,44 +114,27 @@ def _three_way_reif_branch(
 
 
 def _compile_reified_ite_eq_impl(
-    l, r, then, else_, db, var_context, trail_name, k_stmts,
+    ctx: CompilationContext,
+    l, r, then, else_, k_stmts,
     *,
     compile_goal_fn,
     swap: bool,
 ):
-    """Shared ``_compile_reified_ite_eq`` body.
-
-    Strategies differ only in which ``compile_goal_fn`` they pass in:
-    shallow uses the raw ``compile_goal``; trampoline uses a closure
-    over ``compile_goal_trampoline`` that binds ``self_name`` and
-    ``parent_name``.
-
-    The then/else goals are each compiled once and the resulting stmt
-    lists are placed in both the determined branch and the undetermined
-    exploration branch.  This is safe because ``_preallocate_body_vars``
-    (called by ``compile_body``) has already walked the clause tree and
-    emitted ``_vN = Var()`` for every body-only Var before any goal is
-    compiled, so ``term_to_ast_expr`` inside the ITE never needs to
-    introduce a walrus binding in one branch that another branch would
-    reference unbound.
-
-    swap=False (Unify):      True→then, False→else
-    swap=True  (DoesNotUnify): True→else, False→then  (inverted reify_eq)
-    """
+    """Shared ``_compile_reified_ite_eq`` body."""
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     reif_var = _fresh("_reif")
     l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
 
-    then_stmts = compile_goal_fn(then, db, var_context, trail_name, k_stmts)
-    else_stmts = compile_goal_fn(else_, db, var_context, trail_name, k_stmts)
+    then_stmts = compile_goal_fn(ctx, then, k_stmts)
+    else_stmts = compile_goal_fn(ctx, else_, k_stmts)
 
     if swap:
         true_stmts, false_stmts = else_stmts, then_stmts
     else:
         true_stmts, false_stmts = then_stmts, else_stmts
 
-    # Undetermined branch: explore both (unify for "true", dif for "false").
-    # Reuses true_stmts / false_stmts — only one branch executes at runtime.
     mark = _fresh(_MARK_PREFIX)
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -188,24 +147,26 @@ def _compile_reified_ite_eq_impl(
     return _three_way_reif_branch(reif_var, reif_call, true_stmts, false_stmts, undetermined)
 
 
-def _compile_reified_ite_eq(l, r, then, else_, db, var_context, trail_name, k_stmts, swap=False):
+def _compile_reified_ite_eq(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
     """Shallow reified ITE for equality/disequality — wraps ``_impl``."""
+    def _cg(ctx_, goal, k):
+        return _m.compile_goal(goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_)
     return _compile_reified_ite_eq_impl(
-        l, r, then, else_, db, var_context, trail_name, k_stmts,
-        compile_goal_fn=_m.compile_goal,
+        ctx, l, r, then, else_, k_stmts,
+        compile_goal_fn=_cg,
         swap=swap,
     )
 
 
 def _compile_reified_ite_fd_impl(
-    test, then, else_, db, var_context, trail_name, k_stmts,
+    ctx: CompilationContext,
+    test, then, else_, k_stmts,
     *,
     compile_goal_fn,
 ):
-    """Shared ``_compile_reified_ite_fd`` body — strategy differs only
-    in ``compile_goal_fn``.  Same then/else reuse rationale as
-    ``_compile_reified_ite_eq_impl``.
-    """
+    """Shared ``_compile_reified_ite_fd`` body."""
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     test_type = type(test)
     op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
 
@@ -213,11 +174,9 @@ def _compile_reified_ite_fd_impl(
     l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
 
-    then_stmts = compile_goal_fn(then, db, var_context, trail_name, k_stmts)
-    else_stmts = compile_goal_fn(else_, db, var_context, trail_name, k_stmts)
+    then_stmts = compile_goal_fn(ctx, then, k_stmts)
+    else_stmts = compile_goal_fn(ctx, else_, k_stmts)
 
-    # Undetermined: post FD constraint for then path, negated for else path.
-    # Reuses then_stmts / else_stmts — only one branch executes at runtime.
     mark = _fresh(_MARK_PREFIX)
     undetermined = [
         _assign_mark(mark, trail_name),
@@ -232,26 +191,25 @@ def _compile_reified_ite_fd_impl(
     return _three_way_reif_branch(reif_var, reif_call, then_stmts, else_stmts, undetermined)
 
 
-def _compile_reified_ite_fd(test, then, else_, db, var_context, trail_name, k_stmts):
+def _compile_reified_ite_fd(ctx: CompilationContext, test, then, else_, k_stmts):
     """Shallow reified ITE for CLP(FD) comparison — wraps ``_impl``."""
+    def _cg(ctx_, goal, k):
+        return _m.compile_goal(goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_)
     return _compile_reified_ite_fd_impl(
-        test, then, else_, db, var_context, trail_name, k_stmts,
-        compile_goal_fn=_m.compile_goal,
+        ctx, test, then, else_, k_stmts,
+        compile_goal_fn=_cg,
     )
 
 
-def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts):
-    """Compile ITE for non-reifiable conditions.
-
-    Uses single-evaluation with a _found flag instead of double-evaluation NAF.
-    For tabled predicates, falls back to _naf_tabled for the false path (WFS
-    requires separate tabled negation).
-    """
+def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
+    """Compile ITE for non-reifiable conditions."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
-    # Build the condition sub-generator
     cond_gen = _fresh("_ite_cond")
-    cond_stmts = _m.compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()])
+    cond_stmts = _m.compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
     cond_body = cond_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -267,13 +225,10 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
         **_m._EXTRA_FUNCDEF,
     )
 
-    then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts)
-    else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts)
+    then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts, ctx=ctx)
+    else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts, ctx=ctx)
 
     if use_tabled_naf:
-        # Tabled predicates: must use _naf_tabled for WFS soundness.
-        # Still evaluate condition once for the true path, but use
-        # _naf_tabled separately for the false path.
         true_mark = _fresh(_MARK_PREFIX)
         true_block = [
             _assign_mark(true_mark, trail_name),
@@ -304,9 +259,6 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
         ]
         return [cond_fn] + true_block + false_block
     else:
-        # Non-tabled: single evaluation with _found flag.
-        # Run condition once; for each solution run then. After exhaustion,
-        # if no solutions were found, run else.
         found_flag = _fresh("_found")
         mark = _fresh(_MARK_PREFIX)
         return [
@@ -332,77 +284,59 @@ def _compile_general_ite(test, then, else_, db, var_context, trail_name, k_stmts
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _compile_reified_ite_trampoline(test, then, else_, db, var_context, trail_name,
-                                     k_stmts, self_name, parent_name):
-    """Trampoline variant: see ``_compile_reified_ite_impl`` for the shape.
-
-    The ``_eq`` and ``_fd`` trampoline sub-compilers take two extra
-    positional args (``self_name``, ``parent_name``).  We bind them in
-    closures so the shared dispatcher can call them with the same
-    signature as the shallow variants.
-    """
-    def _eq(l, r, then, else_, db, vc, tn, k, swap=False):
-        return _compile_reified_ite_eq_trampoline(
-            l, r, then, else_, db, vc, tn, k, self_name, parent_name, swap=swap,
-        )
-
-    def _fd(test, then, else_, db, vc, tn, k):
-        return _compile_reified_ite_fd_trampoline(
-            test, then, else_, db, vc, tn, k, self_name, parent_name,
-        )
-
+def _compile_reified_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
+    """Trampoline variant: see ``_compile_reified_ite_impl`` for the shape."""
     return _compile_reified_ite_impl(
-        test, then, else_, db, var_context, trail_name, k_stmts,
-        compile_eq=_eq,
-        compile_fd=_fd,
+        ctx, test, then, else_, k_stmts,
+        compile_eq=_compile_reified_ite_eq_trampoline,
+        compile_fd=_compile_reified_ite_fd_trampoline,
     )
 
 
-def _compile_reified_ite_eq_trampoline(l, r, then, else_, db, var_context, trail_name,
-                                        k_stmts, self_name, parent_name, swap=False):
-    """Trampoline variant — wraps ``_compile_reified_ite_eq_impl`` with a
-    closure that binds ``self_name``/``parent_name`` to ``compile_goal_trampoline``.
-    """
-    def _cgt(goal, db_, vc, tn, k):
-        return _m.compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+def _compile_reified_ite_eq_trampoline(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
+    """Trampoline variant — wraps ``_compile_reified_ite_eq_impl``."""
+    def _cgt(ctx_, goal, k):
+        return _m.compile_goal_trampoline(
+            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
+            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
+        )
     return _compile_reified_ite_eq_impl(
-        l, r, then, else_, db, var_context, trail_name, k_stmts,
+        ctx, l, r, then, else_, k_stmts,
         compile_goal_fn=_cgt,
         swap=swap,
     )
 
 
-def _compile_reified_ite_fd_trampoline(test, then, else_, db, var_context, trail_name,
-                                        k_stmts, self_name, parent_name):
+def _compile_reified_ite_fd_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
     """Trampoline variant — wraps ``_compile_reified_ite_fd_impl``."""
-    def _cgt(goal, db_, vc, tn, k):
-        return _m.compile_goal_trampoline(goal, db_, vc, tn, k, self_name, parent_name)
+    def _cgt(ctx_, goal, k):
+        return _m.compile_goal_trampoline(
+            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
+            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
+        )
     return _compile_reified_ite_fd_impl(
-        test, then, else_, db, var_context, trail_name, k_stmts,
+        ctx, test, then, else_, k_stmts,
         compile_goal_fn=_cgt,
     )
 
 
-def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_name,
-                                     k_stmts, self_name, parent_name):
-    """Trampoline variant of _compile_general_ite.
-
-    Condition compiles in trampoline mode and is driven by a mini-trampoline.
-    Then/else branches compile in trampoline mode with normal k_stmts.
-
-    Non-tabled: single evaluation with _found flag (no double-evaluation).
-    Tabled: uses _naf_tabled for WFS-sound false path.
-    """
+def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
+    """Trampoline variant of _compile_general_ite."""
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
+    self_name = ctx.self_name
+    parent_name = ctx.parent_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
-    # ── Build the condition function in trampoline mode ──
     cond_fn_name = _fresh("_ite_cond_fn")
     cond_self = "_ite_self"
     cond_parent = "_ite_parent"
     cond_k = [_m._yield_step_stmt(_name(cond_parent), ast.Constant(None))]
+    cond_ctx = ctx.replace(self_name=cond_self, parent_name=cond_parent)
     cond_stmts = _m.compile_goal_trampoline(
         test, db, var_context, trail_name, cond_k,
-        self_name=cond_self, parent_name=cond_parent,
+        cond_self, cond_parent, ctx=cond_ctx,
     )
     cond_body = cond_stmts + [
         _m._yield_step_stmt(_name(cond_parent), _name("_DONE")),
@@ -421,11 +355,13 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         **_m._EXTRA_FUNCDEF,
     )
 
-    _cgt = _m.compile_goal_trampoline
-    then_stmts = _cgt(then, db, var_context, trail_name, k_stmts, self_name, parent_name)
-    else_stmts = _cgt(else_, db, var_context, trail_name, k_stmts, self_name, parent_name)
+    then_stmts = _m.compile_goal_trampoline(
+        then, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
+    )
+    else_stmts = _m.compile_goal_trampoline(
+        else_, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
+    )
 
-    # ── "True" path: mini-trampoline that runs then for each solution ──
     sg_name = _fresh("_ite_sg")
     g_name = _fresh("_ite_g")
     v_name = _fresh("_ite_v")
@@ -443,7 +379,6 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
                     ast.Constant(None)),
     )
-    # Continue send after running then_stmts
     continue_send = ast.Assign(
         targets=[ast.Tuple(
             elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
@@ -452,7 +387,6 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
                     ast.Constant(None)),
     )
-    # Step into child generator (with _TABLING_SUSPEND handling)
     step_send_normal = ast.Assign(
         targets=[ast.Tuple(
             elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
@@ -469,7 +403,6 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
                     _name("_DONE")),
     )
-    # if _ite_v is _TABLING_SUSPEND: send DONE; else: send value
     step_send = ast.If(
         test=ast.Compare(
             left=_name(v_name),
@@ -495,7 +428,6 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
                 body=[ast.Break()],
                 orelse=[],
             ),
-            # Got a solution — set found flag and run then branch
             _assign(found_flag, ast.Constant(value=True)),
         ] + then_stmts + [continue_send],
         orelse=[step_send],
@@ -513,9 +445,7 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
         _undo_stmt(true_mark, trail_name),
     ]
 
-    # ── "False" path ──
     if use_tabled_naf:
-        # Tabled: must use _naf_tabled for WFS soundness
         fname = test.func.name
         call_arity = len(test.args) + len(test.kwargs)
         arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in test.args]
@@ -534,7 +464,6 @@ def _compile_general_ite_trampoline(test, then, else_, db, var_context, trail_na
             _undo_stmt(naf_mark, trail_name),
         ]
     else:
-        # Non-tabled: use _found flag from true path (no re-evaluation)
         false_block = [
             _if(
                 ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),

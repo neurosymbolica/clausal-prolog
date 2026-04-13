@@ -195,13 +195,21 @@ class TestCompileLambda:
             body=body,
         )
 
+    def _mkctx(self, var_context=None, db=None):
+        from clausal.logic.compiler.compile_ctx import CompilationContext
+        if db is None:
+            db = Database("test")
+        return CompilationContext(
+            db=db, var_context=var_context if var_context is not None else {},
+            trail_name="trail",
+        )
+
     def test_compile_lambda_produces_funcdef(self):
         """_compile_goal_lambda returns a name and FunctionDef."""
         # Body: X_ := 1 — use LoadName for param ref
         # nv
         lam = self._make_lambda(["X_"], Evaluate(left=LoadName(name="X_"), right=1))
-        db = Database("test")
-        name, fdef = _compile_goal_lambda(lam, {}, db, "trail")
+        name, fdef = _compile_goal_lambda(self._mkctx(), lam)
         assert name.startswith("_lambda")
         assert isinstance(fdef, ast.FunctionDef)
         assert fdef.name == name
@@ -210,8 +218,7 @@ class TestCompileLambda:
         """Compiled lambda has params as function arguments."""
         # nv
         lam = self._make_lambda(["X_"], Evaluate(left=LoadName(name="X_"), right=1))
-        db = Database("test")
-        name, fdef = _compile_goal_lambda(lam, {}, db, "trail")
+        name, fdef = _compile_goal_lambda(self._mkctx(), lam)
         arg_names = [a.arg for a in fdef.args.args]
         assert "X_" in arg_names
         assert "trail" in arg_names
@@ -227,8 +234,7 @@ class TestCompileLambda:
             Evaluate(left=LoadName(name="X_"), right=Add(left=z, right=1)),
         )
         enclosing_vc = {z._id: "_v_z"}
-        db = Database("test")
-        name, fdef = _compile_goal_lambda(lam, enclosing_vc, db, "trail")
+        name, fdef = _compile_goal_lambda(self._mkctx(enclosing_vc), lam)
         arg_names = [a.arg for a in fdef.args.args]
         assert "X_" in arg_names
         assert "_v_z" not in arg_names  # captured, not a param
