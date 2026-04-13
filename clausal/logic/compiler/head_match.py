@@ -42,10 +42,13 @@ from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
 )
-from clausal.logic.runtime.list_unify import (
-    _head_list_unify_input, _head_list_unify_output,
-    _head_multi_star_error,
-)
+# Runtime helpers (``_head_list_unify_input`` / ``_head_list_unify_output``
+# / ``_head_multi_star_error``) are referenced by name string in the AST
+# this module emits — e.g. ``_call(_name("_head_list_unify_input"), ...)``.
+# The compiled predicate resolves those names via ``base_globals`` at
+# call time, not via Python-level imports here.  So this module
+# intentionally does NOT import from ``clausal.logic.runtime``; see the
+# one-way boundary enforced by ``tests/test_runtime_compiler_boundary.py``.
 
 # Aliases preserved from the pre-split monolith, where these were bound
 # inline inside the function bodies with `_t` / `_SL` / `_SetLiteral`

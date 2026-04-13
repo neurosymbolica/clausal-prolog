@@ -8,7 +8,9 @@ constructed in ``clausal.logic.compiler.predicate``).
 This package **must not** import from ``clausal.logic.compiler``.
 The compiler generates code that refers to names in
 ``base_globals``; it does not link its own module graph to the
-runtime graph.  Enforced by a CI check.
+runtime graph.  Enforced by ``tests/test_runtime_compiler_boundary.py``
+(see also ``todo/run_tests_in_ci.md`` — the tests need to be wired
+into CI for the enforcement to bite on merge).
 
 Submodules:
 
