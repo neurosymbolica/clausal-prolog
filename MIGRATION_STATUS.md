@@ -146,7 +146,34 @@ Behavior coverage at the .clausal surface is comprehensive:
 The behavior layer is already comprehensively covered by .clausal
 fixtures (~800 Test clauses across scipy/torch/sklearn/spacy/sympy/units).
 
-## Phase 6+ — To do
+## Phase 6 — Prolog translation
+
+Per the original plan, this phase was expected to be mostly infra. That
+prediction held: all 16 files are Prolog→Clausal compile-pipeline
+infrastructure or external-backend integration. No migrations.
+
+| file | status | reason |
+|---|---|---|
+| `test_prolog_ast.py` | ✅ keep | PAtom/PVar/PCompound etc. AST class tests |
+| `test_prolog_dialect.py` | ✅ keep | Dialect config (ISO/SWI/Scryer) |
+| `test_prolog_emit.py` | ✅ keep | Term-to-Prolog-text emission |
+| `test_prolog_golden.py` | ✅ keep | Golden-file round-trip checks |
+| `test_prolog_import.py` | ✅ keep | PrologLoader/PrologFinder + `__pycache__` integration; `_load_module`-per-test pattern |
+| `test_prolog_operators.py` | ✅ keep | Operator-table tests |
+| `test_prolog_parse.py` | ✅ keep | Tokenizer + Pratt parser |
+| `test_prolog_roundtrip.py` | ✅ keep | parse→emit→parse identity |
+| `test_prolog_to_clausal.py` | ✅ keep | Translation pipeline |
+| `test_gprolog_embedding.py` | ✅ keep | External GNU-Prolog backend integration |
+| `test_gprolog_raw.py` | ✅ keep | Same |
+| `test_scryer_backend.py` | ✅ keep | External Scryer backend integration (20 "behavior" tests are backend probes) |
+| `test_scryer_embedding.py` | ✅ keep | Same |
+| `test_scryer_raw.py` | ✅ keep | Same |
+| `test_trealla_backend.py` | ✅ keep | External Trealla backend integration (19 backend probes) |
+| `test_trealla_embedding.py` | ✅ keep | Same |
+
+**Phase 6 net adds**: zero. All 16 files audit-confirmed-stay-as-infra.
+
+## Phase 7+ — To do
 
 See `MIGRATION_CANDIDATES.md`. Suggested next batches:
 
