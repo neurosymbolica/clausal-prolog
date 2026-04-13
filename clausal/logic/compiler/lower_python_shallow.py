@@ -25,6 +25,7 @@ import ast
 from typing import NoReturn
 
 from clausal.logic.compiler.ir import (
+    Alternate,
     ArithEval,
     Dif,
     FDCompare,
@@ -78,6 +79,18 @@ def lower(
             for op in reversed(ops):
                 k = lower(op, ctx, k)
             return k
+
+        # ── Alternate — disjunction.  ``terms_to_goalop`` keeps ``Or``
+        # binary (no flattening) so nested ``Or`` produces nested
+        # ``Alternate`` and this lowering recurses, emitting the same
+        # nested mark/undo pattern as the legacy ``Or`` arm.
+        case Alternate(ops=ops):
+            mark = ctx.fresh(_MARK_PREFIX)
+            out: list[ast.stmt] = [_assign_mark(mark, trail_name)]
+            for op in ops:
+                out.extend(lower(op, ctx, k_stmts))
+                out.append(_undo_stmt(mark, trail_name))
+            return out
 
         # ── Unify ──────────────────────────────────────────────────────────
         case Unify(l=l, r=r):

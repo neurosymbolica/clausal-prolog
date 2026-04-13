@@ -28,6 +28,7 @@ from typing import Any, NoReturn
 from clausal.pythonic_ast import nodes
 from clausal.logic.compiler.terms_to_ast import _is_star_list
 from clausal.logic.compiler.ir import (
+    Alternate,
     ArithEval,
     Dif,
     FDCompare,
@@ -90,6 +91,13 @@ def _extend(ops: list[GoalOp], body: Any) -> None:
 
 def _convert(goal: Any) -> GoalOp:
     match goal:
+        # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
+        # to nested ``Alternate`` so the lowering emits the same nested
+        # mark/undo pattern as the legacy dispatcher.  Flattening would
+        # change the number of trail marks and break byte-for-byte
+        # AST equivalence.
+        case nodes.Or(left=l, right=r):
+            return Alternate(ops=[_convert(l), _convert(r)])
         case nodes.Unify(left=l, right=r):
             # Star-list unification (e.g. ``X is [*T, Last]``) routes
             # through ``_compile_star_is`` in the legacy path and maps to

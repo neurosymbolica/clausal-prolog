@@ -11,6 +11,7 @@ import pytest
 
 from clausal.pythonic_ast import nodes
 from clausal.logic.compiler.ir import (
+    Alternate,
     ArithEval,
     Dif,
     FDCompare,
@@ -116,8 +117,24 @@ def test_and_flattens_into_sequence():
     ])
 
 
+def test_or_stays_binary_and_nests():
+    # Nested ``Or(Or(a, b), c)`` must produce nested ``Alternate`` so the
+    # lowering emits the same nested mark/undo pattern as legacy.
+    # Flattening to a 3-op Alternate would change trail-mark nesting.
+    x, y, z, w = _vars("X", "Y", "Z", "W")
+    body = [_b(nodes.Or,
+               _b(nodes.Or, _b(nodes.Unify, x, y), _b(nodes.Unify, y, z)),
+               _b(nodes.Unify, z, w))]
+    assert terms_to_goalop(body) == Sequence(ops=[
+        Alternate(ops=[
+            Alternate(ops=[Unify(l=x, r=y), Unify(l=y, r=z)]),
+            Unify(l=z, r=w),
+        ]),
+    ])
+
+
 def test_unsupported_raises_not_implemented():
-    # ``Or`` is deferred to Slice D5b.
+    # ``Not`` is deferred to Slice D5c.
     x, y = _vars("X", "Y")
     with pytest.raises(NotImplementedError, match="not yet supported"):
-        terms_to_goalop([_b(nodes.Or, x, y)])
+        terms_to_goalop([nodes.Not(operand=_b(nodes.Unify, x, y))])
