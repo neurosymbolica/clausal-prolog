@@ -123,7 +123,11 @@ commit with its own corpus test:
 - D5d: `IfExpr` → `Branch`, with `reified_test` populated when
   `_is_reifiable(test)` matches
 - D5e: `Call(LoadName)` / `Call(LoadAttr)` → `SubCall` (no hints yet —
-  hints land in D6)
+  hints land in D6).  **Note:** the D4 harness reuses the parent ctx's
+  `bucket_ref_map` / `joint_bucket_ref_map` between the legacy and IR
+  runs.  D2-subset ops never touch those dicts, but `SubCall` lowering
+  will — either deep-clone them for the IR run, or verify that bucket-
+  ref mutation is order-independent before this sub-slice lands.
 - D5f: meta-predicate calls (`once`, `call_nth`, `count_all`,
   `setup_call_cleanup`, `call_cleanup`, `freeze`, `when`, `findall`,
   `bagof`, `setof`, `throw`, `catch`, `catch_error`, `catch_recover`,

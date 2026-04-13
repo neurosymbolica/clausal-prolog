@@ -66,8 +66,11 @@ class FreshNames:
 
     __slots__ = ("_n",)
 
-    def __init__(self) -> None:
-        self._n = 0
+    def __init__(self, starting_at: int = 0) -> None:
+        # ``starting_at`` lets the Slice D4 harness clone a counter at
+        # the same point as the legacy run so the IR shadow emits
+        # identical fresh names without poking ``_n`` directly.
+        self._n = starting_at
 
     def __call__(self, prefix: str = "_t") -> str:
         self._n += 1

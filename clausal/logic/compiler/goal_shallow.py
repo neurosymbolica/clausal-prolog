@@ -773,22 +773,26 @@ def _run_ir_parallel(
     emissions pick identical fresh names.  ``ctx.fresh`` itself is not
     touched — callers see only the legacy advance.
     """
+    import logging
     from ._ast_helpers import FreshNames
     from .strategy import ShallowStrategy
     from .terms_to_goalop import terms_to_goalop
     from . import lower_python_shallow, lower_python_trampoline
     try:
         ir = terms_to_goalop(goals)
-    except NotImplementedError:
-        return  # legitimate fallback — D2 subset is still growing.
+    except NotImplementedError as exc:
+        # Legitimate fallback — D2 subset is still growing.  Logging here
+        # lets D5 development see which body shapes still drop to legacy
+        # without instrumenting individual sub-slices; turn on with
+        # ``pytest --log-cli-level=DEBUG`` or ``logging.basicConfig``.
+        logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
+        return
     lower_fn = (
         lower_python_shallow.lower
         if isinstance(ctx.strategy, ShallowStrategy)
         else lower_python_trampoline.lower
     )
-    ir_fresh = FreshNames()
-    ir_fresh._n = fresh_before
-    ir_ctx = ctx.replace(fresh=ir_fresh)
+    ir_ctx = ctx.replace(fresh=FreshNames(starting_at=fresh_before))
     new_k = lower_fn(ir, ir_ctx, list(leaf))
     legacy_dump = [ast.dump(s) for s in legacy_k]
     new_dump = [ast.dump(s) for s in new_k]
