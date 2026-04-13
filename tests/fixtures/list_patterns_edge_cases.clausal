@@ -113,12 +113,7 @@ Test("head_tail: singleton → H=99, T=[]") <- (
 )  # nv
 Test("head_tail: [] fails") <- (not HeadTail([], _, _))  # nv
 
-# length/2 tests (uses builtin)
-Test("length: [] → 0") <- length([], 0)  # nv
-Test("length: [1,2,3] → 3") <- length([1, 2, 3], 3)  # nv
-Test("length: singleton → 1") <- length(["a"], 1)  # nv
-Test("length: check correct") <- length([1, 2], 2)  # nv
-Test("length: check wrong fails") <- (not length([1, 2], 5))  # nv
+# length/2 / append/3 / last/2 non-edge cases live in iso_list_operations.clausal.
 
 # ═══ Phase 2 tests ═══════════════════════════════════════════════════════════
 
@@ -142,22 +137,13 @@ Test("bookend: differing ends fail") <- (not Bookend([1, 2, 3, 4]))  # nv
 Test("bookend: two equal") <- Bookend([5, 5])  # nv
 Test("bookend: two different fail") <- (not Bookend([1, 2]))  # nv
 
-# append/3 edge cases (uses builtin append)
-Test("append: single elements") <- append([1], [2], [1, 2])  # nv
-Test("append: compute middle") <- (
-    append([1], Y, [1, 2, 3]),
-    Y == [2, 3]
-)  # nv
-Test("append: split [1] yields 2 pairs") <- (
+# Note: general append/3 and last/2 cases live in iso_list_operations.clausal.
+# The only case retained here is the list-pattern-sensitive one:
+Test("append: split [1] yields 2 pairs (pattern-sensitive)") <- (
     findall([X, Y], append(X, Y, [1]), L),
     L == [[[], [1]], [[1], []]]
 )  # nv
-Test("append: nested lists") <- append([[1]], [[2]], [[1], [2]])  # nv
-
-# last/2 edge cases
-Test("last: two elements") <- last([1, 2], 2)  # nv
-Test("last: nested list element") <- last([1, [2, 3]], [2, 3])  # nv
-Test("last: [] fails") <- (not last([], _))  # nv
+Test("last: nested list element (pattern-sensitive)") <- last([1, [2, 3]], [2, 3])  # nv
 
 # ═══ Phase 3 tests ═══════════════════════════════════════════════════════════
 
