@@ -35,18 +35,22 @@ def run_source(source, console=None):
 
 
 def test_base_namespace_has_var():
+    # nv
     assert "Var" in _base_namespace()
 
 
 def test_base_namespace_has_solutions():
+    # nv
     assert "Solutions" in _base_namespace()
 
 
 def test_base_namespace_has_set_style():
+    # nv
     assert "set_style" in _base_namespace()
 
 
 def test_base_namespace_has_compound():
+    # nv
     assert "Compound" in _base_namespace()
 
 
@@ -54,16 +58,19 @@ def test_base_namespace_has_compound():
 
 
 def test_incomplete_returns_true():
+    # nv
     console = ClausalConsole(filename="<test>")
     assert console.runsource("def foo(", "<test>", "single") is True
 
 
 def test_complete_returns_false():
+    # nv
     console = ClausalConsole(filename="<test>")
     assert console.runsource("x = 1", "<test>", "single") is False
 
 
 def test_syntax_error_returns_false():
+    # nv
     console = ClausalConsole(filename="<test>")
     buf = io.StringIO()
     old = sys.stderr
@@ -79,14 +86,17 @@ def test_syntax_error_returns_false():
 
 
 def test_var_in_scope():
+    # nv
     assert "Var" in ClausalConsole(filename="<test>").locals
 
 
 def test_solutions_in_scope():
+    # nv
     assert "Solutions" in ClausalConsole(filename="<test>").locals
 
 
 def test_trail_in_scope():
+    # nv
     assert "Trail" in ClausalConsole(filename="<test>").locals
 
 
@@ -94,12 +104,14 @@ def test_trail_in_scope():
 
 
 def test_normal_assignment_executes():
+    # nv
     console = ClausalConsole(filename="<test>")
     console.runsource("x = 42", "<test>", "single")
     assert console.locals.get("x") == 42
 
 
 def test_normal_expression_executes():
+    # nv
     assert "3" in run_source("1 + 2")
 
 
@@ -107,6 +119,7 @@ def test_normal_expression_executes():
 
 
 def test_embed_double_minus_produces_term():
+    # nv
     console = ClausalConsole(filename="<test>")
     console.runsource("result = --foo", "<test>", "single")
     from clausal.pythonic_ast.nodes import LoadName
@@ -127,6 +140,7 @@ def _make_console_with_In():
 
 
 def test_star_query_no_solutions(monkeypatch):
+    # nv
     console = _make_console_with_In()
     buf = io.StringIO()
     sys.stdout = buf
@@ -140,6 +154,7 @@ def test_star_query_no_solutions(monkeypatch):
 
 
 def test_star_query_single_solution(monkeypatch):
+    # nv
     console = _make_console_with_In()
     buf = io.StringIO()
     sys.stdout = buf
@@ -153,6 +168,7 @@ def test_star_query_single_solution(monkeypatch):
 
 
 def test_star_query_conjunction(monkeypatch):
+    # nv
     console = _make_console_with_In()
     buf = io.StringIO()
     sys.stdout = buf
@@ -170,6 +186,7 @@ def test_star_query_conjunction(monkeypatch):
 
 def test_star_query_import_then_use(monkeypatch):
     """Typical usage: import then query."""
+    # nv
     console = ClausalConsole(filename="<test>")
     console.runsource("from clausal import in_", "<test>", "single")
     buf = io.StringIO()
@@ -187,24 +204,28 @@ def test_star_query_import_then_use(monkeypatch):
 
 
 def test_enable_injects_var():
+    # nv
     ns = {}
     enable_python_repl(ns)
     assert "Var" in ns
 
 
 def test_enable_injects_solutions():
+    # nv
     ns = {}
     enable_python_repl(ns)
     assert "Solutions" in ns
 
 
 def test_enable_injects_set_style():
+    # nv
     ns = {}
     enable_python_repl(ns)
     assert "set_style" in ns
 
 
 def test_enable_installs_displayhook():
+    # nv
     import builtins
     from clausal.repl import Solutions
     ns = {}
@@ -255,32 +276,38 @@ class _FakeRepl:
 class TestPtpythonIntegration:
 
     def test_configure_installs_compile_hook(self):
+        # nv
         repl = _FakeRepl()
         _configure_clausal_repl(repl)
         assert repl._compile_with_flags is not None
 
     def test_configure_injects_var(self):
+        # nv
         repl = _FakeRepl()
         _configure_clausal_repl(repl)
         assert "Var" in repl.get_globals()
 
     def test_configure_injects_solutions(self):
+        # nv
         repl = _FakeRepl()
         _configure_clausal_repl(repl)
         assert "Solutions" in repl.get_globals()
 
     def test_configure_enables_fuzzy_completion(self):
+        # nv
         repl = _FakeRepl()
         _configure_clausal_repl(repl)
         assert repl.enable_fuzzy_completion is True
 
     def test_configure_enables_signature(self):
+        # nv
         repl = _FakeRepl()
         _configure_clausal_repl(repl)
         assert repl.show_signature is True
 
     def test_compile_hook_normal_python(self):
         """Normal Python compiles unchanged."""
+        # nv
         repl = _FakeRepl()
         fn = _make_clausal_compile(repl)
         code_obj = fn("x = 1 + 2", "exec")
@@ -290,6 +317,7 @@ class TestPtpythonIntegration:
 
     def test_compile_hook_star_query_transforms(self):
         """*(goals) is rewritten to Solutions(...)."""
+        # nv
         from clausal import in_
         repl = _FakeRepl()
         repl._ns["in_"] = in_
@@ -308,6 +336,7 @@ class TestPtpythonIntegration:
 
     def test_compile_hook_embed_syntax(self):
         """--name produces a LoadName term."""
+        # nv
         repl = _FakeRepl()
         fn = _make_clausal_compile(repl)
         code_obj = fn("result = --foo", "exec")
@@ -319,6 +348,7 @@ class TestPtpythonIntegration:
 
     def test_compile_hook_syntax_error_propagates(self):
         """Real syntax errors propagate so ptpython can handle them."""
+        # nv
         repl = _FakeRepl()
         fn = _make_clausal_compile(repl)
         with pytest.raises(SyntaxError):

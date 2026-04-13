@@ -11,8 +11,8 @@ TableSolve(X, Y) <- (
     z3.label([X, Y]),
 )
 
-Test("table 3 solutions") <- (count_all(TableSolve(_, _), N), N == 3)
-Test("table first row") <- TableSolve(1, 2)
-Test("table second row") <- TableSolve(3, 4)
-Test("table third row") <- TableSolve(5, 6)
-Test("table excludes others") <- (not(TableSolve(2, 3)))
+Test("table 3 solutions") <- (count_all(TableSolve(_, _), N), N == 3)  # nv
+Test("table first row") <- TableSolve(1, 2)  # nv
+Test("table second row") <- TableSolve(3, 4)  # nv
+Test("table third row") <- TableSolve(5, 6)  # nv
+Test("table excludes others") <- (not(TableSolve(2, 3)))  # nv

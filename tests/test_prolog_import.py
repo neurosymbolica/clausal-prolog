@@ -63,6 +63,7 @@ class TestBasicImport:
     """Basic .pl file import: facts and recursive rules."""
 
     def test_facts(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_facts", """\
             edge(1, 2).
             edge(2, 3).
@@ -74,6 +75,7 @@ class TestBasicImport:
         assert len(clauses) == 3
 
     def test_facts_queryable(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_facts2", """\
             score(1).
             score(2).
@@ -85,6 +87,7 @@ class TestBasicImport:
         assert len(results) == 3
 
     def test_rule_with_body(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_rule", """\
             edge(1, 2).
             edge(2, 3).
@@ -108,6 +111,7 @@ class TestArithmetic:
     """Arithmetic and comparison operators in .pl files."""
 
     def test_is_operator(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_arith", """\
             double(X, Y) :- Y is X * 2.
         """)
@@ -118,6 +122,7 @@ class TestArithmetic:
         assert results == [6]
 
     def test_comparison(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_cmp", """\
             positive(X) :- X > 0.
         """)
@@ -127,6 +132,7 @@ class TestArithmetic:
         assert not list(call("Positive", -1, module=lm))
 
     def test_unification(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_unif", """\
             same(X, X).
         """)
@@ -143,6 +149,7 @@ class TestPycacheCreation:
     """Importing a .pl file writes a .pyc into __pycache__/."""
 
     def test_pyc_created(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_pyc", """\
             fact(1).
         """)
@@ -157,6 +164,7 @@ class TestPycacheCreation:
         assert len(pyc_files) >= 1
 
     def test_pyc_path_matches_source(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_pyc2", """\
             fact(1).
         """)
@@ -173,6 +181,7 @@ class TestPycacheCacheHit:
     """Second import uses cached .pyc — source_to_code is not called."""
 
     def test_source_to_code_skipped_on_cache_hit(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_cachehit", """\
             fact(1).
         """)
@@ -189,6 +198,7 @@ class TestPycacheCacheHit:
 
     def test_cached_predicates_work(self, tmp_path):
         """Predicates loaded from cache behave identically to fresh load."""
+        # nv
         path = _write_pl(tmp_path, "_pl_test_cachehit3", """\
             animal(1).
             animal(2).
@@ -209,6 +219,7 @@ class TestPycacheInvalidation:
     """Modifying source invalidates the cache."""
 
     def test_modified_source_recompiles(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_invalid", """\
             item(1).
             item(2).
@@ -242,6 +253,7 @@ class TestRecursiveImport:
         # use_module with explicit import list so Helper is injected into
         # the calling module's namespace (standard Prolog practice).
         # Note: module names must be valid Prolog atoms (no leading underscore).
+        # nv
         _write_pl(tmp_path, "plbase_helper", """\
             helper(10).
             helper(20).
@@ -256,6 +268,7 @@ class TestRecursiveImport:
         assert len(results) == 2
 
     def test_imported_facts_accessible(self, tmp_path):
+        # nv
         _write_pl(tmp_path, "plbase_vals", """\
             val(100).
             val(200).
@@ -280,6 +293,7 @@ class TestLibraryImport:
 
     def test_clpfd_library_translates_to_import(self):
         """use_module(library(clpfd)) generates -import_from(clausal.logic.clpfd, ...)."""
+        # nv
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         from clausal.tools.prolog_dialect import Dialect
         src = ":- use_module(library(clpfd), [all_different/1]).\n"
@@ -289,6 +303,7 @@ class TestLibraryImport:
 
     def test_lists_library_no_import_generated(self):
         """library(lists) maps to None — emitted as comment, no import directive."""
+        # nv
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         from clausal.tools.prolog_dialect import Dialect
         src = ":- use_module(library(lists)).\n"
@@ -307,6 +322,7 @@ class TestPriority:
 
     def test_clausal_wins_over_pl(self, tmp_path):
         # write .clausal with fact(1) — one clause.
+        # nv
         clausal_file = tmp_path / "prio_test.clausal"
         clausal_file.write_text("fact(1),\n")
 
@@ -331,6 +347,7 @@ class TestErrors:
     """Translation errors surface as SyntaxError."""
 
     def test_cut_loads_successfully(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_cut", """\
             first(X, [X|_]) :- !.
             first(X, [_|T]) :- first(X, T).
@@ -339,6 +356,7 @@ class TestErrors:
         assert "First" in mod.__dict__
 
     def test_if_then_else_raises_syntax_error(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_ite", """\
             classify(X, Cls) :-
                 (X > 0 -> Cls = positive ; Cls = nonpositive).
@@ -354,6 +372,7 @@ class TestDCG:
     """DCG rules in .pl files compile and execute."""
 
     def test_dcg_rule(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_dcg", """\
             greeting --> [1], [2].
         """)
@@ -371,6 +390,7 @@ class TestDynamic:
     """dynamic predicates remain mutable after .pl import."""
 
     def test_assertz_after_import(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_dyn", """\
             :- dynamic(item/1).
             item(42).
@@ -393,11 +413,13 @@ class TestEdgeCases:
     """Edge cases: empty files, comments-only, encoding errors."""
 
     def test_empty_pl_file(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_empty", "")
         mod = _load_prolog_module("_pl_test_empty", path)
         assert hasattr(mod, '__clausal_module__')
 
     def test_comments_only(self, tmp_path):
+        # nv
         path = _write_pl(tmp_path, "_pl_test_comments", """\
             % This file has only comments.
             /* block comment */
@@ -406,6 +428,7 @@ class TestEdgeCases:
         assert hasattr(mod, '__clausal_module__')
 
     def test_non_utf8_raises_syntax_error(self, tmp_path):
+        # nv
         pl_path = tmp_path / "_pl_test_badenc.pl"
         pl_path.write_bytes(b"\xff\xfe" + "fact(1).".encode("utf-16-le"))
         with pytest.raises(SyntaxError, match="(?i)cannot import"):
@@ -419,6 +442,7 @@ class TestFinderIntegration:
     """PrologFinder works through importlib.import_module (the real import path)."""
 
     def test_import_finds_pl_file(self, tmp_path):
+        # nv
         _write_pl(tmp_path, "pltest_auto", """\
             fact(1).
             fact(2).
@@ -451,6 +475,7 @@ class TestGoldenPrologImport:
                              ids=[f.removesuffix(".pl") for f in _GOLDEN_PL_FILES])
     def test_golden_imports(self, pl_filename):
         """Golden .pl file imports without error."""
+        # nv
         path = os.path.join(_GOLDEN_DIR, pl_filename)
         mod_name = f"_golden_pl_{pl_filename.removesuffix('.pl')}"
         mod = _load_prolog_module(mod_name, path)
@@ -460,6 +485,7 @@ class TestGoldenPrologImport:
                              ids=[f.removesuffix(".pl") for f in _GOLDEN_PL_FILES])
     def test_golden_tests_pass(self, pl_filename):
         """Test/1 clauses that can run should pass."""
+        # nv
         path = os.path.join(_GOLDEN_DIR, pl_filename)
         mod_name = f"_golden_pl2_{pl_filename.removesuffix('.pl')}"
         mod = _load_prolog_module(mod_name, path)

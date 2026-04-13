@@ -9,22 +9,22 @@
 
 # ── Logger management ────────────────────────────────────────────────────────
 
-Test("get logger named") <- GetLogger("test.doc.named", _)
+Test("get logger named") <- GetLogger("test.doc.named", _)  # nv
 
-Test("get logger default") <- GetLogger(_)
+Test("get logger default") <- GetLogger(_)  # nv
 
 Test("set and get level") <- (
     GetLogger("test.doc.level", L),
     SetLevel(L, "debug"),
     GetLevel(L, LEVEL),
     LEVEL == "DEBUG"
-)
+)  # nv
 
 Test("is enabled for") <- (
     GetLogger("test.doc.enabled", L),
     SetLevel(L, "debug"),
     IsEnabledFor(L, "debug")
-)
+)  # nv
 
 # ── Logging predicates ───────────────────────────────────────────────────────
 
@@ -32,48 +32,48 @@ Test("debug succeeds") <- (
     GetLogger("test.doc.debug", L),
     SetLevel(L, "debug"),
     Debug(L, "test message")
-)
+)  # nv
 
 Test("info succeeds") <- (
     GetLogger("test.doc.info", L),
     Info(L, "test message")
-)
+)  # nv
 
 Test("warning succeeds") <- (
     GetLogger("test.doc.warn", L),
     Warning(L, "test message")
-)
+)  # nv
 
 Test("error succeeds") <- (
     GetLogger("test.doc.err", L),
     Error(L, "test message")
-)
+)  # nv
 
 Test("critical succeeds") <- (
     GetLogger("test.doc.crit", L),
     Critical(L, "test message")
-)
+)  # nv
 
 Test("log at level") <- (
     GetLogger("test.doc.log", L),
     Log(L, "info", "test message")
-)
+)  # nv
 
 # ── Handler management ───────────────────────────────────────────────────────
 
 Test("stream handler") <- (
     StreamHandler("stderr", H),
     nonvar(H)
-)
+)  # nv
 
 Test("set formatter") <- (
     StreamHandler("stderr", H),
     SetFormatter(H, "%(message)s")
-)
+)  # nv
 
 Test("add and remove handler") <- (
     GetLogger("test.doc.handler", L),
     StreamHandler("stderr", H),
     AddHandler(L, H),
     RemoveHandler(L, H)
-)
+)  # nv

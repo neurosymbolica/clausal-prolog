@@ -9,7 +9,7 @@ Test("tsp 4 cities optimal tour") <- (
         0, TOUR, DIST),
     DIST == 80,
     length(TOUR, 5)
-)
+)  # nv
 
 Test("tsp 3 cities triangle") <- (
     ortools.routing.tsp(
@@ -18,7 +18,7 @@ Test("tsp 3 cities triangle") <- (
          [2, 3, 0]],
         0, TOUR, DIST),
     DIST == 6
-)
+)  # nv
 
 Test("vrp 2 vehicles all customers served") <- (
     ortools.routing.vrp(
@@ -31,7 +31,7 @@ Test("vrp 2 vehicles all customers served") <- (
         [15, 15],
         0, ROUTES, DIST),
     length(ROUTES, 2)
-)
+)  # nv
 
 Test("vrptw 3 customers with time windows") <- (
     ortools.routing.vrptw(
@@ -42,4 +42,4 @@ Test("vrptw 3 customers with time windows") <- (
         [(0, 100), (5, 30), (10, 50), (20, 70)],
         0, 1, ROUTES),
     length(ROUTES, 1)
-)
+)  # nv

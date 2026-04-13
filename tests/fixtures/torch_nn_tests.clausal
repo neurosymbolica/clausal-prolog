@@ -9,19 +9,19 @@ Test("named_parameter enumerates weight and bias") <- (
     findall(NAME, named_parameter(MODEL, NAME, _), NAMES),
     in_("weight", NAMES),
     in_("bias", NAMES)
-)
+)  # nv
 
 Test("parameter count for Linear") <- (
     MODEL is torch.nn.Linear(10, 5),
     findall(P, parameter(MODEL, P), PS),
     length(PS, 2)
-)
+)  # nv
 
 Test("parameter count for no-param module") <- (
     MODEL is torch.nn.ReLU(),
     findall(P, parameter(MODEL, P), PS),
     length(PS, 0)
-)
+)  # nv
 
 # --- module / named_module ---
 
@@ -36,7 +36,7 @@ Test("named_module includes self and children") <- (
     in_("0", NAMES),
     in_("1", NAMES),
     in_("2", NAMES)
-)
+)  # nv
 
 Test("module count for Sequential") <- (
     MODEL is torch.nn.Sequential(
@@ -47,7 +47,7 @@ Test("module count for Sequential") <- (
     findall(M, module(MODEL, M), MS),
     length(MS, LEN),
     LEN >= 4
-)
+)  # nv
 
 # --- child / named_child ---
 
@@ -59,7 +59,7 @@ Test("child count for Sequential") <- (
     ),
     findall(C, child(MODEL, C), CS),
     length(CS, 3)
-)
+)  # nv
 
 Test("named_child names") <- (
     MODEL is torch.nn.Sequential(
@@ -69,13 +69,13 @@ Test("named_child names") <- (
     findall(N, named_child(MODEL, N, _), NAMES),
     in_("0", NAMES),
     in_("1", NAMES)
-)
+)  # nv
 
 Test("child of leaf module is empty") <- (
     MODEL is torch.nn.Linear(4, 2),
     findall(C, child(MODEL, C), CS),
     length(CS, 0)
-)
+)  # nv
 
 # --- Nested models ---
 
@@ -86,7 +86,7 @@ Test("named_module recurses into nested Sequential") <- (
     ),
     findall(N, named_module(MODEL, N, _), NAMES),
     in_("1.0", NAMES)
-)
+)  # nv
 
 Test("named_parameter recurses into nested model") <- (
     MODEL is torch.nn.Sequential(
@@ -96,7 +96,7 @@ Test("named_parameter recurses into nested model") <- (
     findall(N, named_parameter(MODEL, N, _), NAMES),
     in_("0.weight", NAMES),
     in_("1.0.weight", NAMES)
-)
+)  # nv
 
 # ++() dereferences variables, so intermediate model construction works
 Test("nested model via ++() deref") <- (
@@ -104,4 +104,4 @@ Test("nested model via ++() deref") <- (
     MODEL is torch.nn.Sequential(torch.nn.Linear(10, 5), ++(INNER)),
     findall(N, named_module(MODEL, N, _), NAMES),
     in_("1.0", NAMES)
-)
+)  # nv

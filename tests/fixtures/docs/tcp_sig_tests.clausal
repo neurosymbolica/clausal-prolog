@@ -6,10 +6,10 @@
 Test("listen on ephemeral port") <- (
     Listen("127.0.0.1", 0, SERVER),
     Close(SERVER)
-)
+)  # nv
 
 Test("set timeout") <- (
     Listen("127.0.0.1", 0, SERVER),
     SetTimeout(SERVER, 1.0),
     Close(SERVER)
-)
+)  # nv

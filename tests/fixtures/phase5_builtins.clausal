@@ -1,0 +1,88 @@
+# Phase 5 builtin extensions — behavior tests
+#
+# Covers lcm, exp_mod, popcount, msb, lsb, numlist, same_length, transpose.
+# Quantity arithmetic cases stay in tests/test_phase5_builtins.py because
+# Quantity literals can't be constructed at clausal surface.
+
+-module(phase5_builtins, [Test(DESC)])
+
+-private([a, b, c])
+
+# ── lcm/3 ─────────────────────────────────────────────────────────────────
+
+Test("lcm 4 6 = 12") <- (lcm(4, 6, L), L == 12)  # nv
+Test("lcm coprime 7 13 = 91") <- (lcm(7, 13, L), L == 91)  # nv
+Test("lcm with zero = 0") <- (lcm(0, 5, L), L == 0)  # nv
+Test("lcm with negative") <- (lcm(-4, 6, L), L == 12)  # nv
+Test("lcm unbound fails") <- (not lcm(_x, 6, _))  # nv
+
+# ── exp_mod/4 ─────────────────────────────────────────────────────────────
+
+Test("exp_mod 2 10 1000 = 24") <- (exp_mod(2, 10, 1000, R), R == 24)  # nv
+Test("exp_mod zero exponent = 1") <- (exp_mod(3, 0, 7, R), R == 1)  # nv
+Test("exp_mod mod zero fails") <- (not exp_mod(2, 3, 0, _))  # nv
+
+# ── popcount/2 ────────────────────────────────────────────────────────────
+
+Test("popcount 0 = 0") <- (popcount(0, C), C == 0)  # nv
+Test("popcount 255 = 8") <- (popcount(255, C), C == 8)  # nv
+Test("popcount 16 = 1") <- (popcount(16, C), C == 1)  # nv
+Test("popcount negative fails") <- (not popcount(-1, _))  # nv
+
+# ── msb/2 (most-significant bit index) ────────────────────────────────────
+
+Test("msb 1 = 0") <- (msb(1, B), B == 0)  # nv
+Test("msb 8 = 3") <- (msb(8, B), B == 3)  # nv
+Test("msb 255 = 7") <- (msb(255, B), B == 7)  # nv
+Test("msb 0 fails") <- (not msb(0, _))  # nv
+
+# ── lsb/2 (least-significant bit index) ───────────────────────────────────
+
+Test("lsb 1 = 0") <- (lsb(1, B), B == 0)  # nv
+Test("lsb 12 = 2") <- (lsb(12, B), B == 2)  # nv
+Test("lsb 8 = 3") <- (lsb(8, B), B == 3)  # nv
+Test("lsb 0 fails") <- (not lsb(0, _))  # nv
+
+# ── numlist/3 ─────────────────────────────────────────────────────────────
+
+Test("numlist 1 5") <- (numlist(1, 5, L), L == [1, 2, 3, 4, 5])  # nv
+Test("numlist 3 3") <- (numlist(3, 3, L), L == [3])  # nv
+Test("numlist empty when lo > hi") <- (not numlist(5, 1, _))  # nv
+
+# ── same_length/2 ─────────────────────────────────────────────────────────
+
+Test("same_length: both length 3") <- same_length([1, 2, 3], [a, b, c])  # nv
+Test("same_length: mismatched fails") <- (not same_length([1, 2], [a, b, c]))  # nv
+Test("same_length: both empty") <- same_length([], [])  # nv
+
+# ── transpose/2 ───────────────────────────────────────────────────────────
+
+Test("transpose 2x3 → 3x2") <- (
+    transpose([[1, 2, 3], [4, 5, 6]], T),
+    T == [[1, 4], [2, 5], [3, 6]]
+)  # nv
+Test("transpose square") <- (
+    transpose([[1, 2], [3, 4]], T),
+    T == [[1, 3], [2, 4]]
+)  # nv
+Test("transpose empty") <- (transpose([], T), T == [])  # nv
+
+# ── pairs_keys_values/3, pairs_keys/2, pairs_values/2 ──────────────────────
+
+Test("pairs_keys_values: decompose") <- (
+    pairs_keys_values([[1, "a"], [2, "b"]], K, V),
+    K == [1, 2],
+    V == ["a", "b"]
+)  # nv
+Test("pairs_keys_values: compose") <- (
+    pairs_keys_values(P, [1, 2], ["a", "b"]),
+    P == [[1, "a"], [2, "b"]]
+)  # nv
+Test("pairs_keys") <- (
+    pairs_keys([[1, "a"], [2, "b"]], K),
+    K == [1, 2]
+)  # nv
+Test("pairs_values") <- (
+    pairs_values([[1, "a"], [2, "b"]], V),
+    V == ["a", "b"]
+)  # nv

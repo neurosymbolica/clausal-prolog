@@ -1,15 +1,15 @@
 # Companion tests for docs/constraints.md signature blocks.
 
-Test("dif exists") <- dif(1, 2)
+Test("dif exists") <- dif(1, 2)  # nv
 
 Test("in_domain/label exist") <- (
     in_domain(X, 1, 5),
     label([X]),
     X == 1
-)
+)  # nv
 
 Test("all_different exists") <- (
     in_domain([A, B], 1, 2),
     all_different([A, B]),
     label([A, B])
-)
+)  # nv

@@ -12,7 +12,7 @@ Test("solve forward") <- (
     DIFF0 is ++(abs(float(X[0]) - 3.0)),
     DIFF1 is ++(abs(float(X[1]) - 4.0)),
     DIFF0 < 1e-10,
-    DIFF1 < 1e-10)
+    DIFF1 < 1e-10)  # nv
 
 # backward (A, X ground -> B = A @ X)
 Test("solve backward computes B") <- (
@@ -20,7 +20,7 @@ Test("solve backward computes B") <- (
     DIFF0 is ++(abs(float(B[0]) - 2.0)),
     DIFF1 is ++(abs(float(B[1]) - 6.0)),
     DIFF0 < 1e-10,
-    DIFF1 < 1e-10)
+    DIFF1 < 1e-10)  # nv
 
 # round-trip
 Test("solve round-trip") <- (
@@ -29,7 +29,7 @@ Test("solve round-trip") <- (
     Solve(A, B, X),
     Solve(A, B2, X),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(B2 - B))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # ── Inverse(A, B) ────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ Test("inverse forward") <- (
     Inverse(A, INV),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         INV - __import__('numpy').array([[0.5, 0.0], [0.0, 0.25]])))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # backward (symmetric: inv(inv(A)) = A)
 Test("inverse backward") <- (
@@ -47,10 +47,10 @@ Test("inverse backward") <- (
     Inverse(A, INV),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         A - __import__('numpy').array([[2.0, 0.0], [0.0, 4.0]])))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("inverse both unbound fails") <- (not Inverse(_, _))
+Test("inverse both unbound fails") <- (not Inverse(_, _))  # nv
 
 # round-trip
 Test("inverse round-trip") <- (
@@ -58,7 +58,7 @@ Test("inverse round-trip") <- (
     Inverse(A, INV),
     Inverse(INV, A2),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(A2 - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # ── MatrixExpLog(A, B) ───────────────────────────────────────────────────
 
@@ -67,16 +67,16 @@ Test("explog forward zeros to identity") <- (
     A := ++(__import__('numpy').zeros((2, 2))),
     MatrixExpLog(A, B),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(B - __import__('numpy').eye(2)))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # backward (logm)
 Test("explog backward identity to zeros") <- (
     MatrixExpLog(A, ++(__import__('numpy').eye(2))),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(__import__('numpy').real(A)))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("explog both unbound fails") <- (not MatrixExpLog(_, _))
+Test("explog both unbound fails") <- (not MatrixExpLog(_, _))  # nv
 
 # round-trip
 Test("explog round-trip") <- (
@@ -85,7 +85,7 @@ Test("explog round-trip") <- (
     MatrixExpLog(A2, B),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # ── LuDecompose(A, R) ───────────────────────────────────────────────────
 
@@ -95,7 +95,7 @@ Test("lu forward") <- (
     LuDecompose(A, R),
     ResultGet(R, 'p', P),
     ResultGet(R, 'l', L),
-    ResultGet(R, 'u', U))
+    ResultGet(R, 'u', U))  # nv
 
 # backward (recompose)
 Test("lu recompose") <- (
@@ -103,10 +103,10 @@ Test("lu recompose") <- (
     LuDecompose(A, R),
     LuDecompose(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(A2 - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("lu both unbound fails") <- (not LuDecompose(_, _))
+Test("lu both unbound fails") <- (not LuDecompose(_, _))  # nv
 
 # ── QrDecompose(A, R) ───────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ Test("qr forward") <- (
     A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])),
     QrDecompose(A, R),
     ResultGet(R, 'q', Q),
-    ResultGet(R, 'r', RR))
+    ResultGet(R, 'r', RR))  # nv
 
 # backward (recompose)
 Test("qr recompose") <- (
@@ -123,10 +123,10 @@ Test("qr recompose") <- (
     QrDecompose(A, R),
     QrDecompose(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(A2 - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("qr both unbound fails") <- (not QrDecompose(_, _))
+Test("qr both unbound fails") <- (not QrDecompose(_, _))  # nv
 
 # ── SingularValueDecompose(A, R) ─────────────────────────────────────────
 
@@ -136,7 +136,7 @@ Test("svd forward") <- (
     SingularValueDecompose(A, R),
     ResultGet(R, 'u', U),
     ResultGet(R, 's', S),
-    ResultGet(R, 'vh', VH))
+    ResultGet(R, 'vh', VH))  # nv
 
 # backward (recompose)
 Test("svd recompose") <- (
@@ -145,10 +145,10 @@ Test("svd recompose") <- (
     SingularValueDecompose(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("svd both unbound fails") <- (not SingularValueDecompose(_, _))
+Test("svd both unbound fails") <- (not SingularValueDecompose(_, _))  # nv
 
 # ── Cholesky(A, R) ──────────────────────────────────────────────────────
 
@@ -159,7 +159,7 @@ Test("cholesky forward") <- (
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         R - __import__('numpy').linalg.cholesky(
             __import__('numpy').array([[4.0, 2.0], [2.0, 5.0]])).T))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # backward (recompose)
 Test("cholesky recompose") <- (
@@ -167,10 +167,10 @@ Test("cholesky recompose") <- (
     Cholesky(A, R),
     Cholesky(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(A2 - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("cholesky both unbound fails") <- (not Cholesky(_, _))
+Test("cholesky both unbound fails") <- (not Cholesky(_, _))  # nv
 
 # ── EigenDecompose(A, R) ─────────────────────────────────────────────────
 
@@ -179,7 +179,7 @@ Test("eigen forward") <- (
     A := ++(__import__('numpy').array([[2.0, 1.0], [1.0, 2.0]])),
     EigenDecompose(A, R),
     ResultGet(R, 'eigenvalues', VALS),
-    ResultGet(R, 'eigenvectors', VECS))
+    ResultGet(R, 'eigenvectors', VECS))  # nv
 
 # backward (recompose)
 Test("eigen recompose") <- (
@@ -188,10 +188,10 @@ Test("eigen recompose") <- (
     EigenDecompose(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
-    DIFF < 1e-9)
+    DIFF < 1e-9)  # nv
 
 # both unbound
-Test("eigen both unbound fails") <- (not EigenDecompose(_, _))
+Test("eigen both unbound fails") <- (not EigenDecompose(_, _))  # nv
 
 # ── EigenDecomposeHermitian(A, R) ────────────────────────────────────────
 
@@ -200,7 +200,7 @@ Test("eigen hermitian forward") <- (
     A := ++(__import__('numpy').array([[4.0, 1.0], [1.0, 3.0]])),
     EigenDecomposeHermitian(A, R),
     ResultGet(R, 'eigenvalues', VALS),
-    ResultGet(R, 'eigenvectors', VECS))
+    ResultGet(R, 'eigenvectors', VECS))  # nv
 
 # backward (recompose)
 Test("eigen hermitian recompose") <- (
@@ -209,10 +209,10 @@ Test("eigen hermitian recompose") <- (
     EigenDecomposeHermitian(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
-    DIFF < 1e-9)
+    DIFF < 1e-9)  # nv
 
 # both unbound
-Test("eigen hermitian both unbound fails") <- (not EigenDecomposeHermitian(_, _))
+Test("eigen hermitian both unbound fails") <- (not EigenDecomposeHermitian(_, _))  # nv
 
 # ── Schur(A, R) ──────────────────────────────────────────────────────────
 
@@ -221,7 +221,7 @@ Test("schur forward") <- (
     A := ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
     Schur(A, R),
     ResultGet(R, 't', T),
-    ResultGet(R, 'z', Z))
+    ResultGet(R, 'z', Z))  # nv
 
 # backward (recompose)
 Test("schur recompose") <- (
@@ -230,7 +230,7 @@ Test("schur recompose") <- (
     Schur(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # both unbound
-Test("schur both unbound fails") <- (not Schur(_, _))
+Test("schur both unbound fails") <- (not Schur(_, _))  # nv

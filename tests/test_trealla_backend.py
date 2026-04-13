@@ -134,6 +134,7 @@ class TestTreallaParses:
     ])
     def test_conformity_parses(self, name):
         """Trealla accepts the translated .pl without syntax errors."""
+        # nv
         prolog = _translate_conformity(name)
         result = _run_trealla(prolog, "true, halt")
         assert result.returncode == 0, (
@@ -148,6 +149,7 @@ class TestTreallaParses:
     ])
     def test_golden_pl_parses(self, pl_name):
         """Golden .pl files parse in Trealla without error."""
+        # nv
         pl_path = GOLDEN / f"{pl_name}.pl"
         if not pl_path.exists():
             pytest.skip(f"Golden file {pl_path} not found")
@@ -169,6 +171,7 @@ class TestTreallaExecution:
 
     def test_simple_fact_query(self):
         """Translate a simple fact and query it."""
+        # nv
         prolog = clausal_source_to_prolog("Foo(1, 2),\nFoo(3, 4),", dialect=_TREALLA)
         result = _run_trealla(
             prolog,
@@ -179,6 +182,7 @@ class TestTreallaExecution:
 
     def test_simple_rule_query(self):
         """Translate a rule and query it."""
+        # nv
         prolog = clausal_source_to_prolog(
             "Double(X, Y) <- (Y := X * 2)",
             dialect=_TREALLA,
@@ -192,6 +196,7 @@ class TestTreallaExecution:
 
     def test_recursive_rule(self):
         """Translate recursive rules (edge/reach) and query reachability."""
+        # nv
         src = textwrap.dedent("""\
             Edge(1, 2),
             Edge(2, 3),
@@ -209,6 +214,7 @@ class TestTreallaExecution:
 
     def test_list_operations(self):
         """Translate list operations and run in Trealla."""
+        # nv
         src = textwrap.dedent("""\
             MyAppend([], L, L),
             MyAppend([H, *T], L, [H, *R]) <- MyAppend(T, L, R)
@@ -223,6 +229,7 @@ class TestTreallaExecution:
 
     def test_arithmetic_evaluation(self):
         """Arithmetic := translates to 'is' and evaluates in Trealla."""
+        # nv
         src = textwrap.dedent("""\
             Fib(0, 0),
             Fib(1, 1),
@@ -246,6 +253,7 @@ class TestTreallaExecution:
 
     def test_negation(self):
         """Negation as failure (not -> \\+) works in Trealla."""
+        # nv
         src = textwrap.dedent("""\
             Even(0),
             Even(N) <- (N > 0, N1 := N - 2, Even(N1))
@@ -261,6 +269,7 @@ class TestTreallaExecution:
 
     def test_unification(self):
         """Unification (is -> =) works correctly."""
+        # nv
         src = "Test(X, Y) <- (X is Y)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
@@ -272,6 +281,7 @@ class TestTreallaExecution:
 
     def test_disjunction(self):
         """Disjunction (or -> ;) works in Trealla."""
+        # nv
         src = textwrap.dedent("""\
             Color(red),
             Color(blue),
@@ -287,6 +297,7 @@ class TestTreallaExecution:
 
     def test_findall(self):
         """FindAll translates to findall/3 and works in Trealla."""
+        # nv
         src = textwrap.dedent("""\
             Num(1),
             Num(2),
@@ -322,6 +333,7 @@ class TestTreallaConformity:
 
     def test_iso_arithmetic(self):
         """ISO arithmetic tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_arithmetic")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -332,6 +344,7 @@ class TestTreallaConformity:
 
     def test_iso_control(self):
         """ISO control construct tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_control")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -341,6 +354,7 @@ class TestTreallaConformity:
 
     def test_iso_unification(self):
         """ISO unification tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_unification")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -350,6 +364,7 @@ class TestTreallaConformity:
 
     def test_iso_list_operations(self):
         """ISO list operation tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_list_operations")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -359,6 +374,7 @@ class TestTreallaConformity:
 
     def test_iso_type_checking(self):
         """ISO type checking tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_type_checking")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -368,6 +384,7 @@ class TestTreallaConformity:
 
     def test_iso_term_manipulation(self):
         """ISO term manipulation tests pass in Trealla."""
+        # nv
         passed, failed = self._run_conformity("iso_term_manipulation")
         assert len(passed) > 0, "No tests ran"
         if failed:
@@ -386,6 +403,7 @@ class TestTreallaDialectFeatures:
 
     def test_clpz_constraints(self):
         """CLP(Z) constraints use Trealla's clpz library."""
+        # nv
         src = textwrap.dedent("""\
             -import_from(clausal.logic.clpfd, [in_domain, all_different])
             Test(X) <- (
@@ -399,24 +417,28 @@ class TestTreallaDialectFeatures:
 
     def test_trealla_leq_operator(self):
         """Trealla uses =< (ISO) for less-or-equal."""
+        # nv
         src = "Test() <- (1 <= 2)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "=<" in prolog
 
     def test_trealla_dif(self):
         """dif/2 is available in Trealla."""
+        # nv
         src = "Test(X, Y) <- (X is not Y)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "dif" in prolog
 
     def test_trealla_member(self):
         """in -> member/2 works for Trealla."""
+        # nv
         src = "Test(X) <- (X in [1, 2, 3])"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "member" in prolog
 
     def test_trealla_cut(self):
         """Cut is preserved through roundtrip."""
+        # nv
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         src = "foo(X) :- X > 0, !."
         clausal = prolog_to_clausal(src, dialect=_TREALLA)
@@ -435,6 +457,7 @@ class TestISOEdgeCases:
 
     def test_operator_precedence_iso(self):
         """ISO operator precedence is preserved in translation."""
+        # nv
         src = "Test(R) <- (R := 2 + 3 * 4)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "test(R), write(R), nl, halt")
@@ -443,6 +466,7 @@ class TestISOEdgeCases:
 
     def test_atom_quoting(self):
         """Atoms that need quoting are properly quoted."""
+        # nv
         src = "Foo(hello_world),"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "foo(X), write(X), nl, halt")
@@ -451,6 +475,7 @@ class TestISOEdgeCases:
 
     def test_string_handling(self):
         """Strings are handled correctly."""
+        # nv
         src = 'Greeting("hello"),'
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog = ':- set_prolog_flag(double_quotes, atom).\n' + prolog
@@ -460,6 +485,7 @@ class TestISOEdgeCases:
 
     def test_empty_list(self):
         """Empty list [] works correctly."""
+        # nv
         src = "Empty([]),"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "empty(X), write(X), nl, halt")
@@ -468,6 +494,7 @@ class TestISOEdgeCases:
 
     def test_list_cons_pattern(self):
         """[H|T] pattern matching works."""
+        # nv
         src = textwrap.dedent("""\
             Head([H, *_], H),
         """)
@@ -478,6 +505,7 @@ class TestISOEdgeCases:
 
     def test_nested_compound(self):
         """Nested compound terms translate correctly."""
+        # nv
         src = textwrap.dedent("""\
             Eval(add(X, Y), R) <- (R := X + Y)
             Eval(mul(X, Y), R) <- (R := X * Y)
@@ -489,6 +517,7 @@ class TestISOEdgeCases:
 
     def test_multiple_solutions(self):
         """Multiple solutions via backtracking work correctly."""
+        # nv
         src = textwrap.dedent("""\
             Color(red),
             Color(green),
@@ -505,6 +534,7 @@ class TestISOEdgeCases:
 
     def test_comparison_operators(self):
         """All comparison operators translate to ISO forms."""
+        # nv
         src = textwrap.dedent("""\
             TestLt() <- (1 < 2)
             TestLeq() <- (1 <= 1)

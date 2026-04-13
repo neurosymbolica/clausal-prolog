@@ -4,11 +4,11 @@ Test("gensym generates unique") <- (
     gensym("test_doc_", A1),
     gensym("test_doc_", A2),
     dif(A1, A2)
-)
+)  # nv
 
-Test("unpack decompose") <- unpack("hello", ["hello"])
+Test("unpack decompose") <- unpack("hello", ["hello"])  # nv
 
 Test("numbervars") <- (
     numbervars([X, Y, Z], 0, END),
     END == 3
-)
+)  # nv

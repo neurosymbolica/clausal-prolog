@@ -30,35 +30,41 @@ def run_cell(source):
 # ── Basic term embedding ──────────────────────────────────────────────────────
 
 def test_embed_name_produces_LoadName():
+    # nv
     ns = run_cell("result = --foo")
     assert isinstance(ns["result"], LoadName)
     assert ns["result"].name == "foo"
 
 
 def test_embed_integer_is_native_int():
+    # nv
     ns = run_cell("result = --42")
     assert ns["result"] == 42
     assert isinstance(ns["result"], int)
 
 
 def test_embed_float_is_native_float():
+    # nv
     ns = run_cell("result = --3.14")
     assert ns["result"] == 3.14
     assert isinstance(ns["result"], float)
 
 
 def test_embed_string_is_native_str():
+    # nv
     ns = run_cell('result = --"hello"')
     assert ns["result"] == "hello"
     assert isinstance(ns["result"], str)
 
 
 def test_embed_bool_is_native_bool():
+    # nv
     ns = run_cell("result = --True")
     assert ns["result"] is True
 
 
 def test_embed_none_is_native_none():
+    # nv
     ns = run_cell("result = --None")
     assert ns["result"] is None
 
@@ -66,6 +72,7 @@ def test_embed_none_is_native_none():
 # ── Call terms ────────────────────────────────────────────────────────────────
 
 def test_embed_call_no_args():
+    # nv
     ns = run_cell("result = --foo()")
     node = ns["result"]
     assert isinstance(node, Call)
@@ -76,6 +83,7 @@ def test_embed_call_no_args():
 
 
 def test_embed_call_with_int_args():
+    # nv
     ns = run_cell("result = --foo(1, 2)")
     node = ns["result"]
     assert isinstance(node, Call)
@@ -86,6 +94,7 @@ def test_embed_call_with_int_args():
 
 
 def test_embed_nested_call():
+    # nv
     ns = run_cell("result = --foo(bar(1))")
     node = ns["result"]
     assert isinstance(node, Call)
@@ -98,6 +107,7 @@ def test_embed_nested_call():
 # ── Arithmetic ────────────────────────────────────────────────────────────────
 
 def test_embed_addition():
+    # nv
     ns = run_cell("result = --(1 + 2)")
     node = ns["result"]
     assert isinstance(node, Add)
@@ -108,6 +118,7 @@ def test_embed_addition():
 # ── Transformer is fresh per cell ─────────────────────────────────────────────
 
 def test_each_visit_gets_fresh_transformer():
+    # nv
     t = _FreshEmbedTransformer()
     tree1 = ast.parse("result = --foo()")
     tree2 = ast.parse("result = --foo()")
@@ -121,12 +132,14 @@ def test_each_visit_gets_fresh_transformer():
 # ── Normal Python is unaffected ───────────────────────────────────────────────
 
 def test_plain_python_unchanged():
+    # nv
     ns = run_cell("result = 1 + 2")
     assert ns["result"] == 3
 
 
 def test_simple_ast_names_in_scope():
     # After enable_ipython the names are available; _simple_ast_builtins covers them.
+    # nv
     assert "LoadName" in _simple_ast_builtins
     assert "Call" in _simple_ast_builtins
     assert "IntLiteral" in _simple_ast_builtins
@@ -135,30 +148,35 @@ def test_simple_ast_names_in_scope():
 # ── Star-query input transformer (text-level) ────────────────────────────────
 
 def test_star_query_input_transformer_single_goal():
+    # nv
     lines = ["*(greeting(N))\n"]
     result = _star_query_input_transformer(lines)
     assert result == [f"{_STAR_QUERY_SENTINEL}(greeting(N))\n"]
 
 
 def test_star_query_input_transformer_multi_goal():
+    # nv
     lines = ["*(A(X), B(X, Y))\n"]
     result = _star_query_input_transformer(lines)
     assert result == [f"{_STAR_QUERY_SENTINEL}(A(X), B(X, Y))\n"]
 
 
 def test_star_query_input_transformer_preserves_indent():
+    # nv
     lines = ["  *(foo(X))\n"]
     result = _star_query_input_transformer(lines)
     assert result == [f"  {_STAR_QUERY_SENTINEL}(foo(X))\n"]
 
 
 def test_star_query_input_transformer_ignores_non_star():
+    # nv
     lines = ["x = 1 + 2\n", "print(x)\n"]
     result = _star_query_input_transformer(lines)
     assert result == lines
 
 
 def test_star_query_input_transformer_ignores_star_not_paren():
+    # nv
     lines = ["*x\n"]
     result = _star_query_input_transformer(lines)
     assert result == lines
@@ -181,6 +199,7 @@ def _run_sentinel_cell(source):
 
 def test_sentinel_single_goal_compiles():
     """*(greeting(N)) should survive the full text→AST→compile pipeline."""
+    # nv
     source = "*(greeting(N))\n"
     lines = source.splitlines(keepends=True)
     transformed = _star_query_input_transformer(lines)
@@ -194,6 +213,7 @@ def test_sentinel_single_goal_compiles():
 
 def test_sentinel_multi_goal_compiles():
     """*(A(X), B(X, Y)) should survive the full pipeline."""
+    # nv
     source = "*(A(X), B(X, Y))\n"
     lines = source.splitlines(keepends=True)
     transformed = _star_query_input_transformer(lines)

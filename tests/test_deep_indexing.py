@@ -231,18 +231,21 @@ class TestDeepIndexBehavioral:
     # ── MyLen ──────────────────────────────────────────────────────────────────
 
     def test_mylen_empty(self, lm):
+        # nv
         from clausal.logic.solve import call
         n = Var()
         results = [deref(n) for _ in call("MyLen", [], n, module=lm)]
         assert results == [0]
 
     def test_mylen_three(self, lm):
+        # nv
         from clausal.logic.solve import call
         n = Var()
         results = [deref(n) for _ in call("MyLen", [1, 2, 3], n, module=lm)]
         assert results == [3]
 
     def test_mylen_five(self, lm):
+        # nv
         from clausal.logic.solve import call
         n = Var()
         results = [deref(n) for _ in call("MyLen", [10, 20, 30, 40, 50], n, module=lm)]
@@ -250,6 +253,7 @@ class TestDeepIndexBehavioral:
 
     def test_mylen_deterministic(self, lm):
         """MyLen with ground list produces exactly one solution."""
+        # nv
         from clausal.logic.solve import call
         n = Var()
         assert len(list(call("MyLen", [1, 2], n, module=lm))) == 1
@@ -257,18 +261,21 @@ class TestDeepIndexBehavioral:
     # ── MyAppend ───────────────────────────────────────────────────────────────
 
     def test_myappend_nil_left(self, lm):
+        # nv
         from clausal.logic.solve import call
         r = Var()
         results = [deref(r) for _ in call("MyAppend", [], [1, 2], r, module=lm)]
         assert results == [[1, 2]]
 
     def test_myappend_two_plus_two(self, lm):
+        # nv
         from clausal.logic.solve import call
         r = Var()
         results = [deref(r) for _ in call("MyAppend", [1, 2], [3, 4], r, module=lm)]
         assert results == [[1, 2, 3, 4]]
 
     def test_myappend_nil_right(self, lm):
+        # nv
         from clausal.logic.solve import call
         r = Var()
         results = [deref(r) for _ in call("MyAppend", [1, 2], [], r, module=lm)]
@@ -276,6 +283,7 @@ class TestDeepIndexBehavioral:
 
     def test_myappend_split_enumerates_all(self, lm):
         """append in split mode enumerates all four splits of [1,2,3]."""
+        # nv
         from clausal.logic.solve import call
         a, b = Var(), Var()
         splits = [(list(deref(a)), list(deref(b)))
@@ -290,20 +298,24 @@ class TestDeepIndexBehavioral:
     # ── MyMember ───────────────────────────────────────────────────────────────
 
     def test_mymember_present(self, lm):
+        # nv
         from clausal.logic.solve import call
         assert list(call("MyMember", 2, [1, 2, 3], module=lm))
 
     def test_mymember_absent(self, lm):
+        # nv
         from clausal.logic.solve import call
         assert not list(call("MyMember", 99, [1, 2, 3], module=lm))
 
     def test_mymember_enumerate(self, lm):
+        # nv
         from clausal.logic.solve import call
         x = Var()
         results = [deref(x) for _ in call("MyMember", x, [10, 20, 30], module=lm)]
         assert results == [10, 20, 30]
 
     def test_mymember_duplicates(self, lm):
+        # nv
         from clausal.logic.solve import call
         x = Var()
         results = [deref(x) for _ in call("MyMember", x, [1, 1, 2], module=lm)]
@@ -312,18 +324,21 @@ class TestDeepIndexBehavioral:
     # ── MyLast ─────────────────────────────────────────────────────────────────
 
     def test_mylast_singleton(self, lm):
+        # nv
         from clausal.logic.solve import call
         x = Var()
         results = [deref(x) for _ in call("MyLast", [5], x, module=lm)]
         assert results == [5]
 
     def test_mylast_three(self, lm):
+        # nv
         from clausal.logic.solve import call
         x = Var()
         results = [deref(x) for _ in call("MyLast", [1, 2, 3], x, module=lm)]
         assert results == [3]
 
     def test_mylast_deterministic(self, lm):
+        # nv
         from clausal.logic.solve import call
         x = Var()
         assert len(list(call("MyLast", [1, 2, 3], x, module=lm))) == 1
@@ -331,12 +346,14 @@ class TestDeepIndexBehavioral:
     # ── MySumList ──────────────────────────────────────────────────────────────
 
     def test_mysumlist_empty(self, lm):
+        # nv
         from clausal.logic.solve import call
         s = Var()
         results = [deref(s) for _ in call("MySumList", [], s, module=lm)]
         assert results == [0]
 
     def test_mysumlist_ten(self, lm):
+        # nv
         from clausal.logic.solve import call
         s = Var()
         results = [deref(s) for _ in call("MySumList", list(range(1, 11)), s, module=lm)]
@@ -345,12 +362,14 @@ class TestDeepIndexBehavioral:
     # ── MyMax ──────────────────────────────────────────────────────────────────
 
     def test_mymax_singleton(self, lm):
+        # nv
         from clausal.logic.solve import call
         m = Var()
         results = [deref(m) for _ in call("MyMax", [3], m, module=lm)]
         assert results == [3]
 
     def test_mymax_three(self, lm):
+        # nv
         from clausal.logic.solve import call
         m = Var()
         results = [deref(m) for _ in call("MyMax", [3, 1, 4], m, module=lm)]
@@ -359,12 +378,14 @@ class TestDeepIndexBehavioral:
     # ── MyProduct ─────────────────────────────────────────────────────────────
 
     def test_myproduct_empty(self, lm):
+        # nv
         from clausal.logic.solve import call
         p = Var()
         results = [deref(p) for _ in call("MyProduct", [], p, module=lm)]
         assert results == [1]
 
     def test_myproduct_five(self, lm):
+        # nv
         from clausal.logic.solve import call
         p = Var()
         results = [deref(p) for _ in call("MyProduct", [1, 2, 3, 4, 5], p, module=lm)]
@@ -373,12 +394,14 @@ class TestDeepIndexBehavioral:
     # ── MyPrefix — backtracking ────────────────────────────────────────────────
 
     def test_myprefix_enumerate(self, lm):
+        # nv
         from clausal.logic.solve import call
         p = Var()
         prefixes = [list(deref(p)) for _ in call("MyPrefix", p, [1, 2], module=lm)]
         assert prefixes == [[], [1], [1, 2]]
 
     def test_myprefix_no_extra_solutions(self, lm):
+        # nv
         from clausal.logic.solve import call
         p = Var()
         assert len(list(call("MyPrefix", p, [1, 2], module=lm))) == 3
@@ -401,6 +424,7 @@ class TestDeepIndexStructural:
 
     def test_nil_and_cons_pred_has_isinstance_list_guard(self):
         """A predicate with [] and non-empty list heads gets isinstance(_, list) guard."""
+        # nv
         func_def = _nil_and_cons_funcdef(arity=2)
         assert _has_isinstance_check(func_def, "list"), (
             "Expected isinstance(_, list) guard in generated code for a "
@@ -409,11 +433,13 @@ class TestDeepIndexStructural:
 
     def test_three_list_clauses_has_isinstance_guard(self):
         """Three clauses with different non-empty list heads still get isinstance."""
+        # nv
         func_def = _make_list_pred("q", [[], [1], [1, 2, 3]], arity=2)
         assert _has_isinstance_check(func_def, "list")
 
     def test_single_clause_no_isinstance_guard(self):
         """A single-clause predicate has no structural dispatch (nothing to dispatch to)."""
+        # nv
         func_def = _make_list_pred("s", [[]], arity=2)
         assert not _has_isinstance_check(func_def, "list"), (
             "Single-clause predicate should not get isinstance guard"
@@ -421,6 +447,7 @@ class TestDeepIndexStructural:
 
     def test_scalar_only_pred_has_no_isinstance_list_guard(self):
         """Predicate with only integer/string first args should NOT get list guard."""
+        # nv
         db = Database()
         for i in range(4):
             db.assertz(Clause(head=Compound("r", (Var(), Var())), body=[]))
@@ -432,6 +459,7 @@ class TestDeepIndexStructural:
 
     def test_isinstance_check_is_on_deref_local(self):
         """The isinstance guard tests a _d<i> deref local, not the raw arg name."""
+        # nv
         func_def = _nil_and_cons_funcdef(arity=2)
         for node in ast.walk(func_def):
             if (
@@ -455,6 +483,7 @@ class TestDeepIndexStructural:
 
     def test_list_pred_has_is_var_guard(self):
         """when arg may be a Var, generated code includes is_var guard as fallback."""
+        # nv
         func_def = _make_list_pred("t", [[], [1], [1, 2]], arity=2)
         assert _has_is_var_guard(func_def), (
             "Expected is_var(...) guard for unbound argument path in "
@@ -463,6 +492,7 @@ class TestDeepIndexStructural:
 
     def test_is_var_guard_is_on_deref_local(self):
         """The is_var guard tests a _d<i> deref local, not the raw arg name."""
+        # nv
         func_def = _make_list_pred("u", [[], [1, 2]], arity=2)
         for node in ast.walk(func_def):
             if (
@@ -492,6 +522,7 @@ class TestDeepIndexStructural:
         With Phase 5: clauses are grouped under isinstance/is_var guards, so
         top-level body has fewer than 3 direct Match children.
         """
+        # nv
         func_def = _make_list_pred("v", [[], [1], [1, 2]], arity=2)
         top_level = _count_top_level_match_stmts(func_def)
         n_clauses = 3
@@ -502,6 +533,7 @@ class TestDeepIndexStructural:
 
     def test_nil_and_cons_have_separate_match_blocks(self):
         """The [] and non-empty cases are compiled into distinct match blocks."""
+        # nv
         func_def = _make_list_pred("w", [[], [1, 2]], arity=2)
         assert _has_isinstance_check(func_def, "list")
         # The total number of Match nodes should be at least 2: one for nil,
@@ -515,6 +547,7 @@ class TestDeepIndexStructural:
 
     def test_isinstance_appears_exactly_once_for_one_list_position(self):
         """For a predicate discriminating on one list arg, isinstance appears once."""
+        # nv
         func_def = _make_list_pred("x", [[], [1]], arity=2)
         count = _count_isinstance_checks(func_def, "list")
         assert count == 1, (
@@ -531,6 +564,7 @@ class TestDeepIndexEdgeCases:
 
     def test_arity_zero_unaffected(self):
         """Arity-0 predicates have no arguments to dispatch on."""
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("z", ()), body=[]))
         db.assertz(Clause(head=Compound("z", ()), body=[]))
@@ -541,6 +575,7 @@ class TestDeepIndexEdgeCases:
 
     def test_arity_one_single_nil_clause(self):
         """Single [] clause: no dispatch needed (nothing to dispatch to)."""
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("p1", ([],)), body=[]))
         clauses = db.clauses_for("p1", 1)
@@ -549,6 +584,7 @@ class TestDeepIndexEdgeCases:
 
     def test_all_var_heads_no_list_guard(self):
         """Predicate with wildcard heads on all clauses: no list guard needed."""
+        # nv
         db = Database()
         for _ in range(3):
             db.assertz(Clause(head=Compound("allvar", (Var(),)), body=[]))
@@ -560,6 +596,7 @@ class TestDeepIndexEdgeCases:
 
     def test_list_pred_correctness_ground_nil(self):
         """Structural dispatch must correctly route [] to the nil clause."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
 
         # p([], _v)  and  p([1,2], _v2)
@@ -578,6 +615,7 @@ class TestDeepIndexEdgeCases:
 
     def test_list_pred_correctness_ground_cons(self):
         """Structural dispatch must correctly route non-empty list to cons clause."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
 
         db = Database()
@@ -595,6 +633,7 @@ class TestDeepIndexEdgeCases:
 
     def test_list_pred_correctness_non_list_arg(self):
         """A non-list arg should yield no solutions for list-pattern clauses."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
 
         db = Database()
@@ -612,6 +651,7 @@ class TestDeepIndexEdgeCases:
 
     def test_list_pred_correctness_var_arg(self):
         """when arg is a Var (unbound), all list-headed clauses should be tried."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
 
         db = Database()
@@ -636,6 +676,7 @@ class TestDeepIndexEdgeCases:
         If two clauses both have [H|T] patterns, structural dispatch must try
         both — not short-circuit after the first.
         """
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
 
         # Two clauses with non-empty list heads (both "cons" bucket)

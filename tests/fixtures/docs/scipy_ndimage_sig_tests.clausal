@@ -3,8 +3,8 @@
 
 Test("gaussian filter exists") <- (
     GaussianFilter([[1.0, 2.0], [3.0, 4.0]], 1.0, R),
-    nonvar(R))
+    nonvar(R))  # nv
 
 Test("label exists") <- (
     label([[1, 0], [0, 1]], R),
-    nonvar(R))
+    nonvar(R))  # nv

@@ -53,18 +53,22 @@ class TestMetaSquares:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_squares_basic(self):
+        # nv
         r = Var()
         assert _call_collect("Squares", [1, 2, 3], r, mod=self.mod) == [[1, 4, 9]]
 
     def test_squares_empty(self):
+        # nv
         r = Var()
         assert _call_collect("Squares", [], r, mod=self.mod) == [[]]
 
     def test_squares_single(self):
+        # nv
         r = Var()
         assert _call_collect("Squares", [5], r, mod=self.mod) == [[25]]
 
     def test_squares_negative(self):
+        # nv
         r = Var()
         assert _call_collect("Squares", [-2, 3], r, mod=self.mod) == [[4, 9]]
 
@@ -74,18 +78,22 @@ class TestMetaPositives:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_positives_mixed(self):
+        # nv
         r = Var()
         assert _call_collect("Positives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
 
     def test_positives_all_negative(self):
+        # nv
         r = Var()
         assert _call_collect("Positives", [-1, -2, -3], r, mod=self.mod) == [[]]
 
     def test_positives_all_positive(self):
+        # nv
         r = Var()
         assert _call_collect("Positives", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
 
     def test_positives_with_zero(self):
+        # nv
         r = Var()
         assert _call_collect("Positives", [0, 1, -1], r, mod=self.mod) == [[1]]
 
@@ -95,14 +103,17 @@ class TestMetaUniqueMembers:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_unique_dedup(self):
+        # nv
         r = Var()
         assert _call_collect("UniqueMembers", [1, 2, 1, 3, 2], r, mod=self.mod) == [[1, 2, 3]]
 
     def test_unique_already_unique(self):
+        # nv
         r = Var()
         assert _call_collect("UniqueMembers", [5, 10, 15], r, mod=self.mod) == [[5, 10, 15]]
 
     def test_unique_single(self):
+        # nv
         r = Var()
         assert _call_collect("UniqueMembers", [7, 7, 7], r, mod=self.mod) == [[7]]
 
@@ -112,13 +123,16 @@ class TestMetaAllPositive:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_all_positive_succeeds(self):
+        # nv
         assert _call_succeeds("AllPositive", [1, 2, 3], mod=self.mod) == 1
 
     def test_all_positive_fails(self):
+        # nv
         assert _call_succeeds("AllPositive", [1, -2, 3], mod=self.mod) == 0
 
     def test_all_positive_empty(self):
         # for_all with no solutions is vacuously true
+        # nv
         assert _call_succeeds("AllPositive", [], mod=self.mod) == 1
 
 
@@ -127,10 +141,12 @@ class TestMetaSumSquares:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_sum_squares(self):
+        # nv
         r = Var()
         assert _call_collect("SumSquares", [1, 2, 3], r, mod=self.mod) == [14]
 
     def test_sum_squares_empty(self):
+        # nv
         r = Var()
         assert _call_collect("SumSquares", [], r, mod=self.mod) == [0]
 
@@ -140,10 +156,12 @@ class TestMetaEvens:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_evens(self):
+        # nv
         r = Var()
         assert _call_collect("Evens", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_evens_none(self):
+        # nv
         r = Var()
         assert _call_collect("Evens", [1, 3, 5], r, mod=self.mod) == [[]]
 
@@ -153,10 +171,12 @@ class TestMetaCountSolutions:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_count(self):
+        # nv
         r = Var()
         assert _call_collect("CountSolutions", [10, 20, 30], r, mod=self.mod) == [3]
 
     def test_count_empty(self):
+        # nv
         r = Var()
         assert _call_collect("CountSolutions", [], r, mod=self.mod) == [0]
 
@@ -166,15 +186,18 @@ class TestMetaPairs:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_pairs_cartesian(self):
+        # nv
         r = Var()
         results = _call_collect("Pairs", ["a", "b"], [1, 2], r, mod=self.mod)
         assert results == [[["a", 1], ["a", 2], ["b", 1], ["b", 2]]]
 
     def test_pairs_empty_first(self):
+        # nv
         r = Var()
         assert _call_collect("Pairs", [], [1, 2], r, mod=self.mod) == [[]]
 
     def test_pairs_empty_second(self):
+        # nv
         r = Var()
         assert _call_collect("Pairs", ["a"], [], r, mod=self.mod) == [[]]
 
@@ -184,12 +207,15 @@ class TestMetaAllMembers:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_all_members_subset(self):
+        # nv
         assert _call_succeeds("AllMembers", [1, 2], [1, 2, 3], mod=self.mod) == 1
 
     def test_all_members_not_subset(self):
+        # nv
         assert _call_succeeds("AllMembers", [1, 4], [1, 2, 3], mod=self.mod) == 0
 
     def test_all_members_empty_sub(self):
+        # nv
         assert _call_succeeds("AllMembers", [], [1, 2, 3], mod=self.mod) == 1
 
 
@@ -198,10 +224,12 @@ class TestMetaBagPositives:
         self.mod = _load_clausal_module("meta.clausal")
 
     def test_bag_positives(self):
+        # nv
         r = Var()
         assert _call_collect("BagPositives", [-1, 2, -3, 4], r, mod=self.mod) == [[2, 4]]
 
     def test_bag_positives_fails_on_none(self):
+        # nv
         r = Var()
         # bag_of fails when no solutions
         assert _call_collect("BagPositives", [-1, -2, -3], r, mod=self.mod) == []
@@ -217,14 +245,17 @@ class TestHigherOrderDoubles:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_doubles(self):
+        # nv
         r = Var()
         assert _call_collect("Doubles", [1, 2, 3], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_doubles_empty(self):
+        # nv
         r = Var()
         assert _call_collect("Doubles", [], r, mod=self.mod) == [[]]
 
     def test_doubles_negative(self):
+        # nv
         r = Var()
         assert _call_collect("Doubles", [-1, 0, 5], r, mod=self.mod) == [[-2, 0, 10]]
 
@@ -234,12 +265,15 @@ class TestHigherOrderAllPositive:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_all_positive_pass(self):
+        # nv
         assert _call_succeeds("AllPositive", [1, 2, 3], mod=self.mod) == 1
 
     def test_all_positive_fail(self):
+        # nv
         assert _call_succeeds("AllPositive", [1, -2, 3], mod=self.mod) == 0
 
     def test_all_positive_empty(self):
+        # nv
         assert _call_succeeds("AllPositive", [], mod=self.mod) == 1
 
 
@@ -248,14 +282,17 @@ class TestHigherOrderKeepPositive:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_keep_positive(self):
+        # nv
         r = Var()
         assert _call_collect("KeepPositive", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
 
     def test_keep_positive_none(self):
+        # nv
         r = Var()
         assert _call_collect("KeepPositive", [-1, -2], r, mod=self.mod) == [[]]
 
     def test_keep_positive_all(self):
+        # nv
         r = Var()
         assert _call_collect("KeepPositive", [5, 10], r, mod=self.mod) == [[5, 10]]
 
@@ -265,10 +302,12 @@ class TestHigherOrderRemoveNegative:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_remove_negative(self):
+        # nv
         r = Var()
         assert _call_collect("RemoveNegative", [1, -2, 3, -4], r, mod=self.mod) == [[1, 3]]
 
     def test_remove_negative_none(self):
+        # nv
         r = Var()
         assert _call_collect("RemoveNegative", [1, 2, 3], r, mod=self.mod) == [[1, 2, 3]]
 
@@ -278,14 +317,17 @@ class TestHigherOrderSumListFold:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_sum(self):
+        # nv
         r = Var()
         assert _call_collect("SumListFold", [1, 2, 3], r, mod=self.mod) == [6]
 
     def test_sum_empty(self):
+        # nv
         r = Var()
         assert _call_collect("SumListFold", [], r, mod=self.mod) == [0]
 
     def test_sum_single(self):
+        # nv
         r = Var()
         assert _call_collect("SumListFold", [42], r, mod=self.mod) == [42]
 
@@ -295,14 +337,17 @@ class TestHigherOrderProductList:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_product(self):
+        # nv
         r = Var()
         assert _call_collect("ProductList", [2, 3, 4], r, mod=self.mod) == [24]
 
     def test_product_empty(self):
+        # nv
         r = Var()
         assert _call_collect("ProductList", [], r, mod=self.mod) == [1]
 
     def test_product_with_zero(self):
+        # nv
         r = Var()
         assert _call_collect("ProductList", [5, 0, 3], r, mod=self.mod) == [0]
 
@@ -312,6 +357,7 @@ class TestHigherOrderSquares:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_squares(self):
+        # nv
         r = Var()
         assert _call_collect("Squares", [1, 2, 3, 4], r, mod=self.mod) == [[1, 4, 9, 16]]
 
@@ -321,10 +367,12 @@ class TestHigherOrderKeepEven:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_keep_even(self):
+        # nv
         r = Var()
         assert _call_collect("KeepEven", [1, 2, 3, 4, 5, 6], r, mod=self.mod) == [[2, 4, 6]]
 
     def test_keep_even_none(self):
+        # nv
         r = Var()
         assert _call_collect("KeepEven", [1, 3, 5], r, mod=self.mod) == [[]]
 
@@ -334,6 +382,7 @@ class TestHigherOrderRemoveEven:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_remove_even(self):
+        # nv
         r = Var()
         assert _call_collect("RemoveEven", [1, 2, 3, 4, 5], r, mod=self.mod) == [[1, 3, 5]]
 
@@ -343,10 +392,12 @@ class TestHigherOrderNegateList:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_negate(self):
+        # nv
         r = Var()
         assert _call_collect("NegateList", [1, -2, 3], r, mod=self.mod) == [[-1, 2, -3]]
 
     def test_negate_empty(self):
+        # nv
         r = Var()
         assert _call_collect("NegateList", [], r, mod=self.mod) == [[]]
 
@@ -356,10 +407,12 @@ class TestHigherOrderCountFold:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_count(self):
+        # nv
         r = Var()
         assert _call_collect("CountFold", [10, 20, 30, 40], r, mod=self.mod) == [4]
 
     def test_count_empty(self):
+        # nv
         r = Var()
         assert _call_collect("CountFold", [], r, mod=self.mod) == [0]
 
@@ -369,14 +422,17 @@ class TestHigherOrderMaxFold:
         self.mod = _load_clausal_module("higher_order.clausal")
 
     def test_max_fold(self):
+        # nv
         r = Var()
         assert _call_collect("MaxFold", [3, 7, 2, 9, 1], 0, r, mod=self.mod) == [9]
 
     def test_max_fold_single(self):
+        # nv
         r = Var()
         assert _call_collect("MaxFold", [5], 0, r, mod=self.mod) == [5]
 
     def test_max_fold_init_wins(self):
+        # nv
         r = Var()
         assert _call_collect("MaxFold", [1, 2], 100, r, mod=self.mod) == [100]
 
@@ -391,10 +447,12 @@ class TestLambdaApplyVal:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_apply_val(self):
+        # nv
         r = Var()
         assert _call_collect("ApplyVal", r, 42, mod=self.mod) == [42]
 
     def test_apply_val_string(self):
+        # nv
         r = Var()
         assert _call_collect("ApplyVal", r, "hello", mod=self.mod) == ["hello"]
 
@@ -404,10 +462,12 @@ class TestLambdaAddOne:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_add_one(self):
+        # nv
         r = Var()
         assert _call_collect("AddOne", 5, r, mod=self.mod) == [6]
 
     def test_add_one_negative(self):
+        # nv
         r = Var()
         assert _call_collect("AddOne", -1, r, mod=self.mod) == [0]
 
@@ -417,10 +477,12 @@ class TestLambdaAddZ:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_add_z(self):
+        # nv
         r = Var()
         assert _call_collect("AddZ", 3, 10, r, mod=self.mod) == [13]
 
     def test_add_z_zero(self):
+        # nv
         r = Var()
         assert _call_collect("AddZ", 0, 7, r, mod=self.mod) == [7]
 
@@ -430,6 +492,7 @@ class TestLambdaDoubleVal:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_double_val(self):
+        # nv
         r = Var()
         assert _call_collect("DoubleVal", 5, r, mod=self.mod) == [10]
 
@@ -439,6 +502,7 @@ class TestLambdaZeroArg:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_zero_arg(self):
+        # nv
         r = Var()
         assert _call_collect("ZeroArg", r, mod=self.mod) == [42]
 
@@ -449,11 +513,13 @@ class TestLambdaTransform:
 
     def test_transform(self):
         """Transform(5, Y): T := 5 + 1 = 6, Y := 6 * 2 = 12"""
+        # nv
         r = Var()
         assert _call_collect("Transform", 5, r, mod=self.mod) == [12]
 
     def test_transform_zero(self):
         """Transform(0, Y): T := 0 + 1 = 1, Y := 1 * 2 = 2"""
+        # nv
         r = Var()
         assert _call_collect("Transform", 0, r, mod=self.mod) == [2]
 
@@ -464,6 +530,7 @@ class TestLambdaCaptureTwo:
 
     def test_capture_two(self):
         """CaptureTwo(10, 20, 5, R): R := 5 + 10 + 20 = 35"""
+        # nv
         r = Var()
         assert _call_collect("CaptureTwo", 10, 20, 5, r, mod=self.mod) == [35]
 
@@ -474,6 +541,7 @@ class TestLambdaApplyPred:
 
     def test_apply_pred(self):
         """ApplyPred(3, Y): Helper(3, Y) → Y := 3 * 10 = 30"""
+        # nv
         r = Var()
         assert _call_collect("ApplyPred", 3, r, mod=self.mod) == [30]
 
@@ -483,6 +551,7 @@ class TestLambdaAllColors:
         self.mod = _load_clausal_module("lambdas.clausal")
 
     def test_all_colors(self):
+        # nv
         r = Var()
         results = _call_collect("AllColors", r, mod=self.mod)
         assert results == [["red", "green", "blue"]]
@@ -498,6 +567,7 @@ class TestTermInspectionCopyFresh:
         self.mod = _load_clausal_module("term_inspection.clausal")
 
     def test_copy_ground_term(self):
+        # nv
         from clausal.terms import Compound
         term = Compound("foo", (1, 2))
         r = Var()
@@ -506,6 +576,7 @@ class TestTermInspectionCopyFresh:
         assert result[0] == Compound("foo", (1, 2))
 
     def test_copy_returns_fresh_copy(self):
+        # nv
         from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
@@ -519,16 +590,19 @@ class TestTermInspectionCopyFresh:
         assert c.args[0] is not x
 
     def test_copy_atom(self):
+        # nv
         r = Var()
         result = _call_collect("CopyFresh", "hello", r, mod=self.mod)
         assert result == ["hello"]
 
     def test_copy_integer(self):
+        # nv
         r = Var()
         result = _call_collect("CopyFresh", 42, r, mod=self.mod)
         assert result == [42]
 
     def test_copy_list(self):
+        # nv
         r = Var()
         result = _call_collect("CopyFresh", [1, 2, 3], r, mod=self.mod)
         assert result == [[1, 2, 3]]
@@ -539,21 +613,26 @@ class TestTermInspectionHasNoVars:
         self.mod = _load_clausal_module("term_inspection.clausal")
 
     def test_ground_term_no_vars(self):
+        # nv
         from clausal.terms import Compound
         assert _call_succeeds("HasNoVars", Compound("f", (1, 2)), mod=self.mod) == 1
 
     def test_ground_atom(self):
+        # nv
         assert _call_succeeds("HasNoVars", "hello", mod=self.mod) == 1
 
     def test_term_with_var_fails(self):
+        # nv
         from clausal.terms import Compound
         term = Compound("f", (Var(),))
         assert _call_succeeds("HasNoVars", term, mod=self.mod) == 0
 
     def test_ground_list(self):
+        # nv
         assert _call_succeeds("HasNoVars", [1, 2, 3], mod=self.mod) == 1
 
     def test_list_with_var_fails(self):
+        # nv
         assert _call_succeeds("HasNoVars", [1, Var(), 3], mod=self.mod) == 0
 
 
@@ -562,24 +641,28 @@ class TestTermInspectionCountVars:
         self.mod = _load_clausal_module("term_inspection.clausal")
 
     def test_no_vars(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("CountVars", Compound("f", (1, 2)), r, mod=self.mod)
         assert result == [0]
 
     def test_one_var(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("CountVars", Compound("f", (Var(),)), r, mod=self.mod)
         assert result == [1]
 
     def test_two_vars(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("CountVars", Compound("f", (Var(), Var())), r, mod=self.mod)
         assert result == [2]
 
     def test_repeated_var_counts_once(self):
+        # nv
         from clausal.terms import Compound
         x = Var()
         r = Var()
@@ -587,6 +670,7 @@ class TestTermInspectionCountVars:
         assert result == [1]
 
     def test_list_vars(self):
+        # nv
         r = Var()
         result = _call_collect("CountVars", [Var(), Var(), Var()], r, mod=self.mod)
         assert result == [3]
@@ -597,24 +681,28 @@ class TestTermInspectionNumberAndCount:
         self.mod = _load_clausal_module("term_inspection.clausal")
 
     def test_no_vars(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("NumberAndCount", Compound("f", (1, 2)), 0, r, mod=self.mod)
         assert result == [0]
 
     def test_one_var(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("NumberAndCount", Compound("f", (Var(),)), 0, r, mod=self.mod)
         assert result == [1]
 
     def test_start_offset(self):
+        # nv
         from clausal.terms import Compound
         r = Var()
         result = _call_collect("NumberAndCount", Compound("f", (Var(), Var())), 5, r, mod=self.mod)
         assert result == [7]
 
     def test_two_vars_consecutive(self):
+        # nv
         r = Var()
         result = _call_collect("NumberAndCount", [Var(), Var()], 0, r, mod=self.mod)
         assert result == [2]
@@ -626,6 +714,7 @@ class TestTermInspectionCopyShared:
 
     def test_sharing_preserved(self):
         """f(X, X) copied: the two args in copy should be the same fresh Var."""
+        # nv
         from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
@@ -641,6 +730,7 @@ class TestTermInspectionCopyShared:
 
     def test_sharing_independent_from_original(self):
         """Fresh vars in copy are distinct from original Var."""
+        # nv
         from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
@@ -658,16 +748,19 @@ class TestTermInspectionVarList:
         self.mod = _load_clausal_module("term_inspection.clausal")
 
     def test_empty_list(self):
+        # nv
         r = Var()
         result = _call_collect("VarList", [], r, mod=self.mod)
         assert result == [[]]
 
     def test_list_no_vars(self):
+        # nv
         r = Var()
         result = _call_collect("VarList", [1, 2, 3], r, mod=self.mod)
         assert result == [[]]
 
     def test_list_with_vars(self):
+        # nv
         from clausal.logic.variables import is_var
         x, y = Var(), Var()
         r = Var()
@@ -690,10 +783,12 @@ class TestExceptionsCatchAll:
         self.mod = _load_clausal_module("exceptions.clausal")
 
     def test_catch_integer(self):
+        # nv
         r = Var()
         assert _call_collect("CatchAll", 42, r, mod=self.mod) == [42]
 
     def test_catch_string(self):
+        # nv
         r = Var()
         assert _call_collect("CatchAll", "oops", r, mod=self.mod) == ["oops"]
 
@@ -703,10 +798,12 @@ class TestExceptionsSafeRecip:
         self.mod = _load_clausal_module("exceptions.clausal")
 
     def test_safe_recip_nonzero(self):
+        # nv
         r = Var()
         assert _call_collect("SafeRecip", 2, r, mod=self.mod) == [0.5]
 
     def test_safe_recip_zero(self):
+        # nv
         r = Var()
         assert _call_collect("SafeRecip", 0, r, mod=self.mod) == [0]
 
@@ -716,10 +813,12 @@ class TestExceptionsNested:
         self.mod = _load_clausal_module("exceptions.clausal")
 
     def test_inner_miss(self):
+        # nv
         r = Var()
         assert _call_collect("InnerMiss", r, mod=self.mod) == ["outer_problem"]
 
     def test_inner_hit(self):
+        # nv
         r = Var()
         assert _call_collect("InnerHit", r, mod=self.mod) == ["inner_caught"]
 
@@ -733,6 +832,7 @@ class TestExceptionsDeadChildRecovery:
         self.mod = _load_clausal_module("exceptions.clausal")
 
     def test_parent_backtracks(self):
+        # nv
         r = Var()
         assert _call_collect("Parent", r, mod=self.mod) == [10]
 
@@ -742,9 +842,11 @@ class TestExceptionsCatchTransparent:
         self.mod = _load_clausal_module("exceptions.clausal")
 
     def test_no_throw(self):
+        # nv
         r = Var()
         assert _call_collect("CatchNoThrow", r, mod=self.mod) == ["normal"]
 
     def test_multiple_solutions(self):
+        # nv
         r = Var()
         assert _call_collect("CatchMultiple", r, mod=self.mod) == [10, 20, 30]

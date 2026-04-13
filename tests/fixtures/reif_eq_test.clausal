@@ -4,6 +4,6 @@
 CheckEq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 
 
-Test("eq true") <- (CheckEq(1, 1, TRUTH), TRUTH == True)
-Test("eq false") <- (CheckEq(1, 2, TRUTH), TRUTH == False)
-Test("eq string same") <- (CheckEq("a", "a", TRUTH), TRUTH == True)
+Test("eq true") <- (CheckEq(1, 1, TRUTH), TRUTH == True)  # nv
+Test("eq false") <- (CheckEq(1, 2, TRUTH), TRUTH == False)  # nv
+Test("eq string same") <- (CheckEq("a", "a", TRUTH), TRUTH == True)  # nv

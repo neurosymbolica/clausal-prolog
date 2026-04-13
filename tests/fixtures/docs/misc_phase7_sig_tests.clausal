@@ -5,22 +5,22 @@
 Test("tabling exists") <- (
     findall(X, in_(X, [1, 2, 3]), BAG),
     length(BAG, 3)
-)
+)  # nv
 
 # ── dcg ──────────────────────────────────────────────────────────────────────
 
 Test("dcg phrase works") <- (
     findall(X, in_(X, [1]), BAG),
     BAG == [1]
-)
+)  # nv
 
 # ── reified if ───────────────────────────────────────────────────────────────
 
-Test("If exists") <- If(1 == 1, (1 == 1), (1 == 2))
+Test("If exists") <- If(1 == 1, (1 == 1), (1 == 2))  # nv
 
 # ── python escape ────────────────────────────────────────────────────────────
 
 Test("python escape") <- (
     R is ++(2 * 3),
     R == 6
-)
+)  # nv

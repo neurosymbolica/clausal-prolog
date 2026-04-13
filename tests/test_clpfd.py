@@ -65,18 +65,22 @@ def solutions_trampoline(dispatch_fn, trail, extract):
 
 class TestDomainOperations:
     def test_from_range(self):
+        # nv
         d = domain_from_range(1, 5)
         assert d == ((1, 5),)
 
     def test_from_range_empty(self):
+        # nv
         d = domain_from_range(5, 1)
         assert d == ()
 
     def test_from_range_singleton(self):
+        # nv
         d = domain_from_range(3, 3)
         assert d == ((3, 3),)
 
     def test_contains(self):
+        # nv
         d = ((1, 5), (8, 10))
         assert domain_contains(d, 1)
         assert domain_contains(d, 3)
@@ -88,41 +92,49 @@ class TestDomainOperations:
         assert not domain_contains(d, 11)
 
     def test_min_max(self):
+        # nv
         d = ((1, 5), (8, 10))
         assert domain_min(d) == 1
         assert domain_max(d) == 10
 
     def test_min_max_empty(self):
+        # nv
         with pytest.raises(ValueError):
             domain_min(())
         with pytest.raises(ValueError):
             domain_max(())
 
     def test_size(self):
+        # nv
         d = ((1, 5), (8, 10))
         assert domain_size(d) == 5 + 3
 
     def test_singleton(self):
+        # nv
         assert domain_singleton(((3, 3),)) == 3
         assert domain_singleton(((1, 5),)) is None
         assert domain_singleton(((1, 1), (3, 3))) is None
 
     def test_intersection(self):
+        # nv
         d1 = ((1, 5), (8, 10))
         d2 = ((3, 9),)
         result = domain_intersection(d1, d2)
         assert result == ((3, 5), (8, 9))
 
     def test_intersection_disjoint(self):
+        # nv
         d1 = ((1, 3),)
         d2 = ((5, 7),)
         assert domain_intersection(d1, d2) == ()
 
     def test_intersection_identical(self):
+        # nv
         d = ((1, 5),)
         assert domain_intersection(d, d) == ((1, 5),)
 
     def test_remove(self):
+        # nv
         d = ((1, 5),)
         assert domain_remove(d, 3) == ((1, 2), (4, 5))
         assert domain_remove(d, 1) == ((2, 5),)
@@ -130,16 +142,19 @@ class TestDomainOperations:
         assert domain_remove(d, 0) == ((1, 5),)
 
     def test_remove_above(self):
+        # nv
         d = ((1, 5), (8, 10))
         assert domain_remove_above(d, 6) == ((1, 5),)
         assert domain_remove_above(d, 3) == ((1, 3),)
 
     def test_remove_below(self):
+        # nv
         d = ((1, 5), (8, 10))
         assert domain_remove_below(d, 3) == ((3, 5), (8, 10))
         assert domain_remove_below(d, 9) == ((9, 10),)
 
     def test_values(self):
+        # nv
         d = ((1, 3), (5, 6))
         assert list(domain_values(d)) == [1, 2, 3, 5, 6]
 
@@ -151,6 +166,7 @@ class TestDomainOperations:
 
 class TestInDomain:
     def test_post_domain(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -159,6 +175,7 @@ class TestInDomain:
         assert state.domain == ((1, 5),)
 
     def test_post_domain_and_unify_succeeds(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -166,6 +183,7 @@ class TestInDomain:
         assert deref(x) == 3
 
     def test_post_domain_and_unify_fails(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -174,6 +192,7 @@ class TestInDomain:
         trail.undo(mark)
 
     def test_post_domain_list(self):
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 3, trail)
@@ -183,6 +202,7 @@ class TestInDomain:
         assert sy.domain == ((1, 3),)
 
     def test_post_domain_narrows_existing(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -191,12 +211,14 @@ class TestInDomain:
         assert state.domain == ((5, 10),)
 
     def test_post_domain_singleton_binds(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 3, 3, trail)
         assert deref(x) == 3
 
     def test_post_domain_empty_fails(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -205,6 +227,7 @@ class TestInDomain:
         trail.undo(mark)
 
     def test_post_domain_ground_int(self):
+        # nv
         trail = fresh_trail()
         assert in_domain(3, 1, 5, trail)
         assert not in_domain(7, 1, 5, trail)
@@ -217,6 +240,7 @@ class TestInDomain:
 
 class TestLabel:
     def test_label_single(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 3, trail)
@@ -226,6 +250,7 @@ class TestLabel:
         assert results == [1, 2, 3]
 
     def test_label_two_vars(self):
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 2, trail)
@@ -240,6 +265,7 @@ class TestLabel:
 
     def test_label_backtracking(self):
         """Domain is restored on backtrack."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 3, trail)
@@ -256,6 +282,7 @@ class TestLabel:
         assert is_var(deref(x))
 
     def test_label_all_ground(self):
+        # nv
         trail = fresh_trail()
         results = list(label([1, 2, 3], trail))
         assert len(results) == 1  # all ground → 1 solution
@@ -268,32 +295,39 @@ class TestLabel:
 
 class TestStructuralEq:
     def test_same_atoms(self):
+        # nv
         trail = fresh_trail()
         assert structural_eq("a", "a", trail)
 
     def test_different_atoms(self):
+        # nv
         trail = fresh_trail()
         assert not structural_eq("a", "b", trail)
 
     def test_same_compound(self):
+        # nv
         trail = fresh_trail()
         assert structural_eq(Compound("f", (1, 2)), Compound("f", (1, 2)), trail)
 
     def test_different_compound(self):
+        # nv
         trail = fresh_trail()
         assert not structural_eq(Compound("f", (1,)), Compound("f", (2,)), trail)
 
     def test_var_vs_var_different(self):
         """structural_eq: different Vars are NOT equal."""
+        # nv
         trail = fresh_trail()
         assert not structural_eq(Var(), Var(), trail)
 
     def test_var_vs_var_same(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert structural_eq(x, x, trail)
 
     def test_bound_vars(self):
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         unify(x, 42, trail)
@@ -308,15 +342,18 @@ class TestStructuralEq:
 
 class TestFdEq:
     def test_ground_equal(self):
+        # nv
         trail = fresh_trail()
         assert fd_eq(3, 3, trail)
 
     def test_ground_unequal(self):
+        # nv
         trail = fresh_trail()
         assert not fd_eq(3, 4, trail)
 
     def test_var_eq_int(self):
         """X == 5 narrows X to {5}."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert fd_eq(x, 5, trail)
@@ -324,6 +361,7 @@ class TestFdEq:
 
     def test_var_eq_var(self):
         """X == Y posts constraint — both remain unbound."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain(x, 1, 5, trail)
@@ -337,6 +375,7 @@ class TestFdEq:
 
     def test_auto_domain(self):
         """X == 5 on unbound var with no prior domain → auto-domain + narrow to {5}."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert fd_eq(x, 5, trail)
@@ -345,14 +384,17 @@ class TestFdEq:
 
 class TestFdNe:
     def test_ground_different(self):
+        # nv
         trail = fresh_trail()
         assert fd_ne(3, 4, trail)
 
     def test_ground_same(self):
+        # nv
         trail = fresh_trail()
         assert not fd_ne(3, 3, trail)
 
     def test_var_ne_int(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -363,6 +405,7 @@ class TestFdNe:
 
     def test_ne_wipeout(self):
         """in_domain(X, 3, 3), X != 3 → wipeout."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 3, 3, trail)
@@ -371,12 +414,14 @@ class TestFdNe:
 
 class TestFdLt:
     def test_ground_lt(self):
+        # nv
         trail = fresh_trail()
         assert fd_lt(3, 5, trail)
         assert not fd_lt(5, 3, trail)
         assert not fd_lt(3, 3, trail)
 
     def test_var_lt(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -388,6 +433,7 @@ class TestFdLt:
 
 class TestFdLe:
     def test_ground_le(self):
+        # nv
         trail = fresh_trail()
         assert fd_le(3, 5, trail)
         assert fd_le(3, 3, trail)
@@ -395,6 +441,7 @@ class TestFdLe:
 
     def test_chained_comparison(self):
         """1 <= X <= 10 narrows domain to [1, 10]."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert fd_le(1, x, trail)
@@ -407,11 +454,13 @@ class TestFdLe:
 
 class TestFdGtGe:
     def test_gt(self):
+        # nv
         trail = fresh_trail()
         assert fd_gt(5, 3, trail)
         assert not fd_gt(3, 5, trail)
 
     def test_ge(self):
+        # nv
         trail = fresh_trail()
         assert fd_ge(5, 3, trail)
         assert fd_ge(3, 3, trail)
@@ -426,6 +475,7 @@ class TestFdGtGe:
 class TestPropagation:
     def test_lt_chain(self):
         """X < Y, Y < Z, 1 <= Z <= 3 → propagation narrows all to singletons."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 100, trail)
@@ -440,6 +490,7 @@ class TestPropagation:
 
     def test_eq_propagation(self):
         """X == Y + 0 (effectively X == Y) — domains intersect."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain(x, 1, 5, trail)
@@ -454,12 +505,14 @@ class TestPropagation:
 
     def test_wipeout(self):
         """Constraint leading to empty domain → fail."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 3, trail)
         assert not fd_lt(x, 1, trail)
 
     def test_backtracking_restores_domains(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -482,42 +535,50 @@ class TestPropagation:
 class TestCompilerCLPFD:
     def test_ground_eq(self):
         """3 == 3 succeeds, 3 == 4 fails."""
+        # nv
         mod = Module("test_mod")
         goal = ArithEq(left=3, right=3)
         assert list(solve(goal, module=mod))
 
     def test_ground_eq_fails(self):
+        # nv
         mod = Module("test_mod")
         goal = ArithEq(left=3, right=4)
         assert not list(solve(goal, module=mod))
 
     def test_ground_ne(self):
+        # nv
         mod = Module("test_mod")
         assert list(solve(ArithNeq(left=3, right=4), module=mod))
         assert not list(solve(ArithNeq(left=3, right=3), module=mod))
 
     def test_ground_lt(self):
+        # nv
         mod = Module("test_mod")
         assert list(solve(LtNode(left=1, right=2), module=mod))
         assert not list(solve(LtNode(left=2, right=1), module=mod))
 
     def test_ground_le(self):
+        # nv
         mod = Module("test_mod")
         assert list(solve(LtENode(left=1, right=1), module=mod))
         assert not list(solve(LtENode(left=2, right=1), module=mod))
 
     def test_ground_gt(self):
+        # nv
         mod = Module("test_mod")
         assert list(solve(GtNode(left=2, right=1), module=mod))
         assert not list(solve(GtNode(left=1, right=2), module=mod))
 
     def test_ground_ge(self):
+        # nv
         mod = Module("test_mod")
         assert list(solve(GtENode(left=1, right=1), module=mod))
         assert not list(solve(GtENode(left=0, right=1), module=mod))
 
     def test_var_eq_via_solve(self):
         """X_ == 5 binds X_ to 5."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = ArithEq(left=x, right=5)
@@ -529,6 +590,7 @@ class TestCompilerCLPFD:
 
     def test_chained_le_via_solve(self):
         """1 <= X_ <= 3, label([X_]) → 3 solutions."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = And(
@@ -547,6 +609,7 @@ class TestCompilerCLPFD:
 
     def test_ne_via_solve(self):
         """in_domain(X_, 1, 3), X_ != 2, label([X_]) → [1, 3]."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = And(
@@ -563,6 +626,7 @@ class TestCompilerCLPFD:
 
     def test_evaluate_unchanged(self):
         """:= still does eager arithmetic eval."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = Evaluate(left=x, right=Add(position=None, left=2, right=3))
@@ -574,6 +638,7 @@ class TestCompilerCLPFD:
 
     def test_is_unify_unchanged(self):
         """is still does unification."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = Is(left=x, right="hello")
@@ -585,6 +650,7 @@ class TestCompilerCLPFD:
 
     def test_is_not_dif_unchanged(self):
         """is not still does dif/2."""
+        # nv
         mod = Module("test_mod")
         x = Var()
         goal = IsNot(left=x, right=42)
@@ -601,6 +667,7 @@ class TestCompilerCLPFD:
 
 class TestAllDifferent:
     def test_basic(self):
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 3, trail)
@@ -611,15 +678,18 @@ class TestAllDifferent:
         assert len(results) == 6  # 3! permutations
 
     def test_all_different_ground_ok(self):
+        # nv
         trail = fresh_trail()
         assert all_different([1, 2, 3], trail)
 
     def test_all_different_ground_fail(self):
+        # nv
         trail = fresh_trail()
         assert not all_different([1, 2, 1], trail)
 
     def test_all_different_via_solve(self):
         """all_different([X_, Y_, Z_]), in_domain([X_, Y_, Z_], 1, 3), label(...)."""
+        # nv
         mod = Module("test_mod")
         x, y, z = Var(), Var(), Var()
         goal = And(
@@ -678,10 +748,12 @@ class TestNQueens:
         return results
 
     def test_4_queens(self):
+        # nv
         results = self._queens(4)
         assert len(results) == 2
 
     def test_8_queens(self):
+        # nv
         results = self._queens(8)
         assert len(results) == 92
 
@@ -693,6 +765,7 @@ class TestNQueens:
 
 class TestSENDMOREMONEY:
     def test_sendmoremoney(self):
+        # nv
         from clausal.pythonic_ast.nodes import Add, Mult
 
         def mul(v, k):
@@ -734,6 +807,7 @@ class TestSENDMOREMONEY:
 class TestFDAndDif:
     def test_independent(self):
         """FD and dif constraints are independent — both can be on the same var."""
+        # nv
         from clausal.logic.constraints import dif, DIF_KEY
 
         trail = fresh_trail()
@@ -755,6 +829,7 @@ class TestFDAndDif:
 class TestAC3Fixpoint:
     def test_cascaded_lt(self):
         """X < Y < Z, Z ≤ 3, X ≥ 1 → X=1, Y=2, Z=3 without labeling."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         in_domain([x, y, z], 1, 100, trail)
@@ -768,6 +843,7 @@ class TestAC3Fixpoint:
 
     def test_ne_narrows_after_other_change(self):
         """Z = 1 forces propagation back through X != Z and Y != Z."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         in_domain([x, y, z], 1, 3, trail)

@@ -7,7 +7,7 @@ Test("fft constant signal") <- (
     FFTransform([1.0, 1.0, 1.0, 1.0], RESULT),
     DC is ++(abs(complex(RESULT[0]))),
     DIFF is ++(abs(float(DC) - 4.0)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # FFTransform round-trip: backward direction should recover original
 Test("fft round trip") <- (
@@ -15,13 +15,13 @@ Test("fft round trip") <- (
     FFTransform(X, SPECTRUM),
     FFTransform(RECOVERED, SPECTRUM),
     ERR is ++(abs(float(RECOVERED[0].real) - 1.0)),
-    ERR < 1e-10)
+    ERR < 1e-10)  # nv
 
 # RealFFT: output length for 4-point input is 3 (n//2+1)
 Test("real fft output length") <- (
     RealFFT([1.0, 0.0, 0.0, 0.0], RESULT),
     LEN is ++(len(RESULT)),
-    LEN == 3)
+    LEN == 3)  # nv
 
 # FFTFrequencies: fftfreq(4) first element is 0.0, second is 0.25
 Test("fft frequencies length 4") <- (
@@ -30,7 +30,7 @@ Test("fft frequencies length 4") <- (
     F1 is ++(float(FREQS[1])),
     F0 == 0.0,
     DIFF is ++(abs(F1 - 0.25)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # RealFFTFrequencies: 8-point real FFT gives 5 frequencies, first is 0.0
 Test("real fft frequencies non negative") <- (
@@ -38,7 +38,7 @@ Test("real fft frequencies non negative") <- (
     LEN is ++(len(FREQS)),
     LEN == 5,
     F0 is ++(float(FREQS[0])),
-    F0 == 0.0)
+    F0 == 0.0)  # nv
 
 # FFTShift round-trip via backward direction
 Test("fft shift and inverse") <- (
@@ -49,7 +49,7 @@ Test("fft shift and inverse") <- (
     V0 == 0.0,
     V1 is ++(float(RECOVERED[1])),
     DIFF is ++(abs(V1 - 1.0)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 # DiscreteCosineTransform round-trip via backward direction
 Test("dct round trip") <- (
@@ -57,4 +57,4 @@ Test("dct round trip") <- (
     DiscreteCosineTransform(X, COEFFS),
     DiscreteCosineTransform(RECOVERED, COEFFS),
     ERR is ++(abs(float(RECOVERED[0]) - 1.0)),
-    ERR < 1e-10)
+    ERR < 1e-10)  # nv

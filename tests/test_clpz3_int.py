@@ -29,34 +29,41 @@ from clausal.terms import Add, Mult, Sub
 
 class TestInZ3:
     def test_single_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3(x, 1, 9, trail)
 
     def test_list_of_vars(self):
+        # nv
         trail = Trail()
         xs = [Var() for _ in range(5)]
         assert in_z3(xs, 0, 100, trail)
 
     def test_ground_in_range(self):
+        # nv
         trail = Trail()
         assert in_z3(5, 1, 9, trail)
 
     def test_ground_out_of_range(self):
+        # nv
         trail = Trail()
         assert not in_z3(15, 1, 9, trail)
 
     def test_ground_non_int_fails(self):
+        # nv
         trail = Trail()
         assert not in_z3(5.5, 1, 9, trail)
 
     def test_empty_domain(self):
+        # nv
         trail = Trail()
         x = Var()
         assert not in_z3(x, 5, 1, trail)
 
     def test_singleton_domain_binds(self):
         """Singleton domain [3,3] should bind var immediately."""
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3(x, 3, 3, trail)
@@ -64,6 +71,7 @@ class TestInZ3:
 
     def test_singleton_domain_backtracking(self):
         """Singleton binding is undone on trail.undo()."""
+        # nv
         trail = Trail()
         x = Var()
         mark = trail.mark()
@@ -74,6 +82,7 @@ class TestInZ3:
 
     def test_narrowing_via_double_declaration(self):
         """Two in_z3 calls narrow the domain via both constraints."""
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3(x, 1, 9, trail)
@@ -93,23 +102,27 @@ class TestInZ3:
 
     def test_mixed_list_ground_and_var(self):
         """List with mix of ground ints (checked) and vars (constrained)."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         # 5 is in [1,9], so overall succeeds
         assert in_z3([x, 5, y], 1, 9, trail)
 
     def test_mixed_list_ground_out_of_range_fails(self):
+        # nv
         trail = Trail()
         x = Var()
         assert not in_z3([x, 15], 1, 9, trail)
 
     def test_non_integer_bounds_raise(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(TypeError, match="bounds must be integers"):
             in_z3(x, 1.5, 9, trail)
 
     def test_var_registered_as_intsort(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 9, trail)
@@ -119,6 +132,7 @@ class TestInZ3:
 
     def test_negative_domain(self):
         """Negative domain [-5, 5] works correctly."""
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3(x, -5, 5, trail)
@@ -129,6 +143,7 @@ class TestInZ3:
 
     def test_all_negative_domain(self):
         """All-negative domain [-3, -1]."""
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3(x, -3, -1, trail)
@@ -139,6 +154,7 @@ class TestInZ3:
 
     def test_crossing_zero_constraint(self):
         """x + y == 0 with domain [-2, 2]."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], -2, 2, trail)
@@ -151,6 +167,7 @@ class TestInZ3:
 
     def test_singleton_already_registered_tightens_z3(self):
         """Singleton narrowing on an already-Z3-registered var tightens Z3."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 9, trail)
@@ -172,12 +189,14 @@ class TestInZ3:
 
 class TestAllDifferentZ3:
     def test_basic(self):
+        # nv
         trail = Trail()
         xs = [Var() for _ in range(3)]
         in_z3(xs, 1, 3, trail)
         assert all_different_z3(xs, trail)
 
     def test_with_ground_int(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 3, trail)
@@ -185,21 +204,25 @@ class TestAllDifferentZ3:
 
     def test_duplicate_grounds_lazy_fail(self):
         """Distinct(1, 1) doesn't fail eagerly — detected at check time."""
+        # nv
         trail = Trail()
         assert all_different_z3([1, 1], trail)
         assert not z3_check(trail)
 
     def test_empty_list(self):
+        # nv
         trail = Trail()
         assert all_different_z3([], trail)
 
     def test_single_element(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 9, trail)
         assert all_different_z3([x], trail)
 
     def test_non_int_non_var_raises(self):
+        # nv
         trail = Trail()
         with pytest.raises(TypeError, match="expected int or Var"):
             all_different_z3(["not_valid"], trail)
@@ -211,6 +234,7 @@ class TestAllDifferentZ3:
 
 class TestLabelZ3:
     def test_single_var_all_solutions(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 3, trail)
@@ -220,6 +244,7 @@ class TestLabelZ3:
         assert sorted(solutions) == [1, 2, 3]
 
     def test_two_vars_all_different(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 2, trail)
@@ -230,6 +255,7 @@ class TestLabelZ3:
         assert sorted(solutions) == [(1, 2), (2, 1)]
 
     def test_no_solution(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 1, trail)
@@ -238,6 +264,7 @@ class TestLabelZ3:
 
     def test_vars_unbound_after_exhaustion(self):
         """After generator exhausts, Clausal vars are unbound."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 3, trail)
@@ -247,6 +274,7 @@ class TestLabelZ3:
 
     def test_early_termination(self):
         """Breaking out of label_z3 loop works; var stays bound at break."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 100, trail)
@@ -263,11 +291,13 @@ class TestLabelZ3:
         assert is_var(deref(x))
 
     def test_all_ground_single_solution(self):
+        # nv
         trail = Trail()
         solutions = list(label_z3([1, 2, 3], trail))
         assert len(solutions) == 1
 
     def test_unregistered_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         # x not declared with in_z3
@@ -275,12 +305,14 @@ class TestLabelZ3:
             list(label_z3([x], trail))
 
     def test_non_int_non_var_raises(self):
+        # nv
         trail = Trail()
         with pytest.raises(TypeError, match="expected int or Var"):
             list(label_z3(["bad"], trail))
 
     def test_solutions_differ(self):
         """Each yielded solution is a distinct assignment."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -296,16 +328,19 @@ class TestLabelZ3:
 
 class TestZ3Check:
     def test_empty_constraints_sat(self):
+        # nv
         trail = Trail()
         assert z3_check(trail)
 
     def test_consistent_constraints_sat(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 9, trail)
         assert z3_check(trail)
 
     def test_inconsistent_constraints_unsat(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 3, trail)
@@ -319,6 +354,7 @@ class TestZ3Check:
 
 class TestArithmeticConstraints:
     def test_eq_yields_equal_pairs(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 5, trail)
@@ -328,6 +364,7 @@ class TestArithmeticConstraints:
             break
 
     def test_ne_yields_unequal_pairs(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 2, trail)
@@ -338,6 +375,7 @@ class TestArithmeticConstraints:
         assert sorted(solutions) == [(1, 2), (2, 1)]
 
     def test_lt(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 3, trail)
@@ -349,6 +387,7 @@ class TestArithmeticConstraints:
         assert len(solutions) == 3  # (1,2),(1,3),(2,3)
 
     def test_le(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 2, trail)
@@ -359,6 +398,7 @@ class TestArithmeticConstraints:
         assert all(a <= b for a, b in solutions)
 
     def test_gt(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 3, trail)
@@ -369,6 +409,7 @@ class TestArithmeticConstraints:
         assert all(a > b for a, b in solutions)
 
     def test_ge(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 2, trail)
@@ -380,6 +421,7 @@ class TestArithmeticConstraints:
 
     def test_eq_with_ground(self):
         """z3_eq(x, 5) constrains x == 5."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 9, trail)
@@ -391,6 +433,7 @@ class TestArithmeticConstraints:
 
     def test_linear_expression_add(self):
         """X + Y == 10 with domain [0, 10] → 11 solutions."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -403,6 +446,7 @@ class TestArithmeticConstraints:
 
     def test_linear_expression_sub(self):
         """X - Y == 0 with domain [1, 3] → X == Y."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 3, trail)
@@ -415,6 +459,7 @@ class TestArithmeticConstraints:
 
     def test_linear_expression_mult(self):
         """2 * X == 6 with domain [1, 5] → X == 3."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -432,6 +477,7 @@ class TestArithmeticConstraints:
 class TestBacktracking:
     def test_trail_undo_retracts_z3_scope(self):
         """After trail.undo(), Z3 constraints added in that scope are gone."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -458,6 +504,7 @@ class TestBacktracking:
 
     def test_label_blocking_clauses_retracted_on_undo(self):
         """Blocking clauses from label_z3 are cleaned up after backtracking."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 3, trail)
@@ -484,6 +531,7 @@ class TestBacktracking:
 
     def test_interleaved_clausal_and_z3(self):
         """Clausal bindings and Z3 constraints interleave correctly."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -511,6 +559,7 @@ class TestBacktracking:
 
 class TestSendMoreMoney:
     def test_unique_solution(self):
+        # nv
         trail = Trail()
         S, E, N, D, M, O, R, Y = (Var() for _ in range(8))
         in_z3([S, E, N, D, M, O, R, Y], 0, 9, trail)

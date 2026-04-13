@@ -71,21 +71,25 @@ def _make_capture_handler(logger_name):
 
 class TestGetLogger:
     def test_get_logger_default(self):
+        # nv
         result = _run_simple_var(_get_logger_1)
         assert isinstance(result, pylogging.Logger)
         assert result.name == "clausal"
 
     def test_get_logger_named(self):
+        # nv
         result = _run_simple_var(_get_logger_2, "test.unit.named")
         assert isinstance(result, pylogging.Logger)
         assert result.name == "test.unit.named"
 
     def test_get_logger_same_name_same_object(self):
+        # nv
         r1 = _run_simple_var(_get_logger_2, "test.unit.same")
         r2 = _run_simple_var(_get_logger_2, "test.unit.same")
         assert r1 is r2
 
     def test_get_logger_different_names(self):
+        # nv
         r1 = _run_simple_var(_get_logger_2, "test.unit.a")
         r2 = _run_simple_var(_get_logger_2, "test.unit.b")
         assert r1 is not r2
@@ -93,6 +97,7 @@ class TestGetLogger:
 
 class TestSetGetLevel:
     def test_set_debug(self):
+        # nv
         trail = Trail()
         logger = pylogging.getLogger("test.unit.setlvl1")
         _run_simple(_set_level_2, logger, "debug")
@@ -100,6 +105,7 @@ class TestSetGetLevel:
         assert result == "DEBUG"
 
     def test_set_warning(self):
+        # nv
         trail = Trail()
         logger = pylogging.getLogger("test.unit.setlvl2")
         _run_simple(_set_level_2, logger, "warning")
@@ -107,30 +113,35 @@ class TestSetGetLevel:
         assert result == "WARNING"
 
     def test_set_error(self):
+        # nv
         logger = pylogging.getLogger("test.unit.setlvl3")
         _run_simple(_set_level_2, logger, "error")
         result = _run_simple_var(_get_level_2, logger)
         assert result == "ERROR"
 
     def test_set_critical(self):
+        # nv
         logger = pylogging.getLogger("test.unit.setlvl4")
         _run_simple(_set_level_2, logger, "critical")
         result = _run_simple_var(_get_level_2, logger)
         assert result == "CRITICAL"
 
     def test_set_info(self):
+        # nv
         logger = pylogging.getLogger("test.unit.setlvl5")
         _run_simple(_set_level_2, logger, "info")
         result = _run_simple_var(_get_level_2, logger)
         assert result == "INFO"
 
     def test_fatal_alias(self):
+        # nv
         logger = pylogging.getLogger("test.unit.setlvl6")
         _run_simple(_set_level_2, logger, "fatal")
         result = _run_simple_var(_get_level_2, logger)
         assert result == "CRITICAL"
 
     def test_warn_alias(self):
+        # nv
         logger = pylogging.getLogger("test.unit.setlvl7")
         _run_simple(_set_level_2, logger, "warn")
         result = _run_simple_var(_get_level_2, logger)
@@ -139,16 +150,19 @@ class TestSetGetLevel:
 
 class TestIsEnabledFor:
     def test_enabled(self):
+        # nv
         logger = pylogging.getLogger("test.unit.enab1")
         logger.setLevel(pylogging.DEBUG)
         assert _run_simple(_is_enabled_for_2, logger, "info") == 1
 
     def test_disabled(self):
+        # nv
         logger = pylogging.getLogger("test.unit.enab2")
         logger.setLevel(pylogging.ERROR)
         assert _run_simple(_is_enabled_for_2, logger, "debug") == 0
 
     def test_same_level(self):
+        # nv
         logger = pylogging.getLogger("test.unit.enab3")
         logger.setLevel(pylogging.WARNING)
         assert _run_simple(_is_enabled_for_2, logger, "warning") == 1
@@ -158,31 +172,37 @@ class TestOutputCapture:
     """Verify actual log output via captured StringIO handler."""
 
     def test_debug_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.debug")
         _run_simple(_debug_2, logger, "hello debug")
         assert buf.getvalue() == "DEBUG:hello debug\n"
 
     def test_info_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.info")
         _run_simple(_info_2, logger, "hello info")
         assert buf.getvalue() == "INFO:hello info\n"
 
     def test_warning_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.warning")
         _run_simple(_warning_2, logger, "hello warn")
         assert buf.getvalue() == "WARNING:hello warn\n"
 
     def test_error_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.error")
         _run_simple(_error_2, logger, "hello error")
         assert buf.getvalue() == "ERROR:hello error\n"
 
     def test_critical_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.critical")
         _run_simple(_critical_2, logger, "hello crit")
         assert buf.getvalue() == "CRITICAL:hello crit\n"
 
     def test_log3_output(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.cap.log3")
         _run_simple(_log_3, logger, "warning", "log3 msg")
         assert buf.getvalue() == "WARNING:log3 msg\n"
@@ -192,18 +212,21 @@ class TestLevelFiltering:
     """Verify that messages below the logger's level are suppressed."""
 
     def test_debug_suppressed_at_warning(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.filt1")
         logger.setLevel(pylogging.WARNING)
         _run_simple(_debug_2, logger, "should not appear")
         assert buf.getvalue() == ""
 
     def test_error_passes_at_warning(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.filt2")
         logger.setLevel(pylogging.WARNING)
         _run_simple(_error_2, logger, "should appear")
         assert "should appear" in buf.getvalue()
 
     def test_info_suppressed_at_error(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.filt3")
         logger.setLevel(pylogging.ERROR)
         _run_simple(_info_2, logger, "nope")
@@ -214,6 +237,7 @@ class TestMultipleHandlers:
     """Verify that multiple handlers both receive messages."""
 
     def test_two_handlers(self):
+        # nv
         logger = pylogging.getLogger("test.unit.multi")
         logger.setLevel(pylogging.DEBUG)
         logger.handlers.clear()
@@ -235,14 +259,17 @@ class TestMultipleHandlers:
 
 class TestHandlerCreation:
     def test_stream_handler_stdout(self):
+        # nv
         result = _run_simple_var(_stream_handler_2, "stdout")
         assert isinstance(result, pylogging.StreamHandler)
 
     def test_stream_handler_stderr(self):
+        # nv
         result = _run_simple_var(_stream_handler_2, "stderr")
         assert isinstance(result, pylogging.StreamHandler)
 
     def test_set_formatter(self):
+        # nv
         trail = Trail()
         handler = pylogging.StreamHandler(io.StringIO())
         _run_simple(_set_formatter_2, handler, "%(levelname)s - %(message)s")
@@ -252,12 +279,14 @@ class TestHandlerCreation:
 
 class TestFileHandler:
     def test_file_handler_creates_file(self, tmp_path):
+        # nv
         log_path = tmp_path / "test.log"
         result = _run_simple_var(_file_handler_2, str(log_path))
         assert isinstance(result, pylogging.FileHandler)
         result.close()
 
     def test_file_handler_writes(self, tmp_path):
+        # nv
         log_path = tmp_path / "test_write.log"
         logger = pylogging.getLogger("test.unit.filewrite")
         logger.setLevel(pylogging.DEBUG)
@@ -278,6 +307,7 @@ class TestFileHandler:
 
 class TestAddRemoveHandler:
     def test_add_and_remove(self):
+        # nv
         logger = pylogging.getLogger("test.unit.addrem")
         logger.handlers.clear()
         buf = io.StringIO()
@@ -295,6 +325,7 @@ class TestBasicConfig:
     def test_basic_config_level(self):
         # basicConfig only works if root has no handlers yet, so this
         # test is limited — just verify it doesn't crash.
+        # nv
         trail = Trail()
         assert _run_simple(_basic_config_1, {"level": "debug"}) == 1
 
@@ -303,18 +334,23 @@ class TestArityOneShorthand:
     """Verify arity-1 predicates log to the default 'clausal' logger."""
 
     def test_debug_1(self):
+        # nv
         assert _run_simple(_debug_1, "shorthand debug") == 1
 
     def test_info_1(self):
+        # nv
         assert _run_simple(_info_1, "shorthand info") == 1
 
     def test_warning_1(self):
+        # nv
         assert _run_simple(_warning_1, "shorthand warning") == 1
 
     def test_error_1(self):
+        # nv
         assert _run_simple(_error_1, "shorthand error") == 1
 
     def test_critical_1(self):
+        # nv
         assert _run_simple(_critical_1, "shorthand critical") == 1
 
 
@@ -322,6 +358,7 @@ class TestFormatterOutput:
     """Verify custom formatter patterns produce expected output."""
 
     def test_custom_format(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.fmt")
         # Replace formatter with a custom one.
         logger.handlers[0].setFormatter(
@@ -331,6 +368,7 @@ class TestFormatterOutput:
         assert buf.getvalue() == "[INFO] formatted\n"
 
     def test_name_in_format(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.fmt.name")
         logger.handlers[0].setFormatter(
             pylogging.Formatter("%(name)s:%(message)s")
@@ -343,6 +381,7 @@ class TestVarDeref:
     """Verify that Var values are deref'd before logging."""
 
     def test_bound_var_in_message(self):
+        # nv
         logger, buf = _make_capture_handler("test.unit.var")
         trail = Trail()
         v = Var()
@@ -419,4 +458,5 @@ class TestLoggingFixture:
         "logger hierarchy",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)

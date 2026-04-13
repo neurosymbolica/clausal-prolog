@@ -9,13 +9,13 @@ Test("tensor_dataset creation") <- (
     tensor([0, 1, 0], Y),
     tensor_dataset([X, Y], DS),
     dataset_length(DS, 3)
-)
+)  # nv
 
 Test("tensor_dataset single tensor") <- (
     tensor([[1.0], [2.0], [3.0], [4.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, 4)
-)
+)  # nv
 
 # --- dataset_length/2: property query and check ---
 
@@ -24,19 +24,19 @@ Test("dataset_length query") <- (
     tensor_dataset([X], DS),
     dataset_length(DS, N),
     N == 2
-)
+)  # nv
 
 Test("dataset_length check succeeds") <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, 3)
-)
+)  # nv
 
 Test("dataset_length check fails") <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     not(dataset_length(DS, 5))
-)
+)  # nv
 
 # --- dataset_item/3: indexed access ---
 
@@ -48,7 +48,7 @@ Test("dataset_item first") <- (
     # ITEM is a tuple of tensors; access elements via ++()
     X0 is ++(ITEM[0]),
     tensor_list(X0, [10.0])
-)
+)  # nv
 
 Test("dataset_item last") <- (
     tensor([[10.0], [20.0], [30.0]], X),
@@ -57,13 +57,13 @@ Test("dataset_item last") <- (
     dataset_item(DS, 2, ITEM),
     X2 is ++(ITEM[0]),
     tensor_list(X2, [30.0])
-)
+)  # nv
 
 Test("dataset_item out of bounds fails") <- (
     tensor([[1.0], [2.0]], X),
     tensor_dataset([X], DS),
     not(dataset_item(DS, 5, _))
-)
+)  # nv
 
 # --- dataset_element/2: enumerate items ---
 
@@ -72,7 +72,7 @@ Test("dataset_element enumerate all") <- (
     tensor_dataset([X], DS),
     findall(ITEM, dataset_element(DS, ITEM), ITEMS),
     length(ITEMS, 3)
-)
+)  # nv
 
 # --- dataset_element/3: enumerate (index, item) pairs ---
 
@@ -84,7 +84,7 @@ Test("dataset_element with indices") <- (
     in_(0, INDICES),
     in_(1, INDICES),
     in_(2, INDICES)
-)
+)  # nv
 
 Test("dataset_element index and item match") <- (
     tensor([[10.0], [20.0]], X),
@@ -92,4 +92,4 @@ Test("dataset_element index and item match") <- (
     dataset_element(DS, 0, ITEM),
     V is ++(ITEM[0]),
     tensor_list(V, [10.0])
-)
+)  # nv

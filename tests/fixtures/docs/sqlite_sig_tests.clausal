@@ -9,7 +9,7 @@
 Test("connect") <- (
     SQLiteConnect(":memory:", "doc_test_conn"),
     SQLiteCurrentConnection("doc_test_conn")
-)
+)  # nv
 
 # ── Exec and Query ───────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ Test("exec and query") <- (
     SQLiteExec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
     SQLiteQuery("doc_test_eq", "SELECT x FROM t1", V),
     V == 42
-)
+)  # nv
 
 Test("query params") <- (
     SQLiteConnect(":memory:", "doc_test_qp"),
@@ -28,7 +28,7 @@ Test("query params") <- (
     SQLiteExec("doc_test_qp", "INSERT INTO t2 VALUES (2)"),
     SQLiteQuery("doc_test_qp", "SELECT x FROM t2 WHERE x > ?", [1], V),
     V == 2
-)
+)  # nv
 
 # ── Row count ────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ Test("row count") <- (
     SQLiteExec("doc_test_rc", "INSERT INTO t3 VALUES (2)"),
     SQLiteRowCount("doc_test_rc", "DELETE FROM t3", N),
     N == 2
-)
+)  # nv
 
 # ── Schema introspection ─────────────────────────────────────────────────────
 
@@ -47,10 +47,10 @@ Test("table exists") <- (
     SQLiteConnect(":memory:", "doc_test_tbl"),
     SQLiteExec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
     SQLiteTable("doc_test_tbl", "users")
-)
+)  # nv
 
 Test("column info") <- (
     SQLiteConnect(":memory:", "doc_test_col"),
     SQLiteExec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
     SQLiteColumn("doc_test_col", "items", "id", _)
-)
+)  # nv

@@ -37,6 +37,7 @@ def _has_test(content: str) -> bool:
 
 def test_no_skip_blocks():
     """No # skip blocks allowed — all doc snippets must be tested."""
+    # nv
     violations = []
     for md in sorted(_DOCS_DIR.glob("*.md")):
         text = md.read_text()
@@ -59,6 +60,7 @@ def test_no_raw_untested_blocks():
     Inline blocks that compile (imports, predicate defs, working examples)
     are allowed — conftest.py already compile-checks them at collection time.
     """
+    # nv
     import tempfile
     from clausal.testing import load_clausal_module
 

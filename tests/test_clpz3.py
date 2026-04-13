@@ -34,41 +34,48 @@ from clausal.logic.clpz3 import (
 
 class TestZ3State:
     def test_create_state(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         assert isinstance(state, Z3State)
         assert state.solver is not None
 
     def test_same_state_same_trail(self):
+        # nv
         trail = Trail()
         s1 = get_z3_state(trail)
         s2 = get_z3_state(trail)
         assert s1 is s2
 
     def test_different_trails_different_states(self):
+        # nv
         t1, t2 = Trail(), Trail()
         s1 = get_z3_state(t1)
         s2 = get_z3_state(t2)
         assert s1 is not s2
 
     def test_state_has_empty_maps(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         assert state.var_map == {}
         assert state.rev_map == {}
 
     def test_counter_starts_at_zero(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         assert state._counter == 0
 
     def test_empty_solver_is_sat(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         assert state.solver.check() == z3.sat
 
     def test_gc_cleanup(self):
         """State is removed from the registry when the trail is GC'd."""
+        # nv
         from clausal.logic.clpz3 import _z3_states
         trail = Trail()
         tid = id(trail)
@@ -85,24 +92,28 @@ class TestZ3State:
 
 class TestVarRegistration:
     def test_register_int_var(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_x = z3_var_for(x, z3.IntSort(), trail)
         assert z3_x.sort() == z3.IntSort()
 
     def test_register_bool_var(self):
+        # nv
         trail = Trail()
         b = Var()
         z3_b = z3_var_for(b, z3.BoolSort(), trail)
         assert z3_b.sort() == z3.BoolSort()
 
     def test_register_real_var(self):
+        # nv
         trail = Trail()
         r = Var()
         z3_r = z3_var_for(r, z3.RealSort(), trail)
         assert z3_r.sort() == z3.RealSort()
 
     def test_same_var_returns_same_constant(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_x1 = z3_var_for(x, z3.IntSort(), trail)
@@ -110,6 +121,7 @@ class TestVarRegistration:
         assert z3_x1 is z3_x2
 
     def test_different_vars_different_constants(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         z3_x = z3_var_for(x, z3.IntSort(), trail)
@@ -118,6 +130,7 @@ class TestVarRegistration:
         assert z3_x.get_id() != z3_y.get_id()
 
     def test_var_map_populated(self):
+        # nv
         trail = Trail()
         x = Var()
         state = get_z3_state(trail)
@@ -125,6 +138,7 @@ class TestVarRegistration:
         assert state.var_map[id(x)] is z3_x
 
     def test_rev_map_populated(self):
+        # nv
         trail = Trail()
         x = Var()
         state = get_z3_state(trail)
@@ -132,6 +146,7 @@ class TestVarRegistration:
         assert state.rev_map[z3_x.get_id()] is x
 
     def test_attvar_attribute_stored(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_x = z3_var_for(x, z3.IntSort(), trail)
@@ -142,6 +157,7 @@ class TestVarRegistration:
         assert info.sort == z3.IntSort()
 
     def test_ground_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 42, trail)
@@ -149,6 +165,7 @@ class TestVarRegistration:
             z3_var_for(x, z3.IntSort(), trail)
 
     def test_sort_mismatch_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_var_for(x, z3.IntSort(), trail)
@@ -157,6 +174,7 @@ class TestVarRegistration:
 
     def test_unique_names(self):
         """Each Z3 constant gets a unique name."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         z3_x = z3_var_for(x, z3.IntSort(), trail)
@@ -164,6 +182,7 @@ class TestVarRegistration:
         assert str(z3_x) != str(z3_y)
 
     def test_counter_increments(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         x, y, z = Var(), Var(), Var()
@@ -181,24 +200,28 @@ class TestExpressionTranslation:
     # ── Ground literals ──────────────────────────────────────────────────────
 
     def test_int_literal(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(42, trail)
         assert z3.is_int_value(result)
         assert result.as_long() == 42
 
     def test_zero(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(0, trail)
         assert z3.is_int_value(result)
         assert result.as_long() == 0
 
     def test_negative_int(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(-7, trail)
         assert z3.is_int_value(result)
         assert result.as_long() == -7
 
     def test_large_int(self):
+        # nv
         trail = Trail()
         big = 10 ** 100
         result = clausal_to_z3(big, trail)
@@ -206,27 +229,32 @@ class TestExpressionTranslation:
         assert result.as_long() == big
 
     def test_bool_true(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(True, trail)
         assert z3.is_true(result)
 
     def test_bool_false(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(False, trail)
         assert z3.is_false(result)
 
     def test_bool_before_int(self):
         """True/False must translate to Bool, not Int (bool is subclass of int)."""
+        # nv
         trail = Trail()
         assert clausal_to_z3(True, trail).sort() == z3.BoolSort()
         assert clausal_to_z3(False, trail).sort() == z3.BoolSort()
 
     def test_float_literal(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(1.5, trail)
         assert result.sort() == z3.RealSort()
 
     def test_fraction_literal(self):
+        # nv
         trail = Trail()
         result = clausal_to_z3(Fraction(3, 7), trail)
         assert result.sort() == z3.RealSort()
@@ -234,6 +262,7 @@ class TestExpressionTranslation:
     # ── Variables ────────────────────────────────────────────────────────────
 
     def test_registered_var_lookup(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_x = z3_var_for(x, z3.IntSort(), trail)
@@ -241,6 +270,7 @@ class TestExpressionTranslation:
         assert result is z3_x
 
     def test_unregistered_var_with_default_sort(self):
+        # nv
         trail = Trail()
         x = Var()
         result = clausal_to_z3(x, trail, default_sort=z3.IntSort())
@@ -250,6 +280,7 @@ class TestExpressionTranslation:
         assert id(x) in state.var_map
 
     def test_unregistered_var_no_sort_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(ValueError, match="Unregistered"):
@@ -257,6 +288,7 @@ class TestExpressionTranslation:
 
     def test_bound_var_translates_value(self):
         """A bound Var translates its dereferenced value."""
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 10, trail)
@@ -267,6 +299,7 @@ class TestExpressionTranslation:
     # ── Arithmetic operators ─────────────────────────────────────────────────
 
     def test_addition(self):
+        # nv
         from clausal.pythonic_ast.nodes import Add
         trail = Trail()
         x, y = Var(), Var()
@@ -277,6 +310,7 @@ class TestExpressionTranslation:
         assert result.num_args() == 2
 
     def test_subtraction(self):
+        # nv
         from clausal.pythonic_ast.nodes import Sub
         trail = Trail()
         x, y = Var(), Var()
@@ -286,6 +320,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.IntSort()
 
     def test_multiplication(self):
+        # nv
         from clausal.pythonic_ast.nodes import Mult
         trail = Trail()
         x = Var()
@@ -294,6 +329,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.IntSort()
 
     def test_negate(self):
+        # nv
         from clausal.pythonic_ast.nodes import Negate
         trail = Trail()
         x = Var()
@@ -303,6 +339,7 @@ class TestExpressionTranslation:
 
     def test_nested_arithmetic(self):
         """2 * x + 3 translates correctly."""
+        # nv
         from clausal.pythonic_ast.nodes import Add, Mult
         trail = Trail()
         x = Var()
@@ -314,6 +351,7 @@ class TestExpressionTranslation:
     # ── Comparison operators ─────────────────────────────────────────────────
 
     def test_arith_eq_gives_bool(self):
+        # nv
         from clausal.pythonic_ast.nodes import ArithEq
         trail = Trail()
         x = Var()
@@ -322,6 +360,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_arith_neq(self):
+        # nv
         from clausal.pythonic_ast.nodes import ArithNeq
         trail = Trail()
         x = Var()
@@ -330,6 +369,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_lt(self):
+        # nv
         from clausal.pythonic_ast.nodes import Lt
         trail = Trail()
         x = Var()
@@ -338,6 +378,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_lte(self):
+        # nv
         from clausal.pythonic_ast.nodes import LtE
         trail = Trail()
         x = Var()
@@ -346,6 +387,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_gt(self):
+        # nv
         from clausal.pythonic_ast.nodes import Gt
         trail = Trail()
         x = Var()
@@ -354,6 +396,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_gte(self):
+        # nv
         from clausal.pythonic_ast.nodes import GtE
         trail = Trail()
         x = Var()
@@ -364,6 +407,7 @@ class TestExpressionTranslation:
     # ── Boolean operators ────────────────────────────────────────────────────
 
     def test_and(self):
+        # nv
         from clausal.pythonic_ast.nodes import And
         trail = Trail()
         p, q = Var(), Var()
@@ -373,6 +417,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_or(self):
+        # nv
         from clausal.pythonic_ast.nodes import Or
         trail = Trail()
         p, q = Var(), Var()
@@ -382,6 +427,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_not(self):
+        # nv
         from clausal.pythonic_ast.nodes import Not
         trail = Trail()
         p = Var()
@@ -390,6 +436,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_bitand(self):
+        # nv
         from clausal.pythonic_ast.nodes import BitAnd
         trail = Trail()
         p, q = Var(), Var()
@@ -399,6 +446,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_bitor(self):
+        # nv
         from clausal.pythonic_ast.nodes import BitOr
         trail = Trail()
         p, q = Var(), Var()
@@ -408,6 +456,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_bitxor(self):
+        # nv
         from clausal.pythonic_ast.nodes import BitXor
         trail = Trail()
         p, q = Var(), Var()
@@ -417,6 +466,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_invert(self):
+        # nv
         from clausal.pythonic_ast.nodes import Invert
         trail = Trail()
         p = Var()
@@ -425,6 +475,7 @@ class TestExpressionTranslation:
         assert result.sort() == z3.BoolSort()
 
     def test_unknown_type_raises(self):
+        # nv
         trail = Trail()
 
         class _Bogus:
@@ -440,47 +491,58 @@ class TestExpressionTranslation:
 
 class TestZ3ToPython:
     def test_int_value(self):
+        # nv
         assert z3_to_python(z3.IntVal(42)) == 42
         assert isinstance(z3_to_python(z3.IntVal(42)), int)
 
     def test_int_zero(self):
+        # nv
         assert z3_to_python(z3.IntVal(0)) == 0
 
     def test_int_negative(self):
+        # nv
         assert z3_to_python(z3.IntVal(-7)) == -7
 
     def test_large_int(self):
+        # nv
         big = 10 ** 100
         assert z3_to_python(z3.IntVal(big)) == big
 
     def test_bool_true(self):
+        # nv
         assert z3_to_python(z3.BoolVal(True)) == 1
 
     def test_bool_false(self):
+        # nv
         assert z3_to_python(z3.BoolVal(False)) == 0
 
     def test_bool_result_is_int(self):
         """Clausal uses 0/1 for booleans, not Python True/False."""
+        # nv
         result = z3_to_python(z3.BoolVal(True))
         assert result == 1
         assert type(result) is int
 
     def test_rational_exact(self):
+        # nv
         result = z3_to_python(z3.RealVal("3/7"))
         assert result == Fraction(3, 7)
         assert isinstance(result, Fraction)
 
     def test_rational_whole(self):
+        # nv
         result = z3_to_python(z3.RealVal("5"))
         # May come back as Fraction(5, 1) or int depending on Z3
         assert result == 5
 
     def test_rational_half(self):
+        # nv
         result = z3_to_python(z3.RealVal("1/2"))
         assert result == Fraction(1, 2)
 
     def test_model_int_value(self):
         """Value extracted from a real model."""
+        # nv
         s = z3.Solver()
         x = z3.Int("x")
         s.add(x == 99)
@@ -495,6 +557,7 @@ class TestZ3ToPython:
 
 class TestTrailSync:
     def test_z3_push_increments_scopes(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         assert state.solver.num_scopes() == 0
@@ -507,6 +570,7 @@ class TestTrailSync:
         assert state.solver.num_scopes() == 0
 
     def test_z3_push_pop_retracts_constraint(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         x = z3.Int("x")
@@ -523,6 +587,7 @@ class TestTrailSync:
         assert state.solver.check() == z3.sat  # x < 0 retracted
 
     def test_nested_push_pop(self):
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
 
@@ -544,6 +609,7 @@ class TestTrailSync:
 
     def test_push_interleaved_with_clausal_bindings(self):
         """Trail undo undoes both Z3 scope and Clausal variable bindings."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         x = Var()
@@ -563,6 +629,7 @@ class TestTrailSync:
 
     def test_z3_add_lazy(self):
         """z3_add does not check consistency — always returns True."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         x = z3.Int("x")
@@ -576,6 +643,7 @@ class TestTrailSync:
 
     def test_multiple_trail_pops(self):
         """Pop correctly handles multiple levels in one trail.undo()."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
 
@@ -590,6 +658,7 @@ class TestTrailSync:
 
     def test_push_then_constraint_then_backtrack_and_re_add(self):
         """After backtrack, new constraints can be added in clean scope."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         x = z3.Int("x")
@@ -617,6 +686,7 @@ class TestTrailSync:
 class TestImportGuard:
     def test_z3_state_requires_z3(self, monkeypatch):
         """If z3 is not available, Z3State raises ImportError."""
+        # nv
         import clausal.logic.clpz3 as m
         monkeypatch.setattr(m, "_HAS_Z3", False)
         with pytest.raises(ImportError, match="pip install z3-solver"):

@@ -181,26 +181,31 @@ class TestDerefOnce:
     """The generated function calls deref() exactly arity times, not N*arity."""
 
     def test_single_clause_one_deref_per_arg(self):
+        # nv
         _, _, func_def = _make_multi_clause_predicate(1, arity=2)
         assert _count_calls_to("deref", func_def) == 2
 
     def test_two_clauses_still_one_deref_per_arg(self):
+        # nv
         _, _, func_def = _make_multi_clause_predicate(2, arity=2)
         # Would be 4 without the optimization; should be 2.
         assert _count_calls_to("deref", func_def) == 2
 
     def test_three_clauses_still_one_deref_per_arg(self):
+        # nv
         _, _, func_def = _make_multi_clause_predicate(3, arity=2)
         # Would be 6 without the optimization; should be 2.
         assert _count_calls_to("deref", func_def) == 2
 
     def test_five_clauses_arity3_one_deref_per_arg(self):
+        # nv
         _, _, func_def = _make_multi_clause_predicate(5, arity=3)
         # Would be 15 without the optimization; should be 3.
         assert _count_calls_to("deref", func_def) == 3
 
     def test_match_subjects_use_deref_locals(self):
         """Match subjects reference _d0, _d1 locals, not raw arg names."""
+        # nv
         _, _, func_def = _make_multi_clause_predicate(3, arity=2)
         subject_names = _names_in_match_subjects(func_def)
         # Every element of every match subject should be a _d<i> local.
@@ -209,6 +214,7 @@ class TestDerefOnce:
 
     def test_deref_locals_assigned_before_first_match(self):
         """The _d0 assignment must come before the first Match statement."""
+        # nv
         _, _, func_def = _make_multi_clause_predicate(2, arity=1)
         body = func_def.body
         # Find index of first _d0 assign and first Match
@@ -230,6 +236,7 @@ class TestDerefOnce:
 
     def test_arity_zero_no_deref_assigns(self):
         """Arity-0 predicates have no arguments to deref."""
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("fact0", ()), body=[]))
         db.assertz(Clause(head=Compound("fact0", ()), body=[]))
@@ -240,6 +247,7 @@ class TestDerefOnce:
 
     def test_deref_count_scales_with_arity_not_clauses(self):
         """Verify the scaling property: deref count == arity, not n_clauses * arity."""
+        # nv
         for n in range(1, 6):
             _, _, func_def = _make_multi_clause_predicate(n, arity=2)
             n_derefs = _count_calls_to("deref", func_def)
@@ -309,6 +317,7 @@ class TestITENoDuplication:
 
     def test_reified_eq_true_branch_is_unify_branch(self):
         """true_stmts and unify_branch are the same Python list object."""
+        # nv
         x, y = Var(), Var()
         test = Is(left=x, right=1)
         then = Is(left=y, right=99991)
@@ -326,6 +335,7 @@ class TestITENoDuplication:
 
     def test_reified_eq_false_branch_is_dif_branch(self):
         """false_stmts and dif_branch are the same Python list object."""
+        # nv
         x, y = Var(), Var()
         test = Is(left=x, right=1)
         then = Is(left=y, right=99991)
@@ -343,6 +353,7 @@ class TestITENoDuplication:
 
     def test_reified_eq_only_two_compilations(self):
         """_reify_eq is called exactly once; only two goal compilations occur."""
+        # nv
         x, y = Var(), Var()
         test = Is(left=x, right=1)
         then = Is(left=y, right=1)
@@ -368,6 +379,7 @@ class TestITENoDuplication:
 
     def test_reified_fd_true_branch_is_fd_then_stmts(self):
         """then_stmts used for 'if _reif is True' is the same object as the fd_true branch."""
+        # nv
         x, y = Var(), Var()
         test = Gt(left=x, right=5)
         then = Is(left=y, right=99992)
@@ -384,6 +396,7 @@ class TestITENoDuplication:
 
     def test_reified_fd_false_branch_is_fd_else_stmts(self):
         """else_stmts used for 'elif _reif is False' is the same as the fd_false branch."""
+        # nv
         x, y = Var(), Var()
         test = Gt(left=x, right=5)
         then = Is(left=y, right=99992)
@@ -398,6 +411,7 @@ class TestITENoDuplication:
         )
 
     def test_reified_fd_only_one_reify_call(self):
+        # nv
         x, y = Var(), Var()
         test = Gt(left=x, right=5)
         then = Is(left=y, right=1)
@@ -437,6 +451,7 @@ class TestOrMarkElimination:
 
     def test_or_has_exactly_one_mark_call(self):
         """Or(True, True): single trail.mark() before the left branch."""
+        # nv
         stmts = self._compile_or_true()
         module = ast.Module(body=stmts, type_ignores=[])
         ast.fix_missing_locations(module)
@@ -446,6 +461,7 @@ class TestOrMarkElimination:
 
     def test_or_has_exactly_two_undo_calls(self):
         """Or(True, True): two trail.undo() calls, one after each branch."""
+        # nv
         stmts = self._compile_or_true()
         module = ast.Module(body=stmts, type_ignores=[])
         ast.fix_missing_locations(module)
@@ -455,6 +471,7 @@ class TestOrMarkElimination:
 
     def test_or_mark_is_first_statement(self):
         """The single trail.mark() is the very first statement emitted."""
+        # nv
         stmts = self._compile_or_true()
         first = stmts[0]
         assert isinstance(first, ast.Assign), \
@@ -468,6 +485,7 @@ class TestOrMarkElimination:
 
     def test_or_mark_variable_not_reassigned(self):
         """The mark variable is assigned exactly once (not reassigned mid-Or)."""
+        # nv
         stmts = self._compile_or_true()
         # The first stmt assigns the mark variable; get its name.
         mark_name = stmts[0].targets[0].id
@@ -478,6 +496,7 @@ class TestOrMarkElimination:
 
     def test_nested_or_has_two_marks(self):
         """Or(Or(True,True), True): exactly 2 marks — one per disjunction level."""
+        # nv
         stmts = self._compile_or_nested_true()
         module = ast.Module(body=stmts, type_ignores=[])
         ast.fix_missing_locations(module)
@@ -487,6 +506,7 @@ class TestOrMarkElimination:
 
     def test_or_correctness_still_holds(self):
         """Behavioral sanity: disjunction still yields both solutions."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, DONE as _DONE
         from clausal.logic.compiler import compile_predicate_trampoline
 
@@ -536,6 +556,7 @@ class TestSinglePassTraversal:
         return clauses
 
     def test_call_targets_collected(self):
+        # nv
         from clausal.logic.compiler import _collect_globals_info, _collect_call_targets
         clauses = self._make_clauses_with_call()
         _, _, targets_combined = _collect_globals_info(clauses)
@@ -546,6 +567,7 @@ class TestSinglePassTraversal:
 
     def test_head_types_collected(self):
         """User-defined term classes from heads are collected."""
+        # nv
         from clausal.logic.compiler import _collect_globals_info, _collect_head_types
         MyTerm = make_predicate("MyTerm", ("val",))
         t1, t2 = MyTerm(val=1), MyTerm(val=2)
@@ -561,6 +583,7 @@ class TestSinglePassTraversal:
 
     def test_py_thunks_collected(self):
         """PyThunk lambdas in clause bodies are collected."""
+        # nv
         from clausal.logic.compiler import _collect_globals_info, _collect_py_thunks
         from clausal.terms import PyThunk
         v = Var()
@@ -579,6 +602,7 @@ class TestSinglePassTraversal:
 
     def test_single_pass_same_result_as_three_passes(self):
         """Full equivalence: combined result matches three separate collections."""
+        # nv
         from clausal.logic.compiler import (
             _collect_globals_info, _collect_head_types,
             _collect_py_thunks, _collect_call_targets,
@@ -613,6 +637,7 @@ class TestLockedDispatchCaching:
 
     def test_disp_key_in_globals_for_locked_callee(self):
         """_disp_Bar_1 is injected into base_globals when Bar is locked+compiled."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         Bar = self._make_locked_callee()
         db = Database()
@@ -630,6 +655,7 @@ class TestLockedDispatchCaching:
 
     def test_no_get_dispatch_call_in_bytecode_for_locked(self):
         """Bytecode for a call to a locked predicate should not use _get_dispatch()."""
+        # nv
         import dis, io
         from clausal.logic.compiler import compile_predicate_trampoline
         Bar = self._make_locked_callee()
@@ -652,6 +678,7 @@ class TestLockedDispatchCaching:
 
     def test_unlocked_predicate_still_uses_get_dispatch(self):
         """An unlocked (dynamic) predicate still emits fname._get_dispatch()."""
+        # nv
         import dis, io
         from clausal.logic.compiler import compile_predicate_trampoline
         Baz = make_predicate("Baz", ("x",))
@@ -678,6 +705,7 @@ class TestLockedDispatchCaching:
 
     def test_locked_dispatch_correctness(self):
         """Behavioral: a call compiled with cached dispatch still finds solutions."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.trampoline import StepGenerator, DONE as _DONE
         Bar = self._make_locked_callee()
@@ -768,6 +796,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_keys_extracted_at_compile_time(self):
         """_extract_arg_key returns (functor, arity) tuples for Compound heads."""
+        # nv
         from clausal.logic.compiler import _extract_arg_key
         r, w, h = Var(), Var(), Var()
         cl_circle = Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[])
@@ -781,6 +810,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_arg_builds_arg_index(self):
         """_build_arg_index yields distinct buckets for compound-headed clauses."""
+        # nv
         from clausal.logic.compiler import _build_arg_index
         r, w, h, a, b, c, s2 = [Var() for _ in range(7)]
         clauses = [
@@ -799,6 +829,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_key_dispatch_circle(self):
         """Shape(circle(42), Q) → Q=42 via compound-key bucket dispatch."""
+        # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
         solutions = _run_trampoline(fn, Compound("circle", (42,)), q)
@@ -806,6 +837,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_key_dispatch_rect(self):
         """Shape(rect(3, 4), Q) → Q=3 (first inner arg of rect)."""
+        # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
         solutions = _run_trampoline(fn, Compound("rect", (3, 4)), q)
@@ -813,6 +845,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_key_dispatch_wrong_functor(self):
         """Shape(cylinder(5), Q) → no solution (no 'cylinder' bucket or default)."""
+        # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
         solutions = _run_trampoline(fn, Compound("cylinder", (5,)), q)
@@ -820,6 +853,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_key_distinct_from_scalar_keys(self):
         """('circle', 1) tuple key does not collide with int/str scalar keys."""
+        # nv
         from clausal.logic.compiler import _build_arg_index
         v = Var()
         # Mix: scalar keys and compound keys in same predicate
@@ -838,6 +872,7 @@ class TestCompoundKeyIndexing:
 
     def test_predicate_meta_compound_key(self):
         """PredicateMeta heads also produce (class_name, field_count) index keys."""
+        # nv
         from clausal.logic.compiler import _extract_arg_key
         MyTerm = make_predicate("MyTerm", ("val",))
         t = MyTerm(val=1)
@@ -895,6 +930,7 @@ class TestSecondaryIndexing:
 
     def test_secondary_index_builds_correctly(self):
         """_build_secondary_index on normalized clauses: 3 level-0, 2 level-1 each."""
+        # nv
         from clausal.logic.compiler import _build_secondary_index
         facts = [
             ("red",    "warm",    "light"),
@@ -921,18 +957,21 @@ class TestSecondaryIndexing:
 
     def test_all_ground_exact_match(self):
         """Color(blue, cool, light) → exactly one solution."""
+        # nv
         fn, _, _ = self._make_color_predicate()
         solutions = _run_trampoline(fn, "blue", "cool", "light")
         assert len(solutions) == 1, f"Expected 1 solution, got {solutions}"
 
     def test_all_ground_no_match(self):
         """Color(blue, warm, light) → no solution (blue is not warm)."""
+        # nv
         fn, _, _ = self._make_color_predicate()
         solutions = _run_trampoline(fn, "blue", "warm", "light")
         assert solutions == [], f"Expected [], got {solutions}"
 
     def test_partial_ground_first_arg(self):
         """Color(X, warm, B) — single-arg dispatch on arg1 returns warm facts."""
+        # nv
         fn, _, _ = self._make_color_predicate()
         x, b = Var(), Var()
         solutions = _run_trampoline(fn, x, "warm", b)
@@ -941,6 +980,7 @@ class TestSecondaryIndexing:
 
     def test_partial_ground_third_arg(self):
         """Color(X, C, light) — light facts via arg2 single-arg index."""
+        # nv
         fn, _, _ = self._make_color_predicate()
         x, c = Var(), Var()
         solutions = _run_trampoline(fn, x, c, "light")
@@ -949,6 +989,7 @@ class TestSecondaryIndexing:
 
     def test_fully_unbound_returns_all(self):
         """Color(X, C, B) with all unbound → all 6 facts."""
+        # nv
         fn, _, _ = self._make_color_predicate()
         x, c, b = Var(), Var(), Var()
         solutions = _run_trampoline(fn, x, c, b)
@@ -1001,6 +1042,7 @@ class TestJointKeyIndexing:
 
     def test_joint_index_built_for_high_coverage(self):
         """_build_joint_arg_index yields 6 distinct (group, subtype) pairs."""
+        # nv
         from clausal.logic.compiler import _build_joint_arg_index
         facts = [
             ("fire", "dry", "hot"), ("fire", "wet", "cold"),
@@ -1020,6 +1062,7 @@ class TestJointKeyIndexing:
 
     def test_analyze_joint_finds_improvement(self):
         """_analyze_joint_index_positions identifies the (arg0, arg1) pair."""
+        # nv
         from clausal.logic.compiler import (
             _analyze_joint_index_positions, _analyze_index_positions,
         )
@@ -1046,6 +1089,7 @@ class TestJointKeyIndexing:
 
     def test_both_args_ground_exact_match(self):
         """Combo(fire, dry, R) → R = hot."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
         solutions = _run_trampoline(fn, "fire", "dry", result)
@@ -1053,6 +1097,7 @@ class TestJointKeyIndexing:
 
     def test_both_args_ground_opposite(self):
         """Combo(fire, wet, R) → R = cold."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
         solutions = _run_trampoline(fn, "fire", "wet", result)
@@ -1060,6 +1105,7 @@ class TestJointKeyIndexing:
 
     def test_both_args_ground_no_match(self):
         """Combo(earth, dry, R) → no solution."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
         solutions = _run_trampoline(fn, "earth", "dry", result)
@@ -1067,6 +1113,7 @@ class TestJointKeyIndexing:
 
     def test_first_arg_only_ground(self):
         """Combo(fire, S, R) → two solutions: (dry,hot) and (wet,cold)."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         s, r = Var(), Var()
         solutions = _run_trampoline(fn, "fire", s, r)
@@ -1076,6 +1123,7 @@ class TestJointKeyIndexing:
 
     def test_second_arg_only_ground(self):
         """Combo(G, dry, R) → fire/hot, ice/cold, wind/hot."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         g, r = Var(), Var()
         solutions = _run_trampoline(fn, g, "dry", r)
@@ -1085,6 +1133,7 @@ class TestJointKeyIndexing:
 
     def test_fully_unbound_returns_all(self):
         """Combo(G, S, R) with all unbound → 6 solutions."""
+        # nv
         fn, _, _ = self._make_pair_predicate()
         g, s, r = Var(), Var(), Var()
         solutions = _run_trampoline(fn, g, s, r)

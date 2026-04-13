@@ -53,24 +53,28 @@ def _first(functor, *args, module, out_index=-1):
 class TestRead:
 
     def test_parse_scalar_int(self, tmp_path):
+        # nv
         mod = _load("yr1", """
 read_int(S, N) <- Read(S, N)
 """, tmp_path)
         assert _first("read_int", "42", module=mod) == 42
 
     def test_parse_scalar_float(self, tmp_path):
+        # nv
         mod = _load("yr2", """
 read_float(S, N) <- Read(S, N)
 """, tmp_path)
         assert _first("read_float", "3.14", module=mod) == 3.14
 
     def test_parse_scalar_string(self, tmp_path):
+        # nv
         mod = _load("yr3", """
 read_str(S, R) <- Read(S, R)
 """, tmp_path)
         assert _first("read_str", "hello world", module=mod) == "hello world"
 
     def test_parse_mapping(self, tmp_path):
+        # nv
         mod = _load("yr4", """
 read_map(S, R) <- Read(S, R)
 """, tmp_path)
@@ -78,6 +82,7 @@ read_map(S, R) <- Read(S, R)
         assert result == {"name": "alice", "age": 30}
 
     def test_parse_sequence(self, tmp_path):
+        # nv
         mod = _load("yr5", """
 read_seq(S, R) <- Read(S, R)
 """, tmp_path)
@@ -85,6 +90,7 @@ read_seq(S, R) <- Read(S, R)
         assert result == [1, 2, 3]
 
     def test_parse_nested_mapping(self, tmp_path):
+        # nv
         mod = _load("yr6", """
 read_nested(S, R) <- Read(S, R)
 """, tmp_path)
@@ -93,6 +99,7 @@ read_nested(S, R) <- Read(S, R)
         assert result == {"server": {"host": "localhost", "port": 8080}}
 
     def test_parse_bool_true(self, tmp_path):
+        # nv
         mod = _load("yr7", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -100,6 +107,7 @@ read_val(S, R) <- Read(S, R)
         assert result is True
 
     def test_parse_bool_false(self, tmp_path):
+        # nv
         mod = _load("yr8", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -107,6 +115,7 @@ read_val(S, R) <- Read(S, R)
         assert result is False
 
     def test_parse_null(self, tmp_path):
+        # nv
         mod = _load("yr9", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -114,6 +123,7 @@ read_val(S, R) <- Read(S, R)
         assert result is None
 
     def test_parse_empty_doc(self, tmp_path):
+        # nv
         mod = _load("yr10", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -121,6 +131,7 @@ read_val(S, R) <- Read(S, R)
         assert result is None
 
     def test_parse_flow_style_mapping(self, tmp_path):
+        # nv
         mod = _load("yr11", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -128,6 +139,7 @@ read_val(S, R) <- Read(S, R)
         assert result == {"a": 1, "b": 2}
 
     def test_parse_multiline_literal_block(self, tmp_path):
+        # nv
         mod = _load("yr12", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -136,6 +148,7 @@ read_val(S, R) <- Read(S, R)
         assert result == {"text": "line one\nline two\n"}
 
     def test_parse_list_of_mappings(self, tmp_path):
+        # nv
         mod = _load("yr13", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -147,6 +160,7 @@ read_val(S, R) <- Read(S, R)
         ]
 
     def test_invalid_yaml_fails(self, tmp_path):
+        # nv
         mod = _load("yr14", """
 read_val(S, R) <- Read(S, R)
 """, tmp_path)
@@ -163,6 +177,7 @@ read_val(S, R) <- Read(S, R)
 class TestWrite:
 
     def test_write_mapping(self, tmp_path):
+        # nv
         mod = _load("yw1", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
@@ -170,6 +185,7 @@ write_val(D, S) <- write(D, S)
         assert "x: 1" in result
 
     def test_write_list(self, tmp_path):
+        # nv
         mod = _load("yw2", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
@@ -179,6 +195,7 @@ write_val(D, S) <- write(D, S)
         assert "- 3" in result
 
     def test_write_scalar(self, tmp_path):
+        # nv
         mod = _load("yw3", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
@@ -186,6 +203,7 @@ write_val(D, S) <- write(D, S)
         assert result.strip() == "42"
 
     def test_write_nested(self, tmp_path):
+        # nv
         mod = _load("yw4", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
@@ -195,6 +213,7 @@ write_val(D, S) <- write(D, S)
         assert "host: localhost" in result
 
     def test_write_bool_null(self, tmp_path):
+        # nv
         mod = _load("yw5", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
@@ -203,6 +222,7 @@ write_val(D, S) <- write(D, S)
         assert "val: null" in result
 
     def test_round_trip(self, tmp_path):
+        # nv
         mod = _load("yw6", """
 round_trip(S, R) <- (Read(S, D) and write(D, R))
 """, tmp_path)
@@ -221,6 +241,7 @@ round_trip(S, R) <- (Read(S, D) and write(D, R))
 class TestReadAll:
 
     def test_multi_doc(self, tmp_path):
+        # nv
         mod = _load("yra1", """
 read_all(S, R) <- ReadAll(S, R)
 """, tmp_path)
@@ -229,6 +250,7 @@ read_all(S, R) <- ReadAll(S, R)
         assert result == [{"a": 1}, {"b": 2}]
 
     def test_single_doc(self, tmp_path):
+        # nv
         mod = _load("yra2", """
 read_all(S, R) <- ReadAll(S, R)
 """, tmp_path)
@@ -236,6 +258,7 @@ read_all(S, R) <- ReadAll(S, R)
         assert result == [{"x": 1}]
 
     def test_empty_stream(self, tmp_path):
+        # nv
         mod = _load("yra3", """
 read_all(S, R) <- ReadAll(S, R)
 """, tmp_path)
@@ -251,6 +274,7 @@ read_all(S, R) <- ReadAll(S, R)
 class TestWriteAll:
 
     def test_multi_doc_write(self, tmp_path):
+        # nv
         mod = _load("ywa1", """
 write_all(D, S) <- WriteAll(D, S)
 """, tmp_path)
@@ -261,6 +285,7 @@ write_all(D, S) <- WriteAll(D, S)
         assert "b: 2" in result
 
     def test_round_trip_multi_doc(self, tmp_path):
+        # nv
         mod = _load("ywa2", """
 round_trip_all(S, R) <- (ReadAll(S, D) and WriteAll(D, R))
 """, tmp_path)
@@ -278,6 +303,7 @@ round_trip_all(S, R) <- (ReadAll(S, D) and WriteAll(D, R))
 class TestFileIO:
 
     def test_read_file(self, tmp_path):
+        # nv
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text("name: alice\nage: 30\n")
         mod = _load("yrf1", """
@@ -287,6 +313,7 @@ read_file(P, R) <- ReadFile(P, R)
         assert result == {"name": "alice", "age": 30}
 
     def test_read_nonexistent_file_fails(self, tmp_path):
+        # nv
         mod = _load("yrf2", """
 read_file(P, R) <- ReadFile(P, R)
 """, tmp_path)
@@ -295,6 +322,7 @@ read_file(P, R) <- ReadFile(P, R)
 
     def test_write_and_read_back(self, tmp_path):
         """write data to file via Python, then read back via ReadFile."""
+        # nv
         yaml_file = tmp_path / "output.yaml"
         mod = _load("ywf1", """
 read_back(P, V) <- (ReadFile(P, D) and Get(D, "greeting", V))
@@ -307,6 +335,7 @@ read_back(P, V) <- (ReadFile(P, D) and Get(D, "greeting", V))
 
     def test_write_file(self, tmp_path):
         """write data to file via WriteFile, read back via Python."""
+        # nv
         yaml_file = tmp_path / "written.yaml"
         mod = _load("ywf2", """
 do_write(P, D) <- WriteFile(P, D)
@@ -327,12 +356,14 @@ do_write(P, D) <- WriteFile(P, D)
 class TestGet:
 
     def test_single_key(self, tmp_path):
+        # nv
         mod = _load("yg1", """
 get_val(S, K, V) <- (Read(S, D) and Get(D, K, V))
 """, tmp_path)
         assert _first("get_val", "name: alice", "name", module=mod) == "alice"
 
     def test_nested_keys(self, tmp_path):
+        # nv
         mod = _load("yg2", """
 get_nested(S, V) <- (Read(S, D) and Get(D, ["server", "port"], V))
 """, tmp_path)
@@ -340,12 +371,14 @@ get_nested(S, V) <- (Read(S, D) and Get(D, ["server", "port"], V))
         assert _first("get_nested", yaml_str, module=mod) == 8080
 
     def test_list_index(self, tmp_path):
+        # nv
         mod = _load("yg3", """
 get_idx(S, V) <- (Read(S, D) and Get(D, [0], V))
 """, tmp_path)
         assert _first("get_idx", "[10, 20, 30]", module=mod) == 10
 
     def test_mixed_keys_and_indices(self, tmp_path):
+        # nv
         mod = _load("yg4", """
 get_mixed(S, V) <- (Read(S, D) and Get(D, ["items", 1, "name"], V))
 """, tmp_path)
@@ -353,12 +386,14 @@ get_mixed(S, V) <- (Read(S, D) and Get(D, ["items", 1, "name"], V))
         assert _first("get_mixed", yaml_str, module=mod) == "second"
 
     def test_missing_key_fails(self, tmp_path):
+        # nv
         mod = _load("yg5", """
 get_val(S, K, V) <- (Read(S, D) and Get(D, K, V))
 """, tmp_path)
         assert _first("get_val", "x: 1", "missing", module=mod) is None
 
     def test_index_out_of_range_fails(self, tmp_path):
+        # nv
         mod = _load("yg6", """
 get_val(S, V) <- (Read(S, D) and Get(D, [99], V))
 """, tmp_path)
@@ -387,31 +422,41 @@ class TestFixture:
             f"Test({name!r}) failed — no solutions"
 
     def test_parse_scalar_int(self):
+        # nv
         self._run_test("parse scalar int")
 
     def test_parse_scalar_string(self):
+        # nv
         self._run_test("parse scalar string")
 
     def test_parse_mapping(self):
+        # nv
         self._run_test("parse mapping")
 
     def test_parse_sequence(self):
+        # nv
         self._run_test("parse sequence")
 
     def test_parse_bool_and_null(self):
+        # nv
         self._run_test("parse bool and null")
 
     def test_parse_nested_mapping(self):
+        # nv
         self._run_test("parse nested mapping")
 
     def test_list_of_maps(self):
+        # nv
         self._run_test("list of maps")
 
     def test_config_pattern(self):
+        # nv
         self._run_test("config pattern")
 
     def test_round_trip_mapping(self):
+        # nv
         self._run_test("round trip mapping")
 
     def test_write_and_read_back(self):
+        # nv
         self._run_test("write and read back")

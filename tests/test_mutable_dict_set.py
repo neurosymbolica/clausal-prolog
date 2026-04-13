@@ -13,6 +13,7 @@ from clausal.logic.variables import Trail, Var, unify, deref, is_var
 
 class TestTrailRecord:
     def test_record_called_on_undo(self):
+        # nv
         trail = Trail()
         log = []
         m = trail.mark()
@@ -21,6 +22,7 @@ class TestTrailRecord:
         assert log == ["undone"]
 
     def test_record_not_called_if_not_undone(self):
+        # nv
         trail = Trail()
         log = []
         trail.record(lambda: log.append("undone"))
@@ -28,6 +30,7 @@ class TestTrailRecord:
 
     def test_multiple_callbacks_reversed(self):
         """Callbacks fire newest-first, matching the trail's LIFO order."""
+        # nv
         trail = Trail()
         log = []
         m = trail.mark()
@@ -39,6 +42,7 @@ class TestTrailRecord:
 
     def test_callback_exception_cleared(self):
         """Exceptions in callbacks are swallowed so undo always completes."""
+        # nv
         trail = Trail()
         log = []
 
@@ -52,12 +56,14 @@ class TestTrailRecord:
         assert log == ["ok"]
 
     def test_non_callable_raises(self):
+        # nv
         trail = Trail()
         with pytest.raises(TypeError):
             trail.record(42)
 
     def test_callbacks_mixed_with_var_bindings(self):
         """Callbacks and var-bindings interleave correctly in LIFO order."""
+        # nv
         trail = Trail()
         v = Var()
         log = []
@@ -69,6 +75,7 @@ class TestTrailRecord:
         assert is_var(deref(v))
 
     def test_partial_undo_respects_mark(self):
+        # nv
         trail = Trail()
         log = []
         m1 = trail.mark()
@@ -81,6 +88,7 @@ class TestTrailRecord:
         assert log == ["B", "A"]
 
     def test_reset_fires_all_callbacks(self):
+        # nv
         trail = Trail()
         log = []
         trail.record(lambda: log.append("x"))
@@ -90,6 +98,7 @@ class TestTrailRecord:
 
     def test_plain_dict_with_trail_record(self):
         """Demonstrate the idiomatic pattern: use trail.record() + plain dict."""
+        # nv
         trail = Trail()
         d = {}
         _ABSENT = object()
@@ -113,6 +122,7 @@ class TestTrailRecord:
 
     def test_plain_set_with_trail_record(self):
         """Demonstrate the idiomatic pattern: use trail.record() + plain set."""
+        # nv
         trail = Trail()
         s = set()
 

@@ -77,34 +77,40 @@ def call_bindings(functor: str, *args, mod=None) -> list:
 
 class TestMember:
     def test_member_enumerates_all(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("in_", x, [1, 2, 3], module=mod)]
         assert results == [1, 2, 3]
 
     def test_member_check_present(self):
+        # nv
         mod = fresh_module()
         results = list(call("in_", 2, [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_member_check_absent(self):
+        # nv
         mod = fresh_module()
         results = list(call("in_", 99, [1, 2, 3], module=mod))
         assert results == []
 
     def test_member_empty_list_fails(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = list(call("in_", x, [], module=mod))
         assert results == []
 
     def test_member_with_duplicates(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("in_", x, [1, 1, 2], module=mod)]
         assert results == [1, 1, 2]
 
     def test_member_string_elements(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("in_", x, ["a", "b", "c"], module=mod)]
@@ -116,34 +122,40 @@ class TestMember:
 
 class TestAppend:
     def test_append_ground_check(self):
+        # nv
         mod = fresh_module()
         results = list(call("append", [1, 2], [3], [1, 2, 3], module=mod))
         assert len(results) == 1
 
     def test_append_ground_check_fail(self):
+        # nv
         mod = fresh_module()
         results = list(call("append", [1, 2], [3], [1, 2, 4], module=mod))
         assert results == []
 
     def test_append_compute_result(self):
+        # nv
         mod = fresh_module()
         z = Var()
         results = [deref(z) for _ in call("append", [1, 2], [3, 4], z, module=mod)]
         assert results == [[1, 2, 3, 4]]
 
     def test_append_empty_left(self):
+        # nv
         mod = fresh_module()
         z = Var()
         results = [deref(z) for _ in call("append", [], [1, 2], z, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_empty_right(self):
+        # nv
         mod = fresh_module()
         z = Var()
         results = [deref(z) for _ in call("append", [1, 2], [], z, module=mod)]
         assert results == [[1, 2]]
 
     def test_append_both_empty(self):
+        # nv
         mod = fresh_module()
         z = Var()
         results = [deref(z) for _ in call("append", [], [], z, module=mod)]
@@ -151,6 +163,7 @@ class TestAppend:
 
     def test_append_split_mode(self):
         """append(X, Y, [1,2,3]) yields all splits of [1,2,3]."""
+        # nv
         mod = fresh_module()
         x, y = Var(), Var()
         pairs = [(deref(x), deref(y)) for _ in call("append", x, y, [1, 2, 3], module=mod)]
@@ -161,6 +174,7 @@ class TestAppend:
         assert ([1, 2, 3], []) in pairs
 
     def test_append_left_unknown(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("append", x, [3, 4], [1, 2, 3, 4], module=mod)]
@@ -172,28 +186,33 @@ class TestAppend:
 
 class TestLast:
     def test_last_singleton(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("last", [42], x, module=mod)]
         assert results == [42]
 
     def test_last_multiple(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
         assert results == [3]
 
     def test_last_check_correct(self):
+        # nv
         mod = fresh_module()
         results = list(call("last", [1, 2, 3], 3, module=mod))
         assert len(results) == 1
 
     def test_last_check_wrong(self):
+        # nv
         mod = fresh_module()
         results = list(call("last", [1, 2, 3], 1, module=mod))
         assert results == []
 
     def test_last_strings(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("last", ["a", "b", "c"], x, module=mod)]
@@ -205,24 +224,28 @@ class TestLast:
 
 class TestReverse:
     def test_reverse_empty(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("reverse", [], x, module=mod)]
         assert results == [[]]
 
     def test_reverse_singleton(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("reverse", [1], x, module=mod)]
         assert results == [[1]]
 
     def test_reverse_multiple(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("reverse", [1, 2, 3], x, module=mod)]
         assert results == [[3, 2, 1]]
 
     def test_reverse_check(self):
+        # nv
         mod = fresh_module()
         results = list(call("reverse", [1, 2, 3], [3, 2, 1], module=mod))
         assert len(results) == 1
@@ -233,41 +256,48 @@ class TestReverse:
 
 class TestPermutation:
     def test_permutation_empty(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("permutation", [], x, module=mod)]
         assert results == [[]]
 
     def test_permutation_singleton(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("permutation", [1], x, module=mod)]
         assert results == [[1]]
 
     def test_permutation_two_elements(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("permutation", [1, 2], x, module=mod)]
         assert set(map(tuple, results)) == {(1, 2), (2, 1)}
 
     def test_permutation_three_elements_count(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("permutation", [1, 2, 3], x, module=mod)]
         assert len(results) == 6
 
     def test_permutation_three_all_distinct(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [tuple(deref(x)) for _ in call("permutation", [1, 2, 3], x, module=mod)]
         assert len(set(results)) == 6  # all 3! permutations are unique
 
     def test_permutation_check_valid(self):
+        # nv
         mod = fresh_module()
         results = list(call("permutation", [1, 2, 3], [3, 1, 2], module=mod))
         assert len(results) == 1
 
     def test_permutation_check_invalid(self):
+        # nv
         mod = fresh_module()
         results = list(call("permutation", [1, 2, 3], [1, 2, 4], module=mod))
         assert results == []
@@ -278,34 +308,40 @@ class TestPermutation:
 
 class TestBetween:
     def test_between_enumerates(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("between", 1, 5, x, module=mod)]
         assert results == [1, 2, 3, 4, 5]
 
     def test_between_single_value(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("between", 3, 3, x, module=mod)]
         assert results == [3]
 
     def test_between_empty_range(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = list(call("between", 5, 3, x, module=mod))
         assert results == []
 
     def test_between_check_in_range(self):
+        # nv
         mod = fresh_module()
         results = list(call("between", 1, 10, 5, module=mod))
         assert len(results) == 1
 
     def test_between_check_out_of_range(self):
+        # nv
         mod = fresh_module()
         results = list(call("between", 1, 10, 15, module=mod))
         assert results == []
 
     def test_between_negative(self):
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("between", -2, 2, x, module=mod)]
@@ -337,35 +373,43 @@ class TestFibonacci:
         return results[0]
 
     def test_fib_0(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(0, mod) == 0
 
     def test_fib_1(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(1, mod) == 1
 
     def test_fib_2(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(2, mod) == 1
 
     def test_fib_3(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(3, mod) == 2
 
     def test_fib_5(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(5, mod) == 5
 
     def test_fib_7(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(7, mod) == 13
 
     def test_fib_10(self):
+        # nv
         mod = _make_fib_module()
         assert self._fib(10, mod) == 55
 
     def test_fib_no_solution_negative(self):
         """fib(-1, X) should fail (no clause matches N > 1 or N == 0,1)."""
+        # nv
         mod = _make_fib_module()
         x = Var()
         results = list(call("Fib", -1, x, module=mod))
@@ -498,22 +542,27 @@ class TestNQueens:
         return results
 
     def test_queens_1(self):
+        # nv
         solutions = self._solve_queens(1)
         assert solutions == [[1]]
 
     def test_queens_2_no_solution(self):
+        # nv
         solutions = self._solve_queens(2)
         assert solutions == []
 
     def test_queens_3_no_solution(self):
+        # nv
         solutions = self._solve_queens(3)
         assert solutions == []
 
     def test_queens_4_count(self):
+        # nv
         solutions = self._solve_queens(4)
         assert len(solutions) == 2
 
     def test_queens_4_solutions_valid(self):
+        # nv
         solutions = self._solve_queens(4)
         for sol in solutions:
             assert len(sol) == 4
@@ -524,6 +573,7 @@ class TestNQueens:
                     assert abs(sol[i] - sol[j]) != abs(i - j)
 
     def test_queens_5_count(self):
+        # nv
         solutions = self._solve_queens(5)
         assert len(solutions) == 10
 
@@ -534,6 +584,7 @@ class TestNQueens:
 class TestSolveGoalTypes:
     def test_conjunction(self):
         """And(goal1, goal2) — both must succeed."""
+        # nv
         mod = fresh_module()
         x, y = Var(), Var()
         goal = And(
@@ -546,6 +597,7 @@ class TestSolveGoalTypes:
 
     def test_disjunction(self):
         """Or(goal1, goal2) — either may succeed."""
+        # nv
         mod = fresh_module()
         x = Var()
         goal = Or(
@@ -558,12 +610,14 @@ class TestSolveGoalTypes:
 
     def test_naf_success(self):
         """not(False) → succeed once."""
+        # nv
         mod = fresh_module()
         results = solutions_of(Not(operand=False), mod)
         assert len(results) == 1
 
     def test_naf_failure(self):
         """not(True) → fail."""
+        # nv
         mod = fresh_module()
         results = solutions_of(Not(operand=True), mod)
         assert results == []
@@ -571,6 +625,7 @@ class TestSolveGoalTypes:
     def test_naf_with_unification(self):
         """not(X is 1) succeeds when X is unbound (goal inside not has no solution
         because X is unbound and the Is can succeed — so not fails)."""
+        # nv
         mod = fresh_module()
         x = Var()
         # not(x is 1): x is unbound, is(x, 1) succeeds → not fails
@@ -579,6 +634,7 @@ class TestSolveGoalTypes:
 
     def test_in_goal(self):
         """in_(x, list) enumerates list on backtrack."""
+        # nv
         mod = fresh_module()
         x = Var()
         t = Trail()
@@ -586,6 +642,7 @@ class TestSolveGoalTypes:
         assert results == [10, 20, 30]
 
     def test_not_in_goal_succeeds(self):
+        # nv
         mod = fresh_module()
         x = Var()
         unify(x, 99, Trail())
@@ -598,11 +655,13 @@ class TestSolveGoalTypes:
         assert len(results2) == 1
 
     def test_arithmetic_comparison(self):
+        # nv
         mod = fresh_module()
         results = solutions_of(Lt(left=1, right=2), mod)
         assert len(results) == 1
 
     def test_arithmetic_comparison_fail(self):
+        # nv
         mod = fresh_module()
         results = solutions_of(Lt(left=2, right=1), mod)
         assert results == []
@@ -613,6 +672,7 @@ class TestSolveGoalTypes:
 
 class TestQueryAPI:
     def test_query_append(self):
+        # nv
         mod = fresh_module()
         z = Var()
         goal = Call(func=LoadName(name="append"), args=[[1, 2], [3], z], kwargs=[])
@@ -620,6 +680,7 @@ class TestQueryAPI:
         assert results == [{"Z": [1, 2, 3]}]
 
     def test_query_member_multiple(self):
+        # nv
         mod = fresh_module()
         x = Var()
         goal = Call(func=LoadName(name="in_"), args=[x, [1, 2, 3]], kwargs=[])
@@ -627,6 +688,7 @@ class TestQueryAPI:
         assert [r["X"] for r in results] == [1, 2, 3]
 
     def test_once_member(self):
+        # nv
         mod = fresh_module()
         x = Var()
         t_result = once(
@@ -656,18 +718,21 @@ class TestRepeatedHeadVars:
     # ── append/3 — repeated HEAD in positions 1 and 3 ──
 
     def test_append_empty_left(self):
+        # nv
         mod = self._lists_mod()
         r = Var()
         results = [deref(r) for _ in call("append", [], [3, 4], r, module=mod)]
         assert results == [[3, 4]]
 
     def test_append_nonempty(self):
+        # nv
         mod = self._lists_mod()
         r = Var()
         results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
         assert results == [[1, 2, 3, 4]]
 
     def test_append_both_empty(self):
+        # nv
         mod = self._lists_mod()
         r = Var()
         results = [deref(r) for _ in call("append", [], [], r, module=mod)]
@@ -675,6 +740,7 @@ class TestRepeatedHeadVars:
 
     def test_append_base_clause_repeated_var(self):
         """append([], B, B) — B appears twice in head."""
+        # nv
         mod = self._lists_mod()
         r = Var()
         results = [deref(r) for _ in call("append", [], [42], r, module=mod)]
@@ -683,12 +749,14 @@ class TestRepeatedHeadVars:
     # ── last/2 — repeated X in head ──
 
     def test_last_singleton(self):
+        # nv
         mod = self._lists_mod()
         x = Var()
         results = [deref(x) for _ in call("last", [7], x, module=mod)]
         assert results == [7]
 
     def test_last_multi(self):
+        # nv
         mod = self._lists_mod()
         x = Var()
         results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
@@ -698,6 +766,7 @@ class TestRepeatedHeadVars:
 
     def test_append_split(self):
         """append(X, Y, [1,2,3]) enumerates all splits."""
+        # nv
         mod = self._lists_mod()
         x, y = Var(), Var()
         results = []
@@ -713,6 +782,7 @@ class TestRepeatedHeadVars:
     # ── length/2 (no repeated vars, regression check) ──
 
     def test_length(self):
+        # nv
         mod = self._lists_mod()
         n = Var()
         results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
@@ -730,6 +800,7 @@ class TestAnonymousVar:
 
     def test_first_extracts_head(self):
         """First([H, *_], H) — _ ignores the tail."""
+        # nv
         mod = self._anon_mod()
         r = Var()
         results = [deref(r) for _ in call("First", [10, 20, 30], r, module=mod)]
@@ -737,20 +808,24 @@ class TestAnonymousVar:
 
     def test_has_pair_succeeds(self):
         """HasPair([_, _, *_]) — list with at least 2 elements."""
+        # nv
         mod = self._anon_mod()
         assert list(call("HasPair", [1, 2], module=mod)) != []
 
     def test_has_pair_fails_singleton(self):
         """HasPair fails on a 1-element list."""
+        # nv
         mod = self._anon_mod()
         assert list(call("HasPair", [1], module=mod)) == []
 
     def test_has_pair_fails_empty(self):
+        # nv
         mod = self._anon_mod()
         assert list(call("HasPair", [], module=mod)) == []
 
     def test_second_extracts_second(self):
         """Second([_, S, *_], S) — _ ignores first element and rest."""
+        # nv
         mod = self._anon_mod()
         r = Var()
         results = [deref(r) for _ in call("Second", [10, 20, 30], r, module=mod)]
@@ -758,6 +833,7 @@ class TestAnonymousVar:
 
     def test_const_ignores_input(self):
         """Const(_, 42) — any input yields 42."""
+        # nv
         mod = self._anon_mod()
         r = Var()
         results = [deref(r) for _ in call("Const", "anything", r, module=mod)]
@@ -765,6 +841,7 @@ class TestAnonymousVar:
 
     def test_const_ignores_input_var(self):
         """Const(_, 42) with Var input."""
+        # nv
         mod = self._anon_mod()
         x, r = Var(), Var()
         results = [deref(r) for _ in call("Const", x, r, module=mod)]
@@ -772,24 +849,28 @@ class TestAnonymousVar:
 
     def test_member_of_pair_first(self):
         """MemberOfPair(X, [X, _]) — X matches first position."""
+        # nv
         mod = self._anon_mod()
         results = list(call("MemberOfPair", 1, [1, 2], module=mod))
         assert len(results) >= 1
 
     def test_member_of_pair_second(self):
         """MemberOfPair(X, [_, X]) — X matches second position."""
+        # nv
         mod = self._anon_mod()
         results = list(call("MemberOfPair", 2, [1, 2], module=mod))
         assert len(results) >= 1
 
     def test_member_of_pair_neither_fails(self):
         """MemberOfPair(X, [A, B]) fails if X is neither A nor B."""
+        # nv
         mod = self._anon_mod()
         results = list(call("MemberOfPair", 3, [1, 2], module=mod))
         assert results == []
 
     def test_last_anon_head_still_works(self):
         """last/2 in lists.clausal uses _ for unused HEAD — verify it still works."""
+        # nv
         mod = _load_clausal_module("lists.clausal")
         x = Var()
         results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
@@ -804,6 +885,7 @@ class TestMultiStarPatterns:
 
     def test_split_empty(self):
         """Split([], A, B) → A=[], B=[] (one solution)."""
+        # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
         results = [(deref(a), deref(b)) for _ in call("Split", [], a, b, module=mod)]
@@ -811,6 +893,7 @@ class TestMultiStarPatterns:
 
     def test_split_singleton(self):
         """Split([1], A, B) → two solutions."""
+        # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
         results = [(deref(a), deref(b)) for _ in call("Split", [1], a, b, module=mod)]
@@ -818,6 +901,7 @@ class TestMultiStarPatterns:
 
     def test_split_three(self):
         """Split([1,2,3], A, B) → 4 solutions (all splits)."""
+        # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
         results = [(deref(a), deref(b)) for _ in call("Split", [1, 2, 3], a, b, module=mod)]
@@ -830,6 +914,7 @@ class TestMultiStarPatterns:
 
     def test_split3_fixed_head(self):
         """Split3([X, *A, *B], X, A, B) — first element fixed."""
+        # nv
         mod = self._ms_mod()
         x, a, b = Var(), Var(), Var()
         results = [
@@ -844,6 +929,7 @@ class TestMultiStarPatterns:
 
     def test_around(self):
         """Around([*A, X, *B], X, [A, B]) — find element at every position."""
+        # nv
         mod = self._ms_mod()
         x, p = Var(), Var()
         results = [
@@ -858,6 +944,7 @@ class TestMultiStarPatterns:
 
     def test_split3way(self):
         """Split3way([*A, *B, *C], A, B, C) — all 3-way partitions."""
+        # nv
         mod = self._ms_mod()
         a, b, c = Var(), Var(), Var()
         results = [
@@ -875,6 +962,7 @@ class TestMultiStarPatterns:
 
     def test_split3way_empty(self):
         """Split3way([], A, B, C) → one solution: all empty."""
+        # nv
         mod = self._ms_mod()
         a, b, c = Var(), Var(), Var()
         results = [
@@ -885,6 +973,7 @@ class TestMultiStarPatterns:
 
     def test_unbound_builds_seglist(self):
         """Multi-star against unbound Var now builds a SegList (Phase 4)."""
+        # nv
         from clausal.terms import SegList
         mod = self._ms_mod()
         lst, a, b = Var(), Var(), Var()

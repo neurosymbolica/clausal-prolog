@@ -154,30 +154,36 @@ class TestQuerySyntax:
     """*(goals) query syntax — core feature parity tests."""
 
     def test_no_solutions_prints_false(self, driver):
+        # nv
         out = driver.run("*(in_(X, []))")
         assert "false." in out
 
     def test_single_solution_shows_binding(self, driver):
+        # nv
         out = driver.run("*(in_(X, [42]))")
         assert "42" in out
 
     def test_single_solution_exhausts_with_no_more_message(self, driver):
+        # nv
         out = driver.run("*(in_(X, [42]))")
         assert "No more solutions." in out
 
     def test_stop_after_first_with_enter(self, driver):
         # Two solutions; user presses ENTER after first → only first shown
+        # nv
         out = driver.run("*(in_(X, [1, 2]))", keys=['\r'])
         assert "1" in out
         assert "2" not in out.split("1")[1]  # 2 not shown after the first binding
 
     def test_advance_with_space(self, driver):
+        # nv
         out = driver.run("*(in_(X, [1, 2]))", keys=[' '])
         assert "1" in out
         assert "2" in out
         assert "or" in out
 
     def test_show_all_with_a(self, driver):
+        # nv
         out = driver.run("*(in_(X, [1, 2, 3]))", keys=['a'])
         assert "1" in out
         assert "2" in out
@@ -185,6 +191,7 @@ class TestQuerySyntax:
         assert count_or_separators(out) == 2
 
     def test_abort_with_esc_shows_only_first(self, driver):
+        # nv
         out = driver.run("*(in_(X, [1, 2, 3]))", keys=['\x1b'])
         assert "1" in out
         # After ESC, no 'or' separator and no second/third solution
@@ -192,6 +199,7 @@ class TestQuerySyntax:
 
     def test_conjunction_two_goals(self, driver):
         # in_([1,2,3]) ∩ in_([2,3,4]) = {2, 3}
+        # nv
         out = driver.run(
             "*(in_(X, [1,2,3]), in_(X, [2,3,4]))",
             keys=[' ', '\r'],  # next, stop
@@ -201,11 +209,13 @@ class TestQuerySyntax:
 
     def test_variables_auto_declared_uppercase(self, driver):
         # X and Y should be auto-allocated as Var() inside *(...)
+        # nv
         out = driver.run("*(in_(X, [10, 20]))", keys=[' '])
         assert "X" in out
 
     def test_true_binding_shows_true(self, driver):
         # Zero-variable query succeeds with "true."
+        # nv
         out = driver.run("*(in_(1, [1, 2, 3]))")
         assert "true." in out
 
@@ -214,6 +224,7 @@ class TestNormalPython:
     """Normal Python should pass through unchanged."""
 
     def test_assignment_executes(self, driver):
+        # nv
         driver.run("my_var_99 = 7 * 6")
         # Re-use the namespace for ptpython; for console check locals
         if isinstance(driver, ConsoleDriver):
@@ -222,6 +233,7 @@ class TestNormalPython:
             assert driver._ns.get("my_var_99") == 42
 
     def test_import_then_query(self, driver):
+        # nv
         driver.run_import("from clausal import append")
         out = driver.run("*(append([1], [2], R))")
         assert "1" in out
@@ -232,6 +244,7 @@ class TestEmbedSyntax:
     """--expr term embedding syntax."""
 
     def test_embed_name_produces_LoadName(self, driver):
+        # nv
         from clausal.pythonic_ast.nodes import LoadName
         driver.run("my_term = --foo")
         if isinstance(driver, ConsoleDriver):
@@ -246,11 +259,13 @@ class TestSolutionsDisplay:
     """Solutions display hook — interactive output format."""
 
     def test_or_separator_between_solutions(self, driver):
+        # nv
         out = driver.run("*(in_(X, [1, 2, 3]))", keys=[' ', ' '])
         assert count_or_separators(out) == 2
 
     def test_no_blank_line_after_output(self, driver):
         """Verify displayhook doesn't emit a trailing blank line from repr('')."""
+        # nv
         out = driver.run("*(in_(X, [42]))")
         # The output should end with 'No more solutions.\n', not have an extra blank
         stripped = out.rstrip("\n")
@@ -274,6 +289,7 @@ class TestCompileHook:
         return _Fake()
 
     def test_normal_exec_unchanged(self, fake_repl):
+        # nv
         fn = _make_clausal_compile(fake_repl)
         code_obj = fn("x = 1 + 2", "exec")
         ns = {}
@@ -282,6 +298,7 @@ class TestCompileHook:
 
     def test_single_expr_promoted_to_single_mode(self, fake_repl):
         """A bare expression in exec mode is compiled as 'single' → displayhook fires."""
+        # nv
         import sys
         fn = _make_clausal_compile(fake_repl)
         code_obj = fn("[1, 2, 3]", "exec")
@@ -297,6 +314,7 @@ class TestCompileHook:
 
     def test_multistatement_stays_exec(self, fake_repl):
         """Multi-statement code is NOT promoted (single mode would fail)."""
+        # nv
         fn = _make_clausal_compile(fake_repl)
         code_obj = fn("x = 1\ny = 2", "exec")
         ns = {}
@@ -305,6 +323,7 @@ class TestCompileHook:
 
     def test_star_query_compiles(self, fake_repl):
         """*(in_(X, [1])) transforms without error."""
+        # nv
         from clausal import in_
         ns = _base_namespace()
         ns["in_"] = in_
@@ -314,12 +333,14 @@ class TestCompileHook:
         assert code_obj is not None
 
     def test_real_syntax_error_propagates(self, fake_repl):
+        # nv
         fn = _make_clausal_compile(fake_repl)
         with pytest.raises(SyntaxError):
             fn("x = @", "exec")
 
     def test_embed_syntax_transforms(self, fake_repl):
         """--name becomes a LoadName term."""
+        # nv
         from clausal.pythonic_ast.nodes import LoadName
         fn = _make_clausal_compile(fake_repl)
         code_obj = fn("result = --myatom", "exec")

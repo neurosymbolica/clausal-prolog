@@ -67,6 +67,7 @@ class TestIsGoalDeconstruction:
 
     def test_head_tail_basic(self):
         """X is [1,2,3], [H, *T] is X → H=1, T=[2,3]."""
+        # nv
         mod = fresh_module()
         x, h, t = Var(), Var(), Var()
         goal = And(
@@ -78,6 +79,7 @@ class TestIsGoalDeconstruction:
 
     def test_head_tail_singleton(self):
         """[H, *T] is [42] → H=42, T=[]."""
+        # nv
         mod = fresh_module()
         x, h, t = Var(), Var(), Var()
         goal = And(
@@ -89,6 +91,7 @@ class TestIsGoalDeconstruction:
 
     def test_head_tail_empty_fails(self):
         """[H, *T] is [] → no solutions (empty list has no head)."""
+        # nv
         mod = fresh_module()
         x, h, t = Var(), Var(), Var()
         goal = And(
@@ -99,6 +102,7 @@ class TestIsGoalDeconstruction:
 
     def test_two_fixed_plus_star(self):
         """[A, B, *REST] is [10, 20, 30, 40] → A=10, B=20, REST=[30,40]."""
+        # nv
         mod = fresh_module()
         x, a, b, rest = Var(), Var(), Var(), Var()
         goal = And(
@@ -110,6 +114,7 @@ class TestIsGoalDeconstruction:
 
     def test_two_fixed_exact_match(self):
         """[A, B, *REST] is [1, 2] → A=1, B=2, REST=[]."""
+        # nv
         mod = fresh_module()
         x, a, b, rest = Var(), Var(), Var(), Var()
         goal = And(
@@ -121,6 +126,7 @@ class TestIsGoalDeconstruction:
 
     def test_two_fixed_too_short_fails(self):
         """[A, B, *REST] is [1] → no solutions (too few elements)."""
+        # nv
         mod = fresh_module()
         x, a, b, rest = Var(), Var(), Var(), Var()
         goal = And(
@@ -131,6 +137,7 @@ class TestIsGoalDeconstruction:
 
     def test_star_only(self):
         """[*ALL] is [1, 2, 3] → ALL=[1,2,3]."""
+        # nv
         mod = fresh_module()
         x, all_ = Var(), Var()
         goal = And(
@@ -142,6 +149,7 @@ class TestIsGoalDeconstruction:
 
     def test_star_only_empty(self):
         """[*ALL] is [] → ALL=[]."""
+        # nv
         mod = fresh_module()
         x, all_ = Var(), Var()
         goal = And(
@@ -153,6 +161,7 @@ class TestIsGoalDeconstruction:
 
     def test_sandwich_pattern(self):
         """[H, *MID, T] is [1, 2, 3, 4] → H=1, MID=[2,3], T=4."""
+        # nv
         mod = fresh_module()
         x, h, mid, t = Var(), Var(), Var(), Var()
         goal = And(
@@ -164,6 +173,7 @@ class TestIsGoalDeconstruction:
 
     def test_sandwich_minimum(self):
         """[H, *MID, T] is [1, 2] → H=1, MID=[], T=2."""
+        # nv
         mod = fresh_module()
         x, h, mid, t = Var(), Var(), Var(), Var()
         goal = And(
@@ -175,6 +185,7 @@ class TestIsGoalDeconstruction:
 
     def test_sandwich_too_short_fails(self):
         """[H, *MID, T] is [1] → no solutions (need at least 2 elements)."""
+        # nv
         mod = fresh_module()
         x, h, mid, t = Var(), Var(), Var(), Var()
         goal = And(
@@ -185,6 +196,7 @@ class TestIsGoalDeconstruction:
 
     def test_trailing_star(self):
         """[*INIT, LAST] is [1, 2, 3] → INIT=[1,2], LAST=3."""
+        # nv
         mod = fresh_module()
         x, init, last = Var(), Var(), Var()
         goal = And(
@@ -196,6 +208,7 @@ class TestIsGoalDeconstruction:
 
     def test_nested_list_elements(self):
         """[H, *T] is [[1,2], [3,4], [5,6]] → H=[1,2], T=[[3,4],[5,6]]."""
+        # nv
         mod = fresh_module()
         x, h, t = Var(), Var(), Var()
         goal = And(
@@ -221,6 +234,7 @@ class TestIsGoalConstruction:
 
     def test_construct_from_bound_vars(self):
         """H=1, T=[2,3] → [H, *T] constructs [1, 2, 3]."""
+        # nv
         mod = fresh_module()
         h, t, result = Var(), Var(), Var()
         goal = And(
@@ -235,6 +249,7 @@ class TestIsGoalConstruction:
 
     def test_construct_empty_tail(self):
         """H=42, T=[] → [H, *T] constructs [42]."""
+        # nv
         mod = fresh_module()
         h, t, result = Var(), Var(), Var()
         goal = And(
@@ -249,6 +264,7 @@ class TestIsGoalConstruction:
 
     def test_construct_star_only(self):
         """ALL=[1,2,3] → [*ALL] constructs [1,2,3]."""
+        # nv
         mod = fresh_module()
         all_, result = Var(), Var()
         goal = And(
@@ -260,6 +276,7 @@ class TestIsGoalConstruction:
 
     def test_construct_sandwich(self):
         """H=1, MID=[2,3], T=4 → [H, *MID, T] constructs [1,2,3,4]."""
+        # nv
         mod = fresh_module()
         h, mid, t, result = Var(), Var(), Var(), Var()
         goal = And(
@@ -290,6 +307,7 @@ class TestHeadPatternRegression:
 
     def test_append_forward(self):
         """append([1,2], [3,4], R) → R=[1,2,3,4] (head-pattern star)."""
+        # nv
         mod = _load_clausal_module("lists.clausal")
         r = Var()
         results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
@@ -297,6 +315,7 @@ class TestHeadPatternRegression:
 
     def test_append_reverse(self):
         """append(X, Y, [1,2,3]) → enumerates all splits (head-pattern star)."""
+        # nv
         mod = _load_clausal_module("lists.clausal")
         x, y = Var(), Var()
         results = [
@@ -312,6 +331,7 @@ class TestHeadPatternRegression:
 
     def test_length(self):
         """length([10, 20, 30], N) → N=3 (head-pattern star)."""
+        # nv
         mod = _load_clausal_module("lists.clausal")
         n = Var()
         results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
@@ -319,6 +339,7 @@ class TestHeadPatternRegression:
 
     def test_length_empty(self):
         """length([], N) → N=0."""
+        # nv
         mod = _load_clausal_module("lists.clausal")
         n = Var()
         results = [deref(n) for _ in call("length", [], n, module=mod)]
@@ -338,6 +359,7 @@ class TestBodyStarInClausalFile:
 
         Deconstructs LIST into head H and tail T in the body.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         h, t = Var(), Var()
         results = [
@@ -348,6 +370,7 @@ class TestBodyStarInClausalFile:
 
     def test_head_tail_singleton(self):
         """head_tail([42], H, T) → H=42, T=[]."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         h, t = Var(), Var()
         results = [
@@ -358,6 +381,7 @@ class TestBodyStarInClausalFile:
 
     def test_head_tail_empty_fails(self):
         """head_tail([], H, T) → no solutions."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         h, t = Var(), Var()
         results = list(call("HeadTail", [], h, t, module=mod))
@@ -368,6 +392,7 @@ class TestBodyStarInClausalFile:
 
         Trailing star pattern in body — splits off the last element.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         init, last = Var(), Var()
         results = [
@@ -378,6 +403,7 @@ class TestBodyStarInClausalFile:
 
     def test_init_last_singleton(self):
         """init_last([7], INIT, LAST) → INIT=[], LAST=7."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         init, last = Var(), Var()
         results = [
@@ -388,6 +414,7 @@ class TestBodyStarInClausalFile:
 
     def test_init_last_empty_fails(self):
         """init_last([], INIT, LAST) → no solutions."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         init, last = Var(), Var()
         results = list(call("InitLast", [], init, last, module=mod))
@@ -398,6 +425,7 @@ class TestBodyStarInClausalFile:
 
         Extracts first, middle, and last from a list in the body.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         h, mid, t = Var(), Var(), Var()
         results = [
@@ -408,6 +436,7 @@ class TestBodyStarInClausalFile:
 
     def test_sandwich_minimum(self):
         """sandwich([1, 2], H, MID, T) → H=1, MID=[], T=2."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         h, mid, t = Var(), Var(), Var()
         results = [
@@ -421,6 +450,7 @@ class TestBodyStarInClausalFile:
 
         Star-only body deconstruction — just copies the list.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         all_ = Var()
         results = [deref(all_) for _ in call("CaptureBody", [1, 2, 3], all_, module=mod)]
@@ -428,6 +458,7 @@ class TestBodyStarInClausalFile:
 
     def test_capture_all_body_empty(self):
         """capture_body([], ALL) → ALL=[]."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         all_ = Var()
         results = [deref(all_) for _ in call("CaptureBody", [], all_, module=mod)]
@@ -438,6 +469,7 @@ class TestBodyStarInClausalFile:
 
         Deconstruct in body, then use the result in a subsequent goal.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         s = Var()
         results = [deref(s) for _ in call("SumTail", [10, 20, 30, 40], s, module=mod)]
@@ -448,6 +480,7 @@ class TestBodyStarInClausalFile:
 
         Two consecutive body deconstructions — extract the second element.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         x = Var()
         results = [deref(x) for _ in call("Second", [10, 20, 30], x, module=mod)]
@@ -459,6 +492,7 @@ class TestBodyStarInClausalFile:
         First constructs a list from bound X, then deconstructs to get Y.
         Y should equal X.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         y = Var()
         results = [deref(y) for _ in call("WrapUnwrap", 42, y, module=mod)]
@@ -478,6 +512,7 @@ class TestBodyMultiStarDeconstruction:
 
         All 2-way splits enumerated via backtracking.
         """
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         a, b = Var(), Var()
         results = [
@@ -493,6 +528,7 @@ class TestBodyMultiStarDeconstruction:
 
     def test_body_split_empty(self):
         """body_split([], A, B) → A=[], B=[]."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         a, b = Var(), Var()
         results = [
@@ -503,6 +539,7 @@ class TestBodyMultiStarDeconstruction:
 
     def test_body_split_singleton(self):
         """body_split([1], A, B) → two solutions."""
+        # nv
         mod = _load_clausal_module("body_star.clausal")
         a, b = Var(), Var()
         results = [
@@ -525,6 +562,7 @@ class TestBidirectionalBodyStar:
 
         [H, *T] is [1,2,3]  then  R is [H, *T]  → R=[1,2,3].
         """
+        # nv
         mod = fresh_module()
         h, t, r = Var(), Var(), Var()
         goal = And(
@@ -536,6 +574,7 @@ class TestBidirectionalBodyStar:
 
     def test_lhs_ground_rhs_pattern(self):
         """[1,2,3] is [H, *T] — ground list on left, pattern on right."""
+        # nv
         mod = fresh_module()
         h, t = Var(), Var()
         goal = Is(left=[1, 2, 3], right=[h, StarUnpack(value=t)])
@@ -544,6 +583,7 @@ class TestBidirectionalBodyStar:
 
     def test_rhs_ground_lhs_pattern(self):
         """[H, *T] is [1,2,3] — pattern on left, ground list on right."""
+        # nv
         mod = fresh_module()
         h, t = Var(), Var()
         goal = Is(left=[h, StarUnpack(value=t)], right=[1, 2, 3])

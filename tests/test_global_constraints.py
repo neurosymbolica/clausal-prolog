@@ -29,6 +29,7 @@ def fresh_trail() -> Trail:
 class TestCumulative:
     def test_no_overlap_two_tasks(self):
         """Two tasks needing full capacity cannot overlap."""
+        # nv
         trail = fresh_trail()
         s1, s2 = Var(), Var()
         assert in_domain([s1, s2], 0, 10, trail)
@@ -45,6 +46,7 @@ class TestCumulative:
 
     def test_overlapping_tasks_within_capacity(self):
         """Two tasks with combined resource <= capacity CAN overlap."""
+        # nv
         trail = fresh_trail()
         s1, s2 = Var(), Var()
         assert in_domain([s1, s2], 0, 10, trail)
@@ -59,6 +61,7 @@ class TestCumulative:
 
     def test_three_tasks_propagation(self):
         """Three unit-duration tasks, capacity 1 -> all different start times."""
+        # nv
         trail = fresh_trail()
         s1, s2, s3 = Var(), Var(), Var()
         assert in_domain([s1, s2, s3], 1, 3, trail)
@@ -75,6 +78,7 @@ class TestCumulative:
 
     def test_infeasible(self):
         """Three tasks of duration 2, capacity 1, horizon 4 -> too tight."""
+        # nv
         trail = fresh_trail()
         s1, s2, s3 = Var(), Var(), Var()
         assert in_domain([s1, s2, s3], 0, 2, trail)
@@ -92,11 +96,13 @@ class TestCumulative:
 
     def test_empty_task_list(self):
         """Empty task list is trivially true."""
+        # nv
         trail = fresh_trail()
         assert cumulative([], 1, trail)
 
     def test_single_task(self):
         """Single task with capacity is trivially satisfiable."""
+        # nv
         trail = fresh_trail()
         s = Var()
         assert in_domain(s, 0, 10, trail)
@@ -104,6 +110,7 @@ class TestCumulative:
 
     def test_zero_duration_task(self):
         """Zero-duration task is a no-op."""
+        # nv
         trail = fresh_trail()
         s1, s2 = Var(), Var()
         assert in_domain([s1, s2], 0, 5, trail)
@@ -118,6 +125,7 @@ class TestCumulative:
 class TestGlobalCardinality:
     def test_basic_cardinality(self):
         """[X, Y, Z] with value 1 appearing exactly twice."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 3, trail)
@@ -137,6 +145,7 @@ class TestGlobalCardinality:
 
     def test_cardinality_zero_count(self):
         """Value 3 appears 0 times -> excluded from all vars."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 3, trail)
@@ -149,6 +158,7 @@ class TestGlobalCardinality:
 
     def test_cardinality_forced(self):
         """If only N vars can take a value and count == N, they must all be that value."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 2, trail)
@@ -159,6 +169,7 @@ class TestGlobalCardinality:
 
     def test_cardinality_infeasible(self):
         """Infeasible: value 1 must appear 3 times in 2 vars."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 3, trail)
@@ -174,6 +185,7 @@ class TestGlobalCardinality:
 class TestChain:
     def test_increasing_chain(self):
         """chain([X, Y, Z], "lt") -> X < Y < Z."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 5, trail)
@@ -189,6 +201,7 @@ class TestChain:
 
     def test_increasing_chain_tight(self):
         """chain([X, Y, Z], "lt") with domain 1..3 forces X=1, Y=2, Z=3."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 3, trail)
@@ -199,6 +212,7 @@ class TestChain:
 
     def test_decreasing_chain(self):
         """chain([X, Y, Z], "gt") -> X > Y > Z."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 3, trail)
@@ -209,6 +223,7 @@ class TestChain:
 
     def test_chain_single_element(self):
         """Chain of length 1 is trivially true."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 5, trail)
@@ -216,6 +231,7 @@ class TestChain:
 
     def test_chain_le(self):
         """chain([X, Y, Z], "le") with domain 1..2."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 2, trail)
@@ -236,6 +252,7 @@ class TestChain:
 class TestTuplesIn:
     def test_basic_table(self):
         """[X, Y] must be one of [(1,2), (3,4)]."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -247,6 +264,7 @@ class TestTuplesIn:
 
     def test_table_propagation(self):
         """If X=1, then Y must be 2 (only matching tuple)."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -256,6 +274,7 @@ class TestTuplesIn:
 
     def test_table_no_match_fails(self):
         """If X=2, no tuple matches -> fail."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -264,6 +283,7 @@ class TestTuplesIn:
 
     def test_empty_relation_fails(self):
         """Empty relation -> fails immediately."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -271,6 +291,7 @@ class TestTuplesIn:
 
     def test_domain_filtering(self):
         """Posting tuples_in should remove impossible values from domains."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -293,6 +314,7 @@ class TestTuplesIn:
 class TestZcompare:
     def test_ground_less(self):
         """zcompare(Order, 1, 5) -> Order = '<'."""
+        # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 1, 5, trail)
@@ -300,6 +322,7 @@ class TestZcompare:
 
     def test_ground_greater(self):
         """zcompare(Order, 5, 1) -> Order = '>'."""
+        # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 5, 1, trail)
@@ -307,6 +330,7 @@ class TestZcompare:
 
     def test_ground_equal(self):
         """zcompare(Order, 3, 3) -> Order = '='."""
+        # nv
         trail = fresh_trail()
         order = Var()
         assert zcompare(order, 3, 3, trail)
@@ -314,6 +338,7 @@ class TestZcompare:
 
     def test_var_determined_by_domains(self):
         """When domains don't overlap, order is determined."""
+        # nv
         trail = fresh_trail()
         x, y, order = Var(), Var(), Var()
         assert in_domain(x, 1, 3, trail)
@@ -323,6 +348,7 @@ class TestZcompare:
 
     def test_order_ground_constrains_vars(self):
         """zcompare('<', X, Y) constrains X < Y."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -336,6 +362,7 @@ class TestZcompare:
 
     def test_undetermined(self):
         """When domains overlap, order stays unbound."""
+        # nv
         trail = fresh_trail()
         x, y, order = Var(), Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -351,6 +378,7 @@ class TestZcompare:
 class TestBacktracking:
     def test_cumulative_undo(self):
         """Cumulative constraint is undone cleanly by trail.undo()."""
+        # nv
         trail = fresh_trail()
         s1, s2 = Var(), Var()
         assert in_domain([s1, s2], 0, 10, trail)
@@ -363,6 +391,7 @@ class TestBacktracking:
 
     def test_global_cardinality_undo(self):
         """Global cardinality constraint is undone cleanly."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 3, trail)
@@ -374,6 +403,7 @@ class TestBacktracking:
 
     def test_tuples_in_undo(self):
         """TuplesIn constraint is undone cleanly."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 5, trail)
@@ -387,6 +417,7 @@ class TestBacktracking:
 
     def test_chain_undo(self):
         """Chain constraint is undone cleanly."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         assert in_domain([x, y, z], 1, 3, trail)

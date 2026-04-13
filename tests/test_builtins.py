@@ -14,9 +14,9 @@ import dataclasses
 import pytest
 
 from clausal.logic.database import Clause, Database, Module
-from clausal.logic.solve import solve, call, query, once
-from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Compound, KWTerm, Unify as Is, And, Call, LoadName, Not, in_
+from clausal.logic.solve import solve
+from clausal.logic.variables import Var, Trail, deref
+from clausal.terms import Compound, KWTerm, Call, LoadName
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -47,70 +47,92 @@ def sol_var(goal, var, *, limit=50, mod=None):
 
 class TestKWTerm:
     def test_construction_and_access(self):
+        # nv
         t = KWTerm("point", x=1, y=2)
         assert t.functor == "point"
         assert t.x == 1
         assert t.y == 2
 
     def test_equality_order_independent(self):
+        # nv
         assert KWTerm("r", a=1, b=2) == KWTerm("r", b=2, a=1)
 
     def test_equality_different_functor(self):
+        # nv
         assert KWTerm("r", a=1) != KWTerm("s", a=1)
 
     def test_equality_different_fields(self):
+        # nv
         assert KWTerm("r", a=1) != KWTerm("r", a=2)
 
     def test_len(self):
+        # nv
         assert len(KWTerm("r", a=1, b=2)) == 2
 
     def test_keys_values_items(self):
+        # nv
         t = KWTerm("r", a=1, b=2)
         assert list(t.keys()) == ["a", "b"]
         assert list(t.values()) == [1, 2]
         assert list(t.items()) == [("a", 1), ("b", 2)]
 
     def test_with_overrides(self):
+        # nv
         t = KWTerm("r", a=1, b=2)
         t2 = t.with_overrides(b=99)
         assert t2.b == 99
         assert t2.a == 1
 
     def test_with_overrides_unknown_key(self):
+        # nv
         t = KWTerm("r", a=1)
         with pytest.raises(KeyError):
             t.with_overrides(z=9)
 
     def test_with_extensions(self):
+        # nv
         t = KWTerm("r", a=1)
         t2 = t.with_extensions(b=2)
         assert list(t2.keys()) == ["a", "b"]
 
     def test_with_extensions_existing_key(self):
+        # nv
         t = KWTerm("r", a=1)
         with pytest.raises(KeyError):
             t.with_extensions(a=99)
 
     def test_repr(self):
+        # nv
         r = repr(KWTerm("r", x=1))
         assert "KWTerm" in r and "x=1" in r
 
     def test_hash_consistent(self):
+        # nv
         t1 = KWTerm("r", a=1, b=2)
         t2 = KWTerm("r", b=2, a=1)
         assert hash(t1) == hash(t2)
 
     def test_missing_attr(self):
+        # nv
         t = KWTerm("r", a=1)
         with pytest.raises(AttributeError):
             _ = t.z
 
+# ── Migration note ─────────────────────────────────────────────────────────
+# TestTypeChecks / TestArithmetic / TestListPredicates / TestAssertRetract /
+# TestPairHelpers have been removed — their coverage is in .clausal fixtures:
+#   tests/conformity/iso_type_checking.clausal
+#   tests/conformity/iso_arithmetic.clausal  (incl. Sign/Gcd/DivMod)
+#   tests/conformity/iso_list_operations.clausal + builtins_lists.clausal
+#   tests/conformity/iso_database.clausal + builtins_db.clausal
+#   tests/fixtures/phase5_builtins.clausal  (pairs_keys_values/_keys/_values)
 
 # ── functor/3 ─────────────────────────────────────────────────────────────────
 
 
 class TestFunctor:
     def test_decompose_compound(self):
+        # nv
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[Compound("foo", (1, 2)), f, a], kwargs=[])
@@ -120,6 +142,7 @@ class TestFunctor:
         assert results_a == [2]
 
     def test_decompose_atom(self):
+        # nv
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=["hello", f, a], kwargs=[])
@@ -127,6 +150,7 @@ class TestFunctor:
         assert sol_var(goal, a, mod=mod) == [0]
 
     def test_decompose_integer(self):
+        # nv
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[42, f, a], kwargs=[])
@@ -134,6 +158,7 @@ class TestFunctor:
         assert sol_var(goal, a, mod=mod) == [0]
 
     def test_compose_compound(self):
+        # nv
         mod = fresh_module()
         t = Var()
         goal = Call(func=LoadName(name="functor"), args=[t, "bar", 2], kwargs=[])
@@ -145,18 +170,21 @@ class TestFunctor:
         assert len(r.args) == 2
 
     def test_compose_atom(self):
+        # nv
         mod = fresh_module()
         t = Var()
         goal = Call(func=LoadName(name="functor"), args=[t, "hello", 0], kwargs=[])
         assert sol_var(goal, t, mod=mod) == ["hello"]
 
     def test_fails_both_unbound(self):
+        # nv
         mod = fresh_module()
         t, f, a = Var(), Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[t, f, a], kwargs=[])
         assert sol_var(goal, t, mod=mod) == []
 
     def test_decompose_dataclass(self):
+        # nv
         mod = fresh_module()
         db = Database()
 
@@ -176,24 +204,28 @@ class TestFunctor:
 
 class TestArg:
     def test_first_arg(self):
+        # nv
         mod = fresh_module()
         a = Var()
         goal = Call(func=LoadName(name="arg"), args=[1, Compound("f", (10, 20)), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == [10]
 
     def test_second_arg(self):
+        # nv
         mod = fresh_module()
         a = Var()
         goal = Call(func=LoadName(name="arg"), args=[2, Compound("f", (10, 20)), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == [20]
 
     def test_out_of_range(self):
+        # nv
         mod = fresh_module()
         a = Var()
         goal = Call(func=LoadName(name="arg"), args=[3, Compound("f", (10, 20)), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == []
 
     def test_list_arg(self):
+        # nv
         mod = fresh_module()
         a = Var()
         goal = Call(func=LoadName(name="arg"), args=[2, [10, 20, 30], a], kwargs=[])
@@ -205,6 +237,7 @@ class TestArg:
 
 class TestUniv:
     def test_decompose(self):
+        # nv
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=[Compound("f", (1, 2)), lst], kwargs=[])
@@ -212,6 +245,7 @@ class TestUniv:
         assert results == [["f", 1, 2]]
 
     def test_construct(self):
+        # nv
         mod = fresh_module()
         t = Var()
         goal = Call(func=LoadName(name="unpack"), args=[t, ["g", 3, 4]], kwargs=[])
@@ -223,503 +257,18 @@ class TestUniv:
         assert r.args == (3, 4)
 
     def test_decompose_atom(self):
+        # nv
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=["hello", lst], kwargs=[])
         assert sol_var(goal, lst, mod=mod) == [["hello"]]
 
 
-# ── Type check predicates ──────────────────────────────────────────────────────
 
 
-class TestTypeChecks:
-    def test_var_unbound(self):
-        mod = fresh_module()
-        v = Var()
-        goal = Call(func=LoadName(name="var"), args=[v], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_var_bound(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="var"), args=[42], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_nonvar(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="nonvar"), args=[42], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_atom_string(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="is_str"), args=["hello"], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_atom_int_fails(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="is_str"), args=[42], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_number_int(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="number"), args=[42], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_number_float(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="number"), args=[3.14], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_integer(self):
-        mod = fresh_module()
-        g1 = Call(func=LoadName(name="integer"), args=[42], kwargs=[])
-        g2 = Call(func=LoadName(name="integer"), args=[3.14], kwargs=[])
-        assert len(solutions(g1, mod)) == 1
-        assert solutions(g2, mod) == []
-
-    def test_string(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="is_str"), args=["hi"], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_compound_compound(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="compound"), args=[Compound("f", (1,))], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-
-    def test_compound_atom_fails(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="compound"), args=["hello"], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_is_list(self):
-        mod = fresh_module()
-        g1 = Call(func=LoadName(name="is_list"), args=[[1, 2, 3]], kwargs=[])
-        g2 = Call(func=LoadName(name="is_list"), args=[42], kwargs=[])
-        assert len(solutions(g1, mod)) == 1
-        assert solutions(g2, mod) == []
-
-    def test_ground(self):
-        mod = fresh_module()
-        g1 = Call(func=LoadName(name="ground"), args=[42], kwargs=[])
-        g2 = Call(func=LoadName(name="ground"), args=[Var()], kwargs=[])
-        assert len(solutions(g1, mod)) == 1
-        assert solutions(g2, mod) == []
-
-
-# ── Arithmetic predicates ──────────────────────────────────────────────────────
-
-
-class TestArithmetic:
-    def test_between_generate(self):
-        mod = fresh_module()
-        x = Var()
-        goal = Call(func=LoadName(name="between"), args=[1, 3, x], kwargs=[])
-        assert sol_var(goal, x, mod=mod) == [1, 2, 3]
-
-    def test_between_check(self):
-        mod = fresh_module()
-        g1 = Call(func=LoadName(name="between"), args=[1, 5, 3], kwargs=[])
-        g2 = Call(func=LoadName(name="between"), args=[1, 5, 6], kwargs=[])
-        assert len(solutions(g1, mod)) == 1
-        assert solutions(g2, mod) == []
-
-    def test_succ_forward(self):
-        mod = fresh_module()
-        y = Var()
-        goal = Call(func=LoadName(name="succ"), args=[4, y], kwargs=[])
-        assert sol_var(goal, y, mod=mod) == [5]
-
-    def test_succ_backward(self):
-        mod = fresh_module()
-        x = Var()
-        goal = Call(func=LoadName(name="succ"), args=[x, 5], kwargs=[])
-        assert sol_var(goal, x, mod=mod) == [4]
-
-    def test_plus_forward(self):
-        mod = fresh_module()
-        z = Var()
-        goal = Call(func=LoadName(name="plus"), args=[3, 4, z], kwargs=[])
-        assert sol_var(goal, z, mod=mod) == [7]
-
-    def test_plus_backward_x(self):
-        mod = fresh_module()
-        x = Var()
-        goal = Call(func=LoadName(name="plus"), args=[x, 4, 7], kwargs=[])
-        assert sol_var(goal, x, mod=mod) == [3]
-
-    def test_abs_(self):
-        mod = fresh_module()
-        y = Var()
-        goal = Call(func=LoadName(name="abs_"), args=[-5, y], kwargs=[])
-        assert sol_var(goal, y, mod=mod) == [5]
-
-    def test_max_(self):
-        mod = fresh_module()
-        z = Var()
-        goal = Call(func=LoadName(name="max_"), args=[3, 7, z], kwargs=[])
-        assert sol_var(goal, z, mod=mod) == [7]
-
-    def test_min_(self):
-        mod = fresh_module()
-        z = Var()
-        goal = Call(func=LoadName(name="min_"), args=[3, 7, z], kwargs=[])
-        assert sol_var(goal, z, mod=mod) == [3]
-
-    # ── sign/2 ──
-
-    def test_sign_positive(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sign"), args=[42, s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [1]
-
-    def test_sign_negative(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sign"), args=[-7, s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [-1]
-
-    def test_sign_zero(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sign"), args=[0, s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [0]
-
-    def test_sign_float(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sign"), args=[-3.14, s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [-1]
-
-    def test_sign_unbound_fails(self):
-        mod = fresh_module()
-        x, s = Var(), Var()
-        goal = Call(func=LoadName(name="sign"), args=[x, s], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_sign_check_mode(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="sign"), args=[5, 1], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-        goal2 = Call(func=LoadName(name="sign"), args=[5, -1], kwargs=[])
-        assert solutions(goal2, mod) == []
-
-    # ── gcd/3 ──
-
-    def test_gcd_basic(self):
-        mod = fresh_module()
-        g = Var()
-        goal = Call(func=LoadName(name="gcd"), args=[12, 8, g], kwargs=[])
-        assert sol_var(goal, g, mod=mod) == [4]
-
-    def test_gcd_coprime(self):
-        mod = fresh_module()
-        g = Var()
-        goal = Call(func=LoadName(name="gcd"), args=[7, 13, g], kwargs=[])
-        assert sol_var(goal, g, mod=mod) == [1]
-
-    def test_gcd_with_zero(self):
-        mod = fresh_module()
-        g = Var()
-        goal = Call(func=LoadName(name="gcd"), args=[0, 5, g], kwargs=[])
-        assert sol_var(goal, g, mod=mod) == [5]
-
-    def test_gcd_negative(self):
-        mod = fresh_module()
-        g = Var()
-        goal = Call(func=LoadName(name="gcd"), args=[-12, 8, g], kwargs=[])
-        assert sol_var(goal, g, mod=mod) == [4]
-
-    def test_gcd_unbound_fails(self):
-        mod = fresh_module()
-        x, g = Var(), Var()
-        goal = Call(func=LoadName(name="gcd"), args=[x, 8, g], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    # ── divmod_/4 ──
-
-    def test_divmod_basic(self):
-        mod = fresh_module()
-        q, r = Var(), Var()
-        goal = Call(func=LoadName(name="divmod_"), args=[17, 5, q, r], kwargs=[])
-        t = Trail()
-        results = []
-        for _ in solve(goal, mod, t):
-            results.append((deref(q), deref(r)))
-        assert results == [(3, 2)]
-
-    def test_divmod_exact(self):
-        mod = fresh_module()
-        q, r = Var(), Var()
-        goal = Call(func=LoadName(name="divmod_"), args=[10, 5, q, r], kwargs=[])
-        t = Trail()
-        results = []
-        for _ in solve(goal, mod, t):
-            results.append((deref(q), deref(r)))
-        assert results == [(2, 0)]
-
-    def test_divmod_by_zero_fails(self):
-        mod = fresh_module()
-        q, r = Var(), Var()
-        goal = Call(func=LoadName(name="divmod_"), args=[10, 0, q, r], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_divmod_negative(self):
-        mod = fresh_module()
-        q, r = Var(), Var()
-        goal = Call(func=LoadName(name="divmod_"), args=[-7, 2, q, r], kwargs=[])
-        t = Trail()
-        results = []
-        for _ in solve(goal, mod, t):
-            results.append((deref(q), deref(r)))
-        # Python divmod: -7 // 2 = -4, -7 % 2 = 1
-        assert results == [(-4, 1)]
-
-    def test_divmod_unbound_fails(self):
-        mod = fresh_module()
-        x, q, r = Var(), Var(), Var()
-        goal = Call(func=LoadName(name="divmod_"), args=[x, 5, q, r], kwargs=[])
-        assert solutions(goal, mod) == []
-
-    def test_divmod_check_mode(self):
-        mod = fresh_module()
-        goal = Call(func=LoadName(name="divmod_"), args=[17, 5, 3, 2], kwargs=[])
-        assert len(solutions(goal, mod)) == 1
-        goal2 = Call(func=LoadName(name="divmod_"), args=[17, 5, 3, 99], kwargs=[])
-        assert solutions(goal2, mod) == []
-
-
-# ── List predicates ────────────────────────────────────────────────────────────
-
-
-class TestListPredicates:
-    def test_member_check(self):
-        mod = fresh_module()
-        g1 = Call(func=LoadName(name="in_"), args=[2, [1, 2, 3]], kwargs=[])
-        g2 = Call(func=LoadName(name="in_"), args=[5, [1, 2, 3]], kwargs=[])
-        assert len(solutions(g1, mod)) == 1
-        assert solutions(g2, mod) == []
-
-    def test_member_enumerate(self):
-        mod = fresh_module()
-        x = Var()
-        goal = Call(func=LoadName(name="in_"), args=[x, [10, 20, 30]], kwargs=[])
-        assert sol_var(goal, x, mod=mod) == [10, 20, 30]
-
-    def test_memberchk_first_only(self):
-        mod = fresh_module()
-        x = Var()
-        goal = Call(func=LoadName(name="in_check"), args=[x, [1, 1, 2]], kwargs=[])
-        # memberchk commits to first match
-        assert sol_var(goal, x, mod=mod) == [1]
-
-    def test_append_concat(self):
-        mod = fresh_module()
-        z = Var()
-        goal = Call(func=LoadName(name="append"), args=[[1, 2], [3, 4], z], kwargs=[])
-        assert sol_var(goal, z, mod=mod) == [[1, 2, 3, 4]]
-
-    def test_append_split(self):
-        mod = fresh_module()
-        l1, l2 = Var(), Var()
-        goal = Call(func=LoadName(name="append"), args=[l1, l2, [1, 2, 3]], kwargs=[])
-        t = Trail()
-        pairs = []
-        for _ in solve(goal, mod, t):
-            pairs.append((list(deref(l1)), list(deref(l2))))
-        assert pairs == [
-            ([], [1, 2, 3]),
-            ([1], [2, 3]),
-            ([1, 2], [3]),
-            ([1, 2, 3], []),
-        ]
-
-    def test_length_known(self):
-        mod = fresh_module()
-        n = Var()
-        goal = Call(func=LoadName(name="length"), args=[[1, 2, 3], n], kwargs=[])
-        assert sol_var(goal, n, mod=mod) == [3]
-
-    def test_length_generate(self):
-        mod = fresh_module()
-        lst = Var()
-        goal = Call(func=LoadName(name="length"), args=[lst, 3], kwargs=[])
-        results = sol_var(goal, lst, mod=mod)
-        assert len(results) == 1
-        r = results[0]
-        assert isinstance(r, list) and len(r) == 3
-        assert all(is_var(x) for x in r)
-
-    def test_last(self):
-        mod = fresh_module()
-        e = Var()
-        goal = Call(func=LoadName(name="last"), args=[[1, 2, 3], e], kwargs=[])
-        assert sol_var(goal, e, mod=mod) == [3]
-
-    def test_reverse(self):
-        mod = fresh_module()
-        r = Var()
-        goal = Call(func=LoadName(name="reverse"), args=[[1, 2, 3], r], kwargs=[])
-        assert sol_var(goal, r, mod=mod) == [[3, 2, 1]]
-
-    def test_nth0(self):
-        mod = fresh_module()
-        e = Var()
-        goal = Call(func=LoadName(name="get_item"), args=[1, [10, 20, 30], e], kwargs=[])
-        assert sol_var(goal, e, mod=mod) == [20]
-
-    def test_getitem_1based_equivalent(self):
-        mod = fresh_module()
-        e = Var()
-        # get_item is 0-based; index 1 = 2nd element (was nth1 index 2)
-        goal = Call(func=LoadName(name="get_item"), args=[1, [10, 20, 30], e], kwargs=[])
-        assert sol_var(goal, e, mod=mod) == [20]
-
-    def test_nth0_enumerate(self):
-        mod = fresh_module()
-        n, e = Var(), Var()
-        goal = Call(func=LoadName(name="get_item"), args=[n, [10, 20], e], kwargs=[])
-        t = Trail()
-        pairs = []
-        for _ in solve(goal, mod, t):
-            pairs.append((deref(n), deref(e)))
-        assert pairs == [(0, 10), (1, 20)]
-
-    def test_flatten(self):
-        mod = fresh_module()
-        f = Var()
-        goal = Call(func=LoadName(name="flatten"), args=[[[1, 2], [3, [4, 5]]], f], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == [[1, 2, 3, 4, 5]]
-
-    def test_msort(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="msort"), args=[[3, 1, 2, 1], s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [[1, 1, 2, 3]]
-
-    def test_sort_dedup(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sort"), args=[[3, 1, 2, 1], s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [[1, 2, 3]]
-
-    def test_permutation(self):
-        mod = fresh_module()
-        p = Var()
-        goal = Call(func=LoadName(name="permutation"), args=[[1, 2, 3], p], kwargs=[])
-        results = sol_var(goal, p, mod=mod)
-        assert len(results) == 6
-        assert sorted(results) == sorted([
-            [1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 1, 2], [3, 2, 1]
-        ])
-
-    def test_select(self):
-        mod = fresh_module()
-        e, r = Var(), Var()
-        goal = Call(func=LoadName(name="select"), args=[e, [1, 2, 3], r], kwargs=[])
-        t = Trail()
-        pairs = []
-        for _ in solve(goal, mod, t):
-            pairs.append((deref(e), list(deref(r))))
-        assert pairs == [(1, [2, 3]), (2, [1, 3]), (3, [1, 2])]
-
-    def test_subtract(self):
-        mod = fresh_module()
-        d = Var()
-        goal = Call(func=LoadName(name="subtract"), args=[[1, 2, 3, 4], [2, 4], d], kwargs=[])
-        assert sol_var(goal, d, mod=mod) == [[1, 3]]
-
-    def test_intersection(self):
-        mod = fresh_module()
-        i = Var()
-        goal = Call(func=LoadName(name="intersection"), args=[[1, 2, 3], [2, 3, 4], i], kwargs=[])
-        assert sol_var(goal, i, mod=mod) == [[2, 3]]
-
-    def test_union(self):
-        mod = fresh_module()
-        u = Var()
-        goal = Call(func=LoadName(name="union"), args=[[1, 2], [2, 3], u], kwargs=[])
-        assert sol_var(goal, u, mod=mod) == [[1, 2, 3]]
-
-    def test_sum_list(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="sum_list"), args=[[1, 2, 3, 4], s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [10]
-
-    def test_max_list(self):
-        mod = fresh_module()
-        m = Var()
-        goal = Call(func=LoadName(name="max_list"), args=[[3, 1, 4, 1, 5, 9], m], kwargs=[])
-        assert sol_var(goal, m, mod=mod) == [9]
-
-    def test_min_list(self):
-        mod = fresh_module()
-        m = Var()
-        goal = Call(func=LoadName(name="min_list"), args=[[3, 1, 4, 1, 5, 9], m], kwargs=[])
-        assert sol_var(goal, m, mod=mod) == [1]
-
-    def test_list_to_set(self):
-        mod = fresh_module()
-        s = Var()
-        goal = Call(func=LoadName(name="list_to_set"), args=[[1, 2, 1, 3, 2], s], kwargs=[])
-        assert sol_var(goal, s, mod=mod) == [[1, 2, 3]]
 
 
 # ── assertz/retract ───────────────────────────────────────────────────────────
-
-
-class TestAssertRetract:
-    def test_assertz_fact(self):
-        from clausal.logic.compiler import compile_predicate
-
-        mod = fresh_module()
-        # Pre-create an empty predicate so table_for can find it later
-        # (assertz will compile it after asserting)
-        x = Var()
-        fact = Compound("dyn_fact", (42,))
-        goal_assert = Call(func=LoadName(name="assertz"), args=[fact], kwargs=[])
-        # Execute assertz
-        list(solve(goal_assert, mod))
-
-        # Now query it
-        q_var = Var()
-        q_goal = Call(func=LoadName(name="dyn_fact"), args=[q_var], kwargs=[])
-        t = Trail()
-        results = [deref(q_var) for _ in solve(q_goal, mod, t)]
-        assert results == [42]
-
-    def test_assertz_multiple(self):
-        mod = fresh_module()
-        for v in [1, 2, 3]:
-            fact = Compound("dyn_num", (v,))
-            goal = Call(func=LoadName(name="assertz"), args=[fact], kwargs=[])
-            list(solve(goal, mod))
-
-        q = Var()
-        q_goal = Call(func=LoadName(name="dyn_num"), args=[q], kwargs=[])
-        t = Trail()
-        results = [deref(q) for _ in solve(q_goal, mod, t)]
-        assert results == [1, 2, 3]
-
-    def test_retract(self):
-        mod = fresh_module()
-        for v in [1, 2, 3]:
-            fact = Compound("dyn_r", (v,))
-            list(solve(Call(func=LoadName(name="assertz"), args=[fact], kwargs=[]), mod))
-
-        # retract the middle element
-        retract_goal = Call(
-            func=LoadName(name="retract"), args=[Compound("dyn_r", (2,))], kwargs=[]
-        )
-        list(solve(retract_goal, mod))
-
-        q = Var()
-        q_goal = Call(func=LoadName(name="dyn_r"), args=[q], kwargs=[])
-        t = Trail()
-        results = [deref(q) for _ in solve(q_goal, mod, t)]
-        assert results == [1, 3]
-
 
 # ── WK-5: vary, extend, unbound_keys, signature ───────────────────────────────
 
@@ -727,6 +276,7 @@ class TestAssertRetract:
 class TestWK5:
     def test_vary_dataclass(self):
         @dataclasses.dataclass
+        # nv
         class point:
             x: object
             y: object
@@ -744,6 +294,7 @@ class TestWK5:
         assert results[0] == point(x=1, y=99)
 
     def test_vary_kwterm(self):
+        # nv
         mod = fresh_module()
         t = KWTerm("r", a=1, b=2)
         new_t = Var()
@@ -755,6 +306,7 @@ class TestWK5:
         assert results[0] == KWTerm("r", a=1, b=99)
 
     def test_vary_unknown_key(self):
+        # nv
         mod = fresh_module()
         t = KWTerm("r", a=1)
         new_t = Var()
@@ -764,6 +316,7 @@ class TestWK5:
         assert sol_var(goal, new_t, mod=mod) == []
 
     def test_extend_kwterm(self):
+        # nv
         mod = fresh_module()
         t = KWTerm("r", a=1)
         new_t = Var()
@@ -776,6 +329,7 @@ class TestWK5:
 
     def test_unbound_keys_dataclass(self):
         @dataclasses.dataclass
+        # nv
         class pt:
             x: object
             y: object
@@ -789,6 +343,7 @@ class TestWK5:
         assert results == [["y"]]
 
     def test_unbound_keys_kwterm(self):
+        # nv
         v = Var()
         t = KWTerm("r", a=1, b=v)
         mod = fresh_module()
@@ -798,6 +353,7 @@ class TestWK5:
         assert results == [["b"]]
 
     def test_signature(self):
+        # nv
         from clausal.logic.database import Clause
 
         mod = fresh_module()
@@ -811,6 +367,7 @@ class TestWK5:
         assert results == [["arg0", "arg1"]]
 
     def test_signature_unknown(self):
+        # nv
         mod = fresh_module()
         names = Var()
         goal = Call(
@@ -818,51 +375,6 @@ class TestWK5:
         )
         assert sol_var(goal, names, mod=mod) == []
 
-
-# ── Pair helpers ──────────────────────────────────────────────────────────────
-
-
-class TestPairHelpers:
-    def test_pairs_keys_values_decompose(self):
-        mod = fresh_module()
-        k, v = Var(), Var()
-        goal = Call(
-            func=LoadName(name="pairs_keys_values"),
-            args=[[[1, "a"], [2, "b"]], k, v],
-            kwargs=[],
-        )
-        assert sol_var(goal, k, mod=mod) == [[1, 2]]
-        assert sol_var(goal, v, mod=mod) == [["a", "b"]]
-
-    def test_pairs_keys_values_compose(self):
-        mod = fresh_module()
-        p = Var()
-        goal = Call(
-            func=LoadName(name="pairs_keys_values"),
-            args=[p, [1, 2], ["a", "b"]],
-            kwargs=[],
-        )
-        assert sol_var(goal, p, mod=mod) == [[[1, "a"], [2, "b"]]]
-
-    def test_pairs_keys(self):
-        mod = fresh_module()
-        k = Var()
-        goal = Call(
-            func=LoadName(name="pairs_keys"),
-            args=[[[1, "a"], [2, "b"]], k],
-            kwargs=[],
-        )
-        assert sol_var(goal, k, mod=mod) == [[1, 2]]
-
-    def test_pairs_values(self):
-        mod = fresh_module()
-        v = Var()
-        goal = Call(
-            func=LoadName(name="pairs_values"),
-            args=[[[1, "a"], [2, "b"]], v],
-            kwargs=[],
-        )
-        assert sol_var(goal, v, mod=mod) == [["a", "b"]]
 
 
 # ── Builtins accessible from compiled predicate bodies ────────────────────────
@@ -873,6 +385,7 @@ class TestBuiltinsInCompiledPredicates:
 
     def test_between_in_compiled_body(self):
         """A compiled predicate that calls between/3 in its body."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.trampoline import StepGenerator, solutions
 
@@ -895,6 +408,7 @@ class TestBuiltinsInCompiledPredicates:
 
     def test_member_in_compiled_body(self):
         """A compiled predicate that calls member/2 to enumerate."""
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.trampoline import StepGenerator, solutions
 

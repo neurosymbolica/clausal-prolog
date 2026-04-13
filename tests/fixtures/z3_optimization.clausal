@@ -9,7 +9,7 @@ Test("soft higher weight wins") <- (
     z3.soft(X >= 7, 5),
     z3.maximize_satisfaction(SAT),
     SAT == 5,
-)
+)  # nv
 
 # ── Soft all satisfiable ───────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ Test("soft all satisfiable") <- (
     z3.soft(X <= 10, 5),
     z3.maximize_satisfaction(SAT),
     SAT == 8,
-)
+)  # nv
 
 # ── Optimize label ──────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ MinSchedule(T1, T2, T3, COST) <- (
     z3.optimize_label([T1, T2, T3], T3, COST, "minimize"),
 )
 
-Test("optimize label minimize") <- (MinSchedule(0, 5, 8, 8))
+Test("optimize label minimize") <- (MinSchedule(0, 5, 8, 8))  # nv
 
 MaxObj(COST) <- (
     z3.integer((
@@ -45,4 +45,4 @@ MaxObj(COST) <- (
     z3.optimize_label([X, Y], X + Y, COST, "maximize"),
 )
 
-Test("optimize label maximize") <- (MaxObj(COST), COST == 15)
+Test("optimize label maximize") <- (MaxObj(COST), COST == 15)  # nv

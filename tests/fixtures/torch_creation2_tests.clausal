@@ -15,13 +15,13 @@ Test("zeros_like preserves shape and dtype") <- (
     shape(Z, [2, 2]),
     dtype(T, DT),
     dtype(Z, DT)
-)
+)  # nv
 
 Test("zeros_like all zeros") <- (
     tensor([5.0, 6.0, 7.0], T),
     zeros_like(T, Z),
     tensor_list(Z, [0.0, 0.0, 0.0])
-)
+)  # nv
 
 # --- ones_like ---
 
@@ -29,13 +29,13 @@ Test("ones_like preserves shape") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], T),
     ones_like(T, O),
     shape(O, [2, 2])
-)
+)  # nv
 
 Test("ones_like all ones") <- (
     tensor([5.0, 6.0], T),
     ones_like(T, O),
     tensor_list(O, [1.0, 1.0])
-)
+)  # nv
 
 # --- full_like ---
 
@@ -43,32 +43,32 @@ Test("full_like preserves shape") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], T),
     full_like(T, 7.0, F),
     shape(F, [2, 2])
-)
+)  # nv
 
 Test("full_like fills with value") <- (
     tensor([1.0, 2.0, 3.0], T),
     full_like(T, 42.0, F),
     tensor_list(F, [42.0, 42.0, 42.0])
-)
+)  # nv
 
 # --- empty ---
 
 Test("empty shape") <- (
     empty([2, 3], T),
     shape(T, [2, 3])
-)
+)  # nv
 
 Test("empty with opts shape") <- (
     empty([4], {}, T),
     shape(T, [4])
-)
+)  # nv
 
 # --- rand ---
 
 Test("rand shape") <- (
     rand([3, 4], T),
     shape(T, [3, 4])
-)
+)  # nv
 
 Test("rand values in range") <- (
     rand([100], T),
@@ -78,26 +78,26 @@ Test("rand values in range") <- (
     tensor(1.0, ONE),
     le(T, ONE, LE_MASK),
     all(LE_MASK)
-)
+)  # nv
 
 Test("rand produces varying values") <- (
     rand([1000], A),
     rand([1000], B),
     not(equal(A, B))
-)
+)  # nv
 
 Test("rand with opts") <- (
     rand([3], {"dtype": float64}, T),
     shape(T, [3]),
     dtype(T, float64)
-)
+)  # nv
 
 # --- randint ---
 
 Test("randint shape") <- (
     randint(0, 10, [5, 3], T),
     shape(T, [5, 3])
-)
+)  # nv
 
 Test("randint values in range") <- (
     randint(0, 10, [100], T),
@@ -107,39 +107,39 @@ Test("randint values in range") <- (
     tensor(10, TEN),
     gt(TEN, T, LT_MASK),
     all(LT_MASK)
-)
+)  # nv
 
 Test("randint produces varying values") <- (
     randint(0, 1000, [1000], A),
     randint(0, 1000, [1000], B),
     not(equal(A, B))
-)
+)  # nv
 
 # --- logspace ---
 
 Test("logspace shape") <- (
     logspace(0.0, 2.0, 5, T),
     shape(T, [5])
-)
+)  # nv
 
 Test("logspace endpoints") <- (
     logspace(0.0, 2.0, 3, T),
     # 10^0=1, 10^1=10, 10^2=100
     tensor([1.0, 10.0, 100.0], EXPECTED),
     allclose(T, EXPECTED)
-)
+)  # nv
 
 Test("logspace with opts") <- (
     logspace(0.0, 1.0, 3, {"dtype": float64}, T),
     shape(T, [3]),
     dtype(T, float64)
-)
+)  # nv
 
 Test("empty with dtype opt") <- (
     empty([2, 2], {"dtype": float64}, T),
     shape(T, [2, 2]),
     dtype(T, float64)
-)
+)  # nv
 
 # --- diag ---
 
@@ -147,31 +147,31 @@ Test("diag from 1D creates matrix") <- (
     tensor([1.0, 2.0, 3.0], V),
     diag(V, M),
     shape(M, [3, 3])
-)
+)  # nv
 
 Test("diag from 2D extracts diagonal") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], M),
     diag(M, V),
     tensor_list(V, [1.0, 4.0])
-)
+)  # nv
 
 Test("diag with offset") <- (
     tensor([1.0, 2.0], V),
     diag(V, 1, M),
     shape(M, [3, 3])
-)
+)  # nv
 
 Test("diag with negative offset") <- (
     tensor([1.0, 2.0], V),
     diag(V, -1, M),
     shape(M, [3, 3])
-)
+)  # nv
 
 Test("diag from non-square matrix") <- (
     tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], M),
     diag(M, V),
     tensor_list(V, [1.0, 5.0])
-)
+)  # nv
 
 # --- sub ---
 
@@ -180,7 +180,7 @@ Test("sub known values") <- (
     tensor([2.0, 1.0], B),
     sub(A, B, C),
     tensor_list(C, [3.0, 2.0])
-)
+)  # nv
 
 # --- div ---
 
@@ -189,7 +189,7 @@ Test("div known values") <- (
     tensor([2.0, 4.0], B),
     div(A, B, C),
     tensor_list(C, [3.0, 2.0])
-)
+)  # nv
 
 # --- neg ---
 
@@ -197,4 +197,4 @@ Test("neg known values") <- (
     tensor([1.0, -2.0, 3.0], T),
     neg(T, R),
     tensor_list(R, [-1.0, 2.0, -3.0])
-)
+)  # nv

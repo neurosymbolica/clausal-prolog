@@ -10,25 +10,25 @@ Test("unsat core finds conflict") <- (
     z3.unsatisfiable_core(CORE),
     in_("x_high", CORE),
     in_("x_low", CORE),
-)
+)  # nv
 
 Test("sat has no core") <- (
     z3.integer((1 <= X <= 10)),
     z3.named(X > 5, "x_big"),
     not(z3.unsatisfiable_core(_)),
-)
+)  # nv
 
 # ── Satisfiability ──────────────────────────────────────────────────────────
 
 Test("satisfiability sat") <- (
     z3.integer(1 <= X <= 10),
     z3.satisfiability("sat"),
-)
+)  # nv
 
 Test("satisfiability unsat") <- (
     z3.integer((X >= 10, X <= 5)),
     z3.satisfiability("unsat"),
-)
+)  # nv
 
 # ── Model inspection ────────────────────────────────────────────────────────
 
@@ -36,14 +36,14 @@ Test("model without binding") <- (
     z3.integer(X == 7),
     z3.model([X], [[NAME, VAL]]),
     VAL == 7,
-)
+)  # nv
 
 # ── Simplify ────────────────────────────────────────────────────────────────
 
 Test("simplify constant") <- (
     z3.simplify(2 + 3, R),
     R == 5,
-)
+)  # nv
 
 # ── Assertions dump ─────────────────────────────────────────────────────────
 
@@ -52,4 +52,4 @@ Test("assertions non-empty") <- (
     z3.assertions(A),
     length(A, N),
     N >= 1,
-)
+)  # nv

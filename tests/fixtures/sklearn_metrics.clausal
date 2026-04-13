@@ -11,7 +11,7 @@ Test("accuracy metric") <- (
     Predict(FITTED, X, PREDS),
     Metric("accuracy", Y, PREDS, SCORE),
     SCORE > 0.8
-)
+)  # nv
 
 # ── Score/4 with explicit metric ─────────────────────────────────────
 
@@ -20,7 +20,7 @@ Test("score with accuracy metric") <- (
     Fit(Est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
     Score(FITTED, DATASET, "accuracy", SCORE),
     SCORE > 0.5
-)
+)  # nv
 
 # ── Regression metrics ───────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ Test("r2 metric on diabetes") <- (
     DATASET is ("Dataset", X, Y),
     Predict(FITTED, X, PREDS),
     Metric("r2", Y, PREDS, SCORE)
-)
+)  # nv
 
 Test("mse metric on diabetes") <- (
     LoadDataset("diabetes", DATASET),
@@ -39,7 +39,7 @@ Test("mse metric on diabetes") <- (
     Predict(FITTED, X, PREDS),
     Metric("mse", Y, PREDS, SCORE),
     SCORE > 0.0
-)
+)  # nv
 
 # ── CrossValScore ────────────────────────────────────────────────────
 
@@ -47,13 +47,13 @@ Test("cross val score on iris") <- (
     LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), SCORES)
-)
+)  # nv
 
 Test("cross val score with metric") <- (
     LoadDataset("iris", DATASET),
     CrossValScore(Est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), "accuracy", SCORES)
-)
+)  # nv
 
 # ── CrossValidate ────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ Test("cross validate multiple metrics") <- (
     LoadDataset("iris", DATASET),
     CrossValidate(Est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), ["accuracy", "f1_weighted"], RESULTS)
-)
+)  # nv
 
 # ── ConfusionMatrix ──────────────────────────────────────────────────
 
@@ -71,4 +71,4 @@ Test("confusion matrix on iris") <- (
     DATASET is ("Dataset", X, Y),
     Predict(FITTED, X, PREDS),
     ConfusionMatrix(Y, PREDS, MATRIX)
-)
+)  # nv

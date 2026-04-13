@@ -24,6 +24,7 @@ from clausal.pythonic_ast.nodes import (
 class TestCompareChainEdge:
     def test_single_comparison_chain(self):
         """Single-element CompareChain still produces a valid z3 expr."""
+        # nv
         trail = Trail()
         x = Var()
         chain = CompareChain(comparisons=[LtE(left=x, right=5)])
@@ -34,6 +35,7 @@ class TestCompareChainEdge:
 class TestAutoRegistration:
     def test_integer_sort_registered(self):
         """Vars in constraint block are auto-registered with IntSort."""
+        # nv
         trail = Trail()
         x = Var()
         z3_constraint_block((
@@ -45,6 +47,7 @@ class TestAutoRegistration:
 
     def test_real_sort_registered(self):
         """Vars in constraint block are auto-registered with RealSort."""
+        # nv
         trail = Trail()
         x = Var()
         z3_constraint_block((
@@ -57,6 +60,7 @@ class TestAutoRegistration:
 class TestLabelEdgeCases:
     def test_ground_vars_ignored(self):
         """Ground values in the label list are skipped."""
+        # nv
         trail = Trail()
         x = Var()
         z3_constraint_block(
@@ -69,12 +73,14 @@ class TestLabelEdgeCases:
         assert sols == [5]
 
     def test_unregistered_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(ValueError, match="not registered"):
             list(label_z3_polymorphic([x], trail))
 
     def test_bindings_undone_after_label(self):
+        # nv
         trail = Trail()
         x = Var()
         z3_constraint_block(
@@ -89,6 +95,7 @@ class TestLabelEdgeCases:
 class TestBacktracking:
     def test_constraint_block_retracted_on_undo(self):
         """Constraint block constraints are retracted on trail undo."""
+        # nv
         trail = Trail()
         x = Var()
         z3_constraint_block(

@@ -36,21 +36,25 @@ def _succeeds(functor, *args, module):
 
 class TestTerminals:
     def test_single_terminal(self, tmp_path):
+        # nv
         mod = _load("t1", 'hi >> (["hello"])\n', tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, ["hello"], module=mod)
 
     def test_multi_terminal(self, tmp_path):
+        # nv
         mod = _load("t2", 'greet >> (["hello", "world"])\n', tmp_path)
         cls = mod.module_dict["greet"]
         assert _succeeds("phrase", cls, ["hello", "world"], module=mod)
 
     def test_empty_terminal(self, tmp_path):
+        # nv
         mod = _load("t3", 'epsilon >> ([])\n', tmp_path)
         cls = mod.module_dict["epsilon"]
         assert _succeeds("phrase", cls, [], module=mod)
 
     def test_terminal_no_match(self, tmp_path):
+        # nv
         mod = _load("t4", 'hi >> (["hello"])\n', tmp_path)
         cls = mod.module_dict["hi"]
         assert not _succeeds("phrase", cls, ["goodbye"], module=mod)
@@ -61,6 +65,7 @@ class TestTerminals:
 
 class TestNonTerminals:
     def test_chained_non_terminals(self, tmp_path):
+        # nv
         src = (
             'ab_rule >> (["a"])\n'
             'cd_rule >> (["c"])\n'
@@ -72,6 +77,7 @@ class TestNonTerminals:
         assert not _succeeds("phrase", cls, ["a"], module=mod)
 
     def test_non_terminal_with_args(self, tmp_path):
+        # nv
         src = 'tok(_t) >> ([_t])\n'
         mod = _load("nt2", src, tmp_path)
         cls = mod.module_dict["tok"]
@@ -87,6 +93,7 @@ class TestNonTerminals:
 
 class TestInlineGoals:
     def test_inline_goal_passthrough(self, tmp_path):
+        # nv
         src = 'pos(_d) >> ([_d], {_d > 0})\n'
         mod = _load("ig1", src, tmp_path)
         cls = mod.module_dict["pos"]
@@ -103,6 +110,7 @@ class TestInlineGoals:
         assert results2 == []
 
     def test_multiple_inline_goals(self, tmp_path):
+        # nv
         src = 'bounded(_d) >> ([_d], {_d >= 0}, {_d <= 9})\n'
         mod = _load("ig2", src, tmp_path)
         cls = mod.module_dict["bounded"]
@@ -124,6 +132,7 @@ class TestInlineGoals:
 
 class TestConjunction:
     def test_tuple_conjunction(self, tmp_path):
+        # nv
         src = (
             'x_rule >> (["x"])\n'
             'y_rule >> (["y"])\n'
@@ -134,6 +143,7 @@ class TestConjunction:
         assert _succeeds("phrase", cls, ["x", "y"], module=mod)
 
     def test_and_conjunction(self, tmp_path):
+        # nv
         src = (
             'a_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
@@ -149,6 +159,7 @@ class TestConjunction:
 
 class TestDisjunction:
     def test_or_branches(self, tmp_path):
+        # nv
         src = 'letter >> (["a"] or ["b"] or ["c"])\n'
         mod = _load("dj1", src, tmp_path)
         cls = mod.module_dict["letter"]
@@ -163,6 +174,7 @@ class TestDisjunction:
 
 class TestNegation:
     def test_not_terminal(self, tmp_path):
+        # nv
         src = 'not_a >> (not ["a"], [_x])\n'
         mod = _load("neg1", src, tmp_path)
         cls = mod.module_dict["not_a"]
@@ -178,6 +190,7 @@ class TestNegation:
 class TestIfThenElse:
     def test_if_then_else_nonterminals(self, tmp_path):
         """If-then-else with non-terminal conditions (no star-list in If)."""
+        # nv
         src = (
             'a_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
@@ -199,6 +212,7 @@ class TestIfThenElse:
 
 class TestPushback:
     def test_look_ahead(self, tmp_path):
+        # nv
         src = '(peek(_t), [_t]) >> ([_t])\n'
         mod = _load("pb1", src, tmp_path)
         cls = mod.module_dict["peek"]
@@ -216,12 +230,14 @@ class TestPushback:
 
 class TestPhrase:
     def test_phrase_2_success(self, tmp_path):
+        # nv
         src = 'hi >> (["hello", "world"])\n'
         mod = _load("ph1", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, ["hello", "world"], module=mod)
 
     def test_phrase_2_fail(self, tmp_path):
+        # nv
         src = 'hi >> (["hello", "world"])\n'
         mod = _load("ph2", src, tmp_path)
         cls = mod.module_dict["hi"]
@@ -229,6 +245,7 @@ class TestPhrase:
         assert not _succeeds("phrase", cls, ["hello", "world", "extra"], module=mod)
 
     def test_phrase_3_partial(self, tmp_path):
+        # nv
         src = 'tok(_t) >> ([_t])\n'
         mod = _load("ph3", src, tmp_path)
         cls = mod.module_dict["tok"]
@@ -245,6 +262,7 @@ class TestPhrase:
 
 class TestRecursive:
     def test_recursive_list(self, tmp_path):
+        # nv
         src = (
             'items >> ([_x], items)\n'
             'items >> ([])\n'
@@ -255,6 +273,7 @@ class TestRecursive:
         assert _succeeds("phrase", cls, [], module=mod)
 
     def test_recursive_digits(self, tmp_path):
+        # nv
         src = (
             'digits >> ([_d], {_d >= 0}, {_d <= 9}, digits)\n'
             'digits >> ([])\n'
@@ -281,17 +300,20 @@ class TestFixtureIntegration:
         self.module_dict = mod.__dict__
 
     def test_greeting(self):
+        # nv
         cls = self.module_dict["greeting"]
         assert _succeeds("phrase", cls, ["hello", "world"], module=self.mod)
         assert not _succeeds("phrase", cls, ["hi"], module=self.mod)
 
     def test_noun_phrase(self):
+        # nv
         cls = self.module_dict["noun_phrase"]
         assert _succeeds("phrase", cls, ["the", "dog"], module=self.mod)
         assert _succeeds("phrase", cls, ["a", "bird"], module=self.mod)
         assert not _succeeds("phrase", cls, ["the", "fish"], module=self.mod)
 
     def test_sentence(self):
+        # nv
         cls = self.module_dict["sentence"]
         assert _succeeds(
             "phrase", cls,
@@ -303,6 +325,7 @@ class TestFixtureIntegration:
         )
 
     def test_digit_with_args(self):
+        # nv
         cls = self.module_dict["digit"]
         v = Var()
         results = []
@@ -312,6 +335,7 @@ class TestFixtureIntegration:
 
     def test_valid_sentence_regular_pred(self):
         """Regular <- predicate coexisting with DCG rules."""
+        # nv
         assert _succeeds(
             "valid_sentence",
             ["the", "dog", "sees", "a", "bird"],
@@ -319,6 +343,7 @@ class TestFixtureIntegration:
         )
 
     def test_look_ahead_pushback(self):
+        # nv
         cls = self.module_dict["look_ahead"]
         v = Var()
         rest = Var()
@@ -328,6 +353,7 @@ class TestFixtureIntegration:
         assert results == [("x", ["x"])]
 
     def test_not_a(self):
+        # nv
         cls = self.module_dict["not_a"]
         assert _succeeds("phrase", cls, ["b"], module=self.mod)
         assert not _succeeds("phrase", cls, ["a"], module=self.mod)
@@ -348,6 +374,7 @@ class TestStateThreading:
 
     def test_state_read(self, tmp_path):
         """state/1 reads current state without modifying it."""
+        # nv
         src = (
             '-module(s1, [state(_s, _s0, S_2)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
@@ -362,6 +389,7 @@ class TestStateThreading:
 
     def test_state_read_write(self, tmp_path):
         """state/2 reads old state and writes new state."""
+        # nv
         src = (
             '-module(s2, [state2(_s0, _s, S0_2, S_2)])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -378,6 +406,7 @@ class TestStateThreading:
 
     def test_increment_counter(self, tmp_path):
         """Single increment: state goes from [0] to [1]."""
+        # nv
         src = (
             '-module(inc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
@@ -391,6 +420,7 @@ class TestStateThreading:
 
     def test_count_three(self, tmp_path):
         """Three increments: [0] -> [3]."""
+        # nv
         src = (
             '-module(c3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
@@ -405,6 +435,7 @@ class TestStateThreading:
 
     def test_counter_start_nonzero(self, tmp_path):
         """Counting starts from a nonzero initial state."""
+        # nv
         src = (
             '-module(c4, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2), inc(_s0, _s), count3(_s0, _s)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
@@ -421,6 +452,7 @@ class TestStateThreading:
 
     def test_count_leaves_single(self, tmp_path):
         """Count leaves in a single-leaf tree."""
+        # nv
         src = (
             '-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
@@ -437,6 +469,7 @@ class TestStateThreading:
 
     def test_count_leaves_two(self, tmp_path):
         """Count leaves in a two-leaf tree: [leaf, leaf]."""
+        # nv
         src = (
             '-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
@@ -453,6 +486,7 @@ class TestStateThreading:
 
     def test_count_leaves_nested(self, tmp_path):
         """Count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
+        # nv
         src = (
             '-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
@@ -471,6 +505,7 @@ class TestStateThreading:
 
     def test_accumulator_push(self, tmp_path):
         """Push items onto accumulator state."""
+        # nv
         src = (
             '-module(acc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' push(_x, _s0, _s), push_all(_xs, _s0, _s)])\n'
@@ -489,6 +524,7 @@ class TestStateThreading:
 
     def test_accumulator_empty(self, tmp_path):
         """Empty list: accumulator state unchanged."""
+        # nv
         src = (
             '-module(acc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' push(_x, _s0, _s), push_all(_xs, _s0, _s)])\n'
@@ -508,6 +544,7 @@ class TestStateThreading:
 
     def test_state_only_dcg(self, tmp_path):
         """DCG used purely for state-passing, no token consumption."""
+        # nv
         src = (
             '-module(so, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' double(_s0, _s)])\n'
@@ -522,6 +559,7 @@ class TestStateThreading:
 
     def test_state_chained_operations(self, tmp_path):
         """Chain multiple state operations: inc then double."""
+        # nv
         src = (
             '-module(ch, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' inc(_s0, _s), double(_s0, _s), inc_then_double(_s0, _s)])\n'
@@ -541,6 +579,7 @@ class TestStateThreading:
 
     def test_string_state(self, tmp_path):
         """State can be any value — here a string."""
+        # nv
         src = (
             '-module(ss, [state2(_s0, _s, S0_2, S_2), set_name(_n, _s0, _s)])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -556,6 +595,7 @@ class TestStateThreading:
 
     def test_phrase_with_term_arg(self, tmp_path):
         """phrase/3 called from a regular clause with a term argument."""
+        # nv
         src = (
             '-module(pt, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' inc(_s0, _s), run_inc(_n0, _n)])\n'
@@ -571,6 +611,7 @@ class TestStateThreading:
 
     def test_phrase_with_instance_arg(self, tmp_path):
         """phrase/3 called from clause body with instance arg (Call fix)."""
+        # nv
         src = (
             '-module(pi, [count_leaves(_t, _s0, _s), state(_s, _s0, S_2),'
             ' state2(_s0, _s, S0_2, S_2), num_leaves(_t, _n)])\n'
@@ -604,33 +645,39 @@ class TestDcgStateExample:
         self.md = mod.__dict__
 
     def test_count3(self):
+        # nv
         n = Var()
         for _ in call("phrase", self.md["count3"], [0], [n], module=self.mod):
             assert deref(n) == 3
 
     def test_inc_then_double(self):
+        # nv
         n = Var()
         for _ in call("phrase", self.md["inc_then_double"],
                        [5], [n], module=self.mod):
             assert deref(n) == 12  # (5+1)*2
 
     def test_num_leaves_two(self):
+        # nv
         n = Var()
         for _ in call("num_leaves", ["leaf", "leaf"], n, module=self.mod):
             assert deref(n) == 2
 
     def test_num_leaves_nested(self):
+        # nv
         n = Var()
         for _ in call("num_leaves", ["leaf", ["leaf", "leaf"]],
                        n, module=self.mod):
             assert deref(n) == 3
 
     def test_collect_items(self):
+        # nv
         r = Var()
         for _ in call("collect_items", [1, 2, 3], r, module=self.mod):
             assert deref(r) == [3, 2, 1]
 
     def test_collect_items_empty(self):
+        # nv
         r = Var()
         for _ in call("collect_items", [], r, module=self.mod):
             assert deref(r) == []
@@ -644,6 +691,7 @@ class TestDCGStringInput:
 
     def test_phrase2_string_match(self, tmp_path):
         """phrase(rule, "hi") works — string converted to char list."""
+        # nv
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds1", src, tmp_path)
         cls = mod.module_dict["hi"]
@@ -651,6 +699,7 @@ class TestDCGStringInput:
 
     def test_phrase2_string_no_match(self, tmp_path):
         """phrase(rule, "ho") fails when grammar expects "hi"."""
+        # nv
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds2", src, tmp_path)
         cls = mod.module_dict["hi"]
@@ -658,6 +707,7 @@ class TestDCGStringInput:
 
     def test_phrase2_string_empty(self, tmp_path):
         """phrase(eps, "") succeeds for empty grammar."""
+        # nv
         src = 'eps >> ([])\n'
         mod = _load("ds3", src, tmp_path)
         cls = mod.module_dict["eps"]
@@ -665,6 +715,7 @@ class TestDCGStringInput:
 
     def test_phrase2_string_multi_terminal(self, tmp_path):
         """phrase(rule, "hello") matches multi-char terminal sequence."""
+        # nv
         src = 'hello >> (["h", "e", "l", "l", "o"])\n'
         mod = _load("ds4", src, tmp_path)
         cls = mod.module_dict["hello"]
@@ -673,6 +724,7 @@ class TestDCGStringInput:
 
     def test_phrase3_string_remainder(self, tmp_path):
         """phrase(rule, "hiXY", Rest) — Rest is a char list."""
+        # nv
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds5", src, tmp_path)
         cls = mod.module_dict["hi"]
@@ -684,6 +736,7 @@ class TestDCGStringInput:
 
     def test_phrase2_chained_nonterminals_string(self, tmp_path):
         """Chained non-terminals consume a string."""
+        # nv
         src = (
             'a_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
@@ -696,6 +749,7 @@ class TestDCGStringInput:
 
     def test_phrase2_recursive_string(self, tmp_path):
         """Recursive DCG parses a string character by character."""
+        # nv
         src = (
             'chars >> (["a"], chars)\n'
             'chars >> ([])\n'
@@ -708,6 +762,7 @@ class TestDCGStringInput:
 
     def test_phrase2_dcg_with_args_string(self, tmp_path):
         """DCG with args extracts characters from string input."""
+        # nv
         src = 'tok(_t) >> ([_t])\n'
         mod = _load("ds8", src, tmp_path)
         cls = mod.module_dict["tok"]
@@ -719,6 +774,7 @@ class TestDCGStringInput:
 
     def test_phrase2_inline_goal_string(self, tmp_path):
         """DCG with inline goal on string input."""
+        # nv
         src = 'vowel(_v) >> ([_v], {in_(_v, ["a", "e", "i", "o", "u"])})\n'
         mod = _load("ds9", src, tmp_path)
         cls = mod.module_dict["vowel"]
@@ -735,6 +791,7 @@ class TestDCGStringInput:
 
     def test_list_input_still_works(self, tmp_path):
         """List input is unchanged (no regression)."""
+        # nv
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds10", src, tmp_path)
         cls = mod.module_dict["hi"]

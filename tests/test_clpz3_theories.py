@@ -30,6 +30,7 @@ from clausal.logic.clpz3 import (
 
 class TestArrays:
     def test_declare_array(self):
+        # nv
         trail = Trail()
         a = Var()
         assert z3_array(a, z3.IntSort(), z3.IntSort(), trail)
@@ -38,6 +39,7 @@ class TestArrays:
 
     def test_store_then_select_same_index(self):
         """Store 42 at index 0 then select index 0 → 42."""
+        # nv
         trail = Trail()
         a, a2, v = Var(), Var(), Var()
         z3_array(a, z3.IntSort(), z3.IntSort(), trail)
@@ -54,6 +56,7 @@ class TestArrays:
 
     def test_store_then_select_different_index(self):
         """Store at 0, select at 1 → value unconstrained by the store."""
+        # nv
         trail = Trail()
         a, a2, v0, v1 = Var(), Var(), Var(), Var()
         z3_array(a, z3.IntSort(), z3.IntSort(), trail)
@@ -68,6 +71,7 @@ class TestArrays:
 
     def test_two_stores_same_index_last_wins(self):
         """Overwrite index 0 twice: final value is the second store."""
+        # nv
         trail = Trail()
         a, a1, a2, v = Var(), Var(), Var(), Var()
         z3_array(a, z3.IntSort(), z3.IntSort(), trail)
@@ -82,6 +86,7 @@ class TestArrays:
 
     def test_const_array(self):
         """Constant array: every element is 7."""
+        # nv
         trail = Trail()
         a, v = Var(), Var()
         z3_const_array(7, z3.IntSort(), a, trail)
@@ -93,6 +98,7 @@ class TestArrays:
         assert sols == [7]
 
     def test_ground_non_var_raises(self):
+        # nv
         trail = Trail()
         with pytest.raises(TypeError, match="expected Var"):
             z3_array(42, z3.IntSort(), z3.IntSort(), trail)
@@ -104,6 +110,7 @@ class TestArrays:
 
 class TestSets:
     def test_declare_set(self):
+        # nv
         trail = Trail()
         s = Var()
         assert z3_set(s, z3.IntSort(), trail)
@@ -118,6 +125,7 @@ class TestSets:
 
     def test_member_after_add(self):
         """elem added to empty set → IsMember(elem, s2) is satisfiable."""
+        # nv
         trail = Trail()
         s1, s2 = self._empty_set(trail), Var()
         z3_set_add(s1, 5, s2, trail)
@@ -126,6 +134,7 @@ class TestSets:
 
     def test_not_member_of_empty(self):
         """Empty set has no members."""
+        # nv
         trail = Trail()
         s = self._empty_set(trail)
         z3_set_member(42, s, trail)
@@ -133,6 +142,7 @@ class TestSets:
 
     def test_subset(self):
         """EmptySet ⊆ any set."""
+        # nv
         trail = Trail()
         empty = self._empty_set(trail)
         full = Var()
@@ -142,6 +152,7 @@ class TestSets:
 
     def test_not_subset(self):
         """Full set ⊄ empty set."""
+        # nv
         trail = Trail()
         empty = self._empty_set(trail)
         full = Var()
@@ -151,6 +162,7 @@ class TestSets:
 
     def test_union(self):
         """Union of two singleton sets contains both elements."""
+        # nv
         trail = Trail()
         s1a, s1b = self._empty_set(trail), Var()
         s2a, s2b = self._empty_set(trail), Var()
@@ -164,6 +176,7 @@ class TestSets:
 
     def test_intersect_disjoint(self):
         """Intersection of disjoint singleton sets has no members."""
+        # nv
         trail = Trail()
         s1a, s1b = self._empty_set(trail), Var()
         s2a, s2b = self._empty_set(trail), Var()
@@ -175,6 +188,7 @@ class TestSets:
         assert not z3_check(trail)
 
     def test_set_not_member(self):
+        # nv
         trail = Trail()
         s = self._empty_set(trail)
         z3_set_not_member(42, s, trail)
@@ -187,6 +201,7 @@ class TestSets:
 
 class TestStrings:
     def test_declare_string(self):
+        # nv
         trail = Trail()
         s = Var()
         assert z3_string(s, trail)
@@ -194,6 +209,7 @@ class TestStrings:
         assert state.var_map[id(s)].sort() == z3.StringSort()
 
     def test_length_constraint(self):
+        # nv
         trail = Trail()
         s = Var()
         z3_string(s, trail)
@@ -206,6 +222,7 @@ class TestStrings:
         assert len(sols[0]) == 5
 
     def test_contains_hello(self):
+        # nv
         trail = Trail()
         s = Var()
         z3_string(s, trail)
@@ -220,6 +237,7 @@ class TestStrings:
 
     def test_concat_constraint(self):
         """Concat(s1, s2) == s3, s1 == 'foo', s2 == 'bar' → s3 == 'foobar'."""
+        # nv
         from clausal.logic.clpz3 import z3_push
         trail = Trail()
         s1, s2, s3 = Var(), Var(), Var()
@@ -240,6 +258,7 @@ class TestStrings:
 
     def test_regex_digits_only(self):
         """s matches [0-9]+ (one or more digits)."""
+        # nv
         trail = Trail()
         s = Var()
         z3_string(s, trail)
@@ -256,6 +275,7 @@ class TestStrings:
 
     def test_unsatisfiable_string(self):
         """Length 5 AND length 3 → unsat."""
+        # nv
         trail = Trail()
         s = Var()
         z3_string(s, trail)
@@ -264,11 +284,13 @@ class TestStrings:
         assert not z3_check(trail)
 
     def test_ground_var_yields_immediately(self):
+        # nv
         trail = Trail()
         assert len(list(label_z3_str("hello", trail))) == 1
 
     def test_clausal_to_z3_handles_str(self):
         """clausal_to_z3 converts Python str to StringVal."""
+        # nv
         from clausal.logic.clpz3 import clausal_to_z3
         trail = Trail()
         result = clausal_to_z3("hello", trail)
@@ -282,6 +304,7 @@ class TestStrings:
 
 class TestUninterpretedFunctions:
     def test_declare_function(self):
+        # nv
         trail = Trail()
         f = Var()
         assert z3_function(f, [z3.IntSort()], z3.IntSort(), trail)
@@ -292,6 +315,7 @@ class TestUninterpretedFunctions:
 
     def test_apply_function(self):
         """f(3) == 7, f(3) == ? → 7."""
+        # nv
         trail = Trail()
         f, r = Var(), Var()
         z3_function(f, [z3.IntSort()], z3.IntSort(), trail)
@@ -307,6 +331,7 @@ class TestUninterpretedFunctions:
 
     def test_two_calls_same_arg_equal(self):
         """Uninterpreted function: f(3) and f(3) must be equal."""
+        # nv
         trail = Trail()
         f, r1, r2 = Var(), Var(), Var()
         z3_function(f, [z3.IntSort()], z3.IntSort(), trail)
@@ -320,6 +345,7 @@ class TestUninterpretedFunctions:
 
     def test_two_calls_different_args_independent(self):
         """f(1) and f(2) are independent."""
+        # nv
         trail = Trail()
         f, r1, r2 = Var(), Var(), Var()
         z3_function(f, [z3.IntSort()], z3.IntSort(), trail)
@@ -331,6 +357,7 @@ class TestUninterpretedFunctions:
         assert z3_check(trail)  # f(1) != f(2) is satisfiable
 
     def test_non_function_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(TypeError, match="not an uninterpreted function"):
@@ -344,36 +371,42 @@ class TestUninterpretedFunctions:
 class TestQuantifiers:
     def test_forall_tautology(self):
         """ForAll(x, x == x) is a tautology — always satisfiable."""
+        # nv
         trail = Trail()
         z3_forall([("x", z3.IntSort())], lambda x: x == x, trail)
         assert z3_check(trail)
 
     def test_forall_contradiction(self):
         """ForAll(x, x > x) is unsatisfiable."""
+        # nv
         trail = Trail()
         z3_forall([("x", z3.IntSort())], lambda x: x > x, trail)
         assert not z3_check(trail)
 
     def test_exists_simple(self):
         """Exists(x, x == 5) is satisfiable."""
+        # nv
         trail = Trail()
         z3_exists([("x", z3.IntSort())], lambda x: x == 5, trail)
         assert z3_check(trail)
 
     def test_exists_impossible(self):
         """Exists(x: BoolSort, x & ~x) is unsatisfiable."""
+        # nv
         trail = Trail()
         z3_exists([("x", z3.BoolSort())], lambda x: z3.And(x, z3.Not(x)), trail)
         assert not z3_check(trail)
 
     def test_forall_with_function(self):
         """ForAll(x, f(x) >= 0) with f :: Int -> Int — satisfiable."""
+        # nv
         trail = Trail()
         f = z3.Function("f_test", z3.IntSort(), z3.IntSort())
         z3_forall([("x", z3.IntSort())], lambda x: f(x) >= 0, trail)
         assert z3_check(trail)
 
     def test_backtracking_retracts_quantifier(self):
+        # nv
         trail = Trail()
         mark = trail.mark()
         z3_forall([("x", z3.IntSort())], lambda x: x > x, trail)
@@ -389,6 +422,7 @@ class TestQuantifiers:
 class TestAlgebraicDatatypes:
     def test_declare_enum(self):
         """Declare a Color enum: red, green, blue."""
+        # nv
         trail = Trail()
         sort = z3_declare_datatype("Color3", [
             ("red3",   []),
@@ -401,6 +435,7 @@ class TestAlgebraicDatatypes:
 
     def test_declare_pair(self):
         """Declare Pair(first: Int, second: Int)."""
+        # nv
         trail = Trail()
         sort = z3_declare_datatype("Pair2", [
             ("pair2", [("first2", z3.IntSort()), ("second2", z3.IntSort())]),
@@ -409,6 +444,7 @@ class TestAlgebraicDatatypes:
 
     def test_enum_satisfiable(self):
         """A variable of an enum sort is satisfiable."""
+        # nv
         trail = Trail()
         sort = z3_declare_datatype("Dir", [
             ("north", []), ("south", []), ("east", []), ("west", []),
@@ -420,6 +456,7 @@ class TestAlgebraicDatatypes:
 
     def test_recursive_datatype(self):
         """Declare a singly-linked list: nil | cons(head: Int, tail: IntList2)."""
+        # nv
         trail = Trail()
         sort = z3_declare_datatype("IntList2", [
             ("nil2",  []),
@@ -441,6 +478,7 @@ class TestOnFixedIntegration:
         Note: Z3's UserPropagateBase only fires on_fixed for Boolean
         variables (SAT-level atoms), not for theory variables like Int.
         """
+        # nv
         trail = Trail()
         # Create a Z3 state with a Bool variable directly
         state = get_z3_state(trail)

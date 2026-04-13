@@ -10,7 +10,7 @@ Bounded(X) <- (
     z3.label([X]),
 )
 
-Test("real bounded sat") <- Bounded(_)
+Test("real bounded sat") <- Bounded(_)  # nv
 
 # ── Minimize ────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ Test("real minimize") <- (
     )),
     z3.minimize(2 * X + 3 * Y, COST),
     COST == 6,
-)
+)  # nv
 
 # ── Maximize ────────────────────────────────────────────────────────────────
 
@@ -33,21 +33,21 @@ Test("real maximize") <- (
     )),
     z3.maximize(X + Y, COST),
     COST == 20,
-)
+)  # nv
 
 # ── Entailment ──────────────────────────────────────────────────────────────
 
 Test("real entailed") <- (
     z3.integer((5 <= X <= 10)),
     z3.entailed(X >= 5),
-)
+)  # nv
 
 Test("real not entailed") <- (
     z3.integer((1 <= X <= 10)),
     not(z3.entailed(X >= 5)),
-)
+)  # nv
 
 Test("real disentailed") <- (
     z3.integer((5 <= X <= 10)),
     z3.disentailed(X < 5),
-)
+)  # nv

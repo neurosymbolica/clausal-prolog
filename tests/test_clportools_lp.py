@@ -27,6 +27,7 @@ from clausal.logic.clportools_lp import (
 class TestLPInfrastructure:
 
     def test_var_registration(self):
+        # nv
         trail = Trail()
         x = Var()
         lp_var(x, 0.0, 100.0, trail, 'glop')
@@ -34,18 +35,21 @@ class TestLPInfrastructure:
         assert id(x) in state.var_map
 
     def test_solver_mismatch(self):
+        # nv
         trail = Trail()
         get_lp_state(trail, 'glop')
         with pytest.raises(ValueError, match="mismatch"):
             get_lp_state(trail, 'scip')
 
     def test_scip_available(self):
+        # nv
         trail = Trail()
         state = get_lp_state(trail, 'scip')
         assert state.solver_name == 'scip'
 
     def test_backtracking_retracts_constraints(self):
         """Constraint scope retraction via trail mark/undo."""
+        # nv
         trail = Trail()
         x = Var()
         lp_var(x, 0.0, 100.0, trail, 'glop')

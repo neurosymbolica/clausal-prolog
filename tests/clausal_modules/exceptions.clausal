@@ -112,30 +112,30 @@ CatchMultiple(RESULT) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-Test("catch variable catcher") <- (CatchAll(42, CAUGHT) and CAUGHT is 42)
-Test("catch string term") <- (CatchAll("oops", CAUGHT) and CAUGHT is "oops")
-Test("safe reciprocal of 2") <- (SafeRecip(2, R) and R == 0.5)
-Test("safe reciprocal of 0") <- (SafeRecip(0, R) and R is 0)
+Test("catch variable catcher") <- (CatchAll(42, CAUGHT) and CAUGHT is 42)  # nv
+Test("catch string term") <- (CatchAll("oops", CAUGHT) and CAUGHT is "oops")  # nv
+Test("safe reciprocal of 2") <- (SafeRecip(2, R) and R == 0.5)  # nv
+Test("safe reciprocal of 0") <- (SafeRecip(0, R) and R is 0)  # nv
 Test("throw if zero throws") <- (
     catch(ThrowIfZero(0), "division_by_zero", True)
-)
-Test("throw if zero passes") <- ThrowIfZero(1)
+)  # nv
+Test("throw if zero passes") <- ThrowIfZero(1)  # nv
 Test("inner catch misses - outer catches") <- (
     InnerMiss(R) and R is "outer_problem"
-)
-Test("inner catch hits") <- (InnerHit(R) and R is "inner_caught")
+)  # nv
+Test("inner catch hits") <- (InnerHit(R) and R is "inner_caught")  # nv
 
 # The critical dead-child-generator test
 Test("parent backtracks after catch failure") <- (
     Parent(RESULT) and RESULT is 10
-)
+)  # nv
 
 Test("catch is transparent when no throw") <- (
     CatchNoThrow(R) and R is "normal"
-)
+)  # nv
 Test("catch with multiple solutions") <- (
     findall(X, CatchMultiple(X), BAG) and BAG is [10, 20, 30]
-)
+)  # nv
 Test("safe result passes through") <- (
     SafeResult(42, R) and R is 42
-)
+)  # nv

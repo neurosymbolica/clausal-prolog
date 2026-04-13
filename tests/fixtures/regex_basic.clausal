@@ -4,11 +4,11 @@
 
 # ── Match/2: boolean test ───────────────────────────────────────────────────
 
-Test("match digits") <- Match(r"\d+", "123")
-Test("match rejects non-digits") <- (not Match(r"\d+", "abc"))
-Test("match anchored at start") <- (Match(r"\d+", "123abc") and (not Match(r"\d+", "abc123")))
-Test("match full via dollar") <- (Match(r"\d+$", "123") and (not Match(r"\d+$", "123abc")))
-Test("match email") <- Match(r"[^@]+@[^@]+\.[^@]+", "a@b.com")
+Test("match digits") <- Match(r"\d+", "123")  # nv
+Test("match rejects non-digits") <- (not Match(r"\d+", "abc"))  # nv
+Test("match anchored at start") <- (Match(r"\d+", "123abc") and (not Match(r"\d+", "abc123")))  # nv
+Test("match full via dollar") <- (Match(r"\d+$", "123") and (not Match(r"\d+$", "123abc")))  # nv
+Test("match email") <- Match(r"[^@]+@[^@]+\.[^@]+", "a@b.com")  # nv
 
 # ── Match/3: explicit group extraction ──────────────────────────────────────
 
@@ -17,61 +17,61 @@ Test("match named groups") <- (
     Y is ++G["year"] and
     M is ++G["month"] and
     Y == "2026" and M == "03"
-)
+)  # nv
 
 Test("match positional groups") <- (
     Match(r"(\d+)-(\d+)", "42-99", G) and
     A is ++G[0] and B is ++G[1] and
     A == "42" and B == "99"
-)
+)  # nv
 
-Test("match no match fails") <- (not Match(r"\d+", "abc", _))
+Test("match no match fails") <- (not Match(r"\d+", "abc", _))  # nv
 
 # ── Match/2: auto-binding via ALLCAPS groups ────────────────────────────────
 
 Test("auto-bind YEAR") <- (
     YEAR is "2026" and
     Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03")
-)
+)  # nv
 
 # ── Search/2: unanchored ────────────────────────────────────────────────────
 
-Test("search finds in middle") <- Search(r"\d+", "abc123def")
-Test("search rejects absent pattern") <- (not Search(r"\d+", "abcdef"))
+Test("search finds in middle") <- Search(r"\d+", "abc123def")  # nv
+Test("search rejects absent pattern") <- (not Search(r"\d+", "abcdef"))  # nv
 
 Test("search explicit groups") <- (
     Search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G) and
     K is ++G["key"] and V is ++G["val"] and
     K == "bar" and V == "baz"
-)
+)  # nv
 
 # ── Replace/4 ───────────────────────────────────────────────────────────────
 
-Test("replace whitespace") <- (Replace(r"\s+", " ", "a  b   c", R) and R == "a b c")
-Test("replace remove digits") <- (Replace(r"\d+", "", "a1b2c3", R) and R == "abc")
-Test("replace backreference") <- (Replace(r"(\w+)", r"[\1]", "hi lo", R) and R == "[hi] [lo]")
+Test("replace whitespace") <- (Replace(r"\s+", " ", "a  b   c", R) and R == "a b c")  # nv
+Test("replace remove digits") <- (Replace(r"\d+", "", "a1b2c3", R) and R == "abc")  # nv
+Test("replace backreference") <- (Replace(r"(\w+)", r"[\1]", "hi lo", R) and R == "[hi] [lo]")  # nv
 
 # ── Split/3 ─────────────────────────────────────────────────────────────────
 
-Test("split comma") <- (Split(r",\s*", "a, b, c", F) and F == ["a", "b", "c"])
-Test("split whitespace") <- (Split(r"\s+", "x y z", F) and F == ["x", "y", "z"])
+Test("split comma") <- (Split(r",\s*", "a, b, c", F) and F == ["a", "b", "c"])  # nv
+Test("split whitespace") <- (Split(r"\s+", "x y z", F) and F == ["x", "y", "z"])  # nv
 
 # ── findall/3 ────────────────────────────────────────────────────────────
 
 Test("findall digits") <- (
     findall(r"\d+", "a1b23c456", D) and D == "1"
-)
+)  # nv
 
-Test("findall no matches fails") <- (not findall(r"\d+", "abc", _))
+Test("findall no matches fails") <- (not findall(r"\d+", "abc", _))  # nv
 
 # ── Edge cases ──────────────────────────────────────────────────────────────
 
-Test("match empty string") <- Match(r"^$", "")
-Test("match unicode") <- Match(r"^\w+$", "café")
-Test("search parens") <- (Search(r"\(.*?\)", "f(x)") and (not Search(r"\(.*?\)", "fx")))
-Test("search vs match") <- ((not Match(r"\d+", "abc123")) and Search(r"\d+", "abc123"))
+Test("match empty string") <- Match(r"^$", "")  # nv
+Test("match unicode") <- Match(r"^\w+$", "café")  # nv
+Test("search parens") <- (Search(r"\(.*?\)", "f(x)") and (not Search(r"\(.*?\)", "fx")))  # nv
+Test("search vs match") <- ((not Match(r"\d+", "abc123")) and Search(r"\d+", "abc123"))  # nv
 
 # ── Dynamic patterns ───────────────────────────────────────────────────────
 
-Test("dynamic match") <- Match(f"^{"hello"}", "hello world")
-Test("dynamic pattern variable") <- (PAT is r"\d+", Match(PAT, "42"))
+Test("dynamic match") <- Match(f"^{"hello"}", "hello world")  # nv
+Test("dynamic pattern variable") <- (PAT is r"\d+", Match(PAT, "42"))  # nv

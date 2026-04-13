@@ -46,6 +46,7 @@ class TestDirectiveParsing:
 
     def test_edcg_acc_parses(self, tmp_path):
         """Basic -edcg_acc directive parses successfully."""
+        # nv
         src = (
             '-module(t1, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -55,6 +56,7 @@ class TestDirectiveParsing:
 
     def test_edcg_pass_parses(self, tmp_path):
         """Basic -edcg_pass directive parses successfully."""
+        # nv
         src = (
             '-module(t2, [])\n'
             '-edcg_pass(config)\n'
@@ -64,6 +66,7 @@ class TestDirectiveParsing:
 
     def test_edcg_pred_parses(self, tmp_path):
         """Basic -edcg_pred directive parses successfully."""
+        # nv
         src = (
             '-module(t3, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -74,6 +77,7 @@ class TestDirectiveParsing:
 
     def test_edcg_pred_with_dcg(self, tmp_path):
         """EDCG pred can include the built-in 'dcg' accumulator."""
+        # nv
         src = (
             '-module(t4, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -84,6 +88,7 @@ class TestDirectiveParsing:
 
     def test_edcg_pred_with_pass(self, tmp_path):
         """EDCG pred can include a passed argument."""
+        # nv
         src = (
             '-module(t5, [])\n'
             '-edcg_pass(config)\n'
@@ -94,6 +99,7 @@ class TestDirectiveParsing:
 
     def test_multiple_accumulators(self, tmp_path):
         """Multiple accumulators can be declared."""
+        # nv
         src = (
             '-module(t6, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -108,16 +114,19 @@ class TestDirectiveErrors:
     """Test that malformed EDCG directives raise SyntaxError."""
 
     def test_edcg_acc_wrong_arg_count(self, tmp_path):
+        # nv
         src = '-module(e1, [])\n-edcg_acc(counter, _x, _in)\n'
         with pytest.raises(SyntaxError, match="5 arguments"):
             _load("e1", src, tmp_path)
 
     def test_edcg_pred_undeclared_acc(self, tmp_path):
+        # nv
         src = '-module(e2, [])\n-edcg_pred(foo, 0, [unknown])\n'
         with pytest.raises(SyntaxError, match="not a declared"):
             _load("e2", src, tmp_path)
 
     def test_edcg_pred_wrong_arity_type(self, tmp_path):
+        # nv
         src = (
             '-module(e3, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -135,6 +144,7 @@ class TestSingleAccumulator:
 
     def test_simple_counter(self, tmp_path):
         """Increment a counter accumulator."""
+        # nv
         src = (
             '-module(sc1, [count3(_counter0, _counter)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -151,6 +161,7 @@ class TestSingleAccumulator:
 
     def test_counter_start_nonzero(self, tmp_path):
         """Counter starts at a nonzero value."""
+        # nv
         src = (
             '-module(sc2, [count3(_counter0, _counter)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -167,6 +178,7 @@ class TestSingleAccumulator:
 
     def test_list_accumulator(self, tmp_path):
         """Accumulate items into a list."""
+        # nv
         src = (
             '-module(la1, [collect_all(_xs, _items0, _items)])\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
@@ -184,6 +196,7 @@ class TestSingleAccumulator:
 
     def test_accumulator_read(self, tmp_path):
         """Read current accumulator value with acc / Var."""
+        # nv
         src = (
             '-module(ar1, [get_and_inc(_v, _counter0, _counter)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -200,6 +213,7 @@ class TestSingleAccumulator:
 
     def test_custom_joiner_product(self, tmp_path):
         """Accumulator with multiplication joiner."""
+        # nv
         src = (
             '-module(cp1, [mul_all(_xs, _prod0, _prod)])\n'
             '-edcg_acc(product, _x, _in, _out, {_out := _in * _x})\n'
@@ -224,6 +238,7 @@ class TestMultipleAccumulators:
 
     def test_counter_and_list(self, tmp_path):
         """Count and collect items simultaneously."""
+        # nv
         src = (
             '-module(ma1, [process_all(_xs, _cnt0, _cnt, _items0, _items)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -244,6 +259,7 @@ class TestMultipleAccumulators:
 
     def test_partial_overlap(self, tmp_path):
         """Caller uses [counter, items], callee uses [counter] only."""
+        # nv
         src = (
             '-module(po1, [do_both(_x, _cnt0, _cnt, _items0, _items)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -270,6 +286,7 @@ class TestPassedArguments:
 
     def test_basic_pass(self, tmp_path):
         """Pass a config value that is read but not modified."""
+        # nv
         src = (
             '-module(pa1, [check_config(_result, _config)])\n'
             '-edcg_pass(config)\n'
@@ -286,6 +303,7 @@ class TestPassedArguments:
 
     def test_pass_with_accumulator(self, tmp_path):
         """Pass + accumulator together."""
+        # nv
         src = (
             '-module(pac1, [scaled_inc(_cnt0, _cnt, _scale)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -308,6 +326,7 @@ class TestMixedEdcgDcg:
 
     def test_counted_parser(self, tmp_path):
         """Count tokens while parsing them."""
+        # nv
         src = (
             '-module(cp1, [parse(_cnt0, _cnt, _tokens, _rest)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -335,6 +354,7 @@ class TestEdcgControlFlow:
 
     def test_disjunction(self, tmp_path):
         """Disjunction in EDCG body."""
+        # nv
         src = (
             '-module(dj1, [inc_or_double(_cnt0, _cnt)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -352,6 +372,7 @@ class TestEdcgControlFlow:
 
     def test_inline_goal(self, tmp_path):
         """Inline goals {goal} don't thread accumulators."""
+        # nv
         src = (
             '-module(ig1, [inc_if_positive(_cnt0, _cnt)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -373,6 +394,7 @@ class TestEdcgPatterns:
 
     def test_len_adder(self, tmp_path):
         """Port of the len/adder example from EDCG docs."""
+        # nv
         src = (
             '-module(len1, [my_len(_list, _n)])\n'
             '-edcg_acc(adder, _x, _in, _out, {_out := _in + _x})\n'
@@ -391,6 +413,7 @@ class TestEdcgPatterns:
 
     def test_compiler_pass(self, tmp_path):
         """Simulate compiler: parse tokens + emit instructions + count ops."""
+        # nv
         src = (
             '-module(comp1, [compile_all(_code0, _code, _ops0, _ops, _toks, _rest)])\n'
             '-edcg_acc(code, _instr, _in, _out, {_out is [_instr, *_in]})\n'
@@ -430,6 +453,7 @@ class TestEdcgFixture:
 
     def test_counter_fixture(self, tmp_path):
         """Load edcg_counter.clausal and run a scaled count."""
+        # nv
         import shutil, os
         fixture_src = os.path.join(
             os.path.dirname(__file__), "fixtures", "edcg_counter.clausal"
@@ -454,6 +478,7 @@ class TestEdcgEdgeCases:
 
     def test_empty_body(self, tmp_path):
         """EDCG rule with empty body []."""
+        # nv
         src = (
             '-module(eb1, [noop(_cnt0, _cnt)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -468,6 +493,7 @@ class TestEdcgEdgeCases:
 
     def test_recursive_accumulator(self, tmp_path):
         """Recursive EDCG predicate counting list length."""
+        # nv
         src = (
             '-module(rc1, [my_length(_l, _n)])\n'
             '-edcg_acc(len, _x, _in, _out, {_out := _in + _x})\n'
@@ -484,6 +510,7 @@ class TestEdcgEdgeCases:
 
     def test_multiple_pushes_in_sequence(self, tmp_path):
         """Multiple pushes to the same accumulator in a single rule."""
+        # nv
         src = (
             '-module(mp1, [add_three(_cnt0, _cnt)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'
@@ -498,6 +525,7 @@ class TestEdcgEdgeCases:
 
     def test_two_independent_accumulators(self, tmp_path):
         """Two accumulators updated independently in different sub-rules."""
+        # nv
         src = (
             '-module(ti1, [run(_cnt0, _cnt, _items0, _items)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out := _in + _x})\n'

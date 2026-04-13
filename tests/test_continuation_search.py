@@ -7,6 +7,7 @@ from clausal.logic.continuation_search import Search, Finished
 
 def test_empty():
     """A function that never emits produces no values."""
+    # nv
     def fn(emit):
         pass
 
@@ -14,6 +15,7 @@ def test_empty():
 
 
 def test_single_value():
+    # nv
     def fn(emit):
         emit(42)
 
@@ -21,6 +23,7 @@ def test_single_value():
 
 
 def test_multiple_values():
+    # nv
     def fn(emit):
         emit(1)
         emit(2)
@@ -31,6 +34,7 @@ def test_multiple_values():
 
 def test_emission_order():
     """Values arrive in the order they were emitted."""
+    # nv
     def fn(emit):
         for i in range(5):
             emit(i)
@@ -39,6 +43,7 @@ def test_emission_order():
 
 
 def test_non_integer_values():
+    # nv
     def fn(emit):
         emit("hello")
         emit(None)
@@ -51,6 +56,7 @@ def test_non_integer_values():
 
 def test_for_loop():
     """Search works as the target of a for loop."""
+    # nv
     def fn(emit):
         emit(10)
         emit(20)
@@ -64,6 +70,7 @@ def test_for_loop():
 
 def test_iterable_once():
     """Each iteration of a Search object runs the function fresh."""
+    # nv
     def fn(emit):
         emit(1)
         emit(2)
@@ -77,6 +84,7 @@ def test_iterable_once():
 
 def test_emit_during_computation():
     """Emit can be called from inside a loop in the worker."""
+    # nv
     def fn(emit):
         total = 0
         for i in range(1, 6):
@@ -88,6 +96,7 @@ def test_emit_during_computation():
 
 def test_function_stored():
     """The wrapped function is accessible on the Search object."""
+    # nv
     def fn(emit):
         pass
 
@@ -99,6 +108,7 @@ def test_function_stored():
 
 def test_finished_not_visible():
     """Finished is an internal signal; it must not propagate to the caller."""
+    # nv
     def fn(emit):
         emit(1)
 
@@ -111,6 +121,7 @@ def test_finished_not_visible():
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
 def test_large_number_of_values():
+    # nv
     n = 1000
 
     def fn(emit):
@@ -122,6 +133,7 @@ def test_large_number_of_values():
 
 def test_emit_callable_is_first_arg():
     """The emit callback passed to the function must actually switch values."""
+    # nv
     received_emit = []
 
     def fn(emit):

@@ -28,6 +28,7 @@ def _sols(gen_fn, *vars):
 
 class TestInZ3Bv:
     def test_registers_bvsortt(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_bv(x, 8, trail)
@@ -35,6 +36,7 @@ class TestInZ3Bv:
         assert state.var_map[id(x)].sort() == z3.BitVecSort(8)
 
     def test_width_32(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_bv(x, 32, trail)
@@ -42,6 +44,7 @@ class TestInZ3Bv:
         assert state.var_map[id(x)].size() == 32
 
     def test_list_of_vars(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         assert in_z3_bv([x, y], 8, trail)
@@ -50,10 +53,12 @@ class TestInZ3Bv:
         assert state.var_map[id(y)].sort() == z3.BitVecSort(8)
 
     def test_ground_int_passes(self):
+        # nv
         trail = Trail()
         assert in_z3_bv([42], 8, trail)
 
     def test_wrong_type_raises(self):
+        # nv
         trail = Trail()
         with pytest.raises(TypeError):
             in_z3_bv(["not_a_var"], 8, trail)
@@ -62,6 +67,7 @@ class TestInZ3Bv:
 class TestLabelZ3Bv:
     def test_unconstrained_8bit_all_values(self):
         """Unconstrained 8-bit var has 256 solutions."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 4, trail)  # 4-bit for speed: 16 solutions
@@ -72,16 +78,19 @@ class TestLabelZ3Bv:
         assert sorted(solutions) == list(range(16))
 
     def test_all_ground_yields_one(self):
+        # nv
         trail = Trail()
         assert len(list(label_z3_bv([5, 3], trail))) == 1
 
     def test_unregistered_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(ValueError, match="not registered"):
             list(label_z3_bv([x], trail))
 
     def test_vars_unbound_after(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 4, trail)
@@ -93,6 +102,7 @@ class TestLabelZ3Bv:
 
 class TestBvArithmetic:
     def test_add_no_overflow(self):
+        # nv
         trail = Trail()
         x, y, r = Var(), Var(), Var()
         in_z3_bv([x, y, r], 8, trail)
@@ -106,6 +116,7 @@ class TestBvArithmetic:
 
     def test_add_wraparound(self):
         """8-bit: 200 + 100 = 44 (mod 256)."""
+        # nv
         trail = Trail()
         x, y, r = Var(), Var(), Var()
         in_z3_bv([x, y, r], 8, trail)
@@ -118,6 +129,7 @@ class TestBvArithmetic:
         assert sols == [44]
 
     def test_sub(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -129,6 +141,7 @@ class TestBvArithmetic:
         assert sols == [7]
 
     def test_mul(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -140,6 +153,7 @@ class TestBvArithmetic:
         assert sols == [15]
 
     def test_udiv(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -151,6 +165,7 @@ class TestBvArithmetic:
         assert sols == [4]
 
     def test_urem(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -163,6 +178,7 @@ class TestBvArithmetic:
 
     def test_sdiv(self):
         """Signed division: -128 / 2 = -64 (= 192 unsigned in 8-bit)."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -175,6 +191,7 @@ class TestBvArithmetic:
 
     def test_srem(self):
         """Signed remainder: -7 % 3 = -1 (= 255 unsigned in 8-bit)."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -188,6 +205,7 @@ class TestBvArithmetic:
 
 class TestBvBitwise:
     def test_and(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -199,6 +217,7 @@ class TestBvBitwise:
         assert sols == [0b1000]
 
     def test_or(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -210,6 +229,7 @@ class TestBvBitwise:
         assert sols == [0b1110]
 
     def test_xor(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -222,6 +242,7 @@ class TestBvBitwise:
 
     def test_not(self):
         """8-bit NOT: ~10 = 245."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -235,6 +256,7 @@ class TestBvBitwise:
 
 class TestBvShifts:
     def test_shl(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -246,6 +268,7 @@ class TestBvShifts:
         assert sols == [12]
 
     def test_lshr(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -258,6 +281,7 @@ class TestBvShifts:
 
     def test_ashr_positive(self):
         """Arithmetic shift right preserves sign: 0b01100000 >> 2 = 0b00011000."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -270,6 +294,7 @@ class TestBvShifts:
 
     def test_ashr_negative(self):
         """Arithmetic shift right sign-extends: 0b10000000 >> 2 = 0b11100000."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv([x, r], 8, trail)
@@ -284,6 +309,7 @@ class TestBvShifts:
 class TestBvComparisons:
     def test_bv_eq_constrain(self):
         """bv_eq posts equality as a constraint."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 8, trail)
@@ -294,6 +320,7 @@ class TestBvComparisons:
         assert sols == [42]
 
     def test_bv_ne(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 2, trail)  # 2-bit: values 0-3
@@ -305,6 +332,7 @@ class TestBvComparisons:
 
     def test_bv_ult_unsigned(self):
         """Unsigned: 255 < 0 is False (unsigned 255 is 255, not -1)."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -316,6 +344,7 @@ class TestBvComparisons:
 
     def test_bv_slt_signed(self):
         """Signed: -1 (= 255 in 8-bit) < 0 is True."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -326,6 +355,7 @@ class TestBvComparisons:
 
     def test_bv_ult_vs_slt_differ(self):
         """Confirms unsigned and signed comparisons differ for high values."""
+        # nv
         trail1 = Trail()
         x1, y1 = Var(), Var()
         in_z3_bv([x1, y1], 8, trail1)
@@ -344,6 +374,7 @@ class TestBvComparisons:
 
     def test_bv_sle(self):
         """Signed <=: -1 (255) <= 0 is True."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -354,6 +385,7 @@ class TestBvComparisons:
 
     def test_bv_sge(self):
         """Signed >=: 0 >= -1 (255) is True."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -364,6 +396,7 @@ class TestBvComparisons:
 
     def test_bv_ule(self):
         """Unsigned <=: 5 <= 10 is True."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -374,6 +407,7 @@ class TestBvComparisons:
 
     def test_bv_ule_fails(self):
         """Unsigned <=: 10 <= 5 is False."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -384,6 +418,7 @@ class TestBvComparisons:
 
     def test_bv_uge(self):
         """Unsigned >=: 255 >= 200 is True."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_bv([x, y], 8, trail)
@@ -396,6 +431,7 @@ class TestBvComparisons:
 class TestBvStructural:
     def test_extract_upper_nibble(self):
         """Extract bits [7:4] of 8-bit value 0xAB → 0xA."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv(x, 8, trail)
@@ -407,6 +443,7 @@ class TestBvStructural:
         assert sols == [0xA]
 
     def test_extract_lower_nibble(self):
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv(x, 8, trail)
@@ -419,6 +456,7 @@ class TestBvStructural:
 
     def test_concat_two_4bit(self):
         """Concat 4-bit 0xA and 0xB → 8-bit 0xAB."""
+        # nv
         trail = Trail()
         x, y, r = Var(), Var(), Var()
         in_z3_bv([x, y], 4, trail)
@@ -432,6 +470,7 @@ class TestBvStructural:
 
     def test_zext(self):
         """Zero-extend 4-bit 5 to 8-bit → 5."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv(x, 4, trail)
@@ -444,6 +483,7 @@ class TestBvStructural:
 
     def test_sext_positive(self):
         """Sign-extend 4-bit 5 (positive) to 8-bit → 5."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv(x, 4, trail)
@@ -456,6 +496,7 @@ class TestBvStructural:
 
     def test_sext_negative(self):
         """Sign-extend 4-bit 0xF (= -1) to 8-bit → 0xFF (= 255 unsigned)."""
+        # nv
         trail = Trail()
         x, r = Var(), Var()
         in_z3_bv(x, 4, trail)
@@ -469,6 +510,7 @@ class TestBvStructural:
 
 class TestBvBacktracking:
     def test_bv_constraint_retracted_on_undo(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 4, trail)
@@ -484,6 +526,7 @@ class TestBvBacktracking:
 
     def test_z3_try_works_for_bv_comparison(self):
         """Direct BV probes work via solver.push/pop (Phase 3 Issue 6 resolution)."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_bv(x, 8, trail)

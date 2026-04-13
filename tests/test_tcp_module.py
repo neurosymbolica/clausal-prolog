@@ -116,6 +116,7 @@ def multi_echo_server():
 class TestConnect:
 
     def test_connect_to_echo_server(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         sols, trail = simple_solutions(_connect_3, host, port, sock)
@@ -126,16 +127,19 @@ class TestConnect:
 
     def test_connection_refused_fails(self):
         """Connect to a port that's definitely not listening."""
+        # nv
         sock = Var()
         sols, _ = simple_solutions(_connect_3, "127.0.0.1", 1, sock)
         assert len(sols) == 0
 
     def test_unbound_host_fails(self):
+        # nv
         sock = Var()
         sols, _ = simple_solutions(_connect_3, Var(), 80, sock)
         assert len(sols) == 0
 
     def test_unbound_port_fails(self):
+        # nv
         sock = Var()
         sols, _ = simple_solutions(_connect_3, "localhost", Var(), sock)
         assert len(sols) == 0
@@ -148,6 +152,7 @@ class TestListenAccept:
 
     def test_listen_and_accept(self):
         """Listen on ephemeral port, connect from client, accept."""
+        # nv
         server_sock = Var()
         sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
         assert len(sols) == 1
@@ -170,6 +175,7 @@ class TestListenAccept:
 
     def test_ephemeral_port(self):
         """Listen with port 0 picks an available port."""
+        # nv
         server_sock = Var()
         sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
         assert len(sols) == 1
@@ -185,6 +191,7 @@ class TestSendReceive:
 
     def test_echo_round_trip(self, echo_server):
         """Connect, send, receive echoed data, close."""
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -203,6 +210,7 @@ class TestSendReceive:
         s.close()
 
     def test_receive_custom_buffer_size(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -216,6 +224,7 @@ class TestSendReceive:
         s.close()
 
     def test_send_unbound_data_fails(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -225,6 +234,7 @@ class TestSendReceive:
         s.close()
 
     def test_send_bytes(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -243,6 +253,7 @@ class TestSendReceive:
 class TestClose:
 
     def test_close_succeeds(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -251,6 +262,7 @@ class TestClose:
         assert len(sols) == 1
 
     def test_double_close_harmless(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -261,6 +273,7 @@ class TestClose:
         assert len(sols) == 1
 
     def test_close_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_close_1, Var())
         assert len(sols) == 0
 
@@ -271,6 +284,7 @@ class TestClose:
 class TestSetTimeout:
 
     def test_set_timeout(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -281,6 +295,7 @@ class TestSetTimeout:
         s.close()
 
     def test_unbound_seconds_fails(self, echo_server):
+        # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, host, port, sock)
@@ -297,6 +312,7 @@ class TestTcpTrampoline:
 
     def test_full_echo_trampoline(self, echo_server):
         """Full test via trampoline protocol."""
+        # nv
         host, port = echo_server
         sock = Var()
         sols, trail = trampoline_solutions(Connect, host, port, sock)

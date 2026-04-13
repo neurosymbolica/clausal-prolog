@@ -17,10 +17,10 @@ Greeting("Mike", "hi"),
 Test("translate produces string") <- (
     translate(th, Greeting(hello, "world"), STRING),
     is_str(STRING)
-)
+)  # nv
 
 Test("translate produces nonempty") <- (
     translate(th, Greeting(hello, "world"), STRING),
     atom_length(STRING, LENGTH),
     LENGTH > 0
-)
+)  # nv

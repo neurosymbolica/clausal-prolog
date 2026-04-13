@@ -81,31 +81,37 @@ _YS = np.array([0.0, 1.0, 4.0, 9.0, 16.0])  # y = x^2
 
 class TestMakeSpline:
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         assert isinstance(h, int)
         _free(h)
 
     def test_handle_in_registry(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         assert h in _INTERP_REGISTRY
         _free(h)
 
     def test_with_k(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS, 3)
         assert isinstance(h, int)
         _free(h)
 
     def test_with_k_and_bc_type(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS, 3, None)
         assert isinstance(h, int)
         _free(h)
 
     def test_wrong_result_fails(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         assert _fails_with_wrong_result(MakeSpline, _XS, _YS)
         _free(h)
 
     def test_unique_handles(self):
+        # nv
         h1 = _drive(MakeSpline, _XS, _YS)
         h2 = _drive(MakeSpline, _XS, _YS)
         assert h1 != h2
@@ -117,16 +123,19 @@ class TestMakeSpline:
 
 class TestMakeCubic:
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         assert isinstance(h, int)
         _free(h)
 
     def test_with_bc_type(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS, 'not-a-knot')
         assert isinstance(h, int)
         _free(h)
 
     def test_handle_in_registry(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         assert h in _INTERP_REGISTRY
         _free(h)
@@ -136,11 +145,13 @@ class TestMakeCubic:
 
 class TestMakePCHIP:
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakePCHIP, _XS, _YS)
         assert isinstance(h, int)
         _free(h)
 
     def test_with_extrapolate(self):
+        # nv
         h = _drive(MakePCHIP, _XS, _YS, True)
         assert isinstance(h, int)
         _free(h)
@@ -150,11 +161,13 @@ class TestMakePCHIP:
 
 class TestMakeAkima:
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeAkima, _XS, _YS)
         assert isinstance(h, int)
         _free(h)
 
     def test_handle_in_registry(self):
+        # nv
         h = _drive(MakeAkima, _XS, _YS)
         assert h in _INTERP_REGISTRY
         _free(h)
@@ -164,6 +177,7 @@ class TestMakeAkima:
 
 class TestMakeLinear1D:
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeLinear1D, _XS, _YS)
         if h is None:
             pytest.skip("interp1d not available in this scipy version")
@@ -171,6 +185,7 @@ class TestMakeLinear1D:
         _free(h)
 
     def test_with_kind(self):
+        # nv
         h = _drive(MakeLinear1D, _XS, _YS, 'linear')
         if h is None:
             pytest.skip("interp1d not available in this scipy version")
@@ -178,6 +193,7 @@ class TestMakeLinear1D:
         _free(h)
 
     def test_nearest_kind(self):
+        # nv
         h = _drive(MakeLinear1D, _XS, _YS, 'nearest')
         if h is None:
             pytest.skip("interp1d not available in this scipy version")
@@ -192,11 +208,13 @@ class TestMakeRegularGrid:
     _VALUES = np.array([[0.0, 1.0, 2.0], [1.0, 2.0, 3.0], [2.0, 3.0, 4.0]])
 
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeRegularGrid, self._POINTS, self._VALUES)
         assert isinstance(h, int)
         _free(h)
 
     def test_with_method(self):
+        # nv
         h = _drive(MakeRegularGrid, self._POINTS, self._VALUES, 'linear')
         assert isinstance(h, int)
         _free(h)
@@ -209,16 +227,19 @@ class TestMakeRadialBasis:
     _Y = np.array([0.0, 1.0, 4.0, 9.0])
 
     def test_returns_int_handle(self):
+        # nv
         h = _drive(MakeRadialBasis, self._X, self._Y)
         assert isinstance(h, int)
         _free(h)
 
     def test_with_kernel(self):
+        # nv
         h = _drive(MakeRadialBasis, self._X, self._Y, 'linear')
         assert isinstance(h, int)
         _free(h)
 
     def test_with_kernel_and_smooth(self):
+        # nv
         h = _drive(MakeRadialBasis, self._X, self._Y, 'linear', 0.0)
         assert isinstance(h, int)
         _free(h)
@@ -228,6 +249,7 @@ class TestMakeRadialBasis:
 
 class TestEvalSpline:
     def test_eval_at_knots(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         result = _drive(EvalSpline, h, _XS)
         assert result is not None
@@ -235,6 +257,7 @@ class TestEvalSpline:
         _free(h)
 
     def test_eval_at_midpoint(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         # At x=2, y should be close to 4 (x^2)
         result = _drive(EvalSpline, h, np.array([2.0]))
@@ -244,6 +267,7 @@ class TestEvalSpline:
 
     def test_eval_with_nu(self):
         # derivative of x^2 at x=2 should be ~4
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         result = _drive(EvalSpline, h, np.array([2.0]), 1)
         assert result is not None
@@ -251,6 +275,7 @@ class TestEvalSpline:
         _free(h)
 
     def test_pchip_eval_at_knots(self):
+        # nv
         h = _drive(MakePCHIP, _XS, _YS)
         result = _drive(EvalSpline, h, _XS)
         assert result is not None
@@ -258,6 +283,7 @@ class TestEvalSpline:
         _free(h)
 
     def test_akima_eval_at_knots(self):
+        # nv
         h = _drive(MakeAkima, _XS, _YS)
         result = _drive(EvalSpline, h, _XS)
         assert result is not None
@@ -265,11 +291,13 @@ class TestEvalSpline:
         _free(h)
 
     def test_wrong_result_fails(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         assert _fails_with_wrong_result(EvalSpline, h, _XS)
         _free(h)
 
     def test_invalid_handle_fails(self):
+        # nv
         result = _drive(EvalSpline, 9999999, _XS)
         assert result is None
 
@@ -281,6 +309,7 @@ class TestEvalRegularGrid:
     _VALUES = np.array([[0.0, 1.0, 2.0], [1.0, 2.0, 3.0], [2.0, 3.0, 4.0]])
 
     def test_eval_at_grid_points(self):
+        # nv
         h = _drive(MakeRegularGrid, self._POINTS, self._VALUES)
         xi = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
         result = _drive(EvalRegularGrid, h, xi)
@@ -289,6 +318,7 @@ class TestEvalRegularGrid:
         _free(h)
 
     def test_eval_with_method(self):
+        # nv
         h = _drive(MakeRegularGrid, self._POINTS, self._VALUES)
         xi = np.array([[1.0, 1.0]])
         result = _drive(EvalRegularGrid, h, xi, 'linear')
@@ -304,6 +334,7 @@ class TestEvalRadialBasis:
     _Y = np.array([0.0, 1.0, 4.0, 9.0])
 
     def test_eval_at_known_points(self):
+        # nv
         h = _drive(MakeRadialBasis, self._X, self._Y)
         result = _drive(EvalRadialBasis, h, self._X)
         assert result is not None
@@ -311,6 +342,7 @@ class TestEvalRadialBasis:
         _free(h)
 
     def test_invalid_handle_fails(self):
+        # nv
         result = _drive(EvalRadialBasis, 9999999, self._X)
         assert result is None
 
@@ -320,6 +352,7 @@ class TestEvalRadialBasis:
 class TestSplineIntegral:
     def test_integral_of_x_squared(self):
         # Integral of x^2 from 0 to 3 = 9.0
+        # nv
         xs = np.linspace(0.0, 4.0, 20)
         ys = xs ** 2
         h = _drive(MakeCubic, xs, ys)
@@ -330,6 +363,7 @@ class TestSplineIntegral:
 
     def test_integral_of_constant(self):
         # Integral of 1 from 0 to 5 = 5.0
+        # nv
         xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
         ys = np.ones(6)
         h = _drive(MakeCubic, xs, ys)
@@ -339,6 +373,7 @@ class TestSplineIntegral:
         _free(h)
 
     def test_invalid_handle_fails(self):
+        # nv
         result = _drive(SplineIntegral, 9999999, 0.0, 1.0)
         assert result is None
 
@@ -347,6 +382,7 @@ class TestSplineIntegral:
 
 class TestSplineDerivative:
     def test_returns_new_handle(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         h_deriv = _drive(SplineDerivative, h)
         assert isinstance(h_deriv, int)
@@ -355,6 +391,7 @@ class TestSplineDerivative:
         _free(h_deriv)
 
     def test_derivative_with_order(self):
+        # nv
         h = _drive(MakeCubic, _XS, _YS)
         h_deriv = _drive(SplineDerivative, h, 1)
         assert isinstance(h_deriv, int)
@@ -363,6 +400,7 @@ class TestSplineDerivative:
 
     def test_derivative_evaluates(self):
         # d/dx x^2 = 2x; at x=2, value should be ~4
+        # nv
         xs = np.linspace(0.0, 4.0, 20)
         ys = xs ** 2
         h = _drive(MakeCubic, xs, ys)
@@ -374,6 +412,7 @@ class TestSplineDerivative:
         _free(h_deriv)
 
     def test_invalid_handle_fails(self):
+        # nv
         result = _drive(SplineDerivative, 9999999)
         assert result is None
 
@@ -383,6 +422,7 @@ class TestSplineDerivative:
 class TestSplineRoots:
     def test_linear_root_at_zero(self):
         # y = x - 2; root at x=2
+        # nv
         xs = np.array([0.0, 2.0, 4.0])
         ys = np.array([-2.0, 0.0, 2.0])
         h = _drive(MakeCubic, xs, ys)
@@ -395,6 +435,7 @@ class TestSplineRoots:
 
     def test_multiple_roots(self):
         # y = (x-1)*(x-3); roots at 1 and 3
+        # nv
         xs = np.linspace(0.0, 4.0, 20)
         ys = (xs - 1.0) * (xs - 3.0)
         h = _drive(MakeCubic, xs, ys)
@@ -408,6 +449,7 @@ class TestSplineRoots:
         _free(h)
 
     def test_invalid_handle_fails(self):
+        # nv
         result = _drive(SplineRoots, 9999999)
         assert result is None
 
@@ -416,6 +458,7 @@ class TestSplineRoots:
 
 class TestFree:
     def test_removes_handle_from_registry(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         assert h in _INTERP_REGISTRY
         _free(h)
@@ -423,12 +466,14 @@ class TestFree:
 
     def test_free_nonexistent_succeeds(self):
         # Free on unknown handle should still succeed (always yields None)
+        # nv
         dispatch = Free._get_dispatch()
         trail = Trail()
         solutions = [(p, s) for p, s in dispatch(None, None, 9999999, trail) if s is None]
         assert len(solutions) == 1
 
     def test_free_prevents_eval(self):
+        # nv
         h = _drive(MakeSpline, _XS, _YS)
         _free(h)
         result = _drive(EvalSpline, h, _XS)
@@ -439,6 +484,7 @@ class TestFree:
 
 class TestInterpModuleImport:
     def test_alias_module_exports_all(self):
+        # nv
         from clausal.modules import scipy_interpolate as m
         for name in [
             'MakeSpline', 'MakeCubic', 'MakePCHIP',
@@ -493,6 +539,7 @@ class TestScipyInterpolateFixture:
         "free handle succeeds",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -507,6 +554,7 @@ class TestSplineUnits:
 
     def test_make_eval_spline_propagates_y_dims(self):
         """MakeSpline with Quantity x/y → EvalSpline returns Quantity with y_dims."""
+        # nv
         x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
         y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
         handle = _drive(MakeSpline, x, y)
@@ -520,6 +568,7 @@ class TestSplineUnits:
 
     def test_make_eval_spline_plain_fast_path(self):
         """Plain arrays → plain result, unchanged."""
+        # nv
         x = np.array([0.0, 1.0, 2.0, 3.0])
         y = np.array([0.0, 1.0, 4.0, 9.0])
         handle = _drive(MakeSpline, x, y)
@@ -530,6 +579,7 @@ class TestSplineUnits:
 
     def test_spline_integral_has_y_times_x_dims(self):
         """SplineIntegral returns Quantity with y_dims + x_dims."""
+        # nv
         x = Quantity(np.array([0.0, 1.0, 2.0]), {Second: 1})
         y = Quantity(np.array([1.0, 1.0, 1.0]), {Metre: 1, Second: -1})
         handle = _drive(MakeSpline, x, y, 1)  # linear
@@ -544,6 +594,7 @@ class TestSplineUnits:
 
     def test_spline_derivative_handle_has_adjusted_dims(self):
         """SplineDerivative returns a handle whose y_dims = y_dims − x_dims."""
+        # nv
         x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
         y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
         handle = _drive(MakeSpline, x, y)
@@ -559,6 +610,7 @@ class TestSplineUnits:
 
     def test_eval_spline_nu_dims(self):
         """EvalSpline(HANDLE, X, NU, RESULT) with NU=1 has derivative dims."""
+        # nv
         x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
         y = Quantity(np.array([0.0, 1.0, 4.0, 9.0]), {Metre: 1})
         handle = _drive(MakeSpline, x, y)
@@ -570,6 +622,7 @@ class TestSplineUnits:
 
     def test_make_cubic_with_units(self):
         """MakeCubic stores dims; EvalSpline propagates them."""
+        # nv
         x = Quantity(np.array([0.0, 1.0, 2.0, 3.0]), {Second: 1})
         y = Quantity(np.array([0.0, 2.0, 4.0, 6.0]), {Metre: 1})
         handle = _drive(MakeCubic, x, y)

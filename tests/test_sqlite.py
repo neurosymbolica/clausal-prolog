@@ -129,22 +129,26 @@ class TestSQLiteConnect:
     """SQLiteConnect/2: open database and register alias."""
 
     def test_connect_memory(self):
+        # nv
         results = _run_simple(_sqlite_connect_2, ":memory:", "testdb")
         assert len(results) == 1
         assert "testdb" in _CONNECTIONS
 
     def test_connect_file(self, tmp_path):
+        # nv
         db_path = str(tmp_path / "test.db")
         results = _run_simple(_sqlite_connect_2, db_path, "filedb")
         assert len(results) == 1
         assert "filedb" in _CONNECTIONS
 
     def test_connect_duplicate_alias_idempotent(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "dup")
         results = _run_simple(_sqlite_connect_2, ":memory:", "dup")
         assert len(results) == 1  # succeeds idempotently
 
     def test_connect_multiple_aliases(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "db1")
         _run_simple(_sqlite_connect_2, ":memory:", "db2")
         assert "db1" in _CONNECTIONS
@@ -155,12 +159,14 @@ class TestSQLiteDisconnect:
     """SQLiteDisconnect/1: close and unregister."""
 
     def test_disconnect(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "dc1")
         results = _run_simple(_sqlite_disconnect_1, "dc1")
         assert len(results) == 1
         assert "dc1" not in _CONNECTIONS
 
     def test_disconnect_nonexistent_fails(self):
+        # nv
         results = _run_simple(_sqlite_disconnect_1, "nope")
         assert len(results) == 0  # fails — no solution
 
@@ -169,6 +175,7 @@ class TestSQLiteCurrentConnection:
     """SQLiteCurrentConnection/1: enumerate open aliases."""
 
     def test_enumerate_all(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "cc1")
         _run_simple(_sqlite_connect_2, ":memory:", "cc2")
         trail = Trail()
@@ -183,6 +190,7 @@ class TestSQLiteCurrentConnection:
         assert set(results) >= {"cc1", "cc2"}
 
     def test_check_specific(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "cc3")
         trail = Trail()
         parent = object()
@@ -195,6 +203,7 @@ class TestSQLiteCurrentConnection:
         assert len(solutions) == 1
 
     def test_check_missing(self):
+        # nv
         trail = Trail()
         parent = object()
         solutions = []
@@ -225,6 +234,7 @@ class TestSQLiteQuery:
     """SQLiteQuery/3,4: nondeterministic row iteration."""
 
     def test_query_all_rows(self):
+        # nv
         _setup_people_db("q1")
         trail = Trail()
         parent = object()
@@ -238,6 +248,7 @@ class TestSQLiteQuery:
         assert rows == [("alice", 30), ("bob", 25), ("carol", 35)]
 
     def test_query_single_column(self):
+        # nv
         _setup_people_db("q2")
         trail = Trail()
         parent = object()
@@ -252,6 +263,7 @@ class TestSQLiteQuery:
         assert rows == ["alice", "bob", "carol"]
 
     def test_query_no_results(self):
+        # nv
         _setup_people_db("q3")
         trail = Trail()
         parent = object()
@@ -265,6 +277,7 @@ class TestSQLiteQuery:
         assert rows == []
 
     def test_query_parameterized(self):
+        # nv
         _setup_people_db("q4")
         trail = Trail()
         parent = object()
@@ -281,6 +294,7 @@ class TestSQLiteQuery:
         assert rows == ["alice", "carol"]
 
     def test_query_multiple_params(self):
+        # nv
         _setup_people_db("q5")
         trail = Trail()
         parent = object()
@@ -298,6 +312,7 @@ class TestSQLiteQuery:
 
     def test_query_types_preserved(self):
         """INT, TEXT, REAL, NULL types come through correctly."""
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "q6")
         conn = _CONNECTIONS["q6"]
         conn.execute("CREATE TABLE types (i INTEGER, t TEXT, r REAL, n TEXT)")
@@ -315,6 +330,7 @@ class TestSQLiteQuery:
         assert rows == [(42, "hello", 3.14, None)]
 
     def test_query_join(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "q7")
         conn = _CONNECTIONS["q7"]
         conn.execute("CREATE TABLE dept (id INTEGER, name TEXT)")
@@ -337,6 +353,7 @@ class TestSQLiteQuery:
         assert rows == [("alice", "engineering"), ("bob", "marketing")]
 
     def test_query_aggregate(self):
+        # nv
         _setup_people_db("q8")
         trail = Trail()
         parent = object()
@@ -350,6 +367,7 @@ class TestSQLiteQuery:
         assert rows == [3]
 
     def test_query_bad_alias_raises(self):
+        # nv
         trail = Trail()
         parent = object()
         v = Var()
@@ -361,11 +379,13 @@ class TestSQLiteExec:
     """SQLiteExec/2,3: DDL/DML execution."""
 
     def test_exec_create_table(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "e1")
         results = _run_simple(_sqlite_exec_2, "e1", "CREATE TABLE t (x INTEGER)")
         assert len(results) == 1
 
     def test_exec_insert(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "e2")
         conn = _CONNECTIONS["e2"]
         conn.execute("CREATE TABLE t (x INTEGER)")
@@ -377,6 +397,7 @@ class TestSQLiteExec:
         assert rows == [(42,)]
 
     def test_exec_parameterized_insert(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "e3")
         conn = _CONNECTIONS["e3"]
         conn.execute("CREATE TABLE t (name TEXT, val INTEGER)")
@@ -388,6 +409,7 @@ class TestSQLiteExec:
         assert rows == [("hello", 99)]
 
     def test_exec_update(self):
+        # nv
         _setup_people_db("e4")
         _run_simple(_sqlite_exec_3, "e4",
                     "UPDATE people SET age = ? WHERE name = ?", [31, "alice"])
@@ -396,6 +418,7 @@ class TestSQLiteExec:
         assert rows == [(31,)]
 
     def test_exec_delete(self):
+        # nv
         _setup_people_db("e5")
         _run_simple(_sqlite_exec_3, "e5",
                     "DELETE FROM people WHERE name = ?", ["bob"])
@@ -409,6 +432,7 @@ class TestSQLiteRowCount:
     """SQLiteRowCount/3: row count unification."""
 
     def test_row_count_insert(self):
+        # nv
         _run_simple(_sqlite_connect_2, ":memory:", "rc1")
         conn = _CONNECTIONS["rc1"]
         conn.execute("CREATE TABLE t (x INTEGER)")
@@ -422,6 +446,7 @@ class TestSQLiteRowCount:
         assert deref(v) == 1
 
     def test_row_count_update(self):
+        # nv
         _setup_people_db("rc2")
         trail = Trail()
         v = Var()
@@ -432,6 +457,7 @@ class TestSQLiteRowCount:
         assert deref(v) == 3  # 3 rows updated
 
     def test_row_count_delete(self):
+        # nv
         _setup_people_db("rc3")
         trail = Trail()
         v = Var()
@@ -451,6 +477,7 @@ class TestSQLiteTable:
     """SQLiteTable/2: enumerate table names."""
 
     def test_table_enumerate(self):
+        # nv
         _setup_people_db("t1")
         conn = _CONNECTIONS["t1"]
         conn.execute("CREATE TABLE cities (name TEXT, pop INTEGER)")
@@ -467,6 +494,7 @@ class TestSQLiteTable:
         assert set(tables) >= {"people", "cities"}
 
     def test_table_specific_exists(self):
+        # nv
         _setup_people_db("t2")
         trail = Trail()
         parent = object()
@@ -479,6 +507,7 @@ class TestSQLiteTable:
         assert len(solutions) == 1
 
     def test_table_specific_not_exists(self):
+        # nv
         _setup_people_db("t3")
         trail = Trail()
         parent = object()
@@ -495,6 +524,7 @@ class TestSQLiteColumn:
     """SQLiteColumn/4: enumerate columns with types."""
 
     def test_column_enumerate(self):
+        # nv
         _setup_people_db("c1")
         trail = Trail()
         parent = object()
@@ -512,6 +542,7 @@ class TestSQLiteColumn:
 
     def test_column_specific_name(self):
         """when col_name is ground, only matching column succeeds."""
+        # nv
         _setup_people_db("c2")
         trail = Trail()
         parent = object()
@@ -536,6 +567,7 @@ class TestSQLiteClausalIntegration:
     """End-to-end tests via .clausal files."""
 
     def test_connect_exec_query(self, tmp_path):
+        # nv
         mod = _load("sq1", """
 setup(_db) <- (SQLiteConnect(":memory:", _db) and SQLiteExec(_db, "CREATE TABLE items (name TEXT, qty INTEGER)") and SQLiteExec(_db, "INSERT INTO items VALUES ('apple', 3)") and SQLiteExec(_db, "INSERT INTO items VALUES ('banana', 5)"))
 
@@ -545,6 +577,7 @@ item_name(_n) <- (setup("testdb") and SQLiteQuery("testdb", "SELECT name FROM it
         assert names == ["apple", "banana"]
 
     def test_parameterized_query(self, tmp_path):
+        # nv
         mod = _load("sq2", """
 setup <- (SQLiteConnect(":memory:", "db2") and SQLiteExec("db2", "CREATE TABLE nums (v INTEGER)") and SQLiteExec("db2", "INSERT INTO nums VALUES (10)") and SQLiteExec("db2", "INSERT INTO nums VALUES (20)") and SQLiteExec("db2", "INSERT INTO nums VALUES (30)"))
 
@@ -554,6 +587,7 @@ big_num(_n) <- (setup() and SQLiteQuery("db2", "SELECT v FROM nums WHERE v > ?",
         assert nums == [20, 30]
 
     def test_table_introspection(self, tmp_path):
+        # nv
         mod = _load("sq3", """
 setup <- (SQLiteConnect(":memory:", "db3") and SQLiteExec("db3", "CREATE TABLE alpha (x TEXT)") and SQLiteExec("db3", "CREATE TABLE beta (y INTEGER)"))
 
@@ -563,6 +597,7 @@ table_name(_t) <- (setup() and SQLiteTable("db3", _t))
         assert set(tables) >= {"alpha", "beta"}
 
     def test_column_introspection(self, tmp_path):
+        # nv
         mod = _load("sq4", """
 setup <- (SQLiteConnect(":memory:", "db4") and SQLiteExec("db4", "CREATE TABLE things (id INTEGER, label TEXT, weight REAL)"))
 
@@ -578,6 +613,7 @@ col(_name, _type) <- (setup() and SQLiteColumn("db4", "things", _name, _type))
         assert ("weight", "REAL") in cols
 
     def test_disconnect(self, tmp_path):
+        # nv
         mod = _load("sq5", """
 open_close <- (SQLiteConnect(":memory:", "db5") and SQLiteDisconnect("db5"))
 """, tmp_path)
@@ -585,6 +621,7 @@ open_close <- (SQLiteConnect(":memory:", "db5") and SQLiteDisconnect("db5"))
         assert "db5" not in _CONNECTIONS  # cleanup ran
 
     def test_exec_with_params(self, tmp_path):
+        # nv
         mod = _load("sq6", """
 setup <- (SQLiteConnect(":memory:", "db6") and SQLiteExec("db6", "CREATE TABLE kv (k TEXT, v INTEGER)") and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["x", 1]) and SQLiteExec("db6", "INSERT INTO kv VALUES (?, ?)", ["y", 2]))
 

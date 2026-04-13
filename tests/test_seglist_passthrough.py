@@ -41,6 +41,7 @@ class TestSingleStarPassthrough:
 
     def test_append_first_arg_ground_seglist(self):
         """append([1, *V_BOUND], [3], R) where the SegList walks to [1, 2]."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2], trail)
@@ -53,6 +54,7 @@ class TestSingleStarPassthrough:
 
     def test_append_third_arg_ground_seglist(self):
         """append(A, B, ground_seglist) deconstructing correctly."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2], trail)
@@ -69,6 +71,7 @@ class TestSingleStarPassthrough:
 
     def test_last_ground_seglist(self):
         """last(ground_seglist, X) finds the last element."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2, 3], trail)
@@ -99,6 +102,7 @@ class TestMultiStarPassthrough:
 
     def test_split_ground_seglist(self):
         """Split([*A, *B], A, B) with a ground SegList [1, 2, 3]."""
+        # nv
         sl = self._ground_seglist([1, 2, 3])
         a, b = Var(), Var()
         results = [(deref(a), deref(b)) for _ in call("Split", sl, a, b, module=self.mod)]
@@ -111,6 +115,7 @@ class TestMultiStarPassthrough:
 
     def test_split3_ground_seglist(self):
         """Split3([X, *A, *B], X, A, B) with a ground SegList [10, 20, 30]."""
+        # nv
         sl = self._ground_seglist([10, 20, 30])
         x, a, b = Var(), Var(), Var()
         results = [(deref(x), deref(a), deref(b))
@@ -123,6 +128,7 @@ class TestMultiStarPassthrough:
 
     def test_around_ground_seglist(self):
         """Around([*A, X, *B], X, [A, B]) with a ground SegList."""
+        # nv
         sl = self._ground_seglist([1, 2, 3])
         x, p = Var(), Var()
         results = [(deref(x), deref(p))
@@ -135,6 +141,7 @@ class TestMultiStarPassthrough:
 
     def test_split_concrete_seglist(self):
         """Ground SegList built purely from ConcreteSegs (no VarSeg)."""
+        # nv
         sl = SegList([ConcreteSeg([1, 2]), ConcreteSeg([3])])
         assert sl.is_ground()
         a, b = Var(), Var()
@@ -148,6 +155,7 @@ class TestMultiStarPassthrough:
 
     def test_non_ground_seglist_produces_no_solutions(self):
         """Non-ground SegList passed to multi-star predicate: graceful fail (Phase 6)."""
+        # nv
         sl = SegList([VarSeg(Var()), VarSeg(Var())])
         assert not sl.is_ground()
         a, b = Var(), Var()
@@ -166,6 +174,7 @@ class TestBodyStarPassthrough:
 
     def test_head_tail_ground_seglist(self):
         """HeadTail(ground_seglist, H, T) — body Is pattern against SegList."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2, 3], trail)
@@ -179,6 +188,7 @@ class TestBodyStarPassthrough:
 
     def test_init_last_ground_seglist(self):
         """InitLast(ground_seglist, INIT, LAST) — trailing-star body pattern."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2, 3], trail)
@@ -201,6 +211,7 @@ class TestSegListConcatPassthrough:
 
     def test_append_result_via_add(self):
         """Use sl + [3] as the third argument to append."""
+        # nv
         v = Var()
         trail = Trail()
         unify(v, [2], trail)

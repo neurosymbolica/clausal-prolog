@@ -11,7 +11,7 @@ Test("pipeline scaler + logistic regression") <- (
     Fit(PIPE, DATASET, FITTED),
     Score(FITTED, DATASET, SCORE),
     SCORE > 0.5
-)
+)  # nv
 
 # ── Pipeline predict ─────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ Test("pipeline predict") <- (
     DATASET is ("Dataset", X, Y),
     Fit(PIPE, DATASET, FITTED),
     Predict(FITTED, X, PREDS)
-)
+)  # nv
 
 # ── PipelineStep ─────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ Test("pipeline step extraction") <- (
     Fit(PIPE, DATASET, FITTED),
     PipelineStep(FITTED, "scaler", SCALER_FITTED),
     Learned(SCALER_FITTED, "mean", M)
-)
+)  # nv
 
 # ── Pipeline with PCA ────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ Test("pipeline pca + classifier") <- (
     Fit(PIPE, DATASET, FITTED),
     Score(FITTED, DATASET, SCORE),
     SCORE > 0.5
-)
+)  # nv
 
 # ── Pipeline with train/test split ───────────────────────────────────
 
@@ -61,4 +61,4 @@ Test("pipeline with split") <- (
     Fit(PIPE, TRAIN, FITTED),
     Score(FITTED, TEST, SCORE),
     SCORE > 0.5
-)
+)  # nv

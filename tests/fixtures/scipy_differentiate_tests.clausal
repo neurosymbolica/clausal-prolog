@@ -5,27 +5,27 @@ Test("derivative of x squared at 3") <- (
     Derivative(++(lambda x: x**2), 3.0, R),
     ResultGet(R, 'df', DF),
     DIFF is ++(abs(DF - 6.0)),
-    DIFF < 1.0e-8)
+    DIFF < 1.0e-8)  # nv
 
 # d/dx sin(x) at x=0 is 1 (use numpy.sin since scipy passes numpy scalars)
 Test("derivative of sin at zero") <- (
     Derivative(++(__import__('numpy').sin), 0.0, R),
     ResultGet(R, 'df', DF),
     DIFF is ++(abs(DF - 1.0)),
-    DIFF < 1.0e-8)
+    DIFF < 1.0e-8)  # nv
 
 # Result dict has a 'success' field
 Test("derivative result has success field") <- (
     Derivative(++(lambda x: x), 1.0, R),
     ResultGet(R, 'success', OK),
-    OK == True)
+    OK == True)  # nv
 
 # Derivative with extra args: f(x, a) = a*x at x=2, a=5 → 5
 Test("derivative with extra args") <- (
     Derivative(++(lambda x, a: a * x), 2.0, [5.0], R),
     ResultGet(R, 'df', DF),
     DIFF is ++(abs(DF - 5.0)),
-    DIFF < 1.0e-8)
+    DIFF < 1.0e-8)  # nv
 
 # Hessian of x[0]^2 + x[1]^2 is 2*I
 Test("hessian of sum of squares") <- (
@@ -39,4 +39,4 @@ Test("hessian of sum of squares") <- (
     DIFF00 is ++(abs(H00 - 2.0)),
     DIFF11 is ++(abs(H11 - 2.0)),
     DIFF00 < 1.0e-6,
-    DIFF11 < 1.0e-6)
+    DIFF11 < 1.0e-6)  # nv

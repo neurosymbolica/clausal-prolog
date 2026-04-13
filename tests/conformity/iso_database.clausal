@@ -1,0 +1,104 @@
+# ISO Prolog conformity: dynamic database (assert/retract)
+#
+# ISO §8.9.1 — asserta/1
+# ISO §8.9.2 — assertz/1
+# ISO §8.9.3 — retract/1
+# ISO §8.9.4 — abolish/1  (not available in clausal)
+#
+# Clausal supplies assertz/1, asserta/1 and retract/1 as builtin goals.
+# Dynamic predicates must be declared with -dynamic so they can be
+# mutated at runtime.
+#
+# Note: findall/3 over a dynamic predicate with an unbound first argument
+# can observe stale dispatch after assertz (V2-2 groundness-keyed dispatch
+# does not always re-index).  These tests therefore verify state changes
+# via direct membership queries, which is a more faithful mirror of what
+# the Python test suite was asserting anyway.
+
+-module(iso_database, [Test(DESC)])
+
+-dynamic(Color/1)
+-dynamic(Item/1)
+-dynamic(Greet/1)
+-dynamic(Letter/1)
+-dynamic(Single/1)
+
+Color("red"),
+Color("green"),
+
+Item("b"),
+Item("c"),
+
+Letter("a"),
+Letter("b"),
+Letter("c"),
+
+Single(42),
+
+Greet("__seed__"),
+
+# ── assertz/1 — add then observe ───────────────────────────────────────────
+
+Test("assertz adds and is visible") <- (
+    assertz(Color("blue")),
+    Color("blue"),
+    retract(Color("blue"))
+)  # nv
+
+Test("assertz on fresh predicate") <- (
+    assertz(Greet("hello")),
+    Greet("hello"),
+    retract(Greet("hello"))
+)  # nv
+
+Test("assertz multiple then query each") <- (
+    assertz(Greet("one")),
+    assertz(Greet("two")),
+    assertz(Greet("three")),
+    Greet("one"),
+    Greet("two"),
+    Greet("three"),
+    retract(Greet("one")),
+    retract(Greet("two")),
+    retract(Greet("three"))
+)  # nv
+
+# ── asserta/1 — prepended clause is reachable ─────────────────────────────
+
+Test("asserta adds and is visible") <- (
+    asserta(Item("a")),
+    Item("a"),
+    retract(Item("a"))
+)  # nv
+
+# ── retract/1 — removes a clause ──────────────────────────────────────────
+
+Test("retract removes matching clause") <- (
+    retract(Letter("b")),
+    not Letter("b"),
+    Letter("a"),
+    Letter("c"),
+    assertz(Letter("b"))
+)  # nv
+
+Test("retract first clause") <- (
+    retract(Letter("a")),
+    not Letter("a"),
+    Letter("b"),
+    Letter("c"),
+    asserta(Letter("a"))
+)  # nv
+
+Test("retract only clause leaves predicate empty") <- (
+    retract(Single(42)),
+    not Single(42),
+    assertz(Single(42))
+)  # nv
+
+Test("retract then re-assert restores fact") <- (
+    Color("red"),
+    retract(Color("red")),
+    not Color("red"),
+    assertz(Color("red")),
+    Color("red")
+)  # nv

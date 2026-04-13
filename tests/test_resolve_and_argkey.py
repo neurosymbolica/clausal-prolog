@@ -34,6 +34,7 @@ class TestResolveVarGuard:
 
     def test_fd_ne_var_vs_int(self):
         """fd_ne(Var, 5) — Var side skips _resolve, constraint posted."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -46,6 +47,7 @@ class TestResolveVarGuard:
 
     def test_fd_ne_int_vs_var(self):
         """fd_ne(5, Var) — reversed operands, Var side skips _resolve."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -56,6 +58,7 @@ class TestResolveVarGuard:
 
     def test_fd_lt_var_vs_int(self):
         """fd_lt(Var, 5) → Var's domain narrowed to [1,4]."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -66,6 +69,7 @@ class TestResolveVarGuard:
 
     def test_fd_le_var_vs_int(self):
         """fd_le(Var, 5) → Var's domain narrowed to [1,5]."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -76,6 +80,7 @@ class TestResolveVarGuard:
 
     def test_fd_eq_var_vs_int(self):
         """fd_eq(Var, 5) → Var bound to 5."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert fd_eq(x, 5, trail)
@@ -83,6 +88,7 @@ class TestResolveVarGuard:
 
     def test_fd_eq_var_vs_var(self):
         """fd_eq(Var, Var) — both sides are Vars, both skip _resolve."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain(x, 1, 10, trail)
@@ -98,6 +104,7 @@ class TestResolveVarGuard:
 
     def test_fd_gt_delegates_to_fd_lt(self):
         """fd_gt(Var, 3) → fd_lt(3, Var) — Var guard works through delegation."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -108,6 +115,7 @@ class TestResolveVarGuard:
 
     def test_fd_ge_delegates_to_fd_le(self):
         """fd_ge(Var, 3) → fd_le(3, Var) — Var guard works through delegation."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert in_domain(x, 1, 10, trail)
@@ -126,17 +134,21 @@ class TestResolveVarGuard:
 class TestRuntimeArgKey:
 
     def test_int_returns_self(self):
+        # nv
         assert _runtime_arg_key(42) == 42
 
     def test_str_returns_self(self):
+        # nv
         assert _runtime_arg_key("hello") == "hello"
 
     def test_bool_true_returns_self(self):
         """bool goes through isinstance fallback, not type(a) is int."""
+        # nv
         result = _runtime_arg_key(True)
         assert result is True
 
     def test_bool_false_returns_self(self):
+        # nv
         result = _runtime_arg_key(False)
         assert result is False
 
@@ -144,26 +156,33 @@ class TestRuntimeArgKey:
         """True and 1 should produce the same key (both indexable), but
         type(True) is int is False — bool goes through isinstance path."""
         # Both should be indexable (returned as-is)
+        # nv
         assert _runtime_arg_key(True) is True
         assert _runtime_arg_key(1) == 1
 
     def test_float_returns_self(self):
+        # nv
         assert _runtime_arg_key(3.14) == 3.14
 
     def test_none_returns_self(self):
+        # nv
         assert _runtime_arg_key(None) is None
 
     def test_bytes_returns_self(self):
+        # nv
         assert _runtime_arg_key(b"data") == b"data"
 
     def test_compound_returns_functor_arity(self):
+        # nv
         c = Compound("f", (1, 2))
         assert _runtime_arg_key(c) == ("f", 2)
 
     def test_empty_string(self):
+        # nv
         assert _runtime_arg_key("") == ""
 
     def test_large_int(self):
+        # nv
         assert _runtime_arg_key(2**100) == 2**100
 
 
@@ -181,12 +200,14 @@ class TestUnifyOccursCheck:
 
     def test_normal_unify_succeeds(self):
         """Both paths succeed for non-circular terms."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert unify(x, 42, trail)
         assert deref(x) == 42
 
     def test_normal_unify_oc_succeeds(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert unify_with_occurs_check(x, 42, trail)
@@ -194,6 +215,7 @@ class TestUnifyOccursCheck:
 
     def test_circular_unify_succeeds(self):
         """unify (no OC) allows X = (X,) — creates circular term."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify(x, (x,), trail)
@@ -203,6 +225,7 @@ class TestUnifyOccursCheck:
 
     def test_circular_unify_oc_fails(self):
         """unify_with_occurs_check rejects X = (X,) — circular."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify_with_occurs_check(x, (x,), trail)
@@ -212,6 +235,7 @@ class TestUnifyOccursCheck:
 
     def test_nested_circular_unify_succeeds(self):
         """unify allows X = (1, (X,)) — nested circular."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify(x, (1, (x,)), trail)
@@ -219,6 +243,7 @@ class TestUnifyOccursCheck:
 
     def test_nested_circular_unify_oc_fails(self):
         """unify_with_occurs_check rejects nested circular."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify_with_occurs_check(x, (1, (x,)), trail)
@@ -227,6 +252,7 @@ class TestUnifyOccursCheck:
 
     def test_var_var_unify(self):
         """Both paths handle Var-Var unification."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert unify(x, y, trail)
@@ -235,6 +261,7 @@ class TestUnifyOccursCheck:
         assert deref(x) == 99
 
     def test_var_var_unify_oc(self):
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert unify_with_occurs_check(x, y, trail)
@@ -243,12 +270,14 @@ class TestUnifyOccursCheck:
 
     def test_list_unify(self):
         """Both paths unify lists element-wise."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert unify([1, x, 3], [1, 2, 3], trail)
         assert deref(x) == 2
 
     def test_list_unify_oc(self):
+        # nv
         trail = fresh_trail()
         x = Var()
         assert unify_with_occurs_check([1, x, 3], [1, 2, 3], trail)
@@ -256,6 +285,7 @@ class TestUnifyOccursCheck:
 
     def test_list_circular_unify_succeeds(self):
         """unify allows X = [X] — circular list."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify(x, [x], trail)
@@ -263,6 +293,7 @@ class TestUnifyOccursCheck:
 
     def test_list_circular_unify_oc_fails(self):
         """unify_with_occurs_check rejects X = [X]."""
+        # nv
         trail = fresh_trail()
         x = Var()
         result = unify_with_occurs_check(x, [x], trail)
@@ -271,6 +302,7 @@ class TestUnifyOccursCheck:
 
     def test_failure_rolls_back(self):
         """Failed unification rolls back partial bindings."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         # [x, y] vs [1, 2, 3] — length mismatch, fails
@@ -279,6 +311,7 @@ class TestUnifyOccursCheck:
         assert is_var(deref(x))  # rolled back
 
     def test_failure_rolls_back_oc(self):
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         result = unify_with_occurs_check([x, y], [1, 2, 3], trail)

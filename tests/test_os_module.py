@@ -46,18 +46,21 @@ def trampoline_solutions(pred, *args):
 
 class TestEnvironmentVariable:
     def test_get_home(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_environment_variable_2, "HOME", v)
         assert len(sols) == 1
         assert deref(v) == os.environ.get("HOME")
 
     def test_get_path(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_environment_variable_2, "PATH", v)
         assert len(sols) == 1
         assert deref(v) == os.environ["PATH"]
 
     def test_missing_var_fails(self):
+        # nv
         v = Var()
         sols, _ = simple_solutions(
             _environment_variable_2, "_CLAUSAL_NONEXISTENT_VAR_", v
@@ -66,6 +69,7 @@ class TestEnvironmentVariable:
 
     def test_enumerate_all(self):
         """Unbound name enumerates all env vars."""
+        # nv
         name, value = Var(), Var()
         trail = Trail()
         count = 0
@@ -75,6 +79,7 @@ class TestEnvironmentVariable:
 
     def test_unify_value_check(self):
         """when value is pre-bound to the correct value, succeeds."""
+        # nv
         home = os.environ.get("HOME", "")
         if not home:
             pytest.skip("HOME not set")
@@ -83,12 +88,14 @@ class TestEnvironmentVariable:
 
     def test_unify_value_wrong_fails(self):
         """when value is pre-bound to wrong value, fails."""
+        # nv
         sols, _ = simple_solutions(
             _environment_variable_2, "HOME", "definitely_not_home"
         )
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(EnvironmentVariable, "PATH", v)
         assert len(sols) == 1
@@ -100,6 +107,7 @@ class TestEnvironmentVariable:
 
 class TestSetEnvironmentVariable:
     def test_set_and_get(self):
+        # nv
         key = "_CLAUSAL_TEST_SET_VAR_"
         try:
             sols, _ = simple_solutions(_set_environment_variable_2, key, "hello")
@@ -109,14 +117,17 @@ class TestSetEnvironmentVariable:
             os.environ.pop(key, None)
 
     def test_unbound_name_fails(self):
+        # nv
         sols, _ = simple_solutions(_set_environment_variable_2, Var(), "val")
         assert len(sols) == 0
 
     def test_unbound_value_fails(self):
+        # nv
         sols, _ = simple_solutions(_set_environment_variable_2, "KEY", Var())
         assert len(sols) == 0
 
     def test_non_string_name_fails(self):
+        # nv
         sols, _ = simple_solutions(_set_environment_variable_2, 42, "val")
         assert len(sols) == 0
 
@@ -126,6 +137,7 @@ class TestSetEnvironmentVariable:
 
 class TestUnsetEnvironmentVariable:
     def test_set_then_unset(self):
+        # nv
         key = "_CLAUSAL_TEST_UNSET_VAR_"
         os.environ[key] = "temp"
         sols, _ = simple_solutions(_unset_environment_variable_1, key)
@@ -133,12 +145,14 @@ class TestUnsetEnvironmentVariable:
         assert key not in os.environ
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(
             _unset_environment_variable_1, "_CLAUSAL_NONEXISTENT_UNSET_"
         )
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_unset_environment_variable_1, Var())
         assert len(sols) == 0
 
@@ -148,6 +162,7 @@ class TestUnsetEnvironmentVariable:
 
 class TestWorkingDirectory:
     def test_returns_string(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_working_directory_1, v)
         assert len(sols) == 1
@@ -156,11 +171,13 @@ class TestWorkingDirectory:
         assert len(result) > 0
 
     def test_matches_os_getcwd(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_working_directory_1, v)
         assert deref(v) == os.getcwd()
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(WorkingDirectory, v)
         assert len(sols) == 1
@@ -172,6 +189,7 @@ class TestWorkingDirectory:
 
 class TestChangeDirectory:
     def test_change_and_verify(self, tmp_path):
+        # nv
         original = os.getcwd()
         try:
             sols, _ = simple_solutions(_change_directory_1, str(tmp_path))
@@ -181,10 +199,12 @@ class TestChangeDirectory:
             os.chdir(original)
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_change_directory_1, "/nonexistent_dir_xyz")
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_change_directory_1, Var())
         assert len(sols) == 0
 
@@ -194,6 +214,7 @@ class TestChangeDirectory:
 
 class TestPid:
     def test_returns_int(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_pid_1, v)
         assert len(sols) == 1
@@ -202,11 +223,13 @@ class TestPid:
         assert result > 0
 
     def test_matches_os_getpid(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_pid_1, v)
         assert deref(v) == os.getpid()
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(Pid, v)
         assert len(sols) == 1
@@ -218,6 +241,7 @@ class TestPid:
 
 class TestArgv:
     def test_returns_list(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_argv_1, v)
         assert len(sols) == 1
@@ -225,6 +249,7 @@ class TestArgv:
         assert isinstance(result, list)
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(Argv, v)
         assert len(sols) == 1
@@ -236,6 +261,7 @@ class TestArgv:
 
 class TestPlatform:
     def test_returns_known_platform(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_platform_1, v)
         assert len(sols) == 1
@@ -243,6 +269,7 @@ class TestPlatform:
         assert result == sys.platform
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(Platform, v)
         assert len(sols) == 1
@@ -254,6 +281,7 @@ class TestPlatform:
 
 class TestCPUCount:
     def test_returns_positive_int(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_cpu_count_1, v)
         assert len(sols) == 1
@@ -262,11 +290,13 @@ class TestCPUCount:
         assert result > 0
 
     def test_matches_os_cpu_count(self):
+        # nv
         v = Var()
         sols, trail = simple_solutions(_cpu_count_1, v)
         assert deref(v) == os.cpu_count()
 
     def test_trampoline(self):
+        # nv
         v = Var()
         sols, trail = trampoline_solutions(CPUCount, v)
         assert len(sols) == 1

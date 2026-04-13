@@ -51,109 +51,130 @@ def sol_vars(goal, *vars, mod=None):
 
 class TestLcm:
     def test_basic(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="lcm"), args=[4, 6, l], kwargs=[])
         assert sol_var(goal, l) == [12]
 
     def test_coprime(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="lcm"), args=[7, 13, l], kwargs=[])
         assert sol_var(goal, l) == [91]
 
     def test_with_zero(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="lcm"), args=[0, 5, l], kwargs=[])
         assert sol_var(goal, l) == [0]
 
     def test_negative(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="lcm"), args=[-4, 6, l], kwargs=[])
         assert sol_var(goal, l) == [12]
 
     def test_unbound_fails(self):
+        # nv
         goal = Call(func=LoadName(name="lcm"), args=[Var(), 6, Var()], kwargs=[])
         assert solutions(goal) == []
 
 
 class TestExpMod:
     def test_basic(self):
+        # nv
         r = Var()
         goal = Call(func=LoadName(name="exp_mod"), args=[2, 10, 1000, r], kwargs=[])
         assert sol_var(goal, r) == [1024 % 1000]
 
     def test_zero_exp(self):
+        # nv
         r = Var()
         goal = Call(func=LoadName(name="exp_mod"), args=[3, 0, 7, r], kwargs=[])
         assert sol_var(goal, r) == [1]
 
     def test_mod_zero_fails(self):
+        # nv
         goal = Call(func=LoadName(name="exp_mod"), args=[2, 3, 0, Var()], kwargs=[])
         assert solutions(goal) == []
 
     def test_unbound_fails(self):
+        # nv
         goal = Call(func=LoadName(name="exp_mod"), args=[Var(), 3, 7, Var()], kwargs=[])
         assert solutions(goal) == []
 
 
 class TestPopcount:
     def test_zero(self):
+        # nv
         c = Var()
         goal = Call(func=LoadName(name="popcount"), args=[0, c], kwargs=[])
         assert sol_var(goal, c) == [0]
 
     def test_255(self):
+        # nv
         c = Var()
         goal = Call(func=LoadName(name="popcount"), args=[255, c], kwargs=[])
         assert sol_var(goal, c) == [8]
 
     def test_power_of_two(self):
+        # nv
         c = Var()
         goal = Call(func=LoadName(name="popcount"), args=[16, c], kwargs=[])
         assert sol_var(goal, c) == [1]
 
     def test_negative_fails(self):
+        # nv
         goal = Call(func=LoadName(name="popcount"), args=[-1, Var()], kwargs=[])
         assert solutions(goal) == []
 
 
 class TestMsb:
     def test_one(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="msb"), args=[1, b], kwargs=[])
         assert sol_var(goal, b) == [0]
 
     def test_eight(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="msb"), args=[8, b], kwargs=[])
         assert sol_var(goal, b) == [3]
 
     def test_255(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="msb"), args=[255, b], kwargs=[])
         assert sol_var(goal, b) == [7]
 
     def test_zero_fails(self):
+        # nv
         goal = Call(func=LoadName(name="msb"), args=[0, Var()], kwargs=[])
         assert solutions(goal) == []
 
 
 class TestLsb:
     def test_one(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="lsb"), args=[1, b], kwargs=[])
         assert sol_var(goal, b) == [0]
 
     def test_twelve(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="lsb"), args=[12, b], kwargs=[])
         assert sol_var(goal, b) == [2]
 
     def test_eight(self):
+        # nv
         b = Var()
         goal = Call(func=LoadName(name="lsb"), args=[8, b], kwargs=[])
         assert sol_var(goal, b) == [3]
 
     def test_zero_fails(self):
+        # nv
         goal = Call(func=LoadName(name="lsb"), args=[0, Var()], kwargs=[])
         assert solutions(goal) == []
 
@@ -191,6 +212,7 @@ class TestArithmeticQuantity:
     # ── abs_ ──
 
     def test_abs_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _abs__2
         q = self._q(-5, m=1)
         result_var = Var()
@@ -202,6 +224,7 @@ class TestArithmeticQuantity:
     # ── sign (always dimensionless) ──
 
     def test_sign_quantity_positive(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _sign__2
         q = self._q(3.0, m=1)
         s = Var()
@@ -209,6 +232,7 @@ class TestArithmeticQuantity:
         assert results == [1]
 
     def test_sign_quantity_negative(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _sign__2
         q = self._q(-7.0, kg=1)
         s = Var()
@@ -218,6 +242,7 @@ class TestArithmeticQuantity:
     # ── max_ / min_ (same dims required, raises on mismatch) ──
 
     def test_max_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _max__3
         q1, q2 = self._q(3, m=1), self._q(7, m=1)
         z = Var()
@@ -226,6 +251,7 @@ class TestArithmeticQuantity:
         assert results[0].value == 7
 
     def test_min_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _min__3
         q1, q2 = self._q(3, m=1), self._q(7, m=1)
         z = Var()
@@ -235,6 +261,7 @@ class TestArithmeticQuantity:
 
     def test_max_mismatched_dims_raises(self):
         """max_ with different dimensions raises UnitsMismatch."""
+        # nv
         from clausal.logic.builtins.arithmetic import _max__3
         from clausal.terms import UnitsMismatch
         q1, q2 = self._q(3, m=1), self._q(7, s=1)
@@ -244,6 +271,7 @@ class TestArithmeticQuantity:
     # ── plus (same dims required, raises on mismatch) ──
 
     def test_plus_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _plus__3
         q1, q2 = self._q(3, m=1), self._q(4, m=1)
         z = Var()
@@ -252,6 +280,7 @@ class TestArithmeticQuantity:
         assert results[0].value == 7
 
     def test_plus_mismatched_dims_raises(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _plus__3
         from clausal.terms import UnitsMismatch
         q1, q2 = self._q(3, m=1), self._q(4, s=1)
@@ -261,6 +290,7 @@ class TestArithmeticQuantity:
     # ── gcd (same dims, result preserves dims) ──
 
     def test_gcd_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _gcd__3
         q1, q2 = self._q(12, m=1), self._q(8, m=1)
         g = Var()
@@ -270,6 +300,7 @@ class TestArithmeticQuantity:
         assert results[0].value == 4
 
     def test_gcd_mismatched_dims_raises(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _gcd__3
         from clausal.terms import UnitsMismatch
         q1, q2 = self._q(12, m=1), self._q(8, s=1)
@@ -280,6 +311,7 @@ class TestArithmeticQuantity:
 
     def test_gcd_mixed_quantity_plain_raises(self):
         """gcd(plain_int, Quantity(dims)) raises UnitsMismatch."""
+        # nv
         from clausal.logic.builtins.arithmetic import _gcd__3
         from clausal.terms import UnitsMismatch
         q = self._q(6, m=1)
@@ -287,6 +319,7 @@ class TestArithmeticQuantity:
             self._simple(_gcd__3, 4, q, Var())
 
     def test_lcm_mixed_quantity_plain_raises(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _lcm__3
         from clausal.terms import UnitsMismatch
         q = self._q(6, m=1)
@@ -296,6 +329,7 @@ class TestArithmeticQuantity:
     # ── lcm (same dims, result preserves dims) ──
 
     def test_lcm_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _lcm__3
         q1, q2 = self._q(4, m=1), self._q(6, m=1)
         l = Var()
@@ -307,6 +341,7 @@ class TestArithmeticQuantity:
     # ── divmod_ (same dims; quotient dimensionless, remainder keeps dims) ──
 
     def test_divmod_quantity(self):
+        # nv
         from clausal.logic.builtins.arithmetic import _divmod__4
         q1, q2 = self._q(17, m=1), self._q(5, m=1)
         q_var, r_var = Var(), Var()
@@ -329,6 +364,7 @@ class TestArithmeticQuantity:
 class TestPartition:
     def test_basic_partition(self):
         """partition(integer, [1, "a", 2, "b"], Yes, No)."""
+        # nv
         yes, no = Var(), Var()
         goal = Call(func=LoadName(name="partition"),
                     args=[LoadName(name="integer"), [1, "a", 2, "b"], yes, no], kwargs=[])
@@ -339,6 +375,7 @@ class TestPartition:
         assert results[0] == ([1, 2], ["a", "b"])
 
     def test_all_match(self):
+        # nv
         yes, no = Var(), Var()
         goal = Call(func=LoadName(name="partition"),
                     args=[LoadName(name="integer"), [1, 2, 3], yes, no], kwargs=[])
@@ -348,6 +385,7 @@ class TestPartition:
         assert results == [([1, 2, 3], [])]
 
     def test_none_match(self):
+        # nv
         yes, no = Var(), Var()
         goal = Call(func=LoadName(name="partition"),
                     args=[LoadName(name="integer"), ["a", "b"], yes, no], kwargs=[])
@@ -357,6 +395,7 @@ class TestPartition:
         assert results == [([], ["a", "b"])]
 
     def test_empty_list(self):
+        # nv
         yes, no = Var(), Var()
         goal = Call(func=LoadName(name="partition"),
                     args=[LoadName(name="integer"), [], yes, no], kwargs=[])
@@ -396,21 +435,25 @@ class TestTFilter:
         return results
 
     def test_with_reified_eq(self):
+        # nv
         results = self._run_tfilter([1, 2, 1, 3])
         assert len(results) == 1
         assert results[0] == [1, 1]
 
     def test_empty_list(self):
+        # nv
         results = self._run_tfilter([])
         assert len(results) == 1
         assert results[0] == []
 
     def test_none_match(self):
+        # nv
         results = self._run_tfilter([2, 3, 4])
         assert len(results) == 1
         assert results[0] == []
 
     def test_all_match(self):
+        # nv
         results = self._run_tfilter([1, 1, 1])
         assert len(results) == 1
         assert results[0] == [1, 1, 1]
@@ -442,21 +485,25 @@ class TestTPartition:
         return results
 
     def test_with_reified_eq(self):
+        # nv
         results = self._run_tpartition([1, 2, 1, 3])
         assert len(results) == 1
         assert results[0] == ([1, 1], [2, 3])
 
     def test_empty_list(self):
+        # nv
         results = self._run_tpartition([])
         assert len(results) == 1
         assert results[0] == ([], [])
 
     def test_all_true(self):
+        # nv
         results = self._run_tpartition([1, 1])
         assert len(results) == 1
         assert results[0] == ([1, 1], [])
 
     def test_all_false(self):
+        # nv
         results = self._run_tpartition([2, 3])
         assert len(results) == 1
         assert results[0] == ([], [2, 3])
@@ -467,44 +514,53 @@ class TestTPartition:
 
 class TestNumlist:
     def test_range(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="numlist"), args=[1, 5, l], kwargs=[])
         assert sol_var(goal, l) == [[1, 2, 3, 4, 5]]
 
     def test_single(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="numlist"), args=[3, 3, l], kwargs=[])
         assert sol_var(goal, l) == [[3]]
 
     def test_empty_fails(self):
+        # nv
         goal = Call(func=LoadName(name="numlist"), args=[5, 3, Var()], kwargs=[])
         assert solutions(goal) == []
 
     def test_shorthand(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="numlist"), args=[5, l], kwargs=[])
         assert sol_var(goal, l) == [[1, 2, 3, 4, 5]]
 
     def test_shorthand_one(self):
+        # nv
         l = Var()
         goal = Call(func=LoadName(name="numlist"), args=[1, l], kwargs=[])
         assert sol_var(goal, l) == [[1]]
 
     def test_unbound_fails(self):
+        # nv
         goal = Call(func=LoadName(name="numlist"), args=[Var(), 5, Var()], kwargs=[])
         assert solutions(goal) == []
 
 
 class TestSameLength:
     def test_both_ground_equal(self):
+        # nv
         goal = Call(func=LoadName(name="same_length"), args=[[1, 2, 3], ["a", "b", "c"]], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_both_ground_unequal(self):
+        # nv
         goal = Call(func=LoadName(name="same_length"), args=[[1, 2], ["a", "b", "c"]], kwargs=[])
         assert solutions(goal) == []
 
     def test_generate_from_first(self):
+        # nv
         l2 = Var()
         goal = Call(func=LoadName(name="same_length"), args=[[1, 2, 3], l2], kwargs=[])
         mod = fresh_module()
@@ -515,6 +571,7 @@ class TestSameLength:
         assert len(results[0]) == 3
 
     def test_generate_from_second(self):
+        # nv
         l1 = Var()
         goal = Call(func=LoadName(name="same_length"), args=[l1, ["a", "b"]], kwargs=[])
         mod = fresh_module()
@@ -525,27 +582,32 @@ class TestSameLength:
         assert len(results[0]) == 2
 
     def test_empty_lists(self):
+        # nv
         goal = Call(func=LoadName(name="same_length"), args=[[], []], kwargs=[])
         assert len(solutions(goal)) == 1
 
 
 class TestTranspose:
     def test_2x2(self):
+        # nv
         t = Var()
         goal = Call(func=LoadName(name="transpose"), args=[[[1, 2], [3, 4]], t], kwargs=[])
         assert sol_var(goal, t) == [[[1, 3], [2, 4]]]
 
     def test_2x3(self):
+        # nv
         t = Var()
         goal = Call(func=LoadName(name="transpose"), args=[[[1, 2, 3], [4, 5, 6]], t], kwargs=[])
         assert sol_var(goal, t) == [[[1, 4], [2, 5], [3, 6]]]
 
     def test_empty(self):
+        # nv
         t = Var()
         goal = Call(func=LoadName(name="transpose"), args=[[], t], kwargs=[])
         assert sol_var(goal, t) == [[]]
 
     def test_non_rectangular_fails(self):
+        # nv
         goal = Call(func=LoadName(name="transpose"), args=[[[1, 2], [3]], Var()], kwargs=[])
         assert solutions(goal) == []
 
@@ -555,6 +617,7 @@ class TestTranspose:
 
 class TestGroupPairsByKey:
     def test_basic(self):
+        # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"),
                     args=[[["a", 1], ["b", 2], ["a", 3]], g], kwargs=[])
@@ -564,6 +627,7 @@ class TestGroupPairsByKey:
         assert groups == [["a", [1, 3]], ["b", [2]]]
 
     def test_all_unique(self):
+        # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"),
                     args=[[["x", 1], ["y", 2], ["z", 3]], g], kwargs=[])
@@ -571,17 +635,20 @@ class TestGroupPairsByKey:
         assert result == [[["x", [1]], ["y", [2]], ["z", [3]]]]
 
     def test_empty(self):
+        # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"), args=[[], g], kwargs=[])
         assert sol_var(goal, g) == [[]]
 
     def test_single_pair(self):
+        # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"),
                     args=[[["a", 1]], g], kwargs=[])
         assert sol_var(goal, g) == [[["a", [1]]]]
 
     def test_order_preserved(self):
+        # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"),
                     args=[[["b", 1], ["a", 2], ["b", 3]], g], kwargs=[])
@@ -595,30 +662,36 @@ class TestGroupPairsByKey:
 
 class TestMustBe:
     def test_integer_succeeds(self):
+        # nv
         goal = Call(func=LoadName(name="must_be"), args=["integer", 42], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_integer_string_throws(self):
+        # nv
         from clausal.logic.exceptions import LogicException
         goal = Call(func=LoadName(name="must_be"), args=["integer", "hello"], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_unbound_throws_instantiation(self):
+        # nv
         from clausal.logic.exceptions import LogicException
         goal = Call(func=LoadName(name="must_be"), args=["integer", Var()], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_list_succeeds(self):
+        # nv
         goal = Call(func=LoadName(name="must_be"), args=["list", [1, 2]], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_number_float_succeeds(self):
+        # nv
         goal = Call(func=LoadName(name="must_be"), args=["number", 3.14], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_atom_int_throws(self):
+        # nv
         from clausal.logic.exceptions import LogicException
         goal = Call(func=LoadName(name="must_be"), args=["atom", 42], kwargs=[])
         with pytest.raises(LogicException):
@@ -627,20 +700,24 @@ class TestMustBe:
 
 class TestCanBe:
     def test_integer_succeeds(self):
+        # nv
         goal = Call(func=LoadName(name="can_be"), args=["integer", 42], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_unbound_succeeds(self):
+        # nv
         goal = Call(func=LoadName(name="can_be"), args=["integer", Var()], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_wrong_type_throws(self):
+        # nv
         from clausal.logic.exceptions import LogicException
         goal = Call(func=LoadName(name="can_be"), args=["integer", "hello"], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_dict_succeeds(self):
+        # nv
         from clausal.terms import DictTerm
         goal = Call(func=LoadName(name="can_be"), args=["dict", DictTerm({"a": 1})], kwargs=[])
         assert len(solutions(goal)) == 1
@@ -651,6 +728,7 @@ class TestCanBe:
 
 class TestCurrentTime:
     def test_returns_float(self):
+        # nv
         t = Var()
         goal = Call(func=LoadName(name="current_time"), args=[t], kwargs=[])
         result = sol_var(goal, t)
@@ -660,6 +738,7 @@ class TestCurrentTime:
 
     def test_monotonic(self):
         """Two calls return non-decreasing values."""
+        # nv
         t1 = Var()
         goal1 = Call(func=LoadName(name="current_time"), args=[t1], kwargs=[])
         v1 = sol_var(goal1, t1)[0]
@@ -671,6 +750,7 @@ class TestCurrentTime:
 
 class TestStatistics:
     def test_cpu_time(self):
+        # nv
         v = Var()
         goal = Call(func=LoadName(name="statistics"), args=["cpu_time", v], kwargs=[])
         result = sol_var(goal, v)
@@ -679,6 +759,7 @@ class TestStatistics:
         assert result[0] >= 0
 
     def test_wall_time(self):
+        # nv
         v = Var()
         goal = Call(func=LoadName(name="statistics"), args=["wall_time", v], kwargs=[])
         result = sol_var(goal, v)
@@ -688,6 +769,7 @@ class TestStatistics:
 
     def test_enumerate(self):
         """Unbound key enumerates all stats."""
+        # nv
         k, v = Var(), Var()
         goal = Call(func=LoadName(name="statistics"), args=[k, v], kwargs=[])
         mod = fresh_module()
@@ -698,6 +780,7 @@ class TestStatistics:
         assert count >= 2  # at least wall_time and cpu_time
 
     def test_unknown_key_fails(self):
+        # nv
         goal = Call(func=LoadName(name="statistics"), args=["nonexistent", Var()], kwargs=[])
         assert solutions(goal) == []
 
@@ -708,31 +791,37 @@ class TestStatistics:
 class TestSum:
     def test_ground_eq(self):
         """sum_([1, 2, 3], #=, 6) succeeds."""
+        # nv
         goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", 6], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_eq_fails(self):
         """sum_([1, 2, 3], #=, 7) fails."""
+        # nv
         goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", 7], kwargs=[])
         assert solutions(goal) == []
 
     def test_ground_lt(self):
         """sum_([1, 2, 3], #<, 10) succeeds."""
+        # nv
         goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#<", 10], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_lt_fails(self):
         """sum_([1, 2, 3], #<, 5) fails."""
+        # nv
         goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#<", 5], kwargs=[])
         assert solutions(goal) == []
 
     def test_empty_list(self):
         """sum_([], #=, 0) succeeds."""
+        # nv
         goal = Call(func=LoadName(name="sum_"), args=[[], "#=", 0], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_unify_value(self):
         """sum_([1, 2, 3], #=, V) with V unbound → V = 6."""
+        # nv
         v = Var()
         goal = Call(func=LoadName(name="sum_"), args=[[1, 2, 3], "#=", v], kwargs=[])
         result = sol_var(goal, v)
@@ -742,16 +831,19 @@ class TestSum:
 class TestScalarProduct:
     def test_ground(self):
         """scalar_product([2, 3], [4, 5], #=, 23) succeeds (2*4 + 3*5 = 23)."""
+        # nv
         goal = Call(func=LoadName(name="scalar_product"),
                     args=[[2, 3], [4, 5], "#=", 23], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_ground_fails(self):
+        # nv
         goal = Call(func=LoadName(name="scalar_product"),
                     args=[[2, 3], [4, 5], "#=", 10], kwargs=[])
         assert solutions(goal) == []
 
     def test_mismatched_lengths_fails(self):
+        # nv
         goal = Call(func=LoadName(name="scalar_product"),
                     args=[[1, 2, 3], [4, 5], "#=", 0], kwargs=[])
         assert solutions(goal) == []
@@ -760,21 +852,25 @@ class TestScalarProduct:
 class TestElement:
     def test_ground_index(self):
         """element(2, [10, 20, 30], V) → V = 20."""
+        # nv
         v = Var()
         goal = Call(func=LoadName(name="element"), args=[2, [10, 20, 30], v], kwargs=[])
         result = sol_var(goal, v)
         assert result == [20]
 
     def test_ground_index_first(self):
+        # nv
         v = Var()
         goal = Call(func=LoadName(name="element"), args=[1, [10, 20, 30], v], kwargs=[])
         assert sol_var(goal, v) == [10]
 
     def test_index_out_of_range_fails(self):
+        # nv
         goal = Call(func=LoadName(name="element"), args=[4, [10, 20, 30], Var()], kwargs=[])
         assert solutions(goal) == []
 
     def test_index_zero_fails(self):
+        # nv
         goal = Call(func=LoadName(name="element"), args=[0, [10, 20, 30], Var()], kwargs=[])
         assert solutions(goal) == []
 
@@ -782,21 +878,25 @@ class TestElement:
 class TestCircuit:
     def test_valid_circuit(self):
         """circuit([2, 3, 1]) succeeds (1→2→3→1)."""
+        # nv
         goal = Call(func=LoadName(name="circuit"), args=[[2, 3, 1]], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_self_loop_fails(self):
         """circuit([1, 2, 3]) fails (node 1 points to itself)."""
+        # nv
         goal = Call(func=LoadName(name="circuit"), args=[[1, 2, 3]], kwargs=[])
         assert solutions(goal) == []
 
     def test_sub_tour_fails(self):
         """circuit([2, 1, 4, 3]) fails (two sub-tours: 1→2→1 and 3→4→3)."""
+        # nv
         goal = Call(func=LoadName(name="circuit"), args=[[2, 1, 4, 3]], kwargs=[])
         assert solutions(goal) == []
 
     def test_valid_4_node(self):
         """circuit([2, 3, 4, 1]) succeeds (1→2→3→4→1)."""
+        # nv
         goal = Call(func=LoadName(name="circuit"), args=[[2, 3, 4, 1]], kwargs=[])
         assert len(solutions(goal)) == 1
 
@@ -807,6 +907,7 @@ class TestCircuit:
 class TestSequence:
     def test_match_exact(self):
         """phrase(sequence([a, b, c]), [a, b, c]) succeeds."""
+        # nv
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
@@ -820,6 +921,7 @@ class TestSequence:
 
     def test_match_with_rest(self):
         """sequence([a, b], [a, b, c], Rest) → Rest = [c]."""
+        # nv
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
@@ -835,6 +937,7 @@ class TestSequence:
 
     def test_no_match_fails(self):
         """sequence([a], [b]) fails."""
+        # nv
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
@@ -848,6 +951,7 @@ class TestSequence:
 
     def test_empty_sequence(self):
         """sequence([], []) succeeds."""
+        # nv
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
@@ -861,6 +965,7 @@ class TestSequence:
 
     def test_too_short_fails(self):
         """sequence([a, b, c], [a, b]) fails."""
+        # nv
         from clausal.logic.builtins.dcg import _sequence__3
         from clausal.logic.trampoline import DONE
         trail = Trail()
@@ -890,6 +995,7 @@ def fresh_trail():
 class TestSumConstraint:
     def test_sum_narrows_total(self):
         """X in [1,5], Y in [1,5]: sum_([X,Y], #=, T) → T in [2,10]."""
+        # nv
         trail = fresh_trail()
         x, y, t = Var(), Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -901,6 +1007,7 @@ class TestSumConstraint:
 
     def test_sum_narrows_vars_from_total(self):
         """X in [1,5], Y in [1,5], T=10: sum_ propagates both to 5."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -912,6 +1019,7 @@ class TestSumConstraint:
 
     def test_sum_wipeout(self):
         """X in [1,3], Y in [1,3], T=10: impossible → no solutions."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 3, trail)
@@ -920,6 +1028,7 @@ class TestSumConstraint:
 
     def test_sum_lt_narrows(self):
         """X in [1,5], Y in [1,5]: sum_([X,Y], #<, 5) → each max ≤ 3."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -932,6 +1041,7 @@ class TestSumConstraint:
 
     def test_sum_propagates_on_label(self):
         """sum_([X,Y], #=, 7), label → only pairs summing to 7."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -945,6 +1055,7 @@ class TestSumConstraint:
 
     def test_sum_ground_vars_unbound_value_eq(self):
         """sum_([1,2,3], #=, V) with unbound V → V = 6."""
+        # nv
         trail = fresh_trail()
         v = Var()
         assert list(fd_sum([1, 2, 3], "#=", v, trail))
@@ -952,6 +1063,7 @@ class TestSumConstraint:
 
     def test_sum_ground_vars_unbound_value_lt(self):
         """sum_([1,2,3], #<, V) with unbound V → V domain starts at 7."""
+        # nv
         trail = fresh_trail()
         v = Var()
         in_domain(v, 1, 20, trail)
@@ -963,6 +1075,7 @@ class TestSumConstraint:
 class TestScalarProductConstraint:
     def test_sp_narrows_total(self):
         """2*X + 3*Y, X in [1,5], Y in [1,5] → total in [5,25]."""
+        # nv
         trail = fresh_trail()
         x, y, t = Var(), Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -974,6 +1087,7 @@ class TestScalarProductConstraint:
 
     def test_sp_backward_narrows_vars(self):
         """2*X + 3*Y = 12, X in [1,5], Y in [1,5] → Y ≤ 3 (propagation finds unique solution X=3,Y=2)."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -986,6 +1100,7 @@ class TestScalarProductConstraint:
 
     def test_sp_negative_coeff(self):
         """2*X - Y = 5, X in [1,5], Y in [1,5] → X ≥ 3."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 5, trail)
@@ -996,6 +1111,7 @@ class TestScalarProductConstraint:
 
     def test_sp_wipeout(self):
         """[1,1] coeffs (like sum_): [1,3] + [1,3] = 10 impossible."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         in_domain(x, 1, 3, trail)
@@ -1006,6 +1122,7 @@ class TestScalarProductConstraint:
 class TestElementConstraint:
     def test_element_narrows_value_from_index_domain(self):
         """Index in [1,2], List=[10,20,30] → Value in {10,20}."""
+        # nv
         trail = fresh_trail()
         idx, val = Var(), Var()
         in_domain(idx, 1, 2, trail)
@@ -1017,6 +1134,7 @@ class TestElementConstraint:
 
     def test_element_narrows_index_from_value(self):
         """Value = 20, List=[10,20,30] → Index must be 2."""
+        # nv
         trail = fresh_trail()
         idx = Var()
         in_domain(idx, 1, 3, trail)
@@ -1026,6 +1144,7 @@ class TestElementConstraint:
 
     def test_element_wipeout(self):
         """Value = 99 not in list → fail."""
+        # nv
         trail = fresh_trail()
         idx = Var()
         in_domain(idx, 1, 3, trail)
@@ -1033,6 +1152,7 @@ class TestElementConstraint:
 
     def test_element_var_value_var_index(self):
         """Both unbound: Index in [2,3], List=[10,20,30] → Value in {20,30}."""
+        # nv
         trail = fresh_trail()
         idx, val = Var(), Var()
         in_domain(idx, 2, 3, trail)
@@ -1045,6 +1165,7 @@ class TestElementConstraint:
 
     def test_element_narrows_bidirectionally(self):
         """Index in [1,3], Value in {10,30}: only indices 1,3 valid → index ≠ 2."""
+        # nv
         trail = fresh_trail()
         idx, val = Var(), Var()
         in_domain(idx, 1, 3, trail)
@@ -1061,6 +1182,7 @@ class TestElementConstraint:
 class TestCircuitConstraint:
     def test_circuit_prunes_self_loops(self):
         """Domains initially include self-loops; CircuitConstraint removes them."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         in_domain(x, 1, 3, trail)
@@ -1077,6 +1199,7 @@ class TestCircuitConstraint:
 
     def test_circuit_detects_forced_subtour(self):
         """x=2, y=1: forms a 2-cycle → must fail."""
+        # nv
         from clausal.logic.variables import unify as _unify
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
@@ -1090,6 +1213,7 @@ class TestCircuitConstraint:
 
     def test_circuit_forces_completion(self):
         """Chain 1→2→3→? with n=3: last node must close to 1."""
+        # nv
         from clausal.logic.variables import unify as _unify
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
@@ -1104,6 +1228,7 @@ class TestCircuitConstraint:
 
     def test_circuit_all_solutions(self):
         """3-node circuit: exactly 2 Hamiltonian circuits."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         in_domain(x, 1, 3, trail)

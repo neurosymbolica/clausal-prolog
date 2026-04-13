@@ -29,6 +29,7 @@ class TestClausalPropagator:
 
     def test_push_pop_trail_sync(self):
         """push() saves trail state; pop(1) restores it."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
 
@@ -42,6 +43,7 @@ class TestClausalPropagator:
 
     def test_nested_push_pop(self):
         """Two nested push/pop levels restore independently."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
 
@@ -63,6 +65,7 @@ class TestClausalPropagator:
 
     def test_pop_multiple(self):
         """pop(2) undoes two levels at once."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
 
@@ -78,6 +81,7 @@ class TestClausalPropagator:
 
     def test_pop_zero(self):
         """pop(0) is a no-op."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
         x = Var()
@@ -89,6 +93,7 @@ class TestClausalPropagator:
 
     def test_push_does_not_bind(self):
         """push() itself does not bind any variables."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
         x = Var()
@@ -98,6 +103,7 @@ class TestClausalPropagator:
 
     def test_scope_marks_stack(self):
         """scope_marks is correct after push/pop."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
         assert len(prop.scope_marks) == 0
@@ -112,6 +118,7 @@ class TestClausalPropagator:
 
     def test_fresh_creates_new_trail(self):
         """fresh(None) creates a new propagator with a different trail."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
         fresh = prop.fresh(None)
@@ -119,6 +126,7 @@ class TestClausalPropagator:
 
     def test_fresh_shares_var_map(self):
         """fresh() propagator shares var_map/rev_map (read-only during solving)."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         prop = self._make(trail)
@@ -128,6 +136,7 @@ class TestClausalPropagator:
 
     def test_fresh_inherits_goals(self):
         """fresh() propagator inherits on_fixed_goals."""
+        # nv
         trail = Trail()
         state = get_z3_state(trail)
         goal = object()  # dummy goal
@@ -140,6 +149,7 @@ class TestClausalPropagator:
 
     def test_fresh_push_pop_independent(self):
         """fresh() propagator's push/pop operate on its own trail."""
+        # nv
         trail = Trail()
         prop = self._make(trail)
         fresh = prop.fresh(None)
@@ -164,6 +174,7 @@ class TestClausalPropagator:
 class TestTableConstraint:
     def test_basic_table(self):
         """Variables must match one of the given tuples."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -175,6 +186,7 @@ class TestTableConstraint:
 
     def test_empty_table_fails(self):
         """Empty table → no solutions."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -183,6 +195,7 @@ class TestTableConstraint:
 
     def test_table_with_other_constraints(self):
         """Table + additional constraint narrows solutions."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -195,6 +208,7 @@ class TestTableConstraint:
 
     def test_single_row_table(self):
         """Single-row table forces unique solution."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 10, trail)
@@ -206,6 +220,7 @@ class TestTableConstraint:
 
     def test_table_single_var(self):
         """Single-variable table works."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -217,6 +232,7 @@ class TestTableConstraint:
 
     def test_table_no_match_in_domain(self):
         """Table tuples outside the declared domain → no solutions."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 3, trail)
@@ -225,6 +241,7 @@ class TestTableConstraint:
 
     def test_table_with_ground_var(self):
         """Ground variable in position constrains which tuples match."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 10, trail)
@@ -237,6 +254,7 @@ class TestTableConstraint:
 
     def test_table_backtracking(self):
         """Table constraint is retracted when the trail scope is undone."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -257,6 +275,7 @@ class TestTableConstraint:
 
     def test_table_length_mismatch_raises(self):
         """Tuple length mismatch raises ValueError."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 5, trail)
@@ -271,6 +290,7 @@ class TestTableConstraint:
 class TestInnerTrampoline:
     def test_step_generator_in_propagator_context(self):
         """A StepGenerator runs correctly even when created in a propagator context."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, trampoline
 
         trail = Trail()
@@ -289,6 +309,7 @@ class TestInnerTrampoline:
 
     def test_inner_trampoline_bindings_undone_by_pop(self):
         """Bindings made by an inner trampoline are undone by propagator.pop()."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, trampoline
 
         trail = Trail()
@@ -311,6 +332,7 @@ class TestInnerTrampoline:
 
     def test_inner_trampoline_multiple_bindings(self):
         """Multiple bindings across two push levels, popped independently."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, trampoline
 
         trail = Trail()

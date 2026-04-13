@@ -4,14 +4,14 @@
 Test("stats mean exists") <- (
     StatsMean([1.0, 2.0, 3.0], R),
     DIFF is ++(abs(float(R) - 2.0)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 Test("normal pdf exists") <- (
     StatsNormalPdf(0.0, R),
     DIFF is ++(abs(float(R) - 0.3989422804)),
-    DIFF < 1e-6)
+    DIFF < 1e-6)  # nv
 
 Test("normal cdf exists") <- (
     StatsNormalCdf(0.0, R),
     DIFF is ++(abs(float(R) - 0.5)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv

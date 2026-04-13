@@ -107,17 +107,20 @@ class TestTermTransformerCapture:
 
     def test_python_lambda_syntax_rejected(self):
         """Python 'lambda' syntax raises SyntaxError in .clausal context."""
+        # nv
         with pytest.raises(SyntaxError, match="arrow syntax"):
             term_eval("lambda _x: _x")
 
     def test_lambda_param_generates_loadname(self):
         """Arrow lambda param reference in body is a LoadName (not a Var)."""
+        # nv
         node = term_eval("_x <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
         assert node.body.name == "_x"
 
     def test_lambda_captures_enclosing_var(self):
         """Arrow lambda body referencing enclosing var gets the same Var."""
+        # nv
         node, ns = term_eval_with_scope(
             "_x <- (_z)", seen_vars={"_z"}
         )
@@ -126,6 +129,7 @@ class TestTermTransformerCapture:
 
     def test_lambda_body_only_var_does_not_leak(self):
         """Var introduced in arrow lambda body does not appear in enclosing scope."""
+        # nv
         tree = ast.parse("_x <- (_x)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
@@ -135,6 +139,7 @@ class TestTermTransformerCapture:
 
     def test_lambda_captures_multiple_enclosing_vars(self):
         """Arrow lambda can capture multiple enclosing scope vars."""
+        # nv
         node, ns = term_eval_with_scope(
             "_x <- (_x)", seen_vars={"_a", "_b"}
         )
@@ -142,6 +147,7 @@ class TestTermTransformerCapture:
 
     def test_nested_lambda_captures_outer(self):
         """Nested arrow lambda captures from the outermost scope."""
+        # nv
         src = "_x <- (_y <- (_z))"
         node, ns = term_eval_with_scope(src, seen_vars={"_z"})
         assert isinstance(node, sa.Lambda)
@@ -151,17 +157,20 @@ class TestTermTransformerCapture:
 
     def test_anonymous_underscore_in_lambda(self):
         """_ in arrow lambda body is a fresh Var (anonymous)."""
+        # nv
         node = term_eval("_x <- (_)", sa.Lambda)
         assert is_var(node.body)
 
     def test_param_refs_are_loadname(self):
         """Arrow lambda with logic var params produces LoadName refs in body."""
+        # nv
         node = term_eval("(_x, _y) <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
         assert node.body.name == "_x"
 
     def test_nested_lambda_outer_param_is_loadname(self):
         """Inner arrow lambda references outer param as LoadName (not Var)."""
+        # nv
         src = "_x <- (_y <- (_x))"
         node = term_eval(src, sa.Lambda)
         inner = node.body
@@ -189,6 +198,7 @@ class TestCompileLambda:
     def test_compile_lambda_produces_funcdef(self):
         """_compile_goal_lambda returns a name and FunctionDef."""
         # Body: X_ := 1 — use LoadName for param ref
+        # nv
         lam = self._make_lambda(["X_"], Evaluate(left=LoadName(name="X_"), right=1))
         db = Database("test")
         name, fdef = _compile_goal_lambda(lam, {}, db, "trail")
@@ -198,6 +208,7 @@ class TestCompileLambda:
 
     def test_compile_lambda_param_is_func_arg(self):
         """Compiled lambda has params as function arguments."""
+        # nv
         lam = self._make_lambda(["X_"], Evaluate(left=LoadName(name="X_"), right=1))
         db = Database("test")
         name, fdef = _compile_goal_lambda(lam, {}, db, "trail")
@@ -208,6 +219,7 @@ class TestCompileLambda:
 
     def test_compile_lambda_captured_var_not_in_params(self):
         """Captured vars become closure references, not function args."""
+        # nv
         z = Var()  # captured
         # body: X_ := Z_ + 1 — X_ is LoadName (param), z is Var (captured)
         lam = self._make_lambda(
@@ -223,6 +235,7 @@ class TestCompileLambda:
 
     def test_flatten_conjunction(self):
         """_flatten_conjunction flattens And nodes."""
+        # nv
         a = Evaluate(left=Var(), right=1)
         b = Evaluate(left=Var(), right=2)
         c = Evaluate(left=Var(), right=3)
@@ -232,6 +245,7 @@ class TestCompileLambda:
 
     def test_flatten_single(self):
         """_flatten_conjunction with non-And returns singleton list."""
+        # nv
         a = Evaluate(left=Var(), right=1)
         assert _flatten_conjunction(a) == [a]
 
@@ -251,6 +265,7 @@ class TestLambdaRuntime:
 
     def test_call_goal_1_with_zero_arg_lambda(self):
         """call_goal/1 calls a zero-arg goal closure."""
+        # nv
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
@@ -266,6 +281,7 @@ class TestLambdaRuntime:
 
     def test_call_goal_2_with_one_arg_lambda(self):
         """call_goal/2 passes an extra arg to the closure."""
+        # nv
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
@@ -283,6 +299,7 @@ class TestLambdaRuntime:
 
     def test_call_goal_3_with_two_arg_lambda(self):
         """call_goal/3 passes two extra args to the closure."""
+        # nv
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
@@ -300,6 +317,7 @@ class TestLambdaRuntime:
 
     def test_call_goal_with_failing_lambda(self):
         """call_goal with a failing closure produces no solutions."""
+        # nv
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
@@ -313,6 +331,7 @@ class TestLambdaRuntime:
 
     def test_call_goal_with_multi_solution_lambda(self):
         """call_goal with a closure that yields multiple solutions."""
+        # nv
         from clausal.logic.builtins import _BUILTINS
 
         trail = Trail()
@@ -340,6 +359,7 @@ class TestCompiledLambdaExecution:
     def test_lambda_arithmetic_body(self):
         """Lambda with := arithmetic body works end-to-end."""
         # Build: test(X_, Result_) <- call_goal(lambda Y_: Result_ := Y_ + 1, X_)
+        # nv
         x = Var()
         result = Var()
 
@@ -366,6 +386,7 @@ class TestCompiledLambdaExecution:
     def test_lambda_captures_enclosing_var(self):
         """Lambda captures a variable from the enclosing clause."""
         # Build: test(Z_, Result_) <- call_goal(lambda X_: Result_ := X_ + Z_, 10)
+        # nv
         z = Var()
         result = Var()
 
@@ -392,6 +413,7 @@ class TestCompiledLambdaExecution:
     def test_lambda_with_unification_body(self):
         """Lambda body using 'is' (unification) works."""
         # test(R_) <- call_goal(lambda X_: X_ is 42, R_)
+        # nv
         r = Var()
         lam = sa.Lambda(
             params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
@@ -414,6 +436,7 @@ class TestCompiledLambdaExecution:
     def test_lambda_body_fails(self):
         """Lambda with failing body produces no solutions."""
         # test() <- call_goal(lambda X_: X_ is not X_, 42)
+        # nv
         lam = sa.Lambda(
             params=sa.Params(params=[sa.PosOrKwParam(name="X_")]),
             body=DoesNotUnify(left=LoadName(name="X_"), right=LoadName(name="X_")),
@@ -434,6 +457,7 @@ class TestCompiledLambdaExecution:
     def test_lambda_body_conjunction(self):
         """Lambda body with And (conjunction) works."""
         # test(R_) <- call_goal(lambda X_, Y_: (T_ := X_ + 1 and Y_ := T_ * 2), 5, R_)
+        # nv
         t = Var()
         r = Var()
         lam = sa.Lambda(
@@ -478,6 +502,7 @@ class TestLambdaImport:
 
     def test_lambda_unify_in_clausal_file(self, tmp_path):
         """Arrow lambda with unification body in a .clausal file."""
+        # nv
         clausal_file = tmp_path / "lambda_test.clausal"
         clausal_file.write_text(
             "-module(lambda_test, [apply_val/2])\n"
@@ -492,6 +517,7 @@ class TestLambdaImport:
 
     def test_lambda_captures_head_var_in_clausal(self, tmp_path):
         """Arrow lambda in .clausal captures a variable from the clause head."""
+        # nv
         clausal_file = tmp_path / "capture_test.clausal"
         clausal_file.write_text(
             "-module(capture_test, [bind_z/2])\n"
@@ -506,6 +532,7 @@ class TestLambdaImport:
 
     def test_lambda_with_conjunction_in_clausal(self, tmp_path):
         """Arrow lambda with conjunction body in .clausal file."""
+        # nv
         clausal_file = tmp_path / "conj_test.clausal"
         clausal_file.write_text(
             "-module(conj_test, [bind_pair/3])\n"
@@ -520,6 +547,7 @@ class TestLambdaImport:
 
     def test_lambda_zero_arg_in_clausal(self, tmp_path):
         """Zero-arg arrow lambda in .clausal file."""
+        # nv
         clausal_file = tmp_path / "zero_arg_test.clausal"
         clausal_file.write_text(
             "-module(zero_arg_test, [run_goal/1])\n"
@@ -538,6 +566,7 @@ class TestLambdaImport:
 
     def test_lambda_calls_user_predicate(self, tmp_path):
         """Arrow lambda body calling a user predicate via _tramp_call bridge."""
+        # nv
         clausal_file = tmp_path / "lambda_pred_call.clausal"
         clausal_file.write_text(
             "-module(lambda_pred_call, [double/2, apply_double/2])\n"
@@ -554,6 +583,7 @@ class TestLambdaImport:
 
     def test_lambda_calls_multi_solution_predicate(self, tmp_path):
         """Arrow lambda body calling a multi-solution predicate collects all answers."""
+        # nv
         clausal_file = tmp_path / "lambda_multi.clausal"
         clausal_file.write_text(
             "-module(lambda_multi, [color/1, get_color/1])\n"
@@ -576,6 +606,7 @@ class TestLambdaImport:
 
     def test_python_lambda_rejected_in_clausal_file(self, tmp_path):
         """Python lambda syntax raises SyntaxError in .clausal files."""
+        # nv
         clausal_file = tmp_path / "py_lambda.clausal"
         clausal_file.write_text(
             "-module(py_lambda, [test/1])\n"
@@ -596,12 +627,14 @@ class TestArrowLambdaTermTransformer:
 
     def test_single_param_arrow_lambda(self):
         """_x <- (_x > 0) produces a Lambda with one param."""
+        # nv
         node = term_eval("_x <- (_x > 0)", sa.Lambda)
         assert len(node.params.params) == 1
         assert node.params.params[0].name == "_x"
 
     def test_two_param_arrow_lambda(self):
         """(_x, _y) <- (_y is _x) produces a Lambda with two params."""
+        # nv
         node = term_eval("(_x, _y) <- (_y is _x)", sa.Lambda)
         assert len(node.params.params) == 2
         assert node.params.params[0].name == "_x"
@@ -609,17 +642,20 @@ class TestArrowLambdaTermTransformer:
 
     def test_zero_param_arrow_lambda(self):
         """() <- (True) produces a zero-param Lambda."""
+        # nv
         node = term_eval("() <- (True)", sa.Lambda)
         assert len(node.params.params) == 0
 
     def test_arrow_lambda_param_generates_loadname(self):
         """Arrow lambda param in body is a LoadName (not Var)."""
+        # nv
         node = term_eval("_x <- (_x)", sa.Lambda)
         assert isinstance(node.body, sa.LoadName)
         assert node.body.name == "_x"
 
     def test_arrow_lambda_captures_enclosing_var(self):
         """Arrow lambda captures enclosing scope Var."""
+        # nv
         node, ns = term_eval_with_scope(
             "_x <- (_z)", seen_vars={"_z"}
         )
@@ -628,6 +664,7 @@ class TestArrowLambdaTermTransformer:
 
     def test_arrow_lambda_body_var_does_not_leak(self):
         """Var in arrow lambda body does not leak to enclosing scope."""
+        # nv
         tree = ast.parse("_x <- (_x)", mode="eval")
         ast.fix_missing_locations(tree)
         tt = TermTransformer()
@@ -637,12 +674,14 @@ class TestArrowLambdaTermTransformer:
 
     def test_arrow_lambda_walrus_in_body(self):
         """Arrow lambda supports := (Evaluate) in body — unlike Python lambda."""
+        # nv
         node = term_eval("(_x, _y) <- (_y := _x + 1)", sa.Lambda)
         assert isinstance(node, sa.Lambda)
         assert isinstance(node.body, Evaluate)
 
     def test_functor_head_stays_predicate(self):
         """A functor call head like foo(_x) <- body stays as Predicate, not Lambda."""
+        # nv
         from clausal.terms import Predicate as PredNode
         tree = ast.parse("foo(_x) <- (_x > 0)", mode="eval")
         ast.fix_missing_locations(tree)
@@ -660,6 +699,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_unify(self):
         """Arrow lambda with unification body works at runtime."""
+        # nv
         from clausal.logic.database import Clause, Database
         from clausal.logic.compiler import compile_predicate_trampoline
 
@@ -669,6 +709,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_arithmetic_in_clausal(self, tmp_path):
         """Arrow lambda with := arithmetic in .clausal file."""
+        # nv
         clausal_file = tmp_path / "arrow_arith.clausal"
         clausal_file.write_text(
             "-module(arrow_arith, [apply_inc/2])\n"
@@ -687,6 +728,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_two_params_in_clausal(self, tmp_path):
         """Two-param arrow lambda in .clausal file."""
+        # nv
         clausal_file = tmp_path / "arrow_two.clausal"
         clausal_file.write_text(
             "-module(arrow_two, [apply_add/3])\n"
@@ -705,6 +747,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_zero_arg_in_clausal(self, tmp_path):
         """Zero-arg arrow lambda in .clausal file."""
+        # nv
         clausal_file = tmp_path / "arrow_zero.clausal"
         clausal_file.write_text(
             "-module(arrow_zero, [run_goal/1])\n"
@@ -723,6 +766,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_captures_head_var(self, tmp_path):
         """Arrow lambda captures clause-head variable."""
+        # nv
         clausal_file = tmp_path / "arrow_capture.clausal"
         clausal_file.write_text(
             "-module(arrow_capture, [add_z/2])\n"
@@ -741,6 +785,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_conjunction_in_clausal(self, tmp_path):
         """Arrow lambda with conjunction body in .clausal file."""
+        # nv
         clausal_file = tmp_path / "arrow_conj.clausal"
         clausal_file.write_text(
             "-module(arrow_conj, [transform/2])\n"
@@ -759,6 +804,7 @@ class TestArrowLambdaCompiled:
 
     def test_arrow_lambda_calls_user_predicate(self, tmp_path):
         """Arrow lambda calling a user-defined predicate."""
+        # nv
         clausal_file = tmp_path / "arrow_pred.clausal"
         clausal_file.write_text(
             "-module(arrow_pred, [double/2, apply_double/2])\n"

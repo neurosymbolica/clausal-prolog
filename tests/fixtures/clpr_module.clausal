@@ -5,7 +5,7 @@
 Test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X]),
-)
+)  # nv
 
 Test("clpr real bounds") <- (
     clpr.real((
@@ -13,13 +13,13 @@ Test("clpr real bounds") <- (
         X == 5.0,
     )),
     clpr.label([X]),
-)
+)  # nv
 
 # ── Infeasibility ───────────────────────────────────────────────────────────
 
 Test("clpr infeasible") <- (
     not(clpr.real((X >= 10, X <= 5)))
-)
+)  # nv
 
 # ── Arithmetic ──────────────────────────────────────────────────────────────
 
@@ -29,4 +29,4 @@ Test("clpr arithmetic") <- (
         X * 2 == 6.0,
     )),
     clpr.label([X]),
-)
+)  # nv

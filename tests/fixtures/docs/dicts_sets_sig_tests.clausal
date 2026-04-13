@@ -6,10 +6,10 @@ Test("dict operations") <- (
     dict_put("b", 2, {"a": 1}, D),
     dict_keys(D, K),
     length(K, 2)
-)
+)  # nv
 
 Test("set operations") <- (
     is_set({1, 2, 3}),
     set_union({1}, {2}, U),
     set_subset({1}, U)
-)
+)  # nv

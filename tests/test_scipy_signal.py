@@ -90,45 +90,54 @@ _SIGNAL = np.sin(2 * np.pi * 50 * _T) + 0.5 * np.sin(2 * np.pi * 200 * _T)
 
 class TestButterworth:
     def test_default_returns_dict(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_ba_coefficients_are_arrays(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1)
         assert hasattr(r['b'], '__len__')
         assert hasattr(r['a'], '__len__')
 
     def test_with_btype_high(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1, 'high')
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_with_output_sos(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1, 'low', 'sos')
         assert isinstance(r, dict)
         assert 'sos' in r
         assert r['sos'].ndim == 2
 
     def test_with_output_zpk(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1, 'low', 'zpk')
         assert isinstance(r, dict)
         assert 'z' in r and 'p' in r and 'k' in r
 
     def test_with_fs(self):
+        # nv
         r = _drive(Butterworth, 4, 100.0, 'low', 'ba', _FS)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Butterworth, 4, 0.1)
 
     def test_result_get_b(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1)
         b = _drive_result_get(r, 'b')
         assert b is not None
 
     def test_result_get_sos(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1, 'low', 'sos')
         sos = _drive_result_get(r, 'sos')
         assert sos is not None
@@ -139,20 +148,24 @@ class TestButterworth:
 
 class TestBessel:
     def test_default_returns_dict(self):
+        # nv
         r = _drive(Bessel, 4, 0.1)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_with_btype(self):
+        # nv
         r = _drive(Bessel, 4, 0.1, 'low')
         assert isinstance(r, dict)
 
     def test_with_output_sos(self):
+        # nv
         r = _drive(Bessel, 4, 0.1, 'low', 'sos')
         assert isinstance(r, dict)
         assert 'sos' in r
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Bessel, 4, 0.1)
 
 
@@ -160,20 +173,24 @@ class TestBessel:
 
 class TestChebyshevType1:
     def test_default_returns_dict(self):
+        # nv
         r = _drive(ChebyshevType1, 4, 5, 0.1)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_with_btype(self):
+        # nv
         r = _drive(ChebyshevType1, 4, 5, 0.1, 'high')
         assert isinstance(r, dict)
 
     def test_with_output_sos(self):
+        # nv
         r = _drive(ChebyshevType1, 4, 5, 0.1, 'low', 'sos')
         assert isinstance(r, dict)
         assert 'sos' in r
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(ChebyshevType1, 4, 5, 0.1)
 
 
@@ -181,20 +198,24 @@ class TestChebyshevType1:
 
 class TestChebyshevType2:
     def test_default_returns_dict(self):
+        # nv
         r = _drive(ChebyshevType2, 4, 40, 0.1)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_with_btype(self):
+        # nv
         r = _drive(ChebyshevType2, 4, 40, 0.1, 'high')
         assert isinstance(r, dict)
 
     def test_with_output_sos(self):
+        # nv
         r = _drive(ChebyshevType2, 4, 40, 0.1, 'low', 'sos')
         assert isinstance(r, dict)
         assert 'sos' in r
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(ChebyshevType2, 4, 40, 0.1)
 
 
@@ -202,20 +223,24 @@ class TestChebyshevType2:
 
 class TestElliptic:
     def test_default_returns_dict(self):
+        # nv
         r = _drive(Elliptic, 4, 5, 40, 0.1)
         assert isinstance(r, dict)
         assert 'b' in r and 'a' in r
 
     def test_with_btype(self):
+        # nv
         r = _drive(Elliptic, 4, 5, 40, 0.1, 'high')
         assert isinstance(r, dict)
 
     def test_with_output_sos(self):
+        # nv
         r = _drive(Elliptic, 4, 5, 40, 0.1, 'low', 'sos')
         assert isinstance(r, dict)
         assert 'sos' in r
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Elliptic, 4, 5, 40, 0.1)
 
 
@@ -227,27 +252,32 @@ class TestFrequencyResponse:
         return r['b'], r['a']
 
     def test_returns_w_h(self):
+        # nv
         b, a = self._make_butterworth()
         r = _drive(FrequencyResponse, b, a)
         assert isinstance(r, dict)
         assert 'w' in r and 'h' in r
 
     def test_w_length_default(self):
+        # nv
         b, a = self._make_butterworth()
         r = _drive(FrequencyResponse, b, a)
         assert len(r['w']) == 512
 
     def test_with_nfreqs(self):
+        # nv
         b, a = self._make_butterworth()
         r = _drive(FrequencyResponse, b, a, 256)
         assert len(r['w']) == 256
 
     def test_h_is_complex(self):
+        # nv
         b, a = self._make_butterworth()
         r = _drive(FrequencyResponse, b, a)
         assert np.iscomplexobj(r['h'])
 
     def test_wrong_result_fails(self):
+        # nv
         b, a = self._make_butterworth()
         assert _fails_with_wrong_result(FrequencyResponse, b, a)
 
@@ -260,17 +290,20 @@ class TestLinearFilter:
         return r['b'], r['a']
 
     def test_filters_signal(self):
+        # nv
         b, a = self._make_coeffs()
         y = _drive(LinearFilter, b, a, _SIGNAL)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(_SIGNAL)
 
     def test_with_axis(self):
+        # nv
         b, a = self._make_coeffs()
         y = _drive(LinearFilter, b, a, _SIGNAL, -1)
         assert isinstance(y, np.ndarray)
 
     def test_with_zi_returns_dict(self):
+        # nv
         import scipy.signal as sig
         b, a = self._make_coeffs()
         zi = sig.lfilter_zi(b, a) * _SIGNAL[0]
@@ -279,6 +312,7 @@ class TestLinearFilter:
         assert 'y' in result and 'zf' in result
 
     def test_wrong_result_fails(self):
+        # nv
         b, a = self._make_coeffs()
         assert _fails_with_wrong_result(LinearFilter, b, a, _SIGNAL)
 
@@ -291,17 +325,20 @@ class TestSOSFilter:
         return r['sos']
 
     def test_filters_signal(self):
+        # nv
         sos = self._make_sos()
         y = _drive(SOSFilter, sos, _SIGNAL)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(_SIGNAL)
 
     def test_with_axis(self):
+        # nv
         sos = self._make_sos()
         y = _drive(SOSFilter, sos, _SIGNAL, -1)
         assert isinstance(y, np.ndarray)
 
     def test_with_zi_returns_dict(self):
+        # nv
         import scipy.signal as sig
         sos = self._make_sos()
         zi = sig.sosfilt_zi(sos) * _SIGNAL[0]
@@ -310,6 +347,7 @@ class TestSOSFilter:
         assert 'y' in result and 'zf' in result
 
     def test_wrong_result_fails(self):
+        # nv
         sos = self._make_sos()
         assert _fails_with_wrong_result(SOSFilter, sos, _SIGNAL)
 
@@ -322,22 +360,26 @@ class TestForwardBackwardFilter:
         return r['b'], r['a']
 
     def test_zero_phase_filtering(self):
+        # nv
         b, a = self._make_coeffs()
         y = _drive(ForwardBackwardFilter, b, a, _SIGNAL)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(_SIGNAL)
 
     def test_with_axis(self):
+        # nv
         b, a = self._make_coeffs()
         y = _drive(ForwardBackwardFilter, b, a, _SIGNAL, -1)
         assert isinstance(y, np.ndarray)
 
     def test_wrong_result_fails(self):
+        # nv
         b, a = self._make_coeffs()
         assert _fails_with_wrong_result(ForwardBackwardFilter, b, a, _SIGNAL)
 
     def test_differs_from_linear_filter(self):
         """Forward-backward filter produces different output than linear filter (zero-phase)."""
+        # nv
         b, a = self._make_coeffs()
         y_fb = _drive(ForwardBackwardFilter, b, a, _SIGNAL)
         y_lf = _drive(LinearFilter, b, a, _SIGNAL)
@@ -352,22 +394,26 @@ class TestSOSForwardBackwardFilter:
         return r['sos']
 
     def test_zero_phase_filtering(self):
+        # nv
         sos = self._make_sos()
         y = _drive(SOSForwardBackwardFilter, sos, _SIGNAL)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(_SIGNAL)
 
     def test_with_axis(self):
+        # nv
         sos = self._make_sos()
         y = _drive(SOSForwardBackwardFilter, sos, _SIGNAL, -1)
         assert isinstance(y, np.ndarray)
 
     def test_wrong_result_fails(self):
+        # nv
         sos = self._make_sos()
         assert _fails_with_wrong_result(SOSForwardBackwardFilter, sos, _SIGNAL)
 
     def test_pipeline_design_and_filter(self):
         """Full pipeline: design sos filter → apply forward-backward filter."""
+        # nv
         r = _drive(Butterworth, 4, 0.1, 'low', 'sos')
         sos = _drive_result_get(r, 'sos')
         y = _drive(SOSForwardBackwardFilter, sos, _SIGNAL)
@@ -380,15 +426,18 @@ class TestSOSForwardBackwardFilter:
 
 class TestDecimate:
     def test_decimates_signal(self):
+        # nv
         y = _drive(Decimate, _SIGNAL, 10)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(_SIGNAL) // 10
 
     def test_with_axis(self):
+        # nv
         y = _drive(Decimate, _SIGNAL, 10, 0)
         assert isinstance(y, np.ndarray)
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Decimate, _SIGNAL, 10)
 
 
@@ -396,18 +445,21 @@ class TestDecimate:
 
 class TestResample:
     def test_resamples_signal(self):
+        # nv
         num = len(_SIGNAL) // 2
         y = _drive(Resample, _SIGNAL, num)
         assert isinstance(y, np.ndarray)
         assert len(y) == num
 
     def test_with_axis(self):
+        # nv
         num = len(_SIGNAL) // 2
         y = _drive(Resample, _SIGNAL, num, 0)
         assert isinstance(y, np.ndarray)
         assert len(y) == num
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Resample, _SIGNAL, len(_SIGNAL) // 2)
 
 
@@ -418,27 +470,33 @@ class TestConvolve:
     _B = np.array([0.0, 1.0, 0.5])
 
     def test_full_convolution(self):
+        # nv
         y = _drive(Convolve, self._A, self._B)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(self._A) + len(self._B) - 1
 
     def test_with_mode_same(self):
+        # nv
         y = _drive(Convolve, self._A, self._B, 'same')
         assert isinstance(y, np.ndarray)
         assert len(y) == max(len(self._A), len(self._B))
 
     def test_with_mode_valid(self):
+        # nv
         y = _drive(Convolve, self._A, self._B, 'valid')
         assert isinstance(y, np.ndarray)
 
     def test_with_method_direct(self):
+        # nv
         y = _drive(Convolve, self._A, self._B, 'full', 'direct')
         assert isinstance(y, np.ndarray)
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Convolve, self._A, self._B)
 
     def test_known_result(self):
+        # nv
         a = np.array([1.0, 2.0, 3.0])
         b = np.array([1.0, 0.0])
         y = _drive(Convolve, a, b, 'valid')
@@ -452,19 +510,23 @@ class TestCorrelate:
     _B = np.array([0.0, 1.0, 0.5])
 
     def test_full_correlation(self):
+        # nv
         y = _drive(Correlate, self._A, self._B)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(self._A) + len(self._B) - 1
 
     def test_with_mode(self):
+        # nv
         y = _drive(Correlate, self._A, self._B, 'same')
         assert isinstance(y, np.ndarray)
 
     def test_with_method(self):
+        # nv
         y = _drive(Correlate, self._A, self._B, 'full', 'direct')
         assert isinstance(y, np.ndarray)
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Correlate, self._A, self._B)
 
 
@@ -475,21 +537,25 @@ class TestFFTConvolve:
     _B = np.array([0.0, 1.0, 0.5])
 
     def test_full_convolution(self):
+        # nv
         y = _drive(FFTConvolve, self._A, self._B)
         assert isinstance(y, np.ndarray)
         assert len(y) == len(self._A) + len(self._B) - 1
 
     def test_with_mode(self):
+        # nv
         y = _drive(FFTConvolve, self._A, self._B, 'same')
         assert isinstance(y, np.ndarray)
 
     def test_matches_direct_convolve(self):
         """FFT convolution should match direct convolution."""
+        # nv
         y_fft = _drive(FFTConvolve, self._A, self._B)
         y_dir = _drive(Convolve, self._A, self._B, 'full', 'direct')
         assert np.allclose(y_fft, y_dir, atol=1e-10)
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(FFTConvolve, self._A, self._B)
 
 
@@ -497,33 +563,40 @@ class TestFFTConvolve:
 
 class TestPeriodogram:
     def test_returns_f_pxx(self):
+        # nv
         r = _drive(Periodogram, _SIGNAL)
         assert isinstance(r, dict)
         assert 'f' in r and 'Pxx' in r
 
     def test_default_fs(self):
+        # nv
         r = _drive(Periodogram, _SIGNAL)
         # default fs=1.0, max freq = 0.5
         assert r['f'][-1] <= 0.5
 
     def test_with_fs(self):
+        # nv
         r = _drive(Periodogram, _SIGNAL, _FS)
         assert r['f'][-1] <= _FS / 2 + 1
 
     def test_pxx_nonnegative(self):
+        # nv
         r = _drive(Periodogram, _SIGNAL, _FS)
         assert np.all(r['Pxx'] >= 0)
 
     def test_result_get_f(self):
+        # nv
         r = _drive(Periodogram, _SIGNAL, _FS)
         f = _drive_result_get(r, 'f')
         assert f is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Periodogram, _SIGNAL)
 
     def test_peak_at_50hz(self):
         """Periodogram should show a peak near 50 Hz."""
+        # nv
         r = _drive(Periodogram, _SIGNAL, _FS)
         f, Pxx = r['f'], r['Pxx']
         peak_idx = np.argmax(Pxx)
@@ -534,28 +607,34 @@ class TestPeriodogram:
 
 class TestWelch:
     def test_returns_f_pxx(self):
+        # nv
         r = _drive(Welch, _SIGNAL)
         assert isinstance(r, dict)
         assert 'f' in r and 'Pxx' in r
 
     def test_with_fs(self):
+        # nv
         r = _drive(Welch, _SIGNAL, _FS)
         assert r['f'][-1] <= _FS / 2 + 1
 
     def test_pxx_nonnegative(self):
+        # nv
         r = _drive(Welch, _SIGNAL, _FS)
         assert np.all(r['Pxx'] >= 0)
 
     def test_result_get_pxx(self):
+        # nv
         r = _drive(Welch, _SIGNAL, _FS)
         pxx = _drive_result_get(r, 'Pxx')
         assert pxx is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Welch, _SIGNAL)
 
     def test_smoother_than_periodogram(self):
         """Welch power spectral density should be smoother than periodogram."""
+        # nv
         rw = _drive(Welch, _SIGNAL, _FS)
         rp = _drive(Periodogram, _SIGNAL, _FS)
         assert rw['Pxx'].std() <= rp['Pxx'].std() + 1e-10
@@ -565,28 +644,34 @@ class TestWelch:
 
 class TestSpectrogram:
     def test_returns_f_t_sxx(self):
+        # nv
         r = _drive(Spectrogram, _SIGNAL)
         assert isinstance(r, dict)
         assert 'f' in r and 't' in r and 'Sxx' in r
 
     def test_with_fs(self):
+        # nv
         r = _drive(Spectrogram, _SIGNAL, _FS)
         assert r['f'][-1] <= _FS / 2 + 1
 
     def test_sxx_is_2d(self):
+        # nv
         r = _drive(Spectrogram, _SIGNAL, _FS)
         assert r['Sxx'].ndim == 2
 
     def test_sxx_nonnegative(self):
+        # nv
         r = _drive(Spectrogram, _SIGNAL, _FS)
         assert np.all(r['Sxx'] >= 0)
 
     def test_result_get_sxx(self):
+        # nv
         r = _drive(Spectrogram, _SIGNAL, _FS)
         sxx = _drive_result_get(r, 'Sxx')
         assert sxx is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Spectrogram, _SIGNAL)
 
 
@@ -594,26 +679,31 @@ class TestSpectrogram:
 
 class TestResultGet:
     def test_extracts_field(self):
+        # nv
         d = {'x': 42.0, 'fun': 0.0}
         v = _drive_result_get(d, 'x')
         assert v == 42.0
 
     def test_missing_field_fails(self):
+        # nv
         d = {'x': 42.0}
         v = _drive_result_get(d, 'missing')
         assert v is None
 
     def test_non_dict_fails(self):
+        # nv
         v = _drive_result_get("not a dict", 'x')
         assert v is None
 
     def test_non_string_field_fails(self):
+        # nv
         d = {'x': 1.0}
         v = _drive_result_get(d, 42)
         assert v is None
 
     def test_unify_with_bound_correct(self):
         """ResultGet should succeed when VALUE is already bound to the correct value."""
+        # nv
         d = {'b': np.array([1.0])}
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
@@ -624,6 +714,7 @@ class TestResultGet:
 
     def test_unify_with_bound_wrong_fails(self):
         """ResultGet should fail when VALUE is bound to a different value."""
+        # nv
         d = {'x': 42.0}
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
@@ -638,6 +729,7 @@ class TestFilterPipeline:
     """Integration tests for the filter design → apply pipeline."""
 
     def test_butterworth_ba_linear_filter(self):
+        # nv
         r = _drive(Butterworth, 4, 100.0, 'low', 'ba', _FS)
         b = _drive_result_get(r, 'b')
         a = _drive_result_get(r, 'a')
@@ -645,12 +737,14 @@ class TestFilterPipeline:
         assert isinstance(y, np.ndarray)
 
     def test_butterworth_sos_forward_backward(self):
+        # nv
         r = _drive(Butterworth, 4, 100.0, 'low', 'sos', _FS)
         sos = _drive_result_get(r, 'sos')
         y = _drive(SOSForwardBackwardFilter, sos, _SIGNAL)
         assert isinstance(y, np.ndarray)
 
     def test_chebyshev_type1_sos_second_order_sections_filter(self):
+        # nv
         r = _drive(ChebyshevType1, 4, 5, 0.1, 'low', 'sos')
         sos = _drive_result_get(r, 'sos')
         y = _drive(SOSFilter, sos, _SIGNAL)
@@ -658,12 +752,14 @@ class TestFilterPipeline:
 
     def test_butterworth_highpass_attenuates_low_frequency(self):
         """High-pass Butterworth should attenuate the 50 Hz component."""
+        # nv
         r = _drive(Butterworth, 6, 0.3, 'high', 'sos')
         sos = _drive_result_get(r, 'sos')
         y = _drive(SOSForwardBackwardFilter, sos, _SIGNAL)
         assert isinstance(y, np.ndarray)
 
     def test_frequency_response_after_design(self):
+        # nv
         r = _drive(Butterworth, 4, 0.1)
         b = _drive_result_get(r, 'b')
         a = _drive_result_get(r, 'a')
@@ -674,6 +770,7 @@ class TestFilterPipeline:
 
     def test_convolve_correlate_symmetry(self):
         """For a symmetric kernel, convolve and correlate should match."""
+        # nv
         kernel = np.array([1.0, 2.0, 1.0])
         signal = np.array([1.0, 0.0, 1.0, 0.0, 1.0])
         y_conv = _drive(Convolve, signal, kernel, 'same')

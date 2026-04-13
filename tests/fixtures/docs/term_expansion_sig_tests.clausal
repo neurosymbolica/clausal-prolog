@@ -6,8 +6,8 @@ TermExpansion(ITEM, ITEM, STATE, STATE) <- True
 color("red"),
 color("green"),
 
-Test("identity passthrough red") <- color("red")
-Test("identity passthrough green") <- color("green")
+Test("identity passthrough red") <- color("red")  # nv
+Test("identity passthrough green") <- color("green")  # nv
 
 # Regex auto-binding via goal expansion
 -import_from(regex, [Match])
@@ -15,4 +15,4 @@ Test("identity passthrough green") <- color("green")
 Test("regex auto-bind year") <- (
     Match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03"),
     YEAR == "2026"
-)
+)  # nv

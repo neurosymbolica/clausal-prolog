@@ -130,6 +130,7 @@ class TestCompileBodyTrampolineStructure:
 
     def test_empty_body_yields_step_parent(self):
         """Empty body (fact) → single yield Step(parent, None)."""
+        # nv
         import ast
         db = Database()
         vc: dict = {}
@@ -141,6 +142,7 @@ class TestCompileBodyTrampolineStructure:
 
     def test_single_is_goal_wraps_step_parent(self):
         """Is(left=x, right=1) body → mark + if unify: [yield Step(parent, None)] + undo."""
+        # nv
         import ast
         db = Database()
         x = Var()
@@ -150,6 +152,7 @@ class TestCompileBodyTrampolineStructure:
 
     def test_two_is_goals_nest_correctly(self):
         """Two Is goals produce nested structure: outer wraps inner."""
+        # nv
         import ast
         db = Database()
         x, y = Var(), Var()
@@ -163,6 +166,7 @@ class TestCompileGoalTrampolineCallStructure:
 
     def test_call_generates_three_stmts(self):
         """Call to a predicate → gen_assign + step_assign + While."""
+        # nv
         import ast
         db = Database()
         db.assertz(Clause(head=Compound("foo", (1,)), body=[]))
@@ -178,6 +182,7 @@ class TestCompileGoalTrampolineCallStructure:
 
     def test_while_body_ends_with_step_assign(self):
         """The While body ends with _st = (yield Step(gen, None)) — ask for more."""
+        # nv
         import ast
         db = Database()
         db.assertz(Clause(head=Compound("bar", (42,)), body=[]))
@@ -197,22 +202,26 @@ class TestCompileGoalTrampolineCallStructure:
 class TestTrampolineIntegrationFacts:
 
     def test_no_clauses_zero_solutions(self):
+        # nv
         db = Database()
         fn = compile_predicate_trampoline("empty", 1, [], db)
         trail = fresh_trail()
         assert _count_solutions(fn, 42, trail) == 0
 
     def test_single_fact_matches(self):
+        # nv
         _, fn = make_pred("foo", 1, [(Compound("foo", (1,)), [])])
         trail = fresh_trail()
         assert _count_solutions(fn, 1, trail) == 1
 
     def test_single_fact_no_match(self):
+        # nv
         _, fn = make_pred("foo", 1, [(Compound("foo", (1,)), [])])
         trail = fresh_trail()
         assert _count_solutions(fn, 2, trail) == 0
 
     def test_two_facts_one_solution_each(self):
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("foo", (1,)), body=[]))
         db.assertz(Clause(head=Compound("foo", (2,)), body=[]))
@@ -230,6 +239,7 @@ class TestTrampolineIntegrationFacts:
         literal-headed facts match only concrete args; for binding a Var,
         the clause head must itself be a Var.
         """
+        # nv
         a, b = Var(), Var()
         db = Database()
         db.assertz(Clause(head=Compound("digit", (a,)), body=[Is(left=a, right=1)]))
@@ -242,6 +252,7 @@ class TestTrampolineIntegrationFacts:
 
     def test_fact_binds_var(self):
         """Clause with Var head and Is body can bind an incoming Var arg."""
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("color", (x,)), body=[Is(left=x, right="red")]))
@@ -253,6 +264,7 @@ class TestTrampolineIntegrationFacts:
 
     def test_bindings_undone_after_exhaustion(self):
         """After search completes, trail undo restores Var to unbound."""
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("val", (x,)), body=[Is(left=x, right=99)]))
@@ -269,6 +281,7 @@ class TestTrampolineIntegrationFacts:
 class TestTrampolineIntegrationUnification:
 
     def test_is_goal_binds_var(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("is_x", (x,)), body=[Is(left=x, right=5)]))
@@ -279,6 +292,7 @@ class TestTrampolineIntegrationUnification:
         assert results == [5]
 
     def test_failed_is_goal_zero_solutions(self):
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("bad", (2,)), body=[Is(left=2, right=3)]))
         fn = compile_predicate_trampoline("bad", 1, db.clauses_for("bad", 1), db)
@@ -286,6 +300,7 @@ class TestTrampolineIntegrationUnification:
         assert _count_solutions(fn, 2, trail) == 0
 
     def test_conjunction_body_both_bound(self):
+        # nv
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
@@ -310,6 +325,7 @@ class TestTrampolineIntegrationPredicateCall:
         Note: head matching is structural, so inner's clause must use a Var
         head (not a literal) to accept an unbound Var argument from wrap's body.
         """
+        # nv
         db = Database()
         ix = Var()
         db.assertz(Clause(head=Compound("inner", (ix,)), body=[Is(left=ix, right=42)]))
@@ -331,6 +347,7 @@ class TestTrampolineIntegrationPredicateCall:
 
         color and size use Var heads + Is bodies so they accept unbound Var args.
         """
+        # nv
         db = Database()
         c1, c2 = Var(), Var()
         s1, s2 = Var(), Var()
@@ -366,6 +383,7 @@ class TestTrampolineIntegrationPredicateCall:
         N solutions (v bound to 0, 1, ..., N-1 in turn).  This verifies the
         trampoline drives through thousands of clauses without growing the stack.
         """
+        # nv
         N = 5000
         db = Database()
         for i in range(N):
@@ -379,6 +397,7 @@ class TestTrampolineIntegrationPredicateCall:
 
     def test_wrap_many_facts_via_call(self):
         """chain(X) :- step2(X). step2 has N clauses. No stack overflow via Step."""
+        # nv
         N = 1000
         db = Database()
         for i in range(N):
@@ -403,6 +422,7 @@ class TestTrampolineIntegrationPredicateCall:
 class TestTrampolineIntegrationDisjunction:
 
     def test_or_two_branches(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -416,6 +436,7 @@ class TestTrampolineIntegrationDisjunction:
         assert results == [1, 2]
 
     def test_or_left_fails_right_succeeds(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -437,6 +458,7 @@ class TestTrampolineIntegrationNegation:
 
     def test_naf_succeeds_when_inner_fails(self):
         """not(fail_pred(X)) where fail_pred has no clauses → 1 solution."""
+        # nv
         x = Var()
         db = Database()
         compile_predicate_trampoline("fail_pred", 1, [], db)
@@ -450,6 +472,7 @@ class TestTrampolineIntegrationNegation:
 
     def test_naf_fails_when_inner_succeeds(self):
         """not(succeed_pred(42)) where succeed_pred(42) is a fact → 0 solutions."""
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("succeed_pred", (42,)), body=[]))
@@ -471,6 +494,7 @@ class TestTrampolineIntegrationNegation:
 class TestTrampolineIntegrationMembership:
 
     def test_in_enumerates_list(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -484,6 +508,7 @@ class TestTrampolineIntegrationMembership:
         assert results == [1, 2, 3]
 
     def test_not_in_succeeds_when_absent(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -495,6 +520,7 @@ class TestTrampolineIntegrationMembership:
         assert _count_solutions(fn, 3, trail) == 1
 
     def test_not_in_fails_when_present(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -512,6 +538,7 @@ class TestTrampolineIntegrationMembership:
 class TestTrampolineIntegrationComparisons:
 
     def test_gt_succeeds(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("big", (x,)), body=[Gt(left=x, right=10)]))
@@ -520,6 +547,7 @@ class TestTrampolineIntegrationComparisons:
         assert _count_solutions(fn, 15, trail) == 1
 
     def test_gt_fails(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("big2", (x,)), body=[Gt(left=x, right=10)]))
@@ -530,6 +558,7 @@ class TestTrampolineIntegrationComparisons:
     def test_eq_structural_match(self):
         """same(X, Y) :- X == Y. Succeeds when both args are structurally equal."""
         # Use two separate Vars so match patterns don't have duplicate capture names.
+        # nv
         x1, x2 = Var(), Var()
         db = Database()
         db.assertz(Clause(
@@ -544,6 +573,7 @@ class TestTrampolineIntegrationComparisons:
 
     def test_arith_add_one(self):
         """add_one(X, Y) :- Y := X + 1."""
+        # nv
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
@@ -563,6 +593,7 @@ class TestTrampolineIntegrationComparisons:
 class TestTrampolineAlwaysFail:
 
     def test_always_fail_zero_solutions(self):
+        # nv
         db = Database()
         fn = compile_predicate_trampoline("undef", 2, [], db)
         trail = fresh_trail()
@@ -570,6 +601,7 @@ class TestTrampolineAlwaysFail:
 
     def test_always_fail_yields_tuple_none_done(self):
         """The always-fail generator's first yield is (parent=None, DONE)."""
+        # nv
         db = Database()
         fn = compile_predicate_trampoline("undef2", 1, [], db)
         trail = fresh_trail()
@@ -582,13 +614,16 @@ class TestTrampolineAlwaysFail:
 class TestDONESentinel:
 
     def test_done_is_singleton(self):
+        # nv
         from clausal.logic.compiler import DONE as D1, DONE as D2
         assert D1 is D2
 
     def test_done_is_not_none(self):
+        # nv
         assert DONE is not None
 
     def test_done_distinct_from_false(self):
+        # nv
         assert DONE is not False
 
 
@@ -600,6 +635,7 @@ class TestLazyRecompile:
 
     def test_lazy_recompile_fires_after_assertz(self):
         """Adding a clause after compilation triggers recompile on next dispatch."""
+        # nv
         db = Database()
         hv = Var()
         db.assertz(Clause(head=Compound("dyn", (hv,)), body=[Is(left=hv, right=1)]))
@@ -620,6 +656,7 @@ class TestLazyRecompile:
 
     def test_lazy_recompile_via_db_dispatch(self):
         """Lazy recompile works when driving dispatch from db.get_dispatch()."""
+        # nv
         db = Database()
         hv = Var()
         db.assertz(Clause(head=Compound("sdyn", (hv,)), body=[Is(left=hv, right=10)]))

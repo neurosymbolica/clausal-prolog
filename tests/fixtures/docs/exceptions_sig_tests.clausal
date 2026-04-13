@@ -6,7 +6,7 @@ Test("throw/catch exist") <- (
         ERR,
         ERR == "test_error"
     )
-)
+)  # nv
 
 Test("catch_recover exists") <- (
     catch_recover(
@@ -14,4 +14,4 @@ Test("catch_recover exists") <- (
         _,
         (1 == 1)
     )
-)
+)  # nv

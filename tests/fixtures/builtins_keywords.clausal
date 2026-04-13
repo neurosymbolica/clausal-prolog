@@ -17,9 +17,9 @@ Vec(x=0, y=0),
 Vec(x=1, y=2),
 Vec(x=3, y=4),
 
-Test("signature vec fields") <- (PredParams("Vec", 2, PARAMS), length(PARAMS, 2))
-Test("free fields unbound y") <- (FreeFields(Vec(x=1), KEYS), in_("y", KEYS))
+Test("signature vec fields") <- (PredParams("Vec", 2, PARAMS), length(PARAMS, 2))  # nv
+Test("free fields unbound y") <- (FreeFields(Vec(x=1), KEYS), in_("y", KEYS))  # nv
 Test("vary vec x") <- (
     UpdateX(Vec(x=1, y=2), 99, UPDATED),
     UPDATED == Vec(x=99, y=2)
-)
+)  # nv

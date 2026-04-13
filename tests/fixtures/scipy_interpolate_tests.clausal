@@ -14,7 +14,7 @@ Test("cubic spline eval at knots") <- (
     ++(abs(V1 - 1.0)) < 1e-8,
     ++(abs(V2 - 4.0)) < 1e-8,
     ++(abs(V3 - 9.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv
 
 # MakeSpline: BSpline through 5 points, eval at endpoints
 Test("make interp spline eval endpoints") <- (
@@ -24,7 +24,7 @@ Test("make interp spline eval endpoints") <- (
     V4 is ++(float(VALS[1])),
     ++(abs(V0 - 0.0)) < 1e-8,
     ++(abs(V4 - 16.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv
 
 # MakeSpline with explicit k=3
 Test("make interp spline with k") <- (
@@ -32,7 +32,7 @@ Test("make interp spline with k") <- (
     EvalSpline(H, [2.0], VALS),
     V2 is ++(float(VALS[0])),
     ++(abs(V2 - 4.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv
 
 # MakePCHIP: monotone cubic through x^2, check endpoints
 Test("pchip eval at endpoints") <- (
@@ -42,7 +42,7 @@ Test("pchip eval at endpoints") <- (
     V4 is ++(float(VALS[1])),
     ++(abs(V0 - 0.0)) < 1e-8,
     ++(abs(V4 - 16.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv
 
 # MakeAkima: eval at x=2, y should be 4
 Test("akima eval at interior point") <- (
@@ -50,7 +50,7 @@ Test("akima eval at interior point") <- (
     EvalSpline(H, [2.0], VALS),
     V2 is ++(float(VALS[0])),
     ++(abs(V2 - 4.0)) < 1e-6,
-    Free(H))
+    Free(H))  # nv
 
 # SplineIntegral: integral of x^2 from 0 to 3 = 9
 Test("spline integral of x squared") <- (
@@ -59,7 +59,7 @@ Test("spline integral of x squared") <- (
     SplineIntegral(H, 0.0, 3.0, AREA),
     DIFF is ++(abs(float(AREA) - 9.0)),
     DIFF < 1e-5,
-    Free(H))
+    Free(H))  # nv
 
 # SplineIntegral: integral of constant 1 from 0 to 5 = 5
 Test("spline integral of constant") <- (
@@ -68,7 +68,7 @@ Test("spline integral of constant") <- (
     SplineIntegral(H, 0.0, 5.0, AREA),
     DIFF is ++(abs(float(AREA) - 5.0)),
     DIFF < 1e-10,
-    Free(H))
+    Free(H))  # nv
 
 # SplineDerivative: d/dx x^2 at x=2 should be ~4
 Test("spline derivative of x squared") <- (
@@ -79,7 +79,7 @@ Test("spline derivative of x squared") <- (
     DV is ++(float(DVALS[0])),
     ++(abs(DV - 4.0)) < 1e-4,
     Free(H),
-    Free(HD))
+    Free(HD))  # nv
 
 # SplineDerivative with explicit order
 Test("spline derivative order 1") <- (
@@ -90,7 +90,7 @@ Test("spline derivative order 1") <- (
     DV is ++(float(DVALS[0])),
     ++(abs(DV - 2.0)) < 0.2,
     Free(H),
-    Free(HD))
+    Free(HD))  # nv
 
 # SplineRoots: y = x - 2, root at x=2
 Test("spline roots linear") <- (
@@ -100,9 +100,9 @@ Test("spline roots linear") <- (
     NROOTS == 1,
     ROOT0 is ++(float(ROOTS[0])),
     ++(abs(ROOT0 - 2.0)) < 1e-10,
-    Free(H))
+    Free(H))  # nv
 
 # Free: handle is released (just checks it succeeds)
 Test("free handle succeeds") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
-    Free(H))
+    Free(H))  # nv

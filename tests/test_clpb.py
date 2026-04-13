@@ -34,23 +34,27 @@ def fresh_trail() -> Trail:
 
 class TestBDDNode:
     def test_construction(self):
+        # nv
         node = BDDNode(0, BDD_TRUE, BDD_FALSE)
         assert node.var_id == 0
         assert node.high is BDD_TRUE
         assert node.low is BDD_FALSE
 
     def test_identity_equality(self):
+        # nv
         n1 = BDDNode(0, BDD_TRUE, BDD_FALSE)
         n2 = BDDNode(0, BDD_TRUE, BDD_FALSE)
         assert n1 != n2  # identity-based
         assert n1 == n1
 
     def test_hashable(self):
+        # nv
         node = BDDNode(0, BDD_TRUE, BDD_FALSE)
         d = {node: "ok"}
         assert d[node] == "ok"
 
     def test_repr(self):
+        # nv
         node = BDDNode(0, BDD_TRUE, BDD_FALSE)
         assert "BDDNode" in repr(node)
 
@@ -63,6 +67,7 @@ class TestBDDNode:
 class TestMakeNode:
     def test_reduction_rule(self):
         """If high == low, make_node returns the child (no node created)."""
+        # nv
         trail = fresh_trail()
         var = Var()
         vid = enumerate_var(var)
@@ -72,6 +77,7 @@ class TestMakeNode:
 
     def test_unique_table_sharing(self):
         """Same (high, low) for same var returns identical node."""
+        # nv
         trail = fresh_trail()
         var = Var()
         vid = enumerate_var(var)
@@ -80,6 +86,7 @@ class TestMakeNode:
         assert n1 is n2
 
     def test_different_children_different_node(self):
+        # nv
         trail = fresh_trail()
         var = Var()
         vid = enumerate_var(var)
@@ -95,30 +102,35 @@ class TestMakeNode:
 
 class TestApply:
     def test_and_terminals(self):
+        # nv
         assert apply('and', BDD_TRUE, BDD_TRUE) is BDD_TRUE
         assert apply('and', BDD_TRUE, BDD_FALSE) is BDD_FALSE
         assert apply('and', BDD_FALSE, BDD_TRUE) is BDD_FALSE
         assert apply('and', BDD_FALSE, BDD_FALSE) is BDD_FALSE
 
     def test_or_terminals(self):
+        # nv
         assert apply('or', BDD_TRUE, BDD_TRUE) is BDD_TRUE
         assert apply('or', BDD_TRUE, BDD_FALSE) is BDD_TRUE
         assert apply('or', BDD_FALSE, BDD_TRUE) is BDD_TRUE
         assert apply('or', BDD_FALSE, BDD_FALSE) is BDD_FALSE
 
     def test_xor_terminals(self):
+        # nv
         assert apply('xor', BDD_TRUE, BDD_TRUE) is BDD_FALSE
         assert apply('xor', BDD_TRUE, BDD_FALSE) is BDD_TRUE
         assert apply('xor', BDD_FALSE, BDD_TRUE) is BDD_TRUE
         assert apply('xor', BDD_FALSE, BDD_FALSE) is BDD_FALSE
 
     def test_equiv_terminals(self):
+        # nv
         assert apply('equiv', BDD_TRUE, BDD_TRUE) is BDD_TRUE
         assert apply('equiv', BDD_TRUE, BDD_FALSE) is BDD_FALSE
         assert apply('equiv', BDD_FALSE, BDD_TRUE) is BDD_FALSE
         assert apply('equiv', BDD_FALSE, BDD_FALSE) is BDD_TRUE
 
     def test_impl_terminals(self):
+        # nv
         assert apply('impl', BDD_FALSE, BDD_FALSE) is BDD_TRUE
         assert apply('impl', BDD_FALSE, BDD_TRUE) is BDD_TRUE
         assert apply('impl', BDD_TRUE, BDD_FALSE) is BDD_FALSE
@@ -126,6 +138,7 @@ class TestApply:
 
     def test_and_with_variable(self):
         """X AND 1 = X, X AND 0 = 0."""
+        # nv
         var = Var()
         vid = enumerate_var(var)
         x_bdd = make_node(vid, BDD_TRUE, BDD_FALSE, var)
@@ -134,6 +147,7 @@ class TestApply:
 
     def test_or_with_variable(self):
         """X OR 0 = X, X OR 1 = 1."""
+        # nv
         var = Var()
         vid = enumerate_var(var)
         x_bdd = make_node(vid, BDD_TRUE, BDD_FALSE, var)
@@ -142,6 +156,7 @@ class TestApply:
 
     def test_xor_two_variables(self):
         """X XOR Y has 4 paths, 2 satisfying."""
+        # nv
         x = Var()
         y = Var()
         xid = enumerate_var(x)
@@ -152,10 +167,12 @@ class TestApply:
         assert isinstance(result, BDDNode)
 
     def test_negate(self):
+        # nv
         assert negate(BDD_TRUE) is BDD_FALSE
         assert negate(BDD_FALSE) is BDD_TRUE
 
     def test_negate_variable(self):
+        # nv
         var = Var()
         vid = enumerate_var(var)
         x_bdd = make_node(vid, BDD_TRUE, BDD_FALSE, var)
@@ -172,10 +189,12 @@ class TestApply:
 
 class TestRestrict:
     def test_restrict_terminal(self):
+        # nv
         assert restrict(BDD_TRUE, 0, 1) is BDD_TRUE
         assert restrict(BDD_FALSE, 0, 0) is BDD_FALSE
 
     def test_restrict_identity(self):
+        # nv
         var = Var()
         vid = enumerate_var(var)
         x_bdd = make_node(vid, BDD_TRUE, BDD_FALSE, var)
@@ -184,6 +203,7 @@ class TestRestrict:
 
     def test_restrict_higher_var(self):
         """Restricting a variable not in the BDD returns BDD unchanged."""
+        # nv
         var = Var()
         vid = enumerate_var(var)
         x_bdd = make_node(vid, BDD_TRUE, BDD_FALSE, var)
@@ -198,18 +218,22 @@ class TestRestrict:
 
 class TestExprToBDD:
     def test_int_constants(self):
+        # nv
         assert _expr_to_bdd(1) is BDD_TRUE
         assert _expr_to_bdd(0) is BDD_FALSE
 
     def test_bool_constants(self):
+        # nv
         assert _expr_to_bdd(True) is BDD_TRUE
         assert _expr_to_bdd(False) is BDD_FALSE
 
     def test_invalid_int(self):
+        # nv
         with pytest.raises(ValueError, match="0 or 1"):
             _expr_to_bdd(42)
 
     def test_var(self):
+        # nv
         var = Var()
         bdd = _expr_to_bdd(var)
         assert isinstance(bdd, BDDNode)
@@ -217,6 +241,7 @@ class TestExprToBDD:
         assert bdd.low is BDD_FALSE
 
     def test_bitand(self):
+        # nv
         x, y = Var(), Var()
         expr = BitAnd(left=x, right=y)
         bdd = _expr_to_bdd(expr)
@@ -225,18 +250,21 @@ class TestExprToBDD:
         assert bdd is not BDD_FALSE
 
     def test_bitor(self):
+        # nv
         x, y = Var(), Var()
         expr = BitOr(left=x, right=y)
         bdd = _expr_to_bdd(expr)
         assert bdd is not BDD_FALSE
 
     def test_bitxor(self):
+        # nv
         x, y = Var(), Var()
         expr = BitXor(left=x, right=y)
         bdd = _expr_to_bdd(expr)
         assert bdd is not BDD_TRUE
 
     def test_invert(self):
+        # nv
         x = Var()
         expr = Invert(operand=x)
         bdd = _expr_to_bdd(expr)
@@ -245,12 +273,14 @@ class TestExprToBDD:
         assert bdd.low is BDD_TRUE
 
     def test_bool_eq(self):
+        # nv
         x, y = Var(), Var()
         expr = BoolEq(left=x, right=y)
         bdd = _expr_to_bdd(expr)
         assert isinstance(bdd, BDDNode)
 
     def test_bool_impl(self):
+        # nv
         x, y = Var(), Var()
         expr = BoolImpl(left=x, right=y)
         bdd = _expr_to_bdd(expr)
@@ -258,12 +288,14 @@ class TestExprToBDD:
 
     def test_nested_expression(self):
         """(X & Y) | ~Z"""
+        # nv
         x, y, z = Var(), Var(), Var()
         expr = BitOr(left=BitAnd(left=x, right=y), right=Invert(operand=z))
         bdd = _expr_to_bdd(expr)
         assert isinstance(bdd, BDDNode)
 
     def test_unsupported_type(self):
+        # nv
         with pytest.raises(TypeError, match="unsupported"):
             _expr_to_bdd("not a bool expr")
 
@@ -275,15 +307,18 @@ class TestExprToBDD:
 
 class TestSat:
     def test_ground_true(self):
+        # nv
         trail = fresh_trail()
         assert sat(1, trail) is True
 
     def test_ground_false(self):
+        # nv
         trail = fresh_trail()
         assert sat(0, trail) is False
 
     def test_single_var(self):
         """sat(X) means X must be true → X is forced to 1."""
+        # nv
         trail = fresh_trail()
         x = Var()
         assert sat(x, trail) is True
@@ -292,6 +327,7 @@ class TestSat:
     def test_and_forces_both(self):
         """sat(X & Y) with no other info doesn't force them.
         But sat(X & Y) where X=1 → Y must be satisfiable."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitAnd(left=x, right=y)
@@ -299,6 +335,7 @@ class TestSat:
 
     def test_contradiction_fails(self):
         """sat(X & ~X) should fail."""
+        # nv
         trail = fresh_trail()
         x = Var()
         expr = BitAnd(left=x, right=Invert(operand=x))
@@ -306,6 +343,7 @@ class TestSat:
 
     def test_tautology_succeeds(self):
         """sat(X | ~X) should succeed."""
+        # nv
         trail = fresh_trail()
         x = Var()
         expr = BitOr(left=x, right=Invert(operand=x))
@@ -313,6 +351,7 @@ class TestSat:
 
     def test_forced_value(self):
         """sat(X & 1) with sat(X) — X must be 1 since only X=1 satisfies X."""
+        # nv
         trail = fresh_trail()
         x = Var()
         # sat(X) doesn't force X by itself (both 0,1 satisfy "X is satisfiable")
@@ -328,6 +367,7 @@ class TestSat:
 
     def test_sat_negation_forces_zero(self):
         """sat(~X) forces X=0."""
+        # nv
         trail = fresh_trail()
         x = Var()
         expr = Invert(operand=x)
@@ -336,6 +376,7 @@ class TestSat:
 
     def test_sat_and_two_vars(self):
         """sat(X & Y) forces both X=1 and Y=1."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitAnd(left=x, right=y)
@@ -345,6 +386,7 @@ class TestSat:
 
     def test_sat_or_no_force(self):
         """sat(X | Y) doesn't force either variable."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         expr = BitOr(left=x, right=y)
@@ -359,6 +401,7 @@ class TestSat:
 
     def test_sequential_sat_conjunction(self):
         """sat(X | Y) then sat(~X) forces Y=1."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         assert sat(BitOr(left=x, right=y), trail) is True
@@ -376,6 +419,7 @@ class TestSat:
 class TestTaut:
     def test_tautology(self):
         """X | ~X is always true → T=1."""
+        # nv
         trail = fresh_trail()
         x = Var()
         t = Var()
@@ -385,6 +429,7 @@ class TestTaut:
 
     def test_contradiction(self):
         """X & ~X is always false → T=0."""
+        # nv
         trail = fresh_trail()
         x = Var()
         t = Var()
@@ -394,18 +439,21 @@ class TestTaut:
 
     def test_indeterminate(self):
         """X alone is neither tautology nor contradiction → fail."""
+        # nv
         trail = fresh_trail()
         x = Var()
         t = Var()
         assert taut(x, t, trail) is False
 
     def test_ground_true(self):
+        # nv
         trail = fresh_trail()
         t = Var()
         assert taut(1, t, trail) is True
         assert deref(t) == 1
 
     def test_ground_false(self):
+        # nv
         trail = fresh_trail()
         t = Var()
         assert taut(0, t, trail) is True
@@ -413,6 +461,7 @@ class TestTaut:
 
     def test_xor_not_tautology(self):
         """X ^ Y is indeterminate."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         t = Var()
@@ -420,6 +469,7 @@ class TestTaut:
 
     def test_equiv_tautology(self):
         """BoolEq(X, X) → always true → T=1."""
+        # nv
         trail = fresh_trail()
         x = Var()
         t = Var()
@@ -436,6 +486,7 @@ class TestTaut:
 class TestSatCount:
     def test_xor_count(self):
         """X ^ Y has 2 satisfying assignments."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         n = Var()
@@ -444,6 +495,7 @@ class TestSatCount:
 
     def test_and_count(self):
         """X & Y has 1 satisfying assignment."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         n = Var()
@@ -452,6 +504,7 @@ class TestSatCount:
 
     def test_or_count(self):
         """X | Y has 3 satisfying assignments."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         n = Var()
@@ -460,6 +513,7 @@ class TestSatCount:
 
     def test_tautology_count(self):
         """X | ~X has 2 satisfying assignments (X=0 and X=1)."""
+        # nv
         trail = fresh_trail()
         x = Var()
         n = Var()
@@ -469,6 +523,7 @@ class TestSatCount:
 
     def test_contradiction_count(self):
         """X & ~X has 0 satisfying assignments."""
+        # nv
         trail = fresh_trail()
         x = Var()
         n = Var()
@@ -478,6 +533,7 @@ class TestSatCount:
 
     def test_single_var_true(self):
         """Constant 1 → 1 assignment."""
+        # nv
         trail = fresh_trail()
         n = Var()
         assert sat_count(1, n, trail) is True
@@ -485,6 +541,7 @@ class TestSatCount:
 
     def test_three_vars_and(self):
         """X & Y & Z has 1 satisfying assignment."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         n = Var()
@@ -501,6 +558,7 @@ class TestSatCount:
 class TestBoolLabeling:
     def test_single_var(self):
         """Labeling a single unconstrained var gives 2 solutions."""
+        # nv
         trail = fresh_trail()
         x = Var()
         results = []
@@ -510,6 +568,7 @@ class TestBoolLabeling:
 
     def test_two_vars(self):
         """Labeling two unconstrained vars gives 4 solutions."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         results = []
@@ -520,6 +579,7 @@ class TestBoolLabeling:
 
     def test_constrained_xor(self):
         """sat(X ^ Y) then labeling gives exactly 2 solutions."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BitXor(left=x, right=y), trail)
@@ -531,6 +591,7 @@ class TestBoolLabeling:
 
     def test_all_bound(self):
         """Labeling already-bound vars yields one solution."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         unify(x, 1, trail)
@@ -547,6 +608,7 @@ class TestBoolLabeling:
 class TestBoolHook:
     def test_bind_constrained_var(self):
         """Binding a CLP(B) var to 0 or 1 propagates."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         # sat(X | Y) then bind X=0 → Y must become 1
@@ -556,6 +618,7 @@ class TestBoolHook:
 
     def test_bind_to_invalid_int(self):
         """Binding a CLP(B) var to 2 should fail."""
+        # nv
         trail = fresh_trail()
         x = Var()
         sat(x, trail)
@@ -576,6 +639,7 @@ class TestBoolHook:
 
     def test_var_var_merge(self):
         """Unifying two CLP(B) vars with compatible BDDs succeeds."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         # Both have identity BDDs (both must be true)
@@ -594,6 +658,7 @@ class TestBoolHook:
 
     def test_var_var_merge_incompatible(self):
         """Unifying CLP(B) vars with contradictory BDDs fails."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         # x must be true, y must be false — merging should fail
@@ -620,6 +685,7 @@ class TestBoolHook:
 class TestTrailSafety:
     def test_backtrack_restores_state(self):
         """After backtracking, CLP(B) state is restored."""
+        # nv
         trail = fresh_trail()
         x = Var()
         mark = trail.mark()
@@ -648,6 +714,7 @@ class TestTrailSafety:
 
     def test_labeling_backtracks_cleanly(self):
         """Labeling undoes assignments between solutions."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         results = []
@@ -666,12 +733,14 @@ class TestTrailSafety:
 
 class TestTermConstructors:
     def test_bool_eq_construction(self):
+        # nv
         x, y = Var(), Var()
         eq = BoolEq(left=x, right=y)
         assert eq.left is x
         assert eq.right is y
 
     def test_bool_impl_construction(self):
+        # nv
         x, y = Var(), Var()
         impl = BoolImpl(left=x, right=y)
         assert impl.left is x
@@ -679,6 +748,7 @@ class TestTermConstructors:
 
     def test_bool_eq_in_sat(self):
         """sat(BoolEq(X, Y)) — X ↔ Y must hold."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BoolEq(left=x, right=y), trail)
@@ -691,6 +761,7 @@ class TestTermConstructors:
 
     def test_bool_impl_in_sat(self):
         """sat(BoolImpl(X, Y)) — X → Y must hold."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         sat(BoolImpl(left=x, right=y), trail)
@@ -721,18 +792,22 @@ class TestHalfAdder:
         return deref(s), deref(c)
 
     def test_0_0(self):
+        # nv
         s, c = self._half_adder(0, 0)
         assert (s, c) == (0, 0)
 
     def test_0_1(self):
+        # nv
         s, c = self._half_adder(0, 1)
         assert (s, c) == (1, 0)
 
     def test_1_0(self):
+        # nv
         s, c = self._half_adder(1, 0)
         assert (s, c) == (1, 0)
 
     def test_1_1(self):
+        # nv
         s, c = self._half_adder(1, 1)
         assert (s, c) == (0, 1)
 
@@ -764,18 +839,23 @@ class TestFullAdder:
         return deref(s), deref(cout)
 
     def test_0_0_0(self):
+        # nv
         assert self._full_adder(0, 0, 0) == (0, 0)
 
     def test_1_1_0(self):
+        # nv
         assert self._full_adder(1, 1, 0) == (0, 1)
 
     def test_1_1_1(self):
+        # nv
         assert self._full_adder(1, 1, 1) == (1, 1)
 
     def test_0_1_1(self):
+        # nv
         assert self._full_adder(0, 1, 1) == (0, 1)
 
     def test_1_0_0(self):
+        # nv
         assert self._full_adder(1, 0, 0) == (1, 0)
 
 
@@ -787,6 +867,7 @@ class TestFullAdder:
 class TestPigeonHole:
     def test_3_pigeons_2_holes(self):
         """3 pigeons, 2 holes — no valid assignment exists."""
+        # nv
         trail = fresh_trail()
         # P_ij = pigeon i in hole j
         p = [[Var() for _ in range(2)] for _ in range(3)]
@@ -817,6 +898,7 @@ class TestPigeonHole:
 class TestCircuitEquivalence:
     def test_demorgan(self):
         """taut(~(X & Y) ↔ (~X | ~Y)) should be tautology."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         t = Var()
@@ -828,6 +910,7 @@ class TestCircuitEquivalence:
 
     def test_non_equivalence(self):
         """taut(X ↔ Y) is not a tautology."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         t = Var()
@@ -851,6 +934,7 @@ class TestClpbFixture:
         self.logic_mod = self.mod.__dict__["$module"]
 
     def test_half_adder_0_0(self):
+        # nv
         from clausal.logic.solve import call
         s_, c_ = Var(), Var()
         results = []
@@ -860,6 +944,7 @@ class TestClpbFixture:
         assert results[0] == (0, 0)
 
     def test_half_adder_1_1(self):
+        # nv
         from clausal.logic.solve import call
         s_, c_ = Var(), Var()
         results = []
@@ -869,6 +954,7 @@ class TestClpbFixture:
         assert results[0] == (0, 1)
 
     def test_full_adder_1_1_1(self):
+        # nv
         from clausal.logic.solve import call
         s_, cout_ = Var(), Var()
         results = []
@@ -878,6 +964,7 @@ class TestClpbFixture:
         assert results[0] == (1, 1)
 
     def test_pigeon_hole_unsat(self):
+        # nv
         from clausal.logic.solve import call
         results = list(call("PigeonHole", module=self.logic_mod))
         assert len(results) == 0
@@ -891,26 +978,31 @@ class TestClpbFixture:
 class TestNand:
     def test_nand_true_true(self):
         """NAND(1, 1) = 0."""
+        # nv
         result = apply('nand', BDD_TRUE, BDD_TRUE)
         assert result is BDD_FALSE
 
     def test_nand_true_false(self):
         """NAND(1, 0) = 1."""
+        # nv
         result = apply('nand', BDD_TRUE, BDD_FALSE)
         assert result is BDD_TRUE
 
     def test_nand_false_true(self):
         """NAND(0, 1) = 1."""
+        # nv
         result = apply('nand', BDD_FALSE, BDD_TRUE)
         assert result is BDD_TRUE
 
     def test_nand_false_false(self):
         """NAND(0, 0) = 1."""
+        # nv
         result = apply('nand', BDD_FALSE, BDD_FALSE)
         assert result is BDD_TRUE
 
     def test_nand_with_variables(self):
         """NAND(X, Y) is equivalent to ~(X & Y)."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         xid, yid = enumerate_var(x), enumerate_var(y)
@@ -926,6 +1018,7 @@ class TestNand:
 
     def test_nand_self(self):
         """NAND(X, X) = ~X."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -946,17 +1039,20 @@ class TestNand:
 class TestCollectBddVarIds:
     def test_terminal_true(self):
         """No var IDs in a terminal node."""
+        # nv
         result = set()
         _collect_bdd_var_ids(BDD_TRUE, result)
         assert result == set()
 
     def test_terminal_false(self):
+        # nv
         result = set()
         _collect_bdd_var_ids(BDD_FALSE, result)
         assert result == set()
 
     def test_single_variable(self):
         """Identity BDD for one variable has one var_id."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -967,6 +1063,7 @@ class TestCollectBddVarIds:
 
     def test_two_variables(self):
         """apply('and', X, Y) contains both var_ids."""
+        # nv
         trail = fresh_trail()
         x, y = Var(), Var()
         xid, yid = enumerate_var(x), enumerate_var(y)
@@ -980,6 +1077,7 @@ class TestCollectBddVarIds:
 
     def test_complex_bdd(self):
         """(X & Y) | (Z ^ W) has four var_ids."""
+        # nv
         trail = fresh_trail()
         vs = [Var() for _ in range(4)]
         ids = [enumerate_var(v) for v in vs]
@@ -993,6 +1091,7 @@ class TestCollectBddVarIds:
 
     def test_adds_to_existing_set(self):
         """_collect_bdd_var_ids adds to (not replaces) the result set."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -1011,17 +1110,20 @@ class TestCollectBddVarIds:
 class TestPropagateForced:
     def test_terminal_true(self):
         """Terminal BDD_TRUE — nothing to propagate."""
+        # nv
         trail = fresh_trail()
         assert _propagate_forced(BDD_TRUE, trail) is True
 
     def test_terminal_false(self):
         """Terminal BDD_FALSE — nothing to propagate (returns True, it's not
         _propagate_forced's job to detect BDD_FALSE, only forced vars)."""
+        # nv
         trail = fresh_trail()
         assert _propagate_forced(BDD_FALSE, trail) is True
 
     def test_single_var_forced_high(self):
         """Identity BDD (if X then 1 else 0): restrict X=0 gives FALSE → X must be 1."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -1031,6 +1133,7 @@ class TestPropagateForced:
 
     def test_single_var_forced_low(self):
         """Negated BDD (if X then 0 else 1): restrict X=1 gives FALSE → X must be 0."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -1040,6 +1143,7 @@ class TestPropagateForced:
 
     def test_contradiction_detected(self):
         """BDD where both cofactors are FALSE → contradiction."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)
@@ -1057,6 +1161,7 @@ class TestPropagateForced:
 class TestLargeVarCount:
     def test_20_variable_or_chain(self):
         """OR of 20 variables: 2^20 - 1 satisfying assignments."""
+        # nv
         trail = fresh_trail()
         vs = [Var() for _ in range(20)]
         expr = vs[0]
@@ -1068,6 +1173,7 @@ class TestLargeVarCount:
 
     def test_10_variable_xor_chain(self):
         """XOR of 10 variables: 2^9 = 512 satisfying assignments."""
+        # nv
         trail = fresh_trail()
         vs = [Var() for _ in range(10)]
         expr = vs[0]
@@ -1079,6 +1185,7 @@ class TestLargeVarCount:
 
     def test_sat_count_constant_true(self):
         """sat_count(1) with no variables = 1."""
+        # nv
         trail = fresh_trail()
         n = Var()
         assert sat_count(1, n, trail) is True
@@ -1086,6 +1193,7 @@ class TestLargeVarCount:
 
     def test_sat_count_constant_false(self):
         """sat_count(0) = 0."""
+        # nv
         trail = fresh_trail()
         n = Var()
         assert sat_count(0, n, trail) is True
@@ -1093,6 +1201,7 @@ class TestLargeVarCount:
 
     def test_sat_count_single_var_identity(self):
         """sat_count(X) = 1 (only X=1 satisfies)."""
+        # nv
         trail = fresh_trail()
         x = Var()
         n = Var()
@@ -1101,6 +1210,7 @@ class TestLargeVarCount:
 
     def test_deep_and_chain(self):
         """AND of 15 variables: exactly 1 satisfying assignment."""
+        # nv
         trail = fresh_trail()
         vs = [Var() for _ in range(15)]
         expr = vs[0]
@@ -1112,6 +1222,7 @@ class TestLargeVarCount:
 
     def test_labeling_with_many_vars(self):
         """Labeling 5 vars constrained by XOR: should get 2^4 = 16 solutions."""
+        # nv
         trail = fresh_trail()
         vs = [Var() for _ in range(5)]
         expr = vs[0]
@@ -1130,6 +1241,7 @@ class TestLargeVarCount:
 class TestRestrictDirect:
     def test_restrict_deeper_bdd(self):
         """Restrict on a multi-level BDD correctly simplifies."""
+        # nv
         trail = fresh_trail()
         x, y, z = Var(), Var(), Var()
         xid, yid, zid = enumerate_var(x), enumerate_var(y), enumerate_var(z)
@@ -1156,6 +1268,7 @@ class TestRestrictDirect:
 
     def test_restrict_preserves_other_vars(self):
         """Restricting var not in BDD leaves BDD unchanged."""
+        # nv
         trail = fresh_trail()
         x = Var()
         xid = enumerate_var(x)

@@ -73,6 +73,7 @@ class TestModuleItemAccumulation:
 
     def test_empty_module(self):
         """Empty source produces no module items."""
+        # nv
         tree = ast.parse("")
         t = EmbedTransformer()
         t.visit(tree)
@@ -80,6 +81,7 @@ class TestModuleItemAccumulation:
 
     def test_directive_items(self):
         """Directives produce DirectiveItem entries."""
+        # nv
         from clausal.pythonic_ast.nodes import Directive
         source = "-dynamic(color/2)\n-table(fib/2)\n"
         with warnings.catch_warnings():
@@ -96,6 +98,7 @@ class TestModuleItemAccumulation:
 
     def test_import_from_item(self):
         """import_from directives produce ImportFromItem entries."""
+        # nv
         from clausal.pythonic_ast.nodes import ImportFromDirective
         source = "-import_from(some.module, [Foo, alias(Bar, Baz)])\n"
         with warnings.catch_warnings():
@@ -110,6 +113,7 @@ class TestModuleItemAccumulation:
 
     def test_import_module_item(self):
         """import_module directives produce ImportModuleItem entries."""
+        # nv
         from clausal.pythonic_ast.nodes import ImportModuleDirective
         source = "-import_module(some.module)\n"
         with warnings.catch_warnings():
@@ -123,6 +127,7 @@ class TestModuleItemAccumulation:
 
     def test_module_declaration_item(self):
         """Module declarations produce ModuleDeclItem entries."""
+        # nv
         from clausal.pythonic_ast.nodes import ModuleDeclaration
         source = "-module(mymod, [fib(N_, F_), hello])\n"
         with warnings.catch_warnings():
@@ -151,6 +156,7 @@ class TestV2PipelineEquivalence:
 
     def test_edge_graph(self):
         """Edge graph fixture: basic facts + rules."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "edge_graph.clausal")
         md = _load_via_v2(path, "_v2_edge_graph")
         lm = md["$module"]
@@ -161,6 +167,7 @@ class TestV2PipelineEquivalence:
 
     def test_fibonacci(self):
         """Fibonacci fixture."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "fibonacci.clausal")
         md = _load_via_v2(path, "_v2_fibonacci")
         lm = md["$module"]
@@ -172,6 +179,7 @@ class TestV2PipelineEquivalence:
 
     def test_dynamic_pred(self):
         """Dynamic predicate fixture."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
         md = _load_via_v2(path, "_v2_dynamic_pred")
         lm = md["$module"]
@@ -179,6 +187,7 @@ class TestV2PipelineEquivalence:
 
     def test_facts_only(self):
         """Facts-only fixture (edge_graph has facts + rules)."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "edge_graph.clausal")
         md = _load_via_v2(path, "_v2_edge_graph2")
         lm = md["$module"]
@@ -188,6 +197,7 @@ class TestV2PipelineEquivalence:
 
     def test_tabled_fib(self):
         """Tabled fibonacci fixture."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "tabled_fib.clausal")
         md = _load_via_v2(path, "_v2_tabled_fib")
         lm = md["$module"]
@@ -200,6 +210,7 @@ class TestV2PipelineEquivalence:
 
     def test_shallow_pred(self):
         """Shallow predicate fixture."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "shallow_pred.clausal")
         md = _load_via_v2(path, "_v2_shallow_pred")
         lm = md["$module"]
@@ -207,6 +218,7 @@ class TestV2PipelineEquivalence:
 
     def test_dcg_grammar(self):
         """DCG grammar fixture."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "dcg_grammar.clausal")
         md = _load_via_v2(path, "_v2_dcg_grammar")
         lm = md["$module"]
@@ -221,12 +233,14 @@ class TestV2CompileModule:
 
     def test_empty_module(self):
         """Empty predicate list produces empty module."""
+        # nv
         module_dict = {"__name__": "empty"}
         lm = compile_module([], [], module_dict, "empty")
         assert isinstance(lm, LogicModule)
 
     def test_predicate_locking(self):
         """Non-dynamic predicates are locked after compile_module."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
         md = _load_via_v2(path, "_v2_static_pred")
         # All PredicateMeta classes should be locked
@@ -238,6 +252,7 @@ class TestV2CompileModule:
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
+        # nv
         path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
         md = _load_via_v2(path, "_v2_dynamic_pred2")
         Color = md.get("Color")

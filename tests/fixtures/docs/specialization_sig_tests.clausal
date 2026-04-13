@@ -11,4 +11,4 @@ NatnumProgram(PROGRAM) <- (
 
 -specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
 
-Test("count natnum(s(s(0)))") <- SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
+Test("count natnum(s(s(0)))") <- SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv

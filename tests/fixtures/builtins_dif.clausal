@@ -20,10 +20,10 @@ SameOrDiff(X, Y, "same") <- eq(X, Y, True)
 SameOrDiff(X, Y, "different") <- eq(X, Y, False)
 
 
-Test("not equal") <- NotEqual(1, 2)
-Test("pick different") <- (PickDifferent(1, [1, 2, 3], PICKED), PICKED == 2)
-Test("reified eq true") <- (ReifiedEq(1, 1, TRUTH), TRUTH == True)
-Test("reified eq false") <- (ReifiedEq(1, 2, TRUTH), TRUTH == False)
-Test("reified dif true") <- (ReifiedDif(1, 2, TRUTH), TRUTH == True)
-Test("same or diff same") <- SameOrDiff(1, 1, "same")
-Test("same or diff different") <- SameOrDiff(1, 2, "different")
+Test("not equal") <- NotEqual(1, 2)  # nv
+Test("pick different") <- (PickDifferent(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
+Test("reified eq true") <- (ReifiedEq(1, 1, TRUTH), TRUTH == True)  # nv
+Test("reified eq false") <- (ReifiedEq(1, 2, TRUTH), TRUTH == False)  # nv
+Test("reified dif true") <- (ReifiedDif(1, 2, TRUTH), TRUTH == True)  # nv
+Test("same or diff same") <- SameOrDiff(1, 1, "same")  # nv
+Test("same or diff different") <- SameOrDiff(1, 2, "different")  # nv

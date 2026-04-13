@@ -26,23 +26,27 @@ class TestScryerBasics:
     """Core query functionality."""
 
     def test_true(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             assert s.query_bool("true.")
 
     def test_fail(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             assert not s.query_bool("fail.")
             assert s.query_one("fail.") is None
 
     def test_fact_and_query(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("parent(tom, bob).")
             assert s.query_one("parent(tom, X).") == {"X": "bob"}
 
     def test_multiple_solutions(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("color(red). color(green). color(blue).")
@@ -50,18 +54,21 @@ class TestScryerBasics:
             assert [r["X"] for r in results] == ["red", "green", "blue"]
 
     def test_arithmetic(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             assert s.query_one("X is 2 + 3.") == {"X": 5}
             assert s.query_one("X is 10 mod 3.") == {"X": 1}
 
     def test_list_unification(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             sol = s.query_one("X = [1, 2, 3].")
             assert sol["X"] == [1, 2, 3]
 
     def test_compound_term(self):
+        # nv
         from clausal.scryer import Scryer
         from clausal.terms import Compound
         with Scryer() as s:
@@ -71,12 +78,14 @@ class TestScryerBasics:
 
     def test_no_bindings_goal(self):
         """A goal that succeeds with no variables returns empty dict."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             assert s.query_one("true.") == {}
 
     def test_iterator_protocol(self):
         """query() returns a lazy iterator, not a list."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("n(1). n(2). n(3).")
@@ -89,6 +98,7 @@ class TestScryerBasics:
 
     def test_early_break(self):
         """Can break out of iteration early — machine is released."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("n(1). n(2). n(3). n(4). n(5).")
@@ -100,6 +110,7 @@ class TestScryerBasics:
 
     def test_machine_busy_during_iteration(self):
         """Cannot load or query while an iterator is active."""
+        # nv
         from clausal.scryer import Scryer
         import _scryer_ext
         with Scryer() as s:
@@ -123,6 +134,7 @@ class TestClausalTranslation:
     """Loading .clausal source through the translation pipeline."""
 
     def test_consult_clausal_facts(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal("Foo(1, 2),\nFoo(3, 4),")
@@ -130,6 +142,7 @@ class TestClausalTranslation:
             assert len(results) == 2
 
     def test_consult_clausal_rules(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal(textwrap.dedent("""\
@@ -145,12 +158,14 @@ class TestClausalTranslation:
             assert xs == [2, 3, 4]
 
     def test_consult_clausal_arithmetic(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal("Double(X, Y) <- (Y := X * 2)")
             assert s.query_one("double(5, Y).") == {"Y": 10}
 
     def test_consult_clausal_list_patterns(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal(textwrap.dedent("""\
@@ -162,6 +177,7 @@ class TestClausalTranslation:
 
     def test_consult_file_clausal(self, tmp_path):
         """consult_file auto-detects .clausal extension."""
+        # nv
         f = tmp_path / "facts.clausal"
         f.write_text("Color(red),\nColor(blue),\n")
         from clausal.scryer import Scryer
@@ -172,6 +188,7 @@ class TestClausalTranslation:
 
     def test_consult_file_prolog(self, tmp_path):
         """consult_file loads .pl files as raw Prolog."""
+        # nv
         f = tmp_path / "facts.pl"
         f.write_text("animal(cat). animal(dog).\n")
         from clausal.scryer import Scryer
@@ -191,6 +208,7 @@ class TestScryerExamples:
     EXAMPLES = Path(__file__).parent.parent / "clausal" / "examples"
 
     def test_fibonacci(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_file(str(self.EXAMPLES / "fibonacci.clausal"))
@@ -199,6 +217,7 @@ class TestScryerExamples:
             assert sol["R"] == 55
 
     def test_graph_reachable(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             # graph.clausal uses member/2 which needs library(lists) in Scryer
@@ -217,6 +236,7 @@ class TestScryerSession:
 
     def test_separate_predicates_persist(self):
         """Loading different predicates in separate calls — both persist."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_string("likes(alice, bob).")
@@ -228,6 +248,7 @@ class TestScryerSession:
 
     def test_dynamic_assertz_accumulates(self):
         """Dynamic predicates with assertz accumulate clauses."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_string(":- dynamic(likes/2).")
@@ -237,6 +258,7 @@ class TestScryerSession:
             assert len(results) == 2
 
     def test_multiple_queries_same_session(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("num(1). num(2). num(3).")
@@ -246,6 +268,7 @@ class TestScryerSession:
 
     def test_context_manager_cleanup(self):
         """After exiting context, machine is released."""
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.load_string("foo(1).")
@@ -254,6 +277,7 @@ class TestScryerSession:
 
     def test_use_after_close_raises(self):
         """Using a closed session gives a clear error."""
+        # nv
         from clausal.scryer import Scryer
         s = Scryer()
         s.close()
@@ -269,24 +293,28 @@ class TestScryerEdgeCases:
     """Edge cases: empty results, exceptions, large integers."""
 
     def test_large_integer(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             sol = s.query_one("X is 2 ^ 100.")
             assert sol["X"] == 2**100
 
     def test_float_result(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             sol = s.query_one("X is 1.0 + 2.5.")
             assert abs(sol["X"] - 3.5) < 1e-10
 
     def test_nested_list(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             sol = s.query_one("X = [[1, 2], [3, 4]].")
             assert sol["X"] == [[1, 2], [3, 4]]
 
     def test_empty_list(self):
+        # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
             sol = s.query_one("X = [].")
@@ -294,6 +322,7 @@ class TestScryerEdgeCases:
 
     def test_prolog_error_raises(self):
         """Prolog errors become Python ScryerError exceptions."""
+        # nv
         from clausal.scryer import Scryer
         import _scryer_ext
         with Scryer() as s:
@@ -309,6 +338,7 @@ class TestToProlog:
     """Test the to_prolog() text-serialization helper."""
 
     def test_basic_types(self):
+        # nv
         from clausal.scryer import to_prolog
         assert to_prolog(42) == "42"
         assert to_prolog(3.14) == "3.14"
@@ -317,21 +347,25 @@ class TestToProlog:
         assert to_prolog(None) == "[]"
 
     def test_string_quoting(self):
+        # nv
         from clausal.scryer import to_prolog
         assert to_prolog("hello") == "'hello'"
         assert to_prolog("it's") == "'it\\'s'"
 
     def test_list(self):
+        # nv
         from clausal.scryer import to_prolog
         assert to_prolog([1, 2, 3]) == "[1, 2, 3]"
         assert to_prolog([]) == "[]"
 
     def test_compound(self):
+        # nv
         from clausal.scryer import to_prolog
         from clausal.terms import Compound
         assert to_prolog(Compound("f", (1, 2))) == "f(1, 2)"
 
     def test_unsupported_type_raises(self):
+        # nv
         from clausal.scryer import to_prolog
         with pytest.raises(TypeError):
             to_prolog(object())

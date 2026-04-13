@@ -78,14 +78,17 @@ def approx(a, b, rel=1e-9):
 
 class TestGamma:
     def test_positive_integer(self):
+        # nv
         r = _drive(Gamma, 5.0)
         assert approx(r, sc.gamma(5.0))
 
     def test_half(self):
+        # nv
         r = _drive(Gamma, 0.5)
         assert approx(r, sc.gamma(0.5))
 
     def test_unification_fails_wrong_value(self):
+        # nv
         trail = Trail()
         result = 999.0  # ground value, won't unify with gamma(5)
         dispatch = Gamma._get_dispatch()
@@ -95,76 +98,91 @@ class TestGamma:
 
 class TestGammaLog:
     def test_basic(self):
+        # nv
         r = _drive(GammaLog, 10.0)
         assert approx(r, sc.gammaln(10.0))
 
 
 class TestGammaSign:
     def test_positive(self):
+        # nv
         r = _drive(GammaSign, 0.5)
         assert r == sc.gammasgn(0.5)
 
     def test_negative(self):
+        # nv
         r = _drive(GammaSign, -0.5)
         assert r == sc.gammasgn(-0.5)
 
 
 class TestBetaLog:
     def test_basic(self):
+        # nv
         r = _drive(BetaLog, 2.0, 3.0)
         assert approx(r, sc.betaln(2.0, 3.0))
 
 
 class TestDigamma:
     def test_basic(self):
+        # nv
         r = _drive(Digamma, 1.0)
         assert approx(r, sc.digamma(1.0))
 
 
 class TestPolygamma:
     def test_order_0_is_digamma(self):
+        # nv
         r = _drive(Polygamma, 0, 1.0)
         assert approx(r, sc.polygamma(0, 1.0))
 
     def test_order_1(self):
+        # nv
         r = _drive(Polygamma, 1, 2.0)
         assert approx(r, sc.polygamma(1, 2.0))
 
 
 class TestFactorial:
     def test_arity2_exact_false(self):
+        # nv
         r = _drive(Factorial, 5)
         assert approx(r, sc.factorial(5, exact=False))
 
     def test_arity3_exact_true(self):
+        # nv
         r = _drive(Factorial, 5, True)
         assert r == 120
 
     def test_zero(self):
+        # nv
         r = _drive(Factorial, 0)
         assert approx(r, 1.0)
 
 
 class TestComb:
     def test_arity3(self):
+        # nv
         r = _drive(Comb, 5, 2)
         assert approx(r, sc.comb(5, 2, exact=False))
 
     def test_arity4_exact(self):
+        # nv
         r = _drive(Comb, 5, 2, True)
         assert r == 10
 
     def test_arity5_repetition(self):
+        # nv
         r = _drive(Comb, 5, 2, False, True)
         assert approx(r, sc.comb(5, 2, exact=False, repetition=True))
 
 
 class TestPerm:
     def test_arity3(self):
+        # nv
         r = _drive(Perm, 5, 2)
         assert approx(r, sc.perm(5, 2, exact=False))
 
     def test_arity4_exact(self):
+        # nv
         r = _drive(Perm, 5, 2, True)
         assert r == 20
 
@@ -173,20 +191,24 @@ class TestPerm:
 
 class TestErf:
     def test_zero(self):
+        # nv
         r = _drive(Erf, 0.0)
         assert approx(r, 0.0)
 
     def test_one(self):
+        # nv
         r = _drive(Erf, 1.0)
         assert approx(r, sc.erf(1.0))
 
 
 class TestErfComplement:
     def test_one(self):
+        # nv
         r = _drive(ErfComplement, 1.0)
         assert approx(r, sc.erfc(1.0))
 
     def test_sums_to_one(self):
+        # nv
         erf_val = _drive(Erf, 1.0)
         erfc_val = _drive(ErfComplement, 1.0)
         assert approx(erf_val + erfc_val, 1.0)
@@ -194,6 +216,7 @@ class TestErfComplement:
 
 class TestErfInverse:
     def test_round_trip(self):
+        # nv
         x = 0.5
         erf_x = _drive(Erf, x)
         # Backward direction of Erf: Erf(result_var, erf_x) → result_var = erfinv(erf_x)
@@ -204,16 +227,19 @@ class TestErfInverse:
 class TestErfComplementInverse:
     def test_basic(self):
         # Backward direction of ErfComplement: ErfComplement(result_var, 0.5) → result_var = erfcinv(0.5)
+        # nv
         r = _drive_bwd(ErfComplement, 0.5)
         assert approx(r, sc.erfcinv(0.5))
 
 
 class TestNormalCdf:
     def test_zero(self):
+        # nv
         r = _drive(NormalCdf, 0.0)
         assert approx(r, 0.5)
 
     def test_one(self):
+        # nv
         r = _drive(NormalCdf, 1.0)
         assert approx(r, sc.ndtr(1.0))
 
@@ -221,10 +247,12 @@ class TestNormalCdf:
 class TestNormalCdfInverse:
     def test_half(self):
         # Backward direction of NormalCdf: NormalCdf(result_var, 0.5) → result_var = ndtri(0.5)
+        # nv
         r = _drive_bwd(NormalCdf, 0.5)
         assert approx(r, 0.0)
 
     def test_round_trip(self):
+        # nv
         p = 0.975
         x = _drive_bwd(NormalCdf, p)
         back = _drive(NormalCdf, x)
@@ -235,46 +263,54 @@ class TestNormalCdfInverse:
 
 class TestBesselJ:
     def test_order0(self):
+        # nv
         r = _drive(BesselJ, 0, 1.0)
         assert approx(r, sc.jn(0, 1.0))
 
     def test_order1(self):
+        # nv
         r = _drive(BesselJ, 1, 2.0)
         assert approx(r, sc.jn(1, 2.0))
 
 
 class TestBesselY:
     def test_order0(self):
+        # nv
         r = _drive(BesselY, 0, 1.0)
         assert approx(r, sc.yn(0, 1.0))
 
 
 class TestBesselJReal:
     def test_half_order(self):
+        # nv
         r = _drive(BesselJReal, 0.5, 2.0)
         assert approx(r, sc.jv(0.5, 2.0))
 
 
 class TestBesselYReal:
     def test_half_order(self):
+        # nv
         r = _drive(BesselYReal, 0.5, 2.0)
         assert approx(r, sc.yv(0.5, 2.0))
 
 
 class TestBesselK:
     def test_order0(self):
+        # nv
         r = _drive(BesselK, 0, 1.0)
         assert approx(r, sc.kn(0, 1.0))
 
 
 class TestBesselI:
     def test_order0(self):
+        # nv
         r = _drive(BesselI, 0, 1.0)
         assert approx(r, sc.iv(0, 1.0))
 
 
 class TestBesselJZeros:
     def test_first_five_zeros_of_j0(self):
+        # nv
         r = _drive(BesselJZeros, 0, 5)
         expected = sc.jn_zeros(0, 5)
         assert np.allclose(r, expected)
@@ -282,10 +318,12 @@ class TestBesselJZeros:
 
 class TestSphericalBesselJ:
     def test_arity3_no_derivative(self):
+        # nv
         r = _drive(SphericalBesselJ, 0, 1.0)
         assert approx(r, sc.spherical_jn(0, 1.0))
 
     def test_arity4_with_derivative(self):
+        # nv
         r = _drive(SphericalBesselJ, 0, 1.0, True)
         assert approx(r, sc.spherical_jn(0, 1.0, derivative=True))
 
@@ -294,24 +332,28 @@ class TestSphericalBesselJ:
 
 class TestEllipticK:
     def test_zero_modulus(self):
+        # nv
         r = _drive(EllipticK, 0.0)
         assert approx(r, math.pi / 2)
 
 
 class TestEllipticE:
     def test_zero_modulus(self):
+        # nv
         r = _drive(EllipticE, 0.0)
         assert approx(r, math.pi / 2)
 
 
 class TestEllipticKIncomplete:
     def test_basic(self):
+        # nv
         r = _drive(EllipticKIncomplete, 0.5, 0.3)
         assert approx(r, sc.ellipkinc(0.5, 0.3))
 
 
 class TestEllipticEIncomplete:
     def test_basic(self):
+        # nv
         r = _drive(EllipticEIncomplete, 0.5, 0.3)
         assert approx(r, sc.ellipeinc(0.5, 0.3))
 
@@ -320,18 +362,21 @@ class TestEllipticEIncomplete:
 
 class TestHypergeometric1F1:
     def test_basic(self):
+        # nv
         r = _drive(Hypergeometric1F1, 1.0, 2.0, 0.5)
         assert approx(r, sc.hyp1f1(1.0, 2.0, 0.5))
 
 
 class TestHypergeometric2F1:
     def test_basic(self):
+        # nv
         r = _drive(Hypergeometric2F1, 0.5, 0.5, 1.5, 0.25)
         assert approx(r, sc.hyp2f1(0.5, 0.5, 1.5, 0.25))
 
 
 class TestHypergeometric0F1:
     def test_basic(self):
+        # nv
         r = _drive(Hypergeometric0F1, 2.0, 0.5)
         assert approx(r, sc.hyp0f1(2.0, 0.5))
 
@@ -340,31 +385,37 @@ class TestHypergeometric0F1:
 
 class TestEntr:
     def test_half(self):
+        # nv
         r = _drive(Entr, 0.5)
         assert approx(r, sc.entr(0.5))
 
     def test_zero(self):
+        # nv
         r = _drive(Entr, 0.0)
         assert approx(r, 0.0)
 
 
 class TestKlDivergence:
     def test_equal_inputs(self):
+        # nv
         r = _drive(KlDivergence, 0.5, 0.5)
         assert approx(r, 0.0)
 
     def test_basic(self):
+        # nv
         r = _drive(KlDivergence, 0.25, 0.5)
         assert approx(r, sc.kl_div(0.25, 0.5))
 
 
 class TestLogSumExp:
     def test_arity2(self):
+        # nv
         a = np.array([1.0, 2.0, 3.0])
         r = _drive(LogSumExp, a)
         assert approx(r, sc.logsumexp(a))
 
     def test_arity5_with_axis(self):
+        # nv
         a = np.array([[1.0, 2.0], [3.0, 4.0]])
         r = _drive(LogSumExp, a, 0, None, False)
         expected = sc.logsumexp(a, axis=0, b=None, keepdims=False)
@@ -375,52 +426,62 @@ class TestLogSumExp:
 
 class TestAssocLegendre:
     def test_basic(self):
+        # nv
         r = _drive(AssocLegendre, 0, 1, 0.5)
         assert approx(r, sc.lpmv(0, 1, 0.5))
 
 
 class TestLegendrePoly:
     def test_p0_is_one(self):
+        # nv
         r = _drive(LegendrePoly, 0, 0.5)
         assert approx(r, 1.0)
 
     def test_p1_is_x(self):
+        # nv
         r = _drive(LegendrePoly, 1, 0.5)
         assert approx(r, 0.5)
 
     def test_p2(self):
+        # nv
         r = _drive(LegendrePoly, 2, 0.5)
         assert approx(r, sc.eval_legendre(2, 0.5))
 
 
 class TestChebyshevT:
     def test_t0_is_one(self):
+        # nv
         r = _drive(ChebyshevT, 0, 0.5)
         assert approx(r, 1.0)
 
     def test_t1_is_x(self):
+        # nv
         r = _drive(ChebyshevT, 1, 0.5)
         assert approx(r, 0.5)
 
 
 class TestChebyshevU:
     def test_u0_is_one(self):
+        # nv
         r = _drive(ChebyshevU, 0, 0.5)
         assert approx(r, 1.0)
 
 
 class TestHermiteH:
     def test_h0_is_one(self):
+        # nv
         r = _drive(HermiteH, 0, 1.0)
         assert approx(r, 1.0)
 
     def test_h1_is_2x(self):
+        # nv
         r = _drive(HermiteH, 1, 1.0)
         assert approx(r, 2.0)
 
 
 class TestGeneralizedLaguerre:
     def test_l0_is_one(self):
+        # nv
         r = _drive(GeneralizedLaguerre, 0, 1.0, 0.5)
         assert approx(r, 1.0)
 
@@ -429,22 +490,26 @@ class TestGeneralizedLaguerre:
 
 class TestCubeRoot:
     def test_eight(self):
+        # nv
         r = _drive(CubeRoot, 8.0)
         assert approx(r, 2.0)
 
     def test_negative(self):
+        # nv
         r = _drive(CubeRoot, -8.0)
         assert approx(r, sc.cbrt(-8.0))
 
 
 class TestExp10:
     def test_two(self):
+        # nv
         r = _drive(Exp10, 2.0)
         assert approx(r, 100.0)
 
 
 class TestExp2:
     def test_three(self):
+        # nv
         r = _drive(Exp2, 3.0)
         assert approx(r, 8.0)
 
@@ -452,15 +517,18 @@ class TestExp2:
 class TestSigmoid:
     def test_zero_input(self):
         # Backward direction of Logit: Logit(result_var, 0.0) → result_var = expit(0.0)
+        # nv
         r = _drive_bwd(Logit, 0.0)
         assert approx(r, 0.5)
 
     def test_large_input(self):
         # Backward direction of Logit: expit(100.0) ≈ 1.0
+        # nv
         r = _drive_bwd(Logit, 100.0)
         assert approx(r, 1.0)
 
     def test_round_trip_with_logit(self):
+        # nv
         x = 0.3
         # expit(x) via backward Logit, then logit(sig) via forward Logit should give back x
         sig = _drive_bwd(Logit, x)
@@ -470,22 +538,26 @@ class TestSigmoid:
 
 class TestLogit:
     def test_half(self):
+        # nv
         r = _drive(Logit, 0.5)
         assert approx(r, 0.0)
 
 
 class TestLambertW:
     def test_arity2(self):
+        # nv
         r = _drive(LambertW, 1.0)
         expected = sc.lambertw(1.0, k=0, tol=1e-8)
         assert approx(float(np.real(r)), float(np.real(expected)))
 
     def test_arity4_k0(self):
+        # nv
         r = _drive(LambertW, 1.0, 0, 1e-8)
         expected = sc.lambertw(1.0, k=0, tol=1e-8)
         assert approx(float(np.real(r)), float(np.real(expected)))
 
     def test_arity4_k_minus1(self):
+        # nv
         r = _drive(LambertW, -0.1, -1, 1e-8)
         expected = sc.lambertw(-0.1, k=-1, tol=1e-8)
         assert approx(float(np.real(r)), float(np.real(expected)))
@@ -493,20 +565,24 @@ class TestLambertW:
 
 class TestXLogY:
     def test_basic(self):
+        # nv
         r = _drive(XLogY, 2.0, 3.0)
         assert approx(r, sc.xlogy(2.0, 3.0))
 
     def test_zero_x_gives_zero(self):
+        # nv
         r = _drive(XLogY, 0.0, 0.0)
         assert approx(r, 0.0)
 
 
 class TestXLog1pY:
     def test_basic(self):
+        # nv
         r = _drive(XLog1pY, 2.0, 3.0)
         assert approx(r, sc.xlog1py(2.0, 3.0))
 
     def test_zero_x_gives_zero(self):
+        # nv
         r = _drive(XLog1pY, 0.0, 0.0)
         assert approx(r, 0.0)
 
@@ -515,16 +591,20 @@ class TestXLog1pY:
 
 class TestPredicateMeta:
     def test_repr(self):
+        # nv
         assert "Gamma" in repr(Gamma)
 
     def test_get_dispatch_callable(self):
+        # nv
         assert callable(Gamma._get_dispatch())
 
     def test_multi_arity_dispatch_is_callable(self):
+        # nv
         assert callable(Factorial._get_dispatch())
 
     def test_unknown_arity_fails(self):
         """Calling Factorial with 4 positional args (arity 4, unregistered) fails."""
+        # nv
         trail = Trail()
         result = Var()
         dispatch = Factorial._get_dispatch()
@@ -665,4 +745,5 @@ class TestScipySpecialFixture:
         "besselyreal 1.5 2",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)

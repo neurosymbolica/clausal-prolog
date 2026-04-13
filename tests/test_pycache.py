@@ -58,6 +58,7 @@ class TestPycacheCreation:
     """Importing a .clausal file writes a .pyc into __pycache__/."""
 
     def test_pyc_created(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         pycache = src.parent / "__pycache__"
         # Ensure no cache exists initially.
@@ -71,6 +72,7 @@ class TestPycacheCreation:
         assert len(pyc_files) >= 1, "at least one .pyc file should exist"
 
     def test_pyc_path_matches_source(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         _load_module(mod_name, str(src))
 
@@ -82,6 +84,7 @@ class TestPycacheCacheHit:
     """Second import uses cached .pyc — source_to_code is not called."""
 
     def test_source_to_code_skipped_on_cache_hit(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         # First load: creates .pyc.
         _load_module(mod_name, str(src))
@@ -99,6 +102,7 @@ class TestPycacheInvalidation:
     """Modifying source invalidates the cache."""
 
     def test_modified_source_recompiles(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         # First load.
         mod1 = _load_module(mod_name, str(src))
@@ -124,6 +128,7 @@ class TestCachedCorrectness:
     """Predicates work identically from cache vs fresh."""
 
     def test_query_from_cache(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         # First load (creates cache).
         mod1 = _load_module(mod_name, str(src))
@@ -139,6 +144,7 @@ class TestCachedCorrectness:
 
     def test_rules_from_cache(self, tmp_path):
         """Rules (head <- body) work from cache."""
+        # nv
         src = tmp_path / "rules_cached.clausal"
         src.write_text(textwrap.dedent("""\
             double(_x, _y) <- (_y := _x * 2)
@@ -169,6 +175,7 @@ class TestDynamicAfterCache:
     """Dynamic predicates support runtime assertz/retract after cached load."""
 
     def test_dynamic_assertz_after_cache(self, tmp_path):
+        # nv
         src = tmp_path / "dyn_cached.clausal"
         src.write_text(textwrap.dedent("""\
             -dynamic(color/1)
@@ -200,6 +207,7 @@ class TestDontWriteBytecode:
     """sys.dont_write_bytecode = True suppresses cache writes."""
 
     def test_no_pyc_when_dont_write(self, tmp_clausal):
+        # nv
         src, mod_name = tmp_clausal
         pycache = src.parent / "__pycache__"
         if pycache.exists():
@@ -224,6 +232,7 @@ class TestDeferredCompilation:
     def test_compile_called_once_per_predicate(self, tmp_path):
         """With 3 facts for the same predicate, compile_predicate should be
         called exactly once (after all clauses asserted)."""
+        # nv
         src = tmp_path / "deferred.clausal"
         src.write_text(textwrap.dedent("""\
             item("a"),
@@ -253,6 +262,7 @@ class TestDeferredCompilation:
 
     def test_multiple_predicates_compiled_once_each(self, tmp_path):
         """Multiple predicates each get compiled exactly once."""
+        # nv
         src = tmp_path / "multi_pred.clausal"
         src.write_text(textwrap.dedent("""\
             foo("a"),

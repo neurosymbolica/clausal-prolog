@@ -24,6 +24,7 @@ from clausal.pythonic_ast.nodes import ArithEq, GtE
 
 class TestArrays:
     def test_store_select(self):
+        # nv
         trail = Trail()
         a, b = Var(), Var()
         z3_array(a, z3.IntSort(), z3.IntSort(), trail)
@@ -38,6 +39,7 @@ class TestArrays:
 
 class TestSets:
     def test_set_member_after_add(self):
+        # nv
         trail = Trail()
         s1, s2 = Var(), Var()
         z3_set(s1, z3.IntSort(), trail)
@@ -48,6 +50,7 @@ class TestSets:
 
 class TestStrings:
     def test_string_length_entailed(self):
+        # nv
         trail = Trail()
         s = Var()
         z3_string(s, trail)
@@ -59,6 +62,7 @@ class TestStrings:
 
 class TestUF:
     def test_functional_consistency(self):
+        # nv
         trail = Trail()
         f = Var()
         z3_function(f, [z3.IntSort()], z3.IntSort(), trail)

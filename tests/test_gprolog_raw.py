@@ -31,18 +31,21 @@ def machine():
 
 @needs_ext
 def test_raw_machine_creates(machine):
+    # nv
     assert machine is not None
 
 
 @needs_ext
 def test_raw_singleton_enforcement(machine):
     """Cannot create a second engine while one exists."""
+    # nv
     with pytest.raises(_gprolog_ext.GnuPrologError, match="cannot be restarted"):
         _gprolog_ext.RawGnuPrologMachine()
 
 
 @needs_ext
 def test_raw_consult_string(machine):
+    # nv
     machine.consult_string("parent_raw(tom, bob).")
     results = list(machine.query("parent_raw(tom, X)."))
     assert len(results) == 1
@@ -51,18 +54,21 @@ def test_raw_consult_string(machine):
 
 @needs_ext
 def test_raw_arithmetic(machine):
+    # nv
     sol = next(iter(machine.query("X is 2 + 3.")))
     assert sol["X"] == 5
 
 
 @needs_ext
 def test_raw_no_solutions(machine):
+    # nv
     results = list(machine.query("fail."))
     assert results == []
 
 
 @needs_ext
 def test_raw_multiple_solutions(machine):
+    # nv
     machine.consult_string("color_raw(red). color_raw(green). color_raw(blue).")
     results = list(machine.query("color_raw(X)."))
     assert [r["X"] for r in results] == ["red", "green", "blue"]
@@ -71,6 +77,7 @@ def test_raw_multiple_solutions(machine):
 @needs_ext
 def test_raw_lazy_iteration(machine):
     """Iterator is truly lazy — can close after first result."""
+    # nv
     machine.consult_string("nr(1). nr(2). nr(3).")
     it = machine.query("nr(X).")
     first = next(it)
@@ -85,6 +92,7 @@ def test_raw_lazy_iteration(machine):
 @needs_ext
 def test_raw_machine_busy_while_iterating(machine):
     """Cannot start a second query while one is active."""
+    # nv
     machine.consult_string("nr2(1). nr2(2).")
     it = machine.query("nr2(X).")
     next(it)  # start iterating
@@ -98,12 +106,14 @@ def test_raw_machine_busy_while_iterating(machine):
 
 @needs_ext
 def test_raw_list_term(machine):
+    # nv
     sol = next(iter(machine.query("X = [1, 2, 3].")))
     assert sol["X"] == [1, 2, 3]
 
 
 @needs_ext
 def test_raw_compound_term(machine):
+    # nv
     from clausal.terms import Compound
     machine.consult_string("data_raw(point(1, 2)).")
     sol = next(iter(machine.query("data_raw(X).")))
@@ -112,6 +122,7 @@ def test_raw_compound_term(machine):
 
 @needs_ext
 def test_raw_float_term(machine):
+    # nv
     sol = next(iter(machine.query("X is 1.5 + 2.5.")))
     assert sol["X"] == 4.0
 
@@ -119,6 +130,7 @@ def test_raw_float_term(machine):
 @needs_ext
 def test_raw_fd_constraint(machine):
     """GNU Prolog's built-in FD constraint solver."""
+    # nv
     machine.consult_string(
         "solve_raw(X) :- fd_domain(X, 1, 5), X #> 3, fd_labeling([X])."
     )
@@ -130,5 +142,6 @@ def test_raw_fd_constraint(machine):
 @needs_ext
 def test_raw_no_bindings(machine):
     """A ground goal returns an empty dict."""
+    # nv
     sol = next(iter(machine.query("true.")))
     assert sol == {}

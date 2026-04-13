@@ -57,36 +57,43 @@ class pair:
 
 class TestStructuralUnifyCompound:
     def test_same_ground_succeeds(self):
+        # nv
         t = fresh()
         assert structural_unify(Compound("f", (1, 2)), Compound("f", (1, 2)), t)
 
     def test_different_functor_fails(self):
+        # nv
         t = fresh()
         assert not structural_unify(Compound("f", (1,)), Compound("g", (1,)), t)
 
     def test_different_arity_fails(self):
+        # nv
         t = fresh()
         assert not structural_unify(Compound("f", (1,)), Compound("f", (1, 2)), t)
 
     def test_unify_with_var_arg(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(Compound("f", (v, 2)), Compound("f", (99, 2)), t)
         assert deref(v) == 99
 
     def test_var_on_right_side(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(Compound("f", (1,)), Compound("f", (v,)), t)
         assert deref(v) == 1
 
     def test_var_var_in_compound(self):
+        # nv
         t = fresh()
         v1, v2 = Var(), Var()
         assert structural_unify(Compound("f", (v1,)), Compound("f", (v2,)), t)
         assert deref(v1) is deref(v2)
 
     def test_nested_compound(self):
+        # nv
         t = fresh()
         v = Var()
         lhs = Compound("f", (Compound("g", (v,)),))
@@ -95,18 +102,21 @@ class TestStructuralUnifyCompound:
         assert deref(v) == 42
 
     def test_nested_mismatch_fails(self):
+        # nv
         t = fresh()
         lhs = Compound("f", (Compound("g", (1,)),))
         rhs = Compound("f", (Compound("h", (1,)),))
         assert not structural_unify(lhs, rhs, t)
 
     def test_arity_zero(self):
+        # nv
         t = fresh()
         assert structural_unify(Compound("nil", ()), Compound("nil", ()), t)
         assert not structural_unify(Compound("nil", ()), Compound("cons", ()), t)
 
     def test_trail_undo_on_failure(self):
         """Partial bindings inside a Compound unify are rolled back on failure."""
+        # nv
         t = fresh()
         v1, v2 = Var(), Var()
         # f(V1, 99) vs f(42, 100) — V1 would bind to 42 but 99 != 100 → fail
@@ -126,21 +136,26 @@ class TestStructuralUnifyCompound:
 
 class TestStructuralUnifyList:
     def test_empty_lists(self):
+        # nv
         assert structural_unify([], [], fresh())
 
     def test_same_ground_lists(self):
+        # nv
         assert structural_unify([1, 2, 3], [1, 2, 3], fresh())
 
     def test_different_lengths_fail(self):
+        # nv
         assert not structural_unify([1, 2], [1, 2, 3], fresh())
 
     def test_list_with_var(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify([1, v, 3], [1, 99, 3], t)
         assert deref(v) == 99
 
     def test_list_partial_fail_undoes(self):
+        # nv
         t = fresh()
         v = Var()
         # [V, 99] vs [42, 100] — V would bind to 42 but 99 != 100
@@ -149,6 +164,7 @@ class TestStructuralUnifyList:
         assert not v.is_bound
 
     def test_nested_lists(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify([[1, v], [3]], [[1, 2], [3]], t)
@@ -160,20 +176,24 @@ class TestStructuralUnifyList:
 
 class TestStructuralUnifyDataclass:
     def test_same_ground_succeeds(self):
+        # nv
         t = fresh()
         assert structural_unify(point(x=1, y=2), point(x=1, y=2), t)
 
     def test_field_mismatch_fails(self):
+        # nv
         t = fresh()
         assert not structural_unify(point(x=1, y=2), point(x=1, y=99), t)
 
     def test_with_var_field(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(point(x=v, y=2), point(x=42, y=2), t)
         assert deref(v) == 42
 
     def test_var_on_both_sides(self):
+        # nv
         t = fresh()
         v1, v2 = Var(), Var()
         assert structural_unify(point(x=v1, y=0), point(x=v2, y=0), t)
@@ -182,6 +202,7 @@ class TestStructuralUnifyDataclass:
 
     def test_different_types_fail(self):
         """Different dataclass types do not unify via structural_unify."""
+        # nv
         t = fresh()
         p = point(x=1, y=2)
         pair_term = pair(left=1, right=2)
@@ -189,6 +210,7 @@ class TestStructuralUnifyDataclass:
         assert not structural_unify(p, pair_term, t)
 
     def test_nested_dataclass(self):
+        # nv
         t = fresh()
         v = Var()
         lhs = pair(left=point(x=v, y=0), right=10)
@@ -197,6 +219,7 @@ class TestStructuralUnifyDataclass:
         assert deref(v) == 99
 
     def test_trail_undo_on_failure(self):
+        # nv
         t = fresh()
         v = Var()
         # point(V, 2) vs point(42, 99) — V binds to 42 but 2 != 99 → fail
@@ -205,6 +228,7 @@ class TestStructuralUnifyDataclass:
         assert not v.is_bound
 
     def test_three_field_dataclass(self):
+        # nv
         t = fresh()
         vx, vy, vz = Var(), Var(), Var()
         lhs = vec3(x=vx, y=vy, z=vz)
@@ -220,6 +244,7 @@ class TestStructuralUnifyDataclass:
 
 class TestStructuralUnifyKWTerm:
     def test_same_ground_succeeds(self):
+        # nv
         t = fresh()
         k1 = KWTerm("r", a=1, b=2)
         k2 = KWTerm("r", a=1, b=2)
@@ -227,30 +252,36 @@ class TestStructuralUnifyKWTerm:
 
     def test_order_independent(self):
         """KWTerm unification matches by key name, not insertion order."""
+        # nv
         t = fresh()
         k1 = KWTerm("r", a=1, b=2)
         k2 = KWTerm("r", b=2, a=1)
         assert structural_unify(k1, k2, t)
 
     def test_different_functor_fails(self):
+        # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("s", a=1), t)
 
     def test_different_keys_fail(self):
+        # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("r", b=1), t)
 
     def test_value_mismatch_fails(self):
+        # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("r", a=2), t)
 
     def test_with_var_field(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(KWTerm("r", a=v, b=2), KWTerm("r", a=99, b=2), t)
         assert deref(v) == 99
 
     def test_trail_undo_on_failure(self):
+        # nv
         t = fresh()
         v = Var()
         # a=V, b=1 vs a=42, b=99 — V binds to 42 but 1 != 99 → fail
@@ -261,6 +292,7 @@ class TestStructuralUnifyKWTerm:
         assert not v.is_bound
 
     def test_extra_keys_in_one_fails(self):
+        # nv
         t = fresh()
         k1 = KWTerm("r", a=1, b=2, c=3)
         k2 = KWTerm("r", a=1, b=2)
@@ -272,24 +304,28 @@ class TestStructuralUnifyKWTerm:
 
 class TestStructuralUnifyVarArgs:
     def test_top_level_var_binds(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(v, Compound("f", (1,)), t)
         assert deref(v) == Compound("f", (1,))
 
     def test_var_var_binds(self):
+        # nv
         t = fresh()
         v1, v2 = Var(), Var()
         assert structural_unify(v1, v2, t)
         assert deref(v1) is deref(v2)
 
     def test_var_on_right_binds(self):
+        # nv
         t = fresh()
         v = Var()
         assert structural_unify(99, v, t)
         assert deref(v) == 99
 
     def test_bound_var_left(self):
+        # nv
         t = fresh()
         v = Var()
         unify(v, 42, t)
@@ -297,6 +333,7 @@ class TestStructuralUnifyVarArgs:
         assert structural_unify(v, 42, t)
 
     def test_bound_var_mismatch(self):
+        # nv
         t = fresh()
         v = Var()
         unify(v, 42, t)
@@ -310,22 +347,29 @@ class TestStructuralUnifyAtomics:
     """Atomics fall through to C unify — smoke tests."""
 
     def test_int_equal(self):
+        # nv
         assert structural_unify(1, 1, fresh())
 
     def test_int_unequal(self):
+        # nv
         assert not structural_unify(1, 2, fresh())
 
     def test_str_equal(self):
+        # nv
         assert structural_unify("foo", "foo", fresh())
 
     def test_str_unequal(self):
+        # nv
         assert not structural_unify("foo", "bar", fresh())
 
     def test_none_equal(self):
+        # nv
         assert structural_unify(None, None, fresh())
 
     def test_bool_equal(self):
+        # nv
         assert structural_unify(True, True, fresh())
 
     def test_mixed_types_fail(self):
+        # nv
         assert not structural_unify(1, "1", fresh())

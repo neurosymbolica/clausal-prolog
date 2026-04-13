@@ -70,6 +70,7 @@ class TestPassThrough:
 
     def test_no_expansion_returns_same(self):
         """Without TermExpansion clauses, items pass through unchanged."""
+        # nv
         source = 'foo("a"),\nfoo("b"),\n'
         preds, _, md = _parse_and_collect(source)
         result = run_term_expansion(preds, md)
@@ -77,6 +78,7 @@ class TestPassThrough:
 
     def test_empty_input(self):
         """Empty predicate list returns empty."""
+        # nv
         result = run_term_expansion([], {})
         assert result == []
 
@@ -86,6 +88,7 @@ class TestTermExpansionDetection:
 
     def test_detects_te_clause(self):
         """TermExpansion/4 clauses are detected."""
+        # nv
         source = (
             'TermExpansion(_term, _expansion, _m0, _m1) <- ('
             '    _term is _expansion,'
@@ -98,6 +101,7 @@ class TestTermExpansionDetection:
 
     def test_non_te_not_detected(self):
         """Regular clauses are not detected as TermExpansion."""
+        # nv
         source = 'foo("a"),\n'
         preds, _, md = _parse_and_collect(source)
         assert len(preds) == 1
@@ -109,6 +113,7 @@ class TestIdentityExpansion:
 
     def test_identity_expansion(self):
         """TermExpansion(T, T, M, M) passes all items through."""
+        # nv
         source = (
             'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'foo("a"),\n'
@@ -123,6 +128,7 @@ class TestIdentityExpansion:
 
     def test_identity_via_fixture(self):
         """Full import of expansion_passthrough.clausal."""
+        # nv
         mod = _load_module(
             "_exp_pt", os.path.join(FIXTURES_DIR, "expansion_passthrough.clausal")
         )
@@ -139,6 +145,7 @@ class TestSuppression:
 
     def test_suppress_all(self):
         """TermExpansion(T, 'none', M, M) suppresses all items."""
+        # nv
         source = (
             'TermExpansion(_term, "none", _m0, _m0) <- True\n'
             'foo("a"),\n'
@@ -150,6 +157,7 @@ class TestSuppression:
 
     def test_suppress_via_fixture(self):
         """Full import of expansion_suppress.clausal — no foo clauses."""
+        # nv
         mod = _load_module(
             "_exp_sup", os.path.join(FIXTURES_DIR, "expansion_suppress.clausal")
         )
@@ -162,6 +170,7 @@ class TestTeNotExpanded:
 
     def test_te_clauses_removed_from_output(self):
         """TE clauses are separated, not passed through expansion."""
+        # nv
         source = (
             'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'foo("x"),\n'
@@ -179,6 +188,7 @@ class TestOneToMany:
 
     def test_duplicate_items(self):
         """TermExpansion(T, [T, T], M, M) duplicates each item."""
+        # nv
         source = (
             'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'foo("a"),\n'
@@ -191,6 +201,7 @@ class TestOneToMany:
 
     def test_duplicate_full_pipeline(self):
         """Full pipeline: duplicate items → double the clauses."""
+        # nv
         source = (
             'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'item("x"),\n'
@@ -214,6 +225,7 @@ class TestModuleState:
     def test_state_unmatched_passes_through(self):
         """when TE rule doesn't match state, items pass through unchanged."""
         # Rule requires _count + 1 but initial state is "nil" → fails → pass-through
+        # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_i, _f, _count), '
             'ModuleExpansionState(_i, _f, _next)) <- (_next := _count + 1)\n'
@@ -230,6 +242,7 @@ class TestQuasiQuotation:
 
     def test_q_produces_call_node(self):
         """q(foo(_x)) produces a Call constructor AST node."""
+        # nv
         from clausal.templating.term_rewriting import TermTransformer
         tree = ast.parse("q(foo(_x))", mode="eval").body
         t = TermTransformer()
@@ -245,6 +258,7 @@ class TestQuasiQuotation:
 
     def test_q_shares_vars(self):
         """Variables inside q() are shared with the enclosing context."""
+        # nv
         from clausal.templating.term_rewriting import TermTransformer
         tree = ast.parse("[q(foo(_x)), bar(_x)]", mode="eval").body
         t = TermTransformer()
@@ -257,6 +271,7 @@ class TestModuleItemsUnchanged:
 
     def test_directives_preserved(self):
         """Directives in module_items survive term expansion."""
+        # nv
         from clausal.pythonic_ast.nodes import Directive
         source = '-dynamic(color/2)\ncolor("sky", "blue"),\n'
         preds, items, md = _parse_and_collect(source)
@@ -270,6 +285,7 @@ class TestIntegrationWithCompileModule:
 
     def test_no_expansion_full_pipeline(self):
         """Full pipeline with no TermExpansion clauses works normally."""
+        # nv
         source = 'foo("a"),\nfoo("b"),\n'
         preds, items, md = _parse_and_collect(source)
         lm = compile_module(preds, items, md, "_test_no_te")
@@ -283,6 +299,7 @@ class TestIntegrationWithCompileModule:
 
     def test_identity_expansion_full_pipeline(self):
         """Full pipeline with identity TE — all clauses survive."""
+        # nv
         source = (
             'TermExpansion(_term, _term, _m0, _m0) <- True\n'
             'bar("x"),\n'
@@ -300,6 +317,7 @@ class TestIntegrationWithCompileModule:
 
     def test_suppression_full_pipeline(self):
         """Full pipeline with suppression TE — no clauses compiled."""
+        # nv
         source = (
             'TermExpansion(_term, "none", _m0, _m0) <- True\n'
             'baz("a"),\n'
@@ -314,6 +332,7 @@ class TestImportedExpansionRules:
 
     def test_imported_te_via_fixture(self):
         """Full import of expansion_importer.clausal which imports TE rules."""
+        # nv
         import sys
         # Ensure fixtures dir is on path for -import_from resolution.
         fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -343,6 +362,7 @@ class TestImportedExpansionRules:
 
     def test_imported_te_predicate_nodes_stored(self):
         """Provider module stores _te_predicate_nodes on TermExpansion class."""
+        # nv
         mod = _load_module(
             "_exp_prov",
             os.path.join(FIXTURES_DIR, "expansion_provider.clausal"),
@@ -363,6 +383,7 @@ class TestNewFunctorsFromExpansion:
         # Because the TE rule unifies _term with the original Predicate node
         # and _expansion is constructed by Clausal's own unification, the
         # result is a new Predicate node with head dst(...).
+        # nv
         source = (
             'TermExpansion(_term, _exp, _m0, _m0) <- (\n'
             '    _term is _exp,\n'  # identity — passes item through
@@ -382,6 +403,7 @@ class TestNewFunctorsFromExpansion:
         This verifies compile_module handles predicates produced by expansion
         that weren't in the original source (extra clauses for same functor).
         """
+        # nv
         source = (
             'TermExpansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'color("red"),\n'
@@ -406,6 +428,7 @@ class TestInitFinalInjection:
         """TermExpansion accumulates init items via module state."""
         # This TE rule passes items through but adds each item to the
         # init list (prepended items).
+        # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
             'ModuleExpansionState([_term | _init], _final, _s)) <- True\n'
@@ -420,6 +443,7 @@ class TestInitFinalInjection:
 
     def test_final_list_injection(self):
         """TermExpansion accumulates final items via module state."""
+        # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
             'ModuleExpansionState(_init, [_term | _final], _s)) <- True\n'
@@ -432,6 +456,7 @@ class TestInitFinalInjection:
 
     def test_init_final_full_pipeline(self):
         """Full pipeline with init/final injection — all items compiled."""
+        # nv
         source = (
             'TermExpansion(_term, _term, ModuleExpansionState(_init, _final, _s), '
             'ModuleExpansionState([_term | _init], [_term | _final], _s)) <- True\n'

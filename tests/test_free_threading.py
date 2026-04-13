@@ -26,6 +26,7 @@ class TestConcurrentVarCreation:
     """Multiple threads creating Vars must get globally unique var_ids."""
 
     def test_unique_ids_under_contention(self):
+        # nv
         NUM_THREADS = 8
         VARS_PER_THREAD = 10_000
         all_ids: list[set[int]] = [set() for _ in range(NUM_THREADS)]
@@ -63,6 +64,7 @@ class TestConcurrentUnification:
     internal state under concurrent calls."""
 
     def test_independent_unify_threads(self):
+        # nv
         NUM_THREADS = 8
         ITERS = 5_000
         barrier = threading.Barrier(NUM_THREADS)
@@ -94,6 +96,7 @@ class TestConcurrentUnification:
 
     def test_unify_shared_ground_terms(self):
         """Multiple threads unify their own Vars against the same ground list."""
+        # nv
         NUM_THREADS = 8
         shared_ground = [1, 2, [3, 4], "five"]
         barrier = threading.Barrier(NUM_THREADS)
@@ -123,6 +126,7 @@ class TestConcurrentAttrHooks:
     """Tests register/unregister_attr_hook under contention."""
 
     def test_concurrent_register_unregister(self):
+        # nv
         NUM_THREADS = 8
         ITERS = 2_000
         barrier = threading.Barrier(NUM_THREADS)
@@ -143,6 +147,7 @@ class TestConcurrentAttrHooks:
 
     def test_hook_fires_under_contention(self):
         """Register a hook, then unify AttVars from multiple threads."""
+        # nv
         hook_calls = []
         lock = threading.Lock()
 
@@ -183,6 +188,7 @@ class TestConcurrentDatabaseReads:
     """Multiple threads resolve goals against the same compiled Database."""
 
     def test_concurrent_call(self):
+        # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.database import Clause, Module
         from clausal.logic.solve import call
@@ -232,6 +238,7 @@ class TestTrailIsolation:
     trail doesn't affect variables bound via another trail."""
 
     def test_two_trails_independent(self):
+        # nv
         x = Var()
         t1, t2 = Trail(), Trail()
 
@@ -249,6 +256,7 @@ class TestTrailIsolation:
 
     def test_cross_thread_trail_raises(self):
         """Using a Trail from a different thread must raise RuntimeError."""
+        # nv
         trail = Trail()
         error = [None]
 
@@ -272,6 +280,7 @@ class TestTrailIsolation:
 
     def test_cross_thread_trail_undo_raises(self):
         """Calling undo on a Trail from a different thread must raise."""
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 42, trail)
@@ -302,6 +311,7 @@ class TestCExtensionPresence:
 
     def test_variables_is_c_extension(self):
         """_variables must be a C extension module."""
+        # nv
         from clausal.logic.variables import _variables
         # C extension modules have a __file__ ending in .so/.pyd/.dylib
         assert hasattr(_variables, '__file__'), "_variables has no __file__"
@@ -312,6 +322,7 @@ class TestCExtensionPresence:
 
     def test_trampoline_is_c_extension(self):
         """_trampoline must be a C extension module, and trampoline.py must use it."""
+        # nv
         from clausal.logic.trampoline import StepGenerator
         # If the C extension is loaded, StepGenerator's module is _trampoline
         assert StepGenerator.__module__ == '_trampoline', (
@@ -321,6 +332,7 @@ class TestCExtensionPresence:
 
     def test_trampoline_stepgen_has_parent(self):
         """C StepGenerator must expose the parent attribute."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, DONE
 
         def dummy(this_gen, parent):

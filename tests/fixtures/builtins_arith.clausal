@@ -19,16 +19,16 @@ CountTo(N, NUMBERS) <- (
     findall(X, between(1, N, X), NUMBERS)
 )
 
-Test("between 1 to 3") <- (findall(X, between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])
-Test("succ forward") <- (succ(3, Y), Y == 4)
-Test("succ backward") <- (succ(X, 5), X == 4)
-Test("plus forward") <- (plus(2, 3, Z), Z == 5)
-Test("plus backward") <- (plus(X, 3, 7), X == 4)
-Test("abs positive") <- (abs_(5, RESULT), RESULT == 5)
-Test("abs negative") <- (abs_(-3, RESULT), RESULT == 3)
-Test("max basic") <- (max_(3, 5, RESULT), RESULT == 5)
-Test("min basic") <- (min_(3, 5, RESULT), RESULT == 3)
-Test("count to 3") <- (CountTo(3, NUMBERS), NUMBERS == [1, 2, 3])
-Test("in range") <- InRange(1, 5, 3)
-Test("successor") <- (Successor(4, Y), Y == 5)
-Test("predecessor") <- (Predecessor(5, X), X == 4)
+Test("between 1 to 3") <- (findall(X, between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])  # nv
+Test("succ forward") <- (succ(3, Y), Y == 4)  # nv
+Test("succ backward") <- (succ(X, 5), X == 4)  # nv
+Test("plus forward") <- (plus(2, 3, Z), Z == 5)  # nv
+Test("plus backward") <- (plus(X, 3, 7), X == 4)  # nv
+Test("abs positive") <- (abs_(5, RESULT), RESULT == 5)  # nv
+Test("abs negative") <- (abs_(-3, RESULT), RESULT == 3)  # nv
+Test("max basic") <- (max_(3, 5, RESULT), RESULT == 5)  # nv
+Test("min basic") <- (min_(3, 5, RESULT), RESULT == 3)  # nv
+Test("count to 3") <- (CountTo(3, NUMBERS), NUMBERS == [1, 2, 3])  # nv
+Test("in range") <- InRange(1, 5, 3)  # nv
+Test("successor") <- (Successor(4, Y), Y == 5)  # nv
+Test("predecessor") <- (Predecessor(5, X), X == 4)  # nv

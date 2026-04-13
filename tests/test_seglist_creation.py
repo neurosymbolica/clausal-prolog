@@ -49,6 +49,7 @@ class TestOutputUnboundStar:
 
     def test_star_only(self):
         """[*T] with T unbound → SegList([VarSeg(T)]) bound to target."""
+        # nv
         trail = Trail()
         target = Var()
         star = Var()
@@ -61,6 +62,7 @@ class TestOutputUnboundStar:
 
     def test_before_and_unbound_star(self):
         """[1, *T] with T unbound → SegList([ConcreteSeg([1]), VarSeg(T)])."""
+        # nv
         trail = Trail()
         target = Var()
         h = Var()
@@ -75,6 +77,7 @@ class TestOutputUnboundStar:
 
     def test_before_unbound_star_after(self):
         """[1, *T, 2] with T unbound → SegList([ConcreteSeg([1]), VarSeg(T), ConcreteSeg([2])])."""
+        # nv
         trail = Trail()
         target = Var()
         h = Var()
@@ -93,6 +96,7 @@ class TestOutputUnboundStar:
 
     def test_seglist_later_unified(self):
         """After building a SegList, unifying the star var resolves it."""
+        # nv
         trail = Trail()
         target = Var()
         star = Var()
@@ -106,6 +110,7 @@ class TestOutputUnboundStar:
 
     def test_target_already_bound_uses_input_mode(self):
         """If target was bound by body, output switches to input mode."""
+        # nv
         trail = Trail()
         target = Var()
         unify(target, [1, 2, 3], trail)
@@ -125,6 +130,7 @@ class TestBodyStarUnifyUnbound:
 
     def test_unbound_target_unbound_star(self):
         """Is([1, *T], R) with T and R unbound → R = SegList."""
+        # nv
         trail = Trail()
         target = Var()
         star = Var()
@@ -137,6 +143,7 @@ class TestBodyStarUnifyUnbound:
 
     def test_unbound_target_bound_star(self):
         """Is([1, *T], R) with T=[2] → R = [1, 2] (plain list, not SegList)."""
+        # nv
         trail = Trail()
         target = Var()
         star = Var()
@@ -149,6 +156,7 @@ class TestBodyStarUnifyUnbound:
 
     def test_then_unify_against_ground(self):
         """After R = SegList, unify R against [1, 2] → T = [2]."""
+        # nv
         trail = Trail()
         target = Var()
         star = Var()
@@ -172,6 +180,7 @@ class TestBodyMultiStarUnifyUnbound:
     def test_two_stars_unbound_target(self):
         """[*A, *B] against unbound L → L = SegList([VarSeg(A), VarSeg(B)]).
         Binding is live inside the generator loop."""
+        # nv
         trail = Trail()
         target = Var()
         a, b = Var(), Var()
@@ -188,6 +197,7 @@ class TestBodyMultiStarUnifyUnbound:
     def test_star_fixed_star_unbound_target(self):
         """[*A, 5, *B] against unbound L → L = SegList([VarSeg(A), ConcreteSeg([5]), VarSeg(B)]).
         Binding is live inside the generator loop."""
+        # nv
         trail = Trail()
         target = Var()
         a, b, mid = Var(), Var(), Var()
@@ -206,6 +216,7 @@ class TestBodyMultiStarUnifyUnbound:
 
     def test_seglist_then_unified_against_ground(self):
         """[*A, *B] unbound L; inside loop unify L against [1,2,3] gives all splits."""
+        # nv
         trail = Trail()
         target = Var()
         a, b = Var(), Var()
@@ -237,6 +248,7 @@ class TestBuildStarListUnbound:
 
     def test_star_only_unbound(self):
         """_build_star_list([], T, []) with T unbound → SegList([VarSeg(T)])."""
+        # nv
         t = Var()
         result = _build_star_list([], t, [])
         assert isinstance(result, SegList)
@@ -246,6 +258,7 @@ class TestBuildStarListUnbound:
 
     def test_before_and_unbound_star(self):
         """_build_star_list([1], T, []) → SegList([ConcreteSeg([1]), VarSeg(T)])."""
+        # nv
         t = Var()
         result = _build_star_list([1], t, [])
         assert isinstance(result, SegList)
@@ -254,6 +267,7 @@ class TestBuildStarListUnbound:
 
     def test_before_unbound_star_after(self):
         """_build_star_list([1], T, [2]) → 3-segment SegList."""
+        # nv
         t = Var()
         result = _build_star_list([1], t, [2])
         assert isinstance(result, SegList)
@@ -264,11 +278,13 @@ class TestBuildStarListUnbound:
 
     def test_bound_star_returns_plain_list(self):
         """_build_star_list([1], [2, 3], []) → plain list [1, 2, 3]."""
+        # nv
         result = _build_star_list([1], [2, 3], [])
         assert result == [1, 2, 3]
 
     def test_seglist_becomes_ground_on_bind(self):
         """After building SegList, binding the star var resolves to a plain list."""
+        # nv
         trail = Trail()
         t = Var()
         sl = _build_star_list([1], t, [4])
@@ -286,6 +302,7 @@ class TestBuildMultiStarList:
 
     def test_two_unbound_stars(self):
         """[*A, *B] with both unbound → SegList([VarSeg(A), VarSeg(B)])."""
+        # nv
         a, b = Var(), Var()
         result = _build_multi_star_list([("star", a), ("star", b)])
         assert isinstance(result, SegList)
@@ -296,6 +313,7 @@ class TestBuildMultiStarList:
 
     def test_fixed_star_unbound(self):
         """[1, 2, *T] with T unbound → SegList([ConcreteSeg([1,2]), VarSeg(T)])."""
+        # nv
         t = Var()
         result = _build_multi_star_list([("fixed", [1, 2]), ("star", t)])
         assert isinstance(result, SegList)
@@ -304,6 +322,7 @@ class TestBuildMultiStarList:
 
     def test_star_fixed_star_unbound(self):
         """[*A, 5, *B] → SegList with 3 segments."""
+        # nv
         a, b = Var(), Var()
         result = _build_multi_star_list([("star", a), ("fixed", [5]), ("star", b)])
         assert isinstance(result, SegList)
@@ -314,6 +333,7 @@ class TestBuildMultiStarList:
 
     def test_all_bound_returns_plain_list(self):
         """[*A, *B] with A=[1,2], B=[3] → plain list [1,2,3]."""
+        # nv
         a, b = Var(), Var()
         trail = Trail()
         unify(a, [1, 2], trail)
@@ -323,6 +343,7 @@ class TestBuildMultiStarList:
 
     def test_fixed_and_bound_star(self):
         """[1, *T] with T=[2,3] → plain list [1, 2, 3]."""
+        # nv
         t = Var()
         trail = Trail()
         unify(t, [2, 3], trail)
@@ -342,6 +363,7 @@ class TestCompiledPredicateCreation:
 
     def test_append_unbound_rhs(self):
         """append([1,2], Y, Z) with Y unbound → Z is a SegList inside the solution."""
+        # nv
         mod = self.mod
         y = Var()
         z = Var()
@@ -351,6 +373,7 @@ class TestCompiledPredicateCreation:
 
     def test_append_unbound_rhs_then_unified(self):
         """Inside append([1,2], Y, Z) solution, unify Z=[1,2,3] → Y=[3]."""
+        # nv
         mod = self.mod
         y = Var()
         z = Var()
@@ -365,6 +388,7 @@ class TestCompiledPredicateCreation:
 
     def test_last_forward_still_works(self):
         """last([1, 2, 3], X) → X = 3 (forward mode not broken by Phase 4 changes)."""
+        # nv
         mod = self.mod
         x = Var()
         solutions = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
@@ -374,6 +398,7 @@ class TestCompiledPredicateCreation:
 
     def test_split_unbound_list(self):
         """Split(L, A, B) with L unbound → L is a SegList inside the solution."""
+        # nv
         mod = self.mstar
         lst = Var()
         a, b = Var(), Var()
@@ -382,6 +407,7 @@ class TestCompiledPredicateCreation:
 
     def test_split_unbound_list_then_ground(self):
         """Inside Split(L, A, B) solution, unify L=[1,2,3] enumerates splits."""
+        # nv
         mod = self.mstar
         lst = Var()
         a, b = Var(), Var()

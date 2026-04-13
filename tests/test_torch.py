@@ -110,6 +110,7 @@ class TestTorchTensorFixture:
         "empty tensor",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -138,6 +139,7 @@ class TestTorchNnFixture:
         "named_parameter recurses into nested model",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -175,6 +177,7 @@ class TestTorchRegistryFixture:
         "dtype_info enumerate keys",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -196,6 +199,7 @@ class TestTorchIoFixture:
         "load nonexistent file fails",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -251,6 +255,7 @@ class TestTorchLinalgFixture:
         "dot product orthogonal",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -291,6 +296,7 @@ class TestTorchFFTFixture:
         "real_fft_frequencies with spacing",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -340,6 +346,7 @@ class TestTorchComparisonFixture:
         "scatter into zeros",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -402,6 +409,7 @@ class TestTorchMathFixture:
         "cumprod known sequence",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -455,6 +463,7 @@ class TestTorchShape2Fixture:
         "roll with dim",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -502,6 +511,7 @@ class TestTorchDistributionsFixture:
         "cdf uniform",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -563,6 +573,7 @@ class TestTorchFunctionalFixture:
         "dropout with opts",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -591,6 +602,7 @@ class TestTorchSchedulersFixture:
         "scheduler lookup PolynomialLR",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -613,6 +625,7 @@ class TestSchedulerGradUtils:
         return Module("torch_nn", module_dict=vars(nn_mod))
 
     def test_current_lr(self):
+        # nv
         import torch
         from clausal.logic.variables import Var, deref
         model = torch.nn.Linear(2, 2)
@@ -625,6 +638,7 @@ class TestSchedulerGradUtils:
             break
 
     def test_clip_grad_norm(self):
+        # nv
         import torch
         from clausal.logic.variables import Var, deref
         model = torch.nn.Linear(2, 2)
@@ -639,6 +653,7 @@ class TestSchedulerGradUtils:
             break
 
     def test_clip_grad_value(self):
+        # nv
         import torch
         model = torch.nn.Linear(2, 2)
         x = torch.randn(1, 2)
@@ -710,6 +725,7 @@ class TestTorchCreation2Fixture:
         "neg known values",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
 
 
@@ -722,11 +738,13 @@ class TestTorchInfra:
     """Unit tests for torch.py infrastructure."""
 
     def test_lazy_import_loads_torch(self):
+        # nv
         import clausal.modules.py.torch as impl
         impl._ensure_torch()
         assert impl._torch is not None
 
     def test_exports_exist(self):
+        # nv
         import clausal.modules.py.torch as impl
         for name in impl.__all__:
             obj = getattr(impl, name)
@@ -734,6 +752,7 @@ class TestTorchInfra:
 
     def test_pred_arities(self):
         """Verify key predicates have the expected arity variants."""
+        # nv
         import clausal.modules.py.torch as impl
         # zeros should have arity 2 and 3
         assert 2 in impl.zeros._dispatch_fns

@@ -84,11 +84,13 @@ class TestSmallRoundtripClausalProlog:
         "Edge(1, 2),\nEdge(2, 3),",
     ])
     def test_roundtrip_ok(self, src):
+        # nv
         ok, _first, second = roundtrip(src, direction="clausal_to_prolog", dialect=Dialect.swi())
         # The roundtripped result should at least parse back to valid clausal
         assert len(second.strip()) > 0
 
     def test_fact_preserves_arity(self):
+        # nv
         src = "Foo(1, 2, 3),"
         prolog = clausal_source_to_prolog(src)
         back = prolog_to_clausal(prolog)
@@ -99,6 +101,7 @@ class TestSmallRoundtripClausalProlog:
         assert heads1 == heads2
 
     def test_rule_preserves_clause_count(self):
+        # nv
         src = "A(X) <- B(X)\nA(X) <- C(X)"
         prolog = clausal_source_to_prolog(src)
         back = prolog_to_clausal(prolog)
@@ -119,6 +122,7 @@ class TestSmallRoundtripPrologClausal:
         "edge(1, 2).\nedge(2, 3).",
     ])
     def test_roundtrip_produces_valid_prolog(self, src):
+        # nv
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
         # Should parse without error
@@ -126,6 +130,7 @@ class TestSmallRoundtripPrologClausal:
         assert len(pmod.items) > 0
 
     def test_fact_arity_preserved(self):
+        # nv
         src = "foo(a, b, c)."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -142,6 +147,7 @@ class TestOperatorPrecedence:
 
     def test_arithmetic_precedence_clausal_roundtrip(self):
         """a + b * c should not become (a + b) * c."""
+        # nv
         src = "Test(R) <- (R := 1 + 2 * 3)"
         prolog = clausal_source_to_prolog(src)
         # in_ Prolog, * binds tighter than +
@@ -154,6 +160,7 @@ class TestOperatorPrecedence:
 
     def test_arithmetic_precedence_prolog_roundtrip(self):
         """Prolog a + b * c → clausal → Prolog preserves precedence."""
+        # nv
         src = "test(R) :- R is 1 + 2 * 3."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -164,6 +171,7 @@ class TestOperatorPrecedence:
 
     def test_comparison_chain(self):
         """Comparison operators preserve meaning."""
+        # nv
         src = "test :- X > 0, X < 10."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -186,6 +194,7 @@ class TestVariableIdentity:
 
     def test_shared_variables_clausal_roundtrip(self):
         """X appearing in head and body stays the same variable."""
+        # nv
         src = "Foo(X, Y) <- (Bar(X, Z), Baz(Z, Y))"
         prolog = clausal_source_to_prolog(src)
         back = prolog_to_clausal(prolog)
@@ -197,6 +206,7 @@ class TestVariableIdentity:
 
     def test_shared_variables_prolog_roundtrip(self):
         """Prolog variable sharing survives roundtrip."""
+        # nv
         src = "foo(X, Y) :- bar(X, Z), baz(Z, Y)."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -206,6 +216,7 @@ class TestVariableIdentity:
 
     def test_anonymous_variables(self):
         """Anonymous variables stay anonymous."""
+        # nv
         src = "foo(_, Y) :- bar(_, Y)."
         clausal = prolog_to_clausal(src)
         # Should use _ in clausal too
@@ -233,6 +244,7 @@ class TestClauseOrder:
     """Predicate clause order is semantic in Prolog — must be preserved."""
 
     def test_clause_order_clausal_roundtrip(self):
+        # nv
         src = "Foo(1),\nFoo(2),\nFoo(3),"
         prolog = clausal_source_to_prolog(src)
         back = prolog_to_clausal(prolog)
@@ -248,6 +260,7 @@ class TestClauseOrder:
                 assert c1.head == c2.head
 
     def test_clause_order_prolog_roundtrip(self):
+        # nv
         src = "foo(1).\nfoo(2).\nfoo(3)."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -261,6 +274,7 @@ class TestClauseOrder:
 
     def test_multi_predicate_order(self):
         """Multiple predicates keep their relative order."""
+        # nv
         src = "alpha(1).\nbeta(2).\nalpha(3).\nbeta(4)."
         clausal = prolog_to_clausal(src)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -302,6 +316,7 @@ class TestFixtureRoundtripClausalToProlog:
 
     def test_clause_count_preserved(self, path: Path):
         """Same number of clauses after roundtrip."""
+        # nv
         source = path.read_text()
         prolog = clausal_source_to_prolog(source)
         back = prolog_to_clausal(prolog)
@@ -316,6 +331,7 @@ class TestFixtureRoundtripClausalToProlog:
 
     def test_head_functors_preserved(self, path: Path):
         """Head functor/arity pairs preserved in order."""
+        # nv
         source = path.read_text()
         prolog = clausal_source_to_prolog(source)
         back = prolog_to_clausal(prolog)
@@ -324,6 +340,7 @@ class TestFixtureRoundtripClausalToProlog:
 
     def test_variable_count_preserved(self, path: Path):
         """Number of distinct variables per clause stays the same."""
+        # nv
         source = path.read_text()
         prolog = clausal_source_to_prolog(source)
         back = prolog_to_clausal(prolog)
@@ -336,6 +353,7 @@ class TestFixtureRoundtripClausalToProlog:
 
     def test_prolog_output_parses(self, path: Path):
         """Roundtripped Prolog output parses without error."""
+        # nv
         source = path.read_text()
         prolog = clausal_source_to_prolog(source)
         back = prolog_to_clausal(prolog)
@@ -362,6 +380,7 @@ class TestFixtureRoundtripPrologToClausal:
     """Golden .pl files → Clausal → Prolog: structural properties preserved."""
 
     def test_clause_count_preserved(self, pl_path: Path):
+        # nv
         source = pl_path.read_text()
         clausal = prolog_to_clausal(source)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -372,12 +391,14 @@ class TestFixtureRoundtripPrologToClausal:
         assert len(clauses1) == len(clauses2)
 
     def test_head_functors_preserved(self, pl_path: Path):
+        # nv
         source = pl_path.read_text()
         clausal = prolog_to_clausal(source)
         prolog2 = clausal_source_to_prolog(clausal)
         assert _clause_heads(source) == _clause_heads(prolog2)
 
     def test_prolog_output_parses(self, pl_path: Path):
+        # nv
         source = pl_path.read_text()
         clausal = prolog_to_clausal(source)
         prolog2 = clausal_source_to_prolog(clausal)
@@ -395,6 +416,7 @@ class TestCLIRoundtrip:
 
     def test_roundtrip_exit_code_simple_fact(self):
         """Simple facts should roundtrip exactly."""
+        # nv
         from clausal.tools.translate import main
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
@@ -404,6 +426,7 @@ class TestCLIRoundtrip:
         assert code == 0
 
     def test_roundtrip_file_based(self):
+        # nv
         from clausal.tools.translate import main
         # Prolog file roundtrip
         code = main(["--roundtrip", "--dialect", "swi",
@@ -411,6 +434,7 @@ class TestCLIRoundtrip:
         assert code == 0
 
     def test_translate_clausal_to_prolog_autodetect(self, tmp_path):
+        # nv
         from clausal.tools.translate import main
         outfile = tmp_path / "out.pl"
         code = main([str(FIXTURES / "edge_graph.clausal"), "-o", str(outfile)])
@@ -420,6 +444,7 @@ class TestCLIRoundtrip:
         assert "reach" in content
 
     def test_translate_prolog_to_clausal_autodetect(self, tmp_path):
+        # nv
         from clausal.tools.translate import main
         outfile = tmp_path / "out.clausal"
         code = main([str(GOLDEN / "edge_graph.pl"), "-o", str(outfile)])
@@ -429,6 +454,7 @@ class TestCLIRoundtrip:
         assert "Reach" in content
 
     def test_translate_explicit_to_flag(self, tmp_path):
+        # nv
         from clausal.tools.translate import main
         outfile = tmp_path / "out.pl"
         code = main([str(FIXTURES / "edge_graph.clausal"),
@@ -449,18 +475,21 @@ class TestDirectivePreservation:
 
     def test_clausal_dynamic_to_prolog(self):
         """-dynamic in clausal emits :- dynamic in Prolog."""
+        # nv
         src = "-dynamic(Color(name_, value_))"
         prolog = clausal_source_to_prolog(src)
         assert "dynamic" in prolog
 
     def test_prolog_dynamic_to_clausal(self):
         """:- dynamic in Prolog emits -dynamic in clausal."""
+        # nv
         src = ":- dynamic(color/2)."
         clausal = prolog_to_clausal(src)
         assert "dynamic" in clausal.lower()
 
     def test_prolog_module_to_clausal(self):
         """:- module emits -module in clausal."""
+        # nv
         src = ":- module(mymod, [foo/2])."
         clausal = prolog_to_clausal(src)
         assert "module" in clausal.lower()

@@ -22,12 +22,12 @@ NatnumProgram(PROGRAM) <- (
 
 Test("specialized count natnum(0) = 1") <- (
     SolveCountNatnum([["natnum", 0]], 1)
-)
+)  # nv
 
 Test("specialized count natnum(s(0)) = 2") <- (
     SolveCountNatnum([["natnum", ["s", 0]]], 2)
-)
+)  # nv
 
 Test("specialized count natnum(s(s(0))) = 3") <- (
     SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
-)
+)  # nv

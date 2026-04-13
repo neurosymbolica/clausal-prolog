@@ -29,3 +29,43 @@ CopyShared(TERM, FIRST, SECOND) <- (
 
 # VarList/2 — collect vars from a list
 VarList(LIST, VARS) <- term_variables(LIST, VARS)
+
+
+# ── Test clauses (migrated from test_term_inspection.py) ──────────────────
+
+Test("copy_term: ground atom copies as-is") <- (
+    copy_term("hello", C),
+    C == "hello"
+)  # nv
+
+Test("copy_term: ground integer copies as-is") <- (
+    copy_term(42, C),
+    C == 42
+)  # nv
+
+Test("copy_term: ground list copies as-is") <- (
+    copy_term([1, 2, 3], C),
+    C == [1, 2, 3]
+)  # nv
+
+Test("term_variables: ground integer has no vars") <- HasNoVars(42)  # nv
+
+Test("term_variables: ground atom has no vars") <- HasNoVars("hello")  # nv
+
+Test("term_variables: ground list has no vars") <- HasNoVars([1, 2, 3])  # nv
+
+Test("term_variables: single unbound var yields length 1") <- (
+    CountVars(X, N),
+    N == 1
+)  # nv
+
+Test("term_variables: bound var not collected") <- (
+    X is 42,
+    CountVars(X, N),
+    N == 0
+)  # nv
+
+Test("term_variables: ground list with no vars") <- (
+    CountVars([1, 2, 3], N),
+    N == 0
+)  # nv

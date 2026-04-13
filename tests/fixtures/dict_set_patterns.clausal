@@ -26,53 +26,53 @@ primary({"red", "green", "blue"}),
 # ── Tests ──
 
 # --- Test: ground dict matching ---
-Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE), TYPE is "origin")
-Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE), TYPE is "x_axis")
+Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE), TYPE is "origin")  # nv
+Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE), TYPE is "x_axis")  # nv
 
 # --- Test: dict value extraction ---
-Test("get_x") <- (get_x({"x": 42, "y": 99}, X), X is 42)
-Test("get_y") <- (get_y({"x": 10, "y": 20}, Y), Y is 20)
+Test("get_x") <- (get_x({"x": 42, "y": 99}, X), X is 42)  # nv
+Test("get_y") <- (get_y({"x": 10, "y": 20}, Y), Y is 20)  # nv
 
 # --- Test: nested dict ---
 Test("nested city") <- (
     get_city({"address": {"city": "London"}}, C),
     C is "London",
-)
+)  # nv
 
 # --- Test: dict construction in body ---
 Test("make_point") <- (
     make_point(3, 4, P),
     get_x(P, X), X is 3,
     get_y(P, Y), Y is 4,
-)
+)  # nv
 
 # --- Test: dict unification in body ---
 Test("dict unify") <- (
     D is {"a": 1, "b": 2},
     D is {"a": X, "b": Y},
     X is 1, Y is 2,
-)
+)  # nv
 
 # --- Test: dict fails on key mismatch ---
 Test("dict key mismatch fails") <- (
     not ({"a": 1} is {"b": 1})
-)
+)  # nv
 
 # --- Test: set ground matching ---
-Test("set match") <- (colors(S), S is {1, 2, 3})
+Test("set match") <- (colors(S), S is {1, 2, 3})  # nv
 
 # --- Test: set primary ---
-Test("set primary") <- (primary(S), S is {"red", "green", "blue"})
+Test("set primary") <- (primary(S), S is {"red", "green", "blue"})  # nv
 
 # --- Test: set mismatch fails ---
-Test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))
+Test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))  # nv
 
 # --- Test: dict var unifies ---
 Test("var binds dict") <- (
     X is {"key": "val"},
     X is {"key": Y},
     Y is "val",
-)
+)  # nv
 
 # --- Test: empty dict ---
-Test("empty dict") <- ({} is {})
+Test("empty dict") <- ({} is {})  # nv

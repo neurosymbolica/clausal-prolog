@@ -46,26 +46,31 @@ def goal(functor, *args):
 class TestCopyTerm:
 
     def test_copy_atom(self):
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", "hello", copy), copy)
         assert vals == ["hello"]
 
     def test_copy_integer(self):
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", 42, copy), copy)
         assert vals == [42]
 
     def test_copy_none(self):
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", None, copy), copy)
         assert vals == [None]
 
     def test_copy_list_ground(self):
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", [1, 2, 3], copy), copy)
         assert vals == [[1, 2, 3]]
 
     def test_copy_compound_ground(self):
+        # nv
         term = Compound("foo", (1, 2))
         copy = Var()
         vals = sol_var(goal("copy_term", term, copy), copy)
@@ -76,6 +81,7 @@ class TestCopyTerm:
         assert c.args == (1, 2)
 
     def test_copy_var_gets_fresh_var(self):
+        # nv
         x = Var()
         copy = Var()
         mod = fresh_module()
@@ -87,6 +93,7 @@ class TestCopyTerm:
 
     def test_copy_preserves_sharing(self):
         """Two occurrences of the same Var → same fresh Var in copy."""
+        # nv
         x = Var()
         term = Compound("f", (x, x))
         copy = Var()
@@ -100,6 +107,7 @@ class TestCopyTerm:
             assert a0 is a1
 
     def test_copy_fresh_var_distinct_from_original(self):
+        # nv
         x = Var()
         term = Compound("f", (x,))
         copy = Var()
@@ -111,6 +119,7 @@ class TestCopyTerm:
             assert fresh is not x
 
     def test_copy_nested_compound(self):
+        # nv
         inner = Compound("bar", (Var(),))
         term = Compound("foo", (inner, 99))
         copy = Var()
@@ -123,6 +132,7 @@ class TestCopyTerm:
             assert isinstance(c_inner, Compound) and c_inner.functor == "bar"
 
     def test_copy_list_with_vars(self):
+        # nv
         x = Var()
         lst = [1, x, 3]
         copy = Var()
@@ -137,6 +147,7 @@ class TestCopyTerm:
 
     def test_copy_bound_var(self):
         """Var already bound → copy gets the bound value."""
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 42, trail)
@@ -146,12 +157,14 @@ class TestCopyTerm:
             assert deref(copy) == 42
 
     def test_copy_exactly_one_solution(self):
+        # nv
         copy = Var()
         sols = solutions(goal("copy_term", Compound("f", (1,)), copy))
         assert len(sols) == 1
 
     def test_copy_no_side_effects_on_original(self):
         """copy_term does not bind original Vars."""
+        # nv
         x = Var()
         term = Compound("f", (x,))
         copy = Var()
@@ -165,16 +178,19 @@ class TestCopyTerm:
 class TestTermVariables:
 
     def test_ground_term_empty(self):
+        # nv
         out = Var()
         vals = sol_var(goal("term_variables", 42, out), out)
         assert vals == [[]]
 
     def test_ground_compound_empty(self):
+        # nv
         out = Var()
         vals = sol_var(goal("term_variables", Compound("f", (1, 2)), out), out)
         assert vals == [[]]
 
     def test_single_var(self):
+        # nv
         x = Var()
         out = Var()
         mod = fresh_module()
@@ -186,6 +202,7 @@ class TestTermVariables:
             assert result[0] is x
 
     def test_compound_with_vars(self):
+        # nv
         x, y = Var(), Var()
         term = Compound("f", (x, y))
         out = Var()
@@ -198,6 +215,7 @@ class TestTermVariables:
             assert result[1] is y
 
     def test_repeated_var_only_once(self):
+        # nv
         x = Var()
         term = Compound("f", (x, x))
         out = Var()
@@ -209,6 +227,7 @@ class TestTermVariables:
             assert result[0] is x
 
     def test_left_to_right_order(self):
+        # nv
         x, y, z = Var(), Var(), Var()
         term = Compound("f", (x, Compound("g", (y,)), z))
         out = Var()
@@ -219,6 +238,7 @@ class TestTermVariables:
             assert [r is v for r, v in zip(result, [x, y, z])] == [True, True, True]
 
     def test_list_term(self):
+        # nv
         x, y = Var(), Var()
         lst = [1, x, 2, y]
         out = Var()
@@ -232,6 +252,7 @@ class TestTermVariables:
 
     def test_bound_var_not_collected(self):
         """Bound Var derefs to value — not collected."""
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 99, trail)
@@ -245,6 +266,7 @@ class TestTermVariables:
             assert result[0] is y
 
     def test_nested_vars(self):
+        # nv
         x = Var()
         term = Compound("a", (Compound("b", (Compound("c", (x,)),)),))
         out = Var()
@@ -256,6 +278,7 @@ class TestTermVariables:
             assert result[0] is x
 
     def test_exactly_one_solution(self):
+        # nv
         out = Var()
         sols = solutions(goal("term_variables", Var(), out))
         assert len(sols) == 1
@@ -267,12 +290,14 @@ class TestTermVariables:
 class TestNumberVars:
 
     def test_ground_term_no_vars(self):
+        # nv
         end = Var()
         term = Compound("f", (1, 2))
         vals = sol_var(goal("numbervars", term, 0, end), end)
         assert vals == [0]
 
     def test_single_var(self):
+        # nv
         x = Var()
         term = Compound("f", (x,))
         end = Var()
@@ -284,6 +309,7 @@ class TestNumberVars:
             assert deref(end) == 1
 
     def test_two_vars(self):
+        # nv
         x, y = Var(), Var()
         term = Compound("f", (x, y))
         end = Var()
@@ -295,6 +321,7 @@ class TestNumberVars:
             assert deref(end) == 2
 
     def test_start_offset(self):
+        # nv
         x = Var()
         term = Compound("f", (x,))
         end = Var()
@@ -305,6 +332,7 @@ class TestNumberVars:
             assert deref(end) == 6
 
     def test_repeated_var_numbered_once(self):
+        # nv
         x = Var()
         term = Compound("f", (x, x))
         end = Var()
@@ -315,12 +343,14 @@ class TestNumberVars:
             assert deref(end) == 1
 
     def test_unbound_start_fails(self):
+        # nv
         x = Var()
         end = Var()
         sols = solutions(goal("numbervars", x, Var(), end))
         assert len(sols) == 0
 
     def test_list_term(self):
+        # nv
         x, y = Var(), Var()
         lst = [x, y]
         end = Var()
@@ -332,12 +362,14 @@ class TestNumberVars:
             assert deref(end) == 2
 
     def test_exactly_one_solution(self):
+        # nv
         end = Var()
         sols = solutions(goal("numbervars", 42, 0, end))
         assert len(sols) == 1
 
     def test_end_wrong_value_fails(self):
         """If End is already bound to wrong value, predicate fails."""
+        # nv
         x = Var()
         term = Compound("f", (x,))
         # one var → end should be 1; bind end to 99 → should fail
@@ -350,6 +382,7 @@ class TestNumberVars:
 
     def test_bindings_undone_after_backtrack(self):
         """numbervars binds vars via trail; bindings are undone on backtrack."""
+        # nv
         x = Var()
         term = Compound("f", (x,))
         end = Var()
@@ -376,12 +409,14 @@ class TestGenSym:
 
     def test_basic(self):
         """gensym("x", A) → "x_1"."""
+        # nv
         a = Var()
         vals = sol_var(goal("gensym", "x", a), a)
         assert vals == ["x_1"]
 
     def test_sequential(self):
         """Two calls increment: "x_1", "x_2"."""
+        # nv
         a1, a2 = Var(), Var()
         vals1 = sol_var(goal("gensym", "x", a1), a1)
         vals2 = sol_var(goal("gensym", "x", a2), a2)
@@ -390,6 +425,7 @@ class TestGenSym:
 
     def test_different_prefixes(self):
         """Different prefixes have independent counters."""
+        # nv
         a = Var()
         b = Var()
         sol_var(goal("gensym", "x", a), a)
@@ -398,18 +434,21 @@ class TestGenSym:
 
     def test_unbound_prefix_fails(self):
         """gensym(X, A) with unbound X → no solutions."""
+        # nv
         a = Var()
         sols = solutions(goal("gensym", Var(), a))
         assert len(sols) == 0
 
     def test_non_string_prefix_fails(self):
         """gensym(42, A) → no solutions."""
+        # nv
         a = Var()
         sols = solutions(goal("gensym", 42, a))
         assert len(sols) == 0
 
     def test_counter_survives_backtracking(self):
         """Counter does NOT reset on backtracking — impure."""
+        # nv
         a1 = Var()
         sol_var(goal("gensym", "z", a1), a1)
         # Counter is now at 1; next call should give z_2
@@ -419,16 +458,19 @@ class TestGenSym:
 
     def test_atom_already_bound_unification(self):
         """gensym("x", "x_1") succeeds if counter is at 1."""
+        # nv
         sols = solutions(goal("gensym", "x", "x_1"))
         assert len(sols) == 1
 
     def test_atom_already_bound_mismatch(self):
         """gensym("x", "x_99") fails when counter is at 1."""
+        # nv
         sols = solutions(goal("gensym", "x", "x_99"))
         assert len(sols) == 0
 
     def test_thread_safety(self):
         """Concurrent gensym calls produce unique atoms."""
+        # nv
         import threading
         results = []
         lock = threading.Lock()
@@ -456,6 +498,7 @@ class TestCopyTermKWTerm:
 
     def test_copy_kwterm_ground(self):
         """copy_term(KWTerm('r', a=1), Y) → Y is KWTerm('r', a=1)."""
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", KWTerm("r", a=1, b=2), copy), copy)
         assert len(vals) == 1
@@ -466,6 +509,7 @@ class TestCopyTermKWTerm:
 
     def test_copy_kwterm_preserves_functor(self):
         """Functor name is preserved correctly (not replaced by fields dict)."""
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", KWTerm("myrel", x=99), copy), copy)
         assert len(vals) == 1
@@ -473,6 +517,7 @@ class TestCopyTermKWTerm:
 
     def test_copy_kwterm_var_field_gets_fresh_var(self):
         """Var in a KWTerm field → fresh Var in copy, not the original."""
+        # nv
         x = Var()
         t = KWTerm("r", a=x)
         copy = Var()
@@ -488,6 +533,7 @@ class TestCopyTermKWTerm:
 
     def test_copy_kwterm_sharing_preserved(self):
         """Two fields referencing the same Var → same fresh Var in copy."""
+        # nv
         x = Var()
         t = KWTerm("r", a=x, b=x)
         copy = Var()
@@ -503,6 +549,7 @@ class TestCopyTermKWTerm:
 
     def test_copy_kwterm_no_side_effects_on_original(self):
         """copy_term does not bind Vars in the original KWTerm."""
+        # nv
         x = Var()
         t = KWTerm("r", a=x)
         copy = Var()
@@ -523,6 +570,7 @@ class TestCopyTermDictTerm:
 
     def test_copy_dictterm_ground(self):
         """copy_term on a ground DictTerm succeeds (fall-through, shared)."""
+        # nv
         copy = Var()
         vals = sol_var(goal("copy_term", DictTerm({"k": 1}), copy), copy)
         assert len(vals) == 1
@@ -530,6 +578,7 @@ class TestCopyTermDictTerm:
 
     def test_copy_dictterm_var_not_freshened(self):
         """DictTerm Vars are NOT freshened — copy shares the original Var."""
+        # nv
         x = Var()
         t = DictTerm({"k": x})
         copy = Var()
@@ -546,6 +595,7 @@ class TestTermVariablesDictTerm:
 
     def test_dictterm_vars_not_collected(self):
         """term_variables on DictTerm currently returns [] (gap, not handled)."""
+        # nv
         x = Var()
         t = DictTerm({"k": x})
         out = Var()
@@ -566,6 +616,7 @@ class TestCopyTermSegList:
 
     def test_copy_seglist_var_not_freshened(self):
         """SegList VarSeg Vars are NOT freshened — copy shares the original."""
+        # nv
         from clausal.logic.builtins.inspection import _copy_term_impl
         x = Var()
         t = SegList([ConcreteSeg([1, 2]), VarSeg(x)])
@@ -580,6 +631,7 @@ class TestTermVariablesSegList:
 
     def test_seglist_vars_not_collected(self):
         """term_variables on SegList currently returns [] (gap, not handled)."""
+        # nv
         from clausal.logic.builtins.inspection import _collect_vars_impl
         x = Var()
         t = SegList([VarSeg(x)])

@@ -39,73 +39,87 @@ class TestReifyEq:
     """Test the three-valued reification decision procedure."""
 
     def test_identical_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert reify_eq(x, x, trail) is True
 
     def test_ground_equal_int(self):
+        # nv
         trail = Trail()
         assert reify_eq(1, 1, trail) is True
 
     def test_ground_equal_str(self):
+        # nv
         trail = Trail()
         assert reify_eq("hello", "hello", trail) is True
 
     def test_ground_incompatible_int(self):
+        # nv
         trail = Trail()
         assert reify_eq(1, 2, trail) is False
 
     def test_ground_incompatible_type(self):
+        # nv
         trail = Trail()
         assert reify_eq(1, "1", trail) is False
 
     def test_undetermined_var_int(self):
+        # nv
         trail = Trail()
         x = Var()
         assert reify_eq(x, 1, trail) is None
 
     def test_undetermined_int_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert reify_eq(1, x, trail) is None
 
     def test_undetermined_two_vars(self):
+        # nv
         trail = Trail()
         x = Var()
         y = Var()
         assert reify_eq(x, y, trail) is None
 
     def test_bound_var_ground_equal(self):
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 42, trail)
         assert reify_eq(x, 42, trail) is True
 
     def test_bound_var_ground_inequal(self):
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 42, trail)
         assert reify_eq(x, 99, trail) is False
 
     def test_compound_same(self):
+        # nv
         trail = Trail()
         a = Compound("f", (1, 2))
         b = Compound("f", (1, 2))
         assert reify_eq(a, b, trail) is True
 
     def test_compound_different(self):
+        # nv
         trail = Trail()
         a = Compound("f", (1, 2))
         b = Compound("f", (1, 3))
         assert reify_eq(a, b, trail) is False
 
     def test_compound_different_functor(self):
+        # nv
         trail = Trail()
         a = Compound("f", (1,))
         b = Compound("g", (1,))
         assert reify_eq(a, b, trail) is False
 
     def test_compound_with_var(self):
+        # nv
         trail = Trail()
         x = Var()
         a = Compound("f", (x, 2))
@@ -113,6 +127,7 @@ class TestReifyEq:
         assert reify_eq(a, b, trail) is None
 
     def test_predicate_meta_same(self):
+        # nv
         class point(metaclass=PredicateMeta):
             _fields = ("x", "y")
 
@@ -122,6 +137,7 @@ class TestReifyEq:
         assert reify_eq(a, b, trail) is True
 
     def test_predicate_meta_different(self):
+        # nv
         class point(metaclass=PredicateMeta):
             _fields = ("x", "y")
 
@@ -131,20 +147,24 @@ class TestReifyEq:
         assert reify_eq(a, b, trail) is False
 
     def test_list_same(self):
+        # nv
         trail = Trail()
         assert reify_eq([1, 2, 3], [1, 2, 3], trail) is True
 
     def test_list_different(self):
+        # nv
         trail = Trail()
         assert reify_eq([1, 2], [1, 3], trail) is False
 
     def test_list_with_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert reify_eq([1, x], [1, 2], trail) is None
 
     def test_no_side_effects(self):
         """reify_eq must not leave any bindings on the trail."""
+        # nv
         trail = Trail()
         x = Var()
         mark = trail.mark()
@@ -160,74 +180,91 @@ class TestReifyFd:
     """Test three-valued CLP(FD) reification."""
 
     def test_ground_eq_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("eq", 3, 3, trail) is True
 
     def test_ground_eq_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("eq", 3, 4, trail) is False
 
     def test_ground_lt_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("lt", 2, 5, trail) is True
 
     def test_ground_lt_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("lt", 5, 2, trail) is False
 
     def test_ground_ge_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("ge", 5, 5, trail) is True
 
     def test_ground_ge_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("ge", 4, 5, trail) is False
 
     def test_undetermined_with_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert reify_fd("eq", x, 3, trail) is None
 
     def test_undetermined_both_vars(self):
+        # nv
         trail = Trail()
         x = Var()
         y = Var()
         assert reify_fd("lt", x, y, trail) is None
 
     def test_ground_ne_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("ne", 1, 2, trail) is True
 
     def test_ground_ne_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("ne", 3, 3, trail) is False
 
     def test_ground_le_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("le", 3, 3, trail) is True
 
     def test_ground_le_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("le", 4, 3, trail) is False
 
     def test_ground_gt_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("gt", 5, 3, trail) is True
 
     def test_ground_gt_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("gt", 3, 5, trail) is False
 
     def test_ground_ge_true(self):
+        # nv
         trail = Trail()
         assert reify_fd("ge", 5, 5, trail) is True
 
     def test_ground_ge_false(self):
+        # nv
         trail = Trail()
         assert reify_fd("ge", 4, 5, trail) is False
 
     def test_undetermined_fd_var_with_domain(self):
         """FD var with domain is still undetermined (not ground)."""
+        # nv
         trail = Trail()
         x = Var()
         in_domain(x, 1, 10, trail)
@@ -235,6 +272,7 @@ class TestReifyFd:
 
     def test_undetermined_both_fd_vars(self):
         """Both sides are FD vars → undetermined."""
+        # nv
         trail = Trail()
         x = Var()
         y = Var()
@@ -244,6 +282,7 @@ class TestReifyFd:
 
     def test_bound_fd_var_becomes_ground(self):
         """FD var bound to integer → ground, deterministic result."""
+        # nv
         trail = Trail()
         x = Var()
         in_domain(x, 1, 10, trail)
@@ -253,6 +292,7 @@ class TestReifyFd:
 
     def test_no_side_effects(self):
         """reify_fd must not leave bindings or domain changes on the trail."""
+        # nv
         trail = Trail()
         x = Var()
         in_domain(x, 1, 10, trail)
@@ -316,6 +356,7 @@ class TestReifiedIteEquality:
 
     def test_ground_true_simple(self):
         """If(1 is 1, result is 'yes', result is 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -330,6 +371,7 @@ class TestReifiedIteEquality:
 
     def test_ground_false_simple(self):
         """If(1 is 2, result is 'yes', result is 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -344,6 +386,7 @@ class TestReifiedIteEquality:
 
     def test_undetermined_explores_both_simple(self):
         """If(X is 1, result is 'eq', result is 'neq') with X unbound → both branches."""
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -361,6 +404,7 @@ class TestReifiedIteEquality:
         assert results[1][1] == "neq"
 
     def test_ground_true_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -374,6 +418,7 @@ class TestReifiedIteEquality:
         assert results == [("yes",)]
 
     def test_ground_false_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -387,6 +432,7 @@ class TestReifiedIteEquality:
         assert results == [("no",)]
 
     def test_undetermined_explores_both_trampoline(self):
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -419,6 +465,7 @@ class TestReifiedIteDif:
 
     def test_ground_dif_true(self):
         """If(1 is not 2, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -433,6 +480,7 @@ class TestReifiedIteDif:
 
     def test_ground_dif_false(self):
         """If(1 is not 1, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -447,6 +495,7 @@ class TestReifiedIteDif:
 
     def test_undetermined_dif(self):
         """If(X is not 1, 'diff', 'same') with X unbound → both branches (swapped)."""
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -505,6 +554,7 @@ class TestReifiedIteFd:
 
     def test_ground_lt_true(self):
         """If(2 < 5, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -519,6 +569,7 @@ class TestReifiedIteFd:
 
     def test_ground_lt_false(self):
         """If(5 < 2, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -533,6 +584,7 @@ class TestReifiedIteFd:
 
     def test_ground_eq_true(self):
         """If(3 == 3, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -547,6 +599,7 @@ class TestReifiedIteFd:
 
     def test_ground_eq_false(self):
         """If(3 == 4, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -561,6 +614,7 @@ class TestReifiedIteFd:
 
     def test_ground_ne_true(self):
         """If(3 != 4, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -575,6 +629,7 @@ class TestReifiedIteFd:
 
     def test_ground_ne_false(self):
         """If(3 != 3, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -589,6 +644,7 @@ class TestReifiedIteFd:
 
     def test_ground_le_true(self):
         """If(3 <= 3, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -603,6 +659,7 @@ class TestReifiedIteFd:
 
     def test_ground_le_false(self):
         """If(4 <= 3, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -617,6 +674,7 @@ class TestReifiedIteFd:
 
     def test_ground_gt_true(self):
         """If(5 > 3, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -631,6 +689,7 @@ class TestReifiedIteFd:
 
     def test_ground_gt_false(self):
         """If(3 > 5, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -645,6 +704,7 @@ class TestReifiedIteFd:
 
     def test_ground_ge_true(self):
         """If(5 >= 5, 'yes', 'no') → 'yes'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -659,6 +719,7 @@ class TestReifiedIteFd:
 
     def test_ground_ge_false(self):
         """If(4 >= 5, 'yes', 'no') → 'no'."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -674,6 +735,7 @@ class TestReifiedIteFd:
     # ── Trampoline mode: ground FD tests ──
 
     def test_ground_lt_true_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -687,6 +749,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_lt_false_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -700,6 +763,7 @@ class TestReifiedIteFd:
         assert results == [("no",)]
 
     def test_ground_ge_true_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -713,6 +777,7 @@ class TestReifiedIteFd:
         assert results == [("yes",)]
 
     def test_ground_ne_true_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -729,6 +794,7 @@ class TestReifiedIteFd:
 
     def test_undetermined_lt_explores_both(self):
         """If(X < 5, 'lo', 'hi') with X as FD var [1..10] → both branches."""
+        # nv
         x = Var()
         r = Var()
         trail = Trail()
@@ -756,6 +822,7 @@ class TestReifiedIteFd:
 
     def test_undetermined_eq_explores_both(self):
         """If(X == 3, 'hit', 'miss') with FD var X [1..5] → both branches."""
+        # nv
         x = Var()
         r = Var()
         trail = Trail()
@@ -780,6 +847,7 @@ class TestReifiedIteFd:
 
     def test_undetermined_ge_explores_both_trampoline(self):
         """If(X >= 5, 'hi', 'lo') with FD var X [1..10] in trampoline mode."""
+        # nv
         from clausal.logic.trampoline import StepGenerator, DONE
         x = Var()
         r = Var()
@@ -815,6 +883,7 @@ class TestReifiedIteFd:
 
     def test_fd_ite_then_label(self):
         """If(X < 5, R is 'lo', R is 'hi') then label X — correct domain restriction."""
+        # nv
         from clausal.logic.clpfd import label as fd_label
         x = Var()
         r = Var()
@@ -860,6 +929,7 @@ class TestReifiedIteFd:
 
     def test_nested_fd_ite(self):
         """If(X < 10, If(X > 5, 'mid', 'lo'), 'hi') — nested FD conditions."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -920,6 +990,7 @@ class TestGeneralIte:
         """If condition succeeds, run then branch."""
         # member/2: member(X, [X|_]). member(X, [_|T]) :- member(X, T).
         # We'll use in_ instead for simplicity: If(1 in [1,2,3], 'yes', 'no')
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -939,6 +1010,7 @@ class TestGeneralIte:
 
     def test_failing_condition_simple(self):
         """If condition fails, run else branch."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -952,6 +1024,7 @@ class TestGeneralIte:
         assert results == [("no",)]
 
     def test_succeeding_condition_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -965,6 +1038,7 @@ class TestGeneralIte:
         assert ("yes",) in results
 
     def test_failing_condition_trampoline(self):
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -994,6 +1068,7 @@ class TestIteControlFlow:
 
     def test_nested_ite(self):
         """If(c1, If(c2, a, b), c) with ground conditions."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -1012,6 +1087,7 @@ class TestIteControlFlow:
 
     def test_nested_ite_inner_false(self):
         """If(true, If(false, a, b), c)."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("ite_test", (r,)),
@@ -1030,6 +1106,7 @@ class TestIteControlFlow:
 
     def test_ite_preserves_bindings(self):
         """Undetermined ITE: then path binds X, else path leaves X free with dif."""
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -1048,6 +1125,7 @@ class TestIteControlFlow:
 
     def test_ite_with_conjunction_body(self):
         """ITE where then is a conjunction: If(cond, a and b, c)."""
+        # nv
         x = Var()
         y = Var()
         clause = Clause(
@@ -1104,6 +1182,7 @@ class TestGeneralIteMultiSolution:
 
     def test_multi_solution_runs_then_for_each(self):
         """If(X in [1,2,3], R is X, R is 'none') → then runs 3 times."""
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -1123,6 +1202,7 @@ class TestGeneralIteMultiSolution:
 
     def test_multi_solution_then_for_each_trampoline(self):
         """Same multi-solution test in trampoline mode."""
+        # nv
         x = Var()
         r = Var()
         clause = Clause(
@@ -1139,6 +1219,7 @@ class TestGeneralIteMultiSolution:
 
     def test_general_ite_preserves_condition_bindings(self):
         """General ITE: bindings from condition survive into then branch."""
+        # nv
         x = Var()
         r = Var()
         # If(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
@@ -1174,6 +1255,7 @@ class TestIteDifInteraction:
 
     def test_undetermined_ite_with_preexisting_dif(self):
         """dif(X, 1) before If(X is 1, then, else) → only else branch."""
+        # nv
         x = Var()
         r = Var()
         trail = Trail()
@@ -1198,6 +1280,7 @@ class TestIteDifInteraction:
 
     def test_undetermined_ite_with_dif_still_explores_both_when_compatible(self):
         """dif(X, 2) before If(X is 1, then, else) → both branches (dif doesn't block)."""
+        # nv
         x = Var()
         r = Var()
         trail = Trail()
@@ -1233,6 +1316,7 @@ class TestTabledIteCondition:
 
     def test_tabled_condition_succeeds(self):
         """check_path(3, R) with tabled path(1,3) reachable → 'reachable'."""
+        # nv
         mod = self._load_fixture("tabled_ite.clausal")
         from clausal.logic.solve import query
 
@@ -1245,6 +1329,7 @@ class TestTabledIteCondition:
 
     def test_tabled_condition_fails(self):
         """check_path(99, R) with tabled path(1,99) unreachable → 'unreachable'."""
+        # nv
         mod = self._load_fixture("tabled_ite.clausal")
         from clausal.logic.solve import query
 
@@ -1272,6 +1357,7 @@ class TestIteImportIntegration:
 
     def test_classify_ground(self):
         """Import classify predicate and query with ground values."""
+        # nv
         mod = self._load_fixture("reified_max.clausal")
         from clausal.logic.solve import query
 
@@ -1295,6 +1381,7 @@ class TestIteImportIntegration:
         This is the key example from Neumerkel & Kral §6: reified membership
         eliminates leftover choicepoints for ground queries.
         """
+        # nv
         mod = self._load_fixture("reified_memberd.clausal")
         from clausal.logic.solve import query
 
@@ -1307,6 +1394,7 @@ class TestIteImportIntegration:
 
     def test_memberd_ground_absent(self):
         """memberd(99, [1,2,3]) — ground element not in list → no solutions."""
+        # nv
         mod = self._load_fixture("reified_memberd.clausal")
         from clausal.logic.solve import query
 
@@ -1318,6 +1406,7 @@ class TestIteImportIntegration:
 
     def test_memberd_unbound_enumerates(self):
         """memberd(X, [a, b, c]) — unbound X enumerates all elements."""
+        # nv
         mod = self._load_fixture("reified_memberd.clausal")
         from clausal.logic.solve import query
 
@@ -1335,6 +1424,7 @@ class TestIteImportIntegration:
         Unlike standard member/2 which yields 1 twice, memberd with dif
         constraints should yield 1 once and 2 once.
         """
+        # nv
         mod = self._load_fixture("reified_memberd.clausal")
         from clausal.logic.solve import query
 
@@ -1390,6 +1480,7 @@ class TestOnce:
 
     def test_once_takes_first_solution_simple(self):
         """once(X in [1,2,3]) should produce only X=1."""
+        # nv
         x = Var()
         clause = Clause(
             head=Compound("once_test", (x,)),
@@ -1400,6 +1491,7 @@ class TestOnce:
 
     def test_once_takes_first_solution_trampoline(self):
         """once(X in [1,2,3]) should produce only X=1."""
+        # nv
         x = Var()
         clause = Clause(
             head=Compound("once_test", (x,)),
@@ -1410,6 +1502,7 @@ class TestOnce:
 
     def test_once_failing_goal_simple(self):
         """once(99 in [1,2,3]) — failing goal produces no results."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("once_test", (r,)),
@@ -1423,6 +1516,7 @@ class TestOnce:
 
     def test_once_failing_goal_trampoline(self):
         """once(99 in [1,2,3]) — failing goal produces no results."""
+        # nv
         r = Var()
         clause = Clause(
             head=Compound("once_test", (r,)),
@@ -1437,6 +1531,7 @@ class TestOnce:
     def test_once_with_continuation_simple(self):
         """once(X in [1,2]) and Y in [a,b] — once limits first goal,
         continuation still backtracks normally."""
+        # nv
         x, y = Var(), Var()
         clause = Clause(
             head=Compound("once_test", (x, y)),
@@ -1450,6 +1545,7 @@ class TestOnce:
         assert results == [(1, "a"), (1, "b")]
 
     def test_once_with_continuation_trampoline(self):
+        # nv
         x, y = Var(), Var()
         clause = Clause(
             head=Compound("once_test", (x, y)),
@@ -1463,6 +1559,7 @@ class TestOnce:
 
     def test_once_preserves_bindings_simple(self):
         """Bindings from the once'd goal are visible in continuation."""
+        # nv
         x, r = Var(), Var()
         clause = Clause(
             head=Compound("once_test", (r,)),
@@ -1475,6 +1572,7 @@ class TestOnce:
         assert results == [(42,)]
 
     def test_once_preserves_bindings_trampoline(self):
+        # nv
         x, r = Var(), Var()
         clause = Clause(
             head=Compound("once_test", (r,)),
@@ -1488,6 +1586,7 @@ class TestOnce:
 
     def test_once_in_if_condition_simple(self):
         """If(once(X in [1,2,3]), then, else) — once inside If condition."""
+        # nv
         r = Var()
         x = Var()
         clause = Clause(
@@ -1502,6 +1601,7 @@ class TestOnce:
         assert ("found",) in results
 
     def test_once_in_if_condition_trampoline(self):
+        # nv
         r = Var()
         x = Var()
         clause = Clause(
@@ -1521,6 +1621,7 @@ class TestOnceClausal:
 
     def test_once_clausal_import(self):
         """once() works when used in a .clausal file."""
+        # nv
         import importlib
         import os
         from clausal.import_hook import _load_module

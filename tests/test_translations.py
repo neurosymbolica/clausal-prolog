@@ -48,6 +48,7 @@ def clean_registry(request):
 class TestRegistry:
 
     def test_register_predicate(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3, {"LIST": "รายการ", "ELEMENT": "สมาชิก", "NEWLIST": "รายการใหม่"})
         entry = translate_predicate("th", "append", 3)
         assert entry is not None
@@ -55,6 +56,7 @@ class TestRegistry:
         assert entry.arg_map == {"LIST": "รายการ", "ELEMENT": "สมาชิก", "NEWLIST": "รายการใหม่"}
 
     def test_reverse_predicate(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3, {"LIST": "รายการ"})
         entry = reverse_translate_predicate("th", "ต่อท้าย", 3)
         assert entry is not None
@@ -62,29 +64,34 @@ class TestRegistry:
         assert entry.reverse_arg_map == {"รายการ": "LIST"}
 
     def test_register_atom(self):
+        # nv
         register_atom("th", "nil", "ว่าง")
         assert translate_atom("th", "nil") == "ว่าง"
         assert reverse_translate_atom("th", "ว่าง") == "nil"
 
     def test_missing_lookup_returns_none(self):
+        # nv
         assert translate_predicate("th", "Nonexistent", 2) is None
         assert reverse_translate_predicate("th", "Nonexistent", 2) is None
         assert translate_atom("th", "missing") is None
         assert reverse_translate_atom("th", "missing") is None
 
     def test_multiple_languages(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
         register_predicate("ja", "append", "追加", 3)
         assert translate_predicate("th", "append", 3).translated_functor == "ต่อท้าย"
         assert translate_predicate("ja", "append", 3).translated_functor == "追加"
 
     def test_additive_merge(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
         register_predicate("th", "Member", "สมาชิกของ", 2)
         assert translate_predicate("th", "append", 3) is not None
         assert translate_predicate("th", "Member", 2) is not None
 
     def test_get_all_predicates(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
         register_predicate("th", "Member", "สมาชิกของ", 2)
         register_predicate("ja", "append", "追加", 3)
@@ -94,17 +101,20 @@ class TestRegistry:
         assert names == {"ต่อท้าย", "สมาชิกของ"}
 
     def test_get_all_atoms(self):
+        # nv
         register_atom("th", "nil", "ว่าง")
         register_atom("th", "true", "จริง")
         atoms = get_all_atoms("th")
         assert atoms == {"nil": "ว่าง", "true": "จริง"}
 
     def test_get_languages(self):
+        # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
         register_atom("ja", "nil", "空")
         assert get_languages() == {"th", "ja"}
 
     def test_arity_discrimination(self):
+        # nv
         register_predicate("th", "Foo", "ฟู", 2)
         register_predicate("th", "Foo", "ฟูสาม", 3)
         assert translate_predicate("th", "Foo", 2).translated_functor == "ฟู"
@@ -122,23 +132,27 @@ class TestDisplayLocale:
         register_atom("th", "nil", "ว่าง")
 
     def test_compound_with_locale(self):
+        # nv
         t = Compound("append", (1, 2, 3))
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
         assert "append" not in s
 
     def test_compound_without_locale(self):
+        # nv
         t = Compound("append", (1, 2, 3))
         s = term_str(t)
         assert "append" in s
 
     def test_nested_with_locale(self):
+        # nv
         t = Compound("append", ("x", Compound("append", (1, 2, 3)), []))
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
         assert "append" not in s
 
     def test_predicate_meta_with_locale(self):
+        # nv
         Greeting = make_predicate("Greeting", ["NAME", "MESSAGE"])
         register_predicate("th", "Greeting", "ทักทาย", 2)
         t = Greeting(NAME="hello", MESSAGE="world")
@@ -146,12 +160,14 @@ class TestDisplayLocale:
         assert "ทักทาย" in s
 
     def test_no_translation_passthrough(self):
+        # nv
         t = Compound("Unknown", (1, 2))
         s = term_str(t, TermStyle(locale="th"))
         assert "Unknown" in s
 
     def test_atom_in_compound_arg(self):
         """Atom names inside compound args are NOT translated (strings are data)."""
+        # nv
         t = Compound("append", ("nil", "hello", []))
         s = term_str(t, TermStyle(locale="th"))
         # "nil" is a Python string value here, rendered with quotes — not an atom
@@ -159,6 +175,7 @@ class TestDisplayLocale:
 
     def test_zero_arity_atom_with_locale(self):
         """Zero-arity PredicateMeta atoms get their name translated in display."""
+        # nv
         nil_atom = make_predicate("nil", [])
         s = term_str(nil_atom, TermStyle(locale="th"))
         assert "ว่าง" in s
@@ -175,6 +192,7 @@ class TestTranslateBuiltin:
         register_atom("th", "nil", "ว่าง")
 
     def test_forward_produces_string(self):
+        # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
@@ -187,6 +205,7 @@ class TestTranslateBuiltin:
         assert "ต่อท้าย" in result
 
     def test_result_is_string_not_term(self):
+        # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
@@ -199,6 +218,7 @@ class TestTranslateBuiltin:
         assert not isinstance(result, Compound)
 
     def test_unbound_lang_fails(self):
+        # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         t = Compound("append", (1, 2, 3))
@@ -207,6 +227,7 @@ class TestTranslateBuiltin:
 
     def test_atom_lang_accepted(self):
         """Language can be a zero-arity PredicateMeta atom."""
+        # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
@@ -220,6 +241,7 @@ class TestTranslateBuiltin:
         assert "ต่อท้าย" in result
 
     def test_nested_translation(self):
+        # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         register_predicate("th", "Member", "สมาชิกของ", 2)
         trail = Trail()
@@ -254,6 +276,7 @@ class TestDirectiveIntegration:
         request.cls.mod = _load_fixture("translations_basic")
 
     def test_predicate_translations_loaded(self):
+        # nv
         entry = translate_predicate("th", "append", 3)
         assert entry is not None
         assert entry.translated_functor == "ต่อท้าย"
@@ -268,6 +291,7 @@ class TestDirectiveIntegration:
         assert entry3.translated_functor == "ทักทาย"
 
     def test_atom_translations_loaded(self):
+        # nv
         assert translate_atom("th", "nil") == "ว่าง"
         assert translate_atom("th", "hello") == "สวัสดี"
         assert reverse_translate_atom("th", "ว่าง") == "nil"
@@ -277,6 +301,7 @@ class TestDirectiveIntegration:
         "translate produces nonempty",
     ])
     def test_fixture(self, name):
+        # nv
         from clausal.logic.solve import call
         for _ in call("Test", name, module=self.mod):
             return

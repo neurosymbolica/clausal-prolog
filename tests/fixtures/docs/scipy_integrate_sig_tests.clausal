@@ -4,10 +4,10 @@
 Test("trapezoid exists") <- (
     Trapezoid([1.0, 2.0, 3.0], R),
     DIFF is ++(abs(float(R) - 4.0)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 Test("quad exists") <- (
     Quad(++(lambda x: x**2), 0.0, 1.0, R),
     ResultGet(R, "value", V),
     DIFF is ++(abs(float(V) - 1.0/3.0)),
-    DIFF < 1e-4)
+    DIFF < 1e-4)  # nv

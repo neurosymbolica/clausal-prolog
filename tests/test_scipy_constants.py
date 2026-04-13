@@ -53,95 +53,134 @@ def _drive_pred(pred, *args):
 # ── Physical constants — type and value ───────────────────────────────────
 
 class TestSpeedOfLight:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(SpeedOfLight, Quantity)
+                                      # nv
     def test_value(self):             assert _val(SpeedOfLight) == pytest.approx(299792458.0)
     def test_dims(self):
+        # nv
         assert _dims(SpeedOfLight) == {_u.Metre: 1, _u.Second: -1}
 
 
 class TestPlanckConstant:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(PlanckConstant, Quantity)
+                                      # nv
     def test_value(self):             assert _val(PlanckConstant) == pytest.approx(6.62607015e-34)
     def test_dims(self):
+        # nv
         assert _dims(PlanckConstant) == {_u.Kilogram: 1, _u.Metre: 2, _u.Second: -1}
 
 
 class TestReducedPlanckConstant:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(ReducedPlanckConstant, Quantity)
     def test_value(self):
+        # nv
         assert _val(ReducedPlanckConstant) == pytest.approx(_val(PlanckConstant) / (2 * math.pi))
     def test_dims(self):
+        # nv
         assert _dims(ReducedPlanckConstant) == _dims(PlanckConstant)
 
 
 class TestGravitationalConstant:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(GravitationalConstant, Quantity)
+                                      # nv
     def test_value(self):             assert _val(GravitationalConstant) == pytest.approx(6.6743e-11)
     def test_dims(self):
+        # nv
         assert _dims(GravitationalConstant) == {_u.Metre: 3, _u.Kilogram: -1, _u.Second: -2}
 
 
 class TestAvogadroConstant:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(AvogadroConstant, Quantity)
+                                      # nv
     def test_value(self):             assert _val(AvogadroConstant) == pytest.approx(6.02214076e23)
     def test_dims(self):
+        # nv
         assert _dims(AvogadroConstant) == {_u.Mole: -1}
 
 
 class TestBoltzmannConstant:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(BoltzmannConstant, Quantity)
+                                      # nv
     def test_value(self):             assert _val(BoltzmannConstant) == pytest.approx(1.380649e-23)
     def test_dims(self):
+        # nv
         assert _dims(BoltzmannConstant) == {
             _u.Kilogram: 1, _u.Metre: 2, _u.Second: -2, _u.Kelvin: -1}
 
 
 class TestElementaryCharge:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(ElementaryCharge, Quantity)
+                                      # nv
     def test_value(self):             assert _val(ElementaryCharge) == pytest.approx(1.602176634e-19)
     def test_dims(self):
+        # nv
         assert _dims(ElementaryCharge) == {_u.Ampere: 1, _u.Second: 1}
 
 
 class TestElectronMass:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(ElectronMass, Quantity)
+                                      # nv
     def test_value(self):             assert _val(ElectronMass) == pytest.approx(9.1093837139e-31)
     def test_dims(self):
+        # nv
         assert _dims(ElectronMass) == {_u.Kilogram: 1}
 
 
 class TestProtonMass:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(ProtonMass, Quantity)
+                                      # nv
     def test_value(self):             assert _val(ProtonMass) == pytest.approx(1.67262192595e-27)
     def test_dims(self):
+        # nv
         assert _dims(ProtonMass) == {_u.Kilogram: 1}
     def test_heavier_than_electron(self):
+        # nv
         assert _val(ProtonMass) > _val(ElectronMass)
 
 
 class TestElectronVolt:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(ElectronVolt, Quantity)
+                                      # nv
     def test_value(self):             assert _val(ElectronVolt) == pytest.approx(1.602176634e-19)
     def test_dims_are_energy(self):
+        # nv
         assert _dims(ElectronVolt) == {_u.Kilogram: 1, _u.Metre: 2, _u.Second: -2}
     def test_matches_elementary_charge_value(self):
+        # nv
         assert _val(ElectronVolt) == pytest.approx(_val(ElementaryCharge))
 
 
 class TestStandardAtmosphere:
+                                      # nv
     def test_is_quantity(self):       assert isinstance(StandardAtmosphere, Quantity)
+                                      # nv
     def test_value(self):             assert _val(StandardAtmosphere) == pytest.approx(101325.0)
     def test_dims_are_pressure(self):
+        # nv
         assert _dims(StandardAtmosphere) == {_u.Kilogram: 1, _u.Metre: -1, _u.Second: -2}
 
 
 # ── SI prefix factors ─────────────────────────────────────────────────────
 
 class TestPrefixes:
+                          # nv
     def test_kilo(self):  assert Kilo  == pytest.approx(1e3)
+                          # nv
     def test_mega(self):  assert Mega  == pytest.approx(1e6)
+                          # nv
     def test_giga(self):  assert Giga  == pytest.approx(1e9)
     def test_are_floats(self):
+        # nv
         assert isinstance(Kilo, float)
         assert isinstance(Mega, float)
         assert isinstance(Giga, float)
@@ -151,26 +190,32 @@ class TestPrefixes:
 
 class TestValuePredicate:
     def test_speed_of_light(self):
+        # nv
         assert _drive_pred(Value, "speed of light in vacuum") == pytest.approx(299792458.0)
     def test_unknown_fails(self):
+        # nv
         assert _drive_pred(Value, "not a real constant xyz") is None
 
 
 class TestUnitPredicate:
     def test_speed_of_light_unit(self):
+        # nv
         u = _drive_pred(Unit, "speed of light in vacuum")
         assert isinstance(u, str) and "m" in u
 
 
 class TestPrecisionPredicate:
     def test_c_is_exact(self):
+        # nv
         assert _drive_pred(Precision, "speed of light in vacuum") == pytest.approx(0.0)
     def test_G_has_uncertainty(self):
+        # nv
         assert _drive_pred(Precision, "Newtonian constant of gravitation") > 0
 
 
 class TestLookupPredicate:
     def test_returns_all_three(self):
+        # nv
         v, u_str, unc = Var(), Var(), Var()
         dispatch = Lookup._get_dispatch()
         trail = Trail()
@@ -183,6 +228,7 @@ class TestLookupPredicate:
                 break
 
     def test_unknown_fails(self):
+        # nv
         v, u_str, unc = Var(), Var(), Var()
         dispatch = Lookup._get_dispatch()
         trail = Trail()
@@ -193,19 +239,23 @@ class TestLookupPredicate:
 
 class TestFindPredicate:
     def test_finds_electron_mass(self):
+        # nv
         names = _drive_pred(Find, "electron mass")
         assert "electron mass" in names
 
     def test_no_match_is_empty(self):
+        # nv
         names = _drive_pred(Find, "zzznomatch")
         assert names == []
 
 
 class TestAllNamesPredicate:
     def test_returns_many(self):
+        # nv
         names = _drive_pred(AllNames)
         assert len(names) >= 300
     def test_contains_known(self):
+        # nv
         names = _drive_pred(AllNames)
         assert "Planck constant" in names
 
@@ -261,4 +311,5 @@ class TestClausalFixture:
         "si prefixes consistent",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"

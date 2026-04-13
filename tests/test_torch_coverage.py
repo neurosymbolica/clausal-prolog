@@ -188,6 +188,7 @@ class TestTorchCoverage:
 
     @pytest.mark.parametrize("category,names", list(_ALL_EXPECTED.items()))
     def test_category_coverage(self, category, names):
+        # nv
         missing = [n for n in names if n not in self.wrapped]
         if missing:
             warnings.warn(
@@ -197,6 +198,7 @@ class TestTorchCoverage:
 
     def test_report_full_coverage(self):
         """Summary: overall coverage percentage."""
+        # nv
         all_names = []
         for names in _ALL_EXPECTED.values():
             all_names.extend(names)
@@ -212,6 +214,7 @@ class TestTorchCoverage:
 
     def test_no_unexpected_exports(self):
         """Check for predicates not in any expected category."""
+        # nv
         all_expected = set()
         for names in _ALL_EXPECTED.values():
             all_expected.update(names)

@@ -17,9 +17,9 @@ TermToList(TERM, LIST) <- unpack(TERM, LIST)
 ListToTerm(LIST, TERM) <- unpack(TERM, LIST)
 
 
-Test("functor atom") <- (GetFunctor("hello", FUNCTOR, ARITY), FUNCTOR == "hello", ARITY == 0)
-Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == "42", ARITY == 0)
-Test("arg list first") <- (FirstArg([10, 20, 30], ARG), ARG == 10)
-Test("arg list second") <- (SecondArg([10, 20, 30], ARG), ARG == 20)
-Test("term to list atom") <- (TermToList("foo", LIST), LIST == ["foo"])
-Test("list to term atom") <- (ListToTerm(["bar"], TERM), TERM == "bar")
+Test("functor atom") <- (GetFunctor("hello", FUNCTOR, ARITY), FUNCTOR == "hello", ARITY == 0)  # nv
+Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == "42", ARITY == 0)  # nv
+Test("arg list first") <- (FirstArg([10, 20, 30], ARG), ARG == 10)  # nv
+Test("arg list second") <- (SecondArg([10, 20, 30], ARG), ARG == 20)  # nv
+Test("term to list atom") <- (TermToList("foo", LIST), LIST == ["foo"])  # nv
+Test("list to term atom") <- (ListToTerm(["bar"], TERM), TERM == "bar")  # nv

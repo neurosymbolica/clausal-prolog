@@ -49,20 +49,24 @@ def _make_fact_db(functor, facts):
 
 class TestExtractArgKey:
     def test_position_zero(self):
+        # nv
         c = Clause(head=Compound("f", (42, "hello")), body=[True])
         assert _extract_arg_key(c, 0, 2) == 42
 
     def test_position_one(self):
+        # nv
         c = Clause(head=Compound("f", (42, "hello")), body=[True])
         assert _extract_arg_key(c, 1, 2) == "hello"
 
     def test_var_at_position(self):
+        # nv
         v = Var()
         c = Clause(head=Compound("f", (42, v)), body=[True])
         assert _extract_arg_key(c, 1, 2) is _INDEX_VAR
 
     def test_var_with_unify_at_position(self):
         """Var + Unify pattern from _normalize_dataclass_fact at non-first position."""
+        # nv
         v0, v1 = Var(), Var()
         c = Clause(
             head=Compound("f", (v0, v1)),
@@ -72,11 +76,13 @@ class TestExtractArgKey:
         assert _extract_arg_key(c, 1, 2) == "abc"
 
     def test_out_of_range(self):
+        # nv
         c = Clause(head=Compound("f", (1,)), body=[True])
         assert _extract_arg_key(c, 1, 1) is _INDEX_VAR
         assert _extract_arg_key(c, 5, 1) is _INDEX_VAR
 
     def test_predicate_meta_second_field(self):
+        # nv
         class color(metaclass=PredicateMeta):
             _fields = ("name", "code")
 
@@ -96,6 +102,7 @@ class TestExtractArgKey:
 class TestBuildArgIndex:
     def test_position_zero_matches_first_arg(self):
         """Position 0 index matches _build_first_arg_index behavior."""
+        # nv
         clauses = [
             Clause(head=Compound("f", (i, "x")), body=[True])
             for i in range(5)
@@ -106,6 +113,7 @@ class TestBuildArgIndex:
 
     def test_position_one_index(self):
         """Second argument has indexable values."""
+        # nv
         clauses = [
             Clause(head=Compound("f", (Var(), "a")), body=[True]),
             Clause(head=Compound("f", (Var(), "b")), body=[True]),
@@ -117,6 +125,7 @@ class TestBuildArgIndex:
         assert set(idx["buckets"].keys()) == {"a", "b", "c", "d"}
 
     def test_no_index_all_vars(self):
+        # nv
         clauses = [
             Clause(head=Compound("f", (Var(), Var())), body=[True])
             for _ in range(5)
@@ -125,6 +134,7 @@ class TestBuildArgIndex:
         assert _build_arg_index(clauses, 2, 1) is None
 
     def test_n_distinct(self):
+        # nv
         clauses = [
             Clause(head=Compound("f", (1, "a")), body=[True]),
             Clause(head=Compound("f", (1, "b")), body=[True]),
@@ -142,6 +152,7 @@ class TestBuildArgIndex:
 class TestAnalyzeIndexPositions:
     def test_both_positions_indexable(self):
         """Both arg positions have indexable values."""
+        # nv
         facts = [(1, "a"), (2, "b"), (3, "c"), (4, "d")]
         db = _make_fact_db("f", facts)
         clauses = db.clauses_for("f", 2)
@@ -153,6 +164,7 @@ class TestAnalyzeIndexPositions:
 
     def test_only_second_arg_indexable(self):
         """First arg is always Var, second has distinct values."""
+        # nv
         clauses = [
             Clause(head=Compound("f", (Var(), val)), body=[True])
             for val in ["a", "b", "c", "d"]
@@ -164,6 +176,7 @@ class TestAnalyzeIndexPositions:
     def test_sorted_by_selectivity(self):
         """Most selective position comes first."""
         # Position 0: 2 distinct values; Position 1: 4 distinct values
+        # nv
         clauses = [
             Clause(head=Compound("f", (1, "a")), body=[True]),
             Clause(head=Compound("f", (1, "b")), body=[True]),
@@ -177,11 +190,13 @@ class TestAnalyzeIndexPositions:
         assert positions[1][0] == 0
 
     def test_empty_for_few_clauses(self):
+        # nv
         clauses = [Clause(head=Compound("f", (i,)), body=[True]) for i in range(2)]
         assert _analyze_index_positions(clauses, 1) == []
 
     def test_three_arg_predicate(self):
         """Three-argument predicate: all positions indexable."""
+        # nv
         facts = [(1, "a", True), (2, "b", False), (3, "c", True), (4, "d", False)]
         db = _make_fact_db("f", facts)
         clauses = db.clauses_for("f", 3)
@@ -195,6 +210,7 @@ class TestAnalyzeIndexPositions:
 class TestSecondArgLookup:
     def test_lookup_by_second_arg(self):
         """when first arg is Var but second is ground, use second-arg index."""
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -210,6 +226,7 @@ class TestSecondArgLookup:
 
     def test_lookup_by_first_arg_still_works(self):
         """First-arg lookup still works as before."""
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -224,6 +241,7 @@ class TestSecondArgLookup:
 
     def test_all_vars_enumerate(self):
         """when no arg is ground, fallback to full scan."""
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -238,6 +256,7 @@ class TestSecondArgLookup:
 
     def test_both_args_ground(self):
         """Both args ground — uses most selective index."""
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -255,6 +274,7 @@ class TestSecondArgLookup:
 
     def test_no_match_second_arg(self):
         """Ground second arg with no matching value yields nothing."""
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("white", "neutral"),
@@ -269,6 +289,7 @@ class TestSecondArgLookup:
 
     def test_three_arg_middle_ground(self):
         """Three-arg predicate: query by middle arg only."""
+        # nv
         facts = [
             (1, "a", 100), (2, "b", 200), (3, "a", 300),
             (4, "c", 400), (5, "b", 500),
@@ -283,6 +304,7 @@ class TestSecondArgLookup:
 
     def test_three_arg_last_ground(self):
         """Three-arg predicate: query by last arg only."""
+        # nv
         facts = [
             (1, "a", 100), (2, "b", 200), (3, "a", 100),
             (4, "c", 400), (5, "b", 100),
@@ -303,6 +325,7 @@ class TestDifferentModes:
     """Same predicate called in different modes hits different plans."""
 
     def test_color_all_modes(self):
+        # nv
         facts = [
             ("red", "warm"), ("blue", "cool"), ("green", "cool"),
             ("yellow", "warm"), ("orange", "warm"),
@@ -340,6 +363,7 @@ class TestDifferentModes:
 class TestMixedClauses:
     def test_var_headed_clauses_in_all_buckets(self):
         """Clauses with Var at a position appear in every bucket for that position."""
+        # nv
         db = Database()
         # Position 0: specific keys 1, 2, 3 plus 2 catch-all (Var) clauses
         # Position 1: all specific ("a" through "e") — no defaults
@@ -364,6 +388,7 @@ class TestMixedClauses:
 
     def test_true_catch_all_clauses(self):
         """Clauses with Var at ALL positions are defaults for every index."""
+        # nv
         db = Database()
         db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
         db.assertz(_normalize_fact_clause(Compound("f", (2, "b"))))
@@ -390,6 +415,7 @@ class TestMixedClauses:
 
 class TestDynamicReindexGroundness:
     def test_assertz_rebuilds_multi_index(self):
+        # nv
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", "warm"), ("green", "cool"),
@@ -419,6 +445,7 @@ class TestBackwardCompat:
     def test_single_position_matches_v2_1_behavior(self):
         """when only position 0 is indexable, behavior matches V2-1."""
         # All second args are Var → only position 0 is indexable
+        # nv
         clauses = [
             Clause(head=Compound("f", (i, Var())), body=[True])
             for i in range(5)
@@ -436,6 +463,7 @@ class TestBackwardCompat:
 
     def test_below_threshold_no_dispatch(self):
         """Too few clauses → no groundness dispatch, still correct."""
+        # nv
         db = _make_fact_db("small", [(1, "a"), (2, "b")])
         fn = compile_predicate("small", 2, db.clauses_for("small", 2), db)
         trail = Trail()
@@ -449,6 +477,7 @@ class TestBackwardCompat:
 
 class TestPredicateMetaGroundness:
     def test_second_field_lookup(self):
+        # nv
         class fruit(metaclass=PredicateMeta):
             _fields = ("name", "color")
 

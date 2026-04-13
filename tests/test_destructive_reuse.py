@@ -98,6 +98,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_eligible_with_evaluate(self):
         """append(Temp, Extra, Out) where Temp is created by Evaluate."""
+        # nv
         Temp, Extra, Out = Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -110,6 +111,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_alias_through_unify_not_eligible(self):
         """Temp = In where In is a head var → Temp aliases caller data."""
+        # nv
         In, Temp, Extra, Out = Var(), Var(), Var(), Var()
         head = Compound("process", (In, Out))
         body = [
@@ -123,6 +125,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_transitive_alias_not_eligible(self):
         """Temp2 = Temp, Temp = In → Temp2 transitively aliases head var In."""
+        # nv
         In, Temp, Temp2, Extra, Out = Var(), Var(), Var(), Var(), Var()
         head = Compound("process", (In, Out))
         body = [
@@ -136,6 +139,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_head_var_not_eligible(self):
         """append(HeadVar, Extra, Out) — HeadVar is in the clause head."""
+        # nv
         Old, Extra, Out = Var(), Var(), Var()
         head = Compound("process", (Old, Out))
         body = [self._append_call(Old, Extra, Out)]
@@ -145,6 +149,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_live_var_not_eligible(self):
         """append(Temp, Extra, Mid) followed by another use of Temp."""
+        # nv
         Temp, Extra, Mid, Out = Var(), Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -160,6 +165,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_nondeterministic_prefix_not_eligible(self):
         """If a preceding goal is non-deterministic, optimization is suppressed."""
+        # nv
         X, Y, Temp, Extra, Out = Var(), Var(), Var(), Var(), Var()
         head = Compound("process", (X, Out))
         body = [
@@ -173,6 +179,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_deterministic_builtin_prefix_eligible(self):
         """Known-deterministic builtins (length, dict_get, etc.) allow DR."""
+        # nv
         T, Len, Out = Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -194,6 +201,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_once_wrapped_prefix_eligible(self):
         """once(X) wrapped calls are deterministic."""
+        # nv
         T, Mid, Out = Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -210,6 +218,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_eligible_dict_put_with_evaluate(self):
         """dict_put(Key, Value, Temp, Out) where Temp is from Evaluate."""
+        # nv
         Temp, Key, Value, Out = Var(), Var(), Var(), Var()
         head = Compound("update", (Out,))
         body = [
@@ -222,6 +231,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_dict_put_alias_not_eligible(self):
         """dict_put with Temp aliased to head var."""
+        # nv
         In, Temp, Key, Value, Out = Var(), Var(), Var(), Var(), Var()
         head = Compound("update", (In, Out))
         body = [
@@ -234,6 +244,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_eligible_set_union_with_evaluate(self):
         """set_union(Temp, S2, Out) where Temp is from Evaluate."""
+        # nv
         Temp, S2, Out = Var(), Var(), Var()
         head = Compound("merge", (Out,))
         body = [
@@ -246,6 +257,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_set_union_alias_not_eligible(self):
         """set_union with Temp aliased to head var."""
+        # nv
         In, Temp, S2, Out = Var(), Var(), Var(), Var()
         head = Compound("merge", (In, Out))
         body = [
@@ -258,6 +270,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_source_literal_not_eligible(self):
         """append([1,2,3], Extra, Out) — source is a literal, not a Var."""
+        # nv
         Extra, Out = Var(), Var()
         head = Compound("process", (Out,))
         body = [self._append_call([1, 2, 3], Extra, Out)]
@@ -267,6 +280,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_empty_body(self):
         """Facts have no body — nothing to optimize."""
+        # nv
         head = Compound("fact", (1,))
         clause = Clause(head=head, body=[])
         eligible = _find_destructive_reuse_goals(clause)
@@ -274,6 +288,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_single_eligible_among_multiple(self):
         """Only the eligible goal is marked, not others."""
+        # nv
         T1, T2, X, Out = Var(), Var(), Var(), Var()
         head = Compound("multi", (X, Out))
         body = [
@@ -288,6 +303,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_unify_body_only_vars_eligible(self):
         """Unify between two body-only vars does NOT create a head alias."""
+        # nv
         T1, T2, Out = Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -302,6 +318,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_and_conjunction_alias_detected(self):
         """Alias inside And() conjunction is detected."""
+        # nv
         In, Temp, Extra, Out = Var(), Var(), Var(), Var()
         head = Compound("process", (In, Out))
         body = [
@@ -320,6 +337,7 @@ class TestFindDestructiveReuseGoals:
 
     def test_and_flattening_exposes_eligible_call(self):
         """append inside And() is found by flattening."""
+        # nv
         T, Extra, Out = Var(), Var(), Var()
         head = Compound("process", (Out,))
         body = [
@@ -357,6 +375,7 @@ class TestAppendDR:
 
     def test_unique_list_mutated_in_place(self):
         """When source list refcount is low (Var-bound, no aliases), mutate."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_list = [1, 2, 3]
@@ -374,6 +393,7 @@ class TestAppendDR:
 
     def test_shared_list_not_mutated(self):
         """When source list is shared (extra alias), a new list is created."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_list = [1, 2, 3]
@@ -391,6 +411,7 @@ class TestAppendDR:
 
     def test_fallback_for_string(self):
         """Strings are never mutated — fallback to standard append."""
+        # nv
         trail = Trail()
         result_var = Var()
         solutions = self._run("abc", "def", result_var, trail)
@@ -399,6 +420,7 @@ class TestAppendDR:
 
     def test_nondeterministic_mode_falls_back(self):
         """append(-, -, +) mode (all splits) uses standard fallback."""
+        # nv
         trail = Trail()
         l1, l2 = Var(), Var()
 
@@ -419,6 +441,7 @@ class TestDictPutDR:
 
     def test_unique_dict_mutated_in_place(self):
         """When DictTerm refcount is low (Var-bound, no aliases), mutate."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_dict = DictTerm({"a": 1})
@@ -441,6 +464,7 @@ class TestDictPutDR:
 
     def test_shared_dict_not_mutated(self):
         """When DictTerm is shared (extra alias), a new DictTerm is created."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_dict = DictTerm({"a": 1})
@@ -465,6 +489,7 @@ class TestSetUnionDR:
 
     def test_unique_set_mutated_in_place(self):
         """When SetTerm refcount is low (Var-bound, no aliases), mutate."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_set = SetTerm([1, 2])
@@ -487,6 +512,7 @@ class TestSetUnionDR:
 
     def test_shared_set_not_mutated(self):
         """When SetTerm is shared (extra alias), a new SetTerm is created."""
+        # nv
         trail = Trail()
         source_var = Var()
         the_set = SetTerm([1, 2])
@@ -517,6 +543,7 @@ class TestDestructiveReuseIntegration:
 
         make(Out) <- T = [1, 2, 3], append(T, [4], Out).
         """
+        # nv
         T, Out = Var(), Var()
         head = Compound("make", (Out,))
         body = [
@@ -536,6 +563,7 @@ class TestDestructiveReuseIntegration:
 
         make(Out) <- T = {a: 1}, dict_put(b, 2, T, Out).
         """
+        # nv
         T, Out = Var(), Var()
         head = Compound("make", (Out,))
         body = [
@@ -556,6 +584,7 @@ class TestDestructiveReuseIntegration:
 
         make(Out) <- T = {1, 2}, set_union(T, {3}, Out).
         """
+        # nv
         T, Out = Var(), Var()
         head = Compound("make", (Out,))
         body = [
@@ -576,6 +605,7 @@ class TestDestructiveReuseIntegration:
 
         build(In, Out) <- Temp = In, append(Temp, [4], Out).
         """
+        # nv
         In, Temp, Out = Var(), Var(), Var()
         head = Compound("build", (In, Out))
         body = [
@@ -598,6 +628,7 @@ class TestDestructiveReuseIntegration:
 
         process(Old, Out) <- append(Old, [4], Out).
         """
+        # nv
         Old, Out = Var(), Var()
         head = Compound("process", (Old, Out))
         body = [
@@ -621,6 +652,7 @@ class TestDestructiveReuseIntegration:
             append(T1, [a], T2),
             append(T2, [b], Out).
         """
+        # nv
         T1, T2, Out = Var(), Var(), Var()
         head = Compound("chain", (Out,))
         body = [
@@ -643,6 +675,7 @@ class TestDestructiveReuseIntegration:
         add([], Out) <- Out = [].
         add(Old, Out) <- append(Old, [x], Out).  ← Old is head var, NOT eligible
         """
+        # nv
         Old, Out1, Out2 = Var(), Var(), Var()
         head1 = Compound("add", ([], Out1))
         body1 = [Unify(left=Out1, right=[])]

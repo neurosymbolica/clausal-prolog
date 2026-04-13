@@ -4,38 +4,38 @@
 
 SameValue(X, Y) <- (X is Y, X == Y)
 
-Test('atom unifies with itself') <- (X is a, X == a)
+Test('atom unifies with itself') <- (X is a, X == a)  # nv
 
-Test('var unifies with atom') <- (X is a, X == a)
+Test('var unifies with atom') <- (X is a, X == a)  # nv
 
-Test('var unifies with integer') <- (X is 42, X == 42)
+Test('var unifies with integer') <- (X is 42, X == 42)  # nv
 
-Test('var unifies with list') <- (X is [1, 2, 3], X == [1, 2, 3])
+Test('var unifies with list') <- (X is [1, 2, 3], X == [1, 2, 3])  # nv
 
-Test('different atoms fail') <- (not X is a , X is b , X == b)
+Test('different atoms fail') <- (not X is a , X is b , X == b)  # nv
 
-Test('list unification') <- (X is [a], X == [a])
+Test('list unification') <- (X is [a], X == [a])  # nv
 
-Test('empty lists unify') <- (X is [], X == [])
+Test('empty lists unify') <- (X is [], X == [])  # nv
 
-Test('different atoms: is not succeeds') <- (X is a, dif(X, b))
+Test('different atoms: is not succeeds') <- (X is a, dif(X, b))  # nv
 
-Test('same atom: is not fails') <- (X is a, not dif(X, a))
+Test('same atom: is not fails') <- (X is a, not dif(X, a))  # nv
 
-Test('same atom ==') <- (a == a)
+Test('same atom ==') <- (a == a)  # nv
 
-Test('different atoms == fails') <- (a != b)
+Test('different atoms == fails') <- (a != b)  # nv
 
-Test('same integer ==') <- (42 == 42)
+Test('same integer ==') <- (42 == 42)  # nv
 
-Test('bound var == value') <- (X is hello, X == hello)
+Test('bound var == value') <- (X is hello, X == hello)  # nv
 
-Test('different atoms !=') <- (a != b)
+Test('different atoms !=') <- (a != b)  # nv
 
-Test('same atom != fails') <- (not a != a)
+Test('same atom != fails') <- (not a != a)  # nv
 
-Test('same_value: integers') <- (SameValue(42, 42))
+Test('same_value: integers') <- (SameValue(42, 42))  # nv
 
-Test('same_value: strings') <- (SameValue(hello, hello))
+Test('same_value: strings') <- (SameValue(hello, hello))  # nv
 
-Test('same_value: lists') <- (SameValue([1, 2], [1, 2]))
+Test('same_value: lists') <- (SameValue([1, 2], [1, 2]))  # nv

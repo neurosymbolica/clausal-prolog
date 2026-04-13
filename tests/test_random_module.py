@@ -43,6 +43,7 @@ def trampoline_solutions(pred, *args):
 
 class TestRandom:
     def test_binds_float(self):
+        # nv
         x = Var()
         sols, trail = simple_solutions(_random_1, x)
         assert len(sols) == 1
@@ -51,6 +52,7 @@ class TestRandom:
         assert 0.0 <= val < 1.0
 
     def test_trampoline(self):
+        # nv
         x = Var()
         sols, trail = trampoline_solutions(Random, x)
         assert len(sols) == 1
@@ -64,6 +66,7 @@ class TestRandom:
 
 class TestRandomFloat:
     def test_in_range(self):
+        # nv
         x = Var()
         sols, trail = simple_solutions(_random_float_3, 1.0, 5.0, x)
         assert len(sols) == 1
@@ -71,20 +74,24 @@ class TestRandomFloat:
         assert 1.0 <= val < 5.0
 
     def test_low_equals_high_fails(self):
+        # nv
         x = Var()
         sols, _ = simple_solutions(_random_float_3, 3.0, 3.0, x)
         assert len(sols) == 0
 
     def test_low_greater_than_high_fails(self):
+        # nv
         x = Var()
         sols, _ = simple_solutions(_random_float_3, 5.0, 1.0, x)
         assert len(sols) == 0
 
     def test_unbound_low_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_float_3, Var(), 5.0, Var())
         assert len(sols) == 0
 
     def test_unbound_high_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_float_3, 1.0, Var(), Var())
         assert len(sols) == 0
 
@@ -94,6 +101,7 @@ class TestRandomFloat:
 
 class TestRandomInteger:
     def test_in_range(self):
+        # nv
         x = Var()
         sols, trail = simple_solutions(_random_integer_3, 1, 6, x)
         assert len(sols) == 1
@@ -103,6 +111,7 @@ class TestRandomInteger:
 
     def test_boundaries_inclusive(self):
         """Seed and verify both endpoints are reachable."""
+        # nv
         _rng.seed(42)
         values = set()
         for _ in range(200):
@@ -114,10 +123,12 @@ class TestRandomInteger:
         assert 3 in values
 
     def test_low_greater_than_high_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_integer_3, 6, 1, Var())
         assert len(sols) == 0
 
     def test_unbound_args_fail(self):
+        # nv
         sols, _ = simple_solutions(_random_integer_3, Var(), 6, Var())
         assert len(sols) == 0
 
@@ -127,6 +138,7 @@ class TestRandomInteger:
 
 class TestRandomMember:
     def test_picks_element(self):
+        # nv
         x = Var()
         lst = ["a", "b", "c"]
         sols, trail = simple_solutions(_random_member_2, lst, x)
@@ -134,14 +146,17 @@ class TestRandomMember:
         assert deref(x) in lst
 
     def test_empty_list_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_member_2, [], Var())
         assert len(sols) == 0
 
     def test_unbound_list_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_member_2, Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         x = Var()
         sols, trail = trampoline_solutions(RandomMember, ["x", "y"], x)
         assert len(sols) == 1
@@ -153,6 +168,7 @@ class TestRandomMember:
 
 class TestRandomPermutation:
     def test_is_permutation(self):
+        # nv
         p = Var()
         sols, trail = simple_solutions(_random_permutation_2, [1, 2, 3], p)
         assert len(sols) == 1
@@ -161,12 +177,14 @@ class TestRandomPermutation:
         assert len(result) == 3
 
     def test_empty_list(self):
+        # nv
         p = Var()
         sols, trail = simple_solutions(_random_permutation_2, [], p)
         assert len(sols) == 1
         assert deref(p) == []
 
     def test_unbound_list_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_permutation_2, Var(), Var())
         assert len(sols) == 0
 
@@ -176,6 +194,7 @@ class TestRandomPermutation:
 
 class TestRandomSample:
     def test_correct_length(self):
+        # nv
         s = Var()
         sols, trail = simple_solutions(_random_sample_3, [1, 2, 3, 4, 5], 3, s)
         assert len(sols) == 1
@@ -184,16 +203,19 @@ class TestRandomSample:
         assert all(x in [1, 2, 3, 4, 5] for x in result)
 
     def test_k_zero(self):
+        # nv
         s = Var()
         sols, trail = simple_solutions(_random_sample_3, [1, 2, 3], 0, s)
         assert len(sols) == 1
         assert deref(s) == []
 
     def test_k_greater_than_length_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_sample_3, [1, 2], 5, Var())
         assert len(sols) == 0
 
     def test_unbound_k_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_sample_3, [1, 2, 3], Var(), Var())
         assert len(sols) == 0
 
@@ -204,6 +226,7 @@ class TestRandomSample:
 class TestRandomSeed:
     def test_reproducible(self):
         """Seeding produces the same sequence."""
+        # nv
         _rng.seed(123)
         x1 = Var()
         trail1 = Trail()
@@ -220,6 +243,7 @@ class TestRandomSeed:
 
     def test_via_predicate(self):
         """RandomSeed/1 followed by Random/1 is reproducible."""
+        # nv
         sols1, _ = simple_solutions(_random_seed_1, 42)
         assert len(sols1) == 1
         x1 = Var()
@@ -234,6 +258,7 @@ class TestRandomSeed:
         assert v1 == v2
 
     def test_unbound_seed_fails(self):
+        # nv
         sols, _ = simple_solutions(_random_seed_1, Var())
         assert len(sols) == 0
 
@@ -244,6 +269,7 @@ class TestRandomSeed:
 class TestMaybe:
     def test_maybe_0_roughly_half(self):
         """Over many trials, Maybe/0 succeeds ~50% of the time."""
+        # nv
         _rng.seed(0)
         successes = 0
         trials = 1000
@@ -257,23 +283,27 @@ class TestMaybe:
 
     def test_maybe_1_always_succeeds(self):
         """Maybe(1.0) always succeeds."""
+        # nv
         for _ in range(20):
             sols, _ = simple_solutions(_maybe_1, 1.0)
             assert len(sols) == 1
 
     def test_maybe_1_always_fails(self):
         """Maybe(0.0) always fails."""
+        # nv
         for _ in range(20):
             sols, _ = simple_solutions(_maybe_1, 0.0)
             assert len(sols) == 0
 
     def test_maybe_1_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_maybe_1, Var())
         assert len(sols) == 0
 
     def test_maybe_trampoline_multi_arity(self):
         """Maybe supports both arity 0 and 1 via multi-dispatch."""
         # Arity 0
+        # nv
         _rng.seed(1)
         trail = Trail()
         dispatch = Maybe._get_dispatch()

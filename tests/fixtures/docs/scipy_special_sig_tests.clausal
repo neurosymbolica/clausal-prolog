@@ -4,13 +4,13 @@
 Test("gamma exists") <- (
     Gamma(5.0, V),
     DIFF is ++(abs(V - 24.0)),
-    DIFF < 1e-10)
+    DIFF < 1e-10)  # nv
 
 Test("erf exists") <- (
     Erf(0.0, V),
-    ++(abs(V)) < 1e-10)
+    ++(abs(V)) < 1e-10)  # nv
 
 Test("factorial exists") <- (
     Factorial(5, V),
     V is ++(float(V)),
-    ++(abs(V - 120.0)) < 1e-10)
+    ++(abs(V - 120.0)) < 1e-10)  # nv

@@ -50,58 +50,58 @@ EvenProgram(PROGRAM) <- (
 
 Test("solve factorial(0, 1)") <- (
     SolveFactorial([["factorial", 0, 1]])
-)
+)  # nv
 
 Test("solve factorial(1, 1)") <- (
     SolveFactorial([["factorial", 1, 1]])
-)
+)  # nv
 
 Test("solve factorial(3, 6)") <- (
     SolveFactorial([["factorial", 3, 6]])
-)
+)  # nv
 
 Test("solve factorial(5, 120)") <- (
     SolveFactorial([["factorial", 5, 120]])
-)
+)  # nv
 
 # ── Tests: SolveCountFactorial ───────────────────────────────────────────────
 
 Test("count factorial(0, 1) = 1 step") <- (
     SolveCountFactorial([["factorial", 0, 1]], 1)
-)
+)  # nv
 
 # ── Tests: SolveLimitFactorial ───────────────────────────────────────────────
 
 Test("limit factorial(0, 1) depth 1") <- (
     SolveLimitFactorial([["factorial", 0, 1]], 1)
-)
+)  # nv
 
 Test("limit factorial(1, 1) depth 20") <- (
     SolveLimitFactorial([["factorial", 1, 1]], 20)
-)
+)  # nv
 
 Test("limit factorial(3, 6) depth 30") <- (
     SolveLimitFactorial([["factorial", 3, 6]], 30)
-)
+)  # nv
 
 # ── Tests: SolveEven ─────────────────────────────────────────────────────────
 
 Test("solve even(0)") <- (
     SolveEven([["even", 0]])
-)
+)  # nv
 
 Test("solve even(2)") <- (
     SolveEven([["even", 2]])
-)
+)  # nv
 
 Test("solve even(4)") <- (
     SolveEven([["even", 4]])
-)
+)  # nv
 
 Test("solve not even(1)") <- (
     not SolveEven([["even", 1]])
-)
+)  # nv
 
 Test("solve not even(3)") <- (
     not SolveEven([["even", 3]])
-)
+)  # nv

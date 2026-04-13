@@ -8,10 +8,10 @@ Test("makecsr exists") <- (
     MakeCSR(DATA, IDX, PTR, H),
     NonzeroCount(H, NNZ),
     NNZ == 3,
-    Free(H))
+    Free(H))  # nv
 
 Test("makeeye exists") <- (
     MakeEye(3, H),
     NonzeroCount(H, N),
     N == 3,
-    Free(H))
+    Free(H))  # nv

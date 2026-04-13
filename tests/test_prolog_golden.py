@@ -52,6 +52,7 @@ def _case_id(pair):
 @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
 def test_golden_snapshot(source_path, golden_path):
     """Translation output matches the golden .pl snapshot."""
+    # nv
     source = source_path.read_text(encoding="utf-8")
     golden = golden_path.read_text(encoding="utf-8")
     result = clausal_source_to_prolog(source)
@@ -67,6 +68,7 @@ class TestTranslationSyntax:
     @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
     def test_every_clause_ends_with_dot(self, source_path, golden_path):
         """Every non-empty, non-directive line sequence ends with a period."""
+        # nv
         golden = golden_path.read_text(encoding="utf-8")
         for line in golden.strip().split("\n"):
             stripped = line.strip()
@@ -79,6 +81,7 @@ class TestTranslationSyntax:
     @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
     def test_no_trailing_whitespace(self, source_path, golden_path):
         """No lines have trailing whitespace."""
+        # nv
         golden = golden_path.read_text(encoding="utf-8")
         for i, line in enumerate(golden.split("\n"), 1):
             if line != line.rstrip():
@@ -87,6 +90,7 @@ class TestTranslationSyntax:
     @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
     def test_no_python_syntax_leaks(self, source_path, golden_path):
         """Translated output should not contain clausal-specific syntax."""
+        # nv
         import re
         golden = golden_path.read_text(encoding="utf-8")
         # Strip quoted strings before checking for Python keywords
@@ -100,10 +104,12 @@ class TestInNotIn:
     """Tests for the in/not-in → member translation."""
 
     def test_in_translates_to_member(self):
+        # nv
         result = clausal_source_to_prolog("Test() <- (_x in [1, 2, 3])")
         assert "member(X, [1, 2, 3])" in result
 
     def test_not_in_translates_to_negated_member(self):
+        # nv
         result = clausal_source_to_prolog("Test() <- (_x not in [1, 2, 3])")
         assert "\\+ member(X, [1, 2, 3])" in result or "\\+(member(X, [1, 2, 3]))" in result
 
@@ -112,10 +118,12 @@ class TestKeywordArgs:
     """Tests for keyword argument handling in clause heads."""
 
     def test_keyword_fact(self):
+        # nv
         result = clausal_source_to_prolog("Fib(N=0, RESULT=0),")
         assert "fib(0, 0)." in result
 
     def test_keyword_mixed(self):
+        # nv
         result = clausal_source_to_prolog("Foo(1, Y=2),")
         assert "foo(1, 2)." in result
 
@@ -125,6 +133,7 @@ class TestUntranslatable:
 
     def test_double_uadd_warning(self):
         """++expr emits a warning comment."""
+        # nv
         result = clausal_source_to_prolog("Test() <- (_r := ++len(_l))")
         assert "WARNING" in result
         assert "untranslatable" in result
@@ -132,6 +141,7 @@ class TestUntranslatable:
 
     def test_fstring_swi_format(self):
         """f-strings become format/2 in SWI dialect."""
+        # nv
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
             'Test() <- (_x is f"hello {NAME}")',
@@ -142,24 +152,28 @@ class TestUntranslatable:
 
     def test_fstring_iso_warning(self):
         """f-strings emit a warning in ISO dialect."""
+        # nv
         result = clausal_source_to_prolog('Test() <- (_x is f"hello {NAME}")')
         assert "WARNING" in result
         assert "f-string" in result
 
     def test_set_single_element_is_curly(self):
         """Single-element set {Goal} becomes DCG inline goal."""
+        # nv
         result = clausal_source_to_prolog("Test() <- {_x > 0}")
         assert "{" in result
         assert "WARNING" not in result
 
     def test_set_multi_element_warning(self):
         """Multi-element set emits a warning."""
+        # nv
         result = clausal_source_to_prolog("Test() <- {1, 2, 3}")
         assert "WARNING" in result
         assert "set literal" in result
 
     def test_dict_swi(self):
         """Dict literal uses dict_create in SWI dialect."""
+        # nv
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
             'Test() <- (_x is {"a": 1})',
@@ -169,6 +183,7 @@ class TestUntranslatable:
 
     def test_dict_iso_warning(self):
         """Dict literal emits warning in ISO dialect."""
+        # nv
         result = clausal_source_to_prolog('Test() <- (_x is {"a": 1})')
         assert "WARNING" in result
         assert "dict literal" in result
@@ -179,6 +194,7 @@ class TestDialectDirectives:
 
     def test_import_known_library_swi(self):
         """Known clausal modules map to library(...) in SWI."""
+        # nv
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
             '-import_from(clausal.logic.clpfd, [in_domain])',
@@ -188,6 +204,7 @@ class TestDialectDirectives:
 
     def test_import_known_library_scryer(self):
         """Known clausal modules map to library(clpz) in Scryer."""
+        # nv
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
             '-import_from(clausal.logic.clpfd, [in_domain])',
@@ -197,6 +214,7 @@ class TestDialectDirectives:
 
     def test_import_python_only_warning(self):
         """Python-only module imports emit a warning."""
+        # nv
         result = clausal_source_to_prolog(
             '-import_from(py.scipy_special, [Gamma])',
         )
@@ -205,6 +223,7 @@ class TestDialectDirectives:
 
     def test_table_scryer_adds_use_module(self):
         """Scryer table directive prepends use_module(library(tabling))."""
+        # nv
         from clausal.tools.prolog_dialect import Dialect
         result = clausal_source_to_prolog(
             '-table(Fib(N, R))',
@@ -218,6 +237,7 @@ class TestCLI:
     """Test the CLI entry point."""
 
     def test_cli_help(self):
+        # nv
         import subprocess
         result = subprocess.run(
             ["python", "-m", "clausal.tools.clausal_to_prolog", "--help"],
@@ -227,6 +247,7 @@ class TestCLI:
         assert "clausal_to_prolog" in result.stdout
 
     def test_cli_pipe(self):
+        # nv
         import subprocess
         result = subprocess.run(
             ["python", "-m", "clausal.tools.clausal_to_prolog", "--dialect", "swi"],
@@ -237,6 +258,7 @@ class TestCLI:
         assert "foo(1, 2)." in result.stdout
 
     def test_cli_file(self, tmp_path):
+        # nv
         import subprocess
         src = tmp_path / "test.clausal"
         src.write_text("Bar(_x) <- Baz(_x)\n")
@@ -284,6 +306,7 @@ ALL_REVERSE = _REVERSE_CASES + _REVERSE_CONFORMITY
 )
 def test_reverse_golden_snapshot(pl_path, golden_clausal_path):
     """Prolog → clausal output matches the golden .clausal snapshot."""
+    # nv
     source = pl_path.read_text(encoding="utf-8")
     golden = golden_clausal_path.read_text(encoding="utf-8")
     result = prolog_to_clausal(source)
@@ -304,6 +327,7 @@ class TestReverseSyntax:
         ids=[p[0].stem for p in ALL_REVERSE],
     )
     def test_no_trailing_whitespace(self, pl_path, golden_clausal_path):
+        # nv
         golden = golden_clausal_path.read_text(encoding="utf-8")
         for i, line in enumerate(golden.split("\n"), 1):
             if line != line.rstrip():
@@ -316,6 +340,7 @@ class TestReverseSyntax:
     )
     def test_no_prolog_syntax_leaks(self, pl_path, golden_clausal_path):
         """Translated clausal output should not contain Prolog-specific syntax."""
+        # nv
         import re
         golden = golden_clausal_path.read_text(encoding="utf-8")
         stripped = re.sub(r'"[^"]*"', '""', golden)
@@ -333,6 +358,7 @@ class TestReverseSyntax:
     )
     def test_uses_clausal_conventions(self, pl_path, golden_clausal_path):
         """Output uses PascalCase predicates and clausal arrow syntax."""
+        # nv
         golden = golden_clausal_path.read_text(encoding="utf-8")
         lines = [l.strip() for l in golden.split("\n") if l.strip() and not l.strip().startswith("#")]
         if not lines:
@@ -353,6 +379,7 @@ class TestUnifiedCLI:
     """Test the unified translate CLI."""
 
     def test_help(self):
+        # nv
         import subprocess
         result = subprocess.run(
             ["python", "-m", "clausal.tools.translate", "--help"],
@@ -362,6 +389,7 @@ class TestUnifiedCLI:
         assert "clausal-translate" in result.stdout or "translate" in result.stdout
 
     def test_roundtrip_flag(self):
+        # nv
         import subprocess
         result = subprocess.run(
             ["python", "-m", "clausal.tools.translate", "--roundtrip",

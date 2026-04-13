@@ -129,47 +129,56 @@ def _first_solution_trampoline(pred, *args, trail):
 
 class TestTokenToDict:
     def test_keys(self, doc):
+        # nv
         d = _token_to_dict(doc[0])
         assert set(d) == {"text", "lemma", "pos", "tag", "dep", "head_text",
                           "head_i", "i", "is_alpha", "is_stop", "shape"}
 
     def test_apple_text(self, doc):
+        # nv
         d = _token_to_dict(doc[0])
         assert d["text"] == "Apple"
 
     def test_index(self, doc):
+        # nv
         d = _token_to_dict(doc[0])
         assert d["i"] == 0
 
     def test_is_alpha_true(self, doc):
+        # nv
         d = _token_to_dict(doc[0])
         assert d["is_alpha"] is True
 
     def test_pos_propn(self, doc):
+        # nv
         d = _token_to_dict(doc[0])
         assert d["pos"] == "PROPN"
 
 
 class TestEntToDict:
     def test_keys(self, doc):
+        # nv
         ents = list(doc.ents)
         assert ents, "Expected at least one entity in test sentence"
         d = _ent_to_dict(ents[0])
         assert set(d) == {"text", "label", "start", "end", "start_char", "end_char"}
 
     def test_apple_org(self, doc):
+        # nv
         org_ents = [_ent_to_dict(e) for e in doc.ents if e.label_ == "ORG"]
         assert any(e["text"] == "Apple" for e in org_ents)
 
 
 class TestChunkToDict:
     def test_keys(self, doc):
+        # nv
         chunks = list(doc.noun_chunks)
         assert chunks, "Expected at least one noun chunk"
         d = _chunk_to_dict(chunks[0])
         assert set(d) == {"text", "root_text", "root_dep", "root_head_text"}
 
     def test_apple_chunk(self, doc):
+        # nv
         chunks = [_chunk_to_dict(c) for c in doc.noun_chunks]
         assert any(c["text"] == "Apple" for c in chunks)
 
@@ -181,14 +190,17 @@ class TestChunkToDict:
 
 class TestModelRegistry:
     def test_get_known_model(self):
+        # nv
         nlp = _get_model(_ALIAS)
         assert nlp is not None
 
     def test_get_unknown_raises(self):
+        # nv
         with pytest.raises(ValueError, match="No spaCy model"):
             _get_model("__no_such_model__")
 
     def test_load_model_1(self, trail):
+        # nv
         alias = "_test_load1_"
         with _LOCK:
             _MODELS.pop(alias, None)
@@ -200,6 +212,7 @@ class TestModelRegistry:
             _MODELS.pop("en_core_web_sm", None)
 
     def test_load_model_2(self, trail):
+        # nv
         alias = "_test_load2_"
         with _LOCK:
             _MODELS.pop(alias, None)
@@ -211,6 +224,7 @@ class TestModelRegistry:
             _MODELS.pop(alias)
 
     def test_load_model_2_idempotent(self, trail):
+        # nv
         alias = "_test_idem_"
         from clausal.modules.spacy_module import _load_model_2
         with _LOCK:
@@ -222,6 +236,7 @@ class TestModelRegistry:
             _MODELS.pop(alias)
 
     def test_unload_model(self, trail):
+        # nv
         alias = "_test_unload_"
         nlp = spacy.load("en_core_web_sm")
         with _LOCK:
@@ -233,11 +248,13 @@ class TestModelRegistry:
             assert alias not in _MODELS
 
     def test_unload_nonexistent_fails(self, trail):
+        # nv
         from clausal.modules.spacy_module import _unload_model_1
         results = list(_unload_model_1("__missing__", trail, None))
         assert results == []
 
     def test_current_model_enumerate(self, trail):
+        # nv
         result_var = Var()
         results = []
         sentinel = object()
@@ -250,6 +267,7 @@ class TestModelRegistry:
         assert _ALIAS in results
 
     def test_current_model_check_known(self, trail):
+        # nv
         sentinel = object()
         from clausal.modules.spacy_module import _current_model_1
         from clausal.logic.trampoline import DONE
@@ -261,6 +279,7 @@ class TestModelRegistry:
         assert found
 
     def test_current_model_check_unknown(self, trail):
+        # nv
         sentinel = object()
         from clausal.modules.spacy_module import _current_model_1
         from clausal.logic.trampoline import DONE
@@ -285,6 +304,7 @@ def _load_model_1_raw(name, trail, k):
 
 class TestProcess:
     def test_process_returns_doc(self, trail):
+        # nv
         from clausal.modules.spacy_module import _process_3
         result = Var()
         results = list(_process_3(_ALIAS, _TEXT, result, trail, None))
@@ -293,6 +313,7 @@ class TestProcess:
         assert len(processed) > 0
 
     def test_process_unknown_alias(self, trail):
+        # nv
         from clausal.modules.spacy_module import _process_3
         result = Var()
         with pytest.raises(ValueError):
@@ -306,6 +327,7 @@ class TestProcess:
 
 class TestTokenPredicates:
     def test_token_2_yields_multiple(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_2
         tok_var = Var()
         sentinel = object()
@@ -318,6 +340,7 @@ class TestTokenPredicates:
         assert count == len(doc)
 
     def test_token_2_first_is_apple(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_2
         tok_var = Var()
         sentinel = object()
@@ -332,6 +355,7 @@ class TestTokenPredicates:
         assert first["text"] == "Apple"
 
     def test_token_3_by_index(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_3
         tok_var = Var()
         sentinel = object()
@@ -346,6 +370,7 @@ class TestTokenPredicates:
         assert result["text"] == "Apple"
 
     def test_token_3_out_of_range(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_3
         tok_var = Var()
         sentinel = object()
@@ -358,6 +383,7 @@ class TestTokenPredicates:
         assert not found
 
     def test_token_3_iterate_with_index(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_3
         idx_var = Var()
         tok_var = Var()
@@ -373,6 +399,7 @@ class TestTokenPredicates:
         assert pairs[0] == (0, "Apple")
 
     def test_token_text(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_text_2
         tok = _token_to_dict(doc[0])
         result = Var()
@@ -381,6 +408,7 @@ class TestTokenPredicates:
         assert deref(result) == "Apple"
 
     def test_token_list(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _token_list_2
         result = Var()
         results = list(_token_list_2(doc, result, trail, None))
@@ -406,6 +434,7 @@ class TestAnnotationPredicates:
         return _token_to_dict(doc[2])  # "looking"
 
     def test_pos(self, apple_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _pos_2
         result = Var()
         results = list(_pos_2(apple_tok, result, trail, None))
@@ -413,6 +442,7 @@ class TestAnnotationPredicates:
         assert deref(result) == "PROPN"
 
     def test_lemma(self, looking_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _lemma_2
         result = Var()
         results = list(_lemma_2(looking_tok, result, trail, None))
@@ -420,6 +450,7 @@ class TestAnnotationPredicates:
         assert deref(result) == "look"
 
     def test_dep(self, apple_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _dep_2
         result = Var()
         results = list(_dep_2(apple_tok, result, trail, None))
@@ -427,6 +458,7 @@ class TestAnnotationPredicates:
         assert isinstance(deref(result), str)
 
     def test_head(self, apple_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _head_2
         result = Var()
         results = list(_head_2(apple_tok, result, trail, None))
@@ -434,6 +466,7 @@ class TestAnnotationPredicates:
         assert isinstance(deref(result), str)
 
     def test_shape(self, apple_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _shape_2
         result = Var()
         results = list(_shape_2(apple_tok, result, trail, None))
@@ -441,11 +474,13 @@ class TestAnnotationPredicates:
         assert deref(result) == "Xxxxx"
 
     def test_is_alpha_true(self, apple_tok, trail):
+        # nv
         from clausal.modules.spacy_module import _is_alpha_1
         results = list(_is_alpha_1(apple_tok, trail, None))
         assert len(results) == 1
 
     def test_is_alpha_false_for_punctuation(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _is_alpha_1
         # Find the "$" or "." token
         punct_tok = None
@@ -458,6 +493,7 @@ class TestAnnotationPredicates:
         assert results == []
 
     def test_is_stop(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _is_stop_1
         # "is" should be a stop word
         for tok in doc:
@@ -476,6 +512,7 @@ class TestAnnotationPredicates:
 
 class TestNERPredicates:
     def test_entity_2_yields_entities(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _entity_2
         ent_var = Var()
         sentinel = object()
@@ -489,6 +526,7 @@ class TestNERPredicates:
         assert any(e["text"] == "Apple" for e in entities)
 
     def test_entity_3_filter_by_label(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _entity_3
         ent_var = Var()
         sentinel = object()
@@ -502,6 +540,7 @@ class TestNERPredicates:
         assert all(e["label"] == "ORG" for e in org_ents)
 
     def test_entity_3_unknown_label_empty(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _entity_3
         ent_var = Var()
         sentinel = object()
@@ -514,6 +553,7 @@ class TestNERPredicates:
         assert not found
 
     def test_entity_list(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _entity_list_2
         result = Var()
         results = list(_entity_list_2(doc, result, trail, None))
@@ -530,6 +570,7 @@ class TestNERPredicates:
 
 class TestSentencePredicates:
     def test_sentence_2_yields_sentences(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _sentence_2
         sent_var = Var()
         sentinel = object()
@@ -543,6 +584,7 @@ class TestSentencePredicates:
         assert sents[0] == _TEXT
 
     def test_sentence_list(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _sentence_list_2
         result = Var()
         results = list(_sentence_list_2(doc, result, trail, None))
@@ -559,6 +601,7 @@ class TestSentencePredicates:
 
 class TestSimilarity:
     def test_identical_texts(self, trail):
+        # nv
         from clausal.modules.spacy_module import _similarity_4
         score = Var()
         results = list(_similarity_4(_ALIAS, "dog", "dog", score, trail, None))
@@ -568,6 +611,7 @@ class TestSimilarity:
         assert s == pytest.approx(1.0, abs=1e-6)
 
     def test_score_is_float(self, trail):
+        # nv
         from clausal.modules.spacy_module import _similarity_4
         score = Var()
         results = list(_similarity_4(_ALIAS, "cat", "dog", score, trail, None))
@@ -584,6 +628,7 @@ class TestSimilarity:
 
 class TestNounChunks:
     def test_noun_chunk_2_yields_chunks(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _noun_chunk_2
         chunk_var = Var()
         sentinel = object()
@@ -597,6 +642,7 @@ class TestNounChunks:
         assert any(c["text"] == "Apple" for c in chunks)
 
     def test_noun_chunk_has_keys(self, doc, trail):
+        # nv
         from clausal.modules.spacy_module import _noun_chunk_2
         chunk_var = Var()
         sentinel = object()
@@ -617,19 +663,23 @@ class TestNounChunks:
 class TestSpacyPredicateAdapter:
     def test_single_arity_dispatch_direct(self):
         """Single-arity predicate returns its fn directly."""
+        # nv
         disp = UnloadModel._get_dispatch()
         assert callable(disp)
 
     def test_multi_arity_dispatch_is_multi(self):
         """Multi-arity predicate returns _multi_dispatch."""
+        # nv
         disp = LoadModel._get_dispatch()
         assert callable(disp)
 
     def test_repr(self):
+        # nv
         assert "LoadModel" in repr(LoadModel)
 
     def test_multi_dispatch_wrong_arity_fails(self, trail):
         """Multi-dispatch returns DONE for unrecognised arity."""
+        # nv
         from clausal.logic.trampoline import DONE
         sentinel = object()
         results = list(LoadModel._multi_dispatch(sentinel, sentinel, trail))
@@ -645,6 +695,7 @@ class TestSpacyPredicateAdapter:
 
 class TestPySpacyAlias:
     def test_re_exports(self):
+        # nv
         from clausal.modules.py import spacy as py_spacy
         assert py_spacy.LoadModel is LoadModel
         assert py_spacy.Process is Process
@@ -698,4 +749,5 @@ class TestSpacyBasicFixture:
         "noun chunk",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)

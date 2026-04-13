@@ -60,6 +60,7 @@ def _load_fixture(filename: str, mod_name: str | None = None) -> object:
 
 
 def test_module_is_logic_module():
+    # nv
     from clausal.logic.database import Module as LogicModule
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
@@ -67,6 +68,7 @@ def test_module_is_logic_module():
 
 
 def test_module_name_matches_import_name():
+    # nv
     from clausal.logic.database import Module as LogicModule
     name = "_test_edge_name"
     mod = _load_fixture("edge_graph.clausal", name)
@@ -78,18 +80,21 @@ def test_module_name_matches_import_name():
 
 
 def test_edge_predicate_is_defined():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     assert logic_mod.db.is_defined("Edge", 2)
 
 
 def test_reach_predicate_is_defined():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     assert logic_mod.db.is_defined("Reach", 2)
 
 
 def test_edge_dispatch_fn_is_compiled():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     dispatch = logic_mod.db.get_dispatch("Edge", 2)
@@ -97,6 +102,7 @@ def test_edge_dispatch_fn_is_compiled():
 
 
 def test_reach_dispatch_fn_is_compiled():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     dispatch = logic_mod.db.get_dispatch("Reach", 2)
@@ -104,6 +110,7 @@ def test_reach_dispatch_fn_is_compiled():
 
 
 def test_edge_has_three_clauses():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     clauses = logic_mod.db.clauses_for("Edge", 2)
@@ -111,6 +118,7 @@ def test_edge_has_three_clauses():
 
 
 def test_reach_has_two_clauses():
+    # nv
     mod = _load_fixture("edge_graph.clausal")
     logic_mod = mod.__dict__["$module"]
     clauses = logic_mod.db.clauses_for("Reach", 2)
@@ -121,30 +129,35 @@ def test_reach_has_two_clauses():
 
 
 def test_var_injected():
+    # nv
     from clausal.logic.variables import Var
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["Var"] is Var
 
 
 def test_compound_injected():
+    # nv
     from clausal.terms import Compound
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["Compound"] is Compound
 
 
 def test_trail_injected():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["Trail"] is Trail
 
 
 def test_unify_injected():
+    # nv
     from clausal.logic.variables import unify
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["unify"] is unify
 
 
 def test_deref_injected():
+    # nv
     from clausal.logic.variables import deref
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["deref"] is deref
@@ -154,6 +167,7 @@ def test_deref_injected():
 
 
 def test_edge_matches_1_2():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Edge", 2)
@@ -162,6 +176,7 @@ def test_edge_matches_1_2():
 
 
 def test_edge_matches_2_3():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Edge", 2)
@@ -170,6 +185,7 @@ def test_edge_matches_2_3():
 
 
 def test_edge_matches_1_3():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Edge", 2)
@@ -178,6 +194,7 @@ def test_edge_matches_1_3():
 
 
 def test_edge_no_match_2_1():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Edge", 2)
@@ -186,6 +203,7 @@ def test_edge_no_match_2_1():
 
 
 def test_edge_no_match_9_9():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Edge", 2)
@@ -197,6 +215,7 @@ def test_edge_no_match_9_9():
 
 
 def test_reach_direct_edge():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Reach", 2)
@@ -206,6 +225,7 @@ def test_reach_direct_edge():
 
 
 def test_reach_transitive():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Reach", 2)
@@ -215,6 +235,7 @@ def test_reach_transitive():
 
 
 def test_reach_no_path_3_1():
+    # nv
     from clausal.logic.variables import Trail
     mod = _load_fixture("edge_graph.clausal")
     dispatch = mod.__dict__["$module"].db.get_dispatch("Reach", 2)
@@ -227,6 +248,7 @@ def test_reach_no_path_3_1():
 
 
 def test_runtime_assertz_adds_clause():
+    # nv
     from clausal.logic.variables import Trail
     from clausal.logic.database import Clause
     import dataclasses
@@ -258,6 +280,7 @@ def test_call_edge_ground_success():
     Note: edge clauses in the fixture have literals in both head positions,
     so both args must be ground (no Var enumeration via call).
     """
+    # nv
     from clausal.logic.solve import call
 
     mod = _load_fixture("edge_graph.clausal")
@@ -269,6 +292,7 @@ def test_call_edge_ground_success():
 
 def test_call_edge_ground_failure():
     """call() with ground args fails when edge does not exist."""
+    # nv
     from clausal.logic.solve import call
 
     mod = _load_fixture("edge_graph.clausal")
@@ -284,6 +308,7 @@ def test_call_reach_ground_success():
     Note: edge_graph.clausal fixture has literal heads in both positions for Edge,
     so Reach can only be queried with ground args (both src and dst specified).
     """
+    # nv
     from clausal.logic.solve import call
 
     mod = _load_fixture("edge_graph.clausal")
@@ -296,6 +321,7 @@ def test_call_reach_ground_success():
 
 def test_call_reach_no_solution():
     """call() yields nothing when no path exists."""
+    # nv
     from clausal.logic.solve import call
 
     mod = _load_fixture("edge_graph.clausal")
@@ -307,6 +333,7 @@ def test_call_reach_no_solution():
 
 def test_query_reach_ground_via_api():
     """query() works on a ground Reach query."""
+    # nv
     from clausal.logic.solve import query
     from clausal.terms import Call, LoadName
 
@@ -320,6 +347,7 @@ def test_query_reach_ground_via_api():
 
 def test_once_reach_ground_success():
     """once() returns non-None when Reach succeeds (ground query)."""
+    # nv
     from clausal.logic.solve import once
     from clausal.terms import Call, LoadName
 
@@ -333,6 +361,7 @@ def test_once_reach_ground_success():
 
 def test_once_reach_failure_returns_none():
     """once() returns None when no path exists."""
+    # nv
     from clausal.logic.solve import once
     from clausal.terms import Call, LoadName
 
@@ -346,6 +375,7 @@ def test_once_reach_failure_returns_none():
 
 def test_module_solve_method_on_imported():
     """Module.solve() works on an imported predicate."""
+    # nv
     from clausal.terms import Call, LoadName
 
     mod = _load_fixture("edge_graph.clausal")
@@ -358,6 +388,7 @@ def test_module_solve_method_on_imported():
 
 def test_solve_ground_edge_goal():
     """solve() with a ground Call goal succeeds for an existing edge."""
+    # nv
     from clausal.logic.solve import solve
     from clausal.terms import Call, LoadName
 
@@ -371,6 +402,7 @@ def test_solve_ground_edge_goal():
 
 def test_call_unknown_predicate_raises():
     """call() with an undefined predicate raises KeyError."""
+    # nv
     from clausal.logic.solve import call
 
     mod = _load_fixture("edge_graph.clausal")

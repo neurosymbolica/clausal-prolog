@@ -25,7 +25,7 @@ MappedDoubles(LIST, RESULT) <- maplist(
 )
 
 
-Test("double via call") <- (DoubleViaCall(3, Y), Y == 6)
-Test("mapped doubles") <- (MappedDoubles([1, 2, 3], RESULT), RESULT == [2, 4, 6])
-Test("apply binary double") <- (ApplyBinary(DoubleViaCall, 5, RESULT), RESULT == 10)
-Test("run goal lambda") <- RunGoal((() <- True))
+Test("double via call") <- (DoubleViaCall(3, Y), Y == 6)  # nv
+Test("mapped doubles") <- (MappedDoubles([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
+Test("apply binary double") <- (ApplyBinary(DoubleViaCall, 5, RESULT), RESULT == 10)  # nv
+Test("run goal lambda") <- RunGoal((() <- True))  # nv

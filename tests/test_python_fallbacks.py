@@ -37,48 +37,59 @@ class Atom(metaclass=PredicateMeta):
 class TestIsTermInstanceFallback:
 
     def test_predicate_instance(self):
+        # nv
         t = Pt(x=1, y=2)
         assert _is_term_instance_py(t) == is_term_instance(t) == True
 
     def test_class_not_instance(self):
+        # nv
         assert _is_term_instance_py(Pt) == is_term_instance(Pt) == False
 
     def test_int_not_instance(self):
+        # nv
         assert _is_term_instance_py(42) == is_term_instance(42) == False
 
     def test_compound_is_dataclass(self):
+        # nv
         c = Compound("f", (1,))
         assert _is_term_instance_py(c) == is_term_instance(c)
 
     def test_var_not_instance(self):
+        # nv
         assert _is_term_instance_py(Var()) == is_term_instance(Var()) == False
 
 
 class TestIsAtomFallback:
 
     def test_zero_arity(self):
+        # nv
         assert _is_atom_py(Atom) == is_atom(Atom) == True
 
     def test_non_zero_arity(self):
+        # nv
         assert _is_atom_py(Pt) == is_atom(Pt) == False
 
     def test_not_predicate_meta(self):
+        # nv
         assert _is_atom_py(int) == is_atom(int) == False
 
 
 class TestTermFieldNamesFallback:
 
     def test_predicate_instance(self):
+        # nv
         t = Pt(x=1, y=2)
         assert _term_field_names_py(t) == term_field_names(t) == ("x", "y")
 
     def test_compound_dataclass(self):
+        # nv
         c = Compound("f", (1, 2))
         py = _term_field_names_py(c)
         c_ver = term_field_names(c)
         assert py == c_ver
 
     def test_non_term_raises(self):
+        # nv
         with pytest.raises(TypeError):
             _term_field_names_py(42)
 
@@ -96,58 +107,72 @@ from clausal.logic.builtins._helpers import (
 class TestFunctorNameFallback:
 
     def test_compound(self):
+        # nv
         c = Compound("f", (1, 2))
         assert _functor_name_py(c) == _functor_name(c) == "f"
 
     def test_kwterm(self):
+        # nv
         t = KWTerm("rel", a=1)
         assert _functor_name_py(t) == _functor_name(t) == "rel"
 
     def test_predicate_instance(self):
+        # nv
         t = Pt(x=1, y=2)
         assert _functor_name_py(t) == _functor_name(t) == "Pt"
 
     def test_list_empty(self):
+        # nv
         assert _functor_name_py([]) == _functor_name([]) == "[]"
 
     def test_list_nonempty(self):
+        # nv
         assert _functor_name_py([1]) == _functor_name([1]) == "."
 
     def test_int(self):
+        # nv
         assert _functor_name_py(42) == _functor_name(42)
 
     def test_string(self):
+        # nv
         assert _functor_name_py("hello") == _functor_name("hello") == "hello"
 
 
 class TestArityFallback:
 
     def test_compound(self):
+        # nv
         c = Compound("f", (1, 2, 3))
         assert _arity_py(c) == _arity(c) == 3
 
     def test_predicate_instance(self):
+        # nv
         t = Pt(x=1, y=2)
         assert _arity_py(t) == _arity(t) == 2
 
     def test_int(self):
+        # nv
         assert _arity_py(42) == _arity(42) == 0
 
     def test_atom(self):
+        # nv
         assert _arity_py(Atom) == _arity(Atom) == 0
 
 
 class TestNthArgFallback:
 
     def test_compound_first(self):
+        # nv
         c = Compound("f", (10, 20))
         assert _nth_arg_py(c, 1) == _nth_arg(c, 1) == 10
 
     def test_compound_second(self):
+        # nv
         c = Compound("f", (10, 20))
         assert _nth_arg_py(c, 2) == _nth_arg(c, 2) == 20
 
     def test_out_of_range(self):
+        # nv
         c = Compound("f", (10,))
         with pytest.raises(IndexError):
             _nth_arg_py(c, 5)
@@ -158,81 +183,99 @@ class TestNthArgFallback:
 class TestArgsListFallback:
 
     def test_compound(self):
+        # nv
         c = Compound("f", (1, 2, 3))
         assert _args_list_py(c) == _args_list(c) == [1, 2, 3]
 
     def test_predicate_instance(self):
+        # nv
         t = Pt(x=10, y=20)
         assert _args_list_py(t) == _args_list(t) == [10, 20]
 
     def test_non_compound(self):
+        # nv
         assert _args_list_py(42) == _args_list(42) == []
 
 
 class TestIsCompoundFallback:
 
     def test_compound(self):
+        # nv
         c = Compound("f", (1,))
         assert _is_compound_py(c) == _is_compound(c) == True
 
     def test_kwterm(self):
+        # nv
         t = KWTerm("r", a=1)
         assert _is_compound_py(t) == _is_compound(t) == True
 
     def test_int(self):
+        # nv
         assert _is_compound_py(42) == _is_compound(42) == False
 
 
 class TestIsGroundFallback:
 
     def test_ground_int(self):
+        # nv
         assert _is_ground_py(42) == _is_ground(42) == True
 
     def test_ground_list(self):
+        # nv
         assert _is_ground_py([1, 2]) == _is_ground([1, 2]) == True
 
     def test_unbound_var(self):
+        # nv
         v = Var()
         assert _is_ground_py(v) == _is_ground(v) == False
 
     def test_list_with_var(self):
+        # nv
         v = Var()
         assert _is_ground_py([1, v]) == _is_ground([1, v]) == False
 
     def test_compound_with_var(self):
+        # nv
         v = Var()
         c = Compound("f", (1, v))
         assert _is_ground_py(c) == _is_ground(c) == False
 
     def test_compound_ground(self):
+        # nv
         c = Compound("f", (1, 2))
         assert _is_ground_py(c) == _is_ground(c) == True
 
     def test_kwterm_with_var(self):
+        # nv
         v = Var()
         t = KWTerm("r", a=v)
         assert _is_ground_py(t) == _is_ground(t) == False
 
     def test_kwterm_ground(self):
+        # nv
         t = KWTerm("r", a=1)
         assert _is_ground_py(t) == _is_ground(t) == True
 
     def test_predicate_instance_with_var(self):
+        # nv
         v = Var()
         t = Pt(x=v, y=1)
         assert _is_ground_py(t) == _is_ground(t) == False
 
     def test_predicate_instance_ground(self):
+        # nv
         t = Pt(x=1, y=2)
         assert _is_ground_py(t) == _is_ground(t) == True
 
     def test_bound_var_ground(self):
+        # nv
         v = Var()
         trail = Trail()
         unify(v, 42, trail)
         assert _is_ground_py(v) == _is_ground(v) == True
 
     def test_atom_ground(self):
+        # nv
         assert _is_ground_py(Atom) == _is_ground(Atom) == True
 
 
@@ -247,14 +290,17 @@ from clausal.logic.builtins.inspection import (
 class TestCopyTermFallback:
 
     def test_ground_unchanged(self):
+        # nv
         assert _copy_term_py(42, {}) == _copy_term_impl(42, {}) == 42
 
     def test_list_copied(self):
+        # nv
         py = _copy_term_py([1, 2, 3], {})
         c = _copy_term_impl([1, 2, 3], {})
         assert py == c == [1, 2, 3]
 
     def test_var_freshened(self):
+        # nv
         x = Var()
         py_result = _copy_term_py(x, {})
         c_result = _copy_term_impl(x, {})
@@ -262,6 +308,7 @@ class TestCopyTermFallback:
         assert is_var(c_result) and c_result is not x
 
     def test_compound_copied(self):
+        # nv
         c = Compound("f", (1, Var()))
         py = _copy_term_py(c, {})
         assert isinstance(py, Compound)
@@ -271,6 +318,7 @@ class TestCopyTermFallback:
 
     def test_kwterm_functor_preserved(self):
         """KWTerm copy preserves functor (bug fix verification)."""
+        # nv
         t = KWTerm("rel", a=1, b=2)
         py = _copy_term_py(t, {})
         c = _copy_term_impl(t, {})
@@ -278,6 +326,7 @@ class TestCopyTermFallback:
         assert c.functor == "rel"
 
     def test_kwterm_var_freshened(self):
+        # nv
         x = Var()
         t = KWTerm("r", a=x)
         py = _copy_term_py(t, {})
@@ -285,6 +334,7 @@ class TestCopyTermFallback:
         assert py._fields["a"] is not x
 
     def test_sharing_preserved(self):
+        # nv
         x = Var()
         py = _copy_term_py([x, x], {})
         assert py[0] is py[1]  # same fresh var
@@ -294,6 +344,7 @@ class TestCopyTermFallback:
 class TestCollectVarsFallback:
 
     def test_ground_no_vars(self):
+        # nv
         py_result = []
         _collect_vars_py(42, py_result)
         c_result = []
@@ -301,6 +352,7 @@ class TestCollectVarsFallback:
         assert py_result == c_result == []
 
     def test_single_var(self):
+        # nv
         x = Var()
         py_result = []
         _collect_vars_py(x, py_result)
@@ -309,6 +361,7 @@ class TestCollectVarsFallback:
         assert len(py_result) == len(c_result) == 1
 
     def test_dedup(self):
+        # nv
         x = Var()
         py_result = []
         _collect_vars_py([x, x, x], py_result)
@@ -317,6 +370,7 @@ class TestCollectVarsFallback:
         assert len(py_result) == len(c_result) == 1
 
     def test_compound_vars(self):
+        # nv
         x, y = Var(), Var()
         c = Compound("f", (x, 1, y))
         py_result = []

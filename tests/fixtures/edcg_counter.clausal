@@ -33,9 +33,9 @@ Test("scaled count 3 items") <- (
     run_scaled(["a", "b", "c"], 10, COUNT, ITEMS),
     COUNT == 30,
     ITEMS == ["c", "b", "a"]
-)
+)  # nv
 Test("scaled count empty") <- (
     run_scaled([], 5, COUNT, ITEMS),
     COUNT == 0,
     ITEMS == []
-)
+)  # nv

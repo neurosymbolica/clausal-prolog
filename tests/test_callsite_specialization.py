@@ -57,6 +57,7 @@ def _make_pred_cls(name, fields):
 class TestIndexPlansExposed:
     def test_index_plans_set_for_indexed_predicate(self):
         """_index_plans is populated when the predicate has enough clauses."""
+        # nv
         clauses = _make_fact_clauses("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -67,6 +68,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_keys_are_positions(self):
         """Keys of _index_plans are argument positions (ints)."""
+        # nv
         clauses = _make_fact_clauses("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -77,6 +79,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_values_are_dicts_of_callables(self):
         """Values of _index_plans are dicts mapping index keys to callable bucket fns."""
+        # nv
         clauses = _make_fact_clauses("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -89,6 +92,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_contains_expected_keys(self):
         """_index_plans[0] contains the exact set of atom keys from clause heads."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
@@ -98,6 +102,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_contains_integer_keys(self):
         """Integer-keyed predicates expose integer keys in _index_plans."""
+        # nv
         clauses = _make_fact_clauses("fib", [
             (0, 0), (1, 1), (2, 1), (3, 2), (4, 3), (5, 5),
         ])
@@ -109,6 +114,7 @@ class TestIndexPlansExposed:
     def test_index_plans_empty_when_below_threshold(self):
         """Below the indexing threshold, _index_plans is set to {}."""
         # _INDEX_THRESHOLD clauses are needed; use fewer
+        # nv
         assert _INDEX_THRESHOLD > 1
         clauses = _make_fact_clauses("tiny", [("a",)])
         pred_cls = _make_pred_cls("tiny", ["x"])
@@ -118,6 +124,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_not_set_when_no_pred_cls(self):
         """when pred_cls is None, no _index_plans attribute is injected."""
+        # nv
         clauses = _make_fact_clauses("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -126,6 +133,7 @@ class TestIndexPlansExposed:
 
     def test_dispatch_routes_through_bucket(self):
         """The compiled dispatch routes to the correct bucket for a ground arg."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
@@ -139,6 +147,7 @@ class TestIndexPlansExposed:
 
     def test_dispatch_no_solutions_for_unknown_value(self):
         """The dispatch yields nothing for a value with no matching clause."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
@@ -152,6 +161,7 @@ class TestIndexPlansExposed:
 
     def test_index_plans_empty_when_compiled_with_few_clauses(self):
         """_index_plans is {} when a second compile sees fewer clauses than threshold."""
+        # nv
         pred_cls = _make_pred_cls("tiny", ["x"])
         # First compile: enough clauses to index
         clauses5 = _make_fact_clauses("tiny", [("a",), ("b",), ("c",), ("d",), ("e",)])
@@ -165,6 +175,7 @@ class TestIndexPlansExposed:
 
     def test_two_arg_predicate_indexes_first_arg(self):
         """Two-argument predicate: _index_plans[0] keyed on first argument."""
+        # nv
         clauses = _make_fact_clauses("edge", [
             ("a", "b"), ("a", "c"), ("b", "c"),
             ("b", "d"), ("c", "d"), ("d", "a"),
@@ -177,6 +188,7 @@ class TestIndexPlansExposed:
     def test_second_position_indexed_when_more_selective(self):
         """when position 1 is more selective, it also appears in _index_plans."""
         # All first args are the same, but second args vary — pos 1 is more selective
+        # nv
         clauses = _make_fact_clauses("lookup", [
             ("same", 1), ("same", 2), ("same", 3), ("same", 4), ("same", 5),
         ])
@@ -195,6 +207,7 @@ class TestIndexPlansJoint:
         """_index_plans_joint is populated when joint dispatch is used."""
         # Build a predicate where joint (pos0, pos1) indexing is beneficial:
         # many distinct (key0, key1) pairs, high coverage.
+        # nv
         clauses = _make_fact_clauses("pair", [
             (i, j) for i in range(5) for j in range(5)
         ])
@@ -214,6 +227,7 @@ class TestIndexPlansJoint:
 
     def test_index_plans_joint_keys_are_tuples(self):
         """Joint bucket keys are (key_i, key_j) tuples."""
+        # nv
         clauses = _make_fact_clauses("pair", [
             (i, j) for i in range(5) for j in range(5)
         ])
@@ -230,26 +244,33 @@ class TestIndexPlansJoint:
 
 class TestStaticCallKey:
     def test_integer_constant(self):
+        # nv
         assert _static_call_key(ast.Constant(value=42)) == 42
 
     def test_string_constant(self):
+        # nv
         assert _static_call_key(ast.Constant(value="red")) == "red"
 
     def test_float_constant(self):
+        # nv
         assert _static_call_key(ast.Constant(value=3.14)) == 3.14
 
     def test_none_constant(self):
+        # nv
         assert _static_call_key(ast.Constant(value=None)) is None
 
     def test_bool_constant(self):
+        # nv
         assert _static_call_key(ast.Constant(value=True)) is True
 
     def test_variable_name_returns_none(self):
         # A Name node (variable reference) is not statically known
+        # nv
         assert _static_call_key(ast.Name(id="_v_x", ctx=ast.Load())) is None
 
     def test_compound_call_name(self):
         # Dog(_v_name) — functor Dog, arity 1
+        # nv
         node = ast.Call(
             func=ast.Name(id="Dog", ctx=ast.Load()),
             args=[ast.Name(id="_v_name", ctx=ast.Load())],
@@ -259,6 +280,7 @@ class TestStaticCallKey:
 
     def test_compound_call_qualified(self):
         # module.Dog(a, b) — attr Dog, arity 2
+        # nv
         node = ast.Call(
             func=ast.Attribute(
                 value=ast.Name(id="module", ctx=ast.Load()),
@@ -272,6 +294,7 @@ class TestStaticCallKey:
         assert _static_call_key(node) == ("Dog", 2)
 
     def test_compound_call_no_args(self):
+        # nv
         node = ast.Call(
             func=ast.Name(id="Atom", ctx=ast.Load()),
             args=[], keywords=[],
@@ -280,13 +303,16 @@ class TestStaticCallKey:
 
     def test_list_literal_returns_none(self):
         # A list node is not a constant or Call — returns None
+        # nv
         node = ast.List(elts=[], ctx=ast.Load())
         assert _static_call_key(node) is None
 
     def test_zero_integer(self):
+        # nv
         assert _static_call_key(ast.Constant(value=0)) == 0
 
     def test_empty_string(self):
+        # nv
         assert _static_call_key(ast.Constant(value="")) == ""
 
 
@@ -295,22 +321,27 @@ class TestStaticCallKey:
 
 class TestBucketKeyNaming:
     def test_bucket_key_atom(self):
+        # nv
         k = _bucket_key("Color2", 0, "red")
         assert k == "Color2.bucket(pos=0, 'red')"
 
     def test_bucket_key_integer(self):
+        # nv
         k = _bucket_key("Fib", 0, 0)
         assert k == "Fib.bucket(pos=0, 0)"
 
     def test_bucket_key_second_position(self):
+        # nv
         k = _bucket_key("Edge", 1, "b")
         assert k == "Edge.bucket(pos=1, 'b')"
 
     def test_bucket_key_compound(self):
+        # nv
         k = _bucket_key("Rule", 0, ("Dog", 2))
         assert k == "Rule.bucket(pos=0, ('Dog', 2))"
 
     def test_joint_bucket_key(self):
+        # nv
         k = _joint_bucket_key("Pair", 0, 1, "x", 2)
         # repr uses ('x', 2) or ('x',2) depending on Python version; just check structure
         assert k.startswith("Pair.bucket(pos=(0,1), ")
@@ -319,6 +350,7 @@ class TestBucketKeyNaming:
 
     def test_joint_bucket_key_symmetric(self):
         # Different position orderings produce different keys
+        # nv
         k1 = _joint_bucket_key("P", 0, 1, "a", "b")
         k2 = _joint_bucket_key("P", 1, 0, "b", "a")
         assert k1 != k2
@@ -340,6 +372,7 @@ def _make_locked_pred_cls(name, facts):
 class TestInjectBucketRefs:
     def test_bucket_injected_for_literal_arg(self):
         """inject_bucket_refs injects a bucket fn for a static literal call-site arg."""
+        # nv
         callee_cls, callee_arity = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -369,6 +402,7 @@ class TestInjectBucketRefs:
 
     def test_bucket_ref_map_populated(self):
         """inject_bucket_refs populates _compile_context_local.bucket_ref_map."""
+        # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -390,6 +424,7 @@ class TestInjectBucketRefs:
 
     def test_no_injection_for_variable_arg(self):
         """inject_bucket_refs does NOT inject for a variable (non-static) argument."""
+        # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -413,6 +448,7 @@ class TestInjectBucketRefs:
 
     def test_no_injection_for_unlocked_predicate(self):
         """inject_bucket_refs only specialises locked predicates."""
+        # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -436,6 +472,7 @@ class TestInjectBucketRefs:
 
     def test_no_injection_for_unknown_key(self):
         """inject_bucket_refs skips keys not in the callee's bucket dict."""
+        # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -481,6 +518,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_callsite_bucket_injected_into_base_globals(self):
         """base_globals for a caller clause contains a bucket key after compilation."""
+        # nv
         callee_cls, atoms = self._setup_color_pair()
 
         # Compile a caller: find_red(_x) <- color("red", _x)
@@ -490,6 +528,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_locked_callee_returns_correct_results(self):
         """Calling a locked callee with a literal arg returns expected results."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
         dispatch = callee_cls._dispatch_fn
@@ -501,6 +540,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_locked_callee_variable_arg_returns_all(self):
         """Calling a locked callee with a variable returns all solutions."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
         dispatch = callee_cls._dispatch_fn
@@ -514,6 +554,7 @@ class TestCallsiteCorrectnessAndFallback:
     def test_compile_caller_with_literal_uses_bucket_ref(self):
         """compile_predicate_trampoline for a caller with a literal arg injects
         a bucket key into base_globals (verifiable by checking _index_plans on the callee)."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
@@ -538,6 +579,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_dynamic_predicate_not_specialised(self):
         """A dynamic predicate (not locked) never gets bucket specialisation."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls = _make_pred_cls("dyn_color", ["name"])
         clauses = _make_fact_clauses("dyn_color", [(a,) for a in atoms])
@@ -564,6 +606,7 @@ class TestCallsiteCorrectnessAndFallback:
     def test_self_recursive_predicate_not_specialised(self):
         """A predicate calling itself is compiled while unlocked → no bucket ref."""
         # Self-recursive calls happen before locking; the callee has no _locked=True
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         pred_cls = _make_pred_cls("color", ["name"])
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
@@ -588,6 +631,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_multiple_literal_calls_different_buckets(self):
         """Multiple clauses with different literal args each get their own bucket ref."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
@@ -612,6 +656,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_bucket_ref_is_correct_callable(self):
         """The injected bucket fn is the same object as _index_plans[0][key]."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
@@ -638,6 +683,7 @@ class TestCallsiteCorrectnessAndFallback:
 
     def test_inject_idempotent_for_same_key(self):
         """Calling inject twice does not replace an existing bucket ref."""
+        # nv
         atoms = ["red", "green", "blue", "yellow", "purple"]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 

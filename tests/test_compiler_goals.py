@@ -62,6 +62,7 @@ class TestTermToAstExpr:
     """term_to_ast_expr returns an AST expression for various term types."""
 
     def test_known_var_gives_name(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         expr = term_to_ast_expr(v, vc)
@@ -69,6 +70,7 @@ class TestTermToAstExpr:
         assert expr.id == "_vX"
 
     def test_body_only_var_gives_walrus(self):
+        # nv
         v = Var()
         vc: dict[int, str] = {}
         expr = term_to_ast_expr(v, vc)
@@ -83,6 +85,7 @@ class TestTermToAstExpr:
         assert v._id in vc
 
     def test_body_only_var_same_name_on_second_call(self):
+        # nv
         v = Var()
         vc: dict[int, str] = {}
         term_to_ast_expr(v, vc)          # first call → walrus
@@ -91,41 +94,49 @@ class TestTermToAstExpr:
         assert expr2.id == vc[v._id]
 
     def test_none_constant(self):
+        # nv
         expr = term_to_ast_expr(None, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value is None
 
     def test_true_constant(self):
+        # nv
         expr = term_to_ast_expr(True, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value is True
 
     def test_false_constant(self):
+        # nv
         expr = term_to_ast_expr(False, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value is False
 
     def test_int_constant(self):
+        # nv
         expr = term_to_ast_expr(42, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value == 42
 
     def test_str_constant(self):
+        # nv
         expr = term_to_ast_expr("hello", {})
         assert isinstance(expr, ast.Constant)
         assert expr.value == "hello"
 
     def test_float_constant(self):
+        # nv
         expr = term_to_ast_expr(3.14, {})
         assert isinstance(expr, ast.Constant)
         assert isinstance(expr.value, float)
 
     def test_list_gives_ast_list(self):
+        # nv
         expr = term_to_ast_expr([1, 2, 3], {})
         assert isinstance(expr, ast.List)
         assert len(expr.elts) == 3
 
     def test_list_recurses_into_elements(self):
+        # nv
         v = Var()
         vc: dict[int, str] = {}
         expr = term_to_ast_expr([v, 42], vc)
@@ -134,6 +145,7 @@ class TestTermToAstExpr:
         assert isinstance(expr.elts[1], ast.Constant)
 
     def test_compound_gives_call_to_compound(self):
+        # nv
         term = Compound("foo", (1, 2))
         expr = term_to_ast_expr(term, {})
         assert isinstance(expr, ast.Call)
@@ -146,6 +158,7 @@ class TestTermToAstExpr:
         assert isinstance(expr.args[1], ast.Tuple)
 
     def test_dataclass_gives_call_to_cls(self):
+        # nv
         v = Var()
         vc: dict[int, str] = {}
         term = point(_x=v, _y=99)
@@ -158,6 +171,7 @@ class TestTermToAstExpr:
         assert "_y" in kw_names
 
     def test_unknown_type_raises(self):
+        # nv
         with pytest.raises(NotImplementedError):
             term_to_ast_expr(object(), {})
 
@@ -169,15 +183,18 @@ class TestArithToAstExpr:
     """arith_to_ast_expr produces Python arithmetic AST."""
 
     def test_int_gives_constant(self):
+        # nv
         expr = arith_to_ast_expr(7, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value == 7
 
     def test_float_gives_constant(self):
+        # nv
         expr = arith_to_ast_expr(2.5, {})
         assert isinstance(expr, ast.Constant)
 
     def test_var_gives_deref_call(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         expr = arith_to_ast_expr(v, vc)
@@ -186,6 +203,7 @@ class TestArithToAstExpr:
         assert expr.func.id == "deref"
 
     def test_add_gives_binop_add(self):
+        # nv
         expr = arith_to_ast_expr(Add(left=1, right=2), {})
         assert isinstance(expr, ast.BinOp)
         assert isinstance(expr.op, ast.Add)
@@ -193,21 +211,25 @@ class TestArithToAstExpr:
         assert isinstance(expr.right, ast.Constant)
 
     def test_sub(self):
+        # nv
         expr = arith_to_ast_expr(Sub(left=5, right=3), {})
         assert isinstance(expr, ast.BinOp)
         assert isinstance(expr.op, ast.Sub)
 
     def test_mult(self):
+        # nv
         expr = arith_to_ast_expr(Mult(left=2, right=3), {})
         assert isinstance(expr, ast.BinOp)
         assert isinstance(expr.op, ast.Mult)
 
     def test_negate(self):
+        # nv
         expr = arith_to_ast_expr(Negate(operand=5), {})
         assert isinstance(expr, ast.UnaryOp)
         assert isinstance(expr.op, ast.USub)
 
     def test_nested_add(self):
+        # nv
         expr = arith_to_ast_expr(Add(left=Add(left=1, right=2), right=3), {})
         assert isinstance(expr, ast.BinOp)
         assert isinstance(expr.left, ast.BinOp)
@@ -223,15 +245,18 @@ class TestCompileGoalStructure:
         return Database()
 
     def test_true_returns_k_stmts(self):
+        # nv
         sentinel = ast.Pass()
         stmts = compile_goal(True, self._db(), {}, "trail", [sentinel])
         assert stmts == [sentinel]
 
     def test_false_returns_empty(self):
+        # nv
         stmts = compile_goal(False, self._db(), {}, "trail", [ast.Pass()])
         assert stmts == []
 
     def test_is_gives_mark_if_undo(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_goal(Is(left=v, right=42), self._db(), vc, "trail", [ast.Pass()])
@@ -242,6 +267,7 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[2], ast.Expr)        # trail.undo(_mN)
 
     def test_and_chains_goals(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         # And(Is(v, 1), Is(v, 2)) — body won't succeed but structure is right
@@ -256,6 +282,7 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[1].body[0], ast.Assign)  # _m for right Is
 
     def test_or_gives_two_branches(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_goal(
@@ -267,6 +294,7 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[-1], ast.Expr)       # trail.undo(_m)
 
     def test_not_generates_nested_function(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_goal(
@@ -277,6 +305,7 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[0], ast.FunctionDef)
 
     def test_in_generates_for_loop(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         coll = Var()
@@ -285,6 +314,7 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[0], ast.For)
 
     def test_not_in_generates_flag_and_for_loop(self):
+        # nv
         v = Var()
         coll = Var()
         vc = {v._id: "_vX", coll._id: "_vC"}
@@ -296,6 +326,7 @@ class TestCompileGoalStructure:
 
 
     def test_unknown_goal_raises(self):
+        # nv
         with pytest.raises(NotImplementedError):
             compile_goal(object(), self._db(), {}, "trail", [ast.Pass()])
 
@@ -310,6 +341,7 @@ class TestCompileBody:
         return Database()
 
     def test_empty_body_yields_none(self):
+        # nv
         stmts = compile_body([], self._db(), {}, "trail")
         assert len(stmts) == 1
         stmt = stmts[0]
@@ -317,6 +349,7 @@ class TestCompileBody:
         assert isinstance(stmt.value, ast.Yield)
 
     def test_single_goal_wraps_yield(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_body([Is(left=v, right=1)], self._db(), vc, "trail")
@@ -329,6 +362,7 @@ class TestCompileBody:
         assert any(isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield) for s in if_body)
 
     def test_two_goals_chains_correctly(self):
+        # nv
         v = Var()
         vc = {v._id: "_vX"}
         # Is(v, 1) then Is(v, 2) — two-goal conjunction
@@ -374,6 +408,7 @@ class TestIntegrationFacts:
     """Predicates with no body (facts) still work after Step 5."""
 
     def test_fact_matches_and_yields(self):
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("ok", (1,)), body=[]))
         clauses = db.clauses_for("ok", 1)
@@ -386,6 +421,7 @@ class TestIntegrationUnification:
     """Is goal: unify two terms."""
 
     def test_unify_var_with_literal(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=42)]))
@@ -397,6 +433,7 @@ class TestIntegrationUnification:
         assert results == [42]
 
     def test_unify_both_vars(self):
+        # nv
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(head=Compound("unify_xy", (x, y)), body=[Is(left=x, right=y)]))
@@ -413,6 +450,7 @@ class TestIntegrationUnification:
         assert unified_during[0], "a and b should be unified while suspended"
 
     def test_unify_fails_mismatch(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=1)]))
@@ -423,6 +461,7 @@ class TestIntegrationUnification:
         assert _run(fn, 2) == []
 
     def test_bindings_undone_after_exhaustion(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=99)]))
@@ -437,6 +476,7 @@ class TestIntegrationUnification:
         assert is_var_unbound(v, trail)
 
     def test_conjunction_two_is_goals(self):
+        # nv
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
@@ -472,16 +512,19 @@ class TestIntegrationComparisons:
         return compile_predicate("big", 1, clauses, db)
 
     def test_gt_succeeds(self):
+        # nv
         fn = self._make_gt_pred(0)
         assert _run(fn, 5) == [None]
         assert _run(fn, 1) == [None]
 
     def test_gt_fails(self):
+        # nv
         fn = self._make_gt_pred(0)
         assert _run(fn, 0) == []
         assert _run(fn, -1) == []
 
     def test_lt_succeeds(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("small", (x,)), body=[Lt(left=x, right=10)]))
@@ -493,6 +536,7 @@ class TestIntegrationComparisons:
 
     def test_eq_structural(self):
         # Use two separate Vars in head; body checks eq between them after Is unification
+        # nv
         x, y = Var(), Var()
         db = Database()
         # same(X, Y) <- X is Y, X == Y  (unify then check structural eq)
@@ -509,6 +553,7 @@ class TestIntegrationComparisons:
         assert len(results) == 1
 
     def test_lte_boundary(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(head=Compound("lte10", (x,)), body=[LtE(left=x, right=10)]))
@@ -522,6 +567,7 @@ class TestIntegrationDisjunction:
     """Or goal: both branches tried."""
 
     def test_or_both_branches_explored(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -539,6 +585,7 @@ class TestIntegrationDisjunction:
         assert results == [1, 2]
 
     def test_or_left_fails_right_succeeds(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -565,6 +612,7 @@ class TestIntegrationNegation:
     def test_naf_succeeds_when_goal_fails(self):
         # no_such(X) <- X is None  (fails for non-None)
         # naf_test(X) <- not no_such(X)
+        # nv
         db = Database()
         no_v = Var()
         db.assertz(Clause(head=Compound("no_such", (no_v,)), body=[Is(left=no_v, right=None)]))
@@ -582,6 +630,7 @@ class TestIntegrationNegation:
         assert _run(fn, None) == []
 
     def test_naf_fails_when_goal_succeeds(self):
+        # nv
         db = Database()
         any_v = Var()
         db.assertz(Clause(head=Compound("always_ok", (any_v,)), body=[]))
@@ -601,6 +650,7 @@ class TestIntegrationMembership:
     """in_ goal: enumerate members of a list."""
 
     def test_in_finds_all_members(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -618,6 +668,7 @@ class TestIntegrationMembership:
         assert results == [1, 2, 3]
 
     def test_in_with_ground_checks_membership(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -632,6 +683,7 @@ class TestIntegrationMembership:
         assert _run(fn, 99) == []
 
     def test_not_in_succeeds_when_absent(self):
+        # nv
         x = Var()
         db = Database()
         db.assertz(Clause(
@@ -650,6 +702,7 @@ class TestIntegrationPredicateCall:
 
     def test_call_chain(self):
         """foo(X) calls bar(X); bar(X) unifies X with 7."""
+        # nv
         db = Database()
 
         bar_x = Var()
@@ -669,6 +722,7 @@ class TestIntegrationPredicateCall:
 
     def test_multi_clause_predicate(self):
         """color/1 has three clauses; querying with a Var enumerates all."""
+        # nv
         db = Database()
         for col in ("red", "green", "blue"):
             db.assertz(Clause(head=Compound("color", (col,)), body=[]))
@@ -680,6 +734,7 @@ class TestIntegrationPredicateCall:
 
     def test_recursive_predicate(self):
         """nat/1: nat(0). nat(s(X)) <- nat(X).  Count solutions for s(s(0))."""
+        # nv
         db = Database()
 
         @dataclasses.dataclass
@@ -707,6 +762,7 @@ class TestIntegrationArithmetic:
     """Arithmetic expressions inside comparison goals."""
 
     def test_add_in_gt(self):
+        # nv
         x = Var()
         db = Database()
         # big_enough(X) <- X + 1 > 5  (i.e. X > 4)

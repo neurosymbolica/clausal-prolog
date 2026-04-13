@@ -72,35 +72,41 @@ def _fails_with_wrong_result(pred, *args):
 
 class TestMinimizeScalar:
     def test_brent_quadratic(self):
+        # nv
         r = _drive(MinimizeScalar, lambda x: (x - 3.0) ** 2)
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x) - 3.0) < 1e-4
 
     def test_with_method(self):
+        # nv
         r = _drive(MinimizeScalar, lambda x: (x - 3.0) ** 2, 'brent')
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x) - 3.0) < 1e-4
 
     def test_bounded(self):
+        # nv
         r = _drive(MinimizeScalar, lambda x: (x - 3.0) ** 2, 'bounded', (1.0, 5.0))
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x) - 3.0) < 1e-4
 
     def test_result_has_success(self):
+        # nv
         r = _drive(MinimizeScalar, lambda x: (x - 3.0) ** 2)
         assert r is not None
         assert r['success'] is True
 
     def test_result_get_x(self):
+        # nv
         r = _drive(MinimizeScalar, lambda x: (x - 3.0) ** 2)
         x = _drive_result_get(r, 'x')
         assert x is not None
         assert abs(float(x) - 3.0) < 1e-4
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(MinimizeScalar, lambda x: (x - 3.0) ** 2)
 
 
@@ -108,35 +114,41 @@ class TestMinimizeScalar:
 
 class TestMinimize:
     def test_bfgs_quadratic(self):
+        # nv
         r = _drive(Minimize, lambda x: float(sum(xi ** 2 for xi in x)), np.array([1.0, 1.0]))
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert np.allclose(x, [0.0, 0.0], atol=1e-4)
 
     def test_with_method_nelder_mead(self):
+        # nv
         r = _drive(Minimize, lambda x: float(sum(xi ** 2 for xi in x)), np.array([1.0, 1.0]), 'Nelder-Mead')
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert np.allclose(x, [0.0, 0.0], atol=1e-3)
 
     def test_result_success(self):
+        # nv
         r = _drive(Minimize, lambda x: float(x[0] ** 2), np.array([1.0]))
         assert r is not None
         assert r['success'] is True
 
     def test_result_get_x(self):
+        # nv
         r = _drive(Minimize, lambda x: float(x[0] ** 2), np.array([1.0]))
         x = _drive_result_get(r, 'x')
         assert x is not None
         assert abs(float(x[0])) < 1e-4
 
     def test_result_get_fun(self):
+        # nv
         r = _drive(Minimize, lambda x: float(x[0] ** 2), np.array([1.0]))
         fun = _drive_result_get(r, 'fun')
         assert fun is not None
         assert abs(float(fun)) < 1e-8
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Minimize, lambda x: float(x[0] ** 2), np.array([1.0]))
 
 
@@ -144,12 +156,14 @@ class TestMinimize:
 
 class TestDifferentialEvolution:
     def test_simple(self):
+        # nv
         r = _drive(DifferentialEvolution, lambda x: (x[0] - 1.0) ** 2, [(0.0, 3.0)])
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x[0]) - 1.0) < 1e-3
 
     def test_with_seed(self):
+        # nv
         r = _drive(DifferentialEvolution, lambda x: (x[0] - 1.0) ** 2, [(0.0, 3.0)], 42)
         assert r is not None
         x = _drive_result_get(r, 'x')
@@ -160,12 +174,14 @@ class TestDifferentialEvolution:
 
 class TestBasinHopping:
     def test_simple(self):
+        # nv
         r = _drive(BasinHopping, lambda x: float(x[0] ** 2), np.array([1.0]))
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x[0])) < 1e-3
 
     def test_with_niter(self):
+        # nv
         r = _drive(BasinHopping, lambda x: float(x[0] ** 2), np.array([1.0]), 20)
         assert r is not None
         x = _drive_result_get(r, 'x')
@@ -176,12 +192,14 @@ class TestBasinHopping:
 
 class TestDualAnnealing:
     def test_simple(self):
+        # nv
         r = _drive(DualAnnealing, lambda x: (x[0] - 2.0) ** 2, [(0.0, 5.0)])
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x[0]) - 2.0) < 1e-2
 
     def test_with_seed(self):
+        # nv
         r = _drive(DualAnnealing, lambda x: (x[0] - 2.0) ** 2, [(0.0, 5.0)], 42)
         assert r is not None
         x = _drive_result_get(r, 'x')
@@ -192,6 +210,7 @@ class TestDualAnnealing:
 
 class TestShgoMinimize:
     def test_simple(self):
+        # nv
         r = _drive(ShgoMinimize, lambda x: float(x[0] ** 2), [(-3.0, 3.0)])
         assert r is not None
         x = _drive_result_get(r, 'x')
@@ -202,12 +221,14 @@ class TestShgoMinimize:
 
 class TestNonlinearLeastSquares:
     def test_simple(self):
+        # nv
         r = _drive(NonlinearLeastSquares, lambda x: [x[0] - 3.0, x[1] - 4.0], np.array([0.0, 0.0]))
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert np.allclose(x, [3.0, 4.0], atol=1e-4)
 
     def test_with_bounds(self):
+        # nv
         r = _drive(NonlinearLeastSquares,
                    lambda x: [x[0] - 3.0, x[1] - 4.0],
                    np.array([0.0, 0.0]),
@@ -221,6 +242,7 @@ class TestNonlinearLeastSquares:
 
 class TestCurveFit:
     def test_linear_fit(self):
+        # nv
         xdata = np.array([0.0, 1.0, 2.0])
         ydata = np.array([1.0, 3.0, 5.0])
         r = _drive(CurveFit, lambda x, a, b: a * x + b, xdata, ydata)
@@ -229,6 +251,7 @@ class TestCurveFit:
         assert np.allclose(popt, [2.0, 1.0], atol=1e-4)
 
     def test_with_p0(self):
+        # nv
         xdata = np.array([0.0, 1.0, 2.0])
         ydata = np.array([1.0, 3.0, 5.0])
         r = _drive(CurveFit, lambda x, a, b: a * x + b, xdata, ydata, np.array([1.0, 0.0]))
@@ -237,6 +260,7 @@ class TestCurveFit:
         assert np.allclose(popt, [2.0, 1.0], atol=1e-4)
 
     def test_result_has_popt_pcov(self):
+        # nv
         xdata = np.array([0.0, 1.0, 2.0])
         ydata = np.array([1.0, 3.0, 5.0])
         r = _drive(CurveFit, lambda x, a, b: a * x + b, xdata, ydata)
@@ -249,29 +273,34 @@ class TestCurveFit:
 
 class TestRootScalar:
     def test_bisect(self):
+        # nv
         r = _drive(RootScalar, lambda x: x ** 2 - 4.0, 'bisect', [1.0, 3.0])
         assert r is not None
         root = _drive_result_get(r, 'root')
         assert abs(float(root) - 2.0) < 1e-6
 
     def test_brentq(self):
+        # nv
         r = _drive(RootScalar, lambda x: x ** 2 - 4.0, 'brentq', [1.0, 3.0])
         assert r is not None
         root = _drive_result_get(r, 'root')
         assert abs(float(root) - 2.0) < 1e-6
 
     def test_secant(self):
+        # nv
         r = _drive(RootScalar, lambda x: x ** 2 - 4.0, 'secant', 1.0, 3.0)
         assert r is not None
         root = _drive_result_get(r, 'root')
         assert abs(float(root) - 2.0) < 1e-6
 
     def test_result_converged(self):
+        # nv
         r = _drive(RootScalar, lambda x: x ** 2 - 4.0, 'bisect', [1.0, 3.0])
         assert r is not None
         assert r['converged'] is True
 
     def test_result_get_root(self):
+        # nv
         r = _drive(RootScalar, lambda x: x ** 2 - 4.0, 'bisect', [1.0, 3.0])
         root = _drive_result_get(r, 'root')
         assert root is not None
@@ -282,23 +311,27 @@ class TestRootScalar:
 
 class TestRoot:
     def test_simple_system(self):
+        # nv
         r = _drive(Root, lambda x: [x[0] ** 2 - 4.0], np.array([1.0]))
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x[0]) - 2.0) < 1e-6
 
     def test_with_method(self):
+        # nv
         r = _drive(Root, lambda x: [x[0] ** 2 - 4.0], np.array([1.0]), 'hybr')
         assert r is not None
         x = _drive_result_get(r, 'x')
         assert abs(float(x[0]) - 2.0) < 1e-6
 
     def test_result_success(self):
+        # nv
         r = _drive(Root, lambda x: [x[0] ** 2 - 4.0], np.array([1.0]))
         assert r is not None
         assert r['success'] is True
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(Root, lambda x: [x[0] ** 2 - 4.0], np.array([1.0]))
 
 
@@ -307,6 +340,7 @@ class TestRoot:
 class TestLinearProgram:
     def test_simple_1d(self):
         # min -x s.t. x <= 2 → x = 2
+        # nv
         r = _drive(LinearProgram, np.array([-1.0]), np.array([[1.0]]), np.array([2.0]))
         assert r is not None
         x = _drive_result_get(r, 'x')
@@ -314,6 +348,7 @@ class TestLinearProgram:
 
     def test_2d(self):
         # min [-1,-2]@x s.t. [[1,1]]@x <= 4 → x[1] = 4
+        # nv
         r = _drive(LinearProgram,
                    np.array([-1.0, -2.0]),
                    np.array([[1.0, 1.0]]),
@@ -324,6 +359,7 @@ class TestLinearProgram:
 
     def test_with_equality(self):
         # min -x s.t. x == 3
+        # nv
         r = _drive(LinearProgram,
                    np.array([-1.0]),
                    np.array([]).reshape(0, 1),
@@ -335,16 +371,19 @@ class TestLinearProgram:
         assert abs(float(x[0]) - 3.0) < 1e-6
 
     def test_result_success(self):
+        # nv
         r = _drive(LinearProgram, np.array([-1.0]), np.array([[1.0]]), np.array([2.0]))
         assert r is not None
         assert r['success'] is True
 
     def test_result_get_x(self):
+        # nv
         r = _drive(LinearProgram, np.array([-1.0]), np.array([[1.0]]), np.array([2.0]))
         x = _drive_result_get(r, 'x')
         assert x is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(LinearProgram, np.array([-1.0]), np.array([[1.0]]), np.array([2.0]))
 
 
@@ -352,6 +391,7 @@ class TestLinearProgram:
 
 class TestMixedIntegerLinearProgram:
     def test_simple(self):
+        # nv
         import numpy as np
         from scipy.optimize import Bounds as ScipyBounds
         c = np.array([-1.0])
@@ -367,6 +407,7 @@ class TestMixedIntegerLinearProgram:
 
 class TestLinearConstraint:
     def test_creates_object(self):
+        # nv
         import scipy.optimize
         r = _drive(LinearConstraint, np.array([[1.0, 0.0]]), np.array([0.0]), np.array([1.0]))
         assert isinstance(r, scipy.optimize.LinearConstraint)
@@ -376,6 +417,7 @@ class TestLinearConstraint:
 
 class TestBounds:
     def test_creates_object(self):
+        # nv
         import scipy.optimize
         r = _drive(Bounds, np.array([0.0, 0.0]), np.array([1.0, 1.0]))
         assert isinstance(r, scipy.optimize.Bounds)
@@ -385,20 +427,24 @@ class TestBounds:
 
 class TestResultGet:
     def test_get_existing_field(self):
+        # nv
         d = {'x': 42}
         v = _drive_result_get(d, 'x')
         assert v == 42
 
     def test_missing_field_fails(self):
+        # nv
         d = {'x': 42}
         v = _drive_result_get(d, 'y')
         assert v is None
 
     def test_wrong_result_type_fails(self):
+        # nv
         v = _drive_result_get("not a dict", 'x')
         assert v is None
 
     def test_non_string_field_fails(self):
+        # nv
         value = Var()
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
@@ -408,6 +454,7 @@ class TestResultGet:
         assert len(solutions) == 0
 
     def test_bind_existing_scalar_result(self):
+        # nv
         d = {'rank': 2}
         value = 2
         dispatch = ResultGet._get_dispatch()
@@ -457,4 +504,5 @@ class TestScipyOptimizeFixture:
         "result get success",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"

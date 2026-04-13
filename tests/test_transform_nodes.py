@@ -23,22 +23,26 @@ def wrap(node):
 # ---------------------------------------------------------------------------
 
 def test_empty_list_returns_empty_list():
+    # nv
     result = _transform_node_list([], identity)
     assert result == []
 
 
 def test_single_node_unchanged():
+    # nv
     node = object()
     result = _transform_node_list([node], identity)
     assert result == [node]
 
 
 def test_single_node_removed():
+    # nv
     result = _transform_node_list([object()], remove_all)
     assert result == []
 
 
 def test_single_node_transformed():
+    # nv
     node = "a"
     result = _transform_node_list([node], wrap)
     assert result == [("wrapped", "a")]
@@ -49,6 +53,7 @@ def test_single_node_transformed():
 # ---------------------------------------------------------------------------
 
 def test_all_unchanged_returns_list_equal_to_original():
+    # nv
     nodes = [1, 2, 3]
     result = _transform_node_list(nodes, identity)
     assert result == nodes
@@ -57,6 +62,7 @@ def test_all_unchanged_returns_list_equal_to_original():
 def test_all_unchanged_returns_same_object_as_input():
     # when nothing changes the function must return the exact same list object,
     # not a copy — callers use identity comparison to detect no-ops.
+    # nv
     nodes = [1, 2, 3]
     result = _transform_node_list(nodes, identity)
     assert result is nodes
@@ -67,30 +73,35 @@ def test_all_unchanged_returns_same_object_as_input():
 # ---------------------------------------------------------------------------
 
 def test_first_node_removed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: [] if n == "a" else n)
     assert result == ["b", "c"]
 
 
 def test_middle_node_removed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: [] if n == "b" else n)
     assert result == ["a", "c"]
 
 
 def test_last_node_removed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: [] if n == "c" else n)
     assert result == ["a", "b"]
 
 
 def test_all_nodes_removed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, remove_all)
     assert result == []
 
 
 def test_multiple_adjacent_nodes_removed():
+    # nv
     nodes = ["a", "b", "c", "d"]
     remove_set = {"b", "c"}
     result = _transform_node_list(nodes, lambda n: [] if n in remove_set else n)
@@ -98,6 +109,7 @@ def test_multiple_adjacent_nodes_removed():
 
 
 def test_multiple_non_adjacent_nodes_removed():
+    # nv
     nodes = ["a", "b", "c", "d", "e"]
     remove_set = {"a", "c", "e"}
     result = _transform_node_list(nodes, lambda n: [] if n in remove_set else n)
@@ -109,24 +121,28 @@ def test_multiple_non_adjacent_nodes_removed():
 # ---------------------------------------------------------------------------
 
 def test_first_node_transformed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: n.upper() if n == "a" else n)
     assert result == ["A", "b", "c"]
 
 
 def test_middle_node_transformed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: n.upper() if n == "b" else n)
     assert result == ["a", "B", "c"]
 
 
 def test_last_node_transformed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: n.upper() if n == "c" else n)
     assert result == ["a", "b", "C"]
 
 
 def test_all_nodes_transformed():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, str.upper)
     assert result == ["A", "B", "C"]
@@ -135,6 +151,7 @@ def test_all_nodes_transformed():
 def test_transformation_uses_identity_comparison_not_equality():
     # Two distinct objects that compare equal must be treated as a
     # transformation because `transformed_node is not node` is True.
+    # nv
     class EqualToAnything:
         def __eq__(self, other):
             return True
@@ -153,6 +170,7 @@ def test_transformation_uses_identity_comparison_not_equality():
 # ---------------------------------------------------------------------------
 
 def test_remove_and_transform_different_nodes():
+    # nv
     nodes = ["a", "b", "c", "d"]
 
     def transform(n):
@@ -167,6 +185,7 @@ def test_remove_and_transform_different_nodes():
 
 
 def test_transform_first_then_remove_later():
+    # nv
     nodes = ["a", "b", "c"]
 
     def transform(n):
@@ -181,6 +200,7 @@ def test_transform_first_then_remove_later():
 
 
 def test_remove_first_then_transform_later():
+    # nv
     nodes = ["a", "b", "c"]
 
     def transform(n):
@@ -199,6 +219,7 @@ def test_remove_first_then_transform_later():
 # ---------------------------------------------------------------------------
 
 def test_always_returns_a_list():
+    # nv
     assert isinstance(_transform_node_list([], identity), list)
     assert isinstance(_transform_node_list([1], identity), list)
     assert isinstance(_transform_node_list([1], remove_all), list)
@@ -209,6 +230,7 @@ def test_unchanged_result_is_same_object_so_mutations_are_shared():
     # when nothing changes the returned list IS the input list, so mutations
     # to one are visible through the other (a consequence of the identity
     # return, not a bug to defend against here).
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, identity)
     nodes.append("d")
@@ -221,42 +243,49 @@ def test_unchanged_result_is_same_object_so_mutations_are_shared():
 # ---------------------------------------------------------------------------
 
 def test_first_node_expanded_to_multiple():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: ["X", "Y"] if n == "a" else n)
     assert result == ["X", "Y", "b", "c"]
 
 
 def test_middle_node_expanded_to_multiple():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: ["X", "Y"] if n == "b" else n)
     assert result == ["a", "X", "Y", "c"]
 
 
 def test_last_node_expanded_to_multiple():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: ["X", "Y"] if n == "c" else n)
     assert result == ["a", "b", "X", "Y"]
 
 
 def test_node_expanded_to_empty_list_acts_like_removal():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: [] if n == "b" else n)
     assert result == ["a", "c"]
 
 
 def test_node_expanded_to_single_item_list():
+    # nv
     nodes = ["a", "b", "c"]
     result = _transform_node_list(nodes, lambda n: ["Z"] if n == "b" else n)
     assert result == ["a", "Z", "c"]
 
 
 def test_all_nodes_expanded():
+    # nv
     nodes = ["a", "b"]
     result = _transform_node_list(nodes, lambda n: [n, n.upper()])
     assert result == ["a", "A", "b", "B"]
 
 
 def test_multiple_nodes_expanded():
+    # nv
     nodes = ["a", "b", "c"]
     expand = {"a", "c"}
     result = _transform_node_list(nodes, lambda n: [n, n.upper()] if n in expand else n)
@@ -264,6 +293,7 @@ def test_multiple_nodes_expanded():
 
 
 def test_expansion_and_removal_mixed():
+    # nv
     nodes = ["a", "b", "c", "d"]
 
     def transform(n):
@@ -278,6 +308,7 @@ def test_expansion_and_removal_mixed():
 
 
 def test_expansion_and_single_replacement_mixed():
+    # nv
     nodes = ["a", "b", "c"]
 
     def transform(n):
@@ -294,6 +325,7 @@ def test_expansion_and_single_replacement_mixed():
 def test_expansion_triggers_changed_flag():
     # Returning a list (even [node]) must be treated as changed, so the
     # original list object must NOT be returned.
+    # nv
     nodes = ["a"]
     result = _transform_node_list(nodes, lambda n: [n])
     assert result is not nodes
@@ -305,6 +337,7 @@ def test_expansion_triggers_changed_flag():
 # ---------------------------------------------------------------------------
 
 def test_transform_called_once_per_node():
+    # nv
     calls = []
 
     def counting_transform(node):
@@ -317,6 +350,7 @@ def test_transform_called_once_per_node():
 
 
 def test_transform_called_once_per_node_when_first_removed():
+    # nv
     calls = []
 
     def counting_transform(node):
@@ -329,6 +363,7 @@ def test_transform_called_once_per_node_when_first_removed():
 
 
 def test_transform_called_once_per_node_when_first_transformed():
+    # nv
     calls = []
 
     def counting_transform(node):

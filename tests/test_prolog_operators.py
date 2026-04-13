@@ -29,32 +29,39 @@ class TestPrologModule:
     """clausal.modules.prolog provides ISO-compatible arithmetic."""
 
     def test_trunc_div_positive(self):
+        # nv
         from clausal.modules.prolog import TruncDiv
         assert TruncDiv(7, 2) == 3
 
     def test_trunc_div_negative_dividend(self):
+        # nv
         from clausal.modules.prolog import TruncDiv
         # ISO: truncate toward zero -> -3, Python //: floor -> -4
         assert TruncDiv(-7, 2) == -3
 
     def test_trunc_div_negative_divisor(self):
+        # nv
         from clausal.modules.prolog import TruncDiv
         assert TruncDiv(7, -2) == -3
 
     def test_trunc_mod_positive(self):
+        # nv
         from clausal.modules.prolog import TruncMod
         assert TruncMod(7, 3) == 1
 
     def test_trunc_mod_negative_dividend(self):
+        # nv
         from clausal.modules.prolog import TruncMod
         # ISO: sign follows dividend -> -1, Python %: floor mod -> 2
         assert TruncMod(-7, 3) == -1
 
     def test_rem_positive(self):
+        # nv
         from clausal.modules.prolog import Rem
         assert Rem(7, 3) == 1
 
     def test_rem_negative(self):
+        # nv
         from clausal.modules.prolog import Rem
         assert Rem(-7, 3) == -1
 
@@ -66,26 +73,31 @@ class TestTranslatorISOOperators:
     """Prolog ``//``, ``mod``, ``rem`` are emitted as prolog.TruncDiv etc."""
 
     def test_integer_division_emits_prolog_qualified(self):
+        # nv
         src = "test :- X is 7 // 2."
         result = prolog_to_clausal(src)
         assert "prolog.TruncDiv" in result
 
     def test_mod_emits_prolog_qualified(self):
+        # nv
         src = "test :- X is 7 mod 3."
         result = prolog_to_clausal(src)
         assert "prolog.TruncMod" in result
 
     def test_rem_emits_prolog_qualified(self):
+        # nv
         src = "test :- X is 7 rem 3."
         result = prolog_to_clausal(src)
         assert "prolog.Rem" in result
 
     def test_auto_imports_prolog_module(self):
+        # nv
         src = "test :- X is 7 // 2."
         result = prolog_to_clausal(src)
         assert "-import_module(prolog)" in result
 
     def test_no_prolog_import_when_not_needed(self):
+        # nv
         src = "test :- X is 1 + 2."
         result = prolog_to_clausal(src)
         assert "prolog" not in result
@@ -99,6 +111,7 @@ class TestTranslatorAtomQuoting:
 
     def test_atom_declared_via_private(self):
         """Prolog atoms generate a -private declaration."""
+        # nv
         src = "color(red). color(blue)."
         result = prolog_to_clausal(src)
         assert "-private(" in result
@@ -107,12 +120,14 @@ class TestTranslatorAtomQuoting:
 
     def test_atom_used_as_bare_name(self):
         """Atoms appear as bare names in clause bodies (not quoted)."""
+        # nv
         src = "color(red)."
         result = prolog_to_clausal(src)
         assert "Color(red)," in result
         assert "'red'" not in result
 
     def test_true_false_not_in_private(self):
+        # nv
         src = "val(true). val(false)."
         result = prolog_to_clausal(src)
         # true/false are Python builtins, not collected as data atoms
@@ -120,12 +135,14 @@ class TestTranslatorAtomQuoting:
             assert "true" not in result.split("-private(")[1].split(")")[0]
 
     def test_numbers_not_in_private(self):
+        # nv
         src = "val(42)."
         result = prolog_to_clausal(src)
         assert "-private(" not in result  # no atoms at all
 
     def test_functor_names_not_affected(self):
         """functor names (PascalCase predicates) are not declared as atoms."""
+        # nv
         src = "foo_bar(1, 2)."
         result = prolog_to_clausal(src)
         assert "FooBar(1, 2)," in result
@@ -156,6 +173,7 @@ class TestEndToEnd:
 
     def test_atoms_as_data(self, tmp_path):
         """Prolog atoms become zero-arity PredicateMeta classes when imported."""
+        # nv
         path = _write_pl(tmp_path, "_plop_atoms", """\
             color(red).
             color(green).
@@ -171,6 +189,7 @@ class TestEndToEnd:
 
     def test_iso_truncate_div(self, tmp_path):
         """Prolog // uses ISO truncation-toward-zero semantics."""
+        # nv
         path = _write_pl(tmp_path, "_plop_div", """\
             trunc_div(X, Y, R) :- R is X // Y.
         """)
@@ -184,6 +203,7 @@ class TestEndToEnd:
 
     def test_iso_mod(self, tmp_path):
         """Prolog mod uses ISO sign-follows-dividend semantics."""
+        # nv
         path = _write_pl(tmp_path, "_plop_mod", """\
             my_mod(X, Y, R) :- R is X mod Y.
         """)
@@ -197,6 +217,7 @@ class TestEndToEnd:
 
     def test_mixed_atoms_and_arithmetic(self, tmp_path):
         """A .pl file that uses both atoms and arithmetic."""
+        # nv
         path = _write_pl(tmp_path, "_plop_mixed", """\
             classify(X, positive) :- X > 0.
             classify(0, zero).

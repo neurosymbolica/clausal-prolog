@@ -6,23 +6,23 @@
 
 # ── Algorithm registry ───────────────────────────────────────────────────────
 
-Test("random_forest is classifier") <- Algorithm("random_forest", "classifier")
+Test("random_forest is classifier") <- Algorithm("random_forest", "classifier")  # nv
 
-Test("pca is transformer") <- Algorithm("pca", "transformer")
+Test("pca is transformer") <- Algorithm("pca", "transformer")  # nv
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 
 Test("load iris") <- (
     LoadDataset("iris", D),
     D is ("Dataset", _, _)
-)
+)  # nv
 
 Test("make synthetic") <- (
     MakeDataset("classification",
                 {"n_samples": 50, "n_features": 4, "random_state": 42},
                 D),
     D is ("Dataset", _, _)
-)
+)  # nv
 
 # ── Fit and predict ──────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ Test("fit and predict") <- (
     D is ("Dataset", X, _),
     Predict(F, X, PREDS),
     nonvar(PREDS)
-)
+)  # nv
 
 # ── Score ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ Test("score") <- (
     Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
     Score(F, D, S),
     S > 0.8
-)
+)  # nv
 
 # ── Learned attributes ───────────────────────────────────────────────────────
 
@@ -50,4 +50,4 @@ Test("feature importances") <- (
     Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
     Learned(F, "feature_importances", FI),
     nonvar(FI)
-)
+)  # nv

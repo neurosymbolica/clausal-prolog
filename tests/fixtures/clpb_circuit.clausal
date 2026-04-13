@@ -33,8 +33,8 @@ PigeonHole() <- (
     bool_labeling([PIGEON_1_HOLE_1, PIGEON_1_HOLE_2, PIGEON_2_HOLE_1, PIGEON_2_HOLE_2, PIGEON_3_HOLE_1, PIGEON_3_HOLE_2])
 )
 
-Test("half adder 0 0") <- (HalfAdder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)
-Test("half adder 1 0") <- (HalfAdder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)
-Test("half adder 1 1") <- (HalfAdder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)
-Test("full adder 1 1 1") <- (FullAdder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)
-Test("full adder 0 0 0") <- (FullAdder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)
+Test("half adder 0 0") <- (HalfAdder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
+Test("half adder 1 0") <- (HalfAdder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)  # nv
+Test("half adder 1 1") <- (HalfAdder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)  # nv
+Test("full adder 1 1 1") <- (FullAdder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)  # nv
+Test("full adder 0 0 0") <- (FullAdder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv

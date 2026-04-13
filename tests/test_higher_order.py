@@ -119,18 +119,23 @@ def _goal_always_fail(*args):
 
 class TestMapList2:
     def test_all_succeed(self):
+        # nv
         assert run_trampoline(_map_list__2, _goal_positive, [1, 2, 3]) == 1
 
     def test_one_fails(self):
+        # nv
         assert run_trampoline(_map_list__2, _goal_positive, [1, -2, 3]) == 0
 
     def test_empty_list(self):
+        # nv
         assert run_trampoline(_map_list__2, _goal_positive, []) == 1
 
     def test_non_list_fails(self):
+        # nv
         assert run_trampoline(_map_list__2, _goal_positive, 42) == 0
 
     def test_non_callable_fails(self):
+        # nv
         assert run_trampoline(_map_list__2, 42, [1, 2, 3]) == 0
 
 
@@ -139,18 +144,22 @@ class TestMapList2:
 
 class TestMapList3:
     def test_double(self):
+        # nv
         results = run_trampoline_var(_map_list__3, _goal_double, [1, 2, 3])
         assert results == [[2, 4, 6]]
 
     def test_empty_list(self):
+        # nv
         results = run_trampoline_var(_map_list__3, _goal_double, [])
         assert results == [[]]
 
     def test_goal_fails_mid_list(self):
+        # nv
         results = run_trampoline_var(_map_list__3, _goal_always_fail, [1, 2, 3])
         assert results == []
 
     def test_non_list_fails(self):
+        # nv
         results = run_trampoline_var(_map_list__3, _goal_double, "abc")
         assert results == []
 
@@ -160,22 +169,27 @@ class TestMapList3:
 
 class TestInclude:
     def test_filter_positive(self):
+        # nv
         results = run_trampoline_var(_include__3, _goal_positive, [1, -2, 3, -4])
         assert results == [[1, 3]]
 
     def test_all_match(self):
+        # nv
         results = run_trampoline_var(_include__3, _goal_positive, [1, 2, 3])
         assert results == [[1, 2, 3]]
 
     def test_none_match(self):
+        # nv
         results = run_trampoline_var(_include__3, _goal_positive, [-1, -2, -3])
         assert results == [[]]
 
     def test_empty_input(self):
+        # nv
         results = run_trampoline_var(_include__3, _goal_positive, [])
         assert results == [[]]
 
     def test_even_filter(self):
+        # nv
         results = run_trampoline_var(_include__3, _goal_even, [1, 2, 3, 4])
         assert results == [[2, 4]]
 
@@ -185,18 +199,22 @@ class TestInclude:
 
 class TestExclude:
     def test_filter_non_positive(self):
+        # nv
         results = run_trampoline_var(_exclude__3, _goal_positive, [1, -2, 3, -4])
         assert results == [[-2, -4]]
 
     def test_all_match(self):
+        # nv
         results = run_trampoline_var(_exclude__3, _goal_positive, [1, 2, 3])
         assert results == [[]]
 
     def test_none_match(self):
+        # nv
         results = run_trampoline_var(_exclude__3, _goal_positive, [-1, -2, -3])
         assert results == [[-1, -2, -3]]
 
     def test_empty_input(self):
+        # nv
         results = run_trampoline_var(_exclude__3, _goal_positive, [])
         assert results == [[]]
 
@@ -223,18 +241,23 @@ def _run_foldl(goal, lst, v0):
 
 class TestFoldl:
     def test_sum(self):
+        # nv
         assert _run_foldl(_goal_add, [1, 2, 3], 0) == [6]
 
     def test_product(self):
+        # nv
         assert _run_foldl(_goal_mul, [2, 3, 4], 1) == [24]
 
     def test_empty_list(self):
+        # nv
         assert _run_foldl(_goal_add, [], 0) == [0]
 
     def test_goal_fails_mid_fold(self):
+        # nv
         assert _run_foldl(_goal_always_fail, [1, 2, 3], 0) == []
 
     def test_non_list_fails(self):
+        # nv
         assert _run_foldl(_goal_add, 42, 0) == []
 
 
@@ -243,26 +266,31 @@ class TestFoldl:
 
 class TestAliases:
     def test_merge_sort(self):
+        # nv
         r = Var()
         goal = _make_goal_call("msort", [[3, 1, 2], r])
         results = sol_var(goal, r)
         assert results == [[1, 2, 3]]
 
     def test_get_item(self):
+        # nv
         r = Var()
         goal = _make_goal_call("get_item", [1, [10, 20, 30], r])
         results = sol_var(goal, r)
         assert results == [20]
 
     def test_member_check(self):
+        # nv
         goal = _make_goal_call("in_check", [2, [1, 2, 3]])
         assert len(solutions(goal)) == 1
 
     def test_member_check_fail(self):
+        # nv
         goal = _make_goal_call("in_check", [5, [1, 2, 3]])
         assert solutions(goal) == []
 
     def test_unpack(self):
+        # nv
         r = Var()
         goal = _make_goal_call("unpack", [Compound("foo", (1, 2)), r])
         results = sol_var(goal, r)
@@ -279,18 +307,21 @@ class TestBuiltinAsArgument:
 
     def test_builtin_to_maplist2(self):
         """number passed to maplist/2 — succeeds when all elements are numbers."""
+        # nv
         from clausal.logic.builtins import get_builtin_class
         is_number = get_builtin_class("number")
         assert run_trampoline(_map_list__2, is_number, [1, 2, 3.0]) == 1
 
     def test_builtin_to_maplist2_fail(self):
         """number passed to maplist/2 — fails when a non-number is present."""
+        # nv
         from clausal.logic.builtins import get_builtin_class
         is_number = get_builtin_class("number")
         assert run_trampoline(_map_list__2, is_number, [1, "a", 3]) == 0
 
     def test_builtin_to_maplist3(self):
         """succ passed to maplist/3 — maps each element to its successor."""
+        # nv
         from clausal.logic.builtins import get_builtin_class
         succ = get_builtin_class("succ")
         results = run_trampoline_var(_map_list__3, succ, [0, 1, 2])
@@ -298,6 +329,7 @@ class TestBuiltinAsArgument:
 
     def test_builtin_to_filter(self):
         """integer passed to include/3 — keeps only integers."""
+        # nv
         from clausal.logic.builtins import get_builtin_class
         is_int = get_builtin_class("integer")
         results = run_trampoline_var(_include__3, is_int, [1, 2.5, 3, "x"])
@@ -305,6 +337,7 @@ class TestBuiltinAsArgument:
 
     def test_builtin_to_exclude(self):
         """integer passed to exclude/3 — removes integers."""
+        # nv
         from clausal.logic.builtins import get_builtin_class
         is_int = get_builtin_class("integer")
         results = run_trampoline_var(_exclude__3, is_int, [1, 2.5, 3, "x"])
@@ -312,6 +345,7 @@ class TestBuiltinAsArgument:
 
     def test_builtin_clausal_fixture(self):
         """Builtins passed as arguments in compiled .clausal code."""
+        # nv
         from clausal.testing import load_clausal_module, collect_tests, run_test
         mod = load_clausal_module("tests/fixtures/builtin_as_arg.clausal")
         tests = collect_tests(mod)

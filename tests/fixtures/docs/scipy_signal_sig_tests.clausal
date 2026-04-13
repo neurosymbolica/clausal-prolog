@@ -3,8 +3,8 @@
 
 Test("convolve exists") <- (
     Convolve([1.0, 2.0, 3.0], [0.0, 1.0, 0.5], R),
-    nonvar(R))
+    nonvar(R))  # nv
 
 Test("butterworth exists") <- (
     Butterworth(4, 0.2, "low", R),
-    nonvar(R))
+    nonvar(R))  # nv

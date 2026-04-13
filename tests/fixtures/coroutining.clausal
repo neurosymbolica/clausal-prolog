@@ -4,24 +4,24 @@
 Test("call_nth basic") <- (
     call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30
-)
+)  # nv
 
 # call_nth: N exceeds available solutions - fail
 Test("call_nth too few") <- (
     not call_nth(in_(X, [1, 2]), 5)
-)
+)  # nv
 
 # count_all: count members
 Test("count_all basic") <- (
     count_all(in_(X, ["a", "b", "c", "d"]), COUNT),
     COUNT is 4
-)
+)  # nv
 
 # count_all: no solutions - 0
 Test("count_all empty") <- (
     count_all(in_(X, []), COUNT),
     COUNT is 0
-)
+)  # nv
 
 # setup_call_cleanup: basic success
 Test("scc success") <- (
@@ -30,7 +30,7 @@ Test("scc success") <- (
         RESULT is 2,
         CLEANUP is 3,
     )
-)
+)  # nv
 
 # setup_call_cleanup: call fails - cleanup still runs, overall fails
 Test("scc call fails") <- (
@@ -39,7 +39,7 @@ Test("scc call fails") <- (
         in_(X, []),
         CLEANUP is 3,
     )
-)
+)  # nv
 
 # call_cleanup: sugar for SCC
 Test("call_cleanup basic") <- (
@@ -47,33 +47,33 @@ Test("call_cleanup basic") <- (
         RESULT is 42,
         CLEANUP is 99,
     )
-)
+)  # nv
 
 # freeze: already bound - immediate
 Test("freeze already bound") <- (
     X is 5,
     freeze(X, X > 0)
-)
+)  # nv
 
 # freeze: deferred until bound
 Test("freeze deferred") <- (
     freeze(X, Y is X),
     X is "hello",
     Y is "hello"
-)
+)  # nv
 
 # freeze: goal failure rejects unification
 Test("freeze rejects") <- (
     freeze(X, X > 100),
     not (X is 5)
-)
+)  # nv
 
 # when: nonvar condition
 Test("when is_bound") <- (
     when(nonvar(X), Y is X),
     X is 42,
     Y is 42
-)
+)  # nv
 
 # when: conjunction
 Test("when conjunction") <- (
@@ -81,7 +81,7 @@ Test("when conjunction") <- (
     X is 1,
     Y is 2,
     RESULT is "done"
-)
+)  # nv
 
 # ── Nesting inside other meta-predicates ──
 
@@ -89,13 +89,13 @@ Test("when conjunction") <- (
 Test("findall+callnth") <- (
     findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
     BAG is [20]
-)
+)  # nv
 
 # once wrapping count_all
 Test("once+countall") <- (
     once(count_all(in_(X, [1, 2, 3, 4, 5]), COUNT)),
     COUNT is 5
-)
+)  # nv
 
 # catch wrapping call_nth with bad N
 Test("catch+callnth error") <- (
@@ -105,7 +105,7 @@ Test("catch+callnth error") <- (
         RESULT is "caught",
     ),
     RESULT is "caught"
-)
+)  # nv
 
 # freeze inside findall
 Test("findall+freeze") <- (
@@ -115,7 +115,7 @@ Test("findall+freeze") <- (
         BAG,
     ),
     BAG is [99]
-)
+)  # nv
 
 # setup_call_cleanup inside once
 Test("once+scc") <- (
@@ -125,14 +125,14 @@ Test("once+scc") <- (
         CLEANUP is 3,
     )),
     X is "a"
-)
+)  # nv
 
 # call_nth inside freeze
 Test("freeze+callnth") <- (
     freeze(X, call_nth(in_(Y, [X]), 1)),
     X is 42,
     Y is 42
-)
+)  # nv
 
 # count_all inside findall
 Test("findall+countall") <- (
@@ -142,10 +142,10 @@ Test("findall+countall") <- (
         BAG,
     ),
     BAG is [3]
-)
+)  # nv
 
 # call_cleanup inside once
 Test("once+callcleanup") <- (
     once(call_cleanup(in_(X, [10, 20, 30]), RESULT is "cleaned")),
     X is 10
-)
+)  # nv

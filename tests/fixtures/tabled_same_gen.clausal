@@ -15,10 +15,10 @@ Sg(X, Y) <- (
 )
 
 
-Test("sg same") <- Sg(1, 1)
+Test("sg same") <- Sg(1, 1)  # nv
 Test("sg cousins of 4") <- (
     findall(TARGET, Sg(4, TARGET), TARGETS),
     sort(TARGETS, SORTED),
     in_(5, SORTED),
     in_(6, SORTED)
-)
+)  # nv

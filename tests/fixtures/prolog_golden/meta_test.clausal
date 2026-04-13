@@ -6,10 +6,10 @@ UniqueMembers(_numbers, _unique) <- (setof(X, in_(X, _numbers), _unique))
 
 AllPositive(_numbers) <- (forall(in_(X, _numbers), X > 0))
 
-Test('squares') <- (Squares([1, 2, 3], _squares), _squares == [1, 4, 9])
+Test('squares') <- (Squares([1, 2, 3], _squares), _squares == [1, 4, 9])  # nv
 
-Test('positives') <- (Positives([-1, 2, -3, 4], _positives), _positives == [2, 4])
+Test('positives') <- (Positives([-1, 2, -3, 4], _positives), _positives == [2, 4])  # nv
 
-Test('unique members') <- (UniqueMembers([1, 2, 1, 3, 2], _unique), _unique == [1, 2, 3])
+Test('unique members') <- (UniqueMembers([1, 2, 1, 3, 2], _unique), _unique == [1, 2, 3])  # nv
 
-Test('all positive') <- (AllPositive([1, 2, 3]))
+Test('all positive') <- (AllPositive([1, 2, 3]))  # nv

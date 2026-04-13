@@ -70,11 +70,13 @@ class TestListing:
         empty_pred._locked = False
 
     def test_no_clauses(self):
+        # nv
         output = _capture_listing(empty_pred)
         assert "no clauses" in output
         assert "empty_pred/1" in output
 
     def test_single_fact(self):
+        # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
         output = _capture_listing(color)
         assert "color/2" in output
@@ -82,6 +84,7 @@ class TestListing:
         assert "color(" in output
 
     def test_multiple_facts(self):
+        # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("green", "#00ff00"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
@@ -89,6 +92,7 @@ class TestListing:
         assert "3 clause(s)" in output
 
     def test_fact_with_ground_head(self):
+        # nv
         animal._assertz(Clause(animal("cat"), []))
         output = _capture_listing(animal)
         assert "animal(" in output
@@ -96,24 +100,28 @@ class TestListing:
 
     def test_instance_resolves_to_class(self):
         """listing with a PredicateMeta instance resolves to its class."""
+        # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
         inst = color("red", "#ff0000")
         output = _capture_listing(inst)
         assert "color/2" in output
 
     def test_non_predicate_error(self):
+        # nv
         trail = Trail()
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
             solutions(StepGenerator(dispatch, None, 42, trail))
 
     def test_fact_format_ends_with_dot(self):
+        # nv
         animal._assertz(Clause(animal("dog"), []))
         output = _capture_listing(animal)
         lines = [l for l in output.strip().split("\n") if not l.startswith("%")]
         assert all(l.endswith(".") for l in lines if l.strip())
 
     def test_clause_count_in_header(self):
+        # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
         output = _capture_listing(color)
@@ -124,25 +132,30 @@ class TestListing:
 
 class TestPortrayClause:
     def test_simple_string(self):
+        # nv
         output = _capture_portray("hello")
         assert "hello" in output
 
     def test_integer(self):
+        # nv
         output = _capture_portray(42)
         assert "42" in output
 
     def test_list(self):
+        # nv
         output = _capture_portray([1, 2, 3])
         assert "1" in output
         assert "2" in output
         assert "3" in output
 
     def test_nested_list(self):
+        # nv
         output = _capture_portray([[1, 2], [3, 4]])
         assert "1" in output
         assert "4" in output
 
     def test_unbound_var(self):
+        # nv
         v = Var()
         output = _capture_portray(v)
         assert output.strip().startswith("_")

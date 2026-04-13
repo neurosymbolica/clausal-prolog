@@ -36,64 +36,79 @@ class TestIsDeterministicGoal(unittest.TestCase):
     """Test _is_deterministic_goal classification."""
 
     def test_unify(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(Unify(left=Var(), right=42)))
 
     def test_evaluate(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(Evaluate(left=Var(), right=Add(left=1, right=2))))
 
     def test_does_not_unify(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(DoesNotUnify(left=Var(), right=42)))
 
     def test_structural_eq(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(ArithEq(left=1, right=1)))
 
     def test_structural_neq(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(ArithNeq(left=1, right=2)))
 
     def test_comparisons(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(Gt(left=Var(), right=0)))
         self.assertTrue(_is_deterministic_goal(Lt(left=Var(), right=0)))
         self.assertTrue(_is_deterministic_goal(GtE(left=Var(), right=0)))
         self.assertTrue(_is_deterministic_goal(LtE(left=Var(), right=0)))
 
     def test_in_notin(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(in_(left=1, right=[1, 2])))
         self.assertTrue(_is_deterministic_goal(NotIn(left=3, right=[1, 2])))
 
     def test_not(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(Not(operand=Gt(left=1, right=2))))
 
     def test_true_false(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(True))
         self.assertTrue(_is_deterministic_goal(False))
 
     def test_and_deterministic(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(
             And(left=Gt(left=Var(), right=0), right=Evaluate(left=Var(), right=Sub(left=Var(), right=1)))
         ))
 
     def test_and_nondeterministic(self):
+        # nv
         self.assertFalse(_is_deterministic_goal(
             And(left=Gt(left=Var(), right=0), right=Call(func=LoadName(name='Foo'), args=[], kwargs=[]))
         ))
 
     def test_predicate_call(self):
+        # nv
         self.assertFalse(_is_deterministic_goal(
             Call(func=LoadName(name='Foo'), args=[Var()], kwargs=[])
         ))
 
     def test_or_nondeterministic(self):
+        # nv
         self.assertFalse(_is_deterministic_goal(
             Or(left=Gt(left=Var(), right=0), right=Lt(left=Var(), right=0))
         ))
 
     def test_once_deterministic(self):
+        # nv
         inner = Call(func=LoadName(name='Foo'), args=[Var()], kwargs=[])
         self.assertTrue(_is_deterministic_goal(
             Call(func=LoadName(name='once'), args=[inner], kwargs=[])
         ))
 
     def test_findall_deterministic(self):
+        # nv
         self.assertTrue(_is_deterministic_goal(
             Call(func=LoadName(name='findall'), args=[Var(), Var(), Var()], kwargs=[])
         ))
@@ -111,12 +126,14 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_no_body(self):
         """Facts (no body) are not TRO-eligible."""
+        # nv
         cl, P, _ = self._make_clause(('x',), [])
         self.assertFalse(_detect_tro_clause('P', 1, cl))
 
     def test_last_goal_is_self_call(self):
         """Clause with only a self-recursive tail call is TRO-eligible
         if args are safe."""
+        # nv
         x = Var()
 
         class Q(metaclass=PredicateMeta):
@@ -131,6 +148,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_deterministic_prefix_with_self_call(self):
         """Deterministic prefix + self-recursive tail call is TRO-eligible."""
+        # nv
         n = Var()
         n1 = Var()
         result = Var()
@@ -150,6 +168,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_nondeterministic_prefix_rejected(self):
         """Predicate call in prefix makes clause non-TRO."""
+        # nv
         n = Var()
 
         class R(metaclass=PredicateMeta):
@@ -166,6 +185,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_different_functor_rejected(self):
         """Tail call to a different predicate is not self-recursive."""
+        # nv
         x = Var()
 
         class S(metaclass=PredicateMeta):
@@ -179,6 +199,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_no_prefix_body_only_vars_rejected(self):
         """Tail call with body-only vars and no prefix goals is rejected."""
+        # nv
         h = Var()
         t = Var()
         acc = Var()
@@ -200,6 +221,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_star_unpack_with_prefix_allowed(self):
         """StarUnpack in tail call is allowed when prefix goals exist."""
+        # nv
         h = Var()
         t = Var()
         acc = Var()
@@ -222,6 +244,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_nested_var_in_list_arg_no_prefix_rejected(self):
         """List arg containing head-decomposition Var, no prefix goals, is rejected."""
+        # nv
         x = Var()
         goals_var = Var()
         rest = Var()
@@ -243,6 +266,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_compound_arg_with_head_var_allowed_with_prefix(self):
         """Compound tail arg embedding head vars is allowed when prefix goals exist."""
+        # nv
         n = Var()
         n1 = Var()
         acc = Var()
@@ -266,6 +290,7 @@ class TestDetectTroClause(unittest.TestCase):
 
     def test_compound_arg_with_head_var_rejected_no_prefix(self):
         """Compound tail arg embedding head vars is rejected without prefix goals."""
+        # nv
         x = Var()
         y = Var()
 
@@ -313,6 +338,7 @@ class TestTroCorrectness(unittest.TestCase):
 
     def test_simple_countdown(self):
         """N > 0, N1 := N - 1, CountDown(N1) — deterministic prefix."""
+        # nv
         class CountDown(metaclass=PredicateMeta):
             _fields = ('n',)
 
@@ -334,6 +360,7 @@ class TestTroCorrectness(unittest.TestCase):
 
     def test_accumulator_sum(self):
         """AccSum([H|T], Acc, R) <- AccSum(T, Acc+H, R)."""
+        # nv
         class ASum(metaclass=PredicateMeta):
             _fields = ('list', 'acc', 'result')
 
@@ -353,6 +380,7 @@ class TestTroCorrectness(unittest.TestCase):
 
     def test_passthrough_variable(self):
         """Output variable passed through unchanged in tail call."""
+        # nv
         class Pass(metaclass=PredicateMeta):
             _fields = ('n', 'out')
 
@@ -380,6 +408,7 @@ class TestTroCorrectness(unittest.TestCase):
 
     def test_deep_recursion(self):
         """TRO handles deep recursion without excessive allocations."""
+        # nv
         class Deep(metaclass=PredicateMeta):
             _fields = ('n',)
 
@@ -475,6 +504,7 @@ class TestTroAllocations(unittest.TestCase):
 
     def test_tro_constant_allocations(self):
         """TRO predicate should use O(1) StepGenerators regardless of depth."""
+        # nv
         class TroCount(metaclass=PredicateMeta):
             _fields = ('n',)
 
@@ -522,6 +552,7 @@ class TestTroAllocations(unittest.TestCase):
 
     def test_non_tro_linear_allocations(self):
         """Non-TRO predicate (nondeterministic prefix) uses O(n) StepGenerators."""
+        # nv
         class Helper(metaclass=PredicateMeta):
             _fields = ('x',)
 
@@ -572,6 +603,7 @@ class TestTroAllocations(unittest.TestCase):
 
     def test_tro_with_passthrough_output(self):
         """TRO correctly binds output variable through passthrough."""
+        # nv
         class Acc(metaclass=PredicateMeta):
             _fields = ('n', 'acc', 'result')
 
@@ -625,6 +657,7 @@ class TestTroImportHook(unittest.TestCase):
 
     def test_fixture_loaded_with_tro(self):
         """tro_predicates.clausal should load and pass all inline tests."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         # Verify key predicates exist
@@ -633,6 +666,7 @@ class TestTroImportHook(unittest.TestCase):
 
     def test_fixture_accsum_correct(self):
         """AccSum via import hook produces correct results."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         AccSum = mod.__dict__['AccSum']
@@ -646,6 +680,7 @@ class TestTroImportHook(unittest.TestCase):
 
     def test_fixture_factorial_correct(self):
         """AccFactorial via import hook produces correct results."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         AccFactorial = mod.__dict__['AccFactorial']
@@ -659,6 +694,7 @@ class TestTroImportHook(unittest.TestCase):
 
     def test_fixture_tro_allocations(self):
         """TRO predicates from fixture use O(1) StepGenerators."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         AccLength = mod.__dict__['AccLength']
@@ -686,6 +722,7 @@ class TestTroGroundnessDispatch(unittest.TestCase):
 
     def test_mynthof_tro_across_buckets(self):
         """MyNthOf-style predicate: TRO restarts land in different bucket."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
         MyNthOf = mod.__dict__['MyNthOf']
@@ -701,6 +738,7 @@ class TestTroGroundnessDispatch(unittest.TestCase):
 
     def test_mynthof_tro_allocations(self):
         """MyNthOf uses O(1) StepGenerators via dispatch-level TRO."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
         MyNthOf = mod.__dict__['MyNthOf']
@@ -724,6 +762,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
 
     def test_acclength_with_unbound_list(self):
         """AccLength with unbound first arg falls back to StepGenerator (no TRO)."""
+        # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         AccLength = mod.__dict__['AccLength']
@@ -740,6 +779,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
 
     def test_check_indices_computed(self):
         """_get_tro_check_indices returns positions for head-decomposition vars."""
+        # nv
         from clausal.logic.compiler import _get_tro_check_indices
 
         class P(metaclass=PredicateMeta):
@@ -767,6 +807,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
 
     def test_get_tro_check_indices_with_head_decomposition(self):
         """Check indices include head-decomposition vars not bound by prefix."""
+        # nv
         from clausal.logic.compiler import _get_tro_check_indices, _detect_tro_clause
         from clausal.pythonic_ast.nodes import StarUnpack as _SU
 

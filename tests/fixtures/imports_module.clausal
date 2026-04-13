@@ -2,5 +2,5 @@
 
 UseImported(X, Y) <- tests.fixtures.importable_utils.Double(X, Y)
 
-Test("use imported 0") <- (UseImported(0, Y), Y == 0)
-Test("use imported 2") <- (UseImported(2, Y), Y == 4)
+Test("use imported 0") <- (UseImported(0, Y), Y == 0)  # nv
+Test("use imported 2") <- (UseImported(2, Y), Y == 4)  # nv

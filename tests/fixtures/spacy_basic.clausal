@@ -8,44 +8,44 @@ setup(DOC) <- (LoadModel("en_core_web_sm", "test") and Process("test", "Apple is
 
 # ── Model management ────────────────────────────────────────────────────────
 
-Test("load model") <- LoadModel("en_core_web_sm", "basic")
-Test("load model idempotent") <- (LoadModel("en_core_web_sm", "basic") and LoadModel("en_core_web_sm", "basic"))
-Test("current model") <- (LoadModel("en_core_web_sm", "cm") and CurrentModel("cm"))
+Test("load model") <- LoadModel("en_core_web_sm", "basic")  # nv
+Test("load model idempotent") <- (LoadModel("en_core_web_sm", "basic") and LoadModel("en_core_web_sm", "basic"))  # nv
+Test("current model") <- (LoadModel("en_core_web_sm", "cm") and CurrentModel("cm"))  # nv
 
 # ── Token iteration ─────────────────────────────────────────────────────────
 
-Test("token iteration") <- (setup(DOC) and Token(DOC, TOK) and TokenText(TOK, "Apple"))
+Test("token iteration") <- (setup(DOC) and Token(DOC, TOK) and TokenText(TOK, "Apple"))  # nv
 
-Test("token by index") <- (setup(DOC) and Token(DOC, 0, TOK) and TokenText(TOK, "Apple"))
+Test("token by index") <- (setup(DOC) and Token(DOC, 0, TOK) and TokenText(TOK, "Apple"))  # nv
 
-Test("token list") <- (setup(DOC) and TokenList(DOC, TOKS) and FIRST is ++TOKS[0] and T is ++FIRST["text"] and T == "Apple")
+Test("token list") <- (setup(DOC) and TokenList(DOC, TOKS) and FIRST is ++TOKS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
 
 # ── Annotations ─────────────────────────────────────────────────────────────
 
-Test("pos tag") <- (setup(DOC) and Token(DOC, 0, TOK) and Pos(TOK, P) and P == "PROPN")
+Test("pos tag") <- (setup(DOC) and Token(DOC, 0, TOK) and Pos(TOK, P) and P == "PROPN")  # nv
 
-Test("lemma") <- (setup(DOC) and Token(DOC, 2, TOK) and Lemma(TOK, L) and L == "look")
+Test("lemma") <- (setup(DOC) and Token(DOC, 2, TOK) and Lemma(TOK, L) and L == "look")  # nv
 
-Test("dep label") <- (setup(DOC) and Token(DOC, 0, TOK) and Dep(TOK, D) and D == "nsubj")
+Test("dep label") <- (setup(DOC) and Token(DOC, 0, TOK) and Dep(TOK, D) and D == "nsubj")  # nv
 
-Test("shape") <- (setup(DOC) and Token(DOC, 0, TOK) and Shape(TOK, S) and S == "Xxxxx")
+Test("shape") <- (setup(DOC) and Token(DOC, 0, TOK) and Shape(TOK, S) and S == "Xxxxx")  # nv
 
-Test("is alpha") <- (setup(DOC) and Token(DOC, 0, TOK) and IsAlpha(TOK))
+Test("is alpha") <- (setup(DOC) and Token(DOC, 0, TOK) and IsAlpha(TOK))  # nv
 
 # ── NER ─────────────────────────────────────────────────────────────────────
 
-Test("entity iteration") <- (setup(DOC) and Entity(DOC, E) and T is ++E["text"] and T == "Apple")
+Test("entity iteration") <- (setup(DOC) and Entity(DOC, E) and T is ++E["text"] and T == "Apple")  # nv
 
-Test("entity by label") <- (setup(DOC) and Entity(DOC, "ORG", E) and T is ++E["text"] and T == "Apple")
+Test("entity by label") <- (setup(DOC) and Entity(DOC, "ORG", E) and T is ++E["text"] and T == "Apple")  # nv
 
-Test("entity list") <- (setup(DOC) and EntityList(DOC, ENTS) and FIRST is ++ENTS[0] and T is ++FIRST["text"] and T == "Apple")
+Test("entity list") <- (setup(DOC) and EntityList(DOC, ENTS) and FIRST is ++ENTS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
 
 # ── Sentences ───────────────────────────────────────────────────────────────
 
-Test("sentence iteration") <- (setup(DOC) and Sentence(DOC, S) and S == "Apple is looking at buying U.K. startup for $1 billion.")
+Test("sentence iteration") <- (setup(DOC) and Sentence(DOC, S) and S == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
-Test("sentence list") <- (setup(DOC) and SentenceList(DOC, SENTS) and FIRST is ++SENTS[0] and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")
+Test("sentence list") <- (setup(DOC) and SentenceList(DOC, SENTS) and FIRST is ++SENTS[0] and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
 # ── Noun chunks ─────────────────────────────────────────────────────────────
 
-Test("noun chunk") <- (setup(DOC) and NounChunk(DOC, C) and T is ++C["text"] and T == "Apple")
+Test("noun chunk") <- (setup(DOC) and NounChunk(DOC, C) and T is ++C["text"] and T == "Apple")  # nv

@@ -27,7 +27,7 @@ AllPositive(NUMBERS) <- (
 )
 
 
-Test("squares") <- (Squares([1, 2, 3], SQUARES), SQUARES == [1, 4, 9])
-Test("positives") <- (Positives([-1, 2, -3, 4], POSITIVES), POSITIVES == [2, 4])
-Test("unique members") <- (UniqueMembers([1, 2, 1, 3, 2], UNIQUE), UNIQUE == [1, 2, 3])
-Test("all positive") <- AllPositive([1, 2, 3])
+Test("squares") <- (Squares([1, 2, 3], SQUARES), SQUARES == [1, 4, 9])  # nv
+Test("positives") <- (Positives([-1, 2, -3, 4], POSITIVES), POSITIVES == [2, 4])  # nv
+Test("unique members") <- (UniqueMembers([1, 2, 1, 3, 2], UNIQUE), UNIQUE == [1, 2, 3])  # nv
+Test("all positive") <- AllPositive([1, 2, 3])  # nv

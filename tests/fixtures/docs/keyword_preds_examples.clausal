@@ -7,19 +7,19 @@ point(x=1, y=2, z=3),
 Test("vary") <- (
     vary({"y": 99}, point(1, 2, 3), RESULT),
     RESULT == point(1, 99, 3)
-)
+)  # nv
 # --8<-- [end:quick_example]
 
 # --8<-- [start:vary_examples]
 Test("change one field") <- (
     vary({"x": 100}, point(1, 2, 3), R),
     R == point(100, 2, 3)
-)
+)  # nv
 
 Test("change multiple") <- (
     vary({"x": 10, "z": 30}, point(1, 2, 3), R),
     R == point(10, 2, 30)
-)
+)  # nv
 # --8<-- [end:vary_examples]
 
 # --8<-- [start:unbound_keys_examples]
@@ -28,14 +28,14 @@ Test("unbound") <- (
     in_("y", KEYS),
     in_("z", KEYS),
     length(KEYS, 2)
-)
+)  # nv
 
-Test("fully bound") <- unbound_keys(point(1, 2, 3), [])
+Test("fully bound") <- unbound_keys(point(1, 2, 3), [])  # nv
 # --8<-- [end:unbound_keys_examples]
 
 # --8<-- [start:signature_example]
 Test("signature") <- (
     signature("point", 3, NAMES),
     NAMES == ["x", "y", "z"]
-)
+)  # nv
 # --8<-- [end:signature_example]

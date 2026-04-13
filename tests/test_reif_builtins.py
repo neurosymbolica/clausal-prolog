@@ -30,6 +30,7 @@ class TestEq3:
 
     def test_ground_equal(self):
         """eq(1, 1, T) → T = True."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run(1, 1, t, trail)
@@ -38,6 +39,7 @@ class TestEq3:
 
     def test_ground_incompatible(self):
         """eq(1, 2, T) → T = False."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run(1, 2, t, trail)
@@ -46,6 +48,7 @@ class TestEq3:
 
     def test_identical_var(self):
         """eq(X, X, T) with same var → T = True."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -55,6 +58,7 @@ class TestEq3:
 
     def test_undetermined_explores_both(self):
         """eq(X, 1, T) with X unbound → two solutions."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -69,6 +73,7 @@ class TestEq3:
 
     def test_undetermined_two_vars(self):
         """eq(X, Y, T) with X,Y unbound → two solutions."""
+        # nv
         trail = Trail()
         x = Var()
         y = Var()
@@ -82,6 +87,7 @@ class TestEq3:
 
     def test_ground_string_equal(self):
         """eq("hello", "hello", T) → T = True."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run("hello", "hello", t, trail)
@@ -90,6 +96,7 @@ class TestEq3:
 
     def test_ground_string_different(self):
         """eq("hello", "world", T) → T = False."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run("hello", "world", t, trail)
@@ -98,6 +105,7 @@ class TestEq3:
 
     def test_ground_type_mismatch(self):
         """eq(1, "1", T) → T = False."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run(1, "1", t, trail)
@@ -106,30 +114,35 @@ class TestEq3:
 
     def test_t_already_bound_true_matches(self):
         """eq(1, 1, True) — T already True, condition true → succeeds."""
+        # nv
         trail = Trail()
         results = list(eq__3(1, 1, True, trail, None))
         assert len(results) == 1
 
     def test_t_already_bound_true_mismatch(self):
         """eq(1, 2, True) — T=True but 1≠2 → fails."""
+        # nv
         trail = Trail()
         results = list(eq__3(1, 2, True, trail, None))
         assert len(results) == 0
 
     def test_t_already_bound_false_matches(self):
         """eq(1, 2, False) — T already False, condition false → succeeds."""
+        # nv
         trail = Trail()
         results = list(eq__3(1, 2, False, trail, None))
         assert len(results) == 1
 
     def test_t_already_bound_false_mismatch(self):
         """eq(1, 1, False) — T=False but 1=1 → fails."""
+        # nv
         trail = Trail()
         results = list(eq__3(1, 1, False, trail, None))
         assert len(results) == 0
 
     def test_no_side_effects(self):
         """eq/3 should not leave bindings on the trail after exhaustion."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -141,6 +154,7 @@ class TestEq3:
 
     def test_list_equal(self):
         """eq([1,2], [1,2], T) → T = True."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run([1, 2], [1, 2], t, trail)
@@ -149,6 +163,7 @@ class TestEq3:
 
     def test_list_different(self):
         """eq([1,2], [1,3], T) → T = False."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run([1, 2], [1, 3], t, trail)
@@ -157,6 +172,7 @@ class TestEq3:
 
     def test_list_with_var(self):
         """eq([X, 2], [1, 2], T) with X unbound → undetermined."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -180,6 +196,7 @@ class TestDifT3:
 
     def test_ground_different(self):
         """dif_t(1, 2, T) → T = True (they are definitely different)."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run(1, 2, t, trail)
@@ -188,6 +205,7 @@ class TestDifT3:
 
     def test_ground_equal(self):
         """dif_t(1, 1, T) → T = False (they are equal, dif fails)."""
+        # nv
         trail = Trail()
         t = Var()
         results = self._run(1, 1, t, trail)
@@ -196,6 +214,7 @@ class TestDifT3:
 
     def test_identical_var(self):
         """dif_t(X, X, T) with same var → T = False."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -205,6 +224,7 @@ class TestDifT3:
 
     def test_undetermined_explores_both(self):
         """dif_t(X, 1, T) with X unbound → two solutions."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -218,18 +238,21 @@ class TestDifT3:
 
     def test_t_already_bound_true_matches(self):
         """dif_t(1, 2, True) → succeeds (they're different)."""
+        # nv
         trail = Trail()
         results = list(dif_t__3(1, 2, True, trail, None))
         assert len(results) == 1
 
     def test_t_already_bound_true_mismatch(self):
         """dif_t(1, 1, True) → fails (they're equal, dif_t returns False)."""
+        # nv
         trail = Trail()
         results = list(dif_t__3(1, 1, True, trail, None))
         assert len(results) == 0
 
     def test_no_side_effects(self):
         """dif_t/3 should not leave bindings after exhaustion."""
+        # nv
         trail = Trail()
         x = Var()
         t = Var()
@@ -239,6 +262,7 @@ class TestDifT3:
 
     def test_inverse_of_eq(self):
         """eq and dif_t should produce opposite truth values for same args."""
+        # nv
         trail = Trail()
         # Ground case: collect truth values during iteration
         t1 = Var()
@@ -260,15 +284,18 @@ class TestReifBuiltinRegistration:
     """Test that eq/3 and dif_t/3 are properly registered as builtins."""
 
     def test_eq_registered(self):
+        # nv
         from clausal.logic.builtins import _BUILTINS
         assert ("eq", 3) in _BUILTINS
 
     def test_dif_t_registered(self):
+        # nv
         from clausal.logic.builtins import _BUILTINS
         assert ("dif_t", 3) in _BUILTINS
 
     def test_eq_via_get_builtin_dispatch(self):
         """eq/3 should be findable via get_builtin_dispatch."""
+        # nv
         from clausal.logic.builtins import get_builtin_dispatch
         from clausal.logic.database import Database
         db = Database()
@@ -277,6 +304,7 @@ class TestReifBuiltinRegistration:
 
     def test_dif_t_via_get_builtin_dispatch(self):
         """dif_t/3 should be findable via get_builtin_dispatch."""
+        # nv
         from clausal.logic.builtins import get_builtin_dispatch
         from clausal.logic.database import Database
         db = Database()
@@ -298,6 +326,7 @@ class TestReifCompiledIntegration:
 
     def test_eq_from_clausal_file(self):
         """eq/3 called from a .clausal predicate."""
+        # nv
         mod = self._load_fixture("reif_eq_test.clausal")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -310,6 +339,7 @@ class TestReifCompiledIntegration:
         assert results[0]["t"] is True
 
     def test_eq_ground_false_from_clausal(self):
+        # nv
         mod = self._load_fixture("reif_eq_test.clausal")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -322,6 +352,7 @@ class TestReifCompiledIntegration:
         assert results[0]["t"] is False
 
     def test_eq_undetermined_from_clausal(self):
+        # nv
         mod = self._load_fixture("reif_eq_test.clausal")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -353,6 +384,7 @@ class TestMemberdT:
 
     def test_ground_member_true(self):
         """memberd_t(1, [1,2,3], T) → T = True."""
+        # nv
         mod = self._load_stdlib_reif()
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -366,6 +398,7 @@ class TestMemberdT:
 
     def test_ground_member_false(self):
         """memberd_t(99, [1,2,3], T) → T = False."""
+        # nv
         mod = self._load_stdlib_reif()
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -379,6 +412,7 @@ class TestMemberdT:
 
     def test_empty_list(self):
         """memberd_t(1, [], T) → T = False."""
+        # nv
         mod = self._load_stdlib_reif()
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
@@ -392,6 +426,7 @@ class TestMemberdT:
 
     def test_unbound_element_explores_branches(self):
         """memberd_t(X, [1,2], T) with X unbound → explores possibilities."""
+        # nv
         mod = self._load_stdlib_reif()
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName

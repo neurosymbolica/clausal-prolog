@@ -15,6 +15,7 @@ from clausal.pythonic_ast.nodes import ArithEq, LtE, CompareChain
 
 class TestClpqErrorPaths:
     def test_unsupported_node_raises(self):
+        # nv
         from clausal.logic.clpq import clpq_constraint_block
         trail = Trail()
         with pytest.raises(TypeError, match="unsupported node"):
@@ -22,6 +23,7 @@ class TestClpqErrorPaths:
 
     def test_disequality_conflict(self):
         """ArithNeq + ArithEq on same value fails."""
+        # nv
         from clausal.logic.clpq import clpq_constraint_block
         from clausal.pythonic_ast.nodes import ArithNeq
         trail = Trail()
@@ -34,12 +36,14 @@ class TestClpqErrorPaths:
 
 class TestClprErrorPaths:
     def test_unsupported_node_raises(self):
+        # nv
         from clausal.logic.clpr import clpr_constraint_block
         trail = Trail()
         with pytest.raises(TypeError, match="unsupported node"):
             clpr_constraint_block(("not_a_constraint",), trail)
 
     def test_infeasible_returns_false(self):
+        # nv
         from clausal.logic.clpr import clpr_constraint_block
         from clausal.pythonic_ast.nodes import GtE
         trail = Trail()
@@ -52,6 +56,7 @@ class TestClprErrorPaths:
 
 class TestClpqEntailed:
     def test_entailed_by_bounds(self):
+        # nv
         from clausal.logic.clpq import clpq_constraint_block, entailed
         trail = Trail()
         x = Var()

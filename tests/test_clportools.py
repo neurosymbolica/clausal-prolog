@@ -50,6 +50,7 @@ from clausal.pythonic_ast.nodes import LtE
 class TestCPSATVarInfrastructure:
 
     def test_var_mapping_bidirectional(self):
+        # nv
         trail = Trail()
         x = Var()
         state = get_cpsat_state(trail)
@@ -59,6 +60,7 @@ class TestCPSATVarInfrastructure:
         assert state.rev_map[cpsat_x.Index()] is x
 
     def test_var_mapping_idempotent(self):
+        # nv
         trail = Trail()
         x = Var()
         v1 = or_var_for(x, 0, 10, trail)
@@ -66,6 +68,7 @@ class TestCPSATVarInfrastructure:
         assert v1 is v2
 
     def test_bool_var_mapping(self):
+        # nv
         trail = Trail()
         b = Var()
         cpsat_b = or_bool_for(b, trail)
@@ -74,6 +77,7 @@ class TestCPSATVarInfrastructure:
         assert state.rev_map[cpsat_b.Index()] is b
 
     def test_sparse_domain(self):
+        # nv
         trail = Trail()
         x = Var()
         cpsat_x = or_var_from_domain(x, [1, 3, 5, 7], trail)
@@ -81,6 +85,7 @@ class TestCPSATVarInfrastructure:
         assert id(x) in state.var_map
 
     def test_ground_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         unify(x, 1, trail)
@@ -88,6 +93,7 @@ class TestCPSATVarInfrastructure:
             or_var_for(x, 0, 10, trail)
 
     def test_state_cleanup_on_gc(self):
+        # nv
         trail = Trail()
         get_cpsat_state(trail)
         tid = id(trail)
@@ -101,6 +107,7 @@ class TestCPSATBacktrackingMechanism:
     """Tests the activation-literal backtracking mechanism (mark/undo)."""
 
     def test_backtracking_retracts_constraints(self):
+        # nv
         trail = Trail()
         x = Var()
         cpsat_x = or_var_for(x, 0, 10, trail)
@@ -115,6 +122,7 @@ class TestCPSATBacktrackingMechanism:
         assert or_check(trail)
 
     def test_nested_backtracking(self):
+        # nv
         trail = Trail()
         x = Var()
         cpsat_x = or_var_for(x, 0, 10, trail)
@@ -131,6 +139,7 @@ class TestCPSATBacktrackingMechanism:
         assert or_check(trail)
 
     def test_three_nested_scopes(self):
+        # nv
         trail = Trail()
         x = Var()
         cpsat_x = or_var_for(x, 0, 100, trail)
@@ -155,6 +164,7 @@ class TestCPSATBacktrackingMechanism:
 
     def test_label_blocking_clauses_scoped(self):
         """Blocking clauses from label_or don't persist across calls."""
+        # nv
         trail = Trail()
         x = Var()
         or_in(x, 1, 10, trail)
@@ -173,6 +183,7 @@ class TestCPSATScheduling:
     """Scheduling uses IntervalVar objects — can't be tested from .clausal yet."""
 
     def test_simple_no_overlap(self):
+        # nv
         trail = Trail()
         s1, s2 = Var(), Var()
         e1, e2 = Var(), Var()
@@ -192,6 +203,7 @@ class TestCPSATScheduling:
         assert all(abs(a - b) >= 3 for a, b in sols)
 
     def test_no_overlap_unsat(self):
+        # nv
         trail = Trail()
         starts = [Var() for _ in range(3)]
         ends = [Var() for _ in range(3)]
@@ -208,6 +220,7 @@ class TestCPSATScheduling:
         assert not or_check(trail)
 
     def test_cumulative_allows_overlap(self):
+        # nv
         trail = Trail()
         s1, s2 = Var(), Var()
         e1, e2 = Var(), Var()
@@ -223,6 +236,7 @@ class TestCPSATScheduling:
         assert or_check(trail)
 
     def test_2d_packing(self):
+        # nv
         trail = Trail()
         x1, x2, y1, y2 = Var(), Var(), Var(), Var()
         xe1, xe2, ye1, ye2 = Var(), Var(), Var(), Var()
@@ -240,6 +254,7 @@ class TestCPSATScheduling:
         assert or_check(trail)
 
     def test_job_shop(self):
+        # nv
         trail = Trail()
         s00, e00, s01, e01 = Var(), Var(), Var(), Var()
         s10, e10, s11, e11 = Var(), Var(), Var(), Var()
@@ -262,6 +277,7 @@ class TestCPSATScheduling:
         assert or_check(trail)
 
     def test_scheduling_backtrack(self):
+        # nv
         trail = Trail()
         s1, s2 = Var(), Var()
         e1, e2 = Var(), Var()
@@ -286,6 +302,7 @@ class TestCPSATCircuit:
     """Circuit uses BoolVar arc literals — can't be tested from .clausal yet."""
 
     def test_tsp_3_cities(self):
+        # nv
         trail = Trail()
         arcs_vars = {}
         for i in range(3):
@@ -299,6 +316,7 @@ class TestCPSATCircuit:
         assert or_check(trail)
 
     def test_circuit_2_nodes(self):
+        # nv
         trail = Trail()
         a01, a10 = Var(), Var()
         or_bool(a01, trail)
@@ -310,33 +328,41 @@ class TestCPSATCircuit:
 class TestORToolsBuiltinRegistration:
 
     def test_cpsat_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.cpsat", 1) is not None
 
     def test_cpsat_in_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.cpsat.in", 3) is not None
 
     def test_cpsat_solve_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.cpsat.solve", 1) is not None
 
     def test_glop_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.glop", 1) is not None
 
     def test_scip_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.scip", 1) is not None
 
     def test_max_flow_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.graph.max_flow", 4) is not None
 
     def test_tsp_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.routing.tsp", 4) is not None
 
     def test_knapsack_registered(self):
+        # nv
         from clausal.logic.builtins._registry import get_builtin_predicate
         assert get_builtin_predicate("ortools.knapsack", 5) is not None

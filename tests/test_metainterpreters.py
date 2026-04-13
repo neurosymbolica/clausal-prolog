@@ -58,6 +58,7 @@ class TestSolveBindings:
 
     def test_natnum_binds_variable(self, mod):
         """Solve [natnum(X)] should enumerate X = 0, succ(0), succ(succ(0)), ..."""
+        # nv
         Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -79,6 +80,7 @@ class TestSolveBindings:
 
     def test_edge_binds_destination(self, mod):
         """Solve [edge(a, Y)] should enumerate Y = b."""
+        # nv
         _, _, Edge, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -93,6 +95,7 @@ class TestSolveBindings:
 
     def test_path_binds_destination(self, mod):
         """Solve [path(a, Y)] should find Y = b, c, d."""
+        # nv
         _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -117,6 +120,7 @@ class TestSolveCount:
 
     def test_count_single_fact(self, mod):
         """Resolving a single fact takes 1 inference step."""
+        # nv
         Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -129,6 +133,7 @@ class TestSolveCount:
 
     def test_count_path_transitive(self, mod):
         """path(a,c) via edge(a,b) + path(b,c) via edge(b,c) = 4 steps."""
+        # nv
         _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -147,6 +152,7 @@ class TestSolveLimit:
 
     def test_depth_0_fails_on_any_goal(self, mod):
         """Depth 0 means no resolution steps allowed — any non-empty goal list fails."""
+        # nv
         Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -158,6 +164,7 @@ class TestSolveLimit:
 
     def test_exact_depth_succeeds(self, mod):
         """natnum(succ(succ(succ(0)))) needs exactly 4 steps."""
+        # nv
         Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -179,6 +186,7 @@ class TestSolveIterativeDeepening:
 
     def test_finds_path_in_cyclic_graph(self, mod):
         """Iterative deepening finds path(a,b) in graph with a→b→a cycle."""
+        # nv
         _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -200,6 +208,7 @@ class TestSolveTree:
 
     def test_fact_tree(self, mod):
         """Proof tree for a fact is [goal, []]."""
+        # nv
         Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -213,6 +222,7 @@ class TestSolveTree:
 
     def test_recursive_tree_structure(self, mod):
         """Proof tree for natnum(succ(0)) has correct nesting."""
+        # nv
         Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
@@ -231,6 +241,7 @@ class TestSolveTree:
 
     def test_transitive_path_tree(self, mod):
         """Proof tree for path(a,c) shows edge(a,b) + path(b,c) subtree."""
+        # nv
         _, _, Edge, Path = _terms(mod)
         m = _module(mod)
         p = Var()

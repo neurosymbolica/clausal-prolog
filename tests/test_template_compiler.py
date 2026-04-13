@@ -52,22 +52,27 @@ class BinOp:
 
 class TestDetection:
     def test_empty_dict_decorator_detected(self):
+        # nv
         tree = ast.parse("@{}\ndef f(X): pass")
         assert is_template_func(tree.body[0])
 
     def test_no_decorator_not_detected(self):
+        # nv
         tree = ast.parse("def f(X): pass")
         assert not is_template_func(tree.body[0])
 
     def test_non_empty_dict_not_detected(self):
+        # nv
         tree = ast.parse("@{1: 2}\ndef f(X): pass")
         assert not is_template_func(tree.body[0])
 
     def test_multiple_decorators_not_detected(self):
+        # nv
         tree = ast.parse("@{}\n@other\ndef f(X): pass")
         assert not is_template_func(tree.body[0])
 
     def test_class_not_detected(self):
+        # nv
         tree = ast.parse("@{}\nclass C: pass")
         assert not is_template_func(tree.body[0])
 
@@ -78,21 +83,25 @@ class TestDetection:
 
 class TestIdentifiers:
     def test_function_name(self):
+        # nv
         src = "@{}\ndef t(NAME):\n    def NAME(self): pass"
         result = compile_and_run(src, "result = t('greet')")
         assert "def greet" in unparse_result(result)
 
     def test_argument_name(self):
+        # nv
         src = "@{}\ndef t(FN):\n    def foo(self, FN): pass"
         result = compile_and_run(src, "result = t('visitor')")
         assert "visitor" in unparse_result(result)
 
     def test_name_in_expression(self):
+        # nv
         src = "@{}\ndef t(FN):\n    def foo(self):\n        FN.visit(self)"
         result = compile_and_run(src, "result = t('v')")
         assert "v.visit(self)" in unparse_result(result)
 
     def test_multiple_substitutions(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(VISIT, FN):
@@ -105,6 +114,7 @@ class TestIdentifiers:
         assert "visitor" in out
 
     def test_default_parameter_values(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(NAME='greet'):
@@ -114,11 +124,13 @@ class TestIdentifiers:
         assert "def greet" in unparse_result(result)
 
     def test_class_name_substitution(self):
+        # nv
         src = "@{}\ndef t(CLS):\n    class CLS: pass"
         result = compile_and_run(src, "result = t('MyClass')")
         assert "class MyClass" in unparse_result(result)
 
     def test_attribute_name_not_substituted(self):
+        # nv
         src = "@{}\ndef t(X):\n    def foo(self):\n        self.X = 1"
         result = compile_and_run(src, "result = t('hello')")
         # X in self.X is an attribute, not an identifier field that we sub
@@ -132,6 +144,7 @@ class TestIdentifiers:
 
 class TestEscapes:
     def test_single_escape(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(NAME):
@@ -148,6 +161,7 @@ class TestEscapes:
         assert "before" in out and "after" in out
 
     def test_multi_escape(self):
+        # nv
         src = "@{}\ndef t(F):\n    def F(self):\n        {a, b}"
         result = compile_and_run(src, "result = t('f')", {
             "a": ast.parse("x = 1").body[0],
@@ -157,6 +171,7 @@ class TestEscapes:
         assert "x = 1" in out and "y = 2" in out
 
     def test_star_escape(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(F):
@@ -173,6 +188,7 @@ class TestEscapes:
         assert "return self.x" in out
 
     def test_comprehension_escape(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(NAME):
@@ -191,6 +207,7 @@ class TestEscapes:
         assert "print('c')" in out
 
     def test_comprehension_with_filter(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(NAME):
@@ -209,6 +226,7 @@ class TestEscapes:
         assert "op" not in out
 
     def test_escape_returns_list(self):
+        # nv
         src = "@{}\ndef t(F):\n    def F(self):\n        {stmts}"
         stmts = ast.parse("a = 1\nb = 2").body
         result = compile_and_run(src, "result = t('f')",
@@ -217,6 +235,7 @@ class TestEscapes:
         assert "a = 1" in out and "b = 2" in out
 
     def test_nested_if_else_escapes(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(FN):
@@ -240,6 +259,7 @@ class TestEscapes:
 
 class TestMagicArgs:
     def test_args_from_arguments(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__={a}): pass"
         args = ast.arguments(
             posonlyargs=[], args=[ast.arg(arg="self"), ast.arg(arg="x")],
@@ -248,12 +268,14 @@ class TestMagicArgs:
         assert "def f(self, x)" in unparse_result(result)
 
     def test_args_from_single_arg(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__={a}): pass"
         result = compile_and_run(src, "result = t('f')",
                                  {"a": ast.arg(arg="self")})
         assert "def f(self)" in unparse_result(result)
 
     def test_args_from_tuple(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__={a}): pass"
         result = compile_and_run(src, "result = t('f')", {
             "a": (ast.arg(arg="self"), ast.arg(arg="x")),
@@ -261,6 +283,7 @@ class TestMagicArgs:
         assert "def f(self, x)" in unparse_result(result)
 
     def test_args_from_expression(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__={build(names)}): pass"
         def build(names):
             return ast.arguments(
@@ -275,6 +298,7 @@ class TestMagicArgs:
 
     def test_args_with_body_escape(self):
         """The motivating use case: dataclass __init__."""
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(NAME):
@@ -303,6 +327,7 @@ class TestMagicArgs:
         assert "self.right = right" in out
 
     def test_args_not_sole_param_raises(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__={a}, other={b}): pass"
         with pytest.raises(TemplateCompileError, match="sole parameter"):
             compile_and_run(src, "result = t('f')", {
@@ -310,6 +335,7 @@ class TestMagicArgs:
             })
 
     def test_args_no_default_raises(self):
+        # nv
         src = "@{}\ndef t(N):\n    def N(__args__): pass"
         with pytest.raises(TemplateCompileError, match="default"):
             compile_and_run(src, "result = t('f')")
@@ -321,6 +347,7 @@ class TestMagicArgs:
 
 class TestClassTemplates:
     def test_simple_class(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS):
@@ -331,6 +358,7 @@ class TestClassTemplates:
         assert "class Widget" in unparse_result(result)
 
     def test_class_with_base(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS, BASE):
@@ -341,6 +369,7 @@ class TestClassTemplates:
         assert "class Widget(QObject)" in unparse_result(result)
 
     def test_class_with_magic_bases(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS):
@@ -354,6 +383,7 @@ class TestClassTemplates:
         assert "class C(Base1, Base2)" in out
 
     def test_class_with_magic_bases_single_expr(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS):
@@ -365,6 +395,7 @@ class TestClassTemplates:
         assert "class C(MyBase)" in unparse_result(result)
 
     def test_class_with_magic_bases_tuple(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS):
@@ -377,6 +408,7 @@ class TestClassTemplates:
         assert "class C(A, B)" in unparse_result(result)
 
     def test_class_with_body_escapes(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS):
@@ -395,6 +427,7 @@ class TestClassTemplates:
         assert "def bar(self)" in out
 
     def test_class_with_methods_and_bases(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS, BASE):
@@ -423,6 +456,7 @@ class TestClassTemplates:
 
     def test_full_dataclass_expansion(self):
         """Generate a full class with __init__ + visitor from a dataclass."""
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(CLS, VISIT):
@@ -458,12 +492,14 @@ class TestClassTemplates:
 
 class TestLineNumbers:
     def test_function_keeps_original_line(self):
+        # nv
         src = "@{}\ndef t(X):\n    def X(self): pass"
         tree = transform_module_ast(ast.parse(src))
         func = tree.body[0]
         assert func.lineno == 2  # @{} is line 1, def is line 2
 
     def test_escape_gets_original_line(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(X):
@@ -485,20 +521,24 @@ class TestLineNumbers:
 
 class TestEdgeCases:
     def test_non_template_function_unchanged(self):
+        # nv
         src = "def normal(x): return x + 1"
         assert "return x + 1" in transform_module(src)
 
     def test_template_with_no_subs(self):
+        # nv
         src = "@{}\ndef t():\n    def foo(): pass"
         result = compile_and_run(src, "result = t()")
         assert "def foo" in unparse_result(result)
 
     def test_compile_non_template_raises(self):
+        # nv
         tree = ast.parse("def f(): pass")
         with pytest.raises(TemplateCompileError):
             compile_template_func(tree.body[0])
 
     def test_multiple_templates_in_module(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t1(A):
@@ -513,6 +553,7 @@ class TestEdgeCases:
 
     def test_escape_with_single_stmt_node(self):
         """Escape returning a single AST node (not a list)."""
+        # nv
         src = "@{}\ndef t(F):\n    def F(self):\n        {s}"
         result = compile_and_run(src, "result = t('f')", {
             "s": ast.parse("x = 1").body[0],
@@ -526,6 +567,7 @@ class TestEdgeCases:
 
 class TestStringCallable:
     def test_string_callable_becomes_name(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t():
@@ -538,6 +580,7 @@ class TestStringCallable:
         assert call.func.id == '+'
 
     def test_string_callable_with_substitution(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t(OP):
@@ -551,6 +594,7 @@ class TestStringCallable:
 
     def test_identifier_string_callable_in_comp_escape(self):
         # 'make'(x) in a comprehension escape → make(x) at runtime
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t():
@@ -567,6 +611,7 @@ class TestStringCallable:
 
     def test_nonidentifier_string_callable_in_comp_escape(self):
         # '+='(a, b) in a comprehension escape → globals()['+='](a, b) at runtime
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t():
@@ -583,6 +628,7 @@ class TestStringCallable:
 
     def test_identifier_string_callable_in_single_escape(self):
         # {'make'(x)} — single escape
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t():
@@ -593,6 +639,7 @@ class TestStringCallable:
         assert len(result) == 1
 
     def test_nonidentifier_string_callable_in_single_escape(self):
+        # nv
         src = textwrap.dedent("""\
             @{}
             def t():
@@ -628,28 +675,34 @@ def _args(*names: str) -> ast.arguments:
 
 class TestFunctiondefToFunction:
     def test_basic_return_value(self):
+        # nv
         f = functiondef_to_function(ast.parse("def f(): return 1").body[0])
         assert f() == 1
 
     def test_name_from_node(self):
+        # nv
         f = functiondef_to_function(ast.parse("def my_func(): pass").body[0])
         assert f.__name__ == "my_func"
 
     def test_single_parameter(self):
+        # nv
         f = functiondef_to_function(ast.parse("def double(x): return x * 2").body[0])
         assert f(5) == 10
 
     def test_multiple_parameters(self):
+        # nv
         f = functiondef_to_function(ast.parse("def add(x, y): return x + y").body[0])
         assert f(3, 4) == 7
 
     def test_default_parameter(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def greet(name='world'): return 'hello ' + name").body[0])
         assert f() == "hello world"
         assert f("alice") == "hello alice"
 
     def test_globals_accessible(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def f(): return helper()").body[0],
             globals_={"helper": lambda: 99},
@@ -657,6 +710,7 @@ class TestFunctiondefToFunction:
         assert f() == 99
 
     def test_globals_used_in_expression(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def f(x): return scale * x").body[0],
             globals_={"scale": 3},
@@ -664,40 +718,48 @@ class TestFunctiondefToFunction:
         assert f(4) == 12
 
     def test_filename_in_code_object(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def f(): pass").body[0], filename="myfile.py")
         assert f.__code__.co_filename == "myfile.py"
 
     def test_default_filename(self):
+        # nv
         f = functiondef_to_function(ast.parse("def f(): pass").body[0])
         assert f.__code__.co_filename == "<template>"
 
     def test_multiline_body(self):
+        # nv
         src = "def f(x):\n    y = x * 2\n    z = y + 1\n    return z"
         f = functiondef_to_function(ast.parse(src).body[0])
         assert f(5) == 11
 
     def test_varargs(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def f(*args): return list(args)").body[0])
         assert f(1, 2, 3) == [1, 2, 3]
 
     def test_kwargs(self):
+        # nv
         f = functiondef_to_function(ast.parse("def f(**kw): return kw").body[0])
         assert f(a=1, b=2) == {"a": 1, "b": 2}
 
     def test_exception_propagates(self):
+        # nv
         f = functiondef_to_function(
             ast.parse("def f(): raise ValueError('boom')").body[0])
         with pytest.raises(ValueError, match="boom"):
             f()
 
     def test_globals_dict_not_mutated(self):
+        # nv
         ns = {"x": 1}
         functiondef_to_function(ast.parse("def f(): pass").body[0], globals_=ns)
         assert set(ns.keys()) == {"x"}
 
     def test_async_functiondef(self):
+        # nv
         import asyncio
         node = ast.parse("async def f(): return 7").body[0]
         f = functiondef_to_function(node)
@@ -710,23 +772,28 @@ class TestFunctiondefToFunction:
 
 class TestStmtsToFunction:
     def test_basic_body_no_args(self):
+        # nv
         f = stmts_to_function(ast.parse("return 42").body, "answer")
         assert f() == 42
 
     def test_name_assigned(self):
+        # nv
         f = stmts_to_function(ast.parse("pass").body, "my_fn")
         assert f.__name__ == "my_fn"
 
     def test_explicit_args(self):
+        # nv
         f = stmts_to_function(ast.parse("return x + y").body, "add", _args("x", "y"))
         assert f(2, 3) == 5
 
     def test_default_args_means_no_parameters(self):
+        # nv
         import inspect
         f = stmts_to_function(ast.parse("return 0").body, "f")
         assert len(inspect.signature(f).parameters) == 0
 
     def test_globals_accessible_in_body(self):
+        # nv
         f = stmts_to_function(
             ast.parse("return helper(x)").body, "f", _args("x"),
             globals_={"helper": lambda v: v * 10},
@@ -734,30 +801,36 @@ class TestStmtsToFunction:
         assert f(3) == 30
 
     def test_multiple_statements(self):
+        # nv
         f = stmts_to_function(
             ast.parse("y = x * x\nreturn y + 1").body, "f", _args("x"))
         assert f(4) == 17
 
     def test_filename_in_code_object(self):
+        # nv
         f = stmts_to_function(ast.parse("pass").body, "f", filename="gen.py")
         assert f.__code__.co_filename == "gen.py"
 
     def test_default_filename(self):
+        # nv
         f = stmts_to_function(ast.parse("pass").body, "f")
         assert f.__code__.co_filename == "<template>"
 
     def test_returns_annotation(self):
+        # nv
         ret = ast.Name(id="int", ctx=ast.Load())
         f = stmts_to_function(ast.parse("return 1").body, "f", returns=ret)
         assert f.__annotations__ == {"return": int}
 
     def test_decorator_applied(self):
+        # nv
         dec = ast.parse("staticmethod").body[0].value
         f = stmts_to_function(
             ast.parse("return x").body, "f", _args("x"), decorators=[dec])
         assert isinstance(f, staticmethod)
 
     def test_same_body_reused_for_two_functions(self):
+        # nv
         body = ast.parse("return n").body
         f1 = stmts_to_function(body, "f1", _args("n"))
         f2 = stmts_to_function(body, "f2", _args("n"))
@@ -767,6 +840,7 @@ class TestStmtsToFunction:
 
     def test_integration_with_template(self):
         """Template-generated stmts flow through stmts_to_function correctly."""
+        # nv
         src = textwrap.dedent("""\
             @{}
             def make_body(N):

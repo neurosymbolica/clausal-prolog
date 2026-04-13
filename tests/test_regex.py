@@ -109,12 +109,14 @@ class TestMatchBoolean:
     """Match/2 with no auto-bindable groups: pattern + string, boolean test."""
 
     def test_digits_match(self, tmp_path):
+        # nv
         mod = _load("rm1", r"""
 is_digits(S) <- Match(r"\d+", S)
 """, tmp_path)
         assert _succeeds("is_digits", "123", module=mod)
 
     def test_digits_no_match(self, tmp_path):
+        # nv
         mod = _load("rm2", r"""
 is_digits(S) <- Match(r"\d+", S)
 """, tmp_path)
@@ -122,6 +124,7 @@ is_digits(S) <- Match(r"\d+", S)
 
     def test_anchored_at_start(self, tmp_path):
         """Match is anchored at start (like Python re.match)."""
+        # nv
         mod = _load("rm3", r"""
 starts_digit(S) <- Match(r"\d+", S)
 """, tmp_path)
@@ -129,6 +132,7 @@ starts_digit(S) <- Match(r"\d+", S)
         assert _succeeds("starts_digit", "123abc", module=mod)
 
     def test_fullmatch_via_dollar(self, tmp_path):
+        # nv
         mod = _load("rm4", r"""
 all_digits(S) <- Match(r"\d+$", S)
 """, tmp_path)
@@ -136,6 +140,7 @@ all_digits(S) <- Match(r"\d+$", S)
         assert not _succeeds("all_digits", "123abc", module=mod)
 
     def test_email_validation(self, tmp_path):
+        # nv
         mod = _load("rm5", r"""
 is_email(S) <- Match(r"[^@]+@[^@]+\.[^@]+", S)
 """, tmp_path)
@@ -154,6 +159,7 @@ class TestMatchExplicitGroups:
     """Match/3: returns groups dict for manual extraction via ++."""
 
     def test_named_groups(self, tmp_path):
+        # nv
         mod = _load("rg1", r"""
 parse_date(S, YEAR, MONTH, DAY) <- (
     Match(r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})", S, G) and
@@ -168,6 +174,7 @@ parse_date(S, YEAR, MONTH, DAY) <- (
 
     def test_positional_groups(self, tmp_path):
         """No named groups → GroupsDict is a tuple of positional captures."""
+        # nv
         mod = _load("rg2", r"""
 parse_pair(S, A, B) <- (
     Match(r"(\d+)-(\d+)", S, G) and
@@ -180,6 +187,7 @@ parse_pair(S, A, B) <- (
         assert results == [{"a": "42", "b": "99"}]
 
     def test_no_match_fails(self, tmp_path):
+        # nv
         mod = _load("rg3", r"""
 try_parse(S, G) <- Match(r"(?P<x>\d+)", S, G)
 """, tmp_path)
@@ -187,6 +195,7 @@ try_parse(S, G) <- Match(r"(?P<x>\d+)", S, G)
 
     def test_mixed_named_positional(self, tmp_path):
         """Named groups produce a dict; positional groups not in the dict."""
+        # nv
         mod = _load("rg4", r"""
 parse_ver(S, MAJOR) <- (
     Match(r"v(?P<major>\d+)\.\d+", S, G) and
@@ -217,6 +226,7 @@ class TestMatchAutoBinding:
 
     def test_basic_auto_bind(self, tmp_path):
         """ALLCAPS group names auto-bind to same-named logic variables."""
+        # nv
         mod = _load("ab1", r"""
 parse_date(S, YEAR, MONTH, DAY) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 """, tmp_path)
@@ -226,6 +236,7 @@ parse_date(S, YEAR, MONTH, DAY) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<
 
     def test_auto_bind_no_match_fails(self, tmp_path):
         """If the regex doesn't match, the whole goal fails."""
+        # nv
         mod = _load("ab2", r"""
 parse_date(S, YEAR, MONTH, DAY) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 """, tmp_path)
@@ -234,6 +245,7 @@ parse_date(S, YEAR, MONTH, DAY) <- Match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<
 
     def test_auto_bind_constrains_input(self, tmp_path):
         """If a group variable is already bound, auto-binding acts as a test."""
+        # nv
         mod = _load("ab3", r"""
 is_year(S, YEAR) <- Match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
 """, tmp_path)
@@ -246,18 +258,21 @@ is_year(S, YEAR) <- Match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
 
     def test_auto_bind_search(self, tmp_path):
         """Auto-binding also works with Search (unanchored)."""
+        # nv
         mod = _load("ab4", r"""
 find_tag(TEXT, TAG) <- Search(r"<(?P<TAG>\w+)>", TEXT)
 """, tmp_path)
         assert _first("find_tag", "text <bold> more", module=mod) == "bold"
 
     def test_auto_bind_single_group(self, tmp_path):
+        # nv
         mod = _load("ab5", r"""
 first_word(S, WORD) <- Match(r"(?P<WORD>\w+)", S)
 """, tmp_path)
         assert _first("first_word", "hello world", module=mod) == "hello"
 
     def test_auto_bind_many_groups(self, tmp_path):
+        # nv
         mod = _load("ab6", r"""
 parse_url(S, SCHEME, HOST, PORT, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
 """, tmp_path)
@@ -269,6 +284,7 @@ parse_url(S, SCHEME, HOST, PORT, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>
 
     def test_leading_underscore_group(self, tmp_path):
         """_leading_underscore group names also auto-bind."""
+        # nv
         mod = _load("ab7", r"""
 first_word(S, _word) <- Match(r"(?P<_word>\w+)", S)
 """, tmp_path)
@@ -284,6 +300,7 @@ class TestMixedGroupNames:
 
     def test_selective_binding(self, tmp_path):
         """Only ALLCAPS groups are auto-bound; lowercase groups are ignored."""
+        # nv
         mod = _load("mx1", r"""
 parse_log(LINE, LEVEL) <- Match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
 """, tmp_path)
@@ -294,6 +311,7 @@ parse_log(LINE, LEVEL) <- Match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR
     def test_lowercase_groups_still_work_in_regex(self, tmp_path):
         """Lowercase groups still function as regex groups (backreferences etc.)
         — they just don't auto-bind to logic variables."""
+        # nv
         mod = _load("mx2", r"""
 has_repeated_word(S) <- Search(r"(?P<word>\w+)\s+(?P=word)", S)
 """, tmp_path)
@@ -302,6 +320,7 @@ has_repeated_word(S) <- Search(r"(?P<word>\w+)\s+(?P=word)", S)
 
     def test_explicit_extraction_of_lowercase_group(self, tmp_path):
         """Lowercase groups accessible via Match/3 + ++ even though not auto-bound."""
+        # nv
         mod = _load("mx3", r"""
 parse_log(LINE, LEVEL, MSG) <- (
     Match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>\w+):\s+(?P<msg>.*)", LINE, G) and
@@ -322,12 +341,14 @@ class TestSearch:
     """Search: like Match but unanchored (finds pattern anywhere)."""
 
     def test_search_finds_in_middle(self, tmp_path):
+        # nv
         mod = _load("rs1", r"""
 find_digits(S, D) <- Search(r"(?P<D>\d+)", S)
 """, tmp_path)
         assert _first("find_digits", "abc123def", module=mod) == "123"
 
     def test_search_with_explicit_groups(self, tmp_path):
+        # nv
         mod = _load("rs2", r"""
 find_kv(S, KEY, VAL) <- (
     Search(r"(?P<key>\w+)=(?P<val>\w+)", S, G) and
@@ -347,12 +368,14 @@ class TestFindAll:
 
     def test_findall_strings(self, tmp_path):
         """No groups → each match is a plain string."""
+        # nv
         mod = _load("rf1", r"""
 digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
         assert _all("digit_run", "a1b23c456", module=mod) == ["1", "23", "456"]
 
     def test_findall_no_matches(self, tmp_path):
+        # nv
         mod = _load("rf2", r"""
 digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
@@ -360,6 +383,7 @@ digit_run(S, D) <- findall(r"\d+", S, D)
 
     def test_findall_with_groups(self, tmp_path):
         """Groups → each match is a tuple of group strings."""
+        # nv
         mod = _load("rf3", r"""
 pairs(S, PAIR) <- findall(r"(\w+)=(\w+)", S, PAIR)
 """, tmp_path)
@@ -368,6 +392,7 @@ pairs(S, PAIR) <- findall(r"(\w+)=(\w+)", S, PAIR)
 
     def test_findall_backtracking(self, tmp_path):
         """findall solutions participate in Clausal backtracking."""
+        # nv
         mod = _load("rf4", r"""
 Line("errors: 3 warnings: 5"),
 Line("errors: 0 warnings: 1"),
@@ -390,12 +415,14 @@ class TestReplace:
     """Replace/4: Pattern, Replacement, String, Result."""
 
     def test_simple_replace(self, tmp_path):
+        # nv
         mod = _load("rep1", r"""
 clean_spaces(S, R) <- Replace(r"\s+", " ", S, R)
 """, tmp_path)
         assert _first("clean_spaces", "hello   world  foo", module=mod) == "hello world foo"
 
     def test_replace_remove(self, tmp_path):
+        # nv
         mod = _load("rep2", r"""
 strip_digits(S, R) <- Replace(r"\d+", "", S, R)
 """, tmp_path)
@@ -403,12 +430,14 @@ strip_digits(S, R) <- Replace(r"\d+", "", S, R)
 
     def test_replace_backreference(self, tmp_path):
         r"""Replacement can use \1 backreferences."""
+        # nv
         mod = _load("rep3", r"""
 wrap_words(S, R) <- Replace(r"(\w+)", r"[\1]", S, R)
 """, tmp_path)
         assert _first("wrap_words", "hello world", module=mod) == "[hello] [world]"
 
     def test_replace_chain(self, tmp_path):
+        # nv
         mod = _load("rep4", r"""
 normalize(S, R) <- (
     Replace(r"\s+", " ", S, T) and
@@ -422,12 +451,14 @@ class TestSplit:
     """Split/3: Pattern, String, Parts."""
 
     def test_split_comma(self, tmp_path):
+        # nv
         mod = _load("sp1", r"""
 csv_fields(S, F) <- Split(r",\s*", S, F)
 """, tmp_path)
         assert _first("csv_fields", "a, b, c", module=mod) == ["a", "b", "c"]
 
     def test_split_whitespace(self, tmp_path):
+        # nv
         mod = _load("sp2", r"""
 words(S, W) <- Split(r"\s+", S, W)
 """, tmp_path)
@@ -443,6 +474,7 @@ class TestDynamicPattern:
     Auto-binding NOT available — use Match/3 explicitly."""
 
     def test_dynamic_match(self, tmp_path):
+        # nv
         mod = _load("rd1", """
 starts_with(PREFIX, S) <- Match(f"^{PREFIX}", S)
 """, tmp_path)
@@ -450,6 +482,7 @@ starts_with(PREFIX, S) <- Match(f"^{PREFIX}", S)
         assert not _succeeds("starts_with", "goodbye", "hello world", module=mod)
 
     def test_dynamic_with_explicit_groups(self, tmp_path):
+        # nv
         mod = _load("rd2", r"""
 after_prefix(PREFIX, S, REST) <- (
     Search(f"{PREFIX}(?P<rest>.*)", S, G) and
@@ -460,6 +493,7 @@ after_prefix(PREFIX, S, REST) <- (
 
     def test_dynamic_pattern_variable(self, tmp_path):
         """Pattern passed as a plain variable."""
+        # nv
         mod = _load("rd3", r"""
 try_match(PAT, S) <- Match(PAT, S)
 """, tmp_path)
@@ -476,6 +510,7 @@ class TestGoalExpansion:
     and produces equivalent results to runtime compilation."""
 
     def test_static_precompiled(self, tmp_path):
+        # nv
         mod = _load("ge1", r"""
 is_hex(S) <- Match(r"^[0-9a-fA-F]+$", S)
 """, tmp_path)
@@ -484,6 +519,7 @@ is_hex(S) <- Match(r"^[0-9a-fA-F]+$", S)
 
     def test_multiple_patterns_in_module(self, tmp_path):
         """Each static pattern gets its own compiled regex."""
+        # nv
         mod = _load("ge2", r"""
 is_date(S) <- Match(r"\d{4}-\d{2}-\d{2}", S)
 is_time(S) <- Match(r"\d{2}:\d{2}:\d{2}", S)
@@ -494,6 +530,7 @@ is_time(S) <- Match(r"\d{2}:\d{2}:\d{2}", S)
 
     def test_same_pattern_deduplicated(self, tmp_path):
         """Same literal used twice → could share one compiled object."""
+        # nv
         mod = _load("ge3", r"""
 valid_id(S) <- Match(r"[a-z]\w*", S)
 extract_id(S, ID) <- Match(r"(?P<ID>[a-z]\w*)", S)
@@ -510,6 +547,7 @@ class TestPracticalExamples:
 
     def test_log_parser_compact(self, tmp_path):
         """Parse log lines using auto-binding — ALLCAPS groups only."""
+        # nv
         mod = _load("ex1", r"""
 parse_log(LINE, LEVEL, MSG) <- Match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
 """, tmp_path)
@@ -518,6 +556,7 @@ parse_log(LINE, LEVEL, MSG) <- Match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)
         assert results == [{"level": "ERROR", "msg": "disk full"}]
 
     def test_tokenizer(self, tmp_path):
+        # nv
         mod = _load("ex2", r"""
 token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 """, tmp_path)
@@ -526,6 +565,7 @@ token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 
     def test_backtracking_regex(self, tmp_path):
         """Regex extraction + Clausal backtracking."""
+        # nv
         mod = _load("ex3", r"""
 Line("2026-03-16 INFO started"),
 Line("2026-03-16 ERROR disk full"),
@@ -539,6 +579,7 @@ error_message(MSG) <- (
         assert _all("error_message", module=mod) == ["disk full"]
 
     def test_url_parser(self, tmp_path):
+        # nv
         mod = _load("ex4", r"""
 parse_url(S, SCHEME, HOST, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>[^/]+)(?P<PATH>/.*)?", S)
 """, tmp_path)
@@ -550,6 +591,7 @@ parse_url(S, SCHEME, HOST, PATH) <- Match(r"(?P<SCHEME>https?)://(?P<HOST>[^/]+)
 
     def test_csv_parse_and_validate(self, tmp_path):
         """Split CSV, then validate each field."""
+        # nv
         mod = _load("ex5", r"""
 valid_email_in_csv(CSV, EMAIL) <- (
     Split(r",\s*", CSV, FIELDS) and
@@ -571,6 +613,7 @@ class TestAutoBindingPitfalls:
     def test_typo_in_group_name(self, tmp_path):
         """Misspelled ALLCAPS group → wrong variable bound, intended stays unbound.
         Goal expansion could warn if generated var doesn't appear in clause head."""
+        # nv
         mod = _load("pit1", r"""
 parse(S, YEAR) <- Match(r"(?P<YAER>\d{4})", S)
 """, tmp_path)
@@ -581,6 +624,7 @@ parse(S, YEAR) <- Match(r"(?P<YAER>\d{4})", S)
 
     def test_optional_group_binds_none(self, tmp_path):
         """Non-participating optional group → variable bound to None."""
+        # nv
         mod = _load("pit2", r"""
 parse(S, A, B) <- Match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
 """, tmp_path)
@@ -595,6 +639,7 @@ parse(S, A, B) <- Match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
 
     def test_lowercase_groups_not_auto_bound(self, tmp_path):
         """Lowercase group names are NOT auto-bound — this is the control mechanism."""
+        # nv
         mod = _load("pit3", r"""
 check(S, RESULT) <- (
     Match(r"(?P<internal>\d+)-(?P<RESULT>\w+)", S)
@@ -605,6 +650,7 @@ check(S, RESULT) <- (
 
     def test_no_named_groups_boolean_only(self, tmp_path):
         """Unnamed groups → no auto-binding, Match/2 is purely boolean."""
+        # nv
         mod = _load("pit4", r"""
 check(S) <- Match(r"(\d+)-(\d+)", S)
 """, tmp_path)
@@ -615,6 +661,7 @@ check(S) <- Match(r"(\d+)-(\d+)", S)
 class TestEdgeCases:
 
     def test_empty_string(self, tmp_path):
+        # nv
         mod = _load("ec1", r"""
 match_empty(S) <- Match(r"^$", S)
 """, tmp_path)
@@ -622,12 +669,14 @@ match_empty(S) <- Match(r"^$", S)
         assert not _succeeds("match_empty", " ", module=mod)
 
     def test_unicode(self, tmp_path):
+        # nv
         mod = _load("ec2", r"""
 is_word(S) <- Match(r"^\w+$", S)
 """, tmp_path)
         assert _succeeds("is_word", "café", module=mod)
 
     def test_special_chars(self, tmp_path):
+        # nv
         mod = _load("ec3", r"""
 has_parens(S) <- Search(r"\(.*?\)", S)
 """, tmp_path)
@@ -635,6 +684,7 @@ has_parens(S) <- Search(r"\(.*?\)", S)
         assert not _succeeds("has_parens", "foobar", module=mod)
 
     def test_findall_nonoverlapping(self, tmp_path):
+        # nv
         mod = _load("ec4", r"""
 find_aa(S, M) <- findall(r"aa", S, M)
 """, tmp_path)
@@ -642,6 +692,7 @@ find_aa(S, M) <- findall(r"aa", S, M)
 
     def test_search_vs_match(self, tmp_path):
         """Search finds anywhere; Match only at start."""
+        # nv
         mod = _load("ec5", r"""
 try_match(S) <- Match(r"\d+", S)
 try_search(S) <- Search(r"\d+", S)
@@ -700,6 +751,7 @@ class TestRegexBasicFixture:
         "dynamic pattern variable",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)
 
 
@@ -730,4 +782,5 @@ class TestRegexAutoBindFixture:
         "tokenizer first token",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)

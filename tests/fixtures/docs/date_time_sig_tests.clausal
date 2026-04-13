@@ -6,13 +6,13 @@
 
 # ── Now/Today ────────────────────────────────────────────────────────────────
 
-Test("now") <- Now(_)
-Test("now utc") <- NowUTC(_)
-Test("today") <- Today(_)
+Test("now") <- Now(_)  # nv
+Test("now utc") <- NowUTC(_)  # nv
+Test("today") <- Today(_)  # nv
 
 # ── Date ─────────────────────────────────────────────────────────────────────
 
-Test("date construct") <- Date(2026, 3, 16, _)
+Test("date construct") <- Date(2026, 3, 16, _)  # nv
 
 Test("date decompose") <- (
     Date(2026, 3, 16, D),
@@ -20,11 +20,11 @@ Test("date decompose") <- (
     Y == 2026,
     M == 3,
     DAY == 16
-)
+)  # nv
 
 # ── Time ─────────────────────────────────────────────────────────────────────
 
-Test("time construct") <- Time(14, 30, 0, _)
+Test("time construct") <- Time(14, 30, 0, _)  # nv
 
 Test("time decompose") <- (
     Time(14, 30, 0, T),
@@ -32,15 +32,15 @@ Test("time decompose") <- (
     H == 14,
     M == 30,
     S == 0
-)
+)  # nv
 
 # ── DateTime ─────────────────────────────────────────────────────────────────
 
-Test("datetime construct") <- DateTime(2026, 3, 16, 14, 30, 0, _)
+Test("datetime construct") <- DateTime(2026, 3, 16, 14, 30, 0, _)  # nv
 
 # ── TimeDelta ────────────────────────────────────────────────────────────────
 
-Test("timedelta construct") <- TimeDelta(7, 0, _)
+Test("timedelta construct") <- TimeDelta(7, 0, _)  # nv
 
 # ── Arithmetic ───────────────────────────────────────────────────────────────
 
@@ -49,21 +49,21 @@ Test("date add") <- (
     TimeDelta(7, 0, TD),
     DateAdd(D, TD, R),
     Date(2026, 3, 23, R)
-)
+)  # nv
 
 Test("date sub") <- (
     Date(2026, 3, 23, D),
     TimeDelta(7, 0, TD),
     DateSub(D, TD, R),
     Date(2026, 3, 16, R)
-)
+)  # nv
 
 Test("date diff") <- (
     Date(2026, 3, 23, D1),
     Date(2026, 3, 16, D2),
     DateDiff(D1, D2, TD),
     TimeDelta(7, 0, TD)
-)
+)  # nv
 
 # ── Format/Parse ─────────────────────────────────────────────────────────────
 
@@ -71,12 +71,12 @@ Test("format date") <- (
     Date(2026, 3, 16, D),
     FormatDate(D, "%Y-%m-%d", S),
     S == "2026-03-16"
-)
+)  # nv
 
 Test("parse date") <- (
     ParseDate("2026-03-16", "%Y-%m-%d", DT),
     nonvar(DT)
-)
+)  # nv
 
 # ── DayOfWeek ────────────────────────────────────────────────────────────────
 
@@ -84,4 +84,4 @@ Test("day of week") <- (
     Date(2026, 3, 16, D),
     DayOfWeek(D, DOW),
     number(DOW)
-)
+)  # nv

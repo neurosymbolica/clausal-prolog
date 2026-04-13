@@ -19,7 +19,7 @@ ReachB(X, Y) <- (
 )
 
 
-Test("reach a 1 2") <- ReachA(1, 2)
-Test("reach b 2 3") <- ReachB(2, 3)
-Test("reach a transitive 1 4") <- ReachA(1, 4)
-Test("reach b transitive 2 1") <- ReachB(2, 1)
+Test("reach a 1 2") <- ReachA(1, 2)  # nv
+Test("reach b 2 3") <- ReachB(2, 3)  # nv
+Test("reach a transitive 1 4") <- ReachA(1, 4)  # nv
+Test("reach b transitive 2 1") <- ReachB(2, 1)  # nv

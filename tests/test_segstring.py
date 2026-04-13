@@ -21,6 +21,7 @@ class TestSegStringConstruction:
     """SegString creation and basic properties."""
 
     def test_create(self):
+        # nv
         seg = SegString(["hel", VarSeg(Var()), "ld"])
         assert len(seg.segments) == 3
         assert seg.segments[0] == "hel"
@@ -28,6 +29,7 @@ class TestSegStringConstruction:
         assert seg.segments[2] == "ld"
 
     def test_repr(self):
+        # nv
         ss = SegString(["abc"])
         assert "SegString" in repr(ss)
 
@@ -37,11 +39,13 @@ class TestSegStringWalk:
 
     def test_ground_returns_str(self):
         """Fully ground SegString walks to a plain str."""
+        # nv
         ss = SegString(["hello"])
         assert ss.__walk__() == "hello"
 
     def test_bound_varseg_collapses(self):
         """VarSeg bound to a string is inlined."""
+        # nv
         trail = Trail()
         X = Var()
         unify(X, "lo wor", trail)
@@ -50,6 +54,7 @@ class TestSegStringWalk:
 
     def test_unbound_returns_segstring(self):
         """Unbound VarSeg keeps SegString non-ground."""
+        # nv
         X = Var()
         ss = SegString(["hel", VarSeg(X), "ld"])
         walked = ss.__walk__()
@@ -57,16 +62,19 @@ class TestSegStringWalk:
 
     def test_empty_segments(self):
         """Empty SegString walks to empty str."""
+        # nv
         assert SegString([]).__walk__() == ""
         assert SegString([""]).__walk__() == ""
 
     def test_adjacent_strings_merge(self):
         """Adjacent str segments merge during walk."""
+        # nv
         ss = SegString(["hel", "lo"])
         assert ss.__walk__() == "hello"
 
     def test_varseg_bound_to_list_joins(self):
         """VarSeg bound to a char list is joined into string during walk."""
+        # nv
         trail = Trail()
         X = Var()
         unify(X, ["l", "o"], trail)
@@ -75,6 +83,7 @@ class TestSegStringWalk:
 
     def test_nested_segstring(self):
         """VarSeg bound to another SegString is inlined."""
+        # nv
         trail = Trail()
         X = Var()
         inner = SegString(["lo wor"])
@@ -83,6 +92,7 @@ class TestSegStringWalk:
         assert ss.__walk__() == "hello world"
 
     def test_is_ground(self):
+        # nv
         X = Var()
         ss = SegString(["abc"])
         assert ss.is_ground()
@@ -90,10 +100,12 @@ class TestSegStringWalk:
         assert not ss2.is_ground()
 
     def test_to_str(self):
+        # nv
         ss = SegString(["hello"])
         assert ss.to_str() == "hello"
 
     def test_to_str_raises_when_not_ground(self):
+        # nv
         import pytest
         X = Var()
         ss = SegString(["a", VarSeg(X)])
@@ -105,14 +117,17 @@ class TestSegStringUnification:
     """SegString __unify__ against strings."""
 
     def test_ground_match(self):
+        # nv
         ss = SegString(["hello"])
         assert unify(ss, "hello", Trail())
 
     def test_ground_mismatch(self):
+        # nv
         ss = SegString(["hello"])
         assert not unify(ss, "world", Trail())
 
     def test_varseg_binds_to_substring(self):
+        # nv
         trail = Trail()
         X = Var()
         ss = SegString(["hel", VarSeg(X)])
@@ -120,6 +135,7 @@ class TestSegStringUnification:
         assert deref(X) == "lo"
 
     def test_two_varseg(self):
+        # nv
         trail = Trail()
         A, B = Var(), Var()
         ss = SegString([VarSeg(A), ",", VarSeg(B)])
@@ -128,10 +144,12 @@ class TestSegStringUnification:
         assert deref(B) == "world"
 
     def test_empty_match(self):
+        # nv
         assert unify(SegString([""]), "", Trail())
         assert unify(SegString([]), "", Trail())
 
     def test_varseg_empty_binding(self):
+        # nv
         trail = Trail()
         X = Var()
         ss = SegString([VarSeg(X), "abc"])
@@ -140,6 +158,7 @@ class TestSegStringUnification:
 
     def test_string_vs_segstring_symmetric(self):
         """String on left, SegString on right — C tries __unify__."""
+        # nv
         trail = Trail()
         X = Var()
         ss = SegString(["hel", VarSeg(X)])
@@ -148,12 +167,14 @@ class TestSegStringUnification:
 
     def test_segstring_vs_char_list(self):
         """Ground SegString unifies with a character list via C str↔list."""
+        # nv
         trail = Trail()
         ss = SegString(["hello"])
         assert unify(ss, ['h', 'e', 'l', 'l', 'o'], trail)
 
     def test_segstring_vs_char_list_with_var(self):
         """SegString with bound VarSeg unifies with char list."""
+        # nv
         trail = Trail()
         X = Var()
         unify(X, "lo", trail)
@@ -162,6 +183,7 @@ class TestSegStringUnification:
 
     def test_segstring_vs_wrong_list_fails(self):
         """SegString 'hello' does NOT unify with [1, 2, 3]."""
+        # nv
         assert not unify(SegString(["hello"]), [1, 2, 3], Trail())
 
 
@@ -169,11 +191,13 @@ class TestSegStringOccursCheck:
     """SegString __occurs_check__."""
 
     def test_var_in_varseg(self):
+        # nv
         X = Var()
         ss = SegString(["abc", VarSeg(X)])
         assert ss.__occurs_check__(X)
 
     def test_var_not_in_segstring(self):
+        # nv
         X, Y = Var(), Var()
         ss = SegString(["abc", VarSeg(Y)])
         assert not ss.__occurs_check__(X)
@@ -184,6 +208,7 @@ class TestSegStringGenerator:
 
     def test_multiple_splits(self):
         """[*A, ',', *B] matches 'a,b,c' at multiple comma positions."""
+        # nv
         trail = Trail()
         A, B = Var(), Var()
         ss = SegString([VarSeg(A), ",", VarSeg(B)])
@@ -196,6 +221,7 @@ class TestSegStringGenerator:
         assert ("a,b", "c") in solutions
 
     def test_no_match(self):
+        # nv
         trail = Trail()
         A, B = Var(), Var()
         ss = SegString([VarSeg(A), "x", VarSeg(B)])
@@ -204,6 +230,7 @@ class TestSegStringGenerator:
         assert len(solutions) == 0
 
     def test_single_varseg(self):
+        # nv
         trail = Trail()
         X = Var()
         ss = SegString([VarSeg(X)])
@@ -221,6 +248,7 @@ class TestSegListStringPreserving:
     """SegList VarSegs bind to substrings when matching strings."""
 
     def test_single_star_binds_substring(self):
+        # nv
         trail = Trail()
         T = Var()
         sl = SegList([ConcreteSeg(["h"]), VarSeg(T)])
@@ -229,6 +257,7 @@ class TestSegListStringPreserving:
         assert isinstance(deref(T), str)
 
     def test_multi_star_binds_substrings(self):
+        # nv
         trail = Trail()
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg([","]), VarSeg(B)])
@@ -237,6 +266,7 @@ class TestSegListStringPreserving:
         assert deref(B) == "world"
 
     def test_star_binds_empty_substring(self):
+        # nv
         trail = Trail()
         A = Var()
         sl = SegList([VarSeg(A), ConcreteSeg(["x"])])
@@ -245,6 +275,7 @@ class TestSegListStringPreserving:
 
     def test_walk_handles_string_bound_varseg(self):
         """SegList.__walk__ converts string-bound VarSegs to char lists."""
+        # nv
         trail = Trail()
         A = Var()
         unify(A, "hello", trail)
@@ -255,6 +286,7 @@ class TestSegListStringPreserving:
 
     def test_seglist_still_works_with_lists(self):
         """SegList against list still returns list slices."""
+        # nv
         trail = Trail()
         T = Var()
         sl = SegList([ConcreteSeg([1]), VarSeg(T)])
@@ -264,6 +296,7 @@ class TestSegListStringPreserving:
 
     def test_multi_star_string_generator(self):
         """_seglist_unify_gen with string target yields substring bindings."""
+        # nv
         trail = Trail()
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg(["l"]), VarSeg(B)])
@@ -283,6 +316,7 @@ class TestBodyMultiStarString:
     """_body_multi_star_unify preserves string type."""
 
     def test_star_vars_bind_to_substrings(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -293,6 +327,7 @@ class TestBodyMultiStarString:
         assert ("hello", "world") in solutions
 
     def test_fixed_elements_match_chars(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -305,6 +340,7 @@ class TestBodyMultiStarString:
         assert ("hel", "o") in solutions
 
     def test_empty_string_target(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A = Var()
@@ -315,6 +351,7 @@ class TestBodyMultiStarString:
         assert solutions == [""]
 
     def test_no_match(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -330,6 +367,7 @@ class TestBuildStarListString:
     """_build_star_list returns strings when inputs are string-compatible."""
 
     def test_star_str_returns_str(self):
+        # nv
         from clausal.logic.compiler import _build_star_list
         trail = Trail()
         X = Var()
@@ -339,6 +377,7 @@ class TestBuildStarListString:
         assert isinstance(result, str)
 
     def test_star_str_with_after(self):
+        # nv
         from clausal.logic.compiler import _build_star_list
         trail = Trail()
         X = Var()
@@ -349,6 +388,7 @@ class TestBuildStarListString:
 
     def test_star_list_returns_list(self):
         """Non-string star still returns a list."""
+        # nv
         from clausal.logic.compiler import _build_star_list
         trail = Trail()
         X = Var()
@@ -359,6 +399,7 @@ class TestBuildStarListString:
 
     def test_star_ground_segstring_mixed(self):
         """Ground SegString with mixed before/after returns a list."""
+        # nv
         from clausal.logic.compiler import _build_star_list
         trail = Trail()
         X = Var()
@@ -371,6 +412,7 @@ class TestBuildStarListString:
 
     def test_star_nonground_segstring_mixed(self):
         """Non-ground SegString with mixed before/after returns a SegList."""
+        # nv
         from clausal.logic.compiler import _build_star_list
         Y = Var()
         ss = SegString([VarSeg(Y), "orld"])
@@ -380,6 +422,7 @@ class TestBuildStarListString:
 
     def test_star_nonground_segstring_all_str(self):
         """Non-ground SegString with all-str before/after returns a SegString."""
+        # nv
         from clausal.logic.compiler import _build_star_list
         Y = Var()
         ss = SegString([VarSeg(Y), "orld"])
@@ -391,6 +434,7 @@ class TestBuildMultiStarListString:
     """_build_multi_star_list returns strings when all parts are chars."""
 
     def test_all_str_returns_str(self):
+        # nv
         from clausal.logic.compiler import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
@@ -404,6 +448,7 @@ class TestBuildMultiStarListString:
         assert isinstance(result, list)
 
     def test_single_char_fixed_returns_str(self):
+        # nv
         from clausal.logic.compiler import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
@@ -425,6 +470,7 @@ class TestClauseLevelStringPatterns:
 
     def test_head_tail_string(self):
         """HeadTail from list_edge_cases works on strings (Phase 5b)."""
+        # nv
         import os
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
@@ -440,6 +486,7 @@ class TestClauseLevelStringPatterns:
 
     def test_body_multi_star_string_direct(self):
         """_body_multi_star_unify with string target — star vars are substrings."""
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()

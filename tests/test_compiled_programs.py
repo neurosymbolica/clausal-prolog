@@ -138,6 +138,7 @@ class TestGraphReachability:
 
     def test_direct_edge(self):
         """path(a, b) holds — direct edge."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
@@ -147,6 +148,7 @@ class TestGraphReachability:
 
     def test_transitive_reachability(self):
         """From 'a', can reach b, c, d (but not a itself in a DAG)."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
@@ -156,6 +158,7 @@ class TestGraphReachability:
 
     def test_no_path_backwards(self):
         """No outgoing edges from 'd' → path(d, Y) has no solutions."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
@@ -165,6 +168,7 @@ class TestGraphReachability:
 
     def test_path_to_specific_dest(self):
         """path(a, d) is provable (at least one path: a→b→d or a→b→c→d)."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("path", 2)
         trail = fresh_trail()
@@ -181,6 +185,7 @@ class TestGraphReachability:
 
     def test_edge_count(self):
         """edge/2 has exactly 4 clauses (one per edge in the graph)."""
+        # nv
         db = self._build_db()
         assert len(db.clauses_for("edge", 2)) == 4
 
@@ -225,6 +230,7 @@ class TestClassification:
         return db
 
     def test_dog_is_mammal(self):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
@@ -233,6 +239,7 @@ class TestClassification:
         assert results == ["mammal"]
 
     def test_eagle_is_bird(self):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
@@ -241,6 +248,7 @@ class TestClassification:
         assert results == ["bird"]
 
     def test_salmon_is_fish(self):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
@@ -250,6 +258,7 @@ class TestClassification:
 
     def test_name_is_irrelevant(self):
         """Different names for the same species → same category."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
         for name in ["fido", "rex", "spot"]:
@@ -260,6 +269,7 @@ class TestClassification:
 
     def test_unknown_matches_nothing(self):
         """A string is not a known animal term → no solutions."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
         trail = fresh_trail()
@@ -269,6 +279,7 @@ class TestClassification:
 
     def test_ground_category_check(self):
         """animal(eagle(_), 'mammal') fails; animal(eagle(_), 'bird') succeeds."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("animal", 2)
 
@@ -331,6 +342,7 @@ class TestFibonacci:
         (0, 0), (1, 1), (2, 1), (3, 2), (4, 3), (5, 5), (6, 8), (7, 13),
     ])
     def test_fib_values(self, n, expected):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("fib", 2)
         trail = fresh_trail()
@@ -340,6 +352,7 @@ class TestFibonacci:
 
     def test_fib_deterministic(self):
         """fib(N, R) yields exactly one solution for each ground N."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("fib", 2)
         for n in range(8):
@@ -426,6 +439,7 @@ class TestNQueens4:
 
     def test_perm4_has_24_solutions(self):
         """perm4/4 enumerates all 4! = 24 permutations of {1,2,3,4}."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("perm4", 4)
         trail = fresh_trail()
@@ -439,6 +453,7 @@ class TestNQueens4:
 
     def test_no_attack_passes_safe_queens(self):
         """no_attack(2, 4, 1) succeeds: col diff = 2 ≠ 1."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("no_attack", 3)
         trail = fresh_trail()
@@ -447,6 +462,7 @@ class TestNQueens4:
 
     def test_no_attack_fails_diagonal(self):
         """no_attack(1, 2, 1) fails: |1-2| = 1 = dist."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("no_attack", 3)
         trail = fresh_trail()
@@ -455,6 +471,7 @@ class TestNQueens4:
 
     def test_exactly_two_solutions(self):
         """4-queens has exactly 2 solutions."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("queens4", 4)
         trail = fresh_trail()
@@ -467,6 +484,7 @@ class TestNQueens4:
 
     def test_known_solutions(self):
         """Both known 4-queens solutions are found."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("queens4", 4)
         trail = fresh_trail()
@@ -521,6 +539,7 @@ class TestCombinationSearch:
         return db
 
     def test_nine_combinations_simple(self):
+        # nv
         db = self._build_db(mode="simple")
         fn = db.get_dispatch("combo", 2)
         trail = fresh_trail()
@@ -532,6 +551,7 @@ class TestCombinationSearch:
         assert ("green", "medium") in results
 
     def test_nine_combinations_trampoline(self):
+        # nv
         db = self._build_db(mode="trampoline")
         fn = db.get_dispatch("combo", 2)
         trail = fresh_trail()
@@ -545,6 +565,7 @@ class TestCombinationSearch:
 
     def test_colour_filter(self):
         """colour(red) has exactly one solution (exact match)."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("colour", 1)
         trail = fresh_trail()
@@ -553,6 +574,7 @@ class TestCombinationSearch:
 
     def test_size_enumeration(self):
         """size(S) with unbound S yields exactly 3 solutions."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("size", 1)
         trail = fresh_trail()
@@ -596,6 +618,7 @@ class TestDisjunctionAndOr:
         return db
 
     def test_or_val_three_solutions(self):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
@@ -604,6 +627,7 @@ class TestDisjunctionAndOr:
         assert results == [10, 20, 30]
 
     def test_or_pair_nine_solutions(self):
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("or_pair", 2)
         trail = fresh_trail()
@@ -616,6 +640,7 @@ class TestDisjunctionAndOr:
 
     def test_filter_by_first(self):
         """or_val(20) has exactly one solution."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
@@ -624,6 +649,7 @@ class TestDisjunctionAndOr:
 
     def test_nonexistent_value(self):
         """or_val(99) has no solutions."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("or_val", 1)
         trail = fresh_trail()
@@ -671,6 +697,7 @@ class TestNegationAsFailure:
 
     def test_not_red_with_green(self):
         """not_red("green") succeeds."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
@@ -679,6 +706,7 @@ class TestNegationAsFailure:
 
     def test_not_red_with_red_fails(self):
         """not_red("red") fails."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
@@ -687,6 +715,7 @@ class TestNegationAsFailure:
 
     def test_not_red_enumerates_two(self):
         """not_red(C) with unbound C yields green and blue (not red)."""
+        # nv
         db = self._build_db()
         fn = db.get_dispatch("not_red", 1)
         trail = fresh_trail()
@@ -703,6 +732,7 @@ class TestVisualizer:
     """Smoke tests: visualizer produces valid, inspectable Python source."""
 
     def test_show_simple_produces_output(self, capsys):
+        # nv
         from clausal.tools.visualize import show
         db = Database()
         x = Var()
@@ -714,6 +744,7 @@ class TestVisualizer:
         assert "yield" in captured.out
 
     def test_show_trampoline_produces_output(self, capsys):
+        # nv
         from clausal.tools.visualize import show
         db = Database()
         x = Var()
@@ -726,6 +757,7 @@ class TestVisualizer:
 
     def test_source_is_valid_python(self):
         """predicate_to_source returns syntactically valid Python."""
+        # nv
         from clausal.tools.visualize import predicate_to_source
         import ast as ast_mod
         db = Database()
@@ -741,6 +773,7 @@ class TestVisualizer:
 
     def test_ast_str_non_empty(self):
         """predicate_to_ast_str returns a non-empty string."""
+        # nv
         from clausal.tools.visualize import predicate_to_ast_str
         db = Database()
         x = Var()
@@ -750,6 +783,7 @@ class TestVisualizer:
 
     def test_visualize_fib_simple(self, capsys):
         """Show the compiled Fibonacci predicate in simple mode."""
+        # nv
         from clausal.tools.visualize import show
         db = Database()
         r0 = Var()

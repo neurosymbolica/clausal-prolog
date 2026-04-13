@@ -16,9 +16,9 @@ Factorial(N, F) <- (
     F == N * F1
 )
 
-Test("append works") <- (append([1], [2, 3], R), R is [1, 2, 3])
-Test("member works") <- Member(2, [1, 2, 3])
-Test("factorial works") <- (Factorial(5, F), F is 120)
+Test("append works") <- (append([1], [2, 3], R), R is [1, 2, 3])  # nv
+Test("member works") <- Member(2, [1, 2, 3])  # nv
+Test("factorial works") <- (Factorial(5, F), F is 120)  # nv
 
 # --- dynamic_predicates ---
 
@@ -28,12 +28,12 @@ counter(0),
 counter(1),
 counter(2)
 
-Test("counter exists") <- counter(0)
+Test("counter exists") <- counter(0)  # nv
 
 # --- correctness_tests ---
 
 MyAppend([], YS, YS),
 MyAppend([H, *XS], YS, [H, *ZS]) <- MyAppend(XS, YS, ZS)
 
-Test("append nil") <- (MyAppend([], [1, 2], R), R is [1, 2])
-Test("append cons") <- (MyAppend([1], [2, 3], R), R is [1, 2, 3])
+Test("append nil") <- (MyAppend([], [1, 2], R), R is [1, 2])  # nv
+Test("append cons") <- (MyAppend([1], [2, 3], R), R is [1, 2, 3])  # nv

@@ -5,35 +5,35 @@
 Test("parse scalar int") <- (
     Read("42", N),
     N == 42
-)
+)  # nv
 
 Test("parse scalar string") <- (
     Read("hello", S),
     S == "hello"
-)
+)  # nv
 
 Test("parse mapping") <- (
     Read("name: alice\nage: 30", DATA),
     Get(DATA, "name", "alice"),
     Get(DATA, "age", 30)
-)
+)  # nv
 
 Test("parse sequence") <- (
     Read("[1, 2, 3]", DATA),
     DATA == [1, 2, 3]
-)
+)  # nv
 
 Test("parse bool and null") <- (
     Read("flag: true\nval: null", DATA),
     Get(DATA, "flag", True),
     Get(DATA, "val", None)
-)
+)  # nv
 
 Test("parse nested mapping") <- (
     Read("server:\n  host: localhost\n  port: 8080", DATA),
     Get(DATA, ["server", "host"], "localhost"),
     Get(DATA, ["server", "port"], 8080)
-)
+)  # nv
 
 # ── Nested access ────────────────────────────────────────────────────
 
@@ -41,13 +41,13 @@ Test("list of maps") <- (
     Read("- name: alice\n  age: 30\n- name: bob\n  age: 25", DATA),
     Get(DATA, [0, "name"], "alice"),
     Get(DATA, [1, "age"], 25)
-)
+)  # nv
 
 Test("config pattern") <- (
     Read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", DATA),
     Get(DATA, ["database", "host"], "db.example.com"),
     Get(DATA, ["database", "port"], 5432)
-)
+)  # nv
 
 # ── Round-trip ───────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ Test("round trip mapping") <- (
     Read(YAML, DATA2),
     Get(DATA2, "x", 1),
     Get(DATA2, "y", 2)
-)
+)  # nv
 
 Test("write and read back") <- (
     Read("a: 1\nb:\n- 2\n- 3", DATA),
@@ -65,4 +65,4 @@ Test("write and read back") <- (
     Read(YAML, DATA2),
     Get(DATA2, "a", 1),
     Get(DATA2, ["b", 0], 2)
-)
+)  # nv

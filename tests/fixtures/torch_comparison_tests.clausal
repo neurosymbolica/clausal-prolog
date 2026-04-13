@@ -14,42 +14,42 @@ Test("eq element-wise") <- (
     tensor([1.0, 0.0, 3.0], B),
     eq(A, B, C),
     tensor_list(C, [True, False, True])
-)
+)  # nv
 
 Test("ne element-wise") <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([1.0, 0.0, 3.0], B),
     ne(A, B, C),
     tensor_list(C, [False, True, False])
-)
+)  # nv
 
 Test("gt element-wise") <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     gt(A, B, C),
     tensor_list(C, [False, True, False])
-)
+)  # nv
 
 Test("lt element-wise") <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     lt(A, B, C),
     tensor_list(C, [True, False, False])
-)
+)  # nv
 
 Test("ge element-wise") <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     ge(A, B, C),
     tensor_list(C, [False, True, True])
-)
+)  # nv
 
 Test("le element-wise") <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     le(A, B, C),
     tensor_list(C, [True, False, True])
-)
+)  # nv
 
 # --- Check predicates: equal, allclose ---
 
@@ -57,31 +57,31 @@ Test("equal check succeeds") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 2.0], B),
     equal(A, B)
-)
+)  # nv
 
 Test("equal check fails") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 3.0], B),
     not(equal(A, B))
-)
+)  # nv
 
 Test("allclose check succeeds") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 2.0], B),
     allclose(A, B)
-)
+)  # nv
 
 Test("allclose check with tolerance") <- (
     tensor([1.0, 2.0], A),
     tensor([1.01, 2.01], B),
     allclose(A, B, 0.1, 0.0)
-)
+)  # nv
 
 Test("allclose check fails") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 3.0], B),
     not(allclose(A, B))
-)
+)  # nv
 
 # --- Logical operations ---
 
@@ -90,59 +90,59 @@ Test("logical_and") <- (
     tensor([True, False, True, False], B),
     logical_and(A, B, C),
     tensor_list(C, [True, False, False, False])
-)
+)  # nv
 
 Test("logical_or") <- (
     tensor([True, True, False, False], A),
     tensor([True, False, True, False], B),
     logical_or(A, B, C),
     tensor_list(C, [True, True, True, False])
-)
+)  # nv
 
 Test("logical_not") <- (
     tensor([True, False, True], A),
     logical_not(A, B),
     tensor_list(B, [False, True, False])
-)
+)  # nv
 
 Test("logical_xor") <- (
     tensor([True, True, False, False], A),
     tensor([True, False, True, False], B),
     logical_xor(A, B, C),
     tensor_list(C, [False, True, True, False])
-)
+)  # nv
 
 # --- any / all check predicates ---
 
 Test("any succeeds when some True") <- (
     tensor([False, True, False], T),
     any(T)
-)
+)  # nv
 
 Test("any fails when all False") <- (
     tensor([False, False, False], T),
     not(any(T))
-)
+)  # nv
 
 Test("all succeeds when all True") <- (
     tensor([True, True, True], T),
     all(T)
-)
+)  # nv
 
 Test("all fails when some False") <- (
     tensor([True, False, True], T),
     not(all(T))
-)
+)  # nv
 
 Test("any with dim") <- (
     tensor([[False, True], [False, False]], T),
     any(T, 1)
-)
+)  # nv
 
 Test("all with dim") <- (
     tensor([[True, True], [True, True]], T),
     all(T, 0)
-)
+)  # nv
 
 # --- Selection ---
 
@@ -152,14 +152,14 @@ Test("where selects conditionally") <- (
     tensor([True, False, True], COND),
     where(COND, X, Y, R),
     tensor_list(R, [1.0, 20.0, 3.0])
-)
+)  # nv
 
 Test("masked_select") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
     tensor([True, False, True, False], MASK),
     masked_select(T, MASK, R),
     tensor_list(R, [1.0, 3.0])
-)
+)  # nv
 
 Test("index_select") <- (
     tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
@@ -167,14 +167,14 @@ Test("index_select") <- (
     index_select(T, 0, IDX, R),
     shape(R, [2, 2]),
     tensor_list(R, [[1.0, 2.0], [5.0, 6.0]])
-)
+)  # nv
 
 Test("gather along dim") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], T),
     tensor([[0, 1], [1, 0]], IDX),
     gather(T, 1, IDX, R),
     tensor_list(R, [[1.0, 2.0], [4.0, 3.0]])
-)
+)  # nv
 
 Test("scatter into zeros") <- (
     zeros([2, 3], T),
@@ -182,4 +182,4 @@ Test("scatter into zeros") <- (
     tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], SRC),
     scatter(T, 1, IDX, SRC, R),
     tensor_list(R, [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-)
+)  # nv

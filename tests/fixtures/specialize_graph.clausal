@@ -25,20 +25,20 @@ GraphProgram(PROGRAM) <- (
 
 Test("specialized edge(a,b)") <- (
     SolveGraph([["edge", "a", "b"]])
-)
+)  # nv
 
 Test("specialized path(a,b) direct") <- (
     SolveGraph([["path", "a", "b"]])
-)
+)  # nv
 
 Test("specialized path(a,c) transitive") <- (
     SolveGraph([["path", "a", "c"]])
-)
+)  # nv
 
 Test("specialized path(a,d) transitive") <- (
     SolveGraph([["path", "a", "d"]])
-)
+)  # nv
 
 Test("specialized no path(c,a)") <- (
     not SolveGraph([["path", "c", "a"]])
-)
+)  # nv

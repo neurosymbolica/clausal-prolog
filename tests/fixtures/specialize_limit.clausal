@@ -15,20 +15,20 @@ NatnumProgram(PROGRAM) <- (
 
 Test("limit natnum(0) depth 1 ok") <- (
     SolveLimitNatnum([["natnum", 0]], 1)
-)
+)  # nv
 
 Test("limit natnum(s(0)) depth 1 fails") <- (
     not SolveLimitNatnum([["natnum", ["s", 0]]], 1)
-)
+)  # nv
 
 Test("limit natnum(s(0)) depth 2 ok") <- (
     SolveLimitNatnum([["natnum", ["s", 0]]], 2)
-)
+)  # nv
 
 Test("limit natnum(s(s(0))) depth 2 fails") <- (
     not SolveLimitNatnum([["natnum", ["s", ["s", 0]]]], 2)
-)
+)  # nv
 
 Test("limit natnum(s(s(0))) depth 3 ok") <- (
     SolveLimitNatnum([["natnum", ["s", ["s", 0]]]], 3)
-)
+)  # nv

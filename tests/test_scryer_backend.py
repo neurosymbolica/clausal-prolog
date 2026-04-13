@@ -134,6 +134,7 @@ class TestScryerParses:
     ])
     def test_conformity_parses(self, name):
         """Scryer accepts the translated .pl without syntax errors."""
+        # nv
         prolog = _translate_conformity(name)
         # Remove module declaration (Scryer may not support all our module features)
         # and just check the file parses
@@ -151,6 +152,7 @@ class TestScryerParses:
     ])
     def test_golden_pl_parses(self, pl_name):
         """Golden .pl files parse in Scryer without error."""
+        # nv
         pl_path = GOLDEN / f"{pl_name}.pl"
         if not pl_path.exists():
             pytest.skip(f"Golden file {pl_path} not found")
@@ -172,6 +174,7 @@ class TestScryerExecution:
 
     def test_simple_fact_query(self):
         """Translate a simple fact and query it."""
+        # nv
         prolog = clausal_source_to_prolog("Foo(1, 2),\nFoo(3, 4),", dialect=_SCRYER)
         result = _run_scryer(
             prolog,
@@ -182,6 +185,7 @@ class TestScryerExecution:
 
     def test_simple_rule_query(self):
         """Translate a rule and query it."""
+        # nv
         prolog = clausal_source_to_prolog(
             "Double(X, Y) <- (Y := X * 2)",
             dialect=_SCRYER,
@@ -195,6 +199,7 @@ class TestScryerExecution:
 
     def test_recursive_rule(self):
         """Translate recursive rules (edge/reach) and query reachability."""
+        # nv
         src = textwrap.dedent("""\
             Edge(1, 2),
             Edge(2, 3),
@@ -212,6 +217,7 @@ class TestScryerExecution:
 
     def test_list_operations(self):
         """Translate list operations and run in Scryer."""
+        # nv
         src = textwrap.dedent("""\
             MyAppend([], L, L),
             MyAppend([H, *T], L, [H, *R]) <- MyAppend(T, L, R)
@@ -226,6 +232,7 @@ class TestScryerExecution:
 
     def test_arithmetic_evaluation(self):
         """Arithmetic := translates to 'is' and evaluates in Scryer."""
+        # nv
         src = textwrap.dedent("""\
             Fib(0, 0),
             Fib(1, 1),
@@ -249,6 +256,7 @@ class TestScryerExecution:
 
     def test_negation(self):
         """Negation as failure (not → \\+) works in Scryer."""
+        # nv
         src = textwrap.dedent("""\
             Even(0),
             Even(N) <- (N > 0, N1 := N - 2, Even(N1))
@@ -264,6 +272,7 @@ class TestScryerExecution:
 
     def test_unification(self):
         """Unification (is → =) works correctly."""
+        # nv
         src = "Test(X, Y) <- (X is Y)"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         result = _run_scryer(
@@ -275,6 +284,7 @@ class TestScryerExecution:
 
     def test_disjunction(self):
         """Disjunction (or → ;) works in Scryer."""
+        # nv
         src = textwrap.dedent("""\
             Color(red),
             Color(blue),
@@ -290,6 +300,7 @@ class TestScryerExecution:
 
     def test_findall(self):
         """findall translates to findall/3 and works in Scryer."""
+        # nv
         src = textwrap.dedent("""\
             Num(1),
             Num(2),
@@ -334,36 +345,42 @@ class TestScryerConformity:
 
     def test_iso_arithmetic(self):
         """ISO arithmetic tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_arithmetic")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_control(self):
         """ISO control construct tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_control")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_unification(self):
         """ISO unification tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_unification")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_list_operations(self):
         """ISO list operation tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_list_operations")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_type_checking(self):
         """ISO type checking tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_type_checking")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
 
     def test_iso_term_manipulation(self):
         """ISO term manipulation tests pass in Scryer."""
+        # nv
         passed, failed = self._run_conformity("iso_term_manipulation")
         assert len(passed) > 0, "No tests ran"
         assert not failed, f"{len(failed)} tests failed: {failed}"
@@ -421,6 +438,7 @@ class TestScryerConformityRoundtrip:
     @pytest.mark.parametrize("name", _CONFORMITY_NAMES)
     def test_roundtrip_parses(self, name):
         """Roundtripped Prolog output parses in Scryer without errors."""
+        # nv
         path = CONFORMITY / f"{name}.clausal"
         source = path.read_text(encoding="utf-8")
         pl1 = clausal_source_to_prolog(source, dialect=_SCRYER)
@@ -436,6 +454,7 @@ class TestScryerConformityRoundtrip:
     @pytest.mark.parametrize("name", _CONFORMITY_NAMES)
     def test_roundtrip_execution(self, name):
         """All test/1 predicates still pass after roundtrip through translator."""
+        # nv
         passed, failed = self._roundtrip_conformity(name)
         assert len(passed) > 0, f"No tests ran for {name}"
         assert not failed, (
@@ -454,6 +473,7 @@ class TestScryerDialectFeatures:
 
     def test_clpz_constraints(self):
         """CLP(Z) constraints use Scryer's clpz library."""
+        # nv
         src = textwrap.dedent("""\
             -import_from(clausal.logic.clpfd, [in_domain, all_different])
             Test(X) <- (
@@ -467,12 +487,14 @@ class TestScryerDialectFeatures:
 
     def test_scryer_leq_operator(self):
         """Scryer uses =< (ISO) for less-or-equal."""
+        # nv
         src = "Test() <- (1 <= 2)"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         assert "=<" in prolog
 
     def test_scryer_tabling(self):
         """Scryer tabling uses use_module(library(tabling))."""
+        # nv
         src = "-table(Fib(N, R))"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         assert "use_module(library(tabling))" in prolog
@@ -480,18 +502,21 @@ class TestScryerDialectFeatures:
 
     def test_scryer_dif(self):
         """dif/2 is available in Scryer."""
+        # nv
         src = "Test(X, Y) <- (X is not Y)"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         assert "dif" in prolog
 
     def test_scryer_member(self):
         """in → member/2 works for Scryer."""
+        # nv
         src = "Test(X) <- (X in [1, 2, 3])"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         assert "member" in prolog
 
     def test_scryer_cut(self):
         """Cut is preserved through roundtrip (as ! or cut)."""
+        # nv
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         src = "foo(X) :- X > 0, !."
         clausal = prolog_to_clausal(src, dialect=_SCRYER)
@@ -510,6 +535,7 @@ class TestISOEdgeCases:
 
     def test_operator_precedence_iso(self):
         """ISO operator precedence is preserved in translation."""
+        # nv
         src = "Test(R) <- (R := 2 + 3 * 4)"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         # Should evaluate to 14, not 20
@@ -519,6 +545,7 @@ class TestISOEdgeCases:
 
     def test_atom_quoting(self):
         """Atoms that need quoting are properly quoted."""
+        # nv
         src = "Foo(hello_world),"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         result = _run_scryer(prolog, "foo(X), write(X), nl, halt")
@@ -527,6 +554,7 @@ class TestISOEdgeCases:
 
     def test_string_handling(self):
         """Strings are handled correctly."""
+        # nv
         src = 'Greeting("hello"),'
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         # Scryer treats "hello" as a char list by default; use atom flag
@@ -537,6 +565,7 @@ class TestISOEdgeCases:
 
     def test_empty_list(self):
         """Empty list [] works correctly."""
+        # nv
         src = "Empty([]),"
         prolog = clausal_source_to_prolog(src, dialect=_SCRYER)
         result = _run_scryer(prolog, "empty(X), write(X), nl, halt")
@@ -545,6 +574,7 @@ class TestISOEdgeCases:
 
     def test_list_cons_pattern(self):
         """[H|T] pattern matching works."""
+        # nv
         src = textwrap.dedent("""\
             Head([H, *_], H),
         """)
@@ -555,6 +585,7 @@ class TestISOEdgeCases:
 
     def test_nested_compound(self):
         """Nested compound terms translate correctly."""
+        # nv
         src = textwrap.dedent("""\
             Eval(add(X, Y), R) <- (R := X + Y)
             Eval(mul(X, Y), R) <- (R := X * Y)
@@ -566,6 +597,7 @@ class TestISOEdgeCases:
 
     def test_multiple_solutions(self):
         """Multiple solutions via backtracking work correctly."""
+        # nv
         src = textwrap.dedent("""\
             Color(red),
             Color(green),
@@ -582,6 +614,7 @@ class TestISOEdgeCases:
 
     def test_comparison_operators(self):
         """All comparison operators translate to ISO forms."""
+        # nv
         src = textwrap.dedent("""\
             TestLt() <- (1 < 2)
             TestLeq() <- (1 <= 1)

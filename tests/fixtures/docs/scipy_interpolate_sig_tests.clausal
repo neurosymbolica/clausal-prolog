@@ -6,11 +6,11 @@ Test("make spline exists") <- (
     EvalSpline(H, [0.0, 4.0], VALS),
     V0 is ++(float(VALS[0])),
     ++(abs(V0 - 0.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv
 
 Test("make cubic exists") <- (
     MakeCubic([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     EvalSpline(H, [2.0], VALS),
     V is ++(float(VALS[0])),
     ++(abs(V - 4.0)) < 1e-8,
-    Free(H))
+    Free(H))  # nv

@@ -20,14 +20,14 @@ Test("head/tail destructuring") <- (
     HeadTail([1, 2, 3], HEAD, TAIL),
     HEAD == 1,
     TAIL == [2, 3]
-)
+)  # nv
 
 Test("first two + rest") <- (
     FirstTwo([10, 20, 30, 40], A, B, REST),
     A == 10,
     B == 20,
     REST == [30, 40]
-)
+)  # nv
 
 # Validates the partition example
 IsPositive(X) <- (X > 0)
@@ -36,4 +36,4 @@ Test("partition positives") <- (
     Partition([-1, 2, -3, 4], IsPositive, YES, NO),
     YES == [2, 4],
     NO == [-1, -3]
-)
+)  # nv

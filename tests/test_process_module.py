@@ -44,23 +44,28 @@ def trampoline_solutions(pred, *args):
 
 class TestShell1:
     def test_true_succeeds(self):
+        # nv
         sols, _ = simple_solutions(_shell_1, "true")
         assert len(sols) == 1
 
     def test_false_fails(self):
+        # nv
         sols, _ = simple_solutions(_shell_1, "false")
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_shell_1, Var())
         assert len(sols) == 0
 
     def test_non_string_fails(self):
+        # nv
         sols, _ = simple_solutions(_shell_1, 42)
         assert len(sols) == 0
 
     def test_trampoline_multi_arity(self):
         # Arity 1 via multi-dispatch
+        # nv
         sols, _ = trampoline_solutions(Shell, "true")
         assert len(sols) == 1
 
@@ -70,18 +75,21 @@ class TestShell1:
 
 class TestShell2:
     def test_true_exit_zero(self):
+        # nv
         code = Var()
         sols, trail = simple_solutions(_shell_2, "true", code)
         assert len(sols) == 1
         assert deref(code) == 0
 
     def test_false_exit_one(self):
+        # nv
         code = Var()
         sols, trail = simple_solutions(_shell_2, "false", code)
         assert len(sols) == 1
         assert deref(code) == 1
 
     def test_trampoline(self):
+        # nv
         code = Var()
         sols, trail = trampoline_solutions(Shell, "true", code)
         assert len(sols) == 1
@@ -93,20 +101,24 @@ class TestShell2:
 
 class TestShellOutput2:
     def test_captures_stdout(self):
+        # nv
         output = Var()
         sols, trail = simple_solutions(_shell_output_2, "echo hello", output)
         assert len(sols) == 1
         assert deref(output).strip() == "hello"
 
     def test_nonzero_exit_fails(self):
+        # nv
         sols, _ = simple_solutions(_shell_output_2, "false", Var())
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_shell_output_2, Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         output = Var()
         sols, trail = trampoline_solutions(ShellOutput, "echo world", output)
         assert len(sols) == 1
@@ -118,6 +130,7 @@ class TestShellOutput2:
 
 class TestShellOutput3:
     def test_captures_stdout_and_stderr(self):
+        # nv
         out, err = Var(), Var()
         sols, trail = simple_solutions(
             _shell_output_3, "echo out && echo err >&2", out, err
@@ -127,6 +140,7 @@ class TestShellOutput3:
         assert deref(err).strip() == "err"
 
     def test_trampoline(self):
+        # nv
         out, err = Var(), Var()
         sols, trail = trampoline_solutions(
             ShellOutput, "echo hello && echo warn >&2", out, err
@@ -141,6 +155,7 @@ class TestShellOutput3:
 
 class TestProcessCreate3:
     def test_runs_program(self):
+        # nv
         result = Var()
         sols, trail = simple_solutions(
             _process_create_3, "echo", ["hello"], result
@@ -152,20 +167,24 @@ class TestProcessCreate3:
         assert "hello" in r.data["stdout"]
 
     def test_nonexistent_program_fails(self):
+        # nv
         sols, _ = simple_solutions(
             _process_create_3, "/nonexistent_program_xyz", [], Var()
         )
         assert len(sols) == 0
 
     def test_unbound_program_fails(self):
+        # nv
         sols, _ = simple_solutions(_process_create_3, Var(), [], Var())
         assert len(sols) == 0
 
     def test_unbound_args_fails(self):
+        # nv
         sols, _ = simple_solutions(_process_create_3, "echo", Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         result = Var()
         sols, trail = trampoline_solutions(
             ProcessCreate, "echo", ["test"], result
@@ -180,6 +199,7 @@ class TestProcessCreate3:
 
 class TestProcessCreate4:
     def test_with_cwd(self, tmp_path):
+        # nv
         result = Var()
         opts = DictTerm({"cwd": str(tmp_path)})
         sols, trail = simple_solutions(
@@ -190,6 +210,7 @@ class TestProcessCreate4:
         assert str(tmp_path) in r.data["stdout"]
 
     def test_with_timeout(self):
+        # nv
         result = Var()
         opts = DictTerm({"timeout": 0.01})
         sols, _ = simple_solutions(
@@ -199,6 +220,7 @@ class TestProcessCreate4:
         assert len(sols) == 0
 
     def test_with_input(self):
+        # nv
         result = Var()
         opts = DictTerm({"input": "hello from stdin"})
         sols, trail = simple_solutions(
@@ -209,6 +231,7 @@ class TestProcessCreate4:
         assert r.data["stdout"] == "hello from stdin"
 
     def test_trampoline(self):
+        # nv
         result = Var()
         opts = DictTerm({})
         sols, trail = trampoline_solutions(
@@ -224,6 +247,7 @@ class TestProcessCreate4:
 
 class TestSleep:
     def test_sleeps(self):
+        # nv
         start = time.monotonic()
         sols, _ = simple_solutions(_sleep_1, 0.05)
         elapsed = time.monotonic() - start
@@ -231,13 +255,16 @@ class TestSleep:
         assert elapsed >= 0.04  # allow small tolerance
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_sleep_1, Var())
         assert len(sols) == 0
 
     def test_non_numeric_fails(self):
+        # nv
         sols, _ = simple_solutions(_sleep_1, "not a number")
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         sols, _ = trampoline_solutions(Sleep, 0.01)
         assert len(sols) == 1

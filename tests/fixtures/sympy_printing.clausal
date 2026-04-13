@@ -5,26 +5,26 @@
 Test("latex simple") <- (
     Latex(X**2 + 1, S),
     ++("x^{2}" in S)
-)
+)  # nv
 
 Test("latex fraction") <- (
     Latex(1 / X, S),
     ++("frac" in S)
-)
+)  # nv
 
 Test("latex integer") <- (
     Latex(42, S),
     S == "42"
-)
+)  # nv
 
 # ── Pretty/2 ─────────────────────────────────────────────────────────────────
 
 Test("pretty integer") <- (
     Pretty(42, S),
     S == "42"
-)
+)  # nv
 
 Test("pretty expression") <- (
     Pretty(X**2, S),
     ++("2" in S)
-)
+)  # nv

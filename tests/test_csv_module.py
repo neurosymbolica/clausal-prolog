@@ -46,34 +46,40 @@ def trampoline_solutions(pred, *args):
 
 class TestParseRow:
     def test_simple(self):
+        # nv
         row = Var()
         sols, trail = simple_solutions(_parse_row_2, "a,b,c", row)
         assert len(sols) == 1
         assert deref(row) == ["a", "b", "c"]
 
     def test_quoted_fields(self):
+        # nv
         row = Var()
         sols, trail = simple_solutions(_parse_row_2, '"hello, world",b', row)
         assert len(sols) == 1
         assert deref(row) == ["hello, world", "b"]
 
     def test_empty_string(self):
+        # nv
         row = Var()
         sols, trail = simple_solutions(_parse_row_2, "", row)
         assert len(sols) == 1
         assert deref(row) == []
 
     def test_single_field(self):
+        # nv
         row = Var()
         sols, _ = simple_solutions(_parse_row_2, "hello", row)
         assert len(sols) == 1
         assert deref(row) == ["hello"]
 
     def test_unbound_string_fails(self):
+        # nv
         sols, _ = simple_solutions(_parse_row_2, Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         row = Var()
         sols, trail = trampoline_solutions(ParseRow, "x,y", row)
         assert len(sols) == 1
@@ -85,6 +91,7 @@ class TestParseRow:
 
 class TestParse:
     def test_multi_line(self):
+        # nv
         rows = Var()
         csv_text = "a,b,c\n1,2,3\n4,5,6"
         sols, trail = simple_solutions(_parse_2, csv_text, rows)
@@ -96,12 +103,14 @@ class TestParse:
         assert result[2] == ["4", "5", "6"]
 
     def test_empty_input(self):
+        # nv
         rows = Var()
         sols, trail = simple_solutions(_parse_2, "", rows)
         assert len(sols) == 1
         assert deref(rows) == []
 
     def test_mixed_quoted(self):
+        # nv
         rows = Var()
         csv_text = 'a,"b,c"\n"d,e",f'
         sols, trail = simple_solutions(_parse_2, csv_text, rows)
@@ -111,6 +120,7 @@ class TestParse:
         assert result[1] == ["d,e", "f"]
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_parse_2, Var(), Var())
         assert len(sols) == 0
 
@@ -120,6 +130,7 @@ class TestParse:
 
 class TestParseRecords:
     def test_basic(self):
+        # nv
         headers, records = Var(), Var()
         csv_text = "name,age\nalice,30\nbob,25"
         sols, trail = simple_solutions(_parse_records_3, csv_text, headers, records)
@@ -133,6 +144,7 @@ class TestParseRecords:
         assert recs[1].data["name"] == "bob"
 
     def test_headers_only(self):
+        # nv
         headers, records = Var(), Var()
         csv_text = "name,age"
         sols, trail = simple_solutions(_parse_records_3, csv_text, headers, records)
@@ -142,10 +154,12 @@ class TestParseRecords:
 
     def test_empty_fails(self):
         """Empty string has no headers."""
+        # nv
         sols, _ = simple_solutions(_parse_records_3, "", Var(), Var())
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_parse_records_3, Var(), Var(), Var())
         assert len(sols) == 0
 
@@ -155,6 +169,7 @@ class TestParseRecords:
 
 class TestGenerate:
     def test_basic(self):
+        # nv
         s = Var()
         rows = [["a", "b"], ["1", "2"]]
         sols, trail = simple_solutions(_generate_2, rows, s)
@@ -164,6 +179,7 @@ class TestGenerate:
         assert "1,2" in result
 
     def test_quoting(self):
+        # nv
         s = Var()
         rows = [["hello, world", "b"]]
         sols, trail = simple_solutions(_generate_2, rows, s)
@@ -173,6 +189,7 @@ class TestGenerate:
 
     def test_round_trip(self):
         """Parse then generate yields same rows."""
+        # nv
         original = "a,b\r\n1,2\r\n"
         rows = Var()
         simple_solutions(_parse_2, original, rows)
@@ -181,10 +198,12 @@ class TestGenerate:
         assert deref(s) == original
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_generate_2, Var(), Var())
         assert len(sols) == 0
 
     def test_non_list_row_fails(self):
+        # nv
         sols, _ = simple_solutions(_generate_2, ["not_a_list"], Var())
         assert len(sols) == 0
 
@@ -194,6 +213,7 @@ class TestGenerate:
 
 class TestGenerateRecords:
     def test_basic(self):
+        # nv
         s = Var()
         headers = ["name", "age"]
         records = [DictTerm({"name": "alice", "age": "30"})]
@@ -204,10 +224,12 @@ class TestGenerateRecords:
         assert "alice,30" in result
 
     def test_unbound_headers_fails(self):
+        # nv
         sols, _ = simple_solutions(_generate_records_3, Var(), [], Var())
         assert len(sols) == 0
 
     def test_non_dict_term_record_fails(self):
+        # nv
         sols, _ = simple_solutions(
             _generate_records_3, ["a"], ["not_a_dict_term"], Var()
         )
@@ -219,6 +241,7 @@ class TestGenerateRecords:
 
 class TestFileIO:
     def test_round_trip(self, tmp_path):
+        # nv
         path = str(tmp_path / "test.csv")
         rows = [["name", "age"], ["alice", "30"], ["bob", "25"]]
         sols, _ = simple_solutions(_write_file_2, path, rows)
@@ -233,14 +256,17 @@ class TestFileIO:
         assert data[1] == ["alice", "30"]
 
     def test_read_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_read_file_2, "/nonexistent/file.csv", Var())
         assert len(sols) == 0
 
     def test_read_unbound_path_fails(self):
+        # nv
         sols, _ = simple_solutions(_read_file_2, Var(), Var())
         assert len(sols) == 0
 
     def test_write_unbound_rows_fails(self):
+        # nv
         sols, _ = simple_solutions(_write_file_2, "/tmp/test.csv", Var())
         assert len(sols) == 0
 
@@ -250,6 +276,7 @@ class TestFileIO:
 
 class TestReadRecords:
     def test_basic(self, tmp_path):
+        # nv
         path = str(tmp_path / "records.csv")
         with open(path, "w") as f:
             f.write("name,age\nalice,30\nbob,25\n")
@@ -264,5 +291,6 @@ class TestReadRecords:
         assert recs[1].data["age"] == "25"
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_read_records_2, "/nonexistent/file.csv", Var())
         assert len(sols) == 0

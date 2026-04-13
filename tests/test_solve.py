@@ -106,39 +106,46 @@ def _make_arith_module() -> Module:
 
 class TestCall:
     def test_call_edge_direct(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         results = [deref(x) for _ in call("edge", "a", x, module=mod)]
         assert results == ["b"]
 
     def test_call_edge_multiple_sources(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         results = [deref(x) for _ in call("edge", "b", x, module=mod)]
         assert set(results) == {"c", "d"}
 
     def test_call_path_reachable_from_a(self):
+        # nv
         mod = _make_edge_module()
         y = Var()
         results = [deref(y) for _ in call("path", "a", y, module=mod)]
         assert set(results) == {"b", "c", "d"}
 
     def test_call_path_ground_success(self):
+        # nv
         mod = _make_edge_module()
         results = list(call("path", "a", "d", module=mod))
         assert len(results) >= 1  # multiple paths a→d
 
     def test_call_path_ground_failure(self):
+        # nv
         mod = _make_edge_module()
         results = list(call("path", "d", "a", module=mod))  # no back-edge
         assert results == []
 
     def test_call_unknown_predicate_raises(self):
+        # nv
         mod = _make_edge_module()
         with pytest.raises(KeyError):
             list(call("unknown", "x", module=mod))
 
     def test_call_yields_trail(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         trails = list(call("edge", "a", x, module=mod))
@@ -147,6 +154,7 @@ class TestCall:
 
     def test_call_uses_provided_trail(self):
         """Bindings are live inside the iterator (try/finally undoes on exit)."""
+        # nv
         mod = _make_edge_module()
         x = Var()
         t = Trail()
@@ -156,17 +164,20 @@ class TestCall:
         assert seen == ["b"]
 
     def test_call_member2_via_in(self):
+        # nv
         mod = _make_member_module()
         x = Var()
         results = [deref(x) for _ in call("member2", x, [1, 2, 3], module=mod)]
         assert results == [1, 2, 3]
 
     def test_call_lt_check_pass(self):
+        # nv
         mod = _make_arith_module()
         results = list(call("lt_check", 3, 5, module=mod))
         assert len(results) == 1
 
     def test_call_lt_check_fail(self):
+        # nv
         mod = _make_arith_module()
         results = list(call("lt_check", 5, 3, module=mod))
         assert results == []
@@ -177,6 +188,7 @@ class TestCall:
 
 class TestSolve:
     def test_solve_call_goal(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["a", x], kwargs=[])
@@ -184,6 +196,7 @@ class TestSolve:
         assert results == ["b"]
 
     def test_solve_and_goal(self):
+        # nv
         mod = _make_edge_module()
         x, y = Var(), Var()
         goal = And(
@@ -195,16 +208,19 @@ class TestSolve:
         assert set(results) == {("b", "c"), ("b", "d")}
 
     def test_solve_true_goal(self):
+        # nv
         mod = _make_edge_module()
         results = list(solve(True, mod))
         assert len(results) == 1
 
     def test_solve_false_goal(self):
+        # nv
         mod = _make_edge_module()
         results = list(solve(False, mod))
         assert results == []
 
     def test_solve_is_goal(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Is(left=x, right=42)
@@ -212,6 +228,7 @@ class TestSolve:
         assert results == [42]
 
     def test_solve_or_goal(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Or(
@@ -222,18 +239,21 @@ class TestSolve:
         assert results == ["hello", "world"]
 
     def test_solve_not_goal_success(self):
+        # nv
         mod = _make_edge_module()
         # not(False) → succeed once
         results = list(solve(Not(operand=False), mod))
         assert len(results) == 1
 
     def test_solve_not_goal_failure(self):
+        # nv
         mod = _make_edge_module()
         # not(True) → fail
         results = list(solve(Not(operand=True), mod))
         assert results == []
 
     def test_solve_yields_trail(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Is(left=x, right=99)
@@ -242,6 +262,7 @@ class TestSolve:
         assert isinstance(trails[0], Trail)
 
     def test_solve_multiple_solutions_backtrack(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="path"), args=["a", x], kwargs=[])
@@ -250,6 +271,7 @@ class TestSolve:
 
     def test_module_solve_method(self):
         """Module.solve delegates to solve()."""
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["a", x], kwargs=[])
@@ -262,6 +284,7 @@ class TestSolve:
 
 class TestQuery:
     def test_query_single_var(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["a", x], kwargs=[])
@@ -269,6 +292,7 @@ class TestQuery:
         assert results == [{"X": "b"}]
 
     def test_query_multiple_solutions(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["b", x], kwargs=[])
@@ -276,6 +300,7 @@ class TestQuery:
         assert {r["X"] for r in results} == {"c", "d"}
 
     def test_query_two_vars(self):
+        # nv
         mod = _make_edge_module()
         x, y = Var(), Var()
         goal = And(
@@ -287,6 +312,7 @@ class TestQuery:
         assert xy == {("b", "c"), ("b", "d")}
 
     def test_query_failure_yields_nothing(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["z", x], kwargs=[])
@@ -295,6 +321,7 @@ class TestQuery:
 
     def test_query_unbound_var_stays_var(self):
         """An unbound Var in variables dict appears as a Var in the result."""
+        # nv
         mod = _make_edge_module()
         x, y = Var(), Var()
         # Only bind x; y stays unbound
@@ -313,6 +340,7 @@ class TestOnce:
     def test_once_success(self):
         """once returns the Trail (bindings undone after generator exits, but
         the Trail object itself is returned so the caller has a reference)."""
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["a", x], kwargs=[])
@@ -321,6 +349,7 @@ class TestOnce:
         assert isinstance(trail, Trail)
 
     def test_once_failure_returns_none(self):
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["z", x], kwargs=[])
@@ -329,6 +358,7 @@ class TestOnce:
 
     def test_once_only_first_solution(self):
         """once returns non-None on success (b has two outgoing edges but only first fires)."""
+        # nv
         mod = _make_edge_module()
         x = Var()
         goal = Call(func=LoadName(name="edge"), args=["b", x], kwargs=[])
@@ -338,11 +368,13 @@ class TestOnce:
         assert trail is not None
 
     def test_once_true_succeeds(self):
+        # nv
         mod = _make_edge_module()
         result = once(True, mod)
         assert result is not None
 
     def test_once_false_fails(self):
+        # nv
         mod = _make_edge_module()
         result = once(False, mod)
         assert result is None
@@ -353,18 +385,21 @@ class TestOnce:
 
 class TestDerefWalk:
     def test_scalar(self):
+        # nv
         assert _deref_walk(42) == 42
         assert _deref_walk("hello") == "hello"
         assert _deref_walk(None) is None
         assert _deref_walk(True) is True
 
     def test_unbound_var(self):
+        # nv
         v = Var()
         result = _deref_walk(v)
         from clausal.logic.variables import is_var
         assert is_var(result)
 
     def test_bound_var(self):
+        # nv
         v = Var()
         t = Trail()
         from clausal.logic.variables import unify
@@ -372,6 +407,7 @@ class TestDerefWalk:
         assert _deref_walk(v) == 42
 
     def test_list(self):
+        # nv
         v = Var()
         t = Trail()
         from clausal.logic.variables import unify
@@ -379,6 +415,7 @@ class TestDerefWalk:
         assert _deref_walk([1, v, 3]) == [1, "x", 3]
 
     def test_compound(self):
+        # nv
         v = Var()
         t = Trail()
         from clausal.logic.variables import unify
@@ -388,6 +425,7 @@ class TestDerefWalk:
         assert result == Compound("foo", (1, 99, "bar"))
 
     def test_nested(self):
+        # nv
         v = Var()
         t = Trail()
         from clausal.logic.variables import unify

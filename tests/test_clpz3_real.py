@@ -29,6 +29,7 @@ from clausal.pythonic_ast.nodes import Add, Sub, Mult, LtE, Lt, GtE, Gt, ArithEq
 
 class TestInZ3Real:
     def test_unbounded_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, None, None, trail)
@@ -36,24 +37,28 @@ class TestInZ3Real:
         assert state.var_map[id(x)].sort() == z3.RealSort()
 
     def test_bounded_var(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, 0, 10, trail)
         assert z3_check(trail)
 
     def test_fraction_bounds(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, Fraction(1, 3), Fraction(2, 3), trail)
         assert z3_check(trail)
 
     def test_float_bounds(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, 0.0, 1.5, trail)
         assert z3_check(trail)
 
     def test_negative_bounds(self):
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, -100, 100, trail)
@@ -61,6 +66,7 @@ class TestInZ3Real:
 
     def test_tight_bounds_feasible(self):
         """lo == hi — one feasible point."""
+        # nv
         trail = Trail()
         x = Var()
         assert in_z3_real(x, 5, 5, trail)
@@ -71,23 +77,27 @@ class TestInZ3Real:
 
     def test_tight_bounds_infeasible(self):
         """lo > hi — infeasible."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 10, 5, trail)
         assert not z3_check(trail)
 
     def test_ground_in_range(self):
+        # nv
         trail = Trail()
         assert in_z3_real(5, 0, 10, trail)
         assert in_z3_real(5.0, 0, 10, trail)
         assert in_z3_real(Fraction(1, 2), 0, 1, trail)
 
     def test_ground_out_of_range(self):
+        # nv
         trail = Trail()
         assert not in_z3_real(15, 0, 10, trail)
         assert not in_z3_real(-1, 0, 10, trail)
 
     def test_list_of_vars(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         assert in_z3_real([x, y], 0, 10, trail)
@@ -97,6 +107,7 @@ class TestInZ3Real:
 
     def test_backtracking_retracts_bounds(self):
         """Bounds posted via in_z3_real are undone on trail.undo."""
+        # nv
         trail = Trail()
         x = Var()
         mark = trail.mark()
@@ -123,6 +134,7 @@ class TestInZ3Real:
 
 class TestRealArithConstraints:
     def test_eq(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -134,6 +146,7 @@ class TestRealArithConstraints:
         assert solutions[0] == Fraction(3)
 
     def test_ne(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -142,6 +155,7 @@ class TestRealArithConstraints:
         assert z3_check(trail)
 
     def test_lt(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -153,6 +167,7 @@ class TestRealArithConstraints:
         assert solutions[0] < 3
 
     def test_le(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -164,6 +179,7 @@ class TestRealArithConstraints:
         assert solutions[0] <= 5
 
     def test_gt(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -175,6 +191,7 @@ class TestRealArithConstraints:
         assert solutions[0] > 7
 
     def test_ge(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -187,6 +204,7 @@ class TestRealArithConstraints:
 
     def test_two_var_eq(self):
         """x + y == 10, x == 3 → y == 7."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_real([x, y], 0, 10, trail)
@@ -199,6 +217,7 @@ class TestRealArithConstraints:
         assert solutions[0] == (Fraction(3), Fraction(7))
 
     def test_unsatisfiable(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -206,6 +225,7 @@ class TestRealArithConstraints:
         assert not z3_check(trail)
 
     def test_backtracking_retracts_constraint(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -229,6 +249,7 @@ class TestRealArithConstraints:
 
 class TestLabelZ3Real:
     def test_single_var_yields_one(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -241,6 +262,7 @@ class TestLabelZ3Real:
         assert 0 <= float(val) <= 10
 
     def test_infeasible_yields_none(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -248,11 +270,13 @@ class TestLabelZ3Real:
         assert len(list(label_z3_real([x], trail))) == 0
 
     def test_all_ground_yields_one(self):
+        # nv
         trail = Trail()
         assert len(list(label_z3_real([1, 2, Fraction(1, 2)], trail))) == 1
 
     def test_vars_unbound_after(self):
         """Bindings from label_z3_real are undone after the generator resumes."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -261,6 +285,7 @@ class TestLabelZ3Real:
         assert is_var(deref(x))
 
     def test_unregistered_var_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         with pytest.raises(ValueError, match="not registered"):
@@ -273,6 +298,7 @@ class TestLabelZ3Real:
 
 class TestOptimize:
     def test_maximize_bounded(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -281,6 +307,7 @@ class TestOptimize:
         assert deref(r) == Fraction(10)
 
     def test_minimize_bounded(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -290,6 +317,7 @@ class TestOptimize:
 
     def test_maximize_lp(self):
         """Classic LP: maximize 30x + 50y subject to linear constraints."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_real([x, y], 0, 1000, trail)
@@ -307,6 +335,7 @@ class TestOptimize:
         assert result == Fraction(310) or result == 310
 
     def test_minimize_lp(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_real([x, y], 0, 100, trail)
@@ -316,6 +345,7 @@ class TestOptimize:
         assert deref(obj) == Fraction(10)
 
     def test_infeasible_maximize_fails(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -324,6 +354,7 @@ class TestOptimize:
         assert not maximize_z3(x, obj, trail)
 
     def test_infeasible_minimize_fails(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -333,6 +364,7 @@ class TestOptimize:
 
     def test_maximize_does_not_commit(self):
         """maximize_z3 does not modify the main solver state."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -344,6 +376,7 @@ class TestOptimize:
 
     def test_result_unifies(self):
         """If result_var is already bound to the optimal value, succeeds."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 5, 5, trail)
@@ -353,6 +386,7 @@ class TestOptimize:
 
     def test_result_wrong_value_fails(self):
         """If result_var is bound to a wrong value, unify fails."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -368,6 +402,7 @@ class TestOptimize:
 class TestEntailed:
     def test_entailed_upper_bound(self):
         """x in [0,5] → x <= 10 is entailed."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -375,6 +410,7 @@ class TestEntailed:
 
     def test_entailed_exact(self):
         """x == 3 → x <= 5 is entailed."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 3, 3, trail)
@@ -382,6 +418,7 @@ class TestEntailed:
 
     def test_not_entailed_indeterminate(self):
         """x in [0,10] → x < 5 is not entailed (x could be 8)."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -389,6 +426,7 @@ class TestEntailed:
 
     def test_entailed_equality(self):
         """x == 3, y == 3 → x == y is entailed."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         z3_real_eq(x, 3, trail)
@@ -397,12 +435,14 @@ class TestEntailed:
 
     def test_not_entailed_unconstrained(self):
         """No constraints → x < 5 is not entailed."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, None, None, trail)
         assert not entailed_z3(Lt(left=x, right=5), trail)
 
     def test_entailed_does_not_modify_solver(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 5, trail)
@@ -418,6 +458,7 @@ class TestEntailed:
 
 class TestSupInf:
     def test_sup(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -426,6 +467,7 @@ class TestSupInf:
         assert deref(r) == Fraction(10)
 
     def test_inf(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -434,6 +476,7 @@ class TestSupInf:
         assert deref(r) == Fraction(0)
 
     def test_sup_with_constraints(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -450,6 +493,7 @@ class TestSupInf:
 class TestNonlinear:
     def test_quadratic_eq(self):
         """x² == 4 in [0,10] → x == 2."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -463,6 +507,7 @@ class TestNonlinear:
 
     def test_circle_constraint(self):
         """x² + y² <= 25 in [-10,10]² — finds a point inside the circle."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3_real([x, y], -10, 10, trail)
@@ -486,6 +531,7 @@ class TestCrossValidation:
         """LP: maximize 30x + 50y subject to 2x+y<=16, x+2y<=11, x+3y<=15.
         Both CLP(Q) and Z3 should give obj = 310.
         """
+        # nv
         from clausal.logic.clpq import in_q, q_le, maximize as clpq_maximize
 
         # CLP(Q) version
@@ -512,6 +558,7 @@ class TestCrossValidation:
 
     def test_minimize_matches_clpq(self):
         """Minimize x subject to x >= 3 in [0,100]: both give 3."""
+        # nv
         from clausal.logic.clpq import in_q, q_le, minimize as clpq_minimize
 
         trail_q = Trail()

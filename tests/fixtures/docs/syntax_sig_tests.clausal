@@ -1,18 +1,18 @@
 # Companion tests for docs/syntax.md signature blocks.
 # Validates core syntax constructs exist and work.
 
-Test("clause with body") <- (1 == 1)
+Test("clause with body") <- (1 == 1)  # nv
 
 Test("list pattern") <- (
     [H, *T] is [1, 2, 3],
     H == 1,
     T == [2, 3]
-)
+)  # nv
 
 Test("between constraint") <- (
     in_domain(X, 1, 9),
     label([X]),
     X == 1
-)
+)  # nv
 
-Test("maplist higher order") <- maplist(number, [1, 2, 3])
+Test("maplist higher order") <- maplist(number, [1, 2, 3])  # nv

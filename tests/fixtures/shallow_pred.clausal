@@ -5,6 +5,6 @@ Color("sky", "blue"),
 Color("grass", "green"),
 Color("sun", "yellow"),
 
-Test("color sky") <- Color("sky", "blue")
-Test("color grass") <- Color("grass", "green")
-Test("color sun") <- Color("sun", "yellow")
+Test("color sky") <- Color("sky", "blue")  # nv
+Test("color grass") <- Color("grass", "green")  # nv
+Test("color sun") <- Color("sun", "yellow")  # nv

@@ -31,49 +31,49 @@ IsBoundNumber(X) <- (
 
 # ── var/1 ────────────────────────────────────────────────────────────────────
 
-Test("var: unbound var succeeds") <- var(_x)
-Test("var: integer fails") <- (not var(42))
-Test("var: atom fails") <- (not var(Hello))
+Test("var: unbound var succeeds") <- var(_x)  # nv
+Test("var: integer fails") <- (not var(42))  # nv
+Test("var: atom fails") <- (not var(Hello))  # nv
 Test("var: bound var fails") <- (
     _x is 1,
     not var(_x)
-)
+)  # nv
 
 # ── nonvar/1 ─────────────────────────────────────────────────────────────────
 
-Test("nonvar: integer succeeds") <- nonvar(42)
-Test("nonvar: atom succeeds") <- nonvar(Hello)
-Test("nonvar: unbound var fails") <- (not nonvar(_x))
+Test("nonvar: integer succeeds") <- nonvar(42)  # nv
+Test("nonvar: atom succeeds") <- nonvar(Hello)  # nv
+Test("nonvar: unbound var fails") <- (not nonvar(_x))  # nv
 Test("nonvar: bound var succeeds") <- (
     _x is 1,
     nonvar(_x)
-)
-Test("nonvar: list succeeds") <- nonvar([1, 2])
+)  # nv
+Test("nonvar: list succeeds") <- nonvar([1, 2])  # nv
 
 # ── atom/1 ──────────────────────────────────────────────────────────────────
 
-Test("atom: declared atom succeeds") <- atom(Hello)
-Test("atom: declared atom Abc") <- atom(Abc)
-Test("atom: string fails") <- (not atom("hello"))
-Test("atom: integer fails") <- (not atom(1))
-Test("atom: unbound var fails") <- (not atom(_x))
+Test("atom: declared atom succeeds") <- atom(Hello)  # nv
+Test("atom: declared atom Abc") <- atom(Abc)  # nv
+Test("atom: string fails") <- (not atom("hello"))  # nv
+Test("atom: integer fails") <- (not atom(1))  # nv
+Test("atom: unbound var fails") <- (not atom(_x))  # nv
 
 # ── is_str/1 ───────────────────────────────────────────────────────────────────
 
-Test("str: plain string succeeds") <- is_str("hello")
-Test("str: empty string succeeds") <- is_str("")
-Test("str: declared atom fails") <- (not is_str(Hello))
-Test("str: integer fails") <- (not is_str(1))
-Test("str: unbound var fails") <- (not is_str(_x))
-Test("str: list fails") <- (not is_str([]))
+Test("str: plain string succeeds") <- is_str("hello")  # nv
+Test("str: empty string succeeds") <- is_str("")  # nv
+Test("str: declared atom fails") <- (not is_str(Hello))  # nv
+Test("str: integer fails") <- (not is_str(1))  # nv
+Test("str: unbound var fails") <- (not is_str(_x))  # nv
+Test("str: list fails") <- (not is_str([]))  # nv
 
 # ── integer/1 ────────────────────────────────────────────────────────────────────
 
-Test("integer: positive") <- integer(1)
-Test("integer: zero") <- integer(0)
-Test("integer: large") <- integer(100000000000000000000)
-Test("integer: string fails") <- (not integer("1"))
-Test("integer: var fails") <- (not integer(_x))
+Test("integer: positive") <- integer(1)  # nv
+Test("integer: zero") <- integer(0)  # nv
+Test("integer: large") <- integer(100000000000000000000)  # nv
+Test("integer: string fails") <- (not integer("1"))  # nv
+Test("integer: var fails") <- (not integer(_x))  # nv
 # Note: integer(-1), integer(True/False) tested in Python test file
 
 # ── float_/1 ─────────────────────────────────────────────────────────────────
@@ -81,38 +81,70 @@ Test("integer: var fails") <- (not integer(_x))
 
 # ── number/1 ─────────────────────────────────────────────────────────────────
 
-Test("number: integer") <- number(42)
-Test("number: float") <- number(3.14)
-Test("number: string fails") <- (not number("42"))
-Test("number: var fails") <- (not number(_x))
+Test("number: integer") <- number(42)  # nv
+Test("number: float") <- number(3.14)  # nv
+Test("number: string fails") <- (not number("42"))  # nv
+Test("number: var fails") <- (not number(_x))  # nv
 
 # ── callable_/1 (declared atoms) ─────────────────────────────────────────────
 
-Test("callable: declared atom") <- callable_(Hello)
-Test("callable: string") <- callable_("hello")
-Test("callable: int fails") <- (not callable_(42))
-Test("callable: var fails") <- (not callable_(_x))
+Test("callable: declared atom") <- callable_(Hello)  # nv
+Test("callable: string") <- callable_("hello")  # nv
+Test("callable: int fails") <- (not callable_(42))  # nv
+Test("callable: var fails") <- (not callable_(_x))  # nv
 
 # ── is_list/1 ────────────────────────────────────────────────────────────────────
 
-Test("is_list: list") <- is_list([1, 2, 3])
-Test("is_list: empty") <- is_list([])
-Test("is_list: nested") <- is_list([[1], [2]])
-Test("is_list: string fails") <- (not is_list(Hello))
-Test("is_list: int fails") <- (not is_list(42))
-Test("is_list: var fails") <- (not is_list(_x))
+Test("is_list: list") <- is_list([1, 2, 3])  # nv
+Test("is_list: empty") <- is_list([])  # nv
+Test("is_list: nested") <- is_list([[1], [2]])  # nv
+Test("is_list: string fails") <- (not is_list(Hello))  # nv
+Test("is_list: int fails") <- (not is_list(42))  # nv
+Test("is_list: var fails") <- (not is_list(_x))  # nv
 
 # ── ground/1 ─────────────────────────────────────────────────────────────────
 
-Test("ground: integer") <- ground(42)
-Test("ground: declared atom") <- ground(Abc)
-Test("ground: ground list") <- ground([1, 2, 3])
-Test("ground: empty list") <- ground([])
-Test("ground: var fails") <- (not ground(_x))
+Test("ground: integer") <- ground(42)  # nv
+Test("ground: declared atom") <- ground(Abc)  # nv
+Test("ground: ground list") <- ground([1, 2, 3])  # nv
+Test("ground: empty list") <- ground([])  # nv
+Test("ground: var fails") <- (not ground(_x))  # nv
 
 # ── IsBoundNumber/1 (private helper) ─────────────────────────────────────────
 
-Test("is_bound_number: integer") <- IsBoundNumber(42)
-Test("is_bound_number: float") <- IsBoundNumber(3.14)
-Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))
-Test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x))
+Test("is_bound_number: integer") <- IsBoundNumber(42)  # nv
+Test("is_bound_number: float") <- IsBoundNumber(3.14)  # nv
+Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))  # nv
+Test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x))  # nv
+
+# ── additional ground-literal cases migrated from test_iso_type_checking.py ──
+
+# atom/is_str
+Test("is_str: float fails") <- (not is_str(1.0))  # nv
+
+# integer
+Test("integer: float fails") <- (not integer(1.0))  # nv
+Test("integer: hex literal 0x1") <- integer(0x1)  # nv
+Test("integer: octal literal 0o1") <- integer(0o1)  # nv
+Test("integer: binary literal 0b1") <- integer(0b1)  # nv
+
+# float_
+Test("float_: 1.0 succeeds") <- float_(1.0)  # nv
+Test("float_: 0.0 succeeds") <- float_(0.0)  # nv
+Test("float_: scientific 1e9") <- float_(1e9)  # nv
+Test("float_: int fails") <- (not float_(1))  # nv
+Test("float_: string fails") <- (not float_("1.0"))  # nv
+Test("float_: var fails") <- (not float_(_x))  # nv
+
+# number
+Test("number: large int (via eval)") <- (X := 10 ** 100, number(X))  # nv
+
+# callable_
+# (compound-arg variant stays in Python — needs Compound() construction.)
+
+# is_list
+Test("is_list: list of mixed types") <- is_list([1, "a", [2]])  # nv
+
+# ground
+Test("ground: nested ground") <- ground([[1, 2], [3, 4]])  # nv
+Test("ground: list containing var fails") <- (not ground([1, _x, 3]))  # nv

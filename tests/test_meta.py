@@ -50,6 +50,7 @@ def bindings(goal, var: Var, mod=None) -> list:
 class TestFindAll:
     def test_find_all_basic(self):
         """find_all(X, member(X, [1,2,3]), Bag) → [1,2,3]"""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="findall"), args=[
@@ -62,6 +63,7 @@ class TestFindAll:
 
     def test_find_all_with_filter(self):
         """find_all(X, (member(X, [1,2,3]) and X > 1), Bag) → [2, 3]"""
+        # nv
         x = Var()
         bag = Var()
         inner = And(
@@ -74,6 +76,7 @@ class TestFindAll:
 
     def test_find_all_fail_empty_list(self):
         """find_all(X, fail, Bag) → [] (succeeds with empty list)"""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="findall"), args=[x, False, bag], kwargs=[])
@@ -82,6 +85,7 @@ class TestFindAll:
 
     def test_find_all_template_expression(self):
         """find_all([X,Y], cross product) → cartesian product"""
+        # nv
         x = Var()
         y = Var()
         bag = Var()
@@ -95,6 +99,7 @@ class TestFindAll:
 
     def test_find_all_no_side_effects(self):
         """find_all should undo bindings from inner goal."""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="findall"), args=[
@@ -107,6 +112,7 @@ class TestFindAll:
 
     def test_find_all_nested(self):
         """Nested find_all: outer collects inner results."""
+        # nv
         x = Var()
         y = Var()
         inner_bag = Var()
@@ -135,6 +141,7 @@ class TestFindAll:
 class TestBagOf:
     def test_bag_of_basic(self):
         """bag_of(X, member(X, [1,2]), Bag) → [1, 2]"""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="bagof"), args=[
@@ -147,6 +154,7 @@ class TestBagOf:
 
     def test_bag_of_fails_on_empty(self):
         """bag_of(X, fail, _) → fails (no solutions)"""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="bagof"), args=[x, False, bag], kwargs=[])
@@ -160,6 +168,7 @@ class TestBagOf:
 class TestSetOf:
     def test_set_of_dedup(self):
         """set_of(X, member(X, [1,1,2,2,3]), Bag) → [1,2,3]"""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="setof"), args=[
@@ -172,6 +181,7 @@ class TestSetOf:
 
     def test_set_of_fails_on_empty(self):
         """set_of with no solutions fails."""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="setof"), args=[x, False, bag], kwargs=[])
@@ -180,6 +190,7 @@ class TestSetOf:
 
     def test_set_of_preserves_order(self):
         """set_of preserves first occurrence order."""
+        # nv
         x = Var()
         bag = Var()
         goal = Call(func=LoadName(name="setof"), args=[
@@ -197,6 +208,7 @@ class TestSetOf:
 class TestForAll:
     def test_for_all_succeeds(self):
         """for_all(member(X, [2,4,6]), X > 0) → succeeds"""
+        # nv
         x = Var()
         cond = Call(func=LoadName(name="in_"), args=[x, [2, 4, 6]], kwargs=[])
         action = Gt(left=x, right=0)
@@ -206,6 +218,7 @@ class TestForAll:
 
     def test_for_all_fails(self):
         """for_all(member(X, [2,-1,6]), X > 0) → fails"""
+        # nv
         x = Var()
         cond = Call(func=LoadName(name="in_"), args=[x, [2, -1, 6]], kwargs=[])
         action = Gt(left=x, right=0)
@@ -215,6 +228,7 @@ class TestForAll:
 
     def test_for_all_vacuously_true(self):
         """for_all(fail, _) → succeeds (vacuously true)."""
+        # nv
         x = Var()
         goal = Call(func=LoadName(name="forall"), args=[
             False,
@@ -230,6 +244,7 @@ class TestForAll:
 class TestCallN:
     def test_call_1(self):
         """call(Goal) where Goal is a lambda-like callable."""
+        # nv
         mod = fresh_module()
         x = Var()
         results = [deref(x) for _ in call("call", x, module=mod)]
@@ -238,6 +253,7 @@ class TestCallN:
 
     def test_call_goal_4(self):
         """call_goal with 3 extra args."""
+        # nv
         mod = fresh_module()
         # We need a callable that takes 3 extra args + trail + k
         called_with = []
@@ -251,6 +267,7 @@ class TestCallN:
 
     def test_call_alias(self):
         """call/N aliases call_goal/N."""
+        # nv
         mod = fresh_module()
         called_with = []
         def my_goal(a1, trail, k):
@@ -263,6 +280,7 @@ class TestCallN:
 
     def test_call_5(self):
         """call/5 with 4 extra args."""
+        # nv
         mod = fresh_module()
         called_with = []
         def my_goal(a1, a2, a3, a4, trail, k):
@@ -283,6 +301,7 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 class TestClausalImport:
     def test_squares(self):
         """Squares/2 from meta_test.clausal."""
+        # nv
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
         results = [_deref_walk(x) for _ in call("Squares", [1, 2, 3], x, module=mod.__dict__["$module"])]
@@ -290,6 +309,7 @@ class TestClausalImport:
 
     def test_positives(self):
         """Positives/2 from meta_test.clausal."""
+        # nv
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
         results = [_deref_walk(x) for _ in call("Positives", [-1, 2, -3, 4], x, module=mod.__dict__["$module"])]
@@ -297,6 +317,7 @@ class TestClausalImport:
 
     def test_unique_members(self):
         """UniqueMembers/2 from meta_test.clausal."""
+        # nv
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         x = Var()
         results = [_deref_walk(x) for _ in call("UniqueMembers", [1, 2, 1, 3, 2], x, module=mod.__dict__["$module"])]
@@ -304,12 +325,14 @@ class TestClausalImport:
 
     def test_all_positive_pass(self):
         """AllPositive succeeds for all positive list."""
+        # nv
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         results = list(call("AllPositive", [1, 2, 3], module=mod.__dict__["$module"]))
         assert len(results) == 1
 
     def test_all_positive_fail(self):
         """AllPositive fails if any element is non-positive."""
+        # nv
         mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
         results = list(call("AllPositive", [1, -2, 3], module=mod.__dict__["$module"]))
         assert results == []

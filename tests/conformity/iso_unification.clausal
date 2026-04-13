@@ -30,57 +30,113 @@ SameValue(X, Y) <- (
 Test("atom unifies with itself") <- (
     _x is a,
     _x == a
-)
+)  # nv
 Test("var unifies with atom") <- (
     _x is a,
     _x == a
-)
+)  # nv
 Test("var unifies with integer") <- (
     _x is 42,
     _x == 42
-)
+)  # nv
 Test("var unifies with list") <- (
     _x is [1, 2, 3],
     _x == [1, 2, 3]
-)
-Test("different atoms fail") <- (not (_x is a and _x is b and _x == b))
+)  # nv
+Test("different atoms fail") <- (not (_x is a and _x is b and _x == b))  # nv
 Test("list unification") <- (
     _x is [a],
     _x == [a]
-)
+)  # nv
 Test("empty lists unify") <- (
     _x is [],
     _x == []
-)
+)  # nv
 
 # ── is not (does-not-unify) ──────────────────────────────────────────────────
 
 Test("different atoms: is not succeeds") <- (
     _x is a,
     _x is not b
-)
+)  # nv
 Test("same atom: is not fails") <- (
     _x is a,
     not (_x is not a)
-)
+)  # nv
 
 # ── == (structural equality) ─────────────────────────────────────────────────
 
-Test("same atom ==") <- (a == a)
-Test("different atoms == fails") <- (a != b)
-Test("same integer ==") <- (42 == 42)
+Test("same atom ==") <- (a == a)  # nv
+Test("different atoms == fails") <- (a != b)  # nv
+Test("same integer ==") <- (42 == 42)  # nv
 Test("bound var == value") <- (
     _x is Hello,
     _x == Hello
-)
+)  # nv
 
 # ── != (structural inequality) ───────────────────────────────────────────────
 
-Test("different atoms !=") <- (a != b)
-Test("same atom != fails") <- (not (a != a))
+Test("different atoms !=") <- (a != b)  # nv
+Test("same atom != fails") <- (not (a != a))  # nv
 
 # ── SameValue/2 (private helper) ──────────────────────────────────────────
 
-Test("same_value: integers") <- SameValue(42, 42)
-Test("same_value: strings") <- SameValue(Hello, Hello)
-Test("same_value: lists") <- SameValue([1, 2], [1, 2])
+Test("same_value: integers") <- SameValue(42, 42)  # nv
+Test("same_value: strings") <- SameValue(Hello, Hello)  # nv
+Test("same_value: lists") <- SameValue([1, 2], [1, 2])  # nv
+
+# ── Additional `is` (unification) cases ────────────────────────────────────
+
+Test("integer unifies with itself") <- (X is 1, X == 1)  # nv
+Test("float unifies with itself") <- (X is 1.0, X == 1.0)  # nv
+Test("var unifies with var (aliasing)") <- (X is Y, X == Y)  # nv
+Test("different integers fail to unify") <- (not (X is 1, X is 2))  # nv
+Test("int vs float (clausal quirk): 1 is 1.0") <- (X is 1, X is 1.0)  # nv
+Test("list unify with var") <- (X is [1, 2, 3], X == [1, 2, 3])  # nv
+Test("arithmetic term is structural: 1+2 != 3 in unify") <- (
+    not (X is 1 + 2, X is 3)
+)  # nv
+
+# ── Additional `is not` cases ──────────────────────────────────────────────
+
+Test("var/atom is not: succeeds with constraint") <- (X is not a)  # nv
+Test("different numbers: 1 is not 2") <- (1 is not 2)  # nv
+
+# ── == (arithmetic equality, CLP(FD)) ──────────────────────────────────────
+
+Test("same integer == 42") <- (42 == 42)  # nv
+Test("int == float (Python quirk)") <- (1 == 1.0)  # nv
+Test("two fresh vars: X == Y (CLP(FD) posts)") <- (X == Y)  # nv
+Test("same var: X == X") <- (X == X)  # nv
+
+# ── != (arithmetic inequality) ─────────────────────────────────────────────
+
+Test("var != atom") <- (X != a)  # nv
+Test("two fresh vars: X != Y") <- (X != Y)  # nv
+
+# ── structural_eq/2 (Prolog ==/2) ──────────────────────────────────────────
+
+Test("structural_eq: a == a") <- structural_eq(a, a)  # nv
+Test("structural_eq: a != b fails") <- (not structural_eq(a, b))  # nv
+Test("structural_eq: 42 == 42") <- structural_eq(42, 42)  # nv
+Test("structural_eq: same var") <- (X is Y, structural_eq(X, Y))  # nv
+Test("structural_eq: distinct unbound vars fail") <- (
+    not structural_eq(X, Y)
+)  # nv
+Test("structural_eq: unbound var vs atom fails") <- (
+    not structural_eq(X, a)
+)  # nv
+Test("structural_eq: nested lists") <- structural_eq([1, [2, 3]], [1, [2, 3]])  # nv
+Test("structural_eq: distinct lists fail") <- (
+    not structural_eq([1, 2], [1, 3])
+)  # nv
+
+# ── structural inequality (Prolog \==/2 → `not structural_eq`) ─────────────
+
+Test("structural_neq: a vs b") <- (not structural_eq(a, b))  # nv
+Test("structural_neq: unbound var vs atom") <- (not structural_eq(X, a))  # nv
+Test("structural_neq: two fresh vars") <- (not structural_eq(X, Y))  # nv
+Test("structural_neq: same var fails") <- (
+    X is Y,
+    not (not structural_eq(X, Y))
+)  # nv

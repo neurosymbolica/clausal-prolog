@@ -10,41 +10,41 @@
 Test("distribution registry") <- (
     findall(N, distribution(N, _), NS),
     in_("Normal", NS)
-)
+)  # nv
 
 Test("make_distribution normal") <- (
     make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, _)
-)
+)  # nv
 
 Test("make_distribution categorical") <- (
     tensor([0.25, 0.25, 0.25, 0.25], P),
     make_distribution("Categorical", {"probs": P}, _)
-)
+)  # nv
 
 Test("mean property") <- (
     make_distribution("Normal", {"loc": 2.0, "scale": 1.0}, D),
     mean(D, M),
     tensor_list(M, 2.0)
-)
+)  # nv
 
 Test("entropy exists") <- (
     make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
     entropy(D, H),
     shape(H, [])
-)
+)  # nv
 
 Test("sample with shape") <- (
     make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
     sample(D, [100], S),
     shape(S, [100])
-)
+)  # nv
 
 Test("log_prob computation") <- (
     make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
     tensor(0.0, V),
     log_prob(D, V, LP),
     shape(LP, [])
-)
+)  # nv
 
 Test("cdf icdf roundtrip") <- (
     make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
@@ -52,4 +52,4 @@ Test("cdf icdf roundtrip") <- (
     cdf(D, V, P),
     icdf(D, P, V2),
     allclose(V, V2)
-)
+)  # nv

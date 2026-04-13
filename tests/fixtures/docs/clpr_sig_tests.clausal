@@ -3,7 +3,7 @@
 Test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X])
-)
+)  # nv
 
 Test("clpr real bounds") <- (
     clpr.real((
@@ -12,4 +12,4 @@ Test("clpr real bounds") <- (
         X == 5.0,
     )),
     clpr.label([X])
-)
+)  # nv

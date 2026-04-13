@@ -46,9 +46,44 @@ CatchAll(RESULT) <- (
     )
 )
 
-Test("safe div") <- (SafeDiv(10, 2, RESULT), RESULT == 5)
-Test("safe div by zero") <- (SafeDiv(10, 0, RESULT), RESULT == "infinity")
-Test("catch negative") <- (CatchNeg(-5, RESULT), RESULT == "caught_negative")
-Test("catch ok") <- (CatchNeg(5, RESULT), RESULT == "ok")
-Test("catch all") <- (CatchAll(RESULT), RESULT == 42)
-Test("nested catch") <- (NestedCatch(RESULT), RESULT == "outer_error")
+Test("safe div") <- (SafeDiv(10, 2, RESULT), RESULT == 5)  # nv
+Test("safe div by zero") <- (SafeDiv(10, 0, RESULT), RESULT == "infinity")  # nv
+Test("catch negative") <- (CatchNeg(-5, RESULT), RESULT == "caught_negative")  # nv
+Test("catch ok") <- (CatchNeg(5, RESULT), RESULT == "ok")  # nv
+Test("catch all") <- (CatchAll(RESULT), RESULT == 42)  # nv
+Test("nested catch") <- (NestedCatch(RESULT), RESULT == "outer_error")  # nv
+
+# ── catch/3 additional semantic cases (migrated from test_exceptions.py) ───
+
+Test("catch: no exception — passes through") <- (
+    catch(X is 42, _, X is -1),
+    X == 42
+)  # nv
+
+Test("catch: variable catcher matches anything") <- (
+    catch(throw("any"), E, RESULT is E),
+    RESULT == "any"
+)  # nv
+
+Test("catch: specific catcher matches identical term") <- (
+    catch(throw("specific"), "specific", RESULT is "matched"),
+    RESULT == "matched"
+)  # nv
+
+Test("catch: findall around throw re-raises to outer catch") <- (
+    catch(
+        findall(X, (X in [1, 2, 3], throw("fa_err")), _),
+        E,
+        RESULT is E
+    ),
+    RESULT == "fa_err"
+)  # nv
+
+Test("catch: goal with multiple solutions — all pass through") <- (
+    findall(
+        X,
+        catch(X in [10, 20, 30], _, X is -1),
+        L
+    ),
+    L == [10, 20, 30]
+)  # nv

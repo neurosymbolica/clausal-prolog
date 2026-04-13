@@ -47,35 +47,42 @@ def _trampoline_solutions(dispatch, args, trail=None):
 
 class TestExtractFirstArgKey:
     def test_compound_literal(self):
+        # nv
         c = Clause(head=Compound("f", (42,)), body=[True])
         assert _extract_first_arg_key(c, 1) == 42
 
     def test_compound_string(self):
+        # nv
         c = Clause(head=Compound("f", ("hello", 1)), body=[True])
         assert _extract_first_arg_key(c, 2) == "hello"
 
     def test_compound_var(self):
+        # nv
         v = Var()
         c = Clause(head=Compound("f", (v, 1)), body=[True])
         assert _extract_first_arg_key(c, 2) is _INDEX_VAR
 
     def test_compound_var_with_unify(self):
         """Var + Unify pattern from _normalize_dataclass_fact."""
+        # nv
         v = Var()
         c = Clause(head=Compound("f", (v, Var())), body=[Unify(left=v, right=99)])
         assert _extract_first_arg_key(c, 2) == 99
 
     def test_compound_var_with_unify_reversed(self):
         """Unify with reversed left/right."""
+        # nv
         v = Var()
         c = Clause(head=Compound("f", (v,)), body=[Unify(left="abc", right=v)])
         assert _extract_first_arg_key(c, 1) == "abc"
 
     def test_zero_arity(self):
+        # nv
         c = Clause(head=Compound("f", ()), body=[True])
         assert _extract_first_arg_key(c, 0) is _INDEX_VAR
 
     def test_predicate_meta_head(self):
+        # nv
         class color(metaclass=PredicateMeta):
             _fields = ("name", "code")
 
@@ -86,21 +93,25 @@ class TestExtractFirstArgKey:
 
     def test_non_indexable_first_arg(self):
         """Lists and term instances are not indexed (yet)."""
+        # nv
         c = Clause(head=Compound("f", ([1, 2], "x")), body=[True])
         assert _extract_first_arg_key(c, 2) is _INDEX_VAR
 
     def test_bool_key(self):
+        # nv
         c = Clause(head=Compound("f", (True,)), body=[True])
         assert _extract_first_arg_key(c, 1) is True
 
     def test_none_key(self):
         """None is indexable — extracted from Var+Unify pattern."""
+        # nv
         v = Var()
         c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=None)])
         assert _extract_first_arg_key(c, 1) is None
 
     def test_none_key_direct(self):
         """None directly in Compound head is also indexable."""
+        # nv
         c = Clause(head=Compound("f", (None,)), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
@@ -110,15 +121,18 @@ class TestExtractFirstArgKey:
 
 class TestBuildFirstArgIndex:
     def test_too_few_clauses(self):
+        # nv
         clauses = [Clause(head=Compound("f", (i,)), body=[True]) for i in range(3)]
         assert _build_first_arg_index(clauses, 1) is None
 
     def test_zero_arity(self):
+        # nv
         clauses = [Clause(head=Compound("f", ()), body=[True]) for _ in range(10)]
         assert _build_first_arg_index(clauses, 0) is None
 
     def test_all_defaults(self):
         """All clauses have variable first arg — no index."""
+        # nv
         clauses = [
             Clause(head=Compound("f", (Var(), Var())), body=[True])
             for _ in range(5)
@@ -126,6 +140,7 @@ class TestBuildFirstArgIndex:
         assert _build_first_arg_index(clauses, 2) is None
 
     def test_basic_partition(self):
+        # nv
         clauses = [
             Clause(head=Compound("f", (1,)), body=[True]),
             Clause(head=Compound("f", (2,)), body=[True]),
@@ -141,6 +156,7 @@ class TestBuildFirstArgIndex:
             assert len(bucket) == 1
 
     def test_mixed_with_defaults(self):
+        # nv
         v1, v2 = Var(), Var()
         clauses = [
             Clause(head=Compound("f", (1, Var())), body=[True]),   # idx 0, key=1
@@ -173,6 +189,7 @@ class TestIndexedDispatchSimple:
 
     def test_ground_lookup(self):
         """Ground first-arg query uses index to find the right clause."""
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -185,6 +202,7 @@ class TestIndexedDispatchSimple:
 
     def test_var_first_arg_enumerates_all(self):
         """Unbound first-arg query tries all clauses."""
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -197,6 +215,7 @@ class TestIndexedDispatchSimple:
 
     def test_no_match_returns_empty(self):
         """Ground first-arg with no matching clause yields nothing."""
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -211,6 +230,7 @@ class TestIndexedDispatchSimple:
         """Default (var-headed) clauses interleave with specific clauses."""
         # clauses: f(1, a), f(X, b), f(2, c), f(3, d), f(X, e)
         # All ground values normalized to Var+Unify for output-mode queries.
+        # nv
         db = Database()
         db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
         db.assertz(_normalize_fact_clause(Compound("f", (Var(), "b"))))
@@ -239,6 +259,7 @@ class TestIndexedDispatchSimple:
 
     def test_integer_keys(self):
         """Large fact table with integer first args."""
+        # nv
         n = 20
         db = self._make_fact_db("num", [(i, i * i) for i in range(n)])
         fn = compile_predicate("num", 2, db.clauses_for("num", 2), db)
@@ -257,6 +278,7 @@ class TestIndexedDispatchSimple:
 
     def test_string_keys(self):
         """Fact table with string first args."""
+        # nv
         facts = [("apple", 1), ("banana", 2), ("cherry", 3),
                  ("date", 4), ("elderberry", 5)]
         db = self._make_fact_db("fruit", facts)
@@ -269,6 +291,7 @@ class TestIndexedDispatchSimple:
 
     def test_below_threshold_no_index(self):
         """Few clauses → no indexing, still works."""
+        # nv
         db = self._make_fact_db("small", [(1, "a"), (2, "b")])
         fn = compile_predicate("small", 2, db.clauses_for("small", 2), db)
         trail = Trail()
@@ -289,6 +312,7 @@ class TestIndexedDispatchTrampoline:
         return db
 
     def test_ground_lookup(self):
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -302,6 +326,7 @@ class TestIndexedDispatchTrampoline:
         assert results == [("red", 255)]
 
     def test_var_first_arg_enumerates_all(self):
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -315,6 +340,7 @@ class TestIndexedDispatchTrampoline:
         assert len(results) == 5
 
     def test_no_match_returns_empty(self):
+        # nv
         db = self._make_fact_db("color", [
             ("red", 255), ("green", 128), ("blue", 0),
             ("yellow", 200), ("white", 255),
@@ -328,6 +354,7 @@ class TestIndexedDispatchTrampoline:
         assert results == []
 
     def test_mixed_var_and_specific(self):
+        # nv
         db = Database()
         db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
         db.assertz(_normalize_fact_clause(Compound("f", (Var(), "b"))))
@@ -355,6 +382,7 @@ class TestIndexedDispatchTrampoline:
         assert [r[1] for r in results] == ["b", "e"]
 
     def test_large_fact_table(self):
+        # nv
         n = 50
         db = self._make_fact_db("num", [(i, i * i) for i in range(n)])
         fn = compile_predicate_trampoline(
@@ -377,6 +405,7 @@ class TestIndexedDispatchTrampoline:
 class TestDynamicReindex:
     def test_assertz_rebuilds_index_simple(self):
         """After assertz, lazy recompile rebuilds the index."""
+        # nv
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", 1), ("green", 2), ("blue", 3), ("white", 4)]:
@@ -400,6 +429,7 @@ class TestDynamicReindex:
         assert results == [("purple", 5)]
 
     def test_assertz_rebuilds_index_trampoline(self):
+        # nv
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", 1), ("green", 2), ("blue", 3), ("white", 4)]:
@@ -427,6 +457,7 @@ class TestDynamicReindex:
 class TestPredicateMetaIndexing:
     def test_predicate_meta_facts(self):
         """PredicateMeta class facts with normalized Var+Unify heads."""
+        # nv
         class fruit(metaclass=PredicateMeta):
             _fields = ("name", "count")
 
@@ -465,6 +496,7 @@ class TestPredicateMetaIndexing:
 class TestEdgeCases:
     def test_single_arity(self):
         """Arity-1 predicates can be indexed."""
+        # nv
         db = Database()
         for i in range(5):
             db.assertz(_normalize_fact_clause(Compound("p", (i,))))
@@ -475,6 +507,7 @@ class TestEdgeCases:
 
     def test_duplicate_keys(self):
         """Multiple clauses with the same first-arg key."""
+        # nv
         db = Database()
         for args in [(1, "a"), (1, "b"), (2, "c"), (2, "d"), (1, "e")]:
             db.assertz(_normalize_fact_clause(Compound("f", args)))
@@ -486,6 +519,7 @@ class TestEdgeCases:
 
     def test_none_as_key(self):
         """None as first argument value is indexable."""
+        # nv
         db = Database()
         for v in [None, 1, 2, 3]:
             db.assertz(_normalize_fact_clause(Compound("f", (v, str(v)))))
@@ -497,6 +531,7 @@ class TestEdgeCases:
 
     def test_bool_vs_int(self):
         """True/1 and False/0 share hash buckets in Python — both found."""
+        # nv
         db = Database()
         for v in [True, False, 0, 1, 2]:
             db.assertz(_normalize_fact_clause(Compound("f", (v,))))

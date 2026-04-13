@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 
 import pytest
 
@@ -11,21 +10,11 @@ from clausal.logic.compiler import (
     compile_predicate_shallow as compile_predicate,
     compile_predicate_trampoline,
 )
-from clausal.logic.database import Clause, Database, Module
-from clausal.logic.solve import call, solve, query, once, _deref_walk
-from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.database import Clause, Module
+from clausal.logic.solve import solve, _deref_walk
+from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.exceptions import LogicException
-from clausal.terms import (
-    And, Or, Not,
-    Unify as Is, Evaluate,
-    Lt, LtE, Gt, GtE,
-    in_, NotIn,
-    Call, LoadName,
-    Compound,
-)
-
-import clausal.import_hook
-from clausal.import_hook import _load_module
+from clausal.terms import And, Call, LoadName, Compound, Unify as Is, in_
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -56,14 +45,17 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 class TestLogicException:
     def test_is_exception(self):
+        # nv
         exc = LogicException("oops")
         assert isinstance(exc, Exception)
 
     def test_carries_term(self):
+        # nv
         exc = LogicException(Compound("error", ("type_error", "foo")))
         assert exc.term == Compound("error", ("type_error", "foo"))
 
     def test_str(self):
+        # nv
         exc = LogicException("oops")
         assert "oops" in str(exc)
 
@@ -74,6 +66,7 @@ class TestLogicException:
 class TestThrow:
     def test_throw_raises_logic_exception(self):
         """throw(Term) raises LogicException with the term."""
+        # nv
         goal = Call(func=LoadName(name="throw"), args=["oops"], kwargs=[])
         with pytest.raises(LogicException) as exc_info:
             solutions_of(goal)
@@ -81,6 +74,7 @@ class TestThrow:
 
     def test_throw_with_compound_term(self):
         """throw(error(type_error, foo)) raises with compound term."""
+        # nv
         term = Compound("error", ("type_error", "foo"))
         goal = Call(func=LoadName(name="throw"), args=[term], kwargs=[])
         with pytest.raises(LogicException) as exc_info:
@@ -89,6 +83,7 @@ class TestThrow:
 
     def test_throw_with_integer(self):
         """throw(42) raises with integer term."""
+        # nv
         goal = Call(func=LoadName(name="throw"), args=[42], kwargs=[])
         with pytest.raises(LogicException) as exc_info:
             solutions_of(goal)
@@ -97,6 +92,7 @@ class TestThrow:
     def test_throw_with_string_var(self):
         """throw(X) where X is bound via And raises LogicException."""
         # Use catch to capture the thrown term while bindings are still live
+        # nv
         x = Var()
         e = Var()
         result = Var()
@@ -118,6 +114,7 @@ class TestThrow:
 class TestCatch:
     def test_catch_no_exception(self):
         """catch(true, E, fail) succeeds normally when goal doesn't throw."""
+        # nv
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
             Is(left=result, right="ok"),
@@ -129,6 +126,7 @@ class TestCatch:
 
     def test_catch_catches_throw(self):
         """catch(throw(oops), E, Result is E) catches and runs recovery."""
+        # nv
         e = Var()
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
@@ -141,6 +139,7 @@ class TestCatch:
 
     def test_catch_specific_catcher(self):
         """catch(throw(oops), 'oops', Result is caught) matches specific term."""
+        # nv
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
             Call(func=LoadName(name="throw"), args=["oops"], kwargs=[]),
@@ -152,6 +151,7 @@ class TestCatch:
 
     def test_catch_mismatch_reraises(self):
         """catch(throw(oops), 'other', recovery) re-raises when catcher doesn't match."""
+        # nv
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
             Call(func=LoadName(name="throw"), args=["oops"], kwargs=[]),
@@ -164,6 +164,7 @@ class TestCatch:
 
     def test_catch_variable_catcher(self):
         """catch(throw(42), E, Result is E) — variable catcher catches anything."""
+        # nv
         e = Var()
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
@@ -176,6 +177,7 @@ class TestCatch:
 
     def test_nested_catch_inner_catches(self):
         """Inner catch handles the exception; outer catch is not triggered."""
+        # nv
         result = Var()
         inner = Call(func=LoadName(name="catch"), args=[
             Call(func=LoadName(name="throw"), args=["inner_err"], kwargs=[]),
@@ -192,6 +194,7 @@ class TestCatch:
 
     def test_nested_catch_inner_misses(self):
         """Inner catch doesn't match; outer catches instead."""
+        # nv
         e = Var()
         result = Var()
         inner = Call(func=LoadName(name="catch"), args=[
@@ -209,6 +212,7 @@ class TestCatch:
 
     def test_trail_cleanup_on_catch(self):
         """Bindings from the failing goal are undone before recovery runs."""
+        # nv
         x = Var()
         result = Var()
         # Goal binds x to 1, then throws. After catch, x should be unbound.
@@ -229,6 +233,7 @@ class TestCatch:
 
     def test_throw_inside_deeply_nested(self):
         """throw deep inside predicate calls propagates up to catch."""
+        # nv
         mod = fresh_module()
         db = mod.db
 
@@ -260,6 +265,7 @@ class TestCatch:
 
     def test_catch_goal_succeeds_multiple_solutions(self):
         """catch with goal that has multiple solutions — all yielded."""
+        # nv
         x = Var()
         result = Var()
         goal = Call(func=LoadName(name="catch"), args=[
@@ -280,6 +286,7 @@ class TestCatch:
 class TestHalt:
     def test_halt_0(self):
         """halt/0 raises SystemExit(0)."""
+        # nv
         goal = Call(func=LoadName(name="halt"), args=[], kwargs=[])
         with pytest.raises(SystemExit) as exc_info:
             solutions_of(goal)
@@ -287,6 +294,7 @@ class TestHalt:
 
     def test_halt_1(self):
         """halt(1) raises SystemExit(1)."""
+        # nv
         goal = Call(func=LoadName(name="halt"), args=[1], kwargs=[])
         with pytest.raises(SystemExit) as exc_info:
             solutions_of(goal)
@@ -299,6 +307,7 @@ class TestHalt:
 class TestPythonInterop:
     def test_python_catches_logic_exception(self):
         """Python try/except catches LogicException from throw/1."""
+        # nv
         goal = Call(func=LoadName(name="throw"), args=["from_logic"], kwargs=[])
         try:
             solutions_of(goal)
@@ -308,6 +317,7 @@ class TestPythonInterop:
 
     def test_logic_exception_is_exception_subclass(self):
         """LogicException is catchable as a plain Exception."""
+        # nv
         goal = Call(func=LoadName(name="throw"), args=["test"], kwargs=[])
         try:
             solutions_of(goal)
@@ -322,6 +332,7 @@ class TestPythonInterop:
 
 class TestStructuredErrors:
     def test_type_error_helper(self):
+        # nv
         from clausal.logic.exceptions import type_error
         t = type_error("integer", "foo", "bar/1")
         assert t.functor == "error"
@@ -330,6 +341,7 @@ class TestStructuredErrors:
         assert t.args[1] == "bar/1"
 
     def test_instantiation_error_helper(self):
+        # nv
         from clausal.logic.exceptions import instantiation_error
         t = instantiation_error("is/2")
         assert t.functor == "error"
@@ -337,12 +349,14 @@ class TestStructuredErrors:
         assert t.args[1] == "is/2"
 
     def test_existence_error_helper(self):
+        # nv
         from clausal.logic.exceptions import existence_error
         t = existence_error("procedure", "foo/2")
         assert t.functor == "error"
         assert t.args[0].functor == "existence_error"
 
     def test_permission_error_helper(self):
+        # nv
         from clausal.logic.exceptions import permission_error
         t = permission_error("modify", "static_procedure", "foo/2")
         assert t.functor == "error"
@@ -352,38 +366,8 @@ class TestStructuredErrors:
 # ── .clausal integration tests ──────────────────────────────────────────────
 
 
-class TestClausalIntegration:
-    def test_catch_all(self):
-        """CatchAll catches any thrown term."""
-        mod = _load_module("catch_test", os.path.join(_FIXTURE_DIR, "catch_test.clausal"))
-        logic_mod = mod.__dict__["$module"]
-        result = Var()
-        results = [_deref_walk(result) for _ in call("CatchAll", result, module=logic_mod)]
-        assert results == [42]
-
-    def test_catch_neg_positive(self):
-        """CatchNeg with positive value succeeds normally."""
-        mod = _load_module("catch_test", os.path.join(_FIXTURE_DIR, "catch_test.clausal"))
-        logic_mod = mod.__dict__["$module"]
-        result = Var()
-        results = [_deref_walk(result) for _ in call("CatchNeg", 5, result, module=logic_mod)]
-        assert results == ["ok"]
-
-    def test_catch_neg_negative(self):
-        """CatchNeg with negative value catches the throw."""
-        mod = _load_module("catch_test", os.path.join(_FIXTURE_DIR, "catch_test.clausal"))
-        logic_mod = mod.__dict__["$module"]
-        result = Var()
-        results = [_deref_walk(result) for _ in call("CatchNeg", -3, result, module=logic_mod)]
-        assert results == ["caught_negative"]
-
-    def test_nested_catch(self):
-        """NestedCatch: inner catch misses, outer catches."""
-        mod = _load_module("catch_test", os.path.join(_FIXTURE_DIR, "catch_test.clausal"))
-        logic_mod = mod.__dict__["$module"]
-        result = Var()
-        results = [_deref_walk(result) for _ in call("NestedCatch", result, module=logic_mod)]
-        assert results == ["outer_error"]
+# ── TestClausalIntegration removed ─────────────────────────────────────────
+# Clausal-surface integration tests migrated to tests/fixtures/catch_test.clausal.
 
 
 # ── throw inside findall ─────────────────────────────────────────────────────
@@ -392,6 +376,7 @@ class TestClausalIntegration:
 class TestThrowInFindAll:
     def test_throw_inside_findall_propagates(self):
         """throw inside findall propagates out (not isolated)."""
+        # nv
         x = Var()
         bag = Var()
         inner = And(
@@ -405,6 +390,7 @@ class TestThrowInFindAll:
 
     def test_catch_around_findall(self):
         """catch around findall catches throw from inside findall."""
+        # nv
         x = Var()
         bag = Var()
         result = Var()

@@ -14,11 +14,11 @@
 MyLen([], 0),
 MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), N := N1 + 1)
 
-Test("mylen empty") <- (MyLen([], N) and N == 0)
-Test("mylen one element") <- (MyLen([42], N) and N == 1)
-Test("mylen three elements") <- (MyLen([1, 2, 3], N) and N == 3)
-Test("mylen five elements") <- (MyLen([1, 2, 3, 4, 5], N) and N == 5)
-Test("mylen query mode") <- (MyLen([A, B], N) and N == 2)
+Test("mylen empty") <- (MyLen([], N) and N == 0)  # nv
+Test("mylen one element") <- (MyLen([42], N) and N == 1)  # nv
+Test("mylen three elements") <- (MyLen([1, 2, 3], N) and N == 3)  # nv
+Test("mylen five elements") <- (MyLen([1, 2, 3, 4, 5], N) and N == 5)  # nv
+Test("mylen query mode") <- (MyLen([A, B], N) and N == 2)  # nv
 
 # ── MyAppend/3: list concatenation ───────────────────────────────────────────
 # Index target: arg0 (first list): [] vs [HEAD|TAIL].
@@ -26,13 +26,13 @@ Test("mylen query mode") <- (MyLen([A, B], N) and N == 2)
 MyAppend([], RHS, RHS),
 MyAppend([HEAD, *TAIL], RHS, [HEAD, *REST]) <- MyAppend(TAIL, RHS, REST)
 
-Test("myappend nil left") <- (MyAppend([], [1, 2], R) and R == [1, 2])
-Test("myappend nil right") <- (MyAppend([1, 2], [], R) and R == [1, 2])
-Test("myappend both empty") <- (MyAppend([], [], R) and R == [])
-Test("myappend one plus two") <- (MyAppend([1], [2, 3], R) and R == [1, 2, 3])
-Test("myappend two plus two") <- (MyAppend([1, 2], [3, 4], R) and R == [1, 2, 3, 4])
-Test("myappend split nil prefix") <- (MyAppend(A, B, [1, 2]) and A == [] and B == [1, 2])
-Test("myappend split cons prefix") <- (MyAppend([1], B, [1, 2, 3]) and B == [2, 3])
+Test("myappend nil left") <- (MyAppend([], [1, 2], R) and R == [1, 2])  # nv
+Test("myappend nil right") <- (MyAppend([1, 2], [], R) and R == [1, 2])  # nv
+Test("myappend both empty") <- (MyAppend([], [], R) and R == [])  # nv
+Test("myappend one plus two") <- (MyAppend([1], [2, 3], R) and R == [1, 2, 3])  # nv
+Test("myappend two plus two") <- (MyAppend([1, 2], [3, 4], R) and R == [1, 2, 3, 4])  # nv
+Test("myappend split nil prefix") <- (MyAppend(A, B, [1, 2]) and A == [] and B == [1, 2])  # nv
+Test("myappend split cons prefix") <- (MyAppend([1], B, [1, 2, 3]) and B == [2, 3])  # nv
 
 # ── MyMember/2: list membership ───────────────────────────────────────────────
 # Two clauses both with [HEAD|TAIL] on arg1. Index target: arg1.
@@ -41,13 +41,13 @@ Test("myappend split cons prefix") <- (MyAppend([1], B, [1, 2, 3]) and B == [2, 
 MyMember(HEAD, [HEAD, *_]),
 MyMember(ELEM, [_, *TAIL]) <- MyMember(ELEM, TAIL)
 
-Test("mymember first element") <- MyMember(1, [1, 2, 3])
-Test("mymember last element") <- MyMember(3, [1, 2, 3])
-Test("mymember middle element") <- MyMember(2, [1, 2, 3])
-Test("mymember singleton list") <- MyMember(7, [7])
-Test("mymember absent") <- (not MyMember(4, [1, 2, 3]))
-Test("mymember enumerate all") <- (findall(X, MyMember(X, [10, 20, 30]), XS) and XS == [10, 20, 30])
-Test("mymember duplicate values") <- (findall(X, MyMember(X, [1, 1, 2]), XS) and XS == [1, 1, 2])
+Test("mymember first element") <- MyMember(1, [1, 2, 3])  # nv
+Test("mymember last element") <- MyMember(3, [1, 2, 3])  # nv
+Test("mymember middle element") <- MyMember(2, [1, 2, 3])  # nv
+Test("mymember singleton list") <- MyMember(7, [7])  # nv
+Test("mymember absent") <- (not MyMember(4, [1, 2, 3]))  # nv
+Test("mymember enumerate all") <- (findall(X, MyMember(X, [10, 20, 30]), XS) and XS == [10, 20, 30])  # nv
+Test("mymember duplicate values") <- (findall(X, MyMember(X, [1, 1, 2]), XS) and XS == [1, 1, 2])  # nv
 
 # ── MyLast/2: last element of a list ─────────────────────────────────────────
 # Singleton [LAST] base case; recursive on [_|TAIL]. Index target: arg0.
@@ -55,10 +55,10 @@ Test("mymember duplicate values") <- (findall(X, MyMember(X, [1, 1, 2]), XS) and
 MyLast([LAST], LAST),
 MyLast([_, *TAIL], LAST) <- MyLast(TAIL, LAST)
 
-Test("mylast singleton") <- (MyLast([5], X) and X == 5)
-Test("mylast two elements") <- (MyLast([1, 2], X) and X == 2)
-Test("mylast three elements") <- (MyLast([1, 2, 3], X) and X == 3)
-Test("mylast five elements") <- (MyLast([1, 2, 3, 4, 5], X) and X == 5)
+Test("mylast singleton") <- (MyLast([5], X) and X == 5)  # nv
+Test("mylast two elements") <- (MyLast([1, 2], X) and X == 2)  # nv
+Test("mylast three elements") <- (MyLast([1, 2, 3], X) and X == 3)  # nv
+Test("mylast five elements") <- (MyLast([1, 2, 3, 4, 5], X) and X == 5)  # nv
 
 # ── MyProduct/2: product of list elements ────────────────────────────────────
 # Same nil/cons structure as MySumList but multiplies. Index target: arg0.
@@ -66,11 +66,11 @@ Test("mylast five elements") <- (MyLast([1, 2, 3, 4, 5], X) and X == 5)
 MyProduct([], 1),
 MyProduct([HEAD, *TAIL], P) <- (MyProduct(TAIL, P1), P := P1 * HEAD)
 
-Test("myproduct empty") <- (MyProduct([], P) and P == 1)
-Test("myproduct singleton") <- (MyProduct([5], P) and P == 5)
-Test("myproduct three") <- (MyProduct([2, 3, 4], P) and P == 24)
-Test("myproduct with zero") <- (MyProduct([1, 0, 99], P) and P == 0)
-Test("myproduct five values") <- (MyProduct([1, 2, 3, 4, 5], P) and P == 120)
+Test("myproduct empty") <- (MyProduct([], P) and P == 1)  # nv
+Test("myproduct singleton") <- (MyProduct([5], P) and P == 5)  # nv
+Test("myproduct three") <- (MyProduct([2, 3, 4], P) and P == 24)  # nv
+Test("myproduct with zero") <- (MyProduct([1, 0, 99], P) and P == 0)  # nv
+Test("myproduct five values") <- (MyProduct([1, 2, 3, 4, 5], P) and P == 120)  # nv
 
 # ── MySumList/2: sum elements of a numeric list ───────────────────────────────
 # Index target: arg0 ([] vs [HEAD|TAIL]).
@@ -78,11 +78,11 @@ Test("myproduct five values") <- (MyProduct([1, 2, 3, 4, 5], P) and P == 120)
 MySumList([], 0),
 MySumList([HEAD, *TAIL], S) <- (MySumList(TAIL, S1), S := S1 + HEAD)
 
-Test("mysumlist empty") <- (MySumList([], S) and S == 0)
-Test("mysumlist singleton") <- (MySumList([7], S) and S == 7)
-Test("mysumlist three") <- (MySumList([1, 2, 3], S) and S == 6)
-Test("mysumlist ten values") <- (MySumList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], S) and S == 55)
-Test("mysumlist negative") <- (MySumList([-1, -2, -3], S) and S == -6)
+Test("mysumlist empty") <- (MySumList([], S) and S == 0)  # nv
+Test("mysumlist singleton") <- (MySumList([7], S) and S == 7)  # nv
+Test("mysumlist three") <- (MySumList([1, 2, 3], S) and S == 6)  # nv
+Test("mysumlist ten values") <- (MySumList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], S) and S == 55)  # nv
+Test("mysumlist negative") <- (MySumList([-1, -2, -3], S) and S == -6)  # nv
 
 # ── MyMax/2: maximum of a non-empty list ─────────────────────────────────────
 # Singleton [X] base case; uses a helper MyMaxOf/3 to avoid ITE.
@@ -94,11 +94,11 @@ MyMaxOf(X, Y, Y) <- (X < Y)
 MyMax([X], X),
 MyMax([HEAD, *TAIL], MAX) <- (MyMax(TAIL, TMAX), MyMaxOf(HEAD, TMAX, MAX))
 
-Test("mymax singleton") <- (MyMax([3], M) and M == 3)
-Test("mymax two ascending") <- (MyMax([1, 5], M) and M == 5)
-Test("mymax two descending") <- (MyMax([5, 1], M) and M == 5)
-Test("mymax three") <- (MyMax([3, 1, 4], M) and M == 4)
-Test("mymax all equal") <- (MyMax([2, 2, 2], M) and M == 2)
+Test("mymax singleton") <- (MyMax([3], M) and M == 3)  # nv
+Test("mymax two ascending") <- (MyMax([1, 5], M) and M == 5)  # nv
+Test("mymax two descending") <- (MyMax([5, 1], M) and M == 5)  # nv
+Test("mymax three") <- (MyMax([3, 1, 4], M) and M == 4)  # nv
+Test("mymax all equal") <- (MyMax([2, 2, 2], M) and M == 2)  # nv
 
 # ── Mixed structural arguments ────────────────────────────────────────────────
 # Predicate that patterns on both an integer first arg AND a list second arg,
@@ -107,9 +107,9 @@ Test("mymax all equal") <- (MyMax([2, 2, 2], M) and M == 2)
 MyNthOf(0, [HEAD, *_], HEAD),
 MyNthOf(N, [_, *TAIL], ELEM) <- (N > 0, N1 := N - 1, MyNthOf(N1, TAIL, ELEM))
 
-Test("mynthof first") <- (MyNthOf(0, [10, 20, 30], E) and E == 10)
-Test("mynthof second") <- (MyNthOf(1, [10, 20, 30], E) and E == 20)
-Test("mynthof third") <- (MyNthOf(2, [10, 20, 30], E) and E == 30)
+Test("mynthof first") <- (MyNthOf(0, [10, 20, 30], E) and E == 10)  # nv
+Test("mynthof second") <- (MyNthOf(1, [10, 20, 30], E) and E == 20)  # nv
+Test("mynthof third") <- (MyNthOf(2, [10, 20, 30], E) and E == 30)  # nv
 
 # ── Interaction with backtracking ─────────────────────────────────────────────
 # Structural indexing must not suppress backtracking over multiple solutions.
@@ -117,7 +117,7 @@ Test("mynthof third") <- (MyNthOf(2, [10, 20, 30], E) and E == 30)
 MyPrefix([], _),
 MyPrefix([HEAD, *TAIL], [HEAD, *REST]) <- MyPrefix(TAIL, REST)
 
-Test("myprefix empty of three") <- MyPrefix([], [1, 2, 3])
-Test("myprefix singleton") <- MyPrefix([1], [1, 2, 3])
-Test("myprefix full") <- MyPrefix([1, 2, 3], [1, 2, 3])
-Test("myprefix enumerate") <- (findall(P, MyPrefix(P, [1, 2]), PS) and PS == [[], [1], [1, 2]])
+Test("myprefix empty of three") <- MyPrefix([], [1, 2, 3])  # nv
+Test("myprefix singleton") <- MyPrefix([1], [1, 2, 3])  # nv
+Test("myprefix full") <- MyPrefix([1, 2, 3], [1, 2, 3])  # nv
+Test("myprefix enumerate") <- (findall(P, MyPrefix(P, [1, 2]), PS) and PS == [[], [1], [1, 2]])  # nv

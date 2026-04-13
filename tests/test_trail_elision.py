@@ -99,6 +99,7 @@ class TestTrailElisionStructural:
         """Each bucket has exactly one clause (no defaults) -> no mark/undo."""
         # 3 clauses with distinct first-arg keys, no var-headed clause.
         # Each bucket has exactly 1 clause -> trail elision applies to all.
+        # nv
         v1, v2, v3 = Var(), Var(), Var()
         db = _make_db(
             ("p", (1, v1)),
@@ -137,6 +138,7 @@ class TestTrailElisionStructural:
 
     def test_skip_trail_false_has_mark_undo(self):
         """With skip_trail=False (default), var-headed clauses get mark/undo."""
+        # nv
         v = Var()
         head = Compound("t", (v,))
         case_arm = compile_head_to_match_case(
@@ -153,6 +155,7 @@ class TestTrailElisionStructural:
 
     def test_skip_trail_with_dup_guards(self):
         """skip_trail=True still omits mark/undo even with duplicate head vars."""
+        # nv
         v = Var()
         # head = t(X, X) — duplicate var triggers dup_guard with unify()
         head = Compound("t", (v, v))
@@ -170,6 +173,7 @@ class TestTrailElisionStructural:
 
     def test_ground_head_still_elided_without_skip_trail(self):
         """Ground heads (no vars, no guards) are still elided by the original opt."""
+        # nv
         head = Compound("t", (1, 2))
         case_arm = compile_head_to_match_case(
             head=head,
@@ -196,6 +200,7 @@ class TestTrailElisionBehavioral:
 
     def test_single_clause_bucket_returns_correct_results(self):
         """Predicate with distinct first-arg keys returns correct values."""
+        # nv
         mod = _load_module("""\
 Color(1, "warm"),
 Color(2, "cool"),
@@ -211,6 +216,7 @@ Color(3, "cool"),
 
     def test_each_bucket_returns_exactly_one_solution(self):
         """Each distinct first-arg key yields exactly one solution (deterministic)."""
+        # nv
         mod = _load_module("""\
 Map(1, "one"),
 Map(2, "two"),
@@ -229,6 +235,7 @@ Map(4, "four"),
         Try/2 calls Color/2 for each key. After each call, the binding
         from Color's head unification must be undone before the next call.
         """
+        # nv
         mod = _load_module("""\
 Color(1, "warm"),
 Color(2, "cool"),
@@ -248,6 +255,7 @@ Attempt(3, R) <- Color(3, R)
     def test_var_binding_undone_between_calls(self):
         """A Var bound by an elided-trail clause is correctly unbound after
         the call completes, so a subsequent call can rebind it."""
+        # nv
         mod = _load_module("""\
 Fact(1, 10),
 Fact(2, 20),
@@ -273,6 +281,7 @@ Fact(3, 30),
     def test_dup_guard_clause_in_single_bucket(self):
         """A clause with duplicate head vars (dup_guard) in a single-clause
         bucket: Same(X, X) succeeds when both args unify."""
+        # nv
         mod = _load_module("""\
 Same(1, 1),
 Same(2, 2),
@@ -291,6 +300,7 @@ Same(3, 3),
     def test_dup_guard_failure_in_single_bucket(self):
         """When a dup_guard fails in a single-clause bucket, the predicate
         fails and the caller correctly undoes bindings."""
+        # nv
         mod = _load_module("""\
 Same(1, 1),
 Same(2, 2),
@@ -312,6 +322,7 @@ Same(2, 2),
 
     def test_nested_calls_through_elided_predicates(self):
         """Chain of calls through two elided-trail predicates."""
+        # nv
         mod = _load_module("""\
 Left(1, 10),
 Left(2, 20),
@@ -332,6 +343,7 @@ Chain(N, R) <- (Left(N, M), Right(M, R))
     def test_single_clause_predicate_no_index(self):
         """A predicate with only one clause total — below the index threshold,
         so no indexing, but trail elision doesn't apply either."""
+        # nv
         mod = _load_module("""\
 Only(X, Y) <- (Y := X + 1)
 """)
@@ -342,6 +354,7 @@ Only(X, Y) <- (Y := X + 1)
     def test_mixed_ground_and_var_heads_no_elision(self):
         """When a var-headed clause exists, buckets have >1 clause and
         trail elision does NOT apply — verify correctness is maintained."""
+        # nv
         mod = _load_module("""\
 Lookup(1, 10),
 Lookup(2, 20),
@@ -360,6 +373,7 @@ Lookup(X, 0),
     def test_multiple_solutions_non_elided_predicate(self):
         """A predicate with a var-headed default produces multiple solutions
         per key, and backtracking undoes bindings correctly."""
+        # nv
         mod = _load_module("""\
 Info(1, "specific_1"),
 Info(2, "specific_2"),

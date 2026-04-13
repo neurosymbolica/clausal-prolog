@@ -45,18 +45,21 @@ class TestVarFormat:
     """Test that Var.__str__ and __format__ auto-deref for f-string support."""
 
     def test_str_unbound(self):
+        # nv
         v = Var()
         s = str(v)
         assert s.startswith("_")
         assert s[1:].isdigit()
 
     def test_str_bound_int(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, 42, t)
         assert str(v) == "42"
 
     def test_str_bound_string(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, "hello", t)
@@ -64,35 +67,41 @@ class TestVarFormat:
         assert str(v) == "hello"
 
     def test_format_unbound(self):
+        # nv
         v = Var()
         s = f"{v}"
         assert s.startswith("_")
 
     def test_format_bound_int(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, 42, t)
         assert f"{v}" == "42"
 
     def test_format_bound_string(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, "world", t)
         assert f"{v}" == "world"
 
     def test_format_spec_float(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, 3.14159, t)
         assert f"{v:.2f}" == "3.14"
 
     def test_format_spec_int_padding(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, 7, t)
         assert f"{v:03d}" == "007"
 
     def test_fstring_interpolation(self):
+        # nv
         x = Var()
         y = Var()
         t = Trail()
@@ -101,6 +110,7 @@ class TestVarFormat:
         assert f"Name: {x}, Age: {y}" == "Name: Alice, Age: 30"
 
     def test_fstring_with_unbound(self):
+        # nv
         x = Var()
         t = Trail()
         unify(x, 42, t)
@@ -110,17 +120,20 @@ class TestVarFormat:
 
     def test_format_spec_unbound_ignores_spec(self):
         """Format spec on unbound Var is ignored — returns _N."""
+        # nv
         v = Var()
         result = f"{v:05d}"
         assert result.startswith("_")
 
     def test_format_bound_none(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, None, t)
         assert f"{v}" == "None"
 
     def test_str_bound_list(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, [1, 2, 3], t)
@@ -128,6 +141,7 @@ class TestVarFormat:
 
     def test_str_chain_deref(self):
         """Var bound to another var which is bound to a value."""
+        # nv
         v1 = Var()
         v2 = Var()
         t = Trail()
@@ -142,16 +156,19 @@ class TestVarFormat:
 class TestWrite:
 
     def test_write_string(self):
+        # nv
         t = Trail()
         out = _capture_stdout("write", 1, "hello", t)
         assert out == "hello"
 
     def test_write_int(self):
+        # nv
         t = Trail()
         out = _capture_stdout("write", 1, 42, t)
         assert out == "42"
 
     def test_write_var_bound(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, "world", t)
@@ -159,6 +176,7 @@ class TestWrite:
         assert out == "world"
 
     def test_write_fstring(self):
+        # nv
         x = Var()
         t = Trail()
         unify(x, 42, t)
@@ -166,22 +184,26 @@ class TestWrite:
         assert out == "The answer is 42"
 
     def test_write_unbound_var(self):
+        # nv
         v = Var()
         t = Trail()
         out = _capture_stdout("write", 1, v, t)
         assert out.startswith("_")
 
     def test_write_compound(self):
+        # nv
         t = Trail()
         out = _capture_stdout("write", 1, Compound("f", (1, 2)), t)
         assert "f" in out
 
     def test_write_no_newline(self):
+        # nv
         t = Trail()
         out = _capture_stdout("write", 1, "test", t)
         assert "\n" not in out
 
     def test_write_succeeds(self):
+        # nv
         t = Trail()
         results = _run_builtin("write", 1, "x", t)
         assert len(results) >= 1
@@ -192,16 +214,19 @@ class TestWrite:
 class TestWriteln:
 
     def test_writeln_string(self):
+        # nv
         t = Trail()
         out = _capture_stdout("writeln", 1, "hello", t)
         assert out == "hello\n"
 
     def test_writeln_int(self):
+        # nv
         t = Trail()
         out = _capture_stdout("writeln", 1, 99, t)
         assert out == "99\n"
 
     def test_writeln_var_bound(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, [1, 2, 3], t)
@@ -209,6 +234,7 @@ class TestWriteln:
         assert out == "[1, 2, 3]\n"
 
     def test_writeln_fstring(self):
+        # nv
         x = Var()
         y = Var()
         t = Trail()
@@ -218,6 +244,7 @@ class TestWriteln:
         assert out == "Alice is 25 years old\n"
 
     def test_writeln_succeeds(self):
+        # nv
         t = Trail()
         results = _run_builtin("writeln", 1, "x", t)
         assert len(results) >= 1
@@ -228,28 +255,33 @@ class TestWriteln:
 class TestPrintTerm:
 
     def test_print_term_int(self):
+        # nv
         t = Trail()
         out = _capture_stdout("print_term", 1, 42, t)
         assert out.strip() == "42"
 
     def test_print_term_string(self):
+        # nv
         t = Trail()
         out = _capture_stdout("print_term", 1, "hello", t)
         # term_str shows strings with quotes
         assert out.strip() == "'hello'"
 
     def test_print_term_list(self):
+        # nv
         t = Trail()
         out = _capture_stdout("print_term", 1, [1, 2, 3], t)
         assert out.strip() == "[1, 2, 3]"
 
     def test_print_term_compound(self):
+        # nv
         t = Trail()
         c = Compound("foo", (1, "bar"))
         out = _capture_stdout("print_term", 1, c, t)
         assert "foo" in out
 
     def test_print_term_var_bound(self):
+        # nv
         v = Var()
         t = Trail()
         unify(v, [1, 2], t)
@@ -257,6 +289,7 @@ class TestPrintTerm:
         assert out.strip() == "[1, 2]"
 
     def test_print_term_succeeds(self):
+        # nv
         t = Trail()
         results = _run_builtin("print_term", 1, 42, t)
         assert len(results) >= 1
@@ -267,11 +300,13 @@ class TestPrintTerm:
 class TestNl:
 
     def test_nl_outputs_newline(self):
+        # nv
         t = Trail()
         out = _capture_stdout("nl", 0, t)
         assert out == "\n"
 
     def test_nl_succeeds(self):
+        # nv
         t = Trail()
         results = _run_builtin("nl", 0, t)
         assert len(results) >= 1
@@ -282,16 +317,19 @@ class TestNl:
 class TestTab:
 
     def test_tab_spaces(self):
+        # nv
         t = Trail()
         out = _capture_stdout("tab", 1, 4, t)
         assert out == "    "
 
     def test_tab_zero(self):
+        # nv
         t = Trail()
         out = _capture_stdout("tab", 1, 0, t)
         assert out == ""
 
     def test_tab_var_fails(self):
+        # nv
         v = Var()
         t = Trail()
         out = _capture_stdout("tab", 1, v, t)
@@ -299,6 +337,7 @@ class TestTab:
 
     def test_tab_negative_no_output(self):
         """tab with negative number produces empty string (Python ' ' * -N == '')."""
+        # nv
         t = Trail()
         out = _capture_stdout("tab", 1, -3, t)
         assert out == ""
@@ -309,6 +348,7 @@ class TestTab:
 class TestPrintTermEdgeCases:
 
     def test_print_term_unbound_var(self):
+        # nv
         v = Var()
         t = Trail()
         out = _capture_stdout("print_term", 1, v, t)
@@ -320,6 +360,7 @@ class TestPrintTermEdgeCases:
 class TestWriteToString:
 
     def test_string_passthrough(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
@@ -328,6 +369,7 @@ class TestWriteToString:
         assert vals == ["hello"]
 
     def test_int_to_string(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
@@ -336,6 +378,7 @@ class TestWriteToString:
         assert vals == ["42"]
 
     def test_var_bound(self):
+        # nv
         v = Var()
         result = Var()
         t = Trail()
@@ -346,6 +389,7 @@ class TestWriteToString:
         assert vals == ["world"]
 
     def test_fstring(self):
+        # nv
         x = Var()
         result = Var()
         t = Trail()
@@ -356,6 +400,7 @@ class TestWriteToString:
         assert vals == ["answer=42"]
 
     def test_unbound_var(self):
+        # nv
         v = Var()
         result = Var()
         t = Trail()
@@ -371,6 +416,7 @@ class TestWriteToString:
 class TestTermToString:
 
     def test_int(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
@@ -379,6 +425,7 @@ class TestTermToString:
         assert vals == ["42"]
 
     def test_string_quoted(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
@@ -387,6 +434,7 @@ class TestTermToString:
         assert vals == ["'hello'"]
 
     def test_list(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
@@ -395,6 +443,7 @@ class TestTermToString:
         assert vals == ["[1, 2]"]
 
     def test_unbound_var(self):
+        # nv
         v = Var()
         result = Var()
         t = Trail()
@@ -405,6 +454,7 @@ class TestTermToString:
         assert "_" in vals[0]
 
     def test_compound(self):
+        # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
@@ -420,6 +470,7 @@ class TestClausalIntegration:
 
     def test_writeln_from_clausal(self, tmp_path):
         """writeln works as a builtin call in a .clausal file."""
+        # nv
         src = tmp_path / "io_test.clausal"
         src.write_text(
             "Greet(_name) <- writeln(f\"Hello, {_name}!\")\n"
@@ -440,6 +491,7 @@ class TestClausalIntegration:
 
     def test_write_fstring_from_clausal(self, tmp_path):
         """F-string with multiple vars works in .clausal."""
+        # nv
         src = tmp_path / "io_fstr.clausal"
         src.write_text(
             "ShowPair(_a, _b) <- writeln(f\"{_a} and {_b}\")\n"
@@ -460,6 +512,7 @@ class TestClausalIntegration:
 
     def test_fstring_len_expression(self, tmp_path):
         """f"{len(_l)}" works — Python function on a logic variable."""
+        # nv
         src = tmp_path / "io_len.clausal"
         src.write_text(
             "ShowLen(_l) <- writeln(f\"length is {len(_l)}\")\n"
@@ -480,6 +533,7 @@ class TestClausalIntegration:
 
     def test_fstring_arithmetic_expression(self, tmp_path):
         """f"{_n + 1}" works — arithmetic on a logic variable."""
+        # nv
         src = tmp_path / "io_arith.clausal"
         src.write_text(
             "ShowNext(_n) <- writeln(f\"next is {_n + 1}\")\n"
@@ -500,6 +554,7 @@ class TestClausalIntegration:
 
     def test_fstring_str_upper(self, tmp_path):
         """f"{_s.upper()}" works — method call on a logic variable."""
+        # nv
         src = tmp_path / "io_upper.clausal"
         src.write_text(
             "ShowUpper(_s) <- writeln(f\"{_s.upper()}\")\n"
@@ -520,6 +575,7 @@ class TestClausalIntegration:
 
     def test_writeln_with_backtracking(self, tmp_path):
         """writeln fires once per solution during backtracking."""
+        # nv
         src = tmp_path / "io_bt.clausal"
         src.write_text(
             "Color('red'),\n"
@@ -543,6 +599,7 @@ class TestClausalIntegration:
 
     def test_fstring_format_spec_in_clausal(self, tmp_path):
         """f"{_x:.2f}" with format spec works in .clausal files."""
+        # nv
         src = tmp_path / "io_spec.clausal"
         src.write_text(
             "ShowFloat(_x) <- writeln(f\"{_x:.2f}\")\n"
@@ -563,6 +620,7 @@ class TestClausalIntegration:
 
     def test_fstring_no_vars(self, tmp_path):
         """f-string with no logic variables produces a zero-arg lambda."""
+        # nv
         src = tmp_path / "io_novar.clausal"
         src.write_text(
             "Hello() <- writeln(f\"hello world\")\n"

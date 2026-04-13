@@ -43,16 +43,19 @@ def _module(mod):
 
 class TestDelayedNegation:
     def test_equality(self):
+        # nv
         dn1 = DelayedNegation("win", 1, (1,), (1,))
         dn2 = DelayedNegation("win", 1, (1,), (1,))
         assert dn1 == dn2
 
     def test_inequality(self):
+        # nv
         dn1 = DelayedNegation("win", 1, (1,), (1,))
         dn2 = DelayedNegation("win", 1, (2,), (2,))
         assert dn1 != dn2
 
     def test_hashable(self):
+        # nv
         dn1 = DelayedNegation("win", 1, (1,), (1,))
         dn2 = DelayedNegation("win", 1, (1,), (1,))
         assert hash(dn1) == hash(dn2)
@@ -60,6 +63,7 @@ class TestDelayedNegation:
         assert len(s) == 1
 
     def test_repr(self):
+        # nv
         dn = DelayedNegation("win", 1, (1,), (1,))
         assert "win" in repr(dn)
 
@@ -69,34 +73,40 @@ class TestDelayedNegation:
 
 class TestTableEntryConditions:
     def test_add_answer_default_unconditional(self):
+        # nv
         e = TableEntry()
         e.add_answer((1,))
         assert e.conditions == [frozenset()]
 
     def test_add_answer_with_delays(self):
+        # nv
         e = TableEntry()
         dn = DelayedNegation("p", 1, (1,), (1,))
         e.add_answer((1,), frozenset({dn}))
         assert e.conditions == [frozenset({dn})]
 
     def test_truth_value_unconditional(self):
+        # nv
         e = TableEntry()
         e.add_answer((1,))
         assert e.truth_value(0) is True
 
     def test_truth_value_conditional(self):
+        # nv
         e = TableEntry()
         dn = DelayedNegation("p", 1, (1,), (1,))
         e.add_answer((1,), frozenset({dn}))
         assert e.truth_value(0) == "undefined"
 
     def test_truth_value_failed(self):
+        # nv
         e = TableEntry()
         e.add_answer((1,))
         e.conditions[0] = _FAILED
         assert e.truth_value(0) is False
 
     def test_current_delays_initially_empty(self):
+        # nv
         e = TableEntry()
         assert e._current_delays == set()
 
@@ -107,6 +117,7 @@ class TestTableEntryConditions:
 class TestLeaderContext:
     def test_empty_stack(self):
         # Clear stack for isolation
+        # nv
         from clausal.logic.tabling import _leader_ctx
         old = _leader_ctx.stack[:]
         _leader_ctx.stack.clear()
@@ -116,6 +127,7 @@ class TestLeaderContext:
             _leader_ctx.stack.extend(old)
 
     def test_push_pop(self):
+        # nv
         from clausal.logic.tabling import _leader_ctx
         old = _leader_ctx.stack[:]
         _leader_ctx.stack.clear()
@@ -130,6 +142,7 @@ class TestLeaderContext:
             _leader_ctx.stack.extend(old)
 
     def test_nested_leaders(self):
+        # nv
         from clausal.logic.tabling import _leader_ctx
         old = _leader_ctx.stack[:]
         _leader_ctx.stack.clear()
@@ -152,6 +165,7 @@ class TestLeaderContext:
 class TestNafTabled:
     def test_complete_table_no_match(self):
         """Complete table with no matching answer → negation succeeds."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((2,))
@@ -163,6 +177,7 @@ class TestNafTabled:
 
     def test_complete_table_with_match(self):
         """Complete table with matching answer → negation fails."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((1,))
@@ -174,6 +189,7 @@ class TestNafTabled:
 
     def test_complete_table_skips_failed(self):
         """Failed answers in complete table should be skipped."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((1,))
@@ -186,6 +202,7 @@ class TestNafTabled:
 
     def test_evaluating_table_delays(self):
         """Evaluating table → delay, return True, attach to leader."""
+        # nv
         from clausal.logic.tabling import _leader_ctx
         old = _leader_ctx.stack[:]
         _leader_ctx.stack.clear()
@@ -211,12 +228,14 @@ class TestNafTabled:
 
     def test_no_entry_returns_true(self):
         """No table entry → treat as no answers → negation succeeds."""
+        # nv
         ts = {}
         trail = Trail()
         assert _naf_tabled("p", 1, (1,), trail, ts) is True
 
     def test_complete_table_var_arg(self):
         """Complete table with Var arg → matches any answer → negation fails."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((42,))
@@ -236,6 +255,7 @@ class TestNafTabled:
 class TestResolveConditions:
     def test_unconditional_passthrough(self):
         """Unconditional answers remain unchanged."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((1,))
@@ -247,6 +267,7 @@ class TestResolveConditions:
 
     def test_resolve_to_true(self):
         """Delay targeting complete table with no match → resolves to true."""
+        # nv
         ts = {}
         # Target table: complete, has answer (99,) but not (42,)
         target = TableEntry()
@@ -266,6 +287,7 @@ class TestResolveConditions:
 
     def test_resolve_to_false(self):
         """Delay targeting complete table with unconditional match → invalidated."""
+        # nv
         ts = {}
         # Target table: complete, has unconditional answer (42,)
         target = TableEntry()
@@ -285,6 +307,7 @@ class TestResolveConditions:
 
     def test_unfounded_stays_conditional(self):
         """Self-referencing delay stays conditional (unfounded)."""
+        # nv
         ts = {}
         entry = TableEntry()
         dn = DelayedNegation("p", 1, (1,), (1,))
@@ -299,6 +322,7 @@ class TestResolveConditions:
 
     def test_multiple_delays_partial_resolution(self):
         """Multiple delays: some resolve, others don't."""
+        # nv
         ts = {}
         # q(42) has no entry → delay resolves to true
         # r(7) has unconditional answer → delay resolves to false
@@ -325,6 +349,7 @@ class TestResolveConditions:
 class TestPositiveTablingRegression:
     def test_tabled_fib(self):
         """Existing tabled fibonacci still works."""
+        # nv
         m = _load("tabled_fib")
         F = Var()
         results = []
@@ -334,6 +359,7 @@ class TestPositiveTablingRegression:
 
     def test_tabled_path_cyclic(self):
         """Existing tabled cyclic path still works."""
+        # nv
         m = _load("tabled_path")
         Y = Var()
         results = []
@@ -348,6 +374,7 @@ class TestPositiveTablingRegression:
 class TestCompleteTableNaf:
     def test_naf_on_complete_table(self):
         """not P(x) where P's table is already complete → immediate check."""
+        # nv
         ts = {}
         entry = TableEntry()
         entry.add_answer((1,))
@@ -373,6 +400,7 @@ class TestWfsSymmetricWin:
         win(1) depends on not win(2), and win(2) depends on not win(1).
         Both are unfounded — WFS assigns 'undefined'.
         """
+        # nv
         m = _load("wfs_win")
         lm = _module(m)
         db = lm.db
@@ -412,6 +440,7 @@ class TestWfsAsymmetricWin:
         win("a") <- move("a","c"), not win("c") → true (win("c") fails)
         win("b") depends on not win("a") → false (win("a") is true)
         """
+        # nv
         m = _load("wfs_win_asym")
         lm = _module(m)
 
@@ -436,6 +465,7 @@ class TestNoNegationCycle:
         # safe(X) <- (X in [1,2,3]) and not danger(X)
         # safe(1) and safe(2) should be true, safe(3) false
 
+        # nv
         m = _load("tabled_fib")  # reuse for module infrastructure
         lm = _module(m)
         db = lm.db
@@ -455,6 +485,7 @@ class TestNoNegationCycle:
 class TestQueryWfs:
     def test_query_wfs_returns_list(self):
         """query_wfs returns a list, not an iterator."""
+        # nv
         m = _load("tabled_fib")
         lm = _module(m)
         from clausal.terms import Call as TermCall, LoadName

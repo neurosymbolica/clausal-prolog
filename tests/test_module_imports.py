@@ -40,12 +40,14 @@ class TestBaseModule:
     """Verify the importable_utils.clausal base fixture works standalone."""
 
     def test_base_module_has_predicates(self):
+        # nv
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
         assert hasattr(mod, "Double")
         assert hasattr(mod, "Helper")
 
     def test_base_double_ground(self):
+        # nv
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
@@ -53,6 +55,7 @@ class TestBaseModule:
         assert len(results) == 1
 
     def test_base_helper_calls_double(self):
+        # nv
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
@@ -60,6 +63,7 @@ class TestBaseModule:
         assert len(results) == 1
 
     def test_base_double_with_var(self):
+        # nv
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
@@ -75,6 +79,7 @@ class TestImportFrom:
     """Tests for -import_from(module, [Pred1, Pred2])."""
 
     def test_imported_predicates_in_namespace(self):
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         assert hasattr(mod, "Helper")
@@ -83,6 +88,7 @@ class TestImportFrom:
         assert hasattr(mod, "UseDouble")
 
     def test_use_helper_ground(self):
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -90,6 +96,7 @@ class TestImportFrom:
         assert len(results) == 1
 
     def test_use_double_ground(self):
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -97,6 +104,7 @@ class TestImportFrom:
         assert len(results) == 1
 
     def test_use_helper_failure(self):
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -104,6 +112,7 @@ class TestImportFrom:
         assert results == []
 
     def test_use_helper_with_var(self):
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -113,6 +122,7 @@ class TestImportFrom:
 
     def test_imported_predicate_directly_callable(self):
         """The imported Helper predicate can be called directly too."""
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -121,6 +131,7 @@ class TestImportFrom:
 
     def test_multiple_solutions(self):
         """Imported predicate yields all solutions from the source module."""
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -139,12 +150,14 @@ class TestImportAlias:
     """Tests for -import_from(module, [alias(Orig, Local)])."""
 
     def test_alias_in_namespace(self):
+        # nv
         mod = _load_fixture("imports_alias.clausal",
                             "tests.fixtures.imports_alias")
         assert hasattr(mod, "Hlp")
         assert hasattr(mod, "UseAlias")
 
     def test_use_alias_ground(self):
+        # nv
         mod = _load_fixture("imports_alias.clausal",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
@@ -152,6 +165,7 @@ class TestImportAlias:
         assert len(results) == 1
 
     def test_use_alias_with_var(self):
+        # nv
         mod = _load_fixture("imports_alias.clausal",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
@@ -173,6 +187,7 @@ class TestQualifiedCalls:
 
     def test_inject_dotted_call_target(self):
         """_inject_call_targets resolves dotted names from globals."""
+        # nv
         from clausal.logic.compiler import _inject_call_targets
         from clausal.logic.database import Clause
 
@@ -206,6 +221,7 @@ class TestQualifiedCalls:
 
     def test_dotted_name_dispatch(self):
         """Compiled code can dispatch via dotted globals key."""
+        # nv
         from clausal.logic.compiler import _inject_call_targets
         from clausal.logic.database import Clause
 
@@ -223,6 +239,7 @@ class TestQualifiedCalls:
 
     def test_import_module_fixture_loads(self):
         """imports_module.clausal loads and UseImported works."""
+        # nv
         mod = _load_fixture("imports_module.clausal",
                             "tests.fixtures.imports_module")
         assert hasattr(mod, "UseImported")
@@ -231,6 +248,7 @@ class TestQualifiedCalls:
         assert len(results) == 1
 
     def test_import_module_fixture_with_var(self):
+        # nv
         mod = _load_fixture("imports_module.clausal",
                             "tests.fixtures.imports_module")
         logic_mod = mod.__dict__["$module"]
@@ -246,6 +264,7 @@ class TestPythonImport:
     """Existing Python import of .clausal files still works."""
 
     def test_python_import_existing_fixture(self):
+        # nv
         mod = _load_fixture("edge_graph.clausal", "tests.fixtures.edge_graph")
         logic_mod = mod.__dict__["$module"]
         results = list(call("Edge", 1, 2, module=logic_mod))
@@ -259,6 +278,7 @@ class TestImportErrors:
     """Error cases for import directives."""
 
     def test_unknown_module_raises_import_error(self):
+        # nv
         import tempfile
         src = '-import_from(nonexistent_module_xyz_123, [Foo])\n'
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
@@ -270,6 +290,7 @@ class TestImportErrors:
         os.unlink(f.name)
 
     def test_unknown_predicate_raises_import_error(self):
+        # nv
         import tempfile
         src = '-import_from(tests.fixtures.importable_utils, [NoSuchPredicate])\n'
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
@@ -283,6 +304,7 @@ class TestImportErrors:
         os.unlink(f.name)
 
     def test_bad_directive_syntax_non_dotted(self):
+        # nv
         import tempfile
         src = '-import_from(123, [Foo])\n'
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
@@ -294,6 +316,7 @@ class TestImportErrors:
         os.unlink(f.name)
 
     def test_bad_directive_missing_list(self):
+        # nv
         import tempfile
         src = '-import_from(some_module)\n'
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
@@ -312,12 +335,14 @@ class TestDirectiveParsing:
     """Unit tests for the _dotted_name_from_ast helper."""
 
     def test_dotted_name_simple(self):
+        # nv
         import ast as stdlib_ast
         from clausal.templating.term_rewriting import _dotted_name_from_ast
         node = stdlib_ast.Name(id="foo")
         assert _dotted_name_from_ast(node) == "foo"
 
     def test_dotted_name_two_parts(self):
+        # nv
         import ast as stdlib_ast
         from clausal.templating.term_rewriting import _dotted_name_from_ast
         node = stdlib_ast.Attribute(
@@ -327,6 +352,7 @@ class TestDirectiveParsing:
         assert _dotted_name_from_ast(node) == "foo.bar"
 
     def test_dotted_name_three_parts(self):
+        # nv
         import ast as stdlib_ast
         from clausal.templating.term_rewriting import _dotted_name_from_ast
         node = stdlib_ast.Attribute(
@@ -339,6 +365,7 @@ class TestDirectiveParsing:
         assert _dotted_name_from_ast(node) == "a.b.c"
 
     def test_dotted_name_invalid(self):
+        # nv
         import ast as stdlib_ast
         from clausal.templating.term_rewriting import _dotted_name_from_ast
         node = stdlib_ast.Constant(value=42)
@@ -352,14 +379,17 @@ class TestCompilerDottedName:
     """Unit tests for _dotted_name_from_loadattr in compiler."""
 
     def test_loadname(self):
+        # nv
         node = LoadName(name="foo")
         assert _dotted_name_from_loadattr(node) == "foo"
 
     def test_loadattr_simple(self):
+        # nv
         node = LoadAttr(object=LoadName(name="graphs"), attr="Path")
         assert _dotted_name_from_loadattr(node) == "graphs.Path"
 
     def test_loadattr_nested(self):
+        # nv
         node = LoadAttr(
             object=LoadAttr(object=LoadName(name="a"), attr="b"),
             attr="c",
@@ -375,6 +405,7 @@ class TestVisitAttributeValidation:
 
     def test_logic_var_in_attr_raises_syntax_error(self):
         """X_.attr is rejected because X_ is a logic variable."""
+        # nv
         import tempfile
         src = (
             '-import_module(tests.fixtures.importable_utils)\n'
@@ -390,6 +421,7 @@ class TestVisitAttributeValidation:
 
     def test_logic_var_as_attr_name_raises_syntax_error(self):
         """mod.X_ is rejected because X_ is a logic variable."""
+        # nv
         import tempfile
         src = (
             '-import_module(tests.fixtures.importable_utils)\n'
@@ -412,6 +444,7 @@ class TestDottedRemap:
 
     def test_import_from_uses_dotted_key(self):
         """Imported predicates are stored under dotted key in compiled globals."""
+        # nv
         mod = _load_fixture("imports_from.clausal",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
@@ -422,6 +455,7 @@ class TestDottedRemap:
 
     def test_alias_import_uses_dotted_key(self):
         """Aliased imports also use dotted key with original name."""
+        # nv
         mod = _load_fixture("imports_alias.clausal",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
@@ -430,6 +464,7 @@ class TestDottedRemap:
 
     def test_local_name_does_not_shadow_import(self):
         """A local predicate with same name as import doesn't break dispatch."""
+        # nv
         import tempfile
         src = (
             '-import_from(tests.fixtures.importable_utils, [Double])\n'

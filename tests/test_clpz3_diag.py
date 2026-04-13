@@ -26,6 +26,7 @@ from clausal.pythonic_ast.nodes import ArithEq, Lt, LtE, Gt, GtE, Add
 
 class TestNamedConstraints:
     def test_named_post_succeeds(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -33,6 +34,7 @@ class TestNamedConstraints:
 
     def test_named_and_unsat_core(self):
         """x > 5 AND x < 3 is unsat — core includes both."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -45,6 +47,7 @@ class TestNamedConstraints:
         assert "x_small" in names
 
     def test_satisfiable_no_core(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -53,6 +56,7 @@ class TestNamedConstraints:
         assert not z3_unsat_core(core, trail)
 
     def test_named_backtrack(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -67,6 +71,7 @@ class TestNamedConstraints:
 
     def test_three_constraints_two_conflict(self):
         """Three named constraints, only two conflict."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -81,6 +86,7 @@ class TestNamedConstraints:
 
     def test_no_named_unsat(self):
         """Unsat with no named constraints returns empty core."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -92,6 +98,7 @@ class TestNamedConstraints:
 
 class TestMinimalUnsatCore:
     def test_minimal_core_strips_redundant(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -107,6 +114,7 @@ class TestMinimalUnsatCore:
         assert "c" not in names
 
     def test_satisfiable_returns_false(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -121,6 +129,7 @@ class TestMinimalUnsatCore:
 
 class TestIsSat:
     def test_sat(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -129,6 +138,7 @@ class TestIsSat:
         assert deref(r) == "sat"
 
     def test_unsat(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -144,6 +154,7 @@ class TestIsSat:
 
 class TestEntailment:
     def test_entailed_by_bounds(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 5, 10, trail)
@@ -151,12 +162,14 @@ class TestEntailment:
         assert entailed_z3(LtE(left=x, right=10), trail)
 
     def test_not_entailed(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
         assert not entailed_z3(GtE(left=x, right=5), trail)
 
     def test_entailed_after_equality(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -167,12 +180,14 @@ class TestEntailment:
 
 class TestDisentailed:
     def test_disentailed(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 5, 10, trail)
         assert z3_disentailed(Lt(left=x, right=5), trail)
 
     def test_not_disentailed(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -185,6 +200,7 @@ class TestDisentailed:
 
 class TestModel:
     def test_model_without_binding(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 3, trail)
@@ -196,6 +212,7 @@ class TestModel:
         assert model_data[0][1] in [1, 2, 3]
 
     def test_model_constrained(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -205,6 +222,7 @@ class TestModel:
         assert deref(vals)[0][1] == 7
 
     def test_model_unsat_fails(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -213,6 +231,7 @@ class TestModel:
         assert not z3_model([x], vals, trail)
 
     def test_model_multiple_vars(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -232,12 +251,14 @@ class TestModel:
 
 class TestSimplify:
     def test_simplify_constant(self):
+        # nv
         trail = Trail()
         r = Var()
         assert z3_simplify(Add(left=2, right=3), r, trail)
         assert deref(r) == 5
 
     def test_simplify_tautology(self):
+        # nv
         trail = Trail()
         r = Var()
         assert z3_simplify(ArithEq(left=5, right=5), r, trail)
@@ -246,6 +267,7 @@ class TestSimplify:
 
     def test_simplify_with_variable(self):
         """Simplify expression containing a variable returns string form."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -263,6 +285,7 @@ class TestSimplify:
 
 class TestAssertions:
     def test_dump_assertions(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -273,6 +296,7 @@ class TestAssertions:
         assert all(isinstance(s, str) for s in a_list)
 
     def test_empty_assertions(self):
+        # nv
         trail = Trail()
         _ = get_z3_state(trail)  # init state
         a = Var()
@@ -286,6 +310,7 @@ class TestAssertions:
 
 class TestStats:
     def test_stats_returns_pairs(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -306,10 +331,12 @@ class TestStats:
 
 class TestSolverConfig:
     def test_set_timeout(self):
+        # nv
         trail = Trail()
         assert z3_set_option("timeout", 5000, trail)
 
     def test_set_logic_qf_lia(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -317,6 +344,7 @@ class TestSolverConfig:
         assert z3_check(trail)
 
     def test_set_logic_preserves_constraints(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
@@ -328,6 +356,7 @@ class TestSolverConfig:
         assert sols == [5]
 
     def test_set_logic_detects_unsat(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 5, trail)
@@ -343,6 +372,7 @@ class TestSolverConfig:
 class TestDebugWorkflow:
     def test_find_conflict_with_unsat_core(self):
         """Full workflow: post named constraints, find conflict."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 1, 10, trail)
@@ -359,6 +389,7 @@ class TestDebugWorkflow:
 
     def test_model_then_entailment(self):
         """Inspect model, then verify entailment."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)

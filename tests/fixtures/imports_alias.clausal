@@ -2,6 +2,6 @@
 
 UseAlias(X, Y) <- Hlp(X, Y)
 
-Test("use alias 0") <- (UseAlias(0, Y), Y == 0)
-Test("use alias 1") <- (UseAlias(1, Y), Y == 2)
-Test("use alias 2") <- (UseAlias(2, Y), Y == 4)
+Test("use alias 0") <- (UseAlias(0, Y), Y == 0)  # nv
+Test("use alias 1") <- (UseAlias(1, Y), Y == 2)  # nv
+Test("use alias 2") <- (UseAlias(2, Y), Y == 4)  # nv

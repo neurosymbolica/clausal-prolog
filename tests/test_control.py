@@ -34,6 +34,7 @@ def _call(name, *args):
 class TestTimeGoal:
     def test_success_single_solution(self, capsys):
         """time_goal succeeds and reports timing for a goal with one solution."""
+        # nv
         x = Var()
         goal = _call("time_goal", _call("append", [1, 2], [3, 4], x))
         mod = _make_module()
@@ -44,6 +45,7 @@ class TestTimeGoal:
 
     def test_success_multiple_solutions(self, capsys):
         """time_goal forwards all solutions and counts them in the timing line."""
+        # nv
         x = Var()
         goal = _call("time_goal", _call("in_", x, [10, 20, 30]))
         results = []
@@ -55,6 +57,7 @@ class TestTimeGoal:
 
     def test_failure_zero_solutions(self, capsys):
         """time_goal reports 0 solutions when inner goal fails."""
+        # nv
         x = Var()
         goal = _call("time_goal", _call("in_", x, []))
         solutions = _solve_goal(goal)
@@ -64,6 +67,7 @@ class TestTimeGoal:
 
     def test_timing_fields_present(self, capsys):
         """Timing line contains wall and CPU fields."""
+        # nv
         goal = _call("time_goal", _call("append", [], [], []))
         _solve_goal(goal)
         err = capsys.readouterr().err
@@ -72,6 +76,7 @@ class TestTimeGoal:
 
     def test_timing_format(self, capsys):
         """Timing line matches the expected pattern."""
+        # nv
         goal = _call("time_goal", _call("in_", Var(), [1]))
         _solve_goal(goal)
         err = capsys.readouterr().err
@@ -80,6 +85,7 @@ class TestTimeGoal:
     def test_solutions_pass_through(self, capsys):
         """time_goal is transparent — bindings from inner goal are visible."""
         # Wrap a simple multi-solution goal: in_(X, [1, 2])
+        # nv
         x = Var()
         goal = _call("time_goal", _call("in_", x, [1, 2]))
         pairs = []
@@ -91,6 +97,7 @@ class TestTimeGoal:
 
     def test_nested_time_goal(self, capsys):
         """time_goal can wrap another time_goal (nested meta calls)."""
+        # nv
         x = Var()
         inner = _call("time_goal", _call("in_", x, [42]))
         outer = _call("time_goal", inner)

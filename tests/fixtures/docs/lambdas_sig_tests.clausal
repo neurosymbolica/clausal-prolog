@@ -1,15 +1,15 @@
 # Companion tests for docs/lambdas.md display snippets.
 
-Test("call_goal single arg") <- call_goal((X <- (X > 0)), 5)
+Test("call_goal single arg") <- call_goal((X <- (X > 0)), 5)  # nv
 
 Test("call_goal two args") <- (
     call_goal(((X, Y) <- (Y == X * 2)), 5, R),
     R == 10
-)
+)  # nv
 
-Test("maplist with number") <- maplist(number, [1, 2, 3])
+Test("maplist with number") <- maplist(number, [1, 2, 3])  # nv
 
 Test("include with integer") <- (
     include(integer, [1, "a", 2, "b", 3], IS),
     IS == [1, 2, 3]
-)
+)  # nv

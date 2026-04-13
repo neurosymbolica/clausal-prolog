@@ -9,13 +9,13 @@
 
 # ── GetLogger ────────────────────────────────────────────────────────────────
 
-Test("get_logger named") <- GetLogger("test.fixture.named", LOGGER)
+Test("get_logger named") <- GetLogger("test.fixture.named", LOGGER)  # nv
 Test("get_logger same name") <- (
     GetLogger("test.fixture.same", LOGGER1),
     GetLogger("test.fixture.same", LOGGER2),
     LOGGER1 == LOGGER2
-)
-Test("get_logger default") <- GetLogger(LOGGER)
+)  # nv
+Test("get_logger default") <- GetLogger(LOGGER)  # nv
 
 # ── SetLevel / GetLevel ──────────────────────────────────────────────────────
 
@@ -24,31 +24,31 @@ Test("set_level debug") <- (
     SetLevel(LOGGER, "debug"),
     GetLevel(LOGGER, LEVEL),
     LEVEL == "DEBUG"
-)
+)  # nv
 Test("set_level warning") <- (
     GetLogger("test.fixture.lvl2", LOGGER),
     SetLevel(LOGGER, "warning"),
     GetLevel(LOGGER, LEVEL),
     LEVEL == "WARNING"
-)
+)  # nv
 Test("set_level error") <- (
     GetLogger("test.fixture.lvl3", LOGGER),
     SetLevel(LOGGER, "error"),
     GetLevel(LOGGER, LEVEL),
     LEVEL == "ERROR"
-)
+)  # nv
 Test("set_level critical") <- (
     GetLogger("test.fixture.lvl4", LOGGER),
     SetLevel(LOGGER, "critical"),
     GetLevel(LOGGER, LEVEL),
     LEVEL == "CRITICAL"
-)
+)  # nv
 Test("set_level info") <- (
     GetLogger("test.fixture.lvl5", LOGGER),
     SetLevel(LOGGER, "info"),
     GetLevel(LOGGER, LEVEL),
     LEVEL == "INFO"
-)
+)  # nv
 
 # ── IsEnabledFor ─────────────────────────────────────────────────────────────
 
@@ -56,77 +56,77 @@ Test("enabled_for yes") <- (
     GetLogger("test.fixture.en1", LOGGER),
     SetLevel(LOGGER, "debug"),
     IsEnabledFor(LOGGER, "info")
-)
+)  # nv
 Test("enabled_for no") <- (
     GetLogger("test.fixture.en2", LOGGER),
     SetLevel(LOGGER, "error"),
     not IsEnabledFor(LOGGER, "debug")
-)
+)  # nv
 Test("enabled_for same level") <- (
     GetLogger("test.fixture.en3", LOGGER),
     SetLevel(LOGGER, "warning"),
     IsEnabledFor(LOGGER, "warning")
-)
+)  # nv
 
 # ── Logging predicates always succeed ────────────────────────────────────────
 
 Test("debug succeeds") <- (
     GetLogger("test.fixture.d", LOGGER),
     Debug(LOGGER, "debug msg")
-)
+)  # nv
 Test("info succeeds") <- (
     GetLogger("test.fixture.i", LOGGER),
     Info(LOGGER, "info msg")
-)
+)  # nv
 Test("warning succeeds") <- (
     GetLogger("test.fixture.w", LOGGER),
     Warning(LOGGER, "warning msg")
-)
+)  # nv
 Test("error succeeds") <- (
     GetLogger("test.fixture.e", LOGGER),
     Error(LOGGER, "error msg")
-)
+)  # nv
 Test("critical succeeds") <- (
     GetLogger("test.fixture.c", LOGGER),
     Critical(LOGGER, "critical msg")
-)
+)  # nv
 
 # ── Log/3 ────────────────────────────────────────────────────────────────────
 
 Test("log at info") <- (
     GetLogger("test.fixture.log3", LOGGER),
     Log(LOGGER, "info", "generic")
-)
+)  # nv
 Test("log at debug") <- (
     GetLogger("test.fixture.log3d", LOGGER),
     Log(LOGGER, "debug", "dbg")
-)
+)  # nv
 
 # ── Arity-1 shorthand ───────────────────────────────────────────────────────
 
-Test("debug arity 1") <- Debug("default debug")
-Test("info arity 1") <- Info("default info")
-Test("warning arity 1") <- Warning("default warning")
-Test("error arity 1") <- Error("default error")
-Test("critical arity 1") <- Critical("default critical")
+Test("debug arity 1") <- Debug("default debug")  # nv
+Test("info arity 1") <- Info("default info")  # nv
+Test("warning arity 1") <- Warning("default warning")  # nv
+Test("error arity 1") <- Error("default error")  # nv
+Test("critical arity 1") <- Critical("default critical")  # nv
 
 # ── StreamHandler / AddHandler ───────────────────────────────────────────────
 
-Test("stream_handler stdout") <- StreamHandler("stdout", HANDLER)
-Test("stream_handler stderr") <- StreamHandler("stderr", HANDLER)
+Test("stream_handler stdout") <- StreamHandler("stdout", HANDLER)  # nv
+Test("stream_handler stderr") <- StreamHandler("stderr", HANDLER)  # nv
 Test("add_handler") <- (
     GetLogger("test.fixture.ah", LOGGER),
     StreamHandler("stderr", HANDLER),
     AddHandler(LOGGER, HANDLER),
     RemoveHandler(LOGGER, HANDLER)
-)
+)  # nv
 
 # ── SetFormatter ─────────────────────────────────────────────────────────────
 
 Test("set_formatter") <- (
     StreamHandler("stderr", HANDLER),
     SetFormatter(HANDLER, "%(levelname)s: %(message)s")
-)
+)  # nv
 
 # ── Logger hierarchy ────────────────────────────────────────────────────────
 
@@ -136,4 +136,4 @@ Test("logger hierarchy") <- (
     GetLevel(PARENT, PARENT_LEVEL),
     GetLevel(CHILD, CHILD_LEVEL),
     True
-)
+)  # nv

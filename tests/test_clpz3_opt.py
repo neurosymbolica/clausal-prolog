@@ -21,12 +21,14 @@ from clausal.pythonic_ast.nodes import ArithEq, LtE, GtE, Add, Sub
 
 class TestSoftConstraints:
     def test_soft_post_succeeds(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
         assert z3_soft(ArithEq(left=x, right=5), 1, trail)
 
     def test_soft_with_group(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -38,6 +40,7 @@ class TestSoftConstraints:
 
     def test_soft_backtrack(self):
         """Soft constraints are retracted on trail backtrack."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -53,6 +56,7 @@ class TestSoftConstraints:
 
     def test_multiple_soft_backtrack_partial(self):
         """Only soft constraints added after the mark are retracted."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -75,6 +79,7 @@ class TestSoftConstraints:
 class TestMaxSat:
     def test_all_soft_satisfiable(self):
         """When all soft constraints can be satisfied, total = sum of weights."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -86,6 +91,7 @@ class TestMaxSat:
 
     def test_conflicting_soft(self):
         """Conflicting soft constraints: higher-weight wins."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 1, trail)
@@ -98,6 +104,7 @@ class TestMaxSat:
 
     def test_infeasible_returns_false(self):
         """MaxSAT on infeasible hard constraints returns False."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 5, trail)
@@ -107,6 +114,7 @@ class TestMaxSat:
 
     def test_no_soft_constraints(self):
         """MaxSAT with no soft constraints returns 0."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -121,6 +129,7 @@ class TestMaxSat:
 
 class TestOptimizeLabel:
     def test_maximize_simple(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -131,6 +140,7 @@ class TestOptimizeLabel:
         assert sols == [(10, 10)]
 
     def test_minimize_simple(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -142,6 +152,7 @@ class TestOptimizeLabel:
 
     def test_maximize_with_constraint(self):
         """Maximize x subject to x + y == 10, y >= 3."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -155,6 +166,7 @@ class TestOptimizeLabel:
 
     def test_minimize_with_soft(self):
         """Soft constraints influence optimization."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -171,6 +183,7 @@ class TestOptimizeLabel:
         assert len(sols) == 1
 
     def test_infeasible_yields_nothing(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 5, trail)
@@ -180,6 +193,7 @@ class TestOptimizeLabel:
         assert len(sols) == 0
 
     def test_invalid_mode_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -188,6 +202,7 @@ class TestOptimizeLabel:
 
     def test_bindings_undone_after_yield(self):
         """Variables are unbound after the generator completes."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -205,6 +220,7 @@ class TestOptimizeLabel:
 class TestMultiObjective:
     def test_lex_two_objectives(self):
         """Lexicographic: maximize x first, then maximize y."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -222,6 +238,7 @@ class TestMultiObjective:
 
     def test_lex_minimize_then_maximize(self):
         """Lex: minimize x, then maximize y."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -239,6 +256,7 @@ class TestMultiObjective:
 
     def test_pareto_multiple_solutions(self):
         """Pareto mode yields multiple Pareto-optimal solutions."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 3, trail)
@@ -258,6 +276,7 @@ class TestMultiObjective:
 
     def test_box_independent(self):
         """Box mode: each objective optimized independently."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_z3([x, y], 0, 10, trail)
@@ -272,6 +291,7 @@ class TestMultiObjective:
         assert len(sols) == 1
 
     def test_infeasible_yields_nothing(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 5, trail)
@@ -283,6 +303,7 @@ class TestMultiObjective:
         assert len(sols) == 0
 
     def test_bindings_undone(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -304,6 +325,7 @@ class TestPhase4OptWithSoft:
         maximize(x).  Z3 Optimize satisfies soft constraints when possible,
         so the optimal is x=5 (soft satisfied) not x=10.
         """
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -313,6 +335,7 @@ class TestPhase4OptWithSoft:
         assert deref(obj) == 5
 
     def test_minimize_z3_basic(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -328,6 +351,7 @@ class TestPhase4OptWithSoft:
 class TestIntegrationScheduling:
     def test_minimize_makespan(self):
         """Minimize makespan of 3 non-overlapping tasks."""
+        # nv
         trail = Trail()
         t1, t2, t3 = Var(), Var(), Var()
         in_z3([t1, t2, t3], 0, 100, trail)
@@ -351,6 +375,7 @@ class TestIntegrationScheduling:
 
     def test_maxsat_scheduling_preferences(self):
         """MaxSAT: satisfy as many scheduling preferences as possible."""
+        # nv
         trail = Trail()
         x = Var()
         in_z3(x, 0, 10, trail)
@@ -370,6 +395,7 @@ class TestIntegrationScheduling:
 
 class TestRealOptimize:
     def test_real_minimize(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)
@@ -378,6 +404,7 @@ class TestRealOptimize:
         assert deref(obj) == 0
 
     def test_real_maximize(self):
+        # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 0, 10, trail)

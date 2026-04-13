@@ -36,6 +36,7 @@ def simple_var(fn, var, *args):
 
 class TestPutAttr:
     def test_basic(self):
+        # nv
         v = Var()
         sols, trail = simple(_put_attr__3, v, "color", "red")
         assert len(sols) == 1
@@ -43,18 +44,22 @@ class TestPutAttr:
 
     def test_bound_var_fails(self):
         """put_attr on a bound term fails."""
+        # nv
         sols, _ = simple(_put_attr__3, 42, "key", "val")
         assert len(sols) == 0
 
     def test_unbound_key_fails(self):
+        # nv
         sols, _ = simple(_put_attr__3, Var(), Var(), "val")
         assert len(sols) == 0
 
     def test_non_string_key_fails(self):
+        # nv
         sols, _ = simple(_put_attr__3, Var(), 123, "val")
         assert len(sols) == 0
 
     def test_overwrite(self):
+        # nv
         v = Var()
         trail = Trail()
         list(_put_attr__3(v, "k", "old", trail, None))
@@ -63,6 +68,7 @@ class TestPutAttr:
         assert get_attr(v, "k") == "new"
 
     def test_backtrack_undoes(self):
+        # nv
         v = Var()
         trail = Trail()
         mark = trail.mark()
@@ -77,6 +83,7 @@ class TestPutAttr:
 
 class TestGetAttr:
     def test_basic(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "color", "blue", trail)
@@ -85,16 +92,19 @@ class TestGetAttr:
         assert results == ["blue"]
 
     def test_missing_key_fails(self):
+        # nv
         v = Var()
         sols, _ = simple(_get_attr__3, v, "nonexistent", Var())
         assert len(sols) == 0
 
     def test_non_var_fails(self):
+        # nv
         sols, _ = simple(_get_attr__3, 42, "key", Var())
         assert len(sols) == 0
 
     def test_unify_check(self):
         """get_attr with pre-bound value checks equality."""
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "n", 42, trail)
@@ -106,6 +116,7 @@ class TestGetAttr:
         assert len(sols_bad) == 0
 
     def test_after_delete_fails(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", "val", trail)
@@ -119,6 +130,7 @@ class TestGetAttr:
 
 class TestDelAttr:
     def test_basic(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
@@ -128,11 +140,13 @@ class TestDelAttr:
 
     def test_nonexistent_succeeds(self):
         """Deleting non-existent attr is a no-op, succeeds."""
+        # nv
         v = Var()
         sols, _ = simple(_del_attr__2, v, "nope")
         assert len(sols) == 1
 
     def test_backtrack_undoes(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 42, trail)
@@ -148,6 +162,7 @@ class TestDelAttr:
 
 class TestGetAttrs:
     def test_multiple_attrs(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "a", 1, trail)
@@ -161,6 +176,7 @@ class TestGetAttrs:
         assert dt.data["b"] == 2
 
     def test_no_attrs(self):
+        # nv
         v = Var()
         result = Var()
         results = simple_var(_get_attrs__2, result, v, result)
@@ -170,6 +186,7 @@ class TestGetAttrs:
         assert dt.data == {}
 
     def test_non_var_fails(self):
+        # nv
         sols, _ = simple(_get_attrs__2, 42, Var())
         assert len(sols) == 0
 
@@ -179,6 +196,7 @@ class TestGetAttrs:
 
 class TestPutAttrs:
     def test_dict_term(self):
+        # nv
         v = Var()
         dt = DictTerm({"x": 10, "y": 20})
         sols, trail = simple(_put_attrs__2, v, dt)
@@ -187,15 +205,18 @@ class TestPutAttrs:
         assert get_attr(v, "y") == 20
 
     def test_empty_dict(self):
+        # nv
         v = Var()
         sols, _ = simple(_put_attrs__2, v, DictTerm({}))
         assert len(sols) == 1
 
     def test_non_dict_fails(self):
+        # nv
         sols, _ = simple(_put_attrs__2, Var(), [["a", 1]])
         assert len(sols) == 0
 
     def test_non_var_fails(self):
+        # nv
         sols, _ = simple(_put_attrs__2, 42, DictTerm({"k": "v"}))
         assert len(sols) == 0
 
@@ -205,6 +226,7 @@ class TestPutAttrs:
 
 class TestIsAttVar:
     def test_var_with_attr(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
@@ -212,10 +234,12 @@ class TestIsAttVar:
         assert len(sols) == 1
 
     def test_bare_var_fails(self):
+        # nv
         sols, _ = simple(_is_att_var__1, Var())
         assert len(sols) == 0
 
     def test_bound_term_fails(self):
+        # nv
         sols, _ = simple(_is_att_var__1, 42)
         assert len(sols) == 0
 
@@ -225,6 +249,7 @@ class TestIsAttVar:
 
 class TestTermAttributedVariables:
     def test_single_attvar(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
@@ -236,6 +261,7 @@ class TestTermAttributedVariables:
         assert results[0][0] is v
 
     def test_list_with_mix(self):
+        # nv
         v1, v2, v3 = Var(), Var(), Var()
         trail = Trail()
         put_attr(v1, "a", 1, trail)
@@ -252,11 +278,13 @@ class TestTermAttributedVariables:
         assert v2 not in attvars
 
     def test_no_attvars(self):
+        # nv
         result = Var()
         results = simple_var(_term_attributed_variables__2, result, [1, 2, "hello"], result)
         assert results == [[]]
 
     def test_compound_term(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
@@ -268,6 +296,7 @@ class TestTermAttributedVariables:
         assert results[0] == [v]
 
     def test_duplicate_var_listed_once(self):
+        # nv
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
@@ -284,6 +313,7 @@ class TestTermAttributedVariables:
 class TestIntegration:
     def test_coexist_with_clpfd(self):
         """User attr and CLP(FD) attr coexist on the same variable."""
+        # nv
         from clausal.logic.clpfd import in_domain
         v = Var()
         trail = Trail()
@@ -296,6 +326,7 @@ class TestIntegration:
 
     def test_custom_hook_rejects_unification(self):
         """A custom hook can reject unification by returning False."""
+        # nv
         hook_key = "_test_reject_hook"
         rejected = []
 
@@ -318,6 +349,7 @@ class TestIntegration:
 
     def test_custom_hook_accepts_unification(self):
         """A custom hook that returns True allows unification."""
+        # nv
         hook_key = "_test_accept_hook"
         accepted = []
 
@@ -339,6 +371,7 @@ class TestIntegration:
 
     def test_round_trip_put_get_attrs(self):
         """put_attrs then get_attrs round-trips through DictTerm."""
+        # nv
         v = Var()
         trail = Trail()
         dt_in = DictTerm({"x": 10, "y": "hello"})

@@ -74,6 +74,7 @@ class TestHeadToMatchPattern:
     # ── Var ──
 
     def test_unbound_var_gives_match_as(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         p = head_to_match_pattern(v, ctx)
@@ -82,6 +83,7 @@ class TestHeadToMatchPattern:
         assert p.pattern is None  # bare capture, no sub-pattern
 
     def test_var_registers_in_context(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         head_to_match_pattern(v, ctx)
@@ -89,6 +91,7 @@ class TestHeadToMatchPattern:
         assert ctx[v._id] == f"_v{v._id}"
 
     def test_two_different_vars_different_names(self):
+        # nv
         v1, v2 = Var(), Var()
         ctx: dict[int, str] = {}
         p1 = head_to_match_pattern(v1, ctx)
@@ -99,16 +102,19 @@ class TestHeadToMatchPattern:
     # ── Singletons ──
 
     def test_none_gives_match_singleton(self):
+        # nv
         p = head_to_match_pattern(None, {})
         assert isinstance(p, ast.MatchSingleton)
         assert p.value is None
 
     def test_true_gives_match_singleton(self):
+        # nv
         p = head_to_match_pattern(True, {})
         assert isinstance(p, ast.MatchSingleton)
         assert p.value is True
 
     def test_false_gives_match_singleton(self):
+        # nv
         p = head_to_match_pattern(False, {})
         assert isinstance(p, ast.MatchSingleton)
         assert p.value is False
@@ -116,22 +122,26 @@ class TestHeadToMatchPattern:
     # ── Scalar literals ──
 
     def test_int_gives_match_value(self):
+        # nv
         p = head_to_match_pattern(42, {})
         assert isinstance(p, ast.MatchValue)
         assert isinstance(p.value, ast.Constant)
         assert p.value.value == 42
 
     def test_float_gives_match_value(self):
+        # nv
         p = head_to_match_pattern(3.14, {})
         assert isinstance(p, ast.MatchValue)
         assert p.value.value == pytest.approx(3.14)
 
     def test_str_gives_match_value(self):
+        # nv
         p = head_to_match_pattern("hello", {})
         assert isinstance(p, ast.MatchValue)
         assert p.value.value == "hello"
 
     def test_bytes_gives_match_value(self):
+        # nv
         p = head_to_match_pattern(b"hi", {})
         assert isinstance(p, ast.MatchValue)
         assert p.value.value == b"hi"
@@ -139,6 +149,7 @@ class TestHeadToMatchPattern:
     # ── Python list ──
 
     def test_empty_list_gives_wildcard_capture(self):
+        # nv
         list_guards: list = []
         p = head_to_match_pattern([], {}, list_guards=list_guards)
         # Lists now compile as wildcard captures + list_guards
@@ -147,6 +158,7 @@ class TestHeadToMatchPattern:
         assert len(list_guards) == 1
 
     def test_list_registers_vars_in_context(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -159,6 +171,7 @@ class TestHeadToMatchPattern:
     # ── Compound ──
 
     def test_compound_gives_match_class_on_compound(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         term = Compound("foo", (v, 42))
@@ -181,6 +194,7 @@ class TestHeadToMatchPattern:
         assert v._id in ctx
 
     def test_compound_with_var_functor_gives_wildcard(self):
+        # nv
         v_functor = Var()
         term = Compound(v_functor, (1, 2))
         p = head_to_match_pattern(term, {})
@@ -190,6 +204,7 @@ class TestHeadToMatchPattern:
     # ── functor dataclass ──
 
     def test_dataclass_gives_match_class_on_its_type(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         term = point(_x=v, _y=99)
@@ -204,6 +219,7 @@ class TestHeadToMatchPattern:
         assert v._id in ctx
 
     def test_dataclass_all_literals(self):
+        # nv
         ctx: dict[int, str] = {}
         term = point(_x=1, _y=2)
         p = head_to_match_pattern(term, ctx)
@@ -212,6 +228,7 @@ class TestHeadToMatchPattern:
         assert all(isinstance(kp, ast.MatchValue) for kp in p.kwd_patterns)
 
     def test_nested_dataclass(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         inner = point(_x=v, _y=0)
@@ -230,6 +247,7 @@ class TestHeadToMatchPattern:
     # ── Unknown term → wildcard ──
 
     def test_unknown_term_gives_wildcard(self):
+        # nv
         p = head_to_match_pattern(object(), {})
         assert isinstance(p, ast.MatchAs)
         assert p.name is None
@@ -242,6 +260,7 @@ class TestCompileHeadToMatchCase:
     """Unit tests for compile_head_to_match_case."""
 
     def test_returns_match_case(self):
+        # nv
         head = point(_x=1, _y=2)
         case_arm = compile_head_to_match_case(
             head=head,
@@ -252,6 +271,7 @@ class TestCompileHeadToMatchCase:
         assert isinstance(case_arm, ast.match_case)
 
     def test_outer_pattern_is_match_sequence(self):
+        # nv
         head = point(_x=1, _y=2)
         case_arm = compile_head_to_match_case(
             head=head,
@@ -263,6 +283,7 @@ class TestCompileHeadToMatchCase:
         assert len(case_arm.pattern.patterns) == 2
 
     def test_ground_fact_skips_trail_mark(self):
+        # nv
         head = point(_x=1, _y=2)
         case_arm = compile_head_to_match_case(
             head=head,
@@ -276,6 +297,7 @@ class TestCompileHeadToMatchCase:
                        s.targets[0].id == "_mark" for s in case_arm.body)
 
     def test_body_starts_with_trail_mark(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=2)
         case_arm = compile_head_to_match_case(
@@ -291,6 +313,7 @@ class TestCompileHeadToMatchCase:
         assert first_stmt.targets[0].id == "_mark"
 
     def test_body_has_try_finally_with_undo(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=2)
         case_arm = compile_head_to_match_case(
@@ -311,6 +334,7 @@ class TestCompileHeadToMatchCase:
         assert call.func.attr == "undo"
 
     def test_var_context_populated_from_head(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=42)
         var_context: dict[int, str] = {}
@@ -323,6 +347,7 @@ class TestCompileHeadToMatchCase:
         assert v._id in var_context
 
     def test_body_stmts_in_try_block(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=2)
         sentinel = ast.Pass()
@@ -355,11 +380,13 @@ class TestCompilePredicate:
     # ── No clauses → always fail ──
 
     def test_no_clauses_always_fails(self):
+        # nv
         db = Database()
         fn = compile_predicate("foo", 2, [], db)
         assert list(_run_dispatch(fn, 1, 2, _trail())) == []
 
     def test_no_clauses_is_generator(self):
+        # nv
         db = Database()
         fn = compile_predicate("foo", 0, [], db)
         import types
@@ -367,6 +394,7 @@ class TestCompilePredicate:
         assert hasattr(gen, 'send')
 
     def test_no_clauses_installs_dispatch_fn(self):
+        # nv
         db = Database()
         fn = compile_predicate("foo", 2, [], db)
         assert db.get_dispatch("foo", 2) is fn
@@ -374,12 +402,14 @@ class TestCompilePredicate:
     # ── Function naming ──
 
     def test_function_name_includes_functor_and_arity(self):
+        # nv
         db = _make_db_with_clause(point(_x=1, _y=2))
         clauses = db.clauses_for("point", 2)
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
         assert fn.__name__ == "point__2"
 
     def test_arity_zero_function_name(self):
+        # nv
         db = _make_db_with_clause(Compound("truth", ()))
         clauses = db.clauses_for("truth", 0)
         fn = compile_predicate("truth", 0, clauses, db)
@@ -388,6 +418,7 @@ class TestCompilePredicate:
     # ── Literal head matching ──
 
     def test_literal_head_matches_exact_args(self):
+        # nv
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
@@ -395,6 +426,7 @@ class TestCompilePredicate:
         assert list(_run_dispatch(fn, 1, 2, _trail())) == [None]
 
     def test_literal_head_fails_wrong_arg(self):
+        # nv
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
@@ -402,6 +434,7 @@ class TestCompilePredicate:
         assert list(_run_dispatch(fn, 1, 99, _trail())) == []
 
     def test_singleton_head_none(self):
+        # nv
         head = Compound("nil", ())
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("nil", 0)
@@ -411,6 +444,7 @@ class TestCompilePredicate:
     # ── Var head matching ──
 
     def test_var_head_matches_any_value(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=42)
         db = _make_db_with_clause(head)
@@ -420,6 +454,7 @@ class TestCompilePredicate:
             assert list(_run_dispatch(fn, val, 42, _trail())) == [None]
 
     def test_var_head_fails_wrong_literal(self):
+        # nv
         v = Var()
         head = point(_x=v, _y=42)
         db = _make_db_with_clause(head)
@@ -430,6 +465,7 @@ class TestCompilePredicate:
     # ── Compound head matching ──
 
     def test_compound_head_matches_compound_term(self):
+        # nv
         v = Var()
         head = Compound("edge", (v, 42))
         db = _make_db_with_clause(head)
@@ -438,6 +474,7 @@ class TestCompilePredicate:
         assert list(_run_dispatch(fn, "from", 42, _trail())) == [None]
 
     def test_compound_head_fails_wrong_second_arg(self):
+        # nv
         v = Var()
         head = Compound("edge", (v, 42))
         db = _make_db_with_clause(head)
@@ -448,6 +485,7 @@ class TestCompilePredicate:
     # ── Nested dataclass head ──
 
     def test_nested_dataclass_head_matches(self):
+        # nv
         v = Var()
         head = pair(left=point(_x=v, _y=0), right="done")
         db = _make_db_with_clause(head)
@@ -459,6 +497,7 @@ class TestCompilePredicate:
         assert list(_run_dispatch(fn, inner, "done", _trail())) == [None]
 
     def test_nested_dataclass_fails_wrong_inner(self):
+        # nv
         v = Var()
         head = pair(left=point(_x=v, _y=0), right="done")
         db = _make_db_with_clause(head)
@@ -474,6 +513,7 @@ class TestCompilePredicate:
 
     def test_multi_clause_each_can_match(self):
         """Multiple clauses: each matching arg routes to the correct clause."""
+        # nv
         db = Database()
         for color_name in ("red", "green", "blue"):
             db.assertz(Clause(head=Compound("color", (color_name,)), body=[]))
@@ -487,6 +527,7 @@ class TestCompilePredicate:
 
     def test_multi_clause_no_double_yield(self):
         """A specific arg matches exactly one literal clause, not multiple."""
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("x", (1,)), body=[]))
         db.assertz(Clause(head=Compound("x", (2,)), body=[]))
@@ -497,6 +538,7 @@ class TestCompilePredicate:
     # ── Database dispatch wiring ──
 
     def test_installs_dispatch_fn_on_table(self):
+        # nv
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
@@ -504,6 +546,7 @@ class TestCompilePredicate:
         assert db.get_dispatch("point", 2) is fn
 
     def test_get_dispatch_works_after_compile(self):
+        # nv
         head = point(_x=1, _y=2)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("point", 2)
@@ -515,6 +558,7 @@ class TestCompilePredicate:
 
     def test_custom_body_compiler_called_per_clause(self):
         """body_compiler is called once per clause with (clause, var_context)."""
+        # nv
         db = Database()
         db.assertz(Clause(head=Compound("a", (1,)), body=[]))
         db.assertz(Clause(head=Compound("a", (2,)), body=[]))
@@ -536,6 +580,7 @@ class TestCompilePredicate:
 
     def test_custom_body_compiler_can_yield_multiple(self):
         """A body_compiler that yields twice gives 2 results per clause match."""
+        # nv
         db = _make_db_with_clause(Compound("multi", ()))
 
         def double_yield(clause, var_context):
@@ -556,6 +601,7 @@ class TestCompilePredicate:
 
     def test_trail_mark_and_undo_called_around_body(self):
         """Verify that trail.mark() and trail.undo() are called for non-ground clauses."""
+        # nv
         mark_calls = []
         undo_calls = []
 
@@ -581,6 +627,7 @@ class TestCompilePredicate:
 
     def test_trail_undo_called_after_solutions_exhausted(self):
         """Trail.undo is called after head matches and solutions are exhausted."""
+        # nv
         undo_calls = []
 
         class FakeTrail:
@@ -608,6 +655,7 @@ class TestHeadListPatterns:
     # ── head_to_match_pattern with StarUnpack ──
 
     def test_star_list_produces_wildcard_capture(self):
+        # nv
         h, t = Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -616,6 +664,7 @@ class TestHeadListPatterns:
         assert p.name.startswith("_lcap")
 
     def test_star_list_registers_both_vars(self):
+        # nv
         h, t = Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -624,6 +673,7 @@ class TestHeadListPatterns:
         assert t._id in ctx
 
     def test_star_list_records_list_guard(self):
+        # nv
         h, t = Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -638,6 +688,7 @@ class TestHeadListPatterns:
 
     def test_star_middle_pattern(self):
         """[A, *MID, Z] records before=[A], star=MID, after=[Z]."""
+        # nv
         a, mid, z = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -652,6 +703,7 @@ class TestHeadListPatterns:
 
     def test_no_star_list_still_records_guard(self):
         """A plain list [X, 42] also uses list guard (no MatchSequence)."""
+        # nv
         x = Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -665,6 +717,7 @@ class TestHeadListPatterns:
     # ── Repeated vars in head patterns ──
 
     def test_repeated_var_produces_dup_guard(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
         dup_guards: list = []
@@ -682,6 +735,7 @@ class TestHeadListPatterns:
 
     def test_repeated_var_across_list_patterns(self):
         """HEAD in [HEAD, *TAIL] and [HEAD, *RESULT] — same var_context entry, two list guards."""
+        # nv
         h, t, r = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -699,6 +753,7 @@ class TestNestedStarListPatterns:
 
     def test_nested_star_flattens_to_proxy_var(self):
         """[[HEAD, *TAIL], *ROWS] → outer guard with proxy + inner sub-guard."""
+        # nv
         head, tail, rows = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -730,6 +785,7 @@ class TestNestedStarListPatterns:
 
     def test_nested_star_registers_all_vars(self):
         """All vars (HEAD, TAIL, ROWS, proxy) are registered in var_context."""
+        # nv
         head, tail, rows = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -744,6 +800,7 @@ class TestNestedStarListPatterns:
 
     def test_double_nested_star(self):
         """[[[X, *Y], *Z], *W] produces 3 guards."""
+        # nv
         x, y, z, w = Var(), Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -764,6 +821,7 @@ class TestNestedStarListPatterns:
 
     def test_nested_star_no_star_in_inner(self):
         """[[A, B], *REST] — inner list has no star, no sub-guard needed."""
+        # nv
         a, b, rest = Var(), Var(), Var()
         ctx: dict[int, str] = {}
         list_guards: list = []
@@ -831,6 +889,7 @@ class TestNestedStarIntegration:
         return None
 
     def test_extract_head_tail_rows(self):
+        # nv
         h, t, r = Var(), Var(), Var()
         for _ in call("Extract", [[10, 20, 30], [40, 50]], h, t, r, module=self.module):
             assert deref(h) == 10
@@ -840,6 +899,7 @@ class TestNestedStarIntegration:
         pytest.fail("Extract did not match")
 
     def test_extract_single_element_inner(self):
+        # nv
         h, t, r = Var(), Var(), Var()
         for _ in call("Extract", [[42], [1, 2]], h, t, r, module=self.module):
             assert deref(h) == 42
@@ -849,6 +909,7 @@ class TestNestedStarIntegration:
         pytest.fail("Extract did not match")
 
     def test_extract_single_row(self):
+        # nv
         h, t, r = Var(), Var(), Var()
         for _ in call("Extract", [[5, 6, 7]], h, t, r, module=self.module):
             assert deref(h) == 5
@@ -858,6 +919,7 @@ class TestNestedStarIntegration:
         pytest.fail("Extract did not match")
 
     def test_first(self):
+        # nv
         f = Var()
         for _ in call("First", [7, 8, 9], f, module=self.module):
             assert deref(f) == 7
@@ -865,6 +927,7 @@ class TestNestedStarIntegration:
         pytest.fail("First did not match")
 
     def test_deep_triple_nesting(self):
+        # nv
         x, y, z, w = Var(), Var(), Var(), Var()
         for _ in call("Deep", [[[1, 2, 3], [4, 5]], [6, 7]], x, y, z, w, module=self.module):
             assert deref(x) == 1
@@ -875,6 +938,7 @@ class TestNestedStarIntegration:
         pytest.fail("Deep did not match")
 
     def test_transpose_2x3(self):
+        # nv
         r = Var()
         for _ in call("transpose", [[1, 2, 3], [4, 5, 6]], r, module=self.module):
             assert deref(r) == [[1, 4], [2, 5], [3, 6]]
@@ -882,6 +946,7 @@ class TestNestedStarIntegration:
         pytest.fail("transpose did not match")
 
     def test_transpose_3x2(self):
+        # nv
         r = Var()
         for _ in call("transpose", [[1, 2], [3, 4], [5, 6]], r, module=self.module):
             assert deref(r) == [[1, 3, 5], [2, 4, 6]]
@@ -889,9 +954,11 @@ class TestNestedStarIntegration:
         pytest.fail("transpose did not match")
 
     def test_transpose_empty_rows(self):
+        # nv
         assert self._succeeds("transpose", [[], []], [])
 
     def test_transpose_empty_matrix(self):
+        # nv
         assert self._succeeds("transpose", [], [])
 
 
@@ -904,6 +971,7 @@ class TestHeadListUnify:
     # ── Input mode (destructuring) ──
 
     def test_input_simple_list(self):
+        # nv
         trail = Trail()
         v0, v1 = Var(), Var()
         result = _head_list_unify_input([10, 20], [v0, v1], None, [], trail)
@@ -912,6 +980,7 @@ class TestHeadListUnify:
         assert deref(v1) == 20
 
     def test_input_star_list(self):
+        # nv
         trail = Trail()
         h, t = Var(), Var()
         result = _head_list_unify_input([1, 2, 3], [h], t, [], trail)
@@ -920,6 +989,7 @@ class TestHeadListUnify:
         assert deref(t) == [2, 3]
 
     def test_input_star_middle(self):
+        # nv
         trail = Trail()
         a, mid, z = Var(), Var(), Var()
         result = _head_list_unify_input([1, 2, 3, 4], [a], mid, [z], trail)
@@ -929,6 +999,7 @@ class TestHeadListUnify:
         assert deref(z) == 4
 
     def test_input_empty_star(self):
+        # nv
         trail = Trail()
         h, t = Var(), Var()
         result = _head_list_unify_input([1], [h], t, [], trail)
@@ -937,18 +1008,21 @@ class TestHeadListUnify:
         assert deref(t) == []
 
     def test_input_too_short_fails(self):
+        # nv
         trail = Trail()
         h, t = Var(), Var()
         result = _head_list_unify_input([], [h], t, [], trail)
         assert result is False
 
     def test_input_no_star_wrong_length_fails(self):
+        # nv
         trail = Trail()
         v0 = Var()
         result = _head_list_unify_input([1, 2], [v0], None, [], trail)
         assert result is False
 
     def test_input_non_list_fails(self):
+        # nv
         trail = Trail()
         v = Var()
         result = _head_list_unify_input(42, [v], None, [], trail)
@@ -957,6 +1031,7 @@ class TestHeadListUnify:
     # ── Deferred mode (target is unbound Var) ──
 
     def test_input_var_defers(self):
+        # nv
         trail = Trail()
         target = Var()
         v = Var()
@@ -966,6 +1041,7 @@ class TestHeadListUnify:
     # ── Output mode (construction) ──
 
     def test_output_constructs_list(self):
+        # nv
         trail = Trail()
         target = Var()
         h, t = Var(), Var()
@@ -976,6 +1052,7 @@ class TestHeadListUnify:
         assert deref(target) == [1, 2, 3]
 
     def test_output_with_after(self):
+        # nv
         trail = Trail()
         target = Var()
         a, mid, z = Var(), Var(), Var()
@@ -987,6 +1064,7 @@ class TestHeadListUnify:
         assert deref(target) == [1, 2, 3, 4]
 
     def test_output_empty_star(self):
+        # nv
         trail = Trail()
         target = Var()
         h = Var()
@@ -999,6 +1077,7 @@ class TestHeadListUnify:
 
     def test_output_unbound_star_builds_seglist(self):
         """when star var is unbound, output mode builds a SegList."""
+        # nv
         from clausal.terms import SegList, ConcreteSeg, VarSeg
         trail = Trail()
         target = Var()
@@ -1018,6 +1097,7 @@ class TestHeadListUnify:
 
     def test_output_already_bound_switches_to_input(self):
         """If target was bound by the body, output falls back to input mode."""
+        # nv
         trail = Trail()
         target = Var()
         unify(target, [1, 2, 3], trail)

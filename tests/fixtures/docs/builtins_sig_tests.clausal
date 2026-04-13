@@ -3,55 +3,55 @@
 
 # ── Control Flow ─────────────────────────────────────────────────────────────
 
-Test("once exists") <- once(1 == 1)
+Test("once exists") <- once(1 == 1)  # nv
 
-Test("not exists") <- (not (1 == 2))
+Test("not exists") <- (not (1 == 2))  # nv
 
-Test("If exists") <- If(1 == 1, (1 == 1), (1 == 2))
+Test("If exists") <- If(1 == 1, (1 == 1), (1 == 2))  # nv
 
-Test("catch/3 exists") <- catch((1 == 1), _, (1 == 1))
+Test("catch/3 exists") <- catch((1 == 1), _, (1 == 1))  # nv
 
 # ── Coroutining ──────────────────────────────────────────────────────────────
 
 Test("freeze exists") <- (
     freeze(X, X > 0),
     X is 5
-)
+)  # nv
 
 # ── Meta-Predicates ──────────────────────────────────────────────────────────
 
 Test("findall exists") <- (
     findall(X, in_(X, [1, 2, 3]), BAG),
     BAG == [1, 2, 3]
-)
+)  # nv
 
 Test("bagof exists") <- (
     bagof(X, in_(X, [1, 2]), BAG),
     BAG == [1, 2]
-)
+)  # nv
 
-Test("forall exists") <- forall(in_(X, [1, 2, 3]), number(X))
+Test("forall exists") <- forall(in_(X, [1, 2, 3]), number(X))  # nv
 
 Test("count_all exists") <- (
     count_all(in_(_, [1, 2, 3]), N),
     N == 3
-)
+)  # nv
 
 # ── Time & Statistics ────────────────────────────────────────────────────────
 
-Test("current_time exists") <- current_time(_)
+Test("current_time exists") <- current_time(_)  # nv
 
-Test("statistics exists") <- statistics("wall_time", _)
+Test("statistics exists") <- statistics("wall_time", _)  # nv
 
 # ── Higher-Order Call ────────────────────────────────────────────────────────
 
-Test("call exists") <- call(number, 1)
+Test("call exists") <- call(number, 1)  # nv
 
 # ── DCG ──────────────────────────────────────────────────────────────────────
 
 greet_dcg >> (["hi"])
 
-Test("phrase/2 exists") <- phrase(greet_dcg, ["hi"])
+Test("phrase/2 exists") <- phrase(greet_dcg, ["hi"])  # nv
 
 # ── Term Inspection ──────────────────────────────────────────────────────────
 
@@ -59,21 +59,21 @@ Test("functor exists") <- (
     functor("hello", NAME, ARITY),
     NAME == "hello",
     ARITY == 0
-)
+)  # nv
 
 Test("arg exists") <- (
     arg(1, [10, 20, 30], V),
     V == 10
-)
+)  # nv
 
-Test("copy_term exists") <- copy_term([X, Y], [A, B])
+Test("copy_term exists") <- copy_term([X, Y], [A, B])  # nv
 
 Test("term_variables exists") <- (
     term_variables([X, 1, Y], VARS),
     length(VARS, 2)
-)
+)  # nv
 
-Test("gensym exists") <- gensym("test_", _)
+Test("gensym exists") <- gensym("test_", _)  # nv
 
 # ── Runtime Database ─────────────────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ Test("assertz/retract exist") <- (
     assertz(DbFact("added")),
     DbFact("added"),
     retract(DbFact("added"))
-)
+)  # nv
 
 # ── Attributed Variables ─────────────────────────────────────────────────────
 
@@ -93,26 +93,26 @@ Test("put_attr/get_attr exist") <- (
     put_attr(V, "my_key", 42),
     get_attr(V, "my_key", VAL),
     VAL == 42
-)
+)  # nv
 
 Test("attvar exists") <- (
     put_attr(V, "k", 1),
     attvar(V)
-)
+)  # nv
 
 # ── Constraint Predicates ────────────────────────────────────────────────────
 
-Test("dif exists") <- dif(1, 2)
+Test("dif exists") <- dif(1, 2)  # nv
 
 Test("eq reified exists") <- (
     eq(1, 1, T),
     T == True
-)
+)  # nv
 
 Test("dif_t reified exists") <- (
     dif_t(1, 2, T),
     T == True
-)
+)  # nv
 
 # ── CLP(Z) ───────────────────────────────────────────────────────────────────
 
@@ -120,280 +120,280 @@ Test("in_domain exists") <- (
     in_domain(X, 1, 5),
     label([X]),
     X == 1
-)
+)  # nv
 
 Test("all_different exists") <- (
     in_domain([A, B], 1, 2),
     all_different([A, B]),
     label([A, B]),
     A == 1
-)
+)  # nv
 
 Test("element exists") <- (
     element(2, [10, 20, 30], V),
     V == 20
-)
+)  # nv
 
 # ── CLP(B) ───────────────────────────────────────────────────────────────────
 
-Test("sat exists") <- sat(X | ~X)
+Test("sat exists") <- sat(X | ~X)  # nv
 
-Test("taut exists") <- taut(X | ~X, T)
+Test("taut exists") <- taut(X | ~X, T)  # nv
 
-Test("sat_count exists") <- sat_count(X | ~X, N)
+Test("sat_count exists") <- sat_count(X | ~X, N)  # nv
 
 # ── Type Checks ──────────────────────────────────────────────────────────────
 
-Test("var exists") <- var(_)
-Test("nonvar exists") <- nonvar(42)
-Test("atom exists") <- (not atom(42))
-Test("is_str exists") <- is_str("hello")
-Test("number exists") <- number(42)
-Test("integer exists") <- integer(42)
-Test("float_ exists") <- float_(3.14)
-Test("compound exists") <- (not compound(42))
-Test("is_list exists") <- is_list([1, 2, 3])
-Test("ground exists") <- ground(42)
+Test("var exists") <- var(_)  # nv
+Test("nonvar exists") <- nonvar(42)  # nv
+Test("atom exists") <- (not atom(42))  # nv
+Test("is_str exists") <- is_str("hello")  # nv
+Test("number exists") <- number(42)  # nv
+Test("integer exists") <- integer(42)  # nv
+Test("float_ exists") <- float_(3.14)  # nv
+Test("compound exists") <- (not compound(42))  # nv
+Test("is_list exists") <- is_list([1, 2, 3])  # nv
+Test("ground exists") <- ground(42)  # nv
 
 # ── Dict and Set Predicates ──────────────────────────────────────────────────
 
-Test("is_dict exists") <- is_dict({})
-Test("dict_get exists") <- dict_get("a", {"a": 1}, 1)
-Test("dict_put exists") <- dict_put("b", 2, {"a": 1}, _)
-Test("dict_merge exists") <- dict_merge({"a": 1}, {"b": 2}, _)
-Test("dict_keys exists") <- dict_keys({"x": 1}, ["x"])
-Test("dict_pairs exists") <- dict_pairs({"a": 1}, [["a", 1]])
-Test("is_set exists") <- is_set({1, 2, 3})
-Test("set_union exists") <- set_union({1}, {2}, _)
-Test("set_subset exists") <- set_subset({1}, {1, 2})
-Test("gen_set exists") <- gen_set(1, {1, 2, 3})
-Test("gen_dict exists") <- gen_dict("a", {"a": 1}, 1)
+Test("is_dict exists") <- is_dict({})  # nv
+Test("dict_get exists") <- dict_get("a", {"a": 1}, 1)  # nv
+Test("dict_put exists") <- dict_put("b", 2, {"a": 1}, _)  # nv
+Test("dict_merge exists") <- dict_merge({"a": 1}, {"b": 2}, _)  # nv
+Test("dict_keys exists") <- dict_keys({"x": 1}, ["x"])  # nv
+Test("dict_pairs exists") <- dict_pairs({"a": 1}, [["a", 1]])  # nv
+Test("is_set exists") <- is_set({1, 2, 3})  # nv
+Test("set_union exists") <- set_union({1}, {2}, _)  # nv
+Test("set_subset exists") <- set_subset({1}, {1, 2})  # nv
+Test("gen_set exists") <- gen_set(1, {1, 2, 3})  # nv
+Test("gen_dict exists") <- gen_dict("a", {"a": 1}, 1)  # nv
 
 # ── Arithmetic ───────────────────────────────────────────────────────────────
 
-Test("between exists") <- between(1, 3, 2)
+Test("between exists") <- between(1, 3, 2)  # nv
 
 Test("succ exists") <- (
     succ(4, Y),
     Y == 5
-)
+)  # nv
 
 Test("plus exists") <- (
     plus(2, 3, Z),
     Z == 5
-)
+)  # nv
 
 Test("abs_ exists") <- (
     abs_(-5, Y),
     Y == 5
-)
+)  # nv
 
 Test("max_ exists") <- (
     max_(3, 7, Z),
     Z == 7
-)
+)  # nv
 
 Test("min_ exists") <- (
     min_(3, 7, Z),
     Z == 3
-)
+)  # nv
 
 Test("gcd exists") <- (
     gcd(12, 8, G),
     G == 4
-)
+)  # nv
 
 Test("divmod_ exists") <- (
     divmod_(7, 3, Q, R),
     Q == 2,
     R == 1
-)
+)  # nv
 
 # ── List Predicates ──────────────────────────────────────────────────────────
 
-Test("in_ exists") <- in_(2, [1, 2, 3])
+Test("in_ exists") <- in_(2, [1, 2, 3])  # nv
 
 Test("append exists") <- (
     append([1], [2, 3], L),
     L == [1, 2, 3]
-)
+)  # nv
 
 Test("length exists") <- (
     length([1, 2, 3], N),
     N == 3
-)
+)  # nv
 
 Test("last exists") <- (
     last([1, 2, 3], E),
     E == 3
-)
+)  # nv
 
 Test("reverse exists") <- (
     reverse([1, 2, 3], R),
     R == [3, 2, 1]
-)
+)  # nv
 
 Test("flatten exists") <- (
     flatten([[1, 2], [3]], F),
     F == [1, 2, 3]
-)
+)  # nv
 
 Test("sort exists") <- (
     sort([3, 1, 2], S),
     S == [1, 2, 3]
-)
+)  # nv
 
-Test("select exists") <- select(2, [1, 2, 3], [1, 3])
+Test("select exists") <- select(2, [1, 2, 3], [1, 3])  # nv
 
 Test("take exists") <- (
     take(2, [1, 2, 3], T),
     T == [1, 2]
-)
+)  # nv
 
 Test("drop exists") <- (
     drop(1, [1, 2, 3], D),
     D == [2, 3]
-)
+)  # nv
 
 Test("zip_ exists") <- (
     zip_([1, 2], ["a", "b"], P),
     P == [[1, "a"], [2, "b"]]
-)
+)  # nv
 
 Test("numlist exists") <- (
     numlist(1, 3, L),
     L == [1, 2, 3]
-)
+)  # nv
 
-Test("same_length exists") <- same_length([1, 2], [3, 4])
+Test("same_length exists") <- same_length([1, 2], [3, 4])  # nv
 
 Test("transpose exists") <- (
     transpose([[1, 2], [3, 4]], T),
     T == [[1, 3], [2, 4]]
-)
+)  # nv
 
 Test("sum_list exists") <- (
     sum_list([1, 2, 3], S),
     S == 6
-)
+)  # nv
 
 Test("pairs_keys_values exists") <- (
     pairs_keys_values(P, [1, 2], ["a", "b"]),
     P == [[1, "a"], [2, "b"]]
-)
+)  # nv
 
 # ── Higher-Order List Predicates ─────────────────────────────────────────────
 
-Test("maplist/2 exists") <- maplist(number, [1, 2, 3])
+Test("maplist/2 exists") <- maplist(number, [1, 2, 3])  # nv
 
 Test("maplist/3 exists") <- (
     maplist(succ, [1, 2], YS),
     YS == [2, 3]
-)
+)  # nv
 
 Test("include exists") <- (
     include(integer, [1, "a", 2], R),
     R == [1, 2]
-)
+)  # nv
 
 Test("exclude exists") <- (
     exclude(integer, [1, "a", 2], R),
     R == ["a"]
-)
+)  # nv
 
 Test("foldl exists") <- (
     foldl(plus, [1, 2, 3], 0, S),
     S == 6
-)
+)  # nv
 
 Test("take_while exists") <- (
     take_while(integer, [1, 2, "a", 3], P),
     P == [1, 2]
-)
+)  # nv
 
 Test("drop_while exists") <- (
     drop_while(integer, [1, 2, "a", 3], S),
     S == ["a", 3]
-)
+)  # nv
 
 # ── Character/String ─────────────────────────────────────────────────────────
 
 Test("char_code exists") <- (
     char_code("A", C),
     C == 65
-)
+)  # nv
 
 Test("upcase_atom exists") <- (
     upcase_atom("hello", U),
     U == "HELLO"
-)
+)  # nv
 
 Test("downcase_atom exists") <- (
     downcase_atom("HELLO", D),
     D == "hello"
-)
+)  # nv
 
 Test("atom_length exists") <- (
     atom_length("hello", N),
     N == 5
-)
+)  # nv
 
 Test("atom_chars exists") <- (
     atom_chars("hi", CS),
     CS == ["h", "i"]
-)
+)  # nv
 
 Test("atom_concat exists") <- (
     atom_concat("he", "llo", R),
     R == "hello"
-)
+)  # nv
 
-Test("number_chars exists") <- number_chars(42, ["4", "2"])
+Test("number_chars exists") <- number_chars(42, ["4", "2"])  # nv
 
 # ── I/O ──────────────────────────────────────────────────────────────────────
 
 Test("write_to_string exists") <- (
     write_to_string(42, S),
     is_str(S)
-)
+)  # nv
 
 Test("term_to_string exists") <- (
     term_to_string(42, S),
     is_str(S)
-)
+)  # nv
 
 # ── Logging (log module) ─────────────────────────────────────────────────────
 
 -import_from(log, [GetLogger, Debug, Info, SetLevel, GetLevel])
 
-Test("log: GetLogger exists") <- GetLogger("builtins_sig_test", _)
+Test("log: GetLogger exists") <- GetLogger("builtins_sig_test", _)  # nv
 
 Test("log: SetLevel/GetLevel exist") <- (
     GetLogger("builtins_sig_level", L),
     SetLevel(L, "warning"),
     GetLevel(L, LVL),
     LVL == "WARNING"
-)
+)  # nv
 
 # ── Date & Time (date_time module) ───────────────────────────────────────────
 
 -import_from(date_time, [Now, Today, Date, Time, DateTime, TimeDelta,
     DateAdd, DateDiff, FormatDate, DayOfWeek])
 
-Test("date_time: Now exists") <- Now(_)
-Test("date_time: Today exists") <- Today(_)
+Test("date_time: Now exists") <- Now(_)  # nv
+Test("date_time: Today exists") <- Today(_)  # nv
 
 Test("date_time: Date exists") <- (
     Date(2024, 1, 15, D),
     FormatDate(D, "%Y-%m-%d", S),
     S == "2024-01-15"
-)
+)  # nv
 
 Test("date_time: DayOfWeek exists") <- (
     Date(2024, 1, 15, D),
     DayOfWeek(D, W),
     integer(W)
-)
+)  # nv
 
 # ── YAML (yaml_module module) ────────────────────────────────────────────────
 
@@ -402,4 +402,4 @@ Test("date_time: DayOfWeek exists") <- (
 Test("yaml: Read exists") <- (
     Read("x: 1", DATA),
     Get(DATA, "x", 1)
-)
+)  # nv

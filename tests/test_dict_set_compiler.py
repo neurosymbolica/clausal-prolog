@@ -31,6 +31,7 @@ def _load_fixture():
 
 class TestCLevelUnify:
     def test_dictterm_unify_with_vars(self):
+        # nv
         t = Trail()
         x, y = Var(), Var()
         d1 = DictTerm({"a": x, "b": 2})
@@ -40,15 +41,18 @@ class TestCLevelUnify:
         assert deref(y) == 2
 
     def test_dictterm_unify_fails_different_keys(self):
+        # nv
         t = Trail()
         assert not unify(DictTerm({"a": 1}), DictTerm({"b": 1}), t)
 
     def test_dictterm_unify_fails_value_mismatch(self):
+        # nv
         t = Trail()
         assert not unify(DictTerm({"a": 1}), DictTerm({"a": 2}), t)
 
     def test_dictterm_unify_trail_undo(self):
         """On failure, __unify__ undoes partial bindings."""
+        # nv
         t = Trail()
         x = Var()
         d1 = DictTerm({"a": x, "b": 1})
@@ -57,14 +61,17 @@ class TestCLevelUnify:
         assert not isinstance(deref(x), int)
 
     def test_setterm_unify_same(self):
+        # nv
         t = Trail()
         assert unify(SetTerm([1, 2, 3]), SetTerm([3, 1, 2]), t)
 
     def test_setterm_unify_different(self):
+        # nv
         t = Trail()
         assert not unify(SetTerm([1, 2]), SetTerm([1, 3]), t)
 
     def test_var_unifies_with_dictterm(self):
+        # nv
         t = Trail()
         x = Var()
         d = DictTerm({"k": "v"})
@@ -72,6 +79,7 @@ class TestCLevelUnify:
         assert deref(x) == d
 
     def test_var_unifies_with_setterm(self):
+        # nv
         t = Trail()
         x = Var()
         s = SetTerm([1, 2])
@@ -79,14 +87,17 @@ class TestCLevelUnify:
         assert deref(x) == s
 
     def test_dictterm_not_implemented_for_non_dict(self):
+        # nv
         t = Trail()
         assert not unify(DictTerm({"a": 1}), {"a": 1}, t)
 
     def test_empty_dictterms_unify(self):
+        # nv
         t = Trail()
         assert unify(DictTerm({}), DictTerm({}), t)
 
     def test_nested_dictterm_unify(self):
+        # nv
         t = Trail()
         x = Var()
         d1 = DictTerm({"inner": DictTerm({"val": x})})
@@ -95,10 +106,12 @@ class TestCLevelUnify:
         assert deref(x) == 99
 
     def test_setterm_not_implemented_for_non_set(self):
+        # nv
         t = Trail()
         assert not unify(SetTerm([1, 2]), frozenset([1, 2]), t)
 
     def test_empty_setterms_unify(self):
+        # nv
         t = Trail()
         assert unify(SetTerm([]), SetTerm([]), t)
 
@@ -122,42 +135,55 @@ class TestDictSetFixture:
         return sols
 
     def test_origin(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "origin")
 
     def test_x_axis(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "x_axis")
 
     def test_get_x(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "get_x")
 
     def test_get_y(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "get_y")
 
     def test_nested_city(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "nested city")
 
     def test_make_point(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "make_point")
 
     def test_dict_unify(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "dict unify")
 
     def test_dict_key_mismatch(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "dict key mismatch fails")
 
     def test_set_match(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "set match")
 
     def test_set_primary(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "set primary")
 
     def test_set_mismatch(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "set mismatch fails")
 
     def test_var_binds_dict(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "var binds dict")
 
     def test_empty_dict(self, mod, logic_mod):
+        # nv
         assert self._query_test(mod, logic_mod, "empty dict")
 
 
@@ -176,17 +202,20 @@ class TestDictBacktracking:
 
     def test_multiple_dict_clauses(self, mod, logic_mod):
         """point_type has 3 clauses; querying with Var should yield all 3."""
+        # nv
         r = list(call("point_type", Var(), Var(), module=logic_mod))
         assert len(r) == 3
 
     def test_get_x_different_inputs(self, mod, logic_mod):
         """get_x extracts correct X from different dicts."""
+        # nv
         x = Var()
         for trail in call("get_x", DictTerm({"x": 10, "y": 20}), x, module=logic_mod):
             assert deref(x) == 10
             break
 
     def test_get_x_another_input(self, mod, logic_mod):
+        # nv
         x = Var()
         for trail in call("get_x", DictTerm({"x": 77, "y": 88}), x, module=logic_mod):
             assert deref(x) == 77

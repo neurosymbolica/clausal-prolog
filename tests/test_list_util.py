@@ -122,87 +122,109 @@ def _goal_always_fail(*args):
 
 class TestTake:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_take__3, 2, [1, 2, 3, 4]) == [[1, 2]]
 
     def test_take_zero(self):
+        # nv
         assert run_trampoline_var(_take__3, 0, [1, 2, 3]) == [[]]
 
     def test_take_more_than_length(self):
+        # nv
         assert run_trampoline_var(_take__3, 10, [1, 2]) == [[1, 2]]
 
     def test_take_from_empty(self):
+        # nv
         assert run_trampoline_var(_take__3, 3, []) == [[]]
 
 
 class TestDrop:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_drop__3, 2, [1, 2, 3, 4]) == [[3, 4]]
 
     def test_drop_zero(self):
+        # nv
         assert run_trampoline_var(_drop__3, 0, [1, 2, 3]) == [[1, 2, 3]]
 
     def test_drop_all(self):
+        # nv
         assert run_trampoline_var(_drop__3, 3, [1, 2, 3]) == [[]]
 
     def test_drop_more_than_length(self):
+        # nv
         assert run_trampoline_var(_drop__3, 10, [1, 2]) == [[]]
 
 
 class TestSplitAt:
     def test_middle(self):
+        # nv
         assert run_trampoline_2vars(_split_at__4, 2, [1, 2, 3, 4]) == [([1, 2], [3, 4])]
 
     def test_at_zero(self):
+        # nv
         assert run_trampoline_2vars(_split_at__4, 0, [1, 2, 3]) == [([], [1, 2, 3])]
 
     def test_at_end(self):
+        # nv
         assert run_trampoline_2vars(_split_at__4, 3, [1, 2, 3]) == [([1, 2, 3], [])]
 
     def test_beyond_length(self):
+        # nv
         assert run_trampoline_2vars(_split_at__4, 10, [1, 2]) == [([1, 2], [])]
 
 
 class TestZip:
     def test_equal_length(self):
+        # nv
         assert run_trampoline_var(_zip__3, [1, 2, 3], ["a", "b", "c"]) == [
             [[1, "a"], [2, "b"], [3, "c"]]
         ]
 
     def test_unequal_length(self):
+        # nv
         assert run_trampoline_var(_zip__3, [1, 2], ["a", "b", "c"]) == [
             [[1, "a"], [2, "b"]]
         ]
 
     def test_empty(self):
+        # nv
         assert run_trampoline_var(_zip__3, [], [1, 2]) == [[]]
 
 
 class TestReplicate:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_replicate__3, 3, "x") == [["x", "x", "x"]]
 
     def test_zero(self):
+        # nv
         assert run_trampoline_var(_replicate__3, 0, "x") == [[]]
 
     def test_one(self):
+        # nv
         assert run_trampoline_var(_replicate__3, 1, 42) == [[42]]
 
 
 class TestSplitWith:
     def test_split_by_element(self):
+        # nv
         assert run_trampoline_var(_split_with__3, 0, [1, 2, 0, 3, 4]) == [
             [[1, 2], [3, 4]]
         ]
 
     def test_no_separator(self):
+        # nv
         assert run_trampoline_var(_split_with__3, 0, [1, 2, 3]) == [[[1, 2, 3]]]
 
     def test_consecutive_separators(self):
+        # nv
         assert run_trampoline_var(_split_with__3, 0, [1, 0, 0, 2]) == [
             [[1], [], [2]]
         ]
 
     def test_join_mode(self):
+        # nv
         trail = Trail()
         result = Var()
         sg = StepGenerator(_split_with__3, None, 0, result, [[1, 2], [3, 4]], trail)
@@ -226,28 +248,35 @@ class TestSplitWith:
 
 class TestTakeWhile:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_take_while__3, _goal_positive, [1, 2, -3, 4]) == [[1, 2]]
 
     def test_none_match(self):
+        # nv
         assert run_trampoline_var(_take_while__3, _goal_positive, [-1, 2, 3]) == [[]]
 
     def test_all_match(self):
+        # nv
         assert run_trampoline_var(_take_while__3, _goal_positive, [1, 2, 3]) == [[1, 2, 3]]
 
 
 class TestDropWhile:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_drop_while__3, _goal_positive, [1, 2, -3, 4]) == [[-3, 4]]
 
     def test_none_match(self):
+        # nv
         assert run_trampoline_var(_drop_while__3, _goal_positive, [-1, 2, 3]) == [[-1, 2, 3]]
 
     def test_all_match(self):
+        # nv
         assert run_trampoline_var(_drop_while__3, _goal_positive, [1, 2, 3]) == [[]]
 
 
 class TestSpan:
     def test_basic(self):
+        # nv
         assert run_trampoline_2vars(_span__4, _goal_positive, [1, 2, -3, 4]) == [
             ([1, 2], [-3, 4])
         ]
@@ -255,6 +284,7 @@ class TestSpan:
 
 class TestGroupBy:
     def test_consecutive_equal(self):
+        # nv
         assert run_trampoline_var(_group_by__3, _goal_identity, [1, 1, 2, 2, 2, 3]) == [
             [[1, 1], [2, 2, 2], [3]]
         ]
@@ -262,6 +292,7 @@ class TestGroupBy:
     def test_by_computed_key(self):
         # Group by even/odd: _goal_even as identity would need a key projector
         # Use _goal_negate as key: -1,-1 → group; -2,-2 → group
+        # nv
         assert run_trampoline_var(_group_by__3, _goal_negate, [1, 2, 3]) == [
             [[1], [2], [3]]  # all different keys → singleton groups
         ]
@@ -269,49 +300,60 @@ class TestGroupBy:
 
 class TestSortBy:
     def test_sort_by_key(self):
+        # nv
         assert run_trampoline_var(_sort_by__3, _goal_negate, [1, 3, 2]) == [[3, 2, 1]]
 
     def test_already_sorted(self):
+        # nv
         assert run_trampoline_var(_sort_by__3, _goal_identity, [1, 2, 3]) == [[1, 2, 3]]
 
     def test_empty(self):
+        # nv
         assert run_trampoline_var(_sort_by__3, _goal_negate, []) == [[]]
 
 
 class TestMaxBy:
     def test_basic(self):
         # max_by with negate key: max(-x) → element with smallest x → 1
+        # nv
         assert run_trampoline_var(_max_by__3, _goal_negate, [3, 1, 2]) == [1]
 
     def test_single_element(self):
+        # nv
         assert run_trampoline_var(_max_by__3, _goal_identity, [42]) == [42]
 
     def test_tie_breaking(self):
         # First max wins (stable)
+        # nv
         assert run_trampoline_var(_max_by__3, _goal_identity, [3, 3, 1]) == [3]
 
 
 class TestMinBy:
     def test_basic(self):
         # min_by with negate key: min(-x) → element with largest x → 3
+        # nv
         assert run_trampoline_var(_min_by__3, _goal_negate, [3, 1, 2]) == [3]
 
     def test_single_element(self):
+        # nv
         assert run_trampoline_var(_min_by__3, _goal_identity, [42]) == [42]
 
 
 class TestFilterMap:
     def test_basic(self):
+        # nv
         assert run_trampoline_var(_filter_map__3, _goal_double_positive, [1, -2, 3, -4]) == [
             [2, 6]
         ]
 
     def test_all_pass(self):
+        # nv
         assert run_trampoline_var(_filter_map__3, _goal_double, [1, 2, 3]) == [
             [2, 4, 6]
         ]
 
     def test_none_pass(self):
+        # nv
         assert run_trampoline_var(_filter_map__3, _goal_always_fail, [1, 2, 3]) == [[]]
 
 
@@ -396,4 +438,5 @@ class TestListUtilFixture:
         "filter_map none pass",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod)

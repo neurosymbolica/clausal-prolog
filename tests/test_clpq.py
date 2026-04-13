@@ -38,12 +38,14 @@ def state(v):
 class TestDispatch:
     def test_fraction_dispatches_to_q_eq(self):
         """fd_eq with Fraction argument dispatches to q_eq."""
+        # nv
         from clausal.logic.clpfd import fd_eq
         trail, x = fresh()
         assert fd_eq(x, F(1, 3), trail)
         assert deref(x) == F(1, 3)
 
     def test_fraction_dispatches_to_q_le(self):
+        # nv
         from clausal.logic.clpfd import fd_le
         trail = Trail()
         x = Var()
@@ -51,6 +53,7 @@ class TestDispatch:
         assert fd_le(x, F(5), trail)
 
     def test_int_does_not_dispatch_to_q(self):
+        # nv
         from clausal.logic.clpfd import fd_eq
         trail, x = fresh()
         assert fd_eq(x, 5, trail)
@@ -58,6 +61,7 @@ class TestDispatch:
         assert state(x) is None  # no Q attribute
 
     def test_float_does_not_dispatch_to_q(self):
+        # nv
         from clausal.logic.clpfd import fd_eq
         trail, x = fresh()
         assert fd_eq(x, 3.14, trail)
@@ -68,6 +72,7 @@ class TestDispatch:
 
 class TestInQ:
     def test_basic(self):
+        # nv
         trail, x = fresh()
         assert in_q(x, 0, 10, trail)
         s = state(x)
@@ -76,6 +81,7 @@ class TestInQ:
         assert s.hi == F(10)
 
     def test_narrows(self):
+        # nv
         trail, x = fresh()
         in_q(x, 0, 10, trail)
         in_q(x, 2, 8, trail)
@@ -84,16 +90,19 @@ class TestInQ:
         assert s.hi == F(8)
 
     def test_infeasible(self):
+        # nv
         trail, x = fresh()
         in_q(x, 5, 10, trail)
         assert not in_q(x, 0, 3, trail)
 
     def test_point_binds(self):
+        # nv
         trail, x = fresh()
         in_q(x, 5, 5, trail)
         assert deref(x) == F(5)
 
     def test_list(self):
+        # nv
         trail = Trail()
         x, y, z = Var(), Var(), Var()
         assert in_q([x, y, z], 0, 10, trail)
@@ -101,11 +110,13 @@ class TestInQ:
             assert state(v) is not None
 
     def test_ground_check(self):
+        # nv
         trail = Trail()
         assert in_q(F(5), 0, 10, trail)
         assert not in_q(F(15), 0, 10, trail)
 
     def test_unbounded(self):
+        # nv
         trail, x = fresh()
         assert in_q(x, trail=trail)
         s = state(x)
@@ -118,36 +129,43 @@ class TestInQ:
 
 class TestGroundConstraints:
     def test_eq_ground_rationals(self):
+        # nv
         trail = Trail()
         assert q_eq(F(1, 3), F(1, 3), trail)
 
     def test_eq_ground_rationals_fail(self):
+        # nv
         trail = Trail()
         assert not q_eq(F(1, 3), F(1, 2), trail)
 
     def test_ne_ground(self):
+        # nv
         trail = Trail()
         assert q_ne(F(1, 3), F(1, 2), trail)
         assert not q_ne(F(1, 3), F(1, 3), trail)
 
     def test_lt_ground(self):
+        # nv
         trail = Trail()
         assert q_lt(F(1, 3), F(1, 2), trail)
         assert not q_lt(F(1, 2), F(1, 3), trail)
         assert not q_lt(F(1, 3), F(1, 3), trail)
 
     def test_le_ground(self):
+        # nv
         trail = Trail()
         assert q_le(F(1, 3), F(1, 3), trail)
         assert q_le(F(1, 3), F(1, 2), trail)
         assert not q_le(F(1, 2), F(1, 3), trail)
 
     def test_gt_ground(self):
+        # nv
         trail = Trail()
         assert q_gt(F(1, 2), F(1, 3), trail)
         assert not q_gt(F(1, 3), F(1, 2), trail)
 
     def test_ge_ground(self):
+        # nv
         trail = Trail()
         assert q_ge(F(1, 3), F(1, 3), trail)
         assert q_ge(F(1, 2), F(1, 3), trail)
@@ -158,11 +176,13 @@ class TestGroundConstraints:
 
 class TestVarBinding:
     def test_eq_var_to_rational(self):
+        # nv
         trail, x = fresh()
         assert q_eq(x, F(1, 3), trail)
         assert deref(x) == F(1, 3)
 
     def test_eq_var_to_int(self):
+        # nv
         trail, x = fresh()
         assert q_eq(x, F(5), trail)
         assert deref(x) == F(5)
@@ -174,6 +194,7 @@ class TestVarBinding:
 class TestLinearEqualities:
     def test_two_var_eq(self):
         """X + Y = 10, X = 3 → Y = 7."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -184,6 +205,7 @@ class TestLinearEqualities:
     def test_three_var_system(self):
         """X + Y + Z = 6, X - Y = 2, Y - Z = 1
         → Y = 5/3, X = 11/3, Z = 2/3"""
+        # nv
         trail = Trail()
         x, y, z = Var(), Var(), Var()
         in_q([x, y, z], -100, 100, trail)
@@ -195,6 +217,7 @@ class TestLinearEqualities:
         assert deref(z) == F(2, 3)
 
     def test_contradictory(self):
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -202,6 +225,7 @@ class TestLinearEqualities:
         assert not q_eq(x, F(5), trail)
 
     def test_redundant(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -210,6 +234,7 @@ class TestLinearEqualities:
 
     def test_rational_coefficients(self):
         """(1/2)*X + (1/3)*Y = 1, Y = 0 → X = 2."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], -10, 10, trail)
@@ -221,6 +246,7 @@ class TestLinearEqualities:
 
     def test_single_var_scaled(self):
         """2*X = 1 → X = 1/2."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, -10, 10, trail)
@@ -229,6 +255,7 @@ class TestLinearEqualities:
 
     def test_large_coefficients(self):
         """999999*X = 1 → X = 1/999999."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, -10, 10, trail)
@@ -241,11 +268,13 @@ class TestLinearEqualities:
 
 class TestLinearInequalities:
     def test_simple_le(self):
+        # nv
         trail, x = fresh()
         in_q(x, 0, 10, trail)
         assert q_le(x, F(5), trail)
 
     def test_le_infeasible(self):
+        # nv
         trail, x = fresh()
         in_q(x, 0, 10, trail)
         assert q_ge(x, F(6), trail)
@@ -253,6 +282,7 @@ class TestLinearInequalities:
 
     def test_two_var_system(self):
         """X + Y <= 8, X <= 5, Y <= 6, X >= 0, Y >= 0 — should be feasible."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -262,6 +292,7 @@ class TestLinearInequalities:
 
     def test_redundant_constraint(self):
         """X <= 5, X <= 10 — second is redundant."""
+        # nv
         trail, x = fresh()
         in_q(x, 0, 100, trail)
         assert q_le(x, F(5), trail)
@@ -269,6 +300,7 @@ class TestLinearInequalities:
 
     def test_zero_coefficients(self):
         """0*X + Y = 1 should simplify to Y = 1."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], -10, 10, trail)
@@ -281,6 +313,7 @@ class TestLinearInequalities:
 
 class TestBacktracking:
     def test_undo_restores_unbound(self):
+        # nv
         trail, x = fresh()
         mark = trail.mark()
         assert q_eq(x, F(1, 3), trail)
@@ -289,6 +322,7 @@ class TestBacktracking:
         assert is_var(deref(x))
 
     def test_undo_restores_bounds(self):
+        # nv
         trail, x = fresh()
         in_q(x, 0, 10, trail)
         mark = trail.mark()
@@ -298,6 +332,7 @@ class TestBacktracking:
         assert s.hi == F(10)
 
     def test_undo_restores_tableau(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -315,6 +350,7 @@ class TestBacktracking:
 class TestOptimization:
     def test_maximize_simple(self):
         """maximize X subject to X <= 10, X >= 0 → 10."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -325,6 +361,7 @@ class TestOptimization:
 
     def test_minimize_simple(self):
         """minimize X subject to X >= 3, X <= 100 → 3."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -338,6 +375,7 @@ class TestOptimization:
         maximize 30X + 50Y subject to
             2X + Y <= 16, X + 2Y <= 11, X + 3Y <= 15
         → optimal value 310 at X=7, Y=2"""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 1000, trail)
@@ -354,6 +392,7 @@ class TestOptimization:
 
     def test_minimize_lp_binds_vars(self):
         """After minimize, X and Y should be bound to optimal point."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -372,6 +411,7 @@ class TestOptimization:
         """Scheduling example from docs:
         minimize 5X + 3Y subject to
             X + Y >= 10, 2X + Y <= 30, X + 3Y <= 40, X,Y >= 0"""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -393,6 +433,7 @@ class TestOptimization:
 class TestSupInf:
     def test_sup_simple(self):
         """sup(X) with X <= 10 → 10."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -403,6 +444,7 @@ class TestSupInf:
 
     def test_inf_simple(self):
         """inf(X) with X >= 3 → 3."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -413,6 +455,7 @@ class TestSupInf:
 
     def test_sup_does_not_bind_vars(self):
         """sup should compute the bound WITHOUT binding X."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -424,6 +467,7 @@ class TestSupInf:
 
     def test_inf_does_not_bind_vars(self):
         """inf should compute the bound WITHOUT binding X."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -434,6 +478,7 @@ class TestSupInf:
 
     def test_sup_lp(self):
         """sup(30X + 50Y) with LP constraints → 310 (without binding X, Y)."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 1000, trail)
@@ -455,6 +500,7 @@ class TestSupInf:
 class TestEntailed:
     def test_entailed_le_true(self):
         """X <= 4 entails X <= 5."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -463,6 +509,7 @@ class TestEntailed:
 
     def test_entailed_le_false(self):
         """X <= 4 does NOT entail X <= 3."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -471,6 +518,7 @@ class TestEntailed:
 
     def test_entailed_ge_true(self):
         """X >= 5 entails X >= 3."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -479,6 +527,7 @@ class TestEntailed:
 
     def test_entailed_eq_true(self):
         """X == 5 entails X = 5."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -487,6 +536,7 @@ class TestEntailed:
 
     def test_entailed_eq_false(self):
         """X in [0, 10] does NOT entail X = 5."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -494,6 +544,7 @@ class TestEntailed:
 
     def test_entailed_ne_true(self):
         """X <= 4 entails X != 5 (since X can never reach 5)."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -502,6 +553,7 @@ class TestEntailed:
 
     def test_entailed_ne_false(self):
         """X in [0, 10] does NOT entail X != 5 (X could be 5)."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -509,6 +561,7 @@ class TestEntailed:
 
     def test_entailed_does_not_modify_store(self):
         """entailed must not change the constraint store."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -518,6 +571,7 @@ class TestEntailed:
 
     def test_entailed_does_not_add_q_attr(self):
         """entailed on a bare variable must not add Q attributes."""
+        # nv
         trail = Trail()
         x = Var()
         entailed('=<', x, F(5), trail)
@@ -529,14 +583,17 @@ class TestEntailed:
 
 class TestLinearize:
     def test_constant(self):
+        # nv
         trail = Trail()
         assert _linearize(F(5), trail) == ({}, F(5))
 
     def test_int(self):
+        # nv
         trail = Trail()
         assert _linearize(3, trail) == ({}, F(3))
 
     def test_var(self):
+        # nv
         trail = Trail()
         x = Var()
         coeffs, const = _linearize(x, trail)
@@ -544,6 +601,7 @@ class TestLinearize:
         assert const == F(0)
 
     def test_add(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         coeffs, const = _linearize(Add(left=x, right=y), trail)
@@ -551,17 +609,20 @@ class TestLinearize:
         assert const == F(0)
 
     def test_scalar_mult(self):
+        # nv
         trail = Trail()
         x = Var()
         coeffs, const = _linearize(Mult(left=F(3), right=x), trail)
         assert coeffs == {x._id: F(3)}
 
     def test_nonlinear_rejected(self):
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         assert _linearize(Mult(left=x, right=y), trail) is None
 
     def test_negate(self):
+        # nv
         trail = Trail()
         x = Var()
         coeffs, const = _linearize(Negate(operand=x), trail)
@@ -576,6 +637,7 @@ class TestDumpQ:
 
     def test_simple_bounds(self):
         """in_q(X, 0, 10) projects to {-X =< 0} and {X =< 10}."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -585,6 +647,7 @@ class TestDumpQ:
 
     def test_inequality_projection(self):
         """Slacks are eliminated, original constraints recovered."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -599,6 +662,7 @@ class TestDumpQ:
 
     def test_equality_projection(self):
         """Equality: X + Y = 10 projects correctly."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -609,6 +673,7 @@ class TestDumpQ:
 
     def test_no_internal_vars(self):
         """Projection must eliminate all slack/internal variables."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 1000, trail)
@@ -622,6 +687,7 @@ class TestDumpQ:
 
     def test_empty_store(self):
         """No constraints → empty projection."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, trail=trail)
@@ -631,6 +697,7 @@ class TestDumpQ:
 
     def test_ground_var(self):
         """X = 5 projects to {X = 5} (or equivalent bounds)."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -647,6 +714,7 @@ class TestBBInf:
 
     def test_simple_integer(self):
         """min(X) with X >= 3/2, X integer → 2."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -658,6 +726,7 @@ class TestBBInf:
     def test_integer_lp(self):
         """SICStus example: min(X) subject to X >= Y + Z, Y > 1, Z > 1,
         all integer → X = 4 (Y=2, Z=2)."""
+        # nv
         trail = Trail()
         x, y, z = Var(), Var(), Var()
         in_q([x, y, z], 0, 100, trail)
@@ -670,6 +739,7 @@ class TestBBInf:
 
     def test_no_integer_constraint(self):
         """If IntVars is empty, bb_inf == inf (LP relaxation)."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -682,6 +752,7 @@ class TestBBInf:
         """X >= 5/2, X <= 7/2, integer and X != 3 → infeasible.
         LP has solutions (2.5 to 3.5), but only integer in that range is 3,
         and we exclude 3 via bounds."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -701,6 +772,7 @@ class TestBBInf:
 
     def test_already_integer(self):
         """If LP optimum is already integer, no branching needed."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -711,6 +783,7 @@ class TestBBInf:
 
     def test_mixed_integer(self):
         """Only some variables must be integer."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -726,6 +799,7 @@ class TestBBInf:
         min(X + Y) with X + Y >= 5/2, X,Y in [0,10] integer.
         LP relaxation gives X+Y = 5/2 (fractional).
         Integer optimum: X=0, Y=3 (or X=3, Y=0, etc.) → min = 3."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -736,6 +810,7 @@ class TestBBInf:
 
     def test_binds_variables(self):
         """bb_inf should bind integer variables to their optimal values."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -747,6 +822,7 @@ class TestBBInf:
 
     def test_binds_multiple_vars(self):
         """bb_inf binds all constrained vars to optimal integer point."""
+        # nv
         trail = Trail()
         x, y, z = Var(), Var(), Var()
         in_q([x, y, z], 0, 100, trail)
@@ -765,12 +841,14 @@ class TestBBInf:
 class TestCoefficientGrowth:
     def test_newton_sqrt2(self):
         """Newton's method for sqrt(2), 5 iterations → exact large fraction."""
+        # nv
         s = F(1)
         for _ in range(5):
             s = s / 2 + 1 / s
         assert s == F(886731088897, 627013566048)
 
     def test_large_coefficient_constraint(self):
+        # nv
         trail = Trail()
         x = Var()
         big = F(886731088897, 627013566048)
@@ -787,6 +865,7 @@ class TestA1MaximizeSnapshot:
 
     def test_maximize_backtrack_restores_tableau(self):
         """After backtracking past a maximize, the tableau is restored."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -804,6 +883,7 @@ class TestA1MaximizeSnapshot:
         assert q_le(x, F(5), trail)
 
     def test_minimize_backtrack_restores_tableau(self):
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 100, trail)
@@ -824,6 +904,7 @@ class TestA2PivotBound:
 
     def test_upper_bound_inequality(self):
         """System where feasibility requires variables near upper bounds."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q(x, 0, 10, trail)
@@ -837,6 +918,7 @@ class TestA2PivotBound:
 
     def test_infeasible_upper_bound(self):
         """X + Y >= 25 with X,Y in [0,10] → infeasible."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q(x, 0, 10, trail)
@@ -849,6 +931,7 @@ class TestA3DualSimplex:
 
     def test_three_constraint_feasibility(self):
         """System that requires multiple dual simplex pivots."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -859,6 +942,7 @@ class TestA3DualSimplex:
 
     def test_tight_system(self):
         """Constraints that leave only one feasible point via equality."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -869,6 +953,7 @@ class TestA3DualSimplex:
 
     def test_contradictory_inequalities(self):
         """X + Y <= 5, X >= 3, Y >= 3 → infeasible (3+3=6 > 5)."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 100, trail)
@@ -878,6 +963,7 @@ class TestA3DualSimplex:
 
     def test_degenerate_vertex(self):
         """Multiple constraints active at the same point (degeneracy)."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -895,6 +981,7 @@ class TestA4Disequality:
 
     def test_ne_prevents_binding_to_excluded_value(self):
         """X != 5, then X == 5 must fail."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -903,6 +990,7 @@ class TestA4Disequality:
 
     def test_ne_allows_other_values(self):
         """X != 5, X == 3 succeeds."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -912,6 +1000,7 @@ class TestA4Disequality:
 
     def test_strict_lt_rejects_equal(self):
         """X < 5 means X <= 5 AND X != 5. If X is later forced to 5, it fails."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -920,6 +1009,7 @@ class TestA4Disequality:
 
     def test_strict_lt_allows_less(self):
         """X < 5, X == 4 succeeds."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -928,6 +1018,7 @@ class TestA4Disequality:
 
     def test_ne_two_vars(self):
         """X != Y, then X and Y forced equal must fail."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -937,6 +1028,7 @@ class TestA4Disequality:
 
     def test_ne_two_vars_different_ok(self):
         """X != Y, X = 5, Y = 3 succeeds."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -946,16 +1038,19 @@ class TestA4Disequality:
 
     def test_ne_ground_equal_fails(self):
         """Posting q_ne(5, 5) fails immediately."""
+        # nv
         trail = Trail()
         assert not q_ne(F(5), F(5), trail)
 
     def test_ne_ground_different_succeeds(self):
         """Posting q_ne(5, 3) succeeds immediately."""
+        # nv
         trail = Trail()
         assert q_ne(F(5), F(3), trail)
 
     def test_ne_backtrack_restores(self):
         """Disequality is undone on backtrack."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -974,6 +1069,7 @@ class TestB4SnapshotDedup:
         """A multi-step operation (q_eq triggering implied bindings) should
         still be undoable as a single unit, proving snapshots work correctly
         even when deduplicated."""
+        # nv
         trail = Trail()
         x, y = Var(), Var()
         in_q([x, y], 0, 10, trail)
@@ -994,6 +1090,7 @@ class TestFDQPromotion:
 
     def test_fd_var_in_q_context_inherits_bounds(self):
         """in_domain(X, 1, 5) then Q context → Q bounds are [1, 5]."""
+        # nv
         from clausal.logic.clpfd import in_domain, FD_KEY
         from clausal.logic.clpq import _get_tableau
         trail = Trail()
@@ -1013,6 +1110,7 @@ class TestFDQPromotion:
 
     def test_fd_var_promoted_to_q_keeps_fd(self):
         """After promotion, both FD and Q attributes coexist."""
+        # nv
         from clausal.logic.clpfd import in_domain, FD_KEY
         trail = Trail()
         x = Var()
@@ -1023,6 +1121,7 @@ class TestFDQPromotion:
 
     def test_integer_fraction_accepted_by_fd(self):
         """Fraction(3) unifying with FD var succeeds if 3 in domain."""
+        # nv
         from clausal.logic.clpfd import in_domain
         trail = Trail()
         x = Var()
@@ -1032,6 +1131,7 @@ class TestFDQPromotion:
 
     def test_non_integer_fraction_rejected_by_fd(self):
         """Fraction(1,2) unifying with FD var fails (not integer)."""
+        # nv
         from clausal.logic.clpfd import in_domain
         trail = Trail()
         x = Var()
@@ -1040,6 +1140,7 @@ class TestFDQPromotion:
 
     def test_integer_fraction_outside_domain_rejected(self):
         """Fraction(7) outside domain [1,5] fails."""
+        # nv
         from clausal.logic.clpfd import in_domain
         trail = Trail()
         x = Var()
@@ -1048,6 +1149,7 @@ class TestFDQPromotion:
 
     def test_q_eq_on_fd_var_with_integer_result(self):
         """FD var in Q equation that yields integer: both domains coexist."""
+        # nv
         from clausal.logic.clpfd import in_domain, FD_KEY
         trail = Trail()
         x, y = Var(), Var()
@@ -1064,6 +1166,7 @@ class TestFDQPromotion:
 
     def test_q_eq_on_fd_var_with_non_integer_result_fails(self):
         """FD var in Q equation that yields non-integer: FD hook rejects."""
+        # nv
         from clausal.logic.clpfd import in_domain
         trail = Trail()
         x = Var()
@@ -1073,6 +1176,7 @@ class TestFDQPromotion:
 
     def test_float_still_rejected_in_q(self):
         """Regression: float in Q context still raises TypeError."""
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -1084,6 +1188,7 @@ class TestA5FloatTypeError:
     """Issue #9: unifying a Q-var with float must raise TypeError."""
 
     def test_unify_q_var_with_float_raises(self):
+        # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
@@ -1092,6 +1197,7 @@ class TestA5FloatTypeError:
 
     def test_float_literal_does_not_reach_q(self):
         """fd_eq(X, 3.14) should dispatch to CLP(R), not CLP(Q)."""
+        # nv
         from clausal.logic.clpfd import fd_eq
         from clausal.logic.clpr import REAL_KEY
         trail = Trail()
@@ -1114,6 +1220,7 @@ class TestPythonicAliases:
 
     def test_rational_1_alias(self):
         """rational(X) is equivalent to in_q(X)."""
+        # nv
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
@@ -1134,6 +1241,7 @@ class TestPythonicAliases:
 
     def test_rational_with_bounds(self):
         """rational(X) + bounds via chained comparison."""
+        # nv
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
@@ -1154,6 +1262,7 @@ class TestPythonicAliases:
 
     def test_entailed_1_pythonic(self):
         """entailed(X <= 5) — comparison in argument position."""
+        # nv
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
@@ -1180,6 +1289,7 @@ TestEntailed(X) <- (
 
     def test_entailed_1_fails(self):
         """entailed(X <= 3) fails when X could be 4."""
+        # nv
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
@@ -1222,6 +1332,7 @@ class TestClausalIntegration:
         return None  # no solution
 
     def test_two_var(self):
+        # nv
         result = self._run("TwoVar", 2)
         assert result is not None
         x, y = result
@@ -1229,6 +1340,7 @@ class TestClausalIntegration:
         assert y == F(7)
 
     def test_three_var(self):
+        # nv
         result = self._run("ThreeVar", 3)
         assert result is not None
         x, y, z = result
@@ -1237,6 +1349,7 @@ class TestClausalIntegration:
         assert z == F(2, 3)
 
     def test_rational_coeffs(self):
+        # nv
         result = self._run("RationalCoeffs", 2)
         assert result is not None
         x, y = result
@@ -1244,26 +1357,31 @@ class TestClausalIntegration:
         assert y == F(0)
 
     def test_feasible(self):
+        # nv
         result = self._run("Feasible", 2)
         assert result is not None  # just needs to succeed
 
     def test_infeasible(self):
+        # nv
         result = self._run("Infeasible", 1)
         assert result is None  # must fail
 
     def test_lp_maximize(self):
+        # nv
         result = self._run("LP", 3)
         assert result is not None
         x, y, obj = result
         assert obj == F(310)
 
     def test_scheduling_minimize(self):
+        # nv
         result = self._run("Scheduling", 3)
         assert result is not None
         x, y, cost = result
         assert cost == F(30)
 
     def test_sup_inf(self):
+        # nv
         result = self._run("SupInf", 3)
         assert result is not None
         x, lo, hi = result
@@ -1271,6 +1389,7 @@ class TestClausalIntegration:
         assert hi == F(10)
 
     def test_bb_simple(self):
+        # nv
         result = self._run("BBSimple", 2)
         assert result is not None
         x, cost = result
@@ -1278,6 +1397,7 @@ class TestClausalIntegration:
         assert x == F(2)  # variable bound to optimal integer
 
     def test_bb_sicstus(self):
+        # nv
         result = self._run("BBSicstus", 4)
         assert result is not None
         x, y, z, cost = result

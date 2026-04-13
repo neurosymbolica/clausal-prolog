@@ -5,12 +5,12 @@
 Test("uuid4 generates") <- (
     UUIDv4(U),
     IsUUID(U)
-)
+)  # nv
 
 Test("uuid1 generates") <- (
     UUIDv1(U),
     IsUUID(U)
-)
+)  # nv
 
 Test("uuid3 deterministic") <- (
     UUIDv3("dns", "example.com", U1),
@@ -18,7 +18,7 @@ Test("uuid3 deterministic") <- (
     UUIDStr(U1, S1),
     UUIDStr(U2, S2),
     S1 == S2
-)
+)  # nv
 
 Test("uuid5 deterministic") <- (
     UUIDv5("url", "https://example.com", U1),
@@ -26,7 +26,7 @@ Test("uuid5 deterministic") <- (
     UUIDStr(U1, S1),
     UUIDStr(U2, S2),
     S1 == S2
-)
+)  # nv
 
 # ── Conversion roundtrips ──────────────────────────────────────────
 
@@ -36,7 +36,7 @@ Test("uuid str roundtrip") <- (
     UUIDStr(U2, S),
     UUIDStr(U2, S2),
     S == S2
-)
+)  # nv
 
 Test("uuid hex roundtrip") <- (
     UUIDv4(U),
@@ -44,7 +44,7 @@ Test("uuid hex roundtrip") <- (
     UUIDHex(U2, HEX),
     UUIDHex(U2, HEX2),
     HEX == HEX2
-)
+)  # nv
 
 Test("uuid int roundtrip") <- (
     UUIDv4(U),
@@ -52,27 +52,27 @@ Test("uuid int roundtrip") <- (
     UUIDInt(U2, N),
     UUIDInt(U2, N2),
     N == N2
-)
+)  # nv
 
 # ── Inspection ─────────────────────────────────────────────────────
 
 Test("uuid4 version is 4") <- (
     UUIDv4(U),
     UUIDVersion(U, 4)
-)
+)  # nv
 
 Test("uuid3 version is 3") <- (
     UUIDv3("dns", "test", U),
     UUIDVersion(U, 3)
-)
+)  # nv
 
 Test("uuid5 version is 5") <- (
     UUIDv5("dns", "test", U),
     UUIDVersion(U, 5)
-)
+)  # nv
 
 Test("uuid fields decompose") <- (
     UUIDv4(U),
     UUIDFields(U, TIME_LOW, TIME_MID, TIME_HI, CLOCK_SEQ_HI, CLOCK_SEQ_LOW, NODE),
     IsUUID(U)
-)
+)  # nv

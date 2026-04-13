@@ -25,6 +25,7 @@ def stmts(src: str) -> list[sa.Node]:
 # ── Literals ─────────────────────────────────────────────────────────────────
 
 def test_literals():
+    # nv
     assert isinstance(expr("42"), sa.IntLiteral) and expr("42").value == 42
     assert isinstance(expr("3.14"), sa.FloatLiteral)
     assert isinstance(expr("1j"), sa.ComplexLiteral)
@@ -38,6 +39,7 @@ def test_literals():
 
 
 def test_collections():
+    # nv
     assert isinstance(expr("[1,2]"), sa.ListLiteral) and len(expr("[1,2]").elements) == 2
     assert isinstance(expr("(1,2)"), sa.TupleLiteral)
     assert isinstance(expr("{1,2}"), sa.SetLiteral)
@@ -49,6 +51,7 @@ def test_collections():
 
 
 def test_fstring():
+    # nv
     node = expr("f'hello {name}'")
     assert isinstance(node, sa.FString)
     assert isinstance(node.parts[0], sa.StringLiteral)
@@ -59,6 +62,7 @@ def test_fstring():
 
 def test_no_expr_stmt():
     """Expressions go directly into body — no ExprStmt wrapper."""
+    # nv
     s = body("f(x)")
     assert len(s) == 1
     assert isinstance(s[0], sa.Call), f"Expected Call, got {type(s[0]).__name__}"
@@ -73,6 +77,7 @@ def test_no_expr_stmt():
 # ── Context splitting ────────────────────────────────────────────────────────
 
 def test_name_context():
+    # nv
     assert isinstance(expr("x"), sa.LoadName) and expr("x").name == "x"
     s = stmt("x = 1")
     assert isinstance(s.targets[0], sa.StoreName) and s.targets[0].name == "x"
@@ -82,6 +87,7 @@ def test_name_context():
 
 
 def test_attr_context():
+    # nv
     assert isinstance(expr("x.a"), sa.LoadAttr) and expr("x.a").attr == "a"
     s = stmt("x.a = 1")
     assert isinstance(s.targets[0], sa.StoreAttr)
@@ -91,6 +97,7 @@ def test_attr_context():
 
 
 def test_subscript_context():
+    # nv
     assert isinstance(expr("x[0]"), sa.LoadSubscript)
     s = stmt("x[0] = 1")
     assert isinstance(s.targets[0], sa.StoreSubscript)
@@ -100,6 +107,7 @@ def test_subscript_context():
 
 
 def test_starred():
+    # nv
     c = expr("f(*args)")
     assert isinstance(c.args[0], sa.StarUnpack)
     s = stmt("a, *b = [1,2,3]")
@@ -110,6 +118,7 @@ def test_starred():
 
 
 def test_destructuring():
+    # nv
     s = stmt("[a, b] = [1, 2]")
     assert isinstance(s.targets[0], sa.ListPattern)
     s2 = stmt("a, b = 1, 2")
@@ -120,6 +129,7 @@ def test_destructuring():
 # ── Operators ────────────────────────────────────────────────────────────────
 
 def test_binops():
+    # nv
     for src, cls in [
         ("x + y", sa.Add), ("x - y", sa.Sub), ("x * y", sa.Mult),
         ("x / y", sa.Div), ("x // y", sa.FloorDiv), ("x % y", sa.Mod),
@@ -135,6 +145,7 @@ def test_binops():
 
 
 def test_boolops():
+    # nv
     node = expr("a and b")
     assert isinstance(node, sa.And)
     assert isinstance(node.left, sa.LoadName) and isinstance(node.right, sa.LoadName)
@@ -146,6 +157,7 @@ def test_boolops():
 
 
 def test_unaryops():
+    # nv
     assert isinstance(expr("+x"), sa.UnaryPlus)
     assert isinstance(expr("-x"), sa.Negate)
     assert isinstance(expr("not x"), sa.Not)
@@ -154,6 +166,7 @@ def test_unaryops():
 
 
 def test_comparisons():
+    # nv
     assert isinstance(expr("x == y"), sa.ArithEq)
     assert isinstance(expr("x != y"), sa.ArithNeq)
     assert isinstance(expr("x < y"), sa.Lt)
@@ -172,6 +185,7 @@ def test_comparisons():
 
 
 def test_augmented_assign():
+    # nv
     for src, cls in [
         ("x += 1", sa.AddAssign), ("x -= 1", sa.SubAssign),
         ("x *= 1", sa.MultAssign), ("x /= 1", sa.DivAssign),
@@ -189,6 +203,7 @@ def test_augmented_assign():
 # ── Expressions ──────────────────────────────────────────────────────────────
 
 def test_call():
+    # nv
     c = expr("f(1, 2, *args, key=val, **kw)")
     assert isinstance(c, sa.Call)
     assert isinstance(c.func, sa.LoadName) and c.func.name == "f"
@@ -200,10 +215,12 @@ def test_call():
     print("  call OK")
 
 def test_ifexpr():
+    # nv
     assert isinstance(expr("a if b else c"), sa.IfExpr)
     print("  ifexpr OK")
 
 def test_lambda():
+    # nv
     node = expr("lambda x, y=1: x + y")
     assert isinstance(node, sa.Lambda)
     assert isinstance(node.params, sa.Params)
@@ -214,16 +231,19 @@ def test_lambda():
     print("  lambda OK")
 
 def test_yield():
+    # nv
     s = stmt("def f():\n yield 1")
     assert isinstance(s, sa.FunctionDef)
     assert isinstance(s.body[0], sa.Yield)
     print("  yield OK")
 
 def test_walrus():
+    # nv
     assert isinstance(expr("(x := 10)"), sa.NamedExpr)
     print("  walrus OK")
 
 def test_slice():
+    # nv
     node = expr("x[1:2:3]")
     assert isinstance(node, sa.LoadSubscript)
     assert isinstance(node.index, sa.Slice)
@@ -234,6 +254,7 @@ def test_slice():
 # ── Comprehensions ───────────────────────────────────────────────────────────
 
 def test_comprehensions():
+    # nv
     lc = expr("[x for x in y if x > 0]")
     assert isinstance(lc, sa.ListComp)
     assert len(lc.clauses) == 1 and isinstance(lc.clauses[0], sa.ForClause)
@@ -248,6 +269,7 @@ def test_comprehensions():
 # ── Parameters ───────────────────────────────────────────────────────────────
 
 def test_parameters():
+    # nv
     s = stmt("def f(a, b=1, /, c=2, *args, d, e=3, **kw): pass")
     assert isinstance(s, sa.FunctionDef)
     p = s.params.params
@@ -266,6 +288,7 @@ def test_parameters():
 # ── Statements ───────────────────────────────────────────────────────────────
 
 def test_import_flattening():
+    # nv
     ss = stmts("import os, sys")
     assert len(ss) == 2
     assert isinstance(ss[0], sa.Import) and ss[0].module == "os"
@@ -281,6 +304,7 @@ def test_import_flattening():
 
 
 def test_delete_flattening():
+    # nv
     ss = stmts("del x, y.a, z[0]")
     assert len(ss) == 3
     assert isinstance(ss[0], sa.DeleteName)
@@ -290,6 +314,7 @@ def test_delete_flattening():
 
 
 def test_compound_stmts():
+    # nv
     s = stmt("if x:\n  pass\nelif y:\n  pass\nelse:\n  pass")
     assert isinstance(s, sa.If) and isinstance(s.orelse[0], sa.If)
     s = stmt("while True:\n  break")
@@ -304,6 +329,7 @@ def test_compound_stmts():
 
 
 def test_async():
+    # nv
     s = stmt("async def f():\n  pass")
     assert isinstance(s, sa.FunctionDef) and s.is_async is True
     s = stmt("async def f():\n  async for x in y:\n    pass")
@@ -314,6 +340,7 @@ def test_async():
 
 
 def test_class():
+    # nv
     s = stmt("class Foo(Bar, metaclass=Meta):\n  pass")
     assert isinstance(s, sa.ClassDef) and s.name == "Foo"
     assert len(s.bases) == 1 and isinstance(s.bases[0], sa.LoadName)
@@ -322,32 +349,38 @@ def test_class():
 
 
 def test_decorators():
+    # nv
     s = stmt("@deco\ndef f(): pass")
     assert isinstance(s, sa.FunctionDef) and len(s.decorators) == 1
     print("  decorators OK")
 
 
 def test_ann_assign():
+    # nv
     s = stmt("x: int = 1")
     assert isinstance(s, sa.AnnAssign) and isinstance(s.annotation, sa.LoadName)
     print("  annotated assign OK")
 
 def test_raise():
+    # nv
     s = stmt("raise ValueError('bad') from err")
     assert isinstance(s, sa.Raise) and s.exc is not None and s.cause is not None
     print("  raise OK")
 
 def test_assert():
+    # nv
     s = stmt("assert x, 'msg'")
     assert isinstance(s, sa.assertz) and s.msg is not None
     print("  assert OK")
 
 def test_global_nonlocal():
+    # nv
     assert isinstance(stmt("global x, y"), sa.Global)
     assert isinstance(stmt("nonlocal z"), sa.Nonlocal)
     print("  global/nonlocal OK")
 
 def test_multi_assign():
+    # nv
     s = stmt("a = b = 1")
     assert isinstance(s, sa.Assign) and len(s.targets) == 2
     print("  multi assign OK")
@@ -356,6 +389,7 @@ def test_multi_assign():
 # ── Match ────────────────────────────────────────────────────────────────────
 
 def test_match():
+    # nv
     src = """
 match command:
     case "quit":
@@ -388,17 +422,20 @@ match command:
 # ── Infrastructure ───────────────────────────────────────────────────────────
 
 def test_loc_preserved():
+    # nv
     s = stmt("x = 1")
     lineno, col_offset, *_ = s.position
     assert lineno == 1 and col_offset == 0
     print("  location preserved OK")
 
 def test_dump():
+    # nv
     d = sa.dump(sa.simplify(ast.parse("x + 1")))
     assert "Add" in d and "LoadName" in d and "IntLiteral" in d
     print("  dump OK")
 
 def test_children():
+    # nv
     node = sa.Add(
         left=sa.LoadName(name="x"),
         right=sa.IntLiteral(value=1)
@@ -426,6 +463,7 @@ def test_children():
 
 def test_call_copy():
     """__call__ returns a copy with selectively replaced fields."""
+    # nv
     orig = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
     # Replace only right
     updated = orig(right=sa.IntLiteral(value=99))
@@ -442,6 +480,7 @@ def test_call_copy():
 
 def test_call_copy_list_field():
     """__call__ on a node with a list field."""
+    # nv
     node = sa.Module(body=[sa.LoadName(name="a"), sa.LoadName(name="b")])
     updated = node(body=[sa.LoadName(name="c")])
     assert len(updated.body) == 1
@@ -452,6 +491,7 @@ def test_call_copy_list_field():
 
 def test_visit_children_list_field():
     """visit_children traverses elements of list[Node] fields."""
+    # nv
     module = sa.simplify(ast.parse("a\nb\nc"))
     visited = []
     module.visit_children(visited.append)
@@ -463,6 +503,7 @@ def test_visit_children_list_field():
 
 def test_visit_children_node_fields():
     """visit_children visits both node fields of a BinOp."""
+    # nv
     add = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
     visited = []
     add.visit_children(visited.append)
@@ -474,6 +515,7 @@ def test_visit_children_node_fields():
 
 def test_visit_children_optional_node():
     """visit_children visits an Optional[Node] field only when set."""
+    # nv
     ret_val = sa.simplify(ast.parse("def f():\n return 1")).body[0].body[0]
     assert isinstance(ret_val, sa.Return)
     visited = []
@@ -490,6 +532,7 @@ def test_visit_children_optional_node():
 
 def test_transform_children_replaces_nodes():
     """transform_children replaces matched children and returns new node."""
+    # nv
     add = sa.simplify(ast.parse("x + 1")).body[0]
     assert isinstance(add, sa.Add)
 
@@ -507,6 +550,7 @@ def test_transform_children_replaces_nodes():
 
 def test_transform_children_identity():
     """transform_children returns self when nothing changes (no allocation)."""
+    # nv
     add = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
     result = add.transform_children(lambda n: n)
     assert result is add
@@ -515,6 +559,7 @@ def test_transform_children_identity():
 
 def test_transform_children_list_field():
     """transform_children transforms elements inside a list[Node] field."""
+    # nv
     func = sa.simplify(ast.parse("def f():\n a\n b")).body[0]
     assert isinstance(func, sa.FunctionDef)
 
@@ -532,6 +577,7 @@ def test_transform_children_list_field():
 
 def test_transform_fields():
     """transform_fields returns self when nothing changed, copy otherwise."""
+    # nv
     node = sa.Add(left=sa.LoadName(name="x"), right=sa.IntLiteral(value=1))
     same = node.transform_fields(left=node.left, right=node.right)
     assert same is node
@@ -547,6 +593,7 @@ def test_transform_fields():
 # ── More simplify cases ───────────────────────────────────────────────────────
 
 def test_yield_from():
+    # nv
     s = stmt("def f():\n yield from it")
     assert isinstance(s, sa.FunctionDef)
     assert isinstance(s.body[0], sa.YieldFrom)
@@ -555,6 +602,7 @@ def test_yield_from():
 
 
 def test_await():
+    # nv
     s = stmt("async def f():\n await coro()")
     assert isinstance(s, sa.FunctionDef) and s.is_async
     assert isinstance(s.body[0], sa.Await)
@@ -563,6 +611,7 @@ def test_await():
 
 
 def test_try_star():
+    # nv
     try:
         s = stmt("try:\n pass\nexcept* ValueError as eg:\n pass")
         assert isinstance(s, sa.Try) and s.is_star is True
@@ -573,6 +622,7 @@ def test_try_star():
 
 
 def test_type_alias():
+    # nv
     try:
         s = stmt("type Vector = list[float]")
         assert isinstance(s, sa.TypeAlias)
@@ -583,6 +633,7 @@ def test_type_alias():
 
 
 def test_type_params():
+    # nv
     try:
         s = stmt("def f[T, **P, *Ts](): pass")
         assert isinstance(s, sa.FunctionDef)
@@ -596,6 +647,7 @@ def test_type_params():
 
 
 def test_fstring_conversion_and_format_spec():
+    # nv
     node = expr("f'{val!r:.2f}'")
     assert isinstance(node, sa.FString)
     fe = node.parts[0]
@@ -607,6 +659,7 @@ def test_fstring_conversion_and_format_spec():
 
 def test_slice_partial():
     """Slice with missing parts should have None for those components."""
+    # nv
     s = expr("x[::2]")
     assert isinstance(s.index, sa.Slice)
     assert s.index.lower is None
@@ -617,6 +670,7 @@ def test_slice_partial():
 
 def test_compare_chain_shared_operand():
     """Middle operand in 1 < x < 10 should be the same StoreName/LoadName object."""
+    # nv
     node = expr("1 < x < 10")
     assert isinstance(node, sa.CompareChain)
     left_cmp, right_cmp = node.comparisons
@@ -629,6 +683,7 @@ def test_compare_chain_shared_operand():
 
 def test_multi_for_comprehension():
     """Nested for-in comprehension produces multiple ForClause entries."""
+    # nv
     lc = expr("[x for xs in xss for x in xs if x > 0]")
     assert isinstance(lc, sa.ListComp)
     assert len(lc.clauses) == 2
@@ -640,6 +695,7 @@ def test_multi_for_comprehension():
 
 def test_for_clause_children():
     """ForClause.filters is visited as a list[Node] field."""
+    # nv
     fc_node = sa.simplify(ast.parse("[x for x in y if x > 0 if x < 10]")).body[0]
     assert isinstance(fc_node, sa.ListComp)
     fc = fc_node.clauses[0]
@@ -655,6 +711,7 @@ def test_for_clause_children():
 
 
 def test_match_star_and_as():
+    # nv
     src = """
 match x:
     case [*rest]:
@@ -677,6 +734,7 @@ match x:
 
 
 def test_yield_bare():
+    # nv
     s = stmt("def f():\n yield")
     assert isinstance(s, sa.FunctionDef)
     y = s.body[0]
@@ -686,6 +744,7 @@ def test_yield_bare():
 
 def test_exception_tuple():
     """except (A, B) produces a single handler whose type is a tuple load."""
+    # nv
     s = stmt("try:\n pass\nexcept (ValueError, TypeError):\n pass")
     assert isinstance(s, sa.Try) and len(s.handlers) == 1
     assert s.handlers[0].type is not None
@@ -697,6 +756,7 @@ from clausal.pythonic_ast import conversion_from_python_ast as conversion
 def test_visit_dispatch():
     """Verify VISITORS dict has direct hash lookup, not name mangling."""
     # Every entry in VISITORS should map an ast type directly
+    # nv
     for ast_type, func in conversion.VISITORS.items():
         assert isinstance(ast_type, type) and issubclass(ast_type, _ast.AST), \
             f"Key {ast_type} is not an ast.AST subclass"
@@ -706,6 +766,7 @@ def test_visit_dispatch():
 
 def test_big_real_code():
     """Smoke test: simplify substantial Python, verify no CPython nodes leak."""
+    # nv
     import textwrap
     src = textwrap.dedent('''
         import os
@@ -789,6 +850,7 @@ def test_big_real_code():
 # ── __str__ (Python-like display) ────────────────────────────────────────────
 
 def test_str_literals():
+    # nv
     assert str(sa.IntLiteral(value=42)) == "42"
     assert str(sa.FloatLiteral(value=3.14)) == "3.14"
     assert str(sa.BoolLiteral(value=True)) == "True"
@@ -806,6 +868,7 @@ def test_str_literals():
 
 
 def test_str_collections():
+    # nv
     assert str(expr("[1, 2, 3]")) == "[1, 2, 3]"
     assert str(expr("[]")) == "[]"
     assert str(expr("()")) == "()"
@@ -819,6 +882,7 @@ def test_str_collections():
 
 
 def test_str_names_attrs():
+    # nv
     assert str(expr("x")) == "x"
     assert str(expr("x.a")) == "x.a"
     assert str(expr("x.a.b")) == "x.a.b"
@@ -828,6 +892,7 @@ def test_str_names_attrs():
 
 
 def test_str_star():
+    # nv
     assert str(sa.StarUnpack(value=sa.LoadName(name="args"))) == "*args"
     assert str(sa.StarTarget(target=sa.StoreName(name="rest"))) == "*rest"
     s = stmt("a, *b = [1, 2, 3]")
@@ -838,6 +903,7 @@ def test_str_star():
 
 
 def test_str_binops():
+    # nv
     assert str(expr("x + y")) == "x + y"
     assert str(expr("x - y")) == "x - y"
     assert str(expr("x * y")) == "x * y"
@@ -854,12 +920,14 @@ def test_str_binops():
 
 
 def test_str_boolops():
+    # nv
     assert str(expr("a and b")) == "a and b"
     assert str(expr("a or b")) == "a or b"
     print("  str boolops OK")
 
 
 def test_str_unaryops():
+    # nv
     assert str(expr("-x")) == "-x"
     assert str(expr("+x")) == "+x"
     assert str(expr("~x")) == "~x"
@@ -875,6 +943,7 @@ def test_str_unaryops():
 
 
 def test_str_comparisons():
+    # nv
     assert str(expr("x == y")) == "x == y"
     assert str(expr("x != y")) == "x != y"
     assert str(expr("x < y")) == "x < y"
@@ -890,6 +959,7 @@ def test_str_comparisons():
 
 
 def test_str_call():
+    # nv
     assert str(expr("f()")) == "f()"
     assert str(expr("f(1, 2)")) == "f(1, 2)"
     assert str(expr("f(1, *args, key=val, **kw)")) == "f(1, *args, key=val, **kw)"
@@ -898,16 +968,19 @@ def test_str_call():
 
 
 def test_str_ifexpr():
+    # nv
     assert str(expr("a if b else c")) == "a if b else c"
     print("  str ifexpr OK")
 
 
 def test_str_walrus():
+    # nv
     assert str(expr("(x := 10)")) == "(x := 10)"
     print("  str walrus OK")
 
 
 def test_str_lambda():
+    # nv
     assert str(expr("lambda: 1")) == "lambda: 1"
     assert str(expr("lambda x, y: x + y")) == "lambda x, y: x + y"
     assert str(expr("lambda x=1: x")) == "lambda x=1: x"
@@ -915,6 +988,7 @@ def test_str_lambda():
 
 
 def test_str_params():
+    # nv
     s = stmt("def f(a, b, /, c=2, *args, d, e=3, **kw): pass")
     assert str(s.params) == "a, b, /, c=2, *args, d, e=3, **kw"
     s = stmt("def f(*args, x): pass")
@@ -925,6 +999,7 @@ def test_str_params():
 
 
 def test_str_yield():
+    # nv
     s = stmt("def f():\n yield")
     assert str(s.body[0]) == "yield"
     s = stmt("def f():\n yield 1")
@@ -935,12 +1010,14 @@ def test_str_yield():
 
 
 def test_str_await():
+    # nv
     s = stmt("async def f():\n await coro()")
     assert str(s.body[0]) == "await coro()"
     print("  str await OK")
 
 
 def test_str_slice():
+    # nv
     assert str(expr("x[1:2]").index) == "1:2"
     assert str(expr("x[1:2:3]").index) == "1:2:3"
     assert str(expr("x[::2]").index) == "::2"
@@ -950,6 +1027,7 @@ def test_str_slice():
 
 
 def test_str_comprehensions():
+    # nv
     assert str(expr("[x for x in y]")) == "[x for x in y]"
     assert str(expr("[x for x in y if x > 0]")) == "[x for x in y if x > 0]"
     assert str(expr("{x for x in y}")) == "{x for x in y}"
@@ -960,6 +1038,7 @@ def test_str_comprehensions():
 
 
 def test_str_fstring():
+    # nv
     assert str(expr("f'hello {name}'")) == 'f"hello {name}"'
     assert str(expr("f'{val!r}'")) == 'f"{val!r}"'
     assert str(expr("f'{val:.2f}'")) == 'f"{val:.2f}"'
@@ -970,6 +1049,7 @@ def test_str_fstring():
 
 def test_str_combined():
     """A handful of realistic expressions."""
+    # nv
     assert str(expr("x == 1 + y")) == "x == 1 + y"
     assert str(expr("a.b[0](x, y=1)")) == "a.b[0](x, y=1)"
     assert str(expr("[i * 2 for i in range(10) if i % 2 == 0]")) == \

@@ -3,8 +3,8 @@
 
 Test("solve exists") <- (
     Solve([[1.0, 0.0], [0.0, 1.0]], [1.0, 2.0], X),
-    nonvar(X))
+    nonvar(X))  # nv
 
 Test("inverse exists") <- (
     Inverse([[1.0, 0.0], [0.0, 2.0]], INV),
-    nonvar(INV))
+    nonvar(INV))  # nv

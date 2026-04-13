@@ -85,23 +85,28 @@ _DATA2 = [1.0, 2.0, 3.0, 4.0, 5.0]
 
 class TestStatsDescribe:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsDescribe, _DATA1)
         assert isinstance(r, dict)
 
     def test_nobs(self):
+        # nv
         r = _drive(StatsDescribe, _DATA1)
         assert r['nobs'] == 5
 
     def test_mean_approx(self):
+        # nv
         r = _drive(StatsDescribe, _DATA1)
         assert abs(r['mean'] - np.mean(_DATA1)) < 1e-9
 
     def test_minmax(self):
+        # nv
         r = _drive(StatsDescribe, _DATA1)
         assert r['minmax'][0] == 2.0
         assert r['minmax'][1] == 11.0
 
     def test_has_all_keys(self):
+        # nv
         r = _drive(StatsDescribe, _DATA1)
         for key in ('nobs', 'minmax', 'mean', 'variance', 'skewness', 'kurtosis'):
             assert key in r
@@ -111,14 +116,17 @@ class TestStatsDescribe:
 
 class TestStatsMean:
     def test_simple(self):
+        # nv
         r = _drive(StatsMean, [1.0, 2.0, 3.0])
         assert abs(r - 2.0) < 1e-9
 
     def test_float_result(self):
+        # nv
         r = _drive(StatsMean, _DATA1)
         assert isinstance(r, float)
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(StatsMean, [1.0, 2.0, 3.0])
 
 
@@ -127,10 +135,12 @@ class TestStatsMean:
 class TestStatsGeometricMean:
     def test_simple(self):
         # gmean([1, 4]) = 2.0
+        # nv
         r = _drive(StatsGeometricMean, [1.0, 4.0])
         assert abs(r - 2.0) < 1e-9
 
     def test_float_result(self):
+        # nv
         r = _drive(StatsGeometricMean, [2.0, 8.0])
         assert isinstance(r, float)
 
@@ -140,11 +150,13 @@ class TestStatsGeometricMean:
 class TestStatsHarmonicMean:
     def test_simple(self):
         # hmean([1, 1]) = 1.0
+        # nv
         r = _drive(StatsHarmonicMean, [1.0, 1.0])
         assert abs(r - 1.0) < 1e-9
 
     def test_harmonic_two(self):
         # hmean([2, 6]) = 3.0
+        # nv
         r = _drive(StatsHarmonicMean, [2.0, 6.0])
         assert abs(r - 3.0) < 1e-9
 
@@ -153,16 +165,19 @@ class TestStatsHarmonicMean:
 
 class TestStatsMode:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsMode, [1, 2, 2, 3])
         assert isinstance(r, dict)
         assert 'mode' in r
         assert 'count' in r
 
     def test_mode_value(self):
+        # nv
         r = _drive(StatsMode, [1, 2, 2, 3])
         assert abs(r['mode'] - 2.0) < 1e-9
 
     def test_count_value(self):
+        # nv
         r = _drive(StatsMode, [1, 2, 2, 3])
         assert r['count'] == 2
 
@@ -171,10 +186,12 @@ class TestStatsMode:
 
 class TestStatsSkew:
     def test_symmetric_near_zero(self):
+        # nv
         r = _drive(StatsSkew, [1.0, 2.0, 3.0, 4.0, 5.0])
         assert abs(r) < 1e-9
 
     def test_float_result(self):
+        # nv
         r = _drive(StatsSkew, _DATA1)
         assert isinstance(r, float)
 
@@ -183,6 +200,7 @@ class TestStatsSkew:
 
 class TestStatsKurtosis:
     def test_returns_float(self):
+        # nv
         r = _drive(StatsKurtosis, _DATA1)
         assert isinstance(r, float)
 
@@ -192,10 +210,12 @@ class TestStatsKurtosis:
 class TestStatsInterquartileRange:
     def test_simple(self):
         # IQR of [1,2,3,4,5]: Q3=4, Q1=2 → 2
+        # nv
         r = _drive(StatsInterquartileRange, [1.0, 2.0, 3.0, 4.0, 5.0])
         assert abs(r - scipy_stats.iqr([1.0, 2.0, 3.0, 4.0, 5.0])) < 1e-9
 
     def test_float_result(self):
+        # nv
         r = _drive(StatsInterquartileRange, _DATA1)
         assert isinstance(r, float)
 
@@ -204,11 +224,13 @@ class TestStatsInterquartileRange:
 
 class TestStatsZScore:
     def test_returns_list(self):
+        # nv
         r = _drive(StatsZScore, [1.0, 2.0, 3.0])
         assert isinstance(r, list)
         assert len(r) == 3
 
     def test_mean_zero(self):
+        # nv
         r = _drive(StatsZScore, [1.0, 2.0, 3.0])
         assert abs(sum(r) / len(r)) < 1e-9
 
@@ -217,10 +239,12 @@ class TestStatsZScore:
 
 class TestStatsMedianAbsoluteDeviation:
     def test_returns_float(self):
+        # nv
         r = _drive(StatsMedianAbsoluteDeviation, [1.0, 2.0, 3.0, 4.0, 5.0])
         assert isinstance(r, float)
 
     def test_value(self):
+        # nv
         r = _drive(StatsMedianAbsoluteDeviation, [1.0, 2.0, 3.0, 4.0, 5.0])
         expected = float(scipy_stats.median_abs_deviation([1.0, 2.0, 3.0, 4.0, 5.0]))
         assert abs(r - expected) < 1e-9
@@ -230,23 +254,27 @@ class TestStatsMedianAbsoluteDeviation:
 
 class TestStatsPearsonCorrelation:
     def test_perfect_correlation(self):
+        # nv
         x = [1.0, 2.0, 3.0]
         r = _drive(StatsPearsonCorrelation, x, x)
         assert r is not None
         assert abs(r['statistic'] - 1.0) < 1e-9
 
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsPearsonCorrelation, _DATA1, _DATA2)
         assert isinstance(r, dict)
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_result_get_statistic(self):
+        # nv
         r = _drive(StatsPearsonCorrelation, _DATA1, _DATA2)
         stat = _drive_result_get(r, 'statistic')
         assert stat is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(StatsPearsonCorrelation, _DATA1, _DATA2)
 
 
@@ -254,16 +282,19 @@ class TestStatsPearsonCorrelation:
 
 class TestStatsSpearmanCorrelation:
     def test_one_array(self):
+        # nv
         r = _drive(StatsSpearmanCorrelation, np.array([[1, 2], [2, 3], [3, 4]]))
         assert r is not None
         assert 'statistic' in r
 
     def test_two_arrays(self):
+        # nv
         r = _drive(StatsSpearmanCorrelation, _DATA1, _DATA2)
         assert r is not None
         assert 'statistic' in r
 
     def test_perfect_rank_correlation(self):
+        # nv
         x = [1.0, 2.0, 3.0]
         r = _drive(StatsSpearmanCorrelation, x, x)
         assert abs(r['statistic'] - 1.0) < 1e-9
@@ -273,12 +304,14 @@ class TestStatsSpearmanCorrelation:
 
 class TestStatsKendallTau:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsKendallTau, _DATA1, _DATA2)
         assert isinstance(r, dict)
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_perfect_agreement(self):
+        # nv
         x = [1.0, 2.0, 3.0]
         r = _drive(StatsKendallTau, x, x)
         assert abs(r['statistic'] - 1.0) < 1e-9
@@ -288,20 +321,24 @@ class TestStatsKendallTau:
 
 class TestStatsLinearRegression:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsLinearRegression, [1.0, 2.0, 3.0], [2.0, 4.0, 6.0])
         assert isinstance(r, dict)
 
     def test_slope_intercept(self):
+        # nv
         r = _drive(StatsLinearRegression, [1.0, 2.0, 3.0], [2.0, 4.0, 6.0])
         assert abs(r['slope'] - 2.0) < 1e-9
         assert abs(r['intercept']) < 1e-9
 
     def test_has_all_fields(self):
+        # nv
         r = _drive(StatsLinearRegression, _DATA1, _DATA2)
         for key in ('slope', 'intercept', 'rvalue', 'pvalue', 'stderr', 'intercept_stderr'):
             assert key in r
 
     def test_result_get_slope(self):
+        # nv
         r = _drive(StatsLinearRegression, [1.0, 2.0, 3.0], [2.0, 4.0, 6.0])
         slope = _drive_result_get(r, 'slope')
         assert abs(float(slope) - 2.0) < 1e-9
@@ -311,14 +348,17 @@ class TestStatsLinearRegression:
 
 class TestStatsTheilSlopes:
     def test_two_arg(self):
+        # nv
         r = _drive(StatsTheilSlopes, [2.0, 4.0, 6.0])
         assert 'slope' in r
 
     def test_three_arg(self):
+        # nv
         r = _drive(StatsTheilSlopes, [2.0, 4.0, 6.0], [1.0, 2.0, 3.0])
         assert 'slope' in r
 
     def test_has_all_fields(self):
+        # nv
         r = _drive(StatsTheilSlopes, _DATA2)
         for key in ('slope', 'intercept', 'low_slope', 'high_slope'):
             assert key in r
@@ -328,6 +368,7 @@ class TestStatsTheilSlopes:
 
 class TestStatsTTest1Sample:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsTTest1Sample, [1.0, 2.0, 3.0], 2.0)
         assert isinstance(r, dict)
         assert 'statistic' in r
@@ -335,10 +376,12 @@ class TestStatsTTest1Sample:
 
     def test_same_mean_low_t(self):
         # Data with mean 2.0, testing against popmean=2.0 → stat near 0
+        # nv
         r = _drive(StatsTTest1Sample, [1.0, 2.0, 3.0], 2.0)
         assert abs(r['statistic']) < 1e-9
 
     def test_result_get_pvalue(self):
+        # nv
         r = _drive(StatsTTest1Sample, [1.0, 2.0, 3.0], 2.0)
         pv = _drive_result_get(r, 'pvalue')
         assert pv is not None
@@ -348,14 +391,17 @@ class TestStatsTTest1Sample:
 
 class TestStatsTTestIndependent:
     def test_two_arg(self):
+        # nv
         r = _drive(StatsTTestIndependent, _DATA1, _DATA2)
         assert 'statistic' in r
 
     def test_three_arg_equal_var(self):
+        # nv
         r = _drive(StatsTTestIndependent, _DATA1, _DATA2, True)
         assert 'statistic' in r
 
     def test_three_arg_unequal_var(self):
+        # nv
         r = _drive(StatsTTestIndependent, _DATA1, _DATA2, False)
         assert 'statistic' in r
 
@@ -364,6 +410,7 @@ class TestStatsTTestIndependent:
 
 class TestStatsTTestRelated:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsTTestRelated, _DATA1, [d + 0.1 for d in _DATA1])
         assert 'statistic' in r
         assert 'pvalue' in r
@@ -373,16 +420,19 @@ class TestStatsTTestRelated:
 
 class TestStatsChiSquare:
     def test_one_arg(self):
+        # nv
         r = _drive(StatsChiSquare, [10, 20, 30])
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_two_arg_with_expected(self):
+        # nv
         r = _drive(StatsChiSquare, [10, 20, 30], [15, 15, 30])
         assert 'statistic' in r
 
     def test_uniform_distribution(self):
         # [10, 10, 10] matches uniform expected → statistic ~ 0
+        # nv
         r = _drive(StatsChiSquare, [10, 10, 10])
         assert abs(r['statistic']) < 1e-9
 
@@ -391,17 +441,20 @@ class TestStatsChiSquare:
 
 class TestStatsChiSquareContingency:
     def test_returns_dict(self):
+        # nv
         table = [[10, 20], [30, 40]]
         r = _drive(StatsChiSquareContingency, table)
         assert isinstance(r, dict)
 
     def test_has_dof(self):
+        # nv
         table = [[10, 20], [30, 40]]
         r = _drive(StatsChiSquareContingency, table)
         assert 'dof' in r
         assert r['dof'] == 1
 
     def test_has_expected_freq(self):
+        # nv
         table = [[10, 20], [30, 40]]
         r = _drive(StatsChiSquareContingency, table)
         assert 'expected_freq' in r
@@ -411,6 +464,7 @@ class TestStatsChiSquareContingency:
 
 class TestStatsFisherExact:
     def test_returns_dict(self):
+        # nv
         table = [[8, 2], [1, 5]]
         r = _drive(StatsFisherExact, table)
         assert isinstance(r, dict)
@@ -418,6 +472,7 @@ class TestStatsFisherExact:
         assert 'pvalue' in r
 
     def test_pvalue_range(self):
+        # nv
         table = [[8, 2], [1, 5]]
         r = _drive(StatsFisherExact, table)
         assert 0.0 <= r['pvalue'] <= 1.0
@@ -427,11 +482,13 @@ class TestStatsFisherExact:
 
 class TestStatsMannWhitneyU:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsMannWhitneyU, _DATA1, _DATA2)
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_pvalue_range(self):
+        # nv
         r = _drive(StatsMannWhitneyU, _DATA1, _DATA2)
         assert 0.0 <= r['pvalue'] <= 1.0
 
@@ -440,11 +497,13 @@ class TestStatsMannWhitneyU:
 
 class TestStatsWilcoxon:
     def test_one_sample(self):
+        # nv
         r = _drive(StatsWilcoxon, [1.0, -2.0, 3.0, -1.0, 2.0])
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_two_sample(self):
+        # nv
         r = _drive(StatsWilcoxon, _DATA1, _DATA2)
         assert 'statistic' in r
 
@@ -453,15 +512,18 @@ class TestStatsWilcoxon:
 
 class TestStatsKruskal:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsKruskal, [[1, 2, 3], [4, 5, 6]])
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_three_groups(self):
+        # nv
         r = _drive(StatsKruskal, [[1, 2], [3, 4], [5, 6]])
         assert r is not None
 
     def test_wrong_result_fails(self):
+        # nv
         assert _fails_with_wrong_result(StatsKruskal, [[1, 2, 3], [4, 5, 6]])
 
 
@@ -469,11 +531,13 @@ class TestStatsKruskal:
 
 class TestStatsKs2samp:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsKs2samp, _DATA1, _DATA2)
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_identical_samples_zero_stat(self):
+        # nv
         r = _drive(StatsKs2samp, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0])
         assert abs(r['statistic']) < 1e-9
 
@@ -482,6 +546,7 @@ class TestStatsKs2samp:
 
 class TestStatsNormalityTest:
     def test_returns_dict(self):
+        # nv
         np.random.seed(42)
         data = np.random.normal(0, 1, 100)
         r = _drive(StatsNormalityTest, data)
@@ -493,11 +558,13 @@ class TestStatsNormalityTest:
 
 class TestStatsShapiro:
     def test_returns_dict(self):
+        # nv
         r = _drive(StatsShapiro, [1.0, 2.0, 3.0, 4.0, 5.0])
         assert 'statistic' in r
         assert 'pvalue' in r
 
     def test_pvalue_range(self):
+        # nv
         r = _drive(StatsShapiro, [1.0, 2.0, 3.0, 4.0, 5.0])
         assert 0.0 <= r['pvalue'] <= 1.0
 
@@ -507,6 +574,7 @@ class TestStatsShapiro:
 class TestStatsDist:
     def test_norm_pdf_at_zero(self):
         # norm.pdf(0) = 1/sqrt(2*pi)
+        # nv
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
@@ -521,6 +589,7 @@ class TestStatsDist:
         assert abs(val - 1.0 / math.sqrt(2 * math.pi)) < 1e-9
 
     def test_norm_cdf_at_zero(self):
+        # nv
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
@@ -535,6 +604,7 @@ class TestStatsDist:
 
     def test_norm_entropy_no_x(self):
         # StatsDist(DIST, METHOD, RESULT) — 3-arity
+        # nv
         result = Var()
         dispatch = StatsDist._get_dispatch()
         trail = Trail()
@@ -554,17 +624,20 @@ class TestStatsDist:
 
 class TestStatsNormalPdf:
     def test_at_zero(self):
+        # nv
         r = _drive(StatsNormalPdf, 0.0)
         import math
         assert abs(r - 1.0 / math.sqrt(2 * math.pi)) < 1e-9
 
     def test_with_loc_scale(self):
+        # nv
         r = _drive(StatsNormalPdf, 1.0, 1.0, 1.0)
         expected = float(scipy_stats.norm.pdf(1.0, loc=1.0, scale=1.0))
         assert abs(r - expected) < 1e-9
 
     def test_wrong_arity_returns_none(self):
         # 2-arity loc+scale call expects 4-arg form; wrong arity should fail
+        # nv
         r = _drive(StatsNormalPdf, 0.0, 1.0)  # arity 3 — not registered
         assert r is None
 
@@ -573,10 +646,12 @@ class TestStatsNormalPdf:
 
 class TestStatsNormalCdf:
     def test_at_zero(self):
+        # nv
         r = _drive(StatsNormalCdf, 0.0)
         assert abs(r - 0.5) < 1e-9
 
     def test_with_loc_scale(self):
+        # nv
         r = _drive(StatsNormalCdf, 2.0, 1.0, 2.0)
         expected = float(scipy_stats.norm.cdf(2.0, loc=1.0, scale=2.0))
         assert abs(r - expected) < 1e-9
@@ -586,10 +661,12 @@ class TestStatsNormalCdf:
 
 class TestStatsNormalPpf:
     def test_median(self):
+        # nv
         r = _drive(StatsNormalPpf, 0.5)
         assert abs(r) < 1e-9
 
     def test_with_loc_scale(self):
+        # nv
         r = _drive(StatsNormalPpf, 0.5, 5.0, 1.0)
         expected = float(scipy_stats.norm.ppf(0.5, loc=5.0, scale=1.0))
         assert abs(r - expected) < 1e-9
@@ -600,6 +677,7 @@ class TestStatsNormalPpf:
 class TestStatsNormalRvs:
     def test_scalar_result(self):
         # 1-arity: StatsNormalRvs(RESULT)
+        # nv
         result = Var()
         dispatch = StatsNormalRvs._get_dispatch()
         trail = Trail()
@@ -612,10 +690,12 @@ class TestStatsNormalRvs:
         assert isinstance(val, float)
 
     def test_with_loc_scale(self):
+        # nv
         r = _drive(StatsNormalRvs, 0.0, 1.0)
         assert isinstance(r, float)
 
     def test_with_size(self):
+        # nv
         r = _drive(StatsNormalRvs, 0.0, 1.0, 5)
         assert r is not None
         assert len(r) == 5
@@ -625,6 +705,7 @@ class TestStatsNormalRvs:
 
 class TestStatsFreezeDist:
     def test_returns_int_handle(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -640,6 +721,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_pdf_via_handle(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -669,6 +751,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_stats(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -695,6 +778,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_free_removes_handle(self):
+        # nv
         from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
 
         result = Var()
@@ -718,6 +802,7 @@ class TestStatsFreezeDist:
         assert handle not in _FROZEN_DIST_REGISTRY
 
     def test_frozen_cdf(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -743,6 +828,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_ppf(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -770,6 +856,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_rvs_scalar(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -795,6 +882,7 @@ class TestStatsFreezeDist:
         _FROZEN_DIST_REGISTRY.pop(handle, None)
 
     def test_frozen_rvs_with_size(self):
+        # nv
         result = Var()
         dispatch = StatsFreezeDist._get_dispatch()
         trail = Trail()
@@ -825,16 +913,19 @@ class TestStatsFreezeDist:
 
 class TestResultGet:
     def test_get_from_dict(self):
+        # nv
         d = {'statistic': 3.14, 'pvalue': 0.05}
         v = _drive_result_get(d, 'statistic')
         assert abs(v - 3.14) < 1e-9
 
     def test_missing_field_fails(self):
+        # nv
         d = {'statistic': 1.0}
         v = _drive_result_get(d, 'pvalue')
         assert v is None
 
     def test_non_string_field_fails(self):
+        # nv
         value = Var()
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
@@ -844,6 +935,7 @@ class TestResultGet:
         assert len(solutions) == 0
 
     def test_bind_existing_value(self):
+        # nv
         d = {'pvalue': 0.05}
         value = 0.05
         dispatch = ResultGet._get_dispatch()
@@ -853,6 +945,7 @@ class TestResultGet:
         assert len(solutions) == 1
 
     def test_wrong_value_fails(self):
+        # nv
         d = {'pvalue': 0.05}
         dispatch = ResultGet._get_dispatch()
         trail = Trail()
@@ -902,4 +995,5 @@ class TestScipyStatsFixture:
         "shapiro returns dict",
     ])
     def test_fixture(self, name):
+        # nv
         assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"

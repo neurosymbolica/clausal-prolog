@@ -12,21 +12,27 @@ class TestStringUnifiesWithCharList:
     """Core: str = [char, char, ...] element-wise unification."""
 
     def test_basic(self):
+        # nv
         assert unify("abc", ["a", "b", "c"], Trail())
 
     def test_symmetric(self):
+        # nv
         assert unify(["a", "b", "c"], "abc", Trail())
 
     def test_empty(self):
+        # nv
         assert unify("", [], Trail())
 
     def test_single_char(self):
+        # nv
         assert unify("a", ["a"], Trail())
 
     def test_unicode(self):
+        # nv
         assert unify("日本語", ["日", "本", "語"], Trail())
 
     def test_emoji(self):
+        # nv
         assert unify("👋🌍", ["👋", "🌍"], Trail())
 
 
@@ -34,25 +40,32 @@ class TestStringListMismatch:
     """Unification fails when content or length doesn't match."""
 
     def test_length_str_longer(self):
+        # nv
         assert not unify("abc", ["a", "b"], Trail())
 
     def test_length_list_longer(self):
+        # nv
         assert not unify("ab", ["a", "b", "c"], Trail())
 
     def test_content_mismatch(self):
+        # nv
         assert not unify("abc", ["a", "x", "c"], Trail())
 
     def test_str_vs_int_list(self):
+        # nv
         assert not unify("abc", [1, 2, 3], Trail())
 
     def test_str_vs_multi_char_elements(self):
         """'abc' = ['ab', 'c'] fails — length 3 vs 2."""
+        # nv
         assert not unify("abc", ["ab", "c"], Trail())
 
     def test_str_vs_mixed_type_list(self):
+        # nv
         assert not unify("abc", ["a", 2, "c"], Trail())
 
     def test_str_vs_none_in_list(self):
+        # nv
         assert not unify("abc", ["a", None, "c"], Trail())
 
 
@@ -60,6 +73,7 @@ class TestStringListVarBinding:
     """Variables in the list get bound to single-character strings."""
 
     def test_all_vars(self):
+        # nv
         trail = Trail()
         X, Y, Z = Var(), Var(), Var()
         assert unify("abc", [X, Y, Z], trail)
@@ -68,18 +82,21 @@ class TestStringListVarBinding:
         assert deref(Z) == "c"
 
     def test_partial_vars(self):
+        # nv
         trail = Trail()
         X = Var()
         assert unify("abc", ["a", X, "c"], trail)
         assert deref(X) == "b"
 
     def test_var_at_start(self):
+        # nv
         trail = Trail()
         X = Var()
         assert unify("abc", [X, "b", "c"], trail)
         assert deref(X) == "a"
 
     def test_var_at_end(self):
+        # nv
         trail = Trail()
         X = Var()
         assert unify("abc", ["a", "b", X], trail)
@@ -87,18 +104,21 @@ class TestStringListVarBinding:
 
     def test_var_mismatch_other_position(self):
         """'abc' = ['a', X, 'z'] fails at position 2."""
+        # nv
         trail = Trail()
         X = Var()
         assert not unify("abc", ["a", X, "z"], trail)
 
     def test_symmetric_var_binding(self):
         """[X, 'b', 'c'] = 'abc' binds X='a'."""
+        # nv
         trail = Trail()
         X = Var()
         assert unify([X, "b", "c"], "abc", trail)
         assert deref(X) == "a"
 
     def test_unicode_var_binding(self):
+        # nv
         trail = Trail()
         X, Y = Var(), Var()
         assert unify("日本語", [X, "本", Y], trail)
@@ -110,18 +130,23 @@ class TestStringStringUnchanged:
     """String-vs-string unification remains equality (not element-wise)."""
 
     def test_equal(self):
+        # nv
         assert unify("abc", "abc", Trail())
 
     def test_not_equal(self):
+        # nv
         assert not unify("abc", "def", Trail())
 
     def test_empty_strings(self):
+        # nv
         assert unify("", "", Trail())
 
     def test_unicode_equal(self):
+        # nv
         assert unify("日本", "日本", Trail())
 
     def test_unicode_not_equal(self):
+        # nv
         assert not unify("日本", "中国", Trail())
 
 
@@ -129,6 +154,7 @@ class TestBacktracking:
     """Trail undo restores variables after failed/retracted unification."""
 
     def test_undo_restores_var(self):
+        # nv
         trail = Trail()
         X = Var()
         mark = trail.mark()
@@ -139,6 +165,7 @@ class TestBacktracking:
 
     def test_undo_after_failed_unify(self):
         """Failed unification should not leave partial bindings."""
+        # nv
         trail = Trail()
         X, Y = Var(), Var()
         # This should fail at position 2 ('c' != 'z')
@@ -154,22 +181,27 @@ class TestNestedStringList:
     """Strings inside lists unify with char-lists inside lists."""
 
     def test_nested_string(self):
+        # nv
         assert unify([1, "abc", 2], [1, ["a", "b", "c"], 2], Trail())
 
     def test_list_of_strings(self):
+        # nv
         assert unify(["ab", "cd"], [["a", "b"], ["c", "d"]], Trail())
 
     def test_deeply_nested(self):
         """String inside nested list unifies with char list at same position."""
+        # nv
         assert unify([["ab", "cd"]], [["ab", "cd"]], Trail())
         # String at depth 2 vs char list at depth 2:
         assert unify([[1, "ab"]], [[1, ["a", "b"]]], Trail())
 
     def test_string_in_tuple(self):
         """Strings in tuples also unify with char lists in tuples."""
+        # nv
         assert unify((1, "ab"), (1, ["a", "b"]), Trail())
 
     def test_mixed_nesting(self):
+        # nv
         trail = Trail()
         X = Var()
         assert unify([1, "ab"], [1, ["a", X]], trail)
@@ -180,37 +212,46 @@ class TestEdgeCases:
     """Boundary conditions and unusual inputs."""
 
     def test_very_long_string(self):
+        # nv
         s = "a" * 1000
         lst = ["a"] * 1000
         assert unify(s, lst, Trail())
 
     def test_very_long_string_mismatch_at_end(self):
+        # nv
         s = "a" * 999 + "b"
         lst = ["a"] * 1000
         assert not unify(s, lst, Trail())
 
     def test_string_vs_empty_list(self):
+        # nv
         assert not unify("a", [], Trail())
 
     def test_empty_string_vs_nonempty_list(self):
+        # nv
         assert not unify("", ["a"], Trail())
 
     def test_newline_char(self):
+        # nv
         assert unify("a\nb", ["a", "\n", "b"], Trail())
 
     def test_null_char(self):
+        # nv
         assert unify("a\x00b", ["a", "\x00", "b"], Trail())
 
     def test_surrogate_pair(self):
         """Multi-byte Unicode char is a single element."""
+        # nv
         assert unify("𝕳", ["𝕳"], Trail())
 
     def test_string_does_not_unify_with_tuple(self):
         """Strings only unify with lists, not tuples of chars."""
+        # nv
         assert not unify("ab", ("a", "b"), Trail())
 
     def test_pre_bound_var_match(self):
         """A var already bound to a char matches the string position."""
+        # nv
         trail = Trail()
         X = Var()
         unify(X, "b", trail)
@@ -218,6 +259,7 @@ class TestEdgeCases:
 
     def test_pre_bound_var_mismatch(self):
         """A var bound to wrong char causes failure."""
+        # nv
         trail = Trail()
         X = Var()
         unify(X, "z", trail)
@@ -225,6 +267,7 @@ class TestEdgeCases:
 
     def test_same_var_repeated(self):
         """'aba' = [X, 'b', X] succeeds (X='a' used twice)."""
+        # nv
         trail = Trail()
         X = Var()
         assert unify("aba", [X, "b", X], trail)
@@ -232,6 +275,7 @@ class TestEdgeCases:
 
     def test_same_var_repeated_conflict(self):
         """'abc' = [X, 'b', X] fails (X can't be both 'a' and 'c')."""
+        # nv
         trail = Trail()
         X = Var()
         assert not unify("abc", [X, "b", X], trail)
@@ -247,6 +291,7 @@ class TestSegListStringUnification:
 
     def test_head_tail(self):
         """[X, *T] matches 'hello' → X='h', T='ello' (substring preserved)."""
+        # nv
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
@@ -256,6 +301,7 @@ class TestSegListStringUnification:
 
     def test_prefix_suffix(self):
         """[*P, ',', *S] matches 'a,b' — star vars bind to substrings."""
+        # nv
         trail = Trail()
         P, S = Var(), Var()
         sl = SegList([VarSeg(P), ConcreteSeg([","]), VarSeg(S)])
@@ -265,6 +311,7 @@ class TestSegListStringUnification:
 
     def test_multi_star_multiple_solutions(self):
         """[*A, 'l', *B] matches 'hello' at two positions (l at idx 2 and 3)."""
+        # nv
         from clausal.terms import _seglist_unify_gen
         trail = Trail()
         A, B = Var(), Var()
@@ -280,6 +327,7 @@ class TestSegListStringUnification:
 
     def test_empty_string(self):
         """[*A] matches '' → A='' (empty substring)."""
+        # nv
         trail = Trail()
         A = Var()
         sl = SegList([VarSeg(A)])
@@ -288,21 +336,25 @@ class TestSegListStringUnification:
 
     def test_full_concrete_match(self):
         """['h', 'i'] matches 'hi'."""
+        # nv
         sl = SegList([ConcreteSeg(["h", "i"])])
         assert unify(sl, "hi", Trail())
 
     def test_full_concrete_mismatch(self):
         """['h', 'i'] does NOT match 'ho'."""
+        # nv
         sl = SegList([ConcreteSeg(["h", "i"])])
         assert not unify(sl, "ho", Trail())
 
     def test_concrete_length_mismatch(self):
         """['a', 'b', 'c'] does NOT match 'ab'."""
+        # nv
         sl = SegList([ConcreteSeg(["a", "b", "c"])])
         assert not unify(sl, "ab", Trail())
 
     def test_only_star(self):
         """[*X] matches 'abc' → X='abc' (substring preserved)."""
+        # nv
         trail = Trail()
         X = Var()
         sl = SegList([VarSeg(X)])
@@ -311,6 +363,7 @@ class TestSegListStringUnification:
 
     def test_two_stars(self):
         """[*A, *B] matches 'abc' — enumerates 4 splits."""
+        # nv
         from clausal.terms import _seglist_unify_gen
         trail = Trail()
         A, B = Var(), Var()
@@ -324,6 +377,7 @@ class TestSegListStringUnification:
 
     def test_var_in_concrete_binds(self):
         """[*_, X, *_] matching 'abc' with concrete var binds X to each char."""
+        # nv
         from clausal.terms import _seglist_unify_gen
         trail = Trail()
         X = Var()
@@ -338,6 +392,7 @@ class TestSegListStringUnification:
 
     def test_unicode_string(self):
         """SegList matches unicode string."""
+        # nv
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
@@ -347,6 +402,7 @@ class TestSegListStringUnification:
 
     def test_symmetric_string_seglist(self):
         """unify('hello', SegList) works (SegList has __unify__ hook)."""
+        # nv
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
@@ -360,6 +416,7 @@ class TestBodyMultiStarUnifyString:
     """_body_multi_star_unify handles string targets."""
 
     def test_split_at_comma(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -371,6 +428,7 @@ class TestBodyMultiStarUnifyString:
         assert results[0] == (["a"], ["b"])
 
     def test_multiple_commas(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -381,6 +439,7 @@ class TestBodyMultiStarUnifyString:
         assert len(results) == 2
 
     def test_no_match(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
@@ -389,6 +448,7 @@ class TestBodyMultiStarUnifyString:
         assert results == []  # No comma in string
 
     def test_empty_string(self):
+        # nv
         from clausal.logic.compiler import _body_multi_star_unify
         trail = Trail()
         A = Var()

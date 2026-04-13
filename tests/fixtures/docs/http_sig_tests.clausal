@@ -6,19 +6,19 @@
 Test("url encode") <- (
     Encode("hello world", E),
     E == "hello%20world"
-)
+)  # nv
 
 Test("url decode") <- (
     Decode("hello%20world", S),
     S == "hello world"
-)
+)  # nv
 
 Test("url parse") <- (
     Parse("https://example.com:8080/path?q=1#frag", PARTS),
     nonvar(PARTS)
-)
+)  # nv
 
 Test("url join") <- (
     Join({"scheme": "https", "host": "example.com", "path": "/api"}, URL),
     is_str(URL)
-)
+)  # nv

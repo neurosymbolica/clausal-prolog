@@ -6,7 +6,7 @@ Test("when isbound") <- (
     when(nonvar(X), Y is X),
     X is 42,
     Y is 42
-)
+)  # nv
 
 # Conjunction: fire when both X and Y are bound
 Test("when conjunction") <- (
@@ -14,7 +14,7 @@ Test("when conjunction") <- (
     X is 1,
     Y is 2,
     R is "done"
-)
+)  # nv
 
 # ground: fire when term is fully ground
 Test("when ground") <- (
@@ -22,7 +22,7 @@ Test("when ground") <- (
     X is 1,
     Y is 2,
     R is "all ground"
-)
+)  # nv
 # --8<-- [end:supported_conditions]
 
 # --8<-- [start:setup_call_cleanup_3_ex2]
@@ -40,7 +40,7 @@ Test("scc call fails") <- (
         in_(X, []),
         C is 3
     )
-)
+)  # nv
 # --8<-- [end:setup_call_cleanup_3_ex2]
 
 # --8<-- [start:call_nth_2_ex2]
@@ -48,12 +48,12 @@ Test("scc call fails") <- (
 Test("third") <- (
     call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30
-)
+)  # nv
 
 # N exceeds available solutions — fails
 Test("too few") <- (
     not call_nth(in_(X, [1, 2]), 5)
-)
+)  # nv
 # --8<-- [end:call_nth_2_ex2]
 
 # --8<-- [start:count_all_2_ex2]
@@ -61,19 +61,19 @@ Test("too few") <- (
 Test("count") <- (
     count_all(in_(X, ["a", "b", "c", "d"]), N),
     N is 4
-)
+)  # nv
 
 # No solutions — 0
 Test("empty") <- (
     count_all(in_(X, []), N),
     N is 0
-)
+)  # nv
 
 # With filter
 Test("filtered") <- (
     count_all((in_(X, [1, 2, 3, 4, 5]), X > 3), N),
     N is 2
-)
+)  # nv
 # --8<-- [end:count_all_2_ex2]
 
 # --8<-- [start:nesting_inside_meta_predicates]
@@ -81,7 +81,7 @@ Test("filtered") <- (
 Test("findall+callnth") <- (
     findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
     BAG is [20]
-)
+)  # nv
 
 # catch wrapping call_nth with bad N
 Test("catch+callnth") <- (
@@ -91,7 +91,7 @@ Test("catch+callnth") <- (
         R is "caught"
     ),
     R is "caught"
-)
+)  # nv
 
 # freeze inside findall
 Test("findall+freeze") <- (
@@ -101,7 +101,7 @@ Test("findall+freeze") <- (
         BAG
     ),
     BAG is [99]
-)
+)  # nv
 
 # count_all inside findall
 Test("findall+countall") <- (
@@ -111,5 +111,5 @@ Test("findall+countall") <- (
         BAG
     ),
     BAG is [3]
-)
+)  # nv
 # --8<-- [end:nesting_inside_meta_predicates]

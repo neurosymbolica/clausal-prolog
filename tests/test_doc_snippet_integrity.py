@@ -52,6 +52,7 @@ def _has_test_clause(path: Path) -> bool:
 
 
 def test_all_snippet_files_exist():
+    # nv
     refs = _collect_snippet_refs()
     missing = []
     for md, lineno, file_ref, _ in refs:
@@ -64,6 +65,7 @@ def test_all_snippet_files_exist():
 
 
 def test_all_snippet_sections_exist():
+    # nv
     refs = _collect_snippet_refs()
     missing = []
     for md, lineno, file_ref, section in refs:
@@ -85,6 +87,7 @@ def test_all_snippet_sections_exist():
 
 def test_clausal_fixtures_have_tests():
     """Every .clausal file referenced from docs should have Test clauses."""
+    # nv
     refs = _collect_snippet_refs()
     seen: set[str] = set()
     untested = []

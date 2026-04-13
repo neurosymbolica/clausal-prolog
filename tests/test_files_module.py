@@ -57,24 +57,29 @@ def trampoline_solutions(pred, *args):
 
 class TestFileExists:
     def test_existing_file(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         sols, _ = simple_solutions(_file_exists_1, str(f))
         assert len(sols) == 1
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_file_exists_1, "/nonexistent_file_xyz")
         assert len(sols) == 0
 
     def test_directory_fails(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(_file_exists_1, str(tmp_path))
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_file_exists_1, Var())
         assert len(sols) == 0
 
     def test_trampoline(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         sols, _ = trampoline_solutions(FileExists, str(f))
@@ -86,16 +91,19 @@ class TestFileExists:
 
 class TestDirectoryExists:
     def test_existing_dir(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(_directory_exists_1, str(tmp_path))
         assert len(sols) == 1
 
     def test_file_fails(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         sols, _ = simple_solutions(_directory_exists_1, str(f))
         assert len(sols) == 0
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_directory_exists_1, "/nonexistent_dir_xyz")
         assert len(sols) == 0
 
@@ -105,16 +113,19 @@ class TestDirectoryExists:
 
 class TestPathExists:
     def test_file_exists(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         sols, _ = simple_solutions(_path_exists_1, str(f))
         assert len(sols) == 1
 
     def test_dir_exists(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(_path_exists_1, str(tmp_path))
         assert len(sols) == 1
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_path_exists_1, "/nonexistent_xyz")
         assert len(sols) == 0
 
@@ -124,6 +135,7 @@ class TestPathExists:
 
 class TestDirectoryFiles:
     def test_lists_files(self, tmp_path):
+        # nv
         (tmp_path / "a.txt").write_text("a")
         (tmp_path / "b.txt").write_text("b")
         files = Var()
@@ -135,14 +147,17 @@ class TestDirectoryFiles:
         assert "b.txt" in result
 
     def test_nonexistent_dir_fails(self):
+        # nv
         sols, _ = simple_solutions(_directory_files_2, "/nonexistent_dir", Var())
         assert len(sols) == 0
 
     def test_unbound_dir_fails(self):
+        # nv
         sols, _ = simple_solutions(_directory_files_2, Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self, tmp_path):
+        # nv
         (tmp_path / "x.txt").write_text("x")
         files = Var()
         sols, trail = trampoline_solutions(DirectoryFiles, str(tmp_path), files)
@@ -155,6 +170,7 @@ class TestDirectoryFiles:
 
 class TestDirectoryEntries:
     def test_enumerates_entries(self, tmp_path):
+        # nv
         (tmp_path / "a.txt").write_text("a")
         (tmp_path / "b.txt").write_text("b")
         entry = Var()
@@ -165,6 +181,7 @@ class TestDirectoryEntries:
         assert count == 2
 
     def test_matches_directory_files(self, tmp_path):
+        # nv
         (tmp_path / "x.txt").write_text("x")
         (tmp_path / "y.txt").write_text("y")
         # Collect via DirectoryFiles
@@ -185,6 +202,7 @@ class TestDirectoryEntries:
 
 class TestFileSize:
     def test_returns_size(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello world")
         size = Var()
@@ -195,6 +213,7 @@ class TestFileSize:
         assert result == len("hello world")
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_file_size_2, "/nonexistent_xyz", Var())
         assert len(sols) == 0
 
@@ -204,6 +223,7 @@ class TestFileSize:
 
 class TestFileModificationTime:
     def test_returns_float(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         time_var = Var()
@@ -214,6 +234,7 @@ class TestFileModificationTime:
         assert result > 0
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(
             _file_modification_time_2, "/nonexistent_xyz", Var()
         )
@@ -225,6 +246,7 @@ class TestFileModificationTime:
 
 class TestDeleteFile:
     def test_deletes_file(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello")
         assert f.exists()
@@ -233,10 +255,12 @@ class TestDeleteFile:
         assert not f.exists()
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(_delete_file_1, "/nonexistent_xyz")
         assert len(sols) == 0
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_delete_file_1, Var())
         assert len(sols) == 0
 
@@ -246,6 +270,7 @@ class TestDeleteFile:
 
 class TestDeleteDirectory:
     def test_deletes_empty_dir(self, tmp_path):
+        # nv
         d = tmp_path / "subdir"
         d.mkdir()
         assert d.exists()
@@ -254,6 +279,7 @@ class TestDeleteDirectory:
         assert not d.exists()
 
     def test_nonempty_fails(self, tmp_path):
+        # nv
         d = tmp_path / "subdir"
         d.mkdir()
         (d / "file.txt").write_text("x")
@@ -266,6 +292,7 @@ class TestDeleteDirectory:
 
 class TestRenameFile:
     def test_renames(self, tmp_path):
+        # nv
         old = tmp_path / "old.txt"
         new = tmp_path / "new.txt"
         old.write_text("content")
@@ -276,6 +303,7 @@ class TestRenameFile:
         assert new.read_text() == "content"
 
     def test_nonexistent_fails(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(
             _rename_file_2, "/nonexistent_xyz", str(tmp_path / "new.txt")
         )
@@ -287,6 +315,7 @@ class TestRenameFile:
 
 class TestCopyFile:
     def test_copies(self, tmp_path):
+        # nv
         src = tmp_path / "src.txt"
         dst = tmp_path / "dst.txt"
         src.write_text("hello")
@@ -297,6 +326,7 @@ class TestCopyFile:
         assert dst.read_text() == "hello"
 
     def test_nonexistent_source_fails(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(
             _copy_file_2, "/nonexistent_xyz", str(tmp_path / "dst.txt")
         )
@@ -308,6 +338,7 @@ class TestCopyFile:
 
 class TestMakeDirectory:
     def test_creates_dir(self, tmp_path):
+        # nv
         d = tmp_path / "newdir"
         assert not d.exists()
         sols, _ = simple_solutions(_make_directory_1, str(d))
@@ -315,6 +346,7 @@ class TestMakeDirectory:
         assert d.is_dir()
 
     def test_already_exists_fails(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(_make_directory_1, str(tmp_path))
         assert len(sols) == 0
 
@@ -324,6 +356,7 @@ class TestMakeDirectory:
 
 class TestMakeDirectoryPath:
     def test_creates_nested(self, tmp_path):
+        # nv
         d = tmp_path / "a" / "b" / "c"
         assert not d.exists()
         sols, _ = simple_solutions(_make_directory_path_1, str(d))
@@ -331,6 +364,7 @@ class TestMakeDirectoryPath:
         assert d.is_dir()
 
     def test_already_exists_succeeds(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(_make_directory_path_1, str(tmp_path))
         assert len(sols) == 1
 
@@ -340,6 +374,7 @@ class TestMakeDirectoryPath:
 
 class TestReadFileToString:
     def test_reads_file(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("hello world")
         contents = Var()
@@ -348,16 +383,19 @@ class TestReadFileToString:
         assert deref(contents) == "hello world"
 
     def test_nonexistent_fails(self):
+        # nv
         sols, _ = simple_solutions(
             _read_file_to_string_2, "/nonexistent_xyz", Var()
         )
         assert len(sols) == 0
 
     def test_unbound_path_fails(self):
+        # nv
         sols, _ = simple_solutions(_read_file_to_string_2, Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self, tmp_path):
+        # nv
         f = tmp_path / "test.txt"
         f.write_text("trampoline test")
         contents = Var()
@@ -371,18 +409,21 @@ class TestReadFileToString:
 
 class TestWriteStringToFile:
     def test_writes_file(self, tmp_path):
+        # nv
         f = tmp_path / "out.txt"
         sols, _ = simple_solutions(_write_string_to_file_2, str(f), "hello")
         assert len(sols) == 1
         assert f.read_text() == "hello"
 
     def test_overwrites(self, tmp_path):
+        # nv
         f = tmp_path / "out.txt"
         f.write_text("old")
         simple_solutions(_write_string_to_file_2, str(f), "new")
         assert f.read_text() == "new"
 
     def test_unbound_contents_fails(self, tmp_path):
+        # nv
         sols, _ = simple_solutions(
             _write_string_to_file_2, str(tmp_path / "out.txt"), Var()
         )
@@ -394,6 +435,7 @@ class TestWriteStringToFile:
 
 class TestAppendStringToFile:
     def test_appends(self, tmp_path):
+        # nv
         f = tmp_path / "out.txt"
         f.write_text("hello")
         sols, _ = simple_solutions(_append_string_to_file_2, str(f), " world")
@@ -401,6 +443,7 @@ class TestAppendStringToFile:
         assert f.read_text() == "hello world"
 
     def test_creates_if_missing(self, tmp_path):
+        # nv
         f = tmp_path / "new.txt"
         sols, _ = simple_solutions(_append_string_to_file_2, str(f), "first")
         assert len(sols) == 1
@@ -412,6 +455,7 @@ class TestAppendStringToFile:
 
 class TestAbsolutePath:
     def test_resolves(self):
+        # nv
         result = Var()
         sols, trail = simple_solutions(_absolute_path_2, ".", result)
         assert len(sols) == 1
@@ -419,6 +463,7 @@ class TestAbsolutePath:
         assert os.path.isabs(abs_path)
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_absolute_path_2, Var(), Var())
         assert len(sols) == 0
 
@@ -428,20 +473,24 @@ class TestAbsolutePath:
 
 class TestJoinPath:
     def test_joins(self):
+        # nv
         result = Var()
         sols, trail = simple_solutions(_join_path_3, "/home", "user", result)
         assert len(sols) == 1
         assert deref(result) == str(pathlib.Path("/home") / "user")
 
     def test_unbound_base_fails(self):
+        # nv
         sols, _ = simple_solutions(_join_path_3, Var(), "user", Var())
         assert len(sols) == 0
 
     def test_unbound_relative_fails(self):
+        # nv
         sols, _ = simple_solutions(_join_path_3, "/home", Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
+        # nv
         result = Var()
         sols, trail = trampoline_solutions(JoinPath, "/a", "b", result)
         assert len(sols) == 1
@@ -453,6 +502,7 @@ class TestJoinPath:
 
 class TestSplitPath:
     def test_splits(self):
+        # nv
         dir_var, name_var = Var(), Var()
         sols, trail = simple_solutions(
             _split_path_3, "/home/user/file.txt", dir_var, name_var
@@ -462,6 +512,7 @@ class TestSplitPath:
         assert deref(name_var) == "file.txt"
 
     def test_unbound_fails(self):
+        # nv
         sols, _ = simple_solutions(_split_path_3, Var(), Var(), Var())
         assert len(sols) == 0
 
@@ -471,18 +522,21 @@ class TestSplitPath:
 
 class TestFileExtension:
     def test_extension(self):
+        # nv
         ext = Var()
         sols, trail = simple_solutions(_file_extension_2, "data.csv", ext)
         assert len(sols) == 1
         assert deref(ext) == ".csv"
 
     def test_no_extension(self):
+        # nv
         ext = Var()
         sols, trail = simple_solutions(_file_extension_2, "Makefile", ext)
         assert len(sols) == 1
         assert deref(ext) == ""
 
     def test_double_extension(self):
+        # nv
         ext = Var()
         sols, trail = simple_solutions(_file_extension_2, "archive.tar.gz", ext)
         assert len(sols) == 1
@@ -494,6 +548,7 @@ class TestFileExtension:
 
 class TestTempFile:
     def test_creates_temp_file(self):
+        # nv
         path = Var()
         sols, trail = simple_solutions(_temp_file_1, path)
         assert len(sols) == 1
@@ -504,6 +559,7 @@ class TestTempFile:
         os.unlink(result)
 
     def test_trampoline(self):
+        # nv
         path = Var()
         sols, trail = trampoline_solutions(TempFile, path)
         assert len(sols) == 1
@@ -517,6 +573,7 @@ class TestTempFile:
 
 class TestTempDirectory:
     def test_creates_temp_dir(self):
+        # nv
         path = Var()
         sols, trail = simple_solutions(_temp_directory_1, path)
         assert len(sols) == 1
@@ -527,6 +584,7 @@ class TestTempDirectory:
         os.rmdir(result)
 
     def test_trampoline(self):
+        # nv
         path = Var()
         sols, trail = trampoline_solutions(TempDirectory, path)
         assert len(sols) == 1

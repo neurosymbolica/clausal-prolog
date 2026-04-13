@@ -39,34 +39,42 @@ class bar:
 
 class TestHeadKey:
     def test_compound_ground(self):
+        # nv
         h = Compound("likes", (1, 2))
         assert head_key(h) == ("likes", 2)
 
     def test_compound_arity_zero(self):
+        # nv
         h = Compound("true", ())
         assert head_key(h) == ("true", 0)
 
     def test_call_loadname(self):
+        # nv
         h = call_head("member", Var(), Var())
         assert head_key(h) == ("member", 2)
 
     def test_call_arity_zero(self):
+        # nv
         h = call_head("cut")
         assert head_key(h) == ("cut", 0)
 
     def test_functor_dataclass(self):
+        # nv
         h = foo(arg_0=1, arg_1=2)
         assert head_key(h) == ("foo", 2)
 
     def test_functor_dataclass_arity_one(self):
+        # nv
         h = bar(x=42)
         assert head_key(h) == ("bar", 1)
 
     def test_bad_type_raises(self):
+        # nv
         with pytest.raises(TypeError):
             head_key("not_a_term")
 
     def test_compound_var_functor_raises(self):
+        # nv
         v = Var()
         with pytest.raises(TypeError):
             head_key(Compound(v, (1,)))
@@ -77,13 +85,16 @@ class TestHeadKey:
 
 class TestFlattenBody:
     def test_none_body(self):
+        # nv
         assert _flatten_body(None) == []
 
     def test_single_goal(self):
+        # nv
         goal = Is(left=Var(), right=1)
         assert _flatten_body(goal) == [goal]
 
     def test_and_chain(self):
+        # nv
         x, y, z = Var(), Var(), Var()
         a = Is(left=x, right=1)
         b = Is(left=y, right=2)
@@ -92,6 +103,7 @@ class TestFlattenBody:
         assert _flatten_body(body) == [a, b, c]
 
     def test_right_nested_and(self):
+        # nv
         x, y = Var(), Var()
         a = Is(left=x, right=1)
         b = Is(left=y, right=2)
@@ -99,9 +111,11 @@ class TestFlattenBody:
         assert _flatten_body(body) == [a, b]
 
     def test_true_literal(self):
+        # nv
         assert _flatten_body(True) == [True]
 
     def test_false_literal(self):
+        # nv
         assert _flatten_body(False) == [False]
 
 
@@ -110,11 +124,13 @@ class TestFlattenBody:
 
 class TestClause:
     def test_fact_has_empty_body(self):
+        # nv
         head = Compound("true", ())
         c = Clause(head=head, body=[])
         assert c.is_fact()
 
     def test_rule_is_not_fact(self):
+        # nv
         head = Compound("foo", (1,))
         body = [Is(left=Var(), right=1)]
         c = Clause(head=head, body=body)
@@ -133,12 +149,14 @@ class TestDatabase:
         return Clause(head=Compound(name, args), body=[])
 
     def test_assertz_and_clauses_for(self):
+        # nv
         db = self.db()
         c = self.fact("foo", 1)
         db.assertz(c)
         assert db.clauses_for("foo", 1) == [c]
 
     def test_asserta_prepends(self):
+        # nv
         db = self.db()
         c1, c2 = self.fact("foo", 1), self.fact("foo", 2)
         db.assertz(c1)
@@ -146,23 +164,28 @@ class TestDatabase:
         assert db.clauses_for("foo", 1) == [c2, c1]
 
     def test_is_defined_false_before_assert(self):
+        # nv
         db = self.db()
         assert not db.is_defined("foo", 1)
 
     def test_is_defined_true_after_assert(self):
+        # nv
         db = self.db()
         db.assertz(self.fact("foo", 1))
         assert db.is_defined("foo", 1)
 
     def test_clauses_for_undefined(self):
+        # nv
         db = self.db()
         assert db.clauses_for("ghost", 0) == []
 
     def test_get_dispatch_returns_none_when_absent(self):
+        # nv
         db = self.db()
         assert db.get_dispatch("ghost", 0) is None
 
     def test_retract_removes_clause(self):
+        # nv
         db = self.db()
         c = self.fact("foo", 1)
         db.assertz(c)
@@ -170,10 +193,12 @@ class TestDatabase:
         assert db.clauses_for("foo", 1) == []
 
     def test_retract_undefined_predicate(self):
+        # nv
         db = self.db()
         assert db.retract(Compound("ghost", (1,))) is False
 
     def test_multiple_functors_independent(self):
+        # nv
         db = self.db()
         c1 = self.fact("foo", 1)
         c2 = self.fact("bar", "a", "b")
@@ -183,6 +208,7 @@ class TestDatabase:
         assert db.clauses_for("bar", 2) == [c2]
 
     def test_multiple_clauses_same_predicate(self):
+        # nv
         db = self.db()
         c1 = self.fact("foo", 1)
         c2 = self.fact("foo", 2)
@@ -191,6 +217,7 @@ class TestDatabase:
         assert db.clauses_for("foo", 1) == [c1, c2]
 
     def test_repr(self):
+        # nv
         db = self.db()
         db.assertz(self.fact("foo", 1))
         db.assertz(self.fact("bar", "a", "b"))
@@ -204,10 +231,12 @@ class TestDatabase:
 
 class TestModule:
     def test_default_database_created(self):
+        # nv
         m = Module("test")
         assert isinstance(m.db, Database)
 
     def test_assert_fact_compound(self):
+        # nv
         m = Module("test")
         m.assert_fact(Compound("foo", (1, 2)))
         clauses = m.db.clauses_for("foo", 2)
@@ -215,6 +244,7 @@ class TestModule:
         assert clauses[0].is_fact()
 
     def test_assert_fact_call(self):
+        # nv
         m = Module("test")
         term = call_head("edge", 1, 2)
         m.assert_fact(term)
@@ -225,6 +255,7 @@ class TestModule:
     def test_define_predicate_fact(self):
         """define_predicate with True body → empty body list (fact)."""
         @dataclasses.dataclass
+        # nv
         class MockPredicate:
             head: object
             body: object
@@ -238,6 +269,7 @@ class TestModule:
 
     def test_define_predicate_with_body(self):
         @dataclasses.dataclass
+        # nv
         class MockPredicate:
             head: object
             body: object
@@ -254,6 +286,7 @@ class TestModule:
 
     def test_solve_returns_iterator(self):
         """Module.solve delegates to clausal.logic.solve and returns an iterator."""
+        # nv
         m = Module("test")
         result = m.solve(True)
         # True succeeds once; iterator yields one Trail.
@@ -261,12 +294,14 @@ class TestModule:
         assert len(solutions) == 1
 
     def test_repr(self):
+        # nv
         m = Module("mymod")
         assert "mymod" in repr(m)
 
     def test_functor_dataclass_head_in_define(self):
         """define_predicate works when head is a functor dataclass instance."""
         @dataclasses.dataclass
+        # nv
         class MockPredicate:
             head: object
             body: object
@@ -283,22 +318,27 @@ class TestModule:
 
 class TestExtractParamNames:
     def test_functor_dataclass_returns_field_names(self):
+        # nv
         h = foo(arg_0=1, arg_1=2)
         assert _extract_param_names(h) == ("arg_0", "arg_1")
 
     def test_single_field_dataclass(self):
+        # nv
         h = bar(x=42)
         assert _extract_param_names(h) == ("x",)
 
     def test_compound_returns_none(self):
+        # nv
         h = Compound("foo", (1, 2))
         assert _extract_param_names(h) is None
 
     def test_call_returns_none(self):
+        # nv
         h = call_head("foo", 1, 2)
         assert _extract_param_names(h) is None
 
     def test_non_term_returns_none(self):
+        # nv
         assert _extract_param_names("not_a_term") is None
 
 
@@ -307,21 +347,25 @@ class TestExtractParamNames:
 
 class TestDatabaseSignature:
     def test_register_and_retrieve(self):
+        # nv
         db = Database()
         db.register_signature("point", 2, ("_x", "_y"))
         assert db.signature_for("point", 2) == ("_x", "_y")
 
     def test_unknown_predicate_returns_none(self):
+        # nv
         db = Database()
         assert db.signature_for("ghost", 1) is None
 
     def test_duplicate_identical_is_noop(self):
+        # nv
         db = Database()
         db.register_signature("point", 2, ("_x", "_y"))
         db.register_signature("point", 2, ("_x", "_y"))  # no-op, no warning
         assert db.signature_for("point", 2) == ("_x", "_y")
 
     def test_conflicting_signature_warns(self):
+        # nv
         db = Database()
         db.register_signature("point", 2, ("_x", "_y"))
         with pytest.warns(UserWarning, match="signature conflict"):
@@ -330,6 +374,7 @@ class TestDatabaseSignature:
         assert db.signature_for("point", 2) == ("_x", "_y")
 
     def test_register_creates_signature_if_absent(self):
+        # nv
         db = Database()
         assert not db.is_defined("point", 2)
         db.register_signature("point", 2, ("_x", "_y"))
@@ -350,21 +395,25 @@ class TestModuleSignatureRegistration:
         return MockPredicate(head=head, body=body)
 
     def test_dataclass_head_registers_signature(self):
+        # nv
         m = Module("test")
         m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))
         assert m.db.signature_for("foo", 2) == ("arg_0", "arg_1")
 
     def test_compound_head_no_signature(self):
+        # nv
         m = Module("test")
         m.define_predicate(self._pred(Compound("foo", (1, 2))))
         assert m.db.signature_for("foo", 2) is None
 
     def test_call_head_no_signature(self):
+        # nv
         m = Module("test")
         m.define_predicate(self._pred(call_head("foo", 1, 2)))
         assert m.db.signature_for("foo", 2) is None
 
     def test_consistent_clauses_same_signature(self):
+        # nv
         m = Module("test")
         m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))
         m.define_predicate(self._pred(foo(arg_0=Var(), arg_1=Var())))

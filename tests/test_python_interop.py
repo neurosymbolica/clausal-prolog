@@ -38,6 +38,7 @@ class TestPyThunkValue:
 
     def test_len(self, tmp_path):
         """++len(L_) returns the length of a bound list."""
+        # nv
         src = tmp_path / "interop_len.clausal"
         src.write_text("list_len(_l, _n) <- (_n is ++len(_l))\n")
         mod = _load_module("interop_len", str(src))
@@ -47,6 +48,7 @@ class TestPyThunkValue:
 
     def test_upper(self, tmp_path):
         """++S_.upper() calls a method on a dereferenced variable."""
+        # nv
         src = tmp_path / "interop_upper.clausal"
         src.write_text("to_upper(_s, _r) <- (_r is ++_s.upper())\n")
         mod = _load_module("interop_upper", str(src))
@@ -56,6 +58,7 @@ class TestPyThunkValue:
 
     def test_arithmetic(self, tmp_path):
         """++(X_ + 1) does Python arithmetic on a dereferenced variable."""
+        # nv
         src = tmp_path / "interop_arith.clausal"
         src.write_text("inc(_x, _r) <- (_r is ++(_x + 1))\n")
         mod = _load_module("interop_arith", str(src))
@@ -65,6 +68,7 @@ class TestPyThunkValue:
 
     def test_multi_var(self, tmp_path):
         """++() with multiple logic variables."""
+        # nv
         src = tmp_path / "interop_multi.clausal"
         src.write_text("add_len(_a, _b, _r) <- (_r is ++(len(_a) + len(_b)))\n")
         mod = _load_module("interop_multi", str(src))
@@ -74,6 +78,7 @@ class TestPyThunkValue:
 
     def test_no_vars(self, tmp_path):
         """++() with no logic variables — pure Python expression."""
+        # nv
         src = tmp_path / "interop_pure.clausal"
         src.write_text("get_pi(_r) <- (_r is ++(3.14159))\n")
         mod = _load_module("interop_pure", str(src))
@@ -84,6 +89,7 @@ class TestPyThunkValue:
 
     def test_subscript(self, tmp_path):
         """++L_[0] indexes a list."""
+        # nv
         src = tmp_path / "interop_sub.clausal"
         src.write_text("first(_l, _r) <- (_r is ++_l[0])\n")
         mod = _load_module("interop_sub", str(src))
@@ -93,6 +99,7 @@ class TestPyThunkValue:
 
     def test_dict_access(self, tmp_path):
         """++D_['key'] accesses a dict."""
+        # nv
         src = tmp_path / "interop_dict.clausal"
         src.write_text("get_key(_d, _k, _r) <- (_r is ++_d[_k])\n")
         mod = _load_module("interop_dict", str(src))
@@ -102,6 +109,7 @@ class TestPyThunkValue:
 
     def test_string_format(self, tmp_path):
         """++str.join() works."""
+        # nv
         src = tmp_path / "interop_join.clausal"
         src.write_text('join_words(_w, _r) <- (_r is ++", ".join(_w))\n')
         mod = _load_module("interop_join", str(src))
@@ -115,6 +123,7 @@ class TestPyThunkGoal:
 
     def test_print_side_effect(self, tmp_path):
         """++print(X_) executes Python print as a goal."""
+        # nv
         src = tmp_path / "interop_goal.clausal"
         src.write_text("show(_x) <- ++print(_x)\n")
         mod = _load_module("interop_goal", str(src))
@@ -131,6 +140,7 @@ class TestPyThunkGoal:
 
     def test_goal_with_continuation(self, tmp_path):
         """++() goal followed by another goal in the body."""
+        # nv
         src = tmp_path / "interop_cont.clausal"
         src.write_text(
             "process(_x, _r) <- (\n"
@@ -156,6 +166,7 @@ class TestPyThunkMultiSolution:
 
     def test_thunk_per_choice_point(self, tmp_path):
         """PyThunk value is computed for each solution."""
+        # nv
         src = tmp_path / "interop_multi_sol.clausal"
         src.write_text(
             "Item(1),\n"
@@ -170,6 +181,7 @@ class TestPyThunkMultiSolution:
 
     def test_thunk_no_vars(self, tmp_path):
         """++() with no logic variables — pure Python constant."""
+        # nv
         src = tmp_path / "interop_const.clausal"
         src.write_text("the_answer(_r) <- (_r is ++(21 * 2))\n")
         mod = _load_module("interop_const", str(src))
@@ -179,6 +191,7 @@ class TestPyThunkMultiSolution:
 
     def test_thunk_list_comprehension(self, tmp_path):
         """++[x*2 for x in X_] — list comprehension over a logic var."""
+        # nv
         src = tmp_path / "interop_comp.clausal"
         src.write_text("double_all(_l, _r) <- (_r is ++[x*2 for x in _l])\n")
         mod = _load_module("interop_comp", str(src))

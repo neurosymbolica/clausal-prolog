@@ -15,12 +15,14 @@ needs_ext = pytest.mark.skipif(not HAS_EXT, reason="scryer extension not built")
 
 @needs_ext
 def test_raw_machine_creates():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     assert m is not None
 
 
 @needs_ext
 def test_raw_query_iteration():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "parent(tom, bob).")
     results = list(m.query("parent(tom, X)."))
@@ -30,6 +32,7 @@ def test_raw_query_iteration():
 
 @needs_ext
 def test_raw_arithmetic():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X is 2 + 3.")))
     assert sol["X"] == 5
@@ -37,6 +40,7 @@ def test_raw_arithmetic():
 
 @needs_ext
 def test_raw_no_solutions():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     results = list(m.query("fail."))
     assert results == []
@@ -44,6 +48,7 @@ def test_raw_no_solutions():
 
 @needs_ext
 def test_raw_multiple_solutions():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "color(red). color(green). color(blue).")
     results = list(m.query("color(X)."))
@@ -53,6 +58,7 @@ def test_raw_multiple_solutions():
 @needs_ext
 def test_raw_lazy_iteration():
     """Iterator is truly lazy — can break after first result."""
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "n(1). n(2). n(3).")
     it = m.query("n(X).")
@@ -68,6 +74,7 @@ def test_raw_lazy_iteration():
 @needs_ext
 def test_raw_machine_busy_while_iterating():
     """Cannot start a second query while one is active."""
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "n(1). n(2).")
     it = m.query("n(X).")
@@ -82,6 +89,7 @@ def test_raw_machine_busy_while_iterating():
 
 @needs_ext
 def test_raw_list():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X = [1, 2, 3].")))
     assert sol["X"] == [1, 2, 3]
@@ -89,6 +97,7 @@ def test_raw_list():
 
 @needs_ext
 def test_raw_compound():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "data(point(1, 2)).")
     sol = next(iter(m.query("data(X).")))
@@ -98,6 +107,7 @@ def test_raw_compound():
 
 @needs_ext
 def test_raw_large_integer():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X is 2 ^ 100.")))
     assert sol["X"] == 2**100
@@ -106,6 +116,7 @@ def test_raw_large_integer():
 @needs_ext
 def test_raw_exception():
     """Prolog errors become Python ScryerError exceptions."""
+    # nv
     m = _scryer_ext.RawScryerMachine()
     with pytest.raises(_scryer_ext.ScryerError):
         # Evaluating a non-numeric term should raise
@@ -115,6 +126,7 @@ def test_raw_exception():
 @needs_ext
 def test_raw_true_no_bindings():
     """A ground goal returns empty dict."""
+    # nv
     m = _scryer_ext.RawScryerMachine()
     results = list(m.query("true."))
     assert results == [{}]
@@ -122,6 +134,7 @@ def test_raw_true_no_bindings():
 
 @needs_ext
 def test_raw_nested_list():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X = [[1, 2], [3, 4]].")))
     assert sol["X"] == [[1, 2], [3, 4]]
@@ -129,6 +142,7 @@ def test_raw_nested_list():
 
 @needs_ext
 def test_raw_empty_list():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X = [].")))
     assert sol["X"] == []
@@ -136,6 +150,7 @@ def test_raw_empty_list():
 
 @needs_ext
 def test_raw_float():
+    # nv
     m = _scryer_ext.RawScryerMachine()
     sol = next(iter(m.query("X is 1.0 + 2.5.")))
     assert abs(sol["X"] - 3.5) < 1e-10
@@ -144,6 +159,7 @@ def test_raw_float():
 @needs_ext
 def test_raw_load_then_query_multiple_times():
     """Machine is reusable across multiple query cycles."""
+    # nv
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "fact(a). fact(b).")
     r1 = list(m.query("fact(X)."))

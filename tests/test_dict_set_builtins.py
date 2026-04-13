@@ -63,18 +63,23 @@ def _sols(name, *args):
 
 class TestIsDict:
     def test_is_dict_succeeds(self):
+        # nv
         assert _succeeds("is_dict", DictTerm({"a": 1}))
 
     def test_is_dict_fails_on_atom(self):
+        # nv
         assert _fails("is_dict", "not_a_dict")
 
     def test_is_dict_fails_on_set(self):
+        # nv
         assert _fails("is_dict", SetTerm([1, 2]))
 
     def test_is_dict_fails_on_atom(self):
+        # nv
         assert _fails("is_dict", "hello")
 
     def test_is_dict_fails_on_var(self):
+        # nv
         assert _fails("is_dict", Var())
 
 
@@ -83,17 +88,20 @@ class TestIsDict:
 
 class TestDictSize:
     def test_size_empty(self):
+        # nv
         v = Var()
         sols = _sols("dict_size", DictTerm({}), v)
         assert sols[0][1] == 0
 
     def test_size_three(self):
+        # nv
         v = Var()
         d = DictTerm({"a": 1, "b": 2, "c": 3})
         sols = _sols("dict_size", d, v)
         assert sols[0][1] == 3
 
     def test_size_fails_on_non_dict(self):
+        # nv
         assert _fails("dict_size", "not_a_dict", Var())
 
 
@@ -102,16 +110,19 @@ class TestDictSize:
 
 class TestDictKeys:
     def test_keys_sorted(self):
+        # nv
         v = Var()
         d = DictTerm({"c": 1, "a": 2, "b": 3})
         sols = _sols("dict_keys", d, v)
         assert sols[0][1] == ["a", "b", "c"]
 
     def test_keys_unify_succeeds(self):
+        # nv
         d = DictTerm({"x": 1, "y": 2})
         assert _succeeds("dict_keys", d, ["x", "y"])
 
     def test_keys_wrong_order_fails(self):
+        # nv
         d = DictTerm({"x": 1, "y": 2})
         assert _fails("dict_keys", d, ["y", "x"])
 
@@ -121,6 +132,7 @@ class TestDictKeys:
 
 class TestDictValues:
     def test_values_in_key_order(self):
+        # nv
         v = Var()
         d = DictTerm({"b": 20, "a": 10})
         sols = _sols("dict_values", d, v)
@@ -132,18 +144,21 @@ class TestDictValues:
 
 class TestDictPairs:
     def test_dict_to_pairs(self):
+        # nv
         v = Var()
         d = DictTerm({"a": 1, "b": 2})
         sols = _sols("dict_pairs", d, v)
         assert sols[0][1] == [["a", 1], ["b", 2]]
 
     def test_pairs_to_dict(self):
+        # nv
         v = Var()
         pairs = [["x", 10], ["y", 20]]
         sols = _sols("dict_pairs", v, pairs)
         assert sols[0][0] == DictTerm({"x": 10, "y": 20})
 
     def test_pairs_to_dict_unordered(self):
+        # nv
         v = Var()
         pairs = [["b", 2], ["a", 1]]
         sols = _sols("dict_pairs", v, pairs)
@@ -155,24 +170,29 @@ class TestDictPairs:
 
 class TestDictGet:
     def test_get_existing_key(self):
+        # nv
         v = Var()
         d = DictTerm({"name": "Alice", "age": 30})
         sols = _sols("dict_get", "name", d, v)
         assert sols[0][2] == "Alice"
 
     def test_get_missing_key_fails(self):
+        # nv
         d = DictTerm({"name": "Alice"})
         assert _fails("dict_get", "missing", d, Var())
 
     def test_get_value_unify_succeeds(self):
+        # nv
         d = DictTerm({"x": 42})
         assert _succeeds("dict_get", "x", d, 42)
 
     def test_get_value_unify_fails(self):
+        # nv
         d = DictTerm({"x": 42})
         assert _fails("dict_get", "x", d, 99)
 
     def test_get_fails_unbound_key(self):
+        # nv
         d = DictTerm({"x": 1})
         assert _fails("dict_get", Var(), d, Var())
 
@@ -182,18 +202,21 @@ class TestDictGet:
 
 class TestDictPut:
     def test_put_new_key(self):
+        # nv
         v = Var()
         old = DictTerm({"a": 1})
         sols = _sols("dict_put", "b", 2, old, v)
         assert sols[0][3] == DictTerm({"a": 1, "b": 2})
 
     def test_put_overwrite_key(self):
+        # nv
         v = Var()
         old = DictTerm({"a": 1, "b": 99})
         sols = _sols("dict_put", "b", 2, old, v)
         assert sols[0][3] == DictTerm({"a": 1, "b": 2})
 
     def test_put_fails_unbound_key(self):
+        # nv
         old = DictTerm({"a": 1})
         assert _fails("dict_put", Var(), 2, old, Var())
 
@@ -203,6 +226,7 @@ class TestDictPut:
 
 class TestDictPutPairs:
     def test_put_pairs_bulk(self):
+        # nv
         v = Var()
         old = DictTerm({"a": 1})
         pairs = [["b", 2], ["c", 3]]
@@ -210,6 +234,7 @@ class TestDictPutPairs:
         assert sols[0][2] == DictTerm({"a": 1, "b": 2, "c": 3})
 
     def test_put_pairs_overwrite(self):
+        # nv
         v = Var()
         old = DictTerm({"a": 1, "b": 0})
         sols = _sols("dict_put_pairs", [["b", 99]], old, v)
@@ -221,12 +246,14 @@ class TestDictPutPairs:
 
 class TestDictRemove:
     def test_remove_existing_key(self):
+        # nv
         v = Var()
         old = DictTerm({"a": 1, "b": 2, "c": 3})
         sols = _sols("dict_remove", "b", old, v)
         assert sols[0][2] == DictTerm({"a": 1, "c": 3})
 
     def test_remove_missing_key_fails(self):
+        # nv
         old = DictTerm({"a": 1})
         assert _fails("dict_remove", "x", old, Var())
 
@@ -236,6 +263,7 @@ class TestDictRemove:
 
 class TestDictMerge:
     def test_merge_disjoint(self):
+        # nv
         v = Var()
         d1 = DictTerm({"a": 1})
         d2 = DictTerm({"b": 2})
@@ -243,6 +271,7 @@ class TestDictMerge:
         assert sols[0][2] == DictTerm({"a": 1, "b": 2})
 
     def test_merge_d2_overrides(self):
+        # nv
         v = Var()
         d1 = DictTerm({"a": 1, "b": 1})
         d2 = DictTerm({"b": 99, "c": 3})
@@ -250,6 +279,7 @@ class TestDictMerge:
         assert sols[0][2] == DictTerm({"a": 1, "b": 99, "c": 3})
 
     def test_merge_empty_d1(self):
+        # nv
         v = Var()
         d2 = DictTerm({"x": 5})
         sols = _sols("dict_merge", DictTerm({}), d2, v)
@@ -261,6 +291,7 @@ class TestDictMerge:
 
 class TestGenDict:
     def test_gen_dict_all_pairs(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2, "c": 3})
         k_var, v_var = Var(), Var()
         t = Trail()
@@ -270,11 +301,13 @@ class TestGenDict:
         assert pairs == {"a": 1, "b": 2, "c": 3}
 
     def test_gen_dict_count(self):
+        # nv
         d = DictTerm({"x": 10, "y": 20})
         sols = list(solve(_goal("gen_dict", Var(), d, Var()), fresh_mod()))
         assert len(sols) == 2
 
     def test_gen_dict_filter_by_key(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         v = Var()
         sols = _sols("gen_dict", "a", d, v)
@@ -282,6 +315,7 @@ class TestGenDict:
         assert sols[0][2] == 1
 
     def test_gen_dict_empty(self):
+        # nv
         d = DictTerm({})
         assert _fails("gen_dict", Var(), d, Var())
 
@@ -291,11 +325,13 @@ class TestGenDict:
 
 class TestSubDict:
     def test_subdict_exact_match(self):
+        # nv
         pat = DictTerm({"a": 1})
         full = DictTerm({"a": 1, "b": 2})
         assert _succeeds("sub_dict", pat, full)
 
     def test_subdict_with_var_binds_value(self):
+        # nv
         v = Var()
         pat = DictTerm({"name": v})
         full = DictTerm({"name": "Alice", "age": 30})
@@ -306,27 +342,33 @@ class TestSubDict:
         assert captured == ["Alice"]
 
     def test_subdict_fails_missing_key(self):
+        # nv
         pat = DictTerm({"x": 1, "z": 99})
         full = DictTerm({"x": 1, "y": 2})
         assert _fails("sub_dict", pat, full)
 
     def test_subdict_fails_value_mismatch(self):
+        # nv
         pat = DictTerm({"a": 99})
         full = DictTerm({"a": 1})
         assert _fails("sub_dict", pat, full)
 
     def test_subdict_empty_pattern_always_succeeds(self):
+        # nv
         full = DictTerm({"a": 1, "b": 2})
         assert _succeeds("sub_dict", DictTerm({}), full)
 
     def test_subdict_fails_non_dict_pattern(self):
+        # nv
         assert _fails("sub_dict", "not_a_dict", DictTerm({"a": 1}))
 
     def test_subdict_fails_non_dict_full(self):
+        # nv
         assert _fails("sub_dict", DictTerm({"a": 1}), "not_a_dict")
 
     def test_subdict_backtracking_undo(self):
         """Failed sub_dict does not leave bindings on var in pattern."""
+        # nv
         v = Var()
         pat = DictTerm({"a": v, "z": 99})  # z missing from full → fails
         full = DictTerm({"a": 1, "b": 2})
@@ -342,15 +384,19 @@ class TestSubDict:
 
 class TestIsSet:
     def test_is_set_succeeds(self):
+        # nv
         assert _succeeds("is_set", SetTerm([1, 2, 3]))
 
     def test_is_set_fails_on_list(self):
+        # nv
         assert _fails("is_set", [1, 2, 3])
 
     def test_is_set_fails_on_dict(self):
+        # nv
         assert _fails("is_set", DictTerm({"a": 1}))
 
     def test_is_set_fails_on_var(self):
+        # nv
         assert _fails("is_set", Var())
 
 
@@ -359,12 +405,14 @@ class TestIsSet:
 
 class TestSetSize:
     def test_size(self):
+        # nv
         v = Var()
         s = SetTerm([1, 2, 3])
         sols = _sols("set_size", s, v)
         assert sols[0][1] == 3
 
     def test_size_empty(self):
+        # nv
         v = Var()
         sols = _sols("set_size", SetTerm([]), v)
         assert sols[0][1] == 0
@@ -375,6 +423,7 @@ class TestSetSize:
 
 class TestSetList:
     def test_set_to_list(self):
+        # nv
         v = Var()
         s = SetTerm([3, 1, 2])
         sols = _sols("set_list", s, v)
@@ -382,11 +431,13 @@ class TestSetList:
         assert sorted(lst) == [1, 2, 3]
 
     def test_list_to_set(self):
+        # nv
         v = Var()
         sols = _sols("set_list", v, [1, 2, 3])
         assert sols[0][0] == SetTerm([1, 2, 3])
 
     def test_list_to_set_deduplicates(self):
+        # nv
         v = Var()
         sols = _sols("set_list", v, [1, 1, 2])
         assert sols[0][0] == SetTerm([1, 2])
@@ -397,6 +448,7 @@ class TestSetList:
 
 class TestSetUnion:
     def test_union(self):
+        # nv
         v = Var()
         s1 = SetTerm([1, 2])
         s2 = SetTerm([2, 3])
@@ -404,6 +456,7 @@ class TestSetUnion:
         assert sols[0][2] == SetTerm([1, 2, 3])
 
     def test_union_disjoint(self):
+        # nv
         v = Var()
         sols = _sols("set_union", SetTerm([1]), SetTerm([2]), v)
         assert sols[0][2] == SetTerm([1, 2])
@@ -414,6 +467,7 @@ class TestSetUnion:
 
 class TestSetIntersection:
     def test_intersection(self):
+        # nv
         v = Var()
         s1 = SetTerm([1, 2, 3])
         s2 = SetTerm([2, 3, 4])
@@ -421,6 +475,7 @@ class TestSetIntersection:
         assert sols[0][2] == SetTerm([2, 3])
 
     def test_intersection_empty(self):
+        # nv
         v = Var()
         sols = _sols("set_intersection", SetTerm([1]), SetTerm([2]), v)
         assert sols[0][2] == SetTerm([])
@@ -431,6 +486,7 @@ class TestSetIntersection:
 
 class TestSetSubtract:
     def test_subtract(self):
+        # nv
         v = Var()
         s1 = SetTerm([1, 2, 3])
         s2 = SetTerm([2, 3])
@@ -438,6 +494,7 @@ class TestSetSubtract:
         assert sols[0][2] == SetTerm([1])
 
     def test_subtract_all(self):
+        # nv
         v = Var()
         sols = _sols("set_subtract", SetTerm([1, 2]), SetTerm([1, 2, 3]), v)
         assert sols[0][2] == SetTerm([])
@@ -448,6 +505,7 @@ class TestSetSubtract:
 
 class TestSetSymDiff:
     def test_symdiff(self):
+        # nv
         v = Var()
         s1 = SetTerm([1, 2, 3])
         s2 = SetTerm([2, 3, 4])
@@ -455,6 +513,7 @@ class TestSetSymDiff:
         assert sols[0][2] == SetTerm([1, 4])
 
     def test_symdiff_disjoint(self):
+        # nv
         v = Var()
         sols = _sols("set_sym_diff", SetTerm([1]), SetTerm([2]), v)
         assert sols[0][2] == SetTerm([1, 2])
@@ -465,24 +524,31 @@ class TestSetSymDiff:
 
 class TestSetSubsetDisjoint:
     def test_subset_true(self):
+        # nv
         assert _succeeds("set_subset", SetTerm([1, 2]), SetTerm([1, 2, 3]))
 
     def test_subset_false(self):
+        # nv
         assert _fails("set_subset", SetTerm([1, 4]), SetTerm([1, 2, 3]))
 
     def test_subset_equal(self):
+        # nv
         assert _succeeds("set_subset", SetTerm([1, 2]), SetTerm([1, 2]))
 
     def test_empty_is_subset_of_anything(self):
+        # nv
         assert _succeeds("set_subset", SetTerm([]), SetTerm([1, 2, 3]))
 
     def test_disjoint_true(self):
+        # nv
         assert _succeeds("set_disjoint", SetTerm([1, 2]), SetTerm([3, 4]))
 
     def test_disjoint_false(self):
+        # nv
         assert _fails("set_disjoint", SetTerm([1, 2]), SetTerm([2, 3]))
 
     def test_disjoint_empty(self):
+        # nv
         assert _succeeds("set_disjoint", SetTerm([]), SetTerm([1, 2]))
 
 
@@ -491,24 +557,28 @@ class TestSetSubsetDisjoint:
 
 class TestSetAddRemove:
     def test_add(self):
+        # nv
         v = Var()
         old = SetTerm([1, 2])
         sols = _sols("set_add", 3, old, v)
         assert sols[0][2] == SetTerm([1, 2, 3])
 
     def test_add_existing_is_noop(self):
+        # nv
         v = Var()
         old = SetTerm([1, 2])
         sols = _sols("set_add", 2, old, v)
         assert sols[0][2] == SetTerm([1, 2])
 
     def test_remove(self):
+        # nv
         v = Var()
         old = SetTerm([1, 2, 3])
         sols = _sols("set_remove", 2, old, v)
         assert sols[0][2] == SetTerm([1, 3])
 
     def test_remove_absent_is_noop(self):
+        # nv
         v = Var()
         old = SetTerm([1, 2])
         sols = _sols("set_remove", 99, old, v)
@@ -520,6 +590,7 @@ class TestSetAddRemove:
 
 class TestGenSet:
     def test_gen_set_all(self):
+        # nv
         s = SetTerm([1, 2, 3])
         e_var = Var()
         t = Trail()
@@ -529,11 +600,13 @@ class TestGenSet:
         assert elems == {1, 2, 3}
 
     def test_gen_set_count(self):
+        # nv
         s = SetTerm(["a", "b"])
         sols = list(solve(_goal("gen_set", Var(), s), fresh_mod()))
         assert len(sols) == 2
 
     def test_gen_set_empty(self):
+        # nv
         assert _fails("gen_set", Var(), SetTerm([]))
 
 
@@ -561,12 +634,14 @@ class TestClausalIntegration:
 
     def test_get_name(self):
         """get_name/2 uses sub_dict to extract a name field."""
+        # nv
         name_var = Var()
         sols = self._capture("get_name", DictTerm({"name": "Alice", "age": 30}), name_var)
         assert sols
         assert sols[0][1] == "Alice"
 
     def test_is_admin(self):
+        # nv
         from clausal.logic.solve import call as lc_call
         admin = DictTerm({"name": "Bob", "role": "admin"})
         user = DictTerm({"name": "Alice", "role": "user"})
@@ -574,12 +649,14 @@ class TestClausalIntegration:
         assert not list(lc_call("is_admin", user, module=self.logic_mod))
 
     def test_update_field(self):
+        # nv
         new_var = Var()
         old = DictTerm({"x": 1, "y": 2})
         sols = self._capture("update_field", "x", 99, old, new_var)
         assert sols[0][3] == DictTerm({"x": 99, "y": 2})
 
     def test_dict_member(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         k_var, v_var = Var(), Var()
         sols = self._capture("dict_member", k_var, d, v_var)
@@ -587,6 +664,7 @@ class TestClausalIntegration:
         assert pairs == {"a": 1, "b": 2}
 
     def test_set_common(self):
+        # nv
         s1 = SetTerm([1, 2, 3])
         s2 = SetTerm([2, 3, 4])
         inter_var = Var()
@@ -594,6 +672,7 @@ class TestClausalIntegration:
         assert sols[0][2] == SetTerm([2, 3])
 
     def test_set_member(self):
+        # nv
         s = SetTerm(["a", "b", "c"])
         e_var = Var()
         sols = self._capture("set_member", e_var, s)
@@ -602,6 +681,7 @@ class TestClausalIntegration:
 
     def test_dict_key(self):
         """dict_key/2 uses ``KEY in DICT`` to enumerate keys."""
+        # nv
         d = DictTerm({"a": 1, "b": 2, "c": 3})
         k_var = Var()
         sols = self._capture("dict_key", k_var, d)
@@ -610,6 +690,7 @@ class TestClausalIntegration:
 
     def test_splat_update(self):
         """splat_update/4 uses {**OLD, KEY: VALUE} sugar."""
+        # nv
         old = DictTerm({"x": 1, "y": 2})
         new_var = Var()
         sols = self._capture("splat_update", old, "z", 3, new_var)
@@ -655,6 +736,7 @@ class TestInOperatorDictSet:
         return results
 
     def test_key_in_dict_enumerates_keys(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2, "c": 3})
         k = Var()
         sols = self._capture("enum_keys", k, d)
@@ -662,16 +744,19 @@ class TestInOperatorDictSet:
         assert keys == {"a", "b", "c"}
 
     def test_key_in_dict_filters(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("enum_keys", "a", d)
         assert len(sols) == 1
 
     def test_key_in_dict_empty(self):
+        # nv
         d = DictTerm({})
         sols = self._capture("enum_keys", Var(), d)
         assert len(sols) == 0
 
     def test_pair_in_dict_enumerates_pairs(self):
+        # nv
         d = DictTerm({"x": 10, "y": 20})
         k, v = Var(), Var()
         sols = self._capture("enum_pairs", k, v, d)
@@ -679,6 +764,7 @@ class TestInOperatorDictSet:
         assert pairs == {"x": 10, "y": 20}
 
     def test_pair_in_dict_filter_by_key(self):
+        # nv
         d = DictTerm({"x": 42, "y": 99})
         v = Var()
         sols = self._capture("find_value", v, d)
@@ -686,6 +772,7 @@ class TestInOperatorDictSet:
         assert sols[0][0] == 42
 
     def test_pair_in_dict_unifies_value(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         k, v = Var(), Var()
         sols = self._capture("enum_pairs", k, v, d)
@@ -694,26 +781,31 @@ class TestInOperatorDictSet:
             assert s[0] in ("a", "b")
 
     def test_pair_in_dict_empty(self):
+        # nv
         d = DictTerm({})
         sols = self._capture("enum_pairs", Var(), Var(), d)
         assert len(sols) == 0
 
     def test_key_not_in_dict(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("key_absent", "c", d)
         assert len(sols) == 1  # "c" not in dict, so succeeds
 
     def test_key_not_in_dict_fails(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("key_absent", "a", d)
         assert len(sols) == 0  # "a" in dict, so fails
 
     def test_pair_not_in_dict(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("pair_absent", "c", 99, d)
         assert len(sols) == 1  # ("c", 99) not in dict
 
     def test_pair_not_in_dict_wrong_value(self):
+        # nv
         d = DictTerm({"a": 1, "b": 2})
         sols = self._capture("pair_absent", "a", 99, d)
         assert len(sols) == 1  # ("a", 99) not in dict (value doesn't match)

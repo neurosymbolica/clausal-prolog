@@ -13,8 +13,27 @@
 -private([
     Choose(X, Y, R),
     SafeMax(X, Y, M),
-    a, b, c, d
+    Parent(P, C), Ancestor(A, D),
+    Color(X),
+    a, b, c, d, e, red, green, blue
 ])
+
+# Parent/ancestor chain a → b → c → d, plus branch a → e.
+Parent(a, b),
+Parent(b, c),
+Parent(c, d),
+Parent(a, e),
+
+Ancestor(A, D) <- Parent(A, D)
+Ancestor(A, D) <- (
+    Parent(A, Z),
+    Ancestor(Z, D)
+)
+
+# Three-clause predicate used to enumerate colors.
+Color(red),
+Color(green),
+Color(blue),
 
 # Multi-clause disjunction: Choose/3 picks either argument.
 Choose(X, _, X),
@@ -31,61 +50,108 @@ Test("conjunction binds two vars") <- (
     _y is 2,
     _x == 1,
     _y == 2
-)
-Test("conjunction fails if first fails") <- (not (a is b and _x is 1))
-Test("conjunction fails if second fails") <- (not (_x is 1 and a is b))
+)  # nv
+Test("conjunction fails if first fails") <- (not (a is b and _x is 1))  # nv
+Test("conjunction fails if second fails") <- (not (_x is 1 and a is b))  # nv
 Test("triple conjunction") <- (
     _x is 1,
     _y is 2,
     _z is 3,
     _x + _y + _z == 6
-)
+)  # nv
 
 # ── Disjunction (or) ────────────────────────────────────────────────────────
 
-Test("disjunction first succeeds") <- (_x is 1 or _x is 2)
-Test("disjunction first fails, second succeeds") <- (a is b or _x is 1)
-Test("disjunction both fail") <- (not (a is b or c is d))
+Test("disjunction first succeeds") <- (_x is 1 or _x is 2)  # nv
+Test("disjunction first fails, second succeeds") <- (a is b or _x is 1)  # nv
+Test("disjunction both fail") <- (not (a is b or c is d))  # nv
 
 # ── Negation as failure (not) ────────────────────────────────────────────────
 
-Test("not: failed unification succeeds") <- (not (1 is 2))
-Test("not: successful unification fails") <- (not (not (1 is 1)))
-Test("not: member absent") <- (not in_(d, [a, b, c]))
-Test("not: member present fails") <- (not (not in_(b, [a, b, c])))
-Test("double negation: not not (1=1)") <- (not (not (1 is 1)))
+Test("not: failed unification succeeds") <- (not (1 is 2))  # nv
+Test("not: successful unification fails") <- (not (not (1 is 1)))  # nv
+Test("not: member absent") <- (not in_(d, [a, b, c]))  # nv
+Test("not: member present fails") <- (not (not in_(b, [a, b, c])))  # nv
+Test("double negation: not not (1=1)") <- (not (not (1 is 1)))  # nv
 
 # ── Combining control constructs ─────────────────────────────────────────────
 
 Test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (
     (_x is 1 and _y is a) or (_x is 2 and _y is b)
-)
+)  # nv
 Test("not + member: d not in list") <- (
     not in_(d, [a, b, c])
-)
+)  # nv
 Test("conjunction + negation") <- (
     _x is 5,
     not (_x is 3),
     _x == 5
-)
+)  # nv
 
 # ── Multi-clause predicates (Choose/3) ─────────────────────────────────────
 
-Test("choose picks first") <- Choose(1, 2, 1)
-Test("choose picks second") <- Choose(1, 2, 2)
-Test("choose with atoms") <- Choose(a, b, a)
+Test("choose picks first") <- Choose(1, 2, 1)  # nv
+Test("choose picks second") <- Choose(1, 2, 2)  # nv
+Test("choose with atoms") <- Choose(a, b, a)  # nv
 
 # ── If-then-else via SafeMax/3 ────────────────────────────────────────────
 
 Test("safe_max: first is larger") <- (
     SafeMax(5, 3, _m),
     _m == 5
-)
+)  # nv
 Test("safe_max: second is larger") <- (
     SafeMax(2, 7, _m),
     _m == 7
-)
+)  # nv
 Test("safe_max: equal") <- (
     SafeMax(4, 4, _m),
     _m == 4
-)
+)  # nv
+
+# ── true/false at top level of a body ──────────────────────────────────────
+
+Test("true succeeds (1 == 1)") <- (1 == 1)  # nv
+Test("fail fails: not False") <- (not False)  # nv
+
+# ── Backtracking counts (migrated from test_iso_control.py) ────────────────
+
+Test("conjunction backtracks: 2x2 = 4 solutions") <- (
+    findall([X, Y], (X in [1, 2], Y in [a, b]), L),
+    length(L, 4),
+    [1, a] in L,
+    [2, b] in L
+)  # nv
+Test("disjunction yields 2 solutions") <- (
+    findall(X, (X is 1 or X is 2), L),
+    L == [1, 2]
+)  # nv
+Test("disjunction with conjunction: 2 solutions") <- (
+    findall(
+        [X, Y],
+        ((X is 1, Y is a) or (X is 2, Y is b)),
+        L
+    ),
+    L == [[1, a], [2, b]]
+)  # nv
+
+# ── NAF does not bind ──────────────────────────────────────────────────────
+
+Test("naf does not bind: not(X is a) fails") <- (not (not (_x is a)))  # nv
+
+# ── Multi-clause facts (Color/1) ───────────────────────────────────────────
+
+Test("color enumerates three") <- (
+    findall(X, Color(X), L),
+    L == [red, green, blue]
+)  # nv
+
+# ── Recursive predicate (Ancestor/2) ───────────────────────────────────────
+
+Test("ancestor: direct parent") <- Ancestor(a, b)  # nv
+Test("ancestor: transitive") <- Ancestor(a, d)  # nv
+Test("ancestor of a yields all descendants") <- (
+    findall(D, Ancestor(a, D), L),
+    sort(L, S),
+    S == [b, c, d, e]
+)  # nv
