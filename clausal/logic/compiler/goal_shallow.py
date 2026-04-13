@@ -139,30 +139,33 @@ def compile_goal(
     *,
     ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
-    """Compile a goal term into Python statements.
+    """Public entry point — construct ctx if needed, delegate to _dispatch_goal.
 
-    On success, executes k_stmts (the inlined continuation).
-    On failure, does nothing (falls through without executing k_stmts).
-
-    Parameters
-    ----------
-    goal       : goal term (Is, And, Or, Call, True, False, …)
-    db         : live database — used for predicate dispatch and signature lookup
-    var_context: mutable Var._id → python_name dict; extended for body-only Vars
-    trail_name : name of the trail parameter in the enclosing compiled function
-    k_stmts    : continuation statements to inline on success
-    ctx        : optional pre-constructed CompilationContext.  When the
-                 caller is internal (e.g. ``compile_body`` or a recursive
-                 goal), ctx is supplied and carries shared per-predicate
-                 state like ``locked_dispatch_keys``.  External callers
-                 (tests, ``solve.py``) don't need to know about ctx; when
-                 ``ctx is None`` a plain CompilationContext is constructed
-                 from the tuple args with empty ``locked_dispatch_keys``.
+    This legacy tuple signature is preserved for external callers
+    (``solve.py``, tests).  All internal compilation threads ctx
+    directly via ``_dispatch_goal``.
     """
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
         )
+    return _dispatch_goal(ctx, goal, k_stmts)
+
+
+def _dispatch_goal(
+    ctx: CompilationContext,
+    goal: Any,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Internal ctx-native goal dispatcher.
+
+    Shallow-strategy counterpart to ``_dispatch_goal_trampoline``.  On
+    success, emit statements that execute *k_stmts* (the inlined
+    continuation); on failure, emit statements that fall through.
+    """
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
 
     goal = deref(goal)
 
@@ -195,22 +198,22 @@ def compile_goal(
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
             # Build right-to-left: r's stmts become k for l
-            inner_k = compile_goal(r, db, var_context, trail_name, k_stmts, ctx=ctx)
-            return compile_goal(l, db, var_context, trail_name, inner_k, ctx=ctx)
+            inner_k = _dispatch_goal(ctx, r, k_stmts)
+            return _dispatch_goal(ctx, l, inner_k)
 
         # ── Tuple-as-conjunction ─────────────────────────────────────────────
         # (A, B, C) in goal position → treat as conjunction (same as A and B and C)
         case TupleLiteral(elements=elems) if elems:
             k = k_stmts
             for goal in reversed(elems):
-                k = compile_goal(goal, db, var_context, trail_name, k, ctx=ctx)
+                k = _dispatch_goal(ctx, goal, k)
             return k
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
             mark = _fresh(_MARK_PREFIX)
-            left_stmts = compile_goal(l, db, var_context, trail_name, k_stmts, ctx=ctx)
-            right_stmts = compile_goal(r, db, var_context, trail_name, k_stmts, ctx=ctx)
+            left_stmts = _dispatch_goal(ctx, l, k_stmts)
+            right_stmts = _dispatch_goal(ctx, r, k_stmts)
             # Note: both branches share var_context; body-only vars in Or
             # branches that differ between branches are a known POC limitation.
             # After trail.undo(mark) the trail is already back at mark, so the
@@ -236,7 +239,7 @@ def compile_goal(
             # bindings that the sub-generator leaves before failing).
             naf_gen = _fresh("_naf_gen")
             naf_flag = _fresh("_naf")
-            inner_stmts = compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+            inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
             # Always append ``return; yield`` so the NAF function is a generator
             # type even when inner_stmts is empty (e.g. inner goal is False).
             # The dead ``yield`` after ``return`` is the standard Python trick.
@@ -301,7 +304,7 @@ def compile_goal(
         # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
         case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
-            return compile_goal(rewritten, db, var_context, trail_name, k_stmts, ctx=ctx)
+            return _dispatch_goal(ctx, rewritten, k_stmts)
 
 
         # ── Compile-time-known predicate call ────────────────────────────────
@@ -761,9 +764,7 @@ def compile_body(
     return _compile_body_impl(
         goals, ctx,
         leaf_yield=_yield_none_stmt(),
-        compile_goal_fn=lambda goal, ctx_, k: compile_goal(
-            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_,
-        ),
+        compile_goal_fn=lambda goal, ctx_, k: _dispatch_goal(ctx_, goal, k),
     )
 
 

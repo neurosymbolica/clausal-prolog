@@ -308,12 +308,36 @@ def compile_goal_trampoline(
     Note: ``Not`` (NAF) compiles its inner goal with ``compile_goal`` (simple
     mode) so the inner check runs via a local for loop.  NAF inner goals must
     therefore be simple-compiled predicates or primitive goals.
+
+    Public entry point: legacy tuple signature preserved for external
+    callers.  All internal compilation threads ctx via
+    ``_dispatch_goal_trampoline``.
     """
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
         )
+    return _dispatch_goal_trampoline(ctx, goal, k_stmts)
+
+
+def _dispatch_goal_trampoline(
+    ctx: CompilationContext,
+    goal: Any,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Internal ctx-native trampoline goal dispatcher.
+
+    Trampoline-strategy counterpart to ``_dispatch_goal``.  See the
+    public ``compile_goal_trampoline`` docstring for the tuple-protocol
+    details.
+    """
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
+    self_name = ctx.self_name
+    parent_name = ctx.parent_name
+
     goal = deref(goal)
 
     if goal is True:
@@ -342,31 +366,21 @@ def compile_goal_trampoline(
 
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
-            inner_k = compile_goal_trampoline(
-                r, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-            )
-            return compile_goal_trampoline(
-                l, db, var_context, trail_name, inner_k, self_name, parent_name, ctx=ctx,
-            )
+            inner_k = _dispatch_goal_trampoline(ctx, r, k_stmts)
+            return _dispatch_goal_trampoline(ctx, l, inner_k)
 
         # ── Tuple-as-conjunction ─────────────────────────────────────────────
         case TupleLiteral(elements=elems) if elems:
             k = k_stmts
             for goal in reversed(elems):
-                k = compile_goal_trampoline(
-                    goal, db, var_context, trail_name, k, self_name, parent_name, ctx=ctx,
-                )
+                k = _dispatch_goal_trampoline(ctx, goal, k)
             return k
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
             mark = _fresh(_MARK_PREFIX)
-            left_stmts = compile_goal_trampoline(
-                l, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-            )
-            right_stmts = compile_goal_trampoline(
-                r, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-            )
+            left_stmts = _dispatch_goal_trampoline(ctx, l, k_stmts)
+            right_stmts = _dispatch_goal_trampoline(ctx, r, k_stmts)
             # After trail.undo(mark) the trail is already back at mark, so the
             # second _assign_mark would be a no-op — omit it.
             return [
@@ -393,10 +407,9 @@ def compile_goal_trampoline(
             naf_v = _fresh("_naf_v")
             # Compile inner goal in trampoline mode with a solution yield
             inner_k = [_yield_step_stmt(_name("_naf_parent"), ast.Constant(None))]
-            inner_stmts = compile_goal_trampoline(
-                inner, db, var_context, trail_name, inner_k,
-                self_name="_naf_self", parent_name="_naf_parent",
-                ctx=ctx.replace(self_name="_naf_self", parent_name="_naf_parent"),
+            inner_stmts = _dispatch_goal_trampoline(
+                ctx.replace(self_name="_naf_self", parent_name="_naf_parent"),
+                inner, inner_k,
             )
             # Build the inner function: def _naf_gen_fn(_naf_self, _naf_parent, trail): ...
             naf_body = inner_stmts + [
@@ -638,15 +651,10 @@ def compile_body_trampoline(
             self_name=self_name, parent_name=parent_name,
         )
 
-    def _compile_goal(goal, ctx_, k):
-        return compile_goal_trampoline(
-            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
-            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
-        )
     return _compile_body_impl(
         goals, ctx,
         leaf_yield=_yield_step_stmt(_name(parent_name), ast.Constant(None)),
-        compile_goal_fn=_compile_goal,
+        compile_goal_fn=lambda goal, ctx_, k: _dispatch_goal_trampoline(ctx_, goal, k),
     )
 
 

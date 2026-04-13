@@ -295,6 +295,31 @@ through a ctx-taking `_dispatch_goal(ctx, goal, k_stmts)` /
 `_dispatch_goal_trampoline(ctx, goal, k_stmts)` helper.  Public
 functions become thin wrappers that construct ctx and delegate.
 
+**Status:** ✅ done
+
+Delivered:
+
+- Introduced ``_dispatch_goal(ctx, goal, k_stmts)`` in
+  ``goal_shallow.py`` and ``_dispatch_goal_trampoline(ctx, goal,
+  k_stmts)`` in ``goal_trampoline.py``.  Each owns the full
+  goal-type match and is ctx-native — no tuple args.
+- ``compile_goal`` / ``compile_goal_trampoline`` shrank to
+  three-line wrappers: construct ctx from the legacy tuple args if
+  the caller didn't supply one, then delegate.  External-caller
+  signatures unchanged.
+- All in-file recursive calls (And / Or / TupleLiteral / Not /
+  forall rewrite) now use ``_dispatch_goal(ctx, ...)`` /
+  ``_dispatch_goal_trampoline(ctx, ...)`` directly — no more
+  positional ``db, var_context, trail_name`` repetition.
+- NAF's inner compile in the trampoline path uses
+  ``ctx.replace(self_name=..., parent_name=...)`` instead of the
+  three-argument overlay.
+- ``compile_body`` / ``compile_body_trampoline`` inline closures
+  drop their ``lambda`` arg plumbing — ``compile_goal_fn`` is now
+  ``lambda goal, ctx_, k: _dispatch_goal(ctx_, goal, k)``.
+
+Tests: 10409 pass (ex-trealla).
+
 **Status:** ☐ not started
 
 ### B4 — Eliminate `_m.compile_goal` / `_m.compile_goal_trampoline` lazy accessors
