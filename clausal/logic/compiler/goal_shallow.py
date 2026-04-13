@@ -245,7 +245,7 @@ def compile_goal(
             # WFS: if inner is a call to a tabled predicate, use _naf_tabled
             # instead of inline NAF (handles cycles through negation).
             if _is_tabled_naf(inner, db):
-                return _compile_tabled_naf_simple(inner, db, var_context, trail_name, k_stmts)
+                return _compile_tabled_naf_simple(ctx, inner, k_stmts)
 
             # Run inner as a sub-generator; succeed iff it yields no solutions.
             # Bindings from the inner goal do not escape (the nested function
@@ -453,10 +453,13 @@ def _compile_deterministic_goal(
         # ── Unification ─────────────────────────────────────────────────────
         case Unify(left=l, right=r):
             # Phase 5: detect star-list patterns in body Unify goals
-            if _is_star_list(l):
-                return _compile_star_is(l, r, var_context, trail_name, k_stmts)
-            if _is_star_list(r):
-                return _compile_star_is(r, l, var_context, trail_name, k_stmts)
+            if _is_star_list(l) or _is_star_list(r):
+                _sctx = CompilationContext(
+                    db=None, var_context=var_context, trail_name=trail_name,
+                )
+                if _is_star_list(l):
+                    return _compile_star_is(_sctx, l, r, k_stmts)
+                return _compile_star_is(_sctx, r, l, k_stmts)
             mark = _fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)

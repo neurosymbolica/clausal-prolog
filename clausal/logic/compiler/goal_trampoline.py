@@ -397,7 +397,7 @@ def compile_goal_trampoline(
         case Not(operand=inner):
             # WFS: if inner is a call to a tabled predicate, use _naf_tabled
             if _is_tabled_naf(inner, db):
-                return _compile_tabled_naf_simple(inner, db, var_context, trail_name, k_stmts)
+                return _compile_tabled_naf_simple(ctx, inner, k_stmts)
 
             naf_gen_fn = _fresh("_naf_gen_fn")
             naf_flag = _fresh("_naf")

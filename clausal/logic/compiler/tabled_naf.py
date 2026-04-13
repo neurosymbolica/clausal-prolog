@@ -16,6 +16,7 @@ from ._ast_helpers import (
     _name, _call, _fresh, _assign_mark, _undo_stmt, _if, _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr
+from .compile_ctx import CompilationContext
 
 
 def _is_tabled_naf(inner_goal, db) -> bool:
@@ -31,7 +32,7 @@ def _is_tabled_naf(inner_goal, db) -> bool:
     return db.is_tabled(fname, call_arity)
 
 
-def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts):
+def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
     """Emit _naf_tabled(...) call for tabled NAF (both simple and trampoline modes).
 
     Generates::
@@ -41,6 +42,9 @@ def _compile_tabled_naf_simple(inner_goal, db, var_context, trail_name, k_stmts)
             k_stmts
         trail.undo(_m)
     """
+    db = ctx.db
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
     fname = inner_goal.func.name
     call_args = inner_goal.args
     call_kwargs = inner_goal.kwargs

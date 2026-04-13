@@ -20,13 +20,13 @@ from ._ast_helpers import (
     _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr, _parse_star_segments, _count_stars
+from .compile_ctx import CompilationContext
 
 
 def _compile_star_is(
+    ctx: CompilationContext,
     star_side: list,
     other_side: Any,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile an Is goal where one side contains a star-list pattern.
@@ -36,19 +36,18 @@ def _compile_star_is(
     """
     segments = _parse_star_segments(star_side)
     n_stars = _count_stars(segments)
-    other_expr = term_to_ast_expr(other_side, var_context, eval_arith=False)
+    other_expr = term_to_ast_expr(other_side, ctx.var_context, eval_arith=False)
 
     if n_stars == 1:
-        return _compile_single_star_is(segments, other_expr, var_context, trail_name, k_stmts)
+        return _compile_single_star_is(ctx, segments, other_expr, k_stmts)
     else:
-        return _compile_multi_star_is(segments, other_expr, var_context, trail_name, k_stmts)
+        return _compile_multi_star_is(ctx, segments, other_expr, k_stmts)
 
 
 def _compile_single_star_is(
+    ctx: CompilationContext,
     segments: list[tuple],
     other_expr: ast.expr,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile single-star body Is: emit call to _body_star_unify."""
@@ -66,9 +65,11 @@ def _compile_single_star_is(
         else:
             after_vals.extend(val)
 
-    before_exprs = [term_to_ast_expr(v, var_context, eval_arith=False) for v in before_vals]
-    star_expr = term_to_ast_expr(star_val, var_context, eval_arith=False) if star_val is not None else ast.Constant(value=None)
-    after_exprs = [term_to_ast_expr(v, var_context, eval_arith=False) for v in after_vals]
+    vc = ctx.var_context
+    trail_name = ctx.trail_name
+    before_exprs = [term_to_ast_expr(v, vc, eval_arith=False) for v in before_vals]
+    star_expr = term_to_ast_expr(star_val, vc, eval_arith=False) if star_val is not None else ast.Constant(value=None)
+    after_exprs = [term_to_ast_expr(v, vc, eval_arith=False) for v in after_vals]
 
     mark = _fresh(_MARK_PREFIX)
     return [
@@ -89,19 +90,20 @@ def _compile_single_star_is(
 
 
 def _compile_multi_star_is(
+    ctx: CompilationContext,
     segments: list[tuple],
     other_expr: ast.expr,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Compile multi-star body Is: emit for-loop over _body_multi_star_unify."""
+    vc = ctx.var_context
+    trail_name = ctx.trail_name
     # Build segments as a runtime list of tuples
     seg_elts: list[ast.expr] = []
     for kind, val in segments:
         if kind == "fixed":
             elems = ast.List(
-                elts=[term_to_ast_expr(v, var_context, eval_arith=False) for v in val],
+                elts=[term_to_ast_expr(v, vc, eval_arith=False) for v in val],
                 ctx=ast.Load(),
             )
             seg_elts.append(ast.Tuple(
@@ -110,7 +112,7 @@ def _compile_multi_star_is(
             ))
         else:  # star
             seg_elts.append(ast.Tuple(
-                elts=[ast.Constant(value="star"), term_to_ast_expr(val, var_context, eval_arith=False)],
+                elts=[ast.Constant(value="star"), term_to_ast_expr(val, vc, eval_arith=False)],
                 ctx=ast.Load(),
             ))
 
