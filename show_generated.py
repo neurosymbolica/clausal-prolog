@@ -54,10 +54,11 @@ from clausal.tools.visualize import predicate_to_source
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
 from clausal.logic.compiler import (
-    _compile_context_local, _inject_bucket_refs_trampoline,
+    _inject_bucket_refs_trampoline,
     _bucket_key, compile_predicate_trampoline,
     _build_predicate_trampoline_funcdef, _make_body_compiler_trampoline,
 )
+from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.builtins import _normalize_fact_clause
 from clausal.terms import (
@@ -362,17 +363,22 @@ caller_clauses = [
     ),
 ]
 
-# Inject bucket refs, then generate AST with the context in place
+# Inject bucket refs, then generate AST with the context in place.
+# The body_compiler captures ctx_template by reference; mutating
+# ctx_template.bucket_ref_map after construction is visible at compile time.
 base_globals = {"color": color_pred}
-_compile_context_local.locked_dispatch_keys = frozenset()
-_compile_context_local.bucket_ref_map = {}
-_compile_context_local.joint_bucket_ref_map = {}
-_inject_bucket_refs_trampoline(caller_clauses, base_globals)
-
 db_placeholder = None
-body_compiler = _make_body_compiler_trampoline(db_placeholder)
+
+ctx_phase10 = CompilationContext(
+    db=db_placeholder, var_context={}, trail_name="trail",
+)
+_inject_bucket_refs_trampoline(ctx_phase10, caller_clauses, base_globals)
+
+body_compiler_p10 = _make_body_compiler_trampoline(
+    db_placeholder, ctx_template=ctx_phase10,
+)
 func_def = _build_predicate_trampoline_funcdef(
-    "find_red", 1, caller_clauses, db_placeholder, body_compiler,
+    "find_red", 1, caller_clauses, db_placeholder, body_compiler_p10,
 )
 raw = ast.unparse(func_def)
 try:
@@ -383,12 +389,16 @@ except Exception:
 print("# GENERATED (trampoline, Phase 10 — direct bucket ref):")
 print(raw)
 
-# Compare: same caller with only Phase 7 (locked dispatch, no static key)
-_compile_context_local.bucket_ref_map = {}
-_compile_context_local.joint_bucket_ref_map = {}
-_compile_context_local.locked_dispatch_keys = frozenset(["_disp_color_1"])
+# Compare: same caller with only Phase 7 (locked dispatch, no static key).
+ctx_phase7 = CompilationContext(
+    db=db_placeholder, var_context={}, trail_name="trail",
+    locked_dispatch_keys=frozenset(["_disp_color_1"]),
+)
+body_compiler_p7 = _make_body_compiler_trampoline(
+    db_placeholder, ctx_template=ctx_phase7,
+)
 func_def2 = _build_predicate_trampoline_funcdef(
-    "find_red", 1, caller_clauses, db_placeholder, body_compiler,
+    "find_red", 1, caller_clauses, db_placeholder, body_compiler_p7,
 )
 raw2 = ast.unparse(func_def2)
 try:
@@ -397,11 +407,6 @@ except Exception:
     pass
 print("# GENERATED (trampoline, Phase 7 only — cached dispatch closure):")
 print(raw2)
-
-# Reset context
-_compile_context_local.locked_dispatch_keys = frozenset()
-_compile_context_local.bucket_ref_map = {}
-_compile_context_local.joint_bucket_ref_map = {}
 
 print("# NOTES:")
 print("""
