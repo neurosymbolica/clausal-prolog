@@ -7,9 +7,8 @@ lives in ``.goal_trampoline``.
 
 The two compilers are independent — neither strategy calls into the
 other.  Cross-module helpers (control constructs, ITE, tabled NAF,
-star-segments, head-list unify runtime) are pulled from ``_monolith``
-which re-exports them, so this submodule stays agnostic of the exact
-location of each helper.
+star-segments) are imported directly from their canonical owner
+submodules.
 """
 
 from __future__ import annotations

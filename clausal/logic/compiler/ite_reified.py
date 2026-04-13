@@ -14,11 +14,11 @@ WFS-sound tabled negation).
 Each variant has a shallow and a trampoline counterpart — intentionally
 co-located so a future de-duplication refactor is a single-file diff.
 
-Cycle handling: ``compile_goal`` / ``compile_goal_trampoline`` /
-``_yield_step_stmt`` / ``_EXTRA_FUNCDEF`` still live in ``_monolith``
-at this split stage.  We reference them through the ``_m`` alias so
-the attribute lookup happens at call time, sidestepping the
-module-load-order cycle.
+Cycle handling: ``goal_trampoline`` imports this module, so the call
+to ``goal_trampoline._yield_step_stmt`` /
+``goal_trampoline._dispatch_goal_trampoline`` inside
+``_compile_general_ite_trampoline`` uses a function-local import.
+``_EXTRA_FUNCDEF`` lives in ``_ast_helpers`` (leaf; no cycle).
 """
 
 from __future__ import annotations

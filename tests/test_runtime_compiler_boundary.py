@@ -84,8 +84,7 @@ def test_runtime_does_not_import_from_compiler():
 
 
 def test_compiler_imports_of_runtime_are_in_predicate_py_only():
-    """Only compiler/predicate.py (and _monolith.py, transitional) may
-    import from clausal.logic.runtime.
+    """Only compiler/predicate.py may import from clausal.logic.runtime.
 
     Every other compiler module that needs to reference a runtime helper
     does so via a name string in emitted AST (resolved at call time via
@@ -93,17 +92,9 @@ def test_compiler_imports_of_runtime_are_in_predicate_py_only():
     code outside ``predicate.py`` are architectural leaks — they mean
     the compiler is calling runtime helpers itself at compile time
     rather than emitting references to them.
-
-    ``_monolith.py`` is allowed as a transitional exception: it is the
-    hub that ``predicate.py`` bulk-copies runtime names from via
-    ``for _n in dir(_m)``.  Slice B of the migration retires
-    ``_monolith.py`` entirely; at that point this allowed-list should
-    shrink to ``{predicate.py}`` only and the test will catch any new
-    leak.
     """
     allowed = {
         COMPILER_ROOT / "predicate.py",
-        COMPILER_ROOT / "_monolith.py",   # transitional; removed in slice B
     }
     bad: dict[str, list[str]] = {}
     for path in COMPILER_ROOT.rglob("*.py"):

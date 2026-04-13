@@ -439,15 +439,98 @@ Tests: 10409 pass, 90 skipped (ex-trealla).
 
 ### B6 — Inline `_monolith`'s aliases into `predicate.py` and retire `_monolith.py`
 
-**Scope:** The ~50 Phase-0.5a hoisted runtime-helper aliases
-(`_fd_eq_fn`, `_DictTerm_t`, ...) that live in `_monolith.py` and
-reach `predicate.py` via `for _n in dir(_m)` bulk-copy get inlined
-into `predicate.py` directly.  `_monolith.py` is deleted.
-`__init__.__getattr__` delegation is removed; explicit re-exports
-only.  Tests / tools that imported private names get pointed at the
-precise new location.
+**Scope:** Every ``_m.X`` usage in compiler submodules becomes a
+direct import from the real owning submodule.  Every
+``from ._monolith import Y`` becomes a direct import.
+``_monolith.py`` itself is deleted.  ``__init__.__getattr__`` and
+``predicate.__getattr__`` are removed; explicit re-exports only.
 
-**Status:** ☐ not started
+**Status:** ✅ done
+
+Delivered:
+
+- ``_EXTRA_FUNCDEF`` moved from ``predicate.py`` into
+  ``_ast_helpers.py`` so every submodule importing it sees a leaf-
+  level binding (no cycle).  ``control_constructs`` / ``goal_shallow``
+  / ``goal_trampoline`` / ``ite_reified`` now use a direct
+  ``_EXTRA_FUNCDEF`` (12 sites migrated from ``_m._EXTRA_FUNCDEF``).
+- ``goal_trampoline.py``: the three lazy forwards for
+  ``_static_call_key`` / ``_bucket_key`` / ``_joint_bucket_key`` are
+  gone — replaced by ``from .arg_index import ...`` at module level.
+  ``_flatten_and_goals`` / ``_find_destructive_reuse_goals`` /
+  ``_apply_destructive_reuse`` re-pointed from ``._monolith`` to
+  ``.destructive_reuse``.
+- ``ite_reified.py``: ``_m._is_tabled_naf`` → direct import from
+  ``.tabled_naf``.  ``_m._yield_step_stmt`` → function-local import
+  from ``.goal_trampoline`` inside
+  ``_compile_general_ite_trampoline`` (module-level would cycle via
+  ``goal_trampoline → ite_reified``).
+- ``destructive_reuse.py``: ``_is_deterministic_goal`` wrapper kept,
+  but now uses a function-local ``from .tro import
+  _is_deterministic_goal`` to break
+  ``tro → goal_trampoline → destructive_reuse → tro``.
+- ``arg_index.py``, ``tro.py``: unused ``from . import _monolith as
+  _m`` imports dropped.
+- ``predicate.py``: dropped the ``from . import _monolith as _m``
+  import and the ``__getattr__`` fallback that forwarded to it.
+  Every name referenced by ``base_globals`` is now a direct
+  module-level import (slice B1a had already pulled most of them in).
+- ``__init__.py``: ``__getattr__`` delegation removed.
+  ``from ._monolith import ...`` re-exports replaced by direct
+  imports from canonical owners (``.predicate`` / ``.goal_shallow`` /
+  ``.goal_trampoline`` / ``.terms_to_ast`` / ``.head_match``).
+  Explicit re-exports added for every private name that tests,
+  ``solve.py``, ``compiler_v2.py``, or ``tools/visualize.py`` import
+  from ``clausal.logic.compiler``:
+  ``_collect_vars``, ``_var_python_name``,
+  ``_collect_globals_info`` / ``_collect_call_targets`` /
+  ``_collect_head_types`` / ``_collect_py_thunks`` /
+  ``_collect_types_from_term`` / ``_disp_key`` /
+  ``_inject_call_targets``,
+  ``_INDEX_THRESHOLD`` / ``_INDEX_VAR`` /
+  ``_analyze_index_positions`` / ``_analyze_joint_index_positions`` /
+  ``_bucket_key`` / ``_joint_bucket_key`` / ``_static_call_key`` /
+  ``_runtime_arg_key`` / ``_extract_arg_key`` /
+  ``_extract_first_arg_key`` / ``_build_arg_index`` /
+  ``_build_first_arg_index`` / ``_build_joint_arg_index`` /
+  ``_build_secondary_index``,
+  ``_detect_tro_clause`` / ``_get_tro_check_indices`` /
+  ``_tro_args_safe`` / ``_is_deterministic_goal``,
+  ``_find_destructive_reuse_goals``,
+  ``_compile_goal_lambda`` / ``_flatten_conjunction``,
+  ``_inject_bucket_refs_trampoline``, plus the runtime helpers
+  ``_head_list_unify_input`` / ``_head_list_unify_output`` /
+  ``_body_star_unify`` / ``_body_multi_star_unify`` /
+  ``_build_star_list`` / ``_build_multi_star_list`` re-exported
+  transitively via ``.predicate`` (not directly from
+  ``clausal.logic.runtime.*``, to keep the runtime/compiler boundary
+  test's allowed-list at ``{predicate.py}``).
+- ``_monolith.py`` **deleted**.
+
+Cycles encountered and resolution:
+
+- ``tro → goal_trampoline → destructive_reuse → tro`` (previously
+  masked by lazy ``_m._is_deterministic_goal``): resolved with a
+  function-local import inside ``destructive_reuse._is_deterministic_goal``.
+- ``goal_trampoline → ite_reified → goal_trampoline`` (for
+  ``_yield_step_stmt`` / ``_dispatch_goal_trampoline``): resolved
+  with a function-local import inside
+  ``ite_reified._compile_general_ite_trampoline``.
+- ``goal_shallow/goal_trampoline → control_constructs →
+  _dispatch_goal[_trampoline]`` (pre-existing from B4): continues
+  using function-local imports.
+
+Grep assertions:
+
+- ``grep "_m\\.\\|from \\._monolith" clausal/logic/compiler
+  --include="*.py"`` — no hits.
+- ``grep "__getattr__" clausal/logic/compiler/__init__.py
+  clausal/logic/compiler/predicate.py`` — no hits.
+- ``grep "_monolith" clausal/`` — only README/comment historical
+  references remain (trimmed in this slice to remove live design
+  references; B1a/B6 backstory stays for contributors).
+
+Tests: 10409 pass, 90 skipped (ex-trealla).  AST output unchanged.
 
 ### B7 — Clean up the boundary-test transitional exception
 
@@ -456,7 +539,22 @@ allowed-list in `tests/test_runtime_compiler_boundary.py::test_compiler_imports_
 shrinks to just `{predicate.py}`.  The transitional exception comment
 is deleted.
 
-**Status:** ☐ not started
+**Status:** ✅ done
+
+Delivered (as part of the B6 deletion commit):
+
+- Allowed-list in
+  ``test_compiler_imports_of_runtime_are_in_predicate_py_only``
+  reduced to ``{COMPILER_ROOT / "predicate.py"}``.
+- Docstring trimmed to drop the transitional ``_monolith.py``
+  exception paragraph.
+- ``__init__.py`` re-exports the runtime helpers via
+  ``from .predicate import ...`` rather than directly from
+  ``clausal.logic.runtime.*`` so the boundary rule stays satisfied
+  without an extra allowed-list entry for ``__init__.py``.
+
+Tests: 10409 pass, 90 skipped (ex-trealla) — the boundary test
+itself passes with the shrunk allowed-list.
 
 ### B8 — Move `clausal/logic/_list_unify.c` / `_trampoline.c` under `runtime/`
 

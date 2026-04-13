@@ -174,8 +174,7 @@ more detail. Listed roughly in the order the pipeline touches them.
 | `destructive_reuse.py`    | `_find_destructive_reuse_goals` + `_apply_destructive_reuse` — trampoline-only preprocess. |
 | `tro.py`                  | Tail-recursion optimisation: detection + `_compile_tro_tail` / `_compile_tro_body`. Trampoline-only. |
 | `predicate.py`            | The three top-level entrypoints (`compile_predicate_trampoline/shallow/ast` + variants), `_build_predicate_{trampoline_,}funcdef`, `_install`. Owns Phase 3 + 7 and orchestrates the others. |
-| `_monolith.py`            | **Legacy residue.** Holds hoisted runtime-helper aliases (`_fd_eq_fn`, `_DictTerm_t`, …), the `_compile_context_local` thread-local, and re-export shims. Slated for retirement (deferred refactor). |
-| `__init__.py`             | Public API re-exports. `__getattr__` delegates unknown attributes to `_monolith` for tests that still import private helpers. |
+| `__init__.py`             | Public API re-exports. Every exposed name has an explicit import from its canonical owner (no ``__getattr__``; ``_monolith`` retired in slice B6). |
 
 ---
 
@@ -430,8 +429,8 @@ When a call site's indexed arguments are statically-known constants
 (`foo(1, X)`), the compiler emits a direct reference to the predicate's
 bucket-function for that key instead of the general dispatch wrapper.
 `_inject_bucket_refs_trampoline` populates `base_globals` with these
-refs; `_dispatch_call_trampoline` emits them when the
-`_compile_context_local.bucket_ref_map` knows about the target.
+refs; `_dispatch_call_trampoline` emits them when
+`ctx.bucket_ref_map` knows about the target.
 
 ---
 
@@ -475,14 +474,13 @@ clause-tree and output AST.
 |----------------------------------------|--------------------------------------|---------------------------------------------|--------------------------------------------------------------------------|
 | `var_context: dict`                    | Caller of `compile_body` / `compile_goal` | One clause compilation                      | Var._id → Python local name mapping.                                    |
 | `ctx.fresh: FreshNames`                | `CompilationContext`                 | One compilation invocation                  | Fresh-name generator state (`ctx.fresh("_m")` → `_m1`, `_m2`, …; resets per compilation for deterministic AST output). |
-| `_compile_context_local: threading.local` | `_monolith.py`                    | Per-thread, set by `compile_predicate_*`    | `locked_dispatch_keys` (Phase 7 dispatch caching), `bucket_ref_map` / `joint_bucket_ref_map` (Phase 10d/10f call-site specialisation). |
+| `ctx.locked_dispatch_keys / .bucket_ref_map / .joint_bucket_ref_map` | `CompilationContext` (`ctx_template` in `predicate.py`) | One compilation invocation | Phase 7 dispatch caching + Phase 10d/10f call-site bucket-ref specialisation. |
 | `_tro_state: list`                     | `predicate.py` → `base_globals`      | Per compiled function                       | `[flag, arg0, ..., argN-1]` — the TRO signal used by "signal"-mode TRO. |
 | `base_globals: dict`                   | `predicate.py`                       | Per compiled function (becomes `__globals__`) | All runtime helpers, term-class refs, resolved call targets, dispatch caches. |
 
-**The thread-local needs care.** `compile_predicate_trampoline` saves
-and restores it via `try/finally` because compilation can recurse
-(a predicate might be compiled in response to another predicate's
-compilation).  Same for `compile_predicate_shallow`.
+All compile-time state lives on `CompilationContext` (retired from
+a thread-local in slice B2c; see
+`implementation_plans/SLICE_B_PROGRESS.md`).
 
 ---
 
@@ -571,22 +569,14 @@ Things that are true at phase boundaries, and where they are enforced.
 
 Things a new contributor would otherwise have to reverse-engineer.
 
-- **`_monolith.py` is a compatibility layer.** It predates the module
-  split. It holds the ~50 runtime-helper aliases (`_fd_eq_fn`,
-  `_DictTerm_t`, …) that generated code references via `base_globals`,
-  plus the `_compile_context_local` thread-local. Slated for
-  retirement; not yet removed because submodules still reach into it
-  via `_m.*` lazy attribute access in a few places (mostly
-  `_m._EXTRA_FUNCDEF` and `_m.compile_goal` / `_m.compile_goal_trampoline`
-  in cross-strategy calls).
-
-- **`_m.compile_goal` / `_m.compile_goal_trampoline` are lazy accessors.**
-  `control_constructs.py`, `ite_reified.py`, `tro.py` all reference
-  the goal compilers through a `_m` alias on the `_monolith` module.
-  This is because the goal compilers (in `goal_shallow.py` /
-  `goal_trampoline.py`) are loaded *after* these modules — the lazy
-  attribute lookup defers binding until call time, side-stepping the
-  module-load-order cycle.
+- **Module-load cycles are broken with function-local imports, not
+  a shared shim.** Slice B6 retired ``_monolith.py`` entirely.
+  Where a cycle exists (``ite_reified`` referencing
+  ``goal_trampoline._yield_step_stmt``; ``destructive_reuse`` calling
+  ``tro._is_deterministic_goal``; ``control_constructs`` /
+  ``ite_reified`` calling ``_dispatch_goal[_trampoline]``), the
+  consumer uses a function-local import.  Python's import cache makes
+  the per-call overhead a single dict lookup.
 
 - **Phase-0.5a runtime-helper aliases live in `predicate.py`.**
   `_dif_fn`, `_fd_eq_fn`, `_DictTerm_t`, `_KWTerm_s`, …  (~50 names

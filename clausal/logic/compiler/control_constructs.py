@@ -6,13 +6,11 @@ catch (shallow + trampoline twins), goal lambdas, arithmetic /
 structural comparisons, and the small helpers ``_flatten_conjunction``
 and ``_hoist_lambda_args``.
 
-Cycle handling: every control construct calls back into
-``compile_goal`` / ``compile_goal_trampoline`` (still in ``_monolith``
-at this split stage).  We reference them through the ``_m`` alias on
-the ``_monolith`` module so the attribute lookup happens at call time,
-avoiding the load-order cycle.  Future phase 12 moves the goal
-compilers themselves; this module's call sites remain valid because
-``_monolith`` re-exports the goal compilers.
+Cycle handling: ``goal_shallow`` / ``goal_trampoline`` import this
+module, so the call-backs into ``_dispatch_goal`` /
+``_dispatch_goal_trampoline`` inside each control-construct helper
+use a function-local import.  ``_EXTRA_FUNCDEF`` lives in
+``_ast_helpers`` (leaf; no cycle).
 """
 
 from __future__ import annotations

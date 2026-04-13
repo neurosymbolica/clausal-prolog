@@ -7,9 +7,7 @@ right subset of clauses; shallow and trampoline variants are kept
 side-by-side so the future de-dup refactor is a single-file diff.
 
 This module is heavily used by ``compile_predicate_shallow`` and
-``compile_predicate_trampoline`` (still in ``_monolith``) — their
-re-imports from here stay stable as the predicate entrypoints move to
-``.predicate`` in phase 17.
+``compile_predicate_trampoline`` (in ``.predicate``).
 """
 
 from __future__ import annotations
