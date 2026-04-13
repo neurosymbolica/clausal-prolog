@@ -33,10 +33,11 @@ from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt,
     _MARK_PREFIX,
+    _EXTRA_FUNCDEF,
 )
 from .terms_to_ast import term_to_ast_expr
 from .compile_ctx import CompilationContext
-from . import _monolith as _m
+from .tabled_naf import _is_tabled_naf
 
 
 _REIFIABLE_TYPES = (Unify, DoesNotUnify, ArithEq, ArithNeq, Lt, LtE, Gt, GtE)
@@ -209,7 +210,7 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    use_tabled_naf = _m._is_tabled_naf(test, db)
+    use_tabled_naf = _is_tabled_naf(test, db)
 
     cond_gen = ctx.fresh("_ite_cond")
     cond_stmts = _dispatch_goal(ctx, test, [_yield_none_stmt()])
@@ -225,7 +226,7 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
         ),
         body=cond_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     then_stmts = _dispatch_goal(ctx, then, k_stmts)
@@ -321,20 +322,20 @@ def _compile_reified_ite_fd_trampoline(ctx: CompilationContext, test, then, else
 
 def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
     """Trampoline variant of _compile_general_ite."""
-    from .goal_trampoline import _dispatch_goal_trampoline
+    from .goal_trampoline import _dispatch_goal_trampoline, _yield_step_stmt
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    use_tabled_naf = _m._is_tabled_naf(test, db)
+    use_tabled_naf = _is_tabled_naf(test, db)
 
     cond_fn_name = ctx.fresh("_ite_cond_fn")
     cond_self = "_ite_self"
     cond_parent = "_ite_parent"
-    cond_k = [_m._yield_step_stmt(_name(cond_parent), ast.Constant(None))]
+    cond_k = [_yield_step_stmt(_name(cond_parent), ast.Constant(None))]
     cond_ctx = ctx.replace(self_name=cond_self, parent_name=cond_parent)
     cond_stmts = _dispatch_goal_trampoline(cond_ctx, test, cond_k)
     cond_body = cond_stmts + [
-        _m._yield_step_stmt(_name(cond_parent), _name("_DONE")),
+        _yield_step_stmt(_name(cond_parent), _name("_DONE")),
     ]
     cond_fn_def = ast.FunctionDef(
         name=cond_fn_name,
@@ -347,7 +348,7 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
         ),
         body=cond_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     then_stmts = _dispatch_goal_trampoline(ctx, then, k_stmts)

@@ -39,6 +39,7 @@ from ._ast_helpers import (
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .terms_to_ast import (
@@ -56,7 +57,7 @@ from .goal_shallow import (
     _dispatch_goal,
 )
 from .compile_ctx import CompilationContext
-from . import _monolith as _m
+from .arg_index import _static_call_key, _bucket_key, _joint_bucket_key
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
 from .ite_reified import (
@@ -73,18 +74,10 @@ from .control_constructs import (
     _compile_goal_lambda, _flatten_conjunction, _hoist_lambda_args,
 )
 
-# Destructive-reuse helpers used by _make_body_compiler_trampoline — still
-# in _monolith until their own phase extraction.
-from ._monolith import (
+# Destructive-reuse helpers used by _make_body_compiler_trampoline.
+from .destructive_reuse import (
     _flatten_and_goals, _find_destructive_reuse_goals, _apply_destructive_reuse,
 )
-
-# Argument-indexing helpers still in _monolith until phase 14 — resolved
-# lazily at call time via _m.* since they are defined in _monolith AFTER
-# this submodule is imported.
-def _static_call_key(*a, **kw): return _m._static_call_key(*a, **kw)
-def _bucket_key(*a, **kw): return _m._bucket_key(*a, **kw)
-def _joint_bucket_key(*a, **kw): return _m._joint_bucket_key(*a, **kw)
 
 # ── Trampoline tuple-protocol compilation ──────────────────────────────────────
 #
@@ -427,7 +420,7 @@ def _dispatch_goal_trampoline(
                 ),
                 body=naf_body,
                 decorator_list=[], returns=None, type_comment=None,
-                **_m._EXTRA_FUNCDEF,
+                **_EXTRA_FUNCDEF,
             )
             naf_mark = ctx.fresh(_MARK_PREFIX)
             # Mini-trampoline: create StepGenerator, loop until solution or DONE.

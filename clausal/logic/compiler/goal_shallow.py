@@ -42,6 +42,7 @@ from ._ast_helpers import (
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .terms_to_ast import (
@@ -51,10 +52,8 @@ from .terms_to_ast import (
 from .compile_ctx import CompilationContext
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
-from . import _monolith as _m
 
-# Cross-module helpers re-exported by _monolith — pulled explicitly so the
-# goal compiler code doesn't need to be rewritten with ``_m.`` prefixes.
+# Cross-module helpers — pulled explicitly from real owners.
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
 from .ite_reified import (
     _is_reifiable, _compile_reified_ite, _compile_general_ite,
@@ -255,7 +254,7 @@ def _dispatch_goal(
                 ),
                 body=naf_body,
                 decorator_list=[], returns=None, type_comment=None,
-                **_m._EXTRA_FUNCDEF,
+                **_EXTRA_FUNCDEF,
             )
             naf_mark = ctx.fresh(_MARK_PREFIX)
             return [

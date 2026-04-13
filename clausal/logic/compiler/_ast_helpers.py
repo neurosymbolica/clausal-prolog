@@ -27,6 +27,13 @@ _TRAMP_PARENT_NAME = "_tramp_parent"   # trampoline parent-generator parameter
 _THIS_GEN_NAME = "this_generator"      # trampoline self-reference parameter
 
 
+# Python 3.12+ added type_params to FunctionDef.  Spread into ast.FunctionDef
+# kwargs so the compiler stays compatible with both 3.11 and 3.12+.
+_EXTRA_FUNCDEF: dict = (
+    {"type_params": []} if "type_params" in ast.FunctionDef._fields else {}
+)
+
+
 # ── ast helpers ────────────────────────────────────────────────────────────────
 
 

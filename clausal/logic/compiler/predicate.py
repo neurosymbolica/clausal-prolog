@@ -6,10 +6,10 @@ This submodule owns the three public compile functions
 ``_build_predicate_*_funcdef`` helpers that assemble the final
 ``ast.FunctionDef`` for a predicate.
 
-``_EXTRA_FUNCDEF`` is sourced from ``_monolith`` so other submodules
-can keep referencing it via ``_m.`` without requiring predicate.py
-to be loaded first.  Locked-dispatch / bucket-ref state now lives on
-``CompilationContext`` (``ctx_template``) rather than a thread-local.
+``_EXTRA_FUNCDEF`` lives in ``_ast_helpers`` so submodules can
+reference it without depending on this entrypoint module.  Locked-
+dispatch / bucket-ref state lives on ``CompilationContext``
+(``ctx_template``) rather than a thread-local.
 """
 
 from __future__ import annotations
@@ -59,6 +59,7 @@ from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME, _DISP_PREFIX,
+    _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
@@ -99,8 +100,6 @@ from .goal_trampoline import (
     _inject_bucket_refs_trampoline,
     _yield_step_stmt,
 )
-from . import _monolith as _m
-
 # ── Phase 0.5a hoisted runtime-helper aliases ────────────────────────────────
 # ``base_globals`` of compiled predicates references these runtime helpers by
 # name.  The imports below bind each name as a module global in this file, so
@@ -206,29 +205,6 @@ from clausal.logic.tabling import (  # noqa: F401
     _TABLING_SUSPEND,
 )
 _naf_tabled_fn_s = _naf_tabled_fn
-
-# Python 3.12+ added type_params to FunctionDef
-_EXTRA_FUNCDEF: dict = (
-    {"type_params": []} if "type_params" in ast.FunctionDef._fields else {}
-)
-
-
-def __getattr__(name):
-    """Fall back to _monolith for any name not defined in this submodule.
-
-    The compile_predicate_* functions moved here reference ~50 Phase 0.5a
-    hoisted aliases (_DictTerm_t, _fd_eq_fn, _KWTerm_s, …) and runtime
-    helpers (_head_list_unify_input, _body_star_unify, …) that live in
-    _monolith's namespace.  Rather than enumerate them here, we delegate;
-    Python looks up module attributes lazily at call time.
-    """
-    try:
-        return getattr(_m, name)
-    except AttributeError:
-        raise AttributeError(
-            f"module 'clausal.logic.compiler.predicate' has no attribute {name!r}"
-        ) from None
-
 
 # ── TRO (moved to .tro) ─────────────────────────────────────────────────────
 from .tro import (  # noqa: E402,F401

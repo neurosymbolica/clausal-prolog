@@ -22,55 +22,103 @@ Organized by functional cohesion (see
 - ``destructive_reuse`` — dead-source container-reuse rewrite
 - ``tro``               — tail-recursion optimization analysis + rewrite
 - ``predicate``         — top-level ``compile_predicate_*`` entrypoints
-- ``_monolith``         — residual shared state + re-export hub (see below)
 
-The ``_monolith`` submodule holds the hoisted Phase 0.5a runtime-helper
-aliases (``_fd_eq_fn``, ``_DictTerm_t``, …); these are shared module-
-level state that multiple submodules reference lazily.  It also
-re-exports every moved-out symbol so external code can still import
-any name from ``clausal.logic.compiler`` regardless of which submodule
-owns it.
-
-The ``__getattr__`` delegation below forwards unknown-attribute lookups
-to ``_monolith``.  This preserves backward compatibility with the many
-call sites (tests, builtins, tools) that import private helpers like
-``_body_multi_star_unify`` or ``_extract_first_arg_key`` directly from
-``clausal.logic.compiler``.
+Re-exports below are explicit: every name imported from this package
+by tests, tools, or sibling subpackages has a direct binding here.
+The ``_monolith`` re-export hub and ``__getattr__`` delegation that
+previously fronted these names were retired in slice B6 of the
+compiler refactor (see ``implementation_plans/SLICE_B_PROGRESS.md``).
 """
 
-from . import _monolith as _monolith
+# ── Public API ──────────────────────────────────────────────────────────────
+from clausal.logic.trampoline import DONE  # noqa: F401
 
-# Explicit re-exports — the documented public API surface.
-from ._monolith import (  # noqa: F401
+from .predicate import (  # noqa: F401
     compile_predicate_trampoline,
     compile_predicate_trampoline_ast,
     compile_predicate_shallow,
     compile_predicate_shallow_ast,
     compile_predicate,
     compile_predicate_ast,
-    compile_body,
+)
+from .goal_shallow import compile_body, compile_goal  # noqa: F401
+from .goal_trampoline import (  # noqa: F401
     compile_body_trampoline,
+    compile_goal_trampoline,
+)
+from .terms_to_ast import (  # noqa: F401
     term_to_ast_expr,
     arith_to_ast_expr,
+    _dotted_name_from_loadattr,
+)
+from .head_match import (  # noqa: F401
     head_to_match_pattern,
     compile_head_to_match_case,
 )
-from .goal_shallow import compile_goal  # noqa: F401
-from .goal_trampoline import compile_goal_trampoline  # noqa: F401
 
+# ── Private re-exports for tests, tools, and external callers ──────────────
+# Each name below is imported from clausal.logic.compiler somewhere outside
+# this package (tests/, clausal/logic/solve.py, clausal/tools/, etc.).
+# Adding a name here is the explicit contract that the import is intended;
+# new private names should *not* be exposed unless a real external caller
+# needs them.
 
-def __getattr__(name):
-    """Forward unknown-attribute lookups to ``_monolith``.
+from . import predicate  # noqa: F401 — submodule import for tests
 
-    Tests and internal modules import private helpers
-    (``_body_multi_star_unify``, ``_build_star_list``,
-    ``_extract_first_arg_key``, …) from ``clausal.logic.compiler``.
-    Rather than enumerate each one, we delegate — ``_monolith``
-    re-exports every symbol from the topic-specific submodules.
-    """
-    try:
-        return getattr(_monolith, name)
-    except AttributeError:
-        raise AttributeError(
-            f"module 'clausal.logic.compiler' has no attribute {name!r}"
-        ) from None
+from ._vars import _collect_vars, _var_python_name  # noqa: F401
+
+from .globals_env import (  # noqa: F401
+    _collect_globals_info,
+    _collect_call_targets,
+    _collect_head_types,
+    _collect_py_thunks,
+    _collect_types_from_term,
+    _disp_key,
+    _inject_call_targets,
+)
+
+from .arg_index import (  # noqa: F401
+    _INDEX_THRESHOLD,
+    _INDEX_VAR,
+    _analyze_index_positions,
+    _analyze_joint_index_positions,
+    _bucket_key,
+    _joint_bucket_key,
+    _static_call_key,
+    _runtime_arg_key,
+    _extract_arg_key,
+    _extract_first_arg_key,
+    _build_arg_index,
+    _build_first_arg_index,
+    _build_joint_arg_index,
+    _build_secondary_index,
+)
+
+from .tro import (  # noqa: F401
+    _detect_tro_clause,
+    _get_tro_check_indices,
+    _tro_args_safe,
+    _is_deterministic_goal,
+)
+
+from .destructive_reuse import _find_destructive_reuse_goals  # noqa: F401
+
+from .control_constructs import (  # noqa: F401
+    _compile_goal_lambda,
+    _flatten_conjunction,
+)
+
+from .goal_trampoline import _inject_bucket_refs_trampoline  # noqa: F401
+
+# Runtime helpers — re-exported for tests that exercise them directly.
+# We import via .predicate (not directly from clausal.logic.runtime.*) so
+# the runtime/compiler boundary test (which allows runtime imports only
+# in predicate.py) stays satisfied without an exception list entry.
+from .predicate import (  # noqa: F401
+    _head_list_unify_input,
+    _head_list_unify_output,
+    _body_star_unify,
+    _body_multi_star_unify,
+    _build_star_list,
+    _build_multi_star_list,
+)

@@ -47,7 +47,6 @@ from .goal_trampoline import (
     _dispatch_call_trampoline,
     _dispatch_goal_trampoline,
 )
-from . import _monolith as _m
 
 
 # ── Tail Recursion Optimization (TRO) ─────────────────────────────────────────

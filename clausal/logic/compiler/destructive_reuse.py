@@ -22,13 +22,13 @@ from clausal.terms import (
 from clausal.logic.database import Clause
 
 from ._vars import _collect_var_ids
-from . import _monolith as _m
 
 
 def _is_deterministic_goal(goal):
-    # Lazy accessor — _is_deterministic_goal lives in TRO (still in _monolith
-    # until phase 16) and is defined after destructive_reuse is imported.
-    return _m._is_deterministic_goal(goal)
+    # Function-local import to break the cycle:
+    # tro -> goal_trampoline -> destructive_reuse -> tro
+    from .tro import _is_deterministic_goal as _impl
+    return _impl(goal)
 
 
 # ── Destructive-reuse optimization ───────────────────────────────────────────

@@ -37,12 +37,12 @@ from ._ast_helpers import (
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
+    _EXTRA_FUNCDEF,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .globals_env import _preallocate_body_vars
 from .terms_to_ast import term_to_ast_expr, arith_to_ast_expr
 from .compile_ctx import CompilationContext
-from . import _monolith as _m
 from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: E402
 
 # Aliases preserved from the pre-split monolith (Call/LoadName from the AST).
@@ -97,7 +97,7 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
         ),
         body=once_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
     once_mark = ctx.fresh(_MARK_PREFIX)
     return [
@@ -138,7 +138,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
         ),
         body=gen_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     # Type check: n must be a positive integer
@@ -224,7 +224,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
         ),
         body=gen_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     count_incr = ast.AugAssign(
@@ -283,7 +283,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
             ),
             body=body,
             decorator_list=[], returns=None, type_comment=None,
-            **_m._EXTRA_FUNCDEF,
+            **_EXTRA_FUNCDEF,
         )
 
     setup_fn = _make_sub_gen(setup_gen, setup)
@@ -379,7 +379,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
         ),
         body=thunk_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     get_old = _assign(
@@ -470,7 +470,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         ),
         body=thunk_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     cond_expr = term_to_ast_expr(cond, var_context, eval_arith=False)
@@ -543,7 +543,7 @@ def _compile_find_all_core(
         ),
         body=gen_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
 
     append_call = ast.Expr(value=_call(
@@ -697,7 +697,7 @@ def _make_catch_subgen_fn_and_loop(
         ),
         body=gen_body,
         decorator_list=[], returns=None, type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
     loop = ast.For(
         target=_name("_", ast.Store()),
@@ -808,7 +808,7 @@ def _compile_goal_lambda(
         decorator_list=[],
         returns=None,
         type_comment=None,
-        **_m._EXTRA_FUNCDEF,
+        **_EXTRA_FUNCDEF,
     )
     ast.fix_missing_locations(func_def)
 

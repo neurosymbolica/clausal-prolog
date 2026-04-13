@@ -31,7 +31,6 @@ from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign  # noqa: F401
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from . import _monolith as _m  # noqa: F401
 
 
 # ── First-argument indexing (V2-1) ────────────────────────────────────────────
