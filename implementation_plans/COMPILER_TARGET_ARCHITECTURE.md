@@ -38,6 +38,15 @@ trampoline protocol, etc.) lives in a different package from code
 that runs during compilation. This makes it structurally impossible
 to accidentally couple them.
 
+This is **not** about AOT vs JIT — the compiler itself runs at
+Python runtime every time a `.clausal` module is imported, every
+time `assertz/1` adds a new clause to a dynamic predicate, and any
+time a user invokes the compile API directly. The split is between
+*compilation-time code paths* (the `compiler/` package) and
+*compiled-predicate runtime code paths* (the `runtime/` package).
+Both execute in the same Python process; they just do different
+jobs.
+
 ### P4. Optimisations are distinct passes, not embedded in the main compiler
 
 Each optimisation (indexing, TRO, destructive-reuse, call-site
@@ -303,9 +312,10 @@ class FreshNames:
 
 ```python
 class Strategy(Protocol):
-    name: Literal["shallow", "trampoline"]
-
     # Hooks emitted by body-IR lowering.
+    # Strategy identity is the class itself — callers that need to
+    # dispatch on strategy use isinstance() or match/case, not a
+    # string field.  A __repr__ exists for logging.
     def emit_leaf_yield(self, ctx: CompilationContext) -> ast.stmt:
         """AST for 'a solution is available' — the innermost k_stmts."""
 
@@ -341,88 +351,160 @@ live in `compiler/strategy.py` and are 30-50 lines each.
 ### `GoalOp` — the body IR
 
 A small tagged union of *operations* that a compiled body reduces
-to. Strategy-agnostic: neither shallow nor trampoline show up here.
+to. **Target-agnostic and strategy-agnostic**: no Python AST, no
+yield protocols, no C types, no LLVM instructions. Just logic-level
+operations over logic-level operands.
 
 ```python
+# Operands are logic-level — the same types Clause.body uses.
+# Term = Var | Compound | int | str | ... | TupleLiteral | DictTerm | ...
+# Subset of clausal.terms chosen for the IR.
+
 class GoalOp:
     """Base for compiled goal operations."""
 
+# ── Binding / constraint ops ──
+
 @dataclass
 class Unify(GoalOp):
-    l: ast.expr
-    r: ast.expr
-    # Needs mark/undo? Yes for unify, no for dif.
+    l: Term
+    r: Term
+    # Needs trail mark/undo around the k-continuation? Yes for unify,
+    # no for dif (which only posts a constraint).
     needs_mark: bool = True
 
 @dataclass
-class Guard(GoalOp):
-    """Runtime condition — emit `if cond: <k_stmts>`."""
-    cond: ast.expr
+class Dif(GoalOp):
+    """Post a dis-equality constraint on two terms."""
+    l: Term
+    r: Term
 
 @dataclass
-class Iterate(GoalOp):
-    """Enumerate an iterable — emit `for var in iter: <k_stmts>`."""
-    iter_expr: ast.expr
-    elem_var: str
+class StructuralEq(GoalOp):
+    """Prolog ==/2 — succeed iff structurally identical without binding."""
+    l: Term
+    r: Term
+    negate: bool = False  # \==/2
 
 @dataclass
-class SubCall(GoalOp):
-    """Call a sub-predicate.  Emission is strategy-specific."""
-    fname: str
-    arity: int
-    arg_exprs: list[ast.expr]
+class ArithEval(GoalOp):
+    """Evaluate an arithmetic expression and unify with target."""
+    target: Term       # usually a Var
+    expr: ArithExpr    # Add | Sub | Mult | ... tree
+
+@dataclass
+class FDCompare(GoalOp):
+    """CLP(FD) comparison constraint."""
+    op: Literal["eq", "ne", "lt", "le", "gt", "ge"]
+    l: Term
+    r: Term
+
+# ── Control flow ops ──
 
 @dataclass
 class Sequence(GoalOp):
-    """Sequential composition."""
     ops: list[GoalOp]
 
 @dataclass
 class Alternate(GoalOp):
-    """Disjunction / Or."""
+    """Disjunction (Or)."""
     ops: list[GoalOp]
 
 @dataclass
 class Negate(GoalOp):
-    """NAF — first-order negation by failure."""
+    """Negation as failure."""
     op: GoalOp
 
 @dataclass
 class Branch(GoalOp):
-    """If-then-else (reified or general)."""
+    """If-then-else.  reified_test is set for reifiable conditions
+    (Unify, Dif, FDCompare) so backends can emit the three-way
+    reified form; None means general single-evaluation ITE."""
     test: GoalOp
     then: GoalOp
     else_: GoalOp
-    reified_as: Literal["unify", "fd_eq", "fd_lt", ..., None]
+    reified_test: Literal["unify", "dif", "fd_eq", ...] | None = None
+
+# ── Membership ops ──
+
+@dataclass
+class MemberIn(GoalOp):
+    """elem in collection — backtracks over collection elements."""
+    elem: Term
+    collection: Term
+    negate: bool = False  # NotIn
+
+# ── Call ops ──
+
+@dataclass
+class SubCall(GoalOp):
+    """Call a named sub-predicate.  Resolved call target sits in
+    base_globals (by phase 1), so fname is enough — no need to
+    reference a Python callable here."""
+    fname: str
+    arity: int
+    args: list[Term]
+    # Optimisation hints — set by passes, consumed by backends.
+    direct_bucket_ref: str | None = None    # call-site specialisation
+    tail_recursive: bool = False            # TRO eligibility
+    destructive_reuse: bool = False         # DR-rewritten variant
 
 @dataclass
 class MetaCall(GoalOp):
-    """Meta-predicate call — once, findall, catch, etc."""
-    kind: Literal["once", "findall", "catch", ...]
-    args: list[Any]  # structure depends on kind
+    """Meta-predicate call (once, findall, catch, setup_call_cleanup, …).
+    The 'kind' enumerates a closed set; args is a structured record
+    whose shape is determined by kind.  Backends pattern-match on
+    kind to lower."""
+    kind: Literal[
+        "once", "call_nth", "count_all", "setup_call_cleanup",
+        "freeze", "when", "findall", "bagof", "setof",
+        "throw", "catch", "catch_error", "catch_recover",
+        "forall", "halt",
+    ]
+    args: dict[str, Any]  # kind-specific field bag
+
+# ── Low-level ops ──
 
 @dataclass
-class Halt(GoalOp):
-    """halt/0 or halt/1."""
-    code: ast.expr | None = None
-
-@dataclass
-class Raw(GoalOp):
-    """Escape hatch: pre-compiled AST.  Used during migration.
-    Should not exist in final state."""
-    stmts: list[ast.stmt]
+class ListPatternUnify(GoalOp):
+    """Runtime bidirectional list-pattern unification guard.
+    Backends emit a call to their runtime's equivalent of
+    _head_list_unify_input/output.  See compiler/README.md §7."""
+    target: Term
+    before_vars: list[Term]
+    star_var: Term | None
+    after_vars: list[Term]
+    phase: Literal["input", "output"]
 ```
 
-The IR captures **meaning**, not execution. Emission happens in a
-second pass.
+The IR captures **meaning**, not execution. It is the pivot point
+between the analysis passes (which don't need to know about targets
+or strategies) and the lowering passes (which do).
 
 Why this shape:
 
 - Analysis passes (TRO, DR, call-site specialisation) run on
-  `GoalOp` trees. They don't need to know about yield protocols.
-- Strategy-specific emit happens at one place per op kind.
-- Shallow / trampoline differences are localized to the
-  `Strategy.emit_*` hooks.
+  `GoalOp` trees and write back optimisation hints (fields on
+  `SubCall` etc.). They don't need to know about yield protocols.
+- Strategy-specific *lowering* happens at one place per op kind,
+  per backend. Shallow and trampoline differ only in the lowering
+  of a small number of ops (`SubCall`, the leaf yield at the end
+  of a `Sequence`, `Negate`).
+- **Multiple backends are planned** — Python AST today, potentially
+  C / LLVM / WASM later. The IR deliberately does not reference
+  any target's concrete types. See §5b *Future backends*.
+
+### Operands in the IR
+
+`Term` in the IR is the same type clauses carry — `Var`, `Compound`,
+scalars, `DictTerm`, `TupleLiteral`, `StarUnpack`, etc. The IR does
+**not** pre-lower terms to AST expressions — that's a backend
+concern.
+
+Arithmetic expressions use a distinct mini-IR (`ArithExpr` — Add,
+Sub, Mult, Negate, …) because arithmetic has its own evaluation
+semantics that differ from general term handling (native math vs
+unification).
 
 ### `DispatchPlan`
 
@@ -477,7 +559,138 @@ entirely driven by the plan's shape.
 
 ---
 
-## 5. Runtime / compile-time boundary
+## 5. Two axes of variation: strategy and backend
+
+The compiler has **two** orthogonal axes along which output varies:
+
+- **Strategy** — how solution enumeration and backtracking are
+  structured. Today's "shallow" and "trampoline" are both
+  *Python-language* strategies; they differ in call-stack
+  discipline. In a low-level backend (C / LLVM), strategy takes
+  different forms — perhaps an explicit choice-point stack plus
+  continuations, or a WAM-style environment frame.
+
+- **Backend** — what kind of code we emit. Python AST is today.
+  C source, LLVM IR, WASM are potential futures.
+
+The pipeline through phase 5 (IR production) is independent of
+both. Phases 6 (assemble) and 7 (codegen) are backend-specific;
+strategy influences emission within a backend.
+
+```
+         ┌───────────────────────────────────────────────┐
+         │  phases 1-5: target-agnostic                  │
+         │    load, analyse, plan, head, body → IR       │
+         │    (optimisation passes operate here)         │
+         └───────────────────────────────────────────────┘
+                              │
+                              ▼                       ┌── ShallowStrategy
+         ┌────────────────────────────┐               │
+ Python  │ lower_python_{shallow,     │ ◀─── pick ────┤── TrampolineStrategy
+ backend │ trampoline}(IR, ctx)       │               │
+         │ → ast.FunctionDef          │               │
+         └────────────────────────────┘               │
+                              │                       │
+                              ▼                       │
+         ┌────────────────────────────┐               │
+         │ phases 6-8 (Python path):  │               │
+         │   assemble, codegen,       │               │
+         │   install                  │               │
+         └────────────────────────────┘               │
+                                                       │
+         ┌────────────────────────────┐                │
+ Future  │ lower_c / lower_llvm /     │ ◀── pick ──────┘
+ backends│ lower_wasm(IR, ctx)        │
+         │ → target-specific output   │
+         └────────────────────────────┘
+```
+
+Today, only the Python backend exists. The IR is designed so that
+adding a backend means: implement `lower_<backend>(ir, ctx)` +
+a backend-specific assemble/codegen/install path. The analyses and
+optimisations run unchanged on the shared IR.
+
+## 6. Future backends (C / LLVM / WASM)
+
+This subsection is aspirational — no code today — but the target
+architecture must not foreclose on it. Notes on what each backend
+would need:
+
+### C source backend
+
+- Target: a `.c` file defining each predicate as a function taking
+  an explicit choice-point stack.
+- Compiled via `cc` into a `.so` loaded via `ctypes` or a Python
+  C-API extension.
+- Strategy: probably a single strategy — WAM-style environment
+  frames with an explicit trail and choice-point stack. No Python
+  generator protocol available; no trampoline needed.
+- Runtime: a C runtime library providing `unify`, `deref`, `trail`,
+  `deref_walk`, the list-unify helpers. Mirrors the current
+  `clausal/logic/_list_unify.c` etc. but standalone (not a Python
+  extension).
+- Use cases: hot predicates benchmarked against the Python
+  compiled version, production-sensitive deployments.
+
+### LLVM backend
+
+- Target: LLVM IR directly via `llvmlite` (or similar).
+- JIT-compilable for hot predicates (ties into
+  `todo/jit_indexing.md`).
+- AOT-compilable for distribution.
+- Strategy: similar to C backend.
+- Runtime: could share the C runtime library.
+- Use cases: performance-critical computation-heavy predicates.
+
+### WASM backend
+
+- Target: portable WASM module loadable from Python, JS, or
+  anywhere WASM runs.
+- Enables browser / edge-deployment use cases.
+- Probably lowers via LLVM → WASM (leveraging the LLVM backend)
+  rather than emitting WASM text directly.
+
+### What the architecture gives us for free
+
+Because the IR is target-agnostic, **adding any of these backends
+does not require changes to the analysis or optimisation passes**.
+TRO, destructive reuse, indexing, call-site specialisation all
+operate on `GoalOp` trees. A new backend consumes the optimised IR
+and lowers it to its target language.
+
+What each new backend *does* require:
+
+- A new `lower_<target>(ir, ctx)` function.
+- A new `<target>_Strategy` implementation (if the backend has
+  strategy choices — a native C backend might have just one).
+- A new runtime library (in the target's language).
+- New `assemble`, `codegen`, `install` phases appropriate to the
+  target.
+- Tests verifying the backend produces the same solutions as the
+  Python backend on a shared test corpus.
+
+### What won't transfer
+
+Some current Python-specific features may not map cleanly:
+
+- Python `ast.Lambda` goal arguments — backends that don't have
+  first-class closures need an alternative representation.
+- `PyThunk` f-string escapes — native backends probably need a
+  callback-to-Python or a pre-compiled expression.
+- Some Python builtins (`write/1`, `print_term/1`) are trivially
+  implementable in any backend; others (`time_goal/2` with
+  introspection) tie more deeply to Python.
+
+These are acknowledged limitations, not architectural problems. A
+minimal C backend would compile a defined subset of Clausal
+predicates (pure logic + arithmetic + FD) and fall back to the
+Python backend for features the C backend doesn't yet support. The
+target architecture supports this falback — each predicate chooses
+its backend at compile time.
+
+---
+
+## 7. Runtime / compile-time boundary
 
 `clausal/logic/runtime/` holds everything that runs inside compiled
 predicates:
@@ -504,7 +717,7 @@ future cross-contamination.
 
 ---
 
-## 6. Safety and invariants
+## 8. Safety and invariants
 
 Principle P7: invariants are asserted. Each phase states its
 preconditions and postconditions in docstring and in code.
@@ -554,7 +767,7 @@ to the offending clause / phase.
 
 ---
 
-## 7. Strategy contract
+## 9. Strategy contract
 
 The `Strategy` protocol formalises what each strategy must provide.
 Both implementations are small:
@@ -563,7 +776,6 @@ Both implementations are small:
 # strategy.py
 
 class ShallowStrategy:
-    name = "shallow"
     supports_tro = False
     supports_destructive_reuse = False
 
@@ -591,7 +803,6 @@ class ShallowStrategy:
 
 ```python
 class TrampolineStrategy:
-    name = "trampoline"
     supports_tro = True
     supports_destructive_reuse = True
 
@@ -624,7 +835,7 @@ aggressively dedupe without fear.
 
 ---
 
-## 8. What goes where: a concrete example
+## 10. What goes where: a concrete example
 
 Consider compiling `append/3`:
 
@@ -678,7 +889,7 @@ through named fields on `ctx`.
 
 ---
 
-## 9. Optimisations as passes
+## 11. Optimisations as passes
 
 Each optimisation is a pass with a clear before/after contract.
 
@@ -727,7 +938,7 @@ behavioural equivalence on a suite of test predicates.
 
 ---
 
-## 10. Thread-local state: none
+## 12. Thread-local state: none
 
 Today's `_compile_context_local: threading.local` becomes fields on
 `CompilationContext`. The thread-local existed because the compile
@@ -754,7 +965,7 @@ useful for testing and diffing.
 
 ---
 
-## 11. Public API
+## 13. Public API
 
 `clausal/logic/compiler/__init__.py` exposes:
 
@@ -782,7 +993,7 @@ that emits `DeprecationWarning` and forwards, then removal).
 
 ---
 
-## 12. How this differs from today — summary table
+## 14. How this differs from today — summary table
 
 | Concern                          | Today                                       | Target                                   |
 |----------------------------------|---------------------------------------------|------------------------------------------|
@@ -800,7 +1011,7 @@ that emits `DeprecationWarning` and forwards, then removal).
 
 ---
 
-## 13. Open questions to resolve before migrating
+## 15. Open questions to resolve before migrating
 
 These need answers, not just hand-waving:
 
@@ -858,7 +1069,7 @@ specifically.
 
 ---
 
-## 14. What we get
+## 16. What we get
 
 If we execute this architecture well, the pay-off is:
 
@@ -892,7 +1103,7 @@ If we execute this architecture well, the pay-off is:
 
 ---
 
-## 15. What this proposal does NOT answer
+## 17. What this proposal does NOT answer
 
 - **The migration path.** That's step 4. Probably a parallel
   implementation behind a feature flag, migrate tests one by one,
@@ -909,7 +1120,7 @@ If we execute this architecture well, the pay-off is:
 
 ---
 
-## 16. Concluding thoughts
+## 18. Concluding thoughts
 
 The proposal commits to structure. It says:
 
