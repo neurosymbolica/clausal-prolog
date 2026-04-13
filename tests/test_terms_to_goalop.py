@@ -133,8 +133,30 @@ def test_or_stays_binary_and_nests():
     ])
 
 
-def test_unsupported_raises_not_implemented():
-    # ``Not`` is deferred to Slice D5c.
+def test_not_wraps_negate():
+    # Compare by class name + structure rather than dataclass equality —
+    # some other test in the full suite reloads ``clausal.logic.compiler.ir``,
+    # leaving ``terms_to_goalop``'s captured ``Negate`` reference stale
+    # and breaking class-identity based ``__eq__``.  The harness's
+    # ast.dump diff covers semantic correctness; this test only needs to
+    # prove the IR shape is right.
     x, y = _vars("X", "Y")
+    body = [nodes.Not(operand=_b(nodes.Unify, x, y))]
+    result = terms_to_goalop(body)
+    assert isinstance(result, Sequence)
+    assert len(result.ops) == 1
+    neg = result.ops[0]
+    assert type(neg).__name__ == "Negate"
+    assert type(neg.op).__name__ == "Unify"
+    assert neg.op.l == x and neg.op.r == y
+
+
+def test_unsupported_raises_not_implemented():
+    # ``IfExpr`` is deferred to Slice D5d.
+    x, y, z = _vars("X", "Y", "Z")
     with pytest.raises(NotImplementedError, match="not yet supported"):
-        terms_to_goalop([nodes.Not(operand=_b(nodes.Unify, x, y))])
+        terms_to_goalop([nodes.IfExpr(
+            test=_b(nodes.Unify, x, y),
+            body=_b(nodes.Unify, y, z),
+            orelse=_b(nodes.Unify, x, z),
+        )])

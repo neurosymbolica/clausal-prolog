@@ -35,6 +35,7 @@ from clausal.logic.compiler.ir import (
     FDOp,
     GoalOp,
     MemberIn,
+    Negate,
     Sequence,
     StructuralEq,
     Unify,
@@ -98,6 +99,21 @@ def _convert(goal: Any) -> GoalOp:
         # AST equivalence.
         case nodes.Or(left=l, right=r):
             return Alternate(ops=[_convert(l), _convert(r)])
+
+        # ``Not(op)`` → ``Negate(op)``.  Tabled NAF (``Not`` of a call to a
+        # tabled predicate) routes through ``_compile_tabled_naf_simple``
+        # in the legacy path, not the inline NAF that ``lower(Negate)``
+        # emits.  The tabled check needs a ``db`` handle which
+        # ``terms_to_goalop`` does not have, so until the tabled case is
+        # handled explicitly we rely on ``SubCall`` being unsupported
+        # (D5e) to make the inner ``_convert`` raise
+        # ``NotImplementedError`` for any call-shaped inner — that
+        # propagates up through this arm and the whole body falls back
+        # to legacy, including tabled-NAF bodies.  Once D5e lands,
+        # ``Not`` over a tabled ``SubCall`` must be re-routed explicitly
+        # (likely as a ``MetaCall`` arm).
+        case nodes.Not(operand=op):
+            return Negate(op=_convert(op))
         case nodes.Unify(left=l, right=r):
             # Star-list unification (e.g. ``X is [*T, Last]``) routes
             # through ``_compile_star_is`` in the legacy path and maps to
