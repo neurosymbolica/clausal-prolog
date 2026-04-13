@@ -15,6 +15,16 @@ functions are expected to diverge in Slice D5 as strategy-specific
 ops land (``Alternate``, ``Negate``, ``SubCall``, ``MetaCall``, …);
 at that point the trampoline module grows its own dispatch and stops
 delegating.
+
+.. warning::
+   **Do not add a strategy-specific case to ``lower_python_shallow``
+   while this delegation is still live.**  Any op whose trampoline
+   lowering is not identical to the shallow lowering must first trigger
+   the fork: give each strategy module its own full match statement
+   (or introduce a shared ``_lower_goalop_shared`` helper for the
+   strategy-agnostic subset) and then add the divergent case.  The
+   AST-diff harness (D4) will catch the mismatch, but the fix is a
+   structural change, not a one-line patch.
 """
 
 from __future__ import annotations
