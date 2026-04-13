@@ -152,11 +152,10 @@ def test_not_wraps_negate():
 
 
 def test_unsupported_raises_not_implemented():
-    # ``IfExpr`` is deferred to Slice D5d.
-    x, y, z = _vars("X", "Y", "Z")
+    # Predicate ``Call`` is deferred to Slice D5e.
     with pytest.raises(NotImplementedError, match="not yet supported"):
-        terms_to_goalop([nodes.IfExpr(
-            test=_b(nodes.Unify, x, y),
-            body=_b(nodes.Unify, y, z),
-            orelse=_b(nodes.Unify, x, z),
+        terms_to_goalop([nodes.Call(
+            func=nodes.LoadName(name="foo"),
+            args=["X"],
+            kwargs=[],
         )])

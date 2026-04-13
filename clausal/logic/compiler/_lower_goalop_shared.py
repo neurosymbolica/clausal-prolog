@@ -21,15 +21,18 @@ from typing import Callable, Union
 from clausal.logic.compiler.ir import (
     Alternate,
     ArithEval,
+    Branch,
     Dif,
     FDCompare,
     FDOp,
     GoalOp,
     MemberIn,
+    ReifiedKind,
     Sequence,
     StructuralEq,
     Unify,
 )
+from clausal.logic.compiler.ite_reified import _three_way_reif_branch
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.compiler._ast_helpers import (
     _MARK_PREFIX,
@@ -57,6 +60,19 @@ _FD_RUNTIME: dict[FDOp, str] = {
 }
 
 
+# (op_name, fd_true_name, fd_false_name) — the same triple the legacy
+# ``_FD_REIFY_INFO`` carries, keyed here by :data:`ReifiedKind` literal
+# rather than ``clausal.terms`` type so the IR has no term-level dep.
+_FD_REIFY: dict[str, tuple[str, str, str]] = {
+    "fd_eq": ("eq", "_fd_eq", "_fd_ne"),
+    "fd_ne": ("ne", "_fd_ne", "_fd_eq"),
+    "fd_lt": ("lt", "_fd_lt", "_fd_ge"),
+    "fd_le": ("le", "_fd_le", "_fd_gt"),
+    "fd_gt": ("gt", "_fd_gt", "_fd_le"),
+    "fd_ge": ("ge", "_fd_ge", "_fd_lt"),
+}
+
+
 def lower_shared(
     ir: GoalOp,
     ctx: CompilationContext,
@@ -74,6 +90,16 @@ def lower_shared(
             for op in reversed(ops):
                 k = recurse(op, ctx, k)
             return k
+
+        # ── Reified Branch (D5d-i) — three-way ITE.
+        # General Branch (``reified_test is None``) is deferred to
+        # D5d-ii; returning ``None`` lets the caller fall back to
+        # legacy via the harness.
+        case Branch(test=t_op, then=th_op, else_=el_op, reified_test=kind) \
+                if kind is not None:
+            return _lower_reified_branch(
+                ctx, kind, t_op, th_op, el_op, k_stmts, recurse,
+            )
 
         case Alternate(ops=ops):
             mark = ctx.fresh(_MARK_PREFIX)
@@ -180,6 +206,70 @@ def lower_shared(
             ]
 
     return None
+
+
+def _lower_reified_branch(
+    ctx: CompilationContext,
+    kind: ReifiedKind,
+    test_op: GoalOp,
+    then_op: GoalOp,
+    else_op: GoalOp,
+    k_stmts: list[ast.stmt],
+    recurse,
+) -> list[ast.stmt]:
+    """Emit the three-way reified ITE pattern, byte-identical to the
+    legacy ``_compile_reified_ite_eq`` / ``_compile_reified_ite_fd``.
+
+    The IR's ``reified_test`` literal carries enough information that
+    operands can be read directly off ``test_op`` without re-deriving
+    from a term — ``"unify"`` and ``"dif"`` come from a :class:`Unify`
+    or :class:`Dif` IR op respectively, ``"fd_*"`` from :class:`FDCompare`.
+    """
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
+    reif_var = ctx.fresh("_reif")
+    l = test_op.l
+    r = test_op.r
+    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+
+    then_stmts = recurse(then_op, ctx, k_stmts)
+    else_stmts = recurse(else_op, ctx, k_stmts)
+
+    if kind == "unify" or kind == "dif":
+        if kind == "dif":
+            true_stmts, false_stmts = else_stmts, then_stmts
+        else:
+            true_stmts, false_stmts = then_stmts, else_stmts
+        mark = ctx.fresh(_MARK_PREFIX)
+        undetermined = [
+            _assign_mark(mark, trail_name),
+            _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
+            _undo_stmt(mark, trail_name),
+            _if(_call(_name("_dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
+        ]
+        reif_call = _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name))
+        return _three_way_reif_branch(
+            reif_var, reif_call, true_stmts, false_stmts, undetermined,
+        )
+
+    # FD reified.
+    op_name, fd_true_name, fd_false_name = _FD_REIFY[kind]
+    mark = ctx.fresh(_MARK_PREFIX)
+    undetermined = [
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
+        _undo_stmt(mark, trail_name),
+        _assign_mark(mark, trail_name),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
+        _undo_stmt(mark, trail_name),
+    ]
+    reif_call = _call(
+        _name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name),
+    )
+    return _three_way_reif_branch(
+        reif_var, reif_call, then_stmts, else_stmts, undetermined,
+    )
 
 
 __all__ = ["lower_shared"]

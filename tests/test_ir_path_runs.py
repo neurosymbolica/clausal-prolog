@@ -67,11 +67,11 @@ def test_ir_path_runs_and_matches_on_d_subset(strategy_cls):
 
 def test_ir_path_fallback_is_counted_on_unsupported_op():
     _ir_path_stats_reset()
-    # ``IfExpr`` is deferred to D5d — must fall back.
-    body = [nodes.IfExpr(
-        test=_b(nodes.Unify, "X", "Y"),
-        body=_b(nodes.Unify, "Y", "Z"),
-        orelse=_b(nodes.Unify, "X", "Z"),
+    # Predicate ``Call`` is deferred to D5e — must fall back.
+    body = [nodes.Call(
+        func=nodes.LoadName(name="foo"),
+        args=["X"],
+        kwargs=[],
     )]
     _compile_body_impl(body, _ctx(ShallowStrategy()))
     assert _IR_PATH_STATS["runs"] == 1

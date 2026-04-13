@@ -27,15 +27,18 @@ from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
 from clausal.logic.compiler.terms_to_ast import _is_star_list
+from clausal.logic.compiler.ite_reified import _is_reifiable
 from clausal.logic.compiler.ir import (
     Alternate,
     ArithEval,
+    Branch,
     Dif,
     FDCompare,
     FDOp,
     GoalOp,
     MemberIn,
     Negate,
+    ReifiedKind,
     Sequence,
     StructuralEq,
     Unify,
@@ -65,6 +68,18 @@ _FD_OP: dict[type, FDOp] = {
     nodes.LtE: "le",
     nodes.Gt: "gt",
     nodes.GtE: "ge",
+}
+
+
+_REIFIED_KIND: dict[type, ReifiedKind] = {
+    nodes.Unify: "unify",
+    nodes.DoesNotUnify: "dif",
+    nodes.ArithEq: "fd_eq",
+    nodes.ArithNeq: "fd_ne",
+    nodes.Lt: "fd_lt",
+    nodes.LtE: "fd_le",
+    nodes.Gt: "fd_gt",
+    nodes.GtE: "fd_ge",
 }
 
 
@@ -114,6 +129,19 @@ def _convert(goal: Any) -> GoalOp:
         # (likely as a ``MetaCall`` arm).
         case nodes.Not(operand=op):
             return Negate(op=_convert(op))
+
+        # ``IfExpr(test, body, orelse)`` → ``Branch``.  Only the
+        # *reified* subset (D5d-i) is converted; non-reifiable tests
+        # are deferred to D5d-ii and fall back to the legacy general
+        # ITE path via ``NotImplementedError``.
+        case nodes.IfExpr(test=test, body=then, orelse=else_) \
+                if _is_reifiable(test):
+            return Branch(
+                test=_convert(test),
+                then=_convert(then),
+                else_=_convert(else_),
+                reified_test=_REIFIED_KIND[type(test)],
+            )
         case nodes.Unify(left=l, right=r):
             # Star-list unification (e.g. ``X is [*T, Last]``) routes
             # through ``_compile_star_is`` in the legacy path and maps to
