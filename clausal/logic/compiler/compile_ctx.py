@@ -121,6 +121,20 @@ class CompilationContext:
     # helpers that need the strategy must fail loudly if they find it absent.
     strategy: "Strategy | None" = None
 
+    # ── Slice D4: parallel-implementation feature flag ───────────────────
+    #
+    # When ``True``, ``_compile_body_impl`` runs the new GoalOp IR path
+    # (``terms_to_goalop`` → ``lower_python_<strategy>``) alongside the
+    # legacy dispatcher fold and asserts ``ast.dump`` equality before
+    # returning.  Unsupported body shapes surface as ``NotImplementedError``
+    # from ``terms_to_goalop`` and fall back to legacy transparently.
+    #
+    # Fallback env var ``CLAUSAL_IR_PATH=1`` forces the flag on for CI
+    # regardless of per-context configuration.  D7 flips the default to
+    # ``True`` and, after a release cycle of green runs, retires the
+    # legacy path.
+    use_ir_path: bool = False
+
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 

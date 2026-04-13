@@ -722,10 +722,82 @@ def _compile_body_impl(
     """
     strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
-    k: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
+    leaf: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
+
+    # Legacy right-to-left fold.  This advances ``ctx.fresh`` — the IR
+    # parallel run below re-uses the same starting counter via a cloned
+    # FreshNames so the two emissions pick identical fresh names.
+    fresh_before = ctx.fresh._n
+    legacy_k: list[ast.stmt] = list(leaf)
     for goal in reversed(goals):
-        k = strategy.compile_goal(ctx, goal, k)
-    return alloc_stmts + k
+        legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
+
+    if _ir_path_enabled(ctx):
+        _run_ir_parallel(goals, ctx, leaf, legacy_k, fresh_before)
+
+    return alloc_stmts + legacy_k
+
+
+def _ir_path_enabled(ctx: CompilationContext) -> bool:
+    """Slice D4 feature flag.
+
+    Enabled per-context via ``ctx.use_ir_path`` or globally via the
+    ``CLAUSAL_IR_PATH=1`` env var (the CI fallback).  D7 flips the
+    default to ``True``; until then the legacy fold remains the
+    source of truth and the IR path is a verification-only shadow.
+    """
+    import os
+    if ctx.use_ir_path:
+        return True
+    return os.environ.get("CLAUSAL_IR_PATH") == "1"
+
+
+def _run_ir_parallel(
+    goals: list,
+    ctx: CompilationContext,
+    leaf: list[ast.stmt],
+    legacy_k: list[ast.stmt],
+    fresh_before: int,
+) -> None:
+    """Slice D4 parallel-implementation harness.
+
+    Run the GoalOp IR path alongside the just-completed legacy fold and
+    assert ``ast.dump`` equality.  Any drift is stop-the-line — this
+    routine raises ``AssertionError`` rather than silently papering over
+    a lowering bug.  Unsupported body shapes surface as
+    ``NotImplementedError`` from ``terms_to_goalop`` and are an
+    expected fallback, not a failure.
+
+    The IR run uses a cloned :class:`FreshNames` starting at
+    *fresh_before* (the legacy run's pre-fold counter value) so the two
+    emissions pick identical fresh names.  ``ctx.fresh`` itself is not
+    touched — callers see only the legacy advance.
+    """
+    from ._ast_helpers import FreshNames
+    from .strategy import ShallowStrategy
+    from .terms_to_goalop import terms_to_goalop
+    from . import lower_python_shallow, lower_python_trampoline
+    try:
+        ir = terms_to_goalop(goals)
+    except NotImplementedError:
+        return  # legitimate fallback — D2 subset is still growing.
+    lower_fn = (
+        lower_python_shallow.lower
+        if isinstance(ctx.strategy, ShallowStrategy)
+        else lower_python_trampoline.lower
+    )
+    ir_fresh = FreshNames()
+    ir_fresh._n = fresh_before
+    ir_ctx = ctx.replace(fresh=ir_fresh)
+    new_k = lower_fn(ir, ir_ctx, list(leaf))
+    legacy_dump = [ast.dump(s) for s in legacy_k]
+    new_dump = [ast.dump(s) for s in new_k]
+    if new_dump != legacy_dump:
+        raise AssertionError(
+            "Slice D4 IR-path AST diff from legacy path — stop the line.\n"
+            f"  legacy: {legacy_dump}\n"
+            f"  ir:     {new_dump}"
+        )
 
 
 def compile_body(

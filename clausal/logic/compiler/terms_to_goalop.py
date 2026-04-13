@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
+from clausal.logic.compiler.terms_to_ast import _is_star_list
 from clausal.logic.compiler.ir import (
     ArithEval,
     Dif,
@@ -81,6 +82,12 @@ def _extend(ops: list[GoalOp], body: Any) -> None:
 def _convert(goal: Any) -> GoalOp:
     match goal:
         case nodes.Unify(left=l, right=r):
+            # Star-list unification (e.g. ``X is [*T, Last]``) routes
+            # through ``_compile_star_is`` in the legacy path and maps to
+            # ``ListPatternUnify`` in the IR — both belong to Slice D5g,
+            # not D2.  Defer so the D4 harness falls back cleanly.
+            if _is_star_list(l) or _is_star_list(r):
+                _not_yet(goal)
             return Unify(l=l, r=r)
         case nodes.DoesNotUnify(left=l, right=r):
             return Dif(l=l, r=r)
