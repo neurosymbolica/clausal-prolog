@@ -1,4 +1,4 @@
-"""Reified if-then-else compilation (shallow + trampoline variants).
+"""Reified if-then-else compilation — strategy-driven via ``ctx.strategy``.
 
 A "reifiable" test (unify/disunify, arithmetic/FD comparison) compiles
 to a three-way branch driven by ``_reify_eq`` / ``_reify_fd``:
@@ -7,18 +7,20 @@ to a three-way branch driven by ``_reify_eq`` / ``_reify_fd``:
 - returned value ``False`` → run ``else_``
 - returned value ``None``  → explore both with appropriate constraints
 
-Non-reifiable tests fall through to ``_compile_general_ite`` which
-uses a single-evaluation ``_found`` flag (plus ``_naf_tabled`` for
-WFS-sound tabled negation).
+Non-reifiable tests fall through to ``_compile_general_ite`` which uses
+a single-evaluation ``_found`` flag (plus ``_naf_tabled`` for WFS-sound
+tabled negation).
 
-Each variant has a shallow and a trampoline counterpart — intentionally
-co-located so a future de-duplication refactor is a single-file diff.
+Shallow and trampoline previously shipped separate twin helpers
+(``*_trampoline``).  Slice C collapsed them: the reified branches route
+goal-compilation through ``ctx.strategy.compile_goal`` and are
+strategy-agnostic; the general-ITE scaffold (sub-generator + driver
+loop) is the one place where shallow vs trampoline structurally
+differs, so ``_compile_general_ite`` branches on the strategy class.
 
-Cycle handling: ``goal_trampoline`` imports this module, so the call
-to ``goal_trampoline._yield_step_stmt`` /
-``goal_trampoline._dispatch_goal_trampoline`` inside
-``_compile_general_ite_trampoline`` uses a function-local import.
-``_EXTRA_FUNCDEF`` lives in ``_ast_helpers`` (leaf; no cycle).
+Cycle handling: the module is imported by ``goal_shallow`` and
+``goal_trampoline``.  Back-references into those modules are
+function-local imports (the ratified B4/B6 idiom).
 """
 
 from __future__ import annotations
@@ -48,47 +50,14 @@ def _is_reifiable(test) -> bool:
     return isinstance(test, _REIFIABLE_TYPES)
 
 
-# ── Mapping from CmpOp node types to their FD reify ops and negated fd_ names ──
-
 _FD_REIFY_INFO: dict[type, tuple[str, str, str]] = {
     ArithEq:  ("eq", "_fd_eq", "_fd_ne"),
     ArithNeq: ("ne", "_fd_ne", "_fd_eq"),
-    Lt:            ("lt", "_fd_lt", "_fd_ge"),
-    LtE:           ("le", "_fd_le", "_fd_gt"),
-    Gt:            ("gt", "_fd_gt", "_fd_le"),
-    GtE:           ("ge", "_fd_ge", "_fd_lt"),
+    Lt:       ("lt", "_fd_lt", "_fd_ge"),
+    LtE:      ("le", "_fd_le", "_fd_gt"),
+    Gt:       ("gt", "_fd_gt", "_fd_le"),
+    GtE:      ("ge", "_fd_ge", "_fd_lt"),
 }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Shallow variants
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _compile_reified_ite_impl(
-    ctx: CompilationContext,
-    test, then, else_, k_stmts,
-    *,
-    compile_eq,
-    compile_fd,
-):
-    """Shared three-way-branch dispatcher for reified ITE."""
-    match test:
-        case Unify(left=l, right=r):
-            return compile_eq(ctx, l, r, then, else_, k_stmts, swap=False)
-        case DoesNotUnify(left=l, right=r):
-            return compile_eq(ctx, l, r, then, else_, k_stmts, swap=True)
-        case _:
-            return compile_fd(ctx, test, then, else_, k_stmts)
-
-
-def _compile_reified_ite(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Shallow variant: see ``_compile_reified_ite_impl`` for the shape."""
-    return _compile_reified_ite_impl(
-        ctx, test, then, else_, k_stmts,
-        compile_eq=_compile_reified_ite_eq,
-        compile_fd=_compile_reified_ite_fd,
-    )
 
 
 def _three_way_reif_branch(
@@ -114,22 +83,22 @@ def _three_way_reif_branch(
     return [reif_assign, branch]
 
 
-def _compile_reified_ite_eq_impl(
-    ctx: CompilationContext,
-    l, r, then, else_, k_stmts,
-    *,
-    compile_goal_fn,
-    swap: bool,
-):
-    """Shared ``_compile_reified_ite_eq`` body."""
+def _compile_reified_ite_eq(
+    ctx: CompilationContext, l, r, then, else_, k_stmts, *, swap: bool,
+) -> list[ast.stmt]:
+    """Reified ITE for equality / disequality — strategy-agnostic.
+
+    Recursive goal compilation goes through ``ctx.strategy.compile_goal``,
+    so shallow and trampoline share the same function.
+    """
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     reif_var = ctx.fresh("_reif")
     l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
 
-    then_stmts = compile_goal_fn(ctx, then, k_stmts)
-    else_stmts = compile_goal_fn(ctx, else_, k_stmts)
+    then_stmts = ctx.strategy.compile_goal(ctx, then, k_stmts)
+    else_stmts = ctx.strategy.compile_goal(ctx, else_, k_stmts)
 
     if swap:
         true_stmts, false_stmts = else_stmts, then_stmts
@@ -145,28 +114,15 @@ def _compile_reified_ite_eq_impl(
     ]
 
     reif_call = _call(_name("_reify_eq"), l_expr, r_expr, _name(trail_name))
-    return _three_way_reif_branch(reif_var, reif_call, true_stmts, false_stmts, undetermined)
-
-
-def _compile_reified_ite_eq(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
-    """Shallow reified ITE for equality/disequality — wraps ``_impl``."""
-    from .goal_shallow import _dispatch_goal
-    def _cg(ctx_, goal, k):
-        return _dispatch_goal(ctx_, goal, k)
-    return _compile_reified_ite_eq_impl(
-        ctx, l, r, then, else_, k_stmts,
-        compile_goal_fn=_cg,
-        swap=swap,
+    return _three_way_reif_branch(
+        reif_var, reif_call, true_stmts, false_stmts, undetermined,
     )
 
 
-def _compile_reified_ite_fd_impl(
-    ctx: CompilationContext,
-    test, then, else_, k_stmts,
-    *,
-    compile_goal_fn,
-):
-    """Shared ``_compile_reified_ite_fd`` body."""
+def _compile_reified_ite_fd(
+    ctx: CompilationContext, test, then, else_, k_stmts,
+) -> list[ast.stmt]:
+    """Reified ITE for CLP(FD) comparison — strategy-agnostic."""
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     test_type = type(test)
@@ -176,8 +132,8 @@ def _compile_reified_ite_fd_impl(
     l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
 
-    then_stmts = compile_goal_fn(ctx, then, k_stmts)
-    else_stmts = compile_goal_fn(ctx, else_, k_stmts)
+    then_stmts = ctx.strategy.compile_goal(ctx, then, k_stmts)
+    else_stmts = ctx.strategy.compile_goal(ctx, else_, k_stmts)
 
     mark = ctx.fresh(_MARK_PREFIX)
     undetermined = [
@@ -189,23 +145,46 @@ def _compile_reified_ite_fd_impl(
         _undo_stmt(mark, trail_name),
     ]
 
-    reif_call = _call(_name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name))
-    return _three_way_reif_branch(reif_var, reif_call, then_stmts, else_stmts, undetermined)
-
-
-def _compile_reified_ite_fd(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Shallow reified ITE for CLP(FD) comparison — wraps ``_impl``."""
-    from .goal_shallow import _dispatch_goal
-    def _cg(ctx_, goal, k):
-        return _dispatch_goal(ctx_, goal, k)
-    return _compile_reified_ite_fd_impl(
-        ctx, test, then, else_, k_stmts,
-        compile_goal_fn=_cg,
+    reif_call = _call(
+        _name("_reify_fd"), ast.Constant(op_name), l_expr, r_expr, _name(trail_name),
+    )
+    return _three_way_reif_branch(
+        reif_var, reif_call, then_stmts, else_stmts, undetermined,
     )
 
 
-def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Compile ITE for non-reifiable conditions."""
+def _compile_reified_ite(
+    ctx: CompilationContext, test, then, else_, k_stmts,
+) -> list[ast.stmt]:
+    """Three-way-branch dispatcher for reified ITE — strategy-agnostic."""
+    match test:
+        case Unify(left=l, right=r):
+            return _compile_reified_ite_eq(ctx, l, r, then, else_, k_stmts, swap=False)
+        case DoesNotUnify(left=l, right=r):
+            return _compile_reified_ite_eq(ctx, l, r, then, else_, k_stmts, swap=True)
+        case _:
+            return _compile_reified_ite_fd(ctx, test, then, else_, k_stmts)
+
+
+def _compile_general_ite(
+    ctx: CompilationContext, test, then, else_, k_stmts,
+) -> list[ast.stmt]:
+    """Compile ITE for non-reifiable conditions.
+
+    Structural: the strategy determines how the condition's sub-generator
+    is wrapped and driven.  Shallow uses a plain ``def`` + ``for`` loop
+    over a bare yield-None generator; trampoline uses a ``StepGenerator``
+    + send-loop, and compiles the condition with trampoline yields.
+    """
+    from .strategy import TrampolineStrategy
+    if isinstance(ctx.strategy, TrampolineStrategy):
+        return _compile_general_ite_trampoline(ctx, test, then, else_, k_stmts)
+    return _compile_general_ite_shallow(ctx, test, then, else_, k_stmts)
+
+
+def _compile_general_ite_shallow(
+    ctx: CompilationContext, test, then, else_, k_stmts,
+) -> list[ast.stmt]:
     from .goal_shallow import _dispatch_goal
     db = ctx.db
     var_context = ctx.var_context
@@ -262,66 +241,30 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
             _undo_stmt(naf_mark, trail_name),
         ]
         return [cond_fn] + true_block + false_block
-    else:
-        found_flag = ctx.fresh("_found")
-        mark = ctx.fresh(_MARK_PREFIX)
-        return [
-            cond_fn,
-            _assign(found_flag, ast.Constant(value=False)),
-            _assign_mark(mark, trail_name),
-            ast.For(
-                target=_name("_", ast.Store()),
-                iter=_call(_name(cond_gen)),
-                body=[_assign(found_flag, ast.Constant(value=True))] + then_stmts,
-                orelse=[],
-            ),
-            _undo_stmt(mark, trail_name),
-            _if(
-                ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
-                else_stmts,
-            ),
-        ]
+
+    found_flag = ctx.fresh("_found")
+    mark = ctx.fresh(_MARK_PREFIX)
+    return [
+        cond_fn,
+        _assign(found_flag, ast.Constant(value=False)),
+        _assign_mark(mark, trail_name),
+        ast.For(
+            target=_name("_", ast.Store()),
+            iter=_call(_name(cond_gen)),
+            body=[_assign(found_flag, ast.Constant(value=True))] + then_stmts,
+            orelse=[],
+        ),
+        _undo_stmt(mark, trail_name),
+        _if(
+            ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
+            else_stmts,
+        ),
+    ]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Trampoline variants
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _compile_reified_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Trampoline variant: see ``_compile_reified_ite_impl`` for the shape."""
-    return _compile_reified_ite_impl(
-        ctx, test, then, else_, k_stmts,
-        compile_eq=_compile_reified_ite_eq_trampoline,
-        compile_fd=_compile_reified_ite_fd_trampoline,
-    )
-
-
-def _compile_reified_ite_eq_trampoline(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
-    """Trampoline variant — wraps ``_compile_reified_ite_eq_impl``."""
-    from .goal_trampoline import _dispatch_goal_trampoline
-    def _cgt(ctx_, goal, k):
-        return _dispatch_goal_trampoline(ctx_, goal, k)
-    return _compile_reified_ite_eq_impl(
-        ctx, l, r, then, else_, k_stmts,
-        compile_goal_fn=_cgt,
-        swap=swap,
-    )
-
-
-def _compile_reified_ite_fd_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Trampoline variant — wraps ``_compile_reified_ite_fd_impl``."""
-    from .goal_trampoline import _dispatch_goal_trampoline
-    def _cgt(ctx_, goal, k):
-        return _dispatch_goal_trampoline(ctx_, goal, k)
-    return _compile_reified_ite_fd_impl(
-        ctx, test, then, else_, k_stmts,
-        compile_goal_fn=_cgt,
-    )
-
-
-def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
-    """Trampoline variant of _compile_general_ite."""
+def _compile_general_ite_trampoline(
+    ctx: CompilationContext, test, then, else_, k_stmts,
+) -> list[ast.stmt]:
     from .goal_trampoline import _dispatch_goal_trampoline, _yield_step_stmt
     db = ctx.db
     var_context = ctx.var_context

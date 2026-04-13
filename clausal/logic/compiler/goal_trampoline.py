@@ -62,15 +62,15 @@ from .arg_index import _static_call_key, _bucket_key, _joint_bucket_key
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
 from .ite_reified import (
     _is_reifiable,
-    _compile_reified_ite_trampoline,
-    _compile_general_ite_trampoline,
+    _compile_reified_ite,
+    _compile_general_ite,
 )
 from .control_constructs import (
     _compile_arith_cmp, _deref_cmp,
     _compile_once, _compile_call_nth, _compile_count_all,
     _compile_setup_call_cleanup, _compile_freeze, _compile_when,
     _compile_find_all_core,
-    _compile_throw, _compile_catch_trampoline,
+    _compile_throw, _compile_catch,
     _compile_goal_lambda, _flatten_conjunction, _hoist_lambda_args,
 )
 
@@ -501,23 +501,23 @@ def _dispatch_goal_trampoline(
         # ── Reified if-then-else ───────────────────────────────────────────
         case IfExpr(test=test, body=then, orelse=else_):
             if _is_reifiable(test):
-                return _compile_reified_ite_trampoline(ctx, test, then, else_, k_stmts)
+                return _compile_reified_ite(ctx, test, then, else_, k_stmts)
             else:
-                return _compile_general_ite_trampoline(ctx, test, then, else_, k_stmts)
+                return _compile_general_ite(ctx, test, then, else_, k_stmts)
 
         # ── catch(Goal, Catcher, Recovery) — exception handling ──────────
         case Call(func=LoadName(name="catch"), args=[goal_arg, catcher, recovery], kwargs=[]):
-            return _compile_catch_trampoline(ctx, goal_arg, catcher, recovery, k_stmts)
+            return _compile_catch(ctx, goal_arg, catcher, recovery, k_stmts)
 
         # ── catch_error(Goal, Error) — catch any exception, bind Error ──────────
         case Call(func=LoadName(name="catch_error"), args=[goal_arg, error_var], kwargs=[]):
-            return _compile_catch_trampoline(
+            return _compile_catch(
                 ctx, goal_arg, error_var, True, k_stmts, always_catch=True,
             )
 
         # ── catch_recover(Goal, Error, Recovery) — catch, bind, recover ───
         case Call(func=LoadName(name="catch_recover"), args=[goal_arg, error_var, recovery], kwargs=[]):
-            return _compile_catch_trampoline(
+            return _compile_catch(
                 ctx, goal_arg, error_var, recovery, k_stmts, always_catch=True,
             )
 

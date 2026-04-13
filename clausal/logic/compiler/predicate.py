@@ -259,7 +259,7 @@ def _build_predicate_trampoline_funcdef(
             strategy=TrampolineStrategy(),
         )
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
+    params = ctx_template.strategy.function_params(ctx_template, arg_names)
 
     # Statements that go inside the TRO while-loop (or directly in the func body).
     loop_stmts: list[ast.stmt] = []
@@ -581,12 +581,15 @@ def compile_predicate_trampoline(
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
             # TRO: detect tail-recursive clauses (same check as non-indexed path).
+            # Gated on the strategy's ``supports_tro`` flag — see
+            # ``compiler/strategy.py``.  Today only ``TrampolineStrategy``
+            # supports TRO, which matches the reachable path here.
             _is_tabled = (
                 db is not None and db.is_tabled(functor, arity)
             )
             _idx_tro_indices: frozenset[int] | None = None
             _tro_state_obj = None
-            if not _is_tabled:
+            if ctx_template.strategy.supports_tro and not _is_tabled:
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
                     if _detect_tro_clause(functor, arity, cl)
@@ -842,12 +845,13 @@ def compile_predicate_trampoline(
                 pred_cls._index_plans = {}
 
             # TRO: detect tail-recursive clauses with deterministic prefixes.
-            # Disabled for tabled predicates (SLG has its own suspension protocol).
+            # Disabled for tabled predicates (SLG has its own suspension
+            # protocol) and gated on ``ctx_template.strategy.supports_tro``.
             _is_tabled = (
                 db is not None and db.is_tabled(functor, arity)
             )
             tro_indices: frozenset[int] | None = None
-            if not _is_tabled:
+            if ctx_template.strategy.supports_tro and not _is_tabled:
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
                     if _detect_tro_clause(functor, arity, cl)
@@ -989,8 +993,13 @@ def _build_predicate_funcdef(
     ``compile_predicate`` (which then calls ``functiondef_to_function``) and
     ``compile_predicate_ast`` (which returns the FunctionDef directly).
     """
+    _shallow_strategy = ShallowStrategy()
+    _params_ctx = CompilationContext(
+        db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+        strategy=_shallow_strategy,
+    )
     arg_names = [f"arg{i}" for i in range(arity)]
-    params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
+    params = _shallow_strategy.function_params(_params_ctx, arg_names)
 
     all_stmts: list[ast.stmt] = []
 

@@ -715,7 +715,30 @@ def _compile_catch(
     *,
     always_catch: bool = False,
 ) -> list[ast.stmt]:
-    """Compile catch(Goal, Catcher, Recovery) in simple mode."""
+    """Compile catch(Goal, Catcher, Recovery) — strategy-driven.
+
+    Shallow wraps *goal_arg* and *recovery* in sub-generators and drives
+    them with ``for`` loops that execute *k_stmts* per solution; the
+    try/except covers those loops.  Trampoline compiles *goal_arg* /
+    *recovery* with *k_stmts* already embedded as the continuation; the
+    try/except covers the yielding stmts directly.
+
+    The structural split is captured here via ``ctx.strategy`` rather
+    than in twin helpers — the shared ``_compile_catch_impl`` assembles
+    the try/except/unify block given pre-compiled body statements.
+    """
+    from .strategy import TrampolineStrategy
+    if isinstance(ctx.strategy, TrampolineStrategy):
+        from .goal_trampoline import _dispatch_goal_trampoline
+        goal_stmts = _dispatch_goal_trampoline(ctx, goal_arg, k_stmts)
+        recovery_stmts = _dispatch_goal_trampoline(ctx, recovery, k_stmts)
+        return _compile_catch_impl(
+            ctx, catcher,
+            goal_body_stmts=goal_stmts,
+            recovery_body_stmts=recovery_stmts,
+            always_catch=always_catch,
+        )
+
     from .goal_shallow import _dispatch_goal
     goal_stmts = _dispatch_goal(ctx, goal_arg, [_yield_none_stmt()])
     recovery_stmts = _dispatch_goal(ctx, recovery, [_yield_none_stmt()])
@@ -734,27 +757,6 @@ def _compile_catch(
         always_catch=always_catch,
     )
     return [body[0], goal_gen_fn, body[1]]
-
-
-def _compile_catch_trampoline(
-    ctx: CompilationContext,
-    goal_arg: Any,
-    catcher: Any,
-    recovery: Any,
-    k_stmts: list[ast.stmt],
-    *,
-    always_catch: bool = False,
-) -> list[ast.stmt]:
-    """Compile catch(Goal, Catcher, Recovery) in trampoline mode."""
-    from .goal_trampoline import _dispatch_goal_trampoline
-    goal_stmts = _dispatch_goal_trampoline(ctx, goal_arg, k_stmts)
-    recovery_stmts = _dispatch_goal_trampoline(ctx, recovery, k_stmts)
-    return _compile_catch_impl(
-        ctx, catcher,
-        goal_body_stmts=goal_stmts,
-        recovery_body_stmts=recovery_stmts,
-        always_catch=always_catch,
-    )
 
 
 # ── Goal lambda compilation ──────────────────────────────────────────────────

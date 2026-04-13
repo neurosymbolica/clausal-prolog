@@ -121,7 +121,7 @@ from .control_constructs import (  # noqa: E402,F401
     _compile_setup_call_cleanup, _compile_freeze, _compile_when,
     _compile_find_all_core,
     _catcher_to_structural, _compile_throw,
-    _compile_catch, _compile_catch_trampoline,
+    _compile_catch,
     _compile_goal_lambda, _flatten_conjunction, _hoist_lambda_args,
 )
 
