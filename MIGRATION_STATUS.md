@@ -52,7 +52,28 @@ also fails pre-migration.
 
 **Phase 2 net adds**: 3 new `.clausal` fixtures (`io_to_string`, `phase5_builtins`, new test block in `catch_test`/`dict_set_builtins`/`term_inspection.clausal`), 77 Test clauses added. Python test files slimmed where duplicated.
 
-## Phase 3+ — To do
+## Phase 3 — Control flow & constraints
+
+| file | status | action |
+|---|---|---|
+| `test_regex.py` | ✅ audit-complete | 53 migratable tests — but Python scaffolding is `_load_module`-based integration-infra. Behavior covered by `regex_basic.clausal` (34 tests) + `regex_autobind.clausal` (59 tests). No migration |
+| `test_dcg.py` | ⏸ deferred | 57 tests using `_load_module` + `module_dict` introspection. Migration-worthy but requires designing many grammar fixtures. Existing `dcg_grammar.clausal` (5 tests) covers the integration path minimally |
+| `test_meta.py` | ✅ slimmed | Removed `TestClausalImport` (5 tests, dup of fixture). Extended `meta_test.clausal` by 14 Test clauses covering findall/bagof/setof/forall direct behavior. Orphan imports cleaned |
+| `test_coroutining.py` | ✅ extended | Added 12 Test clauses to `coroutining.clausal` (call_nth first/last/fail-goal/zero/negative, count_all bound/filter/no-side-effects, scc throw, call_cleanup fails/throws). `.py` kept for `pytest.raises(LogicException)` error-type assertions |
+| `test_edcg.py` | ⏸ deferred | Same `_load_module`-per-test pattern as DCG |
+| `test_clpfd.py` | ✅ audit-complete | Tests FDVar/Domain Python objects. Behavior covered by `clpfd_queens.clausal` + `clpfd_sendmore.clausal`. Stays |
+| `test_clpb.py` | ✅ audit-complete | BDD internals — infra. Stays |
+| `test_tabling.py` | ✅ audit-complete | TableEntry/SuspendedConsumer internals — infra. Behavior covered by `tabled_*.clausal` fixtures. Stays |
+| `test_wfs.py` | ✅ audit-complete | WFS engine internals — infra. Stays |
+| `test_dif.py` | ✅ audit-complete | `dif()` Python fn + attributed-var internals — infra. Behavior covered by `builtins_dif.clausal`. Stays |
+| `test_reified_ite.py` | ✅ audit-complete | Reified if-then-else AST node tests — infra. Stays |
+| `test_lambdas.py` | ✅ audit-complete | Lambda-compilation internals — infra. Stays |
+| `test_global_constraints.py` | ✅ audit-complete | Global constraint internals — infra. Stays |
+| `test_attributes.py` | ✅ audit-complete | Attributed var internals — infra. Stays |
+
+**Phase 3 net adds**: 26 new Test clauses (`meta_test.clausal` +14, `coroutining.clausal` +12). No Python test files deleted, but `test_meta.py` slimmed. 14 files audited, 2 deferred to TODOs.
+
+## Phase 4+ — To do
 
 See `MIGRATION_CANDIDATES.md`. Suggested next batches:
 

@@ -8,7 +8,7 @@ Tests classified as **behavior** exercise the Clausal language via `solve`/`once
 |---|---:|---:|---:|---:|
 | conformity | 0 | 22 | 0 | 0 |
 | constraints | 2 | 97 | 125 | 949 |
-| control | 8 | 194 | 72 | 175 |
+| control | 6 | 191 | 72 | 175 |
 | core | 23 | 379 | 142 | 844 |
 | docs | 1 | 0 | 4 | 0 |
 | misc | 85 | 164 | 286 | 530 |
@@ -29,11 +29,11 @@ Tests classified as **behavior** exercise the Clausal language via `solve`/`once
 | `tests/test_reif_builtins.py` (constraints) | 0 | 7 | 2 | 26 |
 | `tests/test_clpq.py` (constraints) | 0 | 4 | 11 | 105 |
 | `tests/test_tabling.py` (control) | 4 | 12 | 7 | 37 |
-| `tests/test_meta.py` (control) | 2 | 21 | 0 | 0 |
 | `tests/test_dcg.py` (control) | 1 | 56 | 0 | 0 |
 | `tests/test_higher_order.py` (control) | 1 | 5 | 0 | 28 |
 | `tests/test_exceptions.py` (control) | 0 | 20 | 6 | 1 |
 | `tests/test_edcg.py` (control) | 0 | 19 | 9 | 0 |
+| `tests/test_meta.py` (control) | 0 | 18 | 0 | 0 |
 | `tests/test_string_higher_order.py` (control) | 0 | 16 | 0 | 0 |
 | `tests/test_dif.py` (control) | 0 | 13 | 2 | 27 |
 | `tests/test_metainterpreters.py` (control) | 0 | 11 | 0 | 0 |
@@ -1647,33 +1647,33 @@ Entries marked **†** are also listed in `DUPLICATE_TESTS.md` — prefer deleti
 
 | line | label | test | behavior-hits | infra-hits |
 |---:|---|---|---|---|
-| 58 | **unknown** | `test_is_exception` |  |  |
-| 63 | **infra** | `test_carries_term` |  | Compound |
-| 68 | **unknown** | `test_str` |  |  |
-| 78 | **mixed** | `test_throw_raises_logic_exception` | solve | Call, LoadName, Module, Trail |
-| 86 | **mixed** | `test_throw_with_compound_term` | solve | Call, Compound, LoadName, Module, Trail |
-| 95 | **mixed** | `test_throw_with_integer` | solve | Call, LoadName, Module, Trail |
-| 103 | **mixed** | `test_throw_with_string_var` | solve | And, Call, LoadName, Module, Trail, Var |
-| 126 | **mixed** | `test_catch_no_exception` | solve | Call, LoadName, Module, Trail, Var |
-| 138 | **mixed** | `test_catch_catches_throw` | solve | Call, LoadName, Module, Trail, Var |
-| 151 | **mixed** | `test_catch_specific_catcher` | solve | Call, LoadName, Module, Trail, Var |
-| 163 | **mixed** | `test_catch_mismatch_reraises` | solve | Call, LoadName, Module, Trail, Var |
-| 176 | **mixed** | `test_catch_variable_catcher` | solve | Call, LoadName, Module, Trail, Var |
-| 189 | **mixed** | `test_nested_catch_inner_catches` | solve | Call, LoadName, Module, Trail, Var |
-| 206 | **mixed** | `test_nested_catch_inner_misses` | solve | Call, LoadName, Module, Trail, Var |
-| 224 | **mixed** | `test_trail_cleanup_on_catch` | solve | And, Call, LoadName, Module, Trail, Var, deref |
-| 245 | **mixed** | `test_throw_inside_deeply_nested` | solve | Call, Compound, LoadName, Module, Trail, Var, compile_predicate_trampoline |
-| 277 | **mixed** | `test_catch_goal_succeeds_multiple_solutions` | solve | And, Call, LoadName, Module, Trail, Var |
-| 298 | **mixed** | `test_halt_0` | solve | Call, LoadName, Module, Trail |
-| 306 | **mixed** | `test_halt_1` | solve | Call, LoadName, Module, Trail |
-| 319 | **mixed** | `test_python_catches_logic_exception` | solve | Call, LoadName, Module, Trail |
-| 329 | **mixed** | `test_logic_exception_is_exception_subclass` | solve | Call, LoadName, Module, Trail |
-| 345 | **unknown** | `test_type_error_helper` |  |  |
-| 354 | **unknown** | `test_instantiation_error_helper` |  |  |
-| 362 | **unknown** | `test_existence_error_helper` |  |  |
-| 369 | **unknown** | `test_permission_error_helper` |  |  |
-| 388 | **mixed** | `test_throw_inside_findall_propagates` | solve | And, Call, LoadName, Module, Trail, Var |
-| 402 | **mixed** | `test_catch_around_findall` | solve | And, Call, LoadName, Module, Trail, Var |
+| 47 | **unknown** | `test_is_exception` |  |  |
+| 52 | **infra** | `test_carries_term` |  | Compound |
+| 57 | **unknown** | `test_str` |  |  |
+| 67 | **mixed** | `test_throw_raises_logic_exception` | solve | Call, LoadName, Module, Trail |
+| 75 | **mixed** | `test_throw_with_compound_term` | solve | Call, Compound, LoadName, Module, Trail |
+| 84 | **mixed** | `test_throw_with_integer` | solve | Call, LoadName, Module, Trail |
+| 92 | **mixed** | `test_throw_with_string_var` | solve | And, Call, LoadName, Module, Trail, Var |
+| 115 | **mixed** | `test_catch_no_exception` | solve | Call, LoadName, Module, Trail, Var |
+| 127 | **mixed** | `test_catch_catches_throw` | solve | Call, LoadName, Module, Trail, Var |
+| 140 | **mixed** | `test_catch_specific_catcher` | solve | Call, LoadName, Module, Trail, Var |
+| 152 | **mixed** | `test_catch_mismatch_reraises` | solve | Call, LoadName, Module, Trail, Var |
+| 165 | **mixed** | `test_catch_variable_catcher` | solve | Call, LoadName, Module, Trail, Var |
+| 178 | **mixed** | `test_nested_catch_inner_catches` | solve | Call, LoadName, Module, Trail, Var |
+| 195 | **mixed** | `test_nested_catch_inner_misses` | solve | Call, LoadName, Module, Trail, Var |
+| 213 | **mixed** | `test_trail_cleanup_on_catch` | solve | And, Call, LoadName, Module, Trail, Var, deref |
+| 234 | **mixed** | `test_throw_inside_deeply_nested` | solve | Call, Compound, LoadName, Module, Trail, Var, compile_predicate_trampoline |
+| 266 | **mixed** | `test_catch_goal_succeeds_multiple_solutions` | solve | And, Call, LoadName, Module, Trail, Var |
+| 287 | **mixed** | `test_halt_0` | solve | Call, LoadName, Module, Trail |
+| 295 | **mixed** | `test_halt_1` | solve | Call, LoadName, Module, Trail |
+| 308 | **mixed** | `test_python_catches_logic_exception` | solve | Call, LoadName, Module, Trail |
+| 318 | **mixed** | `test_logic_exception_is_exception_subclass` | solve | Call, LoadName, Module, Trail |
+| 334 | **unknown** | `test_type_error_helper` |  |  |
+| 343 | **unknown** | `test_instantiation_error_helper` |  |  |
+| 351 | **unknown** | `test_existence_error_helper` |  |  |
+| 358 | **unknown** | `test_permission_error_helper` |  |  |
+| 377 | **mixed** | `test_throw_inside_findall_propagates` | solve | And, Call, LoadName, Module, Trail, Var |
+| 391 | **mixed** | `test_catch_around_findall` | solve | And, Call, LoadName, Module, Trail, Var |
 
 </details>
 
@@ -1775,29 +1775,24 @@ Entries marked **†** are also listed in `DUPLICATE_TESTS.md` — prefer deleti
 
 | line | label | test | behavior-hits | infra-hits |
 |---:|---|---|---|---|
-| 51 | **mixed** | `test_find_all_basic` | solve | Call, LoadName, Module, Trail, Var |
-| 64 | **mixed** | `test_find_all_with_filter` | solve | And, Call, Gt, LoadName, Module, Trail, Var |
-| 77 | **mixed** | `test_find_all_fail_empty_list` | solve | Call, LoadName, Module, Trail, Var |
-| 86 | **mixed** | `test_find_all_template_expression` | solve | And, Call, LoadName, Module, Trail, Var |
-| 100 | **mixed** | `test_find_all_no_side_effects` | solve | Call, LoadName, Module, Trail, Var |
-| 113 | **mixed** | `test_find_all_nested` | solve | And, Call, LoadName, Module, Trail, Var |
-| 142 | **mixed** | `test_bag_of_basic` | solve | Call, LoadName, Module, Trail, Var |
-| 155 | **mixed** | `test_bag_of_fails_on_empty` | solve | Call, LoadName, Module, Trail, Var |
-| 169 | **mixed** | `test_set_of_dedup` | solve | Call, LoadName, Module, Trail, Var |
-| 182 | **mixed** | `test_set_of_fails_on_empty` | solve | Call, LoadName, Module, Trail, Var |
-| 191 | **mixed** | `test_set_of_preserves_order` | solve | Call, LoadName, Module, Trail, Var |
-| 209 | **mixed** | `test_for_all_succeeds` | solve | Call, Gt, LoadName, Module, Trail, Var |
-| 219 | **mixed** | `test_for_all_fails` | solve | Call, Gt, LoadName, Module, Trail, Var |
-| 229 | **mixed** | `test_for_all_vacuously_true` | solve | Call, Gt, LoadName, Module, Trail, Var |
-| 245 | **mixed** | `test_call_1` | call | Module, Var, deref |
-| 254 | **mixed** | `test_call_goal_4` | call | Module |
-| 268 | **mixed** | `test_call_alias` | call | Module |
-| 281 | **mixed** | `test_call_5` | call | Module |
-| 302 | **mixed** | `test_squares` | call | Var |
-| 310 | **mixed** | `test_positives` | call | Var |
-| 318 | **mixed** | `test_unique_members` | call | Var |
-| 326 | **behavior** | `test_all_positive_pass` | call |  |
-| 333 | **behavior** | `test_all_positive_fail` | call |  |
+| 35 | **mixed** | `test_find_all_basic` | solve | Call, LoadName, Module, Trail, Var |
+| 48 | **mixed** | `test_find_all_with_filter` | solve | And, Call, Gt, LoadName, Module, Trail, Var |
+| 61 | **mixed** | `test_find_all_fail_empty_list` | solve | Call, LoadName, Module, Trail, Var |
+| 70 | **mixed** | `test_find_all_template_expression` | solve | And, Call, LoadName, Module, Trail, Var |
+| 84 | **mixed** | `test_find_all_no_side_effects` | solve | Call, LoadName, Module, Trail, Var |
+| 97 | **mixed** | `test_find_all_nested` | solve | And, Call, LoadName, Module, Trail, Var |
+| 126 | **mixed** | `test_bag_of_basic` | solve | Call, LoadName, Module, Trail, Var |
+| 139 | **mixed** | `test_bag_of_fails_on_empty` | solve | Call, LoadName, Module, Trail, Var |
+| 153 | **mixed** | `test_set_of_dedup` | solve | Call, LoadName, Module, Trail, Var |
+| 166 | **mixed** | `test_set_of_fails_on_empty` | solve | Call, LoadName, Module, Trail, Var |
+| 175 | **mixed** | `test_set_of_preserves_order` | solve | Call, LoadName, Module, Trail, Var |
+| 193 | **mixed** | `test_for_all_succeeds` | solve | Call, Gt, LoadName, Module, Trail, Var |
+| 203 | **mixed** | `test_for_all_fails` | solve | Call, Gt, LoadName, Module, Trail, Var |
+| 213 | **mixed** | `test_for_all_vacuously_true` | solve | Call, Gt, LoadName, Module, Trail, Var |
+| 229 | **mixed** | `test_call_1` | call | Module, Var, deref |
+| 238 | **mixed** | `test_call_goal_4` | call | Module |
+| 252 | **mixed** | `test_call_alias` | call | Module |
+| 265 | **mixed** | `test_call_5` | call | Module |
 
 </details>
 
@@ -2027,24 +2022,24 @@ Entries marked **†** are also listed in `DUPLICATE_TESTS.md` — prefer deleti
 
 | line | label | test | behavior-hits | infra-hits |
 |---:|---|---|---|---|
-| 50 | **mixed** | `test_decompose_compound` | call | Compound, Module, Var, deref |
-| 58 | **mixed** | `test_decompose_atom` | call | Module, Var, deref |
-| 67 | **mixed** | `test_decompose_arity1` | call | Compound, Module, Var, deref |
-| 75 | **mixed** | `test_construct_compound` | call | Compound, Module, Var, deref |
-| 86 | **mixed** | `test_construct_atom` | call | Module, Var, deref |
-| 96 | **mixed** | `test_decompose_large_compound` | call | Compound, Module, Var, deref |
-| 115 | **mixed** | `test_first_arg` | call | Compound, Module, Var, deref |
-| 123 | **mixed** | `test_second_arg` | call | Compound, Module, Var, deref |
-| 131 | **mixed** | `test_third_arg` | call | Compound, Module, Var, deref |
-| 138 | **mixed** | `test_out_of_range` | call | Compound, Module, Var, deref |
-| 145 | **mixed** | `test_zero_fails` | call | Compound, Module, Var, deref |
-| 152 | **mixed** | `test_negative_fails` | call | Compound, Module, Var, deref |
-| 158 | **mixed** | `test_nested_compound` | call | Compound, Module, Var, deref |
-| 174 | **mixed** | `test_decompose_compound` | call | Compound, Module, Var, deref |
-| 182 | **mixed** | `test_decompose_atom` | call | Module, Var, deref |
-| 190 | **mixed** | `test_decompose_arity1` | call | Compound, Module, Var, deref |
-| 198 | **mixed** | `test_construct_from_list` | call | Compound, Module, Var, deref |
-| 209 | **mixed** | `test_construct_atom_from_list` | call | Module, Var, deref |
+| 49 | **mixed** | `test_decompose_compound` | call | Compound, Module, Var, deref |
+| 57 | **mixed** | `test_decompose_atom` | call | Module, Var, deref |
+| 66 | **mixed** | `test_decompose_arity1` | call | Compound, Module, Var, deref |
+| 74 | **mixed** | `test_construct_compound` | call | Compound, Module, Var, deref |
+| 85 | **mixed** | `test_construct_atom` | call | Module, Var, deref |
+| 95 | **mixed** | `test_decompose_large_compound` | call | Compound, Module, Var, deref |
+| 114 | **mixed** | `test_first_arg` | call | Compound, Module, Var, deref |
+| 122 | **mixed** | `test_second_arg` | call | Compound, Module, Var, deref |
+| 130 | **mixed** | `test_third_arg` | call | Compound, Module, Var, deref |
+| 137 | **mixed** | `test_out_of_range` | call | Compound, Module, Var, deref |
+| 144 | **mixed** | `test_zero_fails` | call | Compound, Module, Var, deref |
+| 151 | **mixed** | `test_negative_fails` | call | Compound, Module, Var, deref |
+| 157 | **mixed** | `test_nested_compound` | call | Compound, Module, Var, deref |
+| 173 | **mixed** | `test_decompose_compound` | call | Compound, Module, Var, deref |
+| 181 | **mixed** | `test_decompose_atom` | call | Module, Var, deref |
+| 189 | **mixed** | `test_decompose_arity1` | call | Compound, Module, Var, deref |
+| 197 | **mixed** | `test_construct_from_list` | call | Compound, Module, Var, deref |
+| 208 | **mixed** | `test_construct_atom_from_list` | call | Module, Var, deref |
 
 </details>
 

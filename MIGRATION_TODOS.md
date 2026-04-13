@@ -78,6 +78,23 @@ findall+comparison. The underlying bug is not fixed.
 Action: open an issue / ROADMAP entry for V2-2 + assertz interaction.
 Non-trivial to fix (involves groundness-keyed dispatch invalidation).
 
+## `_load_module`-per-test files — full migration deferred
+
+Three Phase-3 files use the same idiom: each test dynamically builds a
+`.clausal` source string, writes it to a temp file, loads it, then
+introspects `module_dict` or calls predicates.
+
+- `test_regex.py` (53 migratable tests) — covered by `regex_basic.clausal`
+  + `regex_autobind.clausal`
+- `test_dcg.py` (56 tests) — `dcg_grammar.clausal` is thin (5 tests)
+- `test_edcg.py` (28 tests) — `edcg_counter.clausal` is thin
+
+The scaffolding is arguably *integration infra* (exercising the import
+hook + DCG/EDCG/regex compile passes), but the bulk of each test is
+plain Clausal behavior. Proper migration = design a matrix of small
+grammar/pattern fixtures with Test clauses covering the same matrix of
+inputs. Significant effort, medium-priority.
+
 ## No full git history for the migration
 
 One atomic commit (`ebe0e10`) bundles: audit tooling + `# nv` annotations

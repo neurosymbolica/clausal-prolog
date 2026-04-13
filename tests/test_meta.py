@@ -2,26 +2,10 @@
 
 from __future__ import annotations
 
-import os
-import sys
-
-import pytest
-
-from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
-from clausal.logic.database import Clause, Database, Module
-from clausal.logic.solve import call, solve, query, once, _deref_walk
-from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import (
-    And, Or, Not,
-    Unify as Is, Evaluate,
-    Lt, LtE, Gt, GtE,
-    in_, NotIn,
-    Call, LoadName,
-    Compound,
-)
-
-import clausal.import_hook
-from clausal.import_hook import _load_module
+from clausal.logic.database import Module
+from clausal.logic.solve import call, solve, _deref_walk
+from clausal.logic.variables import Var, Trail, deref
+from clausal.terms import And, Call, LoadName, Gt
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -293,46 +277,4 @@ class TestCallN:
 
 
 # ── .clausal integration ────────────────────────────────────────────────────
-
-
-_FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
-
-
-class TestClausalImport:
-    def test_squares(self):
-        """Squares/2 from meta_test.clausal."""
-        # nv
-        mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        x = Var()
-        results = [_deref_walk(x) for _ in call("Squares", [1, 2, 3], x, module=mod.__dict__["$module"])]
-        assert results == [[1, 4, 9]]
-
-    def test_positives(self):
-        """Positives/2 from meta_test.clausal."""
-        # nv
-        mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        x = Var()
-        results = [_deref_walk(x) for _ in call("Positives", [-1, 2, -3, 4], x, module=mod.__dict__["$module"])]
-        assert results == [[2, 4]]
-
-    def test_unique_members(self):
-        """UniqueMembers/2 from meta_test.clausal."""
-        # nv
-        mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        x = Var()
-        results = [_deref_walk(x) for _ in call("UniqueMembers", [1, 2, 1, 3, 2], x, module=mod.__dict__["$module"])]
-        assert results == [[1, 2, 3]]
-
-    def test_all_positive_pass(self):
-        """AllPositive succeeds for all positive list."""
-        # nv
-        mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        results = list(call("AllPositive", [1, 2, 3], module=mod.__dict__["$module"]))
-        assert len(results) == 1
-
-    def test_all_positive_fail(self):
-        """AllPositive fails if any element is non-positive."""
-        # nv
-        mod = _load_module("meta_test", os.path.join(_FIXTURE_DIR, "meta_test.clausal"))
-        results = list(call("AllPositive", [1, -2, 3], module=mod.__dict__["$module"]))
-        assert results == []
+# TestClausalImport removed: behavior moved to tests/fixtures/meta_test.clausal.

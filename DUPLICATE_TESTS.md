@@ -211,7 +211,7 @@ _None._
 
 ### constraints+control+core+misc+modules+scipy_torch
 
-- 1450 copies:
+- 1462 copies:
   - `tests/clausal_modules/exceptions.clausal:119` — `Test("throw if zero throws")`
   - `tests/clausal_modules/exceptions.clausal:123` — `Test("inner catch misses - outer catches")`
   - `tests/clausal_modules/exceptions.clausal:129` — `Test("parent backtracks after catch failure")`
@@ -346,6 +346,11 @@ _None._
   - `tests/fixtures/coroutining.clausal:131` — `Test("freeze+callnth")`
   - `tests/fixtures/coroutining.clausal:138` — `Test("findall+countall")`
   - `tests/fixtures/coroutining.clausal:148` — `Test("once+callcleanup")`
+  - `tests/fixtures/coroutining.clausal:167` — `Test("count_all with filter")`
+  - `tests/fixtures/coroutining.clausal:171` — `Test("count_all no side effects")`
+  - `tests/fixtures/coroutining.clausal:178` — `Test("scc cleanup runs on throw")`
+  - `tests/fixtures/coroutining.clausal:187` — `Test("call_cleanup: call fails, cleanup still runs")`
+  - `tests/fixtures/coroutining.clausal:190` — `Test("call_cleanup: call throws propagates")`
   - `tests/fixtures/dict_set_builtins.clausal:46` — `Test("dict_size: three")`
   - `tests/fixtures/dict_set_builtins.clausal:53` — `Test("dict_keys: sorted order")`
   - `tests/fixtures/dict_set_builtins.clausal:57` — `Test("dict_values: in key order")`
@@ -715,26 +720,25 @@ _None._
   - `tests/fixtures/list_patterns_edge_cases.clausal:96` — `Test("exactly_two: 2 elements")`
   - `tests/fixtures/list_patterns_edge_cases.clausal:106` — `Test("head_tail: [1,2,3] → H=1, T=[2,3]")`
   - `tests/fixtures/list_patterns_edge_cases.clausal:110` — `Test("head_tail: singleton → H=99, T=[]")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:127` — `Test("all_same: query mode binds all")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:134` — `Test("head_is: query binds head")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:147` — `Test("append: compute middle")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:151` — `Test("append: split [1] yields 2 pairs")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:166` — `Test("ignore_first_two: query binds")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:172` — `Test("first: extracts head")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:176` — `Test("second: exact 2 elements")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:181` — `Test("member_of_pair: [1,1] yields 2 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:185` — `Test("const: numeric input gives 42")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:189` — `Test("const: list input gives 42")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:196` — `Test("split: [1..5] yields 6 splits")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:203` — `Test("split3: singleton → X=42, A=[], B=[]")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:207` — `Test("split3: [1,2] yields 2 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:215` — `Test("around: [1] → X=1, slices=[[],[]]")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:219` — `Test("around: [1,2,1] yields 3 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:228` — `Test("split3way: [1] yields 3 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:235` — `Test("split3way: [1,2,3] yields 10 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:240` — `Test("bracket: [1,2,3,4] yields 3 solutions")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:248` — `Test("bracket: exactly 2 → single solution")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:254` — `Test("split backtracking: 4 splits, each partitions the list")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:122` — `Test("all_same: query mode binds all")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:129` — `Test("head_is: query binds head")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:142` — `Test("append: split [1] yields 2 pairs (pattern-sensitive)")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:152` — `Test("ignore_first_two: query binds")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:158` — `Test("first: extracts head")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:162` — `Test("second: exact 2 elements")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:167` — `Test("member_of_pair: [1,1] yields 2 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:171` — `Test("const: numeric input gives 42")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:175` — `Test("const: list input gives 42")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:182` — `Test("split: [1..5] yields 6 splits")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:189` — `Test("split3: singleton → X=42, A=[], B=[]")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:193` — `Test("split3: [1,2] yields 2 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:201` — `Test("around: [1] → X=1, slices=[[],[]]")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:205` — `Test("around: [1,2,1] yields 3 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:214` — `Test("split3way: [1] yields 3 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:221` — `Test("split3way: [1,2,3] yields 10 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:226` — `Test("bracket: [1,2,3,4] yields 3 solutions")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:234` — `Test("bracket: exactly 2 → single solution")`
+  - `tests/fixtures/list_patterns_edge_cases.clausal:240` — `Test("split backtracking: 4 splits, each partitions the list")`
   - `tests/fixtures/logging_basic.clausal:13` — `Test("get_logger same name")`
   - `tests/fixtures/logging_basic.clausal:22` — `Test("set_level debug")`
   - `tests/fixtures/logging_basic.clausal:28` — `Test("set_level warning")`
@@ -754,6 +758,14 @@ _None._
   - `tests/fixtures/logging_basic.clausal:117` — `Test("add_handler")`
   - `tests/fixtures/logging_basic.clausal:126` — `Test("set_formatter")`
   - `tests/fixtures/logging_basic.clausal:133` — `Test("logger hierarchy")`
+  - `tests/fixtures/meta_test.clausal:38` — `Test("findall basic: member of [1,2,3]")`
+  - `tests/fixtures/meta_test.clausal:42` — `Test("findall with filter: X > 1")`
+  - `tests/fixtures/meta_test.clausal:46` — `Test("findall empty: no solutions yields []")`
+  - `tests/fixtures/meta_test.clausal:50` — `Test("findall cartesian product")`
+  - `tests/fixtures/meta_test.clausal:58` — `Test("findall no side effects on outer vars")`
+  - `tests/fixtures/meta_test.clausal:62` — `Test("findall nested: outer + inner")`
+  - `tests/fixtures/meta_test.clausal:73` — `Test("bagof basic")`
+  - `tests/fixtures/meta_test.clausal:81` — `Test("setof deduplicates")`
   - `tests/fixtures/ortools_cpsat.clausal:5` — `Test("cpsat in_ contiguous domain")`
   - `tests/fixtures/ortools_cpsat.clausal:11` — `Test("cpsat in_ sparse domain")`
   - `tests/fixtures/ortools_cpsat.clausal:17` — `Test("cpsat bool declares 0-1 variable")`
@@ -1912,10 +1924,6 @@ _None._
 
 ### modules
 
-- 3 copies:
-  - `tests/conformity/iso_list_operations.clausal:83` — `Test("last empty fails")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:160` — `Test("last: [] fails")`
-  - `tests/fixtures/prolog_golden/iso_list_operations.clausal:61` — `Test('last empty fails')`
 - 2 copies:
   - `tests/conformity/iso_list_operations.clausal:42` — `Test("in: found")`
   - `tests/fixtures/prolog_golden/iso_list_operations.clausal:15` — `Test('in: found')`
@@ -1929,8 +1937,8 @@ _None._
   - `tests/conformity/iso_list_operations.clausal:56` — `Test("memberchk: not found")`
   - `tests/fixtures/prolog_golden/iso_list_operations.clausal:37` — `Test('memberchk: not found')`
 - 2 copies:
-  - `tests/conformity/iso_list_operations.clausal:72` — `Test("length empty")`
-  - `tests/fixtures/list_patterns_edge_cases.clausal:117` — `Test("length: [] → 0")`
+  - `tests/conformity/iso_list_operations.clausal:83` — `Test("last empty fails")`
+  - `tests/fixtures/prolog_golden/iso_list_operations.clausal:61` — `Test('last empty fails')`
 - 2 copies:
   - `tests/conformity/iso_list_operations.clausal:98` — `Test("nth0 first")`
   - `tests/conformity/iso_list_operations.clausal:100` — `Test("nth1 first")`

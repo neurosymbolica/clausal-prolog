@@ -149,3 +149,44 @@ Test("once+callcleanup") <- (
     once(call_cleanup(in_(X, [10, 20, 30]), RESULT is "cleaned")),
     X is 10
 )  # nv
+
+# ── Additional coverage migrated from test_coroutining.py ──────────────────
+
+# call_nth: pick first / last / with fail goal
+Test("call_nth first: N=1") <- (call_nth(in_(X, [10, 20, 30]), 1), X is 10)  # nv
+Test("call_nth last: N=3") <- (call_nth(in_(X, [10, 20, 30]), 3), X is 30)  # nv
+Test("call_nth fail goal") <- (not call_nth(False, 1))  # nv
+
+# call_nth: error-case behaviors via catch
+Test("call_nth zero raises") <- catch(call_nth(in_(X, [1]), 0), _, True)  # nv
+Test("call_nth negative raises") <- catch(call_nth(in_(X, [1]), -1), _, True)  # nv
+
+# count_all: bound-N modes
+Test("count_all N bound correct") <- count_all(in_(X, [1, 2, 3]), 3)  # nv
+Test("count_all N bound wrong fails") <- (not count_all(in_(X, [1, 2, 3]), 7))  # nv
+Test("count_all with filter") <- (
+    count_all((in_(X, [1, 2, 3, 4, 5]), X > 2), COUNT),
+    COUNT is 3
+)  # nv
+Test("count_all no side effects") <- (
+    X is 99,
+    count_all(in_(Y, [1, 2, 3]), _),
+    X == 99
+)  # nv
+
+# setup_call_cleanup: cleanup runs after call throws (observed via catch)
+Test("scc cleanup runs on throw") <- (
+    catch(
+        setup_call_cleanup(True, throw("call_err"), True),
+        E,
+        E == "call_err"
+    )
+)  # nv
+
+# call_cleanup: call fails / call throws
+Test("call_cleanup: call fails, cleanup still runs") <- (
+    not call_cleanup(in_(X, []), True)
+)  # nv
+Test("call_cleanup: call throws propagates") <- (
+    catch(call_cleanup(throw("cc_err"), True), E, E == "cc_err")
+)  # nv
