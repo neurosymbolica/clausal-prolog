@@ -73,7 +73,31 @@ also fails pre-migration.
 
 **Phase 3 net adds**: 26 new Test clauses (`meta_test.clausal` +14, `coroutining.clausal` +12). No Python test files deleted, but `test_meta.py` slimmed. 14 files audited, 2 deferred to TODOs.
 
-## Phase 4+ — To do
+## Phase 4 — Modules / stdlib
+
+| file | status | action |
+|---|---|---|
+| `test_clausal_modules.py` | ✅ slimmed | 102 → 33 tests. 69 behavior tests migrated to Test clauses in `tests/clausal_modules/{meta,higher_order,lambdas}.clausal` (28+28+13 = 69). What remains in .py: TermInspection tests (need Compound/Var construction) + Exceptions tests (already covered by `exceptions.clausal`'s 12 Test clauses but kept for explicit assertions on result values). Orphan imports cleaned |
+| `test_json_module.py` | ✅ keep | Imports `_parse_2`/`_generate_2` etc. directly — adapter-implementation infra. Behavior in `tests/fixtures/docs/sig_tests` |
+| `test_csv_module.py` | ✅ keep | Same pattern |
+| `test_http_module.py` | ✅ keep | Same |
+| `test_files_module.py` | ✅ keep | Same |
+| `test_os_module.py` | ✅ keep | Same |
+| `test_process_module.py` | ✅ keep | Same |
+| `test_random_module.py` | ✅ keep | Same |
+| `test_crypto_modules.py` | ✅ keep | Same |
+| `test_logging_module.py` | ✅ keep | Tests Python `logging` integration — infra |
+| `test_date_time.py` | ✅ keep | Same adapter pattern |
+| `test_uuid_module.py` | ✅ keep | Same |
+| `test_chars.py` | ✅ keep | Tests via `get_builtin_dispatch` + `StepGenerator` — infra |
+| `test_sqlite.py` | ✅ keep | Same |
+| `test_tcp_module.py` | ✅ keep | Same |
+| `test_yaml_module.py` | ⏸ deferred | `_load_module`-per-test pattern (regex/dcg/edcg cohort) |
+| `test_module_imports.py` | ✅ keep | V3-1 module system mechanics (directive parsing, dispatch, errors). Behavior of imported predicates covered by `imports_*.clausal` + `importable_utils.clausal` |
+
+**Phase 4 net adds**: 69 Test clauses (`meta.clausal` +28, `higher_order.clausal` +28, `lambdas.clausal` +13). 1 file slimmed (test_clausal_modules.py 102 → 33 tests). 14 stdlib wrappers audit-confirmed-as-infra. 1 deferred (yaml).
+
+## Phase 5+ — To do
 
 See `MIGRATION_CANDIDATES.md`. Suggested next batches:
 

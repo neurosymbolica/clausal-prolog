@@ -12,7 +12,7 @@ Tests classified as **behavior** exercise the Clausal language via `solve`/`once
 | core | 23 | 379 | 142 | 844 |
 | docs | 1 | 0 | 4 | 0 |
 | misc | 85 | 164 | 286 | 530 |
-| modules | 71 | 364 | 237 | 824 |
+| modules | 71 | 295 | 237 | 824 |
 | prolog | 4 | 11 | 188 | 268 |
 | scipy_torch | 26 | 700 | 17 | 165 |
 
@@ -84,9 +84,9 @@ Tests classified as **behavior** exercise the Clausal language via `solve`/`once
 | `tests/test_sqlite.py` (modules) | 1 | 5 | 0 | 31 |
 | `tests/test_list_util.py` (modules) | 1 | 0 | 0 | 42 |
 | `tests/test_logging_module.py` (modules) | 1 | 0 | 0 | 39 |
-| `tests/test_clausal_modules.py` (modules) | 0 | 102 | 0 | 0 |
 | `tests/test_dict_set_builtins.py` (modules) | 0 | 73 | 0 | 19 |
 | `tests/test_chars.py` (modules) | 0 | 39 | 0 | 39 |
+| `tests/test_clausal_modules.py` (modules) | 0 | 33 | 0 | 0 |
 | `tests/test_seglist_passthrough.py` (modules) | 0 | 11 | 0 | 0 |
 | `tests/test_seglist_creation.py` (modules) | 0 | 5 | 1 | 20 |
 | `tests/test_dict_set_compiler.py` (modules) | 0 | 3 | 13 | 13 |
@@ -5005,108 +5005,39 @@ Entries marked **†** are also listed in `DUPLICATE_TESTS.md` — prefer deleti
 
 | line | label | test | behavior-hits | infra-hits |
 |---:|---|---|---|---|
-| 55 | **mixed** | `test_squares_basic` | call | Module, Var |
-| 60 | **mixed** | `test_squares_empty` | call | Module, Var |
-| 65 | **mixed** | `test_squares_single` | call | Module, Var |
-| 70 | **mixed** | `test_squares_negative` | call | Module, Var |
-| 80 | **mixed** | `test_positives_mixed` | call | Module, Var |
-| 85 | **mixed** | `test_positives_all_negative` | call | Module, Var |
-| 90 | **mixed** | `test_positives_all_positive` | call | Module, Var |
-| 95 | **mixed** | `test_positives_with_zero` | call | Module, Var |
-| 105 | **mixed** | `test_unique_dedup` | call | Module, Var |
-| 110 | **mixed** | `test_unique_already_unique` | call | Module, Var |
-| 115 | **mixed** | `test_unique_single` | call | Module, Var |
-| 125 | **mixed**† | `test_all_positive_succeeds` | call | Module |
-| 129 | **mixed**† | `test_all_positive_fails` | call | Module |
-| 133 | **mixed**† | `test_all_positive_empty` | call | Module |
-| 143 | **mixed** | `test_sum_squares` | call | Module, Var |
-| 148 | **mixed** | `test_sum_squares_empty` | call | Module, Var |
-| 158 | **mixed** | `test_evens` | call | Module, Var |
-| 163 | **mixed** | `test_evens_none` | call | Module, Var |
-| 173 | **mixed** | `test_count` | call | Module, Var |
-| 178 | **mixed** | `test_count_empty` | call | Module, Var |
-| 188 | **mixed** | `test_pairs_cartesian` | call | Module, Var |
-| 194 | **mixed** | `test_pairs_empty_first` | call | Module, Var |
-| 199 | **mixed** | `test_pairs_empty_second` | call | Module, Var |
-| 209 | **mixed** | `test_all_members_subset` | call | Module |
-| 213 | **mixed** | `test_all_members_not_subset` | call | Module |
-| 217 | **mixed** | `test_all_members_empty_sub` | call | Module |
-| 226 | **mixed** | `test_bag_positives` | call | Module, Var |
-| 231 | **mixed** | `test_bag_positives_fails_on_none` | call | Module, Var |
-| 247 | **mixed** | `test_doubles` | call | Module, Var |
-| 252 | **mixed** | `test_doubles_empty` | call | Module, Var |
-| 257 | **mixed** | `test_doubles_negative` | call | Module, Var |
-| 267 | **mixed**† | `test_all_positive_pass` | call | Module |
-| 271 | **mixed**† | `test_all_positive_fail` | call | Module |
-| 275 | **mixed**† | `test_all_positive_empty` | call | Module |
-| 284 | **mixed** | `test_keep_positive` | call | Module, Var |
-| 289 | **mixed** | `test_keep_positive_none` | call | Module, Var |
-| 294 | **mixed** | `test_keep_positive_all` | call | Module, Var |
-| 304 | **mixed** | `test_remove_negative` | call | Module, Var |
-| 309 | **mixed** | `test_remove_negative_none` | call | Module, Var |
-| 319 | **mixed** | `test_sum` | call | Module, Var |
-| 324 | **mixed** | `test_sum_empty` | call | Module, Var |
-| 329 | **mixed** | `test_sum_single` | call | Module, Var |
-| 339 | **mixed** | `test_product` | call | Module, Var |
-| 344 | **mixed** | `test_product_empty` | call | Module, Var |
-| 349 | **mixed** | `test_product_with_zero` | call | Module, Var |
-| 359 | **mixed** | `test_squares` | call | Module, Var |
-| 369 | **mixed** | `test_keep_even` | call | Module, Var |
-| 374 | **mixed** | `test_keep_even_none` | call | Module, Var |
-| 384 | **mixed** | `test_remove_even` | call | Module, Var |
-| 394 | **mixed** | `test_negate` | call | Module, Var |
-| 399 | **mixed** | `test_negate_empty` | call | Module, Var |
-| 409 | **mixed** | `test_count` | call | Module, Var |
-| 414 | **mixed** | `test_count_empty` | call | Module, Var |
-| 424 | **mixed** | `test_max_fold` | call | Module, Var |
-| 429 | **mixed** | `test_max_fold_single` | call | Module, Var |
-| 434 | **mixed** | `test_max_fold_init_wins` | call | Module, Var |
-| 449 | **mixed** | `test_apply_val` | call | Module, Var |
-| 454 | **mixed** | `test_apply_val_string` | call | Module, Var |
-| 464 | **mixed** | `test_add_one` | call | Module, Var |
-| 469 | **mixed** | `test_add_one_negative` | call | Module, Var |
-| 479 | **mixed** | `test_add_z` | call | Module, Var |
-| 484 | **mixed** | `test_add_z_zero` | call | Module, Var |
-| 494 | **mixed** | `test_double_val` | call | Module, Var |
-| 504 | **mixed** | `test_zero_arg` | call | Module, Var |
-| 514 | **mixed** | `test_transform` | call | Module, Var |
-| 520 | **mixed** | `test_transform_zero` | call | Module, Var |
-| 531 | **mixed** | `test_capture_two` | call | Module, Var |
-| 542 | **mixed** | `test_apply_pred` | call | Module, Var |
-| 553 | **mixed** | `test_all_colors` | call | Module, Var |
-| 569 | **mixed** | `test_copy_ground_term` | call | Compound, Module, Var |
-| 578 | **mixed** | `test_copy_returns_fresh_copy` | call | Compound, Module, Var |
-| 592 | **mixed** | `test_copy_atom` | call | Module, Var |
-| 598 | **mixed** | `test_copy_integer` | call | Module, Var |
-| 604 | **mixed** | `test_copy_list` | call | Module, Var |
-| 615 | **mixed** | `test_ground_term_no_vars` | call | Compound, Module |
-| 620 | **mixed** | `test_ground_atom` | call | Module |
-| 624 | **mixed** | `test_term_with_var_fails` | call | Compound, Module, Var |
-| 630 | **mixed** | `test_ground_list` | call | Module |
-| 634 | **mixed** | `test_list_with_var_fails` | call | Module, Var |
-| 643 | **mixed** | `test_no_vars` | call | Compound, Module, Var |
-| 650 | **mixed** | `test_one_var` | call | Compound, Module, Var |
-| 657 | **mixed** | `test_two_vars` | call | Compound, Module, Var |
-| 664 | **mixed** | `test_repeated_var_counts_once` | call | Compound, Module, Var |
-| 672 | **mixed** | `test_list_vars` | call | Module, Var |
-| 683 | **mixed** | `test_no_vars` | call | Compound, Module, Var |
-| 690 | **mixed** | `test_one_var` | call | Compound, Module, Var |
-| 697 | **mixed** | `test_start_offset` | call | Compound, Module, Var |
-| 704 | **mixed** | `test_two_vars_consecutive` | call | Module, Var |
-| 715 | **mixed** | `test_sharing_preserved` | call | Compound, Var, deref |
-| 731 | **mixed** | `test_sharing_independent_from_original` | call | Compound, Var, deref |
-| 750 | **mixed** | `test_empty_list` | call | Module, Var |
-| 756 | **mixed** | `test_list_no_vars` | call | Module, Var |
-| 762 | **mixed** | `test_list_with_vars` | call | Var |
-| 785 | **mixed** | `test_catch_integer` | call | Module, Var |
-| 790 | **mixed** | `test_catch_string` | call | Module, Var |
-| 800 | **mixed** | `test_safe_recip_nonzero` | call | Module, Var |
-| 805 | **mixed** | `test_safe_recip_zero` | call | Module, Var |
-| 815 | **mixed** | `test_inner_miss` | call | Module, Var |
-| 820 | **mixed** | `test_inner_hit` | call | Module, Var |
-| 834 | **mixed** | `test_parent_backtracks` | call | Module, Var |
-| 844 | **mixed** | `test_no_throw` | call | Module, Var |
-| 849 | **mixed** | `test_multiple_solutions` | call | Module, Var |
+| 55 | **mixed** | `test_copy_ground_term` | call | Compound, Module, Var |
+| 64 | **mixed** | `test_copy_returns_fresh_copy` | call | Compound, Module, Var |
+| 78 | **mixed** | `test_copy_atom` | call | Module, Var |
+| 84 | **mixed** | `test_copy_integer` | call | Module, Var |
+| 90 | **mixed** | `test_copy_list` | call | Module, Var |
+| 101 | **mixed** | `test_ground_term_no_vars` | call | Compound, Module |
+| 106 | **mixed** | `test_ground_atom` | call | Module |
+| 110 | **mixed** | `test_term_with_var_fails` | call | Compound, Module, Var |
+| 116 | **mixed** | `test_ground_list` | call | Module |
+| 120 | **mixed** | `test_list_with_var_fails` | call | Module, Var |
+| 129 | **mixed** | `test_no_vars` | call | Compound, Module, Var |
+| 136 | **mixed** | `test_one_var` | call | Compound, Module, Var |
+| 143 | **mixed** | `test_two_vars` | call | Compound, Module, Var |
+| 150 | **mixed** | `test_repeated_var_counts_once` | call | Compound, Module, Var |
+| 158 | **mixed** | `test_list_vars` | call | Module, Var |
+| 169 | **mixed** | `test_no_vars` | call | Compound, Module, Var |
+| 176 | **mixed** | `test_one_var` | call | Compound, Module, Var |
+| 183 | **mixed** | `test_start_offset` | call | Compound, Module, Var |
+| 190 | **mixed** | `test_two_vars_consecutive` | call | Module, Var |
+| 201 | **mixed** | `test_sharing_preserved` | call | Compound, Var, deref |
+| 217 | **mixed** | `test_sharing_independent_from_original` | call | Compound, Var, deref |
+| 236 | **mixed** | `test_empty_list` | call | Module, Var |
+| 242 | **mixed** | `test_list_no_vars` | call | Module, Var |
+| 248 | **mixed** | `test_list_with_vars` | call | Var |
+| 271 | **mixed** | `test_catch_integer` | call | Module, Var |
+| 276 | **mixed** | `test_catch_string` | call | Module, Var |
+| 286 | **mixed** | `test_safe_recip_nonzero` | call | Module, Var |
+| 291 | **mixed** | `test_safe_recip_zero` | call | Module, Var |
+| 301 | **mixed** | `test_inner_miss` | call | Module, Var |
+| 306 | **mixed** | `test_inner_hit` | call | Module, Var |
+| 320 | **mixed** | `test_parent_backtracks` | call | Module, Var |
+| 330 | **mixed** | `test_no_throw` | call | Module, Var |
+| 335 | **mixed** | `test_multiple_solutions` | call | Module, Var |
 
 </details>
 

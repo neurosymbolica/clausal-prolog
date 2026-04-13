@@ -89,15 +89,6 @@
   - `tests/test_csv_module.py:122` — `test_unbound_fails`
   - `tests/test_http_module.py:285` — `test_unbound_fails`
   - `tests/test_json_module.py:181` — `test_unbound_string_fails`
-- fingerprint `6c4c096da7` (2 copies):
-  - `tests/test_clausal_modules.py:125` — `test_all_positive_succeeds`
-  - `tests/test_clausal_modules.py:267` — `test_all_positive_pass`
-- fingerprint `973e1a57de` (2 copies):
-  - `tests/test_clausal_modules.py:129` — `test_all_positive_fails`
-  - `tests/test_clausal_modules.py:271` — `test_all_positive_fail`
-- fingerprint `667a5c9455` (2 copies):
-  - `tests/test_clausal_modules.py:133` — `test_all_positive_empty`
-  - `tests/test_clausal_modules.py:275` — `test_all_positive_empty`
 - fingerprint `225068e65d` (2 copies):
   - `tests/test_csv_module.py:200` — `test_unbound_fails`
   - `tests/test_json_module.py:235` — `test_unbound_var_fails`
@@ -211,13 +202,14 @@ _None._
 
 ### constraints+control+core+misc+modules+scipy_torch
 
-- 1462 copies:
+- 1463 copies:
   - `tests/clausal_modules/exceptions.clausal:119` — `Test("throw if zero throws")`
   - `tests/clausal_modules/exceptions.clausal:123` — `Test("inner catch misses - outer catches")`
   - `tests/clausal_modules/exceptions.clausal:129` — `Test("parent backtracks after catch failure")`
   - `tests/clausal_modules/exceptions.clausal:133` — `Test("catch is transparent when no throw")`
   - `tests/clausal_modules/exceptions.clausal:136` — `Test("catch with multiple solutions")`
   - `tests/clausal_modules/exceptions.clausal:139` — `Test("safe result passes through")`
+  - `tests/clausal_modules/meta.clausal:111` — `Test("pairs cartesian")`
   - `tests/clausal_modules/term_inspection.clausal:36` — `Test("copy_term: ground atom copies as-is")`
   - `tests/clausal_modules/term_inspection.clausal:41` — `Test("copy_term: ground integer copies as-is")`
   - `tests/clausal_modules/term_inspection.clausal:46` — `Test("copy_term: ground list copies as-is")`
@@ -1696,15 +1688,24 @@ _None._
 
 ### control
 
+- 4 copies:
+  - `tests/clausal_modules/higher_order.clausal:50` — `Test("HO all_positive succeeds")`
+  - `tests/clausal_modules/meta.clausal:98` — `Test("all_positive succeeds")`
+  - `tests/fixtures/builtins_higher_order.clausal:30` — `Test("all positive")`
+  - `tests/fixtures/meta_test.clausal:33` — `Test("all positive")`
+- 3 copies:
+  - `tests/clausal_modules/higher_order.clausal:51` — `Test("HO all_positive fails")`
+  - `tests/clausal_modules/meta.clausal:99` — `Test("all_positive fails")`
+  - `tests/fixtures/meta_test.clausal:34` — `Test("all positive fails: [1,-2,3]")`
+- 2 copies:
+  - `tests/clausal_modules/higher_order.clausal:52` — `Test("HO all_positive empty (vacuously true)")`
+  - `tests/clausal_modules/meta.clausal:100` — `Test("all_positive empty (vacuously true)")`
 - 2 copies:
   - `tests/conformity/iso_control.clausal:67` — `Test("disjunction both fail")`
   - `tests/fixtures/prolog_golden/iso_control.clausal:25` — `Test('disjunction both fail')`
 - 2 copies:
   - `tests/conformity/iso_control.clausal:72` — `Test("not: successful unification fails")`
   - `tests/conformity/iso_control.clausal:75` — `Test("double negation: not not (1=1)")`
-- 2 copies:
-  - `tests/fixtures/builtins_higher_order.clausal:30` — `Test("all positive")`
-  - `tests/fixtures/meta_test.clausal:33` — `Test("all positive")`
 - 2 copies:
   - `tests/fixtures/prolog_golden/iso_control.clausal:29` — `Test('not: successful unification fails')`
   - `tests/fixtures/prolog_golden/iso_control.clausal:35` — `Test('double negation: not not (1=1)')`

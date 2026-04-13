@@ -37,3 +37,28 @@ Color("blue"),
 AllColors(COLORS) <- (
     findall(C, (Color(C)), COLORS)
 )
+
+
+# ── Test clauses (migrated from test_clausal_modules.py::TestLambda*) ─────
+
+Test("apply_val: int") <- (ApplyVal(R, 42), R == 42)  # nv
+Test("apply_val: string") <- (ApplyVal(R, "hello"), R == "hello")  # nv
+
+Test("add_one: 5+1=6") <- (AddOne(5, R), R == 6)  # nv
+Test("add_one: -1+1=0") <- (AddOne(-1, R), R == 0)  # nv
+
+Test("add_z: 3 + 10 = 13") <- (AddZ(3, 10, R), R == 13)  # nv
+Test("add_z: 0 + 7 = 7") <- (AddZ(0, 7, R), R == 7)  # nv
+
+Test("double_val: 5 * 2 = 10") <- (DoubleVal(5, R), R == 10)  # nv
+
+Test("zero_arg: returns 42") <- (ZeroArg(R), R == 42)  # nv
+
+Test("transform: (5+1)*2 = 12") <- (Transform(5, R), R == 12)  # nv
+Test("transform: (0+1)*2 = 2") <- (Transform(0, R), R == 2)  # nv
+
+Test("capture_two: 5 + 10 + 20 = 35") <- (CaptureTwo(10, 20, 5, R), R == 35)  # nv
+
+Test("apply_pred: 3 * 10 = 30") <- (ApplyPred(3, R), R == 30)  # nv
+
+Test("all_colors") <- (AllColors(R), R == ["red", "green", "blue"])  # nv
