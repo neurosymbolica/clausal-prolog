@@ -252,15 +252,9 @@ class TestReifyFd:
         trail = Trail()
         assert reify_fd("gt", 3, 5, trail) is False
 
-    def test_ground_ge_true(self):
-        # nv
-        trail = Trail()
-        assert reify_fd("ge", 5, 5, trail) is True
-
-    def test_ground_ge_false(self):
-        # nv
-        trail = Trail()
-        assert reify_fd("ge", 4, 5, trail) is False
+    # `test_ground_ge_true` / `test_ground_ge_false` are defined earlier in
+    # the class (lines ~202/207). Re-defining them here would shadow them
+    # at class-creation time without adding coverage.
 
     def test_undetermined_fd_var_with_domain(self):
         """FD var with domain is still undetermined (not ground)."""

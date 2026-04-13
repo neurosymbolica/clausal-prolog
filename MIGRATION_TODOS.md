@@ -4,21 +4,45 @@ Outstanding issues deferred from Phase 1 and Phase 2. Not blockers — the
 suite is green against baseline — but worth a sweep pass before claiming
 the migration complete.
 
-## Duplication between new .clausal tests and sibling fixtures
+## Duplication report cleanup (partially addressed)
 
-The dedup report grew across migrations (86 → 89 groups, 1562 → 1637 copies
-of duplicate .clausal Test bodies) because new Test clauses were added to
-the most topically-obvious file without cross-referencing the rest of the
-tree.
+After running a dedicated dedup-cleanup pass:
 
-- **Sign/Gcd/DivMod** tests added to `iso_arithmetic.clausal` likely
-  overlap `builtins_arith.clausal`.
-- **pairs_keys_values/_keys/_values** tests in `phase5_builtins.clausal`
-  may overlap existing pair fixtures (if any).
-- General consolidation pass: walk `DUPLICATE_TESTS.md`, pick the
-  canonical home for each duplicated body, delete the rest.
+- Fixed the dedup script: it had been bucketing every multi-line Test
+  clause's *opening line* together (body captured was just `(`), masking
+  real dupes behind a 1466-copy false positive. Multi-line bodies are now
+  collected via paren-depth tracking. Filter added for `prolog_golden/`
+  (intentional Prolog round-trip mirrors) and `docs/*_sig_tests.clausal`
+  (auto-generated existence tests).
 
-Action: ~30 minutes of `DUPLICATE_TESTS.md` grooming.
+- Result: 290 raw clausal-dupe groups → 51 actionable groups (139 → 131
+  copies). The remaining ~50 groups are largely intentional parallel
+  coverage:
+  - same behavior tested via different implementation styles (lambda vs
+    named-pred maplist vs findall)
+  - tabled vs untabled versions of the same predicate (fibonacci /
+    tabled_fib, tabled_path / tabled_ite)
+  - same goal exercised across multiple conformity files for context
+
+- Deleted 5 byte-identical duplicates with no semantic value:
+  - `iso_unification.clausal`: removed redundant `42 == 42` test (covered
+    earlier in the file under "same integer ==") and three
+    `structural_neq` tests whose bodies were already covered by the
+    matching `structural_eq` "fails" tests.
+  - `test_reified_ite.py::TestReifyFd`: removed second copy of
+    `test_ground_ge_true`/`_false` (Python class semantics had been
+    silently shadowing them anyway).
+
+What remains genuinely actionable (not done):
+
+- `tests/clausal_modules/higher_order.clausal` vs
+  `tests/fixtures/builtins_higher_order.clausal` — both test maplist /
+  include / exclude / foldl, with different style (lambda vs named-pred).
+  Could pick one canonical and drop the other.
+- Within-file pairs in `iso_unification.clausal` and `iso_control.clausal`
+  where the body is identical but the description labels different intent
+  (e.g. `not: successful unification fails` and `double negation`). Worth
+  keeping for documentation.
 
 ## `list_patterns_edge_cases.clausal` re-declares library predicates
 

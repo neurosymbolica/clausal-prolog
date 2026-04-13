@@ -103,8 +103,8 @@ Test("var/atom is not: succeeds with constraint") <- (X is not a)  # nv
 Test("different numbers: 1 is not 2") <- (1 is not 2)  # nv
 
 # ── == (arithmetic equality, CLP(FD)) ──────────────────────────────────────
+# (`Test("same integer ==")` already covers `42 == 42` above.)
 
-Test("same integer == 42") <- (42 == 42)  # nv
 Test("int == float (Python quirk)") <- (1 == 1.0)  # nv
 Test("two fresh vars: X == Y (CLP(FD) posts)") <- (X == Y)  # nv
 Test("same var: X == X") <- (X == X)  # nv
@@ -131,11 +131,10 @@ Test("structural_eq: distinct lists fail") <- (
     not structural_eq([1, 2], [1, 3])
 )  # nv
 
-# ── structural inequality (Prolog \==/2 → `not structural_eq`) ─────────────
-
-Test("structural_neq: a vs b") <- (not structural_eq(a, b))  # nv
-Test("structural_neq: unbound var vs atom") <- (not structural_eq(X, a))  # nv
-Test("structural_neq: two fresh vars") <- (not structural_eq(X, Y))  # nv
+# ── structural inequality (Prolog \==/2) ──────────────────────────────────
+# Implemented via `not structural_eq(...)`.  The positive cases are already
+# covered above by the `structural_eq` "fails" tests; only the
+# bound-aliased-vars case is unique:
 Test("structural_neq: same var fails") <- (
     X is Y,
     not (not structural_eq(X, Y))

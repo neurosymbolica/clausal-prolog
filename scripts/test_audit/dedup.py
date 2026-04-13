@@ -68,24 +68,77 @@ def iter_py_tests():
                 yield py, node.name, node.lineno, fn_fingerprint(node)
 
 
-TEST_CLAUSE_RE = re.compile(r'^Test\(("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')\)\s*<-\s*(.+?)\s*$')
+TEST_HEAD_RE = re.compile(r'^\s*Test\(("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')\)\s*<-\s*(.*)$')
+
+
+def _strip_strings_and_comments(s: str) -> str:
+    out = []
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if c == '#':
+            break
+        if c in ('"', "'"):
+            q = c
+            out.append(' ')
+            i += 1
+            while i < n and s[i] != q:
+                if s[i] == '\\' and i + 1 < n:
+                    i += 2
+                    out.append('  ')
+                    continue
+                out.append(' ')
+                i += 1
+            if i < n:
+                i += 1
+                out.append(' ')
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
 
 
 def iter_clausal_tests():
+    """Walk each .clausal file, yield (path, desc, lineno, body_hash) for every
+    Test clause — multi-line bodies collected via paren-depth tracking so
+    the hashed body is the *full* clause body, not just the opening line."""
     for cl in sorted(TESTS.rglob("*.clausal")):
         try:
-            text = cl.read_text()
+            lines = cl.read_text().splitlines()
         except Exception:
             continue
-        for lineno, line in enumerate(text.splitlines(), 1):
-            stripped = line.strip()
-            m = TEST_CLAUSE_RE.match(stripped)
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            m = TEST_HEAD_RE.match(line)
             if not m:
+                i += 1
                 continue
-            desc, body = m.group(1), m.group(2)
-            body_norm = re.sub(r"\s+", " ", body).strip()
+            desc = m.group(1)
+            tail = m.group(2)
+            start_lineno = i + 1
+            # Track paren depth across continuation lines, starting from `tail`.
+            body_chunks = [tail]
+            safe = _strip_strings_and_comments(tail)
+            depth = safe.count('(') - safe.count(')')
+            j = i
+            while depth > 0 and j + 1 < len(lines):
+                j += 1
+                next_line = lines[j]
+                body_chunks.append(next_line)
+                safe = _strip_strings_and_comments(next_line)
+                depth += safe.count('(') - safe.count(')')
+            body = ' '.join(body_chunks)
+            # Strip trailing inline comment if any.
+            body = _strip_strings_and_comments(body) + ''
+            body_norm = re.sub(r'\s+', ' ', body).strip()
+            # Drop trailing closing paren of an outer wrapping if present
+            # (e.g. `Test("x") <- (a, b)` body becomes `(a, b)`; we want `a, b`).
+            if body_norm.startswith('(') and body_norm.endswith(')'):
+                body_norm = body_norm[1:-1].strip()
             h = hashlib.sha1(body_norm.encode()).hexdigest()
-            yield cl, desc, lineno, h
+            yield cl, desc, start_lineno, h
+            i = j + 1
 
 
 def main():
@@ -133,7 +186,20 @@ def main():
 
     out_lines.append("## .clausal Test(...) duplicates (identical body text)")
     out_lines.append("")
-    cl_dupes = [(fp, hits) for fp, hits in cl_groups.items() if len(hits) > 1]
+    out_lines.append("`prolog_golden/` and `docs/*_sig_tests.clausal` are filtered: "
+                     "the former is intentional Prolog round-trip mirrors, the "
+                     "latter is auto-generated signature-existence tests.")
+    out_lines.append("")
+
+    def _is_intentional_dup(p):
+        s = str(p).replace('\\', '/')
+        return ('prolog_golden/' in s) or ('docs/' in s and '_sig_tests' in s)
+
+    cl_dupes = []
+    for fp, hits in cl_groups.items():
+        actionable = [h for h in hits if not _is_intentional_dup(h[0])]
+        if len(actionable) > 1:
+            cl_dupes.append((fp, actionable))
     cl_dupes.sort(key=lambda kv: -len(kv[1]))
     if not cl_dupes:
         out_lines.append("_None found._")
