@@ -738,6 +738,21 @@ def _compile_body_impl(
     return alloc_stmts + legacy_k
 
 
+# ── Slice D4 harness observability ───────────────────────────────────────────
+#
+# Counters let tests assert the IR path isn't silently falling back on
+# every compile (e.g. if a module scrub caused ``nodes.Not`` captured in
+# ``terms_to_goalop`` to miss new ``Not`` instances).  ``reset()`` and
+# the raw dict are module-private — tests import them by name.
+_IR_PATH_STATS: dict[str, int] = {"runs": 0, "fallbacks": 0, "matches": 0}
+
+
+def _ir_path_stats_reset() -> None:
+    _IR_PATH_STATS["runs"] = 0
+    _IR_PATH_STATS["fallbacks"] = 0
+    _IR_PATH_STATS["matches"] = 0
+
+
 def _ir_path_enabled(ctx: CompilationContext) -> bool:
     """Slice D4 feature flag.
 
@@ -778,6 +793,7 @@ def _run_ir_parallel(
     from .strategy import ShallowStrategy
     from .terms_to_goalop import terms_to_goalop
     from . import lower_python_shallow, lower_python_trampoline
+    _IR_PATH_STATS["runs"] += 1
     try:
         ir = terms_to_goalop(goals)
     except NotImplementedError as exc:
@@ -785,6 +801,7 @@ def _run_ir_parallel(
         # lets D5 development see which body shapes still drop to legacy
         # without instrumenting individual sub-slices; turn on with
         # ``pytest --log-cli-level=DEBUG`` or ``logging.basicConfig``.
+        _IR_PATH_STATS["fallbacks"] += 1
         logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
         return
     lower_fn = (
@@ -802,6 +819,7 @@ def _run_ir_parallel(
             f"  legacy: {legacy_dump}\n"
             f"  ir:     {new_dump}"
         )
+    _IR_PATH_STATS["matches"] += 1
 
 
 def compile_body(
