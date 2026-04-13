@@ -156,7 +156,7 @@ more detail. Listed roughly in the order the pipeline touches them.
 |---------------------------|---------------------------------------------------------------------------------------------|
 | `_ast_helpers.py`         | AST leaf-builders (`_name`, `_call`, `_if`, `_assign_mark`, `_fresh`) and naming constants. |
 | `_vars.py`                | Variable helpers: `_var_python_name`, `_collect_vars`, `_collect_bound_vars`.               |
-| `compile_ctx.py`          | `CompileCtx` dataclass — bundles `db`, `var_context`, `trail_name`, `self_name`, `parent_name`. Partial migration; many helpers still take the tuple directly. |
+| `compile_ctx.py`          | `CompilationContext` dataclass — bundles `db`, `var_context`, `trail_name`, `self_name`, `parent_name`. Partial migration; many helpers still take the tuple directly. |
 | `head_list_unify.py`      | **Runtime** helpers for bidirectional list-pattern unification, plus `_tramp_call` simple↔trampoline bridge. Not compile-time. |
 | `terms_to_ast.py`         | `term_to_ast_expr`, `arith_to_ast_expr` — lowers a term (Var, Compound, DictTerm, …) to a Python AST expression. Also parsing helpers `_parse_star_segments`, `_is_star_list`, `_count_stars`, `_dotted_name_from_loadattr`. |
 | `star_segments.py`        | Body-Is star-list compilation (`[X, *Xs] is Foo`).                                         |
@@ -188,9 +188,19 @@ Clause:
 ```
 
 Heads may include list patterns, Compound functors, or dataclass
-instances (for named-field predicates). Bodies are a flat list —
-conjunction is represented as sequential elements, not nested `And`
-(destructive-reuse explicitly flattens `And` during its preprocess).
+instances (for named-field predicates). Bodies are a flat list of
+goals; by convention, conjunction is written as a Python tuple
+``(G1, G2, G3)`` (which the AST sees as sequential elements) rather
+than as a nested `And` tree. `And` nodes aren't forbidden —
+destructive-reuse explicitly flattens them during its preprocess —
+but the idiomatic form is the tuple.
+
+Structure preservation in the body matters for external tools that
+want to inspect clause bodies (e.g. a meta-interpreter or a code
+walker may care that `(G1, G2, G3)` is grouped as three goals versus
+a nested `And(G1, And(G2, G3))`). The compiler itself is free to
+flatten or re-group internally — both forms have the same compiled
+meaning — but tools shouldn't assume the body has been flattened.
 
 ### `var_context: dict[int, str]`
 
@@ -212,10 +222,10 @@ invariant is enforced by `_preallocate_body_vars` (in `globals_env.py`)
 which recursively walks the whole body, including ITE arms and lambda
 bodies.
 
-### `CompileCtx` (dataclass, `compile_ctx.py`)
+### `CompilationContext` (dataclass, `compile_ctx.py`)
 
 ```
-CompileCtx:
+CompilationContext:
     db: Database | None
     var_context: dict[int, str]
     trail_name: str
@@ -227,6 +237,13 @@ Bundles the values that most compile functions need. Partial
 migration: `_compile_body_impl` and a few other recently-deduped
 helpers take `ctx`; most still take the unpacked tuple. Full
 migration is tracked as a deferred refactor.
+
+`self_name` / `parent_name` are kept as fields (rather than hard-coded
+constants) so nested compilations can shadow them when they need a
+distinct pair — e.g. a NAF mini-trampoline uses `_naf_self` /
+`_naf_parent` to keep its suspended generators distinguishable from
+the enclosing function's ones. They default to the standard
+`this_generator` / `_tramp_parent` names for top-level bodies.
 
 ### `k_stmts: list[ast.stmt]` — the continuation
 
@@ -292,16 +309,56 @@ def functor__arity(this_generator, parent, arg0, ..., argN, trail):
     `_DONE` to know the child exhausted.
 - Default for all predicates. Supports unbounded recursion depth.
 
-### When they interact
+### How solutions reach the caller
+
+When a deeply-nested trampoline predicate finds a solution, the
+solution signal ``(parent, None)`` does **not** short-circuit
+directly to the top of the search chain. Instead, it traverses
+level-by-level:
+
+1. Innermost generator yields ``(parent_1, None)`` — one trampoline hop.
+2. Trampoline loop does ``parent_1.send(None)``; ``parent_1`` resumes
+   at its ``_st_N = yield (child, None)``, runs its own ``k_stmts``
+   (whatever work was queued after the child's call), and eventually
+   yields ``(parent_2, None)`` for its own parent — another hop.
+3. Repeat up to the root.
+
+Each hop is O(1) — a single ``gen.send()`` call in the C trampoline's
+tight ``while(1)`` loop, no Python call-stack growth. So the overall
+cost is O(depth) in number of trampoline iterations per solution, but
+with a tiny per-hop constant factor. This is qualitatively different
+from a ``yield from`` chain, which incurs both Python frame overhead
+and linear resume cost at every level.
+
+**What does NOT happen today:** continuation-level tail-call optimisation,
+where a predicate whose body has no work after a sub-call could pass
+*its own parent* as the child's parent — letting the child yield
+directly to the grandparent and skip this level entirely. That would
+collapse pass-through frames (O(1) per solution regardless of depth).
+The compiler doesn't do this yet. TRO (see §6) handles a narrower case
+— self-recursive tail calls within the same predicate — but not general
+pass-through elision. Deferred as a future optimisation; see
+`todo/continuation_tco.md`.
+
+Greenlets are **not** used in the main search path. A
+``continuation_search.py`` module exists but isn't wired into the
+trampoline — it's dead code at time of writing. The solution-surfacing
+path from a compiled predicate back to a Python ``for``-loop caller
+goes through ``trampoline()`` / ``solutions()`` (in
+``clausal.logic.trampoline``), which is a plain C loop driving the
+generator chain; the Python caller sees solutions one at a time as the
+root generator yields ``(None, value)`` to the trampoline's top.
+
+### Cross-strategy interactions
 
 Trampoline code can call shallow-compiled predicates via
-`_tramp_call(dispatch, args, trail)` (in `head_list_unify.py`, despite
-its name — it's a cross-strategy bridge). Internally it runs a
-mini-trampoline around the shallow generator.
+``_tramp_call(dispatch, args, trail)`` (in ``head_list_unify.py``,
+despite its name — it's a cross-strategy bridge). Internally it runs
+a mini-trampoline around the shallow generator.
 
-Shallow code compiling a meta-predicate (once, catch, findall) may
-actually invoke the shallow goal compiler recursively — even when
-called from a trampoline context, control_constructs helpers
+Shallow code compiling a meta-predicate (``once``, ``catch``,
+``findall``) invokes the shallow goal compiler recursively — even
+when called from a trampoline context, ``control_constructs`` helpers
 compile their inner goals in shallow mode because the meta-predicate
 produces at most one solution per call. **This is a deliberate choice**:
 it keeps the code simpler at the cost of using Python's stack for
@@ -535,11 +592,12 @@ Things a new contributor would otherwise have to reverse-engineer.
   to the function bodies in `predicate.py` without individual
   enumeration. Ugly but localised.
 
-- **`forall/2` rewrites to `\+(Cond, \+ Action)` and recurses into
-  the *shallow* compile_goal even in trampoline mode.** Documented
-  in both `goal_shallow.forall` and `goal_trampoline.forall` arms —
-  the rewrite produces only deterministic or simple-negation code,
-  so shallow compilation is safe even inside a trampoline predicate.
+- **`forall/2` rewrites to `not (Cond, not Action)` and recurses into
+  the *shallow* compile_goal even in trampoline mode.** (In Prolog
+  notation this is `\+(Cond, \+ Action)`.) Documented in both
+  `goal_shallow.forall` and `goal_trampoline.forall` arms — the
+  rewrite produces only deterministic or simple-negation code, so
+  shallow compilation is safe even inside a trampoline predicate.
 
 - **Shallow/trampoline share most meta-predicate compilers.**
   `_compile_once`, `_compile_catch` (plus its `_trampoline` twin),
@@ -596,3 +654,20 @@ stable.
 - `implementation_plans/COMPILER_REFACTOR.md` — notes on the
   earlier pipeline split (module loading: `EmbedTransformer` →
   `compile_module`), separate from this work.
+
+### Pending / speculative
+
+Open design questions tracked in `todo/`:
+
+- `todo/continuation_tco.md` — continuation-level TCO so a solution
+  yield can skip pass-through wrapper frames entirely (referenced
+  from §5).
+- `todo/ast_source_locations.md` — `fix_missing_locations` is likely
+  wiping meaningful source locations, making tracebacks from
+  compiled predicates useless. Tests needed first.
+- `todo/jit_indexing.md` — profile and tune indexing thresholds,
+  add a user directive for explicit indexing control, and eventually
+  a JIT recompilation path for hot predicates.
+- `todo/inline_body_in_dispatch.md` — inline single-clause bucket
+  bodies directly into the dispatch wrapper, eliminating a generator
+  frame per call.

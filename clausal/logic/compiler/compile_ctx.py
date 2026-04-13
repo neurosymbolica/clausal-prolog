@@ -1,6 +1,6 @@
 """Compile-time context dataclass.
 
-``CompileCtx`` bundles the 3–5 values that are threaded through every
+``CompilationContext`` bundles the 3–5 values that are threaded through every
 goal / body / predicate compilation routine:
 
 - ``db``           — the database used for dispatch lookups and signature
@@ -17,7 +17,7 @@ goal / body / predicate compilation routine:
                      parameter — ``"_tramp_parent"`` by default.
 
 The two trampoline-only fields are harmless in shallow mode — shallow
-helpers simply don't read them.  Keeping a single ``CompileCtx`` class
+helpers simply don't read them.  Keeping a single ``CompilationContext`` class
 (rather than separate shallow/trampoline classes) lets functions that
 are strategy-agnostic accept either without branching on type.
 
@@ -38,14 +38,14 @@ from ._ast_helpers import _THIS_GEN_NAME, _TRAMP_PARENT_NAME
 
 
 @dataclasses.dataclass
-class CompileCtx:
+class CompilationContext:
     db: Any  # Database | None — typed loosely to avoid circular import
     var_context: dict[int, str]
     trail_name: str
     self_name: str = _THIS_GEN_NAME
     parent_name: str = _TRAMP_PARENT_NAME
 
-    def replace(self, **overrides) -> "CompileCtx":
+    def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 
         Useful when a nested compilation needs a different ``self_name``

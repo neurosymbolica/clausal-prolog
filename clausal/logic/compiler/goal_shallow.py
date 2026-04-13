@@ -48,7 +48,7 @@ from .terms_to_ast import (
     term_to_ast_expr, arith_to_ast_expr,
     _is_star_list, _dotted_name_from_loadattr,
 )
-from .compile_ctx import CompileCtx
+from .compile_ctx import CompilationContext
 from .star_segments import _compile_star_is
 from .globals_env import _disp_key, _preallocate_body_vars
 from . import _monolith as _m
@@ -695,14 +695,14 @@ def _compile_shared_meta_call(
 
 def _compile_body_impl(
     goals: list,
-    ctx: CompileCtx,
+    ctx: CompilationContext,
     *,
     leaf_yield: ast.stmt,
     compile_goal_fn,
 ) -> list[ast.stmt]:
     """Shared conjunction compilation, parameterised on strategy.
 
-    Takes a :class:`CompileCtx` bundling ``db``, ``var_context``,
+    Takes a :class:`CompilationContext` bundling ``db``, ``var_context``,
     ``trail_name`` (and, trampoline-only, ``self_name``/``parent_name``).
 
     Both ``compile_body`` (shallow) and ``compile_body_trampoline`` reduce
@@ -742,7 +742,7 @@ def compile_body(
     The leaf continuation is ``yield None`` (one solution).  See
     ``_compile_body_impl`` for the shared right-to-left reduction.
     """
-    ctx = CompileCtx(db=db, var_context=var_context, trail_name=trail_name)
+    ctx = CompilationContext(db=db, var_context=var_context, trail_name=trail_name)
     return _compile_body_impl(
         goals, ctx,
         leaf_yield=_yield_none_stmt(),
@@ -776,7 +776,7 @@ def _make_body_compiler_impl(
 
     The returned callable keeps the legacy ``(clause, var_context)``
     signature for compatibility with predicate compilation, which hasn't
-    yet migrated to :class:`CompileCtx`.
+    yet migrated to :class:`CompilationContext`.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
         goals = preprocess_clause(clause) if preprocess_clause is not None else clause.body

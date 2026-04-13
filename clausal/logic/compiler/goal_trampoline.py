@@ -54,7 +54,7 @@ from .goal_shallow import (
     _compile_shared_membership_goal,
     _compile_shared_meta_call,
 )
-from .compile_ctx import CompileCtx
+from .compile_ctx import CompilationContext
 from . import _monolith as _m
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
@@ -628,7 +628,7 @@ def compile_body_trampoline(
     surfaced to the calling generator.  See ``_compile_body_impl`` for
     the shared right-to-left reduction.
     """
-    ctx = CompileCtx(
+    ctx = CompilationContext(
         db=db, var_context=var_context, trail_name=trail_name,
         self_name=self_name, parent_name=parent_name,
     )
