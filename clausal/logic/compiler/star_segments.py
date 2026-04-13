@@ -2,7 +2,8 @@
 
 The three ``_compile_*_is`` functions lower an ``Is`` goal whose left
 side contains ``*`` star-unpacks into AST statements that call the
-runtime helpers in ``.head_list_unify`` (``_body_star_unify`` /
+runtime helpers in ``clausal.logic.runtime.body_star_unify``
+(``_body_star_unify`` /
 ``_body_multi_star_unify``).
 
 Parsing leaves (``_parse_star_segments``, ``_count_stars``,

@@ -181,20 +181,22 @@ from ._ast_helpers import (  # noqa: E402,F401
     _name, _attr, _call, _fresh, _compile_counter,
 )
 
-# ── Bidirectional list pattern unification (moved to .head_list_unify) ───────
-from .head_list_unify import (  # noqa: E402,F401
+# ── Bidirectional list pattern unification (moved to clausal.logic.runtime) ──
+from clausal.logic.runtime.list_unify import (  # noqa: E402,F401
     _head_list_unify_input_py,
     _head_list_unify_output_py,
     _head_list_unify_input,
     _head_list_unify_output,
     _head_multi_star_error,
+)
+from clausal.logic.runtime.body_star_unify import (  # noqa: E402,F401
     _body_star_unify,
     _build_star_list,
     _build_multi_star_list,
     _in_iter,
     _body_multi_star_unify,
-    _tramp_call,
 )
+from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: E402,F401
 
 # ── Variable naming (moved to ._vars) ─────────────────────────────────────────
 from ._vars import _var_python_name, _collect_vars  # noqa: E402,F401

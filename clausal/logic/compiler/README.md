@@ -157,7 +157,9 @@ more detail. Listed roughly in the order the pipeline touches them.
 | `_ast_helpers.py`         | AST leaf-builders (`_name`, `_call`, `_if`, `_assign_mark`, `_fresh`) and naming constants. |
 | `_vars.py`                | Variable helpers: `_var_python_name`, `_collect_vars`, `_collect_bound_vars`.               |
 | `compile_ctx.py`          | `CompilationContext` dataclass — bundles `db`, `var_context`, `trail_name`, `self_name`, `parent_name`. Partial migration; many helpers still take the tuple directly. |
-| `head_list_unify.py`      | **Runtime** helpers for bidirectional list-pattern unification, plus `_tramp_call` simple↔trampoline bridge. Not compile-time. |
+| `../runtime/list_unify.py`      | **Runtime** — bidirectional list-pattern unification. Used *inside* compiled predicates (referenced via `base_globals`); not imported by the compiler's own code paths. See `clausal/logic/runtime/`. |
+| `../runtime/body_star_unify.py` | **Runtime** — body-Is star-list helpers + `_in_iter`. |
+| `../runtime/tramp_call.py`      | **Runtime** — simple↔trampoline bridge. |
 | `terms_to_ast.py`         | `term_to_ast_expr`, `arith_to_ast_expr` — lowers a term (Var, Compound, DictTerm, …) to a Python AST expression. Also parsing helpers `_parse_star_segments`, `_is_star_list`, `_count_stars`, `_dotted_name_from_loadattr`. |
 | `star_segments.py`        | Body-Is star-list compilation (`[X, *Xs] is Foo`).                                         |
 | `globals_env.py`          | `_collect_globals_info`, `_inject_resolved_targets`, `_preallocate_body_vars`, `_GlobalsDb`, `_DbDispatchAdapter`. All Phase-1 globals-dict construction. |
@@ -352,7 +354,7 @@ root generator yields ``(None, value)`` to the trampoline's top.
 ### Cross-strategy interactions
 
 Trampoline code can call shallow-compiled predicates via
-``_tramp_call(dispatch, args, trail)`` (in ``head_list_unify.py``,
+``_tramp_call(dispatch, args, trail)`` (in ``clausal.logic.runtime.list_unify``,
 despite its name — it's a cross-strategy bridge). Internally it runs
 a mini-trampoline around the shallow generator.
 
@@ -442,7 +444,7 @@ Python `match` can only *destructure* sequences, so the list pattern
 compiles as a `MatchAs` wildcard capture plus a runtime guard.
 
 Two phases per list-pattern guard, implemented in
-`head_list_unify.py` and emitted by `head_match.compile_head_to_match_case`:
+`clausal.logic.runtime.list_unify` and emitted by `head_match.compile_head_to_match_case`:
 
 1. **Input phase** (before the body runs):
    `_head_list_unify_input(target, before_vars, star_var, after_vars, trail)`
@@ -457,9 +459,9 @@ Two phases per list-pattern guard, implemented in
 
 Multi-star patterns (`[*A, X, *B]`) go through
 `head_match._compile_multi_star_guard` and
-`head_list_unify._body_multi_star_unify`.
+`clausal.logic.runtime.body_star_unify._body_multi_star_unify`.
 
-Extended block comment: the top of `head_list_unify.py` has the
+Extended block comment: the top of `clausal.logic.runtime.list_unify` has the
 full design rationale with worked examples.
 
 ---

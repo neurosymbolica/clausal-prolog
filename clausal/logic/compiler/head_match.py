@@ -2,7 +2,8 @@
 
 Compiles clause heads (functor dataclass instances, Compounds, etc.)
 into Python ``match`` statement arm patterns.  Handles list patterns
-(with bidirectional input/output guards — see ``.head_list_unify`` for
+(with bidirectional input/output guards — see
+``clausal.logic.runtime.list_unify`` for
 the runtime design), multi-star list guards, and repeat-variable
 guards inside a single head.
 
@@ -41,7 +42,7 @@ from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
 )
-from .head_list_unify import (
+from clausal.logic.runtime.list_unify import (
     _head_list_unify_input, _head_list_unify_output,
     _head_multi_star_error,
 )

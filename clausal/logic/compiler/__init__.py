@@ -5,7 +5,9 @@ Organized by functional cohesion (see
 
 - ``_ast_helpers``      — AST-construction leaves + naming constants
 - ``_vars``             — Var-collection and -naming helpers
-- ``head_list_unify``   — runtime bidirectional list-pattern unification
+- ``clausal.logic.runtime.list_unify`` — runtime bidirectional
+                          list-pattern unification (moved out of
+                          this package — see §7 of ``README.md``)
 - ``terms_to_ast``      — term → Python AST lowering (+ star parsing)
 - ``star_segments``     — body-Is star-list compilation
 - ``globals_env``       — compile-time globals-dict construction
