@@ -304,7 +304,7 @@ migrated.
 
 ---
 
-## 5. Slice C — Explicit `Strategy` protocol
+## 5. Slice C — Explicit `Strategy` protocol ✅ done
 
 **Goal:** Replace the scattered strategy-specific code with the
 `Strategy` protocol from the target architecture (§9).

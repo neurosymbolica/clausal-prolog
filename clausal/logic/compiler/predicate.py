@@ -92,6 +92,7 @@ from .tro import (
     _detect_tro_clause, _compile_tro_body,
 )
 from .compile_ctx import CompilationContext
+from .strategy import ShallowStrategy, TrampolineStrategy
 from .goal_shallow import (
     compile_body, _make_body_compiler,
 )
@@ -255,6 +256,7 @@ def _build_predicate_trampoline_funcdef(
     if ctx_template is None:
         ctx_template = CompilationContext(
             db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+            strategy=TrampolineStrategy(),
         )
     arg_names = [f"arg{i}" for i in range(arity)]
     params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
@@ -458,6 +460,7 @@ def compile_predicate_trampoline(
     # per-clause compile time.
     ctx_template = CompilationContext(
         db=_effective_db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+        strategy=TrampolineStrategy(),
     )
 
     if body_compiler is None:
@@ -1107,6 +1110,7 @@ def compile_predicate_shallow(
         db=_effective_db,
         var_context={},  # placeholder; per-clause dict is overlaid at compile time
         trail_name=_TRAIL_PARAM_NAME,
+        strategy=ShallowStrategy(),
     )
 
     if body_compiler is None:

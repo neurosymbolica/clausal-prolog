@@ -67,9 +67,12 @@ one sub-slice at a time — see
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from ._ast_helpers import FreshNames, _THIS_GEN_NAME, _TRAMP_PARENT_NAME
+
+if TYPE_CHECKING:
+    from .strategy import Strategy
 
 
 @dataclasses.dataclass
@@ -105,6 +108,18 @@ class CompilationContext:
     # counters: AST output of one compilation no longer depends on how many
     # predicates were compiled earlier in the process.
     fresh: FreshNames = dataclasses.field(default_factory=FreshNames)
+
+    # ── Compilation strategy (shallow vs trampoline) ─────────────────────
+    #
+    # Populated by ``compile_predicate_shallow`` / ``compile_predicate_trampoline``
+    # before any clause compiles.  Shared helpers read ``ctx.strategy``
+    # instead of taking per-hook kwargs — see ``compiler/strategy.py`` and
+    # ``implementation_plans/COMPILER_MIGRATION_PLAN.md`` §5.
+    #
+    # ``None`` means "not yet chosen" — legitimate during the brief window
+    # between CompilationContext construction and strategy assignment, but
+    # helpers that need the strategy must fail loudly if they find it absent.
+    strategy: "Strategy | None" = None
 
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.

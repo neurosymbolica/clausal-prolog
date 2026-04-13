@@ -143,10 +143,14 @@ def compile_goal(
     (``solve.py``, tests).  All internal compilation threads ctx
     directly via ``_dispatch_goal``.
     """
+    from .strategy import ShallowStrategy
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
+            strategy=ShallowStrategy(),
         )
+    elif ctx.strategy is None:
+        ctx = ctx.replace(strategy=ShallowStrategy())
     return _dispatch_goal(ctx, goal, k_stmts)
 
 
@@ -160,7 +164,17 @@ def _dispatch_goal(
     Shallow-strategy counterpart to ``_dispatch_goal_trampoline``.  On
     success, emit statements that execute *k_stmts* (the inlined
     continuation); on failure, emit statements that fall through.
+
+    Strategy is forced to :class:`ShallowStrategy` on entry — callers
+    like ``_compile_find_all_core`` / ``_compile_once`` embed a shallow
+    sub-generator inside an outer (possibly trampoline-mode) predicate,
+    and reach here with the outer ctx.  The dispatcher you call
+    determines the strategy; the ``ctx.strategy`` field controls only
+    the outer predicate's body compilation.
     """
+    from .strategy import ShallowStrategy
+    if not isinstance(ctx.strategy, ShallowStrategy):
+        ctx = ctx.replace(strategy=ShallowStrategy())
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
@@ -333,13 +347,11 @@ def _compile_predicate_call_impl(
     call_args: list,
     call_kwargs: list,
     k_stmts: list[ast.stmt],
-    *,
-    emit_dispatch,
 ) -> list[ast.stmt]:
     """Shared predicate-call compilation: arg normalisation + lambda hoist.
 
-    Both ``_compile_predicate_call`` (shallow) and
-    ``_compile_predicate_call_trampoline`` share identical front-ends:
+    Both shallow and trampoline predicate-call sites share identical
+    front-ends:
 
     1. WK-4 keyword normalisation — reorder kwargs into positional order
        using the predicate's signature.  Raises RuntimeError if kwargs
@@ -348,9 +360,9 @@ def _compile_predicate_call_impl(
     2. Hoist Lambda arguments to FunctionDef statements.
     3. Compile each ordered arg to an AST expression.
 
-    The *emit_dispatch* hook then produces the strategy-specific tail
-    (simple-mode ``for`` loop over a generator, or trampoline-mode
-    ``_gen_N`` + ``_st_N`` while loop) given ``(arity, arg_exprs, k_stmts)``.
+    The strategy-specific tail — shallow's ``for`` loop over a generator
+    vs trampoline's ``_gen_N`` + ``_st_N`` while loop — is produced by
+    ``ctx.strategy.emit_sub_call(ctx, fname, arity, arg_exprs, k_stmts)``.
     The returned statements are prepended with the hoisted lambda defs.
     """
     db = ctx.db
@@ -378,7 +390,9 @@ def _compile_predicate_call_impl(
     ordered_args, lambda_defs = _hoist_lambda_args(ctx, ordered_args)
 
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
-    return lambda_defs + emit_dispatch(arity, arg_exprs, k_stmts)
+    return lambda_defs + ctx.strategy.emit_sub_call(
+        ctx, fname, arity, arg_exprs, k_stmts,
+    )
 
 
 def _compile_predicate_call(
@@ -388,25 +402,14 @@ def _compile_predicate_call(
     call_kwargs: list,   # list of Keyword nodes from the term
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
-    """Compile a call to a named predicate (shallow strategy).
+    """Compile a call to a named predicate.
 
-    Emits a ``for`` loop over the predicate's generator.
-    See ``_compile_predicate_call_impl`` for the shared front-end.
+    Thin wrapper around ``_compile_predicate_call_impl`` — the strategy-
+    specific call site (``for`` loop vs StepGenerator while-loop) is
+    emitted via ``ctx.strategy.emit_sub_call``.
     """
-    def _emit(arity, arg_exprs, k_stmts):
-        iter_expr = _dispatch_call_iter(ctx, fname, arity, arg_exprs)
-        return [
-            ast.For(
-                target=_name("_", ast.Store()),
-                iter=iter_expr,
-                body=k_stmts or [ast.Pass()],
-                orelse=[],
-            )
-        ]
-
     return _compile_predicate_call_impl(
         ctx, fname, call_args, call_kwargs, k_stmts,
-        emit_dispatch=_emit,
     )
 
 
@@ -694,26 +697,21 @@ def _compile_shared_meta_call(
 def _compile_body_impl(
     goals: list,
     ctx: CompilationContext,
-    *,
-    leaf_yield: ast.stmt,
-    compile_goal_fn,
 ) -> list[ast.stmt]:
-    """Shared conjunction compilation, parameterised on strategy.
+    """Shared conjunction compilation, parameterised on ``ctx.strategy``.
 
     Takes a :class:`CompilationContext` bundling ``db``, ``var_context``,
-    ``trail_name`` (and, trampoline-only, ``self_name``/``parent_name``).
+    ``trail_name`` (and, trampoline-only, ``self_name``/``parent_name``)
+    plus the compilation strategy.
 
     Both ``compile_body`` (shallow) and ``compile_body_trampoline`` reduce
-    to this helper — they only differ in:
+    to this helper — they differ only via ``ctx.strategy``:
 
-    - ``leaf_yield``: the statement emitted at the innermost continuation
-      to surface a solution (``yield None`` for shallow, ``yield (parent, None)``
-      for trampoline).
-    - ``compile_goal_fn``: the goal-compiler callable, signature
-      ``(goal, ctx, k_stmts) -> list[ast.stmt]``.  Shallow passes a
-      thin adapter around ``compile_goal``; trampoline passes an adapter
-      that forwards ``ctx.self_name``/``ctx.parent_name`` to
-      ``compile_goal_trampoline``.
+    - ``ctx.strategy.emit_leaf_yield(ctx)`` produces the solution-surfacing
+      statement at the innermost continuation (``yield None`` for shallow,
+      ``yield (parent, None)`` for trampoline).
+    - ``ctx.strategy.compile_goal(ctx, goal, k_stmts)`` dispatches to the
+      strategy-specific recursive goal compiler.
 
     Body-only Vars (variables that appear in the body but not the head) are
     pre-allocated via ``_preallocate_body_vars`` so that they are registered
@@ -722,10 +720,11 @@ def _compile_body_impl(
     Var that would otherwise only be walrus-introduced inside a later (inner)
     goal.
     """
+    strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
-    k: list[ast.stmt] = [leaf_yield]
+    k: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
     for goal in reversed(goals):
-        k = compile_goal_fn(goal, ctx, k)
+        k = strategy.compile_goal(ctx, goal, k)
     return alloc_stmts + k
 
 
@@ -745,12 +744,14 @@ def compile_body(
     When the caller is internal (``_make_body_compiler``), it passes
     the shared per-predicate ctx so that ``locked_dispatch_keys`` etc.
     propagate to nested goal compilations.  External callers don't
-    pass ctx; a plain CompilationContext with empty locked-dispatch
-    state is constructed.
+    pass ctx; a plain CompilationContext with ``ShallowStrategy`` and
+    empty locked-dispatch state is constructed.
     """
+    from .strategy import ShallowStrategy
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
+            strategy=ShallowStrategy(),
         )
     else:
         # Caller-supplied ctx: var_context is this clause's fresh dict;
@@ -759,54 +760,43 @@ def compile_body(
         ctx = ctx.replace(
             db=db, var_context=var_context, trail_name=trail_name,
         )
-    return _compile_body_impl(
-        goals, ctx,
-        leaf_yield=_yield_none_stmt(),
-        compile_goal_fn=lambda goal, ctx_, k: _dispatch_goal(ctx_, goal, k),
-    )
+        if ctx.strategy is None:
+            ctx = ctx.replace(strategy=ShallowStrategy())
+    return _compile_body_impl(goals, ctx)
 
 
 def _make_body_compiler_impl(
     db: Database,
     *,
-    body_compile_fn,
-    preprocess_clause=None,
-    ctx_template: CompilationContext | None = None,
+    ctx_template: CompilationContext,
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
-    """Shared factory for strategy-specific body-compiler closures.
+    """Shared factory for body-compiler closures — strategy lives on ctx.
 
     Returns a ``(clause, var_context) -> list[ast.stmt]`` callable that:
 
-    1. Runs ``preprocess_clause(clause)`` to obtain the goal list.  Default
-       is ``clause.body`` (identity).  The trampoline strategy passes a
-       destructive-reuse rewriter here — see ``_make_body_compiler_trampoline``.
-    2. Delegates to ``body_compile_fn(goals, db, var_context, trail_name)``
-       (``compile_body`` or ``compile_body_trampoline``).
+    1. Calls ``ctx_template.strategy.preprocess_clause(clause)`` to obtain
+       the goal list.  ``ShallowStrategy`` returns ``list(clause.body)``
+       unchanged; ``TrampolineStrategy`` applies the destructive-reuse
+       rewrite (its ``_dr_*__N`` dispatch builtins only exist in trampoline
+       form).
+    2. Forks a per-clause ctx from ``ctx_template`` (swapping in the
+       clause-specific ``var_context``) and delegates to
+       ``_compile_body_impl`` — which reads the same strategy for leaf
+       yield + goal dispatch.
 
-    The preprocess hook is what keeps the shallow and trampoline body
-    compilers honestly different: destructive-reuse rewriting is a
-    trampoline-only optimisation (its ``_dr_*__N`` dispatch builtins only
-    exist in trampoline mode), so making it a per-strategy hook rather
-    than hard-wiring it keeps each strategy correct by construction.
-
-    ``ctx_template`` — optional pre-populated CompilationContext carrying
-    per-predicate state (``locked_dispatch_keys`` in particular).  When
-    supplied, each per-clause call forks a ctx from it (replacing
-    ``var_context`` with the clause's fresh dict), so downstream goal
-    compilation sees the right shared state.  When omitted, body
-    compilation falls back to constructing ctx from the tuple args alone
-    (and reading the thread-local for locked keys) — the legacy path.
-
-    The returned callable keeps the legacy ``(clause, var_context)``
-    signature for compatibility with predicate compilation, which hasn't
-    yet migrated to explicit ctx passing.
+    ``ctx_template`` carries per-predicate shared state
+    (``locked_dispatch_keys``, ``bucket_ref_map``, ``joint_bucket_ref_map``,
+    and most importantly ``strategy``).  The closure captures it by
+    reference, so later mutations by the caller (e.g.
+    ``_inject_bucket_refs_trampoline``) are visible at per-clause compile
+    time.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        goals = preprocess_clause(clause) if preprocess_clause is not None else clause.body
-        return body_compile_fn(
-            goals, db, var_context, _TRAIL_PARAM_NAME,
-            ctx=ctx_template,
+        goals = ctx_template.strategy.preprocess_clause(clause)
+        ctx = ctx_template.replace(
+            db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
         )
+        return _compile_body_impl(goals, ctx)
     return _body_compiler
 
 
@@ -817,13 +807,17 @@ def _make_body_compiler(
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a shallow body_compiler callable bound to db.
 
-    No preprocess hook — shallow compiles ``clause.body`` as-is.
-    ``ctx_template`` optionally carries per-predicate shared state.
+    If no ``ctx_template`` is supplied (``compile_predicate_shallow_ast``
+    and test callers), constructs a minimal one carrying ``ShallowStrategy``.
     """
-    return _make_body_compiler_impl(
-        db,
-        body_compile_fn=compile_body,
-        ctx_template=ctx_template,
-    )
+    from .strategy import ShallowStrategy
+    if ctx_template is None:
+        ctx_template = CompilationContext(
+            db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+            strategy=ShallowStrategy(),
+        )
+    elif ctx_template.strategy is None:
+        ctx_template = ctx_template.replace(strategy=ShallowStrategy())
+    return _make_body_compiler_impl(db, ctx_template=ctx_template)
 
 

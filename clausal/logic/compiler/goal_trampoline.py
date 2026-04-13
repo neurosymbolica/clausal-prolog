@@ -74,11 +74,6 @@ from .control_constructs import (
     _compile_goal_lambda, _flatten_conjunction, _hoist_lambda_args,
 )
 
-# Destructive-reuse helpers used by _make_body_compiler_trampoline.
-from .destructive_reuse import (
-    _flatten_and_goals, _find_destructive_reuse_goals, _apply_destructive_reuse,
-)
-
 # ── Trampoline tuple-protocol compilation ──────────────────────────────────────
 #
 # DONE sentinel: yielded as (parent, DONE) when a predicate generator has
@@ -307,11 +302,15 @@ def compile_goal_trampoline(
     callers.  All internal compilation threads ctx via
     ``_dispatch_goal_trampoline``.
     """
+    from .strategy import TrampolineStrategy
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
+            strategy=TrampolineStrategy(),
         )
+    elif ctx.strategy is None:
+        ctx = ctx.replace(strategy=TrampolineStrategy())
     return _dispatch_goal_trampoline(ctx, goal, k_stmts)
 
 
@@ -325,7 +324,14 @@ def _dispatch_goal_trampoline(
     Trampoline-strategy counterpart to ``_dispatch_goal``.  See the
     public ``compile_goal_trampoline`` docstring for the tuple-protocol
     details.
+
+    Strategy is forced to :class:`TrampolineStrategy` on entry — matches
+    the mirror-image contract of ``_dispatch_goal`` (the dispatcher you
+    call determines the strategy).
     """
+    from .strategy import TrampolineStrategy
+    if not isinstance(ctx.strategy, TrampolineStrategy):
+        ctx = ctx.replace(strategy=TrampolineStrategy())
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
@@ -567,42 +573,13 @@ def _compile_predicate_call_trampoline(
     ``(this_generator, DONE)`` (exhausted), ``_st_N`` gets ``DONE`` and the
     while loop exits.
 
-    WK-4 keyword normalisation is applied identically to the simple variant.
-    See ``_compile_predicate_call_impl`` in ``goal_shallow`` for the shared
+    The strategy-specific StepGenerator + while-loop emission is handled
+    by ``TrampolineStrategy.emit_sub_call``; see
+    ``_compile_predicate_call_impl`` in ``goal_shallow`` for the shared
     front-end (arg ordering + lambda hoist + arg_expr lowering).
     """
-    def _emit(arity, arg_exprs, k_stmts):
-        gen_name = ctx.fresh("_gen")
-        status_name = ctx.fresh("_st")
-
-        call_expr = _dispatch_call_trampoline(
-            ctx, fname, arity, arg_exprs,
-        )
-
-        # _gen_N = dispatch(self, arg0, …, trail)
-        gen_assign = _assign(gen_name, call_expr)
-
-        # _st_N = (yield Step(_gen_N, None))
-        first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
-
-        # while _st_N is not _DONE: k_stmts; _st_N = (yield Step(_gen_N, None))
-        loop_body = (k_stmts or [ast.Pass()]) + [
-            _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
-        ]
-        loop = ast.While(
-            test=ast.Compare(
-                left=_name(status_name),
-                ops=[ast.IsNot()],
-                comparators=[_name("_DONE")],
-            ),
-            body=loop_body,
-            orelse=[],
-        )
-        return [gen_assign, first_step, loop]
-
     return _compile_predicate_call_impl(
         ctx, fname, call_args, call_kwargs, k_stmts,
-        emit_dispatch=_emit,
     )
 
 
@@ -632,6 +609,7 @@ def compile_body_trampoline(
     ``_dispatch_call_trampoline``.  When omitted (legacy callers such as
     ``solve.py``), ctx is constructed with thread-local fallback values.
     """
+    from .strategy import TrampolineStrategy
     if ctx is not None:
         # Caller supplied per-predicate ctx; use it but overlay the
         # per-clause trail/var_context/self_name/parent_name.
@@ -639,35 +617,16 @@ def compile_body_trampoline(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
         )
+        if ctx.strategy is None:
+            ctx = ctx.replace(strategy=TrampolineStrategy())
     else:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
+            strategy=TrampolineStrategy(),
         )
 
-    return _compile_body_impl(
-        goals, ctx,
-        leaf_yield=_yield_step_stmt(_name(parent_name), ast.Constant(None)),
-        compile_goal_fn=lambda goal, ctx_, k: _dispatch_goal_trampoline(ctx_, goal, k),
-    )
-
-
-def _dr_preprocess(clause: Clause) -> list:
-    """Destructive-reuse preprocess: flatten And conjunctions, then rewrite.
-
-    Flattening is safe because ``And(a, b)`` compiles identically to the
-    sequential goal list ``[a, b]``.  The rewrite replaces eligible
-    ``append``/``dict_put``/``set_union`` calls with their ``_dr_*``
-    in-place variants when the source container is provably dead.
-
-    Trampoline-only: the ``_dr_*__N`` dispatch functions live in
-    ``clausal.logic.builtins.{lists,dict_set}`` and only exist in
-    trampoline form; wiring this into shallow would require shallow
-    equivalents that don't currently exist.
-    """
-    flat_body = _flatten_and_goals(clause.body)
-    eligible = _find_destructive_reuse_goals(clause)
-    return _apply_destructive_reuse(flat_body, eligible)
+    return _compile_body_impl(goals, ctx)
 
 
 def _make_body_compiler_trampoline(
@@ -677,17 +636,25 @@ def _make_body_compiler_trampoline(
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a trampoline body_compiler callable bound to db.
 
-    Applies destructive-reuse rewriting as a preprocess step; see
-    ``_dr_preprocess`` for why this is trampoline-only.
+    Destructive-reuse rewriting is applied by
+    ``TrampolineStrategy.preprocess_clause``; see ``compiler/strategy.py``.
+    DR is trampoline-only because the ``_dr_*__N`` dispatch functions live
+    in ``clausal.logic.builtins.{lists,dict_set}`` and only exist in
+    trampoline form.
 
     ``ctx_template`` (when supplied) is captured by reference and
     forwarded on every per-clause invocation, so later mutations to its
     ``locked_dispatch_keys`` / ``bucket_ref_map`` / ``joint_bucket_ref_map``
-    fields are visible at compile time.
+    fields are visible at compile time.  When omitted (``_ast`` variants,
+    tests), a minimal ctx_template carrying ``TrampolineStrategy`` is
+    constructed.
     """
-    return _make_body_compiler_impl(
-        db,
-        body_compile_fn=compile_body_trampoline,
-        preprocess_clause=_dr_preprocess,
-        ctx_template=ctx_template,
-    )
+    from .strategy import TrampolineStrategy
+    if ctx_template is None:
+        ctx_template = CompilationContext(
+            db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+            strategy=TrampolineStrategy(),
+        )
+    elif ctx_template.strategy is None:
+        ctx_template = ctx_template.replace(strategy=TrampolineStrategy())
+    return _make_body_compiler_impl(db, ctx_template=ctx_template)
