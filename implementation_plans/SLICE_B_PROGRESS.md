@@ -320,8 +320,6 @@ Delivered:
 
 Tests: 10409 pass (ex-trealla).
 
-**Status:** ☐ not started
-
 ### B4 — Eliminate `_m.compile_goal` / `_m.compile_goal_trampoline` lazy accessors
 
 **Scope:** Replace every `_m.compile_goal(...)` and
@@ -329,7 +327,54 @@ Tests: 10409 pass (ex-trealla).
 any resulting cycles by moving the relevant function (not by lazy
 access).
 
-**Status:** ☐ not started
+**Status:** ✅ done
+
+Delivered:
+
+- ``control_constructs.py`` and ``ite_reified.py`` — every
+  ``_m.compile_goal(...)`` / ``_m.compile_goal_trampoline(...)`` call
+  replaced by a direct ``_dispatch_goal(ctx, goal, k)`` /
+  ``_dispatch_goal_trampoline(ctx, goal, k)`` call.  Because both
+  modules are imported *by* ``goal_shallow`` / ``goal_trampoline``,
+  the ``_dispatch_goal*`` import is **function-local** (inside each
+  helper body) to avoid a module-load-order cycle.  Python caches
+  the import, so the per-call overhead is a single dict lookup.
+- Helpers migrated: ``_compile_once``, ``_compile_call_nth``,
+  ``_compile_count_all``, ``_compile_setup_call_cleanup``,
+  ``_compile_freeze``, ``_compile_when``, ``_compile_find_all_core``,
+  ``_compile_catch``, ``_compile_catch_trampoline``,
+  ``_compile_goal_lambda``, ``_compile_reified_ite_eq``,
+  ``_compile_reified_ite_fd``, ``_compile_general_ite``,
+  ``_compile_reified_ite_eq_trampoline``,
+  ``_compile_reified_ite_fd_trampoline``,
+  ``_compile_general_ite_trampoline``.
+- Trampoline catchesite that used to pass ``(self_name, parent_name)``
+  positionally now inherits from ctx — the outer ctx carries them.
+- ``_compile_general_ite_trampoline``'s condition sub-generator still
+  forks a ctx via ``ctx.replace(self_name="_ite_self",
+  parent_name="_ite_parent")`` and the call is now
+  ``_dispatch_goal_trampoline(cond_ctx, test, cond_k)``.
+- ``goal_trampoline.py``'s forall-rewrite branch now calls
+  ``_dispatch_goal(ctx, rewritten, k_stmts)`` — the ``_dispatch_goal``
+  symbol is imported at module level from ``.goal_shallow``
+  (``goal_trampoline`` already depends on ``goal_shallow`` so no new
+  cycle).
+- ``tro.py``'s prefix-goal loop (inside ``_compile_tro_body``) builds
+  a local ``CompilationContext`` seeded with ``self_name=_THIS_GEN_NAME``
+  / ``parent_name=_TRAMP_PARENT_NAME`` and calls
+  ``_dispatch_goal_trampoline(prefix_ctx, goal, k)``.  Module-level
+  import from ``.goal_trampoline`` — ``tro`` is a leaf so no cycle.
+- ``_monolith.py`` re-exports of ``compile_goal`` /
+  ``compile_goal_trampoline`` dropped (from both the
+  ``from .goal_shallow import ...`` lines and ``__all__``).
+  ``__init__.py`` now imports these two symbols directly from
+  ``.goal_shallow`` / ``.goal_trampoline`` instead of via
+  ``_monolith``.
+
+Grep assertion: ``grep -rn "_m\.compile_goal" clausal/logic/compiler/``
+returns no hits (only README.md notes remain).
+
+Tests: 10409 pass, 0 fail (ex-trealla).  AST output unchanged.
 
 ### B5 — Migrate per-compilation `FreshNames`
 

@@ -195,11 +195,11 @@ from .destructive_reuse import (  # noqa: E402,F401
 # _flatten_and_goals / _find_destructive_reuse_goals / _apply_destructive_reuse
 # from _monolith at load time.
 from .goal_shallow import (  # noqa: E402,F401
-    compile_goal, compile_body, _make_body_compiler,
+    compile_body, _make_body_compiler,
     _compile_predicate_call, _dispatch_call_iter,
 )
 from .goal_trampoline import (  # noqa: E402,F401
-    compile_goal_trampoline, compile_body_trampoline,
+    compile_body_trampoline,
     _make_body_compiler_trampoline,
     _compile_predicate_call_trampoline,
     _dispatch_call_trampoline, _inject_bucket_refs_trampoline,
@@ -265,12 +265,10 @@ __all__ = [
     # Shallow / short-stack compilation (bounded-depth predicates)
     "compile_predicate_shallow",
     "compile_predicate_shallow_ast",
-    "compile_goal",
     "compile_body",
     # Trampoline / stack-safe compilation (production default)
     "compile_predicate_trampoline",
     "compile_predicate_trampoline_ast",
-    "compile_goal_trampoline",
     "compile_body_trampoline",
     "DONE",
     # Shared utilities

@@ -44,6 +44,7 @@ from .goal_trampoline import (
     _compile_predicate_call_trampoline,
     _step_expr, _yield_step_stmt, _assign_yield_step,
     _dispatch_call_trampoline,
+    _dispatch_goal_trampoline,
 )
 from . import _monolith as _m
 
@@ -517,7 +518,7 @@ def _compile_tro_body(
     tail_call = deref(goals[-1])
 
     # Pre-allocate body-only Vars FIRST so _compile_tro_tail and
-    # _m.compile_goal_trampoline find all Var names in var_context.
+    # _dispatch_goal_trampoline find all Var names in var_context.
     alloc_stmts = _preallocate_body_vars(goals, var_context)
 
     # Compute runtime ground-check indices for head-decomposition vars.
@@ -530,11 +531,13 @@ def _compile_tro_body(
     )
 
     # Build prefix goals right-to-left, wrapping around the TRO tail.
+    from .compile_ctx import CompilationContext as _CC
+    prefix_ctx = _CC(
+        db=db, var_context=var_context, trail_name=trail_name,
+        self_name=_THIS_GEN_NAME, parent_name=_TRAMP_PARENT_NAME,
+    )
     for goal in reversed(prefix_goals):
-        k = _m.compile_goal_trampoline(
-            goal, db, var_context, trail_name, k,
-            _THIS_GEN_NAME, _TRAMP_PARENT_NAME,
-        )
+        k = _dispatch_goal_trampoline(prefix_ctx, goal, k)
     return alloc_stmts + k
 
 

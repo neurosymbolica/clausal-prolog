@@ -81,11 +81,10 @@ def _deref_cmp(
 
 def _compile_once(ctx: CompilationContext, inner, k_stmts):
     """Compile once(goal) — take first solution of inner goal, then continue."""
-    db = ctx.db
-    var_context = ctx.var_context
+    from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name
     once_gen = _fresh("_once_gen")
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
     once_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -116,7 +115,7 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
 
 def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
     """Compile call_nth(Goal, N) — succeed on the Nth solution of Goal only."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     count_var = _fresh("_cn_count")
@@ -126,7 +125,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
 
     n_expr = term_to_ast_expr(n_arg, var_context, eval_arith=True)
 
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -202,7 +201,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
 
 def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     """Compile count_all(Goal, Count) — count solutions without collecting."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     n_var = _fresh("_ca_n")
@@ -212,7 +211,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
     count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
 
-    inner_stmts = _m.compile_goal(inner, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -260,8 +259,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
 def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k_stmts):
     """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup."""
-    db = ctx.db
-    var_context = ctx.var_context
+    from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name
     mark_var = _fresh("_scc_m")
     setup_gen = _fresh("_scc_setup")
@@ -272,7 +270,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     cleanup_gen = _fresh("_scc_cleanup")
 
     def _make_sub_gen(name, goal):
-        stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+        stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
         body = stmts + [
             ast.Return(value=ast.Constant(value=None)),
             ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -356,7 +354,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
 
 def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     """Compile freeze(X, Goal) — delay Goal until X is bound."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     x_var = _fresh("_fz_x")
@@ -366,9 +364,9 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
     x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
 
-    bound_stmts = _m.compile_goal(goal, db, var_context, trail_name, k_stmts, ctx=ctx)
+    bound_stmts = _dispatch_goal(ctx, goal, k_stmts)
 
-    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    deferred_stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -438,7 +436,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
 def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
     """Compile when(Cond, Goal) — delay Goal until Cond is satisfied."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
 
@@ -459,7 +457,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         return _compile_when(ctx, cond.left, inner_when, k_stmts)
 
     thunk_name = _fresh("_when_thunk")
-    deferred_stmts = _m.compile_goal(goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    deferred_stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -521,7 +519,7 @@ def _compile_find_all_core(
     dedup: bool = False,
 ) -> list[ast.stmt]:
     """Compile find_all/3, bag_of/3, set_of/3 as special forms."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     results_var = _fresh("_fa_results")
@@ -532,7 +530,7 @@ def _compile_find_all_core(
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
     bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
 
-    inner_stmts = _m.compile_goal(inner_goal, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    inner_stmts = _dispatch_goal(ctx, inner_goal, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -719,15 +717,9 @@ def _compile_catch(
     always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in simple mode."""
-    db = ctx.db
-    var_context = ctx.var_context
-    trail_name = ctx.trail_name
-    goal_stmts = _m.compile_goal(
-        goal_arg, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx,
-    )
-    recovery_stmts = _m.compile_goal(
-        recovery, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx,
-    )
+    from .goal_shallow import _dispatch_goal
+    goal_stmts = _dispatch_goal(ctx, goal_arg, [_yield_none_stmt()])
+    recovery_stmts = _dispatch_goal(ctx, recovery, [_yield_none_stmt()])
 
     goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
         "_catch_gen", goal_stmts, k_stmts,
@@ -755,17 +747,9 @@ def _compile_catch_trampoline(
     always_catch: bool = False,
 ) -> list[ast.stmt]:
     """Compile catch(Goal, Catcher, Recovery) in trampoline mode."""
-    db = ctx.db
-    var_context = ctx.var_context
-    trail_name = ctx.trail_name
-    self_name = ctx.self_name
-    parent_name = ctx.parent_name
-    goal_stmts = _m.compile_goal_trampoline(
-        goal_arg, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-    )
-    recovery_stmts = _m.compile_goal_trampoline(
-        recovery, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-    )
+    from .goal_trampoline import _dispatch_goal_trampoline
+    goal_stmts = _dispatch_goal_trampoline(ctx, goal_arg, k_stmts)
+    recovery_stmts = _dispatch_goal_trampoline(ctx, recovery, k_stmts)
     return _compile_catch_impl(
         ctx, catcher,
         goal_body_stmts=goal_stmts,
@@ -782,7 +766,7 @@ def _compile_goal_lambda(
     lambda_node: Lambda,
 ) -> tuple[str, ast.FunctionDef]:
     """Compile a Lambda node to a simple-mode dispatch function."""
-    db = ctx.db
+    from .goal_shallow import _dispatch_goal
     enclosing_var_context = ctx.var_context
     trail_name = ctx.trail_name
     func_name = _fresh("_lambda")
@@ -796,7 +780,7 @@ def _compile_goal_lambda(
     body_ctx = ctx.replace(var_context=body_vc)
     k: list[ast.stmt] = [_yield_none_stmt()]
     for goal in reversed(body_goals):
-        k = _m.compile_goal(goal, db, body_vc, trail_name, k, ctx=body_ctx)
+        k = _dispatch_goal(body_ctx, goal, k)
 
     body_stmts = alloc_stmts + k + [
         ast.Return(value=ast.Constant(value=None)),

@@ -48,8 +48,6 @@ from ._monolith import (  # noqa: F401
     compile_predicate_shallow_ast,
     compile_predicate,
     compile_predicate_ast,
-    compile_goal,
-    compile_goal_trampoline,
     compile_body,
     compile_body_trampoline,
     term_to_ast_expr,
@@ -57,6 +55,8 @@ from ._monolith import (  # noqa: F401
     head_to_match_pattern,
     compile_head_to_match_case,
 )
+from .goal_shallow import compile_goal  # noqa: F401
+from .goal_trampoline import compile_goal_trampoline  # noqa: F401
 
 
 def __getattr__(name):

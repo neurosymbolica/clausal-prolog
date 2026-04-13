@@ -53,6 +53,7 @@ from .goal_shallow import (
     _compile_deterministic_goal,
     _compile_shared_membership_goal,
     _compile_shared_meta_call,
+    _dispatch_goal,
 )
 from .compile_ctx import CompilationContext
 from . import _monolith as _m
@@ -524,7 +525,7 @@ def _dispatch_goal_trampoline(
         # ── forall/2 — \+( Cond, \+ Action ) ───────────────────────────────
         case Call(func=LoadName(name="forall"), args=[cond, action], kwargs=[]):
             rewritten = Not(operand=And(left=cond, right=Not(operand=action)))
-            return _m.compile_goal(rewritten, db, var_context, trail_name, k_stmts)
+            return _dispatch_goal(ctx, rewritten, k_stmts)
 
         # ── Stack-safe predicate call ─────────────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):

@@ -149,8 +149,9 @@ def _compile_reified_ite_eq_impl(
 
 def _compile_reified_ite_eq(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
     """Shallow reified ITE for equality/disequality — wraps ``_impl``."""
+    from .goal_shallow import _dispatch_goal
     def _cg(ctx_, goal, k):
-        return _m.compile_goal(goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_)
+        return _dispatch_goal(ctx_, goal, k)
     return _compile_reified_ite_eq_impl(
         ctx, l, r, then, else_, k_stmts,
         compile_goal_fn=_cg,
@@ -193,8 +194,9 @@ def _compile_reified_ite_fd_impl(
 
 def _compile_reified_ite_fd(ctx: CompilationContext, test, then, else_, k_stmts):
     """Shallow reified ITE for CLP(FD) comparison — wraps ``_impl``."""
+    from .goal_shallow import _dispatch_goal
     def _cg(ctx_, goal, k):
-        return _m.compile_goal(goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k, ctx=ctx_)
+        return _dispatch_goal(ctx_, goal, k)
     return _compile_reified_ite_fd_impl(
         ctx, test, then, else_, k_stmts,
         compile_goal_fn=_cg,
@@ -203,13 +205,14 @@ def _compile_reified_ite_fd(ctx: CompilationContext, test, then, else_, k_stmts)
 
 def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
     """Compile ITE for non-reifiable conditions."""
+    from .goal_shallow import _dispatch_goal
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
     cond_gen = _fresh("_ite_cond")
-    cond_stmts = _m.compile_goal(test, db, var_context, trail_name, [_yield_none_stmt()], ctx=ctx)
+    cond_stmts = _dispatch_goal(ctx, test, [_yield_none_stmt()])
     cond_body = cond_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -225,8 +228,8 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
         **_m._EXTRA_FUNCDEF,
     )
 
-    then_stmts = _m.compile_goal(then, db, var_context, trail_name, k_stmts, ctx=ctx)
-    else_stmts = _m.compile_goal(else_, db, var_context, trail_name, k_stmts, ctx=ctx)
+    then_stmts = _dispatch_goal(ctx, then, k_stmts)
+    else_stmts = _dispatch_goal(ctx, else_, k_stmts)
 
     if use_tabled_naf:
         true_mark = _fresh(_MARK_PREFIX)
@@ -295,11 +298,9 @@ def _compile_reified_ite_trampoline(ctx: CompilationContext, test, then, else_, 
 
 def _compile_reified_ite_eq_trampoline(ctx: CompilationContext, l, r, then, else_, k_stmts, swap=False):
     """Trampoline variant — wraps ``_compile_reified_ite_eq_impl``."""
+    from .goal_trampoline import _dispatch_goal_trampoline
     def _cgt(ctx_, goal, k):
-        return _m.compile_goal_trampoline(
-            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
-            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
-        )
+        return _dispatch_goal_trampoline(ctx_, goal, k)
     return _compile_reified_ite_eq_impl(
         ctx, l, r, then, else_, k_stmts,
         compile_goal_fn=_cgt,
@@ -309,11 +310,9 @@ def _compile_reified_ite_eq_trampoline(ctx: CompilationContext, l, r, then, else
 
 def _compile_reified_ite_fd_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
     """Trampoline variant — wraps ``_compile_reified_ite_fd_impl``."""
+    from .goal_trampoline import _dispatch_goal_trampoline
     def _cgt(ctx_, goal, k):
-        return _m.compile_goal_trampoline(
-            goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
-            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
-        )
+        return _dispatch_goal_trampoline(ctx_, goal, k)
     return _compile_reified_ite_fd_impl(
         ctx, test, then, else_, k_stmts,
         compile_goal_fn=_cgt,
@@ -322,11 +321,10 @@ def _compile_reified_ite_fd_trampoline(ctx: CompilationContext, test, then, else
 
 def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, k_stmts):
     """Trampoline variant of _compile_general_ite."""
+    from .goal_trampoline import _dispatch_goal_trampoline
     db = ctx.db
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    self_name = ctx.self_name
-    parent_name = ctx.parent_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
     cond_fn_name = _fresh("_ite_cond_fn")
@@ -334,10 +332,7 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
     cond_parent = "_ite_parent"
     cond_k = [_m._yield_step_stmt(_name(cond_parent), ast.Constant(None))]
     cond_ctx = ctx.replace(self_name=cond_self, parent_name=cond_parent)
-    cond_stmts = _m.compile_goal_trampoline(
-        test, db, var_context, trail_name, cond_k,
-        cond_self, cond_parent, ctx=cond_ctx,
-    )
+    cond_stmts = _dispatch_goal_trampoline(cond_ctx, test, cond_k)
     cond_body = cond_stmts + [
         _m._yield_step_stmt(_name(cond_parent), _name("_DONE")),
     ]
@@ -355,12 +350,8 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
         **_m._EXTRA_FUNCDEF,
     )
 
-    then_stmts = _m.compile_goal_trampoline(
-        then, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-    )
-    else_stmts = _m.compile_goal_trampoline(
-        else_, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
-    )
+    then_stmts = _dispatch_goal_trampoline(ctx, then, k_stmts)
+    else_stmts = _dispatch_goal_trampoline(ctx, else_, k_stmts)
 
     sg_name = _fresh("_ite_sg")
     g_name = _fresh("_ite_g")
