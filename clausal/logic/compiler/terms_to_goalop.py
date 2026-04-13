@@ -23,7 +23,7 @@ Coverage expands one construct at a time through Slice D5 (see
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
 from clausal.logic.compiler.ir import (
@@ -97,16 +97,10 @@ def _convert(goal: Any) -> GoalOp:
         case nodes.ArithEq() | nodes.ArithNeq() | nodes.Lt() | nodes.LtE() \
                 | nodes.Gt() | nodes.GtE():
             return FDCompare(op=_FD_OP[type(goal)], l=goal.left, r=goal.right)
-        case list() | nodes.TupleLiteral():
-            # Nested conjunction surfacing as a single goal: wrap in a
-            # Sequence so the caller still gets a single GoalOp back.
-            ops: list[GoalOp] = []
-            _extend(ops, goal)
-            return Sequence(ops=ops)
     _not_yet(goal)
 
 
-def _not_yet(goal: Any) -> None:
+def _not_yet(goal: Any) -> NoReturn:
     """Signal that the D2 subset does not yet cover this goal shape.
 
     The D4 parallel-implementation harness catches this and falls back
