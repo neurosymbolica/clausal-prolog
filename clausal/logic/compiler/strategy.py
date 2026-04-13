@@ -40,6 +40,10 @@ class Strategy(Protocol):
 
     def emit_leaf_yield(self, ctx: "CompilationContext") -> ast.stmt: ...
 
+    def emit_exhaustion_yield(
+        self, ctx: "CompilationContext",
+    ) -> ast.stmt | None: ...
+
     def emit_sub_call(
         self,
         ctx: "CompilationContext",
@@ -72,6 +76,10 @@ class ShallowStrategy:
     def emit_leaf_yield(self, ctx):
         from ._ast_helpers import _yield_none_stmt
         return _yield_none_stmt()
+
+    def emit_exhaustion_yield(self, ctx):
+        # Shallow generators fall off the end of the function naturally.
+        return None
 
     def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts):
         from ._ast_helpers import _name
@@ -109,6 +117,11 @@ class TrampolineStrategy:
         from .goal_trampoline import _yield_step_stmt
         return _yield_step_stmt(_name(ctx.parent_name), ast.Constant(None))
 
+    def emit_exhaustion_yield(self, ctx):
+        from ._ast_helpers import _name
+        from .goal_trampoline import _yield_step_stmt
+        return _yield_step_stmt(_name(ctx.parent_name), _name("_DONE"))
+
     def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts):
         from ._ast_helpers import _name, _assign
         from .goal_trampoline import (
@@ -144,6 +157,8 @@ class TrampolineStrategy:
             _apply_destructive_reuse,
         )
         flat = _flatten_and_goals(clause.body)
+        if not self.supports_destructive_reuse:
+            return flat
         eligible = _find_destructive_reuse_goals(clause)
         return _apply_destructive_reuse(flat, eligible)
 

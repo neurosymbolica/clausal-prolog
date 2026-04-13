@@ -217,6 +217,47 @@ from .tro import (  # noqa: E402,F401
 )
 
 
+def _empty_predicate_funcdef(
+    functor: str,
+    arity: int,
+    db: "Database | None",
+    strategy,
+) -> ast.FunctionDef:
+    """AST for a predicate that matches any args but never yields.
+
+    Strategy-driven: parameter layout comes from
+    ``strategy.function_params``; tail yield comes from
+    ``strategy.emit_exhaustion_yield`` (trampoline's DONE yield) or the
+    ``return; yield None`` idiom (shallow — needs it to make the
+    function a generator type at all).
+    """
+    _params_ctx = CompilationContext(
+        db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME, strategy=strategy,
+    )
+    arg_names = [f"arg{i}" for i in range(arity)]
+    params = strategy.function_params(_params_ctx, arg_names)
+    exhaust = strategy.emit_exhaustion_yield(_params_ctx)
+    if exhaust is not None:
+        body: list[ast.stmt] = [exhaust]
+    else:
+        body = [
+            ast.Return(value=ast.Constant(value=None)),
+            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        ]
+    func_def = ast.FunctionDef(
+        name=f"{functor}__{arity}",
+        args=ast.arguments(
+            posonlyargs=[], args=[ast.arg(arg=p) for p in params],
+            vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=body,
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    ast.fix_missing_locations(func_def)
+    return func_def
+
+
 def _build_predicate_trampoline_funcdef(
     functor: str,
     arity: int,
@@ -380,7 +421,9 @@ def _build_predicate_trampoline_funcdef(
         all_stmts = loop_stmts
 
     if emit_done:
-        all_stmts.append(_yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")))
+        exhaust = ctx_template.strategy.emit_exhaustion_yield(ctx_template)
+        if exhaust is not None:
+            all_stmts.append(exhaust)
 
     # A generator function needs at least one yield or a return+yield pair.
     if not all_stmts:
@@ -898,49 +941,13 @@ def compile_predicate_trampoline_ast(
     if body_compiler is None:
         body_compiler = _make_body_compiler_trampoline(db)
     if not clauses:
-        arg_names = [f"arg{i}" for i in range(arity)]
-        params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
-        func_def = ast.FunctionDef(
-            name=f"{functor}__{arity}",
-            args=ast.arguments(
-                posonlyargs=[], args=[ast.arg(arg=p) for p in params],
-                vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-            ),
-            body=[
-                _yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")),
-            ],
-            decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
-        )
-        ast.fix_missing_locations(func_def)
-        return func_def
+        return _empty_predicate_funcdef(functor, arity, db, TrampolineStrategy())
     return _build_predicate_trampoline_funcdef(functor, arity, clauses, db, body_compiler)
 
 
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
-    arg_names = [f"arg{i}" for i in range(arity)]
-    params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
-    func_name = f"{functor}__{arity}"
-    func_def = ast.FunctionDef(
-        name=func_name,
-        args=ast.arguments(
-            posonlyargs=[],
-            args=[ast.arg(arg=p) for p in params],
-            vararg=None,
-            kwonlyargs=[],
-            kw_defaults=[],
-            kwarg=None,
-            defaults=[],
-        ),
-        body=[
-            _yield_step_stmt(_name(_TRAMP_PARENT_NAME), _name("_DONE")),
-        ],
-        decorator_list=[],
-        returns=None,
-        type_comment=None,
-        **_EXTRA_FUNCDEF,
-    )
-    ast.fix_missing_locations(func_def)
+    func_def = _empty_predicate_funcdef(functor, arity, None, TrampolineStrategy())
     return functiondef_to_function(func_def, globals_={"_DONE": DONE})
 
 
@@ -1432,18 +1439,7 @@ def compile_predicate_shallow_ast(
     if body_compiler is None:
         body_compiler = _make_body_compiler(db)
     if not clauses:
-        arg_names = [f"arg{i}" for i in range(arity)]
-        params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
-        return ast.FunctionDef(
-            name=f"{functor}__{arity}",
-            args=ast.arguments(
-                posonlyargs=[], args=[ast.arg(arg=p) for p in params],
-                vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-            ),
-            body=[ast.Return(value=ast.Constant(value=None)),
-                  ast.Expr(value=ast.Yield(value=ast.Constant(value=None)))],
-            decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF,
-        )
+        return _empty_predicate_funcdef(functor, arity, db, ShallowStrategy())
     return _build_predicate_funcdef(functor, arity, clauses, db, body_compiler)
 
 
@@ -1470,31 +1466,7 @@ def _stub_body_stmts() -> list[ast.stmt]:
 
 def _compile_always_fail(functor: str, arity: int) -> Callable:
     """Return a generator function that matches any args but never yields."""
-    arg_names = [f"arg{i}" for i in range(arity)]
-    params = arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
-    func_name = f"{functor}__{arity}"
-    func_def = ast.FunctionDef(
-        name=func_name,
-        args=ast.arguments(
-            posonlyargs=[],
-            args=[ast.arg(arg=p) for p in params],
-            vararg=None,
-            kwonlyargs=[],
-            kw_defaults=[],
-            kwarg=None,
-            defaults=[],
-        ),
-        # return; yield  →  generator that stops immediately
-        body=[
-            ast.Return(value=ast.Constant(value=None)),
-            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-        ],
-        decorator_list=[],
-        returns=None,
-        type_comment=None,
-        **_EXTRA_FUNCDEF,
-    )
-    ast.fix_missing_locations(func_def)
+    func_def = _empty_predicate_funcdef(functor, arity, None, ShallowStrategy())
     return functiondef_to_function(func_def, globals_={})
 
 
