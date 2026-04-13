@@ -442,14 +442,27 @@ def _compile_tro_tail(
         # Fallback: normal StepGenerator call with captured _tro_arg values.
         arg_exprs = [_name(f"_tro_arg{i}") for i in range(arity)]
         fname = tail_call.func.name
+        from .compile_ctx import CompilationContext as _CC
+        _fallback_ctx = _CC(
+            db=db, var_context=var_context, trail_name=trail_name,
+            self_name=self_name, parent_name=parent_name,
+            locked_dispatch_keys=getattr(
+                _m._compile_context_local, "locked_dispatch_keys", frozenset(),
+            ),
+            bucket_ref_map=getattr(
+                _m._compile_context_local, "bucket_ref_map", {},
+            ),
+            joint_bucket_ref_map=getattr(
+                _m._compile_context_local, "joint_bucket_ref_map", {},
+            ),
+        )
         fallback_stmts = _compile_predicate_call_trampoline(
-            fname, [None] * arity, [], db, var_context, trail_name,
+            _fallback_ctx, fname, [None] * arity, [],
             [_yield_step_stmt(_name(parent_name), ast.Constant(None))],
-            self_name,
         )
         # Patch the arg expressions in the StepGenerator call to use _tro_arg values.
         # The simplest approach: build the call directly.
-        call_expr = _dispatch_call_trampoline(fname, arity, arg_exprs, trail_name, self_name)
+        call_expr = _dispatch_call_trampoline(_fallback_ctx, fname, arity, arg_exprs)
         gen_name = _fresh("_gen")
         status_name = _fresh("_st")
         gen_assign = _assign(gen_name, call_expr)

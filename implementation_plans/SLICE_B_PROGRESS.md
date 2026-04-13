@@ -135,10 +135,61 @@ Tests: 10409 pass, 0 fail (ex-trealla).  AST output unchanged
 
 **Scope:** `_dispatch_call_trampoline` and `_inject_bucket_refs_trampoline`
 take ctx and read/write the `bucket_ref_map` / `joint_bucket_ref_map`
-fields.  After this, the thread-local `_compile_context_local` has no
-readers; it can be deleted from `_monolith.py`.
+fields.  `compile_goal_trampoline` / `_compile_predicate_call_trampoline`
+propagate ctx through recursion and into the dispatch emitter.
+`predicate.py`'s trampoline path builds a `ctx_template` up front,
+forwards it to `_make_body_compiler_trampoline`, and mutates its
+`locked_dispatch_keys` / `bucket_ref_map` / `joint_bucket_ref_map`
+at the same point it writes the thread-local.  `tro.py` constructs
+a ctx at its fallback call sites.
 
-**Status:** ☐ not started
+The thread-local `_compile_context_local` is not yet deleted —
+legacy back-channel callers (`ite_reified` / `control_constructs` /
+`tro.py`'s prefix-goal loop) still invoke `_m.compile_goal_trampoline`
+without ctx and rely on the fallback.  `predicate.py` now aliases
+the thread-local's bucket maps to the *same dict* as
+`ctx_template.bucket_ref_map` / `.joint_bucket_ref_map`, so both
+paths observe writes.  Deletion moves to B2/B3 when those callers
+migrate.
+
+**Status:** ✅ done
+
+Delivered:
+
+- ``_inject_bucket_refs_trampoline(ctx, clauses, base_globals)``
+  mutates ``ctx.bucket_ref_map`` / ``ctx.joint_bucket_ref_map``
+  directly.  Trailing thread-local writes removed.
+- ``_dispatch_call_trampoline(ctx, fname, arity, arg_exprs)`` reads
+  ``ctx.bucket_ref_map``, ``ctx.joint_bucket_ref_map``,
+  ``ctx.locked_dispatch_keys``, ``ctx.trail_name``, ``ctx.self_name``.
+- ``_compile_predicate_call_trampoline(ctx, fname, call_args,
+  call_kwargs, k_stmts)`` — dropped the tuple args in favour of ctx.
+- ``compile_goal_trampoline`` gained ``ctx: CompilationContext | None
+  = None`` kwarg.  Constructs ctx from tuple args + thread-local
+  fallback when omitted; recursive internal calls (And, Or,
+  TupleLiteral, Not) pass ctx explicitly.  The NAF branch overrides
+  ``self_name`` / ``parent_name`` via ``ctx.replace()``.
+- ``compile_body_trampoline`` — docstring updated: ctx now actually
+  does something (no longer a no-op).  Inner ``_compile_goal`` helper
+  forwards ``ctx=ctx_`` to ``compile_goal_trampoline``.
+- ``_make_body_compiler_trampoline`` gained ``ctx_template`` kwarg,
+  forwarded through to ``_make_body_compiler_impl``.
+- ``predicate.py`` ``compile_predicate_trampoline``: constructs
+  ``ctx_template`` before ``_make_body_compiler_trampoline``.  Sets
+  ``ctx_template.locked_dispatch_keys`` alongside the thread-local.
+  Aliases the thread-local's ``bucket_ref_map`` / ``joint_bucket_ref_map``
+  to the ctx_template's dict instances (same object, two names).
+  Calls ``_inject_bucket_refs_trampoline(ctx_template, clauses,
+  base_globals)``.
+- ``tro.py`` fallback paths: build a local ``CompilationContext``
+  seeded from the thread-local and pass to both
+  ``_compile_predicate_call_trampoline`` and
+  ``_dispatch_call_trampoline``.
+- Tests in ``test_callsite_specialization.py`` updated to the new
+  3-arg signature via a small ``_mkctx`` helper that bridges to the
+  thread-local so the test harness still works.
+
+Tests: 10409 pass, 0 fail (ex-trealla).
 
 ### B2 — Migrate leaf-to-mid-layer helpers to take ctx
 

@@ -40,6 +40,21 @@ def _make_fact_clauses(functor, facts):
     ]
 
 
+def _mkctx():
+    """Build a CompilationContext whose bucket-ref maps are shared with
+    the thread-local so tests that still read the thread-local see
+    writes made via ctx."""
+    from clausal.logic.compiler.compile_ctx import CompilationContext
+    ctx = CompilationContext(
+        db=None, var_context={}, trail_name="trail",
+        bucket_ref_map=_compile_context_local.bucket_ref_map,
+        joint_bucket_ref_map=_compile_context_local.joint_bucket_ref_map,
+        locked_dispatch_keys=getattr(
+            _compile_context_local, "locked_dispatch_keys", frozenset()),
+    )
+    return ctx
+
+
 def _trampoline_solutions(dispatch, args, trail=None):
     if trail is None:
         trail = Trail()
@@ -393,7 +408,7 @@ class TestInjectBucketRefs:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, "red")
         assert expected_gkey in base_globals, \
@@ -417,7 +432,7 @@ class TestInjectBucketRefs:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         brmap = _compile_context_local.bucket_ref_map
         assert ("color", 2, 0, "red") in brmap
@@ -440,7 +455,7 @@ class TestInjectBucketRefs:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         # No bucket refs should be injected for variable args
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -465,7 +480,7 @@ class TestInjectBucketRefs:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == []
@@ -487,7 +502,7 @@ class TestInjectBucketRefs:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == []
@@ -570,7 +585,7 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, "red")
         assert expected_gkey in base_globals
@@ -598,7 +613,7 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == [], "Dynamic predicate should not be bucket-specialised"
@@ -624,7 +639,7 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == [], "Self-recursive unlocked predicate should not be specialised"
@@ -648,7 +663,7 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline(clauses, base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), clauses, base_globals)
 
         for atom in ["red", "green", "blue"]:
             gkey = _bucket_key("color", 0, atom)
@@ -671,7 +686,7 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         gkey = _bucket_key("color", 0, "blue")
         bucket_fn = base_globals[gkey]
@@ -698,10 +713,10 @@ class TestCallsiteCorrectnessAndFallback:
         _compile_context_local.bucket_ref_map = {}
         _compile_context_local.joint_bucket_ref_map = {}
 
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
         gkey = _bucket_key("color", 0, "red")
         first_fn = base_globals[gkey]
 
         # Inject again — should NOT overwrite
-        _inject_bucket_refs_trampoline([caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
         assert base_globals[gkey] is first_fn

@@ -124,6 +124,7 @@ def _assign_yield_step(
 
 
 def _inject_bucket_refs_trampoline(
+    ctx: CompilationContext,
     clauses: list,
     base_globals: dict,
 ) -> None:
@@ -133,13 +134,15 @@ def _inject_bucket_refs_trampoline(
     ``_index_plans`` and one (or two) arguments are statically known literals
     or compound constructors, injects the matching bucket function into
     ``base_globals`` and records the mapping in
-    ``_compile_context_local.bucket_ref_map`` /
-    ``_compile_context_local.joint_bucket_ref_map`` so that
+    ``ctx.bucket_ref_map`` / ``ctx.joint_bucket_ref_map`` so that
     :func:`_dispatch_call_trampoline` can emit a direct bucket reference.
+
+    Mutates ``ctx`` in place — the caller's ctx_template (captured by
+    reference in the body_compiler closure) sees the new entries.
     """
 
-    brmap: dict = {}
-    jbrmap: dict = {}
+    brmap = ctx.bucket_ref_map
+    jbrmap = ctx.joint_bucket_ref_map
 
     for clause in clauses:
         for goal in clause.body:
@@ -197,16 +200,12 @@ def _inject_bucket_refs_trampoline(
                         base_globals[gkey] = jdict[jkey]
                     jbrmap[(fname, arity, pi, pj, ki, kj)] = gkey
 
-    _compile_context_local.bucket_ref_map = brmap
-    _compile_context_local.joint_bucket_ref_map = jbrmap
-
 
 def _dispatch_call_trampoline(
+    ctx: CompilationContext,
     fname: str,
     arity: int,
     arg_exprs: list[ast.expr],
-    trail_name: str,
-    self_name: str,
 ) -> ast.expr:
     """Generate: StepGenerator(fname._get_dispatch(), this_generator, arg0, …, trail)
 
@@ -222,8 +221,10 @@ def _dispatch_call_trampoline(
     closure entirely).
     """
     # Phase 10: direct bucket ref for statically-known indexed argument
-    brmap = getattr(_compile_context_local, "bucket_ref_map", {})
-    jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
+    brmap = ctx.bucket_ref_map
+    jbrmap = ctx.joint_bucket_ref_map
+    trail_name = ctx.trail_name
+    self_name = ctx.self_name
 
     # Try joint first (more selective — two args constrain the bucket further)
     for pos_i in range(arity):
@@ -259,7 +260,7 @@ def _dispatch_call_trampoline(
 
     # Phase 7: use cached dispatch name for locked predicates
     dk = _disp_key(fname, arity)
-    locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
+    locked_keys = ctx.locked_dispatch_keys
     if dk in locked_keys:
         dispatch_expr: ast.expr = _name(dk)
     else:
@@ -286,6 +287,8 @@ def compile_goal_trampoline(
     k_stmts: list[ast.stmt],
     self_name: str = _THIS_GEN_NAME,
     parent_name: str = _TRAMP_PARENT_NAME,
+    *,
+    ctx: CompilationContext | None = None,
 ) -> list[ast.stmt]:
     """Compile a goal using the trampoline tuple protocol.
 
@@ -310,6 +313,20 @@ def compile_goal_trampoline(
     mode) so the inner check runs via a local for loop.  NAF inner goals must
     therefore be simple-compiled predicates or primitive goals.
     """
+    if ctx is None:
+        ctx = CompilationContext(
+            db=db, var_context=var_context, trail_name=trail_name,
+            self_name=self_name, parent_name=parent_name,
+            locked_dispatch_keys=getattr(
+                _compile_context_local, "locked_dispatch_keys", frozenset(),
+            ),
+            bucket_ref_map=getattr(
+                _compile_context_local, "bucket_ref_map", {},
+            ),
+            joint_bucket_ref_map=getattr(
+                _compile_context_local, "joint_bucket_ref_map", {},
+            ),
+        )
     goal = deref(goal)
 
     if goal is True:
@@ -339,10 +356,10 @@ def compile_goal_trampoline(
         # ── Conjunction ──────────────────────────────────────────────────────
         case And(left=l, right=r):
             inner_k = compile_goal_trampoline(
-                r, db, var_context, trail_name, k_stmts, self_name, parent_name
+                r, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
             )
             return compile_goal_trampoline(
-                l, db, var_context, trail_name, inner_k, self_name, parent_name
+                l, db, var_context, trail_name, inner_k, self_name, parent_name, ctx=ctx,
             )
 
         # ── Tuple-as-conjunction ─────────────────────────────────────────────
@@ -350,7 +367,7 @@ def compile_goal_trampoline(
             k = k_stmts
             for goal in reversed(elems):
                 k = compile_goal_trampoline(
-                    goal, db, var_context, trail_name, k, self_name, parent_name
+                    goal, db, var_context, trail_name, k, self_name, parent_name, ctx=ctx,
                 )
             return k
 
@@ -358,10 +375,10 @@ def compile_goal_trampoline(
         case Or(left=l, right=r):
             mark = _fresh(_MARK_PREFIX)
             left_stmts = compile_goal_trampoline(
-                l, db, var_context, trail_name, k_stmts, self_name, parent_name
+                l, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
             )
             right_stmts = compile_goal_trampoline(
-                r, db, var_context, trail_name, k_stmts, self_name, parent_name
+                r, db, var_context, trail_name, k_stmts, self_name, parent_name, ctx=ctx,
             )
             # After trail.undo(mark) the trail is already back at mark, so the
             # second _assign_mark would be a no-op — omit it.
@@ -392,6 +409,7 @@ def compile_goal_trampoline(
             inner_stmts = compile_goal_trampoline(
                 inner, db, var_context, trail_name, inner_k,
                 self_name="_naf_self", parent_name="_naf_parent",
+                ctx=ctx.replace(self_name="_naf_self", parent_name="_naf_parent"),
             )
             # Build the inner function: def _naf_gen_fn(_naf_self, _naf_parent, trail): ...
             naf_body = inner_stmts + [
@@ -522,16 +540,14 @@ def compile_goal_trampoline(
         # ── Stack-safe predicate call ─────────────────────────────────────────
         case Call(func=LoadName(name=fname), args=call_args, kwargs=call_kwargs):
             return _compile_predicate_call_trampoline(
-                fname, call_args, call_kwargs, db, var_context,
-                trail_name, k_stmts, self_name,
+                ctx, fname, call_args, call_kwargs, k_stmts,
             )
 
         # ── Qualified predicate call (mod.Pred(X_)) ──────────────────────────
         case Call(func=LoadAttr() as attr, args=call_args, kwargs=call_kwargs):
             fname = _dotted_name_from_loadattr(attr)
             return _compile_predicate_call_trampoline(
-                fname, call_args, call_kwargs, db, var_context,
-                trail_name, k_stmts, self_name,
+                ctx, fname, call_args, call_kwargs, k_stmts,
             )
 
         case Call():
@@ -546,14 +562,11 @@ def compile_goal_trampoline(
 
 
 def _compile_predicate_call_trampoline(
+    ctx: CompilationContext,
     fname: str,
     call_args: list,
     call_kwargs: list,
-    db: Database,
-    var_context: dict[int, str],
-    trail_name: str,
     k_stmts: list[ast.stmt],
-    self_name: str,
 ) -> list[ast.stmt]:
     """Trampoline variant of _compile_predicate_call.
 
@@ -575,12 +588,16 @@ def _compile_predicate_call_trampoline(
     See ``_compile_predicate_call_impl`` in ``goal_shallow`` for the shared
     front-end (arg ordering + lambda hoist + arg_expr lowering).
     """
+    trail_name = ctx.trail_name
+    db = ctx.db
+    var_context = ctx.var_context
+
     def _emit(arity, arg_exprs, k_stmts):
         gen_name = _fresh("_gen")
         status_name = _fresh("_st")
 
         call_expr = _dispatch_call_trampoline(
-            fname, arity, arg_exprs, trail_name, self_name,
+            ctx, fname, arity, arg_exprs,
         )
 
         # _gen_N = dispatch(self, arg0, …, trail)
@@ -630,12 +647,11 @@ def compile_body_trampoline(
     surfaced to the calling generator.  See ``_compile_body_impl`` for
     the shared right-to-left reduction.
 
-    ``ctx`` is currently accepted for signature compatibility with
-    ``_make_body_compiler_impl`` (which passes ``ctx=ctx_template``), but
-    the trampoline path still reads ``locked_dispatch_keys`` /
-    ``bucket_ref_map`` / ``joint_bucket_ref_map`` from the thread-local
-    ``_compile_context_local``.  Slice B1c migrates those onto ctx too;
-    until then, passing ctx here is a no-op.
+    ``ctx``, when supplied, carries the per-predicate
+    ``locked_dispatch_keys`` / ``bucket_ref_map`` / ``joint_bucket_ref_map``
+    forward to ``compile_goal_trampoline`` and onto
+    ``_dispatch_call_trampoline``.  When omitted (legacy callers such as
+    ``solve.py``), ctx is constructed with thread-local fallback values.
     """
     if ctx is not None:
         # Caller supplied per-predicate ctx; use it but overlay the
@@ -653,7 +669,7 @@ def compile_body_trampoline(
     def _compile_goal(goal, ctx_, k):
         return compile_goal_trampoline(
             goal, ctx_.db, ctx_.var_context, ctx_.trail_name, k,
-            ctx_.self_name, ctx_.parent_name,
+            ctx_.self_name, ctx_.parent_name, ctx=ctx_,
         )
     return _compile_body_impl(
         goals, ctx,
@@ -682,14 +698,22 @@ def _dr_preprocess(clause: Clause) -> list:
 
 def _make_body_compiler_trampoline(
     db: Database,
+    *,
+    ctx_template: CompilationContext | None = None,
 ) -> Callable[[Clause, dict[int, str]], list[ast.stmt]]:
     """Return a trampoline body_compiler callable bound to db.
 
     Applies destructive-reuse rewriting as a preprocess step; see
     ``_dr_preprocess`` for why this is trampoline-only.
+
+    ``ctx_template`` (when supplied) is captured by reference and
+    forwarded on every per-clause invocation, so later mutations to its
+    ``locked_dispatch_keys`` / ``bucket_ref_map`` / ``joint_bucket_ref_map``
+    fields are visible at compile time.
     """
     return _make_body_compiler_impl(
         db,
         body_compile_fn=compile_body_trampoline,
         preprocess_clause=_dr_preprocess,
+        ctx_template=ctx_template,
     )

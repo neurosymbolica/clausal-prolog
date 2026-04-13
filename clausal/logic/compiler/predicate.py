@@ -470,8 +470,17 @@ def compile_predicate_trampoline(
     """
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
 
+    # Ctx template: mutated below after base_globals analysis; captured
+    # by reference inside body_compiler so mutations are visible at
+    # per-clause compile time.
+    ctx_template = CompilationContext(
+        db=_effective_db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+    )
+
     if body_compiler is None:
-        body_compiler = _make_body_compiler_trampoline(_effective_db)
+        body_compiler = _make_body_compiler_trampoline(
+            _effective_db, ctx_template=ctx_template,
+        )
 
     # Resolve pred_cls: explicit param > globals_ > auto-detect later.
     if pred_cls is None:
@@ -576,16 +585,17 @@ def compile_predicate_trampoline(
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
     _compile_context_local.locked_dispatch_keys = _locked_keys
+    ctx_template.locked_dispatch_keys = _locked_keys
     # Phase 10f: initialise bucket-ref maps for call-site specialisation.
     _prev_brmap = getattr(_compile_context_local, "bucket_ref_map", {})
     _prev_jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
-    _compile_context_local.bucket_ref_map = {}
-    _compile_context_local.joint_bucket_ref_map = {}
+    _compile_context_local.bucket_ref_map = ctx_template.bucket_ref_map
+    _compile_context_local.joint_bucket_ref_map = ctx_template.joint_bucket_ref_map
     try:
         # Phase 10d: inject bucket refs for statically-known call-site args.
         # Must run after _inject_resolved_targets (which populates base_globals
         # with callee predicate classes) but before building funcdef ASTs.
-        _inject_bucket_refs_trampoline(clauses, base_globals)
+        _inject_bucket_refs_trampoline(ctx_template, clauses, base_globals)
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
