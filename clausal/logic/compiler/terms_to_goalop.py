@@ -76,6 +76,15 @@ def _extend(ops: list[GoalOp], body: Any) -> None:
         for goal in body.elements:
             _extend(ops, goal)
         return
+    if isinstance(body, nodes.And):
+        # ``And`` is a conjunction node; flatten arbitrarily-nested
+        # ``And(And(a, b), c)`` into ``[a, b, c]``.  Sequence's
+        # right-to-left fold is identical to the legacy ``_dispatch_goal``
+        # ``And`` arm (``dispatch(l, dispatch(r, k))``) so flattening
+        # preserves byte-for-byte AST output.
+        _extend(ops, body.left)
+        _extend(ops, body.right)
+        return
     ops.append(_convert(body))
 
 

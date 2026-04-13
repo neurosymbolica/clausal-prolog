@@ -106,8 +106,18 @@ def test_nested_list_flattens():
     ])
 
 
+def test_and_flattens_into_sequence():
+    x, y, z, w = _vars("X", "Y", "Z", "W")
+    body = [_b(nodes.And, _b(nodes.And, _b(nodes.Unify, x, y),
+                                          _b(nodes.Unify, y, z)),
+                          _b(nodes.Unify, z, w))]
+    assert terms_to_goalop(body) == Sequence(ops=[
+        Unify(l=x, r=y), Unify(l=y, r=z), Unify(l=z, r=w),
+    ])
+
+
 def test_unsupported_raises_not_implemented():
-    # ``And`` is deferred to Slice D5a.
+    # ``Or`` is deferred to Slice D5b.
     x, y = _vars("X", "Y")
     with pytest.raises(NotImplementedError, match="not yet supported"):
-        terms_to_goalop([_b(nodes.And, x, y)])
+        terms_to_goalop([_b(nodes.Or, x, y)])
