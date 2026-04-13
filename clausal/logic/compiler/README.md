@@ -154,7 +154,7 @@ more detail. Listed roughly in the order the pipeline touches them.
 
 | Module                    | Scope                                                                                       |
 |---------------------------|---------------------------------------------------------------------------------------------|
-| `_ast_helpers.py`         | AST leaf-builders (`_name`, `_call`, `_if`, `_assign_mark`, `_fresh`) and naming constants. |
+| `_ast_helpers.py`         | AST leaf-builders (`_name`, `_call`, `_if`, `_assign_mark`), `FreshNames` per-compilation unique-name generator, and naming constants. |
 | `_vars.py`                | Variable helpers: `_var_python_name`, `_collect_vars`, `_collect_bound_vars`.               |
 | `compile_ctx.py`          | `CompilationContext` dataclass — bundles `db`, `var_context`, `trail_name`, `self_name`, `parent_name`. Partial migration; many helpers still take the tuple directly. |
 | `../runtime/list_unify.py`      | **Runtime** — bidirectional list-pattern unification. Used *inside* compiled predicates (referenced via `base_globals`); not imported by the compiler's own code paths. See `clausal/logic/runtime/`. |
@@ -474,7 +474,7 @@ clause-tree and output AST.
 | State                                  | Owned by                             | Lifetime                                    | Purpose                                                                  |
 |----------------------------------------|--------------------------------------|---------------------------------------------|--------------------------------------------------------------------------|
 | `var_context: dict`                    | Caller of `compile_body` / `compile_goal` | One clause compilation                      | Var._id → Python local name mapping.                                    |
-| `_compile_counter: list[int]`          | `_ast_helpers.py`                    | Process lifetime (module global)            | Fresh-name generator state (`_fresh("_m")` → `_m42`, `_m43`, …).         |
+| `ctx.fresh: FreshNames`                | `CompilationContext`                 | One compilation invocation                  | Fresh-name generator state (`ctx.fresh("_m")` → `_m1`, `_m2`, …; resets per compilation for deterministic AST output). |
 | `_compile_context_local: threading.local` | `_monolith.py`                    | Per-thread, set by `compile_predicate_*`    | `locked_dispatch_keys` (Phase 7 dispatch caching), `bucket_ref_map` / `joint_bucket_ref_map` (Phase 10d/10f call-site specialisation). |
 | `_tro_state: list`                     | `predicate.py` → `base_globals`      | Per compiled function                       | `[flag, arg0, ..., argN-1]` — the TRO signal used by "signal"-mode TRO. |
 | `base_globals: dict`                   | `predicate.py`                       | Per compiled function (becomes `__globals__`) | All runtime helpers, term-class refs, resolved call targets, dispatch caches. |

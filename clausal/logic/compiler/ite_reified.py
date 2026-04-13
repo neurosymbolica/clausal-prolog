@@ -30,7 +30,7 @@ from clausal.terms import (
 )
 
 from ._ast_helpers import (
-    _name, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt,
     _MARK_PREFIX,
 )
@@ -123,7 +123,7 @@ def _compile_reified_ite_eq_impl(
     """Shared ``_compile_reified_ite_eq`` body."""
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    reif_var = _fresh("_reif")
+    reif_var = ctx.fresh("_reif")
     l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
 
@@ -135,7 +135,7 @@ def _compile_reified_ite_eq_impl(
     else:
         true_stmts, false_stmts = then_stmts, else_stmts
 
-    mark = _fresh(_MARK_PREFIX)
+    mark = ctx.fresh(_MARK_PREFIX)
     undetermined = [
         _assign_mark(mark, trail_name),
         _if(_call(_name("unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
@@ -171,14 +171,14 @@ def _compile_reified_ite_fd_impl(
     test_type = type(test)
     op_name, fd_true_name, fd_false_name = _FD_REIFY_INFO[test_type]
 
-    reif_var = _fresh("_reif")
+    reif_var = ctx.fresh("_reif")
     l_expr = term_to_ast_expr(test.left, var_context, eval_arith=False)
     r_expr = term_to_ast_expr(test.right, var_context, eval_arith=False)
 
     then_stmts = compile_goal_fn(ctx, then, k_stmts)
     else_stmts = compile_goal_fn(ctx, else_, k_stmts)
 
-    mark = _fresh(_MARK_PREFIX)
+    mark = ctx.fresh(_MARK_PREFIX)
     undetermined = [
         _assign_mark(mark, trail_name),
         _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
@@ -211,7 +211,7 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
     trail_name = ctx.trail_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
-    cond_gen = _fresh("_ite_cond")
+    cond_gen = ctx.fresh("_ite_cond")
     cond_stmts = _dispatch_goal(ctx, test, [_yield_none_stmt()])
     cond_body = cond_stmts + [
         ast.Return(value=ast.Constant(value=None)),
@@ -232,7 +232,7 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
     else_stmts = _dispatch_goal(ctx, else_, k_stmts)
 
     if use_tabled_naf:
-        true_mark = _fresh(_MARK_PREFIX)
+        true_mark = ctx.fresh(_MARK_PREFIX)
         true_block = [
             _assign_mark(true_mark, trail_name),
             ast.For(
@@ -254,7 +254,7 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
             _name(trail_name),
             _name("_table_store"),
         )
-        naf_mark = _fresh(_MARK_PREFIX)
+        naf_mark = ctx.fresh(_MARK_PREFIX)
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),
@@ -262,8 +262,8 @@ def _compile_general_ite(ctx: CompilationContext, test, then, else_, k_stmts):
         ]
         return [cond_fn] + true_block + false_block
     else:
-        found_flag = _fresh("_found")
-        mark = _fresh(_MARK_PREFIX)
+        found_flag = ctx.fresh("_found")
+        mark = ctx.fresh(_MARK_PREFIX)
         return [
             cond_fn,
             _assign(found_flag, ast.Constant(value=False)),
@@ -327,7 +327,7 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
     trail_name = ctx.trail_name
     use_tabled_naf = _m._is_tabled_naf(test, db)
 
-    cond_fn_name = _fresh("_ite_cond_fn")
+    cond_fn_name = ctx.fresh("_ite_cond_fn")
     cond_self = "_ite_self"
     cond_parent = "_ite_parent"
     cond_k = [_m._yield_step_stmt(_name(cond_parent), ast.Constant(None))]
@@ -353,11 +353,11 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
     then_stmts = _dispatch_goal_trampoline(ctx, then, k_stmts)
     else_stmts = _dispatch_goal_trampoline(ctx, else_, k_stmts)
 
-    sg_name = _fresh("_ite_sg")
-    g_name = _fresh("_ite_g")
-    v_name = _fresh("_ite_v")
-    true_mark = _fresh(_MARK_PREFIX)
-    found_flag = _fresh("_found")
+    sg_name = ctx.fresh("_ite_sg")
+    g_name = ctx.fresh("_ite_g")
+    v_name = ctx.fresh("_ite_v")
+    true_mark = ctx.fresh(_MARK_PREFIX)
+    found_flag = ctx.fresh("_found")
 
     sg_create = _assign(sg_name,
         _call(_name("StepGenerator"), _name(cond_fn_name),
@@ -448,7 +448,7 @@ def _compile_general_ite_trampoline(ctx: CompilationContext, test, then, else_, 
             _name(trail_name),
             _name("_table_store"),
         )
-        naf_mark = _fresh(_MARK_PREFIX)
+        naf_mark = ctx.fresh(_MARK_PREFIX)
         false_block = [
             _assign_mark(naf_mark, trail_name),
             _if(naf_call, else_stmts),

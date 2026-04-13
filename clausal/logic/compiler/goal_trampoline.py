@@ -35,7 +35,7 @@ from clausal.logic.predicate import PredicateMeta
 from clausal.terms import PyThunk
 
 from ._ast_helpers import (
-    _name, _attr, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
@@ -379,7 +379,7 @@ def _dispatch_goal_trampoline(
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
-            mark = _fresh(_MARK_PREFIX)
+            mark = ctx.fresh(_MARK_PREFIX)
             left_stmts = _dispatch_goal_trampoline(ctx, l, k_stmts)
             right_stmts = _dispatch_goal_trampoline(ctx, r, k_stmts)
             # After trail.undo(mark) the trail is already back at mark, so the
@@ -401,11 +401,11 @@ def _dispatch_goal_trampoline(
             if _is_tabled_naf(inner, db):
                 return _compile_tabled_naf_simple(ctx, inner, k_stmts)
 
-            naf_gen_fn = _fresh("_naf_gen_fn")
-            naf_flag = _fresh("_naf")
-            naf_sg = _fresh("_naf_sg")
-            naf_g = _fresh("_naf_g")
-            naf_v = _fresh("_naf_v")
+            naf_gen_fn = ctx.fresh("_naf_gen_fn")
+            naf_flag = ctx.fresh("_naf")
+            naf_sg = ctx.fresh("_naf_sg")
+            naf_g = ctx.fresh("_naf_g")
+            naf_v = ctx.fresh("_naf_v")
             # Compile inner goal in trampoline mode with a solution yield
             inner_k = [_yield_step_stmt(_name("_naf_parent"), ast.Constant(None))]
             inner_stmts = _dispatch_goal_trampoline(
@@ -429,7 +429,7 @@ def _dispatch_goal_trampoline(
                 decorator_list=[], returns=None, type_comment=None,
                 **_m._EXTRA_FUNCDEF,
             )
-            naf_mark = _fresh(_MARK_PREFIX)
+            naf_mark = ctx.fresh(_MARK_PREFIX)
             # Mini-trampoline: create StepGenerator, loop until solution or DONE.
             # _naf_sg = StepGenerator(_naf_gen_fn, None, trail)
             # _naf_g, _naf_v = _naf_sg.send(None)
@@ -579,8 +579,8 @@ def _compile_predicate_call_trampoline(
     front-end (arg ordering + lambda hoist + arg_expr lowering).
     """
     def _emit(arity, arg_exprs, k_stmts):
-        gen_name = _fresh("_gen")
-        status_name = _fresh("_st")
+        gen_name = ctx.fresh("_gen")
+        status_name = ctx.fresh("_st")
 
         call_expr = _dispatch_call_trampoline(
             ctx, fname, arity, arg_exprs,

@@ -1,9 +1,10 @@
 """AST-construction leaf helpers used throughout the compiler.
 
 Pure functions that build small ``ast`` fragments plus the
-compile-time ``_fresh`` unique-name generator.  No compiler-internal
-dependencies beyond ``clausal.pythonic_ast.nodes.TupleLiteral`` (used
-by ``_in_iter_expr`` to detect ``in`` goals that destructure pairs).
+per-compilation ``FreshNames`` unique-name generator.  No
+compiler-internal dependencies beyond
+``clausal.pythonic_ast.nodes.TupleLiteral`` (used by ``_in_iter_expr``
+to detect ``in`` goals that destructure pairs).
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from clausal.pythonic_ast.nodes import TupleLiteral
 # Names emitted into generated function signatures and locals.  Centralised
 # here (in the deepest-leaf submodule) so any other submodule can import them
 # without creating a cycle back through _monolith.
-_MARK_PREFIX = "_m"            # fresh mark variable prefix (_fresh(_MARK_PREFIX))
+_MARK_PREFIX = "_m"            # fresh mark variable prefix (ctx.fresh(_MARK_PREFIX))
 _TRAIL_PARAM_NAME = "trail"    # compiled-function trail parameter
 _K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
 _DISP_PREFIX = "_disp_"        # locked-dispatch globals-key prefix
@@ -44,13 +45,26 @@ def _call(func: ast.expr, *args: ast.expr, **kwargs_: ast.expr) -> ast.Call:
 
 # ── Unique-name counter ────────────────────────────────────────────────────────
 
-_compile_counter: list[int] = [0]
 
+class FreshNames:
+    """Per-compilation fresh-name generator.
 
-def _fresh(prefix: str = "_t") -> str:
-    """Generate a compile-time unique Python local variable name."""
-    _compile_counter[0] += 1
-    return f"{prefix}{_compile_counter[0]}"
+    One instance lives on ``CompilationContext.fresh`` and is shared
+    across all ``ctx.replace()`` forks of a single compilation, so each
+    invocation of ``compile_predicate_*`` sees a monotonic counter that
+    starts at 1.  Two separate compilations get two separate counters —
+    the AST output of one compilation no longer depends on how many
+    predicates were compiled earlier in the process.
+    """
+
+    __slots__ = ("_n",)
+
+    def __init__(self) -> None:
+        self._n = 0
+
+    def __call__(self, prefix: str = "_t") -> str:
+        self._n += 1
+        return f"{prefix}{self._n}"
 
 
 # ── Misc AST-building helpers ──────────────────────────────────────────────────

@@ -69,7 +69,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
-from ._ast_helpers import _THIS_GEN_NAME, _TRAMP_PARENT_NAME
+from ._ast_helpers import FreshNames, _THIS_GEN_NAME, _TRAMP_PARENT_NAME
 
 
 @dataclasses.dataclass
@@ -95,6 +95,16 @@ class CompilationContext:
     locked_dispatch_keys: frozenset[str] = frozenset()
     bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
     joint_bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
+
+    # ── Per-compilation fresh-name generator ─────────────────────────────
+    #
+    # A single ``FreshNames`` instance is shared across every ``ctx.replace()``
+    # fork of a given compilation (``dataclasses.replace`` preserves fields
+    # not listed in *overrides*, so all forks see the same object).  Two
+    # separate ``compile_predicate_*`` invocations therefore get two separate
+    # counters: AST output of one compilation no longer depends on how many
+    # predicates were compiled earlier in the process.
+    fresh: FreshNames = dataclasses.field(default_factory=FreshNames)
 
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.

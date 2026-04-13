@@ -384,7 +384,58 @@ Tests: 10409 pass, 0 fail (ex-trealla).  AST output unchanged.
 state — the numbers reset per compilation, making AST diffs
 deterministic.
 
-**Status:** ☐ not started
+**Status:** ✅ done
+
+Delivered:
+
+- New ``FreshNames`` class in ``_ast_helpers.py`` (callable,
+  ``__slots__ = ("_n",)``, monotonic counter starting at 1).
+- ``CompilationContext.fresh: FreshNames`` field added with
+  ``default_factory=FreshNames``.  ``ctx.replace()`` preserves the
+  same instance across per-clause forks (``dataclasses.replace``
+  doesn't touch fields omitted from *overrides*), so a single
+  ``compile_predicate_*`` invocation sees one monotonic counter
+  even as it forks ctxs per-clause / per-NAF-subgoal / per-ITE-
+  cond / etc.
+- Every ``_fresh(prefix)`` call migrated to ``ctx.fresh(prefix)`` —
+  ~91 call sites across ``control_constructs.py``, ``goal_shallow.py``,
+  ``goal_trampoline.py``, ``ite_reified.py``, ``tabled_naf.py``,
+  ``star_segments.py``, ``tro.py``.  All callers already carried ctx
+  thanks to B2/B3/B4; no cascading ctx-plumbing was required.
+- Minor ctx-plumbing:
+  - ``_make_catch_subgen_fn_and_loop`` (control_constructs.py) gained
+    a ``ctx`` parameter — it was the last helper in that module that
+    didn't already receive one.
+  - ``_compile_tro_tail`` / ``_compile_tro_body`` (tro.py) gained a
+    ``ctx`` parameter.  The two ad-hoc ``CompilationContext(...)``
+    constructions inside (for ``_hoist_lambda_args`` and the fallback
+    StepGenerator call) became ``ctx.replace(db=..., var_context=...,
+    ...)`` so the shared ``ctx.fresh`` threads through.
+  - ``_build_predicate_trampoline_funcdef`` gained a
+    ``ctx_template: CompilationContext | None = None`` kwarg.  The 11
+    recursive call sites inside ``compile_predicate_trampoline``
+    forward ``ctx_template=ctx_template`` so the whole predicate's
+    TRO tails share one counter.  The fallback
+    ``compile_predicate_trampoline_ast`` path constructs a throwaway
+    ctx_template on first use.
+- ``_fresh`` and ``_compile_counter`` **deleted** from
+  ``_ast_helpers.py``.  The ``_monolith.py`` re-export block dropped
+  both names.  All ``from ._ast_helpers import (..., _fresh, ...)``
+  lines cleaned up (10 modules).
+
+Grep assertions:
+
+- ``grep -rn "_compile_counter" clausal/`` — no hits.
+- ``grep -rn "_fresh(" clausal/logic/compiler/ --include="*.py"`` —
+  no hits (all call sites migrated; ``FreshNames.__call__`` is the
+  only remaining fresh-name generator).
+
+Determinism: compiling the same predicate twice in succession within
+one process now yields byte-identical AST output (verified via
+``ast.unparse`` equality).  The pre-B5 behaviour would drift
+(``_m42`` vs ``_m43`` …).
+
+Tests: 10409 pass, 90 skipped (ex-trealla).
 
 ### B6 — Inline `_monolith`'s aliases into `predicate.py` and retire `_monolith.py`
 

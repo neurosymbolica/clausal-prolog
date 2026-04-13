@@ -33,7 +33,7 @@ from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.logic.database import Clause, Database
 
 from ._ast_helpers import (
-    _name, _attr, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
@@ -83,7 +83,7 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
     """Compile once(goal) — take first solution of inner goal, then continue."""
     from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name
-    once_gen = _fresh("_once_gen")
+    once_gen = ctx.fresh("_once_gen")
     inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
     once_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
@@ -99,7 +99,7 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
         decorator_list=[], returns=None, type_comment=None,
         **_m._EXTRA_FUNCDEF,
     )
-    once_mark = _fresh(_MARK_PREFIX)
+    once_mark = ctx.fresh(_MARK_PREFIX)
     return [
         once_fn,
         _assign_mark(once_mark, trail_name),
@@ -118,10 +118,10 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
     from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    count_var = _fresh("_cn_count")
-    n_var = _fresh("_cn_n")
-    mark_var = _fresh("_cn_m")
-    gen_name = _fresh("_cn_gen")
+    count_var = ctx.fresh("_cn_count")
+    n_var = ctx.fresh("_cn_n")
+    mark_var = ctx.fresh("_cn_m")
+    gen_name = ctx.fresh("_cn_gen")
 
     n_expr = term_to_ast_expr(n_arg, var_context, eval_arith=True)
 
@@ -204,10 +204,10 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    n_var = _fresh("_ca_n")
-    mark_var = _fresh("_ca_m")
-    gen_name = _fresh("_ca_gen")
-    unify_mark = _fresh("_ca_um")
+    n_var = ctx.fresh("_ca_n")
+    mark_var = ctx.fresh("_ca_m")
+    gen_name = ctx.fresh("_ca_gen")
+    unify_mark = ctx.fresh("_ca_um")
 
     count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
 
@@ -261,13 +261,13 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup."""
     from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name
-    mark_var = _fresh("_scc_m")
-    setup_gen = _fresh("_scc_setup")
-    ok_var = _fresh("_scc_ok")
-    call_gen = _fresh("_scc_call")
-    exc_var = _fresh("_scc_exc")
-    exc_e = _fresh("_scc_e")
-    cleanup_gen = _fresh("_scc_cleanup")
+    mark_var = ctx.fresh("_scc_m")
+    setup_gen = ctx.fresh("_scc_setup")
+    ok_var = ctx.fresh("_scc_ok")
+    call_gen = ctx.fresh("_scc_call")
+    exc_var = ctx.fresh("_scc_exc")
+    exc_e = ctx.fresh("_scc_e")
+    cleanup_gen = ctx.fresh("_scc_cleanup")
 
     def _make_sub_gen(name, goal):
         stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
@@ -357,10 +357,10 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    x_var = _fresh("_fz_x")
-    thunk_name = _fresh("_fz_thunk")
-    old_var = _fresh("_fz_old")
-    goals_var = _fresh("_fz_goals")
+    x_var = ctx.fresh("_fz_x")
+    thunk_name = ctx.fresh("_fz_thunk")
+    old_var = ctx.fresh("_fz_old")
+    goals_var = ctx.fresh("_fz_goals")
 
     x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
 
@@ -456,7 +456,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         )
         return _compile_when(ctx, cond.left, inner_when, k_stmts)
 
-    thunk_name = _fresh("_when_thunk")
+    thunk_name = ctx.fresh("_when_thunk")
     deferred_stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
@@ -522,10 +522,10 @@ def _compile_find_all_core(
     from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    results_var = _fresh("_fa_results")
-    mark_var = _fresh("_fa_m")
-    gen_name = _fresh("_fa_gen")
-    unify_mark = _fresh("_fa_um")
+    results_var = ctx.fresh("_fa_results")
+    mark_var = ctx.fresh("_fa_m")
+    gen_name = ctx.fresh("_fa_gen")
+    unify_mark = ctx.fresh("_fa_um")
 
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
     bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
@@ -627,10 +627,10 @@ def _compile_catch_impl(
     """Shared catch-block assembly."""
     var_context = ctx.var_context
     trail_name = ctx.trail_name
-    catch_mark = _fresh("_catch_m")
-    exc_name = _fresh("_exc")
-    term_name = _fresh("_term")
-    unify_mark = _fresh("_catch_um")
+    catch_mark = ctx.fresh("_catch_m")
+    exc_name = ctx.fresh("_exc")
+    term_name = ctx.fresh("_term")
+    unify_mark = ctx.fresh("_catch_um")
 
     catcher_expr = term_to_ast_expr(_catcher_to_structural(catcher), var_context, eval_arith=False)
 
@@ -678,12 +678,13 @@ def _compile_catch_impl(
 
 
 def _make_catch_subgen_fn_and_loop(
+    ctx: CompilationContext,
     name_prefix: str,
     compiled_stmts: list[ast.stmt],
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Wrap shallow-compiled *compiled_stmts* as a sub-generator ``def`` + ``for`` loop."""
-    gen_name = _fresh(name_prefix)
+    gen_name = ctx.fresh(name_prefix)
     gen_body = compiled_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -722,10 +723,10 @@ def _compile_catch(
     recovery_stmts = _dispatch_goal(ctx, recovery, [_yield_none_stmt()])
 
     goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
-        "_catch_gen", goal_stmts, k_stmts,
+        ctx, "_catch_gen", goal_stmts, k_stmts,
     )
     rec_gen_fn, rec_loop = _make_catch_subgen_fn_and_loop(
-        "_catch_rec", recovery_stmts, k_stmts,
+        ctx, "_catch_rec", recovery_stmts, k_stmts,
     )
 
     body = _compile_catch_impl(
@@ -769,7 +770,7 @@ def _compile_goal_lambda(
     from .goal_shallow import _dispatch_goal
     enclosing_var_context = ctx.var_context
     trail_name = ctx.trail_name
-    func_name = _fresh("_lambda")
+    func_name = ctx.fresh("_lambda")
 
     body_vc: dict[int, str] = dict(enclosing_var_context)
     param_arg_names: list[str] = [param.name for param in lambda_node.params.params]

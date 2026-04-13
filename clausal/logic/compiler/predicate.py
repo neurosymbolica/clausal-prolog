@@ -56,7 +56,7 @@ from clausal.logic.runtime.body_star_unify import (  # noqa: F401
 from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
 
 from ._ast_helpers import (
-    _name, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME, _DISP_PREFIX,
 )
@@ -249,6 +249,7 @@ def _build_predicate_trampoline_funcdef(
     emit_done: bool = True,
     tro_indices: frozenset[int] | None = None,
     skip_trail: bool = False,
+    ctx_template: CompilationContext | None = None,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a trampoline-protocol compiled predicate.
 
@@ -270,6 +271,15 @@ def _build_predicate_trampoline_funcdef(
     # Bucket functions use "signal" mode (set _tro_state, return).
     # Full functions use "loop" mode (while True + continue).
     tro_mode = "signal" if (use_tro and not emit_done) else "loop"
+    # ctx_template carries the per-compilation ``FreshNames``.  Callers
+    # from ``compile_predicate_trampoline`` pass the outer template so
+    # every TRO-tail helper draws from the same monotonic counter;
+    # ``compile_predicate_trampoline_ast`` and tests that call this
+    # builder directly get a fresh template.
+    if ctx_template is None:
+        ctx_template = CompilationContext(
+            db=db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
+        )
     arg_names = [f"arg{i}" for i in range(arity)]
     params = [_THIS_GEN_NAME, _TRAMP_PARENT_NAME] + arg_names + [_TRAIL_PARAM_NAME]
 
@@ -302,11 +312,13 @@ def _build_predicate_trampoline_funcdef(
             _tro_clause_set = {id(clauses[i]) for i in tro_indices}
             _orig_bc = body_compiler
             _tro_m = tro_mode
+            _tro_ctx = ctx_template
             def _tro_list_body_compiler(clause, var_context,
                                         _tset=_tro_clause_set, _fn=functor,
-                                        _ar=arity, _db=db, _tm=_tro_m):
+                                        _ar=arity, _db=db, _tm=_tro_m,
+                                        _ctx=_tro_ctx):
                 if id(clause) in _tset:
-                    return _compile_tro_body(clause, _fn, _ar, _db, var_context, _TRAIL_PARAM_NAME,
+                    return _compile_tro_body(_ctx, clause, _fn, _ar, _db, var_context, _TRAIL_PARAM_NAME,
                                              tro_mode=_tm)
                 return _orig_bc(clause, var_context)
             loop_stmts.extend(
@@ -328,7 +340,7 @@ def _build_predicate_trampoline_funcdef(
             if use_tro and ci in tro_indices:
                 # TRO clause: compile prefix goals normally, replace tail call.
                 tro_body_stmts = _compile_tro_body(
-                    clause, functor, arity, db, var_context, _TRAIL_PARAM_NAME,
+                    ctx_template, clause, functor, arity, db, var_context, _TRAIL_PARAM_NAME,
                     tro_mode=tro_mode,
                 )
                 body_stmts = tro_body_stmts
@@ -612,6 +624,7 @@ def compile_predicate_trampoline(
                 f"{functor}__all", arity, clauses,
                 _effective_db, body_compiler, emit_done=False,
                 tro_indices=_idx_tro_indices,
+                ctx_template=ctx_template,
             )
 
             fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
@@ -653,7 +666,8 @@ def compile_predicate_trampoline(
                         _effective_db, body_compiler, emit_done=False,
                         tro_indices=_b_tro,
                         skip_trail=_skip_trail,
-                    )
+                ctx_template=ctx_template,
+            )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
                 # Default bucket (clauses with Var at indexed position).
                 _d_tro = None
@@ -668,7 +682,8 @@ def compile_predicate_trampoline(
                     f"{functor}__p{pos}_dflt", arity, index["defaults"],
                     _effective_db, body_compiler, emit_done=False,
                     tro_indices=_d_tro,
-                )
+                ctx_template=ctx_template,
+            )
                 pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 plans.append((pos, idx_dict, pos_default_fn))
 
@@ -715,7 +730,8 @@ def compile_predicate_trampoline(
                                             bname, arity, lifted,
                                             _effective_db, body_compiler,
                                             emit_done=False,
-                                        )
+                ctx_template=ctx_template,
+            )
                                         l1_fns[kj] = functiondef_to_function(
                                             bdef, globals_=base_globals)
                                     # level-1 default: clauses with var at pos_j
@@ -731,7 +747,8 @@ def compile_predicate_trampoline(
                                         l1dname, arity, l1d_lifted,
                                         _effective_db, body_compiler,
                                         emit_done=False,
-                                    )
+                ctx_template=ctx_template,
+            )
                                     level0_compiled[ki] = (
                                         l1_fns,
                                         functiondef_to_function(
@@ -751,7 +768,8 @@ def compile_predicate_trampoline(
                                         bname, arity, lifted,
                                         _effective_db, body_compiler,
                                         emit_done=False,
-                                    )
+                ctx_template=ctx_template,
+            )
                                     level0_compiled[ki] = (
                                         None,
                                         functiondef_to_function(
@@ -764,7 +782,8 @@ def compile_predicate_trampoline(
                                     arity, sec["level0_defaults"],
                                     _effective_db, body_compiler,
                                     emit_done=False,
-                                )
+                ctx_template=ctx_template,
+            )
                                 level0_default_fn = functiondef_to_function(
                                     l0ddef, globals_=base_globals)
                             else:
@@ -794,7 +813,8 @@ def compile_predicate_trampoline(
                             jbdef = _build_predicate_trampoline_funcdef(
                                 jbname, arity, lifted,
                                 _effective_db, body_compiler, emit_done=False,
-                            )
+                ctx_template=ctx_template,
+            )
                             joint_dict[jk] = functiondef_to_function(
                                 jbdef, globals_=base_globals)
                         # joint default (either arg var)
@@ -803,7 +823,8 @@ def compile_predicate_trampoline(
                                 f"{functor}__j{pos_i}_{pos_j}_dflt",
                                 arity, joint_info["defaults"],
                                 _effective_db, body_compiler, emit_done=False,
-                            )
+                ctx_template=ctx_template,
+            )
                             joint_default_fn = functiondef_to_function(
                                 jddef, globals_=base_globals)
                         else:
@@ -858,6 +879,7 @@ def compile_predicate_trampoline(
             func_def = _build_predicate_trampoline_funcdef(
                 functor, arity, clauses, _effective_db, body_compiler,
                 tro_indices=tro_indices,
+                ctx_template=ctx_template,
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)

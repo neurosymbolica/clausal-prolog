@@ -16,7 +16,7 @@ import ast
 from typing import Any
 
 from ._ast_helpers import (
-    _name, _call, _fresh, _assign_mark, _undo_stmt, _if,
+    _name, _call, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr, _parse_star_segments, _count_stars
@@ -71,7 +71,7 @@ def _compile_single_star_is(
     star_expr = term_to_ast_expr(star_val, vc, eval_arith=False) if star_val is not None else ast.Constant(value=None)
     after_exprs = [term_to_ast_expr(v, vc, eval_arith=False) for v in after_vals]
 
-    mark = _fresh(_MARK_PREFIX)
+    mark = ctx.fresh(_MARK_PREFIX)
     return [
         _assign_mark(mark, trail_name),
         _if(

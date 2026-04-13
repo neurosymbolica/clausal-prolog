@@ -34,7 +34,7 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.predicate import is_term_instance, term_field_names
 
 from ._ast_helpers import (
-    _name, _attr, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
 )
 from ._vars import _var_python_name, _collect_vars

@@ -94,7 +94,7 @@ from ._ast_helpers import (  # noqa: E402,F401
 
 # ── ast helpers (moved to ._ast_helpers, re-imported here) ───────────────────
 from ._ast_helpers import (  # noqa: E402,F401
-    _name, _attr, _call, _fresh, _compile_counter,
+    _name, _attr, _call,
 )
 
 # ── Bidirectional list pattern unification (moved to clausal.logic.runtime) ──

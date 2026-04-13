@@ -31,11 +31,12 @@ from clausal.logic.database import Clause, Database
 from clausal.terms import PyThunk, DictTerm, SetTerm
 
 from ._ast_helpers import (
-    _name, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt,
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
 )
+from .compile_ctx import CompilationContext
 from ._vars import _collect_var_ids, _collect_bound_vars
 from .terms_to_ast import term_to_ast_expr
 from .globals_env import _preallocate_body_vars
@@ -347,6 +348,7 @@ from ._vars import _collect_var_ids, _collect_bound_vars  # noqa: E402,F401
 
 
 def _compile_tro_tail(
+    ctx: CompilationContext,
     tail_call: Call,
     arity: int,
     var_context: dict[int, str],
@@ -392,9 +394,10 @@ def _compile_tro_tail(
         for param_name in sig[n_pos:]:
             ordered_args.append(kw_dict[param_name])
 
-    # Hoist any lambda arguments (reuse existing helper).
-    from .compile_ctx import CompilationContext as _CC_hoist
-    _hoist_ctx = _CC_hoist(
+    # Hoist any lambda arguments (reuse existing helper).  Overlay the
+    # caller's ctx with this TRO tail's var_context / names — the shared
+    # ``ctx.fresh`` generator is preserved by ``replace()``.
+    _hoist_ctx = ctx.replace(
         db=db, var_context=var_context, trail_name=trail_name,
         self_name=self_name, parent_name=parent_name,
     )
@@ -446,8 +449,7 @@ def _compile_tro_tail(
         # Fallback: normal StepGenerator call with captured _tro_arg values.
         arg_exprs = [_name(f"_tro_arg{i}") for i in range(arity)]
         fname = tail_call.func.name
-        from .compile_ctx import CompilationContext as _CC
-        _fallback_ctx = _CC(
+        _fallback_ctx = ctx.replace(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
         )
@@ -458,8 +460,8 @@ def _compile_tro_tail(
         # Patch the arg expressions in the StepGenerator call to use _tro_arg values.
         # The simplest approach: build the call directly.
         call_expr = _dispatch_call_trampoline(_fallback_ctx, fname, arity, arg_exprs)
-        gen_name = _fresh("_gen")
-        status_name = _fresh("_st")
+        gen_name = ctx.fresh("_gen")
+        status_name = ctx.fresh("_st")
         gen_assign = _assign(gen_name, call_expr)
         first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
         loop_body = [
@@ -491,6 +493,7 @@ def _compile_tro_tail(
 # ── compile_predicate_trampoline ───────────────────────────────────────────────
 
 def _compile_tro_body(
+    ctx: CompilationContext,
     clause: Clause,
     functor: str,
     arity: int,
@@ -526,13 +529,14 @@ def _compile_tro_body(
 
     # The innermost continuation is the TRO tail code (instead of yield solution).
     k = _compile_tro_tail(
-        tail_call, arity, var_context, db, trail_name,
+        ctx, tail_call, arity, var_context, db, trail_name,
         tro_mode=tro_mode, check_indices=check_indices or None,
     )
 
     # Build prefix goals right-to-left, wrapping around the TRO tail.
-    from .compile_ctx import CompilationContext as _CC
-    prefix_ctx = _CC(
+    # Overlay ctx with this clause's var_context; the shared ``ctx.fresh``
+    # is preserved so generated names stay monotonic within the compilation.
+    prefix_ctx = ctx.replace(
         db=db, var_context=var_context, trail_name=trail_name,
         self_name=_THIS_GEN_NAME, parent_name=_TRAMP_PARENT_NAME,
     )

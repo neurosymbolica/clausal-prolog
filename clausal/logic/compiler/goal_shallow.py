@@ -38,7 +38,7 @@ from clausal.terms import PyThunk
 from clausal.pythonic_ast.nodes import Keyword as KWNode
 
 from ._ast_helpers import (
-    _name, _attr, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt, _in_iter_expr,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
@@ -211,7 +211,7 @@ def _dispatch_goal(
 
         # ── Disjunction ──────────────────────────────────────────────────────
         case Or(left=l, right=r):
-            mark = _fresh(_MARK_PREFIX)
+            mark = ctx.fresh(_MARK_PREFIX)
             left_stmts = _dispatch_goal(ctx, l, k_stmts)
             right_stmts = _dispatch_goal(ctx, r, k_stmts)
             # Note: both branches share var_context; body-only vars in Or
@@ -237,8 +237,8 @@ def _dispatch_goal(
             # Bindings from the inner goal do not escape (the nested function
             # closes over trail, and we use a fresh mark to undo any accidental
             # bindings that the sub-generator leaves before failing).
-            naf_gen = _fresh("_naf_gen")
-            naf_flag = _fresh("_naf")
+            naf_gen = ctx.fresh("_naf_gen")
+            naf_flag = ctx.fresh("_naf")
             inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
             # Always append ``return; yield`` so the NAF function is a generator
             # type even when inner_stmts is empty (e.g. inner goal is False).
@@ -257,7 +257,7 @@ def _dispatch_goal(
                 decorator_list=[], returns=None, type_comment=None,
                 **_m._EXTRA_FUNCDEF,
             )
-            naf_mark = _fresh(_MARK_PREFIX)
+            naf_mark = ctx.fresh(_MARK_PREFIX)
             return [
                 naf_fn,
                 _assign(naf_flag, ast.Constant(value=True)),
@@ -440,7 +440,7 @@ def _compile_deterministic_goal(
                 if _is_star_list(l):
                     return _compile_star_is(ctx, l, r, k_stmts)
                 return _compile_star_is(ctx, r, l, k_stmts)
-            mark = _fresh(_MARK_PREFIX)
+            mark = ctx.fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
             r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
@@ -451,7 +451,7 @@ def _compile_deterministic_goal(
 
         # ── Arithmetic evaluate-and-bind ─────────────────────────────────────
         case Evaluate(left=l, right=r):
-            mark = _fresh(_MARK_PREFIX)
+            mark = ctx.fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context)
             r_expr = arith_to_ast_expr(r, var_context)
             return [
@@ -548,8 +548,8 @@ def _compile_shared_membership_goal(
     match goal:
         # ── Membership ───────────────────────────────────────────────────────
         case in_(left=elem, right=collection):
-            loop_var = _fresh("_el")
-            mark = _fresh(_MARK_PREFIX)
+            loop_var = ctx.fresh("_el")
+            mark = ctx.fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [
@@ -570,9 +570,9 @@ def _compile_shared_membership_goal(
 
         # ── Non-membership ───────────────────────────────────────────────────
         case NotIn(left=elem, right=collection):
-            found_flag = _fresh("_found")
-            loop_var = _fresh("_el")
-            mark = _fresh(_MARK_PREFIX)
+            found_flag = ctx.fresh("_found")
+            loop_var = ctx.fresh("_el")
+            mark = ctx.fresh(_MARK_PREFIX)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
             return [

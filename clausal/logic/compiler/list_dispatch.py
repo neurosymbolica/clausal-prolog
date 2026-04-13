@@ -25,7 +25,7 @@ from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.database import Clause
 
-from ._ast_helpers import _name, _call, _fresh, _assign, _if, _MARK_PREFIX  # noqa: F401
+from ._ast_helpers import _name, _call, _assign, _if, _MARK_PREFIX  # noqa: F401
 from .head_match import (
     head_to_match_pattern, compile_head_to_match_case, _head_arg_patterns,
     _wrap_yields_with_output_guards,

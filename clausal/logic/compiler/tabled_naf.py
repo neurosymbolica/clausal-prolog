@@ -13,7 +13,7 @@ import ast
 from clausal.terms import Call, LoadName
 
 from ._ast_helpers import (
-    _name, _call, _fresh, _assign_mark, _undo_stmt, _if, _MARK_PREFIX,
+    _name, _call, _assign_mark, _undo_stmt, _if, _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr
 from .compile_ctx import CompilationContext
@@ -64,7 +64,7 @@ def _compile_tabled_naf_simple(ctx: CompilationContext, inner_goal, k_stmts):
     arity = len(call_args)
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in call_args]
     args_tuple = ast.Tuple(elts=arg_exprs, ctx=ast.Load())
-    mark = _fresh(_MARK_PREFIX)
+    mark = ctx.fresh(_MARK_PREFIX)
 
     naf_call = _call(
         _name("_naf_tabled"),
