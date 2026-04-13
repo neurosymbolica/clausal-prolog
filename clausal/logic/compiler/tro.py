@@ -449,15 +449,6 @@ def _compile_tro_tail(
         _fallback_ctx = _CC(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
-            locked_dispatch_keys=getattr(
-                _m._compile_context_local, "locked_dispatch_keys", frozenset(),
-            ),
-            bucket_ref_map=getattr(
-                _m._compile_context_local, "bucket_ref_map", {},
-            ),
-            joint_bucket_ref_map=getattr(
-                _m._compile_context_local, "joint_bucket_ref_map", {},
-            ),
         )
         fallback_stmts = _compile_predicate_call_trampoline(
             _fallback_ctx, fname, [None] * arity, [],

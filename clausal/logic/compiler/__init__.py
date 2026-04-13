@@ -25,11 +25,11 @@ Organized by functional cohesion (see
 - ``_monolith``         — residual shared state + re-export hub (see below)
 
 The ``_monolith`` submodule holds the hoisted Phase 0.5a runtime-helper
-aliases (``_fd_eq_fn``, ``_DictTerm_t``, …) and the thread-local
-``_compile_context_local``; these are shared module-level state that
-multiple submodules reference lazily.  It also re-exports every
-moved-out symbol so external code can still import any name from
-``clausal.logic.compiler`` regardless of which submodule owns it.
+aliases (``_fd_eq_fn``, ``_DictTerm_t``, …); these are shared module-
+level state that multiple submodules reference lazily.  It also
+re-exports every moved-out symbol so external code can still import
+any name from ``clausal.logic.compiler`` regardless of which submodule
+owns it.
 
 The ``__getattr__`` delegation below forwards unknown-attribute lookups
 to ``_monolith``.  This preserves backward compatibility with the many

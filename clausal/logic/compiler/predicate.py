@@ -6,10 +6,10 @@ This submodule owns the three public compile functions
 ``_build_predicate_*_funcdef`` helpers that assemble the final
 ``ast.FunctionDef`` for a predicate.
 
-``_compile_context_local`` (the thread-local used to cache locked
-dispatch names) and ``_EXTRA_FUNCDEF`` are sourced from ``_monolith``
-so other submodules can keep referencing them via ``_m.`` without
-requiring predicate.py to be loaded first.
+``_EXTRA_FUNCDEF`` is sourced from ``_monolith`` so other submodules
+can keep referencing it via ``_m.`` without requiring predicate.py
+to be loaded first.  Locked-dispatch / bucket-ref state now lives on
+``CompilationContext`` (``ctx_template``) rather than a thread-local.
 """
 
 from __future__ import annotations
@@ -36,11 +36,6 @@ from clausal.logic.builtins import (  # noqa: F401
     BuiltinPredicate,
     _BUILTIN_CLASSES,
 )
-# Thread-local still lives in _monolith for this sub-slice (B1a).  It
-# will migrate onto CompilationContext in sub-slice B1b/B1c — see
-# implementation_plans/SLICE_B_PROGRESS.md.
-from ._monolith import _compile_context_local  # noqa: F401
-
 # Runtime helpers referenced by base_globals of compiled predicates.
 # They live in clausal.logic.runtime; see clausal/logic/compiler/README.md
 # §7 (runtime/compile-time boundary).  Importing them here binds them as
@@ -583,14 +578,9 @@ def compile_predicate_trampoline(
     # Phase 7: set compile context so _dispatch_call_trampoline can emit
     # cached dispatch names instead of fname._get_dispatch() for locked predicates.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
-    _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
-    _compile_context_local.locked_dispatch_keys = _locked_keys
     ctx_template.locked_dispatch_keys = _locked_keys
-    # Phase 10f: initialise bucket-ref maps for call-site specialisation.
-    _prev_brmap = getattr(_compile_context_local, "bucket_ref_map", {})
-    _prev_jbrmap = getattr(_compile_context_local, "joint_bucket_ref_map", {})
-    _compile_context_local.bucket_ref_map = ctx_template.bucket_ref_map
-    _compile_context_local.joint_bucket_ref_map = ctx_template.joint_bucket_ref_map
+    # Phase 10f: bucket-ref maps live on ctx_template; populated by
+    # _inject_bucket_refs_trampoline below.
     try:
         # Phase 10d: inject bucket refs for statically-known call-site args.
         # Must run after _inject_resolved_targets (which populates base_globals
@@ -872,10 +862,7 @@ def compile_predicate_trampoline(
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
     finally:
-        _compile_context_local.locked_dispatch_keys = _prev_locked_keys
-        # Phase 10f: restore bucket-ref maps.
-        _compile_context_local.bucket_ref_map = _prev_brmap
-        _compile_context_local.joint_bucket_ref_map = _prev_jbrmap
+        pass
 
     def _recompile_trampoline() -> Callable:
         if db is not None:
@@ -1216,18 +1203,11 @@ def compile_predicate_shallow(
 
     # Phase 7: set compile context so _dispatch_call_iter can emit cached
     # dispatch names instead of fname._get_dispatch() for locked predicates.
-    #
-    # Two channels still present during slice B1b:
-    #   - ctx_template.locked_dispatch_keys — read by _dispatch_call_iter
-    #     when the caller threaded ctx through (the shallow internal path).
-    #   - _compile_context_local.locked_dispatch_keys — read by
-    #     compile_goal as a fallback when no ctx was passed (legacy /
-    #     external callers) and by the trampoline path.
-    # B1c retires the thread-local once the trampoline migrates to ctx too.
+    # ctx_template.locked_dispatch_keys is the single authoritative channel
+    # — threaded via ctx through compile_body → compile_goal →
+    # _compile_predicate_call → _dispatch_call_iter.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
-    _prev_locked_keys = getattr(_compile_context_local, "locked_dispatch_keys", frozenset())
-    _compile_context_local.locked_dispatch_keys = _locked_keys
     try:
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
@@ -1379,7 +1359,7 @@ def compile_predicate_shallow(
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
     finally:
-        _compile_context_local.locked_dispatch_keys = _prev_locked_keys
+        pass
 
     # Wrap the shallow function in a trampoline-protocol adapter so it can be
     # driven by the standard solver and called from compiled trampoline code.

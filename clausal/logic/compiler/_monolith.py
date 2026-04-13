@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import ast
 import dataclasses
-import threading
 from fractions import Fraction
 from typing import Any, Callable
 
@@ -91,13 +90,6 @@ from ._ast_helpers import (  # noqa: E402,F401
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME, _DISP_PREFIX,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
 )
-
-
-# Phase 7: thread-local context for locked-predicate dispatch caching.
-# Set during compile_predicate_trampoline / compile_predicate so that
-# _dispatch_call_trampoline / _dispatch_call_iter can emit a direct name
-# reference (_disp_Foo_2) instead of Foo._get_dispatch() for locked predicates.
-_compile_context_local: threading.local = threading.local()
 
 
 # ── ast helpers (moved to ._ast_helpers, re-imported here) ───────────────────

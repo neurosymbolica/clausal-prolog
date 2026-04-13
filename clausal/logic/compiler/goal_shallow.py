@@ -68,18 +68,6 @@ from .control_constructs import (
     _compile_goal_lambda, _flatten_conjunction, _hoist_lambda_args,
 )
 
-# Thread-local context for locked-predicate dispatch caching.
-# Still referenced here as a FALLBACK for legacy callers of compile_goal
-# that don't pass ``ctx`` (external callers: tests, solve.py, etc.).
-# When a caller passes ctx, ``ctx.locked_dispatch_keys`` is authoritative.
-# The shallow path's own internal machinery (compile_predicate_shallow →
-# _make_body_compiler → compile_body → compile_goal → _compile_predicate_call
-# → _dispatch_call_iter) threads ctx all the way; the thread-local is
-# consulted only when compile_goal is entered without a ctx.  B1c will
-# retire the thread-local once the trampoline path migrates too.
-_compile_context_local = _m._compile_context_local
-
-
 def _dispatch_call_iter(
     ctx: CompilationContext,
     fname: str,
@@ -168,17 +156,12 @@ def compile_goal(
                  goal), ctx is supplied and carries shared per-predicate
                  state like ``locked_dispatch_keys``.  External callers
                  (tests, ``solve.py``) don't need to know about ctx; when
-                 ``ctx is None``, one is constructed from the tuple args,
-                 with ``locked_dispatch_keys`` pulled from the thread-local
-                 ``_compile_context_local`` (the legacy back-channel — see
-                 B1c for the plan to retire it).
+                 ``ctx is None`` a plain CompilationContext is constructed
+                 from the tuple args with empty ``locked_dispatch_keys``.
     """
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
-            locked_dispatch_keys=getattr(
-                _compile_context_local, "locked_dispatch_keys", frozenset(),
-            ),
         )
 
     goal = deref(goal)
@@ -761,15 +744,12 @@ def compile_body(
     When the caller is internal (``_make_body_compiler``), it passes
     the shared per-predicate ctx so that ``locked_dispatch_keys`` etc.
     propagate to nested goal compilations.  External callers don't
-    pass ctx; the thread-local ``_compile_context_local`` supplies the
-    locked-dispatch state as a legacy fallback (see B1c for retirement).
+    pass ctx; a plain CompilationContext with empty locked-dispatch
+    state is constructed.
     """
     if ctx is None:
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
-            locked_dispatch_keys=getattr(
-                _compile_context_local, "locked_dispatch_keys", frozenset(),
-            ),
         )
     else:
         # Caller-supplied ctx: var_context is this clause's fresh dict;

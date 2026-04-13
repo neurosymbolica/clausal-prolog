@@ -20,7 +20,6 @@ from clausal.logic.compiler import (
     _bucket_key,
     _joint_bucket_key,
     _inject_bucket_refs_trampoline,
-    _compile_context_local,
     _disp_key,
 )
 from clausal.logic.predicate import PredicateMeta
@@ -40,19 +39,13 @@ def _make_fact_clauses(functor, facts):
     ]
 
 
-def _mkctx():
-    """Build a CompilationContext whose bucket-ref maps are shared with
-    the thread-local so tests that still read the thread-local see
-    writes made via ctx."""
+def _mkctx(locked_dispatch_keys=frozenset()):
+    """Build a fresh CompilationContext for per-test bucket-ref injection."""
     from clausal.logic.compiler.compile_ctx import CompilationContext
-    ctx = CompilationContext(
+    return CompilationContext(
         db=None, var_context={}, trail_name="trail",
-        bucket_ref_map=_compile_context_local.bucket_ref_map,
-        joint_bucket_ref_map=_compile_context_local.joint_bucket_ref_map,
-        locked_dispatch_keys=getattr(
-            _compile_context_local, "locked_dispatch_keys", frozenset()),
+        locked_dispatch_keys=locked_dispatch_keys,
     )
-    return ctx
 
 
 def _trampoline_solutions(dispatch, args, trail=None):
@@ -404,10 +397,6 @@ class TestInjectBucketRefs:
 
         base_globals = {"color": callee_cls}
         # Set locked_dispatch_keys so _disp_key-based check won't interfere
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, "red")
@@ -416,8 +405,7 @@ class TestInjectBucketRefs:
         assert callable(base_globals[expected_gkey])
 
     def test_bucket_ref_map_populated(self):
-        """inject_bucket_refs populates _compile_context_local.bucket_ref_map."""
-        # nv
+        """inject_bucket_refs populates ctx.bucket_ref_map."""
         callee_cls, _ = _make_locked_pred_cls("color", [
             ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
         ])
@@ -428,14 +416,10 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
+        ctx = _mkctx()
+        _inject_bucket_refs_trampoline(ctx, [caller_clause], base_globals)
 
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
-
-        brmap = _compile_context_local.bucket_ref_map
-        assert ("color", 2, 0, "red") in brmap
+        assert ("color", 2, 0, "red") in ctx.bucket_ref_map
 
     def test_no_injection_for_variable_arg(self):
         """inject_bucket_refs does NOT inject for a variable (non-static) argument."""
@@ -451,10 +435,6 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         # No bucket refs should be injected for variable args
@@ -476,10 +456,6 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -498,10 +474,6 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -581,10 +553,6 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, "red")
@@ -609,10 +577,6 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"dyn_color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -635,10 +599,6 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": pred_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -659,11 +619,7 @@ class TestCallsiteCorrectnessAndFallback:
             for a in ["red", "green", "blue"]
         ]
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
-        _inject_bucket_refs_trampoline(_mkctx(), clauses, base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(),clauses, base_globals)
 
         for atom in ["red", "green", "blue"]:
             gkey = _bucket_key("color", 0, atom)
@@ -682,10 +638,6 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
         gkey = _bucket_key("color", 0, "blue")
@@ -709,10 +661,6 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _compile_context_local.locked_dispatch_keys = frozenset()
-        _compile_context_local.bucket_ref_map = {}
-        _compile_context_local.joint_bucket_ref_map = {}
-
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
         gkey = _bucket_key("color", 0, "red")
         first_fn = base_globals[gkey]

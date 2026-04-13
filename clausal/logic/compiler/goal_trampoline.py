@@ -85,10 +85,6 @@ def _static_call_key(*a, **kw): return _m._static_call_key(*a, **kw)
 def _bucket_key(*a, **kw): return _m._bucket_key(*a, **kw)
 def _joint_bucket_key(*a, **kw): return _m._joint_bucket_key(*a, **kw)
 
-# Thread-local context for locked-predicate dispatch caching.
-_compile_context_local = _m._compile_context_local
-
-
 # ── Trampoline tuple-protocol compilation ──────────────────────────────────────
 #
 # DONE sentinel: yielded as (parent, DONE) when a predicate generator has
@@ -317,15 +313,6 @@ def compile_goal_trampoline(
         ctx = CompilationContext(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
-            locked_dispatch_keys=getattr(
-                _compile_context_local, "locked_dispatch_keys", frozenset(),
-            ),
-            bucket_ref_map=getattr(
-                _compile_context_local, "bucket_ref_map", {},
-            ),
-            joint_bucket_ref_map=getattr(
-                _compile_context_local, "joint_bucket_ref_map", {},
-            ),
         )
     goal = deref(goal)
 
