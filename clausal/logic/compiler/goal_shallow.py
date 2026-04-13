@@ -69,7 +69,9 @@ from .control_constructs import (
 )
 
 # Thread-local context for locked-predicate dispatch caching.
-# Lives in _monolith; referenced lazily by _dispatch_call_iter.
+# Lives in _monolith; referenced lazily by _dispatch_call_iter.  Scheduled
+# to migrate onto CompilationContext.locked_dispatch_keys in slice B1b/B1c —
+# see implementation_plans/SLICE_B_PROGRESS.md.
 _compile_context_local = _m._compile_context_local
 
 

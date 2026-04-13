@@ -23,11 +23,42 @@ from clausal.logic.trampoline import Step, DONE, StepGenerator
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
+    SegList, ConcreteSeg, VarSeg,
+    _seglist_unify_gen,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta
 from clausal.codegen import functiondef_to_function
+from clausal.logic.solve import _deref_walk as _deref_walk_fn
+from clausal.logic.builtins import (  # noqa: F401
+    get_builtin_predicate,
+    BuiltinPredicate,
+    _BUILTIN_CLASSES,
+)
+# Thread-local still lives in _monolith for this sub-slice (B1a).  It
+# will migrate onto CompilationContext in sub-slice B1b/B1c — see
+# implementation_plans/SLICE_B_PROGRESS.md.
+from ._monolith import _compile_context_local  # noqa: F401
+
+# Runtime helpers referenced by base_globals of compiled predicates.
+# They live in clausal.logic.runtime; see clausal/logic/compiler/README.md
+# §7 (runtime/compile-time boundary).  Importing them here binds them as
+# module globals so base_globals[name] = <name> resolves at dict-
+# construction time.  Generated code references them by name string only.
+from clausal.logic.runtime.list_unify import (  # noqa: F401
+    _head_list_unify_input,
+    _head_list_unify_output,
+    _head_multi_star_error,
+)
+from clausal.logic.runtime.body_star_unify import (  # noqa: F401
+    _body_star_unify,
+    _body_multi_star_unify,
+    _build_star_list,
+    _build_multi_star_list,
+    _in_iter,
+)
+from clausal.logic.runtime.tramp_call import _tramp_call  # noqa: F401
 
 from ._ast_helpers import (
     _name, _call, _fresh, _assign, _assign_mark, _undo_stmt, _if,
@@ -69,21 +100,116 @@ from .goal_shallow import (
 )
 from .goal_trampoline import (
     compile_body_trampoline, _make_body_compiler_trampoline,
+    _inject_bucket_refs_trampoline,
+    _yield_step_stmt,
 )
 from . import _monolith as _m
 
-# All Phase 0.5a hoisted aliases (~50 runtime helpers and term-class
-# aliases referenced by compile_predicate_*), plus runtime helpers like
-# _head_list_unify_input / _body_star_unify / _in_iter / _build_star_list,
-# live in _monolith's globals.  Copy every non-dunder name from _m into
-# this submodule's globals so the function bodies (which reference them
-# as bare globals) resolve them without further editing.
-from fractions import Fraction  # noqa: F401 — referenced as _Fraction via _m
+# ── Phase 0.5a hoisted runtime-helper aliases ────────────────────────────────
+# ``base_globals`` of compiled predicates references these runtime helpers by
+# name.  The imports below bind each name as a module global in this file, so
+# ``base_globals[name] = <name>`` picks them up at dict-construction time.
+#
+# Multiple aliases for the same symbol (e.g. ``_DictTerm_t`` vs ``_DictTerm_s``
+# for trampoline vs shallow) are preserved verbatim — the trampoline and
+# shallow ``base_globals`` dicts below bind different keys to the same
+# underlying function, and downstream optimisations (per-strategy evolution
+# of the bound function) could diverge the two aliases.  Keeping the aliases
+# costs nothing and preserves optionality.
+#
+# History: these were previously bulk-copied out of ``_monolith`` via
+# ``for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))``.  Slice B1a
+# of the migration (see ``implementation_plans/SLICE_B_PROGRESS.md``) inlined
+# them here so the bulk-copy hack could be retired.
 
-for _n in dir(_m):
-    if not _n.startswith("__"):
-        globals().setdefault(_n, getattr(_m, _n))
-del _n
+from fractions import Fraction  # noqa: F401 — referenced as _Fraction
+import sys as _sys  # noqa: F401
+import warnings  # noqa: F401
+from collections import defaultdict  # noqa: F401
+
+from clausal.terms import DictTerm, SetTerm, KWTerm, PyThunk  # noqa: F401
+_DictTerm = DictTerm
+_SetTerm = SetTerm
+_PyThunk = PyThunk
+_KWTerm = KWTerm
+_KWTerm_t = KWTerm
+_DictTerm_t = DictTerm
+_SetTerm_t = SetTerm
+_DictTerm_s = DictTerm
+_SetTerm_s = SetTerm
+
+from clausal.pythonic_ast.nodes import (  # noqa: F401
+    SetLiteral as _SetLiteral,
+    Call as AstCall,
+    LoadName as AstLoadName,
+    Keyword as KWNode,
+)
+_SL = _SetLiteral
+_SetLiteral_t = _SetLiteral
+
+from clausal.logic.builtins.lists import (  # noqa: F401
+    _append_dr__3 as _dr_append_fn,
+)
+from clausal.logic.builtins.dict_set import (  # noqa: F401
+    _dict_put_dr__4 as _dr_dict_put_fn,
+    _set_union_dr__3 as _dr_set_union_fn,
+)
+
+from clausal.logic.constraints import (  # noqa: F401
+    dif as _dif_fn,
+    reify_eq as _reify_eq_fn,
+    structural_eq as _structural_eq_fn,
+    structural_neq as _structural_neq_fn,
+)
+_dif_fn_s = _dif_fn
+_reify_eq_fn_s = _reify_eq_fn
+
+from clausal.logic.clpfd import (  # noqa: F401
+    fd_eq as _fd_eq_fn,
+    fd_ne as _fd_ne_fn,
+    fd_lt as _fd_lt_fn,
+    fd_le as _fd_le_fn,
+    fd_gt as _fd_gt_fn,
+    fd_ge as _fd_ge_fn,
+    reify_fd as _reify_fd_fn,
+)
+_fd_eq_fn_s = _fd_eq_fn
+_fd_ne_fn_s = _fd_ne_fn
+_fd_lt_fn_s = _fd_lt_fn
+_fd_le_fn_s = _fd_le_fn
+_fd_gt_fn_s = _fd_gt_fn
+_fd_ge_fn_s = _fd_ge_fn
+_reify_fd_fn_s = _reify_fd_fn
+
+from clausal.logic.exceptions import (  # noqa: F401
+    LogicException as _LogicException_cls,
+    python_error_term as _python_error_term_fn,
+    type_error as _type_error_fn,
+)
+_python_error_term_fn_s = _python_error_term_fn
+_type_error_fn_s = _type_error_fn
+
+from clausal.logic.variables import (  # noqa: F401
+    get_attr as _get_attr_fn,
+    put_attr as _put_attr_fn,
+)
+_get_attr_fn_s = _get_attr_fn
+_put_attr_fn_s = _put_attr_fn
+
+from clausal.logic.coroutining import (  # noqa: F401
+    _install_when_ground as _install_when_ground_fn,
+    _install_when_disjunction as _install_when_disjunction_fn,
+    _install_when_condition as _install_when_condition_fn,
+)
+_install_when_ground_fn_s = _install_when_ground_fn
+_install_when_disjunction_fn_s = _install_when_disjunction_fn
+_install_when_condition_fn_s = _install_when_condition_fn
+
+from clausal.logic.tabling import (  # noqa: F401
+    _naf_tabled as _naf_tabled_fn,
+    _TABLING_SUSPEND,
+)
+_naf_tabled_fn_s = _naf_tabled_fn
 
 # Python 3.12+ added type_params to FunctionDef
 _EXTRA_FUNCDEF: dict = (

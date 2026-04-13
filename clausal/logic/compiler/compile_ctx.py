@@ -1,32 +1,67 @@
 """Compile-time context dataclass.
 
-``CompilationContext`` bundles the 3–5 values that are threaded through every
-goal / body / predicate compilation routine:
+``CompilationContext`` bundles the values that are threaded through
+every goal / body / predicate compilation routine:
 
-- ``db``           — the database used for dispatch lookups and signature
-                     resolution.
-- ``var_context``  — mutable Var._id → python-local-name mapping.  Mutated
-                     in place as ``term_to_ast_expr`` and
+- ``db``           — the database used for dispatch lookups and
+                     signature resolution.
+- ``var_context``  — mutable Var._id → python-local-name mapping.
+                     Mutated in place as ``term_to_ast_expr`` and
                      ``_preallocate_body_vars`` discover new Vars.
-- ``trail_name``   — the name of the compiled function's trail parameter
-                     (always ``"trail"`` today; parameterised for
-                     historical reasons and potential future use).
+                     Per-clause: each clause gets a fresh dict
+                     (head Vars differ per clause).
+- ``trail_name``   — the name of the compiled function's trail
+                     parameter (always ``"trail"`` today;
+                     parameterised for historical reasons).
 - ``self_name``    — (trampoline only) name of the self-generator
                      parameter — ``"this_generator"`` by default.
 - ``parent_name``  — (trampoline only) name of the parent-generator
                      parameter — ``"_tramp_parent"`` by default.
 
-The two trampoline-only fields are harmless in shallow mode — shallow
-helpers simply don't read them.  Keeping a single ``CompilationContext`` class
-(rather than separate shallow/trampoline classes) lets functions that
-are strategy-agnostic accept either without branching on type.
+Plus three fields shared across all clauses of one predicate
+compilation:
+
+- ``locked_dispatch_keys``    — frozenset of ``_disp_Foo_N`` names
+                                that have dispatch functions pre-
+                                cached in ``base_globals``.  Emission
+                                uses this to emit a direct reference
+                                instead of ``Foo._get_dispatch()`` on
+                                every call.  Set once in
+                                ``compile_predicate_*`` before any
+                                clause compiles.
+- ``bucket_ref_map``          — dict keyed by static-call-site
+                                ``(fname, arity, pos, key)`` tuples;
+                                value is the name of a pre-bound
+                                bucket function in ``base_globals``.
+                                Populated by
+                                ``_inject_bucket_refs_trampoline`` so
+                                call-site specialisation can skip the
+                                general dispatch wrapper when the
+                                indexed-arg key is a static constant.
+- ``joint_bucket_ref_map``    — same idea for joint (pos_i, pos_j)
+                                indexing.
+
+These three fields replace what used to be
+``_compile_context_local: threading.local``.  The thread-local was
+a back-channel between the predicate-compilation setup (which
+populates these maps) and the dispatch-call emission (which reads
+them).  By putting them on ``CompilationContext`` we make the
+data-flow explicit and drop a reliance on module-level mutable
+state.
+
+The two trampoline-only parameter-name fields are harmless in
+shallow mode — shallow helpers simply don't read them.  Keeping a
+single ``CompilationContext`` class (rather than separate shallow /
+trampoline classes) lets functions that are strategy-agnostic accept
+either without branching on type.
 
 Migration status: this dataclass is being introduced incrementally.
-The public entrypoints (``compile_goal``, ``compile_body``,
+Public entrypoints (``compile_goal``, ``compile_body``,
 ``compile_predicate_*``) keep their positional-tuple signatures for
 backward compatibility with external callers (tests, ``solve.py``,
 ``compiler_v2.py``).  Internal helpers switch to accepting ``ctx``
-one function group at a time.
+one sub-slice at a time — see
+``implementation_plans/SLICE_B_PROGRESS.md``.
 """
 
 from __future__ import annotations
@@ -45,13 +80,30 @@ class CompilationContext:
     self_name: str = _THIS_GEN_NAME
     parent_name: str = _TRAMP_PARENT_NAME
 
+    # ── Per-predicate shared state (populated before any clause compiles)
+    #
+    # These fields carry information from the predicate-compilation setup
+    # down to dispatch-call emission inside individual clause bodies.
+    # They previously lived in ``_compile_context_local: threading.local``;
+    # moving them here makes the data-flow explicit and removes a
+    # module-level mutable-state dependency.
+    #
+    # ``bucket_ref_map`` and ``joint_bucket_ref_map`` are mutable dicts
+    # shared across all clauses of one predicate — ``ctx.replace()`` does
+    # a shallow copy, so these dict references remain the same object
+    # across any per-clause ctx fork.
+    locked_dispatch_keys: frozenset[str] = frozenset()
+    bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
+    joint_bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
+
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 
         Useful when a nested compilation needs a different ``self_name``
         or ``parent_name`` (e.g., NAF mini-trampoline using ``_naf_self``
-        / ``_naf_parent``) but inherits everything else.  ``var_context``
-        is shared by reference — mutations in the nested compile are
-        visible to the caller, matching current behaviour.
+        / ``_naf_parent``) but inherits everything else.  ``var_context``,
+        ``bucket_ref_map``, and ``joint_bucket_ref_map`` are shared by
+        reference — mutations in the nested compile are visible to the
+        caller, matching current behaviour.
         """
         return dataclasses.replace(self, **overrides)

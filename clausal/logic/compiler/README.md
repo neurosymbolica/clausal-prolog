@@ -588,11 +588,16 @@ Things a new contributor would otherwise have to reverse-engineer.
   attribute lookup defers binding until call time, side-stepping the
   module-load-order cycle.
 
-- **`predicate.py` bulk-copies `_monolith`'s globals.**
-  `for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))`.
-  This is how the ~50 hoisted runtime-helper aliases become visible
-  to the function bodies in `predicate.py` without individual
-  enumeration. Ugly but localised.
+- **Phase-0.5a runtime-helper aliases live in `predicate.py`.**
+  `_dif_fn`, `_fd_eq_fn`, `_DictTerm_t`, `_KWTerm_s`, …  (~50 names
+  used to populate `base_globals` for compiled predicates).  They're
+  imported individually from their canonical source modules
+  (`clausal.logic.constraints`, `clausal.logic.clpfd`,
+  `clausal.logic.runtime.*`, etc.).  Previously these lived in
+  `_monolith.py` and reached `predicate.py` via
+  `for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))` —
+  a bulk-copy hack that slice B1a retired (see
+  `implementation_plans/SLICE_B_PROGRESS.md`).
 
 - **`forall/2` rewrites to `not (Cond, not Action)` and recurses into
   the *shallow* compile_goal even in trampoline mode.** (In Prolog

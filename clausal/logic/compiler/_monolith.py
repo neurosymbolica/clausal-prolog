@@ -67,100 +67,24 @@ from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 
-# ── Hoisted formerly function-local imports (Phase 0.5a) ─────────────────────
-# These were inner imports scattered through compile entrypoints.  Moved to
-# module scope after verifying no import cycle results.  Multiple aliases for
-# the same symbol are kept verbatim so call sites don't need editing.
-import sys as _sys  # noqa: E402
-import warnings  # noqa: E402
-from collections import defaultdict  # noqa: E402
-
-from clausal.terms import DictTerm, SetTerm, KWTerm, PyThunk  # noqa: E402
-_DictTerm = DictTerm
-_SetTerm = SetTerm
-_PyThunk = PyThunk
-_KWTerm = KWTerm
-_KWTerm_t = KWTerm
-_DictTerm_t = DictTerm
-_SetTerm_t = SetTerm
-_DictTerm_s = DictTerm
-_SetTerm_s = SetTerm
-
-from clausal.pythonic_ast.nodes import (  # noqa: E402
-    SetLiteral as _SetLiteral,
-    Call as AstCall,
-    LoadName as AstLoadName,
-    Keyword as KWNode,
-)
-_SL = _SetLiteral
-_SetLiteral_t = _SetLiteral
-
+# ── Phase-0.5a runtime-helper aliases moved to predicate.py ─────────────────
+# These were originally hoisted here during the Phase 0.5a pass (inner
+# imports scattered through compile entrypoints, moved to module scope).
+# Slice B1a of the post-split migration (see
+# implementation_plans/SLICE_B_PROGRESS.md) moved them into
+# ``predicate.py`` directly, where ``base_globals`` construction uses them.
+# ``_monolith`` no longer bulk-supplies aliases to ``predicate.py`` via
+# ``for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))``.
+#
+# Two builtins-related names still live here because ``_monolith``'s own
+# re-export block (the legacy back-compat ``__getattr__`` delegation)
+# continues to need them; they get retired together in slice B6 when
+# ``_monolith.py`` is deleted.
 from clausal.logic.builtins import (  # noqa: E402
     get_builtin_predicate,
     BuiltinPredicate,
     _BUILTIN_CLASSES,
 )
-from clausal.logic.builtins.lists import _append_dr__3 as _dr_append_fn  # noqa: E402
-from clausal.logic.builtins.dict_set import (  # noqa: E402
-    _dict_put_dr__4 as _dr_dict_put_fn,
-    _set_union_dr__3 as _dr_set_union_fn,
-)
-
-from clausal.logic.constraints import (  # noqa: E402
-    dif as _dif_fn,
-    reify_eq as _reify_eq_fn,
-    structural_eq as _structural_eq_fn,
-    structural_neq as _structural_neq_fn,
-)
-_dif_fn_s = _dif_fn
-_reify_eq_fn_s = _reify_eq_fn
-
-from clausal.logic.clpfd import (  # noqa: E402
-    fd_eq as _fd_eq_fn,
-    fd_ne as _fd_ne_fn,
-    fd_lt as _fd_lt_fn,
-    fd_le as _fd_le_fn,
-    fd_gt as _fd_gt_fn,
-    fd_ge as _fd_ge_fn,
-    reify_fd as _reify_fd_fn,
-)
-_fd_eq_fn_s = _fd_eq_fn
-_fd_ne_fn_s = _fd_ne_fn
-_fd_lt_fn_s = _fd_lt_fn
-_fd_le_fn_s = _fd_le_fn
-_fd_gt_fn_s = _fd_gt_fn
-_fd_ge_fn_s = _fd_ge_fn
-_reify_fd_fn_s = _reify_fd_fn
-
-from clausal.logic.exceptions import (  # noqa: E402
-    LogicException as _LogicException_cls,
-    python_error_term as _python_error_term_fn,
-    type_error as _type_error_fn,
-)
-_python_error_term_fn_s = _python_error_term_fn
-_type_error_fn_s = _type_error_fn
-
-from clausal.logic.variables import (  # noqa: E402
-    get_attr as _get_attr_fn,
-    put_attr as _put_attr_fn,
-)
-_get_attr_fn_s = _get_attr_fn
-_put_attr_fn_s = _put_attr_fn
-
-from clausal.logic.coroutining import (  # noqa: E402
-    _install_when_ground as _install_when_ground_fn,
-    _install_when_disjunction as _install_when_disjunction_fn,
-    _install_when_condition as _install_when_condition_fn,
-)
-_install_when_ground_fn_s = _install_when_ground_fn
-_install_when_disjunction_fn_s = _install_when_disjunction_fn
-_install_when_condition_fn_s = _install_when_condition_fn
-
-from clausal.logic.tabling import (  # noqa: E402
-    _naf_tabled as _naf_tabled_fn,
-    _TABLING_SUSPEND,
-)
-_naf_tabled_fn_s = _naf_tabled_fn
 
 # ── Compiled-code naming constants (moved to ._ast_helpers) ──────────────────
 from ._ast_helpers import (  # noqa: E402,F401
