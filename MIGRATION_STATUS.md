@@ -173,7 +173,63 @@ infrastructure or external-backend integration. No migrations.
 
 **Phase 6 net adds**: zero. All 16 files audit-confirmed-stay-as-infra.
 
-## Phase 7+ — To do
+## Phase 7 — Compiler / core / runtime
+
+Per the original plan, this was the "infrastructure stays" phase. Result
+matches: the 78-file bucket is overwhelmingly compiler-pipeline, runtime,
+and adapter-implementation tests. Two outliers got migrations.
+
+### Migrations
+
+| file | action |
+|---|---|
+| `test_slg_termination.py` | Slimmed to TableEntry/is_tabled assertions only. Migrated 17 behavior-level tests to Test clauses in `tests/fixtures/tabled_left_rec.clausal` (+4), `tabled_mutual_rec.clausal` (+4), `tabled_same_gen.clausal` (+10) |
+
+### Audit-confirmed-stay-as-infra
+
+Compiler / runtime / AST internals (35 files): `test_compiler*`,
+`test_database`, `test_predicate_meta`, `test_terms`, `test_unify`,
+`test_variables`, `test_codegen`, `test_template_compiler`,
+`test_simple_ast`, `test_term_rewriting`, `test_first_arg_index`,
+`test_groundness_dispatch`, `test_pycache`, `test_directives`,
+`test_destructive_reuse`, `test_dict_set_terms`, `test_dict_set_compiler`,
+`test_seglist_core`, `test_seglist_creation`, `test_seglist_passthrough`,
+`test_segstring`, `test_resolve_and_argkey`, `test_callsite_specialization`,
+`test_deep_indexing`, `test_continuation_search`, `test_compiled_programs`,
+`test_solve`, `test_search`, `test_metainterpreters`,
+`test_term_expansion`, `test_term_html`, `test_transform_nodes`,
+`test_listing`, `test_python_interop`, `test_python_fallbacks`,
+`test_python_repl`, `test_repl`, `test_repl_integration`,
+`test_trail_elision`, `test_tail_recursion`, `test_translations`,
+`test_builtin_classes`, `test_doc_snippet_coverage`,
+`test_doc_snippet_integrity`, `test_ipython_integration`,
+`test_jupyter_integration`.
+
+Specialization pipeline (3 files): `test_specialization*`,
+`test_specialization_pipeline.py` — `_load_module`-driven integration
+tests of -metainterpreter / -specialize directives.
+
+String-as-list polymorphism (4 files): `test_string_head_patterns`,
+`test_string_higher_order`, `test_string_list_builtins`,
+`test_string_list_unification` — all `_load_module`-per-test pattern,
+testing that list builtins accept string sequences (Phase 4 polymorphic
+dispatch).
+
+Optional-dep CLP backends (10 files, all in baseline failure set):
+`test_clpz3*`, `test_clpsat`, `test_clportools*`, `test_clpz`,
+`test_clpq*`, `test_clpr`, `test_z3_module`, `test_z3_docs`.
+
+Other infra (3 files): `test_body_star_decon`, `test_import`,
+`test_free_threading`.
+
+**Phase 7 net adds**: 18 Test clauses in tabled_*.clausal fixtures.
+1 Python file slimmed (test_slg_termination.py).
+
+## All migration phases complete
+
+See **MIGRATION_TODOS.md** for outstanding cleanup items (deduplication
+sweep, library-predicate-import refactors, V2-2/V2-4b dispatch staleness
+tracking).
 
 See `MIGRATION_CANDIDATES.md`. Suggested next batches:
 
