@@ -203,6 +203,29 @@ def lower_shared(
         # here.  Function-local import breaks the shared ↔ goal_shallow
         # cycle (ratified B4/B6 idiom).
         case SubCall(fname=fname, arity=_arity, args=args):
+            # Slice E4c: tail_recursive hint — emit the TRO tail
+            # (``_compile_tro_tail``) and drop *k_stmts*.  ``ctx.tro_mode``
+            # carries the per-clause-compile mode (``"loop"`` /
+            # ``"signal"``); it must be set by the caller that wrote the
+            # hint, otherwise refuse to lower (guards against a stray
+            # hint reaching ``_compile_body_impl``).
+            if ir.tail_recursive:
+                if ctx.tro_mode is None:
+                    raise AssertionError(
+                        "SubCall.tail_recursive set but ctx.tro_mode is None — "
+                        "TRO hint reached non-TRO compilation context."
+                    )
+                from clausal.terms import Call, LoadName
+                from clausal.logic.compiler.tro import _compile_tro_tail
+                fake_tail_call = Call(
+                    func=LoadName(name=fname), args=list(args), kwargs=[],
+                )
+                return _compile_tro_tail(
+                    ctx, fake_tail_call, ir.arity, ctx.var_context,
+                    ctx.db, ctx.trail_name,
+                    tro_mode=ctx.tro_mode,
+                    check_indices=ir.tro_check_indices or None,
+                )
             from clausal.logic.compiler.goal_shallow import (
                 _compile_predicate_call_impl,
             )

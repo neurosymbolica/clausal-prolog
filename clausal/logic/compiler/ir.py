@@ -270,6 +270,10 @@ class SubCall(GoalOp):
     - ``tail_recursive`` — ``True`` when this call is the tail of a
       TRO-eligible clause; the lowering rewrites it as an argument
       reassignment + loop continue rather than a real sub-call.
+    - ``tro_check_indices`` — companion to ``tail_recursive``: arg
+      positions needing a runtime ``is_var()`` ground-check before
+      the TRO short-circuit fires.  Empty ``frozenset`` when no
+      check is required (or when ``tail_recursive`` is ``False``).
     - ``destructive_reuse`` — ``True`` when the source container of
       this call is provably dead at the call site; the lowering picks
       the ``_dr_*`` in-place variant (trampoline-only).
@@ -279,6 +283,7 @@ class SubCall(GoalOp):
     args: list[Term]
     direct_bucket_ref: Union[str, None] = None
     tail_recursive: bool = False
+    tro_check_indices: frozenset = dataclasses.field(default_factory=frozenset)
     destructive_reuse: bool = False
 
 

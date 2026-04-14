@@ -153,6 +153,18 @@ class CompilationContext:
     # legacy dispatcher entirely.
     use_ir_path: bool = True
 
+    # ── Slice E4c: TRO mode for the current clause-body compile ──────────
+    #
+    # ``"loop"`` (default for non-bucket trampolines) emits a local
+    # ``_tro = True`` flag consumed by the enclosing ``while True``
+    # wrapper.  ``"signal"`` (bucket sub-functions) writes the shared
+    # ``_tro_state`` list instead.  ``None`` means the current compile is
+    # **not** for a TRO-eligible clause — the SubCall arm in
+    # :mod:`._lower_goalop_shared` will refuse to emit a TRO tail in that
+    # state (defence against a stray ``tail_recursive`` hint slipping
+    # through the IR shadow into ``_compile_body_impl``).
+    tro_mode: "str | None" = None
+
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 

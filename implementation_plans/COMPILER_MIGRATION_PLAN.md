@@ -603,7 +603,18 @@ Slice E in the post-D7b order; see §13.  E's reorganisation is
 substantial and it's the path to D7c, but F is small / additive
 / high-payoff and acts as a safety net while D7b bakes.
 
-**Status (2026-04-14):** E1, E2, E3, E4a, E4b complete.  E4b
+**Status (2026-04-14):** E1, E2, E3, E4a, E4b, E4c complete.
+E4c adds an IR shadow inside `_compile_tro_body` (mirroring the
+D4/D7b harness): builds IR from the full clause body, runs E2's
+`tro.analyse`/`apply` (which now also writes
+`SubCall.tro_check_indices`), lowers via the trampoline lowering
+where the SubCall arm reads `tail_recursive` and emits
+`_compile_tro_tail` (ignoring k_stmts), and ast-dump-diffs
+against the legacy fold.  `ctx.tro_mode` carries the per-clause
+mode (`"loop"` / `"signal"`); the SubCall arm asserts it is set
+when `tail_recursive=True` to catch any stray hint reaching a
+non-TRO compilation context.  Legacy `_compile_tro_body` remains
+the source-of-truth path; retirement waits for E6.  E4b
 threads the un-DR-rewritten `clause.body` and `clause.head` into
 `_compile_body_impl` / `_run_ir_parallel` (via the
 `_make_body_compiler_impl` closure, gated on
@@ -632,7 +643,7 @@ bypasses.
 | E3 | call_site | ✅ |
 | E4a | Lowering reads `direct_bucket_ref` (call-site) | ✅ |
 | E4b | Lowering reads `destructive_reuse` | ✅ |
-| E4c | Lowering reads `tail_recursive` (TRO) | ⏳ |
+| E4c | Lowering reads `tail_recursive` (TRO) | ✅ |
 | E5 | Disable-per-optimisation toggle | ⏳ |
 | E6 | Retire legacy bypasses | ⏳ |
 

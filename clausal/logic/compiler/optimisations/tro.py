@@ -87,10 +87,14 @@ def apply(ir: Any, plan: TROPlan) -> Any:
         # skip.  Round-trip tests guarantee this can't happen when
         # the plan came from the same IR.
         return ir
-    if last.tail_recursive:
+    if last.tail_recursive and last.tro_check_indices == plan.check_indices:
         return ir
     new_ops = list(ir.ops)
-    new_ops[-1] = dataclasses.replace(last, tail_recursive=True)
+    new_ops[-1] = dataclasses.replace(
+        last,
+        tail_recursive=True,
+        tro_check_indices=plan.check_indices,
+    )
     return Sequence(ops=new_ops)
 
 
