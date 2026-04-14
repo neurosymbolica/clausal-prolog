@@ -151,30 +151,6 @@ class CompilationContext:
     # helpers that need the strategy must fail loudly if they find it absent.
     strategy: "Strategy | None" = None
 
-    # ── Slice D4: parallel-implementation feature flag ───────────────────
-    #
-    # When ``True``, ``_compile_body_impl`` runs the new GoalOp IR path
-    # (``terms_to_goalop`` → ``lower_python_<strategy>``) alongside the
-    # legacy dispatcher fold and asserts ``ast.dump`` equality before
-    # returning.  Unsupported body shapes surface as ``NotImplementedError``
-    # from ``terms_to_goalop`` and fall back to legacy transparently.
-    # The D6 cross-checks (TRO, destructive_reuse, bucket-ref pre-scan)
-    # gate on the same flag and run their own legacy-vs-IR agreement
-    # assertions per call.
-    #
-    # **D7a flipped the default to ``True``** — the IR shadow + D6
-    # cross-checks now run on every compile, baking the parallel
-    # implementation under regular CI.  Setting ``use_ir_path=False``
-    # explicitly (or before the env var existed) is still respected:
-    # the env var ``CLAUSAL_IR_PATH=1`` forces the flag on regardless,
-    # and ``CLAUSAL_IR_PATH=0`` is **not** consulted — opt out only via
-    # explicit ``CompilationContext(use_ir_path=False)``.
-    #
-    # D7b promotes the IR path to source-of-truth (lowering reads
-    # SubCall hints written by the D6 analyses); D7c retires the
-    # legacy dispatcher entirely.
-    use_ir_path: bool = True
-
     # ── Slice E5a: per-optimisation enable/disable toggle ────────────────
     #
     # Names match the three E1/E2/E3 passes in

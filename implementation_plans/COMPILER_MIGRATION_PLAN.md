@@ -399,7 +399,7 @@ the per-sub-slice progress log and validation evidence:
 | D6d | Tighten cross-check coverage (thread `db`; "IR ⊇ legacy" audit) | ✅ |
 | D7a | Flip `use_ir_path` default to `True` | ✅ baking |
 | D7b | Promote IR path to source-of-truth | ✅ baking |
-| D7c | Delete legacy `_dispatch_goal` / `_dispatch_goal_trampoline` | ⏳ deferred |
+| D7c | Retire byte-parity harness + DR preprocess (legacy fold kept as IR-gap fallback) | ✅ α |
 
 D7c is intentionally held: the value of D7b is the parallel
 verification gate, which D7c removes.  Letting both paths run for

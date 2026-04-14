@@ -56,8 +56,6 @@ class Strategy(Protocol):
         direct_joint_bucket_ref: str | None = None,
     ) -> list[ast.stmt]: ...
 
-    def preprocess_clause(self, clause: "Clause", db: Any = None) -> list[Any]: ...
-
     def function_params(
         self, ctx: "CompilationContext", arg_names: list[str],
     ) -> list[str]: ...
@@ -98,9 +96,6 @@ class ShallowStrategy:
                 orelse=[],
             )
         ]
-
-    def preprocess_clause(self, clause, db=None):
-        return list(clause.body)
 
     def function_params(self, ctx, arg_names):
         from ._ast_helpers import _TRAIL_PARAM_NAME, _K_PARAM_NAME
@@ -158,18 +153,6 @@ class TrampolineStrategy:
             orelse=[],
         )
         return [gen_assign, first_step, loop]
-
-    def preprocess_clause(self, clause, db=None):
-        from .destructive_reuse import (
-            _flatten_and_goals,
-            _find_destructive_reuse_goals,
-            _apply_destructive_reuse,
-        )
-        flat = _flatten_and_goals(clause.body)
-        if not self.supports_destructive_reuse:
-            return flat
-        eligible = _find_destructive_reuse_goals(clause, db=db)
-        return _apply_destructive_reuse(flat, eligible)
 
     def function_params(self, ctx, arg_names):
         from ._ast_helpers import _TRAIL_PARAM_NAME

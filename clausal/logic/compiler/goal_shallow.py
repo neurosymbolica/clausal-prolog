@@ -703,117 +703,97 @@ def _compile_body_impl(
     goals: list,
     ctx: CompilationContext,
     *,
-    original_goals: list | None = None,
     head: Any = None,
 ) -> list[ast.stmt]:
-    """Shared conjunction compilation, parameterised on ``ctx.strategy``.
+    """Shared conjunction compilation — IR-only (Slice D7c-α).
 
-    Takes a :class:`CompilationContext` bundling ``db``, ``var_context``,
-    ``trail_name`` (and, trampoline-only, ``self_name``/``parent_name``)
-    plus the compilation strategy.
+    Builds a :class:`GoalOp` IR from *goals* via :func:`terms_to_goalop`,
+    applies the active optimisation passes (TRO / destructive-reuse /
+    call-site bucket-ref), and lowers via the strategy-specific lowering
+    (:mod:`.lower_python_shallow` or :mod:`.lower_python_trampoline`).
 
-    Both ``compile_body`` (shallow) and ``compile_body_trampoline`` reduce
-    to this helper — they differ only via ``ctx.strategy``:
+    The pre-D7c legacy right-to-left fold (``strategy.compile_goal`` over
+    raw terms) and its byte-parity verification harness retired in D7c-α;
+    the IR path baked green under the D4/D7b harness through every E
+    sub-slice, so it is now the only path.
 
-    - ``ctx.strategy.emit_leaf_yield(ctx)`` produces the solution-surfacing
-      statement at the innermost continuation (``yield None`` for shallow,
-      ``yield (parent, None)`` for trampoline).
-    - ``ctx.strategy.compile_goal(ctx, goal, k_stmts)`` dispatches to the
-      strategy-specific recursive goal compiler.
-
-    Body-only Vars (variables that appear in the body but not the head) are
-    pre-allocated via ``_preallocate_body_vars`` so that they are registered
-    in ``ctx.var_context`` as named locals before right-to-left compilation
-    begins.  This prevents UnboundLocalError when an outer goal references a
-    Var that would otherwise only be walrus-introduced inside a later (inner)
-    goal.
+    Body-only Vars (variables that appear in the body but not the head)
+    are pre-allocated via :func:`_preallocate_body_vars` so the SubCall
+    arm in lowering can reference them as named locals without relying
+    on walrus introduction ordering.
     """
+    from .invariants import assert_body_vars_preallocated
+    from .strategy import ShallowStrategy, TrampolineStrategy
+    from .terms_to_goalop import terms_to_goalop
+    from . import lower_python_shallow, lower_python_trampoline
+
     strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
-    # Slice E6c: TRO-eligible clauses skip the call-site populator.
-    # The pre-E6c ``_compile_tro_body`` bypass did not populate
-    # ``bucket_ref_map`` / ``joint_bucket_ref_map``, so TRO tail-calls
-    # never picked up direct bucket refs.  Byte-parity with that
-    # bypass requires the same omission here.
     tro_active = (
         ctx.tro_plan is not None and bool(ctx.tro_plan.eligible)
     )
     if not tro_active:
-        # Slice E6b: pre-populate ctx.bucket_ref_map / joint_bucket_ref_map
-        # and base_globals with call-site specialisation entries derived
-        # from the IR plan, so the legacy fold below (which reads the maps
-        # via ``_dispatch_call_trampoline``) emits direct bucket refs
-        # without the legacy per-predicate ``_inject_bucket_refs_trampoline``
-        # pre-scan.  The IR rebuilds + re-analyses inside
-        # ``_run_ir_parallel`` so the SubCalls there carry the same hints
-        # for the shadow lowering — byte-parity preserved.
-        _prepopulate_call_site_runtime(
-            original_goals if original_goals is not None else goals, ctx,
-        )
-    # Slice F1: Phase 5 entry gate — README §10 invariant 1.  Lock in
-    # the contract that ``_preallocate_body_vars`` covers every Var
-    # reachable from a body goal so the right-to-left fold below
-    # cannot reference an unregistered Var (which would generate a
-    # walrus-introduced local that earlier-emitted goals try to read).
-    from .invariants import assert_body_vars_preallocated
+        # Populate ``ctx.bucket_ref_map`` / ``joint_bucket_ref_map`` and
+        # inject bucket functions into ``base_globals`` from the IR
+        # call-site plan.  Meta-call helpers in :mod:`.control_constructs`
+        # still run :func:`_dispatch_call_trampoline` on raw terms, and
+        # it reads those maps for direct bucket refs — so we keep
+        # populating them here for their benefit.  The main-body IR
+        # lowering consumes the hints directly via the SubCall arm.
+        _prepopulate_call_site_runtime(goals, ctx)
     assert_body_vars_preallocated(ctx, goals)
 
-    # Slice E6c: TRO-eligible body — replace leaf with ``_compile_tro_tail``
-    # of the tail goal and fold only prefix goals.  Mirrors the retired
-    # ``_compile_tro_body`` structure.  ``fresh_before`` snapshot is taken
-    # *before* ``_compile_tro_tail`` advances ``ctx.fresh`` (via lambda
-    # hoist / fresh names inside the fallback) so the IR shadow's cloned
-    # ``FreshNames`` starts from the same counter value.
-    if tro_active:
-        from clausal.logic.variables import deref as _deref
-        from .tro import _compile_tro_tail
-        plan = ctx.tro_plan
-        if head is None:
-            raise AssertionError(
-                "tro_plan set but head is None — body_compiler must "
-                "pass clause head when installing a TRO plan."
-            )
-        from clausal.logic.predicate import term_field_names as _tfn
-        arity = len(_tfn(head))
-        prefix_goals = goals[:-1]
-        tail_call = _deref(goals[-1])
-        fresh_before = ctx.fresh._n
-        legacy_k: list[ast.stmt] = _compile_tro_tail(
-            ctx, tail_call, arity, ctx.var_context, ctx.db, ctx.trail_name,
-            tro_mode=ctx.tro_mode,
-            check_indices=plan.check_indices or None,
-        )
-        leaf: list[ast.stmt] = legacy_k  # used only for IR shadow's lower() arg
-        for goal in reversed(prefix_goals):
-            legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
-    else:
-        leaf = [strategy.emit_leaf_yield(ctx)]
-        # Legacy right-to-left fold.  This advances ``ctx.fresh`` — the IR
-        # parallel run below re-uses the same starting counter via a cloned
-        # FreshNames so the two emissions pick identical fresh names.
-        fresh_before = ctx.fresh._n
-        legacy_k = list(leaf)
+    try:
+        ir = terms_to_goalop(goals, ctx.db)
+    except NotImplementedError:
+        # IR subset does not yet cover this body shape (e.g. ``And``
+        # as an ``Or`` arm — a known ``_convert`` gap).  Fall back to
+        # the legacy right-to-left dispatcher fold; the dispatcher's
+        # pattern-match body handles the full construct set.
+        #
+        # ``strategy.compile_goal`` bypasses IR-hint-driven
+        # optimisations (destructive-reuse, call-site bucket-refs,
+        # TRO tail rewrite).  For TRO specifically this branch is
+        # unreachable — TRO-eligible clauses are all inside the IR
+        # subset today — but we refuse to compile a TRO clause via
+        # the fallback to keep behaviour honest.
+        if tro_active:
+            raise
+        legacy_k: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
         for goal in reversed(goals):
             legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
+        return alloc_stmts + legacy_k
 
-    # **D7b**: when the IR path is enabled and succeeds, *its* output
-    # is what we return — the IR path is now source-of-truth, the
-    # legacy fold runs alongside as a verification gate.  IR fallback
-    # (``terms_to_goalop`` raises ``NotImplementedError`` on a body
-    # shape outside the D5 subset) returns ``None`` and we use the
-    # legacy result; this keeps any never-yet-seen pathological body
-    # building cleanly until D7c retires legacy outright.
-    chosen_k = legacy_k
-    if _ir_path_enabled(ctx):
-        ir_k = _run_ir_parallel(
-            goals, ctx, leaf, legacy_k, fresh_before,
-            original_goals=original_goals if original_goals is not None else goals,
-            head=head,
-        )
-        if ir_k is not None:
-            chosen_k = ir_k
+    if tro_active:
+        from .optimisations import tro as _tro_pass
+        ir = _tro_pass.apply(ir, ctx.tro_plan)
+    else:
+        if (
+            isinstance(ctx.strategy, TrampolineStrategy)
+            and ctx.strategy.supports_destructive_reuse
+            and head is not None
+            and "destructive_reuse" in ctx.enabled_optimisations
+        ):
+            from .optimisations import destructive_reuse as _dr
+            _dr_plan = _dr.analyse(ir, head, db=ctx.db)
+            ir = _dr.apply(ir, _dr_plan)
+        if (
+            ctx.base_globals is not None
+            and isinstance(ctx.strategy, TrampolineStrategy)
+            and "call_site" in ctx.enabled_optimisations
+        ):
+            from .optimisations import call_site as _call_site
+            _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
+            ir = _call_site.apply(ir, _plan)
 
-    return alloc_stmts + chosen_k
+    lower_fn = (
+        lower_python_shallow.lower
+        if isinstance(ctx.strategy, ShallowStrategy)
+        else lower_python_trampoline.lower
+    )
+    leaf: list[ast.stmt] = [] if tro_active else [strategy.emit_leaf_yield(ctx)]
+    body_k = lower_fn(ir, ctx, leaf)
+    return alloc_stmts + body_k
 
 
 def _prepopulate_call_site_runtime(
@@ -845,153 +825,6 @@ def _prepopulate_call_site_runtime(
         return
     plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
     _call_site.populate_runtime_from_plan(ir, plan, ctx, ctx.base_globals)
-
-
-# ── Slice D4 harness observability ───────────────────────────────────────────
-#
-# Counters let tests assert the IR path isn't silently falling back on
-# every compile (e.g. if a module scrub caused ``nodes.Not`` captured in
-# ``terms_to_goalop`` to miss new ``Not`` instances).  ``reset()`` and
-# the raw dict are module-private — tests import them by name.
-_IR_PATH_STATS: dict[str, int] = {"runs": 0, "fallbacks": 0, "matches": 0}
-
-
-def _ir_path_stats_reset() -> None:
-    _IR_PATH_STATS["runs"] = 0
-    _IR_PATH_STATS["fallbacks"] = 0
-    _IR_PATH_STATS["matches"] = 0
-
-
-def _ir_path_enabled(ctx: CompilationContext) -> bool:
-    """Slice D4 feature flag.
-
-    Enabled per-context via ``ctx.use_ir_path`` or globally via the
-    ``CLAUSAL_IR_PATH=1`` env var (the CI fallback).  D7 flips the
-    default to ``True``; until then the legacy fold remains the
-    source of truth and the IR path is a verification-only shadow.
-    """
-    import os
-    if ctx.use_ir_path:
-        return True
-    return os.environ.get("CLAUSAL_IR_PATH") == "1"
-
-
-def _run_ir_parallel(
-    goals: list,
-    ctx: CompilationContext,
-    leaf: list[ast.stmt],
-    legacy_k: list[ast.stmt],
-    fresh_before: int,
-    *,
-    original_goals: list | None = None,
-    head: Any = None,
-) -> list[ast.stmt] | None:
-    """Slice D4 parallel-implementation harness, promoted by D7b.
-
-    Run the GoalOp IR path alongside the just-completed legacy fold and
-    assert ``ast.dump`` equality.  Any drift is stop-the-line — this
-    routine raises ``AssertionError`` rather than silently papering
-    over a lowering bug.  On success returns the IR-produced
-    statements (which D7b made source-of-truth); on
-    ``NotImplementedError`` from ``terms_to_goalop`` (body shape
-    outside the D5 subset) returns ``None`` so the caller falls back
-    to the legacy result.
-
-    The IR run uses a cloned :class:`FreshNames` starting at
-    *fresh_before* (the legacy run's pre-fold counter value) so the
-    two emissions pick identical fresh names.  ``ctx.fresh`` itself
-    is not touched — callers see only the legacy advance, which is
-    what downstream compilation relies on for further fresh-name
-    monotonicity.
-    """
-    import logging
-    from ._ast_helpers import FreshNames
-    from .strategy import ShallowStrategy
-    from .terms_to_goalop import terms_to_goalop
-    from . import lower_python_shallow, lower_python_trampoline
-    from .strategy import TrampolineStrategy
-    _IR_PATH_STATS["runs"] += 1
-    # Slice E4b: build IR from the *original* (un-DR-rewritten) goal
-    # list so ``destructive_reuse.analyse`` can flag eligible SubCalls
-    # under their original fname; the lowering reads the hint and
-    # emits the ``_dr_<name>__<arity>`` variant.  Legacy still runs
-    # the preprocess-time rewrite (its output drives ``goals``), so
-    # when the caller didn't supply ``original_goals`` we treat
-    # ``goals`` itself as original — byte-parity holds because both
-    # legacy-fold and IR-lowering then emit the same DR-variant name.
-    ir_source = original_goals if original_goals is not None else goals
-    try:
-        ir = terms_to_goalop(ir_source, ctx.db)
-    except NotImplementedError as exc:
-        # Legitimate fallback — D2 subset is still growing.  Logging here
-        # lets D5 development see which body shapes still drop to legacy
-        # without instrumenting individual sub-slices; turn on with
-        # ``pytest --log-cli-level=DEBUG`` or ``logging.basicConfig``.
-        _IR_PATH_STATS["fallbacks"] += 1
-        logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
-        return None
-    # Slice E6c: when the clause is TRO-eligible, skip DR and call-site
-    # apply (matching the retired ``_compile_tro_body`` bypass, which
-    # did neither) and apply the TRO pass instead so the tail
-    # :class:`SubCall` carries ``tail_recursive=True`` / ``tro_check_indices``
-    # for the SubCall arm in :mod:`._lower_goalop_shared`.  The lower
-    # call passes ``leaf=[]`` — the tail SubCall arm ignores ``k_stmts``.
-    tro_active = (
-        ctx.tro_plan is not None and bool(ctx.tro_plan.eligible)
-    )
-    if tro_active:
-        from .optimisations import tro as _tro_pass
-        ir = _tro_pass.apply(ir, ctx.tro_plan)
-    else:
-        # Slice E4b: apply destructive-reuse hints from E1's analyse pass
-        # so IR lowering emits the ``_dr_<name>__<arity>`` variant when
-        # the hint is set.  Gated on strategy support — shallow has no
-        # DR variants.  Running on the original (un-rewritten) IR lets
-        # the analyse see the original fnames ("append", …) before the
-        # SubCall arm in lowering rewrites to the DR name.
-        if (
-            isinstance(ctx.strategy, TrampolineStrategy)
-            and ctx.strategy.supports_destructive_reuse
-            and head is not None
-            and "destructive_reuse" in ctx.enabled_optimisations
-        ):
-            from .optimisations import destructive_reuse as _dr
-            _dr_plan = _dr.analyse(ir, head, db=ctx.db)
-            ir = _dr.apply(ir, _dr_plan)
-        # Slice E4a: apply call-site bucket-ref hints from E3's analyse pass
-        # so IR lowering can emit the direct bucket reference straight off
-        # the :class:`SubCall`.  Legacy's ``_inject_bucket_refs_trampoline``
-        # still populates ``ctx.bucket_ref_map`` (its retirement waits for
-        # E6); both paths produce byte-identical AST because the E3
-        # analyser's gkeys are guaranteed identical to the legacy map's.
-        if (
-            ctx.base_globals is not None
-            and isinstance(ctx.strategy, TrampolineStrategy)
-            and "call_site" in ctx.enabled_optimisations
-        ):
-            from .optimisations import call_site as _call_site
-            _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
-            ir = _call_site.apply(ir, _plan)
-    lower_fn = (
-        lower_python_shallow.lower
-        if isinstance(ctx.strategy, ShallowStrategy)
-        else lower_python_trampoline.lower
-    )
-    ir_ctx = ctx.replace(fresh=FreshNames(starting_at=fresh_before))
-    # Slice E6c: TRO lower takes an empty leaf — the tail SubCall arm
-    # emits ``_compile_tro_tail`` and ignores ``k_stmts``.
-    lower_leaf: list[ast.stmt] = [] if tro_active else list(leaf)
-    new_k = lower_fn(ir, ir_ctx, lower_leaf)
-    legacy_dump = [ast.dump(s) for s in legacy_k]
-    new_dump = [ast.dump(s) for s in new_k]
-    if new_dump != legacy_dump:
-        raise AssertionError(
-            "Slice D4 IR-path AST diff from legacy path — stop the line.\n"
-            f"  legacy: {legacy_dump}\n"
-            f"  ir:     {new_dump}"
-        )
-    _IR_PATH_STATS["matches"] += 1
-    return new_k
 
 
 def compile_body(
@@ -1058,48 +891,16 @@ def _make_body_compiler_impl(
     time.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        # Slice E5b: when ``destructive_reuse`` is disabled, skip the
-        # legacy DR preprocess so legacy and IR fold both see the
-        # original (un-renamed) body — neither path emits a
-        # ``_dr_<name>__<arity>`` call.
-        #
-        # Slice E6c: TRO-eligible clauses also skip DR preprocess —
-        # the retired ``_compile_tro_body`` bypass never ran it, and
-        # the body_compiler now handles TRO clauses via the
-        # ``_compile_body_impl`` TRO branch which consumes the raw
-        # body.  ``ctx_template.tro_plan`` is set by the wrapper in
-        # ``_build_predicate_trampoline_funcdef``.
-        _tro_active = (
-            ctx_template.tro_plan is not None
-            and bool(ctx_template.tro_plan.eligible)
-        )
-        _dr_enabled = (
-            ctx_template.strategy.supports_destructive_reuse
-            and "destructive_reuse" in ctx_template.enabled_optimisations
-            and not _tro_active
-        )
-        if _dr_enabled:
-            goals = ctx_template.strategy.preprocess_clause(clause, db=db)
-        else:
-            from .destructive_reuse import _flatten_and_goals
-            goals = _flatten_and_goals(clause.body)
-        # Slice E4b: keep the un-DR-rewritten body around for the IR
-        # path.  Legacy fold consumes the rewritten ``goals`` (SubCall
-        # fname already ``_dr_…``); IR lowering consumes the flattened
-        # original body + hints and renames in the SubCall arm.  Both
-        # emit the same AST under the D4/D7b harness.
-        original_goals: list | None = None
-        if _dr_enabled:
-            from .destructive_reuse import _flatten_and_goals
-            original_goals = _flatten_and_goals(clause.body)
+        # Slice D7c-α: body is always the flattened raw clause body.
+        # The pre-D7c DR preprocess retired with the legacy fold —
+        # destructive-reuse rewriting now happens inside IR lowering
+        # via the ``destructive_reuse`` SubCall hint.
+        from .destructive_reuse import _flatten_and_goals
+        goals = _flatten_and_goals(clause.body)
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
         )
-        return _compile_body_impl(
-            goals, ctx,
-            original_goals=original_goals,
-            head=clause.head,
-        )
+        return _compile_body_impl(goals, ctx, head=clause.head)
     return _body_compiler
 
 
