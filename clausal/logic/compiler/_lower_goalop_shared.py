@@ -206,6 +206,19 @@ def lower_shared(
             from clausal.logic.compiler.goal_shallow import (
                 _compile_predicate_call_impl,
             )
+            # Slice E4b: destructive-reuse hint — rewrite fname to the
+            # ``_dr_<name>__<arity>`` variant so dispatch emission picks
+            # the in-place bucket function.  The DR variants are
+            # unconditionally registered in ``base_globals`` by
+            # ``predicate.py`` (they're builtin dispatch entries), so
+            # the rename is always resolvable.
+            if ir.destructive_reuse:
+                _DR_NAME_MAP = {
+                    "append": "_dr_append__3",
+                    "dict_put": "_dr_dict_put__4",
+                    "set_union": "_dr_set_union__3",
+                }
+                fname = _DR_NAME_MAP.get(fname, fname)
             return _compile_predicate_call_impl(
                 ctx, fname, args, [], k_stmts,
                 direct_bucket_ref=ir.direct_bucket_ref,

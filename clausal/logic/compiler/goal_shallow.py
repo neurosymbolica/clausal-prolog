@@ -700,6 +700,9 @@ def _compile_shared_meta_call(
 def _compile_body_impl(
     goals: list,
     ctx: CompilationContext,
+    *,
+    original_goals: list | None = None,
+    head: Any = None,
 ) -> list[ast.stmt]:
     """Shared conjunction compilation, parameterised on ``ctx.strategy``.
 
@@ -751,7 +754,11 @@ def _compile_body_impl(
     # building cleanly until D7c retires legacy outright.
     chosen_k = legacy_k
     if _ir_path_enabled(ctx):
-        ir_k = _run_ir_parallel(goals, ctx, leaf, legacy_k, fresh_before)
+        ir_k = _run_ir_parallel(
+            goals, ctx, leaf, legacy_k, fresh_before,
+            original_goals=original_goals if original_goals is not None else goals,
+            head=head,
+        )
         if ir_k is not None:
             chosen_k = ir_k
 
@@ -793,6 +800,9 @@ def _run_ir_parallel(
     leaf: list[ast.stmt],
     legacy_k: list[ast.stmt],
     fresh_before: int,
+    *,
+    original_goals: list | None = None,
+    head: Any = None,
 ) -> list[ast.stmt] | None:
     """Slice D4 parallel-implementation harness, promoted by D7b.
 
@@ -819,8 +829,17 @@ def _run_ir_parallel(
     from . import lower_python_shallow, lower_python_trampoline
     from .strategy import TrampolineStrategy
     _IR_PATH_STATS["runs"] += 1
+    # Slice E4b: build IR from the *original* (un-DR-rewritten) goal
+    # list so ``destructive_reuse.analyse`` can flag eligible SubCalls
+    # under their original fname; the lowering reads the hint and
+    # emits the ``_dr_<name>__<arity>`` variant.  Legacy still runs
+    # the preprocess-time rewrite (its output drives ``goals``), so
+    # when the caller didn't supply ``original_goals`` we treat
+    # ``goals`` itself as original — byte-parity holds because both
+    # legacy-fold and IR-lowering then emit the same DR-variant name.
+    ir_source = original_goals if original_goals is not None else goals
     try:
-        ir = terms_to_goalop(goals, ctx.db)
+        ir = terms_to_goalop(ir_source, ctx.db)
     except NotImplementedError as exc:
         # Legitimate fallback — D2 subset is still growing.  Logging here
         # lets D5 development see which body shapes still drop to legacy
@@ -829,6 +848,20 @@ def _run_ir_parallel(
         _IR_PATH_STATS["fallbacks"] += 1
         logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
         return None
+    # Slice E4b: apply destructive-reuse hints from E1's analyse pass
+    # so IR lowering emits the ``_dr_<name>__<arity>`` variant when
+    # the hint is set.  Gated on strategy support — shallow has no
+    # DR variants.  Running on the original (un-rewritten) IR lets
+    # the analyse see the original fnames ("append", …) before the
+    # SubCall arm in lowering rewrites to the DR name.
+    if (
+        isinstance(ctx.strategy, TrampolineStrategy)
+        and ctx.strategy.supports_destructive_reuse
+        and head is not None
+    ):
+        from .optimisations import destructive_reuse as _dr
+        _dr_plan = _dr.analyse(ir, head, db=ctx.db)
+        ir = _dr.apply(ir, _dr_plan)
     # Slice E4a: apply call-site bucket-ref hints from E3's analyse pass
     # so IR lowering can emit the direct bucket reference straight off
     # the :class:`SubCall`.  Legacy's ``_inject_bucket_refs_trampoline``
@@ -923,10 +956,23 @@ def _make_body_compiler_impl(
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
         goals = ctx_template.strategy.preprocess_clause(clause, db=db)
+        # Slice E4b: keep the un-DR-rewritten body around for the IR
+        # path.  Legacy fold consumes the rewritten ``goals`` (SubCall
+        # fname already ``_dr_…``); IR lowering consumes the flattened
+        # original body + hints and renames in the SubCall arm.  Both
+        # emit the same AST under the D4/D7b harness.
+        original_goals: list | None = None
+        if ctx_template.strategy.supports_destructive_reuse:
+            from .destructive_reuse import _flatten_and_goals
+            original_goals = _flatten_and_goals(clause.body)
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
         )
-        return _compile_body_impl(goals, ctx)
+        return _compile_body_impl(
+            goals, ctx,
+            original_goals=original_goals,
+            head=clause.head,
+        )
     return _body_compiler
 
 
