@@ -326,7 +326,41 @@ Validated:
 - Full ex-trealla suite (default) → 10492 passed, 90 skipped
 - Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10492 passed, 90 skipped
 
-### D6c. Call-site bucket-ref `analyse_ir` parallel shadow — ⏳ pending
+### D6c. Call-site bucket-ref `analyse_ir` parallel shadow — ✅ done
+
+`goal_trampoline.analyse_ir_bucket_refs(clauses, base_globals)` mirrors
+`_inject_bucket_refs_trampoline` over IR :class:`Sequence` ops produced
+by `terms_to_goalop`.  Returns the `(brmap_entries, jbrmap_entries)`
+the IR walker would inject; `base_globals` is read-only here.
+
+Wired into `_inject_bucket_refs_trampoline` as a stop-the-line
+cross-check gated by `CLAUSAL_IR_PATH=1`
+(`_maybe_cross_check_bucket_refs`).  The check applies in two layers:
+
+- **Always**: assert `ir ⊇ legacy` — the IR walker must catch every
+  entry legacy injected.
+- **On flat bodies only** (no top-level `And` / Python list /
+  `TupleLiteral`): assert strict `ir == legacy`.
+
+The asymmetry is intentional.  `terms_to_goalop` flattens top-level
+conjunctions, so the IR walker sees `SubCall`s nested inside `And`
+that the legacy walker silently skips (legacy iterates `clause.body`
+directly — a latent missed-optimisation.)  D7 promotes the IR walk to
+primary; the additional entries are then a free upgrade rather than a
+divergence.
+
+Validated:
+- `pytest tests/test_bucket_refs_ir_parallel.py` → 4 passed
+- `CLAUSAL_IR_PATH=1 pytest tests/test_callsite_specialization.py` → 46 passed
+- Full ex-trealla suite (default) → 10496 passed, 90 skipped
+- Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10496 passed, 90 skipped
+
+### D6 — ✅ all sub-slices done
+
+D6a / D6b / D6c each run their IR-side analysis as a verification-only
+shadow alongside the legacy term-walking detector under
+`CLAUSAL_IR_PATH=1`.  No optimisation hint is yet read by lowering;
+that promotion lands with D7 (legacy retirement).
 
 - `_detect_tro_clause` → `tro.analyse(ir) -> TROPlan` (writes
   `SubCall.tail_recursive = True` on the tail call).

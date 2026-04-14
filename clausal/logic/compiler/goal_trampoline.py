@@ -129,6 +129,16 @@ def _inject_bucket_refs_trampoline(
     brmap = ctx.bucket_ref_map
     jbrmap = ctx.joint_bucket_ref_map
 
+    # Snapshot existing keys so the cross-check sees only the entries
+    # *this* call adds.  ``ctx`` lives across multiple
+    # ``_inject_bucket_refs_trampoline`` invocations within a single
+    # predicate compilation; without the snapshot we'd repeatedly
+    # rediscover the same legacy entries and the strict-equality check
+    # on flat-body subsets would still pass, but the missing-entries
+    # check would compare against an ever-growing baseline.
+    br_before = dict(brmap)
+    jbr_before = dict(jbrmap)
+
     for clause in clauses:
         for goal in clause.body:
             # Identify Call(LoadName | LoadAttr) nodes
@@ -184,6 +194,179 @@ def _inject_bucket_refs_trampoline(
                     if gkey not in base_globals:
                         base_globals[gkey] = jdict[jkey]
                     jbrmap[(fname, arity, pi, pj, ki, kj)] = gkey
+
+    legacy_br_diff = {k: v for k, v in brmap.items() if k not in br_before}
+    legacy_jbr_diff = {k: v for k, v in jbrmap.items() if k not in jbr_before}
+    _maybe_cross_check_bucket_refs(
+        legacy_br_diff, legacy_jbr_diff, clauses, base_globals,
+    )
+
+
+# ── IR-side parallel analysis (Slice D6c) ────────────────────────────────────
+#
+# ``analyse_ir_bucket_refs`` mirrors :func:`_inject_bucket_refs_trampoline`
+# over IR :class:`Sequence` ops produced by ``terms_to_goalop``.
+# Verification-only shadow today (D6 option-1): the entries it would
+# inject are compared to the entries legacy actually injects
+# (``_maybe_cross_check_bucket_refs`` below) and any divergence is
+# stop-the-line.  D7 promotes the IR walk to primary and writes
+# ``SubCall.direct_bucket_ref`` hints directly.
+#
+# IR walks ``ir.ops`` (the flat post-``terms_to_goalop`` :class:`Sequence`)
+# rather than ``clause.body`` (the unflattened source).  ``terms_to_goalop``
+# flattens ``And`` / list / ``TupleLiteral`` conjunctions, so the IR walker
+# inspects every :class:`SubCall` reachable as a top-level conjunction
+# member.  Legacy's ``for goal in clause.body`` only sees the
+# unflattened items — calls nested inside ``And`` are silently skipped
+# (a latent legacy limitation).  The cross-check tolerates the
+# resulting "IR ⊇ legacy" relationship by demanding strict equality
+# only on flat bodies.
+
+
+def analyse_ir_bucket_refs(
+    clauses: list,
+    base_globals: dict,
+) -> tuple[dict, dict]:
+    """Return the bucket-ref entries the IR walker would inject.
+
+    Result mirrors ``_inject_bucket_refs_trampoline`` mutations: a pair
+    ``(brmap_entries, jbrmap_entries)`` of dicts keyed exactly the same
+    way as ``ctx.bucket_ref_map`` / ``ctx.joint_bucket_ref_map``.
+
+    ``base_globals`` is read-only here — the IR walker does not inject
+    new globals, only computes which entries *would* be added.  The
+    cross-check compares against legacy's actual mutations.
+
+    Bodies that ``terms_to_goalop`` cannot convert (``NotImplementedError``)
+    are silently skipped, matching the D4/D6a/D6b fallback contract.
+    """
+    from .terms_to_goalop import terms_to_goalop
+    from . import ir as _ir
+
+    brmap: dict = {}
+    jbrmap: dict = {}
+
+    for clause in clauses:
+        try:
+            body_ir = terms_to_goalop(clause.body, db=None)
+        except NotImplementedError:
+            continue
+        if not isinstance(body_ir, _ir.Sequence):
+            continue
+        for op in body_ir.ops:
+            if not isinstance(op, _ir.SubCall):
+                continue
+            fname = op.fname
+            arity = op.arity
+
+            pred_obj = base_globals.get(fname)
+            if not isinstance(pred_obj, PredicateMeta):
+                continue
+            if not getattr(pred_obj, "_locked", False):
+                continue
+            if not hasattr(pred_obj, "_index_plans"):
+                continue
+
+            # ``SubCall.args`` carries the same positional terms legacy
+            # reads off ``Call.args``; kwarg normalisation by
+            # ``terms_to_goalop`` only reorders, never alters values.
+            arg_exprs = [term_to_ast_expr(a, {}) for a in op.args]
+
+            for pos, idx_dict in pred_obj._index_plans.items():
+                if pos >= len(arg_exprs):
+                    continue
+                key = _static_call_key(arg_exprs[pos])
+                if key is None or key not in idx_dict:
+                    continue
+                gkey = _bucket_key(fname, pos, key)
+                brmap[(fname, arity, pos, key)] = gkey
+
+            if hasattr(pred_obj, "_index_plans_joint"):
+                for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+                    if pi >= len(arg_exprs) or pj >= len(arg_exprs):
+                        continue
+                    ki = _static_call_key(arg_exprs[pi])
+                    kj = _static_call_key(arg_exprs[pj])
+                    if ki is None or kj is None:
+                        continue
+                    jkey = (ki, kj)
+                    if jkey not in jdict:
+                        continue
+                    gkey = _joint_bucket_key(fname, pi, pj, ki, kj)
+                    jbrmap[(fname, arity, pi, pj, ki, kj)] = gkey
+    return brmap, jbrmap
+
+
+def _maybe_cross_check_bucket_refs(
+    legacy_brmap_diff: dict,
+    legacy_jbrmap_diff: dict,
+    clauses: list,
+    base_globals: dict,
+) -> None:
+    """Slice D6c parallel-implementation gate.
+
+    Under ``CLAUSAL_IR_PATH=1``, run :func:`analyse_ir_bucket_refs`
+    against the same clauses + ``base_globals`` and assert the entries
+    it would inject equal what legacy actually injected.
+
+    Bodies whose top-level shape contains ``And`` / nested-list
+    conjunctions cause ``terms_to_goalop`` to flatten and surface
+    additional :class:`SubCall` ops the legacy walker never sees — for
+    those clauses the IR result is a strict superset of legacy's.  We
+    assert ``ir ⊇ legacy`` always, plus ``ir == legacy`` when the
+    clause shape is flat (no ``And`` / list / ``TupleLiteral`` conjunction
+    at top level).
+    """
+    import os
+    if os.environ.get("CLAUSAL_IR_PATH") != "1":
+        return
+    ir_br, ir_jbr = analyse_ir_bucket_refs(clauses, base_globals)
+
+    # ``ir ⊇ legacy`` always — IR must catch every entry legacy did.
+    missing_br = {k: v for k, v in legacy_brmap_diff.items() if ir_br.get(k) != v}
+    missing_jbr = {k: v for k, v in legacy_jbrmap_diff.items() if ir_jbr.get(k) != v}
+    if missing_br or missing_jbr:
+        raise AssertionError(
+            "Slice D6c bucket-ref IR-analysis missed legacy entries — "
+            "stop the line.\n"
+            f"  missing single: {missing_br}\n"
+            f"  missing joint:  {missing_jbr}"
+        )
+
+    # Strict equality on flat bodies (no top-level conjunction node).
+    # An ``And`` / list / ``TupleLiteral`` at top level is legitimately
+    # observed only by IR after ``terms_to_goalop`` flattens — that's
+    # an additive optimisation, not a divergence.
+    if all(_is_flat_body(c.body) for c in clauses):
+        if ir_br != legacy_brmap_diff or ir_jbr != legacy_jbrmap_diff:
+            raise AssertionError(
+                "Slice D6c bucket-ref IR-analysis disagreement on flat "
+                "body — stop the line.\n"
+                f"  legacy single: {legacy_brmap_diff}\n"
+                f"  ir     single: {ir_br}\n"
+                f"  legacy joint:  {legacy_jbrmap_diff}\n"
+                f"  ir     joint:  {ir_jbr}"
+            )
+
+
+def _is_flat_body(body: list) -> bool:
+    """True iff *body* contains no top-level conjunction node.
+
+    ``And`` / Python list / ``TupleLiteral`` at the top level get
+    flattened by ``terms_to_goalop``, surfacing nested calls the
+    legacy walker doesn't see.  On flat bodies the two walkers
+    observe identical call sequences and the cross-check can demand
+    strict equality.
+    """
+    for goal in body:
+        g = deref(goal)
+        if isinstance(g, And):
+            return False
+        if isinstance(g, list):
+            return False
+        if isinstance(g, TupleLiteral):
+            return False
+    return True
 
 
 def _dispatch_call_trampoline(
