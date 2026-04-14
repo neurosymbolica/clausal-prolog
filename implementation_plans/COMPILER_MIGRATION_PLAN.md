@@ -603,10 +603,16 @@ Slice E in the post-D7b order; see §13.  E's reorganisation is
 substantial and it's the path to D7c, but F is small / additive
 / high-payoff and acts as a safety net while D7b bakes.
 
-**Status (2026-04-14):** E1, E2, E3 complete — the architecture
-pattern is established with all three D6 analyses migrated to
-`analyse(ir, ...) → Plan` / `apply(ir, plan) → ir`.  E4+ wire
-lowering to read the written hints and retire the legacy
+**Status (2026-04-14):** E1, E2, E3, E4a complete.  E4a wires the
+IR path's body compile to apply `call_site.analyse/apply` right
+after `terms_to_goalop`, threads a `direct_bucket_ref` kwarg
+through `emit_sub_call` → `_dispatch_call_trampoline`, and has
+the trampoline dispatch emit the direct bucket reference from
+the hint when set (joint-position entries still win first,
+matching legacy).  Legacy `_inject_bucket_refs_trampoline` still
+populates `ctx.bucket_ref_map` — both paths produce byte-
+identical AST because the E3 analyser's gkeys match legacy's.
+E4b/E4c wire the remaining two hints; E6 retires the legacy
 bypasses.
 
 | Sub-slice | Pass | Status |
@@ -614,7 +620,9 @@ bypasses.
 | E1 | destructive_reuse | ✅ |
 | E2 | tro | ✅ |
 | E3 | call_site | ✅ |
-| E4 | Lowering reads hints (source-of-truth promotion) | ⏳ |
+| E4a | Lowering reads `direct_bucket_ref` (call-site) | ✅ |
+| E4b | Lowering reads `destructive_reuse` | ⏳ |
+| E4c | Lowering reads `tail_recursive` (TRO) | ⏳ |
 | E5 | Disable-per-optimisation toggle | ⏳ |
 | E6 | Retire legacy bypasses | ⏳ |
 

@@ -396,6 +396,8 @@ def _dispatch_call_trampoline(
     fname: str,
     arity: int,
     arg_exprs: list[ast.expr],
+    *,
+    direct_bucket_ref: str | None = None,
 ) -> ast.expr:
     """Generate: StepGenerator(fname._get_dispatch(), this_generator, arg0, …, trail)
 
@@ -433,6 +435,21 @@ def _dispatch_call_trampoline(
                         + arg_exprs + [_name(trail_name)],
                     keywords=[],
                 )
+
+    # Prefer the IR-path hint (``SubCall.direct_bucket_ref``) over the
+    # ``ctx.bucket_ref_map`` lookup for the single-position case.  The
+    # hint gkey is byte-identical to what the legacy map would carry
+    # for the same call site (guaranteed by ``tests/
+    # test_optimisations_call_site.py`` — E3's byte-parity check).
+    # Joint-position entries still win over the hint, matching legacy's
+    # joint-first preference.
+    if direct_bucket_ref is not None:
+        return ast.Call(
+            func=_name("StepGenerator"),
+            args=[ast.Name(id=direct_bucket_ref, ctx=ast.Load()), _name(self_name)]
+                + arg_exprs + [_name(trail_name)],
+            keywords=[],
+        )
 
     # Try single-position bucket
     for pos, arg_expr in enumerate(arg_exprs):

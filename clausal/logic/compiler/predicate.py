@@ -635,6 +635,7 @@ def compile_predicate_trampoline(
     # cached dispatch names instead of fname._get_dispatch() for locked predicates.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
+    ctx_template.base_globals = base_globals
     # Phase 10f: bucket-ref maps live on ctx_template; populated by
     # _inject_bucket_refs_trampoline below.
     try:
@@ -1256,6 +1257,7 @@ def compile_predicate_shallow(
     # _compile_predicate_call → _dispatch_call_iter.
     _locked_keys = frozenset(k for k in base_globals if k.startswith(_DISP_PREFIX))
     ctx_template.locked_dispatch_keys = _locked_keys
+    ctx_template.base_globals = base_globals
     try:
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)

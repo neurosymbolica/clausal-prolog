@@ -347,6 +347,8 @@ def _compile_predicate_call_impl(
     call_args: list,
     call_kwargs: list,
     k_stmts: list[ast.stmt],
+    *,
+    direct_bucket_ref: str | None = None,
 ) -> list[ast.stmt]:
     """Shared predicate-call compilation: arg normalisation + lambda hoist.
 
@@ -392,6 +394,7 @@ def _compile_predicate_call_impl(
     arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
     return lambda_defs + ctx.strategy.emit_sub_call(
         ctx, fname, arity, arg_exprs, k_stmts,
+        direct_bucket_ref=direct_bucket_ref,
     )
 
 
@@ -814,6 +817,7 @@ def _run_ir_parallel(
     from .strategy import ShallowStrategy
     from .terms_to_goalop import terms_to_goalop
     from . import lower_python_shallow, lower_python_trampoline
+    from .strategy import TrampolineStrategy
     _IR_PATH_STATS["runs"] += 1
     try:
         ir = terms_to_goalop(goals, ctx.db)
@@ -825,6 +829,16 @@ def _run_ir_parallel(
         _IR_PATH_STATS["fallbacks"] += 1
         logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
         return None
+    # Slice E4a: apply call-site bucket-ref hints from E3's analyse pass
+    # so IR lowering can emit the direct bucket reference straight off
+    # the :class:`SubCall`.  Legacy's ``_inject_bucket_refs_trampoline``
+    # still populates ``ctx.bucket_ref_map`` (its retirement waits for
+    # E6); both paths produce byte-identical AST because the E3
+    # analyser's gkeys are guaranteed identical to the legacy map's.
+    if ctx.base_globals is not None and isinstance(ctx.strategy, TrampolineStrategy):
+        from .optimisations import call_site as _call_site
+        _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
+        ir = _call_site.apply(ir, _plan)
     lower_fn = (
         lower_python_shallow.lower
         if isinstance(ctx.strategy, ShallowStrategy)

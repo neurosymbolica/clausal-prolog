@@ -124,3 +124,27 @@ def test_call_site_pass_matches_legacy_gkey():
     assert ir_gkeys == legacy_gkeys, (
         f"gkey mismatch — legacy={legacy_gkeys}, ir={ir_gkeys}"
     )
+
+
+def test_dispatch_call_trampoline_reads_direct_bucket_ref_hint():
+    """E4a: ``_dispatch_call_trampoline`` emits a direct bucket-ref
+    call when given a ``direct_bucket_ref`` kwarg, independent of
+    ``ctx.bucket_ref_map`` being populated."""
+    import ast as _ast
+    from clausal.logic.compiler.compile_ctx import CompilationContext
+    from clausal.logic.compiler.goal_trampoline import _dispatch_call_trampoline
+
+    ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
+    # Map intentionally empty — hint must still drive emission.
+    arg_exprs = [_ast.Constant(value="red"), _ast.Name(id="X", ctx=_ast.Load())]
+    call_expr = _dispatch_call_trampoline(
+        ctx, "color_e4a", 2, arg_exprs,
+        direct_bucket_ref="_bucket_color_e4a_0_red",
+    )
+    assert isinstance(call_expr, _ast.Call)
+    assert isinstance(call_expr.func, _ast.Name)
+    assert call_expr.func.id == "StepGenerator"
+    # First arg to StepGenerator is the bucket-function Name reference.
+    first = call_expr.args[0]
+    assert isinstance(first, _ast.Name)
+    assert first.id == "_bucket_color_e4a_0_red"

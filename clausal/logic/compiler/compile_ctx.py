@@ -99,6 +99,14 @@ class CompilationContext:
     bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
     joint_bucket_ref_map: dict[tuple, str] = dataclasses.field(default_factory=dict)
 
+    # Per-predicate globals dict — the ``base_globals`` passed into
+    # ``exec``.  Needed by optimisation-hint analysis passes
+    # (``optimisations/call_site.py``) to resolve callee
+    # :class:`PredicateMeta` objects when computing bucket-ref hints.
+    # ``None`` in test-only / partial-setup contexts; analyses must
+    # treat that as "no hints available".
+    base_globals: "dict | None" = None
+
     # ── Per-compilation fresh-name generator ─────────────────────────────
     #
     # A single ``FreshNames`` instance is shared across every ``ctx.replace()``

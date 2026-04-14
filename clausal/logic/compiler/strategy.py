@@ -51,6 +51,8 @@ class Strategy(Protocol):
         arity: int,
         arg_exprs: list[ast.expr],
         k_stmts: list[ast.stmt],
+        *,
+        direct_bucket_ref: str | None = None,
     ) -> list[ast.stmt]: ...
 
     def preprocess_clause(self, clause: "Clause", db: Any = None) -> list[Any]: ...
@@ -81,9 +83,11 @@ class ShallowStrategy:
         # Shallow generators fall off the end of the function naturally.
         return None
 
-    def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts):
+    def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts, *, direct_bucket_ref=None):
         from ._ast_helpers import _name
         from .goal_shallow import _dispatch_call_iter
+        # Shallow strategy does not support bucket-ref specialisation;
+        # the hint is accepted for uniform plumbing and ignored.
         iter_expr = _dispatch_call_iter(ctx, fname, arity, arg_exprs)
         return [
             ast.For(
@@ -122,14 +126,17 @@ class TrampolineStrategy:
         from .goal_trampoline import _yield_step_stmt
         return _yield_step_stmt(_name(ctx.parent_name), _name("_DONE"))
 
-    def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts):
+    def emit_sub_call(self, ctx, fname, arity, arg_exprs, k_stmts, *, direct_bucket_ref=None):
         from ._ast_helpers import _name, _assign
         from .goal_trampoline import (
             _dispatch_call_trampoline, _assign_yield_step,
         )
         gen_name = ctx.fresh("_gen")
         status_name = ctx.fresh("_st")
-        call_expr = _dispatch_call_trampoline(ctx, fname, arity, arg_exprs)
+        call_expr = _dispatch_call_trampoline(
+            ctx, fname, arity, arg_exprs,
+            direct_bucket_ref=direct_bucket_ref,
+        )
         gen_assign = _assign(gen_name, call_expr)
         first_step = _assign_yield_step(
             status_name, _name(gen_name), ast.Constant(None),
