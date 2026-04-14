@@ -399,7 +399,33 @@ The lowering reads the hints; analysis no longer walks term trees.
 Introduce `map_goal_ops(ir, visit) -> GoalOp` (rewrite-capable
 traversal) when the first analysis needs it.
 
-### D7. Retire the legacy path
+### D7a. Flip `use_ir_path` default to `True` — ✅ done
+
+Smallest meaningful step into D7: change
+`CompilationContext.use_ir_path` default from `False` to `True`.  The
+D4 IR shadow + D6 cross-checks (TRO / DR / bucket-refs) now run on
+every compile by default, not just under `CLAUSAL_IR_PATH=1`.  No
+behaviour change — lowering still uses legacy results; the IR side
+remains verification-only.  D6c "IR ⊇ legacy" audit relaxed to run
+without the env-var gate (the cross-check now populates its counter
+by default).
+
+Cost: ~5% test-suite time overhead (131s vs 125s) from always-on
+shadow compilation.  Acceptable bake price.
+
+Validated:
+- Full ex-trealla suite (default) → 10497 passed, 90 skipped
+- Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10497 passed, 90 skipped
+- D6c extras audit: 0 IR-extras observed across full run
+
+Bake plan: leave the flip for one release cycle.  If no regressions
+surface, D7b promotes the IR path to source-of-truth (lowering reads
+SubCall hints from the D6 analyses); D7c retires the legacy
+dispatcher entirely.
+
+### D7b. Promote IR path to source-of-truth — ⏳ pending
+
+### D7c. Retire the legacy dispatcher — ⏳ pending
 
 Preconditions:
 

@@ -18,22 +18,17 @@ sorts to the end of pytest's collection order so the audit runs after
 every other test in the suite has compiled its predicates, giving the
 cross-check the widest possible exposure to real bodies.
 
-The audit only runs under ``CLAUSAL_IR_PATH=1`` because that's the
-gate the cross-check itself respects — without it, the counter is
-never written and an empty result would be vacuous.
+D7a flipped ``CompilationContext.use_ir_path`` default to ``True``,
+so the cross-check now runs on every compile by default — the audit
+no longer needs an env-var gate.  An empty counter at end of session
+is the affirmative signal that no D6c-tolerated divergence occurred.
 """
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 
-@pytest.mark.skipif(
-    os.environ.get("CLAUSAL_IR_PATH") != "1",
-    reason="audit only meaningful when the D6c cross-check is active",
-)
 def test_no_ir_extra_bucket_refs_seen():
     from clausal.logic.compiler.goal_trampoline import _IR_EXTRA_BUCKET_REFS
 
