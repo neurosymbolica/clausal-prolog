@@ -138,6 +138,27 @@ commit with its own corpus test:
 Each addition flips a `NotImplementedError` to a real conversion; AST
 diff stays green throughout.  Coverage progresses toward 100%.
 
+### D5e follow-ups (carry into D5f / D6 / D7)
+
+- `SubCall` lowering currently delegates to legacy
+  `_compile_predicate_call_impl` (lambda hoist + term→ast + strategy
+  `emit_sub_call`).  Pragmatic for D5e — means SubCall isn't truly
+  decoupled from legacy yet.  D7 retirement must migrate the body of
+  `_compile_predicate_call_impl` into `_lower_goalop_shared` (or a
+  sibling), same move as the reified-ITE helper.
+- `SubCall.args` carries raw `Lambda` nodes; hoisting happens inside
+  the lowering.  Consistent with the loose `Term` alias but worth
+  revisiting in D6 — lambdas arguably belong as explicit IR children
+  rather than hidden inside a term-list.
+- `_META_NAMES` in `terms_to_goalop` duplicates the closed set in
+  `ir.MetaKind` minus `forall`'s rewrite.  When D5f lands, unify the
+  two (or delete `_META_NAMES` in favour of direct dispatch to the
+  `MetaCall` conversion arm).
+- D5e was called out as the biggest D5 sub-slice.  The diff is only
+  ~150 lines because the shared-legacy-impl trick skipped real
+  lowering work.  D6 (hints: `direct_bucket_ref`, `tail_recursive`,
+  `destructive_reuse`) and D7 (retirement) will pay that back.
+
 ### D6. Move optimisation passes to operate on `GoalOp`
 
 - `_detect_tro_clause` → `tro.analyse(ir) -> TROPlan` (writes
