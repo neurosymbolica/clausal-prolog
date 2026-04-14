@@ -730,17 +730,26 @@ def _compile_body_impl(
     """
     strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
-    # Slice E6b: pre-populate ctx.bucket_ref_map / joint_bucket_ref_map
-    # and base_globals with call-site specialisation entries derived
-    # from the IR plan, so the legacy fold below (which reads the maps
-    # via ``_dispatch_call_trampoline``) emits direct bucket refs
-    # without the legacy per-predicate ``_inject_bucket_refs_trampoline``
-    # pre-scan.  The IR rebuilds + re-analyses inside
-    # ``_run_ir_parallel`` so the SubCalls there carry the same hints
-    # for the shadow lowering — byte-parity preserved.
-    _prepopulate_call_site_runtime(
-        original_goals if original_goals is not None else goals, ctx,
+    # Slice E6c: TRO-eligible clauses skip the call-site populator.
+    # The pre-E6c ``_compile_tro_body`` bypass did not populate
+    # ``bucket_ref_map`` / ``joint_bucket_ref_map``, so TRO tail-calls
+    # never picked up direct bucket refs.  Byte-parity with that
+    # bypass requires the same omission here.
+    tro_active = (
+        ctx.tro_plan is not None and bool(ctx.tro_plan.eligible)
     )
+    if not tro_active:
+        # Slice E6b: pre-populate ctx.bucket_ref_map / joint_bucket_ref_map
+        # and base_globals with call-site specialisation entries derived
+        # from the IR plan, so the legacy fold below (which reads the maps
+        # via ``_dispatch_call_trampoline``) emits direct bucket refs
+        # without the legacy per-predicate ``_inject_bucket_refs_trampoline``
+        # pre-scan.  The IR rebuilds + re-analyses inside
+        # ``_run_ir_parallel`` so the SubCalls there carry the same hints
+        # for the shadow lowering — byte-parity preserved.
+        _prepopulate_call_site_runtime(
+            original_goals if original_goals is not None else goals, ctx,
+        )
     # Slice F1: Phase 5 entry gate — README §10 invariant 1.  Lock in
     # the contract that ``_preallocate_body_vars`` covers every Var
     # reachable from a body goal so the right-to-left fold below
@@ -748,15 +757,44 @@ def _compile_body_impl(
     # walrus-introduced local that earlier-emitted goals try to read).
     from .invariants import assert_body_vars_preallocated
     assert_body_vars_preallocated(ctx, goals)
-    leaf: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
 
-    # Legacy right-to-left fold.  This advances ``ctx.fresh`` — the IR
-    # parallel run below re-uses the same starting counter via a cloned
-    # FreshNames so the two emissions pick identical fresh names.
-    fresh_before = ctx.fresh._n
-    legacy_k: list[ast.stmt] = list(leaf)
-    for goal in reversed(goals):
-        legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
+    # Slice E6c: TRO-eligible body — replace leaf with ``_compile_tro_tail``
+    # of the tail goal and fold only prefix goals.  Mirrors the retired
+    # ``_compile_tro_body`` structure.  ``fresh_before`` snapshot is taken
+    # *before* ``_compile_tro_tail`` advances ``ctx.fresh`` (via lambda
+    # hoist / fresh names inside the fallback) so the IR shadow's cloned
+    # ``FreshNames`` starts from the same counter value.
+    if tro_active:
+        from clausal.logic.variables import deref as _deref
+        from .tro import _compile_tro_tail
+        plan = ctx.tro_plan
+        if head is None:
+            raise AssertionError(
+                "tro_plan set but head is None — body_compiler must "
+                "pass clause head when installing a TRO plan."
+            )
+        from clausal.logic.predicate import term_field_names as _tfn
+        arity = len(_tfn(head))
+        prefix_goals = goals[:-1]
+        tail_call = _deref(goals[-1])
+        fresh_before = ctx.fresh._n
+        legacy_k: list[ast.stmt] = _compile_tro_tail(
+            ctx, tail_call, arity, ctx.var_context, ctx.db, ctx.trail_name,
+            tro_mode=ctx.tro_mode,
+            check_indices=plan.check_indices or None,
+        )
+        leaf: list[ast.stmt] = legacy_k  # used only for IR shadow's lower() arg
+        for goal in reversed(prefix_goals):
+            legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
+    else:
+        leaf = [strategy.emit_leaf_yield(ctx)]
+        # Legacy right-to-left fold.  This advances ``ctx.fresh`` — the IR
+        # parallel run below re-uses the same starting counter via a cloned
+        # FreshNames so the two emissions pick identical fresh names.
+        fresh_before = ctx.fresh._n
+        legacy_k = list(leaf)
+        for goal in reversed(goals):
+            legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
 
     # **D7b**: when the IR path is enabled and succeeds, *its* output
     # is what we return — the IR path is now source-of-truth, the
@@ -892,42 +930,58 @@ def _run_ir_parallel(
         _IR_PATH_STATS["fallbacks"] += 1
         logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
         return None
-    # Slice E4b: apply destructive-reuse hints from E1's analyse pass
-    # so IR lowering emits the ``_dr_<name>__<arity>`` variant when
-    # the hint is set.  Gated on strategy support — shallow has no
-    # DR variants.  Running on the original (un-rewritten) IR lets
-    # the analyse see the original fnames ("append", …) before the
-    # SubCall arm in lowering rewrites to the DR name.
-    if (
-        isinstance(ctx.strategy, TrampolineStrategy)
-        and ctx.strategy.supports_destructive_reuse
-        and head is not None
-        and "destructive_reuse" in ctx.enabled_optimisations
-    ):
-        from .optimisations import destructive_reuse as _dr
-        _dr_plan = _dr.analyse(ir, head, db=ctx.db)
-        ir = _dr.apply(ir, _dr_plan)
-    # Slice E4a: apply call-site bucket-ref hints from E3's analyse pass
-    # so IR lowering can emit the direct bucket reference straight off
-    # the :class:`SubCall`.  Legacy's ``_inject_bucket_refs_trampoline``
-    # still populates ``ctx.bucket_ref_map`` (its retirement waits for
-    # E6); both paths produce byte-identical AST because the E3
-    # analyser's gkeys are guaranteed identical to the legacy map's.
-    if (
-        ctx.base_globals is not None
-        and isinstance(ctx.strategy, TrampolineStrategy)
-        and "call_site" in ctx.enabled_optimisations
-    ):
-        from .optimisations import call_site as _call_site
-        _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
-        ir = _call_site.apply(ir, _plan)
+    # Slice E6c: when the clause is TRO-eligible, skip DR and call-site
+    # apply (matching the retired ``_compile_tro_body`` bypass, which
+    # did neither) and apply the TRO pass instead so the tail
+    # :class:`SubCall` carries ``tail_recursive=True`` / ``tro_check_indices``
+    # for the SubCall arm in :mod:`._lower_goalop_shared`.  The lower
+    # call passes ``leaf=[]`` — the tail SubCall arm ignores ``k_stmts``.
+    tro_active = (
+        ctx.tro_plan is not None and bool(ctx.tro_plan.eligible)
+    )
+    if tro_active:
+        from .optimisations import tro as _tro_pass
+        ir = _tro_pass.apply(ir, ctx.tro_plan)
+    else:
+        # Slice E4b: apply destructive-reuse hints from E1's analyse pass
+        # so IR lowering emits the ``_dr_<name>__<arity>`` variant when
+        # the hint is set.  Gated on strategy support — shallow has no
+        # DR variants.  Running on the original (un-rewritten) IR lets
+        # the analyse see the original fnames ("append", …) before the
+        # SubCall arm in lowering rewrites to the DR name.
+        if (
+            isinstance(ctx.strategy, TrampolineStrategy)
+            and ctx.strategy.supports_destructive_reuse
+            and head is not None
+            and "destructive_reuse" in ctx.enabled_optimisations
+        ):
+            from .optimisations import destructive_reuse as _dr
+            _dr_plan = _dr.analyse(ir, head, db=ctx.db)
+            ir = _dr.apply(ir, _dr_plan)
+        # Slice E4a: apply call-site bucket-ref hints from E3's analyse pass
+        # so IR lowering can emit the direct bucket reference straight off
+        # the :class:`SubCall`.  Legacy's ``_inject_bucket_refs_trampoline``
+        # still populates ``ctx.bucket_ref_map`` (its retirement waits for
+        # E6); both paths produce byte-identical AST because the E3
+        # analyser's gkeys are guaranteed identical to the legacy map's.
+        if (
+            ctx.base_globals is not None
+            and isinstance(ctx.strategy, TrampolineStrategy)
+            and "call_site" in ctx.enabled_optimisations
+        ):
+            from .optimisations import call_site as _call_site
+            _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
+            ir = _call_site.apply(ir, _plan)
     lower_fn = (
         lower_python_shallow.lower
         if isinstance(ctx.strategy, ShallowStrategy)
         else lower_python_trampoline.lower
     )
     ir_ctx = ctx.replace(fresh=FreshNames(starting_at=fresh_before))
-    new_k = lower_fn(ir, ir_ctx, list(leaf))
+    # Slice E6c: TRO lower takes an empty leaf — the tail SubCall arm
+    # emits ``_compile_tro_tail`` and ignores ``k_stmts``.
+    lower_leaf: list[ast.stmt] = [] if tro_active else list(leaf)
+    new_k = lower_fn(ir, ir_ctx, lower_leaf)
     legacy_dump = [ast.dump(s) for s in legacy_k]
     new_dump = [ast.dump(s) for s in new_k]
     if new_dump != legacy_dump:
@@ -1008,9 +1062,21 @@ def _make_body_compiler_impl(
         # legacy DR preprocess so legacy and IR fold both see the
         # original (un-renamed) body — neither path emits a
         # ``_dr_<name>__<arity>`` call.
+        #
+        # Slice E6c: TRO-eligible clauses also skip DR preprocess —
+        # the retired ``_compile_tro_body`` bypass never ran it, and
+        # the body_compiler now handles TRO clauses via the
+        # ``_compile_body_impl`` TRO branch which consumes the raw
+        # body.  ``ctx_template.tro_plan`` is set by the wrapper in
+        # ``_build_predicate_trampoline_funcdef``.
+        _tro_active = (
+            ctx_template.tro_plan is not None
+            and bool(ctx_template.tro_plan.eligible)
+        )
         _dr_enabled = (
             ctx_template.strategy.supports_destructive_reuse
             and "destructive_reuse" in ctx_template.enabled_optimisations
+            and not _tro_active
         )
         if _dr_enabled:
             goals = ctx_template.strategy.preprocess_clause(clause, db=db)

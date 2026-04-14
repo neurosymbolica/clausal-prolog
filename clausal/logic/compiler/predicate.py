@@ -89,7 +89,7 @@ from .arg_index import (
     _make_groundness_dispatch_simple, _make_groundness_dispatch_trampoline,
 )
 from .tro import (
-    _detect_tro_clause, _compile_tro_body,
+    _detect_tro_clause,
 )
 from .compile_ctx import CompilationContext
 from .strategy import ShallowStrategy, TrampolineStrategy
@@ -213,7 +213,7 @@ from .tro import (  # noqa: E402,F401
     _tro_args_safe,
     _head_has_unifying_list_pattern, _list_has_nonvar_constant,
     _contains_star_unpack,
-    _compile_tro_tail, _compile_tro_body,
+    _compile_tro_tail,
 )
 
 
@@ -321,50 +321,54 @@ def _build_predicate_trampoline_funcdef(
         # Initialise _tro flag at the top of each iteration.
         loop_stmts.append(_assign("_tro", ast.Constant(False)))
 
+    # Slice E6c: TRO-aware body_compiler wrapper.  When the clause is
+    # in ``tro_indices``, stash a :class:`TROPlan` and ``tro_mode`` on
+    # ``ctx_template`` (captured by reference inside the underlying
+    # closure) before invoking the real body_compiler; the
+    # ``_compile_body_impl`` TRO branch then splits prefix/tail and
+    # emits ``_compile_tro_tail`` as the leaf.  Replaces the legacy
+    # ``_compile_tro_body`` bypass entirely.
+    if use_tro:
+        from .optimisations.tro import TROPlan as _TROPlan
+        _tro_clause_set = {id(clauses[i]) for i in tro_indices}
+        _orig_bc = body_compiler
+        _tro_m = tro_mode
+        _tro_ctx = ctx_template
+
+        def _tro_aware_bc(clause, var_context,
+                          _tset=_tro_clause_set, _fn=functor,
+                          _ar=arity, _db=db, _tm=_tro_m, _ctx=_tro_ctx):
+            if id(clause) in _tset:
+                _check = _get_tro_check_indices(_fn, _ar, clause)
+                _plan = _TROPlan(eligible=True, check_indices=frozenset(_check))
+                _prev_plan = _ctx.tro_plan
+                _prev_mode = _ctx.tro_mode
+                _ctx.tro_plan = _plan
+                _ctx.tro_mode = _tm
+                try:
+                    return _orig_bc(clause, var_context)
+                finally:
+                    _ctx.tro_plan = _prev_plan
+                    _ctx.tro_mode = _prev_mode
+            return _orig_bc(clause, var_context)
+        body_compiler = _tro_aware_bc
+
     # Phase 5: structural dispatch for list-discriminating predicates.
     dispatch_pos = (
         _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
     )
     if dispatch_pos is not None:
-        if use_tro:
-            # TRO-aware body compiler: uses _compile_tro_body for eligible clauses.
-            _tro_clause_set = {id(clauses[i]) for i in tro_indices}
-            _orig_bc = body_compiler
-            _tro_m = tro_mode
-            _tro_ctx = ctx_template
-            def _tro_list_body_compiler(clause, var_context,
-                                        _tset=_tro_clause_set, _fn=functor,
-                                        _ar=arity, _db=db, _tm=_tro_m,
-                                        _ctx=_tro_ctx):
-                if id(clause) in _tset:
-                    return _compile_tro_body(_ctx, clause, _fn, _ar, _db, var_context, _TRAIL_PARAM_NAME,
-                                             tro_mode=_tm)
-                return _orig_bc(clause, var_context)
-            loop_stmts.extend(
-                _build_list_dispatch_guard(
-                    clauses, dispatch_pos, arity, subject, _tro_list_body_compiler
-                )
+        loop_stmts.extend(
+            _build_list_dispatch_guard(
+                clauses, dispatch_pos, arity, subject, body_compiler
             )
-        else:
-            loop_stmts.extend(
-                _build_list_dispatch_guard(
-                    clauses, dispatch_pos, arity, subject, body_compiler
-                )
-            )
+        )
     else:
         for ci, clause in enumerate(clauses):
             var_context: dict[int, str] = {}
             _head_arg_patterns(clause.head, var_context, arity)
 
-            if use_tro and ci in tro_indices:
-                # TRO clause: compile prefix goals normally, replace tail call.
-                tro_body_stmts = _compile_tro_body(
-                    ctx_template, clause, functor, arity, db, var_context, _TRAIL_PARAM_NAME,
-                    tro_mode=tro_mode,
-                )
-                body_stmts = tro_body_stmts
-            else:
-                body_stmts = body_compiler(clause, var_context)
+            body_stmts = body_compiler(clause, var_context)
 
             case_arm = compile_head_to_match_case(
                 head=clause.head,

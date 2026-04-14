@@ -202,6 +202,22 @@ class CompilationContext:
     # through the IR shadow into ``_compile_body_impl``).
     tro_mode: "str | None" = None
 
+    # ── Slice E6c: TRO plan for the current clause-body compile ──────────
+    #
+    # Set by the body-compiler wrapper installed in
+    # :func:`_build_predicate_trampoline_funcdef` before invoking
+    # ``body_compiler`` for a TRO-eligible clause.  Carries the
+    # ``check_indices`` frozenset and an ``eligible`` flag.  When
+    # ``eligible`` is ``True``, :func:`_compile_body_impl` splits
+    # goals into ``prefix + [tail]`` and uses :func:`_compile_tro_tail`
+    # as the leaf, matching the (retired) ``_compile_tro_body`` bypass.
+    # On the IR side, :func:`_run_ir_parallel` applies
+    # :func:`optimisations.tro.apply` to mark the tail :class:`SubCall`.
+    # Typed ``Any`` to avoid an import cycle with
+    # :mod:`.optimisations.tro`; runtime duck-types on
+    # ``.eligible`` / ``.check_indices``.
+    tro_plan: "Any | None" = None
+
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 
