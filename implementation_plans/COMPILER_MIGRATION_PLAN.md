@@ -678,6 +678,27 @@ crisp; F locks them in with runtime assertions.  Small,
 additive, low-risk — acts as a safety net while D7b bakes
 toward D7c.
 
+**Status (2026-04-13):** F1 through F4 complete.  Invariants 5
+(TRO safety) and 6 (DR safety) are already enforced inline by
+the analyses themselves; adding runtime assertions would just
+re-run the analysis with no marginal value.  F is functionally
+done.
+
+| Sub-slice | Invariant | Status |
+|---|---|---|
+| F1 | #1 body-vars-preallocated (Phase 5 entry) | ✅ |
+| F2 | #2 call-targets-resolved (Phase 1 exit) | ✅ |
+| F3 | #3 mark/undo paired (Phase 6 post) | ✅ |
+| F4 | #4 trampoline DONE yield (Phase 6 post, emit_done=True) | ✅ |
+| F5 | #5 TRO safety | ⏭ enforced inline by `_tro_args_safe` |
+| F6 | #6 DR safety | ⏭ enforced inline by `_find_destructive_reuse_goals` |
+
+F3 surfaced a real latent dead-mark in `_compile_setup_call_cleanup`
+(allocated `_scc_m = trail.mark()` that no `undo` consumed) —
+removed; behaviour-preserving (verified by full suite green at
+10504 passed / 90 skipped under both default and
+`CLAUSAL_IR_PATH=1`).
+
 **Validation:**
 
 - Introduce each assertion; run the test suite; ensure no
