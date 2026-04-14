@@ -644,7 +644,8 @@ bypasses.
 | E4a | Lowering reads `direct_bucket_ref` (call-site) | ✅ |
 | E4b | Lowering reads `destructive_reuse` | ✅ |
 | E4c | Lowering reads `tail_recursive` (TRO) | ✅ |
-| E5 | Disable-per-optimisation toggle | ⏳ |
+| E5a | Toggle field + IR-side gating | ✅ |
+| E5b | Legacy-bypass gating + matrix tests | ⏳ |
 | E6 | Retire legacy bypasses | ⏳ |
 
 Each pass ships with round-trip (idempotence), no-op (ref-equal

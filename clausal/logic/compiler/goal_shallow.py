@@ -858,6 +858,7 @@ def _run_ir_parallel(
         isinstance(ctx.strategy, TrampolineStrategy)
         and ctx.strategy.supports_destructive_reuse
         and head is not None
+        and "destructive_reuse" in ctx.enabled_optimisations
     ):
         from .optimisations import destructive_reuse as _dr
         _dr_plan = _dr.analyse(ir, head, db=ctx.db)
@@ -868,7 +869,11 @@ def _run_ir_parallel(
     # still populates ``ctx.bucket_ref_map`` (its retirement waits for
     # E6); both paths produce byte-identical AST because the E3
     # analyser's gkeys are guaranteed identical to the legacy map's.
-    if ctx.base_globals is not None and isinstance(ctx.strategy, TrampolineStrategy):
+    if (
+        ctx.base_globals is not None
+        and isinstance(ctx.strategy, TrampolineStrategy)
+        and "call_site" in ctx.enabled_optimisations
+    ):
         from .optimisations import call_site as _call_site
         _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
         ir = _call_site.apply(ir, _plan)

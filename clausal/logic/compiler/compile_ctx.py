@@ -153,6 +153,23 @@ class CompilationContext:
     # legacy dispatcher entirely.
     use_ir_path: bool = True
 
+    # ── Slice E5a: per-optimisation enable/disable toggle ────────────────
+    #
+    # Names match the three E1/E2/E3 passes in
+    # :mod:`clausal.logic.compiler.optimisations`.  Default is "all on"
+    # — behavioural parity with pre-E5 compiles.  E5a gates only the
+    # IR-side analyse/apply invocations; the legacy bypasses
+    # (``preprocess_clause`` DR rewrite, ``_compile_tro_body``,
+    # ``_inject_bucket_refs_trampoline``) still drive codegen and run
+    # unconditionally.  E5b extends the gate to the legacy paths so a
+    # disabled flag actually surfaces un-optimised AST end-to-end, and
+    # adds the per-optimisation test matrix.
+    enabled_optimisations: frozenset = dataclasses.field(
+        default_factory=lambda: frozenset(
+            {"tro", "destructive_reuse", "call_site"}
+        )
+    )
+
     # ── Slice E4c: TRO mode for the current clause-body compile ──────────
     #
     # ``"loop"`` (default for non-bucket trampolines) emits a local

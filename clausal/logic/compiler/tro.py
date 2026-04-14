@@ -831,10 +831,11 @@ def _compile_tro_body(
     # harness in ``_compile_body_impl``.  Fallback (NotImplementedError
     # from ``terms_to_goalop``) is silent — TRO clauses outside the IR
     # subset still land via the legacy path; correctness is unaffected.
-    _maybe_cross_check_ir_tro(
-        ctx, clause, var_context, db, trail_name, tro_mode,
-        functor, arity, alloc_stmts, fresh_before, legacy_result,
-    )
+    if "tro" in ctx.enabled_optimisations:
+        _maybe_cross_check_ir_tro(
+            ctx, clause, var_context, db, trail_name, tro_mode,
+            functor, arity, alloc_stmts, fresh_before, legacy_result,
+        )
     return legacy_result
 
 
