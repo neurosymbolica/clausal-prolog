@@ -6,11 +6,33 @@ Verifies correctness and allocation efficiency of TRO-compiled predicates.
 import unittest
 
 from clausal.logic.compiler import (
-    _detect_tro_clause,
     _is_deterministic_goal,
     _tro_args_safe,
     compile_predicate_trampoline,
 )
+
+
+def _detect_tro_clause(functor, arity, clause, db=None):
+    """Test helper: E6d-β-style TRO eligibility via the uniform
+    ``optimisations.tro.analyse`` pass.  Replaces the retired term-walking
+    ``tro._detect_tro_clause``; returns ``False`` for clauses whose body
+    shape is outside the IR subset (matching the retired helper's
+    behaviour on unsupported shapes)."""
+    from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
+    from clausal.logic.compiler.optimisations.tro import analyse
+    try:
+        ir = terms_to_goalop(clause.body, db=db)
+    except NotImplementedError:
+        return False
+    return analyse(ir, clause.head, functor, arity, db=db).eligible
+
+
+def _get_tro_check_indices(functor, arity, clause, db=None):
+    """Test helper: check-indices via the uniform ``analyse`` pass."""
+    from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
+    from clausal.logic.compiler.optimisations.tro import analyse
+    ir = terms_to_goalop(clause.body, db=db)
+    return analyse(ir, clause.head, functor, arity, db=db).check_indices
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
@@ -792,8 +814,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
 
     def test_check_indices_computed(self):
         """_get_tro_check_indices returns positions for head-decomposition vars."""
-        # nv
-        from clausal.logic.compiler import _get_tro_check_indices
+        pass  # helper defined at module-level
 
         class P(metaclass=PredicateMeta):
             _fields = ('list', 'acc', 'result')
@@ -820,8 +841,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
 
     def test_get_tro_check_indices_with_head_decomposition(self):
         """Check indices include head-decomposition vars not bound by prefix."""
-        # nv
-        from clausal.logic.compiler import _get_tro_check_indices, _detect_tro_clause
+        pass  # helpers defined at module-level
         from clausal.pythonic_ast.nodes import StarUnpack as _SU
 
         class L(metaclass=PredicateMeta):

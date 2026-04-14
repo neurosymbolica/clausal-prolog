@@ -194,6 +194,23 @@ class CompilationContext:
     # ``.eligible`` / ``.check_indices``.
     tro_plan: "Any | None" = None
 
+    # ── Slice E6d-β: per-predicate clause → body IR cache ────────────────
+    #
+    # Populated by ``_build_predicate_trampoline_funcdef`` when it sweeps
+    # for TRO-eligible clauses via ``optimisations.tro.analyse``: the
+    # analyse call needs the body IR, and ``_compile_body_impl`` needs
+    # the same IR a moment later.  Caching avoids a second
+    # ``terms_to_goalop`` build per clause.  Keyed by ``id(clause)`` —
+    # entries are created only for clauses whose body is inside the IR
+    # subset (``terms_to_goalop`` did not raise).  ``None`` in contexts
+    # that bypass the predicate-trampoline path.
+    clause_ir_cache: "dict[int, Any] | None" = None
+
+    # Parallel to ``clause_ir_cache`` — the ``TROPlan`` for each clause
+    # (present iff the clause made it into the IR cache).  The TRO-aware
+    # body_compiler wrapper reads this instead of re-running analyse.
+    clause_tro_plans: "dict[int, Any] | None" = None
+
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.
 

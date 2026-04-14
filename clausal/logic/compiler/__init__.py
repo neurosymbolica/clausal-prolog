@@ -95,8 +95,6 @@ from .arg_index import (  # noqa: F401
 )
 
 from .tro import (  # noqa: F401
-    _detect_tro_clause,
-    _get_tro_check_indices,
     _tro_args_safe,
     _is_deterministic_goal,
 )

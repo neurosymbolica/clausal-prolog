@@ -704,6 +704,7 @@ def _compile_body_impl(
     ctx: CompilationContext,
     *,
     head: Any = None,
+    body_ir: Any = None,
 ) -> list[ast.stmt]:
     """Shared conjunction compilation — IR-only (Slice D7c-α).
 
@@ -744,7 +745,11 @@ def _compile_body_impl(
     assert_body_vars_preallocated(ctx, goals)
 
     try:
-        ir = terms_to_goalop(goals, ctx.db)
+        # Slice E6d-β: predicate-trampoline sweep pre-builds the IR when
+        # running the TRO eligibility check; reuse it here instead of
+        # rebuilding.  ``body_ir`` is ``None`` for callers that bypass the
+        # sweep (shallow path, meta-call recursion, test harnesses).
+        ir = body_ir if body_ir is not None else terms_to_goalop(goals, ctx.db)
     except NotImplementedError:
         # IR subset does not yet cover this body shape (e.g. ``And``
         # as an ``Or`` arm — a known ``_convert`` gap).  Fall back to
@@ -900,7 +905,14 @@ def _make_body_compiler_impl(
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
         )
-        return _compile_body_impl(goals, ctx, head=clause.head)
+        # Slice E6d-β: reuse the IR the predicate-trampoline TRO sweep
+        # already built (see ``_build_predicate_trampoline_funcdef``).
+        cached_ir = None
+        if ctx_template.clause_ir_cache is not None:
+            cached_ir = ctx_template.clause_ir_cache.get(id(clause))
+        return _compile_body_impl(
+            goals, ctx, head=clause.head, body_ir=cached_ir,
+        )
     return _body_compiler
 
 

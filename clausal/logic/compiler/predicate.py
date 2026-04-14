@@ -88,9 +88,6 @@ from .arg_index import (
     _make_indexed_dispatch_simple, _make_indexed_dispatch_trampoline,
     _make_groundness_dispatch_simple, _make_groundness_dispatch_trampoline,
 )
-from .tro import (
-    _detect_tro_clause,
-)
 from .compile_ctx import CompilationContext
 from .strategy import ShallowStrategy, TrampolineStrategy
 from .goal_shallow import (
@@ -209,12 +206,61 @@ _naf_tabled_fn_s = _naf_tabled_fn
 
 # ── TRO (moved to .tro) ─────────────────────────────────────────────────────
 from .tro import (  # noqa: E402,F401
-    _is_deterministic_goal, _detect_tro_clause, _get_tro_check_indices,
+    _is_deterministic_goal,
     _tro_args_safe,
     _head_has_unifying_list_pattern, _list_has_nonvar_constant,
     _contains_star_unpack,
     _compile_tro_tail,
 )
+
+
+def _sweep_tro_eligible(
+    clauses: list,
+    functor: str,
+    arity: int,
+    db,
+    ctx_template: CompilationContext,
+) -> frozenset[int]:
+    """Slice E6d-β: TRO eligibility sweep via the uniform ``analyse`` pass.
+
+    Builds each clause's body IR via :func:`terms_to_goalop` once, runs
+    :func:`optimisations.tro.analyse`, and stashes both the IR and the
+    resulting :class:`TROPlan` on *ctx_template* (keyed by ``id(clause)``)
+    so later stages can reuse them:
+
+    - :func:`_compile_body_impl` reads ``ctx.clause_ir_cache`` to skip a
+      second :func:`terms_to_goalop` build.
+    - The TRO-aware ``body_compiler`` wrapper in
+      :func:`_build_predicate_trampoline_funcdef` reads
+      ``ctx.clause_tro_plans`` instead of re-running analysis.
+
+    Clauses whose body shape is outside the IR subset
+    (``terms_to_goalop`` raises :class:`NotImplementedError`) are silently
+    skipped — they get no cache entry and are therefore never TRO-eligible.
+    This matches the pre-E6d-β behaviour of the retired term-walking
+    ``_detect_tro_clause`` sweep: both paths returned ``False`` for any
+    shape the IR pipeline could not handle anyway.
+
+    Returns the frozenset of TRO-eligible clause indices.
+    """
+    from .terms_to_goalop import terms_to_goalop
+    from .optimisations.tro import analyse as _tro_analyse
+    if ctx_template.clause_ir_cache is None:
+        ctx_template.clause_ir_cache = {}
+    if ctx_template.clause_tro_plans is None:
+        ctx_template.clause_tro_plans = {}
+    eligible: list[int] = []
+    for i, clause in enumerate(clauses):
+        try:
+            body_ir = terms_to_goalop(clause.body, db=db)
+        except NotImplementedError:
+            continue
+        ctx_template.clause_ir_cache[id(clause)] = body_ir
+        plan = _tro_analyse(body_ir, clause.head, functor, arity, db=db)
+        ctx_template.clause_tro_plans[id(clause)] = plan
+        if plan.eligible:
+            eligible.append(i)
+    return frozenset(eligible)
 
 
 def _empty_predicate_funcdef(
@@ -329,18 +375,17 @@ def _build_predicate_trampoline_funcdef(
     # emits ``_compile_tro_tail`` as the leaf.  Replaces the legacy
     # ``_compile_tro_body`` bypass entirely.
     if use_tro:
-        from .optimisations.tro import TROPlan as _TROPlan
         _tro_clause_set = {id(clauses[i]) for i in tro_indices}
         _orig_bc = body_compiler
         _tro_m = tro_mode
         _tro_ctx = ctx_template
 
         def _tro_aware_bc(clause, var_context,
-                          _tset=_tro_clause_set, _fn=functor,
-                          _ar=arity, _db=db, _tm=_tro_m, _ctx=_tro_ctx):
+                          _tset=_tro_clause_set, _tm=_tro_m, _ctx=_tro_ctx):
             if id(clause) in _tset:
-                _check = _get_tro_check_indices(_fn, _ar, clause)
-                _plan = _TROPlan(eligible=True, check_indices=frozenset(_check))
+                # Slice E6d-β: plan was built by ``_sweep_tro_eligible``;
+                # ``id(clause) in _tset`` implies ``plan.eligible`` is True.
+                _plan = _ctx.clause_tro_plans[id(clause)]
                 _prev_plan = _ctx.tro_plan
                 _prev_mode = _ctx.tro_mode
                 _ctx.tro_plan = _plan
@@ -676,9 +721,8 @@ def compile_predicate_trampoline(
                 ctx_template.strategy.supports_tro and not _is_tabled
                 and "tro" in ctx_template.enabled_optimisations
             ):
-                _tro_set = frozenset(
-                    i for i, cl in enumerate(clauses)
-                    if _detect_tro_clause(functor, arity, cl, db=db)
+                _tro_set = _sweep_tro_eligible(
+                    clauses, functor, arity, db, ctx_template,
                 )
                 if _tro_set:
                     _idx_tro_indices = _tro_set
@@ -941,9 +985,8 @@ def compile_predicate_trampoline(
                 ctx_template.strategy.supports_tro and not _is_tabled
                 and "tro" in ctx_template.enabled_optimisations
             ):
-                _tro_set = frozenset(
-                    i for i, cl in enumerate(clauses)
-                    if _detect_tro_clause(functor, arity, cl, db=_effective_db)
+                _tro_set = _sweep_tro_eligible(
+                    clauses, functor, arity, _effective_db, ctx_template,
                 )
                 if _tro_set:
                     tro_indices = _tro_set
