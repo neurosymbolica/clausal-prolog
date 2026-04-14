@@ -10,7 +10,6 @@ in "am I in shallow mode or trampoline mode?":
 - ``emit_sub_call``      — AST for calling a sub-predicate.
 - ``preprocess_clause``  — clause-body rewrite (DR for trampoline).
 - ``function_params``    — compiled-function parameter list.
-- ``compile_goal``       — recursive goal dispatcher (shallow vs trampoline).
 - ``supports_tro`` / ``supports_destructive_reuse`` — feature flags.
 
 The strategy instance lives on :class:`CompilationContext`.  Shared
@@ -60,13 +59,6 @@ class Strategy(Protocol):
         self, ctx: "CompilationContext", arg_names: list[str],
     ) -> list[str]: ...
 
-    def compile_goal(
-        self,
-        ctx: "CompilationContext",
-        goal: Any,
-        k_stmts: list[ast.stmt],
-    ) -> list[ast.stmt]: ...
-
 
 class ShallowStrategy:
     """``compile_predicate_shallow`` — Python ``for`` loops over sub-generators."""
@@ -100,10 +92,6 @@ class ShallowStrategy:
     def function_params(self, ctx, arg_names):
         from ._ast_helpers import _TRAIL_PARAM_NAME, _K_PARAM_NAME
         return arg_names + [_TRAIL_PARAM_NAME, _K_PARAM_NAME]
-
-    def compile_goal(self, ctx, goal, k_stmts):
-        from .goal_shallow import _dispatch_goal
-        return _dispatch_goal(ctx, goal, k_stmts)
 
 
 class TrampolineStrategy:
@@ -157,7 +145,3 @@ class TrampolineStrategy:
     def function_params(self, ctx, arg_names):
         from ._ast_helpers import _TRAIL_PARAM_NAME
         return [ctx.self_name, ctx.parent_name] + arg_names + [_TRAIL_PARAM_NAME]
-
-    def compile_goal(self, ctx, goal, k_stmts):
-        from .goal_trampoline import _dispatch_goal_trampoline
-        return _dispatch_goal_trampoline(ctx, goal, k_stmts)

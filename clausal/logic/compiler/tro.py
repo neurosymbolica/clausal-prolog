@@ -41,11 +41,10 @@ from ._vars import _collect_var_ids, _collect_bound_vars
 from .terms_to_ast import term_to_ast_expr
 from .globals_env import _preallocate_body_vars
 from .control_constructs import _hoist_lambda_args
+from .goal_shallow import _compile_predicate_call_impl
 from .goal_trampoline import (
-    _compile_predicate_call_trampoline,
     _step_expr, _yield_step_stmt, _assign_yield_step,
     _dispatch_call_trampoline,
-    _dispatch_goal_trampoline,
 )
 
 
@@ -604,7 +603,7 @@ def _compile_tro_tail(
             db=db, var_context=var_context, trail_name=trail_name,
             self_name=self_name, parent_name=parent_name,
         )
-        fallback_stmts = _compile_predicate_call_trampoline(
+        fallback_stmts = _compile_predicate_call_impl(
             _fallback_ctx, fname, [None] * arity, [],
             [_yield_step_stmt(_name(parent_name), ast.Constant(None))],
         )
