@@ -317,6 +317,30 @@ class MetaCall(GoalOp):
 
 
 @dataclasses.dataclass
+class Fail(GoalOp):
+    """The constant-failure goal — succeeds for nobody, drops the
+    continuation.  Lowering returns ``[]``; in a :class:`Sequence` fold
+    that truncates everything to its left (matching legacy
+    ``_dispatch_goal(False, k)`` returning ``[]``).
+    """
+
+
+@dataclasses.dataclass
+class PyThunkOp(GoalOp):
+    """A ``PyThunk`` as a body goal — evaluate the embedded callable
+    for side effects, then continue.  The lowering emits a single
+    ``ast.Expr`` wrapping ``term_to_ast_expr(thunk)`` followed by the
+    continuation, matching the legacy fast-path in ``_dispatch_goal``.
+
+    ``thunk`` carries the raw :class:`~clausal.terms.PyThunk` term
+    unchanged — the lowering reuses ``term_to_ast_expr`` so PyThunk
+    globals registration (handled at module-compile time by
+    ``globals_env``) is not duplicated here.
+    """
+    thunk: Term
+
+
+@dataclasses.dataclass
 class ListPatternUnify(GoalOp):
     """Body-side star-list unification (``X := [A, *T, B]`` and friends).
 
@@ -402,7 +426,7 @@ __all__ = [
     # Call
     "SubCall", "MetaCall",
     # Low-level
-    "ListPatternUnify",
+    "Fail", "PyThunkOp", "ListPatternUnify",
     # Traversal
     "walk_goal_ops",
 ]

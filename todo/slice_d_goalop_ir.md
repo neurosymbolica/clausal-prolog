@@ -171,9 +171,9 @@ diff stays green throughout.  Coverage progresses toward 100%.
   `_compile_star_is`.  D6 analysis passes cannot reason about
   list-pattern arity without re-parsing.  Fine today; revisit if an
   analysis pass needs it.
-- **D5g defers `False` as goal conjunct**: legacy's "drop all
-  continuations" behaviour is a non-local effect.  Add a `Fail` IR
-  op (with lowering `return []`) if `False` ever appears in practice.
+- ~~**D5g defers `False` as goal conjunct**~~: resolved by D5j —
+  `Fail` IR op landed; lowering returns `[]` which truncates the
+  Sequence fold byte-identically to legacy.
 - **D5 `_META_NAMES` safety-net frozenset** in `terms_to_goalop`
   duplicates the explicit meta arms.  Delete alongside legacy in D7.
 - **D5h tabled-ITE kwargs asymmetry**: legacy
@@ -222,6 +222,26 @@ env-var dance.
 
 Validated: `pytest tests/test_ir_path_corpus.py` → 12 passed; full
 ex-trealla suite → 10472 passed, 90 skipped.
+
+### D5j. Long-tail body shapes (PyThunk + False + nested TupleLiteral) — ✅ done
+
+Three small, complementary additions that drove the corpus IR-fallback
+count from 53 → 0:
+
+- New `Fail` IR op — `False` as a body goal (whether at conjunction
+  top or inside an `Or`/`Not`/`IfExpr` arm) lowers to `[]`, truncating
+  the surrounding `Sequence` right-to-left fold byte-identically to
+  legacy `_dispatch_goal(False, k) == []`.
+- New `PyThunkOp` IR op — `PyThunk` as a body goal lowers via
+  `term_to_ast_expr` to a single `ast.Expr(call)` + continuation, the
+  same fast-path both legacy `_dispatch_goal`s already share.
+- `_convert` now flattens nested `TupleLiteral` into an inner
+  `Sequence` (mirrors the top-level `_extend` arm).  Also handles
+  `True` as an op (empty `Sequence`) for symmetry with `False`.
+
+Validated: full ex-trealla suite green (10472 passed, 90 skipped) both
+under default and `CLAUSAL_IR_PATH=1`; fixture-corpus IR-fallback
+count is now 0/3723 runs.
 
 ### D6. Move optimisation passes to operate on `GoalOp`
 

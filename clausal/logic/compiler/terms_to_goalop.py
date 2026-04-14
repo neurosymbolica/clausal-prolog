@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
+from clausal.terms import PyThunk
 from clausal.logic.compiler.terms_to_ast import (
     _is_star_list,
     _dotted_name_from_loadattr,
@@ -37,6 +38,7 @@ from clausal.logic.compiler.ir import (
     ArithEval,
     Branch,
     Dif,
+    Fail,
     FDCompare,
     FDOp,
     GoalOp,
@@ -44,6 +46,7 @@ from clausal.logic.compiler.ir import (
     MemberIn,
     MetaCall,
     Negate,
+    PyThunkOp,
     ReifiedKind,
     Sequence,
     StructuralEq,
@@ -120,11 +123,14 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     # Boolean ``True`` is identity for conjunction — the legacy
     # dispatcher short-circuits ``if goal is True: return list(k_stmts)``,
     # i.e. it emits nothing and keeps the continuation intact.  The
-    # IR equivalent is to emit no ops at all.  ``False`` still defers
-    # via ``_convert``'s fall-through because its legacy behaviour
-    # (drop all continuations) is a non-local effect worth a dedicated
-    # IR op if it ever shows up in practice — currently it does not.
+    # IR equivalent is to emit no ops at all.  ``False`` lowers to a
+    # :class:`Fail` op (D5j) — its lowering returns ``[]`` which, in a
+    # right-to-left :class:`Sequence` fold, truncates everything to its
+    # left, byte-identical to legacy ``_dispatch_goal(False, k) == []``.
     if body is True:
+        return
+    if body is False:
+        ops.append(Fail())
         return
     if isinstance(body, list):
         for goal in body:
@@ -147,6 +153,30 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
 
 
 def _convert(goal: Any, db: Any) -> GoalOp:
+    # ``PyThunk`` as a body goal — wrap in :class:`PyThunkOp`; the
+    # lowering reuses ``term_to_ast_expr`` to emit a single
+    # ``ast.Expr(call)``, byte-identical to the legacy fast-path.
+    if isinstance(goal, PyThunk):
+        return PyThunkOp(thunk=goal)
+    # ``False`` reaching ``_convert`` (e.g. as an :class:`Or` arm or an
+    # :class:`IfExpr` branch) — same :class:`Fail` op the conjunction
+    # path emits.  ``True`` in the same position becomes an empty
+    # :class:`Sequence` (the unit) so the surrounding op sees an
+    # always-succeed leaf.
+    if goal is False:
+        return Fail()
+    if goal is True:
+        return Sequence(ops=[])
+    # ``TupleLiteral`` reaching ``_convert`` (i.e. nested inside an
+    # :class:`Or` arm, :class:`Not` operand, or :class:`IfExpr` branch
+    # rather than at the conjunction top where ``_extend`` flattens
+    # it) — flatten its elements into an inner :class:`Sequence`.  The
+    # legacy ``_dispatch_goal`` ``TupleLiteral`` arm builds the same
+    # right-to-left fold via ``reversed(elems)``.
+    if isinstance(goal, nodes.TupleLiteral) and goal.elements:
+        inner_ops: list[GoalOp] = []
+        _extend(inner_ops, list(goal.elements), db)
+        return Sequence(ops=inner_ops)
     match goal:
         # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
         # to nested ``Alternate`` so the lowering emits the same nested

@@ -23,12 +23,14 @@ from clausal.logic.compiler.ir import (
     ArithEval,
     Branch,
     Dif,
+    Fail,
     FDCompare,
     FDOp,
     GoalOp,
     ListPatternUnify,
     MemberIn,
     MetaCall,
+    PyThunkOp,
     ReifiedKind,
     Sequence,
     StructuralEq,
@@ -93,6 +95,19 @@ def lower_shared(
             for op in reversed(ops):
                 k = recurse(op, ctx, k)
             return k
+
+        # ── Constant failure (legacy ``goal is False``) — drops the
+        # continuation entirely.  In a Sequence right-to-left fold this
+        # truncates everything to its left, byte-identical to legacy.
+        case Fail():
+            return []
+
+        # ── PyThunk as a body goal — evaluate the embedded callable
+        # for side effects, then continue.  Identical between shallow
+        # and trampoline (legacy fast-path in both ``_dispatch_goal``s).
+        case PyThunkOp(thunk=thunk):
+            call_expr = term_to_ast_expr(thunk, var_context, eval_arith=False)
+            return [ast.Expr(value=call_expr)] + list(k_stmts)
 
         # ── Reified Branch (D5d-i) — three-way ITE.
         # General Branch (``reified_test is None``) is deferred to
