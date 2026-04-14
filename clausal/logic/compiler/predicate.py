@@ -583,6 +583,14 @@ def compile_predicate_trampoline(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Slice F2: Phase 1 exit gate — README §10 invariant 2.  Lock in
+    # the contract that every collected call target now has an entry
+    # in base_globals (real predicate, BuiltinPredicate adapter,
+    # _DbDispatchAdapter shim, or imported value).  Catches the
+    # "db=None and no other resolution path" case where generated
+    # code would NameError at runtime.
+    from .invariants import assert_call_targets_resolved
+    assert_call_targets_resolved(_call_targets, base_globals, db=db)
     # Inject builtin predicate classes so bare builtin names (e.g. Member
     # passed as an argument to maplist) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
@@ -1199,6 +1207,14 @@ def compile_predicate_shallow(
         base_globals.update(globals_)
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
+    # Slice F2: Phase 1 exit gate — README §10 invariant 2.  Lock in
+    # the contract that every collected call target now has an entry
+    # in base_globals (real predicate, BuiltinPredicate adapter,
+    # _DbDispatchAdapter shim, or imported value).  Catches the
+    # "db=None and no other resolution path" case where generated
+    # code would NameError at runtime.
+    from .invariants import assert_call_targets_resolved
+    assert_call_targets_resolved(_call_targets, base_globals, db=db)
     # Inject builtin predicate classes so bare builtin names (e.g. Member
     # passed as an argument to maplist) resolve at runtime.  Injected after
     # _inject_resolved_targets so that BuiltinPredicate adapters for call

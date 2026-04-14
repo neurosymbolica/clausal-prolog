@@ -81,4 +81,63 @@ def assert_body_vars_preallocated(ctx: Any, goals: list) -> None:
         )
 
 
-__all__ = ["InvariantError", "assert_body_vars_preallocated"]
+def assert_call_targets_resolved(
+    targets: set, base_globals: dict, db: Any = None,
+) -> None:
+    """README §10 invariant 2 — Phase 1 exit gate.
+
+    When ``db`` is provided, every ``(fname, arity)`` collected by
+    ``_collect_globals_info`` must have an entry in ``base_globals``
+    after ``_inject_resolved_targets`` runs — either a real
+    :class:`PredicateMeta`, a :class:`BuiltinPredicate`, a
+    :class:`_DbDispatchAdapter` shim, or an imported Python value.
+    With a db available, the shim is the catch-all floor: anything
+    that survives without an entry indicates a resolution-path bug
+    that would generate ``NameError`` at runtime.
+
+    When ``db is None`` the invariant is **advisory only** — there
+    is no shim floor, the existing contract is "best-effort
+    resolution; missing entries cause runtime NameError if called",
+    and doc-snippet compilation paths legitimately rely on this for
+    placeholder targets.  The check skips silently in that case.
+
+    **Dotted-name targets are also best-effort.**  The shim floor
+    in ``_inject_resolved_targets`` only catches *non-dotted*
+    names; dotted names like ``mod.Submod.Pred`` rely on
+    ``globals_`` ambient resolution or ``sys.modules`` lookup with
+    no shim fallback.  Doc snippets that reference placeholder
+    qualified names (``myapp.graphs.utils.Reachable``) compile
+    successfully today and only fail at runtime if invoked — the
+    assertion preserves that behaviour by skipping dotted names.
+    """
+    if db is None:
+        return
+    missing: list[tuple[str, int]] = []
+    for target_name, target_arity in targets:
+        if target_name in base_globals:
+            continue
+        # Dotted names: best-effort, no shim floor (see docstring).
+        if "." in target_name:
+            continue
+        missing.append((target_name, target_arity))
+    if missing:
+        sample = missing[:5]
+        raise InvariantError(
+            "Phase 1 exit: call-targets-resolved invariant violated. "
+            f"{len(missing)} call target(s) collected from clause "
+            "bodies have no entry in base_globals despite db being "
+            "available — generated code would NameError at runtime "
+            "when invoking them.  _inject_resolved_targets is "
+            "responsible for injecting either a real predicate, a "
+            "BuiltinPredicate, a _DbDispatchAdapter shim, or an "
+            "imported Python value for every collected target when "
+            "a db is available.\n"
+            f"  sample (fname, arity): {sample}"
+        )
+
+
+__all__ = [
+    "InvariantError",
+    "assert_body_vars_preallocated",
+    "assert_call_targets_resolved",
+]
