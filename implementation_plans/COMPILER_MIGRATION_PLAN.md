@@ -603,13 +603,33 @@ Slice E in the post-D7b order; see §13.  E's reorganisation is
 substantial and it's the path to D7c, but F is small / additive
 / high-payoff and acts as a safety net while D7b bakes.
 
-**Pre-E follow-up — meta-call inner coverage.**  `walk_goal_ops`
-does not descend into `MetaCall.args`, so the D6 analyses miss
-`SubCall`s nested inside `once(...)` / `findall(...)` / etc.
-Legacy has the same blind spot, so the D6 cross-checks still
-agree, but it's a real coverage hole D7c will inherit.  Close
-this before E so the unified `analyse(ir) → Plan` shape lands
-with full meta-call recursion from day one.
+**Pre-E follow-up — meta-call inner coverage** — ✅ done.
+
+`MetaCall.args` keeps its transitional shape (raw terms in
+goal positions; lowering forwards them to legacy `_compile_*`
+helpers that re-dispatch through `_dispatch_goal`).  Reshaping
+to `GoalOp` would force a redundant convert / re-convert dance
+through every meta-call helper.
+
+Instead `compiler/ir.py` now ships:
+
+- `META_GOAL_POSITIONS: dict[str, tuple[str, ...]]` — per-kind
+  manifest of which arg-dict keys carry body goals.
+- `walk_goal_ops_deep(ir, visit, db=None)` — drop-in alternative
+  to `walk_goal_ops` that descends into meta-call inners,
+  lazily converting raw-term goals via
+  `terms_to_goalop._convert` so the visitor sees a proper
+  GoalOp tree.
+
+Standard `walk_goal_ops` and the existing D6 analyses are
+unchanged — they explicitly walk top-level conjunction members
+only, matching legacy's blind spot, so their cross-checks
+remain correct.  E's analyses opt into the deep walker.
+
+Validated: full ex-trealla suite green (10516 passed, 90
+skipped) under both default and `CLAUSAL_IR_PATH=1`; six deep-
+walker tests (`tests/test_walk_goal_ops_deep.py`) cover the
+once / findall / setup_call_cleanup / nested-meta cases.
 
 **Validation:**
 

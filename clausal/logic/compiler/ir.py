@@ -306,6 +306,22 @@ class MetaCall(GoalOp):
     Backends pattern-match on ``kind`` to lower.  The open ``dict``
     shape lets D5 expand coverage one meta-kind at a time without
     rewriting this class.
+
+    **Transitional shape (D5f → E).**  The schema above describes
+    the *ideal* shape that E will tighten to.  Today the
+    ``"inner" / "call" / "setup" / "cleanup" / "cond" / "action"``
+    /etc. positions documented as ``GoalOp`` actually carry **raw
+    Term** (the unconverted body-goal term) — the lowering forwards
+    them straight to legacy ``_compile_*`` helpers which call
+    ``_dispatch_goal`` themselves, so reaching for ``GoalOp`` here
+    would force a redundant convert / re-convert dance.
+
+    For walks that need to *see* the nested goals (E's analyses,
+    in particular), use :func:`walk_goal_ops_deep` rather than
+    :func:`walk_goal_ops` — the deep walker consults
+    :data:`META_GOAL_POSITIONS` and lazily converts the raw-term
+    inners through ``terms_to_goalop._convert`` so the visitor
+    sees a proper GoalOp tree.
     """
     kind: MetaKind
     args: dict[str, Any]
@@ -385,6 +401,13 @@ def walk_goal_ops(ir: GoalOp, visit: Callable[[GoalOp], None]) -> None:
     The callback is read-only by convention (walkers do not replace
     nodes); rewrite passes use a dedicated ``map_goal_ops`` helper
     that will land with D6 when optimisation passes need it.
+
+    **Meta-call inner goals.**  ``MetaCall.args`` carries raw terms
+    today (see :class:`MetaCall` for the transitional-shape note);
+    this walker only descends into args entries that are *already*
+    :class:`GoalOp` instances or lists thereof.  Goal-position raw
+    terms (``once``'s ``"inner"`` etc.) are skipped.  Use
+    :func:`walk_goal_ops_deep` for analyses that need to see them.
     """
     visit(ir)
     match ir:
@@ -412,6 +435,103 @@ def walk_goal_ops(ir: GoalOp, visit: Callable[[GoalOp], None]) -> None:
             pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Meta-call inner-goal manifest (Slice E precursor)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# For each ``MetaKind``, the tuple of arg-dict keys whose values
+# represent *body goals* (callable / re-dispatched as goals at
+# lowering time).  Other arg positions carry term operands
+# (templates, bags, counters, error vars).
+#
+# :func:`walk_goal_ops_deep` consults this manifest to descend into
+# meta-call inners, lazily converting the raw term at each goal
+# position through ``terms_to_goalop._convert`` so the visitor sees
+# a proper GoalOp tree.  E's analyses use the deep walker so they
+# can reason about nested ``SubCall`` / ``Unify`` / etc.
+META_GOAL_POSITIONS: dict[str, tuple[str, ...]] = {
+    "once":                 ("inner",),
+    "call_nth":             ("inner",),
+    "count_all":            ("inner",),
+    "setup_call_cleanup":   ("setup", "call", "cleanup"),
+    "call_cleanup":         ("call", "cleanup"),
+    "freeze":               ("inner",),
+    "when":                 ("inner",),
+    "findall":              ("inner",),
+    "bagof":                ("inner",),
+    "setof":                ("inner",),
+    "catch":                ("inner", "recovery"),
+    "catch_error":          ("inner",),
+    "catch_recover":        ("inner", "recovery"),
+    "forall":               ("cond", "action"),
+    # ``naf_tabled`` carries the tabled call as a raw ``Call`` term,
+    # not a goal in the body sense — lowering forwards it directly
+    # to ``_compile_tabled_naf_simple`` rather than re-dispatching.
+    # The deep walker treats it the same as the wrapping ``MetaCall``
+    # for analysis purposes (the call would be picked up at the
+    # outer SubCall level once D7c arrives — see
+    # ``terms_to_goalop`` for the open question).
+}
+
+
+def walk_goal_ops_deep(
+    ir: GoalOp,
+    visit: Callable[[GoalOp], None],
+    db: Any = None,
+) -> None:
+    """Like :func:`walk_goal_ops` but descends into meta-call inners.
+
+    For each :class:`MetaCall` op visited, the goal-position args
+    listed in :data:`META_GOAL_POSITIONS` are pulled out of the
+    args dict and lazily converted to GoalOp via
+    ``terms_to_goalop._convert``, then walked recursively.
+
+    *db* is forwarded to ``_convert`` for kwarg-bearing
+    :class:`SubCall` normalisation; pass the live database when
+    calling on bodies that may contain such calls.  Without *db*,
+    ``_convert`` falls back via ``NotImplementedError`` on
+    kwarg-bearing inners and the deep walker silently skips them
+    (matching the D4 fallback contract).
+
+    Use this walker for analyses that need a complete view of all
+    nested goals — E's optimisation passes, for instance.  Most
+    existing analyses iterate ``ir.ops`` directly because they only
+    care about top-level conjunction members and the legacy
+    detectors had the same limitation; those should stay on
+    :func:`walk_goal_ops` until they actually need the recursion.
+    """
+    visit(ir)
+    match ir:
+        case Sequence(ops=ops) | Alternate(ops=ops):
+            for child in ops:
+                walk_goal_ops_deep(child, visit, db=db)
+        case Negate(op=child):
+            walk_goal_ops_deep(child, visit, db=db)
+        case Branch(test=t, then=th, else_=e):
+            walk_goal_ops_deep(t, visit, db=db)
+            walk_goal_ops_deep(th, visit, db=db)
+            walk_goal_ops_deep(e, visit, db=db)
+        case MetaCall(kind=kind, args=margs):
+            from .terms_to_goalop import _convert
+            for key in META_GOAL_POSITIONS.get(kind, ()):
+                if key not in margs:
+                    continue
+                inner = margs[key]
+                if isinstance(inner, GoalOp):
+                    # Already a GoalOp (post-E schema or a
+                    # caller-provided GoalOp).  Walk directly.
+                    walk_goal_ops_deep(inner, visit, db=db)
+                    continue
+                try:
+                    inner_op = _convert(inner, db)
+                except NotImplementedError:
+                    continue
+                walk_goal_ops_deep(inner_op, visit, db=db)
+        case _:
+            pass
+
+
 __all__ = [
     # Operand aliases
     "Term", "ArithExpr", "FDOp", "ReifiedKind", "MetaKind",
@@ -428,5 +548,7 @@ __all__ = [
     # Low-level
     "Fail", "PyThunkOp", "ListPatternUnify",
     # Traversal
-    "walk_goal_ops",
+    "walk_goal_ops", "walk_goal_ops_deep",
+    # Meta-call manifest (Slice E precursor)
+    "META_GOAL_POSITIONS",
 ]
