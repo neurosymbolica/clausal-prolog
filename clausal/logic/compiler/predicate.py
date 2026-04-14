@@ -450,6 +450,20 @@ def _build_predicate_trampoline_funcdef(
         type_comment=None,
         **_EXTRA_FUNCDEF,
     )
+    # Slice F3+F4: Phase 6 post invariants — README §10 #3 and #4.
+    # F3 (mark/undo paired) catches emitter regressions that allocate
+    # a trail mark without consuming it, which would silently leak
+    # trail entries on backtracking.  F4 (DONE yield) catches a
+    # trampoline funcdef built with emit_done=True but missing the
+    # terminal ``yield (parent, _DONE)`` — without it the driver
+    # loop never sees the termination signal and hangs.
+    from .invariants import (
+        assert_mark_undo_paired,
+        assert_trampoline_done_yield_present,
+    )
+    assert_mark_undo_paired(func_def)
+    if emit_done:
+        assert_trampoline_done_yield_present(func_def)
     ast.fix_missing_locations(func_def)
     return func_def
 

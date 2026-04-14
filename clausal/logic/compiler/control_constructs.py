@@ -258,8 +258,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k_stmts):
     """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup."""
     from .goal_shallow import _dispatch_goal
-    trail_name = ctx.trail_name
-    mark_var = ctx.fresh("_scc_m")
+    trail_name = ctx.trail_name  # noqa: F841 — kept for symmetry with sibling helpers
     setup_gen = ctx.fresh("_scc_setup")
     ok_var = ctx.fresh("_scc_ok")
     call_gen = ctx.fresh("_scc_call")
@@ -341,8 +340,13 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
         orelse=[],
     )
 
+    # Note: an earlier emission allocated a ``_scc_m = trail.mark()``
+    # snapshot here that was never consumed by any ``trail.undo``.
+    # Slice F3's mark/undo invariant flagged it as dead (no observable
+    # behaviour change from removal — the snapshot was written but
+    # never read).  setup / call / cleanup do their own trail
+    # management within their respective sub-generators.
     return [
-        _assign_mark(mark_var, trail_name),
         setup_fn,
         _assign(ok_var, ast.Constant(value=False)),
         setup_loop,

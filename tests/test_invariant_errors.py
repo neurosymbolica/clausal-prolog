@@ -18,14 +18,65 @@ from __future__ import annotations
 
 import pytest
 
+import ast
+
 from clausal.logic.compiler.invariants import (
     InvariantError,
     assert_body_vars_preallocated,
     assert_call_targets_resolved,
+    assert_mark_undo_paired,
+    assert_trampoline_done_yield_present,
 )
 from clausal.logic.database import Database
 from clausal.logic.variables import Var
 from clausal.terms import Unify
+
+
+def _funcdef(name: str, body: list) -> ast.FunctionDef:
+    """Build a minimal FunctionDef with *body* and *name*."""
+    fd = ast.FunctionDef(
+        name=name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=body or [ast.Pass()],
+        decorator_list=[], returns=None, type_comment=None,
+    )
+    ast.fix_missing_locations(fd)
+    return fd
+
+
+def _mark(name: str) -> ast.Assign:
+    """``<name> = trail.mark()`` synthetic AST."""
+    return ast.Assign(
+        targets=[ast.Name(id=name, ctx=ast.Store())],
+        value=ast.Call(
+            func=ast.Attribute(value=ast.Name(id="trail", ctx=ast.Load()),
+                               attr="mark", ctx=ast.Load()),
+            args=[], keywords=[],
+        ),
+    )
+
+
+def _undo(name: str) -> ast.Expr:
+    """``trail.undo(<name>)`` synthetic AST."""
+    return ast.Expr(value=ast.Call(
+        func=ast.Attribute(value=ast.Name(id="trail", ctx=ast.Load()),
+                           attr="undo", ctx=ast.Load()),
+        args=[ast.Name(id=name, ctx=ast.Load())], keywords=[],
+    ))
+
+
+def _yield_done(parent: str = "parent") -> ast.Expr:
+    """``yield (<parent>, _DONE)`` synthetic AST."""
+    return ast.Expr(value=ast.Yield(value=ast.Tuple(
+        elts=[
+            ast.Name(id=parent, ctx=ast.Load()),
+            ast.Name(id="_DONE", ctx=ast.Load()),
+        ],
+        ctx=ast.Load(),
+    )))
 
 
 def _ctx(var_context: dict):
@@ -91,6 +142,63 @@ def test_call_targets_resolved_skips_dotted_names():
     base_globals: dict = {}
     # Should not raise even with a real db — dotted names are skipped.
     assert_call_targets_resolved(targets, base_globals, db=Database())
+
+
+# ── F3: assert_mark_undo_paired ─────────────────────────────────────────────
+
+
+def test_mark_undo_paired_passes_when_balanced():
+    fd = _funcdef("ok", [_mark("_m0"), _undo("_m0")])
+    assert_mark_undo_paired(fd)
+
+
+def test_mark_undo_paired_fires_on_orphan_mark():
+    fd = _funcdef("bad", [_mark("_m0")])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_mark_undo_paired(fd)
+    msg = str(exc_info.value)
+    assert "Phase 6 post" in msg
+    assert "mark/undo-paired" in msg
+    assert "_m0" in msg
+    assert "assigned but never undone" in msg
+
+
+def test_mark_undo_paired_fires_on_orphan_undo():
+    fd = _funcdef("bad", [_undo("_stale")])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_mark_undo_paired(fd)
+    assert "_stale" in str(exc_info.value)
+    assert "never marked" in str(exc_info.value)
+
+
+def test_mark_undo_paired_recurses_into_nested_funcdef():
+    """Marks inside a nested funcdef pair within that scope."""
+    inner = _funcdef("inner_bad", [_mark("_m0")])
+    fd = _funcdef("outer", [inner, _mark("_m1"), _undo("_m1")])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_mark_undo_paired(fd)
+    # The nested orphan should be reported, not the outer balanced pair.
+    assert "_m0" in str(exc_info.value)
+
+
+# ── F4: assert_trampoline_done_yield_present ────────────────────────────────
+
+
+def test_done_yield_present_passes_when_emitted():
+    fd = _funcdef("ok", [_yield_done()])
+    assert_trampoline_done_yield_present(fd)
+
+
+def test_done_yield_present_fires_when_missing():
+    fd = _funcdef("bad", [
+        ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+    ])
+    with pytest.raises(InvariantError) as exc_info:
+        assert_trampoline_done_yield_present(fd)
+    msg = str(exc_info.value)
+    assert "Phase 6 post" in msg
+    assert "trampoline-DONE-yield" in msg
+    assert "bad" in msg
 
 
 def test_call_targets_resolved_fires_on_missing_non_dotted_name():

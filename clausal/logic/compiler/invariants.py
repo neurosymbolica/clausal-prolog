@@ -136,8 +136,137 @@ def assert_call_targets_resolved(
         )
 
 
+def assert_mark_undo_paired(funcdef: Any) -> None:
+    """README §10 invariant 3 — Phase 6 post.
+
+    Every ``<name> = trail.mark()`` assignment in the generated
+    funcdef must have at least one matching ``trail.undo(<name>)``
+    call.  This is a balance check, not a flow-sensitive proof: it
+    catches "mark assigned but never undone" but not "mark not
+    undone on every code path."  The emitting helpers
+    (``_assign_mark`` + ``_undo_stmt``) emit pairs by construction;
+    the assertion locks in that they are paired *somewhere* and
+    catches any future emitter that allocates a mark without ever
+    consuming it.
+
+    The opposite direction (``trail.undo`` of a name that was never
+    marked) is also checked — that would indicate an emitter using
+    a stale name.
+
+    Walks the funcdef body recursively because marks may live inside
+    nested ``If``, ``For``, ``While``, ``Try``, ``FunctionDef``
+    (NAF mini-generators), etc.  Marks defined inside an inner
+    funcdef are paired *within* that inner scope, so the walk
+    accumulates per-scope.
+    """
+    import ast as _ast
+    issues = _check_mark_undo_pairing(funcdef.body)
+    if issues:
+        sample = issues[:5]
+        raise InvariantError(
+            "Phase 6 post: mark/undo-paired invariant violated. "
+            f"{len(issues)} mark/undo imbalance(s) in funcdef "
+            f"{funcdef.name!r}.  Marks emitted via ``_assign_mark`` "
+            "must be consumed by ``_undo_stmt`` in the same scope; "
+            "any miss would leak trail entries on backtracking and "
+            "produce wrong solutions silently.\n"
+            f"  sample: {sample}"
+        )
+
+
+def _check_mark_undo_pairing(stmts: list) -> list[str]:
+    """Recursively check mark/undo balance per lexical scope.
+
+    Returns a list of human-readable issue descriptions; empty list
+    means OK.  Each :class:`ast.FunctionDef` introduces a new scope
+    (NAF mini-generators emit funcdefs whose marks are local).
+    """
+    import ast as _ast
+    marks: set[str] = set()
+    undos: set[str] = set()
+    nested_issues: list[str] = []
+
+    for node in _ast.walk(_make_module(stmts)):
+        if isinstance(node, _ast.FunctionDef) and node.body is not stmts:
+            # Recurse into nested funcdef as a separate scope.
+            nested_issues.extend(_check_mark_undo_pairing(node.body))
+            continue
+        if isinstance(node, _ast.Assign):
+            if (
+                len(node.targets) == 1
+                and isinstance(node.targets[0], _ast.Name)
+                and isinstance(node.value, _ast.Call)
+                and isinstance(node.value.func, _ast.Attribute)
+                and node.value.func.attr == "mark"
+            ):
+                marks.add(node.targets[0].id)
+        elif isinstance(node, _ast.Call):
+            if (
+                isinstance(node.func, _ast.Attribute)
+                and node.func.attr == "undo"
+                and len(node.args) == 1
+                and isinstance(node.args[0], _ast.Name)
+            ):
+                undos.add(node.args[0].id)
+
+    issues = list(nested_issues)
+    for m in marks - undos:
+        issues.append(f"mark {m!r} assigned but never undone")
+    for u in undos - marks:
+        issues.append(f"undo({u!r}) called but name was never marked")
+    return issues
+
+
+def _make_module(stmts: list):
+    """Wrap *stmts* in a synthetic Module so ``ast.walk`` has a root."""
+    import ast as _ast
+    return _ast.Module(body=stmts, type_ignores=[])
+
+
+def assert_trampoline_done_yield_present(funcdef: Any) -> None:
+    """README §10 invariant 4 — Phase 6 post (trampoline only).
+
+    Every trampoline-protocol funcdef built with ``emit_done=True``
+    must contain at least one ``yield (X, _DONE)`` expression.  The
+    runtime contract is: a trampoline generator yields
+    ``(parent, _DONE)`` exactly once after exhausting all
+    solutions, which the calling generator detects to terminate
+    its ``while _st is not _DONE`` loop.
+
+    Bucket sub-functions (``emit_done=False``) are consumed via
+    ``yield from`` by an outer wrapper that emits its own DONE,
+    and so legitimately have no terminal DONE yield — the caller
+    is responsible for invoking this assertion only when
+    ``emit_done`` was True.
+    """
+    import ast as _ast
+    found = False
+    for node in _ast.walk(funcdef):
+        if not isinstance(node, _ast.Yield):
+            continue
+        v = node.value
+        if (
+            isinstance(v, _ast.Tuple)
+            and len(v.elts) == 2
+            and isinstance(v.elts[1], _ast.Name)
+            and v.elts[1].id == "_DONE"
+        ):
+            found = True
+            break
+    if not found:
+        raise InvariantError(
+            "Phase 6 post: trampoline-DONE-yield invariant violated. "
+            f"Funcdef {funcdef.name!r} was built with emit_done=True "
+            "but contains no ``yield (..., _DONE)`` expression. "
+            "Without it the trampoline driver loop never sees the "
+            "termination signal and hangs."
+        )
+
+
 __all__ = [
     "InvariantError",
     "assert_body_vars_preallocated",
     "assert_call_targets_resolved",
+    "assert_mark_undo_paired",
+    "assert_trampoline_done_yield_present",
 ]
