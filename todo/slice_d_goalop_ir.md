@@ -177,27 +177,23 @@ diff stays green throughout.  Coverage progresses toward 100%.
 - **D5 `_META_NAMES` safety-net frozenset** in `terms_to_goalop`
   duplicates the explicit meta arms.  Delete alongside legacy in D7.
 
-### D5h (suggested, optional). Tabled-NAF
+### D5h. Tabled-NAF — ✅ done
 
-Two deferred shapes still fall back:
+- `Not(Call(tabled_pred))` → `MetaCall(kind="naf_tabled", args={"call": Call})`
+  (Option A).  Shared lowering in `_lower_meta_call` forwards to
+  `_compile_tabled_naf_simple`.
+- `IfExpr(test=Call(tabled_pred), ...)` → `Branch(test=SubCall(...),
+  then=..., else_=..., reified_test=None, tabled_naf=True)`.
+  Strategy-specific Branch arms in `lower_python_{shallow,trampoline}`
+  reconstruct the `_naf_tabled(fname, arity, [args...], trail,
+  _table_store)` call from the `SubCall` fields when `tabled_naf` is
+  true.  Byte-identical to legacy `_compile_general_ite_{shallow,
+  trampoline}` under `use_tabled_naf`.
 
-- `Not(Call(tabled_pred))` — `terms_to_goalop`'s `Not` arm explicitly
-  defers via `_not_yet` when `_is_tabled_naf(op, db)` matches.  Legacy
-  routes through `_compile_tabled_naf_simple`.
-- `IfExpr(test=Call(tabled_pred), ...)` — similar deferral in the
-  `IfExpr` arm.  Legacy general-ITE has a bespoke `_naf_tabled` branch.
-
-Pick the shape:
-- **Option A**: add `MetaCall(kind="naf_tabled", args={...})` + lowering
-  that calls `_compile_tabled_naf_simple`.  Consistent with D5f.
-- **Option B**: add a `Negate.tabled: bool` hint flag.  Lowering dispatches
-  on the flag.  Less uniform but makes the IR shape identical to the
-  non-tabled case.
-
-These are rare in the corpus (none of the current 10 fixtures exercise
-them with a real tabled db), so D5h is not blocking D6.  It IS blocking
-D7 — the "use_ir_path default True" flip will fail on any real program
-using tabled NAF.
+Validated: `CLAUSAL_IR_PATH=1` full suite passes (10470 + 90 skipped),
+including `test_wfs`, `test_tabling`, `test_slg_termination`, and the
+tabled-ITE tests in `test_reified_ite`.  The D4 AST-diff harness now
+catches tabled-NAF drift in addition to the D2–D5g subset.
 
 ### D6. Move optimisation passes to operate on `GoalOp`
 

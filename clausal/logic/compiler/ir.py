@@ -79,6 +79,7 @@ MetaKind = Literal[
     "freeze", "when", "findall", "bagof", "setof",
     "throw", "catch", "catch_error", "catch_recover",
     "forall", "halt",
+    "naf_tabled",
 ]
 """Closed enumeration of meta-predicate kinds.  Each kind has a fixed
 ``args`` schema documented on ``MetaCall`` — see ``terms_to_goalop``
@@ -206,11 +207,22 @@ class Branch(GoalOp):
 
     ``reified_test is None`` means general single-evaluation ITE
     (sub-generator for the test; ``_found`` flag gates ``else_``).
+
+    ``tabled_naf`` — set when ``reified_test is None`` and ``test`` is
+    a :class:`SubCall` to a tabled predicate.  The general-ITE lowering
+    then replaces the ``if not _found`` else-guard with a
+    ``_naf_tabled(...)`` call, matching legacy
+    ``_compile_general_ite_{shallow,trampoline}`` under
+    ``use_tabled_naf``.  WFS-sound: required so cycles through negation
+    delay-and-resume correctly.  Must be ``False`` when
+    ``reified_test is not None`` (reifiable tests never target tabled
+    predicates in practice; legacy does not emit that combination).
     """
     test: GoalOp
     then: GoalOp
     else_: GoalOp
     reified_test: Union[ReifiedKind, None] = None
+    tabled_naf: bool = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +297,11 @@ class MetaCall(GoalOp):
     - ``catch_recover``:        ``{"inner": GoalOp, "error": Term, "recovery": GoalOp}``
     - ``forall``:               ``{"cond": GoalOp, "action": GoalOp}``
     - ``halt``:                 ``{"code": Term | None}``
+    - ``naf_tabled``:           ``{"call": Term}`` — WFS-sound negation
+      of a call to a tabled predicate.  ``call`` is the raw
+      :class:`~clausal.terms.Call` node; lowering forwards it to
+      ``_compile_tabled_naf_simple`` which handles kwargs signature
+      normalisation itself.
 
     Backends pattern-match on ``kind`` to lower.  The open ``dict``
     shape lets D5 expand coverage one meta-kind at a time without

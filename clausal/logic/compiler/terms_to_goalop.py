@@ -156,16 +156,19 @@ def _convert(goal: Any, db: Any) -> GoalOp:
         case nodes.Or(left=l, right=r):
             return Alternate(ops=[_convert(l, db), _convert(r, db)])
 
-        # ``Not(op)`` → ``Negate(op)``.  Tabled NAF (``Not`` of a call to
-        # a tabled predicate) routes through
+        # ``Not(op)`` → ``Negate(op)``.  Tabled NAF (``Not`` of a call
+        # to a tabled predicate) routes through
         # ``_compile_tabled_naf_simple`` in the legacy path rather than
-        # the inline NAF that ``lower(Negate)`` emits, so defer those
-        # cases to D5f's ``MetaCall`` coverage.  Non-tabled ``Not(Call)``
+        # the inline NAF that ``lower(Negate)`` emits.  Slice D5h maps
+        # those to :class:`MetaCall` with ``kind="naf_tabled"`` (Option
+        # A from ``todo/slice_d_goalop_ir.md``) — semantically distinct
+        # from standard NAF (WFS delay semantics), so a dedicated kind
+        # rather than a hint on ``Negate``.  Non-tabled ``Not(Call)``
         # is fine — ``SubCall`` lowering + ``Negate`` lowering compose
         # to the same inline-NAF AST the legacy dispatcher emits.
         case nodes.Not(operand=op):
             if isinstance(op, nodes.Call) and _is_tabled_naf(op, db):
-                _not_yet(goal)
+                return MetaCall(kind="naf_tabled", args={"call": op})
             return Negate(op=_convert(op, db))
 
         # ``IfExpr(test, body, orelse)`` → ``Branch``.  ``reified_test``
@@ -176,14 +179,19 @@ def _convert(goal: Any, db: Any) -> GoalOp:
         # exercises a bespoke ``_naf_tabled`` branch in the legacy
         # general-ITE compiler; defer those to D5f.
         case nodes.IfExpr(test=test, body=then, orelse=else_):
-            if isinstance(test, nodes.Call) and _is_tabled_naf(test, db):
-                _not_yet(goal)
-            kind = _REIFIED_KIND[type(test)] if _is_reifiable(test) else None
+            tabled = (
+                isinstance(test, nodes.Call) and _is_tabled_naf(test, db)
+            )
+            kind = (
+                None if tabled
+                else (_REIFIED_KIND[type(test)] if _is_reifiable(test) else None)
+            )
             return Branch(
                 test=_convert(test, db),
                 then=_convert(then, db),
                 else_=_convert(else_, db),
                 reified_test=kind,
+                tabled_naf=tabled,
             )
 
         # ── Meta-predicate calls (Slice D5f) ────────────────────────

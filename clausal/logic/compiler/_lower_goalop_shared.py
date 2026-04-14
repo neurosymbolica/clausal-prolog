@@ -328,8 +328,14 @@ def _lower_meta_call(
         _compile_find_all_core,
         _compile_throw, _compile_catch,
     )
+    from .tabled_naf import _compile_tabled_naf_simple
     from ._ast_helpers import _name, _call
     from .terms_to_ast import term_to_ast_expr
+    # ── WFS-sound NAF of a call to a tabled predicate.  The legacy
+    # ``_compile_tabled_naf_simple`` takes the raw :class:`Call` term
+    # and handles kwargs signature normalisation itself.
+    if kind == "naf_tabled":
+        return _compile_tabled_naf_simple(ctx, margs["call"], k_stmts)
     # ``forall`` rewrites to ``Not(And(cond, Not(action)))`` and
     # re-dispatches through the shallow goal compiler, matching the
     # legacy ``forall`` arm in both strategy dispatchers.

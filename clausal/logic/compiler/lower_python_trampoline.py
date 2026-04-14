@@ -23,7 +23,7 @@ from __future__ import annotations
 import ast
 from typing import NoReturn
 
-from clausal.logic.compiler.ir import Branch, GoalOp, Negate
+from clausal.logic.compiler.ir import Branch, GoalOp, Negate, SubCall
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.compiler._ast_helpers import (
     _EXTRA_FUNCDEF,
@@ -50,7 +50,8 @@ def lower(
         # by ``lower_shared``.)  Mirrors legacy
         # ``_compile_general_ite_trampoline`` byte-for-byte.  Tabled-NAF
         # handling isn't needed here until D5e lands Call → SubCall.
-        case Branch(test=t_op, then=th_op, else_=el_op, reified_test=None):
+        case Branch(test=t_op, then=th_op, else_=el_op,
+                    reified_test=None, tabled_naf=tnaf):
             from clausal.logic.compiler.goal_trampoline import _yield_step_stmt
             trail_name = ctx.trail_name
             cond_fn_name = ctx.fresh("_ite_cond_fn")
@@ -159,12 +160,36 @@ def lower(
                 ),
                 _undo_stmt(true_mark, trail_name),
             ]
-            false_block = [
-                _if(
-                    ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
-                    else_stmts,
-                ),
-            ]
+            if tnaf:
+                assert isinstance(t_op, SubCall)
+                from clausal.logic.compiler.terms_to_ast import (
+                    term_to_ast_expr,
+                )
+                arg_exprs = [
+                    term_to_ast_expr(a, ctx.var_context, eval_arith=False)
+                    for a in t_op.args
+                ]
+                naf_call = _call(
+                    _name("_naf_tabled"),
+                    ast.Constant(t_op.fname),
+                    ast.Constant(t_op.arity),
+                    ast.List(elts=arg_exprs, ctx=ast.Load()),
+                    _name(trail_name),
+                    _name("_table_store"),
+                )
+                naf_mark = ctx.fresh(_MARK_PREFIX)
+                false_block = [
+                    _assign_mark(naf_mark, trail_name),
+                    _if(naf_call, else_stmts),
+                    _undo_stmt(naf_mark, trail_name),
+                ]
+            else:
+                false_block = [
+                    _if(
+                        ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
+                        else_stmts,
+                    ),
+                ]
             return [cond_fn_def] + true_block + false_block
 
         # ── Negation-as-failure — trampoline form.
