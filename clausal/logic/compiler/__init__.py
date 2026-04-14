@@ -99,8 +99,6 @@ from .tro import (  # noqa: F401
     _is_deterministic_goal,
 )
 
-from .destructive_reuse import _find_destructive_reuse_goals  # noqa: F401
-
 from .control_constructs import (  # noqa: F401
     _compile_goal_lambda,
     _flatten_conjunction,

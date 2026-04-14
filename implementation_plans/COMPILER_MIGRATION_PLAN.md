@@ -649,7 +649,7 @@ bypasses.
 | E6a | Joint-bucket hint conduit | ✅ |
 | E6b | Retire `_inject_bucket_refs_trampoline` | ✅ |
 | E6c | Retire `_compile_tro_body` (keep `_compile_tro_tail`) | ✅ |
-| E6d | Retire DR preprocess + legacy term-walking analyses | ⏳ |
+| E6d | Retire DR preprocess + legacy term-walking analyses | ✅ |
 
 Each pass ships with round-trip (idempotence), no-op (ref-equal
 on empty plan), hashability (frozen dataclass), and legacy-

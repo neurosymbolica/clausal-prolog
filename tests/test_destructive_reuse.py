@@ -23,8 +23,27 @@ import pytest
 from clausal.logic.compiler import (
     DONE,
     compile_predicate_trampoline,
-    _find_destructive_reuse_goals,
 )
+
+
+def _find_destructive_reuse_goals(clause, db=None):
+    """Test helper: E6d-β-style DR eligibility via the uniform
+    ``optimisations.destructive_reuse`` IR analyser.  Replaces the retired
+    term-walking ``destructive_reuse._find_destructive_reuse_goals``.
+
+    For the simple body shapes exercised by this test file, IR ``ops``
+    indices and the pre-retirement flat-body indices coincide 1:1 — the
+    retired helper's flatten step matches :func:`terms_to_goalop`'s
+    ``And`` / list / ``TupleLiteral`` flattening.  Returns ``set()`` when
+    the body shape is outside the IR subset (the retired helper likewise
+    returned the empty set on unsupported shapes)."""
+    from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
+    from clausal.logic.compiler.destructive_reuse import analyse_ir
+    try:
+        ir = terms_to_goalop(clause.body, db=db)
+    except NotImplementedError:
+        return set()
+    return analyse_ir(ir, clause.head)
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
