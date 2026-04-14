@@ -476,6 +476,7 @@ def compile_predicate_trampoline(
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
     pred_cls: "PredicateMeta | None" = None,
+    enabled_optimisations: "frozenset[str] | None" = None,
 ) -> Callable:
     """Compile all clauses into a trampoline tuple-protocol generator.
 
@@ -519,6 +520,13 @@ def compile_predicate_trampoline(
         db=_effective_db, var_context={}, trail_name=_TRAIL_PARAM_NAME,
         strategy=TrampolineStrategy(),
     )
+    # Slice E5b: per-optimisation toggle override.  ``None`` keeps the
+    # ctx default (all-on); a frozenset narrows the enabled set so that
+    # both the legacy bypasses (DR preprocess, ``_compile_tro_body``,
+    # ``_inject_bucket_refs_trampoline``) and the IR-side analyses
+    # short-circuit, surfacing un-optimised AST end-to-end.
+    if enabled_optimisations is not None:
+        ctx_template.enabled_optimisations = enabled_optimisations
 
     if body_compiler is None:
         body_compiler = _make_body_compiler_trampoline(
@@ -642,7 +650,11 @@ def compile_predicate_trampoline(
         # Phase 10d: inject bucket refs for statically-known call-site args.
         # Must run after _inject_resolved_targets (which populates base_globals
         # with callee predicate classes) but before building funcdef ASTs.
-        _inject_bucket_refs_trampoline(ctx_template, clauses, base_globals)
+        # Slice E5b: gated on ``call_site`` flag — when disabled, the map
+        # stays empty and both legacy ``_dispatch_call_trampoline`` and the
+        # IR SubCall lowering fall through to the general dispatch path.
+        if "call_site" in ctx_template.enabled_optimisations:
+            _inject_bucket_refs_trampoline(ctx_template, clauses, base_globals)
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
@@ -655,7 +667,10 @@ def compile_predicate_trampoline(
             )
             _idx_tro_indices: frozenset[int] | None = None
             _tro_state_obj = None
-            if ctx_template.strategy.supports_tro and not _is_tabled:
+            if (
+                ctx_template.strategy.supports_tro and not _is_tabled
+                and "tro" in ctx_template.enabled_optimisations
+            ):
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
                     if _detect_tro_clause(functor, arity, cl, db=db)
@@ -917,7 +932,10 @@ def compile_predicate_trampoline(
                 db is not None and db.is_tabled(functor, arity)
             )
             tro_indices: frozenset[int] | None = None
-            if ctx_template.strategy.supports_tro and not _is_tabled:
+            if (
+                ctx_template.strategy.supports_tro and not _is_tabled
+                and "tro" in ctx_template.enabled_optimisations
+            ):
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
                     if _detect_tro_clause(functor, arity, cl, db=_effective_db)

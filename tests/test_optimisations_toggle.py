@@ -14,7 +14,12 @@ clearing a flag short-circuits the matching IR-side analyse.
 from __future__ import annotations
 
 
-def test_default_enabled_optimisations_all_three():
+def test_default_enabled_optimisations_all_three(monkeypatch):
+    # E5b: the default is env-var-overridable (``CLAUSAL_DISABLE_OPT``).
+    # Clear the env var so the dataclass field default factory returns
+    # the all-on set even when this test runs under a sweep that
+    # disables an optimisation.
+    monkeypatch.delenv("CLAUSAL_DISABLE_OPT", raising=False)
     from clausal.logic.compiler.compile_ctx import CompilationContext
     ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
     assert ctx.enabled_optimisations == frozenset(
@@ -24,13 +29,15 @@ def test_default_enabled_optimisations_all_three():
 
 def test_replace_overrides_enabled_optimisations():
     from clausal.logic.compiler.compile_ctx import CompilationContext
-    ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
+    explicit = frozenset({"tro", "destructive_reuse", "call_site"})
+    ctx = CompilationContext(
+        db=None, var_context={}, trail_name="trail",
+        enabled_optimisations=explicit,
+    )
     ctx2 = ctx.replace(enabled_optimisations=frozenset({"tro"}))
     assert ctx2.enabled_optimisations == frozenset({"tro"})
     # Original is unchanged.
-    assert ctx.enabled_optimisations == frozenset(
-        {"tro", "destructive_reuse", "call_site"}
-    )
+    assert ctx.enabled_optimisations == explicit
 
 
 def test_disabling_call_site_skips_ir_apply():

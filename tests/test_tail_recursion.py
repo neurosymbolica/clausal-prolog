@@ -484,6 +484,17 @@ def _patch_sg(counting_cls, *pred_classes):
     return _restore
 
 
+def _tro_disabled() -> bool:
+    """Skip-helper for TRO observability tests under the E5b
+    ``CLAUSAL_DISABLE_OPT=tro`` per-optimisation suite sweep — these
+    tests assert the optimisation actually fires."""
+    import os
+    return "tro" in {
+        s.strip() for s in os.environ.get("CLAUSAL_DISABLE_OPT", "").split(",")
+    }
+
+
+@unittest.skipIf(_tro_disabled(), "TRO disabled via CLAUSAL_DISABLE_OPT")
 class TestTroAllocations(unittest.TestCase):
     """Test that TRO reduces StepGenerator allocations."""
 
@@ -652,6 +663,7 @@ class TestTroAllocations(unittest.TestCase):
 # ── Integration with .clausal import hook ────────────────────────────────────
 
 
+@unittest.skipIf(_tro_disabled(), "TRO disabled via CLAUSAL_DISABLE_OPT")
 class TestTroImportHook(unittest.TestCase):
     """Test TRO via the .clausal import hook."""
 
@@ -717,6 +729,7 @@ class TestTroImportHook(unittest.TestCase):
 # ── Phase 2: Indexed TRO, StarUnpack, runtime ground-check ──────────────────
 
 
+@unittest.skipIf(_tro_disabled(), "TRO disabled via CLAUSAL_DISABLE_OPT")
 class TestTroGroundnessDispatch(unittest.TestCase):
     """Test TRO across groundness-dispatch bucket boundaries."""
 

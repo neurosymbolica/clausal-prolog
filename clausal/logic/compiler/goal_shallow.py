@@ -960,14 +960,26 @@ def _make_body_compiler_impl(
     time.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        goals = ctx_template.strategy.preprocess_clause(clause, db=db)
+        # Slice E5b: when ``destructive_reuse`` is disabled, skip the
+        # legacy DR preprocess so legacy and IR fold both see the
+        # original (un-renamed) body — neither path emits a
+        # ``_dr_<name>__<arity>`` call.
+        _dr_enabled = (
+            ctx_template.strategy.supports_destructive_reuse
+            and "destructive_reuse" in ctx_template.enabled_optimisations
+        )
+        if _dr_enabled:
+            goals = ctx_template.strategy.preprocess_clause(clause, db=db)
+        else:
+            from .destructive_reuse import _flatten_and_goals
+            goals = _flatten_and_goals(clause.body)
         # Slice E4b: keep the un-DR-rewritten body around for the IR
         # path.  Legacy fold consumes the rewritten ``goals`` (SubCall
         # fname already ``_dr_…``); IR lowering consumes the flattened
         # original body + hints and renames in the SubCall arm.  Both
         # emit the same AST under the D4/D7b harness.
         original_goals: list | None = None
-        if ctx_template.strategy.supports_destructive_reuse:
+        if _dr_enabled:
             from .destructive_reuse import _flatten_and_goals
             original_goals = _flatten_and_goals(clause.body)
         ctx = ctx_template.replace(

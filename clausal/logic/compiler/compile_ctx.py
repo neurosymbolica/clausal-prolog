@@ -75,6 +75,28 @@ if TYPE_CHECKING:
     from .strategy import Strategy
 
 
+_ALL_OPTIMISATIONS: frozenset[str] = frozenset(
+    {"tro", "destructive_reuse", "call_site"}
+)
+
+
+def _default_enabled_optimisations() -> frozenset[str]:
+    """Default enabled-optimisations set for new ``CompilationContext``s.
+
+    Honours the ``CLAUSAL_DISABLE_OPT`` env var (comma-separated subset
+    of {``tro``, ``destructive_reuse``, ``call_site``}) so the
+    per-optimisation test sweep can run the full suite under each
+    individual disable without per-test plumbing.  Unknown names are
+    silently ignored.
+    """
+    import os
+    raw = os.environ.get("CLAUSAL_DISABLE_OPT", "")
+    if not raw:
+        return _ALL_OPTIMISATIONS
+    disabled = {s.strip() for s in raw.split(",") if s.strip()}
+    return _ALL_OPTIMISATIONS - disabled
+
+
 @dataclasses.dataclass
 class CompilationContext:
     db: Any  # Database | None — typed loosely to avoid circular import
@@ -165,9 +187,7 @@ class CompilationContext:
     # disabled flag actually surfaces un-optimised AST end-to-end, and
     # adds the per-optimisation test matrix.
     enabled_optimisations: frozenset = dataclasses.field(
-        default_factory=lambda: frozenset(
-            {"tro", "destructive_reuse", "call_site"}
-        )
+        default_factory=lambda: _default_enabled_optimisations()
     )
 
     # ── Slice E4c: TRO mode for the current clause-body compile ──────────
