@@ -41,6 +41,7 @@ from clausal.logic.compiler.ir import (
     FDOp,
     GoalOp,
     MemberIn,
+    MetaCall,
     Negate,
     ReifiedKind,
     Sequence,
@@ -50,12 +51,13 @@ from clausal.logic.compiler.ir import (
 )
 
 
-# Meta-predicate names that the legacy dispatcher routes to dedicated
-# ``_compile_*`` helpers (``_compile_catch``, ``_compile_once``, …).
-# Until D5f lands ``MetaCall`` coverage, a ``Call`` to one of these must
-# fall back to the legacy path rather than being converted to a plain
-# :class:`SubCall` (which would invoke it as an ordinary predicate and
-# diverge from the legacy AST).
+# Meta-predicate names that must never be converted to a plain
+# :class:`SubCall` — the legacy dispatcher routes them to dedicated
+# ``_compile_*`` helpers and we mirror that via explicit :class:`MetaCall`
+# arms below.  Kept as a frozenset safety net: if a ``Call`` with one of
+# these names doesn't match any explicit arm (wrong arity, unexpected
+# kwargs), we defer to legacy rather than silently compiling it as a
+# user predicate call.
 _META_NAMES: frozenset[str] = frozenset({
     "catch", "catch_error", "catch_recover", "forall",
     "throw", "halt",
@@ -174,14 +176,99 @@ def _convert(goal: Any, db: Any) -> GoalOp:
                 reified_test=kind,
             )
 
+        # ── Meta-predicate calls (Slice D5f) ────────────────────────
+        # Each arm mirrors the exact shape the legacy
+        # ``_compile_shared_meta_call`` + strategy-specific catch/forall
+        # dispatchers pattern-match.  Inner goals are passed through as
+        # raw terms (not recursively ``_convert``ed) because the
+        # :class:`MetaCall` lowering delegates to the existing
+        # ``_compile_*`` helpers — those recurse back into
+        # ``_dispatch_goal`` themselves, so converting here would make
+        # the legacy helpers the wrong tool for the job.  Future work
+        # (post-D7) may tighten ``MetaCall.args`` to carry ``GoalOp``
+        # children; see ``todo/slice_d_goalop_ir.md``.
+        case nodes.Call(func=nodes.LoadName(name="throw"),
+                        args=[term_arg], kwargs=[]):
+            return MetaCall(kind="throw", args={"term": term_arg})
+        case nodes.Call(func=nodes.LoadName(name="halt"),
+                        args=[], kwargs=[]):
+            return MetaCall(kind="halt", args={"code": None})
+        case nodes.Call(func=nodes.LoadName(name="halt"),
+                        args=[code_arg], kwargs=[]):
+            return MetaCall(kind="halt", args={"code": code_arg})
+        case nodes.Call(func=nodes.LoadName(name="once"),
+                        args=[inner], kwargs=[]):
+            return MetaCall(kind="once", args={"inner": inner})
+        case nodes.Call(func=nodes.LoadName(name="call_nth"),
+                        args=[inner, n_arg], kwargs=[]):
+            return MetaCall(kind="call_nth",
+                            args={"inner": inner, "n": n_arg})
+        case nodes.Call(func=nodes.LoadName(name="count_all"),
+                        args=[inner, count_arg], kwargs=[]):
+            return MetaCall(kind="count_all",
+                            args={"inner": inner, "count": count_arg})
+        case nodes.Call(func=nodes.LoadName(name="setup_call_cleanup"),
+                        args=[setup, call_g, cleanup], kwargs=[]):
+            return MetaCall(kind="setup_call_cleanup", args={
+                "setup": setup, "call": call_g, "cleanup": cleanup,
+            })
+        case nodes.Call(func=nodes.LoadName(name="call_cleanup"),
+                        args=[call_g, cleanup], kwargs=[]):
+            return MetaCall(kind="call_cleanup",
+                            args={"call": call_g, "cleanup": cleanup})
+        case nodes.Call(func=nodes.LoadName(name="freeze"),
+                        args=[x_arg, inner], kwargs=[]):
+            return MetaCall(kind="freeze",
+                            args={"var": x_arg, "inner": inner})
+        case nodes.Call(func=nodes.LoadName(name="when"),
+                        args=[cond, inner], kwargs=[]):
+            return MetaCall(kind="when",
+                            args={"cond": cond, "inner": inner})
+        case nodes.Call(func=nodes.LoadName(name="findall"),
+                        args=[template, inner, bag], kwargs=[]):
+            return MetaCall(kind="findall", args={
+                "template": template, "inner": inner, "bag": bag,
+            })
+        case nodes.Call(func=nodes.LoadName(name="bagof"),
+                        args=[template, inner, bag], kwargs=[]):
+            return MetaCall(kind="bagof", args={
+                "template": template, "inner": inner, "bag": bag,
+            })
+        case nodes.Call(func=nodes.LoadName(name="setof"),
+                        args=[template, inner, bag], kwargs=[]):
+            return MetaCall(kind="setof", args={
+                "template": template, "inner": inner, "bag": bag,
+            })
+        case nodes.Call(func=nodes.LoadName(name="catch"),
+                        args=[goal_arg, catcher, recovery], kwargs=[]):
+            return MetaCall(kind="catch", args={
+                "inner": goal_arg, "catcher": catcher, "recovery": recovery,
+            })
+        case nodes.Call(func=nodes.LoadName(name="catch_error"),
+                        args=[goal_arg, error_var], kwargs=[]):
+            return MetaCall(kind="catch_error", args={
+                "inner": goal_arg, "error": error_var,
+            })
+        case nodes.Call(func=nodes.LoadName(name="catch_recover"),
+                        args=[goal_arg, error_var, recovery], kwargs=[]):
+            return MetaCall(kind="catch_recover", args={
+                "inner": goal_arg, "error": error_var, "recovery": recovery,
+            })
+        case nodes.Call(func=nodes.LoadName(name="forall"),
+                        args=[cond, action], kwargs=[]):
+            return MetaCall(kind="forall",
+                            args={"cond": cond, "action": action})
+
         # ``Call(LoadName | LoadAttr)`` → ``SubCall``.  Meta-predicate
-        # names (``once``, ``catch``, ``findall``, …) are deferred to
-        # D5f so the legacy ``_compile_shared_meta_call`` arms keep
-        # owning those bodies.  Keyword arguments are normalised here
-        # (WK-4) using the predicate signature on ``db`` — when no
-        # signature is registered we fall back rather than guessing
-        # argument order.  Lambda hoisting stays in the lowering, so
-        # :class:`SubCall.args` carries the terms unchanged.
+        # names not captured by the explicit arms above (wrong arity,
+        # unexpected kwargs) fall through to ``_META_NAMES`` deferral
+        # below so the legacy path gets a shot rather than us silently
+        # compiling them as user predicate calls.  Keyword arguments on
+        # user predicates are normalised here (WK-4) using the predicate
+        # signature on ``db`` — when no signature is registered we fall
+        # back rather than guessing argument order.  Lambda hoisting
+        # stays in the lowering, so :class:`SubCall.args` carries the
+        # terms unchanged.
         case nodes.Call(func=func, args=call_args, kwargs=call_kwargs) \
                 if isinstance(func, (nodes.LoadName, nodes.LoadAttr)):
             if isinstance(func, nodes.LoadName):

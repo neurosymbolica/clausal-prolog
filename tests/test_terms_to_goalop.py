@@ -177,14 +177,44 @@ def test_subcall_from_loadattr_call():
     assert sc.fname == "mod.Pred" and sc.arity == 1 and sc.args == ["X"]
 
 
-def test_meta_call_name_defers_to_legacy():
-    # ``catch`` / ``once`` / ``findall`` etc. route through dedicated
-    # legacy helpers; D5f will cover them as ``MetaCall``.  Until then
-    # they must raise ``NotImplementedError`` so the D4 harness falls
-    # back to the legacy path.
+def test_once_call_becomes_meta_call():
+    # Slice D5f: ``once(G)`` → ``MetaCall(kind="once", args={"inner": G})``.
+    # Class-identity comparison avoided — other tests scrub ir.py.
+    inner = nodes.Unify(left="X", right="Y")
+    ir = terms_to_goalop([nodes.Call(
+        func=nodes.LoadName(name="once"),
+        args=[inner],
+        kwargs=[],
+    )])
+    mc = ir.ops[0]
+    assert type(mc).__name__ == "MetaCall"
+    assert mc.kind == "once"
+    assert mc.args == {"inner": inner}
+
+
+def test_findall_becomes_meta_call_with_flags_in_lowering():
+    # ``findall(T, G, B)`` and ``bagof`` / ``setof`` share a single
+    # :class:`MetaCall` arity; the lowering picks the flags.
+    t, g, b = "T", nodes.Unify(left="X", right="Y"), "B"
+    for kind_name in ("findall", "bagof", "setof"):
+        ir = terms_to_goalop([nodes.Call(
+            func=nodes.LoadName(name=kind_name),
+            args=[t, g, b],
+            kwargs=[],
+        )])
+        mc = ir.ops[0]
+        assert type(mc).__name__ == "MetaCall"
+        assert mc.kind == kind_name
+        assert mc.args == {"template": t, "inner": g, "bag": b}
+
+
+def test_meta_call_wrong_arity_defers_to_legacy():
+    # A ``Call`` that names a meta-pred but doesn't match any explicit
+    # arm (wrong arity) must fall back so the legacy path has a chance
+    # rather than being silently compiled as a user predicate call.
     with pytest.raises(NotImplementedError, match="not yet supported"):
         terms_to_goalop([nodes.Call(
             func=nodes.LoadName(name="once"),
-            args=[nodes.Unify(left="X", right="Y")],
+            args=[],
             kwargs=[],
         )])

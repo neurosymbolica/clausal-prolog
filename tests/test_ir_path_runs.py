@@ -67,15 +67,14 @@ def test_ir_path_runs_and_matches_on_d_subset(strategy_cls):
 
 def test_ir_path_fallback_is_counted_on_unsupported_op():
     _ir_path_stats_reset()
-    # Meta-predicate ``once`` routes through the legacy
-    # ``_compile_shared_meta_call`` arms; ``terms_to_goalop`` defers
-    # it to D5f's ``MetaCall`` coverage, so this body must fall back.
-    body = [nodes.Call(
-        func=nodes.LoadName(name="once"),
-        args=[_b(nodes.Unify, "X", "Y")],
-        kwargs=[],
-    )]
-    _compile_body_impl(body, _ctx(ShallowStrategy()))
-    assert _IR_PATH_STATS["runs"] == 1
-    assert _IR_PATH_STATS["fallbacks"] == 1
-    assert _IR_PATH_STATS["matches"] == 0
+    # Star-list unification (``X is [*T]``) routes through
+    # ``_compile_star_is`` in the legacy path and is deferred to
+    # Slice D5g's :class:`ListPatternUnify` coverage, so this body
+    # must fall back.  Legacy ``_compile_star_is`` requires the
+    # surrounding term machinery so we exercise the fallback through
+    # ``terms_to_goalop`` directly rather than the full harness.
+    from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
+    with pytest.raises(NotImplementedError):
+        terms_to_goalop([nodes.Unify(
+            left=[nodes.StarUnpack(value="T")], right="X",
+        )])

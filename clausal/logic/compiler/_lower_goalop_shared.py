@@ -27,6 +27,7 @@ from clausal.logic.compiler.ir import (
     FDOp,
     GoalOp,
     MemberIn,
+    MetaCall,
     ReifiedKind,
     Sequence,
     StructuralEq,
@@ -157,6 +158,18 @@ def lower_shared(
                 ),
             ]
 
+        # ── Meta-predicate calls — delegate to the legacy helpers.
+        # Each ``MetaCall`` kind corresponds to a specific legacy
+        # ``_compile_*`` helper in :mod:`.control_constructs`.  The
+        # helpers use the shallow ``_dispatch_goal`` for inner goals
+        # regardless of outer strategy (inner meta-call bodies are
+        # always compiled shallow); this matches legacy behaviour.
+        # ``args`` carries raw terms — see ``terms_to_goalop`` for the
+        # rationale.  Function-local imports break the shared ↔
+        # control_constructs / goal_shallow cycle.
+        case MetaCall(kind=kind, args=margs):
+            return _lower_meta_call(ctx, kind, margs, k_stmts)
+
         # ── Predicate call — delegate to the shared legacy front-end.
         # ``_compile_predicate_call_impl`` already performs the exact
         # sequence the legacy ``Call(LoadName | LoadAttr)`` arms do:
@@ -284,6 +297,101 @@ def _lower_reified_branch(
     )
     return _three_way_reif_branch(
         reif_var, reif_call, then_stmts, else_stmts, undetermined,
+    )
+
+
+def _lower_meta_call(
+    ctx: CompilationContext,
+    kind: str,
+    margs: dict,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Dispatch a :class:`MetaCall` to the matching legacy helper.
+
+    One arm per closed :data:`~clausal.logic.compiler.ir.MetaKind`
+    literal.  Each arm reads the fixed ``args`` schema documented on
+    :class:`~clausal.logic.compiler.ir.MetaCall` and forwards to the
+    corresponding ``_compile_*`` helper in :mod:`.control_constructs`.
+    """
+    from .control_constructs import (
+        _compile_once, _compile_call_nth, _compile_count_all,
+        _compile_setup_call_cleanup, _compile_freeze, _compile_when,
+        _compile_find_all_core,
+        _compile_throw, _compile_catch,
+    )
+    from ._ast_helpers import _name, _call
+    from .terms_to_ast import term_to_ast_expr
+    # ``forall`` rewrites to ``Not(And(cond, Not(action)))`` and
+    # re-dispatches through the shallow goal compiler, matching the
+    # legacy ``forall`` arm in both strategy dispatchers.
+    if kind == "forall":
+        from clausal.terms import And, Not
+        from .goal_shallow import _dispatch_goal
+        rewritten = Not(operand=And(
+            left=margs["cond"],
+            right=Not(operand=margs["action"]),
+        ))
+        return _dispatch_goal(ctx, rewritten, k_stmts)
+    if kind == "throw":
+        return _compile_throw(ctx, margs["term"])
+    if kind == "halt":
+        code_arg = margs["code"]
+        if code_arg is None:
+            return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
+        code_expr = term_to_ast_expr(code_arg, ctx.var_context, eval_arith=True)
+        return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
+    if kind == "once":
+        return _compile_once(ctx, margs["inner"], k_stmts)
+    if kind == "call_nth":
+        return _compile_call_nth(ctx, margs["inner"], margs["n"], k_stmts)
+    if kind == "count_all":
+        return _compile_count_all(
+            ctx, margs["inner"], margs["count"], k_stmts,
+        )
+    if kind == "setup_call_cleanup":
+        return _compile_setup_call_cleanup(
+            ctx, margs["setup"], margs["call"], margs["cleanup"], k_stmts,
+        )
+    if kind == "call_cleanup":
+        # Legacy sugar: ``call_cleanup(C, Cl)`` → ``setup_call_cleanup(True, C, Cl)``.
+        return _compile_setup_call_cleanup(
+            ctx, True, margs["call"], margs["cleanup"], k_stmts,
+        )
+    if kind == "freeze":
+        return _compile_freeze(ctx, margs["var"], margs["inner"], k_stmts)
+    if kind == "when":
+        return _compile_when(ctx, margs["cond"], margs["inner"], k_stmts)
+    if kind == "findall":
+        return _compile_find_all_core(
+            ctx, margs["template"], margs["inner"], margs["bag"], k_stmts,
+            fail_on_empty=False, dedup=False,
+        )
+    if kind == "bagof":
+        return _compile_find_all_core(
+            ctx, margs["template"], margs["inner"], margs["bag"], k_stmts,
+            fail_on_empty=True, dedup=False,
+        )
+    if kind == "setof":
+        return _compile_find_all_core(
+            ctx, margs["template"], margs["inner"], margs["bag"], k_stmts,
+            fail_on_empty=True, dedup=True,
+        )
+    if kind == "catch":
+        return _compile_catch(
+            ctx, margs["inner"], margs["catcher"], margs["recovery"], k_stmts,
+        )
+    if kind == "catch_error":
+        return _compile_catch(
+            ctx, margs["inner"], margs["error"], True, k_stmts,
+            always_catch=True,
+        )
+    if kind == "catch_recover":
+        return _compile_catch(
+            ctx, margs["inner"], margs["error"], margs["recovery"], k_stmts,
+            always_catch=True,
+        )
+    raise NotImplementedError(
+        f"_lower_meta_call: unknown MetaCall kind {kind!r}"
     )
 
 
