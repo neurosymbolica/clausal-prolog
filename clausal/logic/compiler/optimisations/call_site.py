@@ -164,4 +164,77 @@ def apply(ir: Any, plan: CallSitePlan) -> Any:
     return Sequence(ops=new_ops)
 
 
-__all__ = ["CallSitePlan", "analyse", "apply"]
+def populate_runtime_from_plan(
+    ir: Any, plan: CallSitePlan, ctx: Any, base_globals: dict,
+) -> None:
+    """Populate :attr:`ctx.bucket_ref_map` / :attr:`joint_bucket_ref_map`
+    **and** *base_globals* with entries derived from *plan*.
+
+    E6b replaces the legacy per-predicate ``_inject_bucket_refs_trampoline``
+    pre-scan with this per-body populator driven off the IR plan.
+    For each :class:`SubCall` with a plan hint:
+
+    - Looks up the matching ``pos`` / ``key`` / bucket callable on
+      the callee's ``_index_plans`` / ``_index_plans_joint``.
+    - Writes the ``(fname, arity, pos, key)`` → gkey entry into the
+      legacy map so the legacy fold's ``_dispatch_call_trampoline``
+      emission sees it.
+    - Injects ``base_globals[gkey] = bucket_fn`` so the generated
+      code can resolve the direct bucket reference at load time.
+
+    Idempotent: re-running with the same plan is a no-op.
+    """
+    from ..ir import Sequence, SubCall
+    from ..arg_index import _static_call_key
+    from ..terms_to_ast import term_to_ast_expr
+    from clausal.logic.predicate import PredicateMeta
+
+    if not isinstance(ir, Sequence):
+        return
+    if not plan.hints and not plan.joint_hints:
+        return
+
+    hint_idx = {op_idx: gkey for op_idx, gkey in plan.hints}
+    joint_idx = {op_idx: gkey for op_idx, gkey in plan.joint_hints}
+
+    for op_idx, op in enumerate(ir.ops):
+        if not isinstance(op, SubCall):
+            continue
+        fname = op.fname
+        arity = op.arity
+        pred_obj = base_globals.get(fname)
+        if not isinstance(pred_obj, PredicateMeta):
+            continue
+        arg_exprs = [term_to_ast_expr(a, {}) for a in op.args]
+
+        single_gkey = hint_idx.get(op_idx)
+        if single_gkey is not None:
+            for pos, idx_dict in pred_obj._index_plans.items():
+                if pos >= len(arg_exprs):
+                    continue
+                key = _static_call_key(arg_exprs[pos])
+                if key is None or key not in idx_dict:
+                    continue
+                ctx.bucket_ref_map[(fname, arity, pos, key)] = single_gkey
+                if single_gkey not in base_globals:
+                    base_globals[single_gkey] = idx_dict[key]
+                break
+
+        joint_gkey = joint_idx.get(op_idx)
+        if joint_gkey is not None and hasattr(pred_obj, "_index_plans_joint"):
+            for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+                if pi >= len(arg_exprs) or pj >= len(arg_exprs):
+                    continue
+                ki = _static_call_key(arg_exprs[pi])
+                kj = _static_call_key(arg_exprs[pj])
+                if ki is None or kj is None:
+                    continue
+                if (ki, kj) not in jdict:
+                    continue
+                ctx.joint_bucket_ref_map[(fname, arity, pi, pj, ki, kj)] = joint_gkey
+                if joint_gkey not in base_globals:
+                    base_globals[joint_gkey] = jdict[(ki, kj)]
+                break
+
+
+__all__ = ["CallSitePlan", "analyse", "apply", "populate_runtime_from_plan"]

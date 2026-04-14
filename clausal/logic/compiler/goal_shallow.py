@@ -730,6 +730,17 @@ def _compile_body_impl(
     """
     strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
+    # Slice E6b: pre-populate ctx.bucket_ref_map / joint_bucket_ref_map
+    # and base_globals with call-site specialisation entries derived
+    # from the IR plan, so the legacy fold below (which reads the maps
+    # via ``_dispatch_call_trampoline``) emits direct bucket refs
+    # without the legacy per-predicate ``_inject_bucket_refs_trampoline``
+    # pre-scan.  The IR rebuilds + re-analyses inside
+    # ``_run_ir_parallel`` so the SubCalls there carry the same hints
+    # for the shadow lowering — byte-parity preserved.
+    _prepopulate_call_site_runtime(
+        original_goals if original_goals is not None else goals, ctx,
+    )
     # Slice F1: Phase 5 entry gate — README §10 invariant 1.  Lock in
     # the contract that ``_preallocate_body_vars`` covers every Var
     # reachable from a body goal so the right-to-left fold below
@@ -765,6 +776,37 @@ def _compile_body_impl(
             chosen_k = ir_k
 
     return alloc_stmts + chosen_k
+
+
+def _prepopulate_call_site_runtime(
+    ir_source: list, ctx: CompilationContext,
+) -> None:
+    """E6b: drive ``ctx.bucket_ref_map`` / ``joint_bucket_ref_map``
+    population from the IR plan instead of the legacy per-predicate
+    ``_inject_bucket_refs_trampoline`` pre-scan.
+
+    Runs before the legacy fold so that ``_dispatch_call_trampoline``
+    sees entries and emits direct bucket refs byte-identically to the
+    pre-E6b shape.  No-op under a strategy without bucket-ref
+    specialisation, when ``base_globals`` is unset, when the
+    ``call_site`` optimisation flag is disabled, or when
+    ``terms_to_goalop`` declines the body shape.
+    """
+    from .strategy import TrampolineStrategy
+    if ctx.base_globals is None:
+        return
+    if not isinstance(ctx.strategy, TrampolineStrategy):
+        return
+    if "call_site" not in ctx.enabled_optimisations:
+        return
+    from .terms_to_goalop import terms_to_goalop
+    from .optimisations import call_site as _call_site
+    try:
+        ir = terms_to_goalop(ir_source, ctx.db)
+    except NotImplementedError:
+        return
+    plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
+    _call_site.populate_runtime_from_plan(ir, plan, ctx, ctx.base_globals)
 
 
 # ── Slice D4 harness observability ───────────────────────────────────────────

@@ -647,14 +647,15 @@ def compile_predicate_trampoline(
     # Phase 10f: bucket-ref maps live on ctx_template; populated by
     # _inject_bucket_refs_trampoline below.
     try:
-        # Phase 10d: inject bucket refs for statically-known call-site args.
-        # Must run after _inject_resolved_targets (which populates base_globals
-        # with callee predicate classes) but before building funcdef ASTs.
-        # Slice E5b: gated on ``call_site`` flag — when disabled, the map
-        # stays empty and both legacy ``_dispatch_call_trampoline`` and the
-        # IR SubCall lowering fall through to the general dispatch path.
-        if "call_site" in ctx_template.enabled_optimisations:
-            _inject_bucket_refs_trampoline(ctx_template, clauses, base_globals)
+        # Slice E6b: ``_inject_bucket_refs_trampoline`` retired.  The
+        # IR-path per-body populator in ``goal_shallow.
+        # _prepopulate_call_site_runtime`` now drives
+        # ``ctx.bucket_ref_map`` / ``joint_bucket_ref_map`` and bucket
+        # function injection into ``base_globals`` from
+        # ``call_site.analyse`` output.  The legacy helper remains
+        # importable for verification tests (``tests/
+        # test_bucket_refs_ir_parallel.py``, D6c parity).
+        pass
         # ── Groundness-keyed dispatch (V2-2, subsumes V2-1) ──────────────
         index_positions = _analyze_index_positions(clauses, arity)
         if index_positions:
