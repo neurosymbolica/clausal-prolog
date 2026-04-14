@@ -569,14 +569,14 @@ class MetaCall(GoalOp):
 
 @dataclass
 class ListPatternUnify(GoalOp):
-    """Runtime bidirectional list-pattern unification guard.
-    Backends emit a call to their runtime's equivalent of
-    _head_list_unify_input/output.  See compiler/README.md §7."""
-    target: Term
-    before_vars: list[Term]
-    star_var: Term | None
-    after_vars: list[Term]
-    phase: Literal["input", "output"]
+    """Body-side star-list unification (``X := [A, *T, B]`` etc.).
+    The lowering dispatches to single-star vs multi-star runtime
+    helpers based on the number of StarUnpack entries in
+    ``star_side``.  Head-match list unification is handled upstream
+    by terms_to_ast and is not part of the body IR's scope; if it
+    is ever absorbed here it will be a separate op."""
+    star_side: list[Term]   # contains one or more StarUnpack entries
+    other_side: Term
 ```
 
 The IR captures **meaning**, not execution. It is the pivot point
