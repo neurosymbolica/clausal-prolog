@@ -119,6 +119,28 @@ hidden ordering dependencies between passes.
 
 Preconditions: E4a/b/c have baked.  E5 test matrix is green.
 
+**Joint-bucket hint gap (from E4a).**  `call_site.analyse`
+computes `joint_hints` but `apply` does not write them — there is
+no joint-position field on :class:`SubCall` today.  Joint-
+position specialisation therefore still rides
+`ctx.joint_bucket_ref_map`, which is populated only by legacy
+`_inject_bucket_refs_trampoline`.  **Before** deleting the
+legacy pre-scan in E6, add a joint-hint conduit — either a new
+``SubCall.direct_joint_bucket_ref: tuple[int, int, str] | None``
+(pi, pj, gkey) field, or a richer type for
+``direct_bucket_ref``, then have `apply` write joint entries and
+`_dispatch_call_trampoline` read them.  Until that lands, E6 must
+keep the joint-map lookup in `_dispatch_call_trampoline` alive.
+
+**Compile-time perf note (from E4a).**  E4a runs
+`call_site.analyse` on every body compile inside
+`_run_ir_parallel` (walks every :class:`SubCall`, re-computes
+`term_to_ast_expr(a, {})` / `_static_call_key` per arg).  Legacy
+`_inject_bucket_refs_trampoline` runs once per predicate.  This
+is a small per-clause regression while both paths co-exist; E6
+amortises back to once-per-predicate when the legacy pre-scan is
+deleted and the E3 analyse lifts to predicate scope.
+
 Delete:
 - `_compile_tro_body` + `_compile_tro_tail` (TRO's bypass path)
 - `Strategy.preprocess_clause` DR rewrite

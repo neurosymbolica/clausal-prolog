@@ -258,9 +258,15 @@ class SubCall(GoalOp):
     Optimisation hints (written by analysis passes, consumed by
     lowering):
 
-    - ``direct_bucket_ref`` — name of a pre-bound bucket function in
-      ``base_globals`` that dispatch may short-circuit to when one or
-      more arguments are statically known (call-site specialisation).
+    - ``direct_bucket_ref`` — name of a pre-bound single-position
+      bucket function in ``base_globals`` that dispatch may short-
+      circuit to when a statically-known argument matches an indexed
+      position (call-site specialisation).  **Joint-position**
+      (two-arg) bucket specialisation is not yet representable as a
+      hint; see ``todo/slice_e_lowering_reads_hints.md`` §E6.  Until
+      the joint-hint field lands, joint-position dispatch still rides
+      ``ctx.joint_bucket_ref_map`` (populated by legacy
+      ``_inject_bucket_refs_trampoline``).
     - ``tail_recursive`` — ``True`` when this call is the tail of a
       TRO-eligible clause; the lowering rewrites it as an argument
       reassignment + loop continue rather than a real sub-call.
