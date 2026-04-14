@@ -722,6 +722,13 @@ def _compile_body_impl(
     """
     strategy = ctx.strategy
     alloc_stmts = _preallocate_body_vars(goals, ctx.var_context)
+    # Slice F1: Phase 5 entry gate — README §10 invariant 1.  Lock in
+    # the contract that ``_preallocate_body_vars`` covers every Var
+    # reachable from a body goal so the right-to-left fold below
+    # cannot reference an unregistered Var (which would generate a
+    # walrus-introduced local that earlier-emitted goals try to read).
+    from .invariants import assert_body_vars_preallocated
+    assert_body_vars_preallocated(ctx, goals)
     leaf: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
 
     # Legacy right-to-left fold.  This advances ``ctx.fresh`` — the IR
