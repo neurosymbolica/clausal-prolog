@@ -571,12 +571,12 @@ Things a new contributor would otherwise have to reverse-engineer.
 
 - **Module-load cycles are broken with function-local imports, not
   a shared shim.** Slice B6 retired ``_monolith.py`` entirely.
-  Where a cycle exists (``ite_reified`` referencing
-  ``goal_trampoline._yield_step_stmt``; ``destructive_reuse`` calling
-  ``tro._is_deterministic_goal``; ``control_constructs`` /
-  ``ite_reified`` calling ``_dispatch_goal[_trampoline]``), the
-  consumer uses a function-local import.  Python's import cache makes
-  the per-call overhead a single dict lookup.
+  Where a cycle exists (``destructive_reuse`` calling
+  ``tro._is_deterministic_goal``; ``control_constructs._lower_inner``
+  importing ``lower_python_shallow``; ``_lower_goalop_shared``
+  importing ``control_constructs``), the consumer uses a
+  function-local import.  Python's import cache makes the per-call
+  overhead a single dict lookup.
 
 - **Phase-0.5a runtime-helper aliases live in `predicate.py`.**
   `_dif_fn`, `_fd_eq_fn`, `_DictTerm_t`, `_KWTerm_s`, …  (~50 names
@@ -589,20 +589,21 @@ Things a new contributor would otherwise have to reverse-engineer.
   a bulk-copy hack that slice B1a retired (see
   `implementation_plans/SLICE_B_PROGRESS.md`).
 
-- **`forall/2` rewrites to `not (Cond, not Action)` and recurses into
-  the *shallow* compile_goal even in trampoline mode.** (In Prolog
-  notation this is `\+(Cond, \+ Action)`.) Documented in both
-  `goal_shallow.forall` and `goal_trampoline.forall` arms — the
-  rewrite produces only deterministic or simple-negation code, so
-  shallow compilation is safe even inside a trampoline predicate.
+- **`forall/2` rewrites to `not (Cond, not Action)` and lowers via
+  the shallow IR pipeline even in trampoline mode.** (In Prolog
+  notation this is `\+(Cond, \+ Action)`.) Documented in
+  ``_lower_goalop_shared._lower_meta_call`` — the rewrite produces
+  only deterministic or simple-negation code, so shallow lowering
+  is safe even inside a trampoline predicate.
 
 - **Shallow/trampoline share most meta-predicate compilers.**
-  `_compile_once`, `_compile_catch` (plus its `_trampoline` twin),
-  `_compile_find_all_core`, etc. live in `control_constructs.py`
-  and are used by both strategies. Their inner goal compilation
-  uses `compile_goal` (shallow), so `once(foo(X))` inside a
-  trampoline predicate runs `foo` in shallow mode. Intentional —
-  see the notes in `control_constructs.py`.
+  `_compile_once`, `_compile_catch` (whose trampoline branch uses
+  `_lower_inner_trampoline`), `_compile_find_all_core`, etc. live
+  in `control_constructs.py` and are used by both strategies.
+  Their inner goal compilation routes through
+  `_lower_inner` (shallow), so `once(foo(X))` inside a trampoline
+  predicate runs `foo` in shallow mode. Intentional — see the notes
+  in `control_constructs.py`.
 
 - **Freshly-compiled predicates see themselves in `base_globals`.**
   When predicate `Foo` is compiled, `base_globals["Foo"]` is the

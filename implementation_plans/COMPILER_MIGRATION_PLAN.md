@@ -383,9 +383,9 @@ is demonstrated.
 
 **This is the biggest slice.** It also unblocks F and G.
 
-**Status (2026-04-13):** D1 through D7b complete; D7c (legacy
-delete) deferred for bake.  See `todo/slice_d_goalop_ir.md` for
-the per-sub-slice progress log and validation evidence:
+**Status (2026-04-14):** Slice D is **complete**.  See
+`todo/slice_d_goalop_ir.md` for the per-sub-slice progress log and
+validation evidence:
 
 | Sub-slice | What | Status |
 |---|---|---|
@@ -397,15 +397,12 @@ the per-sub-slice progress log and validation evidence:
 | D6b | destructive_reuse `analyse_ir` parallel shadow | ✅ |
 | D6c | Call-site bucket-ref `analyse_ir` parallel shadow | ✅ |
 | D6d | Tighten cross-check coverage (thread `db`; "IR ⊇ legacy" audit) | ✅ |
-| D7a | Flip `use_ir_path` default to `True` | ✅ baking |
-| D7b | Promote IR path to source-of-truth | ✅ baking |
-| D7c | Retire byte-parity harness + DR preprocess (legacy fold kept as IR-gap fallback) | ✅ α |
-
-D7c is intentionally held: the value of D7b is the parallel
-verification gate, which D7c removes.  Letting both paths run for
-one release cycle of green CI catches any latent IR bug before
-the safety net comes off.  Slice F (invariants) lands during the
-bake.
+| D7a | Flip `use_ir_path` default to `True` | ✅ |
+| D7b | Promote IR path to source-of-truth | ✅ |
+| D7c-α | Retire byte-parity harness + DR preprocess (legacy fold kept as IR-gap fallback) | ✅ |
+| D7c-β1 | Close `_convert` IR-subset gap, retire IR-gap fallback | ✅ |
+| D7c-β2 | Route meta-call inner goals through IR (retire legacy dispatcher calls from `control_constructs`) | ✅ |
+| D7c-β3 | Delete `_dispatch_goal[_trampoline]` + pattern-match helpers + `_compile_general_ite*` + reified-ITE helpers | ✅ |
 
 **Current state:** Goal compilation pattern-matches directly on
 `clausal.pythonic_ast.nodes` / `clausal.terms` types inside

@@ -98,21 +98,20 @@ def lower_shared(
 
         # ── Constant failure (legacy ``goal is False``) — drops the
         # continuation entirely.  In a Sequence right-to-left fold this
-        # truncates everything to its left, byte-identical to legacy.
+        # truncates everything to its left.
         case Fail():
             return []
 
         # ── PyThunk as a body goal — evaluate the embedded callable
         # for side effects, then continue.  Identical between shallow
-        # and trampoline (legacy fast-path in both ``_dispatch_goal``s).
+        # and trampoline.
         case PyThunkOp(thunk=thunk):
             call_expr = term_to_ast_expr(thunk, var_context, eval_arith=False)
             return [ast.Expr(value=call_expr)] + list(k_stmts)
 
-        # ── Reified Branch (D5d-i) — three-way ITE.
-        # General Branch (``reified_test is None``) is deferred to
-        # D5d-ii; returning ``None`` lets the caller fall back to
-        # legacy via the harness.
+        # ── Reified Branch — three-way ITE.  General Branch
+        # (``reified_test is None``) is strategy-specific and handled
+        # in the ``lower_python_{shallow,trampoline}`` caller.
         case Branch(test=t_op, then=th_op, else_=el_op, reified_test=kind) \
                 if kind is not None:
             return _lower_reified_branch(
@@ -182,21 +181,19 @@ def lower_shared(
             from .star_segments import _compile_star_is
             return _compile_star_is(ctx, ss, os, k_stmts)
 
-        # ── Meta-predicate calls — delegate to the legacy helpers.
-        # Each ``MetaCall`` kind corresponds to a specific legacy
-        # ``_compile_*`` helper in :mod:`.control_constructs`.  The
-        # helpers use the shallow ``_dispatch_goal`` for inner goals
-        # regardless of outer strategy (inner meta-call bodies are
-        # always compiled shallow); this matches legacy behaviour.
-        # ``args`` carries raw terms — see ``terms_to_goalop`` for the
-        # rationale.  Function-local imports break the shared ↔
-        # control_constructs / goal_shallow cycle.
+        # ── Meta-predicate calls — delegate to the ``_compile_*``
+        # helpers in :mod:`.control_constructs`.  Each ``MetaCall``
+        # kind has a dedicated helper; inner goals lower via
+        # :func:`.control_constructs._lower_inner` (shallow) or
+        # :func:`._lower_inner_trampoline` (catch's trampoline branch).
+        # ``args`` carries raw terms — see ``terms_to_goalop`` for
+        # the rationale.  Function-local imports break the shared ↔
+        # control_constructs cycle.
         case MetaCall(kind=kind, args=margs):
             return _lower_meta_call(ctx, kind, margs, k_stmts)
 
-        # ── Predicate call — delegate to the shared legacy front-end.
-        # ``_compile_predicate_call_impl`` already performs the exact
-        # sequence the legacy ``Call(LoadName | LoadAttr)`` arms do:
+        # ── Predicate call — delegate to ``_compile_predicate_call_impl``.
+        # That helper performs WK-4 keyword normalisation,
         # lambda-hoist (advances ``ctx.fresh``), ``term_to_ast_expr`` per
         # arg, then ``ctx.strategy.emit_sub_call``.  Keyword normalisation
         # was done by ``terms_to_goalop`` (WK-4) so we pass ``kwargs=[]``

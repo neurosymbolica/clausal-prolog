@@ -321,14 +321,15 @@ class MetaCall(GoalOp):
     shape lets D5 expand coverage one meta-kind at a time without
     rewriting this class.
 
-    **Transitional shape (D5f → E).**  The schema above describes
-    the *ideal* shape that E will tighten to.  Today the
-    ``"inner" / "call" / "setup" / "cleanup" / "cond" / "action"``
-    /etc. positions documented as ``GoalOp`` actually carry **raw
-    Term** (the unconverted body-goal term) — the lowering forwards
-    them straight to legacy ``_compile_*`` helpers which call
-    ``_dispatch_goal`` themselves, so reaching for ``GoalOp`` here
-    would force a redundant convert / re-convert dance.
+    **Transitional shape (still in place post-D7c).**  Goal-position
+    args (``"inner" / "call" / "setup" / "cleanup" / "cond" / "action"``
+    /etc.) carry **raw Term**, not :class:`GoalOp`.  The
+    ``_lower_meta_call`` arms forward them to the ``_compile_*``
+    helpers in :mod:`.control_constructs`, which call the
+    ``_lower_inner`` / ``_lower_inner_trampoline`` wrappers to build
+    a singleton IR and lower.  Promoting these slots to :class:`GoalOp`
+    would eliminate that intermediate conversion; it's a cosmetic
+    tightening, not correctness-blocking.
 
     For walks that need to *see* the nested goals (E's analyses,
     in particular), use :func:`walk_goal_ops_deep` rather than
@@ -350,8 +351,7 @@ class MetaCall(GoalOp):
 class Fail(GoalOp):
     """The constant-failure goal — succeeds for nobody, drops the
     continuation.  Lowering returns ``[]``; in a :class:`Sequence` fold
-    that truncates everything to its left (matching legacy
-    ``_dispatch_goal(False, k)`` returning ``[]``).
+    that truncates everything to its left.
     """
 
 
@@ -360,7 +360,7 @@ class PyThunkOp(GoalOp):
     """A ``PyThunk`` as a body goal — evaluate the embedded callable
     for side effects, then continue.  The lowering emits a single
     ``ast.Expr`` wrapping ``term_to_ast_expr(thunk)`` followed by the
-    continuation, matching the legacy fast-path in ``_dispatch_goal``.
+    continuation.
 
     ``thunk`` carries the raw :class:`~clausal.terms.PyThunk` term
     unchanged — the lowering reuses ``term_to_ast_expr`` so PyThunk

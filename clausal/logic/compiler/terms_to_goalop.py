@@ -113,13 +113,10 @@ _REIFIED_KIND: dict[type, ReifiedKind] = {
 
 def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     """Flatten list / ``TupleLiteral`` conjunctions; convert each goal."""
-    # Boolean ``True`` is identity for conjunction — the legacy
-    # dispatcher short-circuits ``if goal is True: return list(k_stmts)``,
-    # i.e. it emits nothing and keeps the continuation intact.  The
-    # IR equivalent is to emit no ops at all.  ``False`` lowers to a
-    # :class:`Fail` op (D5j) — its lowering returns ``[]`` which, in a
-    # right-to-left :class:`Sequence` fold, truncates everything to its
-    # left, byte-identical to legacy ``_dispatch_goal(False, k) == []``.
+    # ``True`` is conjunction identity — emit no ops.  ``False`` lowers
+    # to :class:`Fail`, whose lowering returns ``[]`` and in a
+    # right-to-left :class:`Sequence` fold truncates everything to its
+    # left.
     if body is True:
         return
     if body is False:
@@ -134,11 +131,9 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
             _extend(ops, goal, db)
         return
     if isinstance(body, nodes.And):
-        # ``And`` is a conjunction node; flatten arbitrarily-nested
-        # ``And(And(a, b), c)`` into ``[a, b, c]``.  Sequence's
-        # right-to-left fold is identical to the legacy ``_dispatch_goal``
-        # ``And`` arm (``dispatch(l, dispatch(r, k))``) so flattening
-        # preserves byte-for-byte AST output.
+        # Flatten arbitrarily-nested ``And(And(a, b), c)`` into
+        # ``[a, b, c]``; the right-to-left :class:`Sequence` fold
+        # produces the same AST as the nested-dispatch form.
         _extend(ops, body.left, db)
         _extend(ops, body.right, db)
         return
@@ -148,7 +143,7 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
 def _convert(goal: Any, db: Any) -> GoalOp:
     # ``PyThunk`` as a body goal — wrap in :class:`PyThunkOp`; the
     # lowering reuses ``term_to_ast_expr`` to emit a single
-    # ``ast.Expr(call)``, byte-identical to the legacy fast-path.
+    # ``ast.Expr(call)``.
     if isinstance(goal, PyThunk):
         return PyThunkOp(thunk=goal)
     # ``False`` reaching ``_convert`` (e.g. as an :class:`Or` arm or an
@@ -160,12 +155,10 @@ def _convert(goal: Any, db: Any) -> GoalOp:
         return Fail()
     if goal is True:
         return Sequence(ops=[])
-    # ``TupleLiteral`` reaching ``_convert`` (i.e. nested inside an
+    # ``TupleLiteral`` reaching ``_convert`` (nested inside an
     # :class:`Or` arm, :class:`Not` operand, or :class:`IfExpr` branch
     # rather than at the conjunction top where ``_extend`` flattens
-    # it) — flatten its elements into an inner :class:`Sequence`.  The
-    # legacy ``_dispatch_goal`` ``TupleLiteral`` arm builds the same
-    # right-to-left fold via ``reversed(elems)``.
+    # it) — flatten its elements into an inner :class:`Sequence`.
     if isinstance(goal, nodes.TupleLiteral) and goal.elements:
         inner_ops: list[GoalOp] = []
         _extend(inner_ops, list(goal.elements), db)
@@ -173,9 +166,7 @@ def _convert(goal: Any, db: Any) -> GoalOp:
     # ``And`` reaching ``_convert`` (nested inside an :class:`Or` arm,
     # :class:`Not` operand, or :class:`IfExpr` branch — at the
     # conjunction top :func:`_extend` flattens ``And`` directly).  Wrap
-    # the flattened conjunction in an inner :class:`Sequence` so the
-    # lowering's right-to-left fold matches the legacy
-    # ``_dispatch_goal`` ``And`` arm byte-for-byte.
+    # the flattened conjunction in an inner :class:`Sequence`.
     if isinstance(goal, nodes.And):
         inner_ops: list[GoalOp] = []
         _extend(inner_ops, goal.left, db)
@@ -228,17 +219,17 @@ def _convert(goal: Any, db: Any) -> GoalOp:
                 tabled_naf=tabled,
             )
 
-        # ── Meta-predicate calls (Slice D5f) ────────────────────────
-        # Each arm mirrors the exact shape the legacy
-        # ``_compile_shared_meta_call`` + strategy-specific catch/forall
-        # dispatchers pattern-match.  Inner goals are passed through as
-        # raw terms (not recursively ``_convert``ed) because the
-        # :class:`MetaCall` lowering delegates to the existing
-        # ``_compile_*`` helpers — those recurse back into
-        # ``_dispatch_goal`` themselves, so converting here would make
-        # the legacy helpers the wrong tool for the job.  Future work
-        # (post-D7) may tighten ``MetaCall.args`` to carry ``GoalOp``
-        # children; see ``todo/slice_d_goalop_ir.md``.
+        # ── Meta-predicate calls ─────────────────────────────────────
+        # Inner goals are passed through as raw terms (not recursively
+        # ``_convert``ed).  The ``_compile_*`` helpers in
+        # :mod:`.control_constructs` consume them via the
+        # ``_lower_inner`` / ``_lower_inner_trampoline`` wrappers, which
+        # perform the conversion and the strategy-specific lowering in
+        # one step — keeping raw terms here avoids a redundant
+        # convert-at-analysis / rebuild-at-lowering round trip.  A
+        # future cleanup may tighten ``MetaCall.args`` to carry
+        # :class:`GoalOp` children directly (see
+        # ``todo/slice_d_goalop_ir.md``).
         case nodes.Call(func=nodes.LoadName(name="throw"),
                         args=[term_arg], kwargs=[]):
             return MetaCall(kind="throw", args={"term": term_arg})
