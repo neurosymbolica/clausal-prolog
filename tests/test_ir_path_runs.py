@@ -67,10 +67,12 @@ def test_ir_path_runs_and_matches_on_d_subset(strategy_cls):
 
 def test_ir_path_fallback_is_counted_on_unsupported_op():
     _ir_path_stats_reset()
-    # Predicate ``Call`` is deferred to D5e — must fall back.
+    # Meta-predicate ``once`` routes through the legacy
+    # ``_compile_shared_meta_call`` arms; ``terms_to_goalop`` defers
+    # it to D5f's ``MetaCall`` coverage, so this body must fall back.
     body = [nodes.Call(
-        func=nodes.LoadName(name="foo"),
-        args=["X"],
+        func=nodes.LoadName(name="once"),
+        args=[_b(nodes.Unify, "X", "Y")],
         kwargs=[],
     )]
     _compile_body_impl(body, _ctx(ShallowStrategy()))

@@ -151,11 +151,40 @@ def test_not_wraps_negate():
     assert neg.op.l == x and neg.op.r == y
 
 
-def test_unsupported_raises_not_implemented():
-    # Predicate ``Call`` is deferred to Slice D5e.
+def test_subcall_from_loadname_call():
+    # Slice D5e: plain predicate ``Call(LoadName)`` → ``SubCall``.
+    # Class-identity comparison avoided — other tests may scrub the IR
+    # module between runs (see the ``Not`` test below).
+    ir = terms_to_goalop([nodes.Call(
+        func=nodes.LoadName(name="foo"),
+        args=["X", "Y"],
+        kwargs=[],
+    )])
+    assert isinstance(ir, Sequence) and len(ir.ops) == 1
+    sc = ir.ops[0]
+    assert type(sc).__name__ == "SubCall"
+    assert sc.fname == "foo" and sc.arity == 2 and sc.args == ["X", "Y"]
+
+
+def test_subcall_from_loadattr_call():
+    ir = terms_to_goalop([nodes.Call(
+        func=nodes.LoadAttr(object=nodes.LoadName(name="mod"), attr="Pred"),
+        args=["X"],
+        kwargs=[],
+    )])
+    sc = ir.ops[0]
+    assert type(sc).__name__ == "SubCall"
+    assert sc.fname == "mod.Pred" and sc.arity == 1 and sc.args == ["X"]
+
+
+def test_meta_call_name_defers_to_legacy():
+    # ``catch`` / ``once`` / ``findall`` etc. route through dedicated
+    # legacy helpers; D5f will cover them as ``MetaCall``.  Until then
+    # they must raise ``NotImplementedError`` so the D4 harness falls
+    # back to the legacy path.
     with pytest.raises(NotImplementedError, match="not yet supported"):
         terms_to_goalop([nodes.Call(
-            func=nodes.LoadName(name="foo"),
-            args=["X"],
+            func=nodes.LoadName(name="once"),
+            args=[nodes.Unify(left="X", right="Y")],
             kwargs=[],
         )])

@@ -30,6 +30,7 @@ from clausal.logic.compiler.ir import (
     ReifiedKind,
     Sequence,
     StructuralEq,
+    SubCall,
     Unify,
 )
 from clausal.logic.compiler.ite_reified import _three_way_reif_branch
@@ -155,6 +156,20 @@ def lower_shared(
                     k_stmts,
                 ),
             ]
+
+        # ── Predicate call — delegate to the shared legacy front-end.
+        # ``_compile_predicate_call_impl`` already performs the exact
+        # sequence the legacy ``Call(LoadName | LoadAttr)`` arms do:
+        # lambda-hoist (advances ``ctx.fresh``), ``term_to_ast_expr`` per
+        # arg, then ``ctx.strategy.emit_sub_call``.  Keyword normalisation
+        # was done by ``terms_to_goalop`` (WK-4) so we pass ``kwargs=[]``
+        # here.  Function-local import breaks the shared ↔ goal_shallow
+        # cycle (ratified B4/B6 idiom).
+        case SubCall(fname=fname, arity=_arity, args=args):
+            from clausal.logic.compiler.goal_shallow import (
+                _compile_predicate_call_impl,
+            )
+            return _compile_predicate_call_impl(ctx, fname, args, [], k_stmts)
 
         case MemberIn(elem=elem, collection=collection, negate=False):
             loop_var = ctx.fresh("_el")

@@ -795,7 +795,7 @@ def _run_ir_parallel(
     from . import lower_python_shallow, lower_python_trampoline
     _IR_PATH_STATS["runs"] += 1
     try:
-        ir = terms_to_goalop(goals)
+        ir = terms_to_goalop(goals, ctx.db)
     except NotImplementedError as exc:
         # Legitimate fallback — D2 subset is still growing.  Logging here
         # lets D5 development see which body shapes still drop to legacy
