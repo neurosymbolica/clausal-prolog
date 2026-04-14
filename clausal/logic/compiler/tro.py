@@ -370,7 +370,9 @@ _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
 })
 
 
-def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
+def _detect_tro_clause(
+    functor: str, arity: int, clause: Clause, db: Any = None,
+) -> bool:
     """Return True if *clause* has a deterministic-prefix tail-recursive call.
 
     The last goal must be a ``Call`` to the same ``functor`` with ``arity``
@@ -432,12 +434,13 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     else:
         result = _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
                                 allow_head_vars=True)[0]
-    _maybe_cross_check_ir(functor, arity, clause, result)
+    _maybe_cross_check_ir(functor, arity, clause, result, db=db)
     return result
 
 
 def _maybe_cross_check_ir(
     functor: str, arity: int, clause: Clause, legacy_result: bool,
+    db: Any = None,
 ) -> None:
     """Slice D6a parallel-implementation gate.
 
@@ -455,7 +458,7 @@ def _maybe_cross_check_ir(
         return
     from .terms_to_goalop import terms_to_goalop
     try:
-        ir = terms_to_goalop(clause.body, db=None)
+        ir = terms_to_goalop(clause.body, db=db)
     except NotImplementedError:
         return
     ir_eligible, ir_check = analyse_ir(ir, clause.head, functor, arity)

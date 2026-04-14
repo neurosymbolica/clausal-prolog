@@ -133,7 +133,7 @@ def _flatten_and_single(goal: Any, out: list) -> None:
             out.append(goal)
 
 
-def _find_destructive_reuse_goals(clause: Clause) -> set[int]:
+def _find_destructive_reuse_goals(clause: Clause, db: Any = None) -> set[int]:
     """Return indices of body goals eligible for destructive-reuse dispatch.
 
     Only returns indices where all five compile-time criteria are satisfied.
@@ -193,7 +193,7 @@ def _find_destructive_reuse_goals(clause: Clause) -> set[int]:
 
         eligible.add(i)
 
-    _maybe_cross_check_ir(clause, eligible)
+    _maybe_cross_check_ir(clause, eligible, db=db)
     return eligible
 
 
@@ -362,7 +362,9 @@ def _collect_op_var_ids(op: Any, ids: set[int]) -> None:
             pass
 
 
-def _maybe_cross_check_ir(clause: Clause, legacy_eligible: set[int]) -> None:
+def _maybe_cross_check_ir(
+    clause: Clause, legacy_eligible: set[int], db: Any = None,
+) -> None:
     """Slice D6b parallel-implementation gate.
 
     Under ``CLAUSAL_IR_PATH=1``, run :func:`analyse_ir` against the IR
@@ -382,7 +384,7 @@ def _maybe_cross_check_ir(clause: Clause, legacy_eligible: set[int]) -> None:
         return
     from .terms_to_goalop import terms_to_goalop
     try:
-        ir = terms_to_goalop(clause.body, db=None)
+        ir = terms_to_goalop(clause.body, db=db)
     except NotImplementedError:
         return
 

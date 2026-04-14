@@ -635,7 +635,7 @@ def compile_predicate_trampoline(
             if ctx_template.strategy.supports_tro and not _is_tabled:
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
-                    if _detect_tro_clause(functor, arity, cl)
+                    if _detect_tro_clause(functor, arity, cl, db=db)
                 )
                 if _tro_set:
                     _idx_tro_indices = _tro_set
@@ -897,7 +897,7 @@ def compile_predicate_trampoline(
             if ctx_template.strategy.supports_tro and not _is_tabled:
                 _tro_set = frozenset(
                     i for i, cl in enumerate(clauses)
-                    if _detect_tro_clause(functor, arity, cl)
+                    if _detect_tro_clause(functor, arity, cl, db=_effective_db)
                 )
                 if _tro_set:
                     tro_indices = _tro_set

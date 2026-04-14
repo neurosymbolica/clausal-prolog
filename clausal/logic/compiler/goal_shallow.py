@@ -886,7 +886,7 @@ def _make_body_compiler_impl(
     time.
     """
     def _body_compiler(clause: Clause, var_context: dict[int, str]) -> list[ast.stmt]:
-        goals = ctx_template.strategy.preprocess_clause(clause)
+        goals = ctx_template.strategy.preprocess_clause(clause, db=db)
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
         )

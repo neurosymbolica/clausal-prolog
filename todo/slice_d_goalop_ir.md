@@ -355,6 +355,31 @@ Validated:
 - Full ex-trealla suite (default) → 10496 passed, 90 skipped
 - Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10496 passed, 90 skipped
 
+### D6d. Tighten cross-check coverage — ✅ done
+
+Two follow-ups raised in the post-D6c review:
+
+- **`db` threaded through all three cross-checks.**  Previously
+  `_maybe_cross_check_*` called `terms_to_goalop(body, db=None)`,
+  causing silent fallback on any kwarg-bearing call (`terms_to_goalop`
+  needs `db.signature_for` for WK-4 reordering).  Measured pre-fix: 1
+  DR fallback across the .clausal corpus (an EDCG-style call with five
+  keyword args).  Post-fix: 0 fallbacks across all three checks (16
+  TRO + 3720 DR + 498 bucket-ref invocations).  `_detect_tro_clause`,
+  `_find_destructive_reuse_goals`, and `Strategy.preprocess_clause`
+  all gained an optional `db=None` parameter; call sites in
+  `predicate.py` and `goal_shallow.py` pass the live db.
+- **D6c "IR ⊇ legacy" audit.**  Added
+  `tests/test_zz_d6c_extras_audit.py` (`zz` prefix sorts last so the
+  audit runs after every other test in the suite has compiled its
+  predicates).  Asserts that `_IR_EXTRA_BUCKET_REFS` — the
+  process-wide list of IR-extra entries the cross-check tolerates —
+  is empty after the full run.  Confirms zero IR-extras across the
+  entire ex-trealla suite: the "IR ⊇ legacy" leniency is a safety
+  net that real bodies never exercise, and D7's promotion will not
+  introduce any new bucket-ref dispatches that legacy didn't already
+  emit.
+
 ### D6 — ✅ all sub-slices done
 
 D6a / D6b / D6c each run their IR-side analysis as a verification-only

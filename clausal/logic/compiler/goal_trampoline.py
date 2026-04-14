@@ -198,8 +198,17 @@ def _inject_bucket_refs_trampoline(
     legacy_br_diff = {k: v for k, v in brmap.items() if k not in br_before}
     legacy_jbr_diff = {k: v for k, v in jbrmap.items() if k not in jbr_before}
     _maybe_cross_check_bucket_refs(
-        legacy_br_diff, legacy_jbr_diff, clauses, base_globals,
+        legacy_br_diff, legacy_jbr_diff, clauses, base_globals, ctx.db,
     )
+
+
+# Process-wide audit log for D6c: each entry is a ``(extra_br,
+# extra_jbr)`` pair recording bucket-ref entries the IR walker found
+# that the legacy walker missed (always due to ``terms_to_goalop``
+# flattening a top-level ``And`` / nested-list conjunction).  Empty in
+# normal operation; consulted by the D6 post-audit and by
+# ``tests/test_bucket_refs_ir_extras_audit.py``.
+_IR_EXTRA_BUCKET_REFS: list[tuple[dict, dict]] = []
 
 
 # ── IR-side parallel analysis (Slice D6c) ────────────────────────────────────
@@ -226,6 +235,7 @@ def _inject_bucket_refs_trampoline(
 def analyse_ir_bucket_refs(
     clauses: list,
     base_globals: dict,
+    db: Any = None,
 ) -> tuple[dict, dict]:
     """Return the bucket-ref entries the IR walker would inject.
 
@@ -248,7 +258,7 @@ def analyse_ir_bucket_refs(
 
     for clause in clauses:
         try:
-            body_ir = terms_to_goalop(clause.body, db=None)
+            body_ir = terms_to_goalop(clause.body, db=db)
         except NotImplementedError:
             continue
         if not isinstance(body_ir, _ir.Sequence):
@@ -302,6 +312,7 @@ def _maybe_cross_check_bucket_refs(
     legacy_jbrmap_diff: dict,
     clauses: list,
     base_globals: dict,
+    db: Any = None,
 ) -> None:
     """Slice D6c parallel-implementation gate.
 
@@ -320,7 +331,18 @@ def _maybe_cross_check_bucket_refs(
     import os
     if os.environ.get("CLAUSAL_IR_PATH") != "1":
         return
-    ir_br, ir_jbr = analyse_ir_bucket_refs(clauses, base_globals)
+    ir_br, ir_jbr = analyse_ir_bucket_refs(clauses, base_globals, db=db)
+
+    # Audit instrumentation: when the IR walker discovers entries the
+    # legacy walker missed (legitimate when a top-level ``And`` /
+    # nested-list conjunction surfaces a hidden Call), record them on
+    # a process-wide counter so the post-D6 audit can verify that the
+    # "IR ⊇ legacy" leniency isn't masking something unexpected.
+    extra_br = {k: v for k, v in ir_br.items() if k not in legacy_brmap_diff}
+    extra_jbr = {k: v for k, v in ir_jbr.items()
+                 if k not in legacy_jbrmap_diff}
+    if extra_br or extra_jbr:
+        _IR_EXTRA_BUCKET_REFS.append((extra_br, extra_jbr))
 
     # ``ir ⊇ legacy`` always — IR must catch every entry legacy did.
     missing_br = {k: v for k, v in legacy_brmap_diff.items() if ir_br.get(k) != v}
