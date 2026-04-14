@@ -133,16 +133,18 @@ def apply(ir: Any, plan: CallSitePlan) -> Any:
 
     Returns a new :class:`Sequence` with a fresh ``ops`` list when
     any hint was written; returns *ir* unchanged (reference
-    equality) when both single and joint hints are empty.
+    equality) when both single and joint hint sets are empty.
 
-    Only single-position hints are written today — the joint-hint
-    field on :class:`SubCall` doesn't exist yet.  Joint entries in
-    the plan are preserved for the audit / future lowering step.
+    Both single-position (``direct_bucket_ref``) and joint-position
+    (``direct_joint_bucket_ref``) hints are written.  The
+    :func:`~clausal.logic.compiler.goal_trampoline._dispatch_call_trampoline`
+    prefers the joint hint over the single hint, matching legacy's
+    joint-first preference.
     """
     from ..ir import Sequence, SubCall
     if not isinstance(ir, Sequence):
         return ir
-    if not plan.hints:
+    if not plan.hints and not plan.joint_hints:
         return ir
     new_ops = list(ir.ops)
     for op_idx, gkey in plan.hints:
@@ -152,6 +154,13 @@ def apply(ir: Any, plan: CallSitePlan) -> Any:
         if op.direct_bucket_ref == gkey:
             continue
         new_ops[op_idx] = dataclasses.replace(op, direct_bucket_ref=gkey)
+    for op_idx, gkey in plan.joint_hints:
+        op = new_ops[op_idx]
+        if not isinstance(op, SubCall):
+            continue
+        if op.direct_joint_bucket_ref == gkey:
+            continue
+        new_ops[op_idx] = dataclasses.replace(op, direct_joint_bucket_ref=gkey)
     return Sequence(ops=new_ops)
 
 

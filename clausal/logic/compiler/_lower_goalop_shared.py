@@ -245,6 +245,7 @@ def lower_shared(
             return _compile_predicate_call_impl(
                 ctx, fname, args, [], k_stmts,
                 direct_bucket_ref=ir.direct_bucket_ref,
+                direct_joint_bucket_ref=ir.direct_joint_bucket_ref,
             )
 
         case MemberIn(elem=elem, collection=collection, negate=False):

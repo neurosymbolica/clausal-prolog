@@ -349,6 +349,7 @@ def _compile_predicate_call_impl(
     k_stmts: list[ast.stmt],
     *,
     direct_bucket_ref: str | None = None,
+    direct_joint_bucket_ref: str | None = None,
 ) -> list[ast.stmt]:
     """Shared predicate-call compilation: arg normalisation + lambda hoist.
 
@@ -395,6 +396,7 @@ def _compile_predicate_call_impl(
     return lambda_defs + ctx.strategy.emit_sub_call(
         ctx, fname, arity, arg_exprs, k_stmts,
         direct_bucket_ref=direct_bucket_ref,
+        direct_joint_bucket_ref=direct_joint_bucket_ref,
     )
 
 

@@ -646,7 +646,10 @@ bypasses.
 | E4c | Lowering reads `tail_recursive` (TRO) | ✅ |
 | E5a | Toggle field + IR-side gating | ✅ |
 | E5b | Legacy-bypass gating + matrix tests | ✅ |
-| E6 | Retire legacy bypasses | ⏳ |
+| E6a | Joint-bucket hint conduit | ✅ |
+| E6b | Retire `_inject_bucket_refs_trampoline` | ⏳ |
+| E6c | Retire `_compile_tro_body`/`_compile_tro_tail` | ⏳ |
+| E6d | Retire DR preprocess + legacy term-walking analyses | ⏳ |
 
 Each pass ships with round-trip (idempotence), no-op (ref-equal
 on empty plan), hashability (frozen dataclass), and legacy-

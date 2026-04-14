@@ -398,6 +398,7 @@ def _dispatch_call_trampoline(
     arg_exprs: list[ast.expr],
     *,
     direct_bucket_ref: str | None = None,
+    direct_joint_bucket_ref: str | None = None,
 ) -> ast.expr:
     """Generate: StepGenerator(fname._get_dispatch(), this_generator, arg0, …, trail)
 
@@ -417,6 +418,20 @@ def _dispatch_call_trampoline(
     jbrmap = ctx.joint_bucket_ref_map
     trail_name = ctx.trail_name
     self_name = ctx.self_name
+
+    # Slice E6a: prefer the IR-path joint hint over the legacy
+    # ``ctx.joint_bucket_ref_map`` lookup.  The hint gkey is byte-
+    # identical to what the legacy map would carry (E3 analyser reuses
+    # the same ``_joint_bucket_key`` helper).  Joint entries win over
+    # single-position entries — both hint and map — matching legacy's
+    # joint-first preference.
+    if direct_joint_bucket_ref is not None:
+        return ast.Call(
+            func=_name("StepGenerator"),
+            args=[ast.Name(id=direct_joint_bucket_ref, ctx=ast.Load()), _name(self_name)]
+                + arg_exprs + [_name(trail_name)],
+            keywords=[],
+        )
 
     # Try joint first (more selective — two args constrain the bucket further)
     for pos_i in range(arity):

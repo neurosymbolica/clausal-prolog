@@ -261,12 +261,14 @@ class SubCall(GoalOp):
     - ``direct_bucket_ref`` — name of a pre-bound single-position
       bucket function in ``base_globals`` that dispatch may short-
       circuit to when a statically-known argument matches an indexed
-      position (call-site specialisation).  **Joint-position**
-      (two-arg) bucket specialisation is not yet representable as a
-      hint; see ``todo/slice_e_lowering_reads_hints.md`` §E6.  Until
-      the joint-hint field lands, joint-position dispatch still rides
-      ``ctx.joint_bucket_ref_map`` (populated by legacy
-      ``_inject_bucket_refs_trampoline``).
+      position (call-site specialisation).
+    - ``direct_joint_bucket_ref`` — same idea for **joint-position**
+      (two-arg) specialisation: global name of the pre-bound joint
+      bucket function when the call site has two statically-known
+      args matching an ``(pos_i, pos_j)`` joint index of the callee.
+      Takes precedence over ``direct_bucket_ref`` (joint entries are
+      more selective), matching the legacy
+      ``_dispatch_call_trampoline`` joint-first preference.
     - ``tail_recursive`` — ``True`` when this call is the tail of a
       TRO-eligible clause; the lowering rewrites it as an argument
       reassignment + loop continue rather than a real sub-call.
@@ -282,6 +284,7 @@ class SubCall(GoalOp):
     arity: int
     args: list[Term]
     direct_bucket_ref: Union[str, None] = None
+    direct_joint_bucket_ref: Union[str, None] = None
     tail_recursive: bool = False
     tro_check_indices: frozenset = dataclasses.field(default_factory=frozenset)
     destructive_reuse: bool = False

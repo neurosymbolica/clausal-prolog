@@ -126,6 +126,47 @@ def test_call_site_pass_matches_legacy_gkey():
     )
 
 
+def test_dispatch_call_trampoline_reads_direct_joint_bucket_ref_hint():
+    """E6a: ``_dispatch_call_trampoline`` emits a direct joint-bucket
+    call when given a ``direct_joint_bucket_ref`` kwarg.  The joint
+    hint wins over both the joint-map lookup and the single-position
+    hint (joint entries are more selective)."""
+    import ast as _ast
+    from clausal.logic.compiler.compile_ctx import CompilationContext
+    from clausal.logic.compiler.goal_trampoline import _dispatch_call_trampoline
+
+    ctx = CompilationContext(db=None, var_context={}, trail_name="trail")
+    arg_exprs = [_ast.Constant(value="red"), _ast.Constant(value=1)]
+    call_expr = _dispatch_call_trampoline(
+        ctx, "pair_e6a", 2, arg_exprs,
+        direct_bucket_ref="_bucket_pair_e6a_0_red",
+        direct_joint_bucket_ref="_joint_pair_e6a_0_1_red_1",
+    )
+    assert isinstance(call_expr, _ast.Call)
+    first = call_expr.args[0]
+    assert isinstance(first, _ast.Name)
+    assert first.id == "_joint_pair_e6a_0_1_red_1"
+
+
+def test_call_site_pass_apply_writes_joint_hint():
+    """E6a: ``apply`` writes joint_hints onto
+    ``SubCall.direct_joint_bucket_ref``."""
+    from clausal.logic.compiler.optimisations import call_site
+    from clausal.logic.compiler.ir import Sequence, SubCall
+    from clausal.terms import Var
+    ir = Sequence(ops=[
+        SubCall(fname="foo", arity=2, args=[Var(), Var()]),
+    ])
+    plan = call_site.CallSitePlan(
+        hints=(),
+        joint_hints=((0, "_joint_gkey"),),
+    )
+    new_ir = call_site.apply(ir, plan)
+    assert new_ir is not ir
+    assert new_ir.ops[0].direct_joint_bucket_ref == "_joint_gkey"
+    assert new_ir.ops[0].direct_bucket_ref is None
+
+
 def test_dispatch_call_trampoline_reads_direct_bucket_ref_hint():
     """E4a: ``_dispatch_call_trampoline`` emits a direct bucket-ref
     call when given a ``direct_bucket_ref`` kwarg, independent of
