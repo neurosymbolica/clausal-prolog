@@ -6,11 +6,18 @@ catch (shallow + trampoline twins), goal lambdas, arithmetic /
 structural comparisons, and the small helpers ``_flatten_conjunction``
 and ``_hoist_lambda_args``.
 
+Inner goal compilation (Slice D7c-β2): each helper routes inner goals
+through the IR pipeline (:func:`terms_to_goalop` + strategy-specific
+``lower``), not the legacy ``_dispatch_goal[_trampoline]`` dispatchers
+which β3 will delete.  The local :func:`_lower_inner` /
+:func:`_lower_inner_trampoline` wrappers are byte-identical to the
+corresponding legacy dispatch at the shapes these helpers accept.
+
 Cycle handling: ``goal_shallow`` / ``goal_trampoline`` import this
-module, so the call-backs into ``_dispatch_goal`` /
-``_dispatch_goal_trampoline`` inside each control-construct helper
-use a function-local import.  ``_EXTRA_FUNCDEF`` lives in
-``_ast_helpers`` (leaf; no cycle).
+module, so the back-imports of ``lower_python_shallow`` /
+``lower_python_trampoline`` inside the wrappers stay function-local
+(ratified B4/B6 idiom).  ``_EXTRA_FUNCDEF`` lives in ``_ast_helpers``
+(leaf; no cycle).
 """
 
 from __future__ import annotations
@@ -48,6 +55,45 @@ AstCall = Call
 AstLoadName = LoadName
 
 
+def _lower_inner(
+    ctx: CompilationContext,
+    inner: Any,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Byte-identical replacement for the legacy shallow dispatcher
+    ``_dispatch_goal(ctx, inner, k_stmts)`` via the IR pipeline.
+
+    Forces :class:`ShallowStrategy` on entry to match legacy semantics
+    (inner sub-generators in ``once`` / ``findall`` / ``catch`` /
+    goal-lambda bodies etc. are always compiled shallow regardless of
+    the outer clause's strategy).  Wrapping *inner* in a singleton
+    :func:`terms_to_goalop` call produces a :class:`Sequence` whose
+    fold lowers identically to a single ``_dispatch_goal`` call.
+    """
+    from .strategy import ShallowStrategy
+    from .terms_to_goalop import terms_to_goalop
+    from . import lower_python_shallow
+    if not isinstance(ctx.strategy, ShallowStrategy):
+        ctx = ctx.replace(strategy=ShallowStrategy())
+    ir = terms_to_goalop([inner], ctx.db)
+    return lower_python_shallow.lower(ir, ctx, k_stmts)
+
+
+def _lower_inner_trampoline(
+    ctx: CompilationContext,
+    inner: Any,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
+    """Trampoline counterpart to :func:`_lower_inner`.  Byte-identical
+    replacement for ``_dispatch_goal_trampoline(ctx, inner, k_stmts)``
+    via :mod:`.lower_python_trampoline`.
+    """
+    from .terms_to_goalop import terms_to_goalop
+    from . import lower_python_trampoline
+    ir = terms_to_goalop([inner], ctx.db)
+    return lower_python_trampoline.lower(ir, ctx, k_stmts)
+
+
 def _compile_arith_cmp(
     ctx: CompilationContext,
     l: Any,
@@ -79,10 +125,9 @@ def _deref_cmp(
 
 def _compile_once(ctx: CompilationContext, inner, k_stmts):
     """Compile once(goal) — take first solution of inner goal, then continue."""
-    from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name
     once_gen = ctx.fresh("_once_gen")
-    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
+    inner_stmts = _lower_inner(ctx, inner, [_yield_none_stmt()])
     once_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -113,7 +158,6 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
 
 def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
     """Compile call_nth(Goal, N) — succeed on the Nth solution of Goal only."""
-    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     count_var = ctx.fresh("_cn_count")
@@ -123,7 +167,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
 
     n_expr = term_to_ast_expr(n_arg, var_context, eval_arith=True)
 
-    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
+    inner_stmts = _lower_inner(ctx, inner, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -199,7 +243,6 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
 
 def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     """Compile count_all(Goal, Count) — count solutions without collecting."""
-    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     n_var = ctx.fresh("_ca_n")
@@ -209,7 +252,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
     count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
 
-    inner_stmts = _dispatch_goal(ctx, inner, [_yield_none_stmt()])
+    inner_stmts = _lower_inner(ctx, inner, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -257,7 +300,6 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
 def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k_stmts):
     """Compile setup_call_cleanup(Setup, Call, Cleanup) — deterministic cleanup."""
-    from .goal_shallow import _dispatch_goal
     trail_name = ctx.trail_name  # noqa: F841 — kept for symmetry with sibling helpers
     setup_gen = ctx.fresh("_scc_setup")
     ok_var = ctx.fresh("_scc_ok")
@@ -267,7 +309,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     cleanup_gen = ctx.fresh("_scc_cleanup")
 
     def _make_sub_gen(name, goal):
-        stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
+        stmts = _lower_inner(ctx, goal, [_yield_none_stmt()])
         body = stmts + [
             ast.Return(value=ast.Constant(value=None)),
             ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -356,7 +398,6 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
 
 def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     """Compile freeze(X, Goal) — delay Goal until X is bound."""
-    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     x_var = ctx.fresh("_fz_x")
@@ -366,9 +407,9 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
     x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
 
-    bound_stmts = _dispatch_goal(ctx, goal, k_stmts)
+    bound_stmts = _lower_inner(ctx, goal, k_stmts)
 
-    deferred_stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
+    deferred_stmts = _lower_inner(ctx, goal, [_yield_none_stmt()])
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -438,7 +479,6 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
 
 def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
     """Compile when(Cond, Goal) — delay Goal until Cond is satisfied."""
-    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
 
@@ -459,7 +499,7 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
         return _compile_when(ctx, cond.left, inner_when, k_stmts)
 
     thunk_name = ctx.fresh("_when_thunk")
-    deferred_stmts = _dispatch_goal(ctx, goal, [_yield_none_stmt()])
+    deferred_stmts = _lower_inner(ctx, goal, [_yield_none_stmt()])
     thunk_body = deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -521,7 +561,6 @@ def _compile_find_all_core(
     dedup: bool = False,
 ) -> list[ast.stmt]:
     """Compile find_all/3, bag_of/3, set_of/3 as special forms."""
-    from .goal_shallow import _dispatch_goal
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     results_var = ctx.fresh("_fa_results")
@@ -532,7 +571,7 @@ def _compile_find_all_core(
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
     bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
 
-    inner_stmts = _dispatch_goal(ctx, inner_goal, [_yield_none_stmt()])
+    inner_stmts = _lower_inner(ctx, inner_goal, [_yield_none_stmt()])
     gen_body = inner_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
@@ -733,9 +772,8 @@ def _compile_catch(
     """
     from .strategy import TrampolineStrategy
     if isinstance(ctx.strategy, TrampolineStrategy):
-        from .goal_trampoline import _dispatch_goal_trampoline
-        goal_stmts = _dispatch_goal_trampoline(ctx, goal_arg, k_stmts)
-        recovery_stmts = _dispatch_goal_trampoline(ctx, recovery, k_stmts)
+        goal_stmts = _lower_inner_trampoline(ctx, goal_arg, k_stmts)
+        recovery_stmts = _lower_inner_trampoline(ctx, recovery, k_stmts)
         return _compile_catch_impl(
             ctx, catcher,
             goal_body_stmts=goal_stmts,
@@ -743,9 +781,8 @@ def _compile_catch(
             always_catch=always_catch,
         )
 
-    from .goal_shallow import _dispatch_goal
-    goal_stmts = _dispatch_goal(ctx, goal_arg, [_yield_none_stmt()])
-    recovery_stmts = _dispatch_goal(ctx, recovery, [_yield_none_stmt()])
+    goal_stmts = _lower_inner(ctx, goal_arg, [_yield_none_stmt()])
+    recovery_stmts = _lower_inner(ctx, recovery, [_yield_none_stmt()])
 
     goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
         ctx, "_catch_gen", goal_stmts, k_stmts,
@@ -771,7 +808,9 @@ def _compile_goal_lambda(
     lambda_node: Lambda,
 ) -> tuple[str, ast.FunctionDef]:
     """Compile a Lambda node to a simple-mode dispatch function."""
-    from .goal_shallow import _dispatch_goal
+    from .strategy import ShallowStrategy
+    from .terms_to_goalop import terms_to_goalop
+    from . import lower_python_shallow
     enclosing_var_context = ctx.var_context
     trail_name = ctx.trail_name
     func_name = ctx.fresh("_lambda")
@@ -783,9 +822,10 @@ def _compile_goal_lambda(
     alloc_stmts = _preallocate_body_vars(body_goals, body_vc)
 
     body_ctx = ctx.replace(var_context=body_vc)
-    k: list[ast.stmt] = [_yield_none_stmt()]
-    for goal in reversed(body_goals):
-        k = _dispatch_goal(body_ctx, goal, k)
+    if not isinstance(body_ctx.strategy, ShallowStrategy):
+        body_ctx = body_ctx.replace(strategy=ShallowStrategy())
+    body_ir = terms_to_goalop(body_goals, body_ctx.db)
+    k = lower_python_shallow.lower(body_ir, body_ctx, [_yield_none_stmt()])
 
     body_stmts = alloc_stmts + k + [
         ast.Return(value=ast.Constant(value=None)),

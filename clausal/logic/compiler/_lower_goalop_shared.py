@@ -391,17 +391,18 @@ def _lower_meta_call(
     # and handles kwargs signature normalisation itself.
     if kind == "naf_tabled":
         return _compile_tabled_naf_simple(ctx, margs["call"], k_stmts)
-    # ``forall`` rewrites to ``Not(And(cond, Not(action)))`` and
-    # re-dispatches through the shallow goal compiler, matching the
-    # legacy ``forall`` arm in both strategy dispatchers.
+    # ``forall`` rewrites to ``Not(And(cond, Not(action)))``.  Legacy
+    # re-dispatched through the shallow goal compiler; Slice D7c-β2
+    # routes that through the IR pipeline via the local
+    # :func:`_lower_inner` wrapper so no legacy dispatcher is reached.
     if kind == "forall":
         from clausal.terms import And, Not
-        from .goal_shallow import _dispatch_goal
+        from .control_constructs import _lower_inner
         rewritten = Not(operand=And(
             left=margs["cond"],
             right=Not(operand=margs["action"]),
         ))
-        return _dispatch_goal(ctx, rewritten, k_stmts)
+        return _lower_inner(ctx, rewritten, k_stmts)
     if kind == "throw":
         return _compile_throw(ctx, margs["term"])
     if kind == "halt":
