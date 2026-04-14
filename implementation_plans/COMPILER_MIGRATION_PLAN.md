@@ -383,6 +383,30 @@ is demonstrated.
 
 **This is the biggest slice.** It also unblocks F and G.
 
+**Status (2026-04-13):** D1 through D7b complete; D7c (legacy
+delete) deferred for bake.  See `todo/slice_d_goalop_ir.md` for
+the per-sub-slice progress log and validation evidence:
+
+| Sub-slice | What | Status |
+|---|---|---|
+| D1 | `GoalOp` tagged union | ✅ |
+| D2–D3 | `terms_to_goalop` + lowering for the binding/constraint subset | ✅ |
+| D4 | Parallel-implementation harness with AST-diff stop-the-line | ✅ |
+| D5a–j | Coverage expansion (And/Or/Not/IfExpr/SubCall/MetaCall/list-patterns/tabled-NAF/Fail/PyThunkOp/nested-TupleLiteral) | ✅ |
+| D6a | TRO `analyse_ir` parallel shadow | ✅ |
+| D6b | destructive_reuse `analyse_ir` parallel shadow | ✅ |
+| D6c | Call-site bucket-ref `analyse_ir` parallel shadow | ✅ |
+| D6d | Tighten cross-check coverage (thread `db`; "IR ⊇ legacy" audit) | ✅ |
+| D7a | Flip `use_ir_path` default to `True` | ✅ baking |
+| D7b | Promote IR path to source-of-truth | ✅ baking |
+| D7c | Delete legacy `_dispatch_goal` / `_dispatch_goal_trampoline` | ⏳ deferred |
+
+D7c is intentionally held: the value of D7b is the parallel
+verification gate, which D7c removes.  Letting both paths run for
+one release cycle of green CI catches any latent IR bug before
+the safety net comes off.  Slice F (invariants) lands during the
+bake.
+
 **Current state:** Goal compilation pattern-matches directly on
 `clausal.pythonic_ast.nodes` / `clausal.terms` types inside
 `compile_goal` and its children. No intermediate representation.
@@ -450,14 +474,34 @@ Each optimisation in turn, gated by its own sub-slice.
 
 ### D7. Retire the legacy path
 
-When the test corpus is 100% IR-coverage and the full test suite
-passes with `ctx.use_ir_path = True` by default for a release
-cycle:
+D7 split into three sub-slices during execution:
 
-- Flip the default.
-- After one more release with no reported regressions: delete the
-  legacy `compile_goal` dispatcher and all its helpers. They're
-  replaced by `terms_to_goalop` + `lower_python_<strategy>`.
+**D7a. Flip `use_ir_path` default to `True`.**  Smallest meaningful
+step: `CompilationContext.use_ir_path` defaults from `False` to
+`True`.  The D4 IR shadow + D6 cross-checks now run on every
+compile, not just under `CLAUSAL_IR_PATH=1`.  No behaviour change —
+lowering still uses legacy results.  ~5% test-suite overhead from
+always-on shadowing.  Reversible: one-line revert.
+
+**D7b. Promote IR path to source-of-truth.**  `_compile_body_impl`
+returns the IR-produced statements when `_run_ir_parallel`
+succeeds; legacy fold runs alongside as the verification gate.
+Provably safe because every IR run since D4 has asserted
+byte-for-byte equality with legacy *before* returning.
+
+**D7c. Delete the legacy dispatcher.**  Pull out
+`goal_shallow._dispatch_goal`, `goal_trampoline._dispatch_goal_trampoline`,
+their pattern-match helpers, and the parallel cross-check
+machinery.  Public entry points (`compile_goal`, `compile_body`,
+etc.) keep their signatures but reduce to
+`terms_to_goalop` + `lower_python_<strategy>`.
+
+D7c blocks on the bake: each round of CI under D7a/D7b is a
+parallel-verification gate that D7c removes.  Held until either
+(a) one full release cycle of green CI, or (b) Slice E lands and
+moves the optimisation hint reads onto SubCall hints — at which
+point the legacy path becomes the only remaining consumer of the
+old code and deletion is mechanical.
 
 **Preconditions:** Slice C complete (Strategy exists; lowering is
 strategy-aware).
@@ -549,8 +593,23 @@ compiler/optimisations/
    suite with the optimisation on and off; behaviour must be
    equivalent (same solutions enumerated).
 
-**Preconditions:** Slice D complete (IR exists; passes operate
-on it).
+**Preconditions:** Slice D complete through D7b (IR is
+source-of-truth; D6 analyses exist as parallel shadows).  D7c is
+**not** a precondition — Slice E moves the optimisation hint
+reads onto SubCall hints, which is what *enables* clean D7c.
+
+**Scheduling note (2026-04-13):** Slice F is scheduled before
+Slice E in the post-D7b order; see §13.  E's reorganisation is
+substantial and it's the path to D7c, but F is small / additive
+/ high-payoff and acts as a safety net while D7b bakes.
+
+**Pre-E follow-up — meta-call inner coverage.**  `walk_goal_ops`
+does not descend into `MetaCall.args`, so the D6 analyses miss
+`SubCall`s nested inside `once(...)` / `findall(...)` / etc.
+Legacy has the same blind spot, so the D6 cross-checks still
+agree, but it's a real coverage hole D7c will inherit.  Close
+this before E so the unified `analyse(ir) → Plan` shape lands
+with full meta-call recursion from day one.
 
 **Validation:**
 
@@ -609,8 +668,15 @@ failing at runtime with cryptic errors.
 5. When an assertion fires, error message includes: phase name,
    predicate identity, offending clause index, specific violation.
 
-**Preconditions:** Slice D complete (IR gives named phases
-something to assert about).
+**Preconditions:** Slice D complete through D7b (IR is
+source-of-truth; phase boundaries are stable enough to assert
+against).  D7c is not a precondition.
+
+**Scheduling note (2026-04-13):** F is the **immediate next
+slice** after D7b.  The IR promotion makes phase boundaries
+crisp; F locks them in with runtime assertions.  Small,
+additive, low-risk — acts as a safety net while D7b bakes
+toward D7c.
 
 **Validation:**
 
@@ -825,6 +891,8 @@ only retiring after D7 when equivalence is demonstrated.
 
 ## 13. Ordering and parallelism options
 
+### Original plan
+
 The dependency graph (§2) allows:
 
 - **Conservative order:** A → B → C → D → E → F → G → H.
@@ -841,15 +909,50 @@ The dependency graph (§2) allows:
   internal `_monolith` cleanup doesn't need A). Not recommended
   — the coordination cost is high relative to the savings.
 
-Recommendation: **moderately parallel**. A and B together take
-2–3 weeks. Then C / E / H run in parallel (~1–2 weeks each),
-while D starts on its sub-slices independently (~4–8 weeks).
-F and G land in the tail after D.
+Original recommendation: **moderately parallel**. A and B
+together take 2–3 weeks. Then C / E / H run in parallel (~1–2
+weeks each), while D starts on its sub-slices independently
+(~4–8 weeks). F and G land in the tail after D.
 
 Total calendar time: ~8–12 weeks under the moderate plan, ~6–10
 weeks if D is the bottleneck and others finish earlier.
 
 Total engineering effort: ~12–16 person-weeks, dominated by D.
+
+### Actual ordering as executed (2026-04-13 update)
+
+A, B, C completed.  D ran linearly through D1 → D7b, with E and H
+deferred until after D's heavy lifting was complete (the parallel
+C/E/H approach was not pursued — D drove the schedule).
+
+Post-D7b ordering, with D7c held for bake:
+
+```
+  D7b (✅ done, baking)
+       │
+       ├─ F  ← immediate next: small, additive, safety-net
+       │
+       ├─ pre-E follow-up: meta-call inner coverage (item #2)
+       │
+       └─ E  ← unblocks clean D7c
+              │
+              └─ D7c (delete legacy dispatcher)
+                     │
+                     └─ G, H  (parallel, both small)
+```
+
+**Rationale for F-before-E.**  E reorganises optimisation passes
+into a uniform `analyse(ir) → Plan` shape with hint-reading
+lowering — substantial reorg, ~2 weeks per the slice estimate.
+F is small (~3–5 days) and lands runtime invariant assertions at
+phase boundaries.  Doing F first means the bake under D7a/D7b
+runs with stricter correctness gates while waiting for E to land.
+
+**D7c gating.**  D7c blocks on either the bake completing or E
+landing (whichever comes first).  E is the cleaner trigger:
+once optimisation hints live on `SubCall` and lowering reads
+them, the legacy dispatcher's only consumers are gone and the
+delete is mechanical.
 
 ---
 
