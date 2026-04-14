@@ -744,30 +744,17 @@ def _compile_body_impl(
         _prepopulate_call_site_runtime(goals, ctx)
     assert_body_vars_preallocated(ctx, goals)
 
-    try:
-        # Slice E6d-β: predicate-trampoline sweep pre-builds the IR when
-        # running the TRO eligibility check; reuse it here instead of
-        # rebuilding.  ``body_ir`` is ``None`` for callers that bypass the
-        # sweep (shallow path, meta-call recursion, test harnesses).
-        ir = body_ir if body_ir is not None else terms_to_goalop(goals, ctx.db)
-    except NotImplementedError:
-        # IR subset does not yet cover this body shape (e.g. ``And``
-        # as an ``Or`` arm — a known ``_convert`` gap).  Fall back to
-        # the legacy right-to-left dispatcher fold; the dispatcher's
-        # pattern-match body handles the full construct set.
-        #
-        # ``strategy.compile_goal`` bypasses IR-hint-driven
-        # optimisations (destructive-reuse, call-site bucket-refs,
-        # TRO tail rewrite).  For TRO specifically this branch is
-        # unreachable — TRO-eligible clauses are all inside the IR
-        # subset today — but we refuse to compile a TRO clause via
-        # the fallback to keep behaviour honest.
-        if tro_active:
-            raise
-        legacy_k: list[ast.stmt] = [strategy.emit_leaf_yield(ctx)]
-        for goal in reversed(goals):
-            legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
-        return alloc_stmts + legacy_k
+    # Slice E6d-β: predicate-trampoline sweep pre-builds the IR when
+    # running the TRO eligibility check; reuse it here instead of
+    # rebuilding.  ``body_ir`` is ``None`` for callers that bypass the
+    # sweep (shallow path, meta-call recursion, test harnesses).
+    # Slice D7c-β1 closed the last ``_convert`` gap (``And`` nested in
+    # ``Or``/``Not``/``IfExpr``, plus meta-name arity-mismatch
+    # deferral) so the IR-gap fallback to ``strategy.compile_goal`` is
+    # gone — every body shape the compiler accepts is in the IR
+    # subset.  ``terms_to_goalop`` now signals a genuine compiler bug
+    # if it raises :class:`NotImplementedError`.
+    ir = body_ir if body_ir is not None else terms_to_goalop(goals, ctx.db)
 
     if tro_active:
         from .optimisations import tro as _tro_pass
@@ -812,8 +799,9 @@ def _prepopulate_call_site_runtime(
     sees entries and emits direct bucket refs byte-identically to the
     pre-E6b shape.  No-op under a strategy without bucket-ref
     specialisation, when ``base_globals`` is unset, when the
-    ``call_site`` optimisation flag is disabled, or when
-    ``terms_to_goalop`` declines the body shape.
+    ``call_site`` optimisation flag is disabled.  Slice D7c-β1 closed
+    the IR subset gap, so ``terms_to_goalop`` is no longer expected to
+    raise :class:`NotImplementedError` on bodies the compiler accepts.
     """
     from .strategy import TrampolineStrategy
     if ctx.base_globals is None:
@@ -824,10 +812,7 @@ def _prepopulate_call_site_runtime(
         return
     from .terms_to_goalop import terms_to_goalop
     from .optimisations import call_site as _call_site
-    try:
-        ir = terms_to_goalop(ir_source, ctx.db)
-    except NotImplementedError:
-        return
+    ir = terms_to_goalop(ir_source, ctx.db)
     plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
     _call_site.populate_runtime_from_plan(ir, plan, ctx, ctx.base_globals)
 

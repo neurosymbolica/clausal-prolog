@@ -208,13 +208,19 @@ def test_findall_becomes_meta_call_with_flags_in_lowering():
         assert mc.args == {"template": t, "inner": g, "bag": b}
 
 
-def test_meta_call_wrong_arity_defers_to_legacy():
+def test_meta_call_wrong_arity_becomes_subcall():
     # A ``Call`` that names a meta-pred but doesn't match any explicit
-    # arm (wrong arity) must fall back so the legacy path has a chance
-    # rather than being silently compiled as a user predicate call.
-    with pytest.raises(NotImplementedError, match="not yet supported"):
-        terms_to_goalop([nodes.Call(
-            func=nodes.LoadName(name="once"),
-            args=[],
-            kwargs=[],
-        )])
+    # arm (wrong arity) converts to :class:`SubCall` — it resolves as
+    # an ordinary user predicate call, matching the legacy dispatcher's
+    # behaviour at the same arity.  Pre-D7c-β1 this deferred to the
+    # legacy path via :class:`NotImplementedError`; that deferral is
+    # gone along with the legacy fallback.
+    ir = terms_to_goalop([nodes.Call(
+        func=nodes.LoadName(name="once"),
+        args=[],
+        kwargs=[],
+    )])
+    sub = ir.ops[0]
+    assert type(sub).__name__ == "SubCall"
+    assert sub.fname == "once"
+    assert sub.arity == 0

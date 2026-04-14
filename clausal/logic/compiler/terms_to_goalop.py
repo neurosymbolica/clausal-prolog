@@ -58,18 +58,11 @@ from clausal.logic.compiler.ir import (
 # Meta-predicate names that must never be converted to a plain
 # :class:`SubCall` — the legacy dispatcher routes them to dedicated
 # ``_compile_*`` helpers and we mirror that via explicit :class:`MetaCall`
-# arms below.  Kept as a frozenset safety net: if a ``Call`` with one of
-# these names doesn't match any explicit arm (wrong arity, unexpected
-# kwargs), we defer to legacy rather than silently compiling it as a
-# user predicate call.
-_META_NAMES: frozenset[str] = frozenset({
-    "catch", "catch_error", "catch_recover", "forall",
-    "throw", "halt",
-    "once", "call_nth", "count_all",
-    "setup_call_cleanup", "call_cleanup",
-    "freeze", "when",
-    "findall", "bagof", "setof",
-})
+# arms below.  Pre-D7c-β1 this list also gated a legacy-fallback deferral
+# for meta-name calls with unexpected arity/kwargs (e.g. ``findall/4``);
+# that deferral is gone — such calls now convert to :class:`SubCall` and
+# resolve against the database like any other user predicate, which is
+# what the legacy path did at those arities too.
 
 
 def terms_to_goalop(body: list[Any], db: Any = None) -> GoalOp:
@@ -176,6 +169,17 @@ def _convert(goal: Any, db: Any) -> GoalOp:
     if isinstance(goal, nodes.TupleLiteral) and goal.elements:
         inner_ops: list[GoalOp] = []
         _extend(inner_ops, list(goal.elements), db)
+        return Sequence(ops=inner_ops)
+    # ``And`` reaching ``_convert`` (nested inside an :class:`Or` arm,
+    # :class:`Not` operand, or :class:`IfExpr` branch — at the
+    # conjunction top :func:`_extend` flattens ``And`` directly).  Wrap
+    # the flattened conjunction in an inner :class:`Sequence` so the
+    # lowering's right-to-left fold matches the legacy
+    # ``_dispatch_goal`` ``And`` arm byte-for-byte.
+    if isinstance(goal, nodes.And):
+        inner_ops: list[GoalOp] = []
+        _extend(inner_ops, goal.left, db)
+        _extend(inner_ops, goal.right, db)
         return Sequence(ops=inner_ops)
     match goal:
         # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
@@ -309,14 +313,14 @@ def _convert(goal: Any, db: Any) -> GoalOp:
 
         # ``Call(LoadName | LoadAttr)`` → ``SubCall``.  Meta-predicate
         # names not captured by the explicit arms above (wrong arity,
-        # unexpected kwargs) fall through to ``_META_NAMES`` deferral
-        # below so the legacy path gets a shot rather than us silently
-        # compiling them as user predicate calls.  Keyword arguments on
-        # user predicates are normalised here (WK-4) using the predicate
-        # signature on ``db`` — when no signature is registered we fall
-        # back rather than guessing argument order.  Lambda hoisting
-        # stays in the lowering, so :class:`SubCall.args` carries the
-        # terms unchanged.
+        # unexpected kwargs) fall through here and resolve as ordinary
+        # user predicate calls — the legacy dispatcher did the same at
+        # those arities.  Keyword arguments on user predicates are
+        # normalised here (WK-4) using the predicate signature on
+        # ``db``; when no signature is registered we defer to legacy
+        # rather than guessing argument order.  Lambda hoisting stays
+        # in the lowering, so :class:`SubCall.args` carries the terms
+        # unchanged.
         case nodes.Call(func=func, args=call_args, kwargs=call_kwargs) \
                 if isinstance(func, (nodes.LoadName, nodes.LoadAttr)):
             if isinstance(func, nodes.LoadName):
@@ -325,8 +329,6 @@ def _convert(goal: Any, db: Any) -> GoalOp:
                 fname = _dotted_name_from_loadattr(func)
                 if fname is None:
                     _not_yet(goal)
-            if fname in _META_NAMES:
-                _not_yet(goal)
             n_pos = len(call_args)
             arity = n_pos + len(call_kwargs or [])
             ordered_args: list = list(call_args)

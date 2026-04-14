@@ -234,12 +234,10 @@ def _sweep_tro_eligible(
       :func:`_build_predicate_trampoline_funcdef` reads
       ``ctx.clause_tro_plans`` instead of re-running analysis.
 
-    Clauses whose body shape is outside the IR subset
-    (``terms_to_goalop`` raises :class:`NotImplementedError`) are silently
-    skipped — they get no cache entry and are therefore never TRO-eligible.
-    This matches the pre-E6d-β behaviour of the retired term-walking
-    ``_detect_tro_clause`` sweep: both paths returned ``False`` for any
-    shape the IR pipeline could not handle anyway.
+    Slice D7c-β1 closed the last IR subset gap, so every clause body
+    the compiler accepts converts — a :class:`NotImplementedError`
+    from :func:`terms_to_goalop` now signals a genuine compiler bug
+    and propagates.
 
     Returns the frozenset of TRO-eligible clause indices.
     """
@@ -251,10 +249,7 @@ def _sweep_tro_eligible(
         ctx_template.clause_tro_plans = {}
     eligible: list[int] = []
     for i, clause in enumerate(clauses):
-        try:
-            body_ir = terms_to_goalop(clause.body, db=db)
-        except NotImplementedError:
-            continue
+        body_ir = terms_to_goalop(clause.body, db=db)
         ctx_template.clause_ir_cache[id(clause)] = body_ir
         plan = _tro_analyse(body_ir, clause.head, functor, arity, db=db)
         ctx_template.clause_tro_plans[id(clause)] = plan
