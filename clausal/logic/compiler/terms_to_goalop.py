@@ -40,6 +40,7 @@ from clausal.logic.compiler.ir import (
     FDCompare,
     FDOp,
     GoalOp,
+    ListPatternUnify,
     MemberIn,
     MetaCall,
     Negate,
@@ -116,6 +117,15 @@ _REIFIED_KIND: dict[type, ReifiedKind] = {
 
 def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     """Flatten list / ``TupleLiteral`` conjunctions; convert each goal."""
+    # Boolean ``True`` is identity for conjunction — the legacy
+    # dispatcher short-circuits ``if goal is True: return list(k_stmts)``,
+    # i.e. it emits nothing and keeps the continuation intact.  The
+    # IR equivalent is to emit no ops at all.  ``False`` still defers
+    # via ``_convert``'s fall-through because its legacy behaviour
+    # (drop all continuations) is a non-local effect worth a dedicated
+    # IR op if it ever shows up in practice — currently it does not.
+    if body is True:
+        return
     if isinstance(body, list):
         for goal in body:
             _extend(ops, goal, db)
@@ -299,12 +309,15 @@ def _convert(goal: Any, db: Any) -> GoalOp:
             return SubCall(fname=fname, arity=arity, args=ordered_args)
 
         case nodes.Unify(left=l, right=r):
-            # Star-list unification (e.g. ``X is [*T, Last]``) routes
-            # through ``_compile_star_is`` in the legacy path and maps to
-            # ``ListPatternUnify`` in the IR — both belong to Slice D5g,
-            # not D2.  Defer so the D4 harness falls back cleanly.
-            if _is_star_list(l) or _is_star_list(r):
-                _not_yet(goal)
+            # Star-list unification (e.g. ``X := [*T, Last]``) routes
+            # through ``_compile_star_is`` in the legacy path.  Mirror
+            # the legacy preference for putting the star side first:
+            # when both sides carry stars the left side wins (legacy
+            # shallow / trampoline dispatchers both test ``l`` first).
+            if _is_star_list(l):
+                return ListPatternUnify(star_side=l, other_side=r)
+            if _is_star_list(r):
+                return ListPatternUnify(star_side=r, other_side=l)
             return Unify(l=l, r=r)
         case nodes.DoesNotUnify(left=l, right=r):
             return Dif(l=l, r=r)

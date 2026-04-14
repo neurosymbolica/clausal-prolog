@@ -301,22 +301,24 @@ class MetaCall(GoalOp):
 
 @dataclasses.dataclass
 class ListPatternUnify(GoalOp):
-    """Runtime bidirectional list-pattern unification guard.
+    """Body-side star-list unification (``X := [A, *T, B]`` and friends).
 
-    Backends emit a call to their runtime's equivalent of
-    ``_head_list_unify_input`` / ``_head_list_unify_output`` — see
-    ``compiler/README.md`` §7 for the runtime/compile-time boundary.
+    ``star_side`` is the Python list containing one or more
+    :class:`~clausal.pythonic_ast.nodes.StarUnpack` entries; the lowering
+    routes to ``_compile_single_star_is`` or ``_compile_multi_star_is``
+    depending on how many stars the list contains.  ``other_side`` is
+    the term being unified with the pattern (always a single term).
 
-    ``phase`` distinguishes head-unification (``"input"`` — target is
-    derefed, pattern binds on match) from body-side emission
-    (``"output"`` — pattern is constructed, target unified with the
-    built list).
+    D1 originally spelled this op out with parsed before/star/after
+    fields plus a ``phase`` literal for head-match reuse; Slice D5g
+    simplified to a raw-terms wrapper because (a) the parsed shape
+    leaked single-star implementation details into the IR, and (b)
+    head-match is not part of the body IR's scope.  A separate IR op
+    can land if head-match compilation is ever absorbed into the body
+    pipeline.
     """
-    target: Term
-    before_vars: list[Term]
-    star_var: Union[Term, None]
-    after_vars: list[Term]
-    phase: Literal["input", "output"]
+    star_side: list[Term]
+    other_side: Term
 
 
 # ─────────────────────────────────────────────────────────────────────────────

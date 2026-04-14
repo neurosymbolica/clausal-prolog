@@ -26,6 +26,7 @@ from clausal.logic.compiler.ir import (
     FDCompare,
     FDOp,
     GoalOp,
+    ListPatternUnify,
     MemberIn,
     MetaCall,
     ReifiedKind,
@@ -157,6 +158,14 @@ def lower_shared(
                     k_stmts,
                 ),
             ]
+
+        # ── Body-side star-list unification — delegate to the
+        # ``_compile_star_is`` helper in ``.star_segments``.  Single
+        # vs multi-star routing happens inside that helper; the IR
+        # carries only the raw pair (see ``ir.py::ListPatternUnify``).
+        case ListPatternUnify(star_side=ss, other_side=os):
+            from .star_segments import _compile_star_is
+            return _compile_star_is(ctx, ss, os, k_stmts)
 
         # ── Meta-predicate calls — delegate to the legacy helpers.
         # Each ``MetaCall`` kind corresponds to a specific legacy
