@@ -138,7 +138,7 @@ commit with its own corpus test:
 Each addition flips a `NotImplementedError` to a real conversion; AST
 diff stays green throughout.  Coverage progresses toward 100%.
 
-### D5e follow-ups (carry into D5f / D6 / D7)
+### D5 follow-ups (carry into D6 / D7)
 
 - `SubCall` lowering currently delegates to legacy
   `_compile_predicate_call_impl` (lambda hoist + term→ast + strategy
@@ -158,6 +158,46 @@ diff stays green throughout.  Coverage progresses toward 100%.
   ~150 lines because the shared-legacy-impl trick skipped real
   lowering work.  D6 (hints: `direct_bucket_ref`, `tail_recursive`,
   `destructive_reuse`) and D7 (retirement) will pay that back.
+- **D5f MetaCall.args carries raw terms**, not `GoalOp` children.
+  `walk_goal_ops` cannot descend into meta-call inners today.  Probably
+  fine for D6 analysis passes (none currently look inside meta-calls)
+  but verify when they migrate, and tighten the schema post-D7.
+- **D5f forall rewrites at lowering time** (`Not(And(cond, Not(action)))`
+  + shallow re-dispatch) to match legacy byte-for-byte.  Post-D7,
+  consider rewriting at `terms_to_goalop` time instead so the IR is
+  uniform.
+- **D5g ListPatternUnify is shape-opaque for multi-star** — the
+  single-vs-multi distinction is re-derived at lowering time by
+  `_compile_star_is`.  D6 analysis passes cannot reason about
+  list-pattern arity without re-parsing.  Fine today; revisit if an
+  analysis pass needs it.
+- **D5g defers `False` as goal conjunct**: legacy's "drop all
+  continuations" behaviour is a non-local effect.  Add a `Fail` IR
+  op (with lowering `return []`) if `False` ever appears in practice.
+- **D5 `_META_NAMES` safety-net frozenset** in `terms_to_goalop`
+  duplicates the explicit meta arms.  Delete alongside legacy in D7.
+
+### D5h (suggested, optional). Tabled-NAF
+
+Two deferred shapes still fall back:
+
+- `Not(Call(tabled_pred))` — `terms_to_goalop`'s `Not` arm explicitly
+  defers via `_not_yet` when `_is_tabled_naf(op, db)` matches.  Legacy
+  routes through `_compile_tabled_naf_simple`.
+- `IfExpr(test=Call(tabled_pred), ...)` — similar deferral in the
+  `IfExpr` arm.  Legacy general-ITE has a bespoke `_naf_tabled` branch.
+
+Pick the shape:
+- **Option A**: add `MetaCall(kind="naf_tabled", args={...})` + lowering
+  that calls `_compile_tabled_naf_simple`.  Consistent with D5f.
+- **Option B**: add a `Negate.tabled: bool` hint flag.  Lowering dispatches
+  on the flag.  Less uniform but makes the IR shape identical to the
+  non-tabled case.
+
+These are rare in the corpus (none of the current 10 fixtures exercise
+them with a real tabled db), so D5h is not blocking D6.  It IS blocking
+D7 — the "use_ir_path default True" flip will fail on any real program
+using tabled NAF.
 
 ### D6. Move optimisation passes to operate on `GoalOp`
 
