@@ -176,6 +176,24 @@ diff stays green throughout.  Coverage progresses toward 100%.
   op (with lowering `return []`) if `False` ever appears in practice.
 - **D5 `_META_NAMES` safety-net frozenset** in `terms_to_goalop`
   duplicates the explicit meta arms.  Delete alongside legacy in D7.
+- **D5h tabled-ITE kwargs asymmetry**: legacy
+  `_compile_general_ite_{shallow,trampoline}` emits `_naf_tabled(...)`
+  with `test.args` only, dropping `test.kwargs` from the arg tuple
+  while still counting them in arity (looks like a latent legacy bug).
+  The D5h IR path pulls `args` off the `SubCall`, which
+  `terms_to_goalop` has already normalised via `db.signature_for` to
+  include kwargs in positional order.  No test in the suite exercises
+  a tabled predicate call with kwargs inside an `IfExpr` test, so the
+  AST-diff gate stays green today.  If it ever fires: either match the
+  buggy legacy shape in IR lowering, or fix legacy too.  The `Not`
+  path is consistent — `_compile_tabled_naf_simple` normalises kwargs
+  itself.
+- **D5h corpus coverage gap**: `tests/test_ir_path_corpus.py` enables
+  `CLAUSAL_IR_PATH=1` only for its own fixtures and none exercise
+  tabled NAF.  Tabled-NAF IR coverage today comes from running the
+  full suite with the env var set globally (as D5h was validated).
+  Add `wfs_win.clausal` / a tabled-ITE fixture to the corpus so
+  default CI gates tabled-NAF drift without the env-var dance.
 
 ### D5h. Tabled-NAF — ✅ done
 
