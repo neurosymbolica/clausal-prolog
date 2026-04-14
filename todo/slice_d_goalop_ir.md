@@ -295,7 +295,38 @@ Validated:
 - Full ex-trealla suite (default) → 10481 passed, 90 skipped
 - Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10481 passed, 90 skipped
 
-### D6 (legacy heading retained for D6b/D6c)
+### D6b. destructive_reuse `analyse_ir` parallel shadow — ✅ done
+
+`destructive_reuse.analyse_ir(ir, head)` mirrors
+`_find_destructive_reuse_goals` over a `GoalOp` :class:`Sequence`:
+
+- `_collect_op_var_ids` walks every term field on an op and recurses
+  into child :class:`GoalOp`s — IR equivalent of the legacy
+  `_collect_var_ids(subsequent_goal, live_after)` that descends through
+  a goal AST node's dataclass fields.  Covers all D5j ops (`Fail`,
+  `PyThunkOp`) and the meta-call args dict (which may carry mixed
+  GoalOp / term children).
+- `_head_aliased_var_ids_ir` + `_collect_unify_pairs_ir` mirror the
+  legacy alias closure — only top-level `Unify` ops contribute (legacy
+  matches `Unify` / `And` only; `Or` / `Not` / `IfExpr` arms are not
+  descended).  Sequence is descended for parity with legacy `And`
+  recursion.
+- Determinism reuses :func:`tro._is_deterministic_op_ir` (D6a).
+
+Wired into `_find_destructive_reuse_goals` as a stop-the-line
+cross-check gated by `CLAUSAL_IR_PATH=1`
+(`destructive_reuse._maybe_cross_check_ir`).  Index sets aren't
+directly comparable — legacy indexes the post-flatten body, IR
+indexes `Sequence.ops` — so both are projected to the canonical
+`(fname, arity, occurrence#)` form before comparison.
+
+Validated:
+- `pytest tests/test_dr_ir_parallel.py` → 11 passed
+- `CLAUSAL_IR_PATH=1 pytest tests/test_destructive_reuse.py` → 33 passed
+- Full ex-trealla suite (default) → 10492 passed, 90 skipped
+- Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10492 passed, 90 skipped
+
+### D6c. Call-site bucket-ref `analyse_ir` parallel shadow — ⏳ pending
 
 - `_detect_tro_clause` → `tro.analyse(ir) -> TROPlan` (writes
   `SubCall.tail_recursive = True` on the tail call).
