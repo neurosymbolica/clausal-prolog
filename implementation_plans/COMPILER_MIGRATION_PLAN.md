@@ -603,6 +603,28 @@ Slice E in the post-D7b order; see §13.  E's reorganisation is
 substantial and it's the path to D7c, but F is small / additive
 / high-payoff and acts as a safety net while D7b bakes.
 
+**Status (2026-04-14):** E1, E2, E3 complete — the architecture
+pattern is established with all three D6 analyses migrated to
+`analyse(ir, ...) → Plan` / `apply(ir, plan) → ir`.  E4+ wire
+lowering to read the written hints and retire the legacy
+bypasses.
+
+| Sub-slice | Pass | Status |
+|---|---|---|
+| E1 | destructive_reuse | ✅ |
+| E2 | tro | ✅ |
+| E3 | call_site | ✅ |
+| E4 | Lowering reads hints (source-of-truth promotion) | ⏳ |
+| E5 | Disable-per-optimisation toggle | ⏳ |
+| E6 | Retire legacy bypasses | ⏳ |
+
+Each pass ships with round-trip (idempotence), no-op (ref-equal
+on empty plan), hashability (frozen dataclass), and legacy-
+parity tests.  Correctness coverage (on/off behavioural
+equivalence) stays with the existing end-to-end test files
+(`test_tail_recursion.py`, `test_destructive_reuse.py`,
+`test_callsite_specialization.py`) until E4 lands.
+
 **Pre-E follow-up — meta-call inner coverage** — ✅ done.
 
 `MetaCall.args` keeps its transitional shape (raw terms in
