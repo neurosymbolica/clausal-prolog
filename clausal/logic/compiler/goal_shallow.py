@@ -732,10 +732,20 @@ def _compile_body_impl(
     for goal in reversed(goals):
         legacy_k = strategy.compile_goal(ctx, goal, legacy_k)
 
+    # **D7b**: when the IR path is enabled and succeeds, *its* output
+    # is what we return — the IR path is now source-of-truth, the
+    # legacy fold runs alongside as a verification gate.  IR fallback
+    # (``terms_to_goalop`` raises ``NotImplementedError`` on a body
+    # shape outside the D5 subset) returns ``None`` and we use the
+    # legacy result; this keeps any never-yet-seen pathological body
+    # building cleanly until D7c retires legacy outright.
+    chosen_k = legacy_k
     if _ir_path_enabled(ctx):
-        _run_ir_parallel(goals, ctx, leaf, legacy_k, fresh_before)
+        ir_k = _run_ir_parallel(goals, ctx, leaf, legacy_k, fresh_before)
+        if ir_k is not None:
+            chosen_k = ir_k
 
-    return alloc_stmts + legacy_k
+    return alloc_stmts + chosen_k
 
 
 # ── Slice D4 harness observability ───────────────────────────────────────────
@@ -773,20 +783,24 @@ def _run_ir_parallel(
     leaf: list[ast.stmt],
     legacy_k: list[ast.stmt],
     fresh_before: int,
-) -> None:
-    """Slice D4 parallel-implementation harness.
+) -> list[ast.stmt] | None:
+    """Slice D4 parallel-implementation harness, promoted by D7b.
 
     Run the GoalOp IR path alongside the just-completed legacy fold and
     assert ``ast.dump`` equality.  Any drift is stop-the-line — this
-    routine raises ``AssertionError`` rather than silently papering over
-    a lowering bug.  Unsupported body shapes surface as
-    ``NotImplementedError`` from ``terms_to_goalop`` and are an
-    expected fallback, not a failure.
+    routine raises ``AssertionError`` rather than silently papering
+    over a lowering bug.  On success returns the IR-produced
+    statements (which D7b made source-of-truth); on
+    ``NotImplementedError`` from ``terms_to_goalop`` (body shape
+    outside the D5 subset) returns ``None`` so the caller falls back
+    to the legacy result.
 
     The IR run uses a cloned :class:`FreshNames` starting at
-    *fresh_before* (the legacy run's pre-fold counter value) so the two
-    emissions pick identical fresh names.  ``ctx.fresh`` itself is not
-    touched — callers see only the legacy advance.
+    *fresh_before* (the legacy run's pre-fold counter value) so the
+    two emissions pick identical fresh names.  ``ctx.fresh`` itself
+    is not touched — callers see only the legacy advance, which is
+    what downstream compilation relies on for further fresh-name
+    monotonicity.
     """
     import logging
     from ._ast_helpers import FreshNames
@@ -803,7 +817,7 @@ def _run_ir_parallel(
         # ``pytest --log-cli-level=DEBUG`` or ``logging.basicConfig``.
         _IR_PATH_STATS["fallbacks"] += 1
         logging.getLogger(__name__).debug("ir-path fallback: %s", exc)
-        return
+        return None
     lower_fn = (
         lower_python_shallow.lower
         if isinstance(ctx.strategy, ShallowStrategy)
@@ -820,6 +834,7 @@ def _run_ir_parallel(
             f"  ir:     {new_dump}"
         )
     _IR_PATH_STATS["matches"] += 1
+    return new_k
 
 
 def compile_body(

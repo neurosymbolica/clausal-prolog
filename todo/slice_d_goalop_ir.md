@@ -423,7 +423,37 @@ surface, D7b promotes the IR path to source-of-truth (lowering reads
 SubCall hints from the D6 analyses); D7c retires the legacy
 dispatcher entirely.
 
-### D7b. Promote IR path to source-of-truth — ⏳ pending
+### D7b. Promote IR path to source-of-truth — ✅ done
+
+`_compile_body_impl` now returns the IR-produced statements when
+`_run_ir_parallel` succeeds; the legacy fold still runs alongside
+and the AST-equality assertion still gates each compile, but its
+output is now the verification side.
+
+The change was provably safe because every IR run since D4 has
+asserted byte-for-byte equality with legacy *before* returning —
+swapping which side's output the caller sees is a no-op for any
+compile that passed the cross-check (i.e. all of them).
+
+`_run_ir_parallel` signature change: now returns `list[ast.stmt] |
+None` (was `None`).  `None` means IR fell back via
+`NotImplementedError` from `terms_to_goalop`; caller uses legacy.
+Across the .clausal corpus this fallback rate is 0/3723.
+
+The D6 optimisation hints (`SubCall.tail_recursive`,
+`destructive_reuse`, `direct_bucket_ref`) still aren't read by
+lowering — but they don't need to be: TRO has its own bypass body
+compiler, DR rewrites the body before `terms_to_goalop` sees it,
+and bucket-refs use `ctx.bucket_ref_map` which both paths consult
+via `_dispatch_call_trampoline`.  The optimisations work
+transparently under the IR path because they were always wired
+through layers shared with the IR's lowering.
+
+Validated:
+- Full ex-trealla suite (default) → 10497 passed, 90 skipped
+- Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10497 passed, 90 skipped
+
+### D7c. Retire the legacy dispatcher — ⏳ pending
 
 ### D7c. Retire the legacy dispatcher — ⏳ pending
 
