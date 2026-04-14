@@ -34,19 +34,30 @@ import pytest
 from clausal.import_hook import _load_module
 
 
-_FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "clausal_modules")
+_TESTS_DIR = os.path.dirname(__file__)
 
-_CORPUS = [
-    "anon.clausal",
-    "arith.clausal",
-    "exceptions.clausal",
-    "family.clausal",
-    "higher_order.clausal",
-    "lambdas.clausal",
-    "list_edge_cases.clausal",
-    "lists.clausal",
-    "meta.clausal",
-    "term_inspection.clausal",
+# (subdir, filename) — kept as tuples so the parametrize id stays unique
+# across roots and so the tabled-NAF fixtures (which live under
+# ``tests/fixtures/`` alongside the WFS / tabling integration tests) can
+# join the corpus without duplication.
+_CORPUS: list[tuple[str, str]] = [
+    ("clausal_modules", "anon.clausal"),
+    ("clausal_modules", "arith.clausal"),
+    ("clausal_modules", "exceptions.clausal"),
+    ("clausal_modules", "family.clausal"),
+    ("clausal_modules", "higher_order.clausal"),
+    ("clausal_modules", "lambdas.clausal"),
+    ("clausal_modules", "list_edge_cases.clausal"),
+    ("clausal_modules", "lists.clausal"),
+    ("clausal_modules", "meta.clausal"),
+    ("clausal_modules", "term_inspection.clausal"),
+    # D5h follow-up: gate tabled-NAF (Not + IfExpr-test on tabled
+    # predicates) without needing ``CLAUSAL_IR_PATH=1`` over the full
+    # suite.  ``wfs_win`` exercises ``Not(Call(tabled))`` →
+    # ``MetaCall(naf_tabled)``; ``tabled_ite`` exercises
+    # ``IfExpr(test=Call(tabled))`` → ``Branch(tabled_naf=True)``.
+    ("fixtures", "wfs_win.clausal"),
+    ("fixtures", "tabled_ite.clausal"),
 ]
 
 
@@ -55,11 +66,11 @@ def ir_path_on(monkeypatch):
     monkeypatch.setenv("CLAUSAL_IR_PATH", "1")
 
 
-@pytest.mark.parametrize("filename", _CORPUS)
-def test_clausal_module_compiles_with_ir_path_on(filename, ir_path_on):
+@pytest.mark.parametrize("subdir,filename", _CORPUS)
+def test_clausal_module_compiles_with_ir_path_on(subdir, filename, ir_path_on):
     # Loading triggers compile_predicate_* → _compile_body_impl → the
     # D4 harness.  Any AST drift for a D2-subset clause raises
     # AssertionError and fails this test.
-    path = os.path.join(_FIXTURES_DIR, filename)
-    name = f"_ir_corpus_{filename.replace('.', '_')}"
+    path = os.path.join(_TESTS_DIR, subdir, filename)
+    name = f"_ir_corpus_{subdir}_{filename.replace('.', '_')}"
     _load_module(name, path)

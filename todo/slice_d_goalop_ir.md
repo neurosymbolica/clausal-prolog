@@ -188,12 +188,10 @@ diff stays green throughout.  Coverage progresses toward 100%.
   buggy legacy shape in IR lowering, or fix legacy too.  The `Not`
   path is consistent — `_compile_tabled_naf_simple` normalises kwargs
   itself.
-- **D5h corpus coverage gap**: `tests/test_ir_path_corpus.py` enables
-  `CLAUSAL_IR_PATH=1` only for its own fixtures and none exercise
-  tabled NAF.  Tabled-NAF IR coverage today comes from running the
-  full suite with the env var set globally (as D5h was validated).
-  Add `wfs_win.clausal` / a tabled-ITE fixture to the corpus so
-  default CI gates tabled-NAF drift without the env-var dance.
+- ~~**D5h corpus coverage gap**~~: resolved by D5i — corpus now loads
+  `tests/fixtures/wfs_win.clausal` (Not + tabled call → MetaCall) and
+  `tests/fixtures/tabled_ite.clausal` (IfExpr test on tabled call →
+  Branch with `tabled_naf=True`) under `CLAUSAL_IR_PATH=1`.
 
 ### D5h. Tabled-NAF — ✅ done
 
@@ -212,6 +210,18 @@ Validated: `CLAUSAL_IR_PATH=1` full suite passes (10470 + 90 skipped),
 including `test_wfs`, `test_tabling`, `test_slg_termination`, and the
 tabled-ITE tests in `test_reified_ite`.  The D4 AST-diff harness now
 catches tabled-NAF drift in addition to the D2–D5g subset.
+
+### D5i. Tabled-NAF corpus gating — ✅ done
+
+`tests/test_ir_path_corpus.py` now parametrises over `(subdir, filename)`
+tuples and includes `fixtures/wfs_win.clausal` (Not + tabled call →
+`MetaCall(naf_tabled)`) and `fixtures/tabled_ite.clausal`
+(`IfExpr(test=Call(tabled))` → `Branch(tabled_naf=True)`).  Default CI
+now gates tabled-NAF AST drift without the global `CLAUSAL_IR_PATH=1`
+env-var dance.
+
+Validated: `pytest tests/test_ir_path_corpus.py` → 12 passed; full
+ex-trealla suite → 10472 passed, 90 skipped.
 
 ### D6. Move optimisation passes to operate on `GoalOp`
 
