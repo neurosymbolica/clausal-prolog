@@ -49,6 +49,236 @@ from .goal_trampoline import (
 )
 
 
+# ── IR-side parallel analysis (Slice D6a) ────────────────────────────────────
+#
+# The IR module is imported function-locally inside the analysis helpers
+# below.  ``tests/test_runtime_compiler_boundary`` deliberately scrubs
+# ``sys.modules['clausal.logic.compiler.*']`` and re-imports to verify
+# import-discipline; a module-level ``from . import ir as _ir`` would
+# leave us holding stale class references after that scrub, while
+# ``terms_to_goalop`` (imported lazily under ``_maybe_cross_check_ir``)
+# would produce instances of the *new* IR classes — every ``isinstance``
+# check would silently fall through.  The function-local pattern keeps
+# both producer and consumer pinned to the current IR module instance.
+#
+# ``analyse_ir`` mirrors ``_detect_tro_clause`` + ``_get_tro_check_indices``
+# but operates on a :class:`GoalOp` tree.  This is a verification-only
+# shadow today (D6 option-1): the result is asserted equal to the legacy
+# detector's by ``tests/test_tro_ir_parallel.py`` and is not yet wired
+# into the compile pipeline.  When D7 promotes the IR path to primary,
+# the SubCall hint write becomes the source of truth and the legacy
+# term-walking detectors retire.
+#
+# The analysis does NOT re-derive the head/arg-safety logic — it reuses
+# the existing ``_tro_args_safe`` and ``_head_has_unifying_list_pattern``
+# helpers.  Those operate on raw ``head`` / argument terms; ``SubCall.args``
+# carries the same terms (already normalised for kwargs by
+# ``terms_to_goalop``), so the checks port over unchanged.
+
+
+def _is_deterministic_op_ir(op: Any) -> bool:
+    """IR equivalent of ``_is_deterministic_goal`` — pattern-match on
+    :class:`GoalOp` rather than terms.  Mirrors the legacy decision
+    table arm-for-arm so ``analyse_ir`` agrees with ``_detect_tro_clause``
+    on every prefix-determinism judgement.
+
+    Notes on parity:
+
+    - ``True`` (identity) becomes an empty :class:`Sequence` (D5j); the
+      ``Sequence`` arm below treats empty as deterministic.
+    - ``False`` becomes :class:`Fail` (D5j) — deterministic.
+    - ``PyThunk`` becomes :class:`PyThunkOp` (D5j) — deterministic.
+    - ``Call(once|findall|bagof|setof|throw|halt, ...)`` becomes a
+      :class:`MetaCall` with the matching ``kind`` — the explicit set
+      below mirrors the legacy ``name in {...}`` arm.
+    - Other ``MetaCall`` kinds (``catch``, ``forall``, ``freeze``,
+      ``when``, ``setup_call_cleanup``, ``call_cleanup``, ``call_nth``,
+      ``count_all``) are non-deterministic in legacy and stay so here.
+    - ``SubCall`` (general predicate call) is non-deterministic unless
+      its ``(fname, arity)`` is in :data:`_DETERMINISTIC_BUILTINS` — same
+      table the legacy arm consults.
+    - :class:`ListPatternUnify` is the IR shape for star-list ``Unify``
+      bodies; legacy treats ``Unify(...)`` as deterministic regardless
+      of operand shape, so we do too.
+    """
+    from . import ir as _ir
+    match op:
+        case _ir.Unify() | _ir.Dif() | _ir.ArithEval() | _ir.FDCompare() \
+                | _ir.StructuralEq() | _ir.MemberIn() | _ir.ListPatternUnify() \
+                | _ir.Fail() | _ir.PyThunkOp():
+            return True
+        case _ir.Negate():
+            return True
+        case _ir.Branch():
+            return True
+        case _ir.Sequence(ops=ops):
+            return all(_is_deterministic_op_ir(c) for c in ops)
+        case _ir.Alternate():
+            return False
+        case _ir.MetaCall(kind=kind):
+            return kind in _DETERMINISTIC_META_KINDS
+        case _ir.SubCall(fname=fname, arity=arity):
+            return (fname, arity) in _DETERMINISTIC_BUILTINS
+    return False
+
+
+# Subset of ``MetaKind`` that the legacy ``_is_deterministic_goal``
+# treats as at-most-one-solution.  The remaining kinds (``catch``,
+# ``forall``, ``freeze``, ``when``, ``setup_call_cleanup``,
+# ``call_cleanup``, ``call_nth``, ``count_all``) are non-deterministic.
+_DETERMINISTIC_META_KINDS: frozenset[str] = frozenset({
+    "once", "findall", "bagof", "setof", "throw", "halt",
+})
+
+
+def analyse_ir(
+    ir: Any,
+    head: Any,
+    functor: str,
+    arity: int,
+) -> tuple[bool, frozenset[int]]:
+    """IR-side TRO eligibility analysis.
+
+    Returns ``(eligible, check_indices)`` where the first element matches
+    ``_detect_tro_clause(functor, arity, clause)`` and the second matches
+    ``_get_tro_check_indices(functor, arity, clause)`` (empty when not
+    eligible, or when no prefix goals exist).
+
+    Expects *ir* to be the body :class:`Sequence` produced by
+    ``terms_to_goalop``.  An empty Sequence (no body — facts) returns
+    ``(False, frozenset())``.
+    """
+    from . import ir as _ir
+    if not isinstance(ir, _ir.Sequence) or not ir.ops:
+        return (False, frozenset())
+
+    last = ir.ops[-1]
+    if not isinstance(last, _ir.SubCall):
+        return (False, frozenset())
+    if last.fname != functor or last.arity != arity:
+        return (False, frozenset())
+
+    prefix_ops = ir.ops[:-1]
+    if not all(_is_deterministic_op_ir(op) for op in prefix_ops):
+        return (False, frozenset())
+
+    # Star-unpack guard (mirrors legacy ``_contains_star_unpack`` over
+    # ``call_args``).  ``SubCall.args`` retains the original positional
+    # term shape; kwarg normalisation by ``terms_to_goalop`` only
+    # reorders, never wraps.
+    if any(_contains_star_unpack(a) for a in last.args):
+        return (False, frozenset())
+
+    if _head_has_unifying_list_pattern(head):
+        return (False, frozenset())
+
+    # ``_tro_args_safe`` walks raw goal terms to find vars bound by
+    # prefix ``Evaluate`` / ``Unify`` / ``And``.  We don't have those
+    # raw terms on the IR side without a reverse map, so reconstruct
+    # the bound-var set directly from the IR prefix using the matching
+    # ``ArithEval`` / ``Unify`` arms.  The semantics are identical to
+    # the legacy helper's per-goal scan.
+    if not prefix_ops:
+        safe, check = _tro_args_safe_ir(head, [], last.args, arity)
+    else:
+        safe, check = _tro_args_safe_ir(
+            head, prefix_ops, last.args, arity, allow_head_vars=True,
+        )
+    if not safe:
+        return (False, frozenset())
+    return (True, check)
+
+
+def _tro_args_safe_ir(
+    head: Any,
+    prefix_ops: list,
+    tail_args: list,
+    arity: int,
+    allow_head_vars: bool = False,
+) -> tuple[bool, frozenset[int]]:
+    """IR equivalent of :func:`_tro_args_safe`.
+
+    Same return contract; the only difference is how the bound-var set
+    is collected — from :class:`Unify` / :class:`ArithEval` IR ops in
+    *prefix_ops* (descending into :class:`Sequence` to mirror the legacy
+    ``And`` recursion) rather than from raw ``Unify`` / ``Evaluate`` /
+    ``And`` term nodes.
+    """
+    bound_var_ids: set[int] = set()
+    for op in prefix_ops:
+        _collect_bound_vars_ir(op, bound_var_ids)
+
+    head_passthrough_ids: set[int] = set()
+    all_head_var_ids: set[int] = set()
+    if is_term_instance(head):
+        fields = list(term_field_names(head))
+        for i, fname in enumerate(fields):
+            head_arg = getattr(head, fname)
+            _collect_var_ids(head_arg, all_head_var_ids)
+            head_arg = deref(head_arg)
+            if is_var(head_arg) and i < len(tail_args):
+                tail_arg = deref(tail_args[i])
+                if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                    head_passthrough_ids.add(head_arg._id)
+    elif isinstance(head, Compound):
+        for i, head_arg in enumerate(head.args):
+            _collect_var_ids(head_arg, all_head_var_ids)
+            head_arg = deref(head_arg)
+            if is_var(head_arg) and i < len(tail_args):
+                tail_arg = deref(tail_args[i])
+                if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                    head_passthrough_ids.add(head_arg._id)
+
+    _check_positions: set[int] = set()
+    for arg_idx, arg in enumerate(tail_args):
+        arg_var_ids: set[int] = set()
+        _collect_var_ids(arg, arg_var_ids)
+        for vid in arg_var_ids:
+            if vid in bound_var_ids:
+                continue
+            if vid in head_passthrough_ids:
+                continue
+            if allow_head_vars and vid in all_head_var_ids:
+                _check_positions.add(arg_idx)
+                continue
+            return (False, frozenset())
+    return (True, frozenset(_check_positions))
+
+
+def _collect_bound_vars_ir(op: Any, out: set[int]) -> None:
+    """IR equivalent of the per-goal scan inside :func:`_tro_args_safe`.
+
+    Mirrors the legacy ``Evaluate(left=lhs)`` / ``Unify(left, right)``
+    arms.  :class:`Sequence` recurses (corresponds to the legacy
+    ``And(left=l, right=r)`` arm calling ``_collect_bound_vars`` on each
+    side).  Other op kinds bind nothing observable to TRO arg-safety.
+    """
+    from . import ir as _ir
+    match op:
+        case _ir.ArithEval(target=lhs):
+            if is_var(lhs):
+                out.add(lhs._id)
+        case _ir.Unify(l=lhs, r=rhs):
+            if is_var(lhs):
+                out.add(lhs._id)
+            if is_var(rhs):
+                out.add(rhs._id)
+        # Star-list unify (legacy ``Unify(left=[..,*x,..], right=acc2)``
+        # or vice-versa).  ``terms_to_goalop`` normalises the star list
+        # to ``star_side`` regardless of which side had the stars in
+        # the source; ``other_side`` is then whatever was unified with
+        # the pattern.  Legacy ``_tro_args_safe`` adds ``is_var(lhs)``
+        # and ``is_var(rhs)`` at the top level — the star side is always
+        # a list (never a top-level var), so only ``other_side`` is
+        # relevant here.
+        case _ir.ListPatternUnify(other_side=other):
+            if is_var(other):
+                out.add(other._id)
+        case _ir.Sequence(ops=ops):
+            for child in ops:
+                _collect_bound_vars_ir(child, out)
+
+
 # ── Tail Recursion Optimization (TRO) ─────────────────────────────────────────
 #
 # when the last goal in a clause body is a self-recursive Call preceded only by
@@ -198,9 +428,53 @@ def _detect_tro_clause(functor: str, arity: int, clause: Clause) -> bool:
     # list decomposition with at least one deterministic prefix goal
     # (implying the input is likely ground).
     if not clause.body[:-1]:
-        return _tro_args_safe(clause.head, [], call_args, arity)[0]
-    return _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
-                          allow_head_vars=True)[0]
+        result = _tro_args_safe(clause.head, [], call_args, arity)[0]
+    else:
+        result = _tro_args_safe(clause.head, clause.body[:-1], call_args, arity,
+                                allow_head_vars=True)[0]
+    _maybe_cross_check_ir(functor, arity, clause, result)
+    return result
+
+
+def _maybe_cross_check_ir(
+    functor: str, arity: int, clause: Clause, legacy_result: bool,
+) -> None:
+    """Slice D6a parallel-implementation gate.
+
+    When ``CLAUSAL_IR_PATH=1``, also run :func:`analyse_ir` against the
+    IR built from ``clause.body`` and assert it agrees with the legacy
+    detector on both eligibility and ``check_indices``.  Any divergence
+    raises :class:`AssertionError` — stop-the-line.
+
+    ``terms_to_goalop`` failures (``NotImplementedError`` from a body
+    shape outside the D5 subset) are a legitimate fallback and are
+    silently skipped, mirroring the D4 harness contract.
+    """
+    import os
+    if os.environ.get("CLAUSAL_IR_PATH") != "1":
+        return
+    from .terms_to_goalop import terms_to_goalop
+    try:
+        ir = terms_to_goalop(clause.body, db=None)
+    except NotImplementedError:
+        return
+    ir_eligible, ir_check = analyse_ir(ir, clause.head, functor, arity)
+    if ir_eligible != legacy_result:
+        raise AssertionError(
+            "Slice D6a TRO IR-analysis disagreement — stop the line.\n"
+            f"  predicate: {functor}/{arity}\n"
+            f"  legacy eligible: {legacy_result}\n"
+            f"  ir eligible:     {ir_eligible}"
+        )
+    if legacy_result:
+        legacy_check = _get_tro_check_indices(functor, arity, clause)
+        if ir_check != legacy_check:
+            raise AssertionError(
+                "Slice D6a TRO IR check_indices disagreement — stop the line.\n"
+                f"  predicate: {functor}/{arity}\n"
+                f"  legacy: {legacy_check}\n"
+                f"  ir:     {ir_check}"
+            )
 
 
 def _get_tro_check_indices(functor: str, arity: int, clause: Clause) -> frozenset[int]:

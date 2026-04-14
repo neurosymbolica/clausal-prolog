@@ -245,6 +245,58 @@ count is now 0/3723 runs.
 
 ### D6. Move optimisation passes to operate on `GoalOp`
 
+D6 lands in three sub-slices (one per analysis pass), all under the
+**option-1 verification gate**: each new IR-side analysis runs as a
+parallel shadow alongside its legacy term-walking counterpart and
+asserts agreement.  No behaviour change yet; the hints stay unread by
+lowering until D7 promotes the IR path.  This is the same strategy
+that worked through D5 — keep the legacy path the source of truth,
+let the IR analyses bake under CI before flipping over.
+
+### D6a. TRO `analyse_ir` parallel shadow — ✅ done
+
+`tro.analyse_ir(ir, head, functor, arity)` mirrors
+`_detect_tro_clause` + `_get_tro_check_indices` over a `GoalOp`
+:class:`Sequence`:
+
+- `_is_deterministic_op_ir` — IR equivalent of legacy
+  `_is_deterministic_goal`; pattern-matches on `Unify` / `Dif` /
+  `ArithEval` / `FDCompare` / `StructuralEq` / `MemberIn` / `Negate`
+  / `Branch` / `Sequence` / `Alternate` / `MetaCall(once|findall|…)`
+  / `SubCall(<DETERMINISTIC_BUILTINS>)` / `Fail` / `PyThunkOp` /
+  `ListPatternUnify`.
+- `_collect_bound_vars_ir` — mirror of the per-goal scan inside
+  `_tro_args_safe`; descends through `Sequence` (legacy `And`),
+  reads `Unify` / `ArithEval` / `ListPatternUnify` arms.  The
+  star-list arm matters: legacy `Unify(left=acc2, right=[h, *acc])`
+  becomes `ListPatternUnify(star_side=[h, *acc], other_side=acc2)`,
+  so `other_side` carries the binding.
+- `_tro_args_safe_ir` — reuses legacy's head/arg term scans
+  unchanged (`SubCall.args` carries the same terms after kwarg
+  normalisation).
+
+Wired into `_detect_tro_clause` as a stop-the-line cross-check gated
+by `CLAUSAL_IR_PATH=1` (`_maybe_cross_check_ir`).  The full suite under
+that env var verifies thousands of real predicate compilations, well
+beyond the nine targeted cases in `tests/test_tro_ir_parallel.py`.
+
+The IR-module imports inside the analysis helpers are
+**function-local** — `tests/test_runtime_compiler_boundary` scrubs
+`sys.modules['clausal.logic.compiler.*']` mid-session to verify
+import-discipline, and a module-level `from . import ir as _ir` would
+leave us holding stale class refs while `terms_to_goalop` (lazily
+imported inside `_maybe_cross_check_ir`) produces instances of the
+new IR module's classes.  Same hazard, same fix, in the new test
+file's per-test imports.
+
+Validated:
+- `pytest tests/test_tro_ir_parallel.py` → 9 passed
+- `CLAUSAL_IR_PATH=1 pytest tests/test_tail_recursion.py` → 41 passed
+- Full ex-trealla suite (default) → 10481 passed, 90 skipped
+- Full ex-trealla suite under `CLAUSAL_IR_PATH=1` → 10481 passed, 90 skipped
+
+### D6 (legacy heading retained for D6b/D6c)
+
 - `_detect_tro_clause` → `tro.analyse(ir) -> TROPlan` (writes
   `SubCall.tail_recursive = True` on the tail call).
 - `_find_destructive_reuse_goals` → `destructive_reuse.analyse(ir)`
