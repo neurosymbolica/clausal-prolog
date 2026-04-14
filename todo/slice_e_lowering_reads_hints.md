@@ -1,155 +1,154 @@
 # Slice E4+ — lowering reads optimisation hints
 
 > **Self-instruction for the next compiler-refactor session.**
-> **When E6 (legacy bypass retirement) lands, delete this file.**
+> **When E6d retires the last legacy bypass, delete this file.**
 
 ## Before doing anything
 
 1. `cd /workspace/clausal-compiler_refactor`
 2. Read `implementation_plans/COMPILER_MIGRATION_PLAN.md` §6 and §7
-   — authoritative slice definitions, include status tables for D
-   and E.
-3. Read `todo/slice_d_goalop_ir.md` — per-sub-slice progress log
-   for D (still in bake for D7c; E4+ unblocks that deletion).
-4. `git log --oneline -20` for recent commit narrative.  E1/E2/E3
-   commits are labelled `refactor(compiler): Slice E{1,2,3} —
-   <pass> as analyse/apply pass`.
-5. Verify baseline:
+   — authoritative slice definitions and status tables for D and E.
+3. `git log --oneline -30` for recent commit narrative.  E1–E6b
+   commits are labelled `refactor(compiler): Slice E{n} — <desc>`.
+4. Verify baseline:
    - `python -m pytest tests/ --ignore=tests/trealla
      --ignore=tests/test_trealla_backend.py -q`
-     → expect **10534 passed, 90 skipped**.
-   - `CLAUSAL_IR_PATH=1 python -m pytest tests/ …` → same pass
-     count; D6 cross-checks run explicitly under the env var.
+     → expect **10544 passed, 90 skipped**.
+   - `CLAUSAL_IR_PATH=1 python -m pytest tests/ …` → same count.
+   - `CLAUSAL_DISABLE_OPT=tro python -m pytest tests/ …`
+     → **10535 passed, 99 skipped** (9 extra skips for the TRO-
+     observability test classes tagged `@skipIf(_tro_disabled())`).
+   - `CLAUSAL_DISABLE_OPT=destructive_reuse python -m pytest tests/ …`
+     → 10544 passed, 90 skipped.
+   - `CLAUSAL_DISABLE_OPT=call_site python -m pytest tests/ …`
+     → 10544 passed, 90 skipped.
 
-## Where we are
+## Where we are (as of 2026-04-14)
 
-E1/E2/E3 complete.  Three D6 analyses live in
-`clausal/logic/compiler/optimisations/` with uniform shape:
+E1/E2/E3 analyse/apply passes landed.  E4a/b/c wired the three
+hints into IR lowering.  E5a/b added the per-optimisation toggle
+end-to-end.  E6a closed the joint-bucket-hint gap.  E6b retired
+`_inject_bucket_refs_trampoline` from the production compile path.
 
-- `destructive_reuse.py` — `DRPlan` + `analyse(ir, head, db=None)`
-  + `apply(ir, plan) -> ir`
-- `tro.py` — `TROPlan(eligible, check_indices)` + `analyse(ir,
-  head, functor, arity, db=None)` + `apply(ir, plan)`
-- `call_site.py` — `CallSitePlan(hints, joint_hints)` +
-  `analyse(ir, head, base_globals, db=None)` + `apply(ir, plan)`
+### IR hints on :class:`SubCall`
 
-Each `apply` writes hints onto :class:`SubCall`:
-`destructive_reuse: bool`, `tail_recursive: bool`,
-`direct_bucket_ref: str | None`.  Tests cover round-trip,
-no-op, hashability, legacy-parity.
+```
+direct_bucket_ref:        str | None          # single-pos call-site
+direct_joint_bucket_ref:  str | None          # joint-pos call-site (E6a)
+tail_recursive:           bool                # TRO tail (E2/E4c)
+tro_check_indices:        frozenset[int]      # TRO ground-check positions (E4c)
+destructive_reuse:        bool                # DR variant rename (E1/E4b)
+```
 
-**Lowering does not yet read any of these hints.**  Legacy
-bypasses still drive codegen.  E4+ fixes that.
+### Optimisation passes
 
-## E4+ sub-slices (proposed order)
+All in `clausal/logic/compiler/optimisations/`, uniform
+`analyse(ir, …) -> Plan` + `apply(ir, plan) -> ir` contract.
+`call_site.py` also exposes `populate_runtime_from_plan(ir, plan,
+ctx, base_globals)` (E6b) that writes `ctx.bucket_ref_map` /
+`joint_bucket_ref_map` + injects bucket functions into
+`base_globals`.
 
-Work in order of increasing risk.
+### Toggle plumbing (E5)
 
-### E4a — bucket-ref hint reading
+`CompilationContext.enabled_optimisations: frozenset[str]` —
+default `frozenset({"tro", "destructive_reuse", "call_site"})`,
+env-var-overridable via `CLAUSAL_DISABLE_OPT=<comma-list>`.
+Gated at:
+- `_run_ir_parallel` (IR-side DR, call_site analyses).
+- `tro._compile_tro_body` (IR shadow).
+- `_make_body_compiler_impl` (DR preprocess).
+- `predicate.py` (`_detect_tro_clause` sweeps).
+- `_compile_body_impl._prepopulate_call_site_runtime` (gated on
+  `call_site`; no-op populator when disabled).
 
-**Scope:** change `_dispatch_call_trampoline` to prefer
-`subcall.direct_bucket_ref` (when set) over the
-`ctx.bucket_ref_map` lookup, OR wire the IR path's SubCall
-lowering to emit the direct bucket reference directly when the
-hint is present.
+### Byte-parity harness (D4/D7b, E4c mirror)
 
-**Why smallest:** the map approach already works transparently
-via shared ctx; reading the hint is mostly a plumbing change.
-D6c's byte-parity test guarantees the hint's gkey equals what
-legacy writes to the map.
+`_run_ir_parallel` inside `_compile_body_impl` builds IR,
+applies E1/E3 hints, lowers, and `ast.dump`-diffs against the
+legacy fold.  `_compile_tro_body` carries a mirror harness
+(`_maybe_cross_check_ir_tro` in `tro.py`) with E2 hints + the
+SubCall arm's `_compile_tro_tail` path.
 
-**Deliverable:** apply E3's `call_site.apply` during body
-compilation (probably in `_compile_body_impl` or a new "apply
-all optimisations" step right after `terms_to_goalop`), then
-have lowering read the hint.  Legacy `_inject_bucket_refs_trampoline`
-still runs for the map; both produce the same result.  Retirement
-of the legacy pre-scan waits for E6.
+## E6 sub-slices
 
-### E4b — destructive_reuse hint reading
+Status table lives in
+`implementation_plans/COMPILER_MIGRATION_PLAN.md` §6/§7.  At this
+point: E6a/b ✅, E6c/d ⏳.
 
-**Scope:** today `Strategy.preprocess_clause` rewrites
-`Call(append)` → `Call(_dr_append__3)` **before** `terms_to_goalop`
-sees the body.  Move to: build IR from the original body, run
-E1's `apply` to set `SubCall.destructive_reuse=True`, have
-lowering emit the dr-variant name when the hint is set.
+### E6c — retire `_compile_tro_body` / `_compile_tro_tail` bypass
 
-**Tricky bit:** the `_dr_<name>__<arity>` names need to exist in
-`base_globals`.  Today they get injected by the preprocess-time
-rewrite via the builtin module; after E4b the rewrite moves to
-lowering, so globals injection needs to happen unconditionally
-(or based on hint presence).
+**Scope:** stop calling `_compile_tro_body` from
+`_build_predicate_trampoline_funcdef` in `predicate.py`.  TRO
+clauses route through the unified `_compile_body_impl` path;
+both legacy and IR folds inside it emit the TRO tail via the
+SubCall arm's `tail_recursive` read in
+`_lower_goalop_shared.py`.
 
-**Deliverable:** lowering reads the hint.  Preprocess-time
-rewrite still runs (legacy fallback).  Full suite + IR-cross-check
-green.
+**The entanglement** (same class as E6b): legacy fold in
+`_compile_body_impl` doesn't know a clause is TRO — it walks
+terms and has no access to `tro.analyse` output.  If we simply
+re-route TRO clauses through it, legacy emits a normal call
+while IR emits the TRO tail → `ast.dump` diff blows up.
 
-### E4c — TRO hint reading
+**Path forward.** The E6b playbook applies: pre-pass in
+`_compile_body_impl` runs IR build + `tro.analyse` early,
+populates something the legacy fold reads so it also emits the
+TRO tail.  But TRO isn't a map lookup — it's a clause-wide
+control-flow rewrite (the tail goal is replaced by
+`_compile_tro_tail`, prefix goals fold normally).
 
-**Scope:** the hairy one.  Legacy has a dedicated body compiler
-`_compile_tro_body` that bypasses `_compile_body_impl` entirely.
-It's invoked from `predicate.py` for each TRO-eligible clause.
-It emits the snapshot-args + set-_tro-flag tail.
+Simplest: add a body-compiler parameter (or ctx field) that
+carries the TRO plan for the current clause.  The legacy fold's
+tail-goal handler then branches on the plan just like
+`_compile_tro_body` does today.  Specifically:
 
-IR-path equivalent: IR lowering for a `SubCall` with
-`tail_recursive=True` emits the TRO tail directly (reusing the
-`_compile_tro_tail` helper).  The per-predicate machinery
-(`while True:` wrapper, `_tro_state` shared list) still lives
-where it is today — only the per-clause body compile changes.
+1. `_make_body_compiler_impl` inspects the clause, runs
+   `tro.analyse`, stashes the plan on a per-clause ctx field
+   (e.g. `ctx.tro_plan: TROPlan | None`) + sets `ctx.tro_mode`
+   (`"loop"` / `"signal"` from predicate.py).
+2. `_compile_body_impl`: when `ctx.tro_plan.eligible`, split
+   goals into `prefix + [tail]`, fold prefix normally, use the
+   legacy `_compile_tro_tail` output as the leaf (not
+   `strategy.emit_leaf_yield`).  This IS what
+   `_compile_tro_body` already does, moved inline.
+3. IR path: IR lowering already reads `SubCall.tail_recursive`
+   and emits `_compile_tro_tail` for the tail.  Just runs
+   `tro.analyse` + `apply` inside `_run_ir_parallel` (new gate).
+4. Delete `_compile_tro_body` from `tro.py`.
+5. `predicate.py`: delete the `_tro_list_body_compiler` branch
+   and the `if use_tro and ci in tro_indices:` branch — body
+   compiler handles TRO uniformly now.
 
-**Deliverable:** a TRO-eligible clause routes through
-`_compile_body_impl` with E2's `apply` having set the hint, and
-IR lowering emits the tail-call rewrite when it sees
-`tail_recursive=True`.  `_compile_tro_body` still exists as
-fallback; retirement in E6.
+**Risk:** high.  TRO clauses currently bypass `_compile_body_impl`
+entirely, so no harness has run against the unified path.  The
+test matrix from E5b (TRO countdown under each disable) is the
+first line of defence; `tests/test_tail_recursion.py` carries
+deeper cases.
 
-**Risk:** high.  TRO is the most common source of subtle
-miscompilation during this refactor.  Recommend a dedicated
-parallel-check (compile both ways, AST-diff) for TRO-eligible
-clauses during the transition.
+**Deliverable:** `_compile_tro_body` deleted; `_compile_tro_tail`
+kept (called from the SubCall arm's `tail_recursive` branch);
+legacy fold inside `_compile_body_impl` TRO-aware.  Full suite
++ IR-path + per-flag sweep green.  Retirement of
+`_detect_tro_clause` / `_get_tro_check_indices` waits for E6d.
 
-### E5 — per-optimisation toggle
+### E6d — retire DR preprocess + legacy term-walking analyses
 
-Add `ctx.enabled_optimisations: frozenset[str]` with a default
-of `frozenset({"tro", "destructive_reuse", "call_site"})`.  Each
-pass gates on its name being in the set.  Test matrix: suite
-green with each optimisation individually disabled.  Catches
-hidden ordering dependencies between passes.
+Preconditions: E6c baked.
 
-### E6 — retire legacy bypasses
-
-Preconditions: E4a/b/c have baked.  E5 test matrix is green.
-
-**Joint-bucket hint gap (from E4a).**  `call_site.analyse`
-computes `joint_hints` but `apply` does not write them — there is
-no joint-position field on :class:`SubCall` today.  Joint-
-position specialisation therefore still rides
-`ctx.joint_bucket_ref_map`, which is populated only by legacy
-`_inject_bucket_refs_trampoline`.  **Before** deleting the
-legacy pre-scan in E6, add a joint-hint conduit — either a new
-``SubCall.direct_joint_bucket_ref: tuple[int, int, str] | None``
-(pi, pj, gkey) field, or a richer type for
-``direct_bucket_ref``, then have `apply` write joint entries and
-`_dispatch_call_trampoline` read them.  Until that lands, E6 must
-keep the joint-map lookup in `_dispatch_call_trampoline` alive.
-
-**Compile-time perf note (from E4a).**  E4a runs
-`call_site.analyse` on every body compile inside
-`_run_ir_parallel` (walks every :class:`SubCall`, re-computes
-`term_to_ast_expr(a, {})` / `_static_call_key` per arg).  Legacy
-`_inject_bucket_refs_trampoline` runs once per predicate.  This
-is a small per-clause regression while both paths co-exist; E6
-amortises back to once-per-predicate when the legacy pre-scan is
-deleted and the E3 analyse lifts to predicate scope.
-
-Delete:
-- `_compile_tro_body` + `_compile_tro_tail` (TRO's bypass path)
-- `Strategy.preprocess_clause` DR rewrite
-- `_inject_bucket_refs_trampoline` (legacy bucket-ref map
-  population — hints are the source of truth now)
-- `_find_destructive_reuse_goals` + `_detect_tro_clause` +
-  `_get_tro_check_indices` legacy term-walking analyses
-
-After E6, D7c (legacy dispatcher delete) is mechanical.
+Delete (all in `clausal/logic/compiler/`):
+- `Strategy.preprocess_clause` DR rewrite (and
+  `TrampolineStrategy.preprocess_clause` → falls back to
+  `ShallowStrategy.preprocess_clause` which is a no-op).
+  `_make_body_compiler_impl` already conditions on the flag; after
+  E6d it no longer needs the `else` branch — DR rewrite lives
+  entirely in IR lowering via the `destructive_reuse` hint.
+- `destructive_reuse._find_destructive_reuse_goals` +
+  `_apply_destructive_reuse` — only callers are the
+  `preprocess_clause` rewrite path.
+- `tro._detect_tro_clause` + `_get_tro_check_indices` — after E6c,
+  only callers are the `tro.analyse_ir` equivalence test.
+  `analyse_ir` replaces both.
 
 ## Constraints
 
@@ -162,6 +161,11 @@ After E6, D7c (legacy dispatcher delete) is mechanical.
 - **Don't sweep untracked files into commits.**
   `implementation_plans/LLVM_BACKEND.md` is another project's
   scratch — leave it alone, don't `git add -A`.
+- **Byte-parity harness is the test.**  Any E6c restructure that
+  diverges legacy-fold and IR-fold AST on TRO-eligible clauses is
+  wrong.  When in doubt: inspect the `ast.dump` diff in the
+  AssertionError message — it tells you exactly where the two
+  paths split.
 
 ## Deliverables
 
@@ -176,4 +180,5 @@ Git identity:
 Update `implementation_plans/COMPILER_MIGRATION_PLAN.md` §7
 status table per sub-slice.
 
-**Delete this `todo/` file when E6 retires the legacy bypasses.**
+**Delete this `todo/` file when E6d retires the last legacy
+bypass.**
