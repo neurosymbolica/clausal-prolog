@@ -130,17 +130,21 @@ def _convert(goal: Any) -> GoalOp:
         case nodes.Not(operand=op):
             return Negate(op=_convert(op))
 
-        # ``IfExpr(test, body, orelse)`` → ``Branch``.  Only the
-        # *reified* subset (D5d-i) is converted; non-reifiable tests
-        # are deferred to D5d-ii and fall back to the legacy general
-        # ITE path via ``NotImplementedError``.
-        case nodes.IfExpr(test=test, body=then, orelse=else_) \
-                if _is_reifiable(test):
+        # ``IfExpr(test, body, orelse)`` → ``Branch``.  ``reified_test``
+        # is populated for the legacy reifiable test types
+        # (unify/dif/FD comparisons); otherwise ``None`` — the general
+        # single-eval ITE shape that each strategy lowers in its own
+        # dialect.  Tabled NAF (``IfExpr`` with a tabled predicate
+        # call as test) currently falls back to legacy transparently
+        # because Call → SubCall is deferred to D5e; once D5e lands
+        # the general-ITE lowering must add the ``_naf_tabled`` path.
+        case nodes.IfExpr(test=test, body=then, orelse=else_):
+            kind = _REIFIED_KIND[type(test)] if _is_reifiable(test) else None
             return Branch(
                 test=_convert(test),
                 then=_convert(then),
                 else_=_convert(else_),
-                reified_test=_REIFIED_KIND[type(test)],
+                reified_test=kind,
             )
         case nodes.Unify(left=l, right=r):
             # Star-list unification (e.g. ``X is [*T, Last]``) routes

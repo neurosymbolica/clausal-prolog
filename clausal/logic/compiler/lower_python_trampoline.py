@@ -23,7 +23,7 @@ from __future__ import annotations
 import ast
 from typing import NoReturn
 
-from clausal.logic.compiler.ir import GoalOp, Negate
+from clausal.logic.compiler.ir import Branch, GoalOp, Negate
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.compiler._ast_helpers import (
     _EXTRA_FUNCDEF,
@@ -45,6 +45,127 @@ def lower(
 ) -> list[ast.stmt]:
     """Lower *ir* (trampoline strategy), threading *k_stmts* as continuation."""
     match ir:
+
+        # ── General ITE — trampoline form.  (Reified Branch is handled
+        # by ``lower_shared``.)  Mirrors legacy
+        # ``_compile_general_ite_trampoline`` byte-for-byte.  Tabled-NAF
+        # handling isn't needed here until D5e lands Call → SubCall.
+        case Branch(test=t_op, then=th_op, else_=el_op, reified_test=None):
+            from clausal.logic.compiler.goal_trampoline import _yield_step_stmt
+            trail_name = ctx.trail_name
+            cond_fn_name = ctx.fresh("_ite_cond_fn")
+            cond_self = "_ite_self"
+            cond_parent = "_ite_parent"
+            cond_k = [_yield_step_stmt(_name(cond_parent), ast.Constant(None))]
+            cond_ctx = ctx.replace(self_name=cond_self, parent_name=cond_parent)
+            cond_stmts = lower(t_op, cond_ctx, cond_k)
+            cond_body = cond_stmts + [
+                _yield_step_stmt(_name(cond_parent), _name("_DONE")),
+            ]
+            cond_fn_def = ast.FunctionDef(
+                name=cond_fn_name,
+                args=ast.arguments(
+                    posonlyargs=[],
+                    args=[ast.arg(arg=cond_self), ast.arg(arg=cond_parent),
+                          ast.arg(arg=trail_name)],
+                    vararg=None,
+                    kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+                ),
+                body=cond_body,
+                decorator_list=[], returns=None, type_comment=None,
+                **_EXTRA_FUNCDEF,
+            )
+            then_stmts = lower(th_op, ctx, k_stmts)
+            else_stmts = lower(el_op, ctx, k_stmts)
+            sg_name = ctx.fresh("_ite_sg")
+            g_name = ctx.fresh("_ite_g")
+            v_name = ctx.fresh("_ite_v")
+            true_mark = ctx.fresh(_MARK_PREFIX)
+            found_flag = ctx.fresh("_found")
+
+            sg_create = _assign(sg_name,
+                _call(_name("StepGenerator"), _name(cond_fn_name),
+                      ast.Constant(None), _name(trail_name)))
+            first_send = ast.Assign(
+                targets=[ast.Tuple(
+                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+                    ctx=ast.Store(),
+                )],
+                value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
+                            ast.Constant(None)),
+            )
+            continue_send = ast.Assign(
+                targets=[ast.Tuple(
+                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+                    ctx=ast.Store(),
+                )],
+                value=_call(ast.Attribute(value=_name(sg_name), attr="send", ctx=ast.Load()),
+                            ast.Constant(None)),
+            )
+            step_send_normal = ast.Assign(
+                targets=[ast.Tuple(
+                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+                    ctx=ast.Store(),
+                )],
+                value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
+                            _name(v_name)),
+            )
+            step_send_done = ast.Assign(
+                targets=[ast.Tuple(
+                    elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
+                    ctx=ast.Store(),
+                )],
+                value=_call(ast.Attribute(value=_name(g_name), attr="send", ctx=ast.Load()),
+                            _name("_DONE")),
+            )
+            step_send = ast.If(
+                test=ast.Compare(
+                    left=_name(v_name),
+                    ops=[ast.Is()],
+                    comparators=[_name("_TABLING_SUSPEND")],
+                ),
+                body=[step_send_done],
+                orelse=[step_send_normal],
+            )
+            true_loop_body = ast.If(
+                test=ast.Compare(
+                    left=_name(g_name),
+                    ops=[ast.Is()],
+                    comparators=[ast.Constant(None)],
+                ),
+                body=[
+                    ast.If(
+                        test=ast.Compare(
+                            left=_name(v_name),
+                            ops=[ast.Is()],
+                            comparators=[_name("_DONE")],
+                        ),
+                        body=[ast.Break()],
+                        orelse=[],
+                    ),
+                    _assign(found_flag, ast.Constant(value=True)),
+                ] + then_stmts + [continue_send],
+                orelse=[step_send],
+            )
+            true_block = [
+                _assign(found_flag, ast.Constant(value=False)),
+                _assign_mark(true_mark, trail_name),
+                sg_create,
+                first_send,
+                ast.While(
+                    test=ast.Constant(value=True),
+                    body=[true_loop_body],
+                    orelse=[],
+                ),
+                _undo_stmt(true_mark, trail_name),
+            ]
+            false_block = [
+                _if(
+                    ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
+                    else_stmts,
+                ),
+            ]
+            return [cond_fn_def] + true_block + false_block
 
         # ── Negation-as-failure — trampoline form.
         # Inner goal is compiled in trampoline mode with swapped
