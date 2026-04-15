@@ -107,3 +107,50 @@ rewriting of tail calls, without the greenlet runtime dependency.
   — describes the current level-by-level routing.
 - `todo/inline_body_in_dispatch.md` — a different optimisation that
   also reduces per-call overhead.
+
+## 2026-04-15 attempt — stop-the-line, optimisation is unsafe as designed
+
+Tried the natural lowering rewrite (pass `parent` as the child's
+parent, drop the leaf `yield (parent, None)` from the resume-loop
+body) inside `TrampolineStrategy.emit_sub_call`, gated by a new
+`SubCall.tail_position` hint written by an
+`optimisations/continuation_tco.py` pass.  Two successive eligibility
+rules failed:
+
+1. **Any tail-position `SubCall` (Sequence-last / Alternate-arm)** —
+   broke `tests/clausal_modules/exceptions.clausal::parent
+   backtracks after catch failure`.  The clause
+   ``Parent(R) <- in_(I, [0,1]) and TryRisky(I, R)`` wraps the tail
+   SubCall in `MemberIn`'s `for`-loop; when the child yields
+   `(parent, _DONE)` directly, the enclosing `MemberIn` iteration
+   never runs its next candidate — we lose backtracking.
+
+2. **Only bodies of shape `Sequence([SubCall])`** — still broke
+   `tests/clausal_modules/thread_safe_predicates.clausal::transitive
+   path`.  Multi-clause predicates are the killer: each predicate's
+   dispatch function runs `trail.undo(mark)` + `yield (parent, _DONE)`
+   *after* every clause body.  When the TCO'd child yields
+   `(parent, _DONE)`, the caller treats the whole predicate as
+   exhausted — clause 2 onward never runs, and the clause's own
+   `_undo(mark)` is skipped so the trail accumulates junk bindings
+   across calls.  This breaks even single-clause predicates (head
+   unification always marks the trail).
+
+**Root cause**: the current dispatch protocol puts head-unify
+mark/undo *around* the clause body, and the predicate-level
+`_DONE` is meant to signal "no more clauses", not "this sub-call is
+done".  Continuation-TCO requires the child's `_DONE` to *not* leak
+upward — but our frame has real work (trail undo, clause
+enumeration) that must run on the `_DONE` path before we in turn
+relay DONE to the caller.
+
+Without a runtime-protocol change — e.g. a proxy StepGenerator that
+runs our `_undo(mark)` on child DONE before forwarding DONE up, or
+moving head-unify outside the clause generator — there is no sound
+rewrite at compile time alone.
+
+**Status**: parked.  If revisited, start from the protocol change,
+not the lowering.  The comment-only groundwork (`SubCall.tail_position`,
+`parent_override` kwarg, a `continuation_tco` optimisation pass) was
+reverted cleanly; no code remains.  See commit history around
+2026-04-15 for the attempt.

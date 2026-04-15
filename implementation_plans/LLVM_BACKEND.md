@@ -36,12 +36,22 @@ with `Frame` a struct we own:
 
 ```
 { resume_pc: i32
-, parent: Frame*
+, proceed:    Frame*       ; where to deliver solutions
+, fail:       Frame*       ; where to resume on child exhaustion
+, catcher:    Frame*       ; where thrown exceptions propagate
 , trail_mark: i64
 , saved_vars: [N × Term*]
 , … predicate-specific slots
 }
 ```
+
+The three continuation slots replace a single `parent` pointer; see
+`CONTINUATION_TCO_PLAN.md` §3 for the semantic model (why the three
+concerns must be separate and what each one carries).  Normal calls
+set all three to the caller's frame; tail calls set `proceed` to
+the caller's `proceed` while keeping `fail` and `catcher` pointing
+at the caller, so solutions bypass the caller's frame but completion
+and exception routing still walk through it.
 
 Entry block dispatches on `resume_pc` via `switch`. LLVM lowers dense switches to jump tables — codegen quality matches computed-goto. Resume = `musttail call tailcc @pred(frame, rt)` — the trampoline becomes implicit (tail calls don't grow the stack).
 
