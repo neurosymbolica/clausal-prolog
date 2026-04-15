@@ -293,6 +293,14 @@ class SubCall(GoalOp):
     - ``destructive_reuse`` — ``True`` when the source container of
       this call is provably dead at the call site; the lowering picks
       the ``_dr_*`` in-place variant (trampoline-only).
+    - ``tail_position`` — ``True`` when this call is in tail position
+      of the clause body (continuation-level TCO).  Trampoline
+      lowering emits the child's ``proceed`` slot as the caller's own
+      ``_proceed`` (solutions bypass our frame) while keeping ``fail``
+      / ``catcher`` routed through us (completion and exceptions still
+      wake our frame).  Mutually exclusive with ``tail_recursive``
+      (TRO wins and is a richer special case — arg reassignment + loop
+      continue).  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
     """
     fname: str
     arity: int
@@ -302,6 +310,7 @@ class SubCall(GoalOp):
     tail_recursive: bool = False
     tro_check_indices: frozenset = dataclasses.field(default_factory=frozenset)
     destructive_reuse: bool = False
+    tail_position: bool = False
 
 
 @dataclasses.dataclass

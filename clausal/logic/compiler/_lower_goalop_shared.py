@@ -253,6 +253,7 @@ def _lower_shared_body(
                 ctx, fname, args, [], k_stmts,
                 direct_bucket_ref=ir.direct_bucket_ref,
                 direct_joint_bucket_ref=ir.direct_joint_bucket_ref,
+                tail_position=ir.tail_position,
             )
 
         case MemberIn(elem=elem, collection=collection, negate=False):

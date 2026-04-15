@@ -90,7 +90,7 @@ if TYPE_CHECKING:
 
 
 _ALL_OPTIMISATIONS: frozenset[str] = frozenset(
-    {"tro", "destructive_reuse", "call_site"}
+    {"tro", "destructive_reuse", "call_site", "continuation_tco"}
 )
 
 

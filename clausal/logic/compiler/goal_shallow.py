@@ -168,6 +168,7 @@ def _compile_predicate_call_impl(
     *,
     direct_bucket_ref: str | None = None,
     direct_joint_bucket_ref: str | None = None,
+    tail_position: bool = False,
 ) -> list[ast.stmt]:
     """Shared predicate-call compilation: arg normalisation + lambda hoist.
 
@@ -215,10 +216,50 @@ def _compile_predicate_call_impl(
         ctx, fname, arity, arg_exprs, k_stmts,
         direct_bucket_ref=direct_bucket_ref,
         direct_joint_bucket_ref=direct_joint_bucket_ref,
+        tail_position=tail_position,
     )
 
 
 # ── compile_body ───────────────────────────────────────────────────────────────
+
+
+def _head_has_deferred_pattern(head) -> bool:
+    """True when the clause head contains a star-list pattern that will
+    compile to deferred output-mode unification.
+
+    Head args that are :class:`~clausal.terms.SegList`\\s (or
+    :class:`~clausal.terms.Compound`\\s nesting a SegList) trigger
+    :func:`clausal.logic.compiler.head_match._wrap_yields_with_output_guards`
+    to wrap every leaf yield with a per-solution
+    ``_head_list_unify_output(...)`` check.  That check is essential —
+    it's what binds the caller's output-position vars — and it must run
+    on our side of each solution.  Continuation-TCO routes solutions
+    past us, so it's unsafe in these clauses.  See
+    ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+    """
+    if head is None:
+        return False
+    from clausal.terms import SegList, Compound
+    from clausal.pythonic_ast.nodes import StarUnpack
+    try:
+        from clausal.logic.predicate import term_field_names, is_term_instance
+    except ImportError:  # pragma: no cover — defensive
+        return False
+    # Walk the head's fields.  Detect SegList or a plain list containing
+    # a StarUnpack — both forms represent ``[H, *T]``-style patterns that
+    # get deferred output-mode unification.
+    def _walk(val) -> bool:
+        if isinstance(val, SegList) or isinstance(val, StarUnpack):
+            return True
+        if isinstance(val, (list, tuple)):
+            return any(_walk(x) for x in val)
+        if isinstance(val, Compound):
+            return any(_walk(x) for x in val.args)
+        if is_term_instance(val):
+            names = term_field_names(val)
+            return any(_walk(getattr(val, n)) for n in names if hasattr(val, n))
+        return False
+    return _walk(head)
 
 
 def _compile_body_impl(
@@ -299,6 +340,23 @@ def _compile_body_impl(
             from .optimisations import call_site as _call_site
             _plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
             ir = _call_site.apply(ir, _plan)
+        if (
+            isinstance(ctx.strategy, TrampolineStrategy)
+            and "continuation_tco" in ctx.enabled_optimisations
+            and not _head_has_deferred_pattern(head)
+        ):
+            # Continuation-TCO: only safe when nothing wraps the body's
+            # leaf yield with per-solution work.  Head patterns with
+            # star-lists (``[H, *T]``) emit a deferred output-mode
+            # unification guard (``_head_list_unify_output``) around
+            # every leaf yield in the clause — running that check is
+            # essential for binding the caller's output vars, and it
+            # must run on our side of each solution.  TCO would route
+            # solutions past us before the guard fires.  Skip TCO for
+            # such clauses.  See
+            # ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+            from .optimisations import continuation_tco as _ctco
+            ir = _ctco.apply(ir, _ctco.analyse(ir))
 
     lower_fn = (
         lower_python_shallow.lower

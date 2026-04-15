@@ -391,39 +391,52 @@ def _dispatch_call_trampoline(
     *,
     direct_bucket_ref: str | None = None,
     direct_joint_bucket_ref: str | None = None,
+    tail_position: bool = False,
 ) -> ast.expr:
-    """Generate: StepGenerator(fname._get_dispatch(), this_generator, arg0, …, trail)
+    """Generate: ``StepGenerator(fname._get_dispatch(), <proceed>, <fail>,
+    <catcher>, arg0, …, trail)``.
 
-    ``fname`` is resolved from the compiled function's globals.
-    ``this_generator`` is passed as ``parent`` so the child generator knows who to
-    yield back to when it finds a solution.
+    ``fname`` is resolved from the compiled function's globals.  Non-TCO
+    calls pass ``this_generator`` for all three continuation slots — the
+    child routes solutions, exhaustion, and exceptions all back through
+    this frame.  When ``tail_position`` is set, the child's ``proceed``
+    slot becomes the caller's own ``_proceed`` so solutions bypass this
+    frame one hop sooner; ``fail`` and ``catcher`` stay pointed at
+    ``this_generator`` so our frame still wakes on child exhaustion
+    (next clause / enclosing loop / trail undo) and on thrown
+    exceptions (``try/except`` wrapping the child).
 
-    Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a pre-captured
-    dispatch function in base_globals) instead of ``fname._get_dispatch()``.
+    Phase 7: if the predicate is locked, emits ``_disp_fname_N`` (a
+    pre-captured dispatch function in base_globals) instead of
+    ``fname._get_dispatch()``.
 
-    Phase 10: if a statically-known argument matches an indexed position of the
-    callee, emits a direct bucket-function reference (bypassing the dispatch
-    closure entirely).
+    Phase 10: if a statically-known argument matches an indexed
+    position of the callee, emits a direct bucket-function reference
+    (bypassing the dispatch closure entirely).
     """
-    # Phase 10: direct bucket ref for statically-known indexed argument
     brmap = ctx.bucket_ref_map
     jbrmap = ctx.joint_bucket_ref_map
     trail_name = ctx.trail_name
     self_name = ctx.self_name
 
-    # Slice E6a: prefer the IR-path joint hint over the legacy
-    # ``ctx.joint_bucket_ref_map`` lookup.  The hint gkey is byte-
-    # identical to what the legacy map would carry (E3 analyser reuses
-    # the same ``_joint_bucket_key`` helper).  Joint entries win over
-    # single-position entries — both hint and map — matching legacy's
-    # joint-first preference.
-    if direct_joint_bucket_ref is not None:
+    proceed_expr = _name(ctx.proceed_name) if tail_position else _name(self_name)
+    fail_expr = _name(self_name)
+    catcher_expr = _name(self_name)
+
+    def _sg(dispatch_expr: ast.expr) -> ast.Call:
         return ast.Call(
             func=_name("StepGenerator"),
-            args=[ast.Name(id=direct_joint_bucket_ref, ctx=ast.Load()), _name(self_name), _name(self_name), _name(self_name)]
+            args=[dispatch_expr, proceed_expr, fail_expr, catcher_expr]
                 + arg_exprs + [_name(trail_name)],
             keywords=[],
         )
+
+    # Slice E6a: prefer the IR-path joint hint over the legacy
+    # ``ctx.joint_bucket_ref_map`` lookup.  Joint entries win over
+    # single-position entries — both hint and map — matching legacy's
+    # joint-first preference.
+    if direct_joint_bucket_ref is not None:
+        return _sg(ast.Name(id=direct_joint_bucket_ref, ctx=ast.Load()))
 
     # Try joint first (more selective — two args constrain the bucket further)
     for pos_i in range(arity):
@@ -436,27 +449,12 @@ def _dispatch_call_trampoline(
                 continue
             gkey = jbrmap.get((fname, arity, pos_i, pos_j, ki, kj))
             if gkey is not None:
-                return ast.Call(
-                    func=_name("StepGenerator"),
-                    args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
-                        + arg_exprs + [_name(trail_name)],
-                    keywords=[],
-                )
+                return _sg(ast.Name(id=gkey, ctx=ast.Load()))
 
     # Prefer the IR-path hint (``SubCall.direct_bucket_ref``) over the
-    # ``ctx.bucket_ref_map`` lookup for the single-position case.  The
-    # hint gkey is byte-identical to what the legacy map would carry
-    # for the same call site (guaranteed by ``tests/
-    # test_optimisations_call_site.py`` — E3's byte-parity check).
-    # Joint-position entries still win over the hint, matching legacy's
-    # joint-first preference.
+    # ``ctx.bucket_ref_map`` lookup for the single-position case.
     if direct_bucket_ref is not None:
-        return ast.Call(
-            func=_name("StepGenerator"),
-            args=[ast.Name(id=direct_bucket_ref, ctx=ast.Load()), _name(self_name), _name(self_name), _name(self_name)]
-                + arg_exprs + [_name(trail_name)],
-            keywords=[],
-        )
+        return _sg(ast.Name(id=direct_bucket_ref, ctx=ast.Load()))
 
     # Try single-position bucket
     for pos, arg_expr in enumerate(arg_exprs):
@@ -465,12 +463,7 @@ def _dispatch_call_trampoline(
             continue
         gkey = brmap.get((fname, arity, pos, key))
         if gkey is not None:
-            return ast.Call(
-                func=_name("StepGenerator"),
-                args=[ast.Name(id=gkey, ctx=ast.Load()), _name(self_name)]
-                    + arg_exprs + [_name(trail_name)],
-                keywords=[],
-            )
+            return _sg(ast.Name(id=gkey, ctx=ast.Load()))
 
     # Phase 7: use cached dispatch name for locked predicates
     dk = _disp_key(fname, arity)
@@ -483,12 +476,7 @@ def _dispatch_call_trampoline(
             args=[],
             keywords=[],
         )
-    return ast.Call(
-        func=_name("StepGenerator"),
-        args=[dispatch_expr, _name(self_name), _name(self_name), _name(self_name)]
-            + arg_exprs + [_name(trail_name)],
-        keywords=[],
-    )
+    return _sg(dispatch_expr)
 
 
 # ── compile_goal_trampoline ────────────────────────────────────────────────────
