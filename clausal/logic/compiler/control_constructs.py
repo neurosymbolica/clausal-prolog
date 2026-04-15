@@ -43,6 +43,8 @@ from ._ast_helpers import (
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
+    maybe_assert_located,
+    stamp_predicate_funcdef,
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .globals_env import _preallocate_body_vars
@@ -854,7 +856,15 @@ def _compile_goal_lambda(
         type_comment=None,
         **_EXTRA_FUNCDEF,
     )
-    ast.fix_missing_locations(func_def)
+    # Slice G5: meta-call sub-generator (once/findall/catch inner wrapper).
+    # No clause list here — use the enclosing meta-call's position from
+    # the active scope stack.  Falls back to SYNTHETIC_POSITION when the
+    # caller didn't open a scope.
+    from ._ast_helpers import _current_position, SYNTHETIC_POSITION
+    pos = _current_position() or SYNTHETIC_POSITION
+    func_def.lineno, func_def.col_offset, \
+        func_def.end_lineno, func_def.end_col_offset = pos
+    maybe_assert_located(func_def)
 
     return func_name, func_def
 

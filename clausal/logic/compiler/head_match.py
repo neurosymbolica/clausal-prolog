@@ -819,12 +819,7 @@ def compile_head_to_match_case(
     outer_pattern = ast.MatchSequence(patterns=arg_patterns)
 
     # _mark = trail.mark()
-    mark_assign = ast.Assign(
-        targets=[_name(mark_name, ast.Store())],
-        value=_call(_attr(trail_name, "mark")),
-        lineno=0,
-        col_offset=0,
-    )
+    mark_assign = _assign_mark(mark_name, trail_name)
 
     # trail.undo(_mark)
     undo_stmt = ast.Expr(value=_call(_attr(trail_name, "undo"), _name(mark_name)))

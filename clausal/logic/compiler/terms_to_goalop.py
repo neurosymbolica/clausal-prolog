@@ -133,7 +133,11 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     if isinstance(body, nodes.And):
         # Flatten arbitrarily-nested ``And(And(a, b), c)`` into
         # ``[a, b, c]``; the right-to-left :class:`Sequence` fold
-        # produces the same AST as the nested-dispatch form.
+        # produces the same AST as the nested-dispatch form.  The
+        # :class:`And`'s own ``position`` is the outermost conjunction
+        # span — useful as a fallback for child ops whose own position
+        # is missing, but we don't stamp it onto a wrapper here because
+        # the flattened ops carry their own.
         _extend(ops, body.left, db)
         _extend(ops, body.right, db)
         return
@@ -141,6 +145,24 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
 
 
 def _convert(goal: Any, db: Any) -> GoalOp:
+    """Convert one goal term to a :class:`GoalOp`, stamping its source
+    position from the originating term.
+
+    Slice G threads :attr:`pythonic_ast.nodes.Node.position` (and the
+    matching attribute now carried by ``terms.Compound`` /
+    ``DictTerm`` / etc.) onto the produced op.  When the goal is a
+    Python literal that carries no position (e.g. bare ``True`` /
+    ``False``), the op's ``position`` stays ``None`` — call sites that
+    care must scope the surrounding term's position.
+    """
+    op = _convert_inner(goal, db)
+    pos = getattr(goal, "position", None)
+    if pos is not None and op.position is None:
+        op.position = pos
+    return op
+
+
+def _convert_inner(goal: Any, db: Any) -> GoalOp:
     # ``PyThunk`` as a body goal — wrap in :class:`PyThunkOp`; the
     # lowering reuses ``term_to_ast_expr`` to emit a single
     # ``ast.Expr(call)``.

@@ -91,12 +91,26 @@ MetaKind = Literal[
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@dataclasses.dataclass
 class GoalOp:
     """Base class for compiled goal operations.
 
     Subclasses are ``@dataclass`` records.  Passes traverse them with
     ``walk_goal_ops`` or pattern-match on their types.
+
+    ``position`` (Slice G) is the source-position tuple
+    ``(start_line, start_col, end_line, end_col)`` of the originating
+    ``.clausal`` body term.  ``terms_to_goalop`` stamps it from the body
+    term's own ``position`` attribute; lowering opens a position scope
+    on this value before emitting AST so generated nodes carry truthful
+    ``lineno`` / ``col_offset``.
+
+    Declared keyword-only so subclasses may continue to specify their
+    own positional fields without colliding with the inherited default.
     """
+    position: "tuple[int, int, int, int] | None" = dataclasses.field(
+        default=None, kw_only=True, compare=False, repr=False,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

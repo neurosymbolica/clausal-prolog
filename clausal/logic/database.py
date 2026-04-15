@@ -24,10 +24,21 @@ class Clause:
     """One predicate clause: a head term and a list of body goal terms.
 
     An empty body list means a fact.
+
+    ``position`` (Slice G) is the source-position tuple of the
+    originating ``.clausal`` clause statement — the whole
+    ``head <- body`` span.  Set by
+    :meth:`LogicModule.define_predicate` from the parsed
+    :class:`~clausal.pythonic_ast.nodes.Predicate` node.  ``None`` for
+    clauses added at runtime (``assertz`` / generated-from-nothing
+    dataclass facts) that have no source origin.
     """
 
     head: Any
     body: list  # list[term]
+    position: "tuple[int,int,int,int] | None" = dataclasses.field(
+        default=None, compare=False, repr=False,
+    )
 
     def is_fact(self) -> bool:
         return not self.body
@@ -262,7 +273,11 @@ class Module:
         # Normalize dataclass facts: ground field values → Var + Is body goals.
         if body_goals == [True] and _is_normalizable_fact(head):
             head, body_goals = _normalize_dataclass_fact(head)
-        self.db.assertz(Clause(head=head, body=body_goals))
+        self.db.assertz(Clause(
+            head=head,
+            body=body_goals,
+            position=getattr(predicate_node, "position", None),
+        ))
         functor, arity = head_key(head)
         param_names = _extract_param_names(head)
         if param_names is not None:

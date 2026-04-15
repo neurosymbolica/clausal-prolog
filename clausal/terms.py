@@ -17,7 +17,7 @@ from __future__ import annotations
 import re as _re
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Optional
 
 from .logic.variables import Var
 
@@ -55,6 +55,10 @@ class Compound:
     """
     functor: str | Var
     args: tuple
+    # Slice G — source position (start_line, start_col, end_line, end_col).
+    # ``compare=False`` / ``repr=False`` keeps structural equality and
+    # printing unaffected — position is cosmetic metadata only.
+    position: Optional[tuple] = field(default=None, compare=False, repr=False)
 
     def __str__(self) -> str:
         args_str = ", ".join(term_str(a) for a in self.args)
@@ -87,12 +91,24 @@ class KWTerm:
     Attributes are read from the backing dict.  Iteration yields values in
     insertion order.  Equality and unification match by keyword name (not
     position): ``KWTerm('r', a=1, b=2) == KWTerm('r', b=2, a=1)``.
+
+    **Reserved keyword:** ``position`` is consumed by the constructor as
+    source-location metadata (Slice G — see :attr:`position`), not stored
+    as a keyword field.  Passing ``KWTerm('foo', position=X)`` assigns
+    ``X`` to the instance's ``position`` attribute and leaves the field
+    set empty.  Do not use ``position`` as a user-facing KWTerm field
+    name; pick a different name (``pos``, ``coords``, ``loc``) if you
+    need coordinate data on a runtime-constructed term.
     """
 
-    __slots__ = ("_functor", "_fields")
+    __slots__ = ("_functor", "_fields", "position")
 
     def __init__(self, functor: str, **kwargs: Any) -> None:
         object.__setattr__(self, "_functor", functor)
+        # Slice G — source position; pop from kwargs before storing fields
+        # so callers can pass ``position=(...)`` to constructors built by
+        # the .clausal templater without polluting the keyword field set.
+        object.__setattr__(self, "position", kwargs.pop("position", None))
         object.__setattr__(self, "_fields", dict(kwargs))
 
     @property
@@ -622,10 +638,11 @@ class DictTerm:
 
     Two DictTerms unify iff they have the same key set and values unify pairwise.
     """
-    __slots__ = ("_data",)
+    __slots__ = ("_data", "position")
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, *, position=None):
         self._data = dict(data)  # defensive copy
+        self.position = position  # Slice G
 
     @property
     def data(self) -> dict:
@@ -686,10 +703,11 @@ class SetTerm:
     Elements must be ground (hashable). Backed by frozenset for immutability.
     Two SetTerms unify iff they contain the same elements.
     """
-    __slots__ = ("_elements",)
+    __slots__ = ("_elements", "position")
 
-    def __init__(self, elements):
+    def __init__(self, elements, *, position=None):
         self._elements = frozenset(elements)
+        self.position = position  # Slice G
 
     @property
     def elements(self) -> frozenset:
@@ -997,11 +1015,12 @@ class PyThunk:
     The lambda keeps the Python code native — no term transformation — so any
     Python expression (method calls, builtins, arithmetic, etc.) works.
     """
-    __slots__ = ('fn', 'var_objects')
+    __slots__ = ('fn', 'var_objects', 'position')
 
-    def __init__(self, fn, var_objects):
+    def __init__(self, fn, var_objects, *, position=None):
         self.fn = fn
         self.var_objects = tuple(var_objects)
+        self.position = position  # Slice G
 
     def __repr__(self):
         return f"PyThunk({self.fn!r}, {self.var_objects!r})"

@@ -44,6 +44,15 @@ def lower(
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     """Lower *ir* (trampoline strategy), threading *k_stmts* as continuation."""
+    with ctx.at_position(ir.position):
+        return _lower_body(ir, ctx, k_stmts)
+
+
+def _lower_body(
+    ir: GoalOp,
+    ctx: CompilationContext,
+    k_stmts: list[ast.stmt],
+) -> list[ast.stmt]:
     match ir:
 
         # ── General ITE — trampoline form.  (Reified Branch is handled

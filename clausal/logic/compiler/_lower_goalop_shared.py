@@ -86,6 +86,16 @@ def lower_shared(
 ) -> Union[list[ast.stmt], None]:
     """Lower a strategy-agnostic op, or return ``None`` if *ir* is
     strategy-specific and must be handled by the caller."""
+    with ctx.at_position(ir.position):
+        return _lower_shared_body(ir, ctx, k_stmts, recurse)
+
+
+def _lower_shared_body(
+    ir: GoalOp,
+    ctx: CompilationContext,
+    k_stmts: list[ast.stmt],
+    recurse: Callable[[GoalOp, CompilationContext, list[ast.stmt]], list[ast.stmt]],
+) -> Union[list[ast.stmt], None]:
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     match ir:

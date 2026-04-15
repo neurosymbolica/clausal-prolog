@@ -67,9 +67,17 @@ one sub-slice at a time — see
 from __future__ import annotations
 
 import dataclasses
+from contextlib import contextmanager
 from typing import Any, TYPE_CHECKING
 
-from ._ast_helpers import FreshNames, _THIS_GEN_NAME, _TRAMP_PARENT_NAME
+from ._ast_helpers import (
+    FreshNames,
+    _THIS_GEN_NAME,
+    _TRAMP_PARENT_NAME,
+    _current_position,
+    _pop_position,
+    _push_position,
+)
 
 if TYPE_CHECKING:
     from .strategy import Strategy
@@ -210,6 +218,43 @@ class CompilationContext:
     # (present iff the clause made it into the IR cache).  The TRO-aware
     # body_compiler wrapper reads this instead of re-running analyse.
     clause_tro_plans: "dict[int, Any] | None" = None
+
+    # ── Slice G: source-position scope stack ─────────────────────────────
+    #
+    # :meth:`at_position` pushes a 4-tuple ``(start_line, start_col,
+    # end_line, end_col)`` onto a module-level stack in
+    # :mod:`._ast_helpers` that leaf AST builders read from when
+    # stamping ``lineno`` / ``col_offset`` on the nodes they construct.
+    # The stack is module-level rather than per-``CompilationContext``
+    # so emitter helpers don't need to thread a context handle through
+    # every call — a single ``with ctx.at_position(ir.position):`` at
+    # the top of a lowering match arm scopes every emission inside.
+    #
+    # Compiles are not concurrent within a single interpreter thread
+    # (the compiler holds the GIL for its duration), so a plain list
+    # is safe; if that ever changes, switch the module-level slot to a
+    # ``contextvars.ContextVar`` without touching call sites.
+
+    @contextmanager
+    def at_position(self, pos):
+        """Push *pos* onto the position stack for the duration of the block.
+
+        *pos* may be ``None`` (no-op push), a 4-tuple, or any object
+        exposing a ``.position`` attribute (e.g. a :class:`GoalOp` or a
+        ``pythonic_ast.nodes.Node``) — the attribute is unwrapped so
+        call sites can pass the IR op or term directly.
+        """
+        if pos is not None and not isinstance(pos, tuple):
+            pos = getattr(pos, "position", None)
+        _push_position(pos)
+        try:
+            yield
+        finally:
+            _pop_position()
+
+    @property
+    def current_position(self):
+        return _current_position()
 
     def replace(self, **overrides) -> "CompilationContext":
         """Return a shallow copy with fields overridden.

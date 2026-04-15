@@ -570,7 +570,6 @@ def _compile_tro_tail(
                     value=_name("_tro_state"), slice=ast.Constant(0), ctx=ast.Store(),
                 )],
                 value=ast.Constant(True),
-                lineno=0, col_offset=0,
             ),
         ]
         for i in range(arity):
@@ -579,7 +578,6 @@ def _compile_tro_tail(
                     value=_name("_tro_state"), slice=ast.Constant(i + 1), ctx=ast.Store(),
                 )],
                 value=_name(f"_tro_arg{i}"),
-                lineno=0, col_offset=0,
             ))
     else:
         # Loop mode: set _tro = True

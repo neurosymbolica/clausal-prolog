@@ -796,7 +796,18 @@ else changes.
 
 ---
 
-## 9. Slice G — Source-location fidelity
+## 9. Slice G — Source-location fidelity ✅
+
+**Status:** Complete (2026-04-14).  All `ast.fix_missing_locations`
+calls removed from the compiler; source positions thread from
+`.clausal` / `.pl` terms through `GoalOp` IR to emitted `ast.*`
+nodes via `CompilationContext.at_position()` scopes; synthetic
+scaffolding inherits the enclosing `FunctionDef`'s position via
+`propagate_synthetic_positions` and is marked `_g_synthetic=True`;
+`assert_all_nodes_located` runs strictly on every compiled
+FunctionDef.  Regression coverage in `tests/test_source_locations.py`
+(G1 div-by-zero + G6's seven construct-shape cases).  Suite:
+10490 passed ex-trealla.
 
 **Goal:** Resolve `todo/ast_source_locations.md`. Every emitted AST
 node carries the source position of the term it was compiled

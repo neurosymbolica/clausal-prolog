@@ -60,6 +60,10 @@ from ._ast_helpers import (
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _TRAMP_PARENT_NAME, _THIS_GEN_NAME, _DISP_PREFIX,
     _EXTRA_FUNCDEF,
+    maybe_assert_located,
+    stamp_predicate_funcdef,
+    _push_position,
+    _pop_position,
 )
 from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
@@ -295,7 +299,8 @@ def _empty_predicate_funcdef(
         decorator_list=[], returns=None, type_comment=None,
         **_EXTRA_FUNCDEF,
     )
-    ast.fix_missing_locations(func_def)
+    stamp_predicate_funcdef(func_def, ())  # empty predicate — synthetic
+    maybe_assert_located(func_def)
     return func_def
 
 
@@ -408,15 +413,23 @@ def _build_predicate_trampoline_funcdef(
             var_context: dict[int, str] = {}
             _head_arg_patterns(clause.head, var_context, arity)
 
-            body_stmts = body_compiler(clause, var_context)
+            # Slice G5: scope head-match scaffolding (mark/undo, pattern
+            # guards, unify calls) on the clause's own source position.
+            # Without this the `_assign_mark`/`_undo_stmt` calls inside
+            # ``compile_head_to_match_case`` emit at lineno=0.
+            _push_position(getattr(clause, "position", None))
+            try:
+                body_stmts = body_compiler(clause, var_context)
 
-            case_arm = compile_head_to_match_case(
-                head=clause.head,
-                body_stmts=body_stmts,
-                var_context=var_context,
-                arity=arity,
-                skip_trail=skip_trail,
-            )
+                case_arm = compile_head_to_match_case(
+                    head=clause.head,
+                    body_stmts=body_stmts,
+                    var_context=var_context,
+                    arity=arity,
+                    skip_trail=skip_trail,
+                )
+            finally:
+                _pop_position()
             loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
     if use_tro and tro_mode == "loop":
@@ -508,7 +521,8 @@ def _build_predicate_trampoline_funcdef(
     assert_mark_undo_paired(func_def)
     if emit_done:
         assert_trampoline_done_yield_present(func_def)
-    ast.fix_missing_locations(func_def)
+    stamp_predicate_funcdef(func_def, clauses)
+    maybe_assert_located(func_def)
     return func_def
 
 
@@ -1109,14 +1123,19 @@ def _build_predicate_funcdef(
     for clause in clauses:
         var_context: dict[int, str] = {}
         _head_arg_patterns(clause.head, var_context, arity)
-        body_stmts = body_compiler(clause, var_context)
-        case_arm = compile_head_to_match_case(
-            head=clause.head,
-            body_stmts=body_stmts,
-            var_context=var_context,
-            arity=arity,
-            skip_trail=skip_trail,
-        )
+        # Slice G5: scope head-match + body emission on clause position.
+        _push_position(getattr(clause, "position", None))
+        try:
+            body_stmts = body_compiler(clause, var_context)
+            case_arm = compile_head_to_match_case(
+                head=clause.head,
+                body_stmts=body_stmts,
+                var_context=var_context,
+                arity=arity,
+                skip_trail=skip_trail,
+            )
+        finally:
+            _pop_position()
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
 
     # Empty body is invalid Python; use return+yield to make a no-op generator.
@@ -1144,7 +1163,8 @@ def _build_predicate_funcdef(
         type_comment=None,
         **_EXTRA_FUNCDEF,
     )
-    ast.fix_missing_locations(func_def)
+    stamp_predicate_funcdef(func_def, clauses)
+    maybe_assert_located(func_def)
     return func_def
 
 
