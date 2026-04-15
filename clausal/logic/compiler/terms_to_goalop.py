@@ -156,7 +156,13 @@ def _convert(goal: Any, db: Any) -> GoalOp:
     care must scope the surrounding term's position.
     """
     op = _convert_inner(goal, db)
-    pos = getattr(goal, "position", None)
+    # Terms (Compound/KWTerm/DictTerm/SetTerm/PyThunk) carry ``_position``
+    # (underscore-prefixed — reserved, unreachable as a Clausal field name).
+    # pythonic_ast Nodes still use ``position``; check both so this helper
+    # works for either flavour of source node.
+    pos = getattr(goal, "_position", None)
+    if pos is None:
+        pos = getattr(goal, "position", None)
     if pos is not None and op.position is None:
         op.position = pos
     return op

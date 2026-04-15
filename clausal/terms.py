@@ -58,7 +58,9 @@ class Compound:
     # Slice G — source position (start_line, start_col, end_line, end_col).
     # ``compare=False`` / ``repr=False`` keeps structural equality and
     # printing unaffected — position is cosmetic metadata only.
-    position: Optional[tuple] = field(default=None, compare=False, repr=False)
+    # Underscore prefix: Clausal treats ``_name`` as a logic variable,
+    # so this attribute is unreachable as a user field name.
+    _position: Optional[tuple] = field(default=None, compare=False, repr=False)
 
     def __str__(self) -> str:
         args_str = ", ".join(term_str(a) for a in self.args)
@@ -92,23 +94,21 @@ class KWTerm:
     insertion order.  Equality and unification match by keyword name (not
     position): ``KWTerm('r', a=1, b=2) == KWTerm('r', b=2, a=1)``.
 
-    **Reserved keyword:** ``position`` is consumed by the constructor as
-    source-location metadata (Slice G — see :attr:`position`), not stored
-    as a keyword field.  Passing ``KWTerm('foo', position=X)`` assigns
-    ``X`` to the instance's ``position`` attribute and leaves the field
-    set empty.  Do not use ``position`` as a user-facing KWTerm field
-    name; pick a different name (``pos``, ``coords``, ``loc``) if you
-    need coordinate data on a runtime-constructed term.
+    **Reserved keyword:** ``_position`` is consumed by the constructor
+    as source-location metadata (Slice G — see :attr:`_position`), not
+    stored as a keyword field.  The leading underscore makes it
+    syntactically unreachable as a Clausal field name (Clausal parses
+    ``_foo`` as a logic variable), so user code cannot collide with it.
     """
 
-    __slots__ = ("_functor", "_fields", "position")
+    __slots__ = ("_functor", "_fields", "_position")
 
     def __init__(self, functor: str, **kwargs: Any) -> None:
         object.__setattr__(self, "_functor", functor)
         # Slice G — source position; pop from kwargs before storing fields
-        # so callers can pass ``position=(...)`` to constructors built by
-        # the .clausal templater without polluting the keyword field set.
-        object.__setattr__(self, "position", kwargs.pop("position", None))
+        # so callers can pass ``_position=(...)`` from templater-emitted
+        # constructor calls without polluting the keyword field set.
+        object.__setattr__(self, "_position", kwargs.pop("_position", None))
         object.__setattr__(self, "_fields", dict(kwargs))
 
     @property
@@ -638,11 +638,11 @@ class DictTerm:
 
     Two DictTerms unify iff they have the same key set and values unify pairwise.
     """
-    __slots__ = ("_data", "position")
+    __slots__ = ("_data", "_position")
 
-    def __init__(self, data: dict, *, position=None):
+    def __init__(self, data: dict, *, _position=None):
         self._data = dict(data)  # defensive copy
-        self.position = position  # Slice G
+        self._position = _position  # Slice G
 
     @property
     def data(self) -> dict:
@@ -703,11 +703,11 @@ class SetTerm:
     Elements must be ground (hashable). Backed by frozenset for immutability.
     Two SetTerms unify iff they contain the same elements.
     """
-    __slots__ = ("_elements", "position")
+    __slots__ = ("_elements", "_position")
 
-    def __init__(self, elements, *, position=None):
+    def __init__(self, elements, *, _position=None):
         self._elements = frozenset(elements)
-        self.position = position  # Slice G
+        self._position = _position  # Slice G
 
     @property
     def elements(self) -> frozenset:
@@ -1015,12 +1015,12 @@ class PyThunk:
     The lambda keeps the Python code native — no term transformation — so any
     Python expression (method calls, builtins, arithmetic, etc.) works.
     """
-    __slots__ = ('fn', 'var_objects', 'position')
+    __slots__ = ('fn', 'var_objects', '_position')
 
-    def __init__(self, fn, var_objects, *, position=None):
+    def __init__(self, fn, var_objects, *, _position=None):
         self.fn = fn
         self.var_objects = tuple(var_objects)
-        self.position = position  # Slice G
+        self._position = _position  # Slice G
 
     def __repr__(self):
         return f"PyThunk({self.fn!r}, {self.var_objects!r})"

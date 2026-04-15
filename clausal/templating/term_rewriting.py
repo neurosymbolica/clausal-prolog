@@ -421,7 +421,7 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
                 lambda_node,
                 replace(List(elts=var_ref_asts, ctx=load), node),
             ],
-            keywords=[make_keyword_node("position", pos_ast(node), node)],
+            keywords=[make_keyword_node("_position", pos_ast(node), node)],
         ),
         node,
     )
@@ -664,7 +664,7 @@ class TermTransformer(NodeTransformer):
             Call(
                 func=replace(Name(id="DictTerm", ctx=load), dict_expr),
                 args=[dict_arg],
-                keywords=[make_keyword_node("position", pos_ast(dict_expr), dict_expr)],
+                keywords=[make_keyword_node("_position", pos_ast(dict_expr), dict_expr)],
             ),
             dict_expr,
         )

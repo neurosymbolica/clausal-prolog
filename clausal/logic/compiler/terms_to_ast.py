@@ -333,7 +333,7 @@ def term_to_ast_expr(
                     ),
                 )
                 for name in term_field_names(term)
-                if name != "position"
+                if name not in ("_position", "position")
             ],
         )
 
