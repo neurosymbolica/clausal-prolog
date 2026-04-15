@@ -20,7 +20,7 @@ def _run(name, arity, *args, trail=None):
     if trail is None:
         trail = Trail()
     dispatch = get_builtin_dispatch(name, arity, None)
-    return len(solutions(StepGenerator(dispatch, None, *args, trail)))
+    return len(solutions(StepGenerator(dispatch, None, None, None, *args, trail)))
 
 
 def _run_collect(name, arity, *args, trail=None, snap=None):
@@ -28,7 +28,7 @@ def _run_collect(name, arity, *args, trail=None, snap=None):
     if trail is None:
         trail = Trail()
     dispatch = get_builtin_dispatch(name, arity, None)
-    return solutions(StepGenerator(dispatch, None, *args, trail),
+    return solutions(StepGenerator(dispatch, None, None, None, *args, trail),
                      snapshot=snap)
 
 

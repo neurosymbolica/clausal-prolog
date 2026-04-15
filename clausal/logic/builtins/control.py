@@ -74,7 +74,7 @@ def _time_goal__1(this_generator, parent, goal, trail):
     wall_start = _time.perf_counter()
     cpu_start = _time.process_time()
 
-    sg = StepGenerator(dispatch, this_generator, *goal_args, trail)
+    sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *goal_args, trail)
     _st = yield (sg, None)
     solution_count = 0
     while _st is not DONE:
@@ -109,7 +109,7 @@ def _time_goal__2(this_generator, parent, goal, elapsed, trail):
 
     wall_start = _time.perf_counter()
 
-    sg = StepGenerator(dispatch, this_generator, *goal_args, trail)
+    sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *goal_args, trail)
     _st = yield (sg, None)
     while _st is not DONE:
         elapsed_val = _time.perf_counter() - wall_start

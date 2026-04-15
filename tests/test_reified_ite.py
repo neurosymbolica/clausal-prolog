@@ -336,7 +336,7 @@ class TestReifiedIteEquality:
         trail = Trail()
         results = []
         args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, *args, trail)
+        root = StepGenerator(fn, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:
@@ -532,7 +532,7 @@ class TestReifiedIteFd:
         trail = Trail()
         results = []
         args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, *args, trail)
+        root = StepGenerator(fn, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:
@@ -859,7 +859,7 @@ class TestReifiedIteFd:
         db.assertz(clause)
         fn = compile_predicate_trampoline("ite_test", 2, [clause], db)
         results = []
-        root = StepGenerator(fn, None, x, r, trail)
+        root = StepGenerator(fn, None, None, None, x, r, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:
@@ -968,7 +968,7 @@ class TestGeneralIte:
         trail = Trail()
         results = []
         args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, *args, trail)
+        root = StepGenerator(fn, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:
@@ -1162,7 +1162,7 @@ class TestGeneralIteMultiSolution:
         trail = Trail()
         results = []
         args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, *args, trail)
+        root = StepGenerator(fn, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:
@@ -1460,7 +1460,7 @@ class TestOnce:
         trail = Trail()
         results = []
         args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, *args, trail)
+        root = StepGenerator(fn, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:

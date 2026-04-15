@@ -27,7 +27,7 @@ def _make_call_goal_trampoline(extra_n: int):
             dispatch = _ensure_trampoline_dispatch(goal_val)
             derefed = [deref(a) for a in args[1:extra_n + 1]]
             trail = args[extra_n + 1]
-            sg = StepGenerator(dispatch, this_generator, *derefed, trail)
+            sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *derefed, trail)
             _st = yield (sg, None)
             while _st is not DONE:
                 yield (parent, None)
@@ -66,7 +66,7 @@ def _map_list__2(this_generator, parent, goal, lst, trail):
     dispatch = _ensure_trampoline_dispatch(goal_val)
     outer_mark = trail.mark()
     for elem in items:
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(outer_mark)
@@ -92,7 +92,7 @@ def _map_list__3(this_generator, parent, goal, xs, ys, trail):
     results = []
     for x in xs_items:
         y = Var()
-        sg = StepGenerator(dispatch, this_generator, deref(x), y, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(x), y, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(outer_mark)
@@ -120,7 +120,7 @@ def _include__3(this_generator, parent, goal, lst, included, trail):
     kept = []
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)
@@ -147,7 +147,7 @@ def _exclude__3(this_generator, parent, goal, lst, excluded, trail):
     kept = []
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)
@@ -173,7 +173,7 @@ def _foldl__4(this_generator, parent, goal, lst, v0, v, trail):
     acc = v0
     for elem in items:
         next_acc = Var()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), deref(acc), next_acc, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), deref(acc), next_acc, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(outer_mark)
@@ -209,7 +209,7 @@ def _take_while__3(this_generator, parent, goal, lst, prefix, trail):
     taken = []
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)
@@ -237,7 +237,7 @@ def _drop_while__3(this_generator, parent, goal, lst, suffix, trail):
     i = 0
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)
@@ -266,7 +266,7 @@ def _span__4(this_generator, parent, goal, lst, yes, no, trail):
     i = 0
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)
@@ -296,7 +296,7 @@ def _group_by__3(this_generator, parent, goal, lst, groups, trail):
     for elem in items:
         key = Var()
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), key, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(mark)
@@ -331,7 +331,7 @@ def _sort_by__3(this_generator, parent, goal, lst, sorted_lst, trail):
     for elem in items:
         key = Var()
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), key, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(mark)
@@ -368,7 +368,7 @@ def _max_by__3(this_generator, parent, goal, lst, maximum, trail):
     for elem in items:
         key = Var()
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), key, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(mark)
@@ -405,7 +405,7 @@ def _min_by__3(this_generator, parent, goal, lst, minimum, trail):
     for elem in items:
         key = Var()
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), key, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), key, trail)
         _st = yield (sg, None)
         if _st is DONE:
             trail.undo(mark)
@@ -441,7 +441,7 @@ def _filter_map__3(this_generator, parent, goal, lst, result, trail):
     for elem in items:
         out = Var()
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), out, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), out, trail)
         _st = yield (sg, None)
         found = _st is not DONE
         if found:
@@ -473,7 +473,7 @@ def _partition__4(this_generator, parent, goal, lst, included, excluded, trail):
     no = []
     for elem in items:
         mark = trail.mark()
-        sg = StepGenerator(dispatch, this_generator, deref(elem), trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
         _st = yield (sg, None)
         found = _st is not DONE
         trail.undo(mark)

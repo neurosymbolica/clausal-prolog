@@ -76,7 +76,7 @@ def solutions_trampoline(dispatch_fn, args_tuple, snapshot_fn) -> list:
     from clausal.logic.trampoline import StepGenerator
 
     snapshots = []
-    root = StepGenerator(dispatch_fn, None, *args_tuple)
+    root = StepGenerator(dispatch_fn, None, None, None, *args_tuple)
     gen, value = root.send(None)
     while True:
         if gen is None:

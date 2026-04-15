@@ -1106,7 +1106,7 @@ def _make_solve_goal_predicate(
             if pred is not None and hasattr(pred, '_get_dispatch'):
                 from clausal.logic.trampoline import StepGenerator
                 dispatch_fn = pred._get_dispatch()
-                sg = StepGenerator(dispatch_fn, this_generator, *args, trail)
+                sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:
                     yield (parent, None)

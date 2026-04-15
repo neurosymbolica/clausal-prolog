@@ -373,7 +373,7 @@ class TestCompileBody:
 
 def _drive(fn, *args_and_trail):
     """Drive a trampoline-compiled fn, yielding None per solution."""
-    root = StepGenerator(fn, None, *args_and_trail)
+    root = StepGenerator(fn, None, None, None, *args_and_trail)
     gen, value = root.send(None)
     while True:
         if gen is None:

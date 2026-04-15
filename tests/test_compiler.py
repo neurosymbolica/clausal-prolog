@@ -35,7 +35,7 @@ from clausal.terms import Compound
 
 def _run_dispatch(fn, *args_and_trail):
     """Drive a trampoline-protocol fn, yield per solution."""
-    root = StepGenerator(fn, None, *args_and_trail)
+    root = StepGenerator(fn, None, None, None, *args_and_trail)
     gen, value = root.send(None)
     while True:
         if gen is None:
@@ -392,7 +392,7 @@ class TestCompilePredicate:
         db = Database()
         fn = compile_predicate("foo", 0, [], db)
         import types
-        gen = StepGenerator(fn, None, _trail())
+        gen = StepGenerator(fn, None, None, None, _trail())
         assert hasattr(gen, 'send')
 
     def test_no_clauses_installs_dispatch_fn(self):

@@ -196,7 +196,7 @@ def _nil_and_cons_funcdef(arity: int = 2) -> ast.FunctionDef:
 def _trampoline_solutions(dispatch_fn, args: tuple) -> list:
     """Drive a trampoline dispatch function; return count of solutions."""
     solutions = []
-    root = StepGenerator(dispatch_fn, None, *args)
+    root = StepGenerator(dispatch_fn, None, None, None, *args)
     gen, val = root.send(None)
     while True:
         if gen is None:

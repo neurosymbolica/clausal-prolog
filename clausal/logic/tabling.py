@@ -493,7 +493,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
 
         try:
             # Drive original dispatch through trampoline protocol
-            _gen = StepGenerator(original_dispatch, this_generator, *args, trail)
+            _gen = StepGenerator(original_dispatch, this_generator, this_generator, this_generator, *args, trail)
             _st = yield (_gen, None)
             while _st is not DONE:
                 answer = freeze_args(args, trail)
@@ -575,7 +575,7 @@ def _trampoline_to_simple_adapter(trampoline_dispatch, arity):
     def adapted(*args_trail_k):
         args = args_trail_k[:arity]
         trail = args_trail_k[arity]
-        root = StepGenerator(trampoline_dispatch, None, *args, trail)
+        root = StepGenerator(trampoline_dispatch, None, None, None, *args, trail)
         gen, value = root.send(None)
         while True:
             if gen is None:

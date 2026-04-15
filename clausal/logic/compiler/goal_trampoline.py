@@ -419,7 +419,7 @@ def _dispatch_call_trampoline(
     if direct_joint_bucket_ref is not None:
         return ast.Call(
             func=_name("StepGenerator"),
-            args=[ast.Name(id=direct_joint_bucket_ref, ctx=ast.Load()), _name(self_name)]
+            args=[ast.Name(id=direct_joint_bucket_ref, ctx=ast.Load()), _name(self_name), _name(self_name), _name(self_name)]
                 + arg_exprs + [_name(trail_name)],
             keywords=[],
         )
@@ -452,7 +452,7 @@ def _dispatch_call_trampoline(
     if direct_bucket_ref is not None:
         return ast.Call(
             func=_name("StepGenerator"),
-            args=[ast.Name(id=direct_bucket_ref, ctx=ast.Load()), _name(self_name)]
+            args=[ast.Name(id=direct_bucket_ref, ctx=ast.Load()), _name(self_name), _name(self_name), _name(self_name)]
                 + arg_exprs + [_name(trail_name)],
             keywords=[],
         )
@@ -484,7 +484,8 @@ def _dispatch_call_trampoline(
         )
     return ast.Call(
         func=_name("StepGenerator"),
-        args=[dispatch_expr, _name(self_name)] + arg_exprs + [_name(trail_name)],
+        args=[dispatch_expr, _name(self_name), _name(self_name), _name(self_name)]
+            + arg_exprs + [_name(trail_name)],
         keywords=[],
     )
 

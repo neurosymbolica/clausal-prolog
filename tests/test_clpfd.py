@@ -39,7 +39,7 @@ def fresh_trail() -> Trail:
 
 def _drive_trampoline(dispatch_fn, trail):
     """Drive a trampoline dispatch fn, yielding after each solution."""
-    sg = StepGenerator(dispatch_fn, None, trail)
+    sg = StepGenerator(dispatch_fn, None, None, None, trail)
     gen, value = sg.send(None)
     while True:
         if gen is None:

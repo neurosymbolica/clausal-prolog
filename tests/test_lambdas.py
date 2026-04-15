@@ -73,7 +73,7 @@ def term_eval_with_scope(src: str, seen_vars: set[str]):
 
 def _run_dispatch(fn, *args_and_trail):
     """Drive a trampoline-protocol fn, yield per solution."""
-    root = StepGenerator(fn, None, *args_and_trail)
+    root = StepGenerator(fn, None, None, None, *args_and_trail)
     gen, value = root.send(None)
     while True:
         if gen is None:

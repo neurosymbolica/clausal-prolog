@@ -403,7 +403,7 @@ class TestBuiltinsInCompiledPredicates:
         out = Var()
         t = Trail()
         fn = db.get_dispatch("range_check", 1)
-        results = solutions(StepGenerator(fn, None, out, t), lambda: deref(out))
+        results = solutions(StepGenerator(fn, None, None, None, out, t), lambda: deref(out))
         assert results == [1, 2, 3, 4, 5]
 
     def test_member_in_compiled_body(self):
@@ -426,5 +426,5 @@ class TestBuiltinsInCompiledPredicates:
         out = Var()
         t = Trail()
         fn = db.get_dispatch("pick", 1)
-        results = solutions(StepGenerator(fn, None, out, t), lambda: deref(out))
+        results = solutions(StepGenerator(fn, None, None, None, out, t), lambda: deref(out))
         assert results == ["a", "b", "c"]

@@ -520,7 +520,7 @@ class TestOrMarkElimination:
         trail = Trail()
         v = Var()
         results = []
-        root = StepGenerator(fn, None, v, trail)
+        root = StepGenerator(fn, None, None, None, v, trail)
         gen, val = root.send(None)
         while True:
             if gen is None:
@@ -717,7 +717,7 @@ class TestLockedDispatchCaching:
         trail = Trail()
         arg = Var()
         solutions = []
-        root = StepGenerator(fn, None, arg, trail)
+        root = StepGenerator(fn, None, None, None, arg, trail)
         gen, val = root.send(None)
         while True:
             if gen is None:
@@ -740,7 +740,7 @@ def _run_trampoline(fn, *args):
     """
     from clausal.logic.trampoline import StepGenerator, DONE as _DONE
     trail = Trail()
-    root = StepGenerator(fn, None, *args, trail)
+    root = StepGenerator(fn, None, None, None, *args, trail)
     results = []
     gen, val = root.send(None)
     while True:

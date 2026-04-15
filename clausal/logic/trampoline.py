@@ -63,20 +63,44 @@ except ImportError:
 
         Usage::
 
-            sg = StepGenerator(pred_fn, parent, arg0, arg1, trail)
+            sg = StepGenerator(pred_fn, proceed, fail, catcher, arg0, arg1, trail)
 
-        This calls ``pred_fn(sg, parent, arg0, arg1, trail)`` internally, so the
-        generator body receives ``sg`` as its ``this_generator`` parameter.
+        The three continuation slots steer three independent dataflows:
 
-        ``send(value)`` handles first-call bootstrapping transparently:
-        the first call does ``next(inner_gen)``; subsequent calls delegate to
+        - ``proceed`` — where yielded solutions go (consumer frame).
+        - ``fail``    — where to resume on child exhaustion (completion).
+        - ``catcher`` — where thrown exceptions propagate (handler chain).
+
+        For normal (non-TCO) call sites the caller passes the same frame for
+        all three; continuation-level TCO later sets ``proceed`` to the
+        caller's own ``proceed`` while keeping ``fail`` / ``catcher`` pointed
+        at the caller.  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+
+        Phase 1 forwarding note: the generator body receives ``proceed`` as
+        its single parent parameter (``pred_fn(sg, proceed, *args)``) so
+        compiled predicates with the legacy single-parent signature remain
+        callable.  Phase 2 switches to forwarding all three.
+
+        ``send(value)`` handles first-call bootstrapping transparently: the
+        first call does ``next(inner_gen)``; subsequent calls delegate to
         ``inner_gen.send(value)``.
         """
-        __slots__ = ('_gen', '_started', 'parent')
+        __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher')
 
-        def __init__(self, func: Callable, *args: Any) -> None:
-            self.parent = args[0] if args else None  # first arg is always parent
-            self._gen: Generator = func(self, *args)
+        def __init__(
+            self,
+            func: Callable,
+            proceed: Any,
+            fail: Any,
+            catcher: Any,
+            *args: Any,
+        ) -> None:
+            self.proceed = proceed
+            self.fail = fail
+            self.catcher = catcher
+            # Phase 1: forward only ``proceed`` to the generator body.
+            # Compiled-predicate signature stays (this_generator, _tramp_parent, *args).
+            self._gen: Generator = func(self, proceed, *args)
             self._started: bool = False
 
         def send(self, value: Any) -> tuple:
@@ -110,8 +134,8 @@ except ImportError:
 
         LogicException routing: when a generator raises LogicException, the
         throwing generator is dead (its try/finally already ran trail.undo).
-        We unwind through the parent chain using .throw() until a catch/3
-        handler catches it.
+        We unwind through the ``catcher`` chain using .throw() until a
+        catch/3 handler catches it.
         """
         from clausal.logic.exceptions import LogicException
 
@@ -120,13 +144,13 @@ except ImportError:
             try:
                 gen, value = gen.send(value)
             except LogicException as exc:
-                target = gen.parent if hasattr(gen, 'parent') else None
+                target = gen.catcher if hasattr(gen, 'catcher') else None
                 while target is not None:
                     try:
                         gen, value = target.throw(exc)
-                        break  # parent caught it — resume normal trampoline
+                        break  # handler caught it — resume normal trampoline
                     except LogicException:
-                        target = target.parent if hasattr(target, 'parent') else None
+                        target = target.catcher if hasattr(target, 'catcher') else None
                 else:
                     raise exc  # uncaught — surface to Python
         return value
@@ -142,8 +166,8 @@ except ImportError:
         generator remains saved in the table entry's suspended list for later
         resumption by the leader's completion phase.
 
-        LogicException routing: same as trampoline() — unwind through parent
-        chain via .throw() until caught or surface to Python.
+        LogicException routing: same as trampoline() — unwind through the
+        ``catcher`` chain via .throw() until caught or surface to Python.
         """
         from clausal.logic.tabling import _TABLING_SUSPEND
         from clausal.logic.exceptions import LogicException
@@ -164,13 +188,13 @@ except ImportError:
                     else:
                         gen, value = gen.send(value)
                 except LogicException as exc:
-                    target = gen.parent if hasattr(gen, 'parent') else None
+                    target = gen.catcher if hasattr(gen, 'catcher') else None
                     while target is not None:
                         try:
                             gen, value = target.throw(type(exc), exc)
                             break
                         except LogicException:
-                            target = target.parent if hasattr(target, 'parent') else None
+                            target = target.catcher if hasattr(target, 'catcher') else None
                     else:
                         raise exc
 
@@ -201,13 +225,13 @@ except ImportError:
             except StopIteration:
                 return None
             except LogicException as exc:
-                target = gen.parent if hasattr(gen, 'parent') else None
+                target = gen.catcher if hasattr(gen, 'catcher') else None
                 while target is not None:
                     try:
                         gen, value = target.throw(type(exc), exc)
                         break
                     except LogicException:
-                        target = target.parent if hasattr(target, 'parent') else None
+                        target = target.catcher if hasattr(target, 'catcher') else None
                 else:
                     raise exc
 
@@ -244,7 +268,7 @@ def factorial(this_generator: StepGenerator, parent: StepGenerator | None, n: in
     """Compute n! while exercising all three targets."""
 
     # ① (child, …) — delegate to a fresh generator for input validation
-    n = yield (StepGenerator(validate, this_generator, n), None)
+    n = yield (StepGenerator(validate, this_generator, this_generator, this_generator, n), None)
 
     acc = 1
     while n > 1:
@@ -261,13 +285,13 @@ def factorial(this_generator: StepGenerator, parent: StepGenerator | None, n: in
 if __name__ == "__main__":
     cases = [(0, 1), (1, 1), (2, 2), (5, 120), (10, 3_628_800)]
     for n, expected in cases:
-        got = trampoline(StepGenerator(factorial, None, n))
+        got = trampoline(StepGenerator(factorial, None, None, None, n))
         assert got == expected, f"factorial({n}) → {got}, expected {expected}"
         print(f"factorial({n:>2}) = {got}")
 
     # Error path through validate
     try:
-        trampoline(StepGenerator(factorial, None, -1))
+        trampoline(StepGenerator(factorial, None, None, None, -1))
         assert False, "should have raised"
     except ValueError as exc:
         print(f"Caught expected error: {exc}")

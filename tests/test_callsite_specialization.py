@@ -51,7 +51,7 @@ def _mkctx(locked_dispatch_keys=frozenset()):
 def _trampoline_solutions(dispatch, args, trail=None):
     if trail is None:
         trail = Trail()
-    sg = StepGenerator(dispatch, None, *args, trail)
+    sg = StepGenerator(dispatch, None, None, None, *args, trail)
     return solutions(sg, lambda: tuple(deref(a) for a in args))
 
 
@@ -149,7 +149,7 @@ class TestIndexPlansExposed:
 
         trail = Trail()
         arg = "green"
-        sg = StepGenerator(dispatch, None, arg, trail)
+        sg = StepGenerator(dispatch, None, None, None, arg, trail)
         sols = solutions(sg, lambda: deref(arg))
         assert sols == ["green"]
 
@@ -163,7 +163,7 @@ class TestIndexPlansExposed:
 
         trail = Trail()
         arg = "orange"
-        sg = StepGenerator(dispatch, None, arg, trail)
+        sg = StepGenerator(dispatch, None, None, None, arg, trail)
         sols = solutions(sg, lambda: deref(arg))
         assert sols == []
 
@@ -522,7 +522,7 @@ class TestCallsiteCorrectnessAndFallback:
 
         trail = Trail()
         arg = "green"
-        sg = StepGenerator(dispatch, None, arg, trail)
+        sg = StepGenerator(dispatch, None, None, None, arg, trail)
         assert solutions(sg, lambda: deref(arg)) == ["green"]
 
     def test_locked_callee_variable_arg_returns_all(self):
@@ -534,7 +534,7 @@ class TestCallsiteCorrectnessAndFallback:
 
         trail = Trail()
         arg = Var()
-        sg = StepGenerator(dispatch, None, arg, trail)
+        sg = StepGenerator(dispatch, None, None, None, arg, trail)
         results = solutions(sg, lambda: deref(arg))
         assert set(results) == set(atoms)
 

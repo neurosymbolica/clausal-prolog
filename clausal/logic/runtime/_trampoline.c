@@ -63,7 +63,9 @@ get_TABLING_SUSPEND(void)
 typedef struct {
     PyObject_HEAD
     PyObject *gen;          /* inner Python generator */
-    PyObject *parent;       /* parent StepGenerator (or Py_None) */
+    PyObject *proceed;      /* solution target (or Py_None) */
+    PyObject *fail;         /* exhaustion target (or Py_None) */
+    PyObject *catcher;      /* exception handler chain (or Py_None) */
     int       started;      /* 0 = first send does next(); 1 = delegates */
 } StepGenObject;
 
@@ -73,41 +75,57 @@ static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
 #define StepGen_CAST(op)    ((StepGenObject *)(op))
 
 
-/* ── StepGenerator.__init__(func, parent, *args) ─────────────────────────
+/* ── StepGenerator.__init__(func, proceed, fail, catcher, *args) ─────────
  *
- * Calls func(self, parent, *args) and stores the resulting generator.
- * Stores parent for LogicException unwinding.
+ * Stores the three continuation slots, then calls
+ *   func(self, proceed, *args)
+ * to build the inner generator.  Phase 1 forwards only ``proceed`` so
+ * compiled predicates with the legacy single-parent signature remain
+ * callable; Phase 2 will switch to forwarding all three.
  */
 static int
 StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    if (nargs < 1) {
+    if (nargs < 4) {
         PyErr_SetString(PyExc_TypeError,
-                        "StepGenerator requires at least one argument (func)");
+                        "StepGenerator requires at least four arguments "
+                        "(func, proceed, fail, catcher)");
         return -1;
     }
 
-    PyObject *func = PyTuple_GET_ITEM(args, 0);
+    PyObject *func    = PyTuple_GET_ITEM(args, 0);
+    PyObject *proceed = PyTuple_GET_ITEM(args, 1);
+    PyObject *fail    = PyTuple_GET_ITEM(args, 2);
+    PyObject *catcher = PyTuple_GET_ITEM(args, 3);
 
-    /* parent is args[1] (first arg after func), or None if absent */
-    PyObject *parent = (nargs >= 2) ? PyTuple_GET_ITEM(args, 1) : Py_None;
-    Py_INCREF(parent);
-    Py_XDECREF(self->parent);
-    self->parent = parent;
+    Py_INCREF(proceed);
+    Py_XDECREF(self->proceed);
+    self->proceed = proceed;
 
-    /* Build (self, *remaining_args) tuple for func(self, parent, ...) */
-    Py_ssize_t n_remaining = nargs - 1;
-    PyObject *call_args = PyTuple_New(n_remaining + 1);
+    Py_INCREF(fail);
+    Py_XDECREF(self->fail);
+    self->fail = fail;
+
+    Py_INCREF(catcher);
+    Py_XDECREF(self->catcher);
+    self->catcher = catcher;
+
+    /* Phase 1: func(self, proceed, *args[4:])
+     * so generator body sees (this_generator, _tramp_parent, *rest). */
+    Py_ssize_t n_rest = nargs - 4;
+    PyObject *call_args = PyTuple_New(n_rest + 2);
     if (!call_args) return -1;
 
     Py_INCREF((PyObject *)self);
     PyTuple_SET_ITEM(call_args, 0, (PyObject *)self);
+    Py_INCREF(proceed);
+    PyTuple_SET_ITEM(call_args, 1, proceed);
 
-    for (Py_ssize_t i = 0; i < n_remaining; i++) {
-        PyObject *a = PyTuple_GET_ITEM(args, i + 1);
+    for (Py_ssize_t i = 0; i < n_rest; i++) {
+        PyObject *a = PyTuple_GET_ITEM(args, i + 4);
         Py_INCREF(a);
-        PyTuple_SET_ITEM(call_args, i + 1, a);
+        PyTuple_SET_ITEM(call_args, i + 2, a);
     }
 
     PyObject *gen = PyObject_Call(func, call_args, kwds);
@@ -125,7 +143,9 @@ StepGen_dealloc(StepGenObject *self)
 {
     PyObject_GC_UnTrack(self);
     Py_XDECREF(self->gen);
-    Py_XDECREF(self->parent);
+    Py_XDECREF(self->proceed);
+    Py_XDECREF(self->fail);
+    Py_XDECREF(self->catcher);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -133,7 +153,9 @@ static int
 StepGen_traverse(StepGenObject *self, visitproc visit, void *arg)
 {
     Py_VISIT(self->gen);
-    Py_VISIT(self->parent);
+    Py_VISIT(self->proceed);
+    Py_VISIT(self->fail);
+    Py_VISIT(self->catcher);
     return 0;
 }
 
@@ -141,7 +163,9 @@ static int
 StepGen_clear(StepGenObject *self)
 {
     Py_CLEAR(self->gen);
-    Py_CLEAR(self->parent);
+    Py_CLEAR(self->proceed);
+    Py_CLEAR(self->fail);
+    Py_CLEAR(self->catcher);
     return 0;
 }
 
@@ -236,15 +260,33 @@ static PyMethodDef StepGen_methods[] = {
 };
 
 static PyObject *
-StepGen_get_parent(StepGenObject *self, void *Py_UNUSED(closure))
+StepGen_get_proceed(StepGenObject *self, void *Py_UNUSED(closure))
 {
-    Py_INCREF(self->parent);
-    return self->parent;
+    Py_INCREF(self->proceed);
+    return self->proceed;
+}
+
+static PyObject *
+StepGen_get_fail(StepGenObject *self, void *Py_UNUSED(closure))
+{
+    Py_INCREF(self->fail);
+    return self->fail;
+}
+
+static PyObject *
+StepGen_get_catcher(StepGenObject *self, void *Py_UNUSED(closure))
+{
+    Py_INCREF(self->catcher);
+    return self->catcher;
 }
 
 static PyGetSetDef StepGen_getset[] = {
-    {"parent", (getter)StepGen_get_parent, NULL,
-     "Parent StepGenerator (for LogicException unwinding)", NULL},
+    {"proceed", (getter)StepGen_get_proceed, NULL,
+     "Solution target (consumer frame)", NULL},
+    {"fail",    (getter)StepGen_get_fail,    NULL,
+     "Exhaustion target (completion frame)", NULL},
+    {"catcher", (getter)StepGen_get_catcher, NULL,
+     "Exception handler chain (LogicException unwinding)", NULL},
     {NULL}
 };
 
@@ -289,10 +331,10 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
     PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     PyErr_NormalizeException(&exc_type, &exc_val, &exc_tb);
 
-    /* Walk up the parent chain */
+    /* Walk up the catcher chain */
     PyObject *target = failed_gen;
     if (StepGen_Check(target))
-        target = StepGen_CAST(target)->parent;
+        target = StepGen_CAST(target)->catcher;
     else
         target = NULL;
 
@@ -342,7 +384,7 @@ unwind_logic_exception(PyObject *failed_gen, PyObject **out_gen, PyObject **out_
             Py_XDECREF(exc_tb);
             PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
             PyErr_NormalizeException(&exc_type, &exc_val, &exc_tb);
-            target = StepGen_CAST(target)->parent;
+            target = StepGen_CAST(target)->catcher;
         } else {
             /* Different exception — let it propagate */
             Py_XDECREF(exc_type);

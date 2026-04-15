@@ -21,14 +21,14 @@ def _phrase__2(this_generator, parent, rule_body, list_arg, trail):
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         # Class reference (0 extra args): phrase(greeting, [hello, world])
         dispatch = rule_val._get_dispatch()
-        sg = StepGenerator(dispatch, this_generator, list_val, [], trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, [], trail)
     elif is_term_instance(rule_val):
         # Instance with args: phrase(digit(D_), [3, plus, 4])
         cls = type(rule_val)
         dispatch = cls._get_dispatch()
         fields = term_field_names(rule_val)
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
-        sg = StepGenerator(dispatch, this_generator, *user_args, list_val, [], trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, [], trail)
     else:
         yield (parent, DONE)
         return
@@ -52,13 +52,13 @@ def _phrase__3(this_generator, parent, rule_body, list_arg, rest_arg, trail):
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         dispatch = rule_val._get_dispatch()
-        sg = StepGenerator(dispatch, this_generator, list_val, rest_val, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, rest_val, trail)
     elif is_term_instance(rule_val):
         cls = type(rule_val)
         dispatch = cls._get_dispatch()
         fields = term_field_names(rule_val)
         user_args = [deref(getattr(rule_val, f)) for f in fields[:-2]]
-        sg = StepGenerator(dispatch, this_generator, *user_args, list_val, rest_val, trail)
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, rest_val, trail)
     else:
         yield (parent, DONE)
         return

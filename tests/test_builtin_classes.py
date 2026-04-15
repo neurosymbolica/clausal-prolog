@@ -329,7 +329,7 @@ class TestExecution:
         )
         trail = Trail()
         capture = capture_vars or []
-        sg = StepGenerator(dispatch_fn, None, *args, trail)
+        sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
         gen, value = sg.send(None)
         results = []
         while True:

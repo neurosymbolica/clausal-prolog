@@ -23,7 +23,7 @@ def _tramp_call(dispatch_fn, args, trail):
     Used by simple-mode code paths (lambda bodies, NAF, once) that need
     to call trampoline-mode predicates.
     """
-    sg = StepGenerator(dispatch_fn, None, *args, trail)
+    sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
     gen, value = sg.send(None)
     while True:
         if gen is None:

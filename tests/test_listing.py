@@ -25,7 +25,7 @@ def _capture_listing(pred):
     old = sys.stdout
     sys.stdout = buf
     try:
-        solutions(StepGenerator(dispatch, None, pred, trail))
+        solutions(StepGenerator(dispatch, None, None, None, pred, trail))
     finally:
         sys.stdout = old
     return buf.getvalue()
@@ -39,7 +39,7 @@ def _capture_portray(term):
     old = sys.stdout
     sys.stdout = buf
     try:
-        solutions(StepGenerator(dispatch, None, term, trail))
+        solutions(StepGenerator(dispatch, None, None, None, term, trail))
     finally:
         sys.stdout = old
     return buf.getvalue()
@@ -111,7 +111,7 @@ class TestListing:
         trail = Trail()
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
-            solutions(StepGenerator(dispatch, None, 42, trail))
+            solutions(StepGenerator(dispatch, None, None, None, 42, trail))
 
     def test_fact_format_ends_with_dot(self):
         # nv

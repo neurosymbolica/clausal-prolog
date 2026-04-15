@@ -21,7 +21,7 @@ def _run_builtin(name, arity, *args):
     dispatch = get_builtin_dispatch(name, arity, None)
     trail = args[-1]  # trail is always last
     pred_args = args[:-1]
-    return solutions(StepGenerator(dispatch, None, *pred_args, trail))
+    return solutions(StepGenerator(dispatch, None, None, None, *pred_args, trail))
 
 
 def _capture_stdout(name, arity, *args):
@@ -33,7 +33,7 @@ def _capture_stdout(name, arity, *args):
     old = sys.stdout
     sys.stdout = buf
     try:
-        solutions(StepGenerator(dispatch, None, *pred_args, trail))
+        solutions(StepGenerator(dispatch, None, None, None, *pred_args, trail))
     finally:
         sys.stdout = old
     return buf.getvalue()
@@ -364,7 +364,7 @@ class TestWriteToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, "hello", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["hello"]
 
@@ -373,7 +373,7 @@ class TestWriteToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, 42, result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, 42, result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["42"]
 
@@ -384,7 +384,7 @@ class TestWriteToString:
         t = Trail()
         unify(v, "world", t)
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, v, result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["world"]
 
@@ -395,7 +395,7 @@ class TestWriteToString:
         t = Trail()
         unify(x, 42, t)
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, f"answer={x}", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, f"answer={x}", result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["answer=42"]
 
@@ -405,7 +405,7 @@ class TestWriteToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, v, result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert len(vals) == 1
         assert vals[0].startswith("_")
@@ -420,7 +420,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, 42, result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, 42, result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["42"]
 
@@ -429,7 +429,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, "hello", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["'hello'"]
 
@@ -438,7 +438,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, [1, 2], result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, [1, 2], result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["[1, 2]"]
 
@@ -448,7 +448,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, v, result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert len(vals) == 1
         assert "_" in vals[0]
@@ -458,7 +458,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, Compound("f", (1, 2)), result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, Compound("f", (1, 2)), result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["f(1, 2)"]
 

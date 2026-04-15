@@ -25,7 +25,7 @@ from clausal.import_hook import _load_module
 def run_trampoline(fn, *args):
     """Call a native trampoline builtin and return number of solutions."""
     trail = Trail()
-    sg = StepGenerator(fn, None, *args, trail)
+    sg = StepGenerator(fn, None, None, None, *args, trail)
     gen, value = sg.send(None)
     count = 0
     while True:
@@ -42,7 +42,7 @@ def run_trampoline_var(fn, *args_before_result):
     """Call a native trampoline builtin with trailing Var, return deref'd values."""
     trail = Trail()
     result = Var()
-    sg = StepGenerator(fn, None, *args_before_result, result, trail)
+    sg = StepGenerator(fn, None, None, None, *args_before_result, result, trail)
     gen, value = sg.send(None)
     results = []
     while True:
@@ -59,7 +59,7 @@ def run_trampoline_2vars(fn, *args_before_results):
     """Call with two trailing Vars, return pairs of deref'd values."""
     trail = Trail()
     v1, v2 = Var(), Var()
-    sg = StepGenerator(fn, None, *args_before_results, v1, v2, trail)
+    sg = StepGenerator(fn, None, None, None, *args_before_results, v1, v2, trail)
     gen, value = sg.send(None)
     results = []
     while True:
@@ -227,7 +227,7 @@ class TestSplitWith:
         # nv
         trail = Trail()
         result = Var()
-        sg = StepGenerator(_split_with__3, None, 0, result, [[1, 2], [3, 4]], trail)
+        sg = StepGenerator(_split_with__3, None, None, None, 0, result, [[1, 2], [3, 4]], trail)
         gen, value = sg.send(None)
         results = []
         while True:

@@ -303,7 +303,7 @@ class TestInnerTrampoline:
             if unify(result, value + 1, inner_trail):
                 yield (parent, None)
 
-        sg = StepGenerator(my_goal, None, Var(), 5, trail)
+        sg = StepGenerator(my_goal, None, None, None, Var(), 5, trail)
         trampoline(sg)
         assert deref(result) == 6
 
@@ -323,7 +323,7 @@ class TestInnerTrampoline:
             unify(result, 42, inner_trail)
             yield (parent, None)
 
-        sg = StepGenerator(my_goal, None, trail)
+        sg = StepGenerator(my_goal, None, None, None, trail)
         trampoline(sg)
         assert deref(result) == 42
 
@@ -346,7 +346,7 @@ class TestInnerTrampoline:
             unify(a, 10, inner_trail)
             yield (parent, None)
 
-        trampoline(StepGenerator(bind_a, None, trail))
+        trampoline(StepGenerator(bind_a, None, None, None, trail))
         assert deref(a) == 10
 
         prop.push()
@@ -355,7 +355,7 @@ class TestInnerTrampoline:
             unify(b, 20, inner_trail)
             yield (parent, None)
 
-        trampoline(StepGenerator(bind_b, None, trail))
+        trampoline(StepGenerator(bind_b, None, None, None, trail))
         assert deref(b) == 20
 
         prop.pop(1)

@@ -512,11 +512,11 @@ def _make_queens_module(n: int) -> Module:
 
         # Use builtin permutation via trampoline
         perm_dispatch = db.get_dispatch("permutation", 2)
-        perm_sg = StepGenerator(perm_dispatch, this_generator, ns, qs_arg, trail)
+        perm_sg = StepGenerator(perm_dispatch, this_generator, this_generator, this_generator, ns, qs_arg, trail)
         perm_st = yield (perm_sg, None)
         while perm_st is not DONE:
             qs_val = deref(qs_arg)
-            safe_sg = StepGenerator(safe_dispatch, this_generator, qs_val, trail)
+            safe_sg = StepGenerator(safe_dispatch, this_generator, this_generator, this_generator, qs_val, trail)
             safe_st = yield (safe_sg, None)
             while safe_st is not DONE:
                 yield (parent, None)

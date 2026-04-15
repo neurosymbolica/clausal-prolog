@@ -40,7 +40,7 @@ def _trampoline_solutions(dispatch, args, trail=None):
     """Collect all solutions from a trampoline-mode dispatch function."""
     if trail is None:
         trail = Trail()
-    sg = StepGenerator(dispatch, None, *args, trail)
+    sg = StepGenerator(dispatch, None, None, None, *args, trail)
     return solutions(sg, lambda: tuple(deref(a) for a in args))
 
 

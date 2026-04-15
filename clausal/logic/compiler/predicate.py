@@ -552,7 +552,7 @@ def compile_predicate_trampoline(
     Sub-predicate calls within clause bodies use the coroutine-backtracking
     pattern::
 
-        _gen  = StepGenerator(dispatch, this_generator, args, trail)
+        _gen  = StepGenerator(dispatch, this_generator, this_generator, this_generator, args, trail)
         _st   = (yield (_gen, None))
         while _st is not _DONE:
             <continuation>

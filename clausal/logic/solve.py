@@ -78,7 +78,7 @@ except ImportError:
 
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
-    sg = StepGenerator(dispatch_fn, None, *args, trail)
+    sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
     while True:
         result = _drive_until_yield(sg)
         if result is None:

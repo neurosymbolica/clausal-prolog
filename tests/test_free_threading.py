@@ -330,14 +330,15 @@ class TestCExtensionPresence:
             f"expected _trampoline (C extension not loaded?)"
         )
 
-    def test_trampoline_stepgen_has_parent(self):
-        """C StepGenerator must expose the parent attribute."""
+    def test_trampoline_stepgen_has_continuation_slots(self):
+        """C StepGenerator must expose the three continuation slots."""
         # nv
         from clausal.logic.trampoline import StepGenerator, DONE
 
         def dummy(this_gen, parent):
             yield (parent, DONE)
 
-        sg = StepGenerator(dummy, None)
-        assert hasattr(sg, 'parent'), "StepGenerator missing 'parent' attribute"
-        assert sg.parent is None
+        sg = StepGenerator(dummy, None, None, None)
+        for attr in ("proceed", "fail", "catcher"):
+            assert hasattr(sg, attr), f"StepGenerator missing {attr!r} attribute"
+            assert getattr(sg, attr) is None

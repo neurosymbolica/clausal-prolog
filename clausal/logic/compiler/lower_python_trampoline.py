@@ -95,7 +95,8 @@ def _lower_body(
 
             sg_create = _assign(sg_name,
                 _call(_name("StepGenerator"), _name(cond_fn_name),
-                      ast.Constant(None), _name(trail_name)))
+                      ast.Constant(None), ast.Constant(None), ast.Constant(None),
+                      _name(trail_name)))
             first_send = ast.Assign(
                 targets=[ast.Tuple(
                     elts=[_name(g_name, ast.Store()), _name(v_name, ast.Store())],
@@ -240,7 +241,8 @@ def _lower_body(
             naf_mark = ctx.fresh(_MARK_PREFIX)
             sg_create = _assign(naf_sg,
                 _call(_name("StepGenerator"), _name(naf_gen_fn),
-                      ast.Constant(None), _name(trail_name)))
+                      ast.Constant(None), ast.Constant(None), ast.Constant(None),
+                      _name(trail_name)))
             first_send = ast.Assign(
                 targets=[ast.Tuple(
                     elts=[_name(naf_g, ast.Store()), _name(naf_v, ast.Store())],

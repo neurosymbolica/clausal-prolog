@@ -11,7 +11,7 @@ The trampoline execution model:
 
 Driver contract
 ---------------
-Create ``StepGenerator(dispatch_fn, None, *args)`` to drive a trampoline
+Create ``StepGenerator(dispatch_fn, None, None, None, *args)`` to drive a trampoline
 predicate.  The search trampoline then interprets:
   - ``(None, None)``  → solution found; snapshot, then resume for more
   - ``(None, DONE)``  → search exhausted; stop
@@ -81,7 +81,7 @@ def _search_trampoline(dispatch_fn, args, snapshot_fn):
     internally.  ``snapshot_fn`` is called while pred is suspended (bindings live).
     """
     snapshots = []
-    root = StepGenerator(dispatch_fn, None, *args)
+    root = StepGenerator(dispatch_fn, None, None, None, *args)
     gen, value = root.send(None)
 
     while True:
@@ -604,7 +604,7 @@ class TestTrampolineAlwaysFail:
         db = Database()
         fn = compile_predicate_trampoline("undef2", 1, [], db)
         trail = fresh_trail()
-        root = StepGenerator(fn, None, 42, trail)
+        root = StepGenerator(fn, None, None, None, 42, trail)
         gen, value = root.send(None)
         assert gen is None
         assert value is DONE

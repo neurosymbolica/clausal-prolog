@@ -29,7 +29,7 @@ def _run_dispatch(dispatch, *args):
     # args = (*pred_args, trail) — trail is last, ignore the old trailing None
     # include out trailing None from old simple-mode call pattern
     from clausal.logic.variables import Trail
-    sg = StepGenerator(dispatch, None, *args)
+    sg = StepGenerator(dispatch, None, None, None, *args)
     results = []
     gen, value = sg.send(None)
     while True:

@@ -683,7 +683,7 @@ class TestTabledWrapperDirect:
 
         trail = Trail()
         X = Var()
-        root = StepGenerator(wrapped, None, X, trail)
+        root = StepGenerator(wrapped, None, None, None, X, trail)
         # Use snapshot to capture binding while it's live (solutions() collects a list)
         results = solutions(root, snapshot=lambda: deref(X))
         assert results == [42]
@@ -711,7 +711,7 @@ class TestTabledWrapperDirect:
 
         trail = Trail()
         X = Var()
-        root = StepGenerator(wrapped, None, X, trail)
+        root = StepGenerator(wrapped, None, None, None, X, trail)
         results = solutions(root, snapshot=lambda: deref(X))
         assert sorted(results) == [1, 2]
 

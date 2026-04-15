@@ -65,7 +65,7 @@ from clausal.logic.builtins.dict_set import (
 def _search_trampoline(dispatch_fn, args, snapshot_fn):
     """Drive trampoline predicate and collect per-solution snapshots."""
     snapshots = []
-    root = StepGenerator(dispatch_fn, None, *args)
+    root = StepGenerator(dispatch_fn, None, None, None, *args)
     gen, value = root.send(None)
 
     while True:

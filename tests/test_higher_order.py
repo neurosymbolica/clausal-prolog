@@ -20,7 +20,7 @@ from clausal.terms import Call, LoadName, Compound
 def run_trampoline(fn, *args):
     """Call a native trampoline builtin and return number of solutions."""
     trail = Trail()
-    sg = StepGenerator(fn, None, *args, trail)
+    sg = StepGenerator(fn, None, None, None, *args, trail)
     gen, value = sg.send(None)
     count = 0
     while True:
@@ -37,7 +37,7 @@ def run_trampoline_var(fn, *args_before_result):
     """Call a native trampoline builtin with trailing Var, return deref'd values."""
     trail = Trail()
     result = Var()
-    sg = StepGenerator(fn, None, *args_before_result, result, trail)
+    sg = StepGenerator(fn, None, None, None, *args_before_result, result, trail)
     gen, value = sg.send(None)
     results = []
     while True:
@@ -226,7 +226,7 @@ def _run_foldl(goal, lst, v0):
     """Helper: run foldl via trampoline and capture deref'd result."""
     trail = Trail()
     v = Var()
-    sg = StepGenerator(_foldl__4, None, goal, lst, v0, v, trail)
+    sg = StepGenerator(_foldl__4, None, None, None, goal, lst, v0, v, trail)
     gen, value = sg.send(None)
     results = []
     while True:
