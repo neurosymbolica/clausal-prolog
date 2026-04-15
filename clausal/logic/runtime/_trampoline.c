@@ -22,7 +22,12 @@
 
 /* ── DONE sentinel ──────────────────────────────────────────────────────── */
 
-static PyObject *g_DONE = NULL;   /* module-level singleton */
+static PyObject *g_DONE = NULL;     /* module-level singleton */
+static PyObject *g_COMMIT = NULL;   /* third yield-action sentinel; see
+                                     * trampoline.py and CONTINUATION_TCO_PLAN.md
+                                     * §4.1.  Phase 4a lands sentinel + root
+                                     * driver handling; no producer emits it
+                                     * yet. */
 
 /* ── Lazily-cached exception / sentinel types ─────────────────────────── */
 
@@ -534,6 +539,24 @@ solutions_func(PyObject *Py_UNUSED(module), PyObject *args, PyObject *kwargs)
                 Py_DECREF(step);
                 return results;
             }
+            if (value == g_COMMIT) {
+                /* Producer committed: deliver this final solution and
+                 * stop — no further pull from the (now-retired) root.
+                 * _COMMIT is a sentinel, not a payload, so when
+                 * snapshot is None there is no raw value to record. */
+                Py_DECREF(step);
+                if (snapshot_fn != Py_None) {
+                    PyObject *snap = PyObject_CallNoArgs(snapshot_fn);
+                    if (!snap) { Py_DECREF(results); return NULL; }
+                    if (PyList_Append(results, snap) < 0) {
+                        Py_DECREF(snap);
+                        Py_DECREF(results);
+                        return NULL;
+                    }
+                    Py_DECREF(snap);
+                }
+                return results;
+            }
             /* Solution found — take snapshot or collect raw value.
              * INCREF value before DECREF step because value is borrowed
              * from step and DECREF may free both. */
@@ -751,9 +774,11 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__trampoline(void)
 {
-    /* DONE sentinel */
+    /* DONE / _COMMIT sentinels */
     g_DONE = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
     if (!g_DONE) return NULL;
+    g_COMMIT = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
+    if (!g_COMMIT) return NULL;
 
     /* Create StepGenerator as a heap type (mutable — allows __init__ override) */
     StepGenType = (PyTypeObject *)PyType_FromSpec(&StepGen_spec);
@@ -776,6 +801,13 @@ PyInit__trampoline(void)
     Py_INCREF(g_DONE);
     if (PyModule_AddObject(m, "DONE", g_DONE) < 0) {
         Py_DECREF(g_DONE);
+        Py_DECREF(m);
+        return NULL;
+    }
+
+    Py_INCREF(g_COMMIT);
+    if (PyModule_AddObject(m, "_COMMIT", g_COMMIT) < 0) {
+        Py_DECREF(g_COMMIT);
         Py_DECREF(m);
         return NULL;
     }
