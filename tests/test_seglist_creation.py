@@ -14,13 +14,13 @@ import os
 import pytest
 
 from clausal.import_hook import _load_module
-from clausal.logic.compiler import (
+from clausal.logic.runtime.body_star_unify import (
     _body_multi_star_unify,
     _body_star_unify,
     _build_multi_star_list,
     _build_star_list,
-    _head_list_unify_output,
 )
+from clausal.logic.runtime.list_unify import _head_list_unify_output
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify, walk

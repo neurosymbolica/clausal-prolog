@@ -136,9 +136,14 @@ defaults) is compiled independently into a `FunctionDef`:
   rewrite* as a preprocess step (see §6).
 
 **Phase 6 — Codegen**  (`clausal.codegen.functiondef_to_function`)
-Each `FunctionDef` is compiled via `ast.fix_missing_locations` +
-`compile()` + `exec()` into an actual Python function. The
-`base_globals` dict becomes the function's `__globals__`.
+Each `FunctionDef` is compiled via `compile()` + `exec()` into an
+actual Python function. The `base_globals` dict becomes the
+function's `__globals__`. Source positions on emitted AST nodes
+come from the `at_position` scope stack threaded through lowering
+(Slice G; see §10 "Source-location invariant"); synthetic
+scaffolding inherits the enclosing `FunctionDef`'s position via
+`propagate_synthetic_positions` and is marked `_g_synthetic=True`
+for the strict-walker check (`assert_all_nodes_located`).
 
 **Phase 7 — Install**  (`predicate._install`)
 The top-level dispatch wrapper is registered with the database
@@ -563,6 +568,22 @@ Things that are true at phase boundaries, and where they are enforced.
    dead after the call, preceded only by deterministic goals) plus
    the runtime `sys.getrefcount` guard inside `_append_dr__3` etc.
 
+7. **Every emitted AST node carries a source position** (Slice G).
+   Either a real position threaded from the originating `.clausal` /
+   `.pl` term via the `at_position` scope stack (see
+   `_ast_helpers._POSITION_STACK`, entered by `CompilationContext
+   .at_position(pos)` around every IR → AST emission), or — for
+   genuinely synthesised compiler scaffolding (arg nodes, dispatch
+   `Match` boilerplate, trampoline `_DONE` yield, bucket selectors)
+   — inherited from the enclosing `FunctionDef`'s position via
+   `propagate_synthetic_positions` and marked `_g_synthetic=True`.
+   Enforced by `assert_all_nodes_located(..., allow_synthetic=True)`
+   run on every compiled `FunctionDef` via `maybe_assert_located`.
+   No `ast.fix_missing_locations` anywhere in the compiler — the
+   strict walker is the single source of truth and surfaces any
+   un-located node as a loud emitter bug (set
+   `CLAUSAL_ASSERT_LOCATIONS=0` to disable in emergencies).
+
 ---
 
 ## 11. Gotchas and non-obvious decisions
@@ -621,23 +642,38 @@ Things a new contributor would otherwise have to reverse-engineer.
 
 ## 12. Public API
 
-Importable from `clausal.logic.compiler`:
+The stable surface is enumerated in `__init__.__all__`.  Importable
+from `clausal.logic.compiler`:
 
-- `compile_predicate_trampoline(functor, arity, clauses, db=None, body_compiler=None, globals_=None, pred_cls=None) -> Callable` — the main entrypoint.
-- `compile_predicate_shallow(functor, arity, clauses, db=None, body_compiler=None, globals_=None, pred_cls=None) -> Callable` — short-stack strategy.
-- `compile_predicate(functor, arity, clauses, db=None, ...) -> Callable` — deprecated alias for `compile_predicate_shallow`.
-- `compile_predicate_trampoline_ast(...)`, `compile_predicate_shallow_ast(...)`, `compile_predicate_ast(...)` — return the AST `FunctionDef` without executing `compile()`. Used by `clausal.tools.visualize`.
-- `compile_goal(goal, db, var_context, trail_name, k_stmts) -> list[ast.stmt]` — shallow body-goal dispatcher.
-- `compile_goal_trampoline(goal, db, var_context, trail_name, k_stmts, self_name, parent_name) -> list[ast.stmt]` — trampoline body-goal dispatcher.
-- `compile_body(goals, db, var_context, trail_name) -> list[ast.stmt]` / `compile_body_trampoline(...)` — body compilation entry points.
-- `term_to_ast_expr(term, var_context, *, eval_arith=True) -> ast.expr` — lower a term.
-- `arith_to_ast_expr(term, var_context) -> ast.expr` — lower an arithmetic expression to native Python ops.
-- `head_to_match_pattern(...) -> ast.pattern` — clause head → `match` case pattern.
-- `compile_head_to_match_case(head, body_stmts, var_context, arity, ...) -> ast.match_case` — full case arm.
+**Predicate compilation entrypoints** (return a callable predicate):
 
-Private helpers are re-exported via `__init__.__getattr__` for any
-tests / tools that import them directly; these are not considered
-stable.
+- `compile_predicate_trampoline(functor, arity, clauses, db=None, body_compiler=None, globals_=None, pred_cls=None) -> Callable` — the main entrypoint.  Long-lived computations use the trampoline strategy for bounded stack.
+- `compile_predicate_shallow(functor, arity, clauses, db=None, ...) -> Callable` — short-stack strategy (faster steady-state, deep recursion may overflow).
+- `compile_predicate(functor, arity, clauses, db=None, ...) -> Callable` — alias for `compile_predicate_shallow`; kept for back-compat.
+
+**AST variants** (return the generated `ast.FunctionDef` without
+executing `compile()`; consumed by `clausal.tools.visualize`):
+
+- `compile_predicate_trampoline_ast(...)`, `compile_predicate_shallow_ast(...)`, `compile_predicate_ast(...)`.
+
+**Strategy & context**:
+
+- `Strategy` — protocol that `compile_predicate(...)` dispatches through.
+- `ShallowStrategy`, `TrampolineStrategy` — the two built-in implementations.
+- `CompilationContext` — dataclass bundling the per-compilation state threaded through the AST lowerers.
+
+**Runtime sentinel**:
+
+- `DONE` — re-exported from `clausal.logic.trampoline`; single-shot
+  goal-completion marker yielded by generated predicate generators.
+
+Everything else in this package is a package-internal helper.  Tests
+and tools that need to reach private helpers (e.g. `_extract_arg_key`,
+`_collect_globals_info`) should import them from their owning
+submodule (`clausal.logic.compiler.arg_index`, `.globals_env`, …),
+not from the top-level package.  The `_monolith` re-export hub and
+`__getattr__` delegation were retired in slice B6; the remaining
+private re-exports were removed in slice H.
 
 ---
 
@@ -660,9 +696,6 @@ Open design questions tracked in `todo/`:
 - `todo/continuation_tco.md` — continuation-level TCO so a solution
   yield can skip pass-through wrapper frames entirely (referenced
   from §5).
-- `todo/ast_source_locations.md` — `fix_missing_locations` is likely
-  wiping meaningful source locations, making tracebacks from
-  compiled predicates useless. Tests needed first.
 - `todo/jit_indexing.md` — profile and tune indexing thresholds,
   add a user directive for explicit indexing control, and eventually
   a JIT recompilation path for hot predicates.

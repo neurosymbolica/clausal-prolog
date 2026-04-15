@@ -351,8 +351,7 @@ class TestSetTermUnification:
 
 class TestCollectVars:
     def test_collect_vars_from_dictterm(self):
-        # nv
-        from clausal.logic.compiler import _collect_vars
+        from clausal.logic.compiler._vars import _collect_vars
         v1 = Var()
         v2 = Var()
         d = DictTerm({"x": v1, "y": v2, "z": 42})
@@ -362,8 +361,7 @@ class TestCollectVars:
         assert len(vars_found) == 2
 
     def test_collect_vars_from_setterm_empty(self):
-        # nv
-        from clausal.logic.compiler import _collect_vars
+        from clausal.logic.compiler._vars import _collect_vars
         s = SetTerm([1, 2, 3])
         vars_found = _collect_vars(s)
         assert vars_found == []

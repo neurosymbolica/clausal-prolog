@@ -16,7 +16,7 @@ import clausal.import_hook
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call, query, solve
 from clausal.logic.variables import Var, Trail, deref
-from clausal.logic.compiler import _dotted_name_from_loadattr
+from clausal.logic.compiler.terms_to_ast import _dotted_name_from_loadattr
 from clausal.terms import LoadName, LoadAttr, Call as AstCall
 
 
@@ -187,8 +187,7 @@ class TestQualifiedCalls:
 
     def test_inject_dotted_call_target(self):
         """_inject_call_targets resolves dotted names from globals."""
-        # nv
-        from clausal.logic.compiler import _inject_call_targets
+        from clausal.logic.compiler.globals_env import _inject_call_targets
         from clausal.logic.database import Clause
 
         # Create a mock module with a predicate class
@@ -221,8 +220,7 @@ class TestQualifiedCalls:
 
     def test_dotted_name_dispatch(self):
         """Compiled code can dispatch via dotted globals key."""
-        # nv
-        from clausal.logic.compiler import _inject_call_targets
+        from clausal.logic.compiler.globals_env import _inject_call_targets
         from clausal.logic.database import Clause
 
         mod = _load_fixture("importable_utils.clausal",

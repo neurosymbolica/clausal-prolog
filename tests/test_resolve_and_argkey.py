@@ -16,7 +16,7 @@ from clausal.logic.clpfd import (
     FD_KEY, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,
     _ensure_fd, in_domain,
 )
-from clausal.logic.compiler import _runtime_arg_key
+from clausal.logic.compiler.arg_index import _runtime_arg_key
 from clausal.terms import Compound
 
 

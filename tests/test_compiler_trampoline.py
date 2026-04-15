@@ -23,11 +23,10 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
-from clausal.logic.compiler import (
-    DONE,
+from clausal.logic.compiler import DONE, compile_predicate_trampoline
+from clausal.logic.compiler.goal_trampoline import (
     compile_body_trampoline,
     compile_goal_trampoline,
-    compile_predicate_trampoline,
 )
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator

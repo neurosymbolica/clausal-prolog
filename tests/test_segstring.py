@@ -316,8 +316,7 @@ class TestBodyMultiStarString:
     """_body_multi_star_unify preserves string type."""
 
     def test_star_vars_bind_to_substrings(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [","]), ("star", B)]
@@ -327,8 +326,7 @@ class TestBodyMultiStarString:
         assert ("hello", "world") in solutions
 
     def test_fixed_elements_match_chars(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", ["l"]), ("star", B)]
@@ -340,8 +338,7 @@ class TestBodyMultiStarString:
         assert ("hel", "o") in solutions
 
     def test_empty_string_target(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A = Var()
         segments = [("star", A)]
@@ -351,8 +348,7 @@ class TestBodyMultiStarString:
         assert solutions == [""]
 
     def test_no_match(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", ["x"]), ("star", B)]
@@ -367,8 +363,7 @@ class TestBuildStarListString:
     """_build_star_list returns strings when inputs are string-compatible."""
 
     def test_star_str_returns_str(self):
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
         unify(X, "ello", trail)
@@ -377,8 +372,7 @@ class TestBuildStarListString:
         assert isinstance(result, str)
 
     def test_star_str_with_after(self):
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
         unify(X, "ell", trail)
@@ -388,8 +382,7 @@ class TestBuildStarListString:
 
     def test_star_list_returns_list(self):
         """Non-string star still returns a list."""
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
         unify(X, [2, 3], trail)
@@ -399,8 +392,7 @@ class TestBuildStarListString:
 
     def test_star_ground_segstring_mixed(self):
         """Ground SegString with mixed before/after returns a list."""
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
         ss = SegString(["ello"])
@@ -412,8 +404,7 @@ class TestBuildStarListString:
 
     def test_star_nonground_segstring_mixed(self):
         """Non-ground SegString with mixed before/after returns a SegList."""
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         Y = Var()
         ss = SegString([VarSeg(Y), "orld"])
         # before has int → mixed types, so can't return SegString
@@ -422,8 +413,7 @@ class TestBuildStarListString:
 
     def test_star_nonground_segstring_all_str(self):
         """Non-ground SegString with all-str before/after returns a SegString."""
-        # nv
-        from clausal.logic.compiler import _build_star_list
+        from clausal.logic.runtime.body_star_unify import _build_star_list
         Y = Var()
         ss = SegString([VarSeg(Y), "orld"])
         result = _build_star_list(["h"], ss, ["!"])
@@ -434,8 +424,7 @@ class TestBuildMultiStarListString:
     """_build_multi_star_list returns strings when all parts are chars."""
 
     def test_all_str_returns_str(self):
-        # nv
-        from clausal.logic.compiler import _build_multi_star_list
+        from clausal.logic.runtime.body_star_unify import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
         unify(A, "hel", trail)
@@ -448,8 +437,7 @@ class TestBuildMultiStarListString:
         assert isinstance(result, list)
 
     def test_single_char_fixed_returns_str(self):
-        # nv
-        from clausal.logic.compiler import _build_multi_star_list
+        from clausal.logic.runtime.body_star_unify import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
         unify(A, "he", trail)
@@ -486,8 +474,7 @@ class TestClauseLevelStringPatterns:
 
     def test_body_multi_star_string_direct(self):
         """_body_multi_star_unify with string target — star vars are substrings."""
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [","]), ("star", B)]

@@ -153,13 +153,10 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     cache_key = _goal_cache_key(goal, module)
 
     goal = _term_to_goal(goal)
-    from clausal.logic.compiler import (
-        compile_predicate_trampoline,
-        compile_body_trampoline,
-        _collect_vars,
-        _var_python_name,
-        _collect_types_from_term,
-    )
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.logic.compiler.goal_trampoline import compile_body_trampoline
+    from clausal.logic.compiler._vars import _collect_vars, _var_python_name
+    from clausal.logic.compiler.globals_env import _collect_types_from_term
 
     vars_in_goal = _collect_vars(goal)
 

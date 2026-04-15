@@ -95,8 +95,10 @@ def test_bucket_refs_analyse_ir_agrees_with_legacy(
 ):
     # Function-local imports survive the boundary-test sys.modules
     # scrub.  See Slice D6a commit message for the full hazard write-up.
-    from clausal.logic.compiler import _inject_bucket_refs_trampoline
-    from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
+    from clausal.logic.compiler.goal_trampoline import (
+        _inject_bucket_refs_trampoline,
+        analyse_ir_bucket_refs,
+    )
 
     base_globals_legacy = {callee_name: callee_cls}
     ctx_legacy = _mkctx()

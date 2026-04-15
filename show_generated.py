@@ -54,10 +54,11 @@ from clausal.tools.visualize import predicate_to_source
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
 from clausal.logic.compiler import (
-    _inject_bucket_refs_trampoline,
-    _bucket_key, compile_predicate_trampoline,
+    compile_predicate_trampoline,
     _build_predicate_trampoline_funcdef, _make_body_compiler_trampoline,
 )
+from clausal.logic.compiler.arg_index import _bucket_key
+from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.builtins import _normalize_fact_clause

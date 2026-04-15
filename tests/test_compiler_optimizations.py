@@ -82,10 +82,8 @@ import ast
 
 import pytest
 
-from clausal.logic.compiler import (
-    compile_predicate_trampoline_ast,
-    compile_goal_trampoline,
-)
+from clausal.logic.compiler import compile_predicate_trampoline_ast
+from clausal.logic.compiler.goal_trampoline import compile_goal_trampoline
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
@@ -556,8 +554,7 @@ class TestSinglePassTraversal:
         return clauses
 
     def test_call_targets_collected(self):
-        # nv
-        from clausal.logic.compiler import _collect_globals_info, _collect_call_targets
+        from clausal.logic.compiler.globals_env import _collect_globals_info, _collect_call_targets
         clauses = self._make_clauses_with_call()
         _, _, targets_combined = _collect_globals_info(clauses)
         targets_separate = _collect_call_targets(clauses)
@@ -567,8 +564,7 @@ class TestSinglePassTraversal:
 
     def test_head_types_collected(self):
         """User-defined term classes from heads are collected."""
-        # nv
-        from clausal.logic.compiler import _collect_globals_info, _collect_head_types
+        from clausal.logic.compiler.globals_env import _collect_globals_info, _collect_head_types
         MyTerm = make_predicate("MyTerm", ("val",))
         t1, t2 = MyTerm(val=1), MyTerm(val=2)
         clauses = [
@@ -583,8 +579,7 @@ class TestSinglePassTraversal:
 
     def test_py_thunks_collected(self):
         """PyThunk lambdas in clause bodies are collected."""
-        # nv
-        from clausal.logic.compiler import _collect_globals_info, _collect_py_thunks
+        from clausal.logic.compiler.globals_env import _collect_globals_info, _collect_py_thunks
         from clausal.terms import PyThunk
         v = Var()
         thunk = PyThunk(fn=lambda x: x, var_objects=[v])
@@ -602,8 +597,7 @@ class TestSinglePassTraversal:
 
     def test_single_pass_same_result_as_three_passes(self):
         """Full equivalence: combined result matches three separate collections."""
-        # nv
-        from clausal.logic.compiler import (
+        from clausal.logic.compiler.globals_env import (
             _collect_globals_info, _collect_head_types,
             _collect_py_thunks, _collect_call_targets,
         )
@@ -796,8 +790,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_keys_extracted_at_compile_time(self):
         """_extract_arg_key returns (functor, arity) tuples for Compound heads."""
-        # nv
-        from clausal.logic.compiler import _extract_arg_key
+        from clausal.logic.compiler.arg_index import _extract_arg_key
         r, w, h = Var(), Var(), Var()
         cl_circle = Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[])
         cl_rect   = Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[])
@@ -810,8 +803,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_arg_builds_arg_index(self):
         """_build_arg_index yields distinct buckets for compound-headed clauses."""
-        # nv
-        from clausal.logic.compiler import _build_arg_index
+        from clausal.logic.compiler.arg_index import _build_arg_index
         r, w, h, a, b, c, s2 = [Var() for _ in range(7)]
         clauses = [
             Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[]),
@@ -853,8 +845,7 @@ class TestCompoundKeyIndexing:
 
     def test_compound_key_distinct_from_scalar_keys(self):
         """('circle', 1) tuple key does not collide with int/str scalar keys."""
-        # nv
-        from clausal.logic.compiler import _build_arg_index
+        from clausal.logic.compiler.arg_index import _build_arg_index
         v = Var()
         # Mix: scalar keys and compound keys in same predicate
         clauses = [
@@ -872,8 +863,7 @@ class TestCompoundKeyIndexing:
 
     def test_predicate_meta_compound_key(self):
         """PredicateMeta heads also produce (class_name, field_count) index keys."""
-        # nv
-        from clausal.logic.compiler import _extract_arg_key
+        from clausal.logic.compiler.arg_index import _extract_arg_key
         MyTerm = make_predicate("MyTerm", ("val",))
         t = MyTerm(val=1)
         cl = Clause(head=Compound("Foo", (t, Var())), body=[])
@@ -930,8 +920,7 @@ class TestSecondaryIndexing:
 
     def test_secondary_index_builds_correctly(self):
         """_build_secondary_index on normalized clauses: 3 level-0, 2 level-1 each."""
-        # nv
-        from clausal.logic.compiler import _build_secondary_index
+        from clausal.logic.compiler.arg_index import _build_secondary_index
         facts = [
             ("red",    "warm",    "light"),
             ("orange", "warm",    "dark"),
@@ -1042,8 +1031,7 @@ class TestJointKeyIndexing:
 
     def test_joint_index_built_for_high_coverage(self):
         """_build_joint_arg_index yields 6 distinct (group, subtype) pairs."""
-        # nv
-        from clausal.logic.compiler import _build_joint_arg_index
+        from clausal.logic.compiler.arg_index import _build_joint_arg_index
         facts = [
             ("fire", "dry", "hot"), ("fire", "wet", "cold"),
             ("ice",  "dry", "cold"), ("ice",  "wet", "hot"),
@@ -1062,8 +1050,7 @@ class TestJointKeyIndexing:
 
     def test_analyze_joint_finds_improvement(self):
         """_analyze_joint_index_positions identifies the (arg0, arg1) pair."""
-        # nv
-        from clausal.logic.compiler import (
+        from clausal.logic.compiler.arg_index import (
             _analyze_joint_index_positions, _analyze_index_positions,
         )
         facts = [

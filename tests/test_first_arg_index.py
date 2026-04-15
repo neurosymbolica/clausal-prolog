@@ -11,6 +11,8 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
     compile_predicate_trampoline as compile_predicate,
     compile_predicate_trampoline,
+)
+from clausal.logic.compiler.arg_index import (
     _extract_first_arg_key,
     _build_first_arg_index,
     _INDEX_VAR,

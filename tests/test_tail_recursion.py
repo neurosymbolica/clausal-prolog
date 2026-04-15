@@ -5,11 +5,8 @@ Verifies correctness and allocation efficiency of TRO-compiled predicates.
 
 import unittest
 
-from clausal.logic.compiler import (
-    _is_deterministic_goal,
-    _tro_args_safe,
-    compile_predicate_trampoline,
-)
+from clausal.logic.compiler import compile_predicate_trampoline
+from clausal.logic.compiler.tro import _is_deterministic_goal, _tro_args_safe
 
 
 def _detect_tro_clause(functor, arity, clause, db=None):

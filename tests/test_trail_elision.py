@@ -34,8 +34,8 @@ import pytest
 from clausal.logic.compiler import (
     compile_predicate_trampoline_ast,
     compile_predicate_trampoline,
-    compile_head_to_match_case,
 )
+from clausal.logic.compiler.head_match import compile_head_to_match_case
 from clausal.logic.database import Clause, Database
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify

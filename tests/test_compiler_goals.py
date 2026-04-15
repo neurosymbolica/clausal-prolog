@@ -15,13 +15,9 @@ import dataclasses
 
 import pytest
 
-from clausal.logic.compiler import (
-    compile_body,
-    compile_goal,
-    compile_predicate_trampoline as compile_predicate,
-    term_to_ast_expr,
-    arith_to_ast_expr,
-)
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
+from clausal.logic.compiler.goal_shallow import compile_body, compile_goal
+from clausal.logic.compiler.terms_to_ast import term_to_ast_expr, arith_to_ast_expr
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.variables import Var, Trail, deref, unify

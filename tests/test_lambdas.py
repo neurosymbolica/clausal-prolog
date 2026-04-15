@@ -14,11 +14,10 @@ import pytest
 
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import TermTransformer, _is_logic_var_name
-from clausal.logic.compiler import (
-    compile_predicate_trampoline as compile_predicate,
-    compile_goal,
-    compile_body,
-    term_to_ast_expr,
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
+from clausal.logic.compiler.goal_shallow import compile_body, compile_goal
+from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+from clausal.logic.compiler.control_constructs import (
     _compile_goal_lambda,
     _flatten_conjunction,
 )

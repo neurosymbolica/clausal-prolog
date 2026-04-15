@@ -13,10 +13,12 @@ import dataclasses
 
 import pytest
 
-from clausal.logic.compiler import (
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
+from clausal.logic.compiler.head_match import (
     head_to_match_pattern,
     compile_head_to_match_case,
-    compile_predicate_trampoline as compile_predicate,
+)
+from clausal.logic.runtime.list_unify import (
     _head_list_unify_input,
     _head_list_unify_output,
 )

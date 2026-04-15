@@ -12,16 +12,16 @@ import ast
 import pytest
 
 from clausal.logic.database import Clause, Database
-from clausal.logic.compiler import (
-    compile_predicate_trampoline as compile_predicate,
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
+from clausal.logic.compiler.arg_index import (
     _extract_arg_key,
     _INDEX_THRESHOLD,
     _static_call_key,
     _bucket_key,
     _joint_bucket_key,
-    _inject_bucket_refs_trampoline,
-    _disp_key,
 )
+from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
+from clausal.logic.compiler.globals_env import _disp_key
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.trampoline import StepGenerator, solutions, DONE

@@ -416,8 +416,7 @@ class TestBodyMultiStarUnifyString:
     """_body_multi_star_unify handles string targets."""
 
     def test_split_at_comma(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [","]), ("star", B)]
@@ -428,8 +427,7 @@ class TestBodyMultiStarUnifyString:
         assert results[0] == (["a"], ["b"])
 
     def test_multiple_commas(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [","]), ("star", B)]
@@ -439,8 +437,7 @@ class TestBodyMultiStarUnifyString:
         assert len(results) == 2
 
     def test_no_match(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [","]), ("star", B)]
@@ -448,8 +445,7 @@ class TestBodyMultiStarUnifyString:
         assert results == []  # No comma in string
 
     def test_empty_string(self):
-        # nv
-        from clausal.logic.compiler import _body_multi_star_unify
+        from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A = Var()
         segments = [("star", A)]

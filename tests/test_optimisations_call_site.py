@@ -106,7 +106,7 @@ def test_call_site_pass_matches_legacy_gkey():
     ``ctx.bucket_ref_map`` (byte parity guarantee for D7c)."""
     from clausal.logic.compiler.optimisations import call_site
     from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
-    from clausal.logic.compiler import _inject_bucket_refs_trampoline
+    from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     from clausal.logic.compiler.compile_ctx import CompilationContext
 
     clause, base_globals = _case_eligible_literal_arg()
