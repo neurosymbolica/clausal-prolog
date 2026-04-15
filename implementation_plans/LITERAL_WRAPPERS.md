@@ -9,7 +9,13 @@ Wrappers live only in the compile-time AST and are unwrapped to
 native Python scalars before IR lowering — runtime sees only native
 values, unchanged.
 
-**Status:** not started.
+**Status:** Phases 1–3 committed (1513de3) as no-op groundwork.
+Phase 4 attempted twice on 2026-04-15 and **dropped** — the plan's
+"compile-time only" assumption does not hold. See
+`todo/constant_position_metadata.md` ("2026-04-15 findings") for the
+root cause and the two viable paths forward (Design B subclass-natives,
+or stay dropped). Do NOT restart Phases 4–6 from this plan without
+reading those findings first.
 
 **Motivation file:** `todo/constant_position_metadata.md` (context,
 rejected alternatives).
