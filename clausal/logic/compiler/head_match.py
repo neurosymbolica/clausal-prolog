@@ -29,7 +29,7 @@ from clausal.terms import (
     SegList, VarSeg,  # noqa: F401
 )
 from clausal.pythonic_ast.nodes import (
-    StarUnpack, TupleLiteral, SetLiteral,
+    StarUnpack, TupleLiteral, SetLiteral, literal_value,
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
 
@@ -175,6 +175,7 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=name)
 
     # Python singletons
+    term = literal_value(term)
     if term is None or term is True or term is False:
         return ast.MatchSingleton(value=term)
 

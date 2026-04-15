@@ -23,7 +23,7 @@ from clausal.terms import (
     Evaluate,
     Call,  # noqa: F401 — referenced in Evaluate/Unify patterns via type system
 )
-from clausal.pythonic_ast.nodes import Lambda, StarUnpack, SetLiteral as _SL
+from clausal.pythonic_ast.nodes import Lambda, StarUnpack, SetLiteral as _SL, literal_value
 from clausal.logic.predicate import is_term_instance, term_field_names
 
 
@@ -52,6 +52,7 @@ def _collect_vars(term: Any, seen: set[int] | None = None) -> list[Var]:
             return [term]
         return []
 
+    term = literal_value(term)
     if term is None or isinstance(term, (bool, int, float, str, bytes, complex)):
         return []
 

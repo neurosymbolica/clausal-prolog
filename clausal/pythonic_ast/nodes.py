@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Optional, ClassVar
 from .node_class import node_class
 
@@ -40,8 +41,9 @@ __all__ = [
     # Modules
     "Module", "Interactive", "Expression",
     # Literals
-    "IntLiteral", "FloatLiteral", "ComplexLiteral", "StringLiteral",
-    "BytesLiteral", "BoolLiteral", "NoneLiteral", "EllipsisLiteral",
+    "IntLiteral", "FloatLiteral", "ComplexLiteral", "RationalLiteral",
+    "StringLiteral", "BytesLiteral", "BoolLiteral", "NoneLiteral",
+    "EllipsisLiteral", "Literal", "literal_value",
     # Collection literals
     "ListLiteral", "TupleLiteral", "SetLiteral", "DictLiteral",
     # F-strings
@@ -299,6 +301,10 @@ class ComplexLiteral(Literal):
     value: complex = 0j
 
 @node_class
+class RationalLiteral(Literal):
+    value: Fraction = Fraction(0)
+
+@node_class
 class StringLiteral(Literal):
     value: str = ""
 
@@ -320,6 +326,18 @@ class NoneLiteral(Node):
 @dataclass
 class EllipsisLiteral(Node):
     def __str__(self): return "..."
+
+
+def literal_value(x):
+    """Unwrap a *Literal node to its native Python value.
+    Returns x unchanged if not a Literal."""
+    if isinstance(x, Literal):
+        return x.value
+    if isinstance(x, NoneLiteral):
+        return None
+    if isinstance(x, EllipsisLiteral):
+        return ...
+    return x
 
 @dataclass
 class ListLiteral(ElementsLiteral):

@@ -1,4 +1,5 @@
 import ast
+from fractions import Fraction
 from typing import Any, Optional
 from .nodes import *
 
@@ -21,6 +22,7 @@ _CONSTANT_TYPE_MAP: dict[type, type] = {
     int: IntLiteral,
     float: FloatLiteral,
     complex: ComplexLiteral,
+    Fraction: RationalLiteral,
     str: StringLiteral,
     bytes: BytesLiteral,
 }

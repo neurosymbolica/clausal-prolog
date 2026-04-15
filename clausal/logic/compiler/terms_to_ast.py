@@ -29,7 +29,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, DictLiteral, SetLiteral,
-    Lambda,
+    Lambda, literal_value,
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
@@ -126,6 +126,7 @@ def term_to_ast_expr(
     if isinstance(term, LoadName):
         return _name(term.name)
 
+    term = literal_value(term)
     if term is None or isinstance(term, bool):
         return ast.Constant(value=term)
 
@@ -416,6 +417,7 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
         vname = var_context.get(vid, _var_python_name(term))
         return _call(_name("deref"), _name(vname))
 
+    term = literal_value(term)
     if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
         return ast.Constant(value=term)
 

@@ -117,6 +117,7 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     # to :class:`Fail`, whose lowering returns ``[]`` and in a
     # right-to-left :class:`Sequence` fold truncates everything to its
     # left.
+    body = nodes.literal_value(body)
     if body is True:
         return
     if body is False:
@@ -174,6 +175,7 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
     # ``ast.Expr(call)``.
     if isinstance(goal, PyThunk):
         return PyThunkOp(thunk=goal)
+    goal = nodes.literal_value(goal)
     # ``False`` reaching ``_convert`` (e.g. as an :class:`Or` arm or an
     # :class:`IfExpr` branch) — same :class:`Fail` op the conjunction
     # path emits.  ``True`` in the same position becomes an empty
